@@ -64,6 +64,7 @@ vi.mock("../src/web/useDictationField.js", () => ({
 vi.mock("../src/web/DictationStrip.js", () => ({
   DictationButton: () => createElement("button", { type: "button" }, "mic"),
   DictationStrip: () => null,
+  TalkLabel: () => null,
 }));
 
 /* The badge's own behaviour — the panel, its boxes, Regenerate's guards — is

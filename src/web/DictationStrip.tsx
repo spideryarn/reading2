@@ -39,7 +39,9 @@
  * the timer's `role="timer"` exists exactly so that it *is* exposed while not
  * being announced.
  *
- * **The device's name appears for as long as it is open.** Nothing on this page
+ * **The device's name appears for as long as it is open**, and stays until the
+ * words land, so the strip's height does not change under a second press
+ * (plan 261008d). Nothing on this page
  * used to say which microphone had produced a zero, and moving bars still do
  * not say whether the browser opened the device the reader meant.
  */
@@ -298,6 +300,43 @@ export function DictationButton({
 }
 
 /**
+ * **The word beside a labelled microphone** — Learn's and Quiz's: *Talk*, then
+ * *Listening…* while the tape runs, then *Writing it down…* until the words
+ * land (the box is `readOnly` then).
+ *
+ * While a dictation runs both of its words sit in one grid cell and only one
+ * is visible, so the label is the wider one's width from the first word to the
+ * last. Otherwise the growth at Stop could wrap the row it is in and move the
+ * microphone just as a double press's second tap is due — GPT Sol's plan
+ * review of 261008d, F1; the strip below is the same fix for the same press.
+ * Idle *Talk* is left its own width, so the resting row is unchanged.
+ */
+export function TalkLabel({
+  field,
+  className,
+  hidden,
+}: {
+  field: { dictation: UseDictation; readOnly: boolean };
+  className: string;
+  /** `aria-hidden`, where the button's own name already says it. */
+  hidden?: boolean | undefined;
+}) {
+  const running = field.dictation.armed || field.readOnly;
+  return (
+    <span className={`${className}${running ? " talk-label" : ""}`} aria-hidden={hidden || undefined}>
+      {running ? (
+        <>
+          <span className={field.dictation.armed ? undefined : "talk-label-ghost"}>Listening…</span>
+          <span className={field.dictation.armed ? "talk-label-ghost" : undefined}>Writing it down…</span>
+        </>
+      ) : (
+        "Talk"
+      )}
+    </span>
+  );
+}
+
+/**
  * The line under the box: the meter, what is happening, how long for, which
  * microphone, and anything that went wrong.
  *
@@ -333,6 +372,37 @@ export function DictationStrip({
   const left = dictation.armed && dictation.endsAt !== null ? dictation.endsAt - now : null;
   const ending = left !== null && left <= CAP_WARNING_MS;
   const words = dictationWords(dictation, sendingAfter, done, ending);
+
+  /* **The microphone line outlives Stop, until the words land** (Greg,
+     spya-pd9fnc; plan 261008d). In Chat the composer grows upwards from a
+     pinned bottom edge, so a line removed from this strip moves the button
+     above it — and this line was removed at Stop, because the hook clears
+     `deviceLabel` there, dropping the button 28.7 px just as the second press
+     of a double press (261005a) was due. So the strip keeps what it was last
+     shown while the microphone was open, and draws it through `transcribing`.
+     Still true then: that microphone made the recording being transcribed.
+
+     Kept here rather than in the hook, whose `deviceLabel` means "the device
+     open now" to every other reader of it. Set during render, not in an
+     effect, because an effect paints one frame without the line first — the
+     very shift this exists to remove. Each branch only sets when the value
+     differs, so it settles in one extra pass. */
+  const [kept, setKept] = useState<{ label: string; chosen: boolean } | null>(null);
+  if (dictation.armed) {
+    const label = dictation.deviceLabel;
+    const chosen = dictation.deviceId !== null && !dictation.deviceUnavailable;
+    if (label === null ? kept !== null : kept?.label !== label || kept.chosen !== chosen) {
+      setKept(label === null ? null : { label, chosen });
+    }
+  } else if (!dictation.transcribing) {
+    if (kept !== null) setKept(null);
+    /* The picker, open at Stop, stays drawn (switched off) until the words
+       land, for the same reason, and closes then — rather than staying "open"
+       unseen and reappearing on the next dictation (GPT Sol's plan review,
+       F2). */
+    if (picking) setPicking(false);
+  }
+  const mic = dictation.armed || dictation.transcribing ? kept : null;
 
   /* The device list is fetched when the picker is opened rather than kept in
      sync all the time: `enumerateDevices` returns **blank labels until
@@ -400,7 +470,8 @@ export function DictationStrip({
         </p>
       )}
 
-      {/* **Which microphone, for as long as one is open** — not only once ten
+      {/* **Which microphone, for as long as one is open**, and on until its
+          words land (`mic`, above: so the button holds still) — not only once ten
           quiet seconds have passed. Bars moving prove that *a* microphone hears
           sound, not that it is the one the reader meant: Greg's Mac listened to
           something other than his webcam, which was the system input, and the
@@ -408,20 +479,22 @@ export function DictationStrip({
           because in the row above it was the one item allowed to shrink, and on
           a phone it shrank to nothing. "Your choice" comes from the remembered
           pick, not from the label, which says nothing reliable about it. */}
-      {dictation.armed && dictation.deviceLabel && (
+      {mic && (
         <p className="prof-mic-line">
           <span className="prof-mic-line-key">Microphone:</span>{" "}
-          <span className="prof-mic-device" title={dictation.deviceLabel}>
-            {dictation.deviceLabel}
+          <span className="prof-mic-device" title={mic.label}>
+            {mic.label}
           </span>
-          {dictation.deviceId !== null && !dictation.deviceUnavailable && (
-            <span className="prof-mic-chosen"> (your choice)</span>
-          )}{" "}
+          {mic.chosen && <span className="prof-mic-chosen"> (your choice)</span>}{" "}
+          {/* Drawn but switched off while the words are being made: there is
+              no microphone open to change, and taking it away would shorten
+              the line. Plan 261008d. */}
           <button
             type="button"
             className="prof-mic-change"
-            aria-label={`Change microphone, currently ${dictation.deviceLabel}`}
+            aria-label={`Change microphone, currently ${mic.label}`}
             aria-expanded={picking}
+            disabled={!dictation.armed}
             onClick={() => setPicking((p) => !p)}
           >
             Change
@@ -435,18 +508,21 @@ export function DictationStrip({
           another one" left Greg unable to tell whether anything was wrong
           (spya-k3q9mc). "Couldn't use", not "isn't connected": all we know is
           that asking for it by id failed. */}
-      {dictation.armed && dictation.deviceUnavailable && (
+      {/* Through `transcribing` too, for the microphone line's reason above. */}
+      {(dictation.armed || dictation.transcribing) && dictation.deviceUnavailable && (
         <p className="prof-mic-warn">
-          {deviceUnavailableWords(dictation.deviceUnavailable.wanted, dictation.deviceLabel)}
+          {deviceUnavailableWords(dictation.deviceUnavailable.wanted, mic?.label ?? null)}
         </p>
       )}
 
-      {picking && dictation.armed && dictation.deviceLabel && (
+      {picking && mic && (
         <p className="prof-mic-picker">
           <label htmlFor="dictation-mic">Microphone</label>
           <select
             id="dictation-mic"
             value={dictation.deviceId ?? ""}
+            /* Switched off, not removed, while the words are made — `mic`. */
+            disabled={!dictation.armed}
             onChange={(e) => {
               dictation.chooseDevice(e.target.value || null);
               setPicking(false);
