@@ -601,7 +601,7 @@ export function ChatPanel({
           />
         ) : open ? (
           /* Which model answered this conversation, and its thinking
-             (spya-pd9fnc; plan 261008b § 2). */
+             (spya-pd9fnc; plan 261008c § 2). */
           <ChatThreadAbout messages={open.messages} />
         ) : undefined
       }
@@ -623,7 +623,7 @@ export function ChatPanel({
               I was in the middle of a chat, and I couldn't see a way to get
               back to the main chat mode that would let me choose other
               threads."* The × was there and worked; it read as "close". Not in
-              Learn, which has no list. Plan 261008b § 1. */}
+              Learn, which has no list. Plan 261008c § 1. */}
           {!learn && open && (
             <button
               type="button"
@@ -1489,7 +1489,7 @@ export function Conversation({
    * and maybe even top"*). Drawn only while the transcript runs past the
    * panel, so a conversation that fits gets no row. Set only when one of the
    * three changes, for `awayNow`'s reason below: a same-value set per streamed
-   * word is a render per word. chat-steps.ts is the arithmetic; plan 261008b § 3.
+   * word is a render per word. chat-steps.ts is the arithmetic; plan 261008c § 3.
    */
   const [steps, setSteps] = useState(NO_STEPS);
   const stepsNow = useRef(steps);
@@ -1682,7 +1682,7 @@ export function Conversation({
        changes: the former is after them, and the latter cancels out in
        `turnStarts`. Measure them while layout is already current, before the
        spacer write below, so a streamed word does not pay for a second forced
-       layout merely to enable the step buttons (review F8, plan 261008b). */
+       layout merely to enable the step buttons (review F8, plan 261008c). */
     const stepStarts = hasTurns ? turnStarts(el) : [];
     const placing = !h.placed;
     let top = was;
@@ -1959,7 +1959,7 @@ export function Conversation({
           one is a permanent claim that you are lost. **The step buttons beside
           it are not that claim**: they show whenever the transcript runs past
           the panel, because there is then somewhere to go, at the bottom as
-          much as anywhere (spya-qd2agx, plan 261008b § 3). One row, in flow,
+          much as anywhere (spya-qd2agx, plan 261008c § 3). One row, in flow,
           for the pill's reason in chat-actions.css. */}
       {(steps.shown || away) && (
         <div className="chat-steps">

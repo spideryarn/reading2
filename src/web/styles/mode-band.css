@@ -421,7 +421,7 @@ svg.band-waiting-ghost { flex: none; }
 
 /* **"‹ Chats": an open conversation's way back to the list**, first in its
    header and in words, because a phone has no hover to read a tooltip from
-   (spya-pd9fnc, plan 261008b § 1). Quiet like the icons beside it, so the
+   (spya-pd9fnc, plan 261008c § 1). Quiet like the icons beside it, so the
    title stays the thing the eye lands on. */
 .chat-back {
   flex: none;

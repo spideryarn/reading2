@@ -418,7 +418,7 @@ const CHAT: BandShape = {
      is the one part of the band the migration restructured — it went from
      inline JSX to a fragment passed as `head` — so it is the one part where
      "the DOM did not change" is a claim rather than a restatement of the diff.
-     The way back was an unlabelled × at the far end until plan 261008b § 1
+     The way back was an unlabelled × at the far end until plan 261008c § 1
      (spya-pd9fnc): on a phone nobody could tell it was the way back. */
   headChildren: ["button.chat-back.tap-target[aria-label,title,type]", "h2", "button.chat-icon.danger[title,type]"],
 };

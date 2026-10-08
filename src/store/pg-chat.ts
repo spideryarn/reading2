@@ -564,7 +564,7 @@ const rawPgChatStore: ChatStore = {
           // Same rule, same line of reasoning, as the citations above it.
           tools: null,
           model: null,
-          // The model and its thinking are one fact about the attempt (Sol's F4, plan 261008b).
+          // The model and its thinking are one fact about the attempt (Sol's F4, plan 261008c).
           effort: null,
           error: null,
           stopped: false,

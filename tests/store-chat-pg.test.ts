@@ -330,7 +330,7 @@ describe("the Postgres chat store", () => {
     expect("citations" in (stored ?? {})).toBe(false);
     expect("searches" in (stored ?? {})).toBe(false);
     expect("model" in (stored ?? {})).toBe(false);
-    // The model and its thinking are one fact about the attempt (plan 261008b, Sol's F4).
+    // The model and its thinking are one fact about the attempt (plan 261008c, Sol's F4).
     expect("effort" in (stored ?? {})).toBe(false);
     /* And `createdAt` MOVES — opposite to a search run, where it is the
        question's clock. Leave it and the sweep reads the retry the reader is
@@ -809,7 +809,7 @@ describe("the Postgres chat store", () => {
     expect(answered?.citations).toEqual([{ url: "https://example.com/arch" }]);
     expect(answered?.searches).toBe(2);
     expect(answered?.model).toBe("a-model");
-    expect(answered?.effort, "stored, and read back (plan 261008b § 2)").toBe("default");
+    expect(answered?.effort, "stored, and read back (plan 261008c § 2)").toBe("default");
 
     // 3. begin two — a later question does NOT rename the thread.
     const two = await pgChatStore.begin(

@@ -2,7 +2,7 @@
  * **A model's name, as a person reads it** — the table and the lookup, in a
  * module that imports nothing, so the browser can use it as well as the
  * server. Moved out of src/models.ts on 2026-10-08 for a chat thread's (i)
- * (docs/plans/261008b-chat-back-to-the-list-on-a-phone-the-model-in-the-thread-s-i-and-step-between-messages.md § 2);
+ * (docs/plans/261008c-chat-back-to-the-list-on-a-phone-the-model-in-the-thread-s-i-and-step-between-messages.md § 2);
  * src/models.ts re-exports both, and its header § "a third spelling" is still
  * the reasoning.
  */

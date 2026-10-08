@@ -1,4 +1,4 @@
-# Review: 261008b — Chat's "‹ Chats" way back, the model and thinking level in a thread's (i), and Top/↑/↓ between messages
+# Review: 261008c — Chat's "‹ Chats" way back, the model and thinking level in a thread's (i), and Top/↑/↓ between messages
 
 Repo: this worktree (Spideryarn, TypeScript + ESM, React client in `src/web/`, Postgres via
 Drizzle, vitest). `CLAUDE.md` has the house rules.
@@ -8,7 +8,7 @@ Drizzle, vitest). `CLAUDE.md` has the house rules.
 Committed: the single commit at `HEAD` of this worktree's branch (`git show --stat HEAD`). Review
 `git diff HEAD~1..HEAD`. Start with:
 
-- `docs/plans/261008b-chat-back-to-the-list-on-a-phone-the-model-in-the-thread-s-i-and-step-between-messages.md`
+- `docs/plans/261008c-chat-back-to-the-list-on-a-phone-the-model-in-the-thread-s-i-and-step-between-messages.md`
   — the plan, the plan review's findings F1–F5 and how each was settled, and what landed. Read it
   as a reviewer of the conclusions too.
 - `src/web/chat-steps.ts`, `src/web/ChatPanel.tsx` (`head` and `Conversation`: `steps`, `ends`,

@@ -1,6 +1,6 @@
 /**
  * **An answer stores the thinking it was given, and it is what was sent** —
- * plan 261008b § 2 (Greg, spya-pd9fnc: *"which model it had been using, and
+ * plan 261008c § 2 (Greg, spya-pd9fnc: *"which model it had been using, and
  * perhaps even thinking level"*).
  *
  * The stored `effort` is only worth showing if it is the wire's value, so this

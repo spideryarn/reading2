@@ -4291,7 +4291,7 @@ export const chatMessages = spideryarn.table(
      * the two cannot disagree. Stored rather than worked out from `model` when
      * read, because the decision table changes and an old answer must keep
      * saying what it was given. A thread's (i) shows it (spya-pd9fnc; plan
-     * 261008b § 2).
+     * 261008c § 2).
      */
     effort: text("effort").$type<AnswerEffort>(),
     error: text("error"),

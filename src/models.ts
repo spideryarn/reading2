@@ -1677,7 +1677,7 @@ export function modelFor(task: Task, power: ModelPower): string {
 
 /* **`DISPLAY_NAME` and `displayName` live in src/model-names.ts**, which
    imports nothing, so the browser can name a stored model id the way /profile
-   does (a chat thread's (i), plan 261008b § 2). Re-exported here, where every
+   does (a chat thread's (i), plan 261008c § 2). Re-exported here, where every
    server caller has always found them. */
 export { DISPLAY_NAME, displayName } from "./model-names.js";
 

@@ -22,7 +22,7 @@
  * (`max`). A turn is stepped to wherever the room lets it reach — the held
  * question back at the top — but running out of turns goes to the words' end,
  * never down into the empty room.
- * docs/plans/261008b-chat-back-to-the-list-on-a-phone-the-model-in-the-thread-s-i-and-step-between-messages.md § 3.
+ * docs/plans/261008c-chat-back-to-the-list-on-a-phone-the-model-in-the-thread-s-i-and-step-between-messages.md § 3.
  */
 import { stepTarget } from "./keynav.js";
 

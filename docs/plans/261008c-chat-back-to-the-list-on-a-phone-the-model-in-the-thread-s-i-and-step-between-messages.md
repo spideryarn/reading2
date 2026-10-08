@@ -55,7 +55,7 @@ that a reader cannot tell it is the way back:
 And the other door is worse: pressing Chat in the Dock while in a thread *leaves* Chat. On a phone
 the Dock scrolls sideways and Chat is usually off screen anyway.
 
-![before, 390px](261008b-shot-1-before-390.png)
+![before, 390px](261008c-shot-1-before-390.png)
 
 So the class is **a control whose only label is a tooltip, on a device that has no hover** — a
 discoverability bug, not a layout bug.
@@ -168,7 +168,7 @@ Each stage: typecheck, `npm test`, lint on touched files, GPT Sol code review, c
   finger and mouse, and a streaming answer still holds still.
 - Feedback note in `docs/user-feedback/` naming both report ids; `scripts/feedback-endings.ts` run.
 
-## Plan review (GPT Sol, read-only) — [261008b-plan-review-sol.md](261008b-plan-review-sol.md)
+## Plan review (GPT Sol, read-only) — [261008c-plan-review-sol.md](261008c-plan-review-sol.md)
 
 `VERDICT: refuse`, on three P1s, all taken. It approved the way-back diagnosis and fix, and storing
 the effort per answer with `wireEffort` as the source and `"default"` vs null as the encoding; and it
@@ -216,14 +216,14 @@ disabled. While an answer streamed, ↑ to the previous answer held at exactly t
 as the answer grew 647 → 1,619 characters; ↓ afterwards reached the new question, its answer, the
 bottom.
 
-![‹ Chats and the step row, 390px](261008b-shot-2-chats-and-steps-390.png)
-![the (i) after one new answer, 390px](261008b-shot-3-info-card-390.png)
-![the step row, 1440px](261008b-shot-4-steps-1440.png)
+![‹ Chats and the step row, 390px](261008c-shot-2-chats-and-steps-390.png)
+![the (i) after one new answer, 390px](261008c-shot-3-info-card-390.png)
+![the step row, 1440px](261008c-shot-4-steps-1440.png)
 
 Seen and not ours: on the Guide thread on a phone, a "↩ back to …" chip (the guide's Back) sits
 over the composer's placeholder. Reported, not touched.
 
-## Code review (GPT Sol, write-capable) — [261008b-code-review-sol.md](261008b-code-review-sol.md)
+## Code review (GPT Sol, write-capable) — [261008c-code-review-sol.md](261008c-code-review-sol.md)
 
 On `ee1ae5850`. `VERDICT: approve with changes`; its four fixes read and kept, each with a test:
 

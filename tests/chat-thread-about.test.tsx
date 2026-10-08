@@ -3,7 +3,7 @@
  * **An open conversation's (i) says which model answered it, and how hard it
  * was asked to think** — Greg, spya-pd9fnc, 2026-10-08: *"in the information
  * icon for the chat thread, I was hoping it would show me which model it had
- * been using, and perhaps even thinking level."* Plan 261008b § 2.
+ * been using, and perhaps even thinking level."* Plan 261008c § 2.
  *
  * The real `ChatPanel`, handed props directly as
  * tests/guide-in-chat-panel.test.tsx does, and the card opened with a press.

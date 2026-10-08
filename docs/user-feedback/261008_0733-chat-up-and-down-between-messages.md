@@ -14,7 +14,7 @@ Report `spya-qd2agx` (SPIDERYARN-READING2-ES), a suggestion from Greg (an admin,
 > between individual messages within the chat.
 
 **Ending: shipped**, on `dev`. Plan:
-[261008b](../plans/261008b-chat-back-to-the-list-on-a-phone-the-model-in-the-thread-s-i-and-step-between-messages.md)
+[261008c](../plans/261008c-chat-back-to-the-list-on-a-phone-the-model-in-the-thread-s-i-and-step-between-messages.md)
 § 3.
 
 - **Built**: when a conversation is taller than its panel, a row under it has three buttons: ⇈ to

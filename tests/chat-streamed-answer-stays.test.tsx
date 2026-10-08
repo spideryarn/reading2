@@ -582,7 +582,7 @@ describe("a Live conversation", () => {
 
 /* **Top, ↑ and ↓ between turns** (Greg, spya-qd2agx). They share the pill's
    row and move the view the way the pill does, so a hold has to survive them.
-   docs/plans/261008b-chat-back-to-the-list-on-a-phone-the-model-in-the-thread-s-i-and-step-between-messages.md § 3. */
+   docs/plans/261008c-chat-back-to-the-list-on-a-phone-the-model-in-the-thread-s-i-and-step-between-messages.md § 3. */
 describe("the step buttons", () => {
   const row = () => host.querySelector<HTMLElement>(".chat-steps");
   const button = (label: string) => {

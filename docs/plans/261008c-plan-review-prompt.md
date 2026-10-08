@@ -1,4 +1,4 @@
-# Review: plan 261008b — Chat's way back to the list on a phone, the model and thinking level in a thread's (i), and Top/↑/↓ between messages
+# Review: plan 261008c — Chat's way back to the list on a phone, the model and thinking level in a thread's (i), and Top/↑/↓ between messages
 
 Repo: this worktree (Spideryarn, TypeScript + ESM, React client in `src/web/`, Postgres via
 Drizzle, `tsx`, vitest). Read `CLAUDE.md` for the house rules.
@@ -8,7 +8,7 @@ Drizzle, `tsx`, vitest). Read `CLAUDE.md` for the house rules.
 Live pre-commit candidate, base `origin/dev` at the worktree's merge-base (`git merge-base HEAD
 origin/dev`). This is a **plan review**: read the plan as the thing under review.
 
-- The plan: `docs/plans/261008b-chat-back-to-the-list-on-a-phone-the-model-in-the-thread-s-i-and-step-between-messages.md`
+- The plan: `docs/plans/261008c-chat-back-to-the-list-on-a-phone-the-model-in-the-thread-s-i-and-step-between-messages.md`
 - Already drafted, for context (untracked or modified — `git status` lists them):
   `src/web/chat-steps.ts` (new), `tests/chat-steps.test.ts` (new), `src/web/ChatPanel.tsx`
   (the `Conversation` step row: `steps`, `reach`, `measureSteps`, `step`),

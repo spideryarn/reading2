@@ -22,7 +22,7 @@ another session's (`fbbtjtbb`), and this work did not touch the dictation compon
 > had been using, and perhaps even thinking level.
 
 **Ending: shipped**, on `dev`. Plan:
-[261008b](../plans/261008b-chat-back-to-the-list-on-a-phone-the-model-in-the-thread-s-i-and-step-between-messages.md).
+[261008c](../plans/261008c-chat-back-to-the-list-on-a-phone-the-model-in-the-thread-s-i-and-step-between-messages.md).
 
 - **The way back was there, and nobody could tell.** On an iPhone-sized screen, a browser pass
   found the × at the far end of the header on screen, working, and never pushed off by a long

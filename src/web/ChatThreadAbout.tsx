@@ -13,7 +13,7 @@
  * model and thinking, in the order they first appear. A failed answer stores
  * neither and is not counted; nor is one still arriving. An answer from
  * before 2026-10-08 has a model and no thinking level, and says so rather
- * than guessing. Plan 261008b § 2.
+ * than guessing. Plan 261008c § 2.
  */
 import type { AnswerEffort, ChatMessage } from "../types.js";
 import { displayName } from "../model-names.js";

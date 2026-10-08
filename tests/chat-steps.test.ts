@@ -1,6 +1,6 @@
 /**
  * Chat's ↑ / ↓ between turns (spya-qd2agx): the arithmetic, over pixels.
- * docs/plans/261008b-chat-back-to-the-list-on-a-phone-the-model-in-the-thread-s-i-and-step-between-messages.md § 3.
+ * docs/plans/261008c-chat-back-to-the-list-on-a-phone-the-model-in-the-thread-s-i-and-step-between-messages.md § 3.
  */
 import { describe, expect, it } from "vitest";
 import { chatStep } from "../src/web/chat-steps.js";
