@@ -2,7 +2,7 @@
 reports: spya-ucftjt
 ending: shipped
 parts: 3
-comment: Part 2 of 3 shipped for signed-in readers: Ask about Spideryarn on every Help page. Waiting on you: may people who are not signed in use it too? Part 3, the guide, is its own entry.
+comment: Part 2 of 3 shipped for signed-in readers: Ask about Spideryarn on every Help page. You chose to keep it signed-in only for now (q-vvhb55).
 ---
 # Ask about Spideryarn: a chatbot on the Help pages
 

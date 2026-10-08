@@ -2,7 +2,7 @@
 reports: spya-ucftjt
 ending: shipped
 parts: 3
-comment: All three parts shipped: Help in the bar and as pages, Ask about Spideryarn on the Help pages, and a guide in Chat. Waiting on you: may people who are not signed in use the Help chatbot?
+comment: All three parts shipped: Help in the bar and as pages, Ask about Spideryarn on the Help pages, and a guide in Chat. The Help chatbot stays signed-in only for now, as you chose.
 ---
 # The guide agent (part 3 of 3 of `spya-ucftjt`)
 
