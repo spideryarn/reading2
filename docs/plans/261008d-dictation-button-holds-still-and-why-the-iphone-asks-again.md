@@ -220,7 +220,7 @@ it, and one small shared component (`TalkLabel`) with three CSS rules. Nothing i
 
 ## Stages
 
-One stage.
+Two stages: the strip (Part 2), then the remembered-microphone pre-check (Part 1, § Stage 2).
 
 1. The red test, then the strip change, then the test green.
 2. Gates: `npm test`, `npm run typecheck`, lint on touched files.
@@ -230,3 +230,47 @@ One stage.
 5. Docs: [dictation.md](../project/dictation.md) gets the iPhone answer and the steady strip, and a
    postmortem names the class.
 6. The note in `docs/user-feedback/`, `feedback-endings.ts`, push to `dev`.
+
+## What landed
+
+- **`96124f2c2`, stage 1.** The strip keeps its microphone line; `TalkLabel`.
+- **`5c24a1fee`, GPT Sol's code review of stage 1**
+  ([answer](261008d-dictation-button-holds-still-code-review-sol.md)). Sol fixed two lifecycle bugs
+  red-first: a Retry brought back an ended "Couldn't use" warning, and a picker open at Stop
+  reopened on a dictation started before the words landed. The same commit carries two fixes of
+  mine, both found by the browser re-check and the review:
+  - **Learn:** only `.prof-listening` had a row of its own, so the microphone line joined the voice
+    row and squeezed it, pushing the microphone (also Stop) off the band at 320 px. That was older
+    than this work: it measured the same with the old label width injected. Every strip line now
+    carries `.dictation-line`, and `tests/voice-row.test.tsx` reads the lines off the strip's
+    source.
+  - **The comment follow-up** drew the strip inside its one unwrapping row (Sol's P1, report-only).
+    It now wraps the strip's lines below the row.
+- **Not fixed, Sol's P2:** the fleet dashboard's dictation control (`DictationControl.tsx`)
+  changes its button text and status width at Stop and could jump rows near a wrap threshold. It
+  does not offer a double press, and the dashboard is on a higher robustness bar, so changing its
+  layout is a separate piece of work rather than a rider on this one.
+- **`9f9b10ae5`, stage 2**, the remembered-microphone pre-check. GPT Sol's code review
+  ([answer](261008d-dictation-stage-2-code-review-sol.md)): approve, no findings, no files changed.
+  It confirmed the WebKit mechanism against the source, and reviewed the `.dictation-line` and
+  follow-up CSS above.
+- **The postmortem**: [261008b](../postmortems/261008b-a-control-moved-by-its-own-press.md).
+  261005a's own browser check very probably passed because a locator's `tap()` finds the element
+  again for each press and so followed the moving button. `browser-testing.md` now says a double
+  press is two presses at the same place.
+
+**Browser check** (Sonnet, Playwright with Chromium's fake microphone, `/api/transcribe` stubbed at
+2 s and every other POST answered with a fake `{}`, so nothing reached a model or production), on
+`96124f2c2`:
+
+| | button top before → after Stop | double tap at the same spot |
+|---|---|---|
+| Chat 390 | 646.3 → 646.9 (was → 675.0) | sent once, with the transcript |
+| Chat 1440 | 756.7 → 757.3 (was → 785.4) | sent once |
+| Learn 390 | 636.8 → 637.4 | sent once |
+| Feedback 390 | 479.6 → 479.6 | sent once |
+
+The 0.6 px left is the status row's own height (the meter is 0.6 px taller than the spinner). A
+single tap still leaves the words unsent. **Not checked in a browser:** the `5c24a1fee` and
+`9f9b10ae5` changes (CSS contract and unit tests only), WebKit (Playwright's WebKit has no fake
+microphone), and a real iPhone.
