@@ -1,6 +1,6 @@
 # Bottom bar groups: Skim and More join Structure and Summary, Comments joins Marginalia
 
-*Status as of 2026-10-08: planned.*
+*Status as of 2026-10-08: built, checked in a browser and code reviewed.*
 
 Up: [plans.md](../project/plans.md). Reports `spya-wm5gu2` (SPIDERYARN-READING2-EM) and
 `spya-mcs4gb` (SPIDERYARN-READING2-EQ), both from Greg as admin; Overseer queue item `qi-ecakhf63`.
@@ -45,9 +45,9 @@ goes. It carries no `dock-group-start`, so no line separates it from Skim; the f
 gets the line (it begins a different run, so `groupStarts` already says so).
 
 *The cost, named:* 261007c D6 (GPT Sol's PR-1 on that plan) put More outside `role="radiogroup"`
-because a menu button inside one is announced as one of "what the middle column shows", and ARIA
-allows only `radio` children in a radiogroup. Greg's ask puts it between two radios, so in DOM and
-tab order it must sit between them. Options considered:
+because a menu button inside one is announced as part of "what the middle column shows", and a mixed
+composite does not match the textbook radio-group pattern. Greg's ask puts it between two radios, so
+in DOM and tab order it must sit between them. Options considered:
 
 1. **More inside the radiogroup element** (chosen). Smallest change. A screen reader entering More
    hears the group's name and then "More, menu button"; the radios' position-in-set counts radios
@@ -74,8 +74,9 @@ Option 1, which Sol called acceptable as a pragmatic compromise.
 (`DockTab`) on the reading view, and the link (`DockLink`) on Metadata and the visitor pages. Dock
 renders the Comments element as before and hands it to `DockModes` / `DockModeLinks` as a node to
 draw after the toggle in the same frame; if a bar has no Marginalia toggle, Comments gets the frame
-alone. Marginalia's toggle is outside the radiogroup already, so no ARIA question here. Metadata
-keeps the `TooltipGroup` it shared with Comments, now alone in it.
+alone. Marginalia's toggle is outside the radiogroup already, so no ARIA question here. The
+`TooltipGroup` Comments shared with Metadata now wraps the framed controls instead; Metadata stands
+alone, because a group of one has nothing to make instant.
 
 Consequences, each to be checked rather than assumed:
 - inside `.dock-modes`, Comments drops its word on fit rung 2 with the modes rather than on rung 3;
@@ -85,10 +86,10 @@ Consequences, each to be checked rather than assumed:
   frame (fill rather than the top marker) apply to it as to its neighbours;
 - Quick search (⚡) now stands after the Marginalia–Comments frame rather than before Comments.
 
-**D4. The phone overflow (`qi-t22r9mt4`)** — at 390px the bar scrolls sideways and More was past
-the right edge. More moving four buttons left should bring it on screen without scrolling; checked
-in the browser at 390 and 360. If the bar still scrolls, that part of the queue item stays open: it
-is not widened here.
+**D4. The phone overflow (`qi-t22r9mt4`)** — at 390px the bar still scrolls sideways. Moving More
+four buttons left brings it into the first screen in the default bar; with Diagram also drawn, its
+44px box runs from x=354 to x=398, so the last 8px still needs the horizontal scroll. The queue item
+therefore stays open: widening or otherwise redesigning the phone bar is not part of this stage.
 
 **D5. `data-mode` marks the controls that are modes** (Sol's PR-3). Once More and Comments sit
 inside `.dock-modes`, "a control in the mode segment" stops meaning "a mode". The radios,
@@ -112,22 +113,24 @@ PR-4 (the three width counts: segment, bands' frame and radiogroup, Marginalia's
 (every gathered mode open, FAQ and Timeline with the switch on) are tests in
 `tests/dock-groups.test.tsx`, `tests/dock-more.test.tsx` and
 `tests/a-second-press-closes-the-mode.test.tsx`. PR-6's targets are updated: the help page's prose
-and alt text, `reading-view-overview.md`, and the comments in `Dock.tsx` and `dock-fit.css`; the
-`narrow-window.css` and `dock-fit.ts` comments it named were still true. A bar with no Marginalia
-toggle (Comments alone in the frame) does not occur today — Marginalia is on every bar since
-2026-10-05 — so it has code but no test.
+and alt text, `reading-view-overview.md`, and the comments in `Dock.tsx`, `dock-fit.css` and
+`narrow-window.css`; the `dock-fit.ts` comment remained true. A bar with no Marginalia toggle
+(Comments alone in the frame) does not occur today — Marginalia is on every bar since 2026-10-05 —
+so it has code but no test.
 
 ## Stages
 
-One stage: it is small and all in `Dock.tsx`.
+One stage: it is small and centred on `Dock.tsx`, with the matching CSS, tests and docs.
 
-- [ ] Tests first, seen failing: `tests/dock-mode-order.test.ts` (Skim in the shape run, line
+- [x] Tests first, seen failing: `tests/dock-mode-order.test.ts` (Skim in the shape run, line
       starts), `tests/dock-more.test.tsx` (More inside the bands' frame straight after Skim, no
       frame of its own, the next button carries the line; on both arms), a test that Comments is in
       Marginalia's frame after the toggle on both arms.
-- [ ] `group: "shape"` on Skim; More placed in the bands' frame; Comments as a slot; `drawnCount`;
+- [x] `group: "shape"` on Skim; More placed in the bands' frame; Comments as a slot; `drawnCount`;
       comments in `Dock.tsx`, `dock-fit.css`, `narrow-window.css` that describe four frames / More
       after Learn / Comments among "the three that are not modes".
-- [ ] Docs that describe the bar's order: sweep for them (reading-view-overview, narrow-windows,
+- [x] Docs that describe the bar's order: sweep for them (reading-view-overview, narrow-windows,
       phone-and-touch, help pages, mode.md), and update the `ModeGroup` comment.
-- [ ] Gates, browser check (1440, 390, 360; WebKit iPhone), GPT Sol code review, commit, push.
+- [x] Gates, browser check (1440, 390, 360; WebKit iPhone), GPT Sol code review and
+      implementation commit.
+- [ ] Land the review corrections and push to `dev`.

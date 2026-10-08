@@ -25,10 +25,11 @@
  * which is a setting rather than a view of this article — it was *the only*
  * button in the bar not about the article when this was written, and stopped
  * being when `DockHome` and `DockFeedback` moved in. GPT Sol, 2026-09-07).
- * And the modes have grown a hairline frame of their own — `.dock-modes` is
- * what says *these are the things the document can be*, so a control outside
- * that frame is not making the claim Greg objected to. The markup says it three
- * ways: outside the `role="radiogroup"`, a `Link` rather than an `aria-checked`
+ * And the article controls have grown hairline frames of their own —
+ * `.dock-modes` now holds the mode switch, Marginalia and Comments. The mode
+ * switch inside it is what says *these are the things the document can be*.
+ * The markup says the way home is different three ways: outside both that
+ * segment and its `role="radiogroup"`, a `Link` rather than an `aria-checked`
  * button, and never `.dock-btn.on`. Meanwhile the better place that took the way
  * home off this bar — a free top-left corner — stops existing on these pages.
  *
@@ -3321,12 +3322,11 @@ function DockModeLinks({
   }
   return (
     <div className="dock-modes" style={{ "--dock-mode-count": drawnCount(bar) } as CSSProperties}>
-      {/* **One group, so these scrub like the segment does.** Fourteen
+      {/* **One group, so the framed controls scrub as one cluster.** Fourteen
           independent 300ms waits is what a row of tooltips feels like without
-          it — Tooltip.tsx § grouping. Only the modes are in it; the three
-          buttons after this block are not modes and have a group of their own,
-          for the reason given where it is opened (`Dock` § the three that are
-          not modes). */}
+          it — Tooltip.tsx § grouping. Since 2026-10-08 this includes More and
+          Comments as well as the modes; Metadata now stands alone after the
+          segment (`Dock` § Metadata). */}
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
         {exits.length > 0 && <div className="dock-frame" style={frameStyle(exits.length)}>{exits.map(link)}</div>}
         {/* More in the same place as on the reading view — straight after
