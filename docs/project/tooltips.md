@@ -404,10 +404,12 @@ Three things about it are not true of any other set here.
 - **And the three buttons in the bar that are not modes** — Comments, Tweets and Metadata (Tweets became a mode on 2026-09-29, leaving two, and Summary's Thread view on 2026-10-03; [plan](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md)) — took the
   same two-paragraph card later the same day. Their copy is `NOT_A_MODE` in
   [`Dock.tsx`](../../src/web/Dock.tsx) rather than `MODE_CATALOG`, because a record keyed by `Mode`
-  is the wrong home for three things that are not modes and never will be. They are in a
-  `TooltipGroup` of their own, so running along the end of the bar is instant after the first card;
-  the experimental switch stays outside it, being the adjacent account-level control — a setting
-  rather than a view of this article.
+  is the wrong home for three things that are not modes and never will be. Comments joined
+  Marginalia inside the framed controls' `TooltipGroup` on 2026-10-08
+  ([261008d](../plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md));
+  Metadata now stands alone, because a group of one has nothing to make instant. The experimental
+  switch stays outside the group, being the adjacent account-level control — a setting rather than
+  a view of this article.
 - **And then the last two**, on 2026-09-08: the wordmark and the command button, which are not modes
   either and do not go through `DockLink`. `DockCommands` joined the group above it that morning and
   **left again the same day**, when Greg asked for it beside the logo — so the two are now neighbours

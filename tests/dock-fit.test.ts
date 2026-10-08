@@ -444,8 +444,18 @@ describe("the stylesheet backs the ladder", () => {
     const shows = CSS.replace(/\/\*[\s\S]*?\*\//g, "")
       .split("}")
       .map((block) => block.split("{")[0] ?? "")
-      .filter((sel) => sel.includes(".dock-btn.on") && sel.includes(".dock-btn-label"));
+      .filter((sel) => sel.includes("[data-mode].on") && sel.includes(".dock-btn-label"));
     expect(shows.length, "no rule keeps the active mode's label").toBeGreaterThan(0);
+    /* **A mode's word, never Comments'** (plan 261008d, GPT Sol's PR-2):
+       Comments sits in the mode segment since 2026-10-08 and is `.on` while
+       its drawer is open, which `fitSignature` does not hear about. Any rule
+       that gives an `.on` label back without `[data-mode]` would widen the bar
+       unmeasured. */
+    const unscoped = CSS.replace(/\/\*[\s\S]*?\*\//g, "")
+      .split("}")
+      .map((block) => block.split("{")[0] ?? "")
+      .filter((sel) => /\.on\b[^,]*\.dock-btn-label/.test(sel) && !sel.includes("[data-mode].on"));
+    expect(unscoped).toEqual([]);
     expect(shows.some((sel) => sel.includes("dock-fit-2"))).toBe(true);
     /* Rung 4 (2026-10-02) is rung 3 less the search box, so it
        is "the rung below" too. */
@@ -553,7 +563,7 @@ describe("Dock gives the ladder something to work with", () => {
    */
   it("the metadata page: links, in the same frames as the reading view", () => {
     render({ view: "metadata" });
-    const links = host.querySelectorAll(".dock-modes .dock-frame > a.dock-btn");
+    const links = host.querySelectorAll(".dock-modes .dock-frame > a[data-mode]");
     const bar = splitForMore(visibleModes(false, undefined), undefined);
     expect(links).toHaveLength(bar.drawn.length);
     expect(links.length).toBeGreaterThan(1);
@@ -655,7 +665,7 @@ describe("Dock gives the ladder something to work with", () => {
    */
   it("the metadata page with the switch on: every mode, as links", () => {
     render({ view: "metadata", experimental: EXPERIMENTAL_ON });
-    expect(host.querySelectorAll(".dock-modes .dock-frame > a.dock-btn")).toHaveLength(
+    expect(host.querySelectorAll(".dock-modes .dock-frame > a[data-mode]")).toHaveLength(
       MODES.length - GATHERED_UNDER_MORE,
     );
     openMore(host);

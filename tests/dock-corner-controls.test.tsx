@@ -588,14 +588,17 @@ describe("the route walk: one branded home control, never two triggers", () => {
     expect(group).not.toBeNull();
     /* Less Marginalia, which is on every bar since 2026-10-05 and is a toggle
        drawn after the group, never a radio in it (plan 261005d). And the
-       drawn modes only, since 2026-10-07: five are under the More button,
-       which is outside the group too (plan 261007c). */
+       drawn modes only, since 2026-10-07: five are under the More button
+       (plan 261007c). */
     const drawn = splitForMore(visibleModes(false, "plain"), "plain").drawn.filter((m) => m.mode !== "marginalia");
     expect(drawn.length, "the fixture draws a bar").toBeGreaterThan(5);
     expect(group?.querySelectorAll('[role="radio"]')).toHaveLength(drawn.length);
-    /* More would move that number by one if it were drawn inside the group. */
-    expect(group?.querySelector(".dock-more-trigger")).toBeNull();
-    expect(document.querySelector(".dock-modes .dock-more-trigger")).not.toBeNull();
+    /* More stands inside the group since 2026-10-08, between Skim and Search
+       (plan 261008d § D2), and is not counted among its radios: it is a menu
+       button, never `role="radio"`. */
+    const more = group?.querySelector(".dock-more-trigger");
+    expect(more).not.toBeNull();
+    expect(more?.getAttribute("role")).toBeNull();
   });
 
   /**

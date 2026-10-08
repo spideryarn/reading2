@@ -81,7 +81,7 @@ export function moreLabels(root: ParentNode = document): string[] {
 export function reachableModeLabels(root: ParentNode): string[] {
   const drawn = [
     ...root.querySelectorAll<HTMLElement>(
-      '.dock-modes [role="radio"], .dock-modes [aria-pressed], .dock-modes a.dock-btn',
+      '.dock-modes [role="radio"], .dock-modes [data-mode][aria-pressed], .dock-modes a[data-mode]',
     ),
   ].map((el) => el.getAttribute("aria-label") ?? "");
   return [...new Set([...drawn, ...moreLabels(root)])];
@@ -100,7 +100,7 @@ export function reachableModeLabels(root: ParentNode): string[] {
  */
 export function modeDoor(root: ParentNode, label: string): HTMLElement | undefined {
   const button = [
-    ...root.querySelectorAll<HTMLElement>('.dock-modes [role="radio"], .dock-modes [aria-pressed]'),
+    ...root.querySelectorAll<HTMLElement>('.dock-modes [role="radio"], .dock-modes [data-mode][aria-pressed]'),
   ].find((el) => el.getAttribute("aria-label") === label);
   if (button) return button;
   if (moreTrigger(root) === null) return undefined;
@@ -117,7 +117,7 @@ export function modeDoor(root: ParentNode, label: string): HTMLElement | undefin
  */
 export function pressModeByLabel(root: ParentNode, label: string): "bar" | "more" {
   const button = [
-    ...root.querySelectorAll<HTMLElement>('.dock-modes [role="radio"], .dock-modes [aria-pressed]'),
+    ...root.querySelectorAll<HTMLElement>('.dock-modes [role="radio"], .dock-modes [data-mode][aria-pressed]'),
   ].find((el) => el.getAttribute("aria-label") === label);
   if (button) {
     act(() => button.click());

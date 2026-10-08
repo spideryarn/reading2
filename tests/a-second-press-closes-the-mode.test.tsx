@@ -475,48 +475,54 @@ describe("Plain closes both columns", () => {
   );
 });
 
-/* Four since 2026-10-07: the More button has a frame of its own between the
-   bands and Marginalia, outside the radiogroup as Marginalia's is (plan
-   261007c, D6). It was three from 2026-10-02. */
-describe("the bar is four frames: Plain, the bands, More, Marginalia", () => {
-  it("draws Plain alone in the first frame, More alone in the third and Marginalia alone in the last", async () => {
+/* Three since 2026-10-08 (plan 261008d): More stands inside the bands' frame,
+   straight after Skim, and Comments in Marginalia's, after it — Greg,
+   spya-mcs4gb. From 2026-10-07 More had a frame of its own (plan 261007c, D6),
+   and from 2026-10-02 there were three. */
+describe("the bar is three frames: Plain, the bands with More, Marginalia with Comments", () => {
+  it("draws Plain alone in the first frame, More after Skim in the second and Comments after Marginalia in the last", async () => {
     await open("?margin=1");
     const frames = [...host.querySelectorAll(".dock-modes .dock-frame")];
-    expect(frames).toHaveLength(4);
+    expect(frames).toHaveLength(3);
     const labels = (f: Element | undefined) =>
-      [...(f?.querySelectorAll("button") ?? [])].map((b) => b.getAttribute("aria-label"));
+      [...(f?.querySelectorAll(".dock-btn") ?? [])].map((b) => b.getAttribute("aria-label"));
     expect(labels(frames[0])).toEqual([MODE_LABEL.plain]);
-    expect(labels(frames[2])).toEqual(["More"]);
-    expect(labels(frames[3])).toEqual([MODE_LABEL.marginalia]);
-    expect(labels(frames[1])).toContain(MODE_LABEL.summary);
+    expect(labels(frames[1])).toEqual([
+      MODE_LABEL.structure,
+      MODE_LABEL.summary,
+      MODE_LABEL.skim,
+      "More",
+      MODE_LABEL.search,
+      MODE_LABEL.chat,
+      MODE_LABEL.learn,
+    ]);
+    expect(labels(frames[2])).toEqual([MODE_LABEL.marginalia, "Comments"]);
     /* Plain and the bands are still one radiogroup: exactly one is on. More
-       and Marginalia are outside it: neither is one of the things the middle
-       column shows. */
+       is inside it now, between two radios (261008d § D2); Marginalia and
+       Comments are outside it. */
     const group = host.querySelector('.dock-modes [role="radiogroup"]');
     expect(group?.contains(frames[0] ?? null)).toBe(true);
     expect(group?.contains(frames[1] ?? null)).toBe(true);
     expect(group?.contains(frames[2] ?? null)).toBe(false);
-    expect(group?.contains(frames[3] ?? null)).toBe(false);
-    /* A frame's edge separates Plain, More and Marginalia; no run line beside them. */
+    /* A frame's edge separates Plain and Marginalia; no run line beside them. */
     expect(frames[1]?.querySelector("button")?.classList.contains("dock-group-start")).toBe(false);
-    expect(frames[2]?.querySelector("button")?.classList.contains("dock-group-start")).toBe(false);
-    expect(frames[3]?.querySelector("button")?.classList.contains("dock-group-start")).toBe(false);
+    expect(frames[2]?.querySelector(".dock-btn")?.classList.contains("dock-group-start")).toBe(false);
     expect(
       [...(frames[1]?.querySelectorAll("button.dock-group-start") ?? [])].map((button) =>
         button.getAttribute("aria-label"),
       ),
       "the lines between the surviving band runs moved or disappeared",
-    ).toEqual([MODE_LABEL.skim, MODE_LABEL.search]);
+    ).toEqual([MODE_LABEL.search]);
 
     /* Coarse-pointer growth is weighted by the controls actually drawn, at
        both levels. A fixed outer weight was the plan review's P2-1. */
     const modes = host.querySelector<HTMLElement>(".dock-modes");
     expect(modes?.style.getPropertyValue("--dock-mode-count")).toBe(
-      String(modes?.querySelectorAll("button").length),
+      String(modes?.querySelectorAll(".dock-btn").length),
     );
     for (const frame of frames) {
       expect((frame as HTMLElement).style.getPropertyValue("--dock-frame-count")).toBe(
-        String(frame.querySelectorAll("button").length),
+        String(frame.querySelectorAll(".dock-btn").length),
       );
     }
   });

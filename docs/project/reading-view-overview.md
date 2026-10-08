@@ -129,8 +129,12 @@ four of its sub-modes are built, and it is for somebody asked to peer-review the
 readers never are.
 
 **Five modes are under a More button rather than in the bar** since 2026-10-07: Quotes, Glossary,
-FAQ, Ideas and Timeline, the ones Greg said a reader does not open often. More stands after the
-other modes and before Marginalia, and its menu opens upwards. A mode there is as reachable as it
+FAQ, Ideas and Timeline, the ones Greg said a reader does not open often. More stands straight
+after Skim, at the end of the Structure–Summary run (it stood alone after the other modes until
+2026-10-08, when Greg asked for it *"as part of that group, rather than out on their own"*, which
+puts a menu button inside the modes' radiogroup —
+[261008d § D2](../plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md)
+says why that was taken). Its menu opens upwards. Comments shares Marginalia's frame, after it. A mode there is as reachable as it
 was — an owner's command bar lists it, its address works, and a visitor can pick it from More — and
 while it is the open mode it is drawn in the bar again, checked, so a second press still closes it.
 This is a second, separate reason a mode

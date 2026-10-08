@@ -1,0 +1,1617 @@
+diff --git a/docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md b/docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md
+new file mode 100644
+index 000000000..dce9e6235
+--- /dev/null
++++ b/docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md
+@@ -0,0 +1,133 @@
++# Bottom bar groups: Skim and More join Structure and Summary, Comments joins Marginalia
++
++*Status as of 2026-10-08: planned.*
++
++Up: [plans.md](../project/plans.md). Reports `spya-wm5gu2` (SPIDERYARN-READING2-EM) and
++`spya-mcs4gb` (SPIDERYARN-READING2-EQ), both from Greg as admin; Overseer queue item `qi-ecakhf63`.
++Follows [261007c](261007c-bottom-bar-rises-in-on-first-load-and-a-more-button-gathers-the-lesser-modes.md),
++which made the More button.
++
++## Goal
++
++Greg, 2026-10-08, verbatim:
++
++> In the bottom bar, move the skim mode icon into the same group after structure and summary.
++
++> On the bottom bar, I'm glad we've got the three dots that hide the extra modes. I wonder if we
++> could put those, right now they're sort of out on their own. I'm wondering if we could put those
++> perhaps just after the skim mode, just after structure and summary as part of that group, rather
++> than out on their own. And also, I wonder if we could put the comments icon inside a group with
++> marginalia, perhaps after marginalia.
++
++A "group" here is what the bar draws: a hairline frame (`.dock-frame`) and, inside the bands' frame,
++a thin line between runs of related modes (`ModeGroup`, `groupStarts`).
++
++```
++before  [Plain] [Structure Summary | Skim | Search Chat Learn] [⋯ More] [Marginalia]  ⚡  Comments Metadata …
++after   [Plain] [Structure Summary Skim ⋯More | Search Chat Learn] [Marginalia Comments]  ⚡  Metadata …
++
++switch on, before  [Plain] [Structure Summary Diagram | Skim | Citations Referee Debate | Search Chat Learn] [⋯] [Marginalia]
++switch on, after   [Plain] [Structure Summary Diagram Skim ⋯ | Citations Referee Debate | Search Chat Learn] [Marginalia Comments]
++
++a gathered mode open (Glossary), after
++                   [Plain] [Structure Summary Skim ⋯ | Glossary | Search Chat Learn] [Marginalia Comments]
++```
++
++## Decisions
++
++**D1. Skim joins the `shape` run.** One field on its `MODES_UI` row. Its row stays where it is in the
++table, so with the switch on it comes after Diagram — still "after structure and summary", and no
++other row moves. The `guides` run keeps the five gathered modes, which are drawn only while one is
++open (261007c D3); then it is a run of one, after More, with its line.
++
++**D2. More moves inside the bands' frame, straight after the last drawn `shape` row.** Its own frame
++goes. It carries no `dock-group-start`, so no line separates it from Skim; the first button after it
++gets the line (it begins a different run, so `groupStarts` already says so).
++
++*The cost, named:* 261007c D6 (GPT Sol's PR-1 on that plan) put More outside `role="radiogroup"`
++because a menu button inside one is announced as one of "what the middle column shows", and ARIA
++allows only `radio` children in a radiogroup. Greg's ask puts it between two radios, so in DOM and
++tab order it must sit between them. Options considered:
++
++1. **More inside the radiogroup element** (chosen). Smallest change. A screen reader entering More
++   hears the group's name and then "More, menu button"; the radios' position-in-set counts radios
++   only, so "3 of 9" stays right. What More opens is a list of more answers to the group's question
++   ("what the middle column shows"), so the name stays true of it. ARIA requires `radio` children
++   of a radiogroup but does not say every descendant must be one (GPT Sol corrected this plan's first
++   wording); the cost is that it is a mixed composite, not the textbook radio pattern.
++2. **`aria-owns`** — a radiogroup element that owns the radios by id, with More outside it in the
++   accessibility tree. Honest on paper; poor and inconsistent support in Safari/VoiceOver, which is
++   the iPhone and iPad this bar is most used on, and the ids have to be kept in step by hand.
++3. **Two radiogroups** either side of More: worse, since it would claim two independent choices.
++4. **CSS `order`** to draw More between radios while keeping it outside in the DOM: visual order and
++   focus order would disagree (WCAG 2.4.3).
++
++5. **Make every mode an `aria-pressed` button in a plain `role="group"`** (GPT Sol's preference,
++   PR-1): no mixed composite at all. Passed over here because it changes the semantics of the
++   whole mode switch — the radiogroup that tells a screen reader *exactly one of these is on* —
++   and some thirty tests and a measurement script that address modes as radios, for a request
++   about where one button stands. Worth doing if the switch is ever reworked for its own sake.
++
++Option 1, which Sol called acceptable as a pragmatic compromise.
++
++**D3. Comments moves into Marginalia's frame, after Marginalia.** Both arms: the drawer trigger
++(`DockTab`) on the reading view, and the link (`DockLink`) on Metadata and the visitor pages. Dock
++renders the Comments element as before and hands it to `DockModes` / `DockModeLinks` as a node to
++draw after the toggle in the same frame; if a bar has no Marginalia toggle, Comments gets the frame
++alone. Marginalia's toggle is outside the radiogroup already, so no ARIA question here. Metadata
++keeps the `TooltipGroup` it shared with Comments, now alone in it.
++
++Consequences, each to be checked rather than assumed:
++- inside `.dock-modes`, Comments drops its word on fit rung 2 with the modes rather than on rung 3;
++  `--dock-mode-count` counts it (coarse pointer share);
++- `fitSignature` must still change when the Comments chip's count changes (it already reads the count);
++- the drawer's Escape / focus return, the coarse-pointer 44px floor, and the `.on` style inside a
++  frame (fill rather than the top marker) apply to it as to its neighbours;
++- Quick search (⚡) now stands after the Marginalia–Comments frame rather than before Comments.
++
++**D4. The phone overflow (`qi-t22r9mt4`)** — at 390px the bar scrolls sideways and More was past
++the right edge. More moving four buttons left should bring it on screen without scrolling; checked
++in the browser at 390 and 360. If the bar still scrolls, that part of the queue item stays open: it
++is not widened here.
++
++**D5. `data-mode` marks the controls that are modes** (Sol's PR-3). Once More and Comments sit
++inside `.dock-modes`, "a control in the mode segment" stops meaning "a mode". The radios,
++Marginalia's toggle and the links arm's mode links carry `data-mode`; More and Comments do not.
++Every test sweep that collected modes by `.dock-modes a.dock-btn` or `[aria-pressed]` selects by it
++now (`MODE_ATTR` in `Dock.tsx`).
++
++**D6. The rung-2 rule that gives the open mode its word back is scoped to `[data-mode]`** (Sol's
++PR-2). Inside `.dock-modes`, Comments loses its word on rung 2 with the modes; it is `.on` while its
++drawer is open, and the old `.dock-btn.on` selector would have given the word back without the fit
++signature changing, widening the bar with nothing remeasuring it. `tests/dock-fit.test.ts` now fails
++on any `.on … .dock-btn-label` rule without `[data-mode]`.
++
++**Out of scope.** Which modes are gathered under More; the order inside the menu; any other run.
++
++## GPT Sol's plan review
++
++[Prompt](261008d-plan-review-prompt.md), [answer](261008d-plan-review-sol.md): build with fixes, no
++P0. PR-1 is D2 above (option 1 kept, the plan's ARIA claim corrected). PR-2 is D6, PR-3 is D5.
++PR-4 (the three width counts: segment, bands' frame and radiogroup, Marginalia's frame) and PR-5
++(every gathered mode open, FAQ and Timeline with the switch on) are tests in
++`tests/dock-groups.test.tsx`, `tests/dock-more.test.tsx` and
++`tests/a-second-press-closes-the-mode.test.tsx`. PR-6's targets are updated: the help page's prose
++and alt text, `reading-view-overview.md`, and the comments in `Dock.tsx` and `dock-fit.css`; the
++`narrow-window.css` and `dock-fit.ts` comments it named were still true. A bar with no Marginalia
++toggle (Comments alone in the frame) does not occur today — Marginalia is on every bar since
++2026-10-05 — so it has code but no test.
++
++## Stages
++
++One stage: it is small and all in `Dock.tsx`.
++
++- [ ] Tests first, seen failing: `tests/dock-mode-order.test.ts` (Skim in the shape run, line
++      starts), `tests/dock-more.test.tsx` (More inside the bands' frame straight after Skim, no
++      frame of its own, the next button carries the line; on both arms), a test that Comments is in
++      Marginalia's frame after the toggle on both arms.
++- [ ] `group: "shape"` on Skim; More placed in the bands' frame; Comments as a slot; `drawnCount`;
++      comments in `Dock.tsx`, `dock-fit.css`, `narrow-window.css` that describe four frames / More
++      after Learn / Comments among "the three that are not modes".
++- [ ] Docs that describe the bar's order: sweep for them (reading-view-overview, narrow-windows,
++      phone-and-touch, help pages, mode.md), and update the `ModeGroup` comment.
++- [ ] Gates, browser check (1440, 390, 360; WebKit iPhone), GPT Sol code review, commit, push.
+diff --git a/docs/plans/261008d-plan-review-prompt.md b/docs/plans/261008d-plan-review-prompt.md
+new file mode 100644
+index 000000000..cf50508f9
+--- /dev/null
++++ b/docs/plans/261008d-plan-review-prompt.md
+@@ -0,0 +1,12 @@
++You are reviewing a PLAN (read-only) for a small UI change in this repo (Spideryarn, a reading app).
++
++Plan: docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md
++Prior plan it follows: docs/plans/261007c-bottom-bar-rises-in-on-first-load-and-a-more-button-gathers-the-lesser-modes.md (see D6 and PR-1 there).
++Code: src/web/Dock.tsx (MODES_UI, ModeGroup, splitForMore, drawnCount, groupStarts, fitSignature, DockModes, DockModeLinks, DockMore, the Comments DockTab/DockLink inside Dock's return), src/web/styles/dock-fit.css, src/web/styles/narrow-window.css, src/web/dock-fit.ts.
++Tests: tests/dock-more.test.tsx, tests/dock-mode-order.test.ts, tests/dock-fit.test.ts, tests/the-dock-hides-in-a-mode-beside-the-article.test.ts, tests/a-failed-comment-write-is-said-on-the-dock.test.tsx.
++
++Please:
++1. Judge D2's accessibility trade-off (More menu button placed inside role="radiogroup"). Is there a better shape that keeps the visual order Greg asked for (More right after Skim, inside the same frame, before Search) without lying to a screen reader and without breaking focus order? Be concrete. If option 1 is acceptable, say what mitigations (if any) to add.
++2. Find anything the plan misses: places that assume More is after the radiogroup or Comments is a direct child of .dock (CSS selectors like `.dock > .dock-btn`, the fit ladder rungs, the phone hide-on-scroll guard, the drawer Escape handler, tests, measure scripts, docs/help pages).
++3. Anything wrong with D1 (Skim's group change) e.g. tests or comments keyed on the guides run.
++Write findings numbered PR-1.. with severity (P0/P1/P2) and a one-line verdict at the top: build / build with fixes / rethink.
+diff --git a/docs/plans/261008d-plan-review-sol.md b/docs/plans/261008d-plan-review-sol.md
+new file mode 100644
+index 000000000..7a32255b7
+--- /dev/null
++++ b/docs/plans/261008d-plan-review-sol.md
+@@ -0,0 +1,66 @@
++build with fixes
++
++**PR-1 (P1) — Prefer a generic labelled group over putting More inside a radiogroup.**  
++D2 overstates the standard: `radio` is a required owned element of `radiogroup`, but that does not explicitly mean every descendant must be a radio. Nevertheless, this would be a mixed-control composite whose behaviour does not match the [ARIA radio-group pattern](https://www.w3.org/WAI/ARIA/apg/patterns/radio/)—especially since this Dock deliberately keeps every mode tabbable rather than using arrow-key navigation.
++
++The cleaner structure is:
++
++```tsx
++<div role="group" aria-label="Article views">
++  {/* Plain frame */}
++  {/* Structure, Summary, Diagram, Skim, More, gathered mode */}
++</div>
++
++<div role="group" aria-label="Marginalia and comments">
++  {/* Marginalia and Comments */}
++</div>
++```
++
++Make mode controls ordinary buttons with `aria-pressed`, while More remains a menu button and Comments retains `aria-expanded` or link semantics. That preserves the exact visual and Tab order without misleading assistive technology. A toolbar is not a better replacement because the [toolbar pattern](https://www.w3.org/WAI/ARIA/apg/patterns/toolbar/) also expects composite arrow-key navigation. This change must also update `SkipToModes.tsx` and `skip-to-modes.test.tsx`.
++
++Option 1 is acceptable as a narrow pragmatic compromise, but then:
++
++- Change the label from “What the middle column shows” to something truthful such as “Article views and more modes”.
++- Retain native DOM order: Skim radio → More button → Search radio.
++- Add an assistive-technology check, ideally VoiceOver/Safari or an accessibility-tree assertion, including Escape returning focus to More.
++- Correct the plan’s claim that ARIA categorically permits only radio children; the real concern is compatibility and conceptual accuracy. See the [WAI-ARIA definition](https://www.w3.org/TR/wai-aria-1.2/#radiogroup).
++
++**PR-2 (P1) — Moving Comments exposes a stale fit-state bug when its drawer is open.**  
++At fit rung 2, `.dock-modes .dock-btn-label` hides Comments, but the broader rule `.dock.dock-fit-2 .dock-btn.on .dock-btn-label` shows the label again when Comments gains `.on`. `fitSignature` does not include whether that drawer is open, so opening Comments can enlarge the bar without triggering a remeasurement. Scope the exception to actual selected mode controls—preferably via a stable mode attribute/class—or include panel state in the signature. Add a test for open Comments at rung 2.
++
++**PR-3 (P1) — Several selectors currently equate “link inside `.dock-modes`” with “mode”.**  
++Once the Comments link moves inside that subtree, it will be counted as a mode by:
++
++- `tests/helpers/dock-more.ts`
++- `tests/dock-experimental-modes.test.tsx`
++- `tests/dock-mode-tooltips.test.tsx`
++- `tests/dock-more.test.tsx`
++- `tests/dock-fit.test.ts`
++
++Add a stable marker such as `data-mode` to mode buttons and links, then retarget these helpers. Do not filter by the visible word “Comments”. Also update `tests/dock-corner-controls.test.tsx`, which explicitly asserts that More is outside the radiogroup, and the frame expectations in `tests/a-second-press-closes-the-mode.test.tsx`.
++
++**PR-4 (P1) — The plan mentions `drawnCount`, but not all three width-accounting layers.**  
++The implementation must update and test:
++
++- The outer drawn count: drawn modes + More + Comments.
++- The bands-frame count: band radios + More.
++- `--dock-radio-count`, or its renamed equivalent if the radiogroup is removed: modes + More.
++- The Marginalia frame count: Marginalia when present + Comments.
++- The Comments-only Marginalia frame case.
++
++These affect the coarse-pointer flex distribution, not merely desktop fitting. Exercise experimental modes both on and off, plus an open gathered mode after More.
++
++**PR-5 (P2) — D1 itself is sound, but its boundary tests should include experimental FAQ.**  
++Changing Skim to `group: "shape"` correctly removes the separator before it while leaving Diagram between Summary and Skim when enabled. Keep More’s insertion derived from the last drawn shape item rather than a fixed array index. Test every gathered mode, including FAQ with experimental modes enabled, because the normal configuration does not exercise that path. Update the `ModeGroup` explanation and the Skim “guides row” comment.
++
++**PR-6 (P2) — The documentation sweep needs some specific non-obvious targets.**  
++In addition to the named project docs, update:
++
++- `src/web/help/pages/the-reading-view.md`, whose prose and image alt text give the old order.
++- `src/web/help/pages/images/bottom-bar.png` if it visibly shows that order, then regenerate the help corpus rather than editing the generated JSON manually.
++- `docs/project/reading-view-overview.md`, which explains why More is outside the radios.
++- The “own frame/outside radiogroup” comments in `Dock.tsx` and `dock-fit.css`.
++- The loose-control arithmetic comment in `narrow-window.css`.
++- The rung-2 Comments comment in `dock-fit.ts`.
++
++No functional change appears necessary for the phone hide-on-scroll guard or drawer Escape handler: both locate the open More trigger globally rather than relying on it being after the mode group. `scripts/measure-cpu.ts` also remains valid if modes use `aria-pressed` and More keeps its existing trigger selector.
+\ No newline at end of file
+diff --git a/docs/project/reading-view-overview.md b/docs/project/reading-view-overview.md
+index 8100c6317..5c15a8b36 100644
+--- a/docs/project/reading-view-overview.md
++++ b/docs/project/reading-view-overview.md
+@@ -129,8 +129,12 @@ four of its sub-modes are built, and it is for somebody asked to peer-review the
+ readers never are.
+ 
+ **Five modes are under a More button rather than in the bar** since 2026-10-07: Quotes, Glossary,
+-FAQ, Ideas and Timeline, the ones Greg said a reader does not open often. More stands after the
+-other modes and before Marginalia, and its menu opens upwards. A mode there is as reachable as it
++FAQ, Ideas and Timeline, the ones Greg said a reader does not open often. More stands straight
++after Skim, at the end of the Structure–Summary run (it stood alone after the other modes until
++2026-10-08, when Greg asked for it *"as part of that group, rather than out on their own"*, which
++puts a menu button inside the modes' radiogroup —
++[261008d § D2](../plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md)
++says why that was taken). Its menu opens upwards. Comments shares Marginalia's frame, after it. A mode there is as reachable as it
+ was — an owner's command bar lists it, its address works, and a visitor can pick it from More — and
+ while it is the open mode it is drawn in the bar again, checked, so a second press still closes it.
+ This is a second, separate reason a mode
+diff --git a/src/web/Dock.tsx b/src/web/Dock.tsx
+index 24ea369ac..7fd298bfb 100644
+--- a/src/web/Dock.tsx
++++ b/src/web/Dock.tsx
+@@ -658,12 +658,15 @@ interface Props {
+  * § 1 has the reasoning.
+  *
+  *  - `exit` — Plain, alone: the way out of a mode.
+- *  - `shape` — the article's shape, restated (Structure, Summary, Diagram).
+- *  - `guides` — ways through the piece, each drawn from it along one line: a
+- *    route through its quotes, the quotes, questions it answers, its terms,
+- *    its ideas, its dates (Skim, Quotes, Glossary, FAQ, Ideas,
+- *    Timeline). Not "contents": several of these are a model's reading of the
+- *    piece rather than things literally in it (GPT Sol, 2026-09-29).
++ *  - `shape` — the article's shape, restated, and the way through it at
++ *    increasing depth (Structure, Summary, Diagram, Skim). Skim joined on
++ *    2026-10-08 (below).
++ *  - `guides` — ways through the piece, each drawn from it along one line: the
++ *    quotes, questions it answers, its terms, its ideas, its dates (Quotes,
++ *    Glossary, FAQ, Ideas, Timeline). Not "contents": several of these are a
++ *    model's reading of the piece rather than things literally in it (GPT Sol,
++ *    2026-09-29). Since 2026-10-07 every one of them is under More, so the run
++ *    is drawn only while one of them is open.
+  *  - `critical` — reading it critically and against other work (Citations,
+  *    Referee, Debate).
+  *  - `input` — modes that wait on the reader's own words: a word to find, a
+@@ -680,6 +683,11 @@ interface Props {
+  * and Citations one place left each (spya-tnqt2t,
+  * docs/plans/261004j-bottom-bar-citations-and-glossary-one-left-and-help-leaves-the-bar.md).
+  * No run gained or lost a mode.
++ *
++ * Skim moved from `guides` to `shape` on 2026-10-08, Greg: *"move the skim
++ * mode icon into the same group after structure and summary"* (spya-wm5gu2,
++ * docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md).
++ * The More button stands at the end of the same run (`MORE_AFTER`).
+  */
+ type ModeGroup = "exit" | "shape" | "guides" | "critical" | "input" | "margin";
+ 
+@@ -856,10 +864,16 @@ const MODES_UI = [
+ 
+      `Route`, used nowhere else — a path with stops on it, which is the mode.
+      Not `ListOrdered`, which was the Tweets mode's numbered thread.
+-     docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md § 5c. */
++     docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md § 5c.
++
++     **In the shape run, at its end, since 2026-10-08** — Greg: *"move the
++     skim mode icon into the same group after structure and summary"*
++     (spya-wm5gu2). Its row did not move, so it still leads into the Quotes it
++     walks, which are now under More, the button drawn straight after it.
++     docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md. */
+   {
+     mode: "skim",
+-    group: "guides",
++    group: "shape",
+   },
+   /* **After Skim, since 2026-09-29**; straight after Summary, with
+      Skim after it, on 2026-09-28, when Greg moved both: *"move Quotes mode and Trajectory mode further towards
+@@ -1179,13 +1193,42 @@ export function splitForMore(reachable: readonly ModeUi[], current: BandMode | u
+   };
+ }
+ 
++/** One More button, or none: 261007c's "draws nothing when there is nothing gathered". */
++const moreCount = (bar: DockBar): number => (bar.menu.length > 0 ? 1 : 0);
++
+ /**
+- * **How many buttons the bar's mode segment draws**: the drawn rows, and the
+- * More button where there is one. `--dock-mode-count`, the share a coarse
+- * pointer spreads the row by (narrow-window.css).
++ * **How many buttons the bar's mode segment draws**: the drawn rows, the More
++ * button where there is one, and Comments, which stands in Marginalia's frame
++ * since 2026-10-08. `--dock-mode-count`, the share a coarse pointer spreads the
++ * row by (narrow-window.css).
+  */
+ function drawnCount(bar: DockBar): number {
+-  return bar.drawn.length + (bar.menu.length > 0 ? 1 : 0);
++  return bar.drawn.length + moreCount(bar) + 1;
++}
++
++/**
++ * **The run the More button ends.** Greg, 2026-10-08 (spya-mcs4gb): *"just
++ * after the skim mode, just after structure and summary as part of that
++ * group, rather than out on their own."* Skim is the last row of the shape run
++ * (its `MODES_UI` row), so More stands straight after it, inside the bands'
++ * frame, with no line between them.
++ * docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md.
++ */
++const MORE_AFTER: ModeGroup = "shape";
++
++/**
++ * **The bands' frame, cut where More goes**: everything up to the last drawn
++ * row of `MORE_AFTER`'s run, and everything after it. With none of that run
++ * drawn — no bar today — More goes at the end rather than vanishing, so the
++ * gathered modes stay reachable. Both arms cut here, so they cannot disagree.
++ *
++ * Exported for tests/dock-groups.test.tsx.
++ */
++export function cutForMore(bands: readonly ModeUi[]): readonly [readonly ModeUi[], readonly ModeUi[]] {
++  /* `findLastIndex` is ES2023, past the client's lib. */
++  const at = bands.length - [...bands].reverse().findIndex((m) => m.group === MORE_AFTER);
++  if (at > bands.length) return [bands, []];
++  return [bands.slice(0, at), bands.slice(at)];
+ }
+ 
+ /**
+@@ -2153,6 +2196,107 @@ export function Dock({
+     };
+   }, [open]);
+ 
++  /* **Comments, drawn by the mode segment in Marginalia's frame, after it**
++     — Greg, 2026-10-08: *"I wonder if we could put the comments icon inside a
++     group with marginalia, perhaps after marginalia"* (spya-mcs4gb). Built
++     here, where its drawer and counts are, and handed to `DockModes` /
++     `DockModeLinks` as a node, so neither has to learn about the drawer.
++     docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md. */
++  /* Two shapes of the same button. On the reading view it opens the
++     drawer in place. Everywhere else it goes back to the reading view
++     with the drawer already open — which is where a question is useful
++     anyway, since clicking one scrolls to the passage it is about, and
++     these pages have no passages. No count off the reading view: this
++     page did not fetch the comments, and a number would have to be
++     guessed or paid for. */
++  const commentsControl = drawer ? (
++    <DockTab
++      panel="questions"
++      current={panel}
++      onPanel={drawer.onPanel}
++      icon={MessageSquareText}
++      label="Comments"
++      /* **The state, as a description — never in the name.** The name
++         stays "Comments" whatever has happened to it, which is the rule
++         § the switch itself states at length and which GPT Sol caught a
++         breach of there: a name that moves changes the control's
++         identity, and a reader driving this by voice is asking for the
++         button called Comments. So the sentence goes where the switch's
++         goes — an `sr-only` node this button points `aria-describedby`
++         at. Sol raised the same thing against this stage's plan. */
++      note={commentError ? "A change to your comments didn't save." : undefined}
++      className={own ? "" : MARKED}
++      /* **One `what` for both, and the ownership in `state`** — the shape
++         the modes use, and it is the shape because the alternative was
++         two descriptions to keep in step and one of them went stale.
++         `NOT_A_MODE.comments` carries the note.
++
++         **A failed write outranks the visitor line, and cannot collide
++         with it**: only the owner writes, so `commentError` is `null`
++         on every arm that could show the visitor sentence. The ternary
++         is ordered that way regardless, because `state` is the slot for
++         *what this control is doing right now* (Tooltip.tsx
++         § `ControlTip`) and a failure is more that than a footing is.
++
++         The service's own sentence is passed through rather than
++         rewritten: it is already reader-facing copy that says whose
++         problem it is (docs/project/copy.md), and a second paraphrase
++         here would be a third place for the wording to drift. */
++      hover={
++        <ControlTip
++          head="Comments"
++          state={
++            commentError
++              ? `A change to your comments didn't save. ${commentError}`
++              : own
++                ? undefined
++                : NOT_A_MODE.comments.visitor
++          }
++          what={NOT_A_MODE.comments.what}
++          how={NOT_A_MODE.comments.how}
++        />
++      }
++    >
++      <CommentsChip
++        count={own ? entries.length : null}
++        pending={pending}
++        failed={commentError !== null}
++      />
++    </DockTab>
++  ) : (
++    <DockLink
++      href={readHref(slug, withPanel(search, "questions"), "article")}
++      current={false}
++      icon={MessageSquareText}
++      label="Comments"
++      /* **Whose, and the visitor pages reach this arm too.**
++         `PublicMetadataPage` and `VisitorPage` mount the bar with no
++         drawer, which lands here — so two of the three visitor pages went
++         on calling somebody else's comments *"Your comments"* after the
++         reading view had been corrected. The heading inside the drawer
++         was fixed and the link that leads to it was not. GPT Sol, second
++         pass, 2026-08-28.
++
++         `signedIn` is not the question; ownership is. A drawer-less bar
++         belongs to the owner on the metadata page of *their*
++         article, and to a visitor on the public stand-ins. */
++      /* **The same card the drawer trigger draws, plus where the press
++         lands** — the rule `DockModeLinks` follows for the modes, and for
++         the same reason: a reader who learned on the reading view what a
++         comment survives should not meet a one-line OS box for it on the
++         metadata page. The trailing clause on `what` is the only
++         difference in the words. */
++      hover={
++        <ControlTip
++          head="Comments"
++          state={isVisitor ? NOT_A_MODE.comments.visitor : undefined}
++          what={`${NOT_A_MODE.comments.what} — back in the article they are about`}
++          how={NOT_A_MODE.comments.how}
++        />
++      }
++    />
++  );
++
+   return (
+     <>
+       {/* The dim. A button rather than a div so closing by clicking away is
+@@ -2385,9 +2529,10 @@ export function Dock({
+             onOpen={activateMode}
+             marked={marked}
+             margin={margin}
++            comments={commentsControl}
+           />
+         ) : (
+-          <DockModeLinks slug={slug} search={search} bar={bar} marked={marked} />
++          <DockModeLinks slug={slug} search={search} bar={bar} marked={marked} comments={commentsControl} />
+         )}
+ 
+         {/* **Quick search, from anywhere** (plan 261002h): a box where
+@@ -2402,125 +2547,19 @@ export function Dock({
+           />
+         )}
+ 
+-        {/* **The three that are not modes, in one group**, so that running
+-            along the end of the bar is instant after the first card rather than
+-            three separate 300ms waits — the same grouping `DockModes` and
+-            `DockModeLinks` give the modes. `TooltipGroup` is
+-            `FloatingDelayGroup`, a context provider that renders no element, so
+-            it cannot disturb the flex row it wraps (Tooltip.tsx § grouping) —
+-            which is why `DockCommands` could join it on 2026-09-08 without
+-            moving anything on the page, and why it could leave again the same
+-            day when Greg asked for it beside the logo (see there).
+-
+-            **What the group is now**, having lost that fourth member: the three
+-            other views of *this article* — its comments, its thread, its
+-            machinery — which is a tighter subject than it had.
+-
+-            **The experimental switch is outside it on purpose.** It is the
+-            adjacent account-level control — a setting, not a view of this
+-            article — so the gap in the scrubbing is a boundary being felt
+-            rather than an oversight. Not *the only button here not about this
+-            article*, which was the first wording and is too absolute: `DockHome`
+-            and `DockFeedback` are not about it either. GPT Sol. */}
+-        <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+-          {/* Two shapes of the same button. On the reading view it opens the
+-              drawer in place. Everywhere else it goes back to the reading view
+-              with the drawer already open — which is where a question is useful
+-              anyway, since clicking one scrolls to the passage it is about, and
+-              these pages have no passages. No count off the reading view: this
+-              page did not fetch the comments, and a number would have to be
+-              guessed or paid for. */}
+-          {drawer ? (
+-            <DockTab
+-              panel="questions"
+-              current={panel}
+-              onPanel={drawer.onPanel}
+-              icon={MessageSquareText}
+-              label="Comments"
+-              /* **The state, as a description — never in the name.** The name
+-                 stays "Comments" whatever has happened to it, which is the rule
+-                 § the switch itself states at length and which GPT Sol caught a
+-                 breach of there: a name that moves changes the control's
+-                 identity, and a reader driving this by voice is asking for the
+-                 button called Comments. So the sentence goes where the switch's
+-                 goes — an `sr-only` node this button points `aria-describedby`
+-                 at. Sol raised the same thing against this stage's plan. */
+-              note={commentError ? "A change to your comments didn't save." : undefined}
+-              className={own ? "" : MARKED}
+-              /* **One `what` for both, and the ownership in `state`** — the shape
+-                 the modes use, and it is the shape because the alternative was
+-                 two descriptions to keep in step and one of them went stale.
+-                 `NOT_A_MODE.comments` carries the note.
+-
+-                 **A failed write outranks the visitor line, and cannot collide
+-                 with it**: only the owner writes, so `commentError` is `null`
+-                 on every arm that could show the visitor sentence. The ternary
+-                 is ordered that way regardless, because `state` is the slot for
+-                 *what this control is doing right now* (Tooltip.tsx
+-                 § `ControlTip`) and a failure is more that than a footing is.
+-
+-                 The service's own sentence is passed through rather than
+-                 rewritten: it is already reader-facing copy that says whose
+-                 problem it is (docs/project/copy.md), and a second paraphrase
+-                 here would be a third place for the wording to drift. */
+-              hover={
+-                <ControlTip
+-                  head="Comments"
+-                  state={
+-                    commentError
+-                      ? `A change to your comments didn't save. ${commentError}`
+-                      : own
+-                        ? undefined
+-                        : NOT_A_MODE.comments.visitor
+-                  }
+-                  what={NOT_A_MODE.comments.what}
+-                  how={NOT_A_MODE.comments.how}
+-                />
+-              }
+-            >
+-              <CommentsChip
+-                count={own ? entries.length : null}
+-                pending={pending}
+-                failed={commentError !== null}
+-              />
+-            </DockTab>
+-          ) : (
+-            <DockLink
+-              href={readHref(slug, withPanel(search, "questions"), "article")}
+-              current={false}
+-              icon={MessageSquareText}
+-              label="Comments"
+-              /* **Whose, and the visitor pages reach this arm too.**
+-                 `PublicMetadataPage` and `VisitorPage` mount the bar with no
+-                 drawer, which lands here — so two of the three visitor pages went
+-                 on calling somebody else's comments *"Your comments"* after the
+-                 reading view had been corrected. The heading inside the drawer
+-                 was fixed and the link that leads to it was not. GPT Sol, second
+-                 pass, 2026-08-28.
+-
+-                 `signedIn` is not the question; ownership is. A drawer-less bar
+-                 belongs to the owner on the metadata page of *their*
+-                 article, and to a visitor on the public stand-ins. */
+-              /* **The same card the drawer trigger draws, plus where the press
+-                 lands** — the rule `DockModeLinks` follows for the modes, and for
+-                 the same reason: a reader who learned on the reading view what a
+-                 comment survives should not meet a one-line OS box for it on the
+-                 metadata page. The trailing clause on `what` is the only
+-                 difference in the words. */
+-              hover={
+-                <ControlTip
+-                  head="Comments"
+-                  state={isVisitor ? NOT_A_MODE.comments.visitor : undefined}
+-                  what={`${NOT_A_MODE.comments.what} — back in the article they are about`}
+-                  how={NOT_A_MODE.comments.how}
+-                />
+-              }
+-            />
+-          )}
++        {/* **Metadata, on its own since 2026-10-08.** It shared a
++            `TooltipGroup` with Comments (and, before 2026-09-08, with
++            `DockCommands`) so that running along the end of the bar was instant
++            after the first card. Comments moved into Marginalia's frame that
++            day (`commentsControl` above), and a group of one is no group, so
++            the wrapper went with it.
++
++            **The experimental switch was outside that group on purpose**, and
++            still stands apart: it is a setting, not a view of this article.
+ 
+-          {/* A link, not a drawer trigger — the details are a page now. Last in
+-              the bar, which is the right end for it: it is the machinery behind
+-              the article rather than a way of reading it. */}
++            A link, not a drawer trigger — the details are a page now — and
++            after the modes, because it is the machinery behind the article
++            rather than a way of reading it. */}
+           <DockLink
+             href={metadataHref}
+             current={view === "metadata"}
+@@ -2537,7 +2576,6 @@ export function Dock({
+               />
+             }
+           />
+-        </TooltipGroup>
+ 
+         {/* **The switch itself, last, and only for somebody who has an account
+             to save it to.** Greg, 2026-09-03:
+@@ -2904,6 +2942,7 @@ function DockModes({
+   onOpen,
+   marked,
+   margin,
++  comments,
+ }: {
+   /**
+    * The rows to draw and the rows under More, already filtered and split —
+@@ -2936,6 +2975,8 @@ function DockModes({
+   marked?: ReadonlyMap<Mode, string> | undefined;
+   /** Whether Marginalia's column is on — `?margin=1`, the toggle's pressed state. */
+   margin: boolean;
++  /** The Comments control, drawn after Marginalia in its frame — `Dock` § `commentsControl`. */
++  comments: ReactNode;
+ }) {
+   /**
+    * **No keyboard handler, and every button its own tab stop — the arrows
+@@ -2992,11 +3033,23 @@ function DockModes({
+      bands' frame only: a frame's edge already separates the other two.
+      docs/plans/261002g-plain-closes-both-columns-a-second-press-closes-a-mode-and-plain-and-marginalia-in-frames-of-their-own.md.
+ 
+-     **And a fourth since 2026-10-07: the More button's**, after the
+-     radiogroup and before Marginalia's — `DockMore`. */
++     **The More button had a fourth, from 2026-10-07 to 2026-10-08**, after
++     the radiogroup. Greg then asked for it *"just after the skim mode … as part
++     of that group, rather than out on their own"* (spya-mcs4gb), so it stands
++     inside the bands' frame at the end of the shape run (`cutForMore`) — and
++     so inside the `role="radiogroup"`, which 261007c D6 had kept it out of.
++     It is between two radios in reading order, so in the DOM it has to be;
++     the cost and the options weighed are in
++     docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md § D2.
++
++     **And Comments joined Marginalia's frame the same day**, after the
++     toggle: Greg, *"put the comments icon inside a group with marginalia,
++     perhaps after marginalia"*. It is not a radio either, and Marginalia's
++     frame is outside the radiogroup, so nothing is claimed for it. */
+   const radios = bar.drawn.filter((m) => m.mode !== "marginalia");
+   const exits = radios.filter((m) => m.group === "exit");
+   const bands = radios.filter((m) => m.group !== "exit");
++  const [lead, rest] = cutForMore(bands);
+   const toggle = bar.drawn.find((m) => m.mode === "marginalia");
+   const starts = groupStarts(bands);
+   const radio = (m: ModeUi) => (
+@@ -3044,6 +3097,7 @@ function DockModes({
+       <button
+         type="button"
+         role="radio"
++        data-mode={m.mode}
+         className={`dock-btn${m.mode === mode ? " on" : ""}${marked?.has(m.mode) ? ` ${MARKED}` : ""}${starts.has(m.mode) ? " dock-group-start" : ""}`}
+         aria-checked={m.mode === mode}
+         /* Explicit, because the visible label is `display: none` at
+@@ -3094,28 +3148,34 @@ function DockModes({
+           className="dock-modes-radios"
+           role="radiogroup"
+           aria-label="What the middle column shows"
+-          style={{ "--dock-radio-count": radios.length } as CSSProperties}
++          /* One share per button it encloses, More included. */
++          style={{ "--dock-radio-count": radios.length + moreCount(bar) } as CSSProperties}
+         >
+           {exits.length > 0 && (
+             <div className="dock-frame" style={{ "--dock-frame-count": exits.length } as CSSProperties}>
+               {exits.map(radio)}
+             </div>
+           )}
+-          <div className="dock-frame" style={{ "--dock-frame-count": bands.length } as CSSProperties}>
+-            {bands.map(radio)}
++          <div
++            className="dock-frame"
++            style={{ "--dock-frame-count": bands.length + moreCount(bar) } as CSSProperties}
++          >
++            {lead.map(radio)}
++            <DockMore menu={bar.menu} marked={marked} pick={{ kind: "open", open: onOpen, current: mode }} />
++            {rest.map(radio)}
+           </div>
+         </div>
+-        <DockMore menu={bar.menu} marked={marked} pick={{ kind: "open", open: onOpen, current: mode }} />
+-        {toggle && (
+-          <div className="dock-frame" style={{ "--dock-frame-count": 1 } as CSSProperties}>
++        <div className="dock-frame" style={{ "--dock-frame-count": (toggle ? 1 : 0) + 1 } as CSSProperties}>
++          {toggle && (
+             <MarginToggle
+               m={toggle}
+               on={margin}
+               onActivate={onActivate}
+               state={marked?.get(toggle.mode)}
+             />
+-          </div>
+-        )}
++          )}
++          {comments}
++        </div>
+       </TooltipGroup>
+     </div>
+   );
+@@ -3156,6 +3216,7 @@ function MarginToggle({
+       <button
+         type="button"
+         className={`dock-btn${on ? " on" : ""}`}
++        data-mode={m.mode}
+         aria-pressed={on}
+         aria-label={MODE_LABEL[m.mode]}
+         onClick={(e) => {
+@@ -3193,6 +3254,7 @@ function DockModeLinks({
+   search,
+   bar,
+   marked,
++  comments,
+ }: {
+   slug: string;
+   search: string;
+@@ -3201,6 +3263,8 @@ function DockModeLinks({
+    *  the bar. */
+   bar: DockBar;
+   marked?: ReadonlyMap<Mode, string> | undefined;
++  /** The Comments link, after Marginalia in its frame, as `DockModes` draws it. */
++  comments: ReactNode;
+ }) {
+   /* **The segment's non-empty frames, and its lines between runs** — the same
+      split `DockModes` makes (Plain; the bands; Marginalia), from the same
+@@ -3216,17 +3280,14 @@ function DockModeLinks({
+   const toggles = modes.filter((m) => m.mode === "marginalia");
+   const exits = modes.filter((m) => m.mode !== "marginalia" && m.group === "exit");
+   const bands = modes.filter((m) => m.mode !== "marginalia" && m.group !== "exit");
++  const [lead, rest] = cutForMore(bands);
+   const starts = groupStarts(bands);
+-  const frame = (ms: readonly ModeUi[]) =>
+-    ms.length > 0 && (
+-      <div className="dock-frame" style={{ "--dock-frame-count": ms.length } as CSSProperties}>
+-        {ms.map(link)}
+-      </div>
+-    );
++  const frameStyle = (count: number) => ({ "--dock-frame-count": count }) as CSSProperties;
+   function link(m: ModeUi) {
+     return (
+       <DockLink
+         key={m.mode}
++        mode={m.mode}
+         href={modeLinkHref(slug, search, m.mode)}
+         current={false}
+         icon={MODE_ICON[m.mode]}
+@@ -3267,21 +3328,37 @@ function DockModeLinks({
+           for the reason given where it is opened (`Dock` § the three that are
+           not modes). */}
+       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+-        {frame(exits)}
+-        {frame(bands)}
+-        {/* The same place as on the reading view: after the bands, before
+-            Marginalia. Its items are these same links (`modeLinkHref`). */}
+-        <DockMore
+-          menu={bar.menu}
+-          marked={marked}
+-          pick={{ kind: "link", href: (m) => modeLinkHref(slug, search, m) }}
+-        />
+-        {frame(toggles)}
++        {exits.length > 0 && <div className="dock-frame" style={frameStyle(exits.length)}>{exits.map(link)}</div>}
++        {/* More in the same place as on the reading view — straight after
++            the shape run (`cutForMore`) — and its items are these same links
++            (`modeLinkHref`). Comments after Marginalia, as there. */}
++        <div className="dock-frame" style={frameStyle(bands.length + moreCount(bar))}>
++          {lead.map(link)}
++          <DockMore
++            menu={bar.menu}
++            marked={marked}
++            pick={{ kind: "link", href: (m) => modeLinkHref(slug, search, m) }}
++          />
++          {rest.map(link)}
++        </div>
++        <div className="dock-frame" style={frameStyle(toggles.length + 1)}>
++          {toggles.map(link)}
++          {comments}
++        </div>
+       </TooltipGroup>
+     </div>
+   );
+ }
+ 
++/**
++ * **Which controls in the mode segment are modes**: each carries `data-mode`
++ * (the radios, Marginalia's toggle, the links arm's mode links). Since
++ * 2026-10-08 the segment also holds More and Comments (plan 261008d), so
++ * "a button inside `.dock-modes`" no longer means "a mode": dock-fit.css's
++ * rung-2 rule and every test sweep over the modes select by this instead.
++ */
++export const MODE_ATTR = "data-mode";
++
+ /** The More button's word, and its accessible name on the rungs that drop the word. */
+ const MORE_LABEL = "More";
+ 
+@@ -3321,11 +3398,15 @@ type MorePick =
+  *
+  * docs/plans/261007c-bottom-bar-rises-in-on-first-load-and-a-more-button-gathers-the-lesser-modes.md.
+  *
+- * **Not a radio, and outside the radiogroup** (D6): a frame of its own between
+- * `.dock-modes-radios` and Marginalia's, which is outside the group for the
+- * same reason. A menu button announced as one of *what the middle column
+- * shows* would be a lie. So it stands after Learn rather than where the five
+- * were; the cost is named in the plan.
++ * **Not a radio, but inside the radiogroup since 2026-10-08**, straight after
++ * Skim in the bands' frame (`cutForMore`), because Greg asked for it *"just
++ * after the skim mode … as part of that group, rather than out on their own"*
++ * (spya-mcs4gb). It had a frame of its own after the radiogroup for a day
++ * (261007c D6), kept out because a menu button is not one of *what the middle
++ * column shows*. Between two radios in reading order, the DOM has to put it
++ * inside; what it opens is a list of more of those choices, so the group's
++ * name is still true of it. The options weighed are in
++ * docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md § D2.
+  *
+  * **Never `.on`.** The open gathered mode is drawn in the bar as its own
+  * checked radio (`splitForMore`), so this button never has to mean two things.
+@@ -3375,7 +3456,7 @@ function DockMore({
+   if (menu.length === 0) return null;
+   const names = menu.map((m) => MODE_LABEL[m.mode]).join(", ");
+   return (
+-    <div className="dock-frame" style={{ "--dock-frame-count": 1 } as CSSProperties}>
++    <>
+       {/* **`modal={false}`**, where the shelf's menu takes Radix's default.
+           This bar stays operable over its own drawer (`Dock` § there is
+           deliberately no trap), and a modal menu would be the one thing in it
+@@ -3490,7 +3571,7 @@ function DockMore({
+           </DropdownMenu.Content>
+         </DropdownMenu.Portal>
+       </DropdownMenu.Root>
+-    </div>
++    </>
+   );
+ }
+ 
+@@ -3973,6 +4054,7 @@ function DockLink({
+   hover,
+   className = "",
+   keepLabel,
++  mode,
+ }: {
+   href: string;
+   current: boolean;
+@@ -4020,12 +4102,16 @@ function DockLink({
+    * be looking for the way back from.
+    */
+   keepLabel?: true | undefined;
++  /** The mode this link opens, as `data-mode` — `MODE_ATTR`. Absent on the
++   *  links that are not modes (Comments, Metadata). */
++  mode?: Mode | undefined;
+ }) {
+   const link = (
+     <Link
+       href={href}
+       className={`dock-btn${current ? " on" : ""}${className ? ` ${className}` : ""}`}
+       aria-current={current ? "page" : undefined}
++      data-mode={mode}
+       /* **No `title` here, and its absence is asserted rather than assumed.** A
+          `title` beside a card is not a fallback, it is a race: the OS box
+          appears over our panel a second later, saying a shorter version of the
+diff --git a/src/web/help/pages/the-reading-view.md b/src/web/help/pages/the-reading-view.md
+index 5e7ceeb9a..f0bfd39cc 100644
+--- a/src/web/help/pages/the-reading-view.md
++++ b/src/web/help/pages/the-reading-view.md
+@@ -15,15 +15,15 @@ related: spine, gutter, modes, keyboard
+ - **Marginalia** is a column of notes on the right of the article, which can stay open beside any
+   panel.
+ - **The bottom bar** starts with the way home (the Spideryarn wordmark). On your own article, that
+-  is followed by the **Commands** button. Next come the mode buttons, ending with **More** and
+-  **Marginalia**: **More** opens a short list of the modes you will want less often (Quotes,
+-  Glossary and Ideas, and with experimental features on, FAQ and Timeline). Then come **Comments**
+-  and **Metadata**. When you are signed in, it also has the **Experimental** switch and **Feedback**.
++  is followed by the **Commands** button. Next come the mode buttons. **More**, just after
++  Structure, Summary and Skim, opens a short list of the modes you will want less often (Quotes,
++  Glossary and Ideas, and with experimental features on, FAQ and Timeline). Then come
++  **Marginalia** and **Comments**, side by side, and **Metadata**. When you are signed in, it also has the **Experimental** switch and **Feedback**.
+   Every bar has a **Help** link near its right-hand end, which opens Help at the page about the mode
+   you are in. On your own article you can also press **Commands** and type *help*, and wherever
+   a mode has an (i), its card ends in **More in Help**.
+ 
+-![The bottom bar: the wordmark, Commands, Plain, Structure and the other mode buttons, More, Marginalia, Quick search, Comments, Metadata, the Experimental switch and Help](images/bottom-bar.png "The bottom bar on your own article, with Plain open. Most mode buttons show only an icon: point at one for its name.")
++![The bottom bar: the wordmark, Commands, Plain, Structure, Summary, Skim, More and the other mode buttons, Marginalia and Comments, Quick search, Metadata, the Experimental switch and Help](images/bottom-bar.png "The bottom bar on your own article, with Plain open. Most mode buttons show only an icon: point at one for its name.")
+ 
+ When there is not room for everything, the mode buttons drop their words and show only icons. Point
+ at one to see its name and what it does; each mode also shows its name for a few seconds when you
+diff --git a/src/web/styles/dock-fit.css b/src/web/styles/dock-fit.css
+index 66a06d8ed..9d57807b7 100644
+--- a/src/web/styles/dock-fit.css
++++ b/src/web/styles/dock-fit.css
+@@ -12,9 +12,9 @@
+    toggles you could turn on together. A hairline box around them
+    says "one of these", which is what the markup already promises a screen
+    reader via `role="radiogroup"` — this is the sighted half of the same claim.
+-   Since 2026-10-02 there are several boxes (`.dock-frame` below) — four since
+-   the More button got one on 2026-10-07 — and this element is the unframed
+-   row that holds them.
++   Since 2026-10-02 there are several boxes (`.dock-frame` below) — Plain's,
++   the bands' (with More inside since 2026-10-08), and Marginalia's (with
++   Comments) — and this element is the unframed row that holds them.
+ 
+    **On the metadata page the same row holds links, and none is on**
+    (`DockModeLinks`, since 2026-10-04): no mode is open there, so the frames
+@@ -57,13 +57,14 @@
+    2026-10-05, when the mode left the switch.)
+    docs/plans/261002g-plain-closes-both-columns-a-second-press-closes-a-mode-and-plain-and-marginalia-in-frames-of-their-own.md.
+ 
+-   **A fourth since 2026-10-07: the More button's**, between the bands and
+-   Marginalia and outside the radiogroup as Marginalia's is — a menu button is
+-   not one of the things the middle column shows (Dock.tsx § `DockMore`). It
+-   needs no rule of its own here: it is a `.dock-btn` with a `.dock-btn-label`
+-   inside `.dock-modes`, so every rung of the ladder below drops its word and
+-   tightens its padding with its neighbours', and it is never `.on`, so rung
+-   2 never gives the word back.
++   **The More button and Comments sit inside these frames since 2026-10-08**
++   (plan 261008d): More in the bands' frame straight after Skim, Comments in
++   Marginalia's after the toggle. More had a fourth frame of its own for a day.
++   Neither needs a rule of its own here: each is a `.dock-btn` with a
++   `.dock-btn-label` inside `.dock-modes`, so every rung of the ladder below
++   drops its word and tightens its padding with its neighbours'. Neither
++   carries `data-mode`, so rung 2 never gives either its word back
++   (§ the mode you are actually in keeps its word).
+ 
+    **Never shrink, for the reason `.dock-modes` gives above**: this clips its
+    own overflow. On a coarse pointer the row may grow, and each frame takes
+@@ -368,8 +369,16 @@
+    2026-09-06**, when a new rung went in above it. Both measurements above were
+    taken against the old numbering and are unchanged by the renumber: they are
+    about the rung that hides the mode labels, which is this one. Rung 1 hides no
+-   mode label, so there is nothing there for this rule to put back. */
+-.dock.dock-fit-2 .dock-btn.on .dock-btn-label { display: inline; }
++   mode label, so there is nothing there for this rule to put back.
++
++   **A mode's word only — `[data-mode]` — since 2026-10-08**, when Comments
++   moved into Marginalia's frame (plan 261008d). It is `.on` while its drawer
++   is open, and `fitSignature` does not change when the drawer opens, so a
++   plain `.dock-btn.on` here would give it its word back on rung 2 and widen
++   the bar with nothing remeasuring it. A mode's `.on` changes the signature
++   (it names the current mode), which is what makes the measurement above
++   true. */
++.dock.dock-fit-2 .dock-modes [data-mode].on .dock-btn-label { display: inline; }
+ 
+ /* **The radios inside the segment are a semantic group of their own** —
+    Marginalia's toggle sits beside them in the same segment, outside the
+diff --git a/tests/a-broken-mode-leaves-the-article-readable.test.tsx b/tests/a-broken-mode-leaves-the-article-readable.test.tsx
+index d109c8ce2..b252306b6 100644
+--- a/tests/a-broken-mode-leaves-the-article-readable.test.tsx
++++ b/tests/a-broken-mode-leaves-the-article-readable.test.tsx
+@@ -1680,7 +1680,7 @@ describe("a throw inside any band leaves the article", () => {
+ 
+     /* And the reader can still leave it. */
+     if (margin) {
+-      const toggle = host.querySelector<HTMLButtonElement>(".dock-modes [aria-pressed]");
++      const toggle = host.querySelector<HTMLButtonElement>(".dock-modes [data-mode][aria-pressed]");
+       expect(toggle?.getAttribute("aria-label")).toBe(MODE_LABEL.marginalia);
+       await act(async () => (toggle as HTMLButtonElement).click());
+       await settle();
+diff --git a/tests/a-second-press-closes-the-mode.test.tsx b/tests/a-second-press-closes-the-mode.test.tsx
+index ee097dd0e..b9147875b 100644
+--- a/tests/a-second-press-closes-the-mode.test.tsx
++++ b/tests/a-second-press-closes-the-mode.test.tsx
+@@ -475,48 +475,54 @@ describe("Plain closes both columns", () => {
+   );
+ });
+ 
+-/* Four since 2026-10-07: the More button has a frame of its own between the
+-   bands and Marginalia, outside the radiogroup as Marginalia's is (plan
+-   261007c, D6). It was three from 2026-10-02. */
+-describe("the bar is four frames: Plain, the bands, More, Marginalia", () => {
+-  it("draws Plain alone in the first frame, More alone in the third and Marginalia alone in the last", async () => {
++/* Three since 2026-10-08 (plan 261008d): More stands inside the bands' frame,
++   straight after Skim, and Comments in Marginalia's, after it — Greg,
++   spya-mcs4gb. From 2026-10-07 More had a frame of its own (plan 261007c, D6),
++   and from 2026-10-02 there were three. */
++describe("the bar is three frames: Plain, the bands with More, Marginalia with Comments", () => {
++  it("draws Plain alone in the first frame, More after Skim in the second and Comments after Marginalia in the last", async () => {
+     await open("?margin=1");
+     const frames = [...host.querySelectorAll(".dock-modes .dock-frame")];
+-    expect(frames).toHaveLength(4);
++    expect(frames).toHaveLength(3);
+     const labels = (f: Element | undefined) =>
+-      [...(f?.querySelectorAll("button") ?? [])].map((b) => b.getAttribute("aria-label"));
++      [...(f?.querySelectorAll(".dock-btn") ?? [])].map((b) => b.getAttribute("aria-label"));
+     expect(labels(frames[0])).toEqual([MODE_LABEL.plain]);
+-    expect(labels(frames[2])).toEqual(["More"]);
+-    expect(labels(frames[3])).toEqual([MODE_LABEL.marginalia]);
+-    expect(labels(frames[1])).toContain(MODE_LABEL.summary);
++    expect(labels(frames[1])).toEqual([
++      MODE_LABEL.structure,
++      MODE_LABEL.summary,
++      MODE_LABEL.skim,
++      "More",
++      MODE_LABEL.search,
++      MODE_LABEL.chat,
++      MODE_LABEL.learn,
++    ]);
++    expect(labels(frames[2])).toEqual([MODE_LABEL.marginalia, "Comments"]);
+     /* Plain and the bands are still one radiogroup: exactly one is on. More
+-       and Marginalia are outside it: neither is one of the things the middle
+-       column shows. */
++       is inside it now, between two radios (261008d § D2); Marginalia and
++       Comments are outside it. */
+     const group = host.querySelector('.dock-modes [role="radiogroup"]');
+     expect(group?.contains(frames[0] ?? null)).toBe(true);
+     expect(group?.contains(frames[1] ?? null)).toBe(true);
+     expect(group?.contains(frames[2] ?? null)).toBe(false);
+-    expect(group?.contains(frames[3] ?? null)).toBe(false);
+-    /* A frame's edge separates Plain, More and Marginalia; no run line beside them. */
++    /* A frame's edge separates Plain and Marginalia; no run line beside them. */
+     expect(frames[1]?.querySelector("button")?.classList.contains("dock-group-start")).toBe(false);
+-    expect(frames[2]?.querySelector("button")?.classList.contains("dock-group-start")).toBe(false);
+-    expect(frames[3]?.querySelector("button")?.classList.contains("dock-group-start")).toBe(false);
++    expect(frames[2]?.querySelector(".dock-btn")?.classList.contains("dock-group-start")).toBe(false);
+     expect(
+       [...(frames[1]?.querySelectorAll("button.dock-group-start") ?? [])].map((button) =>
+         button.getAttribute("aria-label"),
+       ),
+       "the lines between the surviving band runs moved or disappeared",
+-    ).toEqual([MODE_LABEL.skim, MODE_LABEL.search]);
++    ).toEqual([MODE_LABEL.search]);
+ 
+     /* Coarse-pointer growth is weighted by the controls actually drawn, at
+        both levels. A fixed outer weight was the plan review's P2-1. */
+     const modes = host.querySelector<HTMLElement>(".dock-modes");
+     expect(modes?.style.getPropertyValue("--dock-mode-count")).toBe(
+-      String(modes?.querySelectorAll("button").length),
++      String(modes?.querySelectorAll(".dock-btn").length),
+     );
+     for (const frame of frames) {
+       expect((frame as HTMLElement).style.getPropertyValue("--dock-frame-count")).toBe(
+-        String(frame.querySelectorAll("button").length),
++        String(frame.querySelectorAll(".dock-btn").length),
+       );
+     }
+   });
+diff --git a/tests/arrows-belong-to-the-article.test.tsx b/tests/arrows-belong-to-the-article.test.tsx
+index 53ca2bc40..00c9cc51a 100644
+--- a/tests/arrows-belong-to-the-article.test.tsx
++++ b/tests/arrows-belong-to-the-article.test.tsx
+@@ -209,11 +209,16 @@ describe("the bottom bar's mode segment", () => {
+     expect(rule).not.toContain("display: contents");
+   });
+ 
+-  it("gives the real radiogroup one coarse-pointer flex share per radio", () => {
++  it("gives the real radiogroup one coarse-pointer flex share per button it encloses", () => {
+     paintDock();
+     const group = host.querySelector<HTMLElement>(".dock-modes-radios");
+     expect(group).not.toBeNull();
+-    expect(group?.style.getPropertyValue("--dock-radio-count")).toBe(String(radios().length));
++    /* The radios, and since 2026-10-08 the More button between Skim and
++       Search (plan 261008d § D2). */
++    expect(group?.style.getPropertyValue("--dock-radio-count")).toBe(
++      String(group?.querySelectorAll(".dock-btn").length),
++    );
++    expect(group?.querySelectorAll(".dock-btn").length).toBe(radios().length + 1);
+ 
+     const css = readFileSync(
+       path.join(import.meta.dirname, "../src/web/styles/dock-fit.css"),
+diff --git a/tests/command-bar.test.tsx b/tests/command-bar.test.tsx
+index e4a17ab1f..228a97803 100644
+--- a/tests/command-bar.test.tsx
++++ b/tests/command-bar.test.tsx
+@@ -195,7 +195,7 @@ const listedOfKind = (kind: RowKind): string[] =>
+ /** The mode buttons the Dock itself drew, in the order it drew them. */
+ const dockDraws = (): string[] =>
+   /* The radios and Marginalia's toggle after them (261001i), in DOM order. */
+-  [...host.querySelectorAll<HTMLElement>('.dock-modes [role="radio"], .dock-modes [aria-pressed]')].map(
++  [...host.querySelectorAll<HTMLElement>('.dock-modes [role="radio"], .dock-modes [data-mode][aria-pressed]')].map(
+     (b) => b.getAttribute("aria-label") ?? "",
+   );
+ 
+diff --git a/tests/dock-corner-controls.test.tsx b/tests/dock-corner-controls.test.tsx
+index 4233f926e..8f406cee3 100644
+--- a/tests/dock-corner-controls.test.tsx
++++ b/tests/dock-corner-controls.test.tsx
+@@ -588,14 +588,17 @@ describe("the route walk: one branded home control, never two triggers", () => {
+     expect(group).not.toBeNull();
+     /* Less Marginalia, which is on every bar since 2026-10-05 and is a toggle
+        drawn after the group, never a radio in it (plan 261005d). And the
+-       drawn modes only, since 2026-10-07: five are under the More button,
+-       which is outside the group too (plan 261007c). */
++       drawn modes only, since 2026-10-07: five are under the More button
++       (plan 261007c). */
+     const drawn = splitForMore(visibleModes(false, "plain"), "plain").drawn.filter((m) => m.mode !== "marginalia");
+     expect(drawn.length, "the fixture draws a bar").toBeGreaterThan(5);
+     expect(group?.querySelectorAll('[role="radio"]')).toHaveLength(drawn.length);
+-    /* More would move that number by one if it were drawn inside the group. */
+-    expect(group?.querySelector(".dock-more-trigger")).toBeNull();
+-    expect(document.querySelector(".dock-modes .dock-more-trigger")).not.toBeNull();
++    /* More stands inside the group since 2026-10-08, between Skim and Search
++       (plan 261008d § D2), and is not counted among its radios: it is a menu
++       button, never `role="radio"`. */
++    const more = group?.querySelector(".dock-more-trigger");
++    expect(more).not.toBeNull();
++    expect(more?.getAttribute("role")).toBeNull();
+   });
+ 
+   /**
+diff --git a/tests/dock-experimental-modes.test.tsx b/tests/dock-experimental-modes.test.tsx
+index 87a4f3734..a60825dba 100644
+--- a/tests/dock-experimental-modes.test.tsx
++++ b/tests/dock-experimental-modes.test.tsx
+@@ -194,21 +194,21 @@ function loose(search: string, props: Record<string, unknown> = {}): void {
+ /** The mode buttons of the segment, by the mode each one is for — the radios
+     and, since 2026-10-01, Marginalia's toggle after them (261001i). */
+ function radioModes(): string[] {
+-  return [...host.querySelectorAll<HTMLElement>('.dock-modes [role="radio"], .dock-modes [aria-pressed]')].map(
++  return [...host.querySelectorAll<HTMLElement>('.dock-modes [role="radio"], .dock-modes [data-mode][aria-pressed]')].map(
+     (b) => b.getAttribute("aria-label") ?? "",
+   );
+ }
+ 
+ /** The mode links (the metadata page), by the word on each. */
+ function linkModes(): string[] {
+-  return [...host.querySelectorAll<HTMLElement>(".dock-modes a.dock-btn")].map(
++  return [...host.querySelectorAll<HTMLElement>(".dock-modes a[data-mode]")].map(
+     (a) => a.getAttribute("aria-label") ?? a.textContent ?? "",
+   );
+ }
+ 
+ /** Which of those links carry the visitor's visible unavailable mark. */
+ function markedLinkModes(): string[] {
+-  return [...host.querySelectorAll<HTMLElement>(".dock-modes a.dock-btn")]
++  return [...host.querySelectorAll<HTMLElement>(".dock-modes a[data-mode]")]
+     .filter((a) => a.classList.contains("tw:opacity-55"))
+     .map((a) => a.getAttribute("aria-label") ?? a.textContent ?? "");
+ }
+@@ -290,13 +290,13 @@ describe("the mode the bar is in is drawn whatever the switch says", () => {
+      drawn only while its notes were on. */
+   it("Marginalia's toggle is drawn with the switch off, and pressed while its notes are on", () => {
+     reading({ mode: "glossary", margin: true, experimental: EXPERIMENTAL_OFF });
+-    const toggle = host.querySelector<HTMLElement>('.dock-modes [aria-pressed]');
++    const toggle = host.querySelector<HTMLElement>('.dock-modes [data-mode][aria-pressed]');
+     expect(toggle?.getAttribute("aria-label")).toBe(MODE_LABEL.marginalia);
+     expect(toggle?.getAttribute("aria-pressed")).toBe("true");
+     expect(toggle?.closest('[role="radiogroup"]')).toBeNull();
+     expect(checked()).toEqual([MODE_LABEL.glossary]);
+     reading({ mode: "glossary", margin: false, experimental: EXPERIMENTAL_OFF });
+-    const closed = host.querySelector<HTMLElement>('.dock-modes [aria-pressed]');
++    const closed = host.querySelector<HTMLElement>('.dock-modes [data-mode][aria-pressed]');
+     expect(closed?.getAttribute("aria-label")).toBe(MODE_LABEL.marginalia);
+     expect(closed?.getAttribute("aria-pressed")).toBe("false");
+   });
+@@ -337,7 +337,7 @@ describe("the mode the bar is in is drawn whatever the switch says", () => {
+         /* A bar link, or — for Glossary since 2026-10-07 — the link that is
+            its item under More (plan 261007c). The same `modeLinkHref` either
+            way, which is what this case is about. */
+-        const inBar = [...host.querySelectorAll<HTMLAnchorElement>(".dock-modes a.dock-btn")].find(
++        const inBar = [...host.querySelectorAll<HTMLAnchorElement>(".dock-modes a[data-mode]")].find(
+           (a) => a.getAttribute("aria-label") === MODE_LABEL[mode],
+         );
+         if (!inBar) openMore(host);
+diff --git a/tests/dock-experimental-switch.test.tsx b/tests/dock-experimental-switch.test.tsx
+index e872ab66a..3db93d46a 100644
+--- a/tests/dock-experimental-switch.test.tsx
++++ b/tests/dock-experimental-switch.test.tsx
+@@ -204,7 +204,7 @@ describe("who sees it at all", () => {
+        drawn list, and every mode is still offered. */
+     const bar = splitForMore(visibleModes(true, "plain"), "plain");
+     expect(bar.drawn.length + bar.menu.length).toBe(MODES.length);
+-    expect(host.querySelectorAll('.dock-modes [role="radio"], .dock-modes [aria-pressed]')).toHaveLength(
++    expect(host.querySelectorAll('.dock-modes [role="radio"], .dock-modes [data-mode][aria-pressed]')).toHaveLength(
+       bar.drawn.length,
+     );
+   });
+diff --git a/tests/dock-fit.test.ts b/tests/dock-fit.test.ts
+index 62b09e632..858d46da1 100644
+--- a/tests/dock-fit.test.ts
++++ b/tests/dock-fit.test.ts
+@@ -444,8 +444,18 @@ describe("the stylesheet backs the ladder", () => {
+     const shows = CSS.replace(/\/\*[\s\S]*?\*\//g, "")
+       .split("}")
+       .map((block) => block.split("{")[0] ?? "")
+-      .filter((sel) => sel.includes(".dock-btn.on") && sel.includes(".dock-btn-label"));
++      .filter((sel) => sel.includes("[data-mode].on") && sel.includes(".dock-btn-label"));
+     expect(shows.length, "no rule keeps the active mode's label").toBeGreaterThan(0);
++    /* **A mode's word, never Comments'** (plan 261008d, GPT Sol's PR-2):
++       Comments sits in the mode segment since 2026-10-08 and is `.on` while
++       its drawer is open, which `fitSignature` does not hear about. Any rule
++       that gives an `.on` label back without `[data-mode]` would widen the bar
++       unmeasured. */
++    const unscoped = CSS.replace(/\/\*[\s\S]*?\*\//g, "")
++      .split("}")
++      .map((block) => block.split("{")[0] ?? "")
++      .filter((sel) => /\.on\b[^,]*\.dock-btn-label/.test(sel) && !sel.includes("[data-mode].on"));
++    expect(unscoped).toEqual([]);
+     expect(shows.some((sel) => sel.includes("dock-fit-2"))).toBe(true);
+     /* Rung 4 (2026-10-02) is rung 3 less the search box, so it
+        is "the rung below" too. */
+@@ -553,7 +563,7 @@ describe("Dock gives the ladder something to work with", () => {
+    */
+   it("the metadata page: links, in the same frames as the reading view", () => {
+     render({ view: "metadata" });
+-    const links = host.querySelectorAll(".dock-modes .dock-frame > a.dock-btn");
++    const links = host.querySelectorAll(".dock-modes .dock-frame > a[data-mode]");
+     const bar = splitForMore(visibleModes(false, undefined), undefined);
+     expect(links).toHaveLength(bar.drawn.length);
+     expect(links.length).toBeGreaterThan(1);
+@@ -655,7 +665,7 @@ describe("Dock gives the ladder something to work with", () => {
+    */
+   it("the metadata page with the switch on: every mode, as links", () => {
+     render({ view: "metadata", experimental: EXPERIMENTAL_ON });
+-    expect(host.querySelectorAll(".dock-modes .dock-frame > a.dock-btn")).toHaveLength(
++    expect(host.querySelectorAll(".dock-modes .dock-frame > a[data-mode]")).toHaveLength(
+       MODES.length - GATHERED_UNDER_MORE,
+     );
+     openMore(host);
+diff --git a/tests/dock-groups.test.tsx b/tests/dock-groups.test.tsx
+new file mode 100644
+index 000000000..38ac03d97
+--- /dev/null
++++ b/tests/dock-groups.test.tsx
+@@ -0,0 +1,173 @@
++// @vitest-environment jsdom
++/**
++ * **Which frame More and Comments stand in** — Greg, 2026-10-08:
++ *
++ * > I'm wondering if we could put those perhaps just after the skim mode, just
++ * > after structure and summary as part of that group, rather than out on
++ * > their own. And also, I wonder if we could put the comments icon inside a
++ * > group with marginalia, perhaps after marginalia.
++ *
++ * (spya-mcs4gb; Skim joined Structure's run the same morning, spya-wm5gu2,
++ * which tests/dock-mode-order.test.ts holds.) Both arms of the bar, because the
++ * links arm is the half this bar keeps forgetting (Dock.tsx § `DockModeLinks`).
++ * docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md.
++ */
++import { act, createElement } from "react";
++import { createRoot, type Root } from "react-dom/client";
++import { afterEach, beforeEach, describe, expect, it } from "vitest";
++import { MODE_LABEL } from "../src/title-text.js";
++import { Dock } from "../src/web/Dock.js";
++import { moreTrigger } from "./helpers/dock-more.js";
++import { EXPERIMENTAL_OFF, EXPERIMENTAL_ON } from "./helpers/experimental-fixtures.js";
++
++let host: HTMLDivElement;
++let root: Root;
++
++beforeEach(() => {
++  (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
++  history.replaceState(null, "", "/read/a-piece");
++  host = document.createElement("div");
++  document.body.append(host);
++  root = createRoot(host);
++});
++
++afterEach(() => {
++  act(() => root.unmount());
++  host.remove();
++});
++
++const DRAWER = {
++  comments: [],
++  paragraphs: new Map(),
++  loaded: true,
++  loadError: null,
++  error: null,
++  panel: null,
++  onPanel: () => {},
++  onOpenComment: () => {},
++};
++
++function reading(props: Record<string, unknown> = {}): void {
++  act(() => {
++    root.render(
++      // biome-ignore lint/suspicious/noExplicitAny: the two arms of the bar differ by which props are present, the same cast tests/dock-more.test.tsx makes
++      createElement(Dock as any, {
++        slug: "a-piece",
++        view: "article",
++        mode: "plain",
++        onMode: () => {},
++        experimental: EXPERIMENTAL_OFF,
++        drawer: DRAWER,
++        ...props,
++      }),
++    );
++  });
++}
++
++function loose(props: Record<string, unknown> = {}): void {
++  history.replaceState(null, "", "/read/a-piece/metadata");
++  act(() => {
++    root.render(
++      // biome-ignore lint/suspicious/noExplicitAny: as above
++      createElement(Dock as any, { slug: "a-piece", view: "metadata", experimental: EXPERIMENTAL_OFF, ...props }),
++    );
++  });
++}
++
++/** Each frame's buttons and links, by accessible name, left to right. */
++const frames = () =>
++  [...host.querySelectorAll<HTMLElement>(".dock-modes .dock-frame")].map((f) =>
++    [...f.querySelectorAll<HTMLElement>(".dock-btn")].map((b) => b.getAttribute("aria-label")),
++  );
++
++const L = MODE_LABEL;
++
++describe("the reading view's frames", () => {
++  it("draws More straight after Skim in Structure's frame, and Comments after Marginalia", () => {
++    reading();
++    expect(frames()).toEqual([
++      [L.plain],
++      [L.structure, L.summary, L.skim, "More", L.search, L.chat, L.learn],
++      [L.marginalia, "Comments"],
++    ]);
++  });
++
++  it("with the switch on, More still ends the shape run, after Diagram and Skim", () => {
++    reading({ experimental: EXPERIMENTAL_ON });
++    expect(frames()[1]?.slice(0, 5)).toEqual([L.structure, L.summary, L.diagram, L.skim, "More"]);
++  });
++
++  it("a gathered mode drawn while open stands after More, as a run of its own", () => {
++    reading({ mode: "glossary" });
++    expect(frames()[1]).toEqual([L.structure, L.summary, L.skim, "More", L.glossary, L.search, L.chat, L.learn]);
++    const glossary = host.querySelector(`[aria-label="${L.glossary}"]`) as HTMLElement;
++    expect(glossary.classList.contains("dock-group-start")).toBe(true);
++  });
++
++  it("every gathered mode, open, stands straight after More, switch on or off", () => {
++    for (const [experimental, modes] of [
++      [EXPERIMENTAL_OFF, ["quotes", "glossary", "ideas"]],
++      [EXPERIMENTAL_ON, ["quotes", "glossary", "faq", "ideas", "timeline"]],
++    ] as const) {
++      for (const mode of modes) {
++        reading({ experimental, mode });
++        const bands = frames()[1] ?? [];
++        expect(bands[bands.indexOf("More") + 1], `${mode}, switch ${experimental.on}`).toBe(L[mode]);
++        expect(bands[bands.indexOf("More") - 1], `${mode}, switch ${experimental.on}`).toBe(L.skim);
++      }
++    }
++  });
++
++  it("draws no line between Skim and More, and one after More", () => {
++    reading();
++    const more = moreTrigger(host) as HTMLElement;
++    expect(more.classList.contains("dock-group-start")).toBe(false);
++    const skim = host.querySelector(`[aria-label="${L.skim}"]`) as HTMLElement;
++    expect(skim.classList.contains("dock-group-start")).toBe(false);
++    const search = host.querySelector(`[aria-label="${L.search}"]`) as HTMLElement;
++    expect(search.classList.contains("dock-group-start")).toBe(true);
++  });
++
++  it("More is still a menu button and never a radio", () => {
++    reading();
++    const more = moreTrigger(host) as HTMLElement;
++    expect(more.getAttribute("role")).toBeNull();
++    expect(more.getAttribute("aria-haspopup")).toBe("menu");
++    expect(more.hasAttribute("aria-checked")).toBe(false);
++  });
++
++  it("Comments is the drawer trigger, not a mode, and not in the radiogroup", () => {
++    reading();
++    const comments = host.querySelector<HTMLElement>('button[aria-label="Comments"]') as HTMLElement;
++    expect(comments.closest('[role="radiogroup"]')).toBeNull();
++    expect(comments.getAttribute("role")).toBeNull();
++    /* Not a mode, so not `data-mode`: dock-fit.css's rung-2 rule gives an
++       `.on` mode its word back, and Comments is `.on` while its drawer is
++       open, which nothing remeasures (GPT Sol, PR-2). */
++    expect(comments.hasAttribute("data-mode")).toBe(false);
++    /* Exactly one Comments control in the bar: moved, not copied. */
++    expect(host.querySelectorAll('[aria-label="Comments"]')).toHaveLength(1);
++  });
++
++  it("counts Comments in the shares a coarse pointer spreads the segment by", () => {
++    reading();
++    const modes = host.querySelector<HTMLElement>(".dock-modes") as HTMLElement;
++    /* 7 radios + More + Marginalia + Comments. */
++    expect(modes.style.getPropertyValue("--dock-mode-count")).toBe("10");
++    const last = [...host.querySelectorAll<HTMLElement>(".dock-modes .dock-frame")].at(-1) as HTMLElement;
++    expect(last.style.getPropertyValue("--dock-frame-count")).toBe("2");
++  });
++});
++
++describe("off the reading view, the same frames as links", () => {
++  it("draws More after Skim and the Comments link after Marginalia", () => {
++    loose();
++    expect(frames()).toEqual([
++      [L.plain],
++      [L.structure, L.summary, L.skim, "More", L.search, L.chat, L.learn],
++      [L.marginalia, "Comments"],
++    ]);
++    const comments = host.querySelector<HTMLElement>('[aria-label="Comments"]') as HTMLElement;
++    expect(comments.tagName).toBe("A");
++  });
++});
+diff --git a/tests/dock-mode-order.test.ts b/tests/dock-mode-order.test.ts
+index 1ed5dbbca..524c00daa 100644
+--- a/tests/dock-mode-order.test.ts
++++ b/tests/dock-mode-order.test.ts
+@@ -35,6 +35,12 @@
+  * follows; the **lines** are a fact about what is drawn, so every case about
+  * them reads the drawn list.
+  * docs/plans/261007c-bottom-bar-rises-in-on-first-load-and-a-more-button-gathers-the-lesser-modes.md.
++ *
++ * And on 2026-10-08 (spya-wm5gu2): *"move the skim mode icon into the same
++ * group after structure and summary."* Skim leaves the guides run for the shape
++ * run, at its end; the guides run is the five under More, and is drawn only
++ * while one of them is open —
++ * docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md.
+  */
+ import { describe, expect, it } from "vitest";
+ import { groupStarts, splitForMore, visibleModes } from "../src/web/Dock.js";
+@@ -53,8 +59,8 @@ const RUNS = [
+   /* Tweets stood in the shape run, beside Summary, from 2026-09-29 to
+      2026-10-03; it is Summary's Thread view now, and one button fewer
+      (docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md). */
+-  ["structure", "summary", "diagram"],
+-  ["skim", "quotes", "glossary", "faq", "ideas", "timeline"],
++  ["structure", "summary", "diagram", "skim"],
++  ["quotes", "glossary", "faq", "ideas", "timeline"],
+   ["citations", "referee", "debate"],
+   ["search", "chat", "learn"],
+   /* Marginalia's toggle, since 2026-10-01 a switch beside the band rather than
+@@ -73,16 +79,17 @@ describe("the mode bar's order", () => {
+     const gathered: readonly string[] = UNDER_MORE;
+     expect(bar.drawn.map((m) => m.mode)).toEqual(RUNS.flat().filter((m) => !gathered.includes(m)));
+     expect(bar.menu.map((m) => m.mode)).toEqual(UNDER_MORE);
+-    /* All five are in one run, so More takes nothing from any other. */
+-    expect(RUNS[2]).toEqual(["skim", ...UNDER_MORE]);
++    /* The five are the whole of one run, so More takes nothing from any other,
++       and that run is drawn only while one of them is open. */
++    expect(RUNS[2]).toEqual(UNDER_MORE);
+   });
+ 
+   it("puts a line before each band run, while Marginalia's own frame supplies its edge", () => {
+     /* Both Dock arms pass only the bands to `groupStarts`; Plain and
+        Marginalia already have frame edges (Dock.tsx § the three frames). The
+-       guides run is Skim alone in the bar now, and still begins with a line. */
++       guides run is all under More, so with none of it open it draws no line. */
+     const starts = groupStarts(drawnBands(true));
+-    expect([...starts].sort()).toEqual(RUNS.slice(1, -1).map((run) => run[0]).sort());
++    expect([...starts].sort()).toEqual(["structure", "citations", "search"].sort());
+   });
+ 
+   it("keeps each run in one piece, so a run never draws two lines", () => {
+@@ -98,7 +105,7 @@ describe("the mode bar's order", () => {
+   });
+ 
+   it("with the switch off, draws lines only where two surviving runs meet", () => {
+-    /* Structure, Summary | Skim, Quotes, Glossary, Ideas | Search, Chat,
++    /* Structure, Summary, Skim | Quotes, Glossary, Ideas | Search, Chat,
+        Learn (since 2026-10-05, spya-cnqcjf): the critical run is hidden
+        whole, so no line is left for it. Marginalia's toggle is last, in a
+        frame of its own, since it left the switch the same day (spya-vv54j2). */
+@@ -116,8 +123,9 @@ describe("the mode bar's order", () => {
+       "learn",
+       "marginalia",
+     ]);
+-    /* Of those the bar draws Structure, Summary | Skim | Search, Chat, Learn
+-       since 2026-10-07, with Quotes, Glossary and Ideas under More. */
++    /* Of those the bar draws Structure, Summary, Skim | Search, Chat, Learn
++       — More since 2026-10-07, with Quotes, Glossary and Ideas under it, and
++       Skim in Structure's run since 2026-10-08. */
+     expect(drawnBands(false).map((m) => m.mode)).toEqual([
+       "plain",
+       "structure",
+@@ -129,10 +137,10 @@ describe("the mode bar's order", () => {
+     ]);
+     /* The bar asks about the bands only: the toggle's frame is its own edge
+        (Dock.tsx § the three frames). */
+-    expect([...groupStarts(drawnBands(false))].sort()).toEqual(["structure", "skim", "search"].sort());
++    expect([...groupStarts(drawnBands(false))].sort()).toEqual(["structure", "search"].sort());
+   });
+ 
+-  it("a gathered mode drawn while it is open joins Skim's run, and adds no line", () => {
++  it("a gathered mode drawn while it is open is a run of its own, after Skim, with its line", () => {
+     for (const current of ["quotes", "glossary", "ideas", "timeline"] as const) {
+       const drawn = drawnBands(false, current);
+       expect(drawn.map((m) => m.mode), current).toEqual([
+@@ -145,7 +153,7 @@ describe("the mode bar's order", () => {
+         "chat",
+         "learn",
+       ]);
+-      expect([...groupStarts(drawn)].sort(), current).toEqual(["structure", "skim", "search"].sort());
++      expect([...groupStarts(drawn)].sort(), current).toEqual(["structure", current, "search"].sort());
+     }
+   });
+ 
+diff --git a/tests/dock-mode-tooltips.test.tsx b/tests/dock-mode-tooltips.test.tsx
+index 83eabcb13..e23f7413b 100644
+--- a/tests/dock-mode-tooltips.test.tsx
++++ b/tests/dock-mode-tooltips.test.tsx
+@@ -136,7 +136,7 @@ function modeControls(): HTMLElement[] {
+   /* Marginalia's toggle beside the radios since 2026-10-01 (261001i). */
+   return [
+     ...host.querySelectorAll<HTMLElement>(
+-      '.dock-modes [role="radio"], .dock-modes [aria-pressed], .dock-modes a.dock-btn',
++      '.dock-modes [role="radio"], .dock-modes [data-mode][aria-pressed], .dock-modes a[data-mode]',
+     ),
+   ];
+ }
+diff --git a/tests/dock-more.test.tsx b/tests/dock-more.test.tsx
+index 3a85f47fe..9cb3eb4ab 100644
+--- a/tests/dock-more.test.tsx
++++ b/tests/dock-more.test.tsx
+@@ -207,19 +207,21 @@ describe("the More button on the reading view", () => {
+     expect(more.hasAttribute("title")).toBe(false);
+   });
+ 
+-  it("is not a radio, and stands in a frame of its own between the radiogroup and Marginalia", () => {
++  /* Its own frame, between the radiogroup and Marginalia's, from 2026-10-07;
++     straight after Skim inside the bands' frame since 2026-10-08, Greg:
++     *"just after the skim mode … as part of that group, rather than out on
++     their own"* (plan 261008d; tests/dock-groups.test.tsx has the frames). */
++  it("is not a radio, and stands in the bands' frame straight after Skim", () => {
+     reading();
+     const more = moreTrigger(host) as HTMLButtonElement;
+     expect(more.getAttribute("role")).toBeNull();
+     expect(more.hasAttribute("aria-checked")).toBe(false);
+-    expect(more.closest('[role="radiogroup"]')).toBeNull();
+-    const frame = more.parentElement as HTMLElement;
+-    expect(frame.classList.contains("dock-frame")).toBe(true);
+-    expect(frame.children).toHaveLength(1);
+-    expect(frame.previousElementSibling?.classList.contains("dock-modes-radios")).toBe(true);
+-    const after = frame.nextElementSibling as HTMLElement;
+-    expect(after.classList.contains("dock-frame")).toBe(true);
+-    expect(after.querySelector("[aria-pressed]")?.getAttribute("aria-label")).toBe(MODE_LABEL.marginalia);
++    expect(more.hasAttribute("data-mode")).toBe(false);
++    const frame = more.closest(".dock-frame") as HTMLElement;
++    const buttons = [...frame.querySelectorAll<HTMLElement>(".dock-btn")];
++    const at = buttons.indexOf(more);
++    expect(buttons[at - 1]?.getAttribute("aria-label")).toBe(MODE_LABEL.skim);
++    expect(buttons[at + 1]?.getAttribute("aria-label")).toBe(MODE_LABEL.search);
+   });
+ 
+   it("opens a menu of exactly the gathered modes this reader has, in order", () => {
+@@ -292,13 +294,16 @@ describe("the More button on the reading view", () => {
+   it("counts More as a button in the shares a coarse pointer spreads the row by", () => {
+     reading();
+     const modes = host.querySelector<HTMLElement>(".dock-modes") as HTMLElement;
+-    /* 7 radios + More + Marginalia. It was the reachable count, 11. */
+-    expect(modes.style.getPropertyValue("--dock-mode-count")).toBe("9");
++    /* 7 radios + More + Marginalia + Comments (in Marginalia's frame since
++       2026-10-08). It was the reachable count, 11, before 2026-10-07. */
++    expect(modes.style.getPropertyValue("--dock-mode-count")).toBe("10");
++    /* More is inside the radiogroup and the bands' frame since 2026-10-08. */
+     expect(
+       (host.querySelector(".dock-modes-radios") as HTMLElement).style.getPropertyValue("--dock-radio-count"),
+-    ).toBe("7");
+-    const frame = (moreTrigger(host) as HTMLElement).parentElement as HTMLElement;
+-    expect(frame.style.getPropertyValue("--dock-frame-count")).toBe("1");
++    ).toBe("8");
++    const frame = (moreTrigger(host) as HTMLElement).closest(".dock-frame") as HTMLElement;
++    /* Structure, Summary, Skim, More, Search, Chat, Learn. */
++    expect(frame.style.getPropertyValue("--dock-frame-count")).toBe("7");
+   });
+ });
+ 
+@@ -330,12 +335,14 @@ describe("the More button off the reading view", () => {
+     const more = moreTrigger(host) as HTMLButtonElement;
+     expect(more).not.toBeNull();
+     expect(more.getAttribute("aria-haspopup")).toBe("menu");
+-    const links = [...host.querySelectorAll(".dock-modes a.dock-btn")].map((a) => a.getAttribute("aria-label"));
++    const links = [...host.querySelectorAll(".dock-modes a[data-mode]")].map((a) => a.getAttribute("aria-label"));
+     expect(links).toEqual(
+       labelsOf(["plain", "structure", "summary", "skim", "search", "chat", "learn", "marginalia"]),
+     );
+-    const frames = [...host.querySelectorAll(".dock-modes .dock-frame")];
+-    expect(frames.indexOf(more.parentElement as HTMLElement)).toBe(frames.length - 2);
++    /* In the bands' frame, straight after Skim, as on the reading view. */
++    const frame = more.closest(".dock-frame") as HTMLElement;
++    const inFrame = [...frame.querySelectorAll<HTMLElement>(".dock-btn")];
++    expect(inFrame[inFrame.indexOf(more) - 1]?.getAttribute("aria-label")).toBe(MODE_LABEL.skim);
+   });
+ 
+   it("its items are the links the bar used to draw", () => {
+@@ -353,7 +360,7 @@ describe("the More button off the reading view", () => {
+ 
+   it("draws the gathered mode the reader came from as a link, and says nothing is selected", () => {
+     loose("?mode=ideas");
+-    const links = [...host.querySelectorAll(".dock-modes a.dock-btn")].map((a) => a.getAttribute("aria-label"));
++    const links = [...host.querySelectorAll(".dock-modes a[data-mode]")].map((a) => a.getAttribute("aria-label"));
+     expect(links).toContain(MODE_LABEL.ideas);
+     openMore(host);
+     /* No mode is open on this page, so no item may claim to be the current one. */
+diff --git a/tests/helpers/dock-more.ts b/tests/helpers/dock-more.ts
+index 5fec019a0..32fdd1e64 100644
+--- a/tests/helpers/dock-more.ts
++++ b/tests/helpers/dock-more.ts
+@@ -81,7 +81,7 @@ export function moreLabels(root: ParentNode = document): string[] {
+ export function reachableModeLabels(root: ParentNode): string[] {
+   const drawn = [
+     ...root.querySelectorAll<HTMLElement>(
+-      '.dock-modes [role="radio"], .dock-modes [aria-pressed], .dock-modes a.dock-btn',
++      '.dock-modes [role="radio"], .dock-modes [data-mode][aria-pressed], .dock-modes a[data-mode]',
+     ),
+   ].map((el) => el.getAttribute("aria-label") ?? "");
+   return [...new Set([...drawn, ...moreLabels(root)])];
+@@ -100,7 +100,7 @@ export function reachableModeLabels(root: ParentNode): string[] {
+  */
+ export function modeDoor(root: ParentNode, label: string): HTMLElement | undefined {
+   const button = [
+-    ...root.querySelectorAll<HTMLElement>('.dock-modes [role="radio"], .dock-modes [aria-pressed]'),
++    ...root.querySelectorAll<HTMLElement>('.dock-modes [role="radio"], .dock-modes [data-mode][aria-pressed]'),
+   ].find((el) => el.getAttribute("aria-label") === label);
+   if (button) return button;
+   if (moreTrigger(root) === null) return undefined;
+@@ -117,7 +117,7 @@ export function modeDoor(root: ParentNode, label: string): HTMLElement | undefin
+  */
+ export function pressModeByLabel(root: ParentNode, label: string): "bar" | "more" {
+   const button = [
+-    ...root.querySelectorAll<HTMLElement>('.dock-modes [role="radio"], .dock-modes [aria-pressed]'),
++    ...root.querySelectorAll<HTMLElement>('.dock-modes [role="radio"], .dock-modes [data-mode][aria-pressed]'),
+   ].find((el) => el.getAttribute("aria-label") === label);
+   if (button) {
+     act(() => button.click());
