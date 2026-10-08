@@ -320,7 +320,8 @@ three daily, itself included. Their text, and what to do after a restart:
 pacer tick writes `~/.overseer/pacer-heartbeat`, and **the watchdog, outside this session, fails
 when it is over 90 minutes old** or missing while a session holds your claim. It also fails when
 production is more than 12 hours behind dev, and its line then says how long dev has gone without a
-commit the readiness loop passed. Both land where the daemon check does: `tick.sh`'s last-run line
+commit the readiness loop had shown ready, and how long at least its head has been red. Both land
+where the daemon check does: `tick.sh`'s last-run line
 for `overseer-watchdog`, and `journalctl -u overseer-watchdog -n 6` for the sentence
 ([`scripts/overseer-watchdog-checks.ts`](../../scripts/overseer-watchdog-checks.ts)).
 

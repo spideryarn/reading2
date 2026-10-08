@@ -25,10 +25,10 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { OVERSEER_ROLE } from "../tools/fleet/overseer-claim.js";
-import { GIT_TIMEOUT_MS, gitEnv } from "../tools/fleet/readiness-git.js";
+import { GIT_TIMEOUT_MS, gitEnv, primaryCheckout } from "../tools/fleet/readiness-git.js";
 import { openReadinessStore, readinessDirExists, readinessDirFromEnv } from "../tools/fleet/readiness-store.js";
 import { readinessVerdict } from "../tools/fleet/readiness-verdict.js";
-import { READINESS_RUNNER_WORKTREE, type Reading } from "../tools/fleet/readiness.js";
+import { readinessRunnerPath, type Reading } from "../tools/fleet/readiness.js";
 import { storeRoot } from "../tools/overseer/store.js";
 import { SESSION_ROLE_ENV } from "./gjd-remote-tmux.js";
 
@@ -121,6 +121,12 @@ export function assessPacer(
         `so nothing is releasing work or deploying. ${RECREATE}`,
     );
   }
+  if (session.kind === "cannot-tell") {
+    return check("unknown", `last pacer tick ${ageMin} min ago, but the Overseer session could not be read (${session.why})`);
+  }
+  if (session.kind === "absent") {
+    return check("unhealthy", `last pacer tick ${ageMin} min ago, but no Overseer session is running. Start the Overseer, then: ${RECREATE}`);
+  }
   return check("ok", `last pacer tick ${ageMin} min ago`);
 }
 
@@ -137,10 +143,26 @@ export function readPacerHeartbeat(root: string = storeRoot()): HeartbeatRead {
 const TMUX_TIMEOUT_MS = 5_000;
 
 function tmux(args: string[]): { ok: true; out: string } | { ok: false; status: number | null; err: string } {
-  const ran = spawnSync("tmux", args, { encoding: "utf8", timeout: TMUX_TIMEOUT_MS, killSignal: "SIGKILL" });
+  const ran = spawnSync("tmux", args, { stdio: ["ignore", "pipe", "pipe"], encoding: "utf8", timeout: TMUX_TIMEOUT_MS, killSignal: "SIGKILL" });
   if (ran.error !== undefined) return { ok: false, status: null, err: ran.error.message };
   if (ran.status !== 0) return { ok: false, status: ran.status, err: ran.stderr.trim() };
   return { ok: true, out: ran.stdout };
+}
+
+/** Only explicit missing-variable / vanished-session answers prove no claim. */
+function readOverseerClaim(id: string, ask: typeof tmux): "claimed" | "unclaimed" | "cannot-tell" {
+  const role = ask(["show-environment", "-t", id, SESSION_ROLE_ENV]);
+  if (role.ok) {
+    const lines = role.out.replace(/\n$/, "").split("\n");
+    if (lines.length !== 1) return "cannot-tell";
+    const line = lines[0] ?? "";
+    if (line === `${SESSION_ROLE_ENV}=${OVERSEER_ROLE}`) return "claimed";
+    return line.startsWith(`${SESSION_ROLE_ENV}=`) || line === `-${SESSION_ROLE_ENV}` ? "unclaimed" : "cannot-tell";
+  }
+  const still = ask(["has-session", "-t", id]);
+  const missingVariable = role.status === 1 && role.err === `unknown variable: ${SESSION_ROLE_ENV}`;
+  const vanished = !still.ok && still.status === 1 && still.err === `can't find session: ${id}`;
+  return (still.ok && missingVariable) || vanished ? "unclaimed" : "cannot-tell";
 }
 
 /**
@@ -149,28 +171,23 @@ function tmux(args: string[]): { ok: true; out: string } | { ok: false; status: 
  * *has gone*. Exactly one line `GJD_ROLE=overseer` is a claim; anything else
  * that is not a clean miss means this session could not be read.
  */
-export function findOverseerSession(): OverseerSession {
-  const listed = tmux(["list-sessions", "-F", "#{session_id}\t#{session_name}"]);
+export function findOverseerSession(ask: typeof tmux = tmux): OverseerSession {
+  const listed = ask(["list-sessions", "-F", "#{session_id}\t#{session_name}"]);
   if (!listed.ok) {
     // No server is the ordinary "no sessions" of a box nobody has logged in to.
-    if (/no server running|error connecting to/i.test(listed.err)) return { kind: "absent" };
+    if (listed.status === 1 && /^(no server running on .+|error connecting to .+ \(No such file or directory\))$/.test(listed.err)) return { kind: "absent" };
     return { kind: "cannot-tell", why: `tmux list-sessions: ${listed.err || `exit ${String(listed.status)}`}` };
   }
   const unreadable: string[] = [];
   for (const line of listed.out.split("\n")) {
     if (line === "") continue;
-    const [id = "", name = ""] = line.split("\t");
-    const role = tmux(["show-environment", "-t", id, SESSION_ROLE_ENV]);
-    if (role.ok) {
-      const lines = role.out.replace(/\n$/, "").split("\n");
-      if (lines.length === 1 && lines[0] === `${SESSION_ROLE_ENV}=${OVERSEER_ROLE}`) return { kind: "present", name };
-      if (lines.length !== 1 || !lines[0]?.startsWith(`${SESSION_ROLE_ENV}=`)) unreadable.push(name);
-      continue;
-    }
-    // Not set, or the session went away between the two calls; only a session
-    // still there and still unaskable is a hole.
-    const still = tmux(["has-session", "-t", id]);
-    if (still.ok && role.status === null) unreadable.push(name);
+    const match = /^(\$\d+)\t(.+)$/.exec(line);
+    if (match === null) return { kind: "cannot-tell", why: "tmux list-sessions returned an unrecognized session line" };
+    const id = match[1] ?? "";
+    const name = match[2] ?? "";
+    const claim = readOverseerClaim(id, ask);
+    if (claim === "claimed") return { kind: "present", name };
+    if (claim === "cannot-tell") unreadable.push(name);
   }
   if (unreadable.length > 0) return { kind: "cannot-tell", why: `the role of ${unreadable.join(", ")} could not be read` };
   return { kind: "absent" };
@@ -183,7 +200,7 @@ export function findOverseerSession(): OverseerSession {
 /** Production may trail dev by this much before it is an alarm. The 3-hourly check aims for six. */
 export const MAX_DEPLOY_LAG_MS = 12 * HOUR;
 
-/** How far back the readiness store is read for the last ready commit. Its retention is 7 days. */
+/** How far back to look for observed failures. The store's retention is 7 days. */
 export const READINESS_WINDOW_MS = 72 * HOUR;
 
 /** A fetch goes to GitHub, so it gets longer than the local questions. */
@@ -204,6 +221,7 @@ export type TrunkRead =
 function git(cwd: string, args: string[], timeoutMs = GIT_TIMEOUT_MS): { ok: true; out: string } | { ok: false; why: string } {
   const ran = spawnSync("git", args, {
     cwd,
+    stdio: ["ignore", "pipe", "pipe"],
     encoding: "utf8",
     // gitEnv strips inherited redirects; no prompt, so a missing credential
     // fails rather than waiting for a terminal a systemd unit does not have.
@@ -224,8 +242,12 @@ function git(cwd: string, args: string[], timeoutMs = GIT_TIMEOUT_MS): { ok: tru
  * because the loop's own fetch can hold the ref lock for a moment.
  */
 export function readTrunk(cwd: string = process.cwd()): TrunkRead {
-  let fetched = git(cwd, ["fetch", "--quiet", "origin", "dev", "main"], FETCH_TIMEOUT_MS);
-  if (!fetched.ok) fetched = git(cwd, ["fetch", "--quiet", "origin", "dev", "main"], FETCH_TIMEOUT_MS);
+  // Explicit destinations do not depend on remote.origin.fetch mapping both
+  // branches. Leave FETCH_HEAD alone; this check only consumes tracking refs.
+  const fetchArgs = ["fetch", "--quiet", "--atomic", "--no-write-fetch-head", "origin",
+    "+refs/heads/dev:refs/remotes/origin/dev", "+refs/heads/main:refs/remotes/origin/main"];
+  let fetched = git(cwd, fetchArgs, FETCH_TIMEOUT_MS);
+  if (!fetched.ok) fetched = git(cwd, fetchArgs, FETCH_TIMEOUT_MS);
   if (!fetched.ok) return { kind: "unknown", why: `${fetched.why}, so origin/main and origin/dev may be stale` };
 
   const main = git(cwd, ["rev-parse", "--verify", "origin/main^{commit}"]);
@@ -248,72 +270,136 @@ export function readTrunk(cwd: string = process.cwd()): TrunkRead {
   return { kind: "known", mainSha: main.out, devSha: dev.out, undeployed, oldestUndeployed: oldest };
 }
 
+/** What the readiness loop's records say about dev, or why they could not be read. */
 export type ReadinessStreak =
+  /** The store could not be read, or holds nothing from the loop: an input failure. */
   | { kind: "unknown"; why: string }
-  /** dev's head is ready to deploy. */
-  | { kind: "ready"; sha: string }
   | {
-      kind: "not-ready";
-      /** What `readinessVerdict` says about dev's head: failed, or not yet shown either way. */
-      headVerdict: "not-ready" | "unknown";
-      why: string;
-      /** The newest dev commit the loop showed ready in the window, or null for none. */
-      lastReady: { sha: string; atMs: number } | null;
+      kind: "known";
+      head: HeadReadiness;
+      /**
+       * When dev last stopped having a commit the loop had shown ready, and
+       * why it stopped; null when the head is ready, or when no commit in the
+       * window was ever ready. See {@link lastReadyInterval}.
+       */
+      lastReady: ReadyInterval | null;
     };
 
-/** A run in the readiness loop's own checkout, the one that only ever tests dev's head. */
-function byTheLoop(reading: Reading): boolean {
-  return reading.record.cwd.endsWith(`/${READINESS_RUNNER_WORKTREE}`);
+export type ReadyInterval = { sha: string; untilMs: number; how: "failed" | "moved" | "last-seen" };
+
+export type HeadReadiness =
+  | { kind: "ready" }
+  /**
+   * `sinceMs` is the first observation in the head's ongoing red interval: a
+   * lower bound, since the store has no record of when origin/dev moved.
+   */
+  | { kind: "red"; why: string; sinceMs: number }
+  /**
+   * Not shown either way yet — usually a head the loop has not reached. That
+   * is the ordinary state for half an hour after every push, so it is not an
+   * input failure and does not make the check unknown.
+   */
+  | { kind: "unsettled"; why: string };
+
+/**
+ * Replay the shared verdict over chronological prefixes, grouping equal times
+ * so input order never decides anything, and call `visit` with each prefix's
+ * verdict. Sticky failures, whole-check decomposition and unfinished runs keep
+ * exactly readinessVerdict's semantics.
+ */
+function replay(ordered: readonly Reading[], sha: string, visit: (verdict: ReturnType<typeof readinessVerdict>, atMs: number) => void): void {
+  for (let end = 0; end < ordered.length; ) {
+    const atMs = ordered[end]?.atMs ?? 0;
+    do end += 1;
+    while (end < ordered.length && ordered[end]?.atMs === atMs);
+    visit(readinessVerdict({ readings: ordered.slice(0, end), devSha: sha, caveat: "", unreadable: 0 }), atMs);
+  }
 }
 
 /**
- * How long dev has gone without a commit the readiness loop showed ready.
- *
- * **Ready means what `readinessVerdict` says it means** — the conjunction of
- * the required checks on one sha, with a known failure sticky — computed once
- * per sha the loop has tested. When dev's head is ready this is `ready`;
- * otherwise "undeployable since" is the newest instant any earlier commit
- * became ready. A loop that has stopped reads as undeployable too, which is
- * true: nobody has shown any commit fit to ship.
- *
- * Only the loop's runs count. A pass in some agent's worktree is about a
- * commit that may never have been dev's head.
+ * Two facts from the loop's records: where dev's head stands now (and, when
+ * red, since when at least), and the last time any dev commit was shown ready.
+ * Only runs in the loop's own checkout count — the exact path, which is also
+ * the deploy evidence reader's boundary; a pass in some agent's worktree is
+ * about a commit that may never have been dev's head.
  */
 export function readinessStreak(
   read: { readings: readonly Reading[]; unreadable: number },
   devSha: string,
   nowMs: number,
   windowMs: number,
+  runnerCwd: string,
 ): ReadinessStreak {
   if (read.unreadable > 0) {
     return { kind: "unknown", why: `${read.unreadable} readiness record(s) could not be read, and the newest may be the one that matters` };
   }
-  const readings = read.readings.filter(byTheLoop);
+  const readings = read.readings.filter((r) => r.record.cwd === runnerCwd);
   if (readings.length === 0) {
     return { kind: "unknown", why: `the readiness loop recorded nothing in the last ${Math.round(windowMs / HOUR)} hours` };
   }
+  // A read can race a finishing run; the pacer's clock slack covers that.
+  if (readings.some((r) => !Number.isFinite(r.atMs) || r.atMs > nowMs + FUTURE_SLACK_MS)) {
+    return { kind: "unknown", why: "the readiness loop has a record with an invalid or future observation time" };
+  }
+  const ordered = readings.filter((r) => r.atMs >= nowMs - windowMs).sort((a, b) => a.atMs - b.atMs);
 
-  const verdictOn = (sha: string) => readinessVerdict({ readings, devSha: sha, caveat: "", unreadable: 0 });
-  const head = verdictOn(devSha);
-  if (head.kind === "ready") return { kind: "ready", sha: devSha };
-
-  let lastReady: { sha: string; atMs: number } | null = null;
-  const shas = new Set<string>();
-  for (const r of readings) if (r.record.treeAtStart.kind === "known") shas.add(r.record.treeAtStart.sha);
-  for (const sha of shas) {
-    const v = verdictOn(sha);
-    if (v.kind !== "ready") continue;
-    // Ready from the moment the last of its required passes landed.
-    let atMs = 0;
-    for (const e of v.evidence) {
-      const at = e.record?.state === "finished" ? Date.parse(e.record.at) : Number.NaN;
-      if (!Number.isNaN(at)) atMs = Math.max(atMs, at);
-    }
-    if (atMs > 0 && atMs <= nowMs && (lastReady === null || atMs > lastReady.atMs)) lastReady = { sha, atMs };
+  let head: HeadReadiness;
+  const now = readinessVerdict({ readings: ordered, devSha, caveat: "", unreadable: 0 });
+  if (now.kind === "ready") head = { kind: "ready" };
+  else if (now.kind === "unknown") head = { kind: "unsettled", why: now.why };
+  else {
+    let sinceMs: number | null = null;
+    replay(ordered, devSha, (verdict, atMs) => {
+      sinceMs = verdict.kind === "not-ready" ? (sinceMs ?? Math.min(atMs, nowMs)) : null;
+    });
+    head = { kind: "red", why: now.failing.map((e) => `${e.check}: ${e.why}`).join("; "), sinceMs: sinceMs ?? nowMs };
   }
 
-  const why = head.kind === "not-ready" ? head.failing.map((e) => `${e.check}: ${e.why}`).join("; ") : head.why;
-  return { kind: "not-ready", headVerdict: head.kind, why, lastReady };
+  return { kind: "known", head, lastReady: head.kind === "ready" ? null : lastReadyInterval(ordered) };
+}
+
+const shaOf = (r: Reading): string | null => (r.record.treeAtStart.kind === "known" ? r.record.treeAtStart.sha : null);
+
+/**
+ * The ready interval that ended most recently, over all commits the loop ran.
+ *
+ * Each commit's verdict is replayed over its own readings, so a later failure
+ * cannot erase the time it was ready. An interval ends when the commit fails
+ * again, or when dev moves on — seen as the loop's first run on another commit
+ * after it became ready, since the loop only ever tests dev's head. One with
+ * no later evidence either way ends at the newest reading: it was still ready
+ * then, and nothing says for how much longer.
+ */
+function lastReadyInterval(ordered: readonly Reading[]): ReadyInterval | null {
+  const bySha = new Map<string, Reading[]>();
+  for (const r of ordered) {
+    const sha = shaOf(r);
+    if (sha === null) continue;
+    bySha.set(sha, [...(bySha.get(sha) ?? []), r]);
+  }
+  const newestMs = ordered.at(-1)?.atMs ?? 0;
+  let best: ReadyInterval | null = null;
+  for (const [sha, list] of bySha) {
+    let fromMs: number | null = null;
+    let end: { untilMs: number; how: "failed" | "moved" | "last-seen" } | null = null;
+    replay(list, sha, (verdict, atMs) => {
+      if (verdict.kind === "ready") {
+        if (fromMs === null) fromMs = atMs;
+        end = null;
+      } else if (fromMs !== null) {
+        end = { untilMs: atMs, how: "failed" };
+        fromMs = null;
+      }
+    });
+    if (fromMs !== null) {
+      const readyFrom: number = fromMs;
+      const next = ordered.find((r) => shaOf(r) !== null && shaOf(r) !== sha && Date.parse(r.record.startedAt) >= readyFrom);
+      end = next !== undefined ? { untilMs: Date.parse(next.record.startedAt), how: "moved" } : { untilMs: newestMs, how: "last-seen" };
+    }
+    const ended: { untilMs: number; how: "failed" | "moved" | "last-seen" } | null = end;
+    if (ended !== null && (best === null || ended.untilMs > best.untilMs)) best = { sha, ...ended };
+  }
+  return best;
 }
 
 /** The store's own reader over the window. Never creates the directory. */
@@ -323,22 +409,33 @@ export function readReadinessStreak(devSha: string, nowMs: number, windowMs: num
   const opened = openReadinessStore(dir);
   if (opened.kind === "refused") return { kind: "unknown", why: opened.why };
   const read = opened.store.read({ sinceMs: nowMs - windowMs, nowMs });
-  return readinessStreak({ readings: read.readings, unreadable: read.unreadable.length }, devSha, nowMs, windowMs);
+  const primary = primaryCheckout(process.cwd());
+  if ("why" in primary) return { kind: "unknown", why: primary.why };
+  return readinessStreak({ readings: read.readings, unreadable: read.unreadable.length }, devSha, nowMs, windowMs, readinessRunnerPath(primary.path));
 }
 
-function hours(ms: number): string {
-  const h = ms / HOUR;
+/** Hours to print; a lower bound rounds down so it never overstates the evidence. */
+function hours(ms: number, lowerBound = false): string {
+  const h = Math.max(0, ms / HOUR);
+  if (lowerBound) return h < 10 ? (Math.floor(h * 10) / 10).toFixed(1) : String(Math.floor(h));
   return h < 10 ? h.toFixed(1) : String(Math.round(h));
 }
 
 function describeStreak(streak: ReadinessStreak, nowMs: number, windowMs: number): string {
-  if (streak.kind === "unknown") return `how long dev has been undeployable is not known: ${streak.why}`;
-  if (streak.kind === "ready") return `dev's head ${streak.sha.slice(0, 9)} is ready to deploy`;
-  const since =
-    streak.lastReady === null
-      ? `dev has been undeployable for at least ${hours(windowMs)} hours (no commit the readiness loop passed in that window)`
-      : `dev has been undeployable for ${hours(nowMs - streak.lastReady.atMs)} hours (the last commit the readiness loop passed was ${streak.lastReady.sha.slice(0, 9)} at ${new Date(streak.lastReady.atMs).toISOString()})`;
-  return `${since}; dev's head is ${streak.headVerdict === "not-ready" ? "red" : "not yet shown ready"}: ${streak.why}`;
+  if (streak.kind === "unknown") return `whether dev is deployable is unknown: ${streak.why}`;
+  const { head, lastReady } = streak;
+  if (head.kind === "ready") return "dev's head is ready to deploy";
+  const headLine =
+    head.kind === "red"
+      ? `dev's head has been red for at least ${hours(nowMs - head.sinceMs, true)} hours (${head.why})`
+      : `dev's head is not yet shown ready (${head.why})`;
+  const ended = { failed: "when it failed a rerun", moved: "when dev moved past it", "last-seen": "when it was last seen" } as const;
+  const passLine =
+    lastReady === null
+      ? `the readiness loop has passed no dev commit in the last ${hours(windowMs)} hours`
+      : `dev has been undeployable for about ${hours(nowMs - lastReady.untilMs)} hours: the last commit the readiness loop ` +
+        `passed, ${lastReady.sha.slice(0, 9)}, stopped counting at ${new Date(lastReady.untilMs).toISOString()}, ${ended[lastReady.how]}`;
+  return `${passLine}; ${headLine}`;
 }
 
 export function assessDeployLag(
@@ -353,14 +450,17 @@ export function assessDeployLag(
     return check("unknown", `how far production is behind dev could not be read: ${trunk.why}`);
   }
   const readiness = describeStreak(streak, nowMs, windowMs);
+  // Within the threshold, an unreadable readiness store still stops this
+  // reading as ok; a head the loop has not reached yet does not.
+  const quiet: CheckState = streak.kind === "unknown" ? "unknown" : "ok";
   if (trunk.oldestUndeployed === null) {
-    return check("ok", `production (origin/main ${trunk.mainSha.slice(0, 9)}) has everything on dev`);
+    return check(quiet, `production (origin/main ${trunk.mainSha.slice(0, 9)}) has everything on dev. ${readiness}`);
   }
   const lagMs = nowMs - trunk.oldestUndeployed.committedAtMs;
   const behind =
     `production is ${hours(lagMs)} hours behind dev: ${trunk.undeployed} commit(s) on origin/dev are not on origin/main, ` +
     `the oldest ${trunk.oldestUndeployed.sha.slice(0, 9)} committed ${new Date(trunk.oldestUndeployed.committedAtMs).toISOString()}`;
-  if (lagMs <= maxLagMs) return check("ok", `${behind}. ${readiness}`);
+  if (lagMs <= maxLagMs) return check(quiet, `${behind}. ${readiness}`);
   return check(
     "unhealthy",
     `${behind}, over the ${hours(maxLagMs)} hour threshold. ${readiness}. ` +
