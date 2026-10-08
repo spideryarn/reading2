@@ -1,6 +1,6 @@
 Round 2 of a read-only PLAN review in the Spideryarn repo. You refused round 1; your findings are in
-docs/plans/261008f-needs-a-decision-plan-review-sol.md. The revised plan is
-docs/plans/261008f-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md — read its new
+docs/plans/261008i-needs-a-decision-plan-review-sol.md. The revised plan is
+docs/plans/261008i-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md — read its new
 section "What the plan review changed", which amends the numbered decisions above it.
 
 Some stage-1 work already exists uncommitted in this worktree (compare the working tree against

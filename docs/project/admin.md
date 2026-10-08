@@ -255,7 +255,7 @@ reader's data, and it is under the namespace because only an administrator is as
 ([feedback.md § Questions for an admin](feedback.md#questions-for-an-admin-and-replies-to-them-since-2026-10-07)).
 The third, since 2026-10-08, is **`POST /api/admin/feedback/deferrals`**, *Defer for now* on a
 question: a row in `feedback_question_deferrals` under the same id, for the same reasons
-([261008f](../plans/261008f-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md)).
+([261008i](../plans/261008i-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md)).
 
 The metadata is exact and worth listing rather than gesturing at: the account **id**, the **email
 address**, the **providers** GoTrue records for it (`google`, `email`), whether that address is

@@ -169,7 +169,7 @@ interface StoredAnswer extends QueryResultRow {
   created_at: Date;
 }
 
-/** Whether production has the deferrals table yet (plan 261008f). The name is a literal. */
+/** Whether production has the deferrals table yet (plan 261008i). The name is a literal. */
 export const DEFERRALS_DEPLOYED_SQL =
   "select to_regclass('spideryarn.feedback_question_deferrals') is not null as deployed";
 
@@ -335,7 +335,7 @@ export async function runAnswers(
         `once acted on: quote it into docs/user-feedback/questions/${row.questionId}.md and add \`acted: ${row.id}\` to its header`,
       );
     }
-    /* **Deferrals: "not now, do not chase"** (plan 261008f). Nothing to act
+    /* **Deferrals: "not now, do not chase"** (plan 261008i). Nothing to act
        on, and the question stays open: it is still Greg's to decide. */
     out("");
     const deferralsAsked = await read<{ deployed: unknown }>(DEFERRALS_DEPLOYED_SQL, []);
@@ -462,7 +462,7 @@ export function renderOpenQuestions(questions: readonly QuestionFile[]): string[
  * him anything.** The admin's *Needs a decision* view draws these under a
  * heading that says no question has been written yet, and this listing is
  * where the sweep finds them to write one. Until 2026-10-08 they were drawn as
- * rows with nothing to press (`spya-u6h6q8`, plan 261008f § The bug). Ids
+ * rows with nothing to press (`spya-u6h6q8`, plan 261008i § The bug). Ids
  * sorted, so the output is stable.
  */
 export function waitingWithoutQuestion(
@@ -482,7 +482,7 @@ export function waitingWithoutQuestion(
  * The listing's third section: split reports with a part no note covers. Not
  * Greg's to decide and not shipped; Open on his tab until an agent writes the
  * missing note, or adds the report to the header of the note that already
- * covers that part (plan 261008f, F1).
+ * covers that part (plan 261008i, F1).
  */
 export function renderIncompleteSplits(ids: readonly string[]): string[] {
   if (ids.length === 0) return ["Every split report has a note for each of its parts."];

@@ -93,7 +93,7 @@ let answerOutcome: FeedbackAnswerSubmission | null = null;
 /** The question ids each `answersTo` asked about, and the replies it hands back. */
 let newestAsked: { ids: readonly string[]; owner: string }[] = [];
 let newestAnswer: StoredFeedbackAnswer[] = [];
-/** The deferrals the fake store holds, and every `setDeferred` the route made (261008f). */
+/** The deferrals the fake store holds, and every `setDeferred` the route made (261008i). */
 let deferralsAnswer: StoredFeedbackDeferral[] = [];
 let deferralsSet: { input: NewFeedbackDeferral; owner: string }[] = [];
 /** The report ids each `linkedReports` asked about, and what it hands back. */
@@ -175,7 +175,7 @@ vi.mock("../src/feedback-questions.generated.js", () => ({
     { id: "q-bbbbbb", title: "A question about nothing filed", report: null, asked: "2026-10-06", body: "Stands alone." },
     { id: "q-cccccc", title: "About a reader's report", report: "spya-n0tm1n", asked: "2026-10-07", body: "The body says it all." },
   ],
-  /* q-bbbbbb's first reply has been acted on (plan 261008f). */
+  /* q-bbbbbb's first reply has been acted on (plan 261008i). */
   FEEDBACK_QUESTION_ACTED: { "q-aaaaaa": [], "q-bbbbbb": ["spya-act3d0"], "q-cccccc": [] },
 }));
 
@@ -840,7 +840,7 @@ describe("questions for the admin, and replies to them", () => {
 
   const THREADS = `${EARLIER}?questions=2`;
 
-  /* Plan 261008f: a client that asks `questions=2` gets threads. */
+  /* Plan 261008i: a client that asks `questions=2` gets threads. */
   it("sends threads to a client that asks: unacted replies, the state, the report's text", async () => {
     linkedAnswer = [{ id: "spya-wa1t00", number: 212, firstLine: "Could there be one switch?", body: "Could there be one switch?\nOr two." }];
     newestAnswer = [
@@ -916,7 +916,7 @@ describe("questions for the admin, and replies to them", () => {
       { id: "spya-older0", questionId: "q-bbbbbb", body: "first", createdAt: "2026-10-07T07:00:00.000Z" },
       { id: "spya-repzyy", questionId: "q-bbbbbb", body: "Yes, do it", createdAt: "2026-10-07T08:00:00.000Z" },
     ];
-    /* No `questions=2`: a tab from before 261008f, which must keep working
+    /* No `questions=2`: a tab from before 261008i, which must keep working
        after the deploy, gets the six-key shape it was built against (F3). */
     const reply = await get();
     expect(reply.status).toBe(200);
@@ -973,7 +973,7 @@ describe("questions for the admin, and replies to them", () => {
     expect(threads.questions.every((question) => question.report === null)).toBe(true);
   });
 
-  /* Defer for now, and Bring back: plan 261008f, decision 3. */
+  /* Defer for now, and Bring back: plan 261008i, decision 3. */
   describe("POST /api/admin/feedback/deferrals", () => {
     const DEFERRALS = "/api/admin/feedback/deferrals";
     const defer = (body: unknown, verify?: Parameters<typeof handleApi>[2]) =>

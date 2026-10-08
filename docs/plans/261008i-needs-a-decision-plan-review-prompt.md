@@ -1,5 +1,5 @@
 You are reviewing a PLAN (not code) in the Spideryarn repo, read-only. The plan:
-docs/plans/261008f-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md
+docs/plans/261008i-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md
 
 It builds on docs/plans/261007d-earlier-tab-says-what-became-of-each-report-numbers-them-and-asks-greg-questions-in-place.md
 (read its Decisions and "What the plan review changed" sections). The code it changes:

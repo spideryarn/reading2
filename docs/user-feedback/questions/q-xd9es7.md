@@ -4,7 +4,7 @@ report: spya-thpsnd
 status: open
 asked: 2026-10-08
 title: A filter on which kinds of note Marginalia shows: now, or not yet?
-refs: qi-5ay85q7d · docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md § The wider question · docs/project/interface-vision.md (Still open) · docs/user-feedback/261003_1010-fewer-top-level-modes-tweets-under-summary.md · asked by plan 261008f
+refs: qi-5ay85q7d · docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md § The wider question · docs/project/interface-vision.md (Still open) · docs/user-feedback/261003_1010-fewer-top-level-modes-tweets-under-summary.md · asked by plan 261008i
 ---
 Should Marginalia, the column of notes to the right of the article, get a filter so you can say which kinds of note it shows?
 

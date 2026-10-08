@@ -16,7 +16,7 @@
  * Two scrollers under one finger, with the keyboard taking half the screen, is
  * the second report; one scroller is the fix, and Safari reveals the caret in
  * it by itself. Written for QuizPanel's answer box and moved here when the
- * reply box needed it (plan 261008f, F9).
+ * reply box needed it (plan 261008i, F9).
  *
  * Chat's composer's mechanism without its roof: `auto` first, or the box could
  * only ever grow. `rows` is the floor. **Measured again when the width

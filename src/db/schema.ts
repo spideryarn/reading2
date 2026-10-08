@@ -5828,7 +5828,7 @@ export const feedbackQuestionAnswers = spideryarn.table(
  * per question, written only by `POST /api/admin/feedback/deferrals`, read by
  * the Earlier tab (which group the thread is in) and by
  * `scripts/feedback-questions.ts --answers` (so agents do not chase it).
- * docs/plans/261008f-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md, decision 3.
+ * docs/plans/261008i-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md, decision 3.
  *
  * > And maybe there should be a button to say, do you know what, I think for
  * > now let's defer this as an alternative to replying.

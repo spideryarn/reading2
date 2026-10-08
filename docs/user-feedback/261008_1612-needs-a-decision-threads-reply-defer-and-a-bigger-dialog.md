@@ -9,7 +9,7 @@ Eight reports from Greg (an admin; `scripts/feedback-reporter.ts` exit 0 on each
 filed 2026-10-08 16:12–16:50 UTC, all about the Feedback dialog's Earlier tab and its *Needs a
 decision* view. One bug and seven suggestions, built as one design. Plan, both GPT Sol plan
 reviews and the code review:
-[261008f](../plans/261008f-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md).
+[261008i](../plans/261008i-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md).
 Postmortem for the bug:
 [261008c](../postmortems/261008c-needs-a-decision-lists-reports-nobody-can-answer.md).
 

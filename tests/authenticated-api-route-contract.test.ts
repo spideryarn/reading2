@@ -390,7 +390,7 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/admin/feedback/answers"],
   },
   {
-    /* An admin's "defer for now" on a question, 261008f. One segment, as `answers` is. */
+    /* An admin's "defer for now" on a question, 261008i. One segment, as `answers` is. */
     match: { kind: "literal", path: "/api/admin/feedback/deferrals" },
     methods: ["POST"],
     witnesses: ["/api/admin/feedback/deferrals"],
@@ -969,7 +969,7 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
    the command bar's suggestions (plan 261005k); 95 with an admin's own earlier
    feedback (plan 261007d); 96 with their replies to questions (its stage 2);
    97 with the Help pages' chatbot (plan 261007k); 98 with Hidden text's Opus
-   check (plan 261007l); 99 with an admin's deferral of a question (plan 261008f). */
+   check (plan 261007l); 99 with an admin's deferral of a question (plan 261008i). */
 const EXPECTED_MATCHER_COUNT = 99;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
    with the admin's earlier feedback; 118 with their replies to questions; 119
@@ -2136,7 +2136,7 @@ describe("the authenticated API's route contract", () => {
         "GET literal /api/admin/feedback/earlier",
         // an admin's reply to a question, 261007d stage 2 — beside the list that carries the questions
         "POST literal /api/admin/feedback/answers",
-        // an admin's deferral of a question, 261008f — beside the replies
+        // an admin's deferral of a question, 261008i — beside the replies
         "POST literal /api/admin/feedback/deferrals",
         "GET regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)$/",
         // mark one report ignored, 261003j — beside the read of it

@@ -1505,7 +1505,7 @@ describe("the Earlier tab", () => {
 
   /* docs/plans/261007d-…: for an admin the tab says what became of each report,
      numbers them, and carries the note's one-line comment. Reshaped by
-     docs/plans/261008f-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md:
+     docs/plans/261008i-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md:
      the read asks for threads (`questions=2`), an admin's dialog reads Needs a
      decision as soon as it opens, and Earlier opens there when a thread waits. */
   describe("for an admin", () => {
@@ -1612,7 +1612,7 @@ describe("the Earlier tab", () => {
       expect(pills()).toEqual(["All 5", "Open 1", "Needs a decision 1", "Set aside 2", "Shipped 1"]);
     });
 
-    /* Plan 261008f, decision 8: the count on the shortcut is needed before
+    /* Plan 261008i, decision 8: the count on the shortcut is needed before
        Earlier is opened, so an admin's dialog reads Needs a decision when it
        opens, on Write, once per opening. */
     it("reads Needs a decision as soon as the dialog opens, on Write, and again on the next opening", async () => {
@@ -1766,7 +1766,7 @@ describe("the Earlier tab", () => {
     });
 
     /* Stage 2 of 261007d: an agent's questions, in Needs a decision, each with
-       a box to reply in. 261008f made them threads: a contents, one thread at
+       a box to reply in. 261008i made them threads: a contents, one thread at
        a time, three groups, and Defer for now. */
     describe("questions an agent has asked", () => {
       const ANSWERS_PATH = "/api/admin/feedback/answers";
@@ -1910,7 +1910,7 @@ describe("the Earlier tab", () => {
          there, but there doesn't appear to be a reply button or input box".
          Waiting report rows were drawn under the question cards as a list of
          their own, with nothing to press: one repeating a question above it,
-         one with no question at all. Plan 261008f § The bug. */
+         one with no question at all. Plan 261008i § The bug. */
       it("draws no report under Needs a decision that cannot be answered: it is inside its thread, or under the no-question heading", async () => {
         const orphan = { ...base, id: "spya-a6b2c3", number: 210, status: "waiting", body: "Fewer modes, please." };
         await openWaiting(WITH_QUESTIONS, {
@@ -2099,7 +2099,7 @@ describe("the Earlier tab", () => {
         expect(replyBoxes()).toHaveLength(1);
       });
 
-      /* F3, the other direction: a server from before 261008f ignores
+      /* F3, the other direction: a server from before 261008i ignores
          `questions=2` and answers in the six-key shape, which the client maps. */
       it("reads an older server's six-key questions: its reply as the one reply, being considered, and no report text", async () => {
         const legacy = (question: typeof Q1 | typeof Q2, answer: unknown) => ({

@@ -2435,7 +2435,7 @@ export interface LinkedFeedbackReport {
   number: number;
   /** The first line of what the reader wrote, cut to a line's length. */
   firstLine: string;
-  /** All of it, for the thread's shut *Your report* (plan 261008f, decision 7). */
+  /** All of it, for the thread's shut *Your report* (plan 261008i, decision 7). */
   body: string;
 }
 
@@ -2782,7 +2782,7 @@ export interface FeedbackStore {
    * **Every reply of this owner's to these questions**, oldest first; a
    * question they have not replied to has none. Owner-scoped: another admin's
    * reply is never this one's. The route keeps the ones not yet acted on and
-   * works out each thread's state from all of them (plan 261008f).
+   * works out each thread's state from all of them (plan 261008i).
    */
   answersTo(questionIds: readonly string[]): Promise<StoredFeedbackAnswer[]>;
   /**

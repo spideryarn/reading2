@@ -16,7 +16,7 @@ import {
 
 /**
  * The ids of an open question's replies an agent has acted on: which replies
- * the thread still lists, and part of its state (plan 261008f). Never sent.
+ * the thread still lists, and part of its state (plan 261008i). Never sent.
  */
 export function feedbackQuestionActed(id: string): readonly string[] {
   return Object.hasOwn(FEEDBACK_QUESTION_ACTED, id) ? (FEEDBACK_QUESTION_ACTED[id] ?? []) : [];

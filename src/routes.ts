@@ -8167,7 +8167,7 @@ async function fileFeedback(
 
 /**
  * **Every open question, as the signed-in admin's Earlier tab shows it**:
- * oldest first, as threads (plan 261008f). Each carries the admin's own
+ * oldest first, as threads (plan 261008i). Each carries the admin's own
  * replies not yet acted on, which group it is in (`questionState`, from every
  * reply and the admin's deferral), and, when it names a report **of theirs**,
  * that report's number, first line and text. Every lookup is owner-scoped in
@@ -8177,7 +8177,7 @@ async function fileFeedback(
  * picked field by field; the file's `refs` was never compiled, and its `acted`
  * ids leave only as the state and as which replies are listed.
  *
- * `shape` 1 is the answer before 261008f, for a request without
+ * `shape` 1 is the answer before 261008i, for a request without
  * `questions=2`: a tab loaded before the deploy keeps working after it (F3).
  * Six keys, the newest reply of any kind, the report without its text.
  */
@@ -8230,7 +8230,7 @@ async function questionsForAdmin(shape: 1 | 2): Promise<AdminFeedbackQuestion[] 
         linked === undefined
           ? null
           : { id: linked.id, number: linked.number, firstLine: linked.firstLine, body: linked.body },
-      /* What an agent has acted on is quoted in the body already (261008f, decision 2). */
+      /* What an agent has acted on is quoted in the body already (261008i, decision 2). */
       /* The newest few, with a count of the rest (F12): every reply is still
          stored, and `--answers` prints them all. */
       answers: unacted.slice(-THREAD_ANSWERS).map(reply),
@@ -9263,7 +9263,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
         more: page.more || fitting.length < reports.length,
         counts: { all: open + waiting + aside + shipped, open, waiting, aside, shipped },
       };
-      /* **Threads only to a client that asks for them** (plan 261008f, F3): a
+      /* **Threads only to a client that asks for them** (plan 261008i, F3): a
          tab loaded before the deploy sends no `questions`, and its strict
          check wants the six-key questions it was built against. Anything but
          `2` is that older client. */
@@ -9319,7 +9319,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
   },
 
   /* **Defer a question, or bring it back** — the *Defer for now* and *Bring
-     back* buttons on a thread in the Earlier tab. Plan 261008f, decision 3.
+     back* buttons on a thread in the Earlier tab. Plan 261008i, decision 3.
      Under `/api/admin/`, so the namespace gate has refused everybody else
      before this runs; nothing here asks who the caller is, and the row is the
      signed-in owner's. One segment after `feedback/`, like `answers`.

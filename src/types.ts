@@ -7393,7 +7393,7 @@ export interface AdminFeedbackQuestionAnswer {
  * server): plain text, to be drawn as text with its line breaks kept. The
  * file's `refs` line is for agents and is never here, and its `acted` ids
  * reach the browser only as `state` and as which replies are listed.
- * docs/plans/261008f-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md.
+ * docs/plans/261008i-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md.
  */
 export interface AdminFeedbackQuestion {
   /** `q-k3m9qt`. */
@@ -7425,7 +7425,7 @@ export interface AdminFeedbackQuestion {
 }
 
 /**
- * **A question as a server before 261008f sends it**, and as the new server
+ * **A question as a server before 261008i sends it**, and as the new server
  * still sends it to a request without `questions=2`, so a tab from before the
  * deploy keeps working after it (F3). Six keys, the newest reply only.
  */
@@ -7461,7 +7461,7 @@ export interface AdminEarlierFeedbackPage {
   questions: AdminFeedbackQuestion[];
 }
 
-/** The same answer to a request without `questions=2`: the shape before 261008f (F3). */
+/** The same answer to a request without `questions=2`: the shape before 261008i (F3). */
 export interface AdminEarlierFeedbackPageV1 extends Omit<AdminEarlierFeedbackPage, "questions"> {
   questions: AdminFeedbackQuestionV1[];
 }

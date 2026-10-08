@@ -186,7 +186,7 @@ function commentProblem(comment: string): string | null {
  * waiting on Greg): not ended, so not shipped, and not waiting on a decision
  * either. It said `awaiting` until 2026-10-08, which put spya-thpsnd under
  * *Needs a decision* with nothing for Greg to answer, when what was owed was
- * an agent's note (plan 261008f, F1). The admin tab shows it as Open.
+ * an agent's note (plan 261008i, F1). The admin tab shows it as Open.
  */
 export function combineEndings(
   notes: readonly { ending: FeedbackEnding; parts?: number }[],
@@ -388,7 +388,7 @@ export function parseQuestionFile(name: string, text: string): QuestionFile | st
     return `the body must be at most ${MAX_FEEDBACK_QUESTION_BODY_CHARS} characters, not ${body.length}`;
   }
   /* The dialog shuts everything after the first such line: a second would be
-     a heading inside the details that reads as a split nobody gets (261008f). */
+     a heading inside the details that reads as a split nobody gets (261008i). */
   if (body.split("\n").filter((line) => line === QUESTION_DETAILS_LINE).length > 1) {
     return `the body may have at most one line that is exactly \`${QUESTION_DETAILS_LINE}\``;
   }
@@ -436,7 +436,7 @@ export function compileQuestions(files: readonly NoteFile[]): { questions: Quest
  * the open ones only**: `refs` is never written here, so it cannot reach the
  * server's answer. Each open question's `acted` ids are, in a map of their
  * own, which the server reads to decide whether Greg's reply is still being
- * considered and never sends (plan 261008f, decision 1).
+ * considered and never sends (plan 261008i, decision 1).
  */
 export function renderQuestionsModule(questions: readonly QuestionFile[]): string {
   const open = questions

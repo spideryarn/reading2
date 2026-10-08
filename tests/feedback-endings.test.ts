@@ -49,7 +49,7 @@ describe("the committed map", () => {
     ).toBe(renderModule(endings, comments));
   });
 
-  /* GPT Sol's plan review of 261008f, F1: thpsnd sat under Needs a decision
+  /* GPT Sol's plan review of 261008i, F1: thpsnd sat under Needs a decision
      because its part 2's note did not name it. Pinned here so a header edit
      that drops it again goes red. */
   it("has spya-thpsnd's three parts: shipped, not waiting and not incomplete", () => {
@@ -219,7 +219,7 @@ describe("combineEndings — one report, several notes", () => {
        second half had not started (docs/project/feedback-reports.md). So it
        is not shipped; and it is not waiting on Greg either, which is what it
        said until spya-thpsnd sat under Needs a decision with nothing to
-       answer (plan 261008f, F1). An agent owes the missing note. */
+       answer (plan 261008i, F1). An agent owes the missing note. */
     expect(combineEndings([{ ending: "shipped", parts: 2 }])).toBeNull();
     /* A part that does wait on Greg still says so. */
     expect(combineEndings([{ ending: "awaiting", parts: 3 }])).toBe("awaiting");
@@ -274,7 +274,7 @@ describe("which note's comment a report shows (261007d, decision 4)", () => {
 
   it("is a lone `ending: shipped, parts: 2` note's: the report has no ending yet, and that note says on what", () => {
     const { endings, comments, incomplete } = compile(`${R}\nending: shipped\nparts: 2\ncomment: half shipped; the other half is queued`);
-    /* Not waiting on Greg: an agent owes the other half's note (261008f, F1). */
+    /* Not waiting on Greg: an agent owes the other half's note (261008i, F1). */
     expect(endings.has("spya-aaaaaa")).toBe(false);
     expect(incomplete).toEqual(["spya-aaaaaa"]);
     expect(comments.get("spya-aaaaaa")).toBe("half shipped; the other half is queued");
@@ -399,7 +399,7 @@ describe("a question file", () => {
     expect(text).not.toContain("SPIDERYARN-READING2-E8");
   });
 
-  it("compiles each open question's acted ids for the server, and an answered one's not at all (261008f)", () => {
+  it("compiles each open question's acted ids for the server, and an answered one's not at all (261008i)", () => {
     const answered = HEADER.replace("q-k3m9qt", "q-answrd").replace("status: open", "status: answered");
     const { questions } = compileQuestions([
       { name: "q-k3m9qt.md", text: file(`${HEADER}\nacted: spya-bbbbbb, spya-cccccc`) },
@@ -410,7 +410,7 @@ describe("a question file", () => {
     expect(text).not.toContain("spya-dddddd");
   });
 
-  it("takes one line that is exactly Details, and refuses a second (261008f)", () => {
+  it("takes one line that is exactly Details, and refuses a second (261008i)", () => {
     const split = "Which?\n\nA. This.\n\nDetails\n\nWhy.";
     expect(parse(file(HEADER, split))).toMatchObject({ body: split });
     expect(parse(file(HEADER, `${split}\nDetails\nmore`))).toMatch(/Details/);

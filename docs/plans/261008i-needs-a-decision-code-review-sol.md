@@ -1,4 +1,4 @@
-# Code review — plan 261008f
+# Code review — plan 261008i
 
 C1 — High — `scripts/feedback-questions.ts:210`: `runAnswers` treated every non-null administrator deferral as current. It therefore told the sweep “do not chase” for questions that were answered, removed from this checkout, or superseded by a later reply. I changed deferral classification to require an open question and to apply the server's same latest-action rule (a later reply wins; a tie remains deferred), report omitted inactive rows, and added regressions in `tests/feedback-questions.test.ts:252`.
 

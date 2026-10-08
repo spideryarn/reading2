@@ -22,7 +22,7 @@ export const MAX_FEEDBACK_QUESTION_TITLE_CHARS = 120;
 /**
  * The short version, the options and the recommendation, then the details, as
  * plain text. 4,000 until 2026-10-08, when the details moved under their own
- * line (`QUESTION_DETAILS_LINE`) and needed the room (plan 261008f).
+ * line (`QUESTION_DETAILS_LINE`) and needed the room (plan 261008i).
  */
 export const MAX_FEEDBACK_QUESTION_BODY_CHARS = 6_000;
 
@@ -64,7 +64,7 @@ export function isFeedbackQuestionId(value: unknown): value is string {
 
 /**
  * **Which group a thread is in**, in the admin's *Needs a decision* (plan
- * 261008f, decision 1): waiting on Greg, Greg has replied and no agent has
+ * 261008i, decision 1): waiting on Greg, Greg has replied and no agent has
  * acted on it yet, or Greg said not now.
  */
 export const FEEDBACK_QUESTION_STATES = ["waiting", "responded", "deferred"] as const;
@@ -99,7 +99,7 @@ export function mintFeedbackQuestionId(random?: () => number): string {
  * is for agents and is not here: nothing compiled reaches a browser that the
  * file's author did not write for Greg to read. `acted` is compiled beside it,
  * for the server alone (`FEEDBACK_QUESTION_ACTED`), which sends the browser
- * only the state it works out from it (plan 261008f, decision 1).
+ * only the state it works out from it (plan 261008i, decision 1).
  */
 export interface CompiledFeedbackQuestion {
   id: string;

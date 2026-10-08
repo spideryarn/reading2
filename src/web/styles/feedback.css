@@ -133,7 +133,7 @@
    make the feedback dialog a bit taller and wider, especially on a big
    screen"*. Wider from 1024px; and on a window tall enough, at least most of
    it tall, the scroller taking the room. `max-height: 90%` above stays the cap,
-   so a phone with the keyboard up is untouched (plan 261008f, decision 12). */
+   so a phone with the keyboard up is untouched (plan 261008i, decision 12). */
 @media (min-width: 1024px) {
   .fb-panel { width: min(92vw, 46rem); }
 }
@@ -194,7 +194,7 @@
   border-bottom-color: var(--highlight);
 }
 .fb-tab:focus-visible { outline: 1px solid var(--highlight-text); outline-offset: 2px; border-radius: 3px; }
-/* The admin's way straight to Needs a decision (plan 261008f): a tab's look,
+/* The admin's way straight to Needs a decision (plan 261008i): a tab's look,
    at the far end, and pressed rather than selected, because it is a shortcut
    into the Earlier panel and not a panel of its own. */
 .fb-tab-shortcut { margin-left: auto; display: inline-flex; align-items: baseline; gap: 0.3rem; }
@@ -393,7 +393,7 @@ a.fb-earlier-page:focus-visible {
    view with the keyboard up (spya-za2tse). */
 .fb-reply-input { overflow: hidden; resize: none; }
 
-/* The contents of Needs a decision: three groups, one row a thread (261008f). */
+/* The contents of Needs a decision: three groups, one row a thread (261008i). */
 .fb-threads { display: flex; flex-direction: column; gap: 0.75rem; }
 .fb-threads-group { display: flex; flex-direction: column; gap: 0.35rem; }
 details.fb-threads-group > summary { cursor: pointer; }

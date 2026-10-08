@@ -303,7 +303,7 @@ const LEGACY_QUESTION_KEYS = ["answer", "asked", "body", "id", "report", "title"
 
 /**
  * **A thread as this client draws it**: the server's question, except that
- * the report's text may be null, which only a server from before 261008f
+ * the report's text may be null, which only a server from before 261008i
  * sends (it had none to send) and which then draws no *Your report*.
  */
 export type ThreadQuestion = Omit<AdminFeedbackQuestion, "report"> & {
@@ -314,7 +314,7 @@ export type ThreadQuestion = Omit<AdminFeedbackQuestion, "report"> & {
 export type AdminThreadsPage = Omit<AdminEarlierFeedbackPage, "questions"> & { questions: ThreadQuestion[] };
 
 /**
- * **A server from before 261008f answers in the six-key shape** — a rollback,
+ * **A server from before 261008i answers in the six-key shape** — a rollback,
  * or the minutes of a deploy (F3). Each such question becomes a thread before
  * the strict check: its newest reply as the only one, *being considered* if
  * there is one, never deferred, no report text. Only a question with exactly
@@ -470,7 +470,7 @@ interface Receipt<T> {
  * **The admin's threads in progress**, held by the hook the dialog keeps
  * mounted, so a half-written reply survives a look at another tab, another
  * filter, another thread, and the dialog being shut. One thread open at a
- * time, and its reply box is simply there (plan 261008f, decision 5).
+ * time, and its reply box is simply there (plan 261008i, decision 5).
  */
 export interface QuestionReplies {
   /** The thread showing on its own, or null for the contents. */
@@ -758,7 +758,7 @@ async function read(ask: EarlierAsk): Promise<ReadAnswer | "failed" | "absent"> 
  * this is, and showing the plain list under that would hide it.
  *
  * **An admin's dialog reads *Needs a decision* as soon as it opens** (plan
- * 261008f, decisions 8 and 9), on Write too: that read is the count on the
+ * 261008i, decisions 8 and 9), on Write too: that read is the count on the
  * shortcut beside the tabs, and it decides where Earlier opens. Earlier opens
  * on *Needs a decision*; when that first read says no thread is waiting, it
  * moves to All, **unless the reader has chosen anything since the opening
@@ -1204,7 +1204,7 @@ function AdminRow({ report, now }: { report: AdminEarlierFeedback; now: number }
  * **It grows with its words and never scrolls itself** (useFitTextarea.ts):
  * on an iPhone, a dictated paragraph in a three-line box inside a scrolling
  * panel was two scrollers under one finger with the keyboard up (Greg,
- * `spya-za2tse`; plan 261008f, decision 10).
+ * `spya-za2tse`; plan 261008i, decision 10).
  */
 function ReplyBox({
   question,
@@ -1307,7 +1307,7 @@ function ReplyBox({
           Send reply
         </button>
         {/* The alternative to replying (spya-t6nmxt): "not now". Reversible,
-            and it tells agents not to chase it (plan 261008f, decision 3). */}
+            and it tells agents not to chase it (plan 261008i, decision 3). */}
         <button
           type="button"
           className="fb-copy"
@@ -1538,7 +1538,7 @@ function ThreadView({
 
 /**
  * **The questions an agent has put to the admin, as threads**, in *Needs a
- * decision* (261007d, reshaped by 261008f). The contents, or one thread on its
+ * decision* (261007d, reshaped by 261008i). The contents, or one thread on its
  * own: each waiting report with an open question is inside its thread and
  * nowhere else, so nothing drawn here lacks a way to answer (`spya-u6h6q8`).
  *
@@ -1599,7 +1599,7 @@ export function waitingThreads(questions: readonly ThreadQuestion[]): number {
  * you've replied to · 1 deferred`. Greg asked for "how many since my last
  * visit or when they were most recently added or something"; the newest
  * question's day says nearly the same with nothing remembered per device
- * (plan 261008f, decision 8).
+ * (plan 261008i, decision 8).
  */
 export function shortcutTitle(questions: readonly ThreadQuestion[]): string {
   const count = (state: FeedbackQuestionState) => questions.filter((question) => question.state === state).length;
@@ -1665,7 +1665,7 @@ export function EarlierList({
         if (choice.show === "waiting") {
           if (threadOpen) return null;
           /* **Only the reports no thread is about** (spya-u6h6q8, plan
-             261008f § The bug): a waiting report with an open question is
+             261008i § The bug): a waiting report with an open question is
              inside that thread, with its reply box. What is left waits on a
              question nobody has written yet, and says so, so a row here never
              looks like something to answer that cannot be. */

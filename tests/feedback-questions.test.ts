@@ -162,7 +162,7 @@ describe("classifyAnswers — which replies an agent still has to act on", () =>
 
 describe("runAnswers — the run, through a fake reader", () => {
   const TARGET = ".env.prod → aws-0.pooler.supabase.com";
-  /** `deferrals`: false before that table is deployed, or the rows it holds (plan 261008f). */
+  /** `deferrals`: false before that table is deployed, or the rows it holds (plan 261008i). */
   function reader(
     deployed: boolean | "throws" | "cannot",
     rows: AnswerRow[] | "throws" = [],
@@ -232,7 +232,7 @@ describe("runAnswers — the run, through a fake reader", () => {
     expect(lines).toContain(DEFERRALS_NOT_DEPLOYED);
   });
 
-  /* Deferrals: "not now, do not chase" (plan 261008f), held to the replies' rule (F6). */
+  /* Deferrals: "not now, do not chase" (plan 261008i), held to the replies' rule (F6). */
   it("prints the deferrals in force, an administrator's only, and leaves a brought-back one out", async () => {
     const { read, statements } = reader(true, [], [
       { ownerId: ADMIN_USER_ID_PROD, questionId: "q-aaaaaa", deferredAt: new Date("2026-10-08T09:00:00Z"), environment: "production" },
@@ -408,7 +408,7 @@ describe("the listing and the command line", () => {
     expect(lines.join("\n")).not.toContain("q-cccccc");
   });
 
-  /* spya-u6h6q8, plan 261008f § The bug: a waiting report with no question
+  /* spya-u6h6q8, plan 261008i § The bug: a waiting report with no question
      was a row under Needs a decision with nothing to answer. */
   it("names each report waiting on Greg that no open question asks about", () => {
     const endings = new Map<string, "shipped" | "declined" | "awaiting">([

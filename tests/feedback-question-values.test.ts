@@ -1,7 +1,7 @@
 /**
  * **Which group a thread is in, and how its body splits** — the two pure rules
  * the admin's *Needs a decision* rests on (src/feedback-question-values.ts).
- * docs/plans/261008f-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md,
+ * docs/plans/261008i-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md,
  * decisions 1 and 11, and GPT Sol's plan review F2 and F15.
  */
 import { describe, expect, it } from "vitest";

@@ -1209,7 +1209,7 @@ describe("the Postgres feedback store", { timeout: 30_000 }, () => {
     });
 
     it("hands back every reply to each question asked about, oldest first, and none for the rest", async () => {
-      /* A thread lists every reply not yet acted on (plan 261008f, decision 2). */
+      /* A thread lists every reply not yet acted on (plan 261008i, decision 2). */
       const older = mintId();
       await runAsOwner(ALICE, () => pgFeedbackStore.submitAnswer(reply({ id: older, body: "first thought" })));
       await getDb()
@@ -1231,7 +1231,7 @@ describe("the Postgres feedback store", { timeout: 30_000 }, () => {
       expect(await runAsOwner(ALICE, () => pgFeedbackStore.answersTo([]))).toEqual([]);
     });
 
-    /* Defer for now, and Bring back (plan 261008f, decision 3; GPT Sol's
+    /* Defer for now, and Bring back (plan 261008i, decision 3; GPT Sol's
        plan review F5): conditional both ways, so a retry moves neither time. */
     describe("deferrals", () => {
       const deferral = (questionId: string, deferred: boolean) =>

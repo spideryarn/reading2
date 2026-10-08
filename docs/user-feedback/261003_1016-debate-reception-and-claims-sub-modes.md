@@ -10,7 +10,7 @@ Report `spya-caue42` · suggestion from Greg (admin; the production row, read wi
 `feedback-unswept.ts --show`) · 2026-10-03, reading Levin 2024, *Self-Improvising Memory*, in
 Debate. Sentry event `74461136547646cf9068ca35e78ef7aa`.
 
-**Also part 2 of 3 of `spya-thpsnd`, steering Debate** (header added 2026-10-08, plan 261008f).
+**Also part 2 of 3 of `spya-thpsnd`, steering Debate** (header added 2026-10-08, plan 261008i).
 The part 1 note names this part; this note queued it (below) and the open question `q-sn37bt` asks
 it, but the header named only `spya-caue42`, so thpsnd had two notes of three and read as waiting
 on Greg, under *Needs a decision* with nothing to answer.

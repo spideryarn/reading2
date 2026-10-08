@@ -1557,7 +1557,7 @@ describe("one owner's article, asked for by another", { timeout: 20_000 }, () =>
     }
   });
 
-  it("does not share a deferral of a question (261008f)", async () => {
+  it("does not share a deferral of a question (261008i)", async () => {
     /* `feedback_question_deferrals` is keyed by owner: one admin's "not now"
        must not move another account's thread. */
     const { pgFeedbackStore } = await import("../src/store/pg-feedback.js");

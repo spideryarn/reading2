@@ -1,7 +1,7 @@
 # *Needs a decision* lists reports nobody can answer
 
 Up: [postmortems.md](../project/postmortems.md). The fix and its evidence:
-[261008f](../plans/261008f-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md).
+[261008i](../plans/261008i-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md).
 
 > I'm using the feedback slash earlier slash needs a decision interface, and it's weird. There seems
 > to be a few that are listed there, but there doesn't appear to be a reply button or input box for
@@ -81,26 +81,26 @@ Greg's job.
 1. **A test that every item under a heading asking the reader to act offers that action, or says
    why it cannot.** One render, one assertion per item. Done:
    `tests/feedback-dialog.test.tsx`, "draws no report under Needs a decision that cannot be
-   answered", the failing test 261008f is built from. It was run against the old code first and
+   answered", the failing test 261008i is built from. It was run against the old code first and
    failed there (`#214` drawn outside its thread beside `#210`), so it is known to be able to fail.
    The rule applies to any heading that asks
    the reader to act.
 2. **The compiler states the difference instead of inferring it.** An explicit `awaiting` must
    have an open question, so `npx tsx scripts/feedback-questions.ts` lists any `awaiting` report
    with no question for the sweep. An incomplete split is listed separately, as work for an
-   agent. Done in 261008f.
+   agent. Done in 261008i.
 3. **When a status gets a new meaning, review every rule that produces it.** Stage 1 promoted
    `awaiting` from "not shipped" to "needs your decision" and kept every producer unchanged. It
    costs one question in review. It is a habit, so it is weaker than items 1 and 2.
 4. **Part numbers on every split note**, so that completeness is checked by which parts exist,
-   not by how many notes there are. Declined for now (F10 in 261008f's review). The weakness is
+   not by how many notes there are. Declined for now (F10 in 261008i's review). The weakness is
    older than this bug and this fix does not widen it, but fixing it means renumbering 21 existing
    split notes. **This part of the class is still open**: a note naming the wrong report can still
    make a split look complete.
 
 ## The fix that is right for the long term
 
-This is what 261008f is building. **The view's unit becomes a thread, which is one open
+This is what 261008i is building. **The view's unit becomes a thread, which is one open
 question.** A waiting report that has a question is drawn inside that question's thread, and never
 as a row of its own. A waiting report with no question goes under a heading that says, in plain
 words, that no question has been written yet, and the sweep's script lists it so that an agent

@@ -1375,7 +1375,7 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
           hidden={view !== "earlier"}
         >
           {/* The pills go while one thread shows: on a phone with the keyboard
-              up they cost three lines (plan 261008f, decision 4). */}
+              up they cost three lines (plan 261008i, decision 4). */}
           {threadOpen ? null : (
             <EarlierFilter choice={choice} onShow={setShow} questionCount={waitingQuestionCount} />
           )}

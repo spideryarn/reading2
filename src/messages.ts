@@ -657,7 +657,7 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "fb-reply": "retry",
   "fb-reply-stale": "retry",
   /* Defer for now or Bring back not getting through, and the question settled
-     before it arrived (261008f): nothing changed either way. */
+     before it arrived (261008i): nothing changed either way. */
   "fb-defer": "retry",
   "fb-defer-settled": "retry",
   /* The subscription allowance, `pay-`. All six are registered rather than
@@ -5887,7 +5887,7 @@ export const FEEDBACK_REPLY_STALE: ReaderFacingFailure = {
  * **Defer for now, or Bring back, did not get through** — `POST
  * /api/admin/feedback/deferrals` failed, or answered with something that is
  * not a deferral. Nothing changed on screen; pressing again is safe, because
- * the write is conditional both ways (plan 261008f, F5).
+ * the write is conditional both ways (plan 261008i, F5).
  */
 export const FEEDBACK_DEFER_FAILED: ReaderFacingFailure = {
   kind: "retry",

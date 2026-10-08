@@ -5,9 +5,12 @@ builds on [261007d](261007d-earlier-tab-says-what-became-of-each-report-numbers-
 reports `spya-u6h6q8` (bug), `spya-bzwzfw`, `spya-t6nmxt`, `spya-bbe74w`, `spya-n7hvm0`,
 `spya-krvuc9`, `spya-za2tse`, `spya-frpy22` · worktree `feedback-earlier-decisions`
 
+Named **261008f** while it was built: another plan took that letter on `dev` at the same time (the
+way-back chip), so this one became 261008i at merge. Commits `6d5f0b934` and `ff88d0cd8` say 261008f.
+
 Status as of 2026-10-08: **built, reviewed by GPT Sol (plan twice, code once: approve with six fixes, applied), seen in Chromium and iPhone-sized WebKit, and on `dev`; not deployed.** The reply box on a real iPhone with its keyboard up is still to be seen (Greg's phone).
 
-**The code review** (`261008f-needs-a-decision-code-review-sol.md`, C1–C6, all fixed by the reviewer): `--answers` printed deferrals of settled or since-replied questions as in force (C1); a question kept on screen only to protect a draft was counted and grouped as live (C2); a reply could be sent by keyboard while a deferral was in flight (C3); a deferral receipt that another tab had overtaken was refused (C4); nested answers and the reply receipt were not held to exact keys (C5); and the endings map was stale against this plan's own note, so the eight reports would have shown as Open (C6).
+**The code review** (`261008i-needs-a-decision-code-review-sol.md`, C1–C6, all fixed by the reviewer): `--answers` printed deferrals of settled or since-replied questions as in force (C1); a question kept on screen only to protect a draft was counted and grouped as live (C2); a reply could be sent by keyboard while a deferral was in flight (C3); a deferral receipt that another tab had overtaken was refused (C4); nested answers and the reply receipt were not held to exact keys (C5); and the endings map was stale against this plan's own note, so the eight reports would have shown as Open (C6).
 
 ## What Greg asked for
 
@@ -236,7 +239,7 @@ that offers a reply, or sits under the heading that says no question has been wr
 
 ## What the plan review changed
 
-GPT Sol refused the first draft (`261008f-needs-a-decision-plan-review-sol.md`, F1–F9). All nine
+GPT Sol refused the first draft (`261008i-needs-a-decision-plan-review-sol.md`, F1–F9). All nine
 accepted, and **they amend the decisions above where they differ**:
 
 - **F1, thpsnd was misdiagnosed.** Its part 2, steering Debate, *was* written up: in the caue42
@@ -293,7 +296,7 @@ accepted, and **they amend the decisions above where they differ**:
   iOS keyboard**: the WebKit check at 390px is of the layout with a short window standing in for
   the keyboard, and the real check is Greg's phone, said so in the note.
 
-**Round two** (`261008f-needs-a-decision-plan-review-sol-r2.md`) closed F2–F9 and refused on F1
+**Round two** (`261008i-needs-a-decision-plan-review-sol-r2.md`) closed F2–F9 and refused on F1
 and F10. What changed:
 
 - **F1, done as amended.** I had first added thpsnd to the command-bar note (`261003_1005`), which

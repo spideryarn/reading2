@@ -330,7 +330,7 @@ this is what the app does with it.
 
 **Since 2026-10-08 each question is a thread** — Greg's eight reports of that afternoon, the bug
 `spya-u6h6q8` first (*"there doesn't appear to be a reply button or input box"*), plan
-[261008f](../plans/261008f-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md) and
+[261008i](../plans/261008i-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md) and
 postmortem [261008c](../postmortems/261008c-needs-a-decision-lists-reports-nobody-can-answer.md).
 
 ```
@@ -399,8 +399,8 @@ postmortem [261008c](../postmortems/261008c-needs-a-decision-lists-reports-nobod
   thread is waiting, unless the reader has chosen anything in the meantime (a pill, the button, a
   thread). Every other reader's dialog is unchanged.
 - **Two builds at once.** The browser asks `questions=2`; the server sends threads only then, and
-  the six-key questions of before 261008f otherwise, so a tab loaded before the deploy keeps
-  working after it. A server from before 261008f ignores the parameter, and the browser maps its
+  the six-key questions of before 261008i otherwise, so a tab loaded before the deploy keeps
+  working after it. A server from before 261008i ignores the parameter, and the browser maps its
   six-key questions into threads (the newest reply as the only one). A 404 on a reply says to copy
   the words, reload and reply again. If the questions are not what the browser expects, the whole
   list shows the ordinary "would not load" sentence, never some of them. If a later list no longer

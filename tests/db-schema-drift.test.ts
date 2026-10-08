@@ -393,7 +393,7 @@ describe("against a real database", () => {
          261005b); forty-nine since `article_share_link_events` the same day
          (plan 261005e); fifty since `feedback_question_answers`, 2026-10-07
          (plan 261007d); fifty-one since `feedback_question_deferrals`, 2026-10-08
-         (plan 261008f). */
+         (plan 261008i). */
       expect(report.declaredTables).toBe(51);
       expect(driftWarnings(report)).toEqual([]);
     });

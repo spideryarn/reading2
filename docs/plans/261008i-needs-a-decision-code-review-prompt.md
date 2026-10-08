@@ -1,4 +1,4 @@
-Code review of plan 261008f in the Spideryarn repo, in this worktree. You have write access: FIX what
+Code review of plan 261008i in the Spideryarn repo, in this worktree. You have write access: FIX what
 you find inside this change (the files it touches and their tests), then report. Do not commit, and
 run no git command that changes the index or the working tree beyond your own edits (no checkout,
 restore, stash, reset). Do not touch production, .env*, infra/ or systemd. Do not edit the admin
@@ -6,7 +6,7 @@ prefix gate or any defence listed in docs/project/security-map.md § Where the d
 live; if a fix would need that, report it instead.
 
 The change: `git diff a7ccdb2ba..6d5f0b934` (one commit). The plan, with both of your plan reviews
-and how each finding was answered: docs/plans/261008f-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md
+and how each finding was answered: docs/plans/261008i-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md
 (read "What the plan review changed", both rounds; they amend the numbered decisions). The bug's
 postmortem: docs/postmortems/261008c-needs-a-decision-lists-reports-nobody-can-answer.md. The doc
 for readers of the code: docs/project/feedback.md § Questions for an admin.
