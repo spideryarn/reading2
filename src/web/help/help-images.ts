@@ -108,7 +108,7 @@ export const HELP_IMAGES: Readonly<Record<string, HelpImage>> = {
   "bottom-bar.png": {
     src: bottomBarPng,
     w: 1344,
-    h: 38,
+    h: 36,
     shows: "The bottom bar alone, Plain open, on the admin’s own copy of a public article.",
     article: "Great Hackers (gh-spya-whnhkx)",
     window: "1440×900 at 2×",
