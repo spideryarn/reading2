@@ -1,6 +1,6 @@
 # Text styles for the recurring lines in a mode band
 
-**Status: building, 2026-10-08. Session `fbar65p3-type-sizes-across-modes`, queue item `qi-t76rmqxr`,
+**Status: done, 2026-10-08, on `dev`, not deployed. Session `fbar65p3-type-sizes-across-modes`, queue item `qi-t76rmqxr`,
 report `spya-ar65p3`, question `q-dhnbhw` (answered `spya-k99f8e`).**
 
 Up: [261006k](261006k-text-size-adjust-for-a-landscape-phone-and-a-quick-review-of-fonts-and-sizes.md)
@@ -162,9 +162,32 @@ ourselves over."*
   source, and Quotes' and FAQ's quotes are in; F3 Quiz's question an exception, Citations' title
   in; F4 split shared selectors; F5 Search in, Diagram out by name; F6 the ratchet dropped for a
   registry; F7 label at 0.77; F8 blurbs left alone, a role-by-voice matrix, a landscape shot
-- [ ] Before-shots
-- [ ] Build, test red then green
-- [ ] GPT Sol code review
-- [ ] After-shots, exceptions
-- [ ] Pushed to dev
-- [ ] Bookkeeping
+- [x] Before-shots: 14 band views (Skim, Timeline, FAQ, Glossary, Quiz, Quotes, Ideas, Citations,
+  Debate, Search, Referee's four parts) on three local articles, at 1440, 1024, 390 and 844 × 390,
+  one script run twice, with computed sizes recorded. Debate had no reception rows locally and
+  Mirror and Candidates no results, so those lines are checked by the test, not by a picture
+- [x] Build (Opus): 49 test rows seen red before any CSS moved, then green; full `npm test` green
+  (1868 files). Departures from the table, each judged right: Search's passage is `--type-item`
+  (Quotes' case); `.dbt-group-count` and `.skim-cue` added; the `.gloss-count` role set on the
+  counts by descendant selector, since Quiz borrows the class for status sentences
+- [x] After-shots compared pair by pair. Every move is under a pixel except Glossary's definition
+  (14.2 → 13.6px, still comfortable in the mono) and the two small heads up to 12.3px; no row
+  rewraps badly at any width, including the phone. No move looked worse, so no new exceptions.
+  `/design`'s matrix checked at 1440 and 390 (it scrolls sideways inside its panel on a phone).
+  Seen side by side there, the model's mono and the reader's Arial read larger than the serif at
+  one size; that is the face question 261006k left open, not a size one, and is not acted on
+- [x] GPT Sol code review: approve with changes, six findings, all fixed by the reviewer and kept
+  ([findings](261008i-code-review-findings.md), [answer](261008i-code-review-sol.md)): F1 FAQ's
+  quote wins by specificity, not sheet order; F2 Debate's claim heading and F3 Mirror's block-id
+  line made explicit exceptions; F4 the test now also loads the whole cascade onto DOM witnesses,
+  so a different, more specific selector cannot override a role unseen (negative controls red);
+  F5 two `/design` cells corrected; F6 the docs name all the exceptions
+- [x] Pushed to dev
+- [x] Bookkeeping: q-dhnbhw answered and acted, the report's note updated, endings regenerated
+
+## Screenshots kept
+
+Before on the left, after on the right, at 1440:
+[Skim](261008i-shot-skim-before-after.png) (section line and quote up by about 0.6px) ·
+[Glossary](261008i-shot-glossary-before-after.png) (the biggest move, the definition down 0.6px) ·
+and [/design's Text roles](261008i-shot-design-text-roles.png).

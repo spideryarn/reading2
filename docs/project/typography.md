@@ -107,9 +107,9 @@ meets.
 quotation *is* the row, so it is `--type-item`; under a Debate title, a quotation is `--type-quote`.
 Search's results are Quotes' case. Face is a separate decision, [fonts.md](fonts.md)'s.
 
-**Exceptions, each with a comment beside the rule:** Quiz's question stays 1.03rem — one prompt the
-reader answers, set above its 0.94rem premise and answer box, not a row in a list. Mirror's
-`.mir-criterion` keeps its literal: it stands where a quote would, but it is the reader's line.
+**Exceptions, each with a comment beside the rule:** Quiz's one question stays 1.03rem; Debate's
+foldable claim quotation stays 0.85rem; Mirror's reader-written criterion and block-id fallback stay
+0.88rem. They occupy similar places without doing one of the six jobs.
 
 **Left out on purpose:** Timeline's and Ideas' group blurbs (small explanatory copy, neither meta
 nor body); Marginalia, drawn small beside the prose; Structure and the outline, which size rows by

@@ -765,11 +765,15 @@ a.clm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight-text); o
 }
 .mir-jump:hover .mir-quote { text-decoration: underline; }
 .mir-jump:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
-.mir-quote { font-size: var(--type-quote); color: var(--ink); }
+.mir-quote { color: var(--ink); }
+.mir-quote:not(.mir-block-id) { font-size: var(--type-quote); }
+/* A named exception to the text roles: when the reader's quoted words can no
+   longer be found, this line is a block id rather than source words. */
+.mir-block-id { font-size: 0.88rem; }
 /* The reader's criterion, printed where a coverage remark has no passage to
    quote. It stands in the quote's place at the quote's size, but it is the
-   reader's own line rather than source words, so it is not on the quote role
-   (plan 261008i § F4). */
+   reader's own line rather than source words, so it is a named exception to
+   the quote role (plan 261008i § F4). */
 .mir-criterion { font-size: 0.88rem; color: var(--ink); }
 
 /* The referee's own sentence, and the passage under it — set apart from the

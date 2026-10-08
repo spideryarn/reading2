@@ -95,15 +95,18 @@
   padding: 0.5rem 0 0.15rem;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: var(--type-label);
   font-weight: 600;
   letter-spacing: 0.05em;
   line-height: 1.4;
   text-transform: uppercase;
 }
+.dbt-group-head:not(.dbt-group-claim) { font-size: var(--type-label); }
 /* A claim heading is a quotation of the article, so it is set as one — in the
    reading face, sentence case, behind a dotted rule — not in capitals, which
    would turn the piece's words into a label of ours.
+
+   A named exception to the text roles: it is a foldable quotation heading,
+   not the small uppercase label `.dbt-group-head` otherwise means.
 
    It is the `<summary>` of a native `<details>` (DebatePanel.tsx § ClaimsList),
    so the browser's own disclosure marker leads it and the whole line folds the

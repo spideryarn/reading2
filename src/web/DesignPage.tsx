@@ -428,7 +428,7 @@ const TEXT_ROLES: {
     token: "--type-item",
     use: "a row's main line, the thing you scan down",
     samples: {
-      ui: "Jane Okafor, Leiden", // Candidates' name
+      ui: "The multiscale wisdom of the body", // a citation's third-party title
       ai: "Writing is a test of thought", // an idea's name, a term, an FAQ question
       author: "Prices already contain most of what anyone knows.", // a Quotes row, a Search hit
       reader: "Does it report its sample size?", // a Criteria row
@@ -448,6 +448,7 @@ const TEXT_ROLES: {
     samples: {
       ui: "The model's line about this passage was withheld.", // Claims, withheld
       ai: "This passage leans on the idea without stating it.", // why-lines, glosses
+      author: "“in the year the war ended”", // Timeline's phrase inside an explanatory line
     },
   },
   {

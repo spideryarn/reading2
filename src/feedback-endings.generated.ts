@@ -495,7 +495,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
 /** One line about a report, from its note's `comment:`. An admin's Earlier tab only. */
 export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
   "spya-a5gzb9": "Shipped. Still waiting on you, from the imports half: may a failed import's pre-filled report also carry the source URL, filename and error sentence? Today it carries ids, step names and times only.",
-  "spya-ar65p3": "Shipped: a sideways iPhone no longer enlarges a band's text. Still waiting on you: should the same kind of line be the same size in every mode? Three choices, from lining up the five or six kinds that recur to leaving it.",
+  "spya-ar65p3": "Shipped: a sideways iPhone no longer enlarges a band's text, and, on your answer, the kinds of line that recur across modes now share six named sizes (on /design, under Text roles).",
   "spya-btjtbb": "Mostly Apple's: an iPhone home-screen app forgets the grant on every restart and 10 minutes after dictation. We fixed one extra prompt of ours. Try Safari's per-site Microphone: Allow; WebKit bug 280394 tracks the rest.",
   "spya-c2qmbg": "Shipped: Dig deeper on the citation card. Still waiting on you: should Citations become a sub-mode of Debate, and should a cited work be listed beside the claim it is cited near?",
   "spya-caue42": "Shipped: the Reception and Claims sub-modes. Still waiting on you: should Claims let you choose which claim is checked, by typing or picking one, or stay as built, where the search chooses?",

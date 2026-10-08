@@ -14,10 +14,10 @@
  *   2. **Each moved line uses its token.** `REGISTRY` is the table as built.
  *      For each row, every rule in every reading-view sheet whose selector list
  *      contains that exact selector — at any `@media`/`@supports` depth, and
- *      counting a `font:` shorthand as a size — sets it to `var(--type-<role>)`
- *      and nothing else. So a later rule, or a narrow-window override, that
- *      quietly put a literal back is a failure here, not a surprise in a
- *      screenshot.
+ *      counting a `font:` shorthand as a size — sets it to `var(--type-<role>)`.
+ *      A representative element is also put through the full sheet cascade, so
+ *      a different, more specific selector that wins on the real class context
+ *      is a failure too.
  *   3. **Each named exception keeps its literal and its reason.** Quiz's
  *      question is the first: so the next tidy-up cannot "fix" it onto
  *      `--type-item` without deleting the comment that says why it is not one.
@@ -58,6 +58,64 @@ interface Row {
   role: Role;
 }
 
+/**
+ * A real class context for each registered line. The cascade check builds this
+ * little path under `.mode-band`; the last element is the line under test.
+ * These are deliberately independent of the selector that owns the token: the
+ * difference is what lets `.gloss-term .gloss-name` or
+ * `.srch-hit-btn .srch-hit-quote` reveal an override the exact-selector check
+ * cannot see.
+ */
+const WITNESSES: Record<string, string> = {
+  ".skim-place": ".skim-row.current button.skim-go .skim-place",
+  ".skim-words": ".skim-row.current button.skim-go .skim-words",
+  ".skim-cue": ".skim-row.current button.skim-go .skim-cue",
+  ".skim-cluster-h": ".skim-card section.skim-cluster .skim-cluster-h",
+  ".tl-label": ".tl-item.open button.tl-row .tl-label",
+  ".tl-quote": ".tl-occurrences li.open button .tl-quote",
+  ".tl-when": ".tl-item.open button.tl-row .tl-when.tl-when-words",
+  ".tl-group > h3": "section.tl-group > h3",
+  ".tl-group > h3 > .gloss-count": "section.tl-group > h3 > .gloss-count",
+  ".faq-question": ".faq-item .faq-question-row h2.faq-question",
+  ".gloss-part-text.faq-quote": ".faq-item .faq-passage .gloss-part-text.faq-quote",
+  ".gloss-name": ".gloss-term button.gloss-row .gloss-name",
+  ".gloss-gloss": ".gloss-term button.gloss-row .gloss-gloss",
+  ".gloss-part-text": ".gloss-term .gloss-open .gloss-part .gloss-part-text",
+  ".gloss-sources a": ".gloss-sources li a",
+  ".gloss-part-label > .gloss-count": ".gloss-part-label > .gloss-count",
+  ".ideas-name": ".ideas-item.open > button.ideas-name",
+  ".ideas-quote": ".ideas-occurrences li.open button .ideas-quote",
+  ".ideas-reason": ".ideas-occurrences li.open button .ideas-reason",
+  ".ideas-group > h3": "section.ideas-group > h3",
+  ".ideas-group > h3 > .gloss-count": "section.ideas-group > h3 > .gloss-count",
+  ".quotes-text": ".quotes-row.on button.quotes-quote blockquote.quotes-text",
+  ".quotes-prov": ".quotes-why-card .quotes-prov",
+  ".cite-title": ".cite-item p.cite-title",
+  ".cite-quote blockquote": ".cite-item figure.cite-quote blockquote",
+  ".cite-why": ".cite-item p.cite-why",
+  ".cite-meta": ".cite-item p.cite-meta",
+  ".dbt-title": ".dbt-item.open a.dbt-title.dbt-title-ai",
+  ".dbt-quote": ".dbt-item.open blockquote.dbt-quote",
+  ".dbt-applies": ".dbt-item.open p.dbt-applies",
+  ".dbt-meta": ".dbt-item.open p.dbt-meta",
+  ".dbt-group-count": ".dbt-group-claim .dbt-group-count",
+  ".dbt-group-head:not(.dbt-group-claim)": ".dbt-group h3.dbt-group-head",
+  ".crit-criterion": ".crit-row .crit-head .crit-criterion",
+  ".clm-claim": ".clm-list .clm-row p.clm-claim",
+  ".cnd-name": ".cnd-list .cnd-row p.cnd-name",
+  ".crit-quote": ".crit-result.on button.crit-jump .crit-quote",
+  ".clm-quote": ".clm-passage .clm-jump .clm-quote",
+  ".mir-quote:not(.mir-block-id)": ".mir-remark button.mir-jump .mir-quote",
+  ".crit-why": ".crit-result.on p.crit-why",
+  ".clm-why": ".clm-passage p.clm-why",
+  ".cnd-why": ".cnd-row p.cnd-why",
+  ".crit-meta": ".crit-row p.crit-meta",
+  ".cnd-count": ".cnd-list-head .cnd-count",
+  ".srch-hit-quote": ".srch-hit.on button.srch-hit-btn .srch-hit-body .srch-hit-quote",
+  ".srch-hit-why": ".srch-hit.on button.srch-hit-btn .srch-hit-body .srch-hit-why",
+  ".srch-count": ".srch-sort .srch-count",
+};
+
 /** The table as built. Grouped by mode, in the order the plan lists them. */
 const REGISTRY: Row[] = [
   // Skim
@@ -73,7 +131,7 @@ const REGISTRY: Row[] = [
   { file: "timeline.css", selector: ".tl-group > h3 > .gloss-count", role: "count" },
   // FAQ
   { file: "faq.css", selector: ".faq-question", role: "item" },
-  { file: "faq.css", selector: ".faq-quote", role: "quote" },
+  { file: "faq.css", selector: ".gloss-part-text.faq-quote", role: "quote" },
   // Glossary (and the parts Ideas and Timeline borrow from it)
   { file: "glossary.css", selector: ".gloss-name", role: "item" },
   { file: "glossary.css", selector: ".gloss-gloss", role: "body" },
@@ -100,14 +158,14 @@ const REGISTRY: Row[] = [
   { file: "debate.css", selector: ".dbt-applies", role: "body" },
   { file: "debate.css", selector: ".dbt-meta", role: "meta" },
   { file: "debate.css", selector: ".dbt-group-count", role: "count" },
-  { file: "debate.css", selector: ".dbt-group-head", role: "label" },
+  { file: "debate.css", selector: ".dbt-group-head:not(.dbt-group-claim)", role: "label" },
   // Referee: Criteria, Claims, Mirror, Candidates
   { file: "referee.css", selector: ".crit-criterion", role: "item" },
   { file: "referee.css", selector: ".clm-claim", role: "item" },
   { file: "referee.css", selector: ".cnd-name", role: "item" },
   { file: "referee.css", selector: ".crit-quote", role: "quote" },
   { file: "referee.css", selector: ".clm-quote", role: "quote" },
-  { file: "referee.css", selector: ".mir-quote", role: "quote" },
+  { file: "referee.css", selector: ".mir-quote:not(.mir-block-id)", role: "quote" },
   { file: "referee.css", selector: ".crit-why", role: "body" },
   { file: "referee.css", selector: ".clm-why", role: "body" },
   { file: "referee.css", selector: ".cnd-why", role: "body" },
@@ -136,6 +194,30 @@ const EXCEPTIONS: Exception[] = [
     reason:
       "One prompt the reader answers, set above its 0.94rem premise and answer box — not a row " +
       "in a list, so not --type-item (GPT Sol's F3 on the plan).",
+  },
+  {
+    file: "debate.css",
+    selector: ".dbt-group-claim",
+    value: "0.85rem",
+    reason:
+      "A foldable quotation heading in the author's words, not the small uppercase group label " +
+      "that the shared base class otherwise means.",
+  },
+  {
+    file: "referee.css",
+    selector: ".mir-criterion",
+    value: "0.88rem",
+    reason:
+      "The reader's criterion stands where a quotation can stand, but is not source words and " +
+      "therefore is not on the quote role.",
+  },
+  {
+    file: "referee.css",
+    selector: ".mir-block-id",
+    value: "0.88rem",
+    reason:
+      "The fallback displays a stable block id when quoted words are missing, not source words " +
+      "that belong on the quote role.",
   },
 ];
 
@@ -182,9 +264,22 @@ function stripStrings(css: string): string {
 
 const parsed = new Map<string, ParsedRule[]>();
 
+function sourceBlocks(css: string): number {
+  const bare = stripStrings(stripComments(css));
+  return (bare.match(/\{/g) ?? []).length - (bare.match(/@property\b/g) ?? []).length;
+}
+
 function parse(path: string, css: string): ParsedRule[] {
   const hit = parsed.get(path);
   if (hit) return hit;
+  const source = sourceBlocks(css);
+  /* `styles.css` is the import manifest. Its leaves are already in SHEETS, and
+     handing its imports to jsdom would only make it try to resolve them from
+     about:blank. */
+  if (source === 0) {
+    parsed.set(path, []);
+    return [];
+  }
   const style = window.document.createElement("style");
   style.textContent = css;
   window.document.head.appendChild(style);
@@ -226,8 +321,6 @@ function parse(path: string, css: string): ParsedRule[] {
      dropped something it did not understand, and a dropped rule is one this
      file cannot see. The one exception is `@property` (logo-animations.css),
      which jsdom does not keep and which cannot hold a font size. */
-  const bare = stripStrings(stripComments(css));
-  const source = (bare.match(/\{/g) ?? []).length - (bare.match(/@property\b/g) ?? []).length;
   if (blocks !== source) {
     throw new Error(
       `${path}: the source has ${source} blocks and jsdom's CSSOM holds ${blocks}. ` +
@@ -239,6 +332,35 @@ function parse(path: string, css: string): ParsedRule[] {
 }
 
 const SHEETS = readerSheets();
+
+/* The ordinary, active cascade for the representative elements below. The
+   exact-selector walk remains the check for declarations hidden in media or
+   supports blocks that jsdom does not activate. */
+for (const s of SHEETS) {
+  if (sourceBlocks(s.css) === 0) continue;
+  const style = window.document.createElement("style");
+  style.dataset.sheet = s.path;
+  style.textContent = s.css;
+  window.document.head.appendChild(style);
+}
+
+function witness(path: string): { host: HTMLElement; target: HTMLElement } {
+  const host = window.document.createElement("aside");
+  host.className = "mode-band";
+  let parent: HTMLElement = host;
+  let target = host;
+  for (const segment of path.split(/\s*>\s*|\s+/).filter(Boolean)) {
+    const tag = segment.match(/^[a-z][\w-]*/i)?.[0] ?? "div";
+    const element = window.document.createElement(tag);
+    element.className = Array.from(segment.matchAll(/\.([_a-zA-Z][\w-]*)/g), (m) => m[1]).join(" ");
+    parent.appendChild(element);
+    parent = element;
+    target = element;
+  }
+  window.document.body.appendChild(host);
+  expect(target.matches(path), `bad witness path: ${path}`).toBe(true);
+  return { host, target };
+}
 
 function sheet(file: string): { path: string; css: string } {
   const path = `src/web/styles/${file}`;
@@ -288,6 +410,7 @@ describe("each registered line uses its role's token", () => {
   it("names each selector once", () => {
     const seen = REGISTRY.map((r) => normalise(r.selector));
     expect(seen.filter((s, i) => seen.indexOf(s) !== i)).toEqual([]);
+    expect(Object.keys(WITNESSES).sort()).toEqual([...seen].sort());
   });
 
   for (const row of REGISTRY) {
@@ -301,19 +424,23 @@ describe("each registered line uses its role's token", () => {
         .filter((s) => s.value !== `var(--type-${row.role})`)
         .map((s) => `${s.where}: ${s.value}`);
       expect(wrong, `every size on \`${row.selector}\` should be var(--type-${row.role})`).toEqual([]);
+
+      const path = WITNESSES[row.selector];
+      if (path === undefined) throw new Error(`no cascade witness for ${row.selector}`);
+      const element = witness(path);
+      const actual = window.getComputedStyle(element.target).fontSize;
+      element.host.remove();
+      /* jsdom preserves a winning custom-property reference in computed
+         font-size when the full app sheets are installed. That is useful here:
+         this assertion asks which declaration won, while the token-value test
+         above separately asks what that variable means. */
+      const expected = `var(--type-${row.role})`;
+      expect(
+        actual,
+        `the full cascade on \`${path}\` should resolve to ${row.role}`,
+      ).toBe(expected);
     });
   }
-
-  /* `.faq-quote` sits on the same element as `.gloss-part-text` (FaqPanel.tsx),
-     a body line, and wins only because faq.css is later in the cascade at the
-     same specificity. If the order ever flipped, FAQ's quotation would silently
-     become body text and the registry row above would still be green. */
-  it("FAQ's quote wins over the glossary part it shares an element with", () => {
-    const order = SHEETS.map((s) => s.path);
-    expect(order.indexOf("src/web/styles/faq.css")).toBeGreaterThan(
-      order.indexOf("src/web/styles/glossary.css"),
-    );
-  });
 });
 
 describe("the named exceptions", () => {
