@@ -220,6 +220,11 @@ const SHARED = new Set([
      an unopened one out, so a browser copy and a server copy would be two
      rules for one paragraph. It imports types only. src/recall-hint.ts. */
   "recall-hint.js",
+  /* A model id as a person reads it (`DISPLAY_NAME`). /profile names models
+     through it on the server, and a chat thread's (i) names the model that
+     answered in the browser, so a second copy would let the two disagree. It
+     imports nothing. src/model-names.ts; plan 261008c § 2. */
+  "model-names.js",
   /* How a conversation's title is cut from its first question. The server
      stores that cut; Chat's list asks whether a stored title is exactly it
      before drawing the whole question instead (src/web/chat-list-row.ts), so
