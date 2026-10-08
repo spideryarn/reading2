@@ -1,5 +1,5 @@
 -- An admin's "defer for now" on a question an agent asked in the Feedback dialog:
--- docs/plans/261008i-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md, decision 3.
+-- docs/plans/261008f-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md, decision 3.
 --
 -- Additive: one new table and nothing else. No existing table, column,
 -- constraint or row is touched. src/db/schema.ts § `feedbackQuestionDeferrals`

@@ -5857,6 +5857,11 @@ export const feedbackQuestionDeferrals = spideryarn.table(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     /** Which deployment wrote the row, asked of the server. */
     environment: text("environment").notNull(),
+    /**
+     * When it was first deferred, which neither of the two times above keeps:
+     * both move on a later press. Store when it happened (docs/project/sql.md).
+     */
+    createdAt: createdAt(),
   },
   (t) => [
     primaryKey({ columns: [t.ownerId, t.questionId] }),

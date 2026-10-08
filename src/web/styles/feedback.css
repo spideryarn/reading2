@@ -323,14 +323,6 @@ a.fb-earlier-page:focus-visible {
   font-weight: 600;
   color: var(--ink);
 }
-.fb-questions-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
 /* One question: a card, so its reply box plainly belongs to it. */
 .fb-question {
   display: flex;
@@ -360,7 +352,6 @@ a.fb-earlier-page:focus-visible {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.fb-question-report-line { overflow-wrap: anywhere; }
 /* What the admin replied, set apart the way a note's comment is. */
 .fb-question-answer {
   align-self: stretch;
