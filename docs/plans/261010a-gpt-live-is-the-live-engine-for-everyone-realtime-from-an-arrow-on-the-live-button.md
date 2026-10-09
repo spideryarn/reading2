@@ -140,3 +140,21 @@ bar's More does). No server route or cost path assumes a default engine (Sol che
    stage). Browser check in a Sonnet subagent (Playwright on the box): Chat and Learn, Experimental
    off and on, desktop and phone width.
 3. Docs, queue bookkeeping, feedback note, push to `dev`.
+
+## What happened
+
+- 2026-10-10 — built as planned, with the plan review's findings. GPT Sol's code review:
+  [code-review-sol](261010a-gpt-live-is-the-live-engine-for-everyone-code-review-sol.md),
+  **APPROVE WITH FIXES**. Its fixes were read and kept: a cross-engine Reconnect shows as
+  reconnecting, so Cancel is offered. A pointer pick does not return focus to the arrow. The menu
+  closes and stays closed once a call begins. The arrow is lit with Live during a call. The privacy
+  test pins the declarations by name.
+- 2026-10-10 — browser check (Sonnet, Playwright, this tree's dev server, `/read/scaling-hypothesis`).
+  Chat and Learn pass. With Experimental off there is Live alone, with no arrow and no select. With
+  it on, Live is 66×36 and the arrow 18×36, joined with one border. The menu lists GPT-Live
+  (checked) then Realtime, a choice persists across a reload, and the tooltip is hidden while the
+  menu is open. Keyboard: Tab, Enter, ArrowDown, Home, Escape. Letter keys with the menu open fired
+  no shortcut. On iPhone 13 emulation in WebKit the arrow is 40×36 and the menu fits on screen.
+  **Not checked:** a finger *opening* the menu. Playwright's WebKit touch sends no `click` after a
+  tap, and `useFingerPressMenu` opens on the click, as the shelf's "⋯" and the bar's More do. A
+  mouse click opens it, and tapping an item works. No console errors. No call was started.
