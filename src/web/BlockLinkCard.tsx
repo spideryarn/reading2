@@ -84,6 +84,12 @@ export interface BlockLinkEntry {
   text: string;
   /** The title of the section it sits in, or undefined where that has none. */
   section: string | undefined;
+  /**
+   * The block itself, as the prose draws it, so an excerpt anywhere in the
+   * reading view is drawn from its markup (Excerpt.tsx, plan 261009k). Absent
+   * in an index built from text alone, and then an excerpt is a string.
+   */
+  block?: Block;
 }
 
 /** Every block of this article, by id. Also the "is this id real" check. */
@@ -112,7 +118,7 @@ export function buildBlockLinkIndex(
   for (const [row, block] of blocks.entries()) {
     while ((sections[at + 1]?.row ?? Number.POSITIVE_INFINITY) <= row) at += 1;
     const title = sections[at]?.title.trim() ?? "";
-    index.set(block.id, { text: block.text, section: title === "" ? undefined : title });
+    index.set(block.id, { text: block.text, section: title === "" ? undefined : title, block });
   }
   return index;
 }

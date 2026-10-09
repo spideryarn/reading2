@@ -705,6 +705,8 @@ function useSkimMode({
           position: block === null ? null : (positions.get(block) ?? null),
           /* The quote's own words, for the row (plan 260928e). */
           words: byId.get(stop.quoteId)?.text ?? null,
+          /* Whose markup they are drawn from — maths and italics kept (261009k). */
+          blockId: block,
           /* Where it sits in the outline, for the position mark's card (260929f § 3). */
           where: block === null ? NO_WHERE : whereForBlock(tree, index, block),
           passes: passesOf?.get(stop.quoteId) ?? null,
