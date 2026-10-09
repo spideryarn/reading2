@@ -92,8 +92,8 @@ v2, the scrapbook, is built on top of that:
   shows it — above the quote since 2026-10-01, so the question comes before the passage it is asked
   of (Greg, `SPIDERYARN-READING2-8J`, plan 261001n) — and a route written before cues shows its old role instead (`PROMPT_VERSION`
   `trajectory/5` marks those as out of date).
-- **The next stop's cue under the door.** Under **Next stop ›** in the prose, in small muted
-  italics, so the door says where it leads.
+- **The next stop's cue under the door.** Under **Next stop ›** in the prose, small and muted
+  (italic until 2026-10-09), so the door says where it leads.
 - **The stop card**, under the current row only
   ([`stop-card.ts`](../../src/web/stop-card.ts) gathers it; the panel draws it). It holds whatever
   the other modes have **already** written about this paragraph:
@@ -485,6 +485,19 @@ mouse. The line is inside the row's button, so it cannot take focus or a tap of 
 corners and an inset strip for the bar. Before, the row and the card each painted their own, and the
 row's rounded corner bent its bar away just above the card's. **The door keeps to the prose's
 measure**, so the next stop's cue no longer runs across the rule at the prose's right edge.
+
+**The quote is the loudest line in the open stop** — Greg's answer to
+[q-u04sye](../user-feedback/questions/q-u04sye.md), plan
+[261009m](../plans/261009m-skim-quieter-open-stop.md), tried as an experiment:
+
+> Okay, try these and let's see how it goes.
+>
+> — Greg, 2026-10-09 (`spya-uzpm5s`)
+
+The open stop's section heading is a step smaller (0.82rem, a named exception in
+[typography.md](typography.md)) and in the soft ink; at rest, the chips are unfilled outlines with
+soft-ink names; both the model's door cue and the fixed end-of-pass line are upright. The other rows
+are unchanged, so the route still scans as a list.
 
 **On a phone, the head's controls stay in Skim; a row goes to the article** — Greg, 2026-10-03,
 report spya-kudr63, plan

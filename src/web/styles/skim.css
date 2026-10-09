@@ -198,7 +198,17 @@
 }
 .skim-row.current .skim-go,
 .skim-row.current .skim-go:hover { background: none; }
-.skim-row.current .skim-place { font-weight: 600; color: var(--ink); }
+/* A named exception to the text roles (typography.md § Text roles in a band):
+   the open stop's section heading is a step below --type-item and in the
+   soft ink, so the quote under it is the line read first (Greg's answer to
+   q-u04sye, plan 261009m). Only the open stop: the other rows keep the full
+   heading, so the route still scans as a list. tests/type-roles.test.ts
+   holds it at 0.82rem. */
+.skim-row.current .skim-place {
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
 
 /* **Where the stop sits in the article** — a vertical hairline under the row's
    number, top the article's start and bottom its end, as the spine draws it;
@@ -371,14 +381,16 @@
   flex-wrap: wrap;
   gap: 0.5rem;
 }
-/* **Where the door leads**: the next stop's cue, small, muted and italic, so
-   it reads as a signpost rather than as the author's words or a summary. */
+/* **Where the door leads**: the next stop's cue, small and muted, so it reads
+   as a signpost rather than as the author's words or a summary — or, at the
+   end of a pass, the fixed "End of Gist — 5 stops". Upright since plan
+   261009m, both: italic mono read poorly, and the model's cue is marked by
+   its face (voices.css § `.skim-door-cue-next`), not by a slant. */
 .skim-door-cue {
   max-width: 32em;
   margin: 0;
   color: var(--ink-faint);
   font-size: 0.8rem;
-  font-style: italic;
   line-height: 1.35;
   text-align: right;
 }
@@ -419,6 +431,11 @@
   text-transform: uppercase;
 }
 .skim-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+/* **An outline, not a fill** (plan 261009m, q-u04sye): the stop's raised
+   ground shows through and the name is in the soft ink, so the chips read as
+   labels under the quote rather than the loudest shapes in the band. They
+   were filled with `--page` until 2026-10-09, near-black on the dark theme's
+   raised grey. The border is the stronger rule, or the outline vanishes. */
 .skim-chip {
   display: inline-flex;
   align-items: center;
@@ -427,8 +444,8 @@
   padding: 0 0.6rem;
   border: 1px solid var(--rule-strong);
   border-radius: var(--radius);
-  background: var(--page);
-  color: var(--ink);
+  background: transparent;
+  color: var(--ink-soft);
   font-size: 0.85rem;
   /* A name can wrap — an idea's is a short sentence — so the line height is
      text's, and the house height comes from `min-height` (browser check,
@@ -439,7 +456,7 @@
   cursor: pointer;
 }
 .skim-chip:hover,
-.skim-chip.on { border-color: var(--highlight); }
+.skim-chip.on { border-color: var(--highlight); color: var(--ink); }
 /* **A term chip's card** — the glossary's own (`TermCard`, styled by
    prose-hover-card.css), inside the shared tooltip (SkimPanel.tsx § TermChip).
    Only its height is ours. An entry with a web answer is long, and the row of
