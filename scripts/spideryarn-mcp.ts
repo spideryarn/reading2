@@ -6,6 +6,7 @@
  *     npx tsx scripts/spideryarn-mcp.ts whoami --site https://www.spideryarn.com
  *     npx tsx scripts/spideryarn-mcp.ts serve  --site https://www.spideryarn.com
  *     npx tsx scripts/spideryarn-mcp.ts logout --site https://www.spideryarn.com
+ *     npx tsx scripts/spideryarn-mcp.ts config --site https://www.spideryarn.com   # what to paste into Claude
  *
  * `serve` is the default command and is what an AI app runs. It speaks MCP on
  * stdin and stdout, so **nothing but protocol may reach stdout**: diagnostics
@@ -24,8 +25,10 @@
  * is used once.
  */
 
-import { readFileSync } from "node:fs";
+import { accessSync, constants, readFileSync, statSync } from "node:fs";
+import path from "node:path";
 import readline from "node:readline";
+import { fileURLToPath } from "node:url";
 
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 
@@ -41,7 +44,7 @@ interface Args {
   flags: Map<string, string | true>;
 }
 
-const COMMANDS = ["serve", "login", "logout", "whoami"] as const;
+const COMMANDS = ["serve", "login", "logout", "whoami", "config"] as const;
 const VALUED = new Set(["--site", "--env-file", "--email"]);
 
 /** Parse one `--option`, returning whether it consumed the following argv item. */
@@ -153,6 +156,65 @@ function askHidden(question: string): Promise<string> {
   });
 }
 
+/** Single-quote a word for a POSIX shell if it needs it. */
+function shellWord(word: string): string {
+  return /^[\w@%+=:,./-]+$/.test(word) ? word : `'${word.replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * What an AI app needs to start `serve` from this checkout: Claude Desktop's
+ * `mcpServers` entry and the `claude mcp add` line. Absolute paths throughout,
+ * because Claude Desktop starts servers from no particular directory, and
+ * `node`'s own directory first on `PATH`, because Desktop's `PATH` is short and
+ * tsx's shebang is `/usr/bin/env node`.
+ */
+export function clientConfig(o: { repo: string; site: string; nodeDir: string }) {
+  const command = path.join(o.repo, "node_modules", ".bin", "tsx");
+  const args = [path.join(o.repo, "scripts", "spideryarn-mcp.ts"), "serve", "--site", o.site];
+  const PATH = [o.nodeDir, "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"]
+    .filter((dir, i, all) => all.indexOf(dir) === i)
+    .join(":");
+  return {
+    desktop: { mcpServers: { spideryarn: { command, args, env: { PATH } } } },
+    claudeCode: ["claude", "mcp", "add", "--scope", "user", "spideryarn", "--env", `PATH=${PATH}`, "--", command, ...args].map(shellWord).join(" "),
+  };
+}
+
+/**
+ * The directory your shell finds `node` in, rather than `process.execPath`:
+ * Homebrew's execPath is a versioned Cellar path that the next upgrade deletes,
+ * while the PATH entry (`/opt/homebrew/opt/node@24/bin`) survives it.
+ */
+function nodeDirOnPath(): string {
+  for (const dir of (process.env.PATH ?? "").split(path.delimiter)) {
+    const absolute = path.resolve(dir);
+    const candidate = path.join(absolute, "node");
+    try {
+      if (!statSync(candidate).isFile()) continue;
+      accessSync(candidate, constants.X_OK);
+      return absolute;
+    } catch {
+      /* Shell lookup skips missing or non-executable candidates too. */
+    }
+  }
+  return path.dirname(process.execPath);
+}
+
+function runConfig(args: Args): number {
+  const made = clientConfig({
+    repo: path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."),
+    site: siteFrom(args),
+    nodeDir: nodeDirOnPath(),
+  });
+  /* stdout on purpose: this is not `serve`, and the JSON is there to be copied or piped. */
+  process.stdout.write(
+    "Claude Desktop: Settings → Developer → Edit Config, and merge this into claude_desktop_config.json:\n\n" +
+      `${JSON.stringify(made.desktop, null, 2)}\n\n` +
+      `Claude Code:\n\n${made.claudeCode}\n`,
+  );
+  return 0;
+}
+
 async function runLogin(args: Args, out: (line: string) => void): Promise<number> {
   const site = siteFrom(args);
   const supabase = supabaseFrom(args);
@@ -227,7 +289,7 @@ export async function main(argv: readonly string[]): Promise<number> {
   try {
     const args = parseArgs(argv);
     if (args.flags.has("--help")) {
-      out("usage: spideryarn-mcp [serve|login|whoami|logout] --site URL [--env-file PATH] [--email E]");
+      out("usage: spideryarn-mcp [serve|login|whoami|logout|config] --site URL [--env-file PATH] [--email E]");
       return 0;
     }
     switch (args.command) {
@@ -237,6 +299,8 @@ export async function main(argv: readonly string[]): Promise<number> {
         return await runWhoami(args, out);
       case "logout":
         return await runLogout(args, out);
+      case "config":
+        return runConfig(args);
       default:
         return await runServe(args);
     }

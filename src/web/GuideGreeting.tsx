@@ -31,14 +31,24 @@ import type { Greeting, GreetingRun } from "./guide-greeting.js";
 import { PROFILE_HREF } from "./router.js";
 
 /**
- * **What *Ask the guide where to start* sends**, as the reader's first message
- * — so what they pressed is what the transcript shows, and what the guide
- * answers with their reason in front of it (`GUIDE_SYSTEM`, src/converse.ts).
+ * **Three ways in, while the guide is empty** — plan
+ * docs/plans/261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md.
+ * Greg, 2026-10-09 (`spya-pqaftb`): *"other buttons could include help me
+ * clarify my intent, suggest some tools or modes … frame this in terms of user
+ * value and not use jargon … if it's early in the conversation, we probably
+ * rely more on built-ins and defaults"*.
+ *
+ * Each sends its words as the reader's first message, so what they pressed is
+ * what the transcript shows. Drawn whatever is stored: with no reason, *Where
+ * should I start?* gets the guide's question why, which is the conversation
+ * the greeting opens anyway. Later answers carry the guide's own next steps
+ * instead (GuideNextSteps.tsx).
  */
-export const GUIDE_FIRST_QUESTION = "I've said why I'm reading this. Where should I start?";
-
-/** The button's words. */
-export const GUIDE_START_LABEL = "Ask the guide where to start";
+export const GUIDE_STARTS = [
+  "Where should I start?",
+  "Help me work out what I want from this",
+  "How could I read this well?",
+] as const;
 
 function Run({ run }: { run: GreetingRun }) {
   if (run.voice === "title") return <span className="guide-greeting-title">{run.text}</span>;
@@ -46,7 +56,16 @@ function Run({ run }: { run: GreetingRun }) {
   return <>{run.text}</>;
 }
 
-export function GuideGreeting({ greeting, onAsk }: { greeting: Greeting; onAsk(question: string): void }) {
+export function GuideGreeting({
+  greeting,
+  starts,
+  onAsk,
+}: {
+  greeting: Greeting;
+  /** The conversation is still empty, so the three ways in are drawn. */
+  starts: boolean;
+  onAsk(question: string): void;
+}) {
   return (
     <div className="chat-suggest guide-greeting" role="note" aria-label="The guide's greeting">
       <div className="guide-greeting-bubble">
@@ -67,13 +86,15 @@ export function GuideGreeting({ greeting, onAsk }: { greeting: Greeting; onAsk(q
           )}
         </div>
       </div>
-      {greeting.offersStart && (
+      {starts && (
         <ul>
-          <li>
-            <button type="button" className="chat-suggest-btn" onClick={() => onAsk(GUIDE_FIRST_QUESTION)}>
-              {GUIDE_START_LABEL}
-            </button>
-          </li>
+          {GUIDE_STARTS.map((start) => (
+            <li key={start}>
+              <button type="button" className="chat-suggest-btn" onClick={() => onAsk(start)}>
+                {start}
+              </button>
+            </li>
+          ))}
         </ul>
       )}
     </div>

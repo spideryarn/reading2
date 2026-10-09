@@ -70,8 +70,8 @@ is a third reason to make that flip, and the cheapest of the three to land.**
 2. **A guard that declines says so, when declining could matter.** Not on every command: on a
    commit that changes a docs PNG and that it could not read, one line of `additionalContext` would
    have told each session what to run. Subsumed here for the ordinary command shapes measured above;
-   still the right default for the regenerate hook, which is reported to the Overseer rather than
-   changed here.
+   still the right default for the regenerate hook, which now does exactly that
+   ([261009t](../plans/261009t-the-regenerate-hook-says-when-it-declines-a-commit-that-names-its-sources.md)).
 3. **The git `pre-commit` hook** above. The only option with no parsing in it. Greg's call.
 4. **Compress at capture** (in the screenshot helpers) — rejected again for 261007m's reasons:
    several capture paths, and it misses a copied-in or hand-made shot.

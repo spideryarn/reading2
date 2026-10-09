@@ -39,9 +39,9 @@
  *
  * The stored names under it — the `citations`, `debate` and `debate-claims`
  * steps, columns and routes, the panels' file names and CSS — are renamed
- * after the sub-modes in later stages of plan 261009s.
+ * after the sub-modes in later stages of plan 261009w.
  * docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md,
- * docs/plans/261009s-peer-review-becomes-sources-all-the-way-down.md,
+ * docs/plans/261009w-peer-review-becomes-sources-all-the-way-down.md,
  * docs/project/sources.md.
  */
 

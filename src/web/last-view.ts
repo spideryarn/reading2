@@ -211,11 +211,11 @@ export const NEVER_REMEMBERED = [
      Listed for `deep`'s reason. */
   "debate",
   /* **Sources' sub-mode key for the day the mode was called Peer review**
-     (2026-10-09; docs/plans/261009s-peer-review-becomes-sources-all-the-way-down.md).
+     (2026-10-09; docs/plans/261009w-peer-review-becomes-sources-all-the-way-down.md).
      Lifted to `sources` on arrival and on restore (router.ts §
      `liftLegacySources`). Listed for `deep`'s reason: a lone
      `?peer-review=claims` is somebody's old link, and must win over a stored
-     view (GPT Sol's F7 on plan 261009s). */
+     view (GPT Sol's F7 on plan 261009w). */
   "peer-review",
 ] as const;
 

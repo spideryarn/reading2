@@ -1434,7 +1434,7 @@ const DEBATE_CLAIMS = "debate=claims";
  * a remembered last view (last-view.ts § `restoredHref`), which is put on the
  * address after boot and would otherwise walk past this (GPT Sol's F1 on plan
  * 261009l). docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md,
- * docs/plans/261009s-peer-review-becomes-sources-all-the-way-down.md.
+ * docs/plans/261009w-peer-review-becomes-sources-all-the-way-down.md.
  */
 function liftLegacySources(at: Address): Address {
   const pairs = queryPairs(at.search);

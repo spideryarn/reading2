@@ -337,7 +337,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        Not `criteria`, which is the chip's own row. */
     /* "peer review" was here until 2026-10-09, when it went to the mode
        then named Peer review, now Sources (plan 261009l § The name, plan
-       261009s), which keeps it as its old name. The person doing one, who is
+       261009w), which keeps it as its old name. The person doing one, who is
        who this mode is for, is here as `for peer reviewers`, the landing
        tile's words, rather than `peer reviewer` as it was until Sources took
        `peer review`: Referee comes first in the bar, so a nickname here that
@@ -484,7 +484,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
      aliases, so each opens the view it means). Called Peer review until later
      that day.
      docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md,
-     docs/plans/261009s-peer-review-becomes-sources-all-the-way-down.md. */
+     docs/plans/261009w-peer-review-becomes-sources-all-the-way-down.md. */
   sources: {
     /* Greg's frame for it, 2026-10-09 (spya-vcvxu5): *"what this article
        cites and what other people say about it, this article might be a good
@@ -519,7 +519,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        called Peer review (plan 261009l § The name). It stays here as the
        mode's old name, so typing it still finds this mode first; Referee has
        `for peer reviewers`, which is about the person. `sources` was
-       an alias until it became the label (plan 261009s), and an alias saying
+       an alias until it became the label (plan 261009w), and an alias saying
        the label again would be a second copy (tests/mode-catalog.test.ts §
        never another mode's label). The two retired mode words are the
        sub-mode rows' aliases, not these. */

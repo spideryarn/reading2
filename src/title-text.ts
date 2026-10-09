@@ -252,7 +252,7 @@ export const MODE_LABEL: Record<Mode, string> = {
      sub-modes under the name Peer review (Greg: "Maybe peer review") —
      docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md. Sources
      later that day, because Peer review shared a phrase with Referee (Greg:
-     "B Sources", spya-egmn6r) — docs/plans/261009s-peer-review-becomes-sources-all-the-way-down.md. */
+     "B Sources", spya-egmn6r) — docs/plans/261009w-peer-review-becomes-sources-all-the-way-down.md. */
   sources: "Sources",
   structure: "Structure",
   faq: "FAQ",

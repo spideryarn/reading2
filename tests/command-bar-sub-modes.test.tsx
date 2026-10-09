@@ -584,7 +584,7 @@ describe("Sources' three sub-modes", () => {
       "Sources › Reception",
       "Sources › Claims",
     ]);
-    /* Its name until 2026-10-09 still finds it, ahead of Referee (plan 261009s). */
+    /* Its name until 2026-10-09 still finds it, ahead of Referee (plan 261009w). */
     type("peer review");
     expect(fullName(rows()[0] as HTMLElement)).toBe("Sources");
     expect(rows().map(fullName)).toContain("Referee");

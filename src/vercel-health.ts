@@ -443,11 +443,13 @@ const EXPECTED = [
    */
   { name: "SPIDERYARN_OWNER_ID", breaks: null },
   /**
-   * **The one AI app whose OAuth tokens `POST /api/mcp` accepts** —
+   * **The AI apps whose OAuth tokens `POST /api/mcp` accepts**, as a
+   * comma-separated list of hand-registered client ids —
    * src/mcp/remote.ts, plan 261007p. Unset is the shipped state and a
    * deliberate one: the route then refuses everybody, so remote MCP is off
-   * until Greg registers the client and sets this. Hence `breaks: null`; an
-   * operator still wants to see at a glance whether it is on.
+   * until Greg registers the clients and sets this. Hence `breaks: null`; an
+   * operator still wants to see at a glance whether the variable is configured;
+   * the route ignores whitespace and empty entries when deciding whether it is on.
    */
   { name: "MCP_OAUTH_CLIENT_ID", breaks: null },
   /* **`SPIDERYARN_BASE_URL` was here for a few hours on 2026-09-07 and is

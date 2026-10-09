@@ -694,7 +694,7 @@ red by themselves. These do not all, and `debate` is the specimen each was check
   aliases, one wrapper drawing the two panels under one chip row — and the stored names held, on
   purpose, until the provisional name was confirmed.
 - **Peer review → Sources**
-  ([261009s](../plans/261009s-peer-review-becomes-sources-all-the-way-down.md)) is the template for
+  ([261009w](../plans/261009w-peer-review-becomes-sources-all-the-way-down.md)) is the template for
   **renaming a mode whose stored names cannot break a reader across the deploy**: the mode word
   first (the old word in `RETIRED_MODES`, its sub-mode key lifted by the same canonicaliser and kept
   in `NEVER_REMEMBERED`, the old name kept as the mode's alias), then each stored name by expand and

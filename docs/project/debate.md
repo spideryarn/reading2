@@ -439,7 +439,7 @@ switch:
 What was built is [sources.md](sources.md) and plan
 [261009l](../plans/261009l-peer-review-mode-merges-citations-and-debate.md). The mode was called
 Peer review that day, and became Sources the same evening, for its clash with Referee
-([261009s](../plans/261009s-peer-review-becomes-sources-all-the-way-down.md)). It is part of the
+([261009w](../plans/261009w-peer-review-becomes-sources-all-the-way-down.md)). It is part of the
 wider wish to declutter the bottom bar
 ([interface-vision.md](interface-vision.md#decluttering-the-bottom-bar)).
 

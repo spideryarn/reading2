@@ -314,7 +314,7 @@ report's note, `feedback-endings.ts`), and messages to the two sessions if they 
 
 ## After GPT Sol's plan review
 
-[261009s-plan-review-sol.md](261009s-plan-review-sol.md): BUILD WITH CHANGES, F1 to F11. It found no
+[261009w-plan-review-sol.md](261009w-plan-review-sol.md): BUILD WITH CHANGES, F1 to F11. It found no
 lease failure in the step-run mirror, but showed the expand was only compatible in one direction in
 several places. What changed, each a decision taken now:
 

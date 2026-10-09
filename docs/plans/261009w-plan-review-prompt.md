@@ -1,7 +1,7 @@
-# Plan review: Peer review becomes Sources, all the way down (261009s)
+# Plan review: Peer review becomes Sources, all the way down (261009w)
 
 You are reviewing a **plan**, read-only. Candidate: commit `f5b247d4503e563c70c0c25bb523c5f0ffc72872`,
-file `docs/plans/261009s-peer-review-becomes-sources-all-the-way-down.md`. The repo at that commit is
+file `docs/plans/261009w-peer-review-becomes-sources-all-the-way-down.md`. The repo at that commit is
 the code the plan will change.
 
 Context worth reading: `docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md` (the

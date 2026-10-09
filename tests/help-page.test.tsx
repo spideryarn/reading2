@@ -110,7 +110,7 @@ const PINNED_ANCHORS = [
   /* 2026-10-09: Citations and Debate became Peer review (plan 261009l).
      `mode-citations` and `mode-debate` above are aliases now (RETIRED_MODES). */
   "mode-peer-review",
-  /* 2026-10-09, later: Peer review became Sources (plan 261009s).
+  /* 2026-10-09, later: Peer review became Sources (plan 261009w).
      `mode-peer-review` above is an alias now (RETIRED_MODES). */
   "mode-sources",
 ];
@@ -815,7 +815,7 @@ describe("arriving", () => {
       ["/help#mode-trajectory", "/help/mode-skim", MODE_LABEL.skim],
       ["/help/mode-trajectory", "/help/mode-skim", MODE_LABEL.skim],
       ["/help/mode-remember", "/help/mode-learn", MODE_LABEL.learn],
-      /* Peer review until 2026-10-09 (plan 261009s), and Citations and Debate before it. */
+      /* Peer review until 2026-10-09 (plan 261009w), and Citations and Debate before it. */
       ["/help/mode-peer-review", "/help/mode-sources", "Sources"],
       ["/help/mode-citations", "/help/mode-sources", "Sources"],
       ["/help/mode-debate", "/help/mode-sources", "Sources"],

@@ -1,8 +1,8 @@
-# Code review, Stage 1 of 261009s: Peer review → Sources (the mode word)
+# Code review, Stage 1 of 261009w: Peer review → Sources (the mode word)
 
 You are a reviewer **and fixer**, write-capable in the worktree. Candidate: commit
 `68d9ed837` (one commit; `git show --stat 68d9ed837` lists the 132 paths, seven of them renames).
-Plan: `docs/plans/261009s-peer-review-becomes-sources-all-the-way-down.md` (§ The names, § "Source"
+Plan: `docs/plans/261009w-peer-review-becomes-sources-all-the-way-down.md` (§ The names, § "Source"
 already means other things, § Old links still land, § Stage 1, and § After GPT Sol's plan review, F7).
 
 ## What the stage is

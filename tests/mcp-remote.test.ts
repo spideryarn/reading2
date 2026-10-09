@@ -27,8 +27,12 @@
  * - **The metadata document** answers without a token (RFC 9728).
  */
 
+import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Readable } from "node:stream";
 
 import { Client as McpClient, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
@@ -64,6 +68,7 @@ const TOKENS: Record<string, Record<string, unknown>> = {
   "admin-prod-app": { ...person(ADMIN_USER_ID_PROD, "prod-admin@spideryarn.test"), client_id: CLIENT },
   "admin-browser": person(ADMIN_USER_ID_LOCAL, ADMIN_EMAIL_LOCAL),
   "admin-other-app": { ...person(ADMIN_USER_ID_LOCAL, ADMIN_EMAIL_LOCAL), client_id: OTHER_CLIENT },
+  "admin-unlisted-app": { ...person(ADMIN_USER_ID_LOCAL, ADMIN_EMAIL_LOCAL), client_id: "unlisted-client" },
   "admin-odd-app": { ...person(ADMIN_USER_ID_LOCAL, ADMIN_EMAIL_LOCAL), client_id: 42 },
   "reader-app": { ...person(READER, "reader@example.test"), client_id: CLIENT },
 };
@@ -223,8 +228,27 @@ describe("the gate on /api/mcp", () => {
     }
   });
 
+  it("a comma-separated list admits each app on it, and only those", async () => {
+    /* Claude and ChatGPT, each registered by hand, each with its own id (261009a). */
+    process.env.MCP_OAUTH_CLIENT_ID = ` ${OTHER_CLIENT} , ${CLIENT} `;
+    try {
+      for (const token of ["admin-app", "admin-other-app"]) {
+        const r = await call("POST", "/api/mcp", { token, headers: MCP_HEADERS, body: INIT });
+        expect(r.status, token).toBe(200);
+      }
+      const unlisted = await call("POST", "/api/mcp", { token: "admin-unlisted-app", headers: MCP_HEADERS, body: INIT });
+      expect(unlisted.status).toBe(401);
+      expect(unlisted.text).toContain("[mcp-client]");
+      process.env.MCP_OAUTH_CLIENT_ID = OTHER_CLIENT;
+      const r = await call("POST", "/api/mcp", { token: "admin-app", headers: MCP_HEADERS, body: INIT });
+      expect(r.status).toBe(401);
+    } finally {
+      process.env.MCP_OAUTH_CLIENT_ID = CLIENT;
+    }
+  });
+
   it("with MCP_OAUTH_CLIENT_ID unset or empty, everyone is refused: it ships dark", async () => {
-    for (const value of [undefined, ""]) {
+    for (const value of [undefined, "", " , ,"]) {
       if (value === undefined) delete process.env.MCP_OAUTH_CLIENT_ID;
       else process.env.MCP_OAUTH_CLIENT_ID = value;
       try {
@@ -241,8 +265,8 @@ describe("the gate on /api/mcp", () => {
     expect(r.status).toBe(403);
   });
 
-  it("a hostile or null Origin: 403; the site's own, Claude's, or none: served", async () => {
-    for (const origin of ["https://evil.example", "null", "https://claude.ai.evil.example"]) {
+  it("a hostile or null Origin: 403; the site's own, Claude's, ChatGPT's, or none: served", async () => {
+    for (const origin of ["https://evil.example", "null", "https://claude.ai.evil.example", "https://chatgpt.com.evil.example"]) {
       const r = await call("POST", "/api/mcp", {
         token: "admin-app",
         headers: { ...MCP_HEADERS, origin },
@@ -250,7 +274,7 @@ describe("the gate on /api/mcp", () => {
       });
       expect(r.status, origin).toBe(403);
     }
-    for (const origin of [siteOrigin(), "https://claude.ai", undefined]) {
+    for (const origin of [siteOrigin(), "https://claude.ai", "https://chatgpt.com", undefined]) {
       const r = await call("POST", "/api/mcp", {
         token: "admin-app",
         headers: { ...MCP_HEADERS, ...(origin ? { origin } : {}) },
@@ -367,5 +391,108 @@ describe("the resource metadata, RFC 9728", () => {
       bearer_methods_supported: ["header"],
       scopes_supported: ["openid", "email", "profile"],
     });
+  });
+});
+
+/* Run the real CLI with an intercepted fetch: no password or production request
+   can escape, including when reproducing the pre-fix unsafe URL guard. */
+describe("the OAuth spike stays local and keeps credentials out of output", () => {
+  function spike(command: string, supabase: string, site = "http://localhost:5273", response?: string, fetchCode?: string) {
+    const dir = mkdtempSync(join(tmpdir(), "mcp-spike-test-"));
+    const client = join(dir, "client.json");
+    writeFileSync(client, JSON.stringify({ client_id: CLIENT, client_secret: "fake-secret", redirect: "http://localhost:8976/callback", token_endpoint_auth_method: "client_secret_post" }));
+    try {
+      const code = `
+        globalThis.fetch = async function() {
+          console.log("FETCH_ATTEMPTED");
+          ${fetchCode ?? (response ? `return new Response(${JSON.stringify(response)}, {status: 400, headers: {"content-type": "application/json"}});` : 'throw new Error("INTERCEPTED_NETWORK");')}
+        };
+        process.argv = [process.execPath, "scripts/mcp-oauth-spike.ts", ...${JSON.stringify([command, "--client", client, "--out", join(dir, "out.json"), "--site", site, "--email", "spike@example.test"])}];
+        await import("./scripts/mcp-oauth-spike.ts");
+      `;
+      const run = spawnSync(process.execPath, ["--import", "tsx", "--input-type=module", "--eval", code], {
+        cwd: process.cwd(), encoding: "utf8", timeout: 5000,
+        env: { ...process.env, SUPABASE_URL: supabase, SUPABASE_SERVICE_ROLE_KEY: "fake-service", SUPABASE_PUBLISHABLE_KEY: "fake-publishable", SPIKE_PASSWORD: "fake-password" },
+      });
+      expect(run.error).toBeUndefined();
+      return { status: run.status, output: run.stdout + run.stderr };
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it.each([
+    ["register", "http://localhost:password@production.example", "http://localhost:5273"],
+    ["flow", "https://production.example", "http://localhost:5273"],
+    ["flow", "http://127.0.0.1:54321", "https://www.spideryarn.com"],
+  ])("%s refuses nonlocal endpoints before the first request (%s, %s)", (command, supabase, site) => {
+    const run = spike(command, supabase, site);
+    expect(run.status).not.toBe(0);
+    expect(run.output).not.toContain("FETCH_ATTEMPTED");
+  });
+
+  it("does not print credentials echoed in an OAuth error", () => {
+    const run = spike("register", "http://127.0.0.1:54321", undefined, JSON.stringify({ message: "echoed-fake-access-token", refresh_token: "echoed-fake-refresh-token" }));
+    expect(run.status).not.toBe(0);
+    expect(run.output).toContain("FETCH_ATTEMPTED");
+    expect(run.output).not.toContain("echoed-fake-access-token");
+    expect(run.output).not.toContain("echoed-fake-refresh-token");
+  });
+
+  /* Real Supabase SDK, simulated HTTP replies; every unrecognised endpoint
+     throws. Check that the protocol and error paths do more than print results. */
+  function flowFetch(scenario: string) {
+    return `
+      const scenario = ${JSON.stringify(scenario)};
+      const url = new URL(arguments[0]);
+      const init = arguments[1];
+      if (init.redirect !== "manual") throw new Error("redirect policy missing");
+      const as = "http://127.0.0.1:54321/auth/v1";
+      const json = (data, status = 200) => new Response(JSON.stringify(data), {status, headers:{"content-type":"application/json"}});
+      const callback = () => "http://localhost:8976/callback?code=fake-code&state=" +
+        (scenario === "bad-state" ? "wrong" : globalThis.spikeState);
+      if (url.pathname === "/.well-known/oauth-protected-resource/api/mcp") return json({resource:"http://localhost:5273/api/mcp", authorization_servers:[as]});
+      if (url.pathname === "/.well-known/oauth-authorization-server/auth/v1") return json({issuer:as, authorization_endpoint:as+"/oauth/authorize", token_endpoint:scenario === "remote-token" ? "https://production.example/token" : as+"/oauth/token"});
+      if (url.pathname === "/auth/v1/oauth/authorize") {
+        globalThis.spikeState = url.searchParams.get("state");
+        if (!url.searchParams.get("resource") || url.searchParams.get("code_challenge_method") !== "S256") throw new Error("PKCE/resource missing");
+        return new Response(null, {status:302, headers:{location:"http://localhost:5273/oauth/consent?authorization_id=fake-id"}});
+      }
+      if (url.pathname === "/auth/v1/token") return json({access_token:"fake-reader-token", refresh_token:"fake-reader-refresh", expires_in:3600, user:{id:"reader", email:"spike@example.test"}});
+      if (url.pathname === "/auth/v1/oauth/authorizations/fake-id") return json(scenario === "existing-consent" ? {redirect_url:callback()} : {client:{id:${JSON.stringify(CLIENT)}},redirect_uri:"http://localhost:8976/callback"});
+      if (url.pathname.endsWith("/consent")) return json({redirect_url:callback()});
+      if (url.pathname === "/auth/v1/oauth/token") {
+        console.log("TOKEN_EXCHANGE");
+        const form = new URLSearchParams(init.body);
+        if (form.get("client_secret") !== "fake-secret" || !form.get("code_verifier") || !form.get("resource")) throw new Error("bad token request");
+        if (scenario === "token-error") return json({refresh_token:"echoed-fake-refresh-token"}, 400);
+        const claims = Buffer.from(JSON.stringify({iss:as, client_id:${JSON.stringify(CLIENT)}, sub:"reader"})).toString("base64url");
+        return json({access_token:"header."+claims+".signature", refresh_token:"fake-refresh"});
+      }
+      if (url.pathname === "/api/mcp") return json({result:{}}, scenario === "mcp-denied" ? 401 : 200);
+      if (url.pathname === "/api/library") return json({}, scenario === "library-accepted" ? 200 : 401);
+      if (url.pathname === "/auth/v1/user") {
+        console.log("METADATA_PUT");
+        return json({}, scenario === "metadata-denied" ? 403 : 200);
+      }
+      throw new Error("unexpected request");
+    `;
+  }
+
+  it.each(["first-consent", "existing-consent", "metadata-denied"])("completes %s and cleans up only successful writes", (scenario) => {
+    const run = spike("flow", "http://127.0.0.1:54321", undefined, undefined,
+      flowFetch(scenario));
+    expect(run.status, run.output).toBe(0);
+    expect(run.output.match(/METADATA_PUT/g)?.length).toBe(scenario === "metadata-denied" ? 1 : 2);
+    expect(run.output).not.toContain("fake-refresh");
+  });
+
+  it.each(["remote-token", "bad-state", "token-error", "mcp-denied", "library-accepted"])("fails %s without leaking credentials or writing metadata", (scenario) => {
+    const run = spike("flow", "http://127.0.0.1:54321", undefined, undefined,
+      flowFetch(scenario));
+    expect(run.status).not.toBe(0);
+    expect(run.output).not.toContain("METADATA_PUT");
+    expect(run.output).not.toContain("echoed-fake-refresh-token");
+    if (["remote-token", "bad-state"].includes(scenario)) expect(run.output).not.toContain("TOKEN_EXCHANGE");
   });
 });

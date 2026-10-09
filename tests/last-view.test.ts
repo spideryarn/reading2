@@ -131,7 +131,7 @@ describe("rememberableSearch", () => {
     expect(hasArticleState("?debate=claims")).toBe(true);
   });
 
-  /* GPT Sol's F7 on plan 261009s: the sub-mode key was `peer-review` for the
+  /* GPT Sol's F7 on plan 261009w: the sub-mode key was `peer-review` for the
      day the mode was called Peer review. A lone `?peer-review=claims` is
      somebody's old link, so it must count as explicit article state and win
      over this browser's stored view. */

@@ -93,6 +93,9 @@ const PROMISES: Record<string, string> = {
   "Library.tsx › Search the library": "search",
   /* Enter asks the quick search now, without waiting for the pause (plan 261002h). */
   "DockQuickSearch.tsx › Quick search": "search",
+  /* The guide's search step: Enter presses the quick-search chip beside it,
+     as the Dock's box does (plan 261009u). */
+  "GuideNextSteps.tsx › Words to search this article for": "search",
   /* Enter goes to the first matching section (plan 261001s). */
   "PageContents.tsx › Search this page's sections": "search",
   /* Enter goes to the best match by setting the address (plan 261002b). */

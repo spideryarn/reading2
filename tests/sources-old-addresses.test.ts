@@ -7,12 +7,12 @@
  * and land on its default Bibliography (GPT Sol's F1 on plan 261009l). The
  * chat list's old `?chatfrom=debate|citations|peer-review` filters land on the
  * combined word (F5). The mode was called Peer review until 2026-10-09, when
- * it became Sources (plan 261009s § Old links still land).
+ * it became Sources (plan 261009w § Old links still land).
  *
  * The DOM half — the real router, nuqs and a band — is
  * tests/debate-navigation.test.tsx.
  * docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md § Stage 1,
- * docs/plans/261009s-peer-review-becomes-sources-all-the-way-down.md.
+ * docs/plans/261009w-peer-review-becomes-sources-all-the-way-down.md.
  */
 import { describe, expect, it } from "vitest";
 import { liftedLegacyHref, settleAddress } from "../src/web/router.js";

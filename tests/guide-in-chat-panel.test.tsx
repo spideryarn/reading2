@@ -9,9 +9,8 @@
  *   it opens the guide (GPT Sol's F2);
  * - **the greeting**, ours and free, asking in the conversation since plan
  *   261009i (no box): why you are reading when no reason is stored, About you
- *   quoted back when it is there, *Ask the guide where to start* only when a
- *   reason is stored, nothing asked or offered when the reason could not be
- *   read;
+ *   quoted back when it is there, three ways in while it is empty (plan
+ *   261009u), nothing asked when the reason could not be read;
  * - **the guide's offer to save** (plan 261009q), a card under its answer
  *   that writes only on a press, never over words changed since the guide
  *   offered it, once per double press, with an Undo that puts back only over
@@ -70,7 +69,7 @@ vi.mock("../src/web/lib/api.js", async () => {
 });
 
 const { ChatPanel } = await import("../src/web/ChatPanel.js");
-const { GUIDE_FIRST_QUESTION, GUIDE_START_LABEL } = await import("../src/web/GuideGreeting.js");
+const { GUIDE_STARTS } = await import("../src/web/GuideGreeting.js");
 const { OFFER_WORDS, UNDO_LABEL } = await import("../src/web/GuideSaveOffer.js");
 
 const AT = "2026-10-07T09:00:00.000Z";
@@ -220,7 +219,8 @@ describe("the guide's greeting", () => {
   };
   const button = (label: string) =>
     [...host.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === label);
-  const startButton = () => button(GUIDE_START_LABEL);
+  const startButton = () => button(GUIDE_STARTS[0]);
+  const startLabels = () => GUIDE_STARTS.filter((label) => button(label) !== undefined);
   /* What the greeting no longer draws under the first answer (plan 261009q). */
   const keepButton = () => button("Keep this as why you're reading");
   /** The reader answers: the same mount, now with their first message in it. */
@@ -237,7 +237,8 @@ describe("the guide's greeting", () => {
     expect(host.textContent).toContain("Hi, I'm your guide to Attention Is All You Need.");
     expect(host.textContent).toContain("Why are you reading it?");
     expect(host.querySelector("textarea#guide-purpose")).toBeNull();
-    expect(startButton()).toBeUndefined();
+    /* The three ways in, whatever is stored (plan 261009u). */
+    expect(startLabels()).toEqual([...GUIDE_STARTS]);
     expect(host.querySelector("h2")?.textContent).toBe("Guide");
   });
 
@@ -248,7 +249,7 @@ describe("the guide's greeting", () => {
     expect(host.textContent).toContain("why are you reading this one?");
   });
 
-  it("offers the start button, and asks nothing, when a reason is stored; the press sends the fixed question", async () => {
+  it("offers the three starts, and asks nothing, when a reason is stored; a press sends its words", async () => {
     reader = { ...reader, purpose: "I review for a journal" };
     await greeting();
     expect(host.textContent).toContain("You said you're reading it because “I review for a journal”.");
@@ -256,7 +257,7 @@ describe("the guide's greeting", () => {
     const start = startButton();
     expect(start).toBeDefined();
     act(() => start?.click());
-    expect(sent).toEqual([GUIDE_FIRST_QUESTION]);
+    expect(sent).toEqual([GUIDE_STARTS[0]]);
   });
 
   it("points at the profile only when a reason is stored and About you is empty", async () => {
@@ -274,7 +275,6 @@ describe("the guide's greeting", () => {
     reader = { ...reader, purposeFailed: true };
     await greeting();
     expect(host.textContent).not.toContain("Why are you reading");
-    expect(startButton()).toBeUndefined();
     await answer("For my journal club");
     expect(keepButton()).toBeUndefined();
   });
@@ -284,6 +284,8 @@ describe("the guide's greeting", () => {
     await answer("For my journal club\r\n next week  ");
     expect(host.textContent).toContain("Why are you reading it?");
     expect(keepButton()).toBeUndefined();
+    /* The starts go with the first message; the greeting stays. */
+    expect(startLabels()).toEqual([]);
     expect(patches).toEqual([]);
   });
 
@@ -493,5 +495,38 @@ describe("the guide's offer to save", () => {
     paint([chat], { threadId: chat.id });
     await settle();
     expect(host.querySelector(".guide-offer")).toBeNull();
+  });
+});
+
+/* Plan 261009u: the guide's next steps, as ChatPanel places them. What each
+   kind does is tests/guide-next-steps-row.test.tsx. */
+describe("the guide's next steps in the panel", () => {
+  const steps = (words: string) => [
+    { name: "offer_next_steps", label: "offered next steps", status: "done" as const, steps: [{ kind: "ask" as const, words }] },
+  ];
+  const twoAnswers = (last: "done" | "pending") =>
+    thread("spya-gdenxt", "guide", {
+      messages: [
+        { id: "spya-gdeq11", role: "user", text: "For my journal club.", createdAt: AT, status: "done" },
+        { id: "spya-gdea11", role: "assistant", text: "Start with the abstract.", createdAt: AT, status: "done", tools: steps("Older step") },
+        { id: "spya-gdeq12", role: "user", text: "And then?", createdAt: AT, status: "done" },
+        { id: "spya-gdea12", role: "assistant", text: "Then the method.", createdAt: AT, status: last, tools: last === "done" ? steps("Newer step") : [] },
+      ],
+    });
+  const labels = () => [...host.querySelectorAll('[aria-label="Next steps"] button')].map((b) => b.textContent);
+
+  it("draws the latest answer's steps only, with no tool line for them, and a press sends the words", async () => {
+    paint([CHAT], { guide: twoAnswers("done"), threadId: "spya-gdenxt" });
+    await settle();
+    expect(labels()).toEqual(["Newer step"]);
+    expect(host.textContent).not.toContain("offered next steps");
+    act(() => host.querySelector<HTMLButtonElement>('[aria-label="Next steps"] button')?.click());
+    expect(sent).toEqual(["Newer step"]);
+  });
+
+  it("draws no steps while an answer is arriving, not even the last one's", async () => {
+    paint([CHAT], { guide: twoAnswers("pending"), threadId: "spya-gdenxt" });
+    await settle();
+    expect(labels()).toEqual([]);
   });
 });

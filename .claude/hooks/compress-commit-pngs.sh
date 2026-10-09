@@ -63,35 +63,10 @@ command -v pngquant >/dev/null || quiet
 # receipts. Bash 3.2 and BSD tools need no GNU utilities or newer array builtins.
 HOOK_DIR=$(cd "$(dirname "$0")" && pwd) || quiet
 PAYLOAD="$payload" HOOK_DIR="$HOOK_DIR" python3 - <<'PYTHON'
-import fnmatch, hashlib, json, os, re, signal, subprocess, sys, time
+import hashlib, json, os, signal, subprocess, sys, time
 sys.dont_write_bytecode = True  # no __pycache__ in .claude/hooks
 sys.path.insert(0, os.environ["HOOK_DIR"])
 import commit_command  # the shared reading of what a commit carries
-
-# In the command text, a path starts at the start or after one of these...
-BEFORE = r"(?:^|(?<=[\s'\"=;&|(<>]))"
-# ...and ends at the end or before one of these.
-AFTER = r"(?=$|[\s'\";&|)<>])"
-WORD = r"[^\s'\";&|)<>/]*"  # one path component, which may be a glob
-
-
-def leading_cd(cmd, cwd):
-    """Where a supported leading `cd <dir> &&` (or `;`) goes, or cwd; None if uncertain."""
-    m = re.match(r"\s*cd\s+(?:'([^']*)'|\"([^\"$`\\]*)\"|([^\s;&|<>()$`'\"\\]+))\s*(?:&&|;|\n)", cmd)
-    if not m:
-        # Do not apply paths relative to the payload cwd when the shell will first change it
-        # in a form we do not understand (an escaped path, expansion, cd --, ||, ...).
-        return None if re.match(r"\s*cd(?:\s|$)", cmd) else os.path.realpath(cwd)
-    single, double, bare = m.groups()
-    # The shell expands a leading tilde only when it is unquoted.
-    target = bare if bare is not None else single if single is not None else double
-    if target == "" or (bare is not None and bare.startswith("-")):
-        return None
-    if bare is not None:
-        target = os.path.expanduser(target)
-    target = os.path.join(cwd, target)
-    return os.path.realpath(target) if os.path.isdir(target) else None
-
 
 def docs_pngs(root):
     """Every PNG on disk under docs/, repo-relative, symlinked directories not followed. From the
@@ -102,29 +77,6 @@ def docs_pngs(root):
     return found
 
 
-def named(cmd, name, root, cwd):
-    """Does the command text name this file: the file itself, its folder as a whole word, or its
-    folder as the base of a glob that matches it (`docs/plans/x-shots/*.png`)? Repo-relative,
-    cwd-relative or absolute. A further ancestor counts only as a whole word, so a command that
-    names `docs/plans/a.md` names no screenshot in docs/plans."""
-    def spellings(rel):
-        absolute = os.path.join(root, rel)
-        base = {s for s in (rel, absolute, os.path.relpath(absolute, cwd)) if s not in ("", ".")}
-        return base | {"./" + s for s in base if not os.path.isabs(s)}
-    if any(re.search(BEFORE + re.escape(s) + AFTER, cmd) for s in spellings(name)):
-        return True
-    parent, base = os.path.split(name)
-    for s in spellings(parent):
-        for m in re.finditer(BEFORE + re.escape(s) + "(?:/(" + WORD + "))?" + AFTER, cmd):
-            pattern = m.group(1)
-            if not pattern or (re.search(r"[*?\[]", pattern) and fnmatch.fnmatchcase(base, pattern)):
-                return True
-    parent = os.path.dirname(parent)
-    while parent:
-        if any(re.search(BEFORE + re.escape(s) + "/?" + AFTER, cmd) for s in spellings(parent)):
-            return True
-        parent = os.path.dirname(parent)
-    return False
 
 def main():
     d = json.loads(os.environ["PAYLOAD"])
@@ -139,7 +91,7 @@ def main():
     if commit is not None:
         cwd, paths = commit.cwd, commit.paths
     else:
-        cwd, paths = leading_cd(cmd, cwd), None
+        cwd, paths = commit_command.leading_cd(cmd, cwd), None
         if cwd is None:
             return
 
@@ -218,7 +170,7 @@ def main():
     files = set()
     restage = {}
     if paths is None:
-        files = {name for name in docs_pngs(root) if safe(name) and named(cmd, name, root, cwd)}
+        files = {name for name in docs_pngs(root) if safe(name) and commit_command.named(cmd, name, root, cwd)}
         files = changed_from_head(files)
     elif paths:
         added = {os.path.relpath(a, root) for a in commit.added}

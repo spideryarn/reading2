@@ -191,7 +191,7 @@ describe("the ranking normalises what the reader typed", () => {
    * this one — so the two cannot disagree.
    */
   it("collapses runs of internal whitespace", () => {
-    /* Sources by its old name, an alias since 2026-10-09 (plans 261009l, 261009s), Referee after it inside `for peer reviewers`. */
+    /* Sources by its old name, an alias since 2026-10-09 (plans 261009l, 261009w), Referee after it inside `for peer reviewers`. */
     expect(rankModes("peer  review", MODES)).toEqual(["sources", "referee"]);
     expect(rankModes("PEER \t REVIEW ", MODES)).toEqual(["sources", "referee"]);
   });

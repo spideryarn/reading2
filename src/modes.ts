@@ -158,7 +158,7 @@ export const MODES = [
      spya-egmn6r). `?mode=peer-review` still opens it, through
      `RETIRED_MODES` below.
      docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md,
-     docs/plans/261009s-peer-review-becomes-sources-all-the-way-down.md,
+     docs/plans/261009w-peer-review-becomes-sources-all-the-way-down.md,
      docs/project/sources.md. */
   "sources",
   /* The fifteenth, 2026-09-07, and the only one so far that is an *instrument*
@@ -359,7 +359,7 @@ export const RETIRED_MODES: Readonly<Record<string, BandMode>> = {
   /* **Sources was called Peer review until 2026-10-09** (`?mode=peer-review`,
      `?peer-review=<sub-mode>`), renamed for its clash with Referee. Its
      sub-mode word is lifted with it by `liftLegacySources`, for the reason
-     above. docs/plans/261009s-peer-review-becomes-sources-all-the-way-down.md. */
+     above. docs/plans/261009w-peer-review-becomes-sources-all-the-way-down.md. */
   "peer-review": "sources",
 };
 

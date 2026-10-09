@@ -22,7 +22,7 @@ the experimental switch, in every reader's bar, since the day it was made.
 It was called **Peer review** for its first day; § The name says why it is Sources now. The plan,
 its review and what is left to build are
 [261009l](../plans/261009l-peer-review-mode-merges-citations-and-debate.md), and the rename is
-[261009s](../plans/261009s-peer-review-becomes-sources-all-the-way-down.md). The depth on each list
+[261009w](../plans/261009w-peer-review-becomes-sources-all-the-way-down.md). The depth on each list
 stays where it was: **[citations.md](citations.md)** for Bibliography, **[debate.md](debate.md)**
 for Reception and Claims. This page owns the merge.
 
@@ -182,7 +182,7 @@ it, rename it to a word with no clash, or rename Referee
 > — Greg, 2026-10-09 (reply `spya-egmn6r` to q-xf2xvb)
 
 So the mode is Sources all the way down
-([261009s](../plans/261009s-peer-review-becomes-sources-all-the-way-down.md)), in stages. The mode's
+([261009w](../plans/261009w-peer-review-becomes-sources-all-the-way-down.md)), in stages. The mode's
 own word went first: the label, the catalogue, `?mode=sources`, `?sources=`, the help page, the
 remembered view, the chat filter and every `Sources…` identifier. **The stored names still keep the
 old words until that plan's later stages**: the `citations`, `debate` and `debate-claims` steps,

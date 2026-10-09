@@ -1405,7 +1405,7 @@ export function learnInSearch(search: string): LearnView {
  * since 2026-10-09 (docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md).
  * It was `?peer-review=` while the mode was called Peer review, earlier that
  * day, and an old one is lifted to this before anything reads it (router.ts §
- * `liftLegacySources`; docs/plans/261009s-peer-review-becomes-sources-all-the-way-down.md).
+ * `liftLegacySources`; docs/plans/261009w-peer-review-becomes-sources-all-the-way-down.md).
  *
  * `bibliography` is what the piece cites (the Citations mode until that day);
  * `reception` is what others have written about the piece itself; `claims` is
