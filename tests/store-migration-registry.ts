@@ -2856,6 +2856,13 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* 261007j: a voucher's starter article. The same shape again, with its own
      stem and its own articles, minted per run; the Auth lookup replaced. */
   "tests/voucher-starter.test.ts": "private-postgres",
+  /* 261009u: author gifts. The same shape as the file above — its own stem,
+     its own articles minted per run, the Auth lookup replaced, every send to
+     an injected fetch, and the after-response lookup replaced by a recorder. */
+  "tests/author-gifts.test.ts": "private-postgres",
+  /* Plan 261009u, stage 2: its own scratch article, a gift and lookups on it,
+     and the ledger rows a fake call writes under the lookup's run id. */
+  "tests/author-lookup-start.test.ts": "private-postgres",
   "tests/blocks-baseline.test.ts": "private-postgres",
   "tests/candidates-route.test.ts": "private-postgres",
   "tests/chat-anchor.test.ts": "private-postgres",

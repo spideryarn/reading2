@@ -6807,6 +6807,192 @@ export const billingVoucherEmails = spideryarn.table(
 );
 
 /**
+ * **An author gift: the draft of a gift voucher for the author of one of the
+ * administrator's own articles** — made from the add page or `/admin/vouchers`,
+ * filled in by a web-search lookup, and turned into an ordinary voucher only
+ * when the administrator presses *Send*.
+ * docs/plans/261009u-author-gift-draft-voucher-from-the-add-page.md (D1);
+ * src/store/pg-author-gifts.ts is the only writer.
+ *
+ * **A draft is not a voucher.** It lives here rather than in `billing_vouchers`
+ * so that the claim, the entitlement sum, the gift-audience sum and the email
+ * queue never see one: nothing is emailed automatically because there is no
+ * row of theirs to email from. *Send* goes through `createVoucher` with
+ * `voucher_id` as the voucher's id, so a repeated *Send* is that create's
+ * replay and queues nothing.
+ *
+ * **One per article, for good** (`article_id` unique): a second press, or a
+ * replay after *Send*, finds this row. Discarding is `discarded_at`, and
+ * restoring clears it, so there is never a second row to collide with.
+ *
+ * **The status is derived, never stored**: discarded, draft, sending (frozen,
+ * and no voucher with `voucher_id` yet) or sent (that voucher exists).
+ *
+ * **The freeze** is `send_started_at` with `send_attempt`, set together by
+ * one conditional `UPDATE`. From then on the fields the voucher carries do not
+ * change; `notes` still may (R2-F7). The attempt token is what lets a refused
+ * starter unfreeze its own attempt and no newer one (R2-F3).
+ *
+ * Admin-only throughout: `notes` is never in an email or anything a reader
+ * sees. Every write is under `/api/admin/author-gifts`, behind the namespace
+ * gate.
+ */
+export const authorGifts = spideryarn.table(
+  "author_gifts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** The gift's identity. Deleting the article deletes its draft. */
+    articleId: uuid("article_id")
+      .notNull()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    /** Minted with the row: the id the voucher gets on *Send*. */
+    voucherId: uuid("voucher_id").notNull().defaultRandom(),
+    /**
+     * **The starter's slug, frozen when the gift is made** (R2-F4): it is part
+     * of the voucher create's identity, so a rename later still replays.
+     */
+    starterSlug: text("starter_slug").notNull(),
+    /** The administrator who made it; the voucher's `created_by` whoever sends it. */
+    createdBy: uuid("created_by").notNull(),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    /** Normalised as the voucher's is, so *Send* can hand it over unchanged. Null is no address yet. */
+    email: text("email"),
+    /** One line, as `cleanRecipientName` leaves it (src/admin-vouchers.ts). */
+    recipientName: text("recipient_name"),
+    /** The note to the recipient, as `noteText` leaves it. */
+    recipientNote: text("recipient_note"),
+    articles: integer("articles").notNull().default(20),
+    /**
+     * **The administrator's comments field** (D6): where the address was seen,
+     * what was found about the author, a suggested message. The lookup appends;
+     * the administrator edits. Never sent to anybody.
+     */
+    notes: text("notes"),
+    notesUpdatedAt: timestamp("notes_updated_at", { withTimezone: true }),
+    /**
+     * **Which lookup supplied the current address and name** — null when the
+     * administrator typed it, or edited it since (Sol's F7). Set null if the
+     * lookup row goes.
+     */
+    emailLookupId: uuid("email_lookup_id").references((): AnyPgColumn => authorLookups.id, {
+      onDelete: "set null",
+    }),
+    nameLookupId: uuid("name_lookup_id").references((): AnyPgColumn => authorLookups.id, {
+      onDelete: "set null",
+    }),
+    /** *Send* was pressed; the voucher's fields are frozen from here. */
+    sendStartedAt: timestamp("send_started_at", { withTimezone: true }),
+    /** The freeze's own token (R2-F3). Set with `send_started_at`, cleared with it. */
+    sendAttempt: uuid("send_attempt"),
+    /** Discarded, and when. Restoring clears it. */
+    discardedAt: timestamp("discarded_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("author_gifts_article").on(t.articleId),
+    uniqueIndex("author_gifts_voucher").on(t.voucherId),
+    /* The voucher table's rule, so *Send* never hands `createVoucher` an
+       address its CHECK would refuse. */
+    check(
+      "author_gifts_email_normalised",
+      sql`${t.email} is null or (${t.email} = lower(btrim(${t.email})) and ${t.email} like '%_@_%')`,
+    ),
+    check("author_gifts_articles_range", sql`${t.articles} between 1 and 1000`),
+    /* Ceilings that catch a runaway; the app's limits are lower
+       (docs/project/sql.md § "Except a size limit"). */
+    check("author_gifts_notes_length", sql`${t.notes} is null or char_length(${t.notes}) <= 1000000`),
+    check(
+      "author_gifts_recipient_note_length",
+      sql`${t.recipientNote} is null or char_length(${t.recipientNote}) <= 1000000`,
+    ),
+    check(
+      "author_gifts_recipient_name_length",
+      sql`${t.recipientName} is null or char_length(${t.recipientName}) <= 10000`,
+    ),
+    check("author_gifts_starter_slug_length", sql`char_length(${t.starterSlug}) <= 10000`),
+    /* Nothing is sent without an address, and a discarded gift is not sent. */
+    check("author_gifts_send_has_email", sql`${t.sendStartedAt} is null or ${t.email} is not null`),
+    check("author_gifts_send_not_discarded", sql`${t.sendStartedAt} is null or ${t.discardedAt} is null`),
+    /* The freeze is a moment and its token, or neither. */
+    check("author_gifts_send_attempt_together", sql`num_nonnulls(${t.sendStartedAt}, ${t.sendAttempt}) <> 1`),
+  ],
+);
+
+/**
+ * **One web-search lookup for an author gift, and what it found** — one row
+ * per run (plan 261009u, D5). src/store/pg-author-gifts.ts is the only writer.
+ *
+ * **Pending, claimed, finished.** `beginLookup` inserts it pending (`outcome`
+ * null) under the gift's lock; the after-response task claims it by setting
+ * `run_id` — null until then (R2-F6) — and only a claimed row is spent on;
+ * `finishLookup` sets `outcome` and `finished_at` under compare-and-swap on
+ * `outcome is null`, so a row marked `stale` meanwhile is not overwritten.
+ *
+ * **At most one unfinished lookup per gift**, as an index rather than a hope:
+ * `author_lookups_one_pending`.
+ *
+ * **Cost has one home, the ledger.** `run_id` is the lookup's own collector,
+ * so `ai_calls.run_id` names exactly its calls, retries and failures included.
+ * Nothing about money is copied here.
+ *
+ * The found fields are what survived the server's rules (D4): a URL that was
+ * among the search results, an address seen exactly in one. `failure` is a
+ * reason — a status code, an error name, `stale` — never the provider's prose.
+ */
+export const authorLookups = spideryarn.table(
+  "author_lookups",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    authorGiftId: uuid("author_gift_id")
+      .notNull()
+      .references(() => authorGifts.id, { onDelete: "cascade" }),
+    /** When it was asked for: the start. */
+    createdAt: createdAt(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    /** Null while pending; then `address`, `author`, `nothing` or `failed`. */
+    outcome: text("outcome"),
+    failure: text("failure"),
+    authorName: text("author_name"),
+    authorSourceUrl: text("author_source_url"),
+    /** An address seen in a search result or the article, normalised. */
+    email: text("email"),
+    emailSourceUrl: text("email_source_url"),
+    /** An address the model gave that no result showed. Never written into the draft. */
+    suggestedEmail: text("suggested_email"),
+    contactUrl: text("contact_url"),
+    /** How many searches the provider says ran (Sol's F10). */
+    searches: integer("searches"),
+    /** The lookup's own collector: the key into `ai_calls`. Null until claimed. */
+    runId: uuid("run_id"),
+    model: text("model"),
+  },
+  (t) => [
+    check("author_lookups_outcome", sql`${t.outcome} is null or ${t.outcome} in ('address', 'author', 'nothing', 'failed')`),
+    check("author_lookups_finished_together", sql`(${t.finishedAt} is null) = (${t.outcome} is null)`),
+    check("author_lookups_failure_only_failed", sql`${t.failure} is null or ${t.outcome} = 'failed'`),
+    check("author_lookups_searches", sql`${t.searches} is null or ${t.searches} >= 0`),
+    check(
+      "author_lookups_text_lengths",
+      sql`coalesce(char_length(${t.failure}), 0) <= 10000
+          and coalesce(char_length(${t.authorName}), 0) <= 10000
+          and coalesce(char_length(${t.authorSourceUrl}), 0) <= 10000
+          and coalesce(char_length(${t.email}), 0) <= 10000
+          and coalesce(char_length(${t.emailSourceUrl}), 0) <= 10000
+          and coalesce(char_length(${t.suggestedEmail}), 0) <= 10000
+          and coalesce(char_length(${t.contactUrl}), 0) <= 10000
+          and coalesce(char_length(${t.model}), 0) <= 10000`,
+    ),
+    /* The list's runs of one gift, newest first. */
+    index("author_lookups_gift").on(t.authorGiftId, t.createdAt),
+    /* One lookup in flight per gift: `beginLookup` checks under the gift lock,
+       and this makes a second pending row impossible rather than unlikely. */
+    uniqueIndex("author_lookups_one_pending")
+      .on(t.authorGiftId)
+      .where(sql`${t.outcome} is null`),
+  ],
+);
+
+/**
  * **Every new ingest an owner is charged for, reserved before it runs and
  * settled when it ends** — and, since 2026-09-30, every High-powered AI upgrade,
  * born settled (`kind`). One row per *attempt to spend* — not per article, and

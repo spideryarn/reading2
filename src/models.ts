@@ -950,6 +950,17 @@ export type Task =
    * answer it feeds.
    */
   | "dig-deeper-search"
+  /**
+   * **Who wrote an article, and how to reach them** — the author gift's one
+   * lookup (src/author-lookup.ts, plan 261009u D4). Admin-only, pressed by an
+   * administrator for one article at a time, run after the response. Chat
+   * wire because `openrouter:web_search` is a server tool there and nowhere
+   * else; its own job so `/admin/costs` and the gift's row can say what a
+   * lookup costs. **Always standard power**: it is not one of the article's
+   * modes, so the article's High-powered AI does not move it — the caller
+   * passes `"standard"` explicitly.
+   */
+  | "author-lookup"
   | "link-summary";
 
 /**
@@ -1235,6 +1246,11 @@ export const TASK_TIER: Record<Task, Tier> = {
   "citations-find": "capable",
   /* `citations-find`'s tier and its reason: the same prompt, the same pick. */
   "upload-source-guess": "capable",
+  /* Capable, for `citations-find`'s reason: the job is weighing a handful of
+     search results and saying which, if any, names the author and an address.
+     Code checks every URL and the address against the results; a shallow pick
+     is an empty draft Greg fills by hand. */
+  "author-lookup": "capable",
   /* Explain's tier, because it is explain's kind of work: prose about the
      article, with web search, that a reader reads as it arrives. */
   "citation-investigate": "capable",
@@ -1498,6 +1514,8 @@ export const TASK_WIRE: Record<Task, Wire> = {
   "citations-find": "chat",
   /* Chat, for `citations-find`'s reason: it is the same web-search call. */
   "upload-source-guess": "chat",
+  /* Chat, for `citations-find`'s reason — the web-search server tool. */
+  "author-lookup": "chat",
   /* Chat, for `citations-find`'s reason — the web-search server tool — and
      because a reader watches it stream. */
   "citation-investigate": "chat",
@@ -1631,6 +1649,9 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
      running the real feature against another model. */
   "citations-find": "SPIDERYARN_CITATIONS_FIND_MODEL",
   "upload-source-guess": "SPIDERYARN_UPLOAD_SOURCE_GUESS_MODEL",
+  /* Every chat-wire task has one (tests/models.test.ts); for a comparison run
+     of whether another model finds the author as often. */
+  "author-lookup": "SPIDERYARN_AUTHOR_LOOKUP_MODEL",
   "citation-investigate": "SPIDERYARN_CITATION_INVESTIGATE_MODEL",
   /* Plan 261001a says this runs on the quick check's model, not merely its
      tier. Share the override too: otherwise setting the quick check's model

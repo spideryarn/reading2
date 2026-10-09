@@ -686,6 +686,16 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
+  /* **The author gift's lookup** (src/author-lookup.ts) — `citations-find`'s
+     policy for its reason: it sends `openrouter:web_search`, and a fallback
+     that dropped the tool would answer from memory. Caught there too — no
+     result, no URL kept, no address "seen" — but the draft would say *found
+     nothing* for a search that never ran. */
+  "author-lookup": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { order: ["anthropic"], require_parameters: true },
+  },
   /* **Citations' *Investigate*** (src/citation-investigate.ts) — explain's
      route and both of its reasons: the article is a cached first part, so the
      `order` pin keeps it landing on the prefix it wrote, and the request pins
@@ -1159,6 +1169,11 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
   },
   "upload-source-guess": {
     providerDefault: "Not measured. One uploaded paper's title and a web search, not the article.",
+  },
+  "author-lookup": {
+    providerDefault:
+      "Not measured. An article's two ends and up to three web searches, a short JSON answer out; " +
+      "its ceiling is src/author-lookup.ts § ANSWER_TOKENS.",
   },
   "citation-investigate": {
     providerDefault:

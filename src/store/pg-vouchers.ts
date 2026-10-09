@@ -44,6 +44,7 @@ import { type Articles, type Points, articles as articlesOf, budgetFor, ingestHe
 import type { Gift } from "../billing-plan.js";
 import { getDb } from "../db/client.js";
 import { articleRevisions, articles, billingAccounts, billingVouchers } from "../db/schema.js";
+import { looksLikeEmail, normaliseEmail } from "../email-address.js";
 import { noteText } from "../email.js";
 import { isSlug } from "../ingest.js";
 import { log } from "../log.js";
@@ -85,20 +86,9 @@ export const VOUCHER_MAX_ARTICLES = 1000;
 /** The longest private note the app accepts; the table's CHECK is a much higher ceiling. */
 export const VOUCHER_NOTE_MAX = 500;
 
-/**
- * **An address as the table stores it**: trimmed and lower-cased. The check
- * constraint `billing_vouchers_email_normalised` refuses anything else, so a
- * writer that forgets this fails loudly rather than storing an address the
- * claim can never match.
- */
-export function normaliseEmail(raw: string): string {
-  return raw.trim().toLowerCase();
-}
-
-/** A shape check, not a deliverability check: something, an @, something. */
-export function looksLikeEmail(normalised: string): boolean {
-  return /^[^\s@]+@[^\s@]+$/.test(normalised) && normalised.length <= 320;
-}
+/* The address rules live in an import-free module so that code which must not
+   load the database can share them; re-exported here for this store's callers. */
+export { looksLikeEmail, normaliseEmail };
 
 /* ------------------------------------------------------------- the claim -- */
 
@@ -683,17 +673,20 @@ export function parseVoucherPatch(body: unknown): Parsed<VoucherPatch> {
   return { ok: true, value: patch };
 }
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
+/* The field parsers below are exported for src/store/pg-author-gifts.ts: an
+   author gift is a voucher's draft, so it takes the voucher's rules from here
+   rather than a copy of them (plan 261009u). */
+export function isPlainObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function parseEmail(value: unknown): Parsed<string> {
+export function parseEmail(value: unknown): Parsed<string> {
   if (typeof value !== "string") return { ok: false, message: "email must be a string." };
   const email = normaliseEmail(value);
   return looksLikeEmail(email) ? { ok: true, value: email } : { ok: false, message: "That is not an email address." };
 }
 
-function parseArticles(value: unknown): Parsed<number> {
+export function parseArticles(value: unknown): Parsed<number> {
   return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= VOUCHER_MAX_ARTICLES
     ? { ok: true, value }
     : { ok: false, message: `articles must be a whole number from 1 to ${VOUCHER_MAX_ARTICLES}.` };
@@ -708,7 +701,7 @@ function parseArticles(value: unknown): Parsed<number> {
  * **Counted in code points**, as Postgres' `char_length` counts, not in UTF-16
  * units as `.length` does, so an emoji-heavy note is not refused early.
  */
-function parseNote(value: unknown, field: "note" | "recipientNote" = "note"): Parsed<string | null> {
+export function parseNote(value: unknown, field: "note" | "recipientNote" = "note"): Parsed<string | null> {
   if (value === null) return { ok: true, value: null };
   if (typeof value !== "string") return { ok: false, message: `${field} must be a string or null.` };
   const tooLong = (text: string) => [...text].length > VOUCHER_NOTE_MAX;
@@ -735,7 +728,7 @@ function parseNote(value: unknown, field: "note" | "recipientNote" = "note"): Pa
  * break or a control character inside it becomes a space, and blank is none.
  * Counted in code points, as `parseNote` counts and for its reason.
  */
-function parseName(value: unknown): Parsed<string | null> {
+export function parseName(value: unknown): Parsed<string | null> {
   if (value === null) return { ok: true, value: null };
   if (typeof value !== "string") return { ok: false, message: "recipientName must be a string or null." };
   if ([...value].length > RECIPIENT_NAME_MAX) {
