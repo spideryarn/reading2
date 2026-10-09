@@ -272,8 +272,11 @@ under it, and then the five folders that hold the project's memory.
 
 - **[positioning.md](positioning.md)** — what the website says, who it says it to first, and what
   the product is called; the decisions, in Greg's words, and the interview that turns them into copy.
-- **[marketing.md](marketing.md)** — how people come to hear about it: who we go looking for
-  first, the experiments, and the ideas not yet tried.
+- **[marketing-overview.md](marketing-overview.md)** — how people come to hear about it: who we
+  go looking for first, and every idea with its status. The hub for:
+  - **[marketing-author-gifts.md](marketing-author-gifts.md)** — giving people their own writing in
+    Spideryarn, and the admin tool that makes it cheap.
+  - **[marketing-talks.md](marketing-talks.md)** — where Greg could give a talk, and what kind.
 - **[open-questions.md](open-questions.md)** — the calls nobody has made yet, each with a
   recommendation so nobody is blocked. It should shrink: when a question gets decided, the answer
   goes into the doc that owns it and the question is deleted.
