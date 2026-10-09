@@ -133,8 +133,12 @@ import {
   wasAborted,
 } from "./debate-journal.js";
 import { mintId } from "./ids.js";
+import type { AllowanceTaken, FetchAllowanceStore, RatePolicy } from "./store/contracts.js";
 import {
   ANSWER_OVERFLOWED_FIXED_ASK,
+  DEBATE_CHECK_BUSY,
+  DEBATE_CHECK_LIMITED,
+  DEBATE_CHECK_RESTING,
   DEBATE_SEARCH_DID_NOT_RUN,
   MODEL_REFUSED,
   PROVIDER_UNREADABLE,
@@ -2115,12 +2119,80 @@ export function blockTextById(blocks: readonly Block[]): Map<string, ArticleBloc
 export const CHECK_PROMPT_VERSION = "debate-check/1";
 
 /**
- * **How long one check may run before it is abandoned.** Under Vercel's 800 s
- * ceiling for the request it rides on, with the margin the pipeline's 740 s
- * self-abort keeps (src/jobs.ts). A measured pass B took 602 s once; most take
- * about 90.
+ * **How long one check may run before it is abandoned.** 360 s, the budget the
+ * Debate step gives its own comparable calls (src/jobs.ts § `STEP_BUDGET_MS`,
+ * `debate`), because a check is one search call. A pass B took 602 s once in
+ * the legacy two-search shape; the step's measured runs since have a p90 of
+ * 115 s and a maximum of 162 s. A check that hits this is stored as an error,
+ * and the reader may press again.
+ *
+ * Was 720 s until GPT Sol's E1 and E6 (plan 261008i, stage 3 review): the
+ * allowance lease and the sweep's grace are both derived from this, so a
+ * shorter deadline frees a dead process's slot sooner.
  */
-export const DEBATE_CHECK_TIMEOUT_MS = 720_000;
+export const DEBATE_CHECK_TIMEOUT_MS = 360_000;
+
+/**
+ * **The check's own allowance**: 10 an hour, two at once, 30 a day per reader,
+ * and a global fuse of 100 a day across every reader. Its own bucket,
+ * `debate-check`, rather than Dig deeper's, because Dig deeper's lease (170 s)
+ * is sized for Dig deeper's calls: a check outliving its lease stops holding
+ * its concurrency slot, and then `concurrency: 2` holds nothing (GPT Sol's E1).
+ *
+ * **Sized from the plan's quoted cost**, about $0.20 a check (plan 261008i §
+ * The cost line): a reader's day at the very worst is 30 × $0.20 ≈ $6, and the
+ * fuse is 100 × $0.20 ≈ $20 a day for everybody together. The numbers are a
+ * first guess and **Greg's to move**.
+ *
+ * The lease is the check's deadline plus a minute, so a slot is held for the
+ * whole call, and a process that dies mid-check frees it soon after.
+ */
+export const DEBATE_CHECK_RATE_POLICY: RatePolicy = {
+  fills: 10,
+  windowMs: 60 * 60 * 1000,
+  concurrency: 2,
+  leaseMs: DEBATE_CHECK_TIMEOUT_MS + 60_000,
+  daily: { fills: 30, globalFills: 100, windowMs: 24 * 60 * 60 * 1000 },
+};
+
+function checkRefusedBy(kind: Exclude<AllowanceTaken["kind"], "allowed">): Error {
+  const refuse = (status: number, message: string) => Object.assign(new Error(message), { status });
+  switch (kind) {
+    case "concurrency":
+      return refuse(429, DEBATE_CHECK_BUSY);
+    case "rate":
+      return refuse(429, DEBATE_CHECK_LIMITED);
+    case "global":
+      return refuse(503, DEBATE_CHECK_RESTING);
+    default: {
+      const never: never = kind;
+      return never;
+    }
+  }
+}
+
+/**
+ * **Take one check's allowance, or throw the refusal** — a 429 or a 503 in a
+ * check's words, which the route answers as JSON before its stream opens.
+ * src/dig-deeper.ts § `admitDig` is the shape. The function it returns frees
+ * the slot once, however often it is called.
+ */
+export async function admitDebateCheck(
+  allowance: Pick<FetchAllowanceStore, "take" | "finish">,
+): Promise<() => Promise<void>> {
+  const taken = await allowance.take("debate-check", DEBATE_CHECK_RATE_POLICY);
+  if (taken.kind !== "allowed") {
+    log("model").warn({ why: taken.kind }, "debate check: allowance spent");
+    throw checkRefusedBy(taken.kind);
+  }
+  const lease = taken.id;
+  let freed = false;
+  return async () => {
+    if (freed) return;
+    freed = true;
+    await allowance.finish(lease);
+  };
+}
 
 /** Kept rows per claim in one check. Rows past it are counted, never silently dropped. */
 export const MAX_CHECK_ROWS_PER_CLAIM = MAX_CLAIM_ROWS;

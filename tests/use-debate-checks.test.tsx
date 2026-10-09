@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
- * The checks hook's two recovery paths: another tab becomes visible to this
- * one, and a broken SSE is reconciled before the same picks can be pressed
- * again. Plan 261008i stage 3.
+ * The checks hook's recovery paths: another tab becomes visible to this one,
+ * a broken SSE is reconciled before the same picks can be pressed again, and
+ * overlapping reads land newest-wins. Plan 261008i stage 3.
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -19,7 +19,9 @@ const wire = vi.hoisted(() => ({
 vi.mock("../src/web/lib/api.js", () => ({
   apiFetch: wire.apiFetch,
   failure: async () => new Error("request refused"),
-  readJson: async () => wire.getBodies.shift(),
+  /* A reply that carries its own body answers with it, so a case can settle
+     overlapping reads out of order; otherwise the next queued body. */
+  readJson: async (res: { jsonBody?: unknown } | undefined) => res?.jsonBody ?? wire.getBodies.shift(),
 }));
 
 vi.mock("../src/web/lib/sse.js", async (importOriginal) => ({
@@ -128,6 +130,63 @@ describe("a broken answer stream", () => {
 
     expect(recovered).toBe(true);
     expect(hook.sending).toBe(false);
+    expect(hook.checks).toEqual([stored("done")]);
+  });
+});
+
+describe("overlapping reads (GPT Sol's E11)", () => {
+  it("never lets an older read's reply overwrite a newer one's", async () => {
+    wire.getBodies.push({ checks: [] });
+    await act(async () => root.render(createElement(Harness)));
+    await settle();
+
+    let olderReply!: (value: unknown) => void;
+    let newerReply!: (value: unknown) => void;
+    wire.apiFetch.mockImplementationOnce(() => new Promise((resolve) => (olderReply = resolve)));
+    wire.apiFetch.mockImplementationOnce(() => new Promise((resolve) => (newerReply = resolve)));
+
+    let older!: Promise<void>;
+    let newer!: Promise<void>;
+    act(() => {
+      older = hook.refresh();
+      newer = hook.refresh();
+    });
+    await act(async () => {
+      newerReply({ ok: true, body: {}, jsonBody: { checks: [stored("done")] } });
+      await newer;
+    });
+    expect(hook.checks).toEqual([stored("done")]);
+
+    await act(async () => {
+      olderReply({ ok: true, body: {}, jsonBody: { checks: [stored("pending")] } });
+      await older;
+    });
+    expect(hook.checks).toEqual([stored("done")]);
+  });
+
+  it("never lets a read sent before the answer frame overwrite the answer", async () => {
+    wire.getBodies.push({ checks: [] });
+    await act(async () => root.render(createElement(Harness)));
+    await settle();
+
+    let staleReply!: (value: unknown) => void;
+    wire.apiFetch.mockImplementationOnce(() => new Promise((resolve) => (staleReply = resolve)));
+    let stale!: Promise<void>;
+    act(() => {
+      stale = hook.refresh();
+    });
+
+    wire.apiFetch.mockImplementationOnce(async () => ({ ok: true, body: {} }));
+    wire.readAnswerStream.mockImplementationOnce(async () => stored("done"));
+    await act(async () => {
+      await hook.check({ claimIds: [TARGET.claimId] });
+    });
+    expect(hook.checks).toEqual([stored("done")]);
+
+    await act(async () => {
+      staleReply({ ok: true, body: {}, jsonBody: { checks: [stored("pending")] } });
+      await stale;
+    });
     expect(hook.checks).toEqual([stored("done")]);
   });
 });

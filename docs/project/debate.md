@@ -122,11 +122,24 @@ address drawn once. Nothing searches by itself: only these two buttons spend.
 **What stops a press spending by accident.** The press is the only trigger; the list must still
 match the article (a stale list is read-only, and the server answers 409 before anything else);
 **one check per article at a time**, held by Postgres (a partial unique index on
-`debate_claim_checks`, so two tabs pressing at once get one search and one 409); and the shared
-**Dig deeper allowance** (`admitDig`, `src/dig-deeper.ts`: 20 an hour, 60 a day, two at once, a
-global 100 a day), taken after every free refusal and before the model. The button is held from the
-press until the stored answer has been read, and while another tab's check is out. A closed tab
-does not cancel a check: its answer is stored and the next read finds it.
+`debate_claim_checks`, so two tabs pressing at once get one search and one 409); and the check's
+own **allowance** (`DEBATE_CHECK_RATE_POLICY`, `src/debate.ts`: 10 an hour, 30 a day per reader,
+two at once, a global fuse of 100 a day), taken after every free refusal and before the model. At
+about 20 cents a check that is about $6 a day for one reader at the very worst and about $20 a day
+for everybody; the numbers are Greg's to move. It is its own bucket, not Dig deeper's, because
+Dig deeper's lease (170 s) is shorter than a check may run, and a check that outlives its lease
+stops holding its concurrency slot; the check's lease is its deadline (360 s) plus a minute. The
+button is held from the press until the stored answer has been read, and while another tab's check
+is out. A closed tab does not cancel a check: its answer is stored and the next read finds it. If
+storing the answer fails, the write is tried twice more before it is given up.
+
+**Where a check is drawn comes from what it stored**, not only from the current list's ids, so
+nothing paid for is hidden. A list made again mints new ids, so a check's claim is drawn under the
+listed claim with the same id, or else the same paragraph and quote; a checked claim the new list
+does not name is drawn as a group of its own, headed by the quote and statement the check stored,
+and can still be dug into (the server finds its words in the stored check). Checks made against an
+earlier version of the article go in one read-only group at the end, *Checked against an earlier
+version of this article*, grouped the same way, with no Dig further and no box.
 
 **Found nothing is not the same as not answered.** The model answers one group per claim. An
 explicit empty group says *This search found nothing it could quote on this claim.* A claim the

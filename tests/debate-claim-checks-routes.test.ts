@@ -55,10 +55,37 @@ const seen = vi.hoisted(() => ({
   gate: null as Promise<void> | null,
   /** Resolved when the stub search starts, so a case can act while it is out. */
   started: null as (() => void) | null,
+  /** How many of the next `finish` writes throw, as a dropped connection would. */
+  finishThrows: 0,
+  finishCalls: 0,
+  /** Run just before the reservation insert: a peer acting in that gap. */
+  beforeBegin: null as (() => Promise<void>) | null,
 }));
 
-vi.mock("../src/store/index.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../src/store/index.js")>()),
+vi.mock("../src/store/index.js", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../src/store/index.js")>();
+  const checks = real.debateClaimChecksStore;
+  return {
+  ...real,
+  debateClaimChecksStore: {
+    list: (...a: Parameters<typeof checks.list>) => checks.list(...a),
+    abandon: (...a: Parameters<typeof checks.abandon>) => checks.abandon(...a),
+    sweep: (...a: Parameters<typeof checks.sweep>) => checks.sweep(...a),
+    async begin(...a: Parameters<typeof checks.begin>) {
+      const hook = seen.beforeBegin;
+      seen.beforeBegin = null;
+      if (hook) await hook();
+      return checks.begin(...a);
+    },
+    async finish(...a: Parameters<typeof checks.finish>) {
+      seen.finishCalls++;
+      if (seen.finishThrows > 0) {
+        seen.finishThrows--;
+        throw new Error("connection reset");
+      }
+      return checks.finish(...a);
+    },
+  },
   fetchAllowanceStore: {
     async take(bucket: string) {
       seen.taken.push(bucket);
@@ -68,7 +95,8 @@ vi.mock("../src/store/index.js", async (importOriginal) => ({
       seen.finished.push(id);
     },
   },
-}));
+  };
+});
 
 vi.mock("../src/debate.js", async (importOriginal) => {
   const real = await importOriginal<typeof import("../src/debate.js")>();
@@ -129,6 +157,7 @@ await pgReady({
 const { handleApi } = await import("../src/routes.js");
 const { debateClaimChecksStore, loadArticle, loadDebateClaims } = await import("../src/store/index.js");
 const { CHECK_ORPHAN_GRACE_MS, CheckInFlight } = await import("../src/store/pg-debate-claim-checks.js");
+const { DEBATE_CHECK_TIMEOUT_MS } = await import("../src/debate.js");
 
 interface Reply {
   status: number;
@@ -188,13 +217,13 @@ let claims: ListedClaim[];
 let hash: string;
 
 /** Write a list onto the article's current revision — the stage-2 artefact, as the step stores it. */
-async function storeList(sourceHash: string): Promise<void> {
+async function storeList(sourceHash: string, listed: ListedClaim[] = claims): Promise<void> {
   const list: DebateClaimList = {
     version: "debate-claims/1",
     generator: "test",
     slug: SLUG,
     sourceHash,
-    claims,
+    claims: listed,
     dropped: { unknownIds: 0, unquoted: 0, tooLong: 0, duplicate: 0, overCap: 0, malformed: 0 },
     generatedAt: new Date().toISOString(),
     elapsedMs: 1,
@@ -238,6 +267,9 @@ beforeEach(async () => {
   seen.answer = "allowed";
   seen.gate = null;
   seen.started = null;
+  seen.finishThrows = 0;
+  seen.finishCalls = 0;
+  seen.beforeBegin = null;
   await getDb().delete(debateClaimChecks).where(eq(debateClaimChecks.articleId, article.articleId));
   await storeList(hash);
 });
@@ -312,7 +344,7 @@ describe("refusals, in order, before anything is spent", () => {
     const r = await call("POST", URL, { claimIds: [claims[0]!.id] });
     expect(r.status).toBe(429);
     expect(r.written).toContain(DEBATE_CHECK_LIMITED);
-    expect(seen.taken).toEqual(["dig-deeper"]);
+    expect(seen.taken).toEqual(["debate-check"]);
     expect(seen.searches).toEqual([]);
     /* No pending row left to hold the article's one check. */
     expect(await rows()).toEqual([]);
@@ -347,7 +379,7 @@ describe("a check", () => {
     expect(done.listSourceHash).toBe(hash);
     expect(done.finishedAt).toBeTruthy();
     /* The allowance: taken once, given back once. */
-    expect(seen.taken).toEqual(["dig-deeper"]);
+    expect(seen.taken).toEqual(["debate-check"]);
     expect(seen.finished).toEqual(["lease"]);
     /* And the GET finds the same row a reload would. */
     const listed2 = JSON.parse((await call("GET", URL)).written) as { checks: DebateClaimCheck[] };
@@ -364,7 +396,7 @@ describe("a check", () => {
     expect(second.status).toBe(409);
     expect(second.written).toContain(DEBATE_CHECK_IN_FLIGHT);
     /* Refused by the index, before the allowance. */
-    expect(seen.taken).toEqual(["dig-deeper"]);
+    expect(seen.taken).toEqual(["debate-check"]);
     release();
     expect((await first).status).toBe(200);
     expect(seen.searches).toHaveLength(1);
@@ -389,6 +421,147 @@ describe("a check", () => {
     const r2 = await call("POST", URL, { digFurther: ownId });
     expect(r2.status).toBe(200);
     expect(seen.searches[1]?.targets).toEqual([{ kind: "own", claimId: ownId, text: TYPED }]);
+  });
+});
+
+describe("a check, when something goes wrong around it", () => {
+  it("retries a finish write that failed, so a paid answer is kept (GPT Sol's E7)", async () => {
+    seen.finishThrows = 2;
+    const r = await call("POST", URL, { claimIds: [claims[0]!.id] });
+    expect(r.status).toBe(200);
+    expect(seen.finishCalls).toBe(3);
+    expect(doneFrame(r.written).status).toBe("done");
+    const [row] = await rows();
+    expect(row?.status).toBe("done");
+    expect(row?.model).toBe("stub-model");
+  });
+
+  it("gives up after three tries, and the allowance is still given back", async () => {
+    seen.finishThrows = 5;
+    const r = await call("POST", URL, { claimIds: [claims[0]!.id] });
+    expect(seen.finishCalls).toBe(3);
+    expect(r.written).not.toContain("event: done");
+    expect(seen.finished).toEqual(["lease"]);
+    expect((await rows())[0]?.status).toBe("pending");
+  });
+
+  it("tells Dig further the addresses a check stored just before its reservation (GPT Sol's E8)", async () => {
+    const r1 = await call("POST", URL, { claimIds: [claims[0]!.id] });
+    expect(r1.status).toBe(200);
+    /* A peer's check on the same claim, still out when this press is validated... */
+    const peer = await asTestOwner(() =>
+      debateClaimChecksStore.begin(SLUG, {
+        listSourceHash: hash,
+        targets: [
+          {
+            kind: "listed",
+            claimId: claims[0]!.id,
+            blockId: claims[0]!.blockId,
+            quote: claims[0]!.quote,
+            statement: claims[0]!.statement,
+          },
+        ],
+        digFurther: true,
+      }),
+    );
+    /* ...and finished in the gap before this press reserves. */
+    seen.beforeBegin = async () => {
+      const lost = {
+        uncited: 0,
+        selfSource: 0,
+        unverifiedSource: 0,
+        directnessUnverified: 0,
+        sourceIsCopy: 0,
+        claimNotInBlock: 0,
+        unknownBlockId: 0,
+        malformed: 0,
+      };
+      const finished = await asTestOwner(() =>
+        debateClaimChecksStore.finish(
+          SLUG,
+          peer.check.id,
+          {
+            status: "done",
+            results: [
+              {
+                claimId: claims[0]!.id,
+                outcome: "answered",
+                rows: [
+                  {
+                    id: "spya-rwlate",
+                    url: "https://late.example/peer",
+                    sourceQuote: "words copied from the page",
+                    relation: "qualifies",
+                    lean: "neither",
+                    applies: "How it bears.",
+                    claimQuote: claims[0]!.quote,
+                    blockId: claims[0]!.blockId,
+                  },
+                ],
+              },
+            ],
+            counts: {
+              returnedSources: 1,
+              reportedRows: 1,
+              keptRows: 1,
+              omittedOverCap: 0,
+              lost,
+              webSearches: 1,
+              groups: { missing: 0, duplicate: 0, unknown: 0, malformed: 0, rowsSetAside: 0 },
+            },
+            webSearches: 1,
+            model: "peer-model",
+          } as Parameters<typeof debateClaimChecksStore.finish>[2],
+          peer.attempt,
+        ),
+      );
+      expect(finished?.status).toBe("done");
+    };
+    const r2 = await call("POST", URL, { digFurther: claims[0]!.id });
+    expect(r2.status).toBe(200);
+    expect(seen.searches[1]?.alreadyFound).toContain("https://late.example/peer");
+    expect(seen.searches[1]?.alreadyFound).toContain("https://found.example/1/0");
+  });
+
+  it("digs further on a claim whose list was made again with new ids, from the stored check (E5)", async () => {
+    const r1 = await call("POST", URL, { claimIds: [claims[2]!.id] });
+    expect(r1.status).toBe(200);
+    /* The same article, listed again: same hash, fresh random ids. */
+    await storeList(
+      hash,
+      claims.map((c, i) => ({ ...c, id: `spya-n${"abcde"[i]}k2mb` })),
+    );
+    const r2 = await call("POST", URL, { digFurther: claims[2]!.id });
+    expect(r2.status).toBe(200);
+    expect(seen.searches[1]?.targets).toEqual([
+      {
+        kind: "listed",
+        claimId: claims[2]!.id,
+        blockId: claims[2]!.blockId,
+        quote: claims[2]!.quote,
+        statement: claims[2]!.statement,
+      },
+    ]);
+    expect(seen.searches[1]?.alreadyFound).toEqual(["https://found.example/1/0"]);
+  });
+});
+
+describe("Dig further across a list made again (E5)", () => {
+  it("digs further on the new id of a claim checked under its old one, told the old check's addresses", async () => {
+    const r1 = await call("POST", URL, { claimIds: [claims[3]!.id] });
+    expect(r1.status).toBe(200);
+    const renamed = claims.map((c, i) => ({ ...c, id: `spya-m${"abcde"[i]}k2mb` }));
+    await storeList(hash, renamed);
+    const r2 = await call("POST", URL, { digFurther: renamed[3]!.id });
+    expect(r2.status).toBe(200);
+    expect(seen.searches[1]?.targets.map((t) => t.claimId)).toEqual([renamed[3]!.id]);
+    expect(seen.searches[1]?.alreadyFound).toEqual(["https://found.example/1/0"]);
+  });
+
+  it("still refuses an id no list and no check has ever named", async () => {
+    const r = await call("POST", URL, { digFurther: "spya-nowhere" });
+    expect(r.status).toBe(409);
+    expect(seen.taken).toEqual([]);
   });
 });
 
@@ -437,6 +610,19 @@ describe("the store", () => {
     expect(now.find((r) => r.id === check.id)?.model).toBeNull();
     expect(now.find((r) => r.id === newer.check.id)?.finishedAt).toBeNull();
     expect(now.find((r) => r.id === newer.check.id)?.status).toBe("pending");
+  });
+
+  it("waits out the model's whole deadline and the admission before it, from the same constant (E6)", async () => {
+    expect(CHECK_ORPHAN_GRACE_MS).toBeGreaterThanOrEqual(DEBATE_CHECK_TIMEOUT_MS + 120_000);
+    /* Reserved, then nearly two minutes in admission and setup, then a model
+       call that ran to its deadline: still not another process's to end. */
+    const { check } = await begin();
+    await getDb()
+      .update(debateClaimChecks)
+      .set({ createdAt: new Date(Date.now() - DEBATE_CHECK_TIMEOUT_MS - 110_000) })
+      .where(eq(debateClaimChecks.id, check.id));
+    const swept = await asTestOwner(() => debateClaimChecksStore.sweep(SLUG, () => false));
+    expect(swept.find((c) => c.id === check.id)?.status).toBe("pending");
   });
 
   it("leaves a check this process is running, and a young one, to finish", async () => {

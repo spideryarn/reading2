@@ -3110,7 +3110,12 @@ export type RateBucket =
   /* *Ask about Spideryarn* on the Help pages — a streamed answer from the
      whole Help, free to the reader and so bounded here instead, with a global
      fuse (src/help-chat-call.ts § `HELP_CHAT_RATE_POLICY`, plan 261007k). */
-  | "help-chat";
+  | "help-chat"
+  /* Debate's reader-picked claim checks — one paid web search over the
+     claims a reader ticked or typed (src/debate.ts §
+     `DEBATE_CHECK_RATE_POLICY`, plan 261008i § 3). Not Dig deeper's bucket,
+     because Dig deeper's lease is shorter than a check (GPT Sol's E1). */
+  | "debate-check";
 
 /**
  * **How many outbound fetches one reader's pointer may cause.**

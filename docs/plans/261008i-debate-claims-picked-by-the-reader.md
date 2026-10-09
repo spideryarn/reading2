@@ -150,15 +150,22 @@ logged), `created_at`, `finished_at`. Checks are drawn under the list with the s
   tabs pressing at once get one search and one 409;
 - the **list is fresh**: the server compares the stored list's hash with the article it has just
   loaded and answers 409 before any allowance or model use (F6);
-- **the `dig-deeper` allowance** (`src/dig-deeper.ts`, 20 an hour, 60 a day, two at once, a global
-  fuse of 100 a day), taken after every free refusal (ownership, input, staleness, in flight) and
-  before the model. It already bounds the paid *tell me more* actions; this is one more of them.
-  Its limits are not changed;
+- **the check's own allowance**, bucket `debate-check` (`DEBATE_CHECK_RATE_POLICY`,
+  `src/debate.ts`: 10 an hour, 30 a day per reader, two at once, a global fuse of 100 a day — about
+  $6 a reader-day and $20 a day in all at the worst, at ~$0.20 a check; Greg's to move), taken
+  after every free refusal (ownership, input, staleness, in flight) and before the model. *Amended
+  after stage 3's code review (GPT Sol's E1):* this first shared the `dig-deeper` allowance, but
+  that bucket's lease is 170 s, sized for Dig deeper's calls, and a check could run 720 s; only
+  unexpired leases count towards `concurrency`, so a slow check stopped holding its slot and "two
+  at once" held nothing. Lengthening Dig deeper's lease would have loosened Dig deeper instead, so
+  the check got its own bucket, with a lease of its deadline (now 360 s, the Debate step's budget
+  for a comparable call) plus a minute;
 - owner only. The experimental switch is **not** a defence (security-map: it changes what is
   discoverable, never who may do what), and is not counted as one here.
 
-No defence in [security-map.md](../project/security-map.md) is changed: the allowance is used, not
-altered, and the list reaches visitors through the existing projection. A reviewer is asked to
+No defence in [security-map.md](../project/security-map.md) is changed: the allowance machinery is
+used, not altered (one more bucket in it, after E1), and the list reaches visitors through the
+existing projection. A reviewer is asked to
 check exactly that.
 
 ### 4. Who sees what

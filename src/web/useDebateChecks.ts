@@ -20,6 +20,14 @@
  *
  * **Nothing here ever spends on arrival.** Only `check()` POSTs, and only a
  * press calls it.
+ *
+ * ## Newest wins
+ *
+ * Focus, a retry and the pending poll can each send a read, and the replies
+ * can arrive in any order. Every read is numbered when it is sent, and a reply
+ * older than the newest one applied is dropped — and so is any read sent
+ * before a frame from this tab's own stream was applied, since the frame is
+ * newer than what that read will say (GPT Sol's E11).
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DebateCheckRequest, DebateClaimCheck, DebateClaimChecksResponse } from "../types.js";
@@ -122,9 +130,18 @@ export function useDebateChecks(slug: string): UseDebateChecks {
   const checksNow = useRef(checks);
   checksNow.current = checks;
   const url = `/api/debate-claims/${encodeURIComponent(slug)}/checks`;
+  /** The number of the last read sent, and of the newest state applied (a read's, or a frame's). */
+  const sent = useRef(0);
+  const applied = useRef(0);
+  /** A stream frame is newer than every read already out. */
+  const applyFrame = useCallback((check: DebateClaimCheck) => {
+    applied.current = sent.current;
+    setChecks((was) => withCheck(was, check));
+  }, []);
 
   const refreshChecks = useCallback(async (): Promise<readonly DebateClaimCheck[] | null> => {
     const mine = slug;
+    const number = ++sent.current;
     try {
       const res = await apiFetch(url);
       const body = await readJson<DebateClaimChecksResponse>(res);
@@ -132,12 +149,16 @@ export function useDebateChecks(slug: string): UseDebateChecks {
       if (!Array.isArray(body?.checks) || !body.checks.every(isCheck)) {
         throw new MalformedReply("the checks reply has no list of checks");
       }
+      /* Overtaken: a newer read, or a frame of this tab's own, is on screen. */
+      if (number <= applied.current) return null;
+      applied.current = number;
       setChecks(body.checks);
       setError(null);
       setStatus("ready");
       return body.checks;
     } catch (err) {
-      if (current.current !== mine) return null;
+      /* An overtaken read's failure says nothing about what is on screen. */
+      if (current.current !== mine || number <= applied.current) return null;
       setError(describeFetchFailure(err as Error));
       /* A failed re-read keeps what is on screen. */
       setStatus((was) => (was === "ready" ? was : "error"));
@@ -201,14 +222,14 @@ export function useDebateChecks(slug: string): UseDebateChecks {
         accepted = true;
         const done = await readAnswerStream<DebateClaimCheck>(res.body, {
           begin(data) {
-            if (current.current === mine && isCheck(data)) setChecks((was) => withCheck(was, data));
+            if (current.current === mine && isCheck(data)) applyFrame(data);
           },
           delta() {},
           done(data) {
             return isCheck(data) ? data : undefined;
           },
         });
-        if (current.current === mine) setChecks((was) => withCheck(was, done));
+        if (current.current === mine) applyFrame(done);
         return true;
       } catch (err) {
         if (current.current !== mine) return false;
@@ -229,7 +250,7 @@ export function useDebateChecks(slug: string): UseDebateChecks {
         if (current.current === mine) setSending(false);
       }
     },
-    [slug, url, refresh, refreshChecks],
+    [slug, url, refresh, refreshChecks, applyFrame],
   );
 
   return { status, checks, error, sending, pressError, check, refresh };

@@ -240,7 +240,10 @@
 .dbt-check-error { margin: 0.25rem 0 0; color: var(--danger); font-size: 0.82rem; }
 .dbt-check-found > .dbt-list { margin-top: 0.25rem; }
 .dbt-dig { flex: none; margin-left: 0.35rem; white-space: nowrap; }
-.dbt-own-claim { margin-top: 0.75rem; }
+.dbt-own-claim, .dbt-checked-claim { margin-top: 0.75rem; }
+/* Checks against an earlier version of the article: read-only, set apart (E5). */
+.dbt-check-earlier { margin-top: 1.25rem; padding-top: 0.5rem; border-top: 1px solid var(--rule); }
+.dbt-check-earlier-head { margin: 0; }
 .dbt-own-label { color: var(--ink-faint); font-family: var(--font-ui); font-size: 0.78rem; }
 @media (pointer: coarse) {
   .dbt-check-send,
