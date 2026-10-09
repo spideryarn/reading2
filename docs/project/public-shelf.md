@@ -198,3 +198,9 @@ sits beside it, never inside it.
 - **No cursor.** The row cap is a ceiling rather than a page size, so there is nothing to paginate
   through. The ordering is total on `(public_at, slug)` precisely so that a cursor is possible the
   day it starts biting.
+- **No topic pills, yet.** Greg asked for them (2026-10-04) and chose the shape (2026-10-08):
+  regenerated automatically when an article is shared, billed to a site account rather than any
+  reader, if each regeneration is half a cent or less. Measured, that holds up to about 20 public
+  articles, so the plan adds a rebuild button on `/admin` beyond. Planned in
+  [261008j](../plans/261008j-public-shelf-topic-pills-automatic-billed-to-the-site.md); it edits
+  listed defences, so it waits for his yes (`q-p5h2a7`).

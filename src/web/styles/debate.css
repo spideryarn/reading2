@@ -95,15 +95,18 @@
   padding: 0.5rem 0 0.15rem;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.05em;
   line-height: 1.4;
   text-transform: uppercase;
 }
+.dbt-group-head:not(.dbt-group-claim) { font-size: var(--type-label); }
 /* A claim heading is a quotation of the article, so it is set as one — in the
    reading face, sentence case, behind a dotted rule — not in capitals, which
    would turn the piece's words into a label of ours.
+
+   A named exception to the text roles: it is a foldable quotation heading,
+   not the small uppercase label `.dbt-group-head` otherwise means.
 
    It is the `<summary>` of a native `<details>` (DebatePanel.tsx § ClaimsList),
    so the browser's own disclosure marker leads it and the whole line folds the
@@ -140,7 +143,7 @@
 .dbt-group-count {
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.78rem;
+  font-size: var(--type-count);
   font-weight: 400;
   font-variant-numeric: tabular-nums;
 }
@@ -433,7 +436,7 @@ button.dbt-mark:focus-visible { outline: 2px solid var(--highlight-text); outlin
   overflow-wrap: anywhere;
   color: var(--highlight-ink);
   font-family: var(--font-ui);
-  font-size: 0.92rem;
+  font-size: var(--type-item);
   font-weight: 600;
   line-height: 1.3;
   text-decoration: none;
@@ -454,7 +457,7 @@ button.dbt-mark:focus-visible { outline: 2px solid var(--highlight-text); outlin
   margin: 0.15rem 0 0;
   color: var(--ink-soft);
   font-family: var(--font-ui);
-  font-size: 0.78rem;
+  font-size: var(--type-meta);
   line-height: 1.35;
 }
 .dbt-site { overflow-wrap: anywhere; }
@@ -552,7 +555,7 @@ button.dbt-mark:focus-visible { outline: 2px solid var(--highlight-text); outlin
   padding: 0 0 0 0.55rem;
   border-left: 2px solid var(--rule-strong);
   color: var(--ink);
-  font-size: 0.88rem;
+  font-size: var(--type-quote);
   line-height: 1.5;
 }
 .dbt-item.open .dbt-title,
@@ -651,7 +654,7 @@ button.dbt-mark:focus-visible { outline: 2px solid var(--highlight-text); outlin
 .dbt-applies {
   margin: 0;
   color: var(--ink-soft);
-  font-size: 0.85rem;
+  font-size: var(--type-body);
   line-height: 1.45;
 }
 /* Where it does *not* bear on the claim. Optional on the row and drawn quieter,

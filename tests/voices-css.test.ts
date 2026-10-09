@@ -229,8 +229,9 @@ const VOICES_BY_SURFACE: Record<Surface, readonly string[] | { none: string }> =
   add: [".voice-reader", ".prof-box-input"],
   "add-upload": [".voice-reader", ".prof-box-input"],
   profile: [".prof-box-input", ".prof-interim", ".voice-author"],
-  /* the reading column's specimen is a sample of an article */
-  design: [".prose"],
+  /* the reading column's specimen is a sample of an article; the text-roles
+     matrix sets one sample in each voice a role meets */
+  design: [".prose", ".voice-ai", ".voice-author", ".voice-reader"],
   login: { none: "a sign-in form: an email address is a credential, not something said" },
   admin: { none: "an administrator's tables; other readers' words there are left in the app's face" },
   privacy: { none: OURS },

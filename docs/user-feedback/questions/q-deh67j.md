@@ -1,10 +1,11 @@
 ---
 id: q-deh67j
 report: spya-mdp0em
-status: open
+status: answered
 asked: 2026-10-04
 title: Topic pills on the public shelf: now, later, or did you mean your own shelf?
-refs: SPIDERYARN-READING2-BX · qi-8a52pdxh · docs/plans/261004j-shelf-topic-pills-more-inclusive-and-public-shelf-pills-awaiting-greg.md § Part 2 · docs/user-feedback/261004_1000-topic-pills-on-the-public-shelf.md
+refs: SPIDERYARN-READING2-BX · qi-8a52pdxh · docs/plans/261004j-shelf-topic-pills-more-inclusive-and-public-shelf-pills-awaiting-greg.md § Part 2 · docs/user-feedback/261004_1000-topic-pills-on-the-public-shelf.md · follow-up q-p5h2a7
+acted: spya-hbtqvc
 ---
 Background. You asked for topic pills on the page for filtering public articles. I took that to be the public shelf: the page that lists every article anyone has shared, for anyone, signed in or not. Nothing is built, for two reasons. Every way of showing pills there changes a listed security defence, which an unattended agent does not do. And the public shelf holds 6 articles, where the pills need 8 before they appear at all.
 
@@ -21,3 +22,23 @@ D. Did you mean the Include public section of your own shelf? It lists the same 
 What would decide it: A if you want it to look and work like your shelf and are happy for it to wait for 8 or more public articles. B if you want something visible this week and can live with weak pills. C if you were thinking ahead to a bigger public shelf rather than today's six. D if you meant your own shelf.
 
 Recommended: C now, and A when the public shelf passes about 20 articles, unless you meant D.
+
+## Greg's answer, 2026-10-08 (in the Feedback dialog, reply `spya-hbtqvc`)
+
+> I had meant the public shelf for that's available to non-logged-in users, showing the publicly
+> shared articles. Okay, how about this? Perhaps we could add some kind of interface, probably on
+> that page, only visible, only shown, only usable by admin users like me, and that I can click a
+> regenerate topic pills. In other words, it doesn't happen every single time a new article is
+> added. It's manual. I don't know if this is a good solution. It feels kind of crappy. The
+> alternative would be we do it every time a new article is added and bill it to a special account
+> like, I don't know, admin or whatever that's, in a sense, no particular user. It's the site. That
+> would also work. I think I'm worried that it will end up being more than half a cent. If it was
+> only half a cent and you were confident about that to regenerate, then maybe I'd say that would be
+> the way to go, and it would run automatically when new public pages are added. I guess use your
+> judgment.
+
+Settled: the public shelf (`/read/public`), not D. The cost was measured (investigation
+261008a): under half a cent a regeneration up to about 20 public articles, so the plan is automatic up to
+20 and billed to a site account, with a rebuild button on /admin beyond (plan 261008j). Building it
+edits listed defences, so approval to build
+is the follow-up question `q-p5h2a7`.

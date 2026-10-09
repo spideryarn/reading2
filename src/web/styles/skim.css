@@ -144,12 +144,12 @@
   text-align: right;
 }
 .skim-what { display: flex; flex-direction: column; min-width: 0; gap: 0.15rem; }
-.skim-place { font-size: 0.88rem; line-height: 1.35; }
-.skim-cue { color: var(--ink-soft); font-size: 0.85rem; line-height: 1.35; }
+.skim-place { font-size: var(--type-item); line-height: 1.35; }
+.skim-cue { color: var(--ink-soft); font-size: var(--type-body); line-height: 1.35; }
 /* The quote's own words (plan 260928e) — cut short on every row but the
    current one, whose row shows them whole. A touch smaller than the path,
    so the section still reads as the row's heading. */
-.skim-words { color: var(--ink-soft); font-size: 0.84rem; line-height: 1.4; overflow-wrap: anywhere; }
+.skim-words { color: var(--ink-soft); font-size: var(--type-quote); line-height: 1.4; overflow-wrap: anywhere; }
 .skim-row.current .skim-words { color: var(--ink); }
 /* A quote may run to 1,200 characters (src/quotes.ts), so the card is wider
    than the shared 22rem and breaks an unbroken token. At that width the
@@ -350,7 +350,7 @@
 .skim-cluster-h {
   margin: 0 0 0.2rem;
   color: var(--ink-faint);
-  font-size: 0.72rem;
+  font-size: var(--type-label);
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }

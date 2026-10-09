@@ -1,7 +1,7 @@
 ---
 reports: spya-mdp0em
 ending: awaiting
-comment: Waiting on you: not built. Every way of showing pills on the public shelf edits a security defence, and that shelf has 6 articles where pills need 8. Four options, or did you mean Include public on your own shelf?
+comment: Waiting on you again: measured against your half-cent bar, the plan is automatic up to 20 public articles, billed to a site account, with an admin rebuild button beyond. It edits a security defence, so it needs your yes to build.
 ---
 # Topic pills on the public shelf
 
@@ -31,3 +31,13 @@ The other report handled in the same session shipped:
 **The question for Greg is now a file**, `docs/user-feedback/questions/q-deh67j.md`, moved there from
 `awaiting-approval.md` on 2026-10-07. He sees it in the Feedback dialog and replies there
 ([feedback-reports.md § Asking Greg a question](../project/feedback-reports.md#asking-greg-a-question-and-acting-on-his-answer)).
+
+**2026-10-08: Greg answered** (reply `spya-hbtqvc`): the public shelf, `/read/public`; automatic and
+billed to the site if a regeneration is half a cent or less, otherwise an admin-only button. Measured
+([investigation 261008a](../investigations/261008a-public-shelf-topic-rethink-cost.md)): 0.03–0.04¢
+for a re-think of today's 6 public articles, about 0.01¢ to file one new share, about half a cent at
+45 articles, where one run was already over the bar. So the plan is automatic up to 20 public
+articles, billed to a site account, with a rebuild button on `/admin` beyond
+([261008j](../plans/261008j-public-shelf-topic-pills-automatic-billed-to-the-site.md)). Still
+**awaiting**: building it edits listed defences, so it waits for his yes, asked as
+`docs/user-feedback/questions/q-p5h2a7.md`. Queue item `qi-4far27sc`.

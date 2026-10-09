@@ -1,0 +1,143 @@
+{
+ "promptVersion": 2,
+ "measuredAt": "2026-10-08T21:00:07.840Z",
+ "results": [
+  {
+   "kind": "rethink",
+   "shelf": "public-6",
+   "works": 6,
+   "run": 1,
+   "usd": 0.0003598,
+   "calls": 1,
+   "unpriced": 0,
+   "seconds": 8.264277408,
+   "topics": 2
+  },
+  {
+   "kind": "rethink",
+   "shelf": "public-6",
+   "works": 6,
+   "run": 2,
+   "usd": 0.0003048,
+   "calls": 1,
+   "unpriced": 0,
+   "seconds": 5.364682844999997,
+   "topics": 2
+  },
+  {
+   "kind": "rethink",
+   "shelf": "public-6",
+   "works": 6,
+   "run": 3,
+   "usd": 0.0004048,
+   "calls": 1,
+   "unpriced": 0,
+   "seconds": 8.362653667000002,
+   "topics": 2
+  },
+  {
+   "kind": "rethink",
+   "shelf": "wide-8",
+   "works": 8,
+   "run": 1,
+   "usd": 0.0002911,
+   "calls": 1,
+   "unpriced": 0,
+   "seconds": 5.528208352000002,
+   "topics": 3
+  },
+  {
+   "kind": "rethink",
+   "shelf": "wide-8",
+   "works": 8,
+   "run": 2,
+   "usd": 0.0003411,
+   "calls": 1,
+   "unpriced": 0,
+   "seconds": 6.375797092000004,
+   "topics": 3
+  },
+  {
+   "kind": "rethink",
+   "shelf": "wide-20",
+   "works": 20,
+   "run": 1,
+   "usd": 0.000875675,
+   "calls": 1,
+   "unpriced": 0,
+   "seconds": 13.423209470000002,
+   "topics": 5
+  },
+  {
+   "kind": "rethink",
+   "shelf": "wide-20",
+   "works": 20,
+   "run": 2,
+   "usd": 0.00097119,
+   "calls": 1,
+   "unpriced": 0,
+   "seconds": 18.55549136,
+   "topics": 4
+  },
+  {
+   "kind": "rethink",
+   "shelf": "wide-45",
+   "works": 45,
+   "run": 1,
+   "usd": 0.0048348,
+   "calls": 4,
+   "unpriced": 0,
+   "seconds": 66.640701343,
+   "topics": 12
+  },
+  {
+   "kind": "rethink",
+   "shelf": "wide-45",
+   "works": 45,
+   "run": 2,
+   "usd": 0.00516553,
+   "calls": 4,
+   "unpriced": 0,
+   "seconds": 80.13343155400001,
+   "topics": 12
+  },
+  {
+   "kind": "rethink",
+   "shelf": "wide-96",
+   "works": 96,
+   "run": 1,
+   "usd": 0.014443075,
+   "calls": 9,
+   "unpriced": 0,
+   "seconds": 130.44133103800002,
+   "topics": 32
+  },
+  {
+   "kind": "file-one",
+   "shelf": "wide-20",
+   "run": 1,
+   "usd": 0.0000704,
+   "calls": 1,
+   "unpriced": 0,
+   "seconds": 4.296865911999951
+  },
+  {
+   "kind": "file-one",
+   "shelf": "wide-20",
+   "run": 2,
+   "usd": 0.0001061,
+   "calls": 1,
+   "unpriced": 0,
+   "seconds": 4.788630353000015
+  },
+  {
+   "kind": "file-one",
+   "shelf": "wide-20",
+   "run": 3,
+   "usd": 0.0000802,
+   "calls": 1,
+   "unpriced": 0,
+   "seconds": 2.8732387759999836
+  }
+ ]
+}
