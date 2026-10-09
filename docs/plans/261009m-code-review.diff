@@ -1,0 +1,925 @@
+diff --git a/docs/plans/261009m-arxiv-affiliations-plan-review-sol.md b/docs/plans/261009m-arxiv-affiliations-plan-review-sol.md
+new file mode 100644
+index 000000000..00a760fbc
+--- /dev/null
++++ b/docs/plans/261009m-arxiv-affiliations-plan-review-sol.md
+@@ -0,0 +1,48 @@
++Verdict: **revise before build**. No P0s; two P1 integrity gaps defeat the stated “held to the page” guarantee.
++
++1. **P1 — affiliations are verified page-wide, not against the author whose creator record contains them.**
++
++   [`titleBlockRecords`](/var/tmp/spideryarn-worktrees/fbxg4jyr-arxiv-affiliations/src/arxiv-affiliations.ts:39) puts every creator on page 1, while [`affiliationsFor`](/var/tmp/spideryarn-worktrees/fbxg4jyr-arxiv-affiliations/src/pdf-authors.ts:504) accepts the first matching span anywhere on any page. The exact-name check at [src/arxiv-affiliations.ts:62](/var/tmp/spideryarn-worktrees/fbxg4jyr-arxiv-affiliations/src/arxiv-affiliations.ts:62) does not bind affiliations to those names.
++
++   I reproduced this with the Attention fixture: assigning `Google Research` to Ashish Vaswani and `Google Brain` to Noam Shazeer passed and returned both wrong associations.
++
++   The PDF path has the same general page-wide limitation, though markers sometimes provide extra evidence. Here the HTML gives stronger evidence—one creator element per author—and the plan discards it.
++
++   After the global check, re-verify each returned author against only `block.creators[i]`, or otherwise preserve the creator record ID through verification. Add a test swapping two real, printed affiliations; it must refuse.
++
++2. **P1 — deleting `.ltx_contact_name` breaks the consecutive-page-words guarantee and can manufacture text the page never printed.**
++
++   The claim at [plan:44](/var/tmp/spideryarn-worktrees/fbxg4jyr-arxiv-affiliations/docs/plans/261009m-arxiv-html-affiliations-by-the-authors-pass.md:44) is false for a positional verifier. Removing words creates new adjacency. The implementation also removes every matching element without checking its text or structure at [src/latexml.ts:901](/var/tmp/spideryarn-worktrees/fbxg4jyr-arxiv-affiliations/src/latexml.ts:901).
++
++   I reproduced a creator printing:
++
++   ```text
++   Alice Doe Affiliation:DepartmentAffiliation:University
++   ```
++
++   After label deletion its evidence became `Alice Doe DepartmentUniversity`, and the verifier accepted and stored `DepartmentUniversity`—a word the page did not print.
++
++   There is already stricter machinery: the known-label allowlist at [src/latexml.ts:1023](/var/tmp/spideryarn-worktrees/fbxg4jyr-arxiv-affiliations/src/latexml.ts:1023) and structural validation in [`contactLines`](/var/tmp/spideryarn-worktrees/fbxg4jyr-arxiv-affiliations/src/latexml.ts:1223). Reuse that rather than raw selector deletion.
++
++   The simplest safe version is to keep contact boundaries and accept separate affiliations or a conservative refusal. If joining split contacts is required, define and validate that projection explicitly; do not obtain it by deleting arbitrary intervening text. Add adjacent-label, unknown-label, and no-whitespace tests.
++
++3. **P2 — equality of names does not prove the list came from the title-block fallback.**
++
++   The plan’s gate at [plan:49](/var/tmp/spideryarn-worktrees/fbxg4jyr-arxiv-affiliations/docs/plans/261009m-arxiv-html-affiliations-by-the-authors-pass.md:49) cannot guarantee its following claim that a `citation_author` page is never asked. [`metaAuthors`](/var/tmp/spideryarn-worktrees/fbxg4jyr-arxiv-affiliations/src/meta-authors.ts:48) chooses citation metadata first and the title block only as a fallback, but identical citation names with no affiliations are observationally identical afterward.
++
++   Carry explicit provenance such as `authorsSource: "citation" | "dc" | "latexml"` or test for author metadata before losing that fact. The citation test must use the exact same names and order as the title block; a shorter or different list does not test this edge.
++
++4. **P2 — the stage tests need the adversarial and call-placement cases, not only ordinary model mistakes.**
++
++   Add tests for:
++
++   - a wrong-but-printed affiliation assigned to another author;
++   - an affiliation assembled across deleted labels;
++   - exact matching `citation_author` names causing zero calls;
++   - an ordinary reader exception degrading to names only;
++   - a rejected/too-short article causing zero calls;
++   - a prose-retention fallback causing exactly one call.
++
++   That final case matters because [`readArticle`](/var/tmp/spideryarn-worktrees/fbxg4jyr-arxiv-affiliations/src/extract.ts:442) may execute `readingArm` twice. Only evidence extraction belongs there; invoke the paid reader once in `runExtract`, after challenge/Readability/length refusal checks.
++
++The remaining operational design is sound: the system prompt fences records as untrusted data, abort propagation can follow the reviewed PDF wrapper, fixed refusal reasons/counts can be logged without prose, and `openRouterAuthorsReader` inside `runStep` will automatically attribute the gateway call to the article’s `extract` step. The exact-name equality check is sufficient for name splitting/order once affiliation ownership is checked separately.
+\ No newline at end of file
+diff --git a/docs/plans/261009m-arxiv-html-affiliations-by-the-authors-pass.md b/docs/plans/261009m-arxiv-html-affiliations-by-the-authors-pass.md
+new file mode 100644
+index 000000000..328f4a9dd
+--- /dev/null
++++ b/docs/plans/261009m-arxiv-html-affiliations-by-the-authors-pass.md
+@@ -0,0 +1,148 @@
++# arXiv HTML imports: each author's affiliation, read by the PDF path's authors pass
++
++Up: [plans.md](../project/plans.md). Report `spya-xg4jyr` (SPIDERYARN-READING2-FG), question
++[q-qjbb9a](../user-feedback/questions/q-qjbb9a.md), queue item `qi-62h5hz6s`. Follows
++[261009d](261009d-arxiv-html-title-block-tidied-at-import.md), which tidied the rows and asked this.
++
++> 1A as long as it's not too complicated or costly. 2A but just for that one because it's a
++> prominent paper that we're sharing publicly.
++>
++> — Greg, 2026-10-09, reply `spya-fb8y50` to q-qjbb9a
++
++## What this is for
++
++Since 2026-10-05 an arXiv link imports arXiv's HTML rendering, not the PDF. Its masthead names come
++from LaTeXML's markup (`latexmlAuthorNames`, src/latexml.ts), without affiliations, so the hover
++tooltip a PDF import has on each name is missing. Reading affiliations by rule was tried and was
++wrong on 7 of 19 pages, silently
++([261007d](261007d-front-matter-folded-by-default-and-arxiv-html-authors.md)). A PDF import gets
++them from a model call held to the page's words (`src/pdf-authors.ts`). 1A is that call, on the
++HTML path.
++
++## What to build
++
++**The PDF path's authors pass, unchanged, fed the title block as records.** No new prompt, schema,
++model or check:
++
++```
++LaTeXML title block (before prepareDocument rewrites it)
++  └─ latexmlTitleBlock(doc) → { names (the markup's, as today), creators: one line of text per author }
++       └─ records: [ {id:"names", text: names.join(", ")},  {id:"author-1", text: "Ashish Vaswani … Google Brain …"}, … ]
++            └─ readAuthors(records, ["names"], openRouterAuthorsReader(modelFor("pdf-frontmatter", power)))
++                 └─ verifyAuthors: every name in the names record, in order, nobody skipped;
++                    every affiliation a run of the page's own words, trimmed, shape- and cap-checked
++                 └─ and here: the names returned are exactly the markup's names, in order,
++                    and each affiliation is a run of words in that author's own record
++```
++
++- `latexmlTitleBlock` (src/latexml.ts): the same `titleBlockOf` + `readCreators` as
++  `latexmlAuthorNames`, so it is `null` exactly when the names are. Each creator's text, with
++  LaTeXML's furniture **replaced by a space**: a note's repeated marks and number (`NOTE_FURNITURE`,
++  which the tidy rewrite already drops) and a contact label that is exactly one of the measured
++  `CONTACT_LABELS` (`Affiliation:`, `Email:` …); a label not in that list stays as words. And a
++  space after the name and each contact and note. The labels have to go: LaTeXML splits one
++  institution over several contacts (`Affiliation: Department of Physics, Affiliation: University
++  of Trento, Affiliation: Italy`), and with them in, the institution is no consecutive run of words,
++  so the check refused the whole paper (2610.08392, measured below). *Replaced*, not deleted, because
++  deleting fused the words either side into one the page never printed (plan review, 2).
++- `src/arxiv-affiliations.ts`: the records, the call, and two checks `verifyAuthors` does not make.
++  The names that come back must be exactly the markup's names, in order (a model splitting one name
++  into two people would otherwise pass). And **each affiliation must be printed in that author's own
++  record** (`affiliationPrintedIn`, the PDF check's own matcher, exported): `verifyAuthors` finds an
++  affiliation anywhere on the page, which is all a PDF offers, and so "Google Research" for Vaswani
++  passed it (plan review, 1). An institution printed once for several authors is refused with it.
++  All or nothing, as on the PDF path: any refusal leaves the names-only list exactly as today. A
++  model that gives nobody an institution is also "nothing".
++- `runExtract` (src/extract.ts) takes an optional `affiliations` reader, as it takes `titleTidier`;
++  absent, no call (tests, scripts, evals). `readingArm` hands out the title block only when the
++  author list **came from it** — asked while it can be, by whether `metaAuthors` finds anything
++  without it, since a `citation_author` list of the same names is indistinguishable afterwards (plan
++  review, 3). The call is in `runExtract`, after every refusal, so a page refused as too short never
++  pays and the prose-retention fallback's second `readingArm` run does not call twice.
++- `pipeline.ts` hands one in on the HTML extract branch, built on the article's power, and logs a
++  refusal or a failure (an abort is re-thrown), as `authorsOrNothing` does in src/pdf-read.ts.
++  Metered under the `pdf-frontmatter` route, as the PDF call is; the cost lands on the article's
++  `extract` step by `runStep`, so nothing new is needed for cost tracking.
++
++**Not done, and why:**
++
++- *A cheaper model* (the title tidier's DeepSeek). Greg chose "the same small model PDF imports
++  use". That is in fact the **capable** tier (Sonnet 5.5, `pdf-frontmatter` in src/models.ts), on a
++  route pinned to Anthropic; q-qjbb9a called it small. It costs half a cent here (below), which is
++  what the question promised. Switching would mean a second route and a second measurement for a
++  saving of a fraction of a cent.
++- *Affiliations printed once for several authors.* The per-author check refuses them (2610.08750
++  below, where the model also mixed two records). Accepting them would mean trusting the model's
++  attribution across records, which is the very thing the check is for.
++- *A cache on a content hash.* A re-extraction calls again. It is half a cent, and re-extraction is
++  rare; the PDF authors pass has no cache either.
++- *Commas between contacts.* With labels removed, `Department of … Engineering University of Bologna
++  Bologna, 40126, Italy` reads with no comma where the page had a label. Adding one would be a
++  character the page did not print; left as the page's own.
++- *2A, the re-extraction of Greg's Attention import* (`arxiv-1706-03762-spya-wyt7j0`). A production
++  write that needs this code deployed: recorded in q-qjbb9a as authorised, for the Overseer after
++  the deploy.
++
++*The simpler option passed over*: storing `ltx_role_affiliation` contacts by rule, no model. Measured
++wrong on 7 of 19 pages (261007d). The model is what Greg approved.
++
++## Measured
++
++`evals/arxiv-affiliations/measure.ts` over live `arxiv.org/html/<id>` pages — the eleven papers the
++title-block fixtures were cut from and five more from 261009d's twenty — each call recorded in the
++ledger. Sonnet 5.5, standard power, 2026-10-09, on the final code (after the plan review):
++
++| | |
++|---|---|
++| cost per import | **$0.002 – $0.010**, median about **$0.005** (820–1,700 tokens in, 44–660 out); 13 calls, $0.060 |
++| every name given its affiliations, right | 10 of 13 called |
++| refused, names stay plain | 2: 2610.08790 prints no affiliation in its title block; 2610.08750, where the model gave the first author "Bioinformatics Group … Wageningen" assembled partly from the second author's record — refused by the per-author check, rightly |
++| some authors given none, rightly | Polosukhin in Attention (the page prints only his email), Bates in 2610.08785 (nothing beside his name) |
++| no call | 3: 2610.08781, .10548, .10690 (no names read today either: several people in one `personname`, or institutions as creators) |
++| wrong | 0 seen |
++
++Attention reads `Ashish Vaswani — Google Brain`, `Niki Parmar — Google Research`, `Aidan N. Gomez —
++University of Toronto` … as the PDF import did. Before the labels fix, 2610.08392 was refused and
++2610.03261's one institution came back as three. Full output: the ledger line per paper is
++reproducible with the command above.
++
++**End to end, locally**: `scripts/stage.ts extract arxiv-1706-03762v7-spya-wv4w9s --force` (the
++local database) stored the eight authors with those affiliations on the revision, and the ledger
++booked the call as `extract` / `pdf-frontmatter` beside the title tidy, $0.0056 for the step.
++
++High power runs the call on Opus 5.5, about five times the price: still under three cents.
++
++## Stages
++
++1. `latexmlTitleBlock`, `src/arxiv-affiliations.ts`, the `runExtract` option and the pipeline
++   wiring; tests red first on the fixtures with a stub reader (no spend): the records, a name split
++   refused, a name missing refused, an affiliation not on the page refused, an abort re-thrown, a
++   `citation_author` page never asking, an end-to-end `runExtract` with a stub giving Attention its
++   affiliations on `meta.authors`. The measurement above, re-run on the final code.
++2. Docs (content-extraction.md's arXiv reader, a line in architecture's model-calls list if one
++   lists them), GPT Sol's code review, the gates, push, the note, q-qjbb9a, `feedback-endings.ts`.
++
++GPT Sol reviews this plan before stage 1 and the code before the push.
++
++## The plan review
++
++GPT Sol, read-only, 2026-10-09 ([the review](261009m-arxiv-affiliations-plan-review-sol.md)),
++verdict *revise before build*. No P0. Each finding checked against the code; both P1s reproduced
++by the reviewer and then pinned by a test that was red against the spike.
++
++| | Sev | Finding | Outcome |
++|---|---|---|---|
++| 1 | P1 | Affiliations verified page-wide, so a printed institution could be given to the wrong author (Vaswani ↔ Shazeer swap passed) | Accepted: each affiliation must be in that author's own record; test; costs one paper of thirteen, rightly |
++| 2 | P1 | Deleting `.ltx_contact_name` can fuse two words into one the page never printed, and removed any label unchecked | Accepted: only the measured labels, replaced by a space; a space after each name, contact and note; tests for both |
++| 3 | P2 | Equal names do not prove the list came from the title block | Accepted: provenance asked in `readingArm`; the test uses the same eight names |
++| 4 | P2 | Tests for the adversarial and placement cases | Accepted, bar one: a test that the prose-retention fallback calls once. The call is in `runExtract`, which runs once whatever `readingArm` does; building a page that rolls back was not worth it for that |
++
++## Ledger
++
++- 2026-10-09: prior-work check (plans 260929d, 261007d, 261009d; the note and q-qjbb9a; origin/dev;
++  fleet: no other session on this). Spike and measurement: `latexmlTitleBlock`, the module, the
++  measure script; labels fix after 2610.08392 refused. Plan written.
++- 2026-10-09: GPT Sol's plan review, *revise before build*; all four taken (§ The plan review).
++  Built red first: `tests/arxiv-affiliations.test.ts`, 20 tests on the real fixtures, stub reader.
++  Five mutants (labels kept, names check off, per-author check off, provenance off, the gate off),
++  each killed. Re-measured on the final code; a local stage-2 run stored the affiliations.
+diff --git a/docs/project/content-extraction.md b/docs/project/content-extraction.md
+index 4a226e8eb..fcf392b74 100644
+--- a/docs/project/content-extraction.md
++++ b/docs/project/content-extraction.md
+@@ -299,7 +299,7 @@ everything it makes is sanitised afterwards like the rest of the page.
+ | a plot as `<object type="image/svg+xml">` | a caption over nothing | an `<img>`. SVG is still not hosted: [article-images.md](article-images.md) leaves it linked to arXiv |
+ | a code listing as a `<div>` per line | a paragraph per line | one `<pre>` |
+ | a boxed passage as an SVG frame round a `foreignObject` | an empty block | the passage's own blocks |
+-| authors in the title block, none in the metadata | Readability's guess: a cited author, or "and" | the paper's authors, names only, through `metaAuthors` ([`src/meta-authors.ts`](../../src/meta-authors.ts)); right on 12 of 19 live pages and refused on the rest, 2026-10-07 ([261007d](../plans/261007d-front-matter-folded-by-default-and-arxiv-html-authors.md) § Stage 2 says why affiliations are not read) |
++| authors in the title block, none in the metadata | Readability's guess: a cited author, or "and" | the paper's authors, names only, through `metaAuthors` ([`src/meta-authors.ts`](../../src/meta-authors.ts)); right on 12 of 19 live pages and refused on the rest, 2026-10-07 ([261007d](../plans/261007d-front-matter-folded-by-default-and-arxiv-html-authors.md) § Stage 2 says why a rule cannot read affiliations). **Each name's affiliations** are read on import by the PDF path's authors pass (one call on the `pdf-frontmatter` model, about half a cent), held to the title block's own words, and the names must come back exactly as the markup has them, or the names stay alone ([`src/arxiv-affiliations.ts`](../../src/arxiv-affiliations.ts), [261009m](../plans/261009m-arxiv-html-affiliations-by-the-authors-pass.md)) |
+ | the title block itself: each author's affiliation, email and `\thanks` note in a pop-up CSS hides | one paragraph of every author fused, with `thanks:`, `footnotemark: 1` and `Affiliation:` as text; and Readability **deleting** the first short author element it took for the byline | one row per author (name, then each contact on its own line), each note once, numbered, and a name carrying the numbers of the notes it shares; one line of names when nobody has details. The page's nodes are moved, a word check and the link targets checked before the swap, and an unproved `\footnotemark` refuses. 16 of 20 live pages, 2026-10-09 ([261009d](../plans/261009d-arxiv-html-title-block-tidied-at-import.md)) |
+ | a macro it could not expand, as its name in `<span class="ltx_ERROR undefined">`, and the macro's argument as ordinary text | `\hohsettheme` then `hohRose` above the title; `phases\ucitedagotto2005.` mid-sentence; `\bmsection` before a funding statement. 9 of 79 papers, 2026-10-09 | the report gone, a space where it would join two words, `\sep` a semicolon between keyword phrases. The argument stays, unless it is a name from the TeX source (`hohRose`, a .bib file's name) or a citation key after a `…cite` macro, which go too ([261009f](../plans/261009f-latex-undefined-macros-leave-the-page.md)) |
+ 
+diff --git a/docs/project/setup-dev.md b/docs/project/setup-dev.md
+index 4e30a6c60..9ff06a0a0 100644
+--- a/docs/project/setup-dev.md
++++ b/docs/project/setup-dev.md
+@@ -543,7 +543,7 @@ shows the model you actually set and marks the row *set in the environment*. Rem
+ | `SPIDERYARN_UPLOAD_SOURCE_GUESS_MODEL` | The same search for an uploaded paper itself, once, to guess where it lives on the web ([ingest-queue.md](ingest-queue.md#a-guessed-web-address-looked-for-once)) |
+ | `SPIDERYARN_CITATION_INVESTIGATE_MODEL` | Citations mode's *Dig deeper* (was *Investigate*) used to take its model from this. Since 2026-10-01 the answer is always the high-power model (`DIG_DEEPER_MODEL`), so this changes what `/profile` reports for the task and nothing a reader triggers ([citations.md](citations.md#dig-deeper-a-closer-look-at-one-work-on-demand)) |
+ | `SPIDERYARN_QUIZ_VERDICT_MODEL` | whether the reader got a quiz question right, judged from the finished mark and shown to nobody ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else)) — a quick-tier job. `evals/quiz.ts` prints the verdict beside a hand label on all eight marking cases, so this is the variable for asking the same question with evidence |
+-| `SPIDERYARN_PDF_FRONTMATTER_MODEL` | the second look at an uploaded PDF's first pages, deciding which records are the article's title and authors and which are the publisher's (`src/pdf-frontmatter.ts`) — so `evals/pdf/titles.mts` can compare models on the shipped path |
++| `SPIDERYARN_PDF_FRONTMATTER_MODEL` | the second look at an uploaded PDF's first pages, deciding which records are the article's title and authors and which are the publisher's (`src/pdf-frontmatter.ts`); also its authors pass, which reads an arXiv HTML paper's affiliations (`src/arxiv-affiliations.ts`) — so `evals/pdf/titles.mts` can compare models on the shipped path |
+ | `SPIDERYARN_DEBATE_MODEL` | Debate mode's step |
+ | `SPIDERYARN_SIMPLE_CHECK_MODEL` | Simple's fidelity guard: each written level's paragraphs checked against the passages they cite ([summaries.md](summaries.md#simple-a-plain-words-orientation)). Its rates were measured on GPT-5.6 Luna, where it stays (`PINNED_MODEL`), so another model is a new measurement |
+ | `SPIDERYARN_DIG_DEEPER_SEARCH_MODEL` | *Dig deeper*'s forced web search, run before the answer: it keeps the search's results and writes a keyword query for the reader's library (`src/dig-deeper.ts`). A quick-tier job; the answer the reader reads is always the high-power model, which this does not change |
+diff --git a/evals/arxiv-affiliations/measure.ts b/evals/arxiv-affiliations/measure.ts
+new file mode 100644
+index 000000000..149eef499
+--- /dev/null
++++ b/evals/arxiv-affiliations/measure.ts
+@@ -0,0 +1,65 @@
++/**
++ * **What the authors pass reads off arXiv HTML title blocks, and what it costs.**
++ *
++ * Fetches each paper's live `arxiv.org/html/<id>`, reads its title block
++ * (`latexmlTitleBlock`), runs the PDF path's authors reader over it
++ * (`readArxivAffiliations`) and prints the verdict, the affiliations per name
++ * and the ledger's cost per paper. Every call is recorded (`collectSpend` with
++ * the cost store's sink), as docs/project/cost-tracking.md requires.
++ *
++ *   npx tsx evals/arxiv-affiliations/measure.ts [--power=standard|high] <arxiv id>...
++ *
++ * docs/plans/261009m-arxiv-html-affiliations-by-the-authors-pass.md § Measured.
++ */
++import { JSDOM, VirtualConsole } from "jsdom";
++import { collectSpend, formatNanos, totalSpend } from "../../src/ai-spend.js";
++import { readArxivAffiliations } from "../../src/arxiv-affiliations.js";
++import { loadEnvLocal } from "../../src/env.js";
++import { latexmlTitleBlock } from "../../src/latexml.js";
++import { modelFor } from "../../src/models.js";
++import { environmentOwnerId } from "../../src/owner.js";
++import { openRouterAuthorsReader } from "../../src/pdf-authors.js";
++import { costStore } from "../../src/store/ai-calls.js";
++
++loadEnvLocal();
++const args = process.argv.slice(2);
++const power = args.find((a) => a.startsWith("--power="))?.slice("--power=".length) === "high" ? "high" : "standard";
++const ids = args.filter((a) => !a.startsWith("--"));
++let total = 0n;
++let calls = 0;
++for (const id of ids) {
++  const url = `https://arxiv.org/html/${id}`;
++  const res = await fetch(url);
++  if (!res.ok) {
++    console.log(`${id}: HTTP ${res.status}`);
++    continue;
++  }
++  const doc = new JSDOM(await res.text(), { url: res.url, virtualConsole: new VirtualConsole() }).window.document;
++  const block = latexmlTitleBlock(doc);
++  if (!block) {
++    console.log(`${id}: no title block the names reader accepts — no call`);
++    continue;
++  }
++  const reader = openRouterAuthorsReader(modelFor("pdf-frontmatter", power));
++  let verdict: Awaited<ReturnType<typeof readArxivAffiliations>> | Error = new Error("not run");
++  const { report } = await collectSpend(
++    async () => {
++      try {
++        verdict = await readArxivAffiliations(block, reader);
++      } catch (err) {
++        verdict = err as Error;
++      }
++    },
++    { attribution: { scopeKind: "eval", ownerId: environmentOwnerId() }, sink: (row) => costStore.record(row) },
++  );
++  const spend = totalSpend(report.calls);
++  total += BigInt(spend.nanos);
++  calls += report.calls.length;
++  const { input, output } = reader.usage();
++  console.log(`\n${id}: ${block.names.length} names · ${formatNanos(spend.nanos)} · ${input} in / ${output} out`);
++  const v = verdict as Awaited<ReturnType<typeof readArxivAffiliations>> | Error;
++  if (v instanceof Error) console.log(`  ERROR ${v.message}`);
++  else if (v.authors === null) console.log(`  refused: ${v.note}`);
++  else for (const a of v.authors) console.log(`  ${a.name} — ${a.affiliations.join(" | ") || "(none)"}`);
++}
++console.log(`\n${calls} call(s), ${formatNanos(Number(total))} in all, recorded in ${costStore.describe()}`);
+diff --git a/src/arxiv-affiliations.ts b/src/arxiv-affiliations.ts
+new file mode 100644
+index 000000000..7e576977b
+--- /dev/null
++++ b/src/arxiv-affiliations.ts
+@@ -0,0 +1,114 @@
++/**
++ * **An arXiv HTML paper's affiliations, read by the PDF path's authors pass.**
++ *
++ * A LaTeXML title block gives every author's name in markup that says exactly
++ * which span is the name (`latexmlAuthorNames`, src/latexml.ts), but not which
++ * of the contacts beside it is the institution: a rule of one affiliation per
++ * `ltx_role_affiliation` contact was wrong on 7 of 19 pages, silently
++ * (docs/plans/261007d-front-matter-folded-by-default-and-arxiv-html-authors.md).
++ * So the names come from the markup, as before, and the affiliations from the
++ * same model call a PDF import makes (src/pdf-authors.ts), **held to the page by
++ * the same check**: every affiliation must be the page's own consecutive words,
++ * and the names the model returns must be the markup's names, in order, every
++ * one. Anything short of that is no affiliations at all, and the names stay as
++ * they were.
++ *
++ * The title block is handed over as the PDF pass's records: one byline record
++ * holding the markup's names, and one record per author holding that author's
++ * name and everything LaTeXML set beside it. The prompt, the schema and the
++ * check are the PDF path's, unchanged — one reader to keep right, not two.
++ *
++ * Greg, 2026-10-09 (q-qjbb9a, 1A): *"1A as long as it's not too complicated or
++ * costly."* docs/plans/261009m-arxiv-html-affiliations-by-the-authors-pass.md.
++ */
++import { errorFields, log } from "./log.js";
++import { type AuthorsReader, affiliationPrintedIn, readAuthors } from "./pdf-authors.js";
++import type { FrontMatterItem } from "./pdf-frontmatter.js";
++import type { Author } from "./types.js";
++
++/** What `latexmlTitleBlock` (src/latexml.ts) reads off the page before it is rewritten. */
++export interface TitleBlock {
++  names: readonly string[];
++  /** One line per author: the name and everything beside it. */
++  creators: readonly string[];
++}
++
++const BYLINE_ID = "names";
++
++/** The title block as the PDF authors pass's records. Exported for the test. */
++export function titleBlockRecords(block: TitleBlock): FrontMatterItem[] {
++  return [
++    { id: BYLINE_ID, index: 0, page: 1, type: "paragraph", text: block.names.join(", ") },
++    ...block.creators.map((text, i) => ({ id: `author-${i + 1}`, index: i + 1, page: 1, type: "paragraph" as const, text })),
++  ];
++}
++
++/**
++ * The authors with their affiliations, or `null` with why — a refusal is the
++ * ordinary outcome of anything not checking out, and the caller keeps the
++ * names-only list it already has. An abort is re-thrown; any other failure is
++ * the caller's to log.
++ */
++export async function readArxivAffiliations(
++  block: TitleBlock,
++  reader: AuthorsReader,
++  signal?: AbortSignal,
++): Promise<{ authors: Author[] } | { authors: null; note: string }> {
++  const verdict = await readAuthors(titleBlockRecords(block), [BYLINE_ID], reader, signal);
++  if (!verdict.authors) return { authors: null, note: verdict.note ?? "the authors pass named nobody" };
++  /* **The markup's names, every one, in order** — `verifyAuthors` holds each
++     name to the byline's words and lets nobody be skipped, but a model that
++     split "Ashish Vaswani" into two people would still pass it. */
++  const same =
++    verdict.authors.length === block.names.length && verdict.authors.every((a, i) => a.name === block.names[i]);
++  if (!same) return { authors: null, note: "the authors pass's names were not the title block's" };
++  /* **Each affiliation printed beside its own author.** `verifyAuthors` finds
++     an affiliation anywhere on the page, which is all a PDF can offer; here the
++     markup says which text is whose, so "Google Research" for Vaswani — printed,
++     but beside Parmar — is refused (GPT Sol, plan review of 261009m). An
++     institution printed once for several authors is refused with it: the
++     safe way to be wrong. */
++  const own = verdict.authors.every((a, i) =>
++    a.affiliations.every((affiliation) => affiliationPrintedIn(block.creators[i] ?? "", affiliation)),
++  );
++  if (!own) return { authors: null, note: "the authors pass gave an author an affiliation printed beside somebody else" };
++  /* Nobody given an institution is the model saying the page prints none,
++     which is not worth a list that says so. */
++  if (verdict.authors.every((a) => a.affiliations.length === 0)) {
++    return { authors: null, note: "the authors pass found no affiliations" };
++  }
++  return { authors: verdict.authors };
++}
++
++/**
++ * What `runExtract` is handed to read affiliations with (src/extract.ts): the
++ * authors with their affiliations, or `null` to keep the names alone.
++ */
++export type AffiliationReader = (block: TitleBlock) => Promise<Author[] | null>;
++
++/**
++ * **The pipeline's reader, degrading as the PDF path's `authorsOrNothing`
++ * does**: a refusal or a failed call is logged and is `null`, so the import
++ * goes on with the names alone; an abort is re-thrown. The log line carries a
++ * refusal's fixed sentence and a count, never a word of the page.
++ */
++export function arxivAffiliationReader(reader: AuthorsReader, ctx: { slug: string; signal: AbortSignal }): AffiliationReader {
++  return async (block) => {
++    try {
++      const verdict = await readArxivAffiliations(block, reader, ctx.signal);
++      if (verdict.authors) return verdict.authors;
++      log("pipeline").info(
++        { slug: ctx.slug, step: "extract", authors: block.names.length },
++        `extract ${ctx.slug}: no affiliations for the arXiv title block: ${verdict.note}`,
++      );
++      return null;
++    } catch (err) {
++      if (ctx.signal.aborted) throw err;
++      log("pipeline").warn(
++        { slug: ctx.slug, step: "extract", ...errorFields(err) },
++        `extract ${ctx.slug}: the arXiv affiliations call was no help; keeping the names alone`,
++      );
++      return null;
++    }
++  };
++}
+diff --git a/src/extract.ts b/src/extract.ts
+index 26a4379a3..58640e3e0 100644
+--- a/src/extract.ts
++++ b/src/extract.ts
+@@ -32,7 +32,7 @@ import { ruleTitleTidier, type TitleTidier } from "./title-tidy.js";
+ import { canonicaliseCallouts, type CalloutStats } from "./callouts.js";
+ import { ChallengePage, challengeIn } from "./challenge-page.js";
+ import { removePlatformFurniture } from "./furniture.js";
+-import { latexmlAuthorNames, prepareLatexml } from "./latexml.js";
++import { latexmlTitleBlock, prepareLatexml } from "./latexml.js";
+ import { READER_COMMENTS_KEY, removeReaderComments } from "./reader-comments.js";
+ import { canonicaliseMaths } from "./maths-import.js";
+ import { loadMathsRenderer } from "./maths-server.js";
+@@ -53,6 +53,7 @@ import type { WorkId } from "./bibliographic.js";
+ import { authorsForByline, chooseByline, metaAuthors } from "./meta-authors.js";
+ import { RESERVED_ATTRS, scrubReserved } from "./reserved.js";
+ import { sanitizeHtml } from "./sanitize.js";
++import type { AffiliationReader, TitleBlock } from "./arxiv-affiliations.js";
+ import type { Author, Meta } from "./types.js";
+ 
+ /**
+@@ -418,6 +419,12 @@ export function readArticle(
+    * asking what Readability said still gets what Readability said.
+    */
+   authors: Author[] | null;
++  /**
++   * A LaTeXML title block as read before it was rewritten, when `authors` is
++   * its names and nothing the page declared elsewhere; otherwise `null`. What
++   * an affiliations reader is handed (src/arxiv-affiliations.ts).
++   */
++  titleBlock: TitleBlock | null;
+   /** The identifiers the page declares for itself — src/article-registry.ts § `ownIdsOfDocument`. */
+   ownIds: WorkId[];
+   refusal: TooLittleTextToRead | ChallengePage | null;
+@@ -437,6 +444,7 @@ export function readArticle(
+   return {
+     article: shipped.article,
+     authors: shipped.authors,
++    titleBlock: shipped.titleBlock,
+     ownIds: shipped.ownIds,
+     refusal: refusalFor(shipped),
+     notes: shipped.notes,
+@@ -464,6 +472,7 @@ function readingArm(
+   /** What the source said it was, before anything rewrote it — `refusalFor`. */
+   challenge: ChallengePage | null;
+   authors: Author[] | null;
++  titleBlock: TitleBlock | null;
+   ownIds: WorkId[];
+   notes: NoteStats;
+   callouts: CalloutStats;
+@@ -491,10 +500,11 @@ function readingArm(
+      it and Readability deletes every `<script>`. `provenanceArm` has the same
+      line in the same place. */
+   const challenge = challengeIn(dom.window.document);
+-  /* A LaTeXML title block's names, before `prepareDocument` rewrites the block
+-     into one row per author (src/latexml.ts § 6). `metaAuthors` still reads the
+-     `<meta>` tags where it always has, below, and falls back to these. */
+-  const titleBlockNames = latexmlAuthorNames(dom.window.document);
++  /* A LaTeXML title block's names, and each author's text for the affiliations
++     reader, before `prepareDocument` rewrites the block into one row per author
++     (src/latexml.ts § 6). `metaAuthors` still reads the `<meta>` tags where it
++     always has, below, and falls back to these names. */
++  const titleBlock = latexmlTitleBlock(dom.window.document);
+   const { notes, callouts, removed, kept } = prepareDocument(dom.window.document, protect);
+   /* Before the parse, and it has to be: Readability mutates the document it is
+      given, and `keepClasses: false` takes the `noprint` class off whatever
+@@ -502,7 +512,12 @@ function readingArm(
+   const notForPrint = notForPrintText(dom.window.document);
+   /* Before the parse for the same reason: every author the page declares,
+      which Readability collapses to one — src/meta-authors.ts. */
+-  const authors = metaAuthors(dom.window.document, titleBlockNames);
++  const authors = metaAuthors(dom.window.document, titleBlock?.names ?? null);
++  /* **Whether that list came from the title block**, asked now, while it can
++     be: a `citation_author` list of the same names is indistinguishable from it
++     afterwards, and a page that declares its authors has said what it has to
++     say (GPT Sol, plan review of 261009m). */
++  const fromTitleBlock = titleBlock !== null && authors !== null && metaAuthors(dom.window.document, null) === null;
+   /* And the same again: the page's own DOI or arXiv id, off its meta tags and its address. */
+   const ownIds = ownIdsOfDocument(dom.window.document, url);
+   const article = new Readability(dom.window.document).parse();
+@@ -510,6 +525,7 @@ function readingArm(
+     article,
+     challenge,
+     authors,
++    titleBlock: fromTitleBlock ? titleBlock : null,
+     ownIds,
+     notes,
+     callouts,
+@@ -1247,6 +1263,15 @@ export class TooLittleTextToRead extends Error {
+  * derive it from, and every caller already knows the slug. The command line
+  * that could pass an explicit filename is gone too.
+  */
++/** Whether `authors` is exactly `names`, in order, with no affiliations yet: the title block's list. */
++function sameNames(authors: readonly Author[] | null, names: readonly string[]): boolean {
++  return (
++    authors !== null &&
++    authors.length === names.length &&
++    authors.every((a, i) => a.name === names[i] && a.affiliations.length === 0)
++  );
++}
++
+ /** The cheap test before loading temml: a `<math>` or a MathJax script anywhere in the raw page. */
+ const MIGHT_HOLD_MATHS = /<math[\s>]|math\/tex/iu;
+ 
+@@ -1271,6 +1296,12 @@ export async function runExtract(opts: {
+    * (src/title-tidy-model.ts); absent, the rule alone, and no call.
+    */
+   titleTidier?: TitleTidier;
++  /**
++   * What reads an arXiv HTML paper's affiliations off its title block. Import
++   * hands in the PDF path's authors pass (src/arxiv-affiliations.ts, plan
++   * 261009m); absent, no call, and the names stay alone.
++   */
++  affiliations?: AffiliationReader;
+ }): Promise<ExtractResult> {
+   const { slug } = opts;
+   /* Before the DOM pass that asks whether each formula would draw: this is the
+@@ -1295,7 +1326,10 @@ export async function runExtract(opts: {
+      Found by a GPT Sol review that reproduced it, 2026-08-26 — the fourth round
+      of the same class, and the first one where the leak was a dependency's
+      rather than ours. See docs/project/logging.md. */
+-  const { article, authors, ownIds, refusal, notes, callouts, removed, kept } = readArticle(opts.html, opts.url);
++  const { article, authors: declaredAuthors, titleBlock, ownIds, refusal, notes, callouts, removed, kept } = readArticle(
++    opts.html,
++    opts.url,
++  );
+   /* **Before the `!article` check, so it wins over `ReadabilityRefused` too.**
+      A bot check Readability happens to decline is still a bot check, and that
+      is the sentence with a move in it. src/challenge-page.ts. */
+@@ -1328,6 +1362,14 @@ export async function runExtract(opts: {
+      page's declared author list replaces it where it has dropped somebody,
+      because Readability keeps only the last of a repeated tag —
+      src/meta-authors.ts. */
++  /* **Affiliations for a LaTeXML title block's names**, and only when those
++     names are the whole list: a page that declares `citation_author` tags has
++     already said what it has to say. The reader returns the same names, in the
++     same order, or nothing (src/arxiv-affiliations.ts). Plan 261009m. */
++  const authors =
++    opts.affiliations && titleBlock && sameNames(declaredAuthors, titleBlock.names)
++      ? ((await opts.affiliations(titleBlock)) ?? declaredAuthors)
++      : declaredAuthors;
+   const byline = chooseByline(authors?.map((a) => a.name) ?? null, tidyMetaText(article.byline));
+   const declared = authorsForByline(authors, byline);
+   /* **Plain text, once, before it branches** into `meta.title`, the page's
+diff --git a/src/latexml.ts b/src/latexml.ts
+index ed2f73ddb..9f7f89b08 100644
+--- a/src/latexml.ts
++++ b/src/latexml.ts
+@@ -855,8 +855,8 @@ const ORCID_LINK_LABEL = /\b(?:orcid|profile|record)\b/iu;
+  *   div.ltx_authors      (one)
+  *     span.ltx_creator.ltx_role_author   ×n
+  *       span.ltx_personname              one, holding one name
+- *       span.ltx_note.ltx_role_thanks    the footnote `\thanks` makes, when it is set beside the name: not read
+- *       span.ltx_author_notes            affiliations, addresses, emails: not read
++ *       span.ltx_note.ltx_role_thanks    the footnote `\thanks` makes, when it is set beside the name: not read here (`latexmlTitleBlock` hands it to a model)
++ *       span.ltx_author_notes            affiliations, addresses, emails: not read here (`latexmlTitleBlock` hands them to a model)
+  *     span.ltx_author_before             the space, the ", " or the " and " between them: not read
+  * ```
+  *
+@@ -882,6 +882,49 @@ export function latexmlAuthorNames(doc: Document): string[] | null {
+   return block ? (readCreators(block)?.map((c) => c.name) ?? null) : null;
+ }
+ 
++/**
++ * **The title block as the authors pass reads it**: the names `latexmlAuthorNames`
++ * reads, and one line of text per creator — the name and everything set beside
++ * it (the `\thanks` note, the affiliation and email contacts) — which is what a
++ * model's affiliations are held to (src/arxiv-affiliations.ts). Read before
++ * `prepareDocument`, like the names: `tidyTitleBlock` moves these nodes. `null`
++ * exactly when `latexmlAuthorNames` is.
++ *
++ * **One projection of the page, defined here**: LaTeXML's furniture — a note's
++ * repeated marks and number, and a contact's label when it is exactly one of
++ * the measured `CONTACT_LABELS` — is **replaced by a space**, never just
++ * deleted. Replaced, because deleting fuses the words either side:
++ * `Affiliation:Department` `Affiliation:University` became `DepartmentUniversity`,
++ * a word the page never printed (GPT Sol, plan review of 261009m). Taken out at
++ * all, because LaTeXML splits one institution over several contacts
++ * (`Affiliation: Department of Physics, Affiliation: University of Trento`), and
++ * with the labels in, that institution is no run of words (2610.08392). A label
++ * not in the list stays, as words: it may be the author's.
++ */
++export function latexmlTitleBlock(doc: Document): { names: string[]; creators: string[] } | null {
++  const block = titleBlockOf(doc);
++  const creators = block ? readCreators(block) : null;
++  if (!creators) return null;
++  return {
++    names: creators.map((c) => c.name),
++    creators: creators.map((c) => {
++      const copy = c.creator.cloneNode(true) as Element;
++      const furniture = [
++        ...Array.from(copy.querySelectorAll(NOTE_FURNITURE)),
++        ...Array.from(copy.querySelectorAll(".ltx_contact_name")).filter(
++          (label) => label.children.length === 0 && CONTACT_LABELS.has((label.textContent ?? "").trim()),
++        ),
++      ];
++      for (const el of furniture) el.replaceWith(copy.ownerDocument.createTextNode(" "));
++      /* And a space after the name and each contact and note, for the same
++         reason: they are separate lines in the pop-up, whatever whitespace the
++         markup has between them. */
++      for (const el of Array.from(copy.querySelectorAll(".ltx_personname, .ltx_contact, .ltx_note"))) el.after(" ");
++      return (copy.textContent ?? "").replace(/\s+/gu, " ").trim();
++    }),
++  };
++}
++
+ /** The one `.ltx_authors` under the one `article.ltx_document` at a LaTeXML address, or `null`. */
+ function titleBlockOf(doc: Document): Element | null {
+   if (!hasLatexmlSource(doc)) return null;
+diff --git a/src/pdf-authors.ts b/src/pdf-authors.ts
+index 7d2f8ea83..0c8ea2ecc 100644
+--- a/src/pdf-authors.ts
++++ b/src/pdf-authors.ts
+@@ -381,6 +381,16 @@ const findAffiliation = (have: Word[], want: string[]): FoundSpan | null => {
+   return null;
+ };
+ 
++/**
++ * Whether `affiliation` is a run of `text`'s words, by the rule `verifyAuthors`
++ * holds an affiliation to a page with. For a caller that knows which part of
++ * the page belongs to which author (src/arxiv-affiliations.ts).
++ */
++export function affiliationPrintedIn(text: string, affiliation: string): boolean {
++  const want = words(affiliation);
++  return want.length > 0 && findAffiliation(wordsOf(text), want) !== null;
++}
++
+ const oneLine = (s: string) => s.replace(/\s+/gu, " ").trim();
+ 
+ export type AuthorsVerdict =
+diff --git a/src/pipeline.ts b/src/pipeline.ts
+index 83a6451cb..9fbcba236 100644
+--- a/src/pipeline.ts
++++ b/src/pipeline.ts
+@@ -176,6 +176,7 @@ import {
+   PROMPT_VERSION as SKETCH_PROMPT_VERSION,
+   SKETCH_OUTPUT_SCHEMA,
+ } from "./sketch.js";
++import { arxivAffiliationReader } from "./arxiv-affiliations.js";
+ import { openRouterAuthorsReader } from "./pdf-authors.js";
+ import { openRouterFrontMatterReader } from "./pdf-frontmatter.js";
+ import { runPdfExtract } from "./pdf-read.js";
+@@ -2748,7 +2749,16 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
+            encoding so that stays visible. */
+         const html = new TextDecoder().decode(bytes);
+         try {
+-          const result = await runExtract({ html, url, slug: ctx.slug, titleTidier: stepTitleTidier(ctx, store) });
++          const result = await runExtract({
++            html,
++            url,
++            slug: ctx.slug,
++            titleTidier: stepTitleTidier(ctx, store),
++            /* An arXiv HTML paper's affiliations, by the PDF path's authors
++               pass on the same model (plan 261009m). Called only on a LaTeXML
++               title block whose names are the whole author list. */
++            affiliations: arxivAffiliationReader(openRouterAuthorsReader(modelFor("pdf-frontmatter", ctx.power)), ctx),
++          });
+           /* **The audit line for the named pre-Readability removers.**
+              `removePlatformFurniture` and `removeReaderComments` delete an
+              element because of a publisher/platform name, and a delete
+diff --git a/tests/arxiv-affiliations.test.ts b/tests/arxiv-affiliations.test.ts
+new file mode 100644
+index 000000000..1e21aa4b2
+--- /dev/null
++++ b/tests/arxiv-affiliations.test.ts
+@@ -0,0 +1,233 @@
++/**
++ * An arXiv HTML paper's affiliations, read by the PDF path's authors pass and
++ * held to the title block's own words — src/arxiv-affiliations.ts.
++ *
++ * The fixtures are the real title blocks in `tests/fixtures/latexml/` (emails
++ * replaced). The model is a stub that answers what each test says: nothing here
++ * spends. What the real model answers, and what it costs, is
++ * evals/arxiv-affiliations/measure.ts.
++ *
++ * docs/plans/261009m-arxiv-html-affiliations-by-the-authors-pass.md.
++ */
++import { readFileSync } from "node:fs";
++import { JSDOM } from "jsdom";
++import { describe, expect, it } from "vitest";
++import {
++  type AffiliationReader,
++  type TitleBlock,
++  arxivAffiliationReader,
++  readArxivAffiliations,
++  titleBlockRecords,
++} from "../src/arxiv-affiliations.js";
++import { runExtract } from "../src/extract.js";
++import { latexmlTitleBlock } from "../src/latexml.js";
++import { type AuthorAnswer, type AuthorsReader, parseAuthors } from "../src/pdf-authors.js";
++
++const fx = (name: string) =>
++  readFileSync(new URL(`./fixtures/latexml/${name}.html`, import.meta.url), "utf8").replace(/^<!--[\s\S]*?-->\n/u, "");
++const page = (body: string, head = "") =>
++  `<!doctype html><html lang="en"><head><title>A Paper</title>${head}</head><body><article class="ltx_document ltx_authors_1line">${body}</article></body></html>`;
++const blockOf = (name: string, url = "https://arxiv.org/html/1706.03762v7") =>
++  latexmlTitleBlock(new JSDOM(page(fx(name)), { url }).window.document)!;
++
++const ATTENTION_AFFILIATIONS: [string, string[]][] = [
++  ["Ashish Vaswani", ["Google Brain"]],
++  ["Noam Shazeer", ["Google Brain"]],
++  ["Niki Parmar", ["Google Research"]],
++  ["Jakob Uszkoreit", ["Google Research"]],
++  ["Llion Jones", ["Google Research"]],
++  ["Aidan N. Gomez", ["University of Toronto"]],
++  ["Łukasz Kaiser", ["Google Brain"]],
++  ["Illia Polosukhin", []],
++];
++const attentionAnswer = (): AuthorAnswer[] =>
++  ATTENTION_AFFILIATIONS.map(([name, affiliations]) => ({ name, affiliations: [...affiliations] }));
++
++/** A reader that answers `answer` and remembers each prompt. */
++const stub = (answer: AuthorAnswer[], seen: string[] = []): AuthorsReader => ({
++  id: "test/stub",
++  usage: () => ({ input: 0, output: 0 }),
++  async ask(prompt) {
++    seen.push(prompt);
++    return parseAuthors(JSON.stringify({ authors: answer }));
++  },
++});
++
++describe("the title block as the authors pass's records", () => {
++  it("is the markup's names as the byline, then one line per author with LaTeXML's furniture out", () => {
++    const block = blockOf("authors-1706-03762v7");
++    expect(block.names).toHaveLength(8);
++    const records = titleBlockRecords(block);
++    expect(records[0]).toMatchObject({ id: "names", text: block.names.join(", ") });
++    expect(records).toHaveLength(9);
++    const shazeer = records.find((r) => r.text.startsWith("Noam Shazeer"))!;
++    expect(shazeer.text).toContain("Google Brain");
++    for (const r of records) expect(r.text).not.toMatch(/Affiliation:|Email:|footnotemark|thanks:/u);
++  });
++
++  it("is null wherever the names are: institutions marked up as creators", () => {
++    expect(latexmlTitleBlock(new JSDOM(page(fx("authors-2610-08781")), { url: "https://arxiv.org/html/2610.08781" }).window.document)).toBeNull();
++  });
++
++  it("is null away from a LaTeXML address", () => {
++    expect(latexmlTitleBlock(new JSDOM(page(fx("authors-1706-03762v7")), { url: "https://example.org/paper" }).window.document)).toBeNull();
++  });
++});
++
++describe("readArxivAffiliations", () => {
++  const block = blockOf("authors-1706-03762v7");
++
++  it("gives each markup name the affiliations the page prints for it", async () => {
++    const verdict = await readArxivAffiliations(block, stub(attentionAnswer()));
++    expect(verdict.authors).toEqual(attentionAnswer());
++  });
++
++  it("finds one institution LaTeXML split across three labelled contacts (2610.08392)", async () => {
++    const trento = blockOf("authors-2610-08392", "https://arxiv.org/html/2610.08392");
++    const answer = trento.names.map((name) => ({
++      name,
++      affiliations: name === "Asiye Malkoç" ? ["Department of Cellular, Computational and Integrative Biology, University of Trento, Italy"]
++        : name === "Yuri Bozzi" ? ["Center for Mind/ Brain Sciences, University of Trento, Italy"]
++        : ["Department of Physics, University of Trento, Italy"],
++    }));
++    const verdict = await readArxivAffiliations(trento, stub(answer));
++    expect(verdict.authors?.[0]).toEqual({ name: "Ilya Auslender", affiliations: ["Department of Physics, University of Trento, Italy"] });
++  });
++
++  it("refuses an affiliation the page does not print", async () => {
++    const answer = attentionAnswer();
++    answer[0]!.affiliations = ["Google DeepMind"];
++    expect(await readArxivAffiliations(block, stub(answer))).toMatchObject({ authors: null });
++  });
++
++  it("refuses a list with somebody left out", async () => {
++    const answer = attentionAnswer().filter((a) => a.name !== "Llion Jones");
++    expect(await readArxivAffiliations(block, stub(answer))).toMatchObject({ authors: null });
++  });
++
++  it("refuses one name split into two people", async () => {
++    const answer = attentionAnswer();
++    answer.splice(0, 1, { name: "Ashish", affiliations: ["Google Brain"] }, { name: "Vaswani", affiliations: ["Google Brain"] });
++    expect(await readArxivAffiliations(block, stub(answer))).toMatchObject({ authors: null });
++  });
++
++  it("refuses an institution that is printed, but beside somebody else", async () => {
++    const answer = attentionAnswer();
++    answer[0]!.affiliations = ["Google Research"];
++    expect(await readArxivAffiliations(block, stub(answer))).toMatchObject({ authors: null });
++  });
++
++  it("refuses the names out of order", async () => {
++    const answer = attentionAnswer();
++    [answer[0], answer[1]] = [answer[1]!, answer[0]!];
++    expect(await readArxivAffiliations(block, stub(answer))).toMatchObject({ authors: null });
++  });
++
++  it("refuses a list where nobody has an institution: it would say nothing", async () => {
++    const answer = attentionAnswer().map((a) => ({ name: a.name, affiliations: [] }));
++    expect(await readArxivAffiliations(block, stub(answer))).toMatchObject({ authors: null });
++  });
++});
++
++describe("arxivAffiliationReader, the pipeline's wrapper", () => {
++  const block = blockOf("authors-1706-03762v7");
++  const failing = (err: Error): AuthorsReader => ({
++    id: "test/failing",
++    usage: () => ({ input: 0, output: 0 }),
++    async ask() {
++      throw err;
++    },
++  });
++
++  it("is null, not a failed import, when the call fails", async () => {
++    const read = arxivAffiliationReader(failing(new Error("upstream 502")), { slug: "s", signal: new AbortController().signal });
++    expect(await read(block)).toBeNull();
++  });
++
++  it("re-throws when the job is aborted", async () => {
++    const ac = new AbortController();
++    ac.abort();
++    const read = arxivAffiliationReader(failing(new Error("aborted")), { slug: "s", signal: ac.signal });
++    await expect(read(block)).rejects.toThrow();
++  });
++
++  it("is null on a refusal", async () => {
++    const answer = attentionAnswer();
++    answer[0]!.affiliations = ["Google DeepMind"];
++    const read = arxivAffiliationReader(stub(answer), { slug: "s", signal: new AbortController().signal });
++    expect(await read(block)).toBeNull();
++  });
++});
++
++describe("runExtract with an affiliations reader", () => {
++  const prose = `<p>${"The dominant sequence transduction models are based on complex recurrent networks. ".repeat(12)}</p>`;
++  const body = `<h1 class="ltx_title ltx_title_document">Attention Is All You Need</h1>${fx("authors-1706-03762v7")}<section class="ltx_section">${prose}</section>`;
++  const extract = (affiliations?: AffiliationReader, head = "") =>
++    runExtract({ html: page(body, head), url: "https://arxiv.org/html/1706.03762v7", slug: "arxiv-affiliations", ...(affiliations ? { affiliations } : {}) });
++
++  it("stores the affiliations on meta.authors, the byline unchanged", async () => {
++    const seen: TitleBlock[] = [];
++    const out = await extract(async (block) => {
++      seen.push(block);
++      return readArxivAffiliations(block, stub(attentionAnswer())).then((v) => v.authors);
++    });
++    expect(seen).toHaveLength(1);
++    expect(out.meta.authors).toEqual(attentionAnswer());
++    expect(out.meta.byline).toBe(ATTENTION_AFFILIATIONS.map(([n]) => n).join("; "));
++  });
++
++  it("keeps the names alone when the reader gives nothing", async () => {
++    const out = await extract(async () => null);
++    expect(out.meta.authors).toEqual(ATTENTION_AFFILIATIONS.map(([name]) => ({ name, affiliations: [] })));
++  });
++
++  it("does not ask when the page declares the very same authors in citation_author tags", async () => {
++    let asked = 0;
++    const names = ATTENTION_AFFILIATIONS.map(([n]) => n);
++    const out = await extract(
++      async () => {
++        asked++;
++        return null;
++      },
++      names.map((n) => `<meta name="citation_author" content="${n}">`).join(""),
++    );
++    expect(asked).toBe(0);
++    expect(out.meta.authors?.map((a) => a.name)).toEqual(names);
++  });
++
++  it("does not ask for a page it refuses as too short", async () => {
++    let asked = 0;
++    const short = page(`<h1 class="ltx_title ltx_title_document">A</h1>${fx("authors-2610-08785")}<p>Too short.</p>`);
++    await expect(
++      runExtract({
++        html: short,
++        url: "https://arxiv.org/html/1706.03762v7",
++        slug: "arxiv-affiliations-short",
++        affiliations: async () => {
++          asked++;
++          return null;
++        },
++      }),
++    ).rejects.toThrow();
++    expect(asked).toBe(0);
++  });
++});
++
++describe("the projection of a creator's text", () => {
++  const creator = (contacts: string) =>
++    `<div class="ltx_authors"><span class="ltx_creator ltx_role_author"><span class="ltx_personname">Alice Doe</span><span class="ltx_author_notes"><span class="ltx_author_notes_content">${contacts}</span></span></span></div>`;
++  const textOf = (contacts: string) =>
++    latexmlTitleBlock(new JSDOM(page(creator(contacts)), { url: "https://arxiv.org/html/2610.00001" }).window.document)!.creators[0];
++
++  it("never fuses the words either side of a label it takes out", () => {
++    const text = textOf(
++      `<span class="ltx_contact ltx_role_affiliation"><span class="ltx_contact_name">Affiliation:</span>Department</span><span class="ltx_contact ltx_role_affiliation"><span class="ltx_contact_name">Affiliation:</span>University</span>`,
++    );
++    expect(text).toBe("Alice Doe Department University");
++  });
++
++  it("keeps a label it has not measured, as words", () => {
++    const text = textOf(`<span class="ltx_contact ltx_role_affiliation"><span class="ltx_contact_name">Visiting from:</span> Acme Labs</span>`);
++    expect(text).toBe("Alice Doe Visiting from: Acme Labs");
++  });
++});

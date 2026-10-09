@@ -126,8 +126,9 @@ from the press until the new list has been read
 ([reader-profile.md § Regenerate waits for its own result](reader-profile.md#regenerate-waits-for-its-own-result)).
 After a refused start, the panel's foot also offers *Find them again* on a current list, held in
 the same way.
-A press is one model call; the list is replaced only if the run succeeds. The row is drawn with the experimental
-switch off too, as Timeline's and Debate's are. Why it is safe to offer is in
+A press is one model call; the list is replaced only if the run succeeds. The Metadata row is
+drawn with the experimental switch off too, as Timeline's and Reception's are. Why it is safe to
+offer is in
 [`src/rerun-steps.ts`](../../src/rerun-steps.ts).
 
 ## Who sees it

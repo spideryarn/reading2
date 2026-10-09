@@ -254,7 +254,7 @@ on 2026-09-29 (`1a44cb57`).
 
 **A conversation with the AI wears `MessagesSquare`, Chat mode's own icon, wherever it is drawn**:
 the gutter's chat button, the head of the card it opens (`ChatDialog.tsx`), the marks that reopen a
-chat started from a Glossary entry, a cited work or a Debate claim or angle (`OriginChat.tsx`,
+chat started from a Glossary entry, a cited work or a Peer review claim or angle (`OriginChat.tsx`,
 `DebatePanel.tsx`), and *Ask about this paragraph in chat* (`SimplePanel.tsx`).
 
 **One square bubble is the comment family**: `MessageSquareText` on the bar's Comments button,
@@ -265,7 +265,7 @@ from one that starts a new one is what sits beside the glyph: a count, the answe
 a label. [261006i](../plans/261006i-a-lone-comment-in-the-margin-says-its-words-once-and-the-gutter-s-chat-button-wears-chat-s-two-bubbles.md)
 has the narrower option that was passed over. Two places still cross the families and were left:
 Chat's *New conversation* wears `MessageSquarePlus`, and the Metadata page's Debate row wears
-`MessagesSquare` while Debate's mode icon is `Globe`.
+`MessagesSquare` while Peer review's mode icon is `BookText` (it was Debate's `Globe` until 2026-10-09).
 
 ## Where they're used
 

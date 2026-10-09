@@ -5870,7 +5870,7 @@ async function runRefereeClaims(slug: string, res: ServerResponse): Promise<void
 }
 
 /* ------------------------------------------ debate's reader claim checks --
-   The reader ticks claims in Debate's Claims, or types one, and presses Check:
+   The reader ticks claims in Peer review's Claims, or types one, and presses Check:
    one web search over them all, stored as a check. Plan
    docs/plans/261008i-debate-claims-picked-by-the-reader.md § 3;
    src/store/pg-debate-claim-checks.ts; src/debate.ts § `generateClaimCheck`. */
@@ -11405,9 +11405,9 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
    * article gets no list in v1: this is not under `/api/public/`, and adding it
    * there is a new field on the public boundary.
    *
-   * **No experimental gate**, because Debate has none on the server: the switch
-   * hides the bar's button, and a bookmarked `?mode=debate` stays reachable
-   * (docs/project/experimental-features.md). GPT Sol's F4.
+   * **No experimental gate.** Debate had none on the server even while its
+   * bar button was behind the switch, and since 2026-10-09 this is Reception
+   * inside Peer review, which is offered to everyone. GPT Sol's F4.
    *
    * **The identity is the imported one, not the shelf's**: a reader's rename
    * would fail the title check on a correct DOI (F2).

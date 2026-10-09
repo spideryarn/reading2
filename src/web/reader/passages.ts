@@ -151,12 +151,14 @@ export function selectPassages(mode: BandMode, slots: PassageSlots): PassageSlot
        than a claim about one. A mode that lit its own rows' blocks in the prose
        would mark the whole article. */
     case "structure":
-    case "debate":
-    /* Citations marks nothing in v1: a row's "first cited" is a jump to one
+    /* Peer review marks nothing, in any of its three sub-modes. Bibliography
+       (Citations until 2026-10-09): a row's "first cited" is a jump to one
        block, not a selection, and selecting a work to mark every passage that
        cites it (`?cite=`, a `Found` producer) is deferred —
-       docs/plans/260911g-citations-mode.md § What is deliberately not built. */
-    case "citations":
+       docs/plans/260911g-citations-mode.md § What is deliberately not built.
+       Reception and Claims (Debate until then): a row is a page on the web,
+       and a claim's passage is a jump. */
+    case "peer-review":
     /* FAQ marks nothing in v1 either: each passage under a question is a jump,
        and a `?faq=` selection that marks a question's passages in the prose is
        deferred — docs/plans/260916d-faq-mode.md § Deferred. */

@@ -1113,6 +1113,7 @@ export function settleAddress(pathname: string, search: string, hash: string): s
   at = liftLegacySlug(at);
   at = liftLegacyTweets(at);
   at = liftLegacyDebateBy(at);
+  at = liftLegacyPeerReview(at);
   at = liftLegacyAbout(at);
   /* `liftStrandedText` stood here from 2026-09-05 to 2026-09-29, rewriting
      `?mode=hierarchy&text=0` to Structure and dropping every `text=0`. Both
@@ -1403,16 +1404,95 @@ function liftLegacyDebateBy(at: Address): Address {
 const DEBATE_CLAIMS = "debate=claims";
 
 /**
+ * **Citations and Debate, two modes until 2026-10-09, to the Peer review
+ * sub-mode each became**:
+ *
+ * - `?mode=citations` → `?mode=peer-review` (Bibliography, the default);
+ * - `?mode=debate` → `?mode=peer-review&peer-review=reception`, or `claims`
+ *   when the old address said `debate=claims`;
+ * - `?chatfrom=debate` and `?chatfrom=citations` → `?chatfrom=peer-review`,
+ *   Chat's list filter for conversations started from any of the three.
+ *
+ * `RETIRED_MODES` (src/modes.ts) alone would open Peer review at its default,
+ * so an old Reception or Claims link would land on Bibliography; this is what
+ * `liftLegacyTweets` is to Summary's thread. **It runs after
+ * `liftLegacyDebateBy`**, so an older `?debateby=claim` has already become
+ * `debate=claims` by the time it is read here. **An explicit `peer-review=`
+ * wins** over the old words, as an explicit `debate=` wins over `debateby`.
+ * The `debate=` pairs a Debate address carried are consumed; on any other
+ * address a stray `debate=` is read by nothing and left as written. Every
+ * other pair — `?citeby`, `?citebar`, `?debateby`, `?bears`,
+ * `?debatethread`, the sub-modes' own — is kept exactly as written.
+ *
+ * One function behind every arrival: `settleAddress` on boot,
+ * `liftedLegacyHref` on a navigation and on Back, and `liftedLegacySearch` for
+ * a remembered last view (last-view.ts § `restoredHref`), which is put on the
+ * address after boot and would otherwise walk past this (GPT Sol's F1 on plan
+ * 261009l). docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md.
+ */
+function liftLegacyPeerReview(at: Address): Address {
+  const pairs = queryPairs(at.search);
+  const pairValue = (pair: string | undefined): string | null => {
+    if (pair === undefined || !pair.includes("=")) return null;
+    try {
+      return decodeURIComponent(pair.slice(pair.indexOf("=") + 1));
+    } catch {
+      return null;
+    }
+  };
+  const modeWord = pairValue(pairs.find((pair) => hasKey(pair, "mode")));
+  const chatFromWord = pairValue(pairs.find((pair) => hasKey(pair, "chatfrom")));
+  const oldMode = modeWord === "citations" || modeWord === "debate" ? modeWord : null;
+  const oldChatFrom = chatFromWord === "citations" || chatFromWord === "debate";
+  if (oldMode === null && !oldChatFrom) return at;
+
+  /* The sub-mode the old address meant, unless it names the new one itself. */
+  const explicit = pairs.some((pair) => hasKey(pair, "peer-review"));
+  const debateView = pairValue(pairs.find((pair) => hasKey(pair, "debate"))) === "claims" ? "claims" : "reception";
+  const view = oldMode === "debate" && !explicit ? debateView : null;
+
+  let wroteMode = false;
+  let wroteChatFrom = false;
+  const kept = pairs.flatMap((pair) => {
+    if (oldMode !== null && hasKey(pair, "mode")) {
+      if (wroteMode) return [];
+      wroteMode = true;
+      return ["mode=peer-review"];
+    }
+    if (oldMode === "debate" && hasKey(pair, "debate")) return [];
+    if (oldChatFrom && hasKey(pair, "chatfrom")) {
+      if (wroteChatFrom) return [];
+      wroteChatFrom = true;
+      return ["chatfrom=peer-review"];
+    }
+    return [pair];
+  });
+  if (view !== null) kept.push(`peer-review=${view}`);
+  return { pathname: at.pathname, search: kept.length > 0 ? `?${kept.join("&")}` : "", hash: at.hash };
+}
+
+/**
  * **Every old spelling `settleAddress` lifts that can also arrive after
- * boot** — `liftedTweetsHref`'s job, for the thread's old addresses and
- * Debate's old order together. `navigate()` and Back/Forward (`useRoute`) ask
- * this, so a tab open across a deploy lands where a fresh load would. `null`
- * when the address carries neither.
+ * boot** — `liftedTweetsHref`'s job, for the thread's old addresses, Debate's
+ * old order, and Citations' and Debate's old mode words together. `navigate()`
+ * and Back/Forward (`useRoute`) ask this, so a tab open across a deploy lands
+ * where a fresh load would. `null` when the address carries none of them.
  */
 export function liftedLegacyHref(href: string): string | null {
   const at = splitHref(href);
-  const lifted = liftLegacyDebateBy(liftLegacyTweets(at));
+  const lifted = liftLegacyPeerReview(liftLegacyDebateBy(liftLegacyTweets(at)));
   return lifted === at ? null : `${lifted.pathname}${lifted.search}${lifted.hash}`;
+}
+
+/**
+ * **The same lifts for a bare query string** — a remembered last view, which
+ * last-view.ts § `restoredHref` puts on the address after `settleAddress` has
+ * run (GPT Sol's F1 on plan 261009l). Debate's old order first, then the
+ * Peer review words, as `settleAddress` orders them. The thread's old word is
+ * last-view's own business (`opensTheThread` drops it).
+ */
+export function liftedLegacySearch(search: string): string {
+  return liftLegacyPeerReview(liftLegacyDebateBy({ pathname: "", search, hash: "" })).search;
 }
 
 /**

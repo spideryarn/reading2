@@ -1838,6 +1838,10 @@ describe("the Earlier tab", () => {
         if (!found) throw new Error(`no ${name} button`);
         return found;
       };
+      /** `aria-disabled`, not `disabled`: an unavailable pager button keeps its hint (261009m § 4). */
+      const unavailable = (b: HTMLButtonElement) => b.getAttribute("aria-disabled") === "true" && !b.disabled;
+      const place = () => thread().querySelector(".fb-thread-place")?.textContent;
+      const showing = () => thread().querySelector<HTMLElement>(".fb-question")?.dataset.question;
       const hasButton = (within: Element, name: string) =>
         [...within.querySelectorAll("button")].some((b) => (b.textContent ?? "").trim() === name);
       const replyBoxes = () => [...panelOf("Earlier").querySelectorAll<HTMLTextAreaElement>("textarea.fb-reply-input")];
@@ -1998,9 +2002,9 @@ describe("the Earlier tab", () => {
         expect(panelOf("Earlier").querySelector(".fb-threads")).toBeNull();
         /* The pills go while one thread shows: on a phone they cost three lines. */
         expect(panelOf("Earlier").querySelectorAll(".fb-show-button")).toHaveLength(0);
-        expect(thread().querySelector(".fb-thread-place")?.textContent).toBe("1 of 2");
-        expect(button(thread(), "‹ Previous").disabled).toBe(true);
-        expect(button(thread(), "Next ›").disabled).toBe(false);
+        expect(place()).toBe("1 of 2 needing a decision");
+        expect(unavailable(button(thread(), "‹ Previous"))).toBe(true);
+        expect(unavailable(button(thread(), "Next ›"))).toBe(false);
         expect([...thread().querySelectorAll("button")].every((b) => b.type === "button")).toBe(true);
 
         const article = thread().querySelector<HTMLElement>(".fb-question");
@@ -2029,8 +2033,8 @@ describe("the Earlier tab", () => {
         /* A thread with no report has no Your report. */
         click(button(thread(), "Next ›"));
         expect(thread().querySelector<HTMLElement>(".fb-question")?.dataset.question).toBe("q-bbbbbb");
-        expect(thread().querySelector(".fb-thread-place")?.textContent).toBe("2 of 2");
-        expect(button(thread(), "Next ›").disabled).toBe(true);
+        expect(place()).toBe("2 of 2 needing a decision");
+        expect(unavailable(button(thread(), "Next ›"))).toBe(true);
         expect(thread().querySelector("details.fb-question-more")).toBeNull();
 
         /* And the way back: the contents, and the pills. */
@@ -2040,18 +2044,103 @@ describe("the Earlier tab", () => {
         expect(pills()).toContain("Needs a decision 1 · 2 to decide");
       });
 
-      it("walks the threads in the order the contents draws them, deferred last", async () => {
+      /* spya-nmt06n (Greg, 2026-10-09): "I only want them to cycle through the
+         next and previous that need a decision, rather than anything else. And
+         they should, I guess, be disabled with a tooltip or something if there's
+         no more." Plan 261009m. */
+      it("steps only through the threads that need a decision, skipping replied and deferred ones", async () => {
+        const later = { ...Q2, id: "q-eeeeee", asked: "2026-10-09" };
+        const all = [Q1, Q3, Q4, later];
+        await openThread("q-aaaaaa", { ...ADMIN_REPORTS, questions: all }, { ...WAITING, questions: all });
+        expect(place()).toBe("1 of 2 needing a decision");
+        click(button(thread(), "Next ›"));
+        expect(showing()).toBe("q-eeeeee");
+        expect(place()).toBe("2 of 2 needing a decision");
+        click(button(thread(), "‹ Previous"));
+        expect(showing()).toBe("q-aaaaaa");
+      });
+
+      it("makes an end unavailable with a hint, and says the hint on the row when it is pressed anyway", async () => {
         const all = [Q4, Q3, Q1];
         await openThread("q-aaaaaa", { ...ADMIN_REPORTS, questions: all }, { ...WAITING, questions: all });
-        const showing = () => thread().querySelector<HTMLElement>(".fb-question")?.dataset.question;
-        expect(thread().querySelector(".fb-thread-place")?.textContent).toBe("1 of 3");
-        click(button(thread(), "Next ›"));
-        expect(showing()).toBe("q-cccccc");
-        click(button(thread(), "Next ›"));
-        expect(showing()).toBe("q-dddddd");
-        expect(thread().querySelector(".fb-thread-place")?.textContent).toBe("3 of 3");
+        expect(place()).toBe("1 of 1 needing a decision");
+        const previous = button(thread(), "‹ Previous");
+        const next = button(thread(), "Next ›");
+        expect(unavailable(previous)).toBe(true);
+        expect(unavailable(next)).toBe(true);
+        expect(previous.title).toBe("No earlier thread needs a decision");
+        expect(next.title).toBe("No later thread needs a decision");
+        /* The live region is there, empty, before anything is said in it (P2). */
+        const said = () => thread().querySelector(".fb-thread-end");
+        expect(said()?.getAttribute("role")).toBe("status");
+        expect(said()?.textContent).toBe("");
+        expect(said()?.matches(":empty")).toBe(true);
+
+        click(next);
+        expect(showing()).toBe("q-aaaaaa");
+        expect(said()?.textContent).toBe("No later thread needs a decision");
+        const firstSaying = said()?.firstElementChild;
+        click(next);
+        expect(said()?.firstElementChild).not.toBe(firstSaying);
+        expect(said()?.textContent).toBe("No later thread needs a decision");
+        click(previous);
+        expect(said()?.textContent).toBe("No earlier thread needs a decision");
+      });
+
+      it("does not revive an old end sentence after paging away and back", async () => {
+        await openThread();
+        const said = () => thread().querySelector(".fb-thread-end")?.textContent;
         click(button(thread(), "‹ Previous"));
-        expect(showing()).toBe("q-cccccc");
+        expect(said()).toBe("No earlier thread needs a decision");
+
+        click(button(thread(), "Next ›"));
+        expect(showing()).toBe("q-bbbbbb");
+        expect(said()).toBe("");
+        click(button(thread(), "‹ Previous"));
+        expect(showing()).toBe("q-aaaaaa");
+        expect(said()).toBe("");
+      });
+
+      it("takes an end sentence away when the showing thread stops needing a decision", async () => {
+        await openThread();
+        click(button(thread(), "‹ Previous"));
+        expect(thread().querySelector(".fb-thread-end")?.textContent).toBe("No earlier thread needs a decision");
+
+        typeReply("decided");
+        answer = stored(201);
+        click(button(thread(), "Send reply"));
+        await settle();
+        expect(place()).toBe("1 needs a decision");
+        expect(thread().querySelector(".fb-thread-end")?.textContent).toBe("");
+      });
+
+      it("steps from a replied or deferred thread opened from the contents to the waiting ones beside it", async () => {
+        const all = [Q1, Q3, Q4];
+        await openThread("q-cccccc", { ...ADMIN_REPORTS, questions: all }, { ...WAITING, questions: all });
+        /* Not one of them, so no position: only how many there are. */
+        expect(place()).toBe("1 needs a decision");
+        expect(button(thread(), "‹ Previous").title).toBe("Previous thread that needs a decision");
+        expect(unavailable(button(thread(), "Next ›"))).toBe(true);
+        click(button(thread(), "‹ Previous"));
+        expect(showing()).toBe("q-aaaaaa");
+        /* And from there, nothing waits after it: the deferred one is skipped. */
+        expect(unavailable(button(thread(), "Next ›"))).toBe(true);
+
+        click(button(thread(), "‹ All threads"));
+        const deferred = group("deferred") as HTMLDetailsElement;
+        deferred.open = true;
+        click(row("q-dddddd"));
+        expect(place()).toBe("1 needs a decision");
+        click(button(thread(), "‹ Previous"));
+        expect(showing()).toBe("q-aaaaaa");
+      });
+
+      it("says none are left when the thread showing is not waiting and nothing else is", async () => {
+        const all = [Q3, Q4];
+        await openThread("q-cccccc", { ...ADMIN_REPORTS, questions: all }, { ...WAITING, questions: all });
+        expect(place()).toBe("No threads need a decision now");
+        expect(unavailable(button(thread(), "‹ Previous"))).toBe(true);
+        expect(unavailable(button(thread(), "Next ›"))).toBe(true);
       });
 
       /* Decision 11 (spya-za2tse): TL;DR first; everything after a line that is
@@ -2147,9 +2236,12 @@ describe("the Earlier tab", () => {
         expect(answered?.textContent).toContain("You replied");
         expect(answered?.querySelector("time")?.getAttribute("datetime")).toBe("2026-10-07T09:00:00.000Z");
         expect(answered?.querySelector(".fb-question-answer-body")?.textContent).toBe("1A, and do B later");
-        /* Being considered at once: it moves group, so it is now last of two. */
+        /* Being considered at once: no longer one to decide, but still a stop,
+           so Next goes on to the one that is (261009m § 2). */
         expect(thread().querySelector(".fb-question")?.getAttribute("data-state")).toBe("responded");
-        expect(thread().querySelector(".fb-thread-place")?.textContent).toBe("2 of 2");
+        expect(place()).toBe("1 needs a decision");
+        expect(unavailable(button(thread(), "‹ Previous"))).toBe(true);
+        expect(unavailable(button(thread(), "Next ›"))).toBe(false);
 
         /* A second reply: a new id, and both shown, oldest first. */
         typeReply("one more thing");
@@ -2768,6 +2860,13 @@ describe("the Earlier tab", () => {
         ).toEqual(["#214"]);
         click(row("q-aaaaaa"));
         expect(replyBoxes()[0]?.value).toBe("a decision in progress");
+        /* Kept only for its draft, so not one to decide although its stale state
+           says waiting, and it sits after every live thread (261009m § 2). */
+        expect(place()).toBe("1 needs a decision");
+        expect(unavailable(button(thread(), "Next ›"))).toBe(true);
+        click(button(thread(), "‹ Previous"));
+        expect(showing()).toBe("q-bbbbbb");
+        expect(place()).toBe("1 of 1 needing a decision");
       });
 
       it("keeps the reply box mounted while closing during transcription", async () => {

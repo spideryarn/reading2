@@ -23,7 +23,6 @@ import {
   ClipboardCheck,
   Clock,
   Columns2,
-  Globe,
   Layers,
   Lightbulb,
   type LucideIcon,
@@ -47,9 +46,11 @@ export const MODE_ICON: Readonly<Record<Mode, LucideIcon>> = {
   faq: BadgeQuestionMark,
   ideas: Lightbulb,
   timeline: Clock,
-  citations: BookText,
   referee: ClipboardCheck,
-  debate: Globe,
+  /* Citations' book until 2026-10-09: the mode opens on Bibliography, so the
+     button shows what a press lands on. Debate's globe stays Reception's
+     job-progress icon (DebatePanel.tsx). */
+  "peer-review": BookText,
   search: Search,
   chat: MessagesSquare,
   learn: Brain,

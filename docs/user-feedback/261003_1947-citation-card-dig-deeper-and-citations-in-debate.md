@@ -1,7 +1,7 @@
 ---
 reports: spya-c2qmbg
 ending: shipped
-comment: Shipped: Dig deeper on the citation card. Still waiting on you: should Citations become a sub-mode of Debate, and should a cited work be listed beside the claim it is cited near?
+comment: Shipped: Citations and Debate are one mode, Peer review (Bibliography, Reception, Claims), out of Experimental, with the works cited beside each claim. Still asking you: keep the name, given Referee?
 ---
 
 # A citation's card offers Dig deeper; folding Citations into Debate awaits Greg
@@ -25,6 +25,16 @@ Not built, queued:
   cited work placed in a debate thread (qi-vmnga65v): options, costs and a recommendation in
   [261004b § Part 2](../plans/261004b-citation-hover-card-offers-dig-deeper.md), on
   [awaiting-approval.md](awaiting-approval.md).
+
+**Then, 2026-10-09: B and C1, shipped** (Greg's reply `spya-vcvxu5` to q-xf2xvb). Citations and
+Debate are one mode, **Peer review**, out of the Experimental switch, with three sub-modes:
+Bibliography (the former Citations, the default), Reception and Claims. Under each claim, *Cited in
+this paragraph* names the works the article cites in that claim's paragraph. C2 (a model filing
+cited works under Debate's themes) is not built, as recommended. Plan and reviews:
+[261009l](../plans/261009l-peer-review-mode-merges-citations-and-debate.md). **Held, queued as
+qi-j8py7rjw:** renaming the stored names (steps, columns, routes) all the way down, until Greg
+confirms the name, which clashes with Referee mode's "peer review". That follow-up is asked in
+q-xf2xvb.
 
 **The question for Greg is now a file**, `docs/user-feedback/questions/q-xf2xvb.md`, moved there from
 `awaiting-approval.md` on 2026-10-07. He sees it in the Feedback dialog and replies there
