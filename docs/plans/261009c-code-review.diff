@@ -1,0 +1,386 @@
+diff --git a/docs/project/narrow-windows.md b/docs/project/narrow-windows.md
+index 1a2f00b79..1541be3e8 100644
+--- a/docs/project/narrow-windows.md
++++ b/docs/project/narrow-windows.md
+@@ -165,6 +165,14 @@ Three things worth carrying to whatever is built next:
+   `overflow-x: auto` on the bar around it — **at every width, not inside a media query**, which is
+   the second half of the same lesson: that fallback lived in the 731px query until 2026-09-02, so
+   the one width band where the bar had started overflowing again had no floor under it.
++- **But More is never past the edge.** A scrolling row hides whatever is beyond the fold, and the
++  one button that must not be there is More, which holds five modes. On a phone the row is at its
++  44px floor, so its buttons stand at the same x at 390, 375 and 360, and with Diagram drawn More's
++  place after Skim is x 354–398 (WebKit, 2026-10-09). No label rung fits 360. So when that place is
++  past the bar's edge, More moves to the front of the bands' frame, in the DOM as well as on screen.
++  The test is where More's *home* ends, never where it is drawn, or moving it would send it straight
++  back: `moreOffTheEdge` in [`src/web/dock-fit.ts`](../../src/web/dock-fit.ts), `bandsInOrder` in
++  `Dock.tsx`, [261009b](../plans/261009b-phone-bottom-bar-more-leads-the-bands-frame-when-its-place-is-off-screen.md).
+ - **When what has to fit is the content, a media query is the wrong tool.** The bottom bar dropped
+   its labels at `max-width: 1100px`, a number measured against six modes. At thirteen the spelled-out
+   row wants 1416px, so two thirds of a laptop screen showed every label *and* ran the last buttons
+diff --git a/src/web/Dock.tsx b/src/web/Dock.tsx
+index 649a5c445..ed9f421d4 100644
+--- a/src/web/Dock.tsx
++++ b/src/web/Dock.tsx
+@@ -209,7 +209,7 @@ import { returnToSubMode, withSubMode, withSubModeParams, type SubMode } from ".
+    docs/plans/260906h-mode-catalog-and-a-command-bar.md. */
+ import { CommandBar, type CommandBarArticle, type CommandBarExperimental, type ShelfRow } from "./CommandBar.js";
+ import type { CommandExecutor } from "./command-proposal.js";
+-import { useDockFit } from "./dock-fit.js";
++import { MORE_HOME_ATTR, useDockFit } from "./dock-fit.js";
+ /* Plain data and no React (help-anchors.ts says so on purpose), so the bar
+    links into Help without pulling the page's words into its own chunk. */
+ import { helpHref, modeAnchor } from "./help/help-anchors.js";
+@@ -1225,6 +1225,8 @@ function drawnCount(bar: DockBar): number {
+  * (its `MODES_UI` row), so More stands straight after it, inside the bands'
+  * frame, with no line between them.
+  * docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md.
++ * **Wherever that place can be seen** — on a phone where it is off the edge,
++ * More leads the frame instead (`bandsInOrder`, plan 261009b).
+  */
+ const MORE_AFTER: ModeGroup = "shape";
+ 
+@@ -1243,6 +1245,37 @@ export function cutForMore(bands: readonly ModeUi[]): readonly [readonly ModeUi[
+   return [bands.slice(0, at), bands.slice(at)];
+ }
+ 
++/** `MORE_HOME_ATTR` on the row More's home follows, spread into its props. */
++const moreHomeAttr = (on: boolean) => (on ? { [MORE_HOME_ATTR]: "" } : {});
++
++/**
++ * **The bands' frame's children, in order, with More where it stands** — after
++ * `cutForMore`'s lead, or first of all when `moreLeads` (its own place is off
++ * the edge of a phone; dock-fit.ts § `moreOffTheEdge`, plan 261009b). Both arms
++ * draw through this, so they cannot disagree about where More is.
++ *
++ * `draw`'s second argument is true for the row More's home follows, which must
++ * carry `MORE_HOME_ATTR` in **either** order — it is how the measurement finds
++ * More's home without caring where More is drawn.
++ *
++ * **One flat array**, every child keyed (More by `"more"`), so a re-order moves
++ * the nodes rather than remounting them: a lead and a rest drawn as two arrays
++ * either side of More would remount every row that crossed between them,
++ * dropping focus and an open tooltip (GPT Sol, plan review 3).
++ */
++export function bandsInOrder<T>(
++  bands: readonly ModeUi[],
++  moreLeads: boolean,
++  draw: (m: ModeUi, moreHome: boolean) => T,
++  more: T,
++): T[] {
++  const [lead, rest] = cutForMore(bands);
++  const home = lead[lead.length - 1];
++  const rows = lead.map((m) => draw(m, m === home));
++  const after = rest.map((m) => draw(m, false));
++  return moreLeads ? [more, ...rows, ...after] : [...rows, more, ...after];
++}
++
+ /**
+  * **Which drawn buttons begin a new run of related modes** — and so carry the
+  * separator line (`ModeGroup`; dock-fit.css § lines between runs).
+@@ -2044,7 +2077,7 @@ export function Dock({
+      running off the right-hand end. dock-fit.ts, and Greg's ask: *"more
+      automatic/dynamic (so that we don't have to keep tweaking some
+      constant)"*. */
+-  const { ref: dockRef, fitClass } = useDockFit(
++  const { ref: dockRef, fitClass, moreLeads } = useDockFit(
+     fitSignature(
+       bar,
+       mode,
+@@ -2551,9 +2584,17 @@ export function Dock({
+             marked={marked}
+             margin={margin}
+             comments={commentsControl}
++            moreLeads={moreLeads}
+           />
+         ) : (
+-          <DockModeLinks slug={slug} search={search} bar={bar} marked={marked} comments={commentsControl} />
++          <DockModeLinks
++            slug={slug}
++            search={search}
++            bar={bar}
++            marked={marked}
++            comments={commentsControl}
++            moreLeads={moreLeads}
++          />
+         )}
+ 
+         {/* **Quick search, from anywhere** (plan 261002h): a box where
+@@ -2964,6 +3005,7 @@ function DockModes({
+   marked,
+   margin,
+   comments,
++  moreLeads,
+ }: {
+   /**
+    * The rows to draw and the rows under More, already filtered and split —
+@@ -2973,6 +3015,8 @@ function DockModes({
+    * `fitSignature` is measuring the same set that is drawn.
+    */
+   bar: DockBar;
++  /** More leads the bands' frame — `useDockFit`'s answer; `bandsInOrder`. */
++  moreLeads: boolean;
+   mode: BandMode;
+   /**
+    * **Opening a mode**, which since 2026-09-07 is one callback rather than the
+@@ -3062,6 +3106,9 @@ function DockModes({
+      It is between two radios in reading order, so in the DOM it has to be;
+      the cost and the options weighed are in
+      docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md § D2.
++     **Except where that place is off the edge of a phone**, where More leads
++     the frame instead (`bandsInOrder`, plan 261009b) — first in DOM and focus
++     order as well as on screen.
+ 
+      **And Comments joined Marginalia's frame the same day**, after the
+      toggle: Greg, *"put the comments icon inside a group with marginalia,
+@@ -3070,10 +3117,9 @@ function DockModes({
+   const radios = bar.drawn.filter((m) => m.mode !== "marginalia");
+   const exits = radios.filter((m) => m.group === "exit");
+   const bands = radios.filter((m) => m.group !== "exit");
+-  const [lead, rest] = cutForMore(bands);
+   const toggle = bar.drawn.find((m) => m.mode === "marginalia");
+   const starts = groupStarts(bands);
+-  const radio = (m: ModeUi) => (
++  const radio = (m: ModeUi, moreHome = false) => (
+     <Tooltip
+       key={m.mode}
+       placement="top"
+@@ -3119,6 +3165,7 @@ function DockModes({
+         type="button"
+         role="radio"
+         data-mode={m.mode}
++        {...moreHomeAttr(moreHome)}
+         className={`dock-btn${m.mode === mode ? " on" : ""}${marked?.has(m.mode) ? ` ${MARKED}` : ""}${starts.has(m.mode) ? " dock-group-start" : ""}`}
+         aria-checked={m.mode === mode}
+         /* Explicit, because the visible label is `display: none` at
+@@ -3174,16 +3221,19 @@ function DockModes({
+         >
+           {exits.length > 0 && (
+             <div className="dock-frame" style={{ "--dock-frame-count": exits.length } as CSSProperties}>
+-              {exits.map(radio)}
++              {exits.map((m) => radio(m))}
+             </div>
+           )}
+           <div
+             className="dock-frame"
+             style={{ "--dock-frame-count": bands.length + moreCount(bar) } as CSSProperties}
+           >
+-            {lead.map(radio)}
+-            <DockMore menu={bar.menu} marked={marked} pick={{ kind: "open", open: onOpen, current: mode }} />
+-            {rest.map(radio)}
++            {bandsInOrder(
++              bands,
++              moreLeads,
++              radio,
++              <DockMore key="more" menu={bar.menu} marked={marked} pick={{ kind: "open", open: onOpen, current: mode }} />,
++            )}
+           </div>
+         </div>
+         <div className="dock-frame" style={{ "--dock-frame-count": (toggle ? 1 : 0) + 1 } as CSSProperties}>
+@@ -3276,6 +3326,7 @@ function DockModeLinks({
+   bar,
+   marked,
+   comments,
++  moreLeads,
+ }: {
+   slug: string;
+   search: string;
+@@ -3283,6 +3334,8 @@ function DockModeLinks({
+    *  the segment is given, so the two arms cannot disagree about what is in
+    *  the bar. */
+   bar: DockBar;
++  /** More leads the bands' frame — as `DockModes` is told. */
++  moreLeads: boolean;
+   marked?: ReadonlyMap<Mode, string> | undefined;
+   /** The Comments link, after Marginalia in its frame, as `DockModes` draws it. */
+   comments: ReactNode;
+@@ -3301,14 +3354,14 @@ function DockModeLinks({
+   const toggles = modes.filter((m) => m.mode === "marginalia");
+   const exits = modes.filter((m) => m.mode !== "marginalia" && m.group === "exit");
+   const bands = modes.filter((m) => m.mode !== "marginalia" && m.group !== "exit");
+-  const [lead, rest] = cutForMore(bands);
+   const starts = groupStarts(bands);
+   const frameStyle = (count: number) => ({ "--dock-frame-count": count }) as CSSProperties;
+-  function link(m: ModeUi) {
++  function link(m: ModeUi, moreHome = false) {
+     return (
+       <DockLink
+         key={m.mode}
+         mode={m.mode}
++        moreHome={moreHome}
+         href={modeLinkHref(slug, search, m.mode)}
+         current={false}
+         icon={MODE_ICON[m.mode]}
+@@ -3348,21 +3401,26 @@ function DockModeLinks({
+           Comments as well as the modes; Metadata now stands alone after the
+           segment (`Dock` § Metadata). */}
+       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+-        {exits.length > 0 && <div className="dock-frame" style={frameStyle(exits.length)}>{exits.map(link)}</div>}
++        {exits.length > 0 && <div className="dock-frame" style={frameStyle(exits.length)}>{exits.map((m) => link(m))}</div>}
+         {/* More in the same place as on the reading view — straight after
+-            the shape run (`cutForMore`) — and its items are these same links
++            the shape run, or first where that is off a phone's edge
++            (`bandsInOrder`) — and its items are these same links
+             (`modeLinkHref`). Comments after Marginalia, as there. */}
+         <div className="dock-frame" style={frameStyle(bands.length + moreCount(bar))}>
+-          {lead.map(link)}
+-          <DockMore
+-            menu={bar.menu}
+-            marked={marked}
+-            pick={{ kind: "link", href: (m) => modeLinkHref(slug, search, m) }}
+-          />
+-          {rest.map(link)}
++          {bandsInOrder(
++            bands,
++            moreLeads,
++            link,
++            <DockMore
++              key="more"
++              menu={bar.menu}
++              marked={marked}
++              pick={{ kind: "link", href: (m) => modeLinkHref(slug, search, m) }}
++            />,
++          )}
+         </div>
+         <div className="dock-frame" style={frameStyle(toggles.length + 1)}>
+-          {toggles.map(link)}
++          {toggles.map((m) => link(m))}
+           {comments}
+         </div>
+       </TooltipGroup>
+@@ -3421,7 +3479,8 @@ type MorePick =
+  * **Not a radio, but inside the radiogroup since 2026-10-08**, straight after
+  * Skim in the bands' frame (`cutForMore`), because Greg asked for it *"just
+  * after the skim mode … as part of that group, rather than out on their own"*
+- * (spya-mcs4gb). It had a frame of its own after the radiogroup for a day
++ * (spya-mcs4gb) — or first in that frame where its place is off a phone's
++ * edge (`bandsInOrder`, plan 261009b). It had a frame of its own after the radiogroup for a day
+  * (261007c D6), kept out because a menu button is not one of *what the middle
+  * column shows*. Between two radios in reading order, the DOM has to put it
+  * inside; what it opens is a list of more of those choices, so the group's
+@@ -4075,6 +4134,7 @@ function DockLink({
+   className = "",
+   keepLabel,
+   mode,
++  moreHome,
+ }: {
+   href: string;
+   current: boolean;
+@@ -4125,6 +4185,8 @@ function DockLink({
+   /** The mode this link opens, as `data-mode` — `MODE_ATTR`. Absent on the
+    *  links that are not modes (Comments, Metadata). */
+   mode?: Mode | undefined;
++  /** The row More's home follows — `MORE_HOME_ATTR`; `bandsInOrder`. */
++  moreHome?: boolean | undefined;
+ }) {
+   const link = (
+     <Link
+@@ -4132,6 +4194,7 @@ function DockLink({
+       className={`dock-btn${current ? " on" : ""}${className ? ` ${className}` : ""}`}
+       aria-current={current ? "page" : undefined}
+       data-mode={mode}
++      {...moreHomeAttr(moreHome === true)}
+       /* **No `title` here, and its absence is asserted rather than assumed.** A
+          `title` beside a card is not a fallback, it is a race: the OS box
+          appears over our panel a second later, saying a shorter version of the
+diff --git a/src/web/dock-fit.ts b/src/web/dock-fit.ts
+index 89ab194be..2dbe4aca2 100644
+--- a/src/web/dock-fit.ts
++++ b/src/web/dock-fit.ts
+@@ -183,7 +183,52 @@ export function chooseDockFit(el: HTMLElement, current: number): number {
+ }
+ 
+ /**
+- * The hook the bar uses: a ref for its root, and the class to render with.
++ * **The More button's home: the last drawn row before it**, marked so
++ * `moreOffTheEdge` can find where More *would* end without caring where it is
++ * drawn. Dock.tsx puts it on the last row of `cutForMore`'s lead, in both arms.
++ */
++export const MORE_HOME_ATTR = "data-more-home";
++
++/**
++ * **Whether More's own place, straight after Skim, is past the bar's visible
++ * edge with the row at rest** — and so whether More leads the bands' frame
++ * instead (queue item `qi-t22r9mt4`;
++ * docs/plans/261009b-phone-bottom-bar-more-leads-the-bands-frame-when-its-place-is-off-screen.md).
++ *
++ * Measured in WebKit, 2026-10-09: every phone width sits on the last rung with
++ * the row at its 44px floor, so the buttons have the same x at 390, 375 and
++ * 360, and with Diagram drawn More's place is x 354–398 — off the edge of all
++ * three. No label rung fits 360, so this is not a rung: it changes no width,
++ * only where More stands, and the ladder's measurement is untouched by it.
++ *
++ * **The answer must not depend on which order is drawn**, or moving More would
++ * bring it into view and the next measurement would send it home again. So it
++ * asks where More's *home* ends. In the home order that is More's own right
++ * edge; in the leading order it is the right edge of the row marked
++ * `MORE_HOME_ATTR` — the row More would follow, which now ends exactly where
++ * More would. The larger of the two is the home edge in either order.
++ *
++ * Against the content edge — client width less the right padding, which
++ * carries the notch inset in narrow-window.css § a narrow window — and with
++ * the bar's scroll added back, because a rect moves with the scroll and the
++ * question is about the row before anyone has dragged it. **Past that query the
++ * notch is carried by `.dock-tail` instead, and this does not subtract it**: a
++ * phone held landscape is 667px wide or more, and More's home is about 400px in,
++ * so the inset cannot decide the answer there. Revisit if More ever moves right.
++ */
++export function moreOffTheEdge(el: HTMLElement): boolean {
++  const more = el.querySelector<HTMLElement>(".dock-more-trigger");
++  if (!more) return false;
++  const home = el.querySelector<HTMLElement>(`[${MORE_HOME_ATTR}]`);
++  const right = Math.max(more.getBoundingClientRect().right, home?.getBoundingClientRect().right ?? -Infinity);
++  const atRest = right - el.getBoundingClientRect().left - el.clientLeft + el.scrollLeft;
++  const pad = Number.parseFloat(getComputedStyle(el).paddingRight) || 0;
++  return atRest > el.clientWidth - pad;
++}
++
++/**
++ * The hook the bar uses: a ref for its root, the class to render with, and
++ * whether More leads the bands' frame (`moreOffTheEdge`).
+  *
+  * **The class is written twice, and that is not a bug.** `chooseDockFit`
+  * mutates `classList` because it has to — each rung must be on the element
+@@ -236,9 +281,11 @@ export function chooseDockFit(el: HTMLElement, current: number): number {
+ export function useDockFit(content: string): {
+   ref: RefObject<HTMLDivElement | null>;
+   fitClass: string;
++  moreLeads: boolean;
+ } {
+   const ref = useRef<HTMLDivElement | null>(null);
+   const [level, setLevel] = useState(0);
++  const [moreLeads, setMoreLeads] = useState(false);
+   /* The DOM's truth, readable synchronously. `level` is the same number one
+      render behind, and the measurement must not wait for a render to know
+      where it currently stands. */
+@@ -248,6 +295,10 @@ export function useDockFit(content: string): {
+     const el = ref.current;
+     if (!el) return;
+     const next = chooseDockFit(el, applied.current);
++    /* After the rung, so it is asked of the row as it will be drawn, and with
++       `chooseDockFit`'s guard: a bar with no layout has no answer. Moving More
++       changes no width, so it cannot send the ladder round again. */
++    if (el.clientWidth > 0) setMoreLeads(moreOffTheEdge(el));
+     if (next === applied.current) return;
+     applied.current = next;
+     setLevel(next);
+@@ -298,5 +349,5 @@ export function useDockFit(content: string): {
+   }, [measure]);
+ 
+   const cls = DOCK_FIT_CLASSES[level] ?? "";
+-  return { ref, fitClass: cls ? ` ${cls}` : "" };
++  return { ref, fitClass: cls ? ` ${cls}` : "", moreLeads };
+ }
+diff --git a/src/web/styles/dock-fit.css b/src/web/styles/dock-fit.css
+index a3573e1a5..1adee9df3 100644
+--- a/src/web/styles/dock-fit.css
++++ b/src/web/styles/dock-fit.css
+@@ -58,7 +58,8 @@
+    docs/plans/261002g-plain-closes-both-columns-a-second-press-closes-a-mode-and-plain-and-marginalia-in-frames-of-their-own.md.
+ 
+    **The More button and Comments sit inside these frames since 2026-10-08**
+-   (plan 261008d): More in the bands' frame straight after Skim, Comments in
++   (plan 261008d): More in the bands' frame straight after Skim (first in it
++   where that place is off a phone's edge — plan 261009b), Comments in
+    Marginalia's after the toggle. More had a fourth frame of its own for a day.
+    Neither needs a rule of its own here: each is a `.dock-btn` with a
+    `.dock-btn-label` inside `.dock-modes`, so every rung of the ladder below

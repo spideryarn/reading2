@@ -325,7 +325,12 @@ a red that belongs to no file — an unhandled error, a failing teardown, a run 
 whole suite — cannot be rerun in part; and a change to the harness since (anything under `tests/`
 that is not a test, `vitest.config.ts`, the lockfile …) means the whole suite.
 
-A run still going does not count as the nearest; it only blocks runs on its own commit. A run must
+A run still going does not count as the nearest; it only blocks runs on its own commit. If the partial
+gate selects a settled run and then refuses it, its reason also names one run still going on a
+descendant of that commit which the candidate contains, if there is one. That run may stand in
+once it finishes: a notes commit on top of a commit mid-check is one case, and waiting for
+that check is often quicker than the suite
+([261009b](../plans/261009b-deploy-names-the-nearer-test-run-still-going-when-it-runs-the-whole-suite.md)). A run must
 carry the reporter's current outcome to stand in at all, here or in the exact-commit reuse above,
 so records from before 2026-10-08's change stand in for nothing.
 

@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -35,7 +36,7 @@ const dirs: string[] = [];
 const locks: Array<{ lock: HeldLock; path: string }> = [];
 
 function directory(name: string): string {
-  const dir = mkdtempSync(join("/tmp", `spideryarn-receipt-${process.pid}-${name}-`));
+  const dir = mkdtempSync(join(tmpdir(), `spideryarn-receipt-${process.pid}-${name}-`));
   dirs.push(dir);
   return dir;
 }

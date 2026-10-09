@@ -284,7 +284,7 @@ beforeEach(() => {
        "nothing built yet". */
     if (url.startsWith("/api/metadata/")) return json({ stages: [] });
     if (url === "/api/models") return json({ tasks: [] });
-    if (url === "/api/public/library") return json({ entries: [], truncated: false });
+    if (url === "/api/public/library") return json({ entries: [], topics: [], truncated: false });
     /* 404, and it is the ordinary answer: most articles have no thread. A 200
        with `{}` in it is the one thing the page cannot read. */
     if (url.startsWith("/api/tweets/")) return json({}, 404);

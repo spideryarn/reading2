@@ -183,7 +183,52 @@ export function chooseDockFit(el: HTMLElement, current: number): number {
 }
 
 /**
- * The hook the bar uses: a ref for its root, and the class to render with.
+ * **The More button's home: the last drawn row before it**, marked so
+ * `moreOffTheEdge` can find where More *would* end without caring where it is
+ * drawn. Dock.tsx puts it on the last row of `cutForMore`'s lead, in both arms.
+ */
+export const MORE_HOME_ATTR = "data-more-home";
+
+/**
+ * **Whether More's own place, straight after Skim, is past the bar's visible
+ * edge with the row at rest** — and so whether More leads the bands' frame
+ * instead (queue item `qi-t22r9mt4`;
+ * docs/plans/261009c-phone-bottom-bar-more-leads-the-bands-frame-when-its-place-is-off-screen.md).
+ *
+ * Measured in WebKit, 2026-10-09: every phone width sits on the last rung with
+ * the row at its 44px floor, so the buttons have the same x at 390, 375 and
+ * 360, and with Diagram drawn More's place is x 354–398 — off the edge of all
+ * three. No label rung fits 360, so this is not a rung: it changes no width,
+ * only where More stands, and the ladder's measurement is untouched by it.
+ *
+ * **The answer must not depend on which order is drawn**, or moving More would
+ * bring it into view and the next measurement would send it home again. So it
+ * asks where More's *home* ends. In the home order that is More's own right
+ * edge; in the leading order it is the right edge of the row marked
+ * `MORE_HOME_ATTR` — the row More would follow, which now ends exactly where
+ * More would. The larger of the two is the home edge in either order.
+ *
+ * Against the content edge — client width less the right padding, which
+ * carries the notch inset in narrow-window.css § a narrow window — and with
+ * the bar's scroll added back, because a rect moves with the scroll and the
+ * question is about the row before anyone has dragged it. **Past that query the
+ * notch is carried by `.dock-tail` instead, and this does not subtract it**: a
+ * phone held landscape is 667px wide or more, and More's home is about 400px in,
+ * so the inset cannot decide the answer there. Revisit if More ever moves right.
+ */
+export function moreOffTheEdge(el: HTMLElement): boolean {
+  const more = el.querySelector<HTMLElement>(".dock-more-trigger");
+  if (!more) return false;
+  const home = el.querySelector<HTMLElement>(`[${MORE_HOME_ATTR}]`);
+  const right = Math.max(more.getBoundingClientRect().right, home?.getBoundingClientRect().right ?? -Infinity);
+  const atRest = right - el.getBoundingClientRect().left - el.clientLeft + el.scrollLeft;
+  const pad = Number.parseFloat(getComputedStyle(el).paddingRight) || 0;
+  return atRest > el.clientWidth - pad;
+}
+
+/**
+ * The hook the bar uses: a ref for its root, the class to render with, and
+ * whether More leads the bands' frame (`moreOffTheEdge`).
  *
  * **The class is written twice, and that is not a bug.** `chooseDockFit`
  * mutates `classList` because it has to — each rung must be on the element
@@ -236,9 +281,11 @@ export function chooseDockFit(el: HTMLElement, current: number): number {
 export function useDockFit(content: string): {
   ref: RefObject<HTMLDivElement | null>;
   fitClass: string;
+  moreLeads: boolean;
 } {
   const ref = useRef<HTMLDivElement | null>(null);
   const [level, setLevel] = useState(0);
+  const [moreLeads, setMoreLeads] = useState(false);
   /* The DOM's truth, readable synchronously. `level` is the same number one
      render behind, and the measurement must not wait for a render to know
      where it currently stands. */
@@ -248,6 +295,10 @@ export function useDockFit(content: string): {
     const el = ref.current;
     if (!el) return;
     const next = chooseDockFit(el, applied.current);
+    /* After the rung, so it is asked of the row as it will be drawn, and with
+       `chooseDockFit`'s guard: a bar with no layout has no answer. Moving More
+       changes no width, so it cannot send the ladder round again. */
+    if (el.clientWidth > 0) setMoreLeads(moreOffTheEdge(el));
     if (next === applied.current) return;
     applied.current = next;
     setLevel(next);
@@ -298,5 +349,5 @@ export function useDockFit(content: string): {
   }, [measure]);
 
   const cls = DOCK_FIT_CLASSES[level] ?? "";
-  return { ref, fitClass: cls ? ` ${cls}` : "" };
+  return { ref, fitClass: cls ? ` ${cls}` : "", moreLeads };
 }
