@@ -326,6 +326,19 @@ describe("partialEvidenceFor's limits", () => {
     expect(e).toMatchObject({ kind: "rerun", files: ["tests/b.test.ts"] });
   });
 
+  it("a refusal names a run still going on a nearer commit, which may stand in once it finishes", () => {
+    /* 2026-10-09: the deploy of a notes commit refused the void run on the
+       nearest settled commit and ran the whole suite, without saying the run
+       on its parent was 48 minutes in; it passed 26 minutes later. */
+    const going = run(C, { kind: "unusable", why: "still running" }, { refusal: "it is still running", running: true }, 0.8);
+    const e = evidence([run(B, { kind: "unusable", why: "void" }, { refusal: "it did not reach a verdict" }, 1.2), going]);
+    expect(e.kind).toBe("run");
+    if (e.kind === "run") {
+      expect(e.why).toMatch(/did not reach a verdict/);
+      expect(e.why).toMatch(new RegExp(`a run on ${C.slice(0, 8)} \\(deploy-gate ${going.id}\\), started 48m ago, is still going`));
+    }
+  });
+
   it("only a run still going is no evidence", () => {
     const going = run(C, { kind: "unusable", why: "still running" }, { refusal: "it is still running", running: true }, 0.2);
     const e = evidence([going]);

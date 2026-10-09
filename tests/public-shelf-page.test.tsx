@@ -599,6 +599,13 @@ describe("the topic pills", () => {
     act(() => tipRoot.unmount());
   });
 
+  it("treats an answer from a server older than the pills as having none", async () => {
+    const old = { entries: TOPICAL.entries.map(({ topics: _, ...e }) => e), truncated: false } as unknown as PublicLibrary;
+    const page = await show(() => old);
+    expect(page.querySelector("[data-public-topics]")).toBeNull();
+    expect(cards(page)).toHaveLength(4);
+  });
+
   it("draws no row when the server sent no topics", async () => {
     const page = await show();
     expect(page.querySelector("[data-public-topics]")).toBeNull();

@@ -35,7 +35,8 @@ function score(judgments: unknown, duplicateRun = false) {
   writeFileSync(`${out}-judgment-s1.json`, JSON.stringify({ judgments }));
   const result = spawnSync(process.execPath, ["--import", "tsx", "scripts/eval/skim-cue-pairs.ts", ...args, `--out=${out}`], {
     encoding: "utf8",
-    env: { PATH: process.env.PATH, NODE_ENV: "test" },
+    // TMPDIR kept so tsx's own temp files stay inside the run's temp root (plan 261009a).
+    env: { PATH: process.env.PATH, NODE_ENV: "test", TMPDIR: process.env.TMPDIR },
   });
   return { ...result, out };
 }

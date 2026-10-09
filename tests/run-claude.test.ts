@@ -772,8 +772,8 @@ describe("the CLI, end to end", () => {
     /* The stand-in dumps its own environment as the answer, so this asserts against what the child
        actually received rather than against what the wrapper meant to send. */
     const r = runCli(
-      `env | sed 's/"/_/g' | tr '\\n' ' ' > /tmp/run-claude-env-probe.txt\n`
-      + `printf '{"type":"result","subtype":"success","is_error":false,"num_turns":1,"result":"%s"}\\n' "$(cat /tmp/run-claude-env-probe.txt)"`,
+      `probe=$(env | sed 's/"/_/g' | tr '\\n' ' ')\n`
+      + `printf '{"type":"result","subtype":"success","is_error":false,"num_turns":1,"result":"%s"}\\n' "$probe"`,
     );
     expect(r.status).toBe(0);
     const everything = readFileSync(r.answerPath, "utf8");
