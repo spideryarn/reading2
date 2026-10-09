@@ -1,0 +1,7 @@
+Review this plan, read-only: docs/plans/261010a-dismiss-older-version-notices.md (repo root is the cwd).
+
+Context: Greg (admin) asked that every "This describes an older version of the article" notice be dismissable without re-running. Precedent: docs/plans/261009i-skim-profile-notice-can-be-dismissed.md and commit 127b4ba82 (Skim's profile notice ×). Read the panels named in the plan's table (src/web/*Panel.tsx, Tweets.tsx, DebatePanel.tsx, QuizPanel.tsx § Staleness, SkimPanel.tsx § bannerReason/RouteBanner, SearchPanel.tsx § StaleNote), src/web/rewrite-hold.ts (the `identity` each owner hook passes), src/store/pg-glossary-hidden.ts and its route in src/routes.ts (the owner-scoped table this copies), and docs/project/controls.md.
+
+Look for: wrong or missing notices; a key whose identity is not actually stable / re-stamped on rewrite in some mode (check each hook's identity); whether "lasts until the artefact is regenerated" is right; whether storing an opaque unvalidated key is safe (docs/project/security-map.md); dismissing Quiz/Skim stale notices that guard a fault; race conditions in the client cache (sign-out, slug change, POST failure); registries/tests the plan forgets; anything simpler that does the same.
+
+Write findings numbered, each with severity (P1/P2/P3), evidence (file:line), and a concrete fix. End with a one-line verdict: "build as is", "build with fixes", or "rethink".
