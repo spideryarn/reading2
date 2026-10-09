@@ -9148,7 +9148,7 @@ async function serveApi(
      * **The MCP tools for an AI app, and the third thing before the gate** —
      * plan 261007p. `requireUser` refuses an OAuth token everywhere (its
      * `[auth-oauth-token]`), so this route checks its own: the same claims,
-     * plus the one client it accepts and the administrator only. Exact paths,
+     * plus the clients `MCP_OAUTH_CLIENT_ID` admits and the administrator only. Exact paths,
      * like the webhook's. `handleApi` is handed in because each tool calls the
      * routes below in-process, as the verified person, through this same
      * function. src/mcp/remote.ts.

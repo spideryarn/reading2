@@ -444,10 +444,11 @@ const EXPECTED = [
   { name: "SPIDERYARN_OWNER_ID", breaks: null },
   /**
    * **The AI apps whose OAuth tokens `POST /api/mcp` accepts**, as a
-   * comma-separated list of hand-registered client ids —
+   * comma-separated list of hand-registered client ids, or `*` for any app
+   * Supabase's dynamic registration let in (Greg, 2026-10-09) —
    * src/mcp/remote.ts, plan 261007p. Unset is the shipped state and a
    * deliberate one: the route then refuses everybody, so remote MCP is off
-   * until Greg registers the clients and sets this. Hence `breaks: null`; an
+   * until Greg sets this. Hence `breaks: null`; an
    * operator still wants to see at a glance whether the variable is configured;
    * the route ignores whitespace and empty entries when deciding whether it is on.
    */
