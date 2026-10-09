@@ -225,6 +225,25 @@ describe("a paid-search step is begun once per job (261009l)", () => {
     await getDb().delete(jobsTable).where(eq(jobsTable.id, job.id));
   });
 
+  /**
+   * **One column, two kinds of marker** (plan 261009o). Steps run in canonical
+   * order, `illustrated` before `debate`, so the overwrite that can happen is
+   * plates → debate, and only once `illustrated` is done. The later marker must
+   * be the one a lapse leaves behind.
+   */
+  it("keeps the latest marker through a lapse when a job marks the plates and then Debate", async () => {
+    const { job } = await fixture("lapse", true);
+    const attempt = mintAttempt();
+    expect((await pgJobStore.claim(job.id, OWNER, attempt, 60_000, 100)).kind).toBe("claimed");
+    expect(await pgJobStore.beginPaidStep(job.id, attempt, "illustrated-plates")).toBe("begun");
+    expect(await pgJobStore.beginPaidStep(job.id, attempt, "debate")).toBe("begun");
+    await endTheWindow(job.id, "lapse");
+
+    const next = mintAttempt();
+    expect((await pgJobStore.claim(job.id, OWNER, next, 60_000, 100)).kind).toBe("claimed");
+    expect(await pgJobStore.beginPaidStep(job.id, next, "debate")).toBe("begun-before");
+  });
+
   for (const how of ["lapse", "pause"] as const) {
     it(`does not run it again after a ${how}, and ends the job saying why`, async () => {
       const { runs, parts, job } = await fixture(how, true);
@@ -254,6 +273,49 @@ describe("a paid-search step is begun once per job (261009l)", () => {
       expect(ended.requeues, "and it did take another window to find out").toBe(1);
     });
   }
+
+  /**
+   * **A purchase marked inside a step, through the context** (plan 261009o):
+   * Illustrated's plates, which come after the step's own hand-back. The step
+   * re-runs — it is not `oncePerJob` — and the marker it asks for is this
+   * claim's, on the job row, so the second window is told the first began it.
+   * The step-level half is tests/illustrated-step-registration.test.ts § the
+   * brief between windows.
+   */
+  it("hands a step the job's marker for a purchase inside it, on the live claim", async () => {
+    const slug = `test-paid-once-${randomUUID().slice(0, 8)}`;
+    SEEDED.push(await scratchArticleInPg(slug, { ownerId: OWNER }));
+    const answers: string[] = [];
+    const markingStep = {
+      ...STEPS.illustrated,
+      async run(ctx: StepContext): Promise<StepProduct> {
+        if (!ctx.beginPaidWork) throw new Error("the walk handed the step no marker");
+        answers.push(await ctx.beginPaidWork("illustrated-plates"));
+        if (answers.length === 1) await endTheWindow(ctx.jobId!, "lapse");
+        throw new Error("the plates were cut off");
+      },
+    } as PipelineStep;
+    const parts: AdvanceParts = {
+      power: async () => "standard",
+      session: async (job: Job, attempt: string): Promise<StoreSession> => ({
+        ...(await claimSession(job, attempt)),
+        reads: NOT_DONE,
+      }),
+      steps: { ...STEPS, illustrated: markingStep } as AdvanceParts["steps"],
+    };
+    const job = await queueJob(slug, "illustrated");
+
+    await advanceAsOwner(job.id, parts);
+    const [between] = await getDb()
+      .select({ status: jobsTable.status, begun: jobsTable.paidStepBegun })
+      .from(jobsTable)
+      .where(eq(jobsTable.id, job.id));
+    expect(between?.status).toBe("queued");
+    expect(between?.begun).toBe("illustrated-plates");
+
+    await advanceAsOwner(job.id, parts);
+    expect(answers, "the next window is told this job began them").toEqual(["begun", "begun-before"]);
+  });
 
   it("still re-runs a step that is not marked (today's rule for every other step)", async () => {
     const { runs, parts, job } = await fixture("lapse", false);

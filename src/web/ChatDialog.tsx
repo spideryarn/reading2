@@ -324,6 +324,8 @@ export function ChatDialog({
     stop,
     cancelAndDiscard,
     remove,
+    deleteFrom,
+    settled,
     error,
   } = useChat(slug, onSettled);
 
@@ -1306,6 +1308,8 @@ export function ChatDialog({
             onSend={(question) => send(thread.id, question, at)}
             onRetry={(messageId) => retry(thread.id, messageId)}
             onEdit={(messageId, question) => edit(thread.id, messageId, question, at)}
+            /* Only on a settled conversation — see `onDeleteFrom` in ChatPanel. */
+            onDeleteFrom={settled(thread.id) ? (messageId) => deleteFrom(thread.id, messageId) : undefined}
             onStop={(messageId) => stop(thread.id, messageId)}
             focusNonce={0}
             focused={focused}

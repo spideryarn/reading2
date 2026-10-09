@@ -529,6 +529,7 @@ export function ConversationBand({
     rename,
     openHint,
     remove,
+    deleteFrom,
     deleting,
     settled,
     named,
@@ -1474,6 +1475,10 @@ export function ConversationBand({
          nothing else's. */
       onEdit={(messageId, question) =>
         current && edit(current, messageId, question, at, openKind === "chat" ? onScreen?.() : undefined)
+      }
+      /* Only on a settled conversation — see `onDeleteFrom` in ChatPanel. */
+      onDeleteFrom={
+        current && settled(current) ? (messageId) => deleteFrom(current, messageId) : undefined
       }
       onStop={(messageId) => current && stop(current, messageId)}
       onHintOpened={(messageId, hint) => current && openHint(current, messageId, hint)}

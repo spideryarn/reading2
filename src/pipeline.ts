@@ -211,6 +211,7 @@ import {
   ILLUSTRATE_SKETCH_PROFILE,
   ILLUSTRATE_SKETCH_STALE,
   pdfTooManyPages,
+  PLATES_NOT_REPEATED,
   type ReaderFacingFailure,
   SOURCE_DOCUMENT_DAMAGED,
   SOURCE_DOCUMENT_GONE,
@@ -248,6 +249,7 @@ import {
   type Block,
   type JobUpload,
   type Meta,
+  type PaidPurchase,
   type StepName,
   type StepPreview,
   type StoredReadingDifficulty,
@@ -720,6 +722,18 @@ export interface StepContext {
    */
   jobId?: string;
   /**
+   * **Mark a purchase this job must not make twice**, on the job row and this
+   * claim's fence (`JobStore.beginPaidStep`). `"begun"`: go ahead. `"begun-before"`:
+   * an earlier window of this same job began it and never finished, so it may
+   * already be paid for, and the step fails rather than buy it again.
+   *
+   * `oncePerJob` marks a whole step; this is for a step whose purchase comes
+   * after its own deliberate hand-back, which marking the step would refuse —
+   * Illustrated's plates. Absent from a command line or a test, where nothing
+   * requeues. docs/plans/261009o-a-requeued-job-does-not-buy-the-illustrated-plates-again.md.
+   */
+  beginPaidWork?: (purchase: PaidPurchase) => Promise<"begun" | "begun-before">;
+  /**
    * How long the queue allows this step, `STEP_BUDGET_MS[step]` in src/jobs.ts,
    * which this file cannot import. The structure step's slices path stops
    * itself inside it. `undefined` from a command line or a test.
@@ -964,6 +978,10 @@ export interface PipelineStep<N extends StepName = StepName> {
    * marker is the job row's `paid_step_begun` (`JobStore.beginPaidStep`), and
    * `runStep` (src/jobs.ts) is the one reader.
    * docs/plans/261009l-a-requeued-job-does-not-buy-the-debate-search-again.md.
+   *
+   * A step whose purchase comes after a hand-back of its own marks that
+   * purchase instead, through `StepContext.beginPaidWork` — `illustrated`'s
+   * plates (plan 261009o).
    */
   oncePerJob?: true;
   /**
@@ -1847,6 +1865,17 @@ function briefBank(
  */
 function refuseToIllustrate(reason: IllustrateRefusal): never {
   throw stageFailure(ILLUSTRATE_REFUSAL[reason]);
+}
+
+/** `generateIllustrated`'s `beginPlates`, on the job's once-per-job marker. Plan 261009o. */
+function beginIllustratedPlates(
+  beginPaidWork: NonNullable<StepContext["beginPaidWork"]>,
+): () => Promise<void> {
+  return async () => {
+    if ((await beginPaidWork("illustrated-plates")) === "begun-before") {
+      throw stageFailure(PLATES_NOT_REPEATED);
+    }
+  };
 }
 
 /**
@@ -5044,6 +5073,13 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
            docs/plans/261007l-illustrated-fits-a-claim-and-a-late-stop-says-so.md. */
         ...(ctx.deadlineAt !== undefined ? { deadlineAt: ctx.deadlineAt } : {}),
         ...(ctx.jobId ? { bank: briefBank(ctx, ctx.jobId, checkpoints, sourceHash) } : {}),
+        /* **The plates are bought once per job.** A window that died with them
+           out has lost them — they are stored only once the set is back — and
+           the requeue would hand the banked brief to a window that buys them
+           all again. Marked here rather than as `oncePerJob`, because the
+           step's own hand-back after the brief is a second window too.
+           docs/plans/261009o-a-requeued-job-does-not-buy-the-illustrated-plates-again.md. */
+        ...(ctx.beginPaidWork ? { beginPlates: beginIllustratedPlates(ctx.beginPaidWork) } : {}),
       });
 
       /* **Written here rather than in `generateIllustrated`**, which writes

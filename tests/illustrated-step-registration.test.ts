@@ -112,6 +112,7 @@ import { memoryArtefactsFrom } from "./helpers/memory-artefacts.js";
 import { STAMP_SOURCE } from "../src/store/artifacts.js";
 import type { MemoryArtifactStore } from "./helpers/memory-artefacts.js";
 import { nullCheckpointStore, type CheckpointStore } from "../src/store/checkpoints.js";
+import { StaleAttemptError } from "../src/store/jobs.js";
 import { NeedsAnotherWindow } from "../src/another-window.js";
 
 /* ------------------------------------------------------- the stubbed models -- */
@@ -128,6 +129,9 @@ const answers: string[] = [];
 let briefCalls = 0;
 let briefTakesMs = 0;
 let plateCalls = 0;
+/* A plate that never comes back: the window that sent it is dead, as a killed
+   process is. The promise is abandoned rather than settled. */
+let plateHangs = false;
 
 vi.mock("../src/messages-stream.js", async (importOriginal) => {
   const real = await importOriginal<typeof import("../src/messages-stream.js")>();
@@ -169,6 +173,7 @@ vi.mock("../src/ai-call.js", async (importOriginal) => {
     ...real,
     openRouterImage: () => {
       plateCalls++;
+      if (plateHangs) return new Promise<never>(() => undefined);
       return Promise.resolve({ image: PLATE, mediaType: "image/jpeg" });
     },
   };
@@ -353,7 +358,9 @@ afterAll(async () => {
 
 beforeEach(async () => {
   briefCalls = 0;
+  briefTakesMs = 0;
   plateCalls = 0;
+  plateHangs = false;
   /* **A fresh store per case, read off the untouched copy of `example/`.** It
      replaces two lines of cleanup — delete `illustrated.json`, delete the
      `steps/` markers — that existed because the store and the fixture were the
@@ -800,6 +807,108 @@ describe("the brief between windows", () => {
     const other = { ...ctxFor(), jobId: "spya-jobtwo", deadlineAt: Date.now() + 720_000 };
     await STEPS.illustrated.run(other, store, checkpoints);
     expect(briefCalls, "a new job does not inherit the last brief").toBe(2);
+  });
+
+  /**
+   * **The job row's once-per-job marker, as `runStep` hands it to a step**
+   * (`StepContext.beginPaidWork`, `JobStore.beginPaidStep`), held in a `Set`.
+   * The walk-level half — that the claim's fence really is what reaches the
+   * step — is tests/jobs-paid-step-once.test.ts.
+   */
+  function jobMarker() {
+    const begun = new Set<string>();
+    return {
+      begun,
+      beginPaidWork: async (purchase: string) => {
+        if (begun.has(purchase)) return "begun-before" as const;
+        begun.add(purchase);
+        return "begun" as const;
+      },
+    };
+  }
+
+  /**
+   * **A window that dies while its plates are out does not get them bought
+   * again by the next window of the same job.** Plan 261009o. The first window
+   * banks the brief and dies on its first plate — the call never returns, as
+   * a killed process's does not. Before the fix the second window read the
+   * banked brief, found the plates fit, and drew the whole set again.
+   */
+  it("does not draw the plates again in a later window of a job that began them", async () => {
+    const checkpoints = memoryCheckpoints();
+    const marker = jobMarker();
+    await script();
+    briefCalls = 0;
+    plateCalls = 0;
+
+    const first = { ...ctxFor(), jobId: "spya-jobdie", deadlineAt: Date.now() + 720_000, beginPaidWork: marker.beginPaidWork };
+    plateHangs = true;
+    try {
+      void STEPS.illustrated.run(first, store, checkpoints);
+      await vi.waitFor(() => expect(plateCalls, "the first plate was sent").toBe(1));
+    } finally {
+      plateHangs = false;
+    }
+    expect(briefCalls).toBe(1);
+    expect(checkpoints.size(), "the brief was banked before the plates").toBe(1);
+
+    const second = { ...ctxFor(), jobId: "spya-jobdie", deadlineAt: Date.now() + 720_000, beginPaidWork: marker.beginPaidWork };
+    const again = STEPS.illustrated.run(second, store, checkpoints);
+    await expect(again).rejects.toThrow("[jb-plates-once]");
+    expect(plateCalls, "no plate was bought by the second window").toBe(1);
+    expect(briefCalls, "nor the brief").toBe(1);
+    expect([...marker.begun], "the first window marked its plates").toEqual(["illustrated-plates"]);
+
+    /* The reader's Retry: a new job, with a row of its own and so a clean
+       marker. It buys the brief again (the bank is keyed by job) and paints. */
+    await script();
+    const fresh = jobMarker();
+    const retried = { ...ctxFor(), jobId: "spya-jobretry", deadlineAt: Date.now() + 720_000, beginPaidWork: fresh.beginPaidWork };
+    const result = await STEPS.illustrated.run(retried, store, checkpoints);
+    expect(briefCalls).toBe(2);
+    expect(plateCalls).toBe(3);
+    expect((result.parts.illustrated as Illustrated).plates.filter((p) => p.image)).toHaveLength(2);
+  });
+
+  it("leaves no marker on its own hand-back, so the next window draws the plates", async () => {
+    const checkpoints = memoryCheckpoints();
+    const marker = jobMarker();
+    await script();
+    briefCalls = 0;
+    plateCalls = 0;
+    const deadlineAt = Date.now() + BRIEF_CAP_MS + SETTLE_MARGIN_MS + 1_000;
+    briefTakesMs = 500_000;
+    vi.useFakeTimers({ toFake: ["Date"], now: Date.now() });
+    try {
+      const first = { ...ctxFor(), jobId: "spya-jobsplit", deadlineAt, beginPaidWork: marker.beginPaidWork };
+      await expect(STEPS.illustrated.run(first, store, checkpoints)).rejects.toBeInstanceOf(NeedsAnotherWindow);
+    } finally {
+      vi.useRealTimers();
+      briefTakesMs = 0;
+    }
+    expect(marker.begun.size, "a hand-back before the plates marks nothing").toBe(0);
+
+    const second = { ...ctxFor(), jobId: "spya-jobsplit", deadlineAt: Date.now() + 720_000, beginPaidWork: marker.beginPaidWork };
+    const result = await STEPS.illustrated.run(second, store, checkpoints);
+    expect(plateCalls).toBe(2);
+    expect((result.parts.illustrated as Illustrated).plates.filter((p) => p.image)).toHaveLength(2);
+    expect([...marker.begun]).toEqual(["illustrated-plates"]);
+  });
+
+  it("propagates a lost claim from the plate marker before drawing anything", async () => {
+    await script();
+    const lost = new StaleAttemptError("spya-joblost");
+    const ctx = {
+      ...ctxFor(),
+      jobId: "spya-joblost",
+      deadlineAt: Date.now() + 720_000,
+      beginPaidWork: async () => {
+        throw lost;
+      },
+    };
+
+    await expect(STEPS.illustrated.run(ctx, store, memoryCheckpoints())).rejects.toBe(lost);
+    expect(plateCalls, "a claimant that lost the job sends no plate").toBe(0);
   });
 
   it.each([null, [], { raw: 17 }, { raw: "not JSON" }, { raw: "{}" }])(

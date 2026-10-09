@@ -61,7 +61,7 @@ import { createHash, randomUUID } from "node:crypto";
 
 import { urlKey } from "../ingest.js";
 import type { FailureKind } from "../messages.js";
-import type { Job, JobReset, JobStatus, JobStep, JobUpload, OwnerId, StepName } from "../types.js";
+import type { Job, JobReset, JobStatus, JobStep, JobUpload, OwnerId, PaidPurchase, StepName } from "../types.js";
 
 /**
  * A fingerprint of exactly what `sameWork` compares, computed once.
@@ -723,8 +723,13 @@ export interface JobStore {
    * Locked, read and written in one transaction, like `pauseForDeadline`,
    * because a refused conditional `UPDATE` could not say which of the two
    * refusals it was. Plan 261009l.
+   *
+   * **Or a purchase inside a step** (`PaidPurchase`): Illustrated's plates,
+   * marked at the plate phase because the step hands itself to a second window
+   * on purpose before them. One column holds either: a job walks its steps in
+   * order, so at most one marked purchase is ever unfinished in it. Plan 261009o.
    */
-  beginPaidStep(id: string, attempt: string, step: StepName): Promise<"begun" | "begun-before">;
+  beginPaidStep(id: string, attempt: string, purchase: PaidPurchase): Promise<"begun" | "begun-before">;
 
   /**
    * A step is **still running**: write what the card should say, keep the claim.

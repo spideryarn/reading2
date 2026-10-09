@@ -126,6 +126,7 @@ function paint(live?: LiveApi, threadId: string | null = THREAD.id, threads = [T
         canStartOver: true,
         onRetry: () => {},
         onEdit: () => {},
+        onDeleteFrom: undefined,
         onStop: () => {},
         onJump: (id: string) => { events.push(`jump:${id}`); },
         recovering: new Set<string>(),

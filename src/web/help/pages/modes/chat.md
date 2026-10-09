@@ -53,6 +53,8 @@ it.
 
 <kbd>Enter</kbd> sends and <kbd>Shift Enter</kbd> starts a new line; <kbd>Esc</kbd> stops an answer
 still arriving. **Answer again** gets a fresh answer, and the pencil lets you rewrite your question.
+The bin beside the pencil deletes that question, its answer and everything after it: press it, then
+press it again to confirm. The first question has no bin; to delete it, delete the conversation.
 When a conversation is longer than the panel, the arrows under it step to the previous or next
 message, or back to the first, and **Latest** jumps to the end. The (i) in the corner of a
 conversation says which AI model answered it, and how hard it was asked to think.

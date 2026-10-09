@@ -40,6 +40,8 @@ vi.mock("../src/web/useChat.js", () => ({
     stop: () => {},
     cancelAndDiscard: () => {},
     remove: () => {},
+    deleteFrom: () => {},
+    settled: () => true,
     error: null,
   }),
 }));
@@ -140,6 +142,7 @@ function paint(t: ChatThread): void {
         canStartOver: true,
         onRetry: () => {},
         onEdit: () => {},
+        onDeleteFrom: undefined,
         onStop: () => {},
         onJump: () => {},
         recovering: new Set<string>(),

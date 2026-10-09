@@ -4060,6 +4060,34 @@ async function hintOpened(
 }
 
 /**
+ * **Delete one of the reader's questions and everything after it.**
+ * `POST /api/chat/:slug/:threadId/delete-from`, body `{ messageId,
+ * expectedTailId }`. Report spya-mx423m; the rules are `withDeleteFrom` in
+ * src/chat.ts, and a refusal is its `ChatConflict`, so a 409.
+ *
+ * Under the conversation's turn order, for the reason the thread `DELETE`
+ * gives: nothing about a delete needs to interleave with a turn. Nothing is
+ * aborted first, unlike an edit: a conversation with an answer arriving is
+ * refused, and the panel does not offer the button then.
+ */
+async function deleteChatFrom(
+  slug: string,
+  threadId: string,
+  body: unknown,
+): Promise<{ threads: ChatThread[]; deleted: number }> {
+  const { messageId, expectedTailId } = objectBody(body);
+  /* The tail is required, unlike edit's: a new route has no old tab to stay
+     compatible with, and an unguarded delete is a stale tab deleting turns it
+     never saw. */
+  if (typeof messageId !== "string" || typeof expectedTailId !== "string") {
+    throw httpError(400, "Expected { messageId, expectedTailId }");
+  }
+  return inTurnOrder(`${slug}/${threadId}`, () =>
+    chatStore.deleteFrom(slug, threadId, messageId, { expectedTailId }),
+  );
+}
+
+/**
  * **Stop the first answer of a conversation, and throw the conversation away.**
  *
  * Greg's call, 2026-08-26: a reader who selects a sentence, sees the answer
@@ -12157,6 +12185,19 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     handler: async ({ request: { req, res } }, captures) => {
       const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
       send(res, 200, await hintOpened(slug, id, await readBody(req)));
+    },
+  },
+
+  /* The reader deleted a question and everything after it. No model call;
+     `first-capture` for `hint-opened`'s reason. */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/delete-from$/,
+    article: "first-capture",
+    handler: async ({ request: { req, res } }, captures) => {
+      const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
+      send(res, 200, await deleteChatFrom(slug, id, await readBody(req)));
     },
   },
 

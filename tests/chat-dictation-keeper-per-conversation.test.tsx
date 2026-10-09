@@ -65,6 +65,8 @@ vi.mock("../src/web/useChat.js", () => ({
     discard: () => {},
     rename: () => {},
     remove: () => {},
+    deleteFrom: () => {},
+    settled: () => true,
     error: null,
   }),
 }));
@@ -140,6 +142,7 @@ function panel(threadId: string | null) {
         canStartOver: true,
         onRetry: () => {},
         onEdit: () => {},
+        onDeleteFrom: undefined,
         onStop: () => {},
         onJump: () => {},
         recovering: new Set<string>(),
