@@ -135,24 +135,27 @@ that conversation too**, which the privacy page says
 ## From Claude on the web or a phone (built, switched off)
 
 The same tools are also served at `https://www.spideryarn.com/api/mcp`, for an AI app that cannot
-start a program on your Mac. Claude signs in with OAuth: it sends you to `/oauth/consent`, you
+start a program on your Mac, including ChatGPT Desktop. The app signs in with OAuth: it sends you to `/oauth/consent`, you
 press *Allow*, and it gets a token from Supabase's OAuth server for your account
 ([261007p](../plans/261007p-mcp-remote-sign-in-with-oauth.md)).
 
-- **Off until Greg switches it on.** It accepts only the token of the one AI app whose id is in
-  `MCP_OAUTH_CLIENT_ID`; unset, it refuses everyone. Before switching on, run the spike in
+- **Off until Greg switches it on.** It accepts only tokens whose app id is in the comma-separated
+  `MCP_OAUTH_CLIENT_ID` list (spaces and empty entries ignored); with no ids, it refuses everyone.
+  Register each app by hand, with dynamic registration **off**. Before switching on, run
+  [`scripts/mcp-oauth-spike.ts`](../../scripts/mcp-oauth-spike.ts), the spike in
   [261007p § What landed](../plans/261007p-mcp-remote-sign-in-with-oauth.md#what-landed-stage-1)
   against the local stack: it has not been run against a real OAuth server. Switching on: Supabase dashboard,
   Authentication → OAuth Server on (dynamic registration **off**) and Authentication → OAuth Apps,
-  one confidential app with redirect `https://claude.ai/api/mcp/auth_callback`; its id into Vercel
-  as `MCP_OAUTH_CLIENT_ID`; deploy; then in Claude, Settings → Connectors → *Add custom connector*,
+  a confidential app per connector, with its exact callback (Claude's is
+  `https://claude.ai/api/mcp/auth_callback`); their ids into Vercel
+  as `MCP_OAUTH_CLIENT_ID`, separated by commas; deploy; then in Claude, Settings → Connectors → *Add custom connector*,
   the address above, *Use your own OAuth client*, its id and secret.
 - **Administrator only**, for now.
 - **Not one click, as designed.** Claude has a link that opens *Add custom connector* already filled
-  in, but this setup also requires a client id and secret. `MCP_OAUTH_CLIENT_ID` accepts exactly one
-  id; adding a separate ChatGPT client or using dynamically registered clients needs a change to
-  that gate, not just a Supabase setting. Both apps support static clients, so dynamic registration
-  is an option for easier setup, not a requirement for supporting both:
+  in, but this setup also requires a client id and secret. Greg approved separate hand-registered
+  Claude and ChatGPT clients on 2026-10-09; dynamic registration remains a separate decision.
+  Both apps support static clients, so dynamic registration is an option for easier setup,
+  not a requirement for supporting both:
   [261009a § The decision this leaves](../research/261009a-one-click-mcp-install-for-claude-and-chatgpt.md#the-decision-this-leaves-gregs).
 - **The asking tools refuse there**: no dialog can be shown on your Mac from a server, so gifts,
   publishing and private links are done in the Mac app or on the site.
