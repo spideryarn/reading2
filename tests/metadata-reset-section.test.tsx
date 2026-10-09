@@ -541,7 +541,7 @@ describe("the Start this article again section", () => {
     await open();
 
     expect(button("Start again")).toBeUndefined();
-    expect(card()?.textContent).toContain("Then, one after another: FAQ and Bibliography.");
+    expect(card()?.textContent).toContain("Then, one after another: FAQ and Peer review › Bibliography.");
   });
 
   it("reads the metadata again when the reset finishes", async () => {
