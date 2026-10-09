@@ -3254,7 +3254,22 @@ export interface ToolRun {
    * docs/plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md.
    */
   offer?: SaveOffer;
+  /**
+   * **The guide's next steps**, at most three, drawn as a row of buttons under
+   * its latest answer (`offer_next_steps` in src/chat-tools.ts,
+   * src/web/GuideNextSteps.tsx). Each is a press; the tool runs none of them.
+   * Plan docs/plans/261009r-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md.
+   */
+  steps?: NextStep[];
 }
+
+/** One of the guide's next steps — src/next-steps.ts says what each does and checks them. */
+export type NextStep =
+  | { kind: "ask"; words: string }
+  | { kind: "mode"; mode: string }
+  | { kind: "search"; words: string }
+  | { kind: "share" }
+  | { kind: "archive" };
 
 /**
  * **One offer to save**: which of the reader's two profile fields, and the

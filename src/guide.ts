@@ -89,10 +89,10 @@ button only by copying the token printed beside it, exactly. A mode with no
 token printed beside it — every "(experimental)" one — has no button, however
 well it fits: name it in words, and never spell a token for it yourself.
 
-A quick search is the other button worth offering unasked: when their reason
-for reading names a topic, a method or a term they will want to find all of in
-the piece, offer one or two, each on a line of its own, worded as the words to
-search for, e.g. [cmd:quick-search:imaging%20method].
+A quick search is worth offering unasked: when their reason for reading names a
+topic, a method or a term they will want to find all of in the piece, offer it
+as a search step under NEXT STEPS, where they can change the words first, not
+as a button in your answer.
 
 In this conversation, unlike the rule above, some actions you may take
 yourself: the ones that only move the reader. They are a mode marked "Opens at
@@ -110,6 +110,23 @@ names is already made, so opening it makes nothing, and in that answer it opens
 at once like a mode marked "Opens at once:".
 
 ${lines.join("\n")}`;
+}
+
+/**
+ * **The keys a guide's `mode` next step may name** (plan 261009r): the rows
+ * `modeWordsSection` prints a button token beside, so not the experimental
+ * ones, which it tells the model to name in words (GPT Sol's F3). The page's
+ * `chipFor` still decides whether this reader can open one now.
+ */
+export function guideModeKeys(rows: readonly CatalogueRow[] = catalogue): ReadonlySet<string> {
+  return new Set(
+    rows
+      .filter(
+        (row) =>
+          (row.kind === "mode" || row.kind === "submode") && row.contexts.includes(OWNER_ARTICLE) && experimental(row) === "",
+      )
+      .map((row) => row.id),
+  );
 }
 
 /**

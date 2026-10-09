@@ -598,7 +598,7 @@ What differs is what the session is told and given, on both engines:
   the reading, not the piece; why they are reading first; modes named, never pressed, since a
   voice has no buttons.
 - **The tools** are the typed guide's article tools (`GUIDE_TOOLS`) plus `show_passage`, without
-  the typed guide's `offer_to_save` (a card with a button, which a voice has nowhere to put;
+  the typed guide's `offer_to_save` or `offer_next_steps` (a card or a row of buttons, which a voice has nowhere to put;
   `LIVE_SERVER_TOOLS` refuses it too, and a spoken turn's stored runs never carry an offer,
   [261009q](../plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md)). The page says the
   session's kind on every `/live-tool` call and the route hands it to `runTool`, so the guide's gate

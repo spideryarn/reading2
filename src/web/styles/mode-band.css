@@ -766,6 +766,24 @@ svg.band-waiting-ghost { flex: none; }
   border-color: var(--rule-strong);
 }
 .guide-offer .chat-suggest-btn:hover { border-color: var(--highlight); }
+/* The guide's next steps (plan 261009r): the greeting's column of buttons,
+   under its latest answer. A share or archive step carries an icon. A search
+   step is a box the reader can change, then the quick-search chip for its
+   words, wrapping under it on a narrow band. */
+.guide-next-steps { margin: 0.2rem 0 0.8rem; padding: 0; border: 0; min-width: 0; }
+.guide-next-steps .chat-suggest-btn { display: flex; align-items: center; gap: 0.4rem; }
+.guide-next-search { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
+.guide-next-search-box {
+  flex: 1 1 10rem;
+  min-width: 0;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.88rem;
+}
 .chat-new {
   display: inline-flex;
   align-items: center;
@@ -1276,7 +1294,8 @@ svg.band-waiting-ghost { flex: none; }
 .crit-poles input:focus-visible,
 .quiz-answer:focus-visible,
 .ill-steer-input:focus-visible,
-.skim-purpose-input:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+.skim-purpose-input:focus-visible,
+.guide-next-search-box:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 /* **Send is the primary control in its row** — Greg, 2026-09-12: *"it sort of
    should be bigger and maybe have some kind of outline to indicate that it's
    probably the most important button in that little area."* So it is the one
