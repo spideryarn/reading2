@@ -3534,6 +3534,8 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/an-uploaded-html-file-becomes-an-article.test.ts": "private-postgres",
   "tests/uploads-api.test.ts": "private-postgres",
   "tests/pdf-quality-pg.test.ts": "private-postgres",
+  "tests/export-meta-abstract-pg.test.ts": "private-postgres",
+  "tests/metadata-rerun-keeps-extract-pg.test.ts": "private-postgres",
 };
 
 /**

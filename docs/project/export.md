@@ -133,7 +133,12 @@ fixed in place — fixing one turns that test red:
 - a `candidates` chat thread is written as `chat` (emitting the real kind was tried, and reverted);
 - `passages` and `interrupted` are dropped from every message;
 - `extractedHtml` is never written at all;
-- `shortId`, `visibility` and `publicAt` have nowhere to land, because `data/` has no sharing.
+- `shortId`, `visibility` and `publicAt` have nowhere to land, because `data/` has no sharing;
+- `meta.json` has no `doi` or `journal`. Whether it should is Greg's open question from
+  [261004a](../plans/261004a-metadata-page-shows-publication-date-and-journal-from-crossref-at-import.md);
+  `tests/export-meta-abstract-pg.test.ts` pins the omission. (`abstract` was left out with nothing
+  saying so until [261009p](../plans/261009p-metadata-rerun-keeps-what-it-does-not-make.md), and
+  is written now.)
 
 A reader's download built on that would inherit every one of them into a brand-new user-facing
 format, with the round-trip test blocking the repair. **The rollback's data model is not "my article

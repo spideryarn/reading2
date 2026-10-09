@@ -2112,6 +2112,91 @@ export const metadataReaders = {
 };
 
 /**
+ * **Which `Meta` fields the `metadata` step makes, which it fills, and which
+ * it keeps from the revision it writes into.** Its `meta` goes through
+ * `metaColumns`, which writes every column `?? null`, so a field it left out
+ * would be a column it cleared. On a minimal paper's first run there is nothing
+ * there; run alone by the administrator on an article `extract` already read,
+ * it was how the PDF was read (`recall`, `pagesChecked`, `quality` and the
+ * rest), the page's `siteName`, `lang`, `excerpt` and `note`, and any byline,
+ * date or DOI this run did not find again. Plan 261009p.
+ *
+ * - **`made`**: the step always says it. The title pair (`stepTitleTidier`
+ *   already holds a pair steady when the raw title repeats) and `source`.
+ * - **`filled`**: what this run finds replaces what was there, and what it
+ *   does not find leaves what was there — `metadataOverPrevious` says how,
+ *   because three of them travel in pairs.
+ * - **`kept`**: the step never says it. Those not in `metaColumns` (`url`,
+ *   `fetchedAt`, `filename`, `rawSha256`, `readingDifficulty`) ride along and
+ *   the write ignores them.
+ *
+ * A `Record` over `keyof Meta`, so a new field does not compile until somebody
+ * has said which.
+ */
+export const METADATA_STEP_FIELDS: Readonly<Record<keyof Meta, "made" | "filled" | "kept">> = {
+  slug: "made",
+  title: "made",
+  titleOriginal: "made",
+  source: "made",
+  byline: "filled",
+  authors: "filled",
+  abstract: "filled",
+  doi: "filled",
+  journal: "filled",
+  publishedAt: "filled",
+  publishedYear: "filled",
+  readingDifficulty: "kept",
+  siteName: "kept",
+  lang: "kept",
+  url: "kept",
+  fetchedAt: "kept",
+  excerpt: "kept",
+  note: "kept",
+  filename: "kept",
+  rawSha256: "kept",
+  method: "kept",
+  pages: "kept",
+  unverified: "kept",
+  recall: "kept",
+  pagesChecked: "kept",
+  quality: "kept",
+};
+
+/**
+ * **The `metadata` step's `meta`, laid over the revision's**, by
+ * `METADATA_STEP_FIELDS`. Pure, so the rules are tested without a store.
+ *
+ * The `filled` fields go in three pairs and one single, each as one fact:
+ *
+ * - **authors and byline** — the run's, unless it found none, or found the
+ *   same names in the same order, when what was there stands: `extract` reads
+ *   affiliations and a page's own byline, and this step reads neither.
+ * - **DOI and journal** — the journal is the registry's word about that DOI, so
+ *   the old one stands only beside the same DOI (or no new one).
+ * - **the day and the year** — one or the other, by CHECK; the old pair
+ *   stands only when the run found neither.
+ * - **the abstract** — the run's, else what was there.
+ */
+export function metadataOverPrevious(previous: Meta | null, made: Meta): Meta {
+  if (previous === null) return made;
+  const was = <K extends keyof Meta>(...keys: K[]): Partial<Pick<Meta, K>> =>
+    Object.fromEntries(keys.filter((k) => previous[k] !== undefined).map((k) => [k, previous[k]])) as Partial<Pick<Meta, K>>;
+  const kept = Object.fromEntries(
+    Object.entries(previous).filter(([key]) => METADATA_STEP_FIELDS[key as keyof Meta] === "kept"),
+  ) as Partial<Meta>;
+  const names = (authors: Meta["authors"]) => (authors ?? []).map((a) => a.name).join("\n");
+  const people =
+    made.authors === undefined || names(made.authors) === names(previous.authors) ? was("authors", "byline") : {};
+  /* DOI identity is case-insensitive. Keep the registry facts when the reader
+     and the previous extraction copied different capitals from the same DOI. */
+  const sameDoi = made.doi === undefined || made.doi.toLowerCase() === previous.doi?.toLowerCase();
+  const work = sameDoi ? { ...was("doi"), ...(made.journal === undefined ? was("journal") : {}) } : {};
+  const date = made.publishedAt === undefined && made.publishedYear === undefined ? was("publishedAt", "publishedYear") : {};
+  const abstract = made.abstract === undefined ? was("abstract") : {};
+  return { ...kept, ...made, ...people, ...work, ...date, ...abstract };
+}
+
+/**
  * **What tidies an imported title** in `extract` and `metadata`: a small model,
  * with the rule behind it (src/title-tidy-model.ts, plan 261005j). In an
  * object for `metadataReaders`' reason, so a test can `vi.spyOn` it and run
@@ -2637,7 +2722,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           ? await metadataReaders.pdf(bytes, { signal: ctx.signal })
           : await metadataReaders.html(new TextDecoder().decode(bytes), { signal: ctx.signal });
       const paper = { slug: ctx.slug, ...(manifest.filename ? { filename: manifest.filename } : {}), found };
-      const meta = await withArticleRegistry(
+      const made = await withArticleRegistry(
         ctx,
         "metadata",
         paperMeta({
@@ -2649,6 +2734,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         }),
         [],
       );
+      const meta = metadataOverPrevious(await store.read(ctx.slug, "extract", "meta"), made);
       /* Counts and the branch, never a word of the paper (docs/project/logging.md). */
       plog.info(
         {
