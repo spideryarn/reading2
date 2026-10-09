@@ -1,0 +1,5 @@
+Review this plan, read-only: docs/plans/261009b-phone-bottom-bar-more-leads-the-bands-frame-when-its-place-is-off-screen.md
+
+Context: Spideryarn's bottom bar (src/web/Dock.tsx — DockModes, DockModeLinks, cutForMore, DockMore; src/web/dock-fit.ts — useDockFit/chooseDockFit; src/web/styles/dock-fit.css; src/web/styles/narrow-window.css § a coarse pointer). Raw WebKit measurements: /tmp/claude-1000/-home-greg-code-spideryarn2/f680f03d-45d8-4648-9f28-17cbbeea23d0/scratchpad/measure/out.json (if readable).
+
+Questions: Is the order-independent "home right edge" measurement sound (no oscillation, no stale state across resize / rotation / scrollLeft != 0 / RTL not relevant)? Is there a simpler design that keeps More reachable at 360px with Experimental on? Any a11y problem with More first inside the role=radiogroup frame? What tests would catch a regression that jsdom can't? Anything in the plan that is wrong about the code? Be concise: numbered findings, each with severity and a concrete fix.

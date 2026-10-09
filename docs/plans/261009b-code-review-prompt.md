@@ -1,0 +1,5 @@
+Code review of plan docs/plans/261009b-phone-bottom-bar-more-leads-the-bands-frame-when-its-place-is-off-screen.md (your plan review: docs/plans/261009b-plan-review-sol.md). Diff of tracked files: docs/plans/261009b-code-review.diff; the new test file is tests/dock-more-leads.test.tsx (untracked, read it directly).
+
+Changed: src/web/dock-fit.ts (MORE_HOME_ATTR, moreOffTheEdge, useDockFit returns moreLeads), src/web/Dock.tsx (bandsInOrder, moreHomeAttr, DockModes/DockModeLinks/DockLink take moreLeads/moreHome), dock-fit.css comment, docs/project/narrow-windows.md bullet.
+
+You may fix what you find inside this stage (these files), keeping edits minimal and in the surrounding style; report anything wider for me. Do not invent quotes from Greg. Do not run git commands that change history or the index. After edits run: npx vitest run tests/dock-more-leads.test.tsx tests/dock-groups.test.tsx tests/dock-more.test.tsx tests/dock-fit.test.ts and npm run typecheck. Report: numbered findings with severity, what you changed, and test results.

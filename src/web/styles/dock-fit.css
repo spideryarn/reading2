@@ -58,7 +58,8 @@
    docs/plans/261002g-plain-closes-both-columns-a-second-press-closes-a-mode-and-plain-and-marginalia-in-frames-of-their-own.md.
 
    **The More button and Comments sit inside these frames since 2026-10-08**
-   (plan 261008d): More in the bands' frame straight after Skim, Comments in
+   (plan 261008d): More in the bands' frame straight after Skim (first in it
+   where that place is off a phone's edge — plan 261009b), Comments in
    Marginalia's after the toggle. More had a fourth frame of its own for a day.
    Neither needs a rule of its own here: each is a `.dock-btn` with a
    `.dock-btn-label` inside `.dock-modes`, so every rung of the ladder below

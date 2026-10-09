@@ -165,6 +165,14 @@ Three things worth carrying to whatever is built next:
   `overflow-x: auto` on the bar around it — **at every width, not inside a media query**, which is
   the second half of the same lesson: that fallback lived in the 731px query until 2026-09-02, so
   the one width band where the bar had started overflowing again had no floor under it.
+- **But More is never past the edge.** A scrolling row hides whatever is beyond the fold, and the
+  one button that must not be there is More, which holds five modes. On a phone the row is at its
+  44px floor, so its buttons stand at the same x at 390, 375 and 360, and with Diagram drawn More's
+  place after Skim is x 354–398 (WebKit, 2026-10-09). No label rung fits 360. So when that place is
+  past the bar's edge, More moves to the front of the bands' frame, in the DOM as well as on screen.
+  The test is where More's *home* ends, never where it is drawn, or moving it would send it straight
+  back: `moreOffTheEdge` in [`src/web/dock-fit.ts`](../../src/web/dock-fit.ts), `bandsInOrder` in
+  `Dock.tsx`, [261009b](../plans/261009b-phone-bottom-bar-more-leads-the-bands-frame-when-its-place-is-off-screen.md).
 - **When what has to fit is the content, a media query is the wrong tool.** The bottom bar dropped
   its labels at `max-width: 1100px`, a number measured against six modes. At thirteen the spelled-out
   row wants 1416px, so two thirds of a laptop screen showed every label *and* ran the last buttons
