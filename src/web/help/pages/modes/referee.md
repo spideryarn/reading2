@@ -3,6 +3,15 @@ keywords: peer review reviewer reviewing paper manuscript criteria claims assess
 related: for-reviewers, comments
 ---
 
+## In short
+
+Peer review asks you to be thorough and fair, and an AI that wrote your review for you would be
+neither. Referee helps you do it yourself: you set the criteria you are judging against, it lines up
+the paper’s claims beside the passages it thinks are meant to back them, and it reads your own
+comments back so you can make them clearer. It never gives a verdict; that stays yours.
+
+![A Strength of evidence criterion on a paper: four passages, each with a line on why, three marked counts for in green and one counts against in red](../images/mode-referee.png "A For / against criterion: each passage the AI found, which way it cuts, and why. The list numbers 1–4 are its ordering, not a score.")
+
 ## When to use it
 
 When you are reviewing a paper and want help being thorough without handing over the judgement. It
@@ -28,8 +37,6 @@ Five parts, chosen by the chips at the top:
 Referee is only for whoever added the article.
 
 ## Reading it
-
-![A Strength of evidence criterion on a paper: four passages, each with a line on why, three marked counts for in green and one counts against in red](../images/mode-referee.png "A For / against criterion: each passage the AI found, which way it cuts, and why. The list numbers 1–4 are its ordering, not a score.")
 
 **Hidden text** checks the original web page for text a person would not see but an AI would read —
 text the colour of its background, too small to read, invisible characters, instructions written to

@@ -14,8 +14,10 @@
  *
  * **Built from the Help's own sources of truth, not from the files alone**: the
  * order is `HELP_GROUPS` (what the contents page shows), the title, summary and
- * keywords are `helpEntry`'s, a mode's first two sentences are the mode
- * catalog's (they are not in its file), every `{{…}}` token is expanded by
+ * keywords are `helpEntry`'s, a mode's page is in the order the page draws it
+ * — its `In short`, then the mode catalog's two sentences under *How it works*
+ * (they are not in its file), then the rest, split by the page's own parser
+ * (`helpModeSections`) — every `{{…}}` token is expanded by
  * `expandHelpTokens`, and each page's address is `helpHref` — so a question is
  * `/help/questions#faq-…`, never `/help/faq-…`.
  *
@@ -30,7 +32,7 @@ import type { HelpCorpusPage } from "../src/help-chat.js";
 import { MODE_CATALOG } from "../src/mode-catalog.js";
 import { HELP_ANCHORS, helpAnchorKind, helpHref, type HelpAnchor } from "../src/web/help/help-anchors.js";
 import { HELP_GROUPS, helpEntry } from "../src/web/help/help-content.js";
-import { expandHelpTokens } from "../src/web/help/help-markdown.js";
+import { expandHelpTokens, helpModeSections } from "../src/web/help/help-markdown.js";
 import { helpPage } from "../src/web/help/help-pages.js";
 
 const FILE = path.join(import.meta.dirname, "..", "src", "help-corpus.generated.json");
@@ -49,13 +51,19 @@ function pictureInWords(body: string): string {
   );
 }
 
-/** A mode's page opens with the catalog's two sentences, as the page draws it (help-content.tsx § helpBody). */
+/**
+ * A mode's page in the order the page draws it (help-content.tsx § helpBody):
+ * its opening, then the catalog's two sentences under *How it works*, then the
+ * rest of its file.
+ */
 function bodyOf(anchor: HelpAnchor): string {
-  const words = pictureInWords(expandHelpTokens(helpPage(anchor).body, anchor).trim());
+  const markdown = expandHelpTokens(helpPage(anchor).body, anchor).trim();
   const kind = helpAnchorKind(anchor);
-  if (kind.kind !== "mode") return words;
+  if (kind.kind !== "mode") return pictureInWords(markdown);
   const catalog = MODE_CATALOG[kind.mode];
-  return `${catalog.description}.\n\n${catalog.how}\n\n${words}`;
+  const { inShort, whenToUse, reading } = helpModeSections(markdown, anchor);
+  const parts = [inShort.markdown, `## How it works\n\n${catalog.description}.\n\n${catalog.how}`, whenToUse?.markdown, reading?.markdown];
+  return pictureInWords(parts.filter((p) => p !== undefined).join("\n\n"));
 }
 
 const built: HelpCorpusPage[] = HELP_GROUPS.flatMap((group) =>
@@ -100,11 +108,24 @@ describe("src/help-corpus.generated.json", () => {
     expect(spine?.body).toContain("(Picture: A click on the spine jumps to another section");
   });
 
-  it("opens a mode's page with the catalog's sentences, which its file does not hold", () => {
-    const glossary = built.find((p) => p.anchor === "mode-glossary");
-    expect(glossary?.body.startsWith(`${MODE_CATALOG.glossary.description}.`)).toBe(true);
-    expect(glossary?.body).toContain(MODE_CATALOG.glossary.how);
-    expect(glossary?.body).toContain("## When to use it");
+  it("gives a mode's page in the page's order: In short, its picture, How it works with the catalog's sentences, then the rest", () => {
+    const glossary = built.find((p) => p.anchor === "mode-glossary")?.body ?? "";
+    const at = (s: string) => {
+      const i = glossary.indexOf(s);
+      expect(i, s).toBeGreaterThanOrEqual(0);
+      return i;
+    };
+    expect(glossary.startsWith("## In short\n\n")).toBe(true);
+    const order = [
+      at("## In short"),
+      at("(Picture: "),
+      at("## How it works"),
+      at(`${MODE_CATALOG.glossary.description}.`),
+      at(MODE_CATALOG.glossary.how),
+      at("## When to use it"),
+      at("## Reading it"),
+    ];
+    expect(order).toEqual([...order].sort((a, b) => a - b));
   });
 
   it.runIf(process.env.WRITE_HELP_CORPUS === "1")("is written", () => {

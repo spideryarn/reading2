@@ -2,6 +2,15 @@
 keywords: ask question conversation answer explain talk voice live speak dictate microphone help understand paragraph button bookmark tag action list filter recall tutorial explore
 ---
 
+## In short
+
+Chat is for the questions the article raises in your own head: what a sentence means, whether a
+claim really follows, how two parts fit together. You ask in your own words, and every answer points
+back to the paragraphs it came from, so you can check it against the text rather than take it on
+trust.
+
+![A chat about Great Hackers: the reader asks whether the author gives real evidence, and the answer begins “Mostly assertion”, with short codes after the claims it rests on](../images/mode-chat.png "Chat: the short codes after a claim are the paragraphs it rests on. Click one to check it.")
+
 ## When to use it
 
 When you have a question of your own: what a sentence means, whether a claim follows, how two
@@ -19,8 +28,6 @@ Quicker ways in than the Chat button:
 Chat is only for whoever added the article; on someone else’s shared article its button is dimmed.
 
 ## Reading it
-
-![A chat about Great Hackers: the reader asks whether the author gives real evidence, and the answer begins “Mostly assertion”, with short codes after the claims it rests on](../images/mode-chat.png "Chat: the short codes after a claim are the paragraphs it rests on. Click one to check it.")
 
 The short codes in an answer are links to the paragraphs it relied on. Click one to jump there, or
 point at it to read the start first. A dimmed code is a paragraph the article no longer has. Check

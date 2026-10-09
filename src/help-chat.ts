@@ -77,7 +77,7 @@ export interface HelpCorpusPage {
   readonly keywords: string;
   /** A mode behind the Experimental switch. */
   readonly experimental: boolean;
-  /** The page's Markdown, every `{{…}}` token expanded; a mode's starts with the catalog's two sentences. */
+  /** The page's Markdown, every `{{…}}` token expanded; a mode's opens with its In short, then the catalog's two sentences under How it works. */
   readonly body: string;
 }
 
