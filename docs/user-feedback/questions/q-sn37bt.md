@@ -1,10 +1,11 @@
 ---
 id: q-sn37bt
 report: spya-caue42
-status: open
+status: answered
 asked: 2026-10-03
 title: Should you be able to choose which claim Debate checks?
-refs: qi-k9deez4b · docs/plans/261003o-debate-reception-and-claims-sub-modes-and-a-tidier-panel.md § Questions for Greg (not waited on) · docs/user-feedback/261003_1016-debate-reception-and-claims-sub-modes.md
+acted: spya-rp3u4p
+refs: qi-k9deez4b · qi-7e32ngyt · docs/plans/261008i-debate-claims-picked-by-the-reader.md · docs/plans/261003o-debate-reception-and-claims-sub-modes-and-a-tidier-panel.md § Questions for Greg (not waited on) · docs/user-feedback/261003_1016-debate-reception-and-claims-sub-modes.md
 ---
 Background. Your report shipped as Debate's two parts, Reception and Claims. This is the half that was left for you. Debate's Claims search reads the article, picks three or four claims by itself, and looks for what has been written about each. It now shows you those claims, each with its sources under it. You cannot yet say "check this one", which you asked for.
 
@@ -19,3 +20,17 @@ C. List the claims first, and search nothing until you pick. A cheap first step 
 What would decide it: if the claims the search picks by itself are usually the ones you care about, A or B. If you often find it has picked the wrong ones, C. B is the smaller step and does not rule C out later.
 
 Recommended: B, after a few days of using A.
+
+## Greg's answer, 2026-10-08 (in the Feedback dialog, reply `spya-rp3u4p`)
+
+> C list the claims first, let them pick
+>
+> and also B allow them to input their own
+
+Settled: C and B, both built (plan 261008i). Pressing Debate now searches for Reception only.
+Pressing Claims lists the article's main claims from one call with no web search; a visitor sees
+that list too. The owner ticks claims or types one (at most four a press) and presses Check: one web
+search, about 20 cents, with each claim answered on its own. Dig further searches one checked claim
+again, looking elsewhere. Checks have their own allowance (10 an hour, 30 a day) and are the
+owner's only. Whether a visitor should see the checks of the listed claims is the follow-up
+question q-cgwene.
