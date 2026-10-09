@@ -72,8 +72,10 @@ import type {
   DebateBears,
   DebateLean,
   DebateRelation,
+  DebateClaimsNotRun,
   DebateSynthesis,
   FaqQuestion,
+  ListedClaim,
   SimpleLevel,
   SimpleParagraph,
   GlossaryKind,
@@ -423,6 +425,7 @@ export interface PublicArtefactSet {
   simpleSummary?: PublicSimpleSummary;
   citations?: PublicCitations;
   debate?: PublicDebate;
+  debateClaims?: PublicDebateClaimList;
   sketch?: PublicSketch;
 }
 
@@ -603,6 +606,27 @@ export interface PublicFaq {
 }
 
 /**
+ * **Debate's claims list, as a visitor gets it** — from the day it was built
+ * (2026-10-08, docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2).
+ * Generated output about the article, so readable by a visitor by default
+ * (docs/project/mode.md § The artefact); only making it spends.
+ *
+ * **Each claim crosses field by field** — `{ id, blockId, quote, statement }`:
+ * the article's own words, where they are, and the model's one-line wording of
+ * the claim. No profile is in this stage, so there is nothing about a person
+ * to drop. **Read-only**: the visitor's panel has no button to make, redo or
+ * check one.
+ *
+ * **What does not cross** is the pipeline, as everywhere in this file —
+ * `version`, `generator`, `slug`, `sourceHash`, `generatedAt`, `elapsedMs` —
+ * and `dropped`, our checking's tally. Nor does any check the owner ran on a
+ * listed claim: those are a separate table (plan § 4).
+ */
+export interface PublicDebateClaimList {
+  claims: ListedClaim[];
+}
+
+/**
  * **Simple, as a visitor gets it** — Summary's plain-words sub-mode, from the
  * day it was built (docs/plans/260930i-simple-summaries-eli15-sub-mode.md).
  * Generated output, so readable by a visitor by default
@@ -763,7 +787,7 @@ export interface PublicClaimDebateRow extends PublicDebateRowBase {
 }
 
 /**
- * One of the two searches, as a visitor gets it: its rows, and **how many
+ * One Debate group, as a visitor gets it: its rows, and **how many
  * rows the public boundary withheld** — computed there, never read off the
  * artefact (260905f § What is counted, Sol's F17). The stored `counts` do not
  * cross: `returnedSources`, `reportedRows`, `keptRows`, `omittedOverCap`, the
@@ -783,6 +807,11 @@ export interface PublicDebateGroup<Row> {
   sourceNotPublishable: number;
 }
 
+/** The claims group as a visitor gets it: searched (a legacy debate), or not run. src/types.ts § `DebateClaims`. */
+export type PublicDebateClaims =
+  | (PublicDebateGroup<PublicClaimDebateRow> & { pass?: undefined })
+  | DebateClaimsNotRun;
+
 /**
  * **The Debate, as a visitor gets it** — since 2026-09-29, the fourth mode plan
  * 260929c moved off `owners-only` (SPIDERYARN-READING2-56), by the contract its
@@ -797,10 +826,16 @@ export interface PublicDebateGroup<Row> {
 export interface PublicDebate {
   searchedAt: string;
   direct: PublicDebateGroup<PublicDirectDebateRow>;
-  claims: PublicDebateGroup<PublicClaimDebateRow>;
+  /**
+   * The claims search's rows — or `{pass: "not-run"}` for a debate searched at
+   * `debate/7` or later, when the press stopped searching for claims
+   * (src/types.ts § `DebateClaims`). Carried across as it is stored, so a
+   * visitor is never told a search found nothing when none ran.
+   */
+  claims: PublicDebateClaims;
   /**
    * **The threads and the key sources** — since 2026-10-01 (plan 261001b,
-   * SPIDERYARN-READING2-6M). The model's words over the rows both passes kept;
+   * SPIDERYARN-READING2-6M). The model's words over the rows the search kept;
    * no profile goes into the call.
    *
    * **A `made` synthesis crosses only when no row was withheld** in either

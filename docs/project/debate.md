@@ -2,9 +2,9 @@
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
-What the rest of the web says about this piece: replies to it, and the argument around the claims it
-makes. **The only mode whose content is not in the article at all**, which is why nearly everything
-the panel draws that is not a row is a disclosure.
+What the rest of the web says about this piece: Reception now, plus claim sources preserved from an
+earlier search. **The only mode whose content is not in the article at all**, which is why nearly
+everything the panel draws that is not a row is a disclosure.
 
 ## What it is for
 
@@ -36,7 +36,7 @@ the panel draws that is not a row is a disclosure.
 
 ## What the reader sees
 
-Two sub-modes, one per search, on a segmented control (`?debate=claims`; Reception is the default):
+Two sub-modes on a segmented control (`?debate=claims`; Reception is the default):
 
 - **Reception**: what others have written about the piece itself, including work that cites it and
   says something about it. Pages that link or quote the piece come first; pages that only name it
@@ -47,15 +47,18 @@ Two sub-modes, one per search, on a segmented control (`?debate=claims`; Recepti
   For the owner it ends with **Cited by**: the papers that cite the piece, from OpenAlex, most cited
   first, ten and then all (see [§ Cited by](#cited-by-the-papers-that-cite-the-piece) below). A
   visitor gets a Google Scholar search for who cites it instead.
-- **Claims**: what has been written about the claims the piece makes. One open disclosure per
-  claim, in article order, headed by the article's own words; the relevance bar belongs here.
+- **Claims**: the list of the claims the article rests on, for the reader to pick from
+  ([§ The claims list](#the-claims-list)). The Reception search no longer looks into claims. A
+  debate from before `debate/7` still draws its saved claim sources under the list, exactly as
+  before, headed *Claims the earlier search chose*: one open disclosure per claim, in article
+  order, headed by the article's own words; the relevance bar belongs there.
 
 When the article has changed since the search ran, a banner says so and offers *Search again*.
 That button is held from the press until the new search has been read, so one press cannot buy two
 searches: [reader-profile.md § Regenerate waits for its own result](reader-profile.md#regenerate-waits-for-its-own-result).
 
 Threads and key sources narrow whichever sub-mode is on screen. **The stored search cannot be
-steered**: its two searches choose their own queries, and what they keep is one result per article,
+steered**: its Reception search chooses its own queries, and what it keeps is one result per article,
 the same for the owner and for every visitor. What the owner can do, since 2026-10-05, is start a
 chat from it: about any one claim ([§ Check a claim in chat](#check-a-claim-in-chat)), or from an
 angle of their own typed into the box at the top
@@ -63,6 +66,81 @@ angle of their own typed into the box at the top
 
 Open this doc to find your way in; the plans below are still where the design and its reasoning
 live.
+
+## The claims list
+
+Since 2026-10-08 Claims opens on a list of up to eight claims the article rests on that someone
+outside could argue with, in article order
+([261008i § 2](../plans/261008i-debate-claims-picked-by-the-reader.md)). It is its own pipeline
+step and artefact, `debate-claims` (the `debate_claims` column), made by **one model call over the
+article and no web search**: a few cents, where the Reception search is the dearest press in the
+app. Each claim is the article's own words, re-found in the paragraph it names and stored as the
+article's characters (the Referee rule, `findQuote` in `"spaced"` mode), with a jump to that
+paragraph, and under it one short line in the AI's words, labelled so. A claim whose quote is not
+in its paragraph is dropped and counted. Each listed claim keeps *Check this claim in chat*, and on
+a current list the owner can tick claims and check them on the web
+([§ Checking the claims you pick](#checking-the-claims-you-pick)).
+
+**The press rule.** Pressing the Claims chip — the panel's segment, the command bar's *Debate:
+Claims*, or the Debate button when it lands on Claims — makes the list when there is none. A link,
+Back, a reload or a last-view restore that lands on Claims only reads, and shows *List its claims*.
+The two sub-modes arm two different targets (`activationForDebate`, `src/web/activation.ts`), and
+each hook spends only its own while its own sub-mode is showing, so a Claims press can never buy
+the Reception search, nor a Reception press the list.
+
+**Its states**: none (*List its claims* for the owner; a sentence for a visitor), running, an empty
+list (a sentence: a real answer), a failed run (its sentence and *Retry*), and **stale** — the
+article has changed since — when the list is drawn read-only under a banner with *List again*.
+
+**Who sees it.** The owner, with the controls. A visitor to a shared article sees the list
+read-only — each claim's id, paragraph, quote and statement, through the public projection — and
+nothing to press; the list alone, with no search stored, is enough to open Debate to them.
+
+The Claims segment's count is the number of listed claims when there is a list and no check has
+found anything yet; once checks have put sources on screen, it is those sources (each claim's,
+an address once) plus any older search's; with no list, the older search's claim sources, as
+before.
+
+## Checking the claims you pick
+
+Since 2026-10-09, for the owner, on a current list
+([261008i § 3](../plans/261008i-debate-claims-picked-by-the-reader.md)). Greg chose this over an
+automatic claims search: *"C list the claims first, let them pick … and also B allow them to input
+their own"* (2026-10-08, q-sn37bt).
+
+**What a press buys.** Tick claims, type one of your own in the box (at most 600 characters,
+refused rather than cut), and press **Check**: **one web search**, about 20 cents and a minute and a
+half, over every ticked claim and the typed one together, at most four. It is pass B's call from
+the old automatic search (`generateClaimCheck`, `src/debate.ts`), handed the claims instead of
+picking them, and every row passes the same checks (a URL the search returned, a quotation found
+in that page's extract, never the article itself). A listed claim's rows are anchored to the list's
+own quote and paragraph, never to anything the model wrote; a typed claim's rows have no anchor.
+**Dig further**, on a claim a finished check has looked at, is one more search for that claim
+alone, told the addresses it already has so it looks elsewhere; its rows join the claim's, an
+address drawn once. Nothing searches by itself: only these two buttons spend.
+
+**What stops a press spending by accident.** The press is the only trigger; the list must still
+match the article (a stale list is read-only, and the server answers 409 before anything else);
+**one check per article at a time**, held by Postgres (a partial unique index on
+`debate_claim_checks`, so two tabs pressing at once get one search and one 409); and the shared
+**Dig deeper allowance** (`admitDig`, `src/dig-deeper.ts`: 20 an hour, 60 a day, two at once, a
+global 100 a day), taken after every free refusal and before the model. The button is held from the
+press until the stored answer has been read, and while another tab's check is out. A closed tab
+does not cancel a check: its answer is stored and the next read finds it.
+
+**Found nothing is not the same as not answered.** The model answers one group per claim. An
+explicit empty group says *This search found nothing it could quote on this claim.* A claim the
+answer left out, or answered twice, is *not answered*, and says so in different words: that search
+tells you nothing either way about it.
+
+**Visitors** see the list and nothing of the checks: a check may hold the owner's own words, and
+the checks are in a table the public reader does not read. Whether a visitor should see the checks
+of the article's own listed claims is a question for Greg in the plan.
+
+The table is `debate_claim_checks` (one row per press; [export.md](export.md) carries it). The
+routes are `GET` and `POST /api/debate-claims/:slug/checks`; the panel's half is
+[`src/web/useDebateChecks.ts`](../../src/web/useDebateChecks.ts) and
+[`src/web/debate-checks.ts`](../../src/web/debate-checks.ts).
 
 ## Check a claim in chat
 
@@ -327,8 +405,15 @@ Each module's header comment says what it owns and why; start with `src/debate.t
 
 - [`src/debate.ts`](../../src/debate.ts) — the pipeline step: the searches, and what is kept. Its
   header opens with the one thing to understand first.
-- [`src/debate-themes.ts`](../../src/debate-themes.ts) — the third call: the themes the sources
-  share, and the key sources.
+- [`src/debate-claims.ts`](../../src/debate-claims.ts) — Claims' list: the `debate-claims` step,
+  its prompt and the anchoring of each claim. The panel's half is
+  [`src/web/useDebateClaims.ts`](../../src/web/useDebateClaims.ts).
+- The reader's checks: `generateClaimCheck` and `readCheckedClaimGroup` at the foot of
+  `src/debate.ts`; the store
+  [`src/store/pg-debate-claim-checks.ts`](../../src/store/pg-debate-claim-checks.ts); the route
+  `runDebateClaimCheck` in `src/routes.ts`, whose docblock lists the refusals in order.
+- [`src/debate-themes.ts`](../../src/debate-themes.ts) — the optional search-free synthesis call:
+  the themes the Reception sources share, and the key sources.
 - [`src/debate-synthesis.ts`](../../src/debate-synthesis.ts) — the rules a synthesis must keep, read
   on both sides of the wire.
 - [`src/debate-registry.ts`](../../src/debate-registry.ts) — authors and year from Crossref or

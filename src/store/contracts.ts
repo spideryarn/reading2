@@ -46,6 +46,7 @@
  */
 
 import { isAdmin, type AdminUser } from "../admin.js";
+import type { HiddenCheckResult, StoredHiddenCheck } from "../referee-hidden-check-types.js";
 import type { OwnerId } from "../owner.js";
 import type { Db } from "../db/client.js";
 import type { Assets } from "../assets.js";
@@ -98,6 +99,11 @@ import type {
   QuizKeptAnswer,
   QuizQuestionId,
   FaqFound,
+  DebateClaimListFound,
+  DebateCheckCounts,
+  DebateCheckResult,
+  DebateCheckTarget,
+  DebateClaimCheck,
   RelationsResponse,
   CrossrefsFound,
   SimpleSummaryFound,
@@ -294,6 +300,15 @@ export interface ArticleReader {
    * docs/plans/260916d-faq-mode.md.
    */
   loadFaq(slug: string): Promise<FaqFound>;
+
+  /**
+   * Debate's claims list, plus whether its rendered body and cited head still
+   * describe the article, and whether its prompt/model generation is current.
+   * A visitor reads the list off the public payload instead
+   * (src/store/public-reader.ts), without the staleness verdict.
+   * docs/plans/261008i-debate-claims-picked-by-the-reader.md.
+   */
+  loadDebateClaims(slug: string): Promise<DebateClaimListFound>;
 
   /**
    * How each paragraph bears on the one before it, plus whether it still
@@ -1588,6 +1603,87 @@ export interface RefereeClaimsStore {
    * src/store/pg-referee-claims.ts).
    */
   sweep(slug: string, live: boolean): Promise<ClaimsRun | null>;
+}
+
+/**
+ * **How a reader's claim check ends**: the answer, or the reader's sentence for
+ * why there is none. Two arms, so an `error` cannot carry results — the
+ * database refuses that row too (`debate_claim_checks_results_only_done`).
+ */
+export type ClaimCheckFinish =
+  | {
+      status: "done";
+      results: DebateCheckResult[];
+      counts: DebateCheckCounts;
+      webSearches: number;
+      model: string;
+    }
+  | { status: "error"; error: string };
+
+/** What a check is when it is pressed — everything but the outcome. */
+export interface ClaimCheckBegin {
+  listSourceHash: string;
+  targets: DebateCheckTarget[];
+  digFurther: boolean;
+}
+
+/**
+ * **Debate's reader-picked claim checks** — src/store/pg-debate-claim-checks.ts,
+ * plan docs/plans/261008i-debate-claims-picked-by-the-reader.md § 3.
+ *
+ * Owner-scoped like every reader-state store: each method takes a slug and
+ * refuses one this reader does not own with the reader's 404.
+ */
+export interface DebateClaimChecksStore {
+  /** Every check on the article, oldest first. */
+  list(slug: string): Promise<DebateClaimCheck[]>;
+
+  /**
+   * **The reservation**: insert a `pending` check, or throw a 409
+   * (`CheckInFlight`) when the article already has one — the partial unique
+   * index decides, so two presses at once cannot both get through.
+   */
+  begin(slug: string, check: ClaimCheckBegin): Promise<{ check: DebateClaimCheck; attempt: string }>;
+
+  /**
+   * **Take back a reservation nothing was spent on** — the allowance refused
+   * the press after `begin`. Deletes the row only while it is still this
+   * attempt's `pending` one.
+   */
+  abandon(slug: string, id: string, attempt: string): Promise<void>;
+
+  /**
+   * Write the outcome over the `pending` check **this attempt began**. `null`
+   * when it is not there to write to: the sweep ended it, or the article went.
+   */
+  finish(slug: string, id: string, patch: ClaimCheckFinish, attempt: string): Promise<DebateClaimCheck | null>;
+
+  /**
+   * End abandoned `pending` checks — older than the call's deadline and its
+   * margin, and not one `live` says this process is running — then list.
+   */
+  sweep(slug: string, live: (id: string) => boolean): Promise<DebateClaimCheck[]>;
+}
+
+/**
+ * **Hidden text's Opus check, kept** — one row per article, the last finished
+ * answer. src/store/pg-referee-hidden-checks.ts;
+ * docs/plans/261009a-save-hidden-text-opinions.md.
+ *
+ * Only a validated answer is ever written, so there is no begin, no attempt
+ * and no sweep: a failed run leaves the last good answer where it was. Both
+ * methods are owner-scoped: a slug the caller does not own is a 404.
+ */
+export interface RefereeHiddenCheckStore {
+  /** The kept check, or `null` when this article has never been checked. */
+  read(slug: string): Promise<StoredHiddenCheck | null>;
+  /**
+   * Keep `result`, replacing whatever was there. `startedAt` is when the
+   * referee pressed; the store stamps the finish. Returns the row kept after
+   * the attempt, which may be a newer check when this write loses the freshness
+   * fence.
+   */
+  save(slug: string, result: HiddenCheckResult, startedAt: Date): Promise<StoredHiddenCheck>;
 }
 
 /**

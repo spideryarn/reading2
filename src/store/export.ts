@@ -458,6 +458,8 @@ export async function exportArticle(
   if (revision.quiz) await put("article_revisions", "quiz.json", revision.quiz);
   if (revision.faq) await put("article_revisions", "faq.json", revision.faq);
   if (revision.relations) await put("article_revisions", "relations.json", revision.relations);
+  if (revision.debateClaims)
+    await put("article_revisions", "debate-claims.json", revision.debateClaims);
   if (revision.crossrefs)
     await put("article_revisions", "crossrefs.json", revision.crossrefs);
   if (revision.simpleSummary)
@@ -807,6 +809,20 @@ export async function exportArticle(
      `claims` is JSONB and is written back verbatim. There is no `configFromRow`
      equivalent to fail on, because there is no discriminated union in the row —
      the shape is validated by `validateClaims` on the way in. */
+  /* Hidden text's Opus check, one row and no id, as above. Plan 261009a. */
+  const hiddenCheckRow = rows.refereeHiddenChecks[0];
+  if (hiddenCheckRow) {
+    await put("referee_hidden_checks", "referee-hidden-check.json", {
+      check: {
+        judgments: hiddenCheckRow.judgments,
+        unanswered: hiddenCheckRow.unanswered,
+        notSent: hiddenCheckRow.notSent,
+        model: hiddenCheckRow.model,
+        createdAt: hiddenCheckRow.createdAt.toISOString(),
+        finishedAt: hiddenCheckRow.finishedAt.toISOString(),
+      },
+    });
+  }
   const claimsRow = rows.refereeClaims[0];
   if (claimsRow) {
     await put("referee_claims", "referee-claims.json", {
@@ -826,6 +842,31 @@ export async function exportArticle(
         error: claimsRow.error,
         sourceHash: claimsRow.sourceHash,
       }),
+    });
+  }
+
+  /* debate-claim-checks.json — the reader's checks of the claims they picked
+     in Debate (plan 261008i § 3). No filesystem store ever read this back, so
+     the shape is the rows, columns as they are, as the bundle writes them. */
+  if (rows.debateClaimChecks.length) {
+    await put("debate_claim_checks", "debate-claim-checks.json", {
+      checks: rows.debateClaimChecks.map((row) =>
+        compact({
+          id: row.id,
+          status: row.status,
+          listSourceHash: row.listSourceHash,
+          promptVersion: row.promptVersion,
+          digFurther: row.digFurther,
+          targets: row.targets,
+          results: row.results,
+          counts: row.counts,
+          webSearches: row.webSearches,
+          model: row.model,
+          error: row.error,
+          createdAt: row.createdAt.toISOString(),
+          finishedAt: row.finishedAt?.toISOString(),
+        }),
+      ),
     });
   }
 

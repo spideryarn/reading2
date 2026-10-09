@@ -19,9 +19,13 @@
  * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md).
  *
  * **Two sub-modes since 2026-10-03**, `?debate=`: Reception, the search about
- * the piece, and Claims, the search about what it claims. Both draw the one
- * stored debate, so switching between them fetches and spends nothing.
- * docs/plans/261003o-debate-reception-and-claims-sub-modes-and-a-tidier-panel.md.
+ * the piece, and Claims. docs/plans/261003o-debate-reception-and-claims-sub-modes-and-a-tidier-panel.md.
+ *
+ * **Claims has its own artefact since 2026-10-08**: the list of the article's
+ * claims (`useDebateClaims`, plan 261008i § 2), made by a press on Claims and
+ * never by Reception's. Both hooks stay mounted in both sub-modes, each told
+ * whether its own sub-mode is showing, so a press for one that lands on the
+ * other is retired unspent. A visitor gets the stored list off the payload.
  *
  * **And a second read for the owner since 2026-10-04**, `useCiters`: the papers
  * that cite the piece, from OpenAlex, for Reception's *Cited by*. Not the
@@ -32,10 +36,12 @@
 
 import { useQueryState } from "nuqs";
 import type { BlockId } from "../../../types.js";
-import type { PublicDebate } from "../../../public-types.js";
+import type { PublicDebate, PublicDebateClaimList } from "../../../public-types.js";
 import { bearsParam, debateOrderParam, debateParam, debateThreadParam } from "../../params.js";
 import { useRenderCount } from "../../perf.js";
 import { useDebate } from "../../useDebate.js";
+import { useDebateClaims } from "../../useDebateClaims.js";
+import { useDebateChecks } from "../../useDebateChecks.js";
 import { useCiters } from "../../useCiters.js";
 import { type DebateClaimChats, DebatePanel } from "../../DebatePanel.js";
 import { yearOf } from "../../debate-order.js";
@@ -93,9 +99,11 @@ export function DebateBand({
 }) {
   useRenderCount("DebateBand");
   const articleYear = yearOf(publishedAt);
-  const debate = useDebate(slug);
   /* `?debate=`, Reception unless it says `claims`. */
   const [view, setView] = useQueryState("debate", debateParam);
+  const debate = useDebate(slug, view === "reception");
+  /* Claims' own list and its own press (activation.ts § `activationForDebate`). */
+  const claimList = useDebateClaims(slug, view === "claims");
   /* `?debateby=`, Reception's order, defaulting to `prioritised` (*as found*);
      the panel draws what the rows can support (debate-order.ts §
      `effectiveReceptionOrder`). */
@@ -106,12 +114,17 @@ export function DebateBand({
   const [thread, setThread] = useQueryState("debatethread", debateThreadParam);
   /* **Who cites the piece**, Reception's *Cited by* — a second read with no job
      under it, so it can never start the search above. Wanted when the panel
-     draws the section: with Reception, and before any search is stored
-     (DebatePanel.tsx § `citedBy`). Plan 261004h. */
-  const citers = useCiters(slug, view === "reception" || debate.status === "none");
+     draws the section: with Reception (DebatePanel.tsx § `citedBy`). Plan
+     261004h. Claims has its own list since 2026-10-08, so *Cited by* no
+     longer stands in for a missing search there. */
+  const citers = useCiters(slug, view === "reception");
+  /* **The reader's claim checks** (plan 261008i § 3): read on mount, never
+     posted but by a press on Check or Dig further. Read whichever sub-mode is
+     showing, because the Claims segment's count is drawn from them. */
+  const checks = useDebateChecks(slug);
   return (
     <DebatePanel
-      access={{ kind: "owner", owner: debate, citers, claimChats }}
+      access={{ kind: "owner", owner: debate, claimList, checks, citers, claimChats }}
       onJump={onJump}
       view={view}
       onView={setView}
@@ -131,7 +144,8 @@ export function DebateBand({
 /**
  * **The same panel, for somebody who does not own the article.**
  *
- * The debate came in the page's own payload. No `useDebate`, so no read of
+ * The debate and the claims list came in the page's own payload, either of
+ * them possibly absent (Reader.tsx mounts this when one is there). No `useDebate`, so no read of
  * `/api/debate/:slug`, no job and no search — a second band rather than a flag
  * on the first, because a hook cannot be called conditionally
  * (src/web/reader-capability.ts; `VisitorTimelineBand` is the sibling). The
@@ -140,12 +154,15 @@ export function DebateBand({
  */
 export function VisitorDebateBand({
   debate,
+  claimList,
   onJump,
   blockOrder,
   publishedAt,
   articleTitle,
 }: {
-  debate: PublicDebate;
+  debate: PublicDebate | null;
+  /** Claims' list, read-only — `PublicDebateClaimList`, src/public-types.ts. */
+  claimList: PublicDebateClaimList | null;
   onJump(id: BlockId): void;
   blockOrder: ReadonlyMap<BlockId, number>;
   /** A visitor's meta carries no `publishedAt`, so this is `undefined` today and there is no marker. */
@@ -164,7 +181,7 @@ export function VisitorDebateBand({
   const [thread, setThread] = useQueryState("debatethread", debateThreadParam);
   return (
     <DebatePanel
-      access={{ kind: "visitor", debate }}
+      access={{ kind: "visitor", debate, claimList }}
       onJump={onJump}
       view={view}
       onView={setView}

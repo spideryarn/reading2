@@ -27,7 +27,13 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { TierRow } from "../src/billing/tiers.js";
 import { closeDb, getDb } from "../src/db/client.js";
-import { articleRevisions, articles, blockIdentities, revisionBlocks } from "../src/db/schema.js";
+import {
+  articleRevisions,
+  articles,
+  blockIdentities,
+  refereeHiddenChecks,
+  revisionBlocks,
+} from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
 import { type OwnerId, runAsOwner } from "../src/owner.js";
@@ -40,6 +46,7 @@ import { pgJobStore } from "../src/store/pg-jobs.js";
 import { pgLinkSummaryStore } from "../src/store/pg-link-summaries.js";
 import { pgRefereeClaimsStore } from "../src/store/pg-referee-claims.js";
 import { pgRefereeCriteriaStore } from "../src/store/pg-referee-criteria.js";
+import { pgRefereeHiddenCheckStore } from "../src/store/pg-referee-hidden-checks.js";
 import { pgSearchStore } from "../src/store/pg-searches.js";
 import { pgShelfStore } from "../src/store/pg-shelf.js";
 import { pgVisibilityStore } from "../src/store/pg-visibility.js";
@@ -75,6 +82,7 @@ await pgReady({
     { table: "spideryarn.referee_criteria", column: "finished_at" },
     { table: "spideryarn.referee_criteria", column: "colour_at" },
     { table: "spideryarn.referee_claims", column: "finished_at" },
+    { table: "spideryarn.referee_hidden_checks", column: "finished_at" },
     { table: "spideryarn.jobs", column: "cancel_requested_at" },
     { table: "spideryarn.link_summaries", column: "finished_at" },
   ],
@@ -98,6 +106,8 @@ const BLOCK = mintId();
 const NO_TIERS: readonly TierRow[] = [];
 /** A time no clock in this file can produce, to prove a column was overwritten. */
 const EARLIER = "2026-08-01T00:00:00.000Z";
+/** A later press time, still fixed so no server clock could accidentally satisfy it. */
+const LATER = "2026-08-02T00:00:00.000Z";
 const NONE: ReadonlySet<string> = new Set();
 /** A grace window in the future, so every `pending` row is past it. */
 const SWEEP_ALL = { keep: NONE, graceMs: -60_000 };
@@ -901,6 +911,40 @@ describe("referee_claims.finished_at", () => {
     const after = await read();
     expectRecent(after.finished_at, "finished_at after the sweep");
     expect(after.created_at, "the sweep re-dated the run's start").toBe(anHourAgo);
+  });
+});
+
+/* ---------------------------------------------------- hidden-text checks -- */
+
+describe("referee_hidden_checks event times", () => {
+  const where = sql`article_id = ${ARTICLE_ID}`;
+  const answer = (model: string) => ({
+    judgments: [],
+    unanswered: 0,
+    notSent: 0,
+    model,
+  });
+
+  it("records the press and finish, replaces both for a newer press, and lets no older press change the row", async () => {
+    await getDb().delete(refereeHiddenChecks).where(eq(refereeHiddenChecks.articleId, ARTICLE_ID));
+
+    await mine(() => pgRefereeHiddenCheckStore.save(SLUG, answer("first"), new Date(EARLIER)));
+    const first = await rowOf("referee_hidden_checks", where);
+    expect(new Date(String(first.created_at)).toISOString()).toBe(EARLIER);
+    expectRecent(String(first.finished_at), "finished_at after the first hidden-text check");
+
+    await pause();
+    await mine(() => pgRefereeHiddenCheckStore.save(SLUG, answer("newer"), new Date(LATER)));
+    const newer = await rowOf("referee_hidden_checks", where);
+    expect(new Date(String(newer.created_at)).toISOString()).toBe(LATER);
+    expect(newer.model).toBe("newer");
+    expect(newer.finished_at).not.toBe(first.finished_at);
+
+    const returned = await mine(() =>
+      pgRefereeHiddenCheckStore.save(SLUG, answer("older-finished-late"), new Date(EARLIER)),
+    );
+    expect(returned.model).toBe("newer");
+    expect(await rowOf("referee_hidden_checks", where)).toEqual(newer);
   });
 });
 

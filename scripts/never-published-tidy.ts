@@ -144,7 +144,7 @@ const when = (v: unknown) => (v instanceof Date ? v : new Date(String(v)));
  * is not is held back rather than deleted, because the reader made it.
  */
 const READER_TABLES = [
-  "comments", "chat_threads", "search_runs", "referee_criteria", "referee_claims",
+  "comments", "chat_threads", "search_runs", "referee_criteria", "referee_claims", "referee_hidden_checks",
   "glossary_lookups", "glossary_hidden_entries", "citation_finds", "citation_investigations",
   "reading_time", "quiz_attempts", "link_summaries", "article_tags", "upload_source_guesses",
   /* **And the history that outlives the article** (`on delete set null`): a

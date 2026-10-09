@@ -1,0 +1,324 @@
+// @vitest-environment jsdom
+/**
+ * **Checking the claims the reader picked, on screen** — Debate's Claims with
+ * its tick boxes, the box for a claim of your own, Check and Dig further.
+ * src/web/DebatePanel.tsx § `OwnerListedClaims`, src/web/debate-checks.ts.
+ * Plan docs/plans/261008i-debate-claims-picked-by-the-reader.md § 3 and § 5,
+ * stage 3.
+ *
+ * What a reader could otherwise be misled or overcharged by, each case red
+ * first: Check pressable when it should not be; a POST carrying anything but
+ * ids and the typed words; the same page drawn twice under one claim; Dig
+ * further sending more than one claim; and *found nothing* said over a claim
+ * the search never answered.
+ */
+import { act, createElement } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { checksOwner, claimListOf, claimListOwner } from "./helpers/debate-claims-owner.js";
+import type {
+  BlockId,
+  DebateCheckRequest,
+  DebateCheckResult,
+  DebateCheckRow,
+  DebateCheckTarget,
+  DebateClaimCheck,
+  ListedClaim,
+} from "../src/types.js";
+import type { UseDebate } from "../src/web/useDebate.js";
+import type { UseDebateChecks } from "../src/web/useDebateChecks.js";
+import type { UseDebateClaims } from "../src/web/useDebateClaims.js";
+import {
+  DEBATE_CHECK_FOUND_NOTHING,
+  DEBATE_CHECK_NOT_ANSWERED,
+  DEBATE_CHECK_OWN_LABEL,
+  DEBATE_CHECK_YOUR_CLAIM,
+} from "../src/messages.js";
+
+const { DebatePanel } = await import("../src/web/DebatePanel.js");
+
+const BLOCK = "spya-k3m9qt" as BlockId;
+
+const LISTED: ListedClaim[] = [
+  { id: "spya-cdm2a4", blockId: BLOCK, quote: "a starter needs cool water", statement: "Cool water suits a starter." },
+  { id: "spya-cdm2b5", blockId: BLOCK, quote: "salt slows it down", statement: "Salt slows fermentation." },
+  { id: "spya-cdm2c6", blockId: BLOCK, quote: "rye peaks sooner", statement: "Rye peaks sooner." },
+  { id: "spya-cdm2d7", blockId: BLOCK, quote: "feed it twice a day", statement: "Feed twice daily." },
+  { id: "spya-cdm2e8", blockId: BLOCK, quote: "warmth speeds it up", statement: "Warmth speeds it." },
+];
+const [A, B] = LISTED as [ListedClaim, ListedClaim];
+
+const NO_DEBATE: UseDebate = {
+  status: "none",
+  debate: null,
+  stale: false,
+  outdated: false,
+  slug: "a-piece",
+  error: null,
+  retryRead: async () => {},
+  job: null,
+  failed: null,
+  stalled: false,
+  starting: false,
+  automatic: false,
+  ensure: async () => {},
+  regenerate: async () => {},
+  cancel: () => {},
+  rewriting: false,
+  refresh: async () => {},
+};
+
+function row(url: string, over: Partial<DebateCheckRow> = {}): DebateCheckRow {
+  return {
+    id: `spya-r${url.length.toString().padStart(5, "a").replace(/[0-9]/g, "b")}`,
+    url,
+    title: `Page at ${url}`,
+    sourceQuote: "words copied from that page",
+    relation: "qualifies",
+    lean: "neither",
+    applies: "How it bears.",
+    ...over,
+  } as DebateCheckRow;
+}
+
+function listedTarget(c: ListedClaim): DebateCheckTarget {
+  return { kind: "listed", claimId: c.id, blockId: c.blockId, quote: c.quote, statement: c.statement };
+}
+
+function check(
+  id: string,
+  targets: DebateCheckTarget[],
+  results: DebateCheckResult[],
+  over: Partial<DebateClaimCheck> = {},
+): DebateClaimCheck {
+  return {
+    id,
+    status: "done",
+    listSourceHash: "hash",
+    promptVersion: "debate-check/1",
+    digFurther: false,
+    targets,
+    results,
+    createdAt: "2026-10-09T10:00:00.000Z",
+    ...over,
+  };
+}
+
+let host: HTMLDivElement;
+let root: Root;
+const sent: DebateCheckRequest[] = [];
+
+function paint(
+  checks: Partial<UseDebateChecks> = {},
+  list: Partial<UseDebateClaims> = {},
+): void {
+  act(() => {
+    root.render(
+      createElement(DebatePanel, {
+        access: {
+          kind: "owner",
+          owner: NO_DEBATE,
+          claimList: claimListOwner({ status: "ready", claimList: claimListOf(LISTED), ...list }),
+          checks: checksOwner({
+            check: async (request: DebateCheckRequest) => {
+              sent.push(request);
+              return true;
+            },
+            ...checks,
+          }),
+          citers: { result: { kind: "no-doi" }, retry: () => {} },
+          claimChats: { summaries: [], onCheck: () => {}, onLens: () => {}, onOpen: () => {} },
+        },
+        onJump: () => {},
+        view: "claims",
+        onView: () => {},
+        order: "prioritised",
+        onOrder: () => {},
+        blockOrder: new Map(),
+        relevance: null,
+        onRelevance: () => {},
+        articleYear: null,
+        thread: null,
+        onThread: () => {},
+        articleTitle: "A piece",
+      }),
+    );
+  });
+}
+
+const ticks = () => [...host.querySelectorAll<HTMLInputElement>(".dbt-listed-tick")];
+const checkButton = () => host.querySelector<HTMLButtonElement>("button.dbt-check-send");
+const digButtons = () => [...host.querySelectorAll<HTMLButtonElement>("button.dbt-dig")];
+const segments = () => [...host.querySelectorAll(".dbt-views [role='radio']")].map((b) => b.textContent ?? "");
+const claimItem = (id: string) => host.querySelector(`.dbt-listed-claim[data-claim="${id}"]`);
+
+function tick(i: number): void {
+  act(() => {
+    ticks()[i]?.click();
+  });
+}
+
+function type(words: string): void {
+  const el = host.querySelector<HTMLInputElement>(`input[aria-label="${DEBATE_CHECK_OWN_LABEL}"]`);
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+  act(() => {
+    setter?.call(el, words);
+    el?.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+async function pressCheck(): Promise<void> {
+  await act(async () => {
+    checkButton()?.click();
+  });
+}
+
+beforeEach(() => {
+  (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  sent.length = 0;
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+});
+
+afterEach(() => {
+  act(() => root.unmount());
+  host.remove();
+});
+
+describe("Check", () => {
+  it("is off with nothing picked, and names how many claims a press would search", async () => {
+    paint();
+    expect(ticks()).toHaveLength(LISTED.length);
+    expect(checkButton()?.disabled).toBe(true);
+    expect(checkButton()?.textContent).toBe("Check");
+    await pressCheck();
+    expect(sent).toEqual([]);
+    tick(0);
+    expect(checkButton()?.disabled).toBe(false);
+    expect(checkButton()?.textContent).toBe("Check 1 claim");
+  });
+
+  it("posts the ticked ids and the typed words, and nothing else", async () => {
+    paint();
+    tick(1);
+    type("  Salt is fine in moderation  ");
+    expect(checkButton()?.textContent).toBe("Check 2 claims");
+    await pressCheck();
+    expect(sent).toEqual([{ claimIds: [B.id], own: "Salt is fine in moderation" }]);
+    /* What was picked has become a check. */
+    expect(ticks().some((t) => t.checked)).toBe(false);
+  });
+
+  it("is off over more than four claims", () => {
+    paint();
+    for (let i = 0; i < 4; i++) tick(i);
+    expect(checkButton()?.disabled).toBe(false);
+    tick(4);
+    expect(checkButton()?.textContent).toBe("Check 5 claims");
+    expect(checkButton()?.disabled).toBe(true);
+    /* Four ticks and a typed claim is five too. */
+    tick(4);
+    type("one more");
+    expect(checkButton()?.disabled).toBe(true);
+  });
+
+  it("is off while this tab's check is out, and while another tab's is", () => {
+    paint();
+    tick(0);
+    expect(checkButton()?.disabled).toBe(false);
+    paint({ sending: true });
+    expect(checkButton()?.disabled).toBe(true);
+    expect(ticks()[0]?.disabled).toBe(true);
+    const pending = check("spya-chk234", [listedTarget(A)], [], { status: "pending" });
+    paint({ checks: [pending] });
+    expect(checkButton()?.disabled).toBe(true);
+    /* The positive control: nothing out, a tick, and it is on. */
+    paint({ checks: [] });
+    expect(checkButton()?.disabled).toBe(false);
+  });
+
+  it("is not offered on a stale list: no boxes, no Check", () => {
+    paint({}, { stale: true });
+    expect(ticks()).toHaveLength(0);
+    expect(checkButton()).toBeNull();
+  });
+});
+
+describe("what the checks found", () => {
+  it("draws a page once under a claim, however many checks found it", () => {
+    const first = check("spya-chk234", [listedTarget(A)], [
+      { claimId: A.id, outcome: "answered", rows: [row("https://a.example/one"), row("https://a.example/two")] },
+    ]);
+    const second = check(
+      "spya-chk345",
+      [listedTarget(A)],
+      [{ claimId: A.id, outcome: "answered", rows: [row("https://a.example/two"), row("https://a.example/three")] }],
+      { digFurther: true },
+    );
+    paint({ checks: [first, second] });
+    const titles = [...(claimItem(A.id)?.querySelectorAll(".dbt-item a.dbt-title") ?? [])].map((a) => a.textContent);
+    expect(titles).toEqual(["Page at https://a.example/one", "Page at https://a.example/two", "Page at https://a.example/three"]);
+    /* The segment counts the rows on screen, a page once per claim. */
+    expect(segments()[1]).toBe("Claims3");
+  });
+
+  it("says found nothing only for an explicit empty answer, and something else when a claim was not answered", () => {
+    const done = check(
+      "spya-chk234",
+      [listedTarget(A), listedTarget(B)],
+      [
+        { claimId: A.id, outcome: "answered", rows: [] },
+        { claimId: B.id, outcome: "not-answered" },
+      ],
+    );
+    paint({ checks: [done] });
+    expect(claimItem(A.id)?.textContent).toContain(DEBATE_CHECK_FOUND_NOTHING);
+    expect(claimItem(A.id)?.textContent).not.toContain(DEBATE_CHECK_NOT_ANSWERED);
+    expect(claimItem(B.id)?.textContent).toContain(DEBATE_CHECK_NOT_ANSWERED);
+    expect(claimItem(B.id)?.textContent).not.toContain(DEBATE_CHECK_FOUND_NOTHING);
+  });
+
+  it("does not draw a check made from an older list", () => {
+    const old = check(
+      "spya-chk234",
+      [listedTarget(A)],
+      [{ claimId: A.id, outcome: "answered", rows: [row("https://a.example/one")] }],
+      { listSourceHash: "an-older-list" },
+    );
+    paint({ checks: [old] });
+    expect(claimItem(A.id)?.querySelector(".dbt-item")).toBeNull();
+    expect(digButtons()).toHaveLength(0);
+  });
+
+  it("draws a typed claim as your claim, with its rows", () => {
+    const own: DebateCheckTarget = { kind: "own", claimId: "spya-own234", text: "Rye is easier" };
+    paint({
+      checks: [check("spya-chk234", [own], [{ claimId: own.claimId, outcome: "answered", rows: [row("https://b.example/x")] }])],
+    });
+    const group = host.querySelector(".dbt-own-claim");
+    expect(group?.textContent).toContain(`${DEBATE_CHECK_YOUR_CLAIM}: `);
+    expect(group?.textContent).toContain("Rye is easier");
+    expect(group?.querySelectorAll(".dbt-item")).toHaveLength(1);
+  });
+});
+
+describe("Dig further", () => {
+  it("is offered on a claim a finished check looked at, and sends that one claim alone", async () => {
+    const done = check("spya-chk234", [listedTarget(A)], [{ claimId: A.id, outcome: "answered", rows: [] }]);
+    paint({ checks: [done] });
+    /* A ticked claim elsewhere must not ride along. */
+    tick(1);
+    expect(digButtons()).toHaveLength(1);
+    await act(async () => {
+      digButtons()[0]?.click();
+    });
+    expect(sent).toEqual([{ digFurther: A.id }]);
+  });
+
+  it("is held while a check is out", () => {
+    const done = check("spya-chk234", [listedTarget(A)], [{ claimId: A.id, outcome: "answered", rows: [] }]);
+    paint({ checks: [done], sending: true });
+    expect(digButtons()[0]?.disabled).toBe(true);
+  });
+});

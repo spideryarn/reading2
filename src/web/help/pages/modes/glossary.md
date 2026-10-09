@@ -3,6 +3,16 @@ keywords: terms definitions define jargon words meaning underline dotted vocabul
 related: mode-chat
 ---
 
+## In short
+
+Every field has words it uses in its own way, and a piece that leans on one you do not know can stop
+making sense without telling you why. Glossary lists the terms this piece uses in a non-obvious way
+and keeps what the piece tells you about them separate from background supplied by the AI. Once
+made, the terms are underlined in the text in every mode, so an explanation is a moment away while
+you read.
+
+![A glossary card for Robert Millikan over the article: a background definition, and buttons for Dig deeper, Hide and Open glossary](../images/glossary-card.png "Point at an underlined term for its card. This one is background: what the AI knows, not what the article says.")
+
 ## When to use it
 
 Early in a piece from an unfamiliar field, or one where the author gives everyday words a narrower
@@ -18,8 +28,6 @@ list — it says **Write a new list** instead. That run replaces the list rather
 already made, but cannot add to it.
 
 ## Reading it
-
-![A glossary card for Robert Millikan over the article: a background definition, and buttons for Dig deeper, Hide and Open glossary](../images/glossary-card.png "Point at an underlined term for its card. This one is background: what the AI knows, not what the article says.")
 
 ![The Glossary panel: a box to look up a term, ways to order the list, a threshold slider, and entries for Cargo Cult Science, Esalen Institute and Uri Geller](../images/mode-glossary.png "The Glossary panel: every term in the order you choose, with a slider to hide the less important ones.")
 

@@ -125,6 +125,7 @@ export function useAutoRun(
   status: ArtefactStatus,
   ensure: () => Promise<void>,
   reread: () => Promise<void>,
+  enabled = true,
 ): boolean {
   /* A primitive, so React can compare it without a memo, and so nothing here
      can hold a token it has not spent. */
@@ -158,6 +159,14 @@ export function useAutoRun(
        waited on. Claiming is idempotent, so `<StrictMode>` running this twice
        makes no difference. */
     if (!claimActivation(slug, target, nonce, owner)) return;
+    /* A delegated mode can keep this hook mounted while moving to a sub-mode
+       that does not authorise this target. Drop the press immediately, even
+       while the opening GET is still in flight: waiting for it to settle would
+       let Back to the non-generating sub-mode spend the earlier press. */
+    if (!enabled) {
+      consumeActivation(slug, target, nonce, owner);
+      return;
+    }
     /* The GET has not settled. Ordinary, and the press waits for it. */
     if (status === "loading") return;
     if (status === "error") {
@@ -178,7 +187,7 @@ export function useAutoRun(
     if (!jobEngine.beginAutoAttempt(slug, target)) return;
     setAutomatic(true);
     void run.current();
-  }, [nonce, status, slug, target, owner]);
+  }, [nonce, status, slug, target, owner, enabled]);
 
   /* **Not reset anywhere**, and it does not need to be: every caller narrows it
      with *and a run is in flight* before showing anything, so it stops being

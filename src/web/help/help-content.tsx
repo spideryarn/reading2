@@ -23,10 +23,13 @@
  *
  * ## The modes say only what the catalog does not
  *
- * A mode's page draws its heading from `MODE_LABEL` and its first two
- * sentences from `MODE_CATALOG` — the same words its band's (i) card shows
- * (BandAbout.tsx § AboutMode) — and then the two things only Help says: when
- * the mode is worth opening, and how to read what it shows. Its line on the
+ * A mode's page draws its heading from `MODE_LABEL`, opens with its file's
+ * `In short` — why a reader would care, what it is for, roughly how it works,
+ * and a picture of it in use (Greg, `spya-xcmg2d`; plan 261009a) — then, under
+ * *How it works*, the two sentences from `MODE_CATALOG` — the same words its
+ * band's (i) card shows (BandAbout.tsx § AboutMode) — and then the two things
+ * only Help says: when the mode is worth opening, and how to read what it
+ * shows. Its line on the
  * contents page is the catalog's too. Restating the catalog in the file would
  * be a second copy to drift. `HELP_MODE_FILES` (help-pages.ts) is a
  * `Record<Mode, …>`, so a new mode without a file is a type error. GPT Sol,
@@ -54,7 +57,7 @@ import {
   type HelpAnchor,
   type HelpAnchorKind,
 } from "./help-anchors.js";
-import { helpSectionText, renderHelpMarkdown, renderHelpModeHalves } from "./help-markdown.js";
+import { helpSectionText, renderHelpMarkdown, renderHelpModeSections } from "./help-markdown.js";
 import { HELP_FAQ_PAGES, HELP_GUIDE_PAGES, HELP_MODE_PAGES, HELP_TOPIC_PAGES, helpPage } from "./help-pages.js";
 import { HelpSub } from "./help-parts.js";
 
@@ -147,8 +150,9 @@ export function helpEntry(anchor: HelpAnchor): HelpEntry {
 
 /**
  * **One anchor's words, drawn.** A topic's, a question's or a guide's are its
- * file. A mode's are the catalog's two sentences, then each half its file
- * has, under the heading the page has always put there.
+ * file. A mode's are its file's `In short`, with no heading, then the
+ * catalog's two sentences under *How it works*, then each other section its
+ * file has, under the heading the page has always put there.
  *
  * Drawn when asked for, so opening one page parses one file. A file with
  * something in it that nothing draws throws here, and tests/help-page.test.tsx
@@ -158,9 +162,12 @@ export function helpBody(anchor: HelpAnchor): ReactNode {
   const kind = helpAnchorKind(anchor);
   if (kind.kind !== "mode") return renderHelpMarkdown(helpPage(anchor).body, anchor);
   const catalog = MODE_CATALOG[kind.mode];
-  const { whenToUse, reading } = renderHelpModeHalves(HELP_MODE_PAGES[kind.mode].body, anchor);
+  const { inShort, whenToUse, reading } = renderHelpModeSections(HELP_MODE_PAGES[kind.mode].body, anchor);
   return (
     <>
+      {/* The page's opening, so no heading above it. */}
+      {inShort}
+      <HelpSub>How it works</HelpSub>
       {/* The band's own (i) card, word for word — BandAbout.tsx § AboutMode. */}
       <p className="tw:text-foreground">{catalog.description}.</p>
       <p>{catalog.how}</p>

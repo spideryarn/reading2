@@ -130,6 +130,8 @@ describe("the policy", () => {
         "sketch", "illustrated", "skim", "debate", "citations", "crossrefs", "simple",
         /* 2026-10-03, a whole column that reads nothing — plan 261003f. */
         "relations",
+        /* 2026-10-08, the same: Debate's claims list — plan 261008i. */
+        "debate-claims",
       ].sort(),
     );
   });

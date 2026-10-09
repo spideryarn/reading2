@@ -185,6 +185,68 @@
   margin: 0 0 0 1.2rem;
 }
 
+/* **Claims' list of the article's claims** (DebatePanel.tsx §
+   ListedClaims, plan 261008i stage 2). Each claim is a row of two columns:
+   the first is kept for the tick box stage 3 puts there, and is empty until
+   then; the second is the heading — the article's quote, set as an older
+   search's claim heading is, but not a disclosure, so no triangle and no
+   pointer — and under it the model's one line, quieter, with its label. */
+.dbt-listed {
+  list-style: none;
+  margin: 0.25rem 0 0.5rem;
+  padding: 0;
+}
+.dbt-listed-claim {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 0.25rem;
+  margin-top: 0.5rem;
+}
+.dbt-listed-pick { width: 0; }
+/* The owner's tick box, on a current list (plan 261008i stage 3): the column
+   is as wide as the box, and on a coarse pointer a finger tall. */
+.dbt-listed-pick:has(.dbt-listed-tick) { width: auto; padding-top: 0.1rem; }
+.dbt-listed-tick { margin: 0; accent-color: var(--highlight-text); }
+@media (pointer: coarse) {
+  .dbt-listed-tick { width: 1.25rem; height: 1.25rem; }
+}
+.dbt-listed-head.dbt-group-claim { margin-top: 0; cursor: auto; }
+.dbt-listed-head.dbt-group-claim::before { content: none; }
+.dbt-listed-statement {
+  margin: 0.15rem 0 0;
+  padding-left: calc(0.55rem + 2px);
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+.dbt-listed-ai {
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+}
+
+/* **Checking the claims** (DebatePanel.tsx § OwnerListedClaims, plan 261008i
+   stage 3): the box and Check are the angle box's row below (`.gloss-ask`),
+   wrapping the button under the box in a narrow band. Under each claim its
+   checked rows, the sentence for a claim with nothing to read, and the
+   failure sentence, set as the empty sentence is. A typed claim is a group
+   of its own after the list, its words in the reader's face. */
+.dbt-check { margin-top: 0.5rem; }
+.dbt-check-row { flex-wrap: wrap; }
+.dbt-check-row .gloss-ask-input { flex: 1 1 12rem; }
+.dbt-check-send { flex: none; white-space: nowrap; }
+.dbt-check-pending,
+.dbt-check-line { margin: 0.25rem 0 0; font-size: 0.82rem; }
+.dbt-check-error { margin: 0.25rem 0 0; color: var(--danger); font-size: 0.82rem; }
+.dbt-check-found > .dbt-list { margin-top: 0.25rem; }
+.dbt-dig { flex: none; margin-left: 0.35rem; white-space: nowrap; }
+.dbt-own-claim { margin-top: 0.75rem; }
+.dbt-own-label { color: var(--ink-faint); font-family: var(--font-ui); font-size: 0.78rem; }
+@media (pointer: coarse) {
+  .dbt-check-send,
+  .dbt-dig { min-height: 2.5rem; }
+}
+
 /* **Look at the debate from an angle** (DebatePanel.tsx § Angles, plan
    261005k): the owner's box at the top of the panel and *Your angles* under
    it.

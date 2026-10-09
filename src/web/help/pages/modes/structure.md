@@ -3,6 +3,15 @@ keywords: outline contents table of contents tree map hierarchy sections parts s
 related: spine, mode-summary
 ---
 
+## In short
+
+Before a long piece it helps to know its shape, and in the middle of one, where you are and what is
+left. Structure maps the piece into parts and sections, usually with a short summary of each, and a
+press on any row takes you there. The map is prepared with the article: nothing is generated when
+you open it, so it is instant.
+
+![Structure in two columns: the article’s seven parts on the left, the first part’s four sections on the right, the current one highlighted with a line on what it says](../images/mode-structure.png "Structure: the parts on the left, the sections of the part you are in on the right. Press any row to jump there.")
+
 ## When to use it
 
 To get your bearings before you start, or to see where you are and what is left. Nothing is
@@ -13,8 +22,6 @@ generated when you open it, so it is instant, and visitors to a shared article s
 summaries, but not the sizes.
 
 ## Reading it
-
-![Structure in two columns: the article’s seven parts on the left, the first part’s four sections on the right, the current one highlighted with a line on what it says](../images/mode-structure.png "Structure: the parts on the left, the sections of the part you are in on the right. Press any row to jump there.")
 
 In **Fisheye**, where a column has no room for every row it says how many come earlier or later. As
 one list, Fisheye always shows the sections directly under the part you are in and the available

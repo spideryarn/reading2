@@ -299,6 +299,7 @@ describe("declaredTables", () => {
       "realtime_sessions",
       "referee_claims",
       "referee_criteria",
+      "referee_hidden_checks",
       "revision_blocks",
       "revision_phrase_runs",
       "revision_step_runs",
@@ -395,8 +396,9 @@ describe("against a real database", () => {
          (plan 261005e); fifty since `feedback_question_answers`, 2026-10-07
          (plan 261007d); fifty-one since `feedback_question_deferrals`, 2026-10-08
          (plan 261008i); fifty-two since `import_records` the same day (plan
-         261008j). */
-      expect(report.declaredTables).toBe(52);
+         261008j); fifty-three since `referee_hidden_checks`, 2026-10-09 (plan
+         261009a). */
+      expect(report.declaredTables).toBe(53);
       expect(driftWarnings(report)).toEqual([]);
     });
   });

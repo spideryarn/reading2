@@ -65,11 +65,8 @@ import { currentSpend, type SpendRecord } from "../../src/ai-spend.js";
 import type { Article } from "../../src/article-input.js";
 import { withLedger } from "../../src/cli-ledger.js";
 import { isBodyEvidence } from "../../src/block-policy.js";
-import { articleWithIds } from "../../src/article-prompt.js";
 import {
   blockTextById,
-  CLAIMS_PROMPT,
-  CLAIMS_SYSTEM,
   DIRECT_SYSTEM,
   directPrompt,
   generateDebate,
@@ -81,8 +78,7 @@ import { loadEnvLocal } from "../../src/env.js";
 import { isMain } from "../../src/is-main.js";
 import { modelFor } from "../../src/models.js";
 import { environmentOwnerId, runAsOwner } from "../../src/owner.js";
-import { fallbackHeadTitle } from "../../src/source-hash.js";
-import { type Block, identificationLevel, type Meta } from "../../src/types.js";
+import { type Block, identificationLevel } from "../../src/types.js";
 import { costOf, formatRunCost, type RunCost } from "./cost.js";
 import { JournalFile, readJournal } from "./journal-file.js";
 import { type ReplayedAttempt, replayJournal, replayLines } from "./replay.js";
@@ -170,12 +166,12 @@ interface RunFile {
   error: string | null;
   elapsedMs: number;
   webSearches: number | null;
-  kept: { direct: number; claims: number } | null;
+  kept: { direct: number } | null;
   /**
    * **What the model answered for `bears`, and what survived** — from a Layer 1
    * replay of this run's own journal (bears.ts). Here and never in the stored
-   * artefact. `null` unless exactly one direct and one claims pass replayed from
-   * a journal with no unreadable lines or write failures.
+   * artefact. `null` unless the one current direct pass replayed from a journal
+   * with no unreadable lines or write failures.
    */
   bears: BearsReport | null;
   /** Rows the replay kept, which must equal `kept`'s sum — see `report`. */
@@ -220,7 +216,7 @@ async function commandRun(o: Options): Promise<void> {
   let error: string | null = null;
   let sourceHash: string | null = null;
   let webSearches: number | null = null;
-  let kept: { direct: number; claims: number } | null = null;
+  let kept: { direct: number } | null = null;
 
   try {
     const run = await generateDebate({ power: "standard",
@@ -233,7 +229,7 @@ async function commandRun(o: Options): Promise<void> {
     completed = true;
     sourceHash = run.debate.sourceHash;
     webSearches = run.webSearches;
-    kept = { direct: run.debate.direct.rows.length, claims: run.debate.claims.rows.length };
+    kept = { direct: run.debate.direct.rows.length };
   } catch (err) {
     /* **Recorded, not rethrown.** The call that failed had already been paid
        for, and a failed run is precisely the one whose journal is worth
@@ -251,7 +247,7 @@ async function commandRun(o: Options): Promise<void> {
   const replayed = replayJournal(contents.events, { blockText: blockTextById(article.blocks) });
   const bears =
     journal.failures.length === 0 && contents.malformedLines.length === 0
-      ? completeBearsReport(replayed)
+      ? completeBearsReport(replayed, ["direct"])
       : null;
 
   const runFile: RunFile = {
@@ -277,7 +273,7 @@ async function commandRun(o: Options): Promise<void> {
   await writeFile(path.join(dir, "run.json"), `${JSON.stringify(runFile, null, 2)}\n`, "utf-8");
 
   report(runFile, contents.malformedLines, journal.failures.length);
-  const runKept = kept ? kept.direct + kept.claims : null;
+  const runKept = kept?.direct ?? null;
   const bearsInvalid =
     bears === null ||
     bearsProblems(bears).length > 0 ||
@@ -299,8 +295,8 @@ function report(runFile: RunFile, malformedLines: number[], writeFailures: numbe
   console.log(runFile.completed ? "The run completed." : `The run FAILED: ${String(runFile.error)}`);
   if (runFile.kept) {
     console.log(
-      `  kept ${String(runFile.kept.direct)} about this piece, ${String(runFile.kept.claims)} about what it claims` +
-        `; ${String(runFile.webSearches ?? 0)} web search(es); ${String(Math.round(runFile.elapsedMs / 1000))}s`,
+      `  kept ${String(runFile.kept.direct)} about this piece; ` +
+        `${String(runFile.webSearches ?? 0)} web search(es); ${String(Math.round(runFile.elapsedMs / 1000))}s`,
     );
   }
   if (runFile.bears) {
@@ -308,14 +304,14 @@ function report(runFile: RunFile, malformedLines: number[], writeFailures: numbe
     for (const line of bearsLines(runFile.bears)) console.log(line);
     /* The replay and the run read the same rows with the same code, so a
        difference means the journal is not a record of what the run stored. */
-    const runKept = runFile.kept ? runFile.kept.direct + runFile.kept.claims : null;
+    const runKept = runFile.kept?.direct ?? null;
     if (runKept !== null && runFile.replayedKept !== runKept) {
       console.log(
         `  ! the replay kept ${String(runFile.replayedKept)} row(s) and the run kept ${String(runKept)} — these counts are not about this run`,
       );
     }
   } else {
-    console.log("\n  bears: not measured — the journal did not replay as one direct and one claims pass");
+    console.log("\n  bears: not measured — the journal did not replay as one direct pass");
   }
   console.log(`\nCost: ${runFile.costLine}`);
   console.log(`  ledger run ${runFile.ledgerRunId}; generations: ${runFile.cost.callIds.join(", ") || "(none)"}`);
@@ -364,7 +360,7 @@ async function loadArticleFor(slug: string): Promise<Article> {
 /**
  * **What a run would buy, and from where — for free.**
  *
- * The store read, the fingerprint and the two prompts are all built here and
+ * The store read, the fingerprint and pass A's prompt are all built here and
  * nothing is dispatched, so the one thing `check` cannot cover — that this slug
  * really is readable as this owner, and that pass A has a URL to search for —
  * is answerable without opening the wire. `evals/summaries/run.ts plan` is the
@@ -377,9 +373,7 @@ async function commandPlan(o: Options): Promise<void> {
   if (!slug) throw new Error("plan needs --slug <article-slug>");
   const article = await loadArticleFor(slug);
   const evidence = article.blocks.filter(isBodyEvidence);
-  const meta: Meta = article.meta ?? ({ title: fallbackHeadTitle(article.tree) } as Meta);
   const directUser = directPrompt(article.meta, article.tree);
-  const claimsSystem = `${articleWithIds(meta, evidence)}\n\n---\n\n${CLAIMS_SYSTEM}`;
 
   console.log(`# What a run on "${slug}" would buy\n`);
   console.log(`  blocks           ${String(article.blocks.length)} (${String(evidence.length)} of them argument rather than apparatus)`);
@@ -389,7 +383,7 @@ async function commandPlan(o: Options): Promise<void> {
   console.log(`  inputFingerprint ${inputFingerprint(article.blocks, article.tree, article.meta)}`);
   console.log(`  model            ${modelFor("debate", "standard")}`);
   console.log(`\n  pass A  system ${String(DIRECT_SYSTEM.length)} chars (${sha256Of(DIRECT_SYSTEM).slice(0, 12)}), user ${String(directUser.length)} chars (${sha256Of(directUser).slice(0, 12)})`);
-  console.log(`  pass B  system ${String(claimsSystem.length)} chars (${sha256Of(claimsSystem).slice(0, 12)}), user ${String(CLAIMS_PROMPT.length)} chars (${sha256Of(CLAIMS_PROMPT).slice(0, 12)})`);
+  /* No pass B line: a press stopped running it at `debate/7` (plan 261008i). */
 
   if (!article.meta?.url) {
     console.log(
@@ -401,7 +395,7 @@ async function commandPlan(o: Options): Promise<void> {
     console.log("\n! This slug is poison — its URL is https://cost-eval.invalid/…, so `run` will refuse it.");
   }
   console.log(
-    "\nNothing was dispatched. `run --slug` is the paid one, and it is roughly $0.15 for the two passes.",
+    "\nNothing was dispatched. `run --slug` is the paid one: one model call that searches the web, plus synthesis when enough sources survive.",
   );
 }
 
@@ -870,7 +864,7 @@ function syntheticJournal(): DebateJournalEvent[] {
 }
 
 /** A `SpendRecord` with only the fields the cost path reads. */
-function syntheticCall(opts: { priced: boolean; job?: string }): SpendRecord {
+function syntheticCall(opts: { priced: boolean; job?: string; webSearches?: number }): SpendRecord {
   return {
     job: (opts.job ?? "debate") as SpendRecord["job"],
     wire: "chat",
@@ -890,7 +884,7 @@ function syntheticCall(opts: { priced: boolean; job?: string }): SpendRecord {
     cacheWrite5mTokens: null,
     cacheWrite1hTokens: null,
     reasoningTokens: null,
-    webSearches: 4,
+    webSearches: opts.webSearches ?? 4,
     serviceTier: null,
     inferenceGeo: null,
     ms: 1,
@@ -956,15 +950,21 @@ async function commandCheck(): Promise<void> {
 
   /* --- seam 3: the cost path ------------------------------------------- */
   console.log("\nThe cost path");
-  const priced = costOf([syntheticCall({ priced: true }), syntheticCall({ priced: true })], { completed: true });
+  const priced = costOf(
+    [syntheticCall({ priced: true }), syntheticCall({ priced: true, webSearches: 0 })],
+    { completed: true },
+  );
   results.push(
     check(
-      "two priced debate calls are a measurement",
+      "one priced search and a priced synthesis are a measurement",
       priced.kind === "measured" && priced.problems.length === 0,
       formatRunCost(priced),
     ),
   );
-  const unpriced = costOf([syntheticCall({ priced: true }), syntheticCall({ priced: false })], { completed: true });
+  const unpriced = costOf(
+    [syntheticCall({ priced: true }), syntheticCall({ priced: false, webSearches: 0 })],
+    { completed: true },
+  );
   results.push(
     check(
       "one unpriced call makes the whole figure `not measured`, with the count printed",
@@ -986,8 +986,8 @@ async function commandCheck(): Promise<void> {
   );
   results.push(
     check(
-      "a completed run must hold exactly its two search calls",
-      three.problems.some((p) => p.includes("exactly 2 search calls")),
+      "a completed run refuses a third call",
+      three.problems.some((p) => p.includes("at most one search-free synthesis")),
       three.problems.join("; "),
     ),
   );

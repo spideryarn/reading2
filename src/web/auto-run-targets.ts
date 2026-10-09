@@ -54,6 +54,10 @@ type StepAutoRunTarget = StepTarget<
   | "quotes"
   | "timeline"
   | "debate"
+  /* Debate's Claims: the list of the article's claims, armed by a press that
+     lands on Claims — its segment, its command row, or the Debate button —
+     docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2. */
+  | "debate-claims"
   /* Every work the piece cites — docs/plans/260911g-citations-mode.md. */
   | "citations"
   /* The questions a careful reader would put to the piece —

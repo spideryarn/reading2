@@ -2,6 +2,16 @@
 keywords: sketch picture visual map drawing illustrated painting shape argument chart graph force drift trail
 ---
 
+## In short
+
+Some arguments are easier to follow once you can see their shape: three reasons meeting at one
+conclusion, a ladder of steps, a main line with side trips. The Sketch is a model reading the
+argument and drawing it as a picture, running mostly down the page in the article’s order; a box can
+take you to the passage it came from. Use it to see where a long piece is heading before you start,
+or to find your place in it.
+
+![A Sketch of an article on phrenology: a question at the top, a chain of claims fanning out into five regions, and a conclusion at the bottom](../images/mode-sketch.png "Sketch: the argument as a picture, running down the page in the article’s order. Click a box to jump to its passage.")
+
 ## When to use it
 
 The **Sketch** is worth the wait for a long or tangled argument, where seeing its shape at once —
@@ -10,8 +20,6 @@ how to read the rest. For a short piece with one line of argument, skip it. On s
 article you see a Sketch only if one has already been drawn.
 
 ## Reading it
-
-![A Sketch of an article on phrenology: a question at the top, a chain of claims fanning out into five regions, and a conclusion at the bottom](../images/mode-sketch.png "Sketch: the argument as a picture, running down the page in the article’s order. Click a box to jump to its passage.")
 
 The Sketch mostly runs down the page in the article’s order, and nothing in it is to scale. Point at
 a box to read more; click one to jump to its passage, though not every box has one. Click a region’s

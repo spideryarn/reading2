@@ -142,7 +142,7 @@
 import type { Mode } from "../modes.js";
 import type { AutoRunTarget } from "./auto-run-targets.js";
 import type { DiagramKind } from "./diagram.js";
-import type { LearnView, SummaryView } from "./params.js";
+import type { DebateView, LearnView, SummaryView } from "./params.js";
 import type { RefereeView } from "./referee-views.js";
 import type { SubMode } from "./sub-modes.js";
 import type { StepName } from "../types.js";
@@ -193,9 +193,12 @@ export type { AutoRunTarget };
  *  - **`none`** — nothing to arm, with the reason written out. The reasons were
  *    prose in this docblock until the type asked for them by name.
  *
- * **`debate` is the dearest mode press in the app** — two metered calls that
- * each go out to the open web, up to ~$0.27 and rising with the length of the
- * article. What keeps the price honest is that the mode is behind the
+ * **`debate` is the dearest mode press in the app** — a metered call that
+ * goes out to the open web, up to ~$0.14 and rising with the length of the
+ * article (two such calls until `debate/7`, 2026-10-08, when the claims
+ * search left the press). **Delegated since that day**: a press landing on
+ * Reception arms the search, one landing on Claims arms the claims list —
+ * one call and no search (§ `activationForDebate`). What keeps the price honest is that the mode is behind the
  * experimental-features switch, so the button is not in front of every reader,
  * and that the blurb on it says so.
  *
@@ -238,6 +241,12 @@ export interface PressContext {
    * told apart.
    */
   summary: SummaryView;
+  /**
+   * Which of Debate's sub-modes a Debate press is about to land on — the
+   * reading view's parsed `?debate=`, for `summary`'s reason above. Only
+   * Reception's press buys the search (§ `activationForDebate`).
+   */
+  debate: DebateView;
 }
 
 const MODE_TARGET: Record<Mode, ModeActivation> = {
@@ -245,7 +254,14 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
   ideas: { kind: "fixed", target: "ideas" },
   quotes: { kind: "fixed", target: "quotes" },
   timeline: { kind: "fixed", target: "timeline" },
-  debate: { kind: "fixed", target: "debate" },
+  /* **Delegated since 2026-10-08** (plan 261008i, GPT Sol's F1): the press
+     searches for Reception only, so a press that lands on Claims must not buy
+     it. § `activationForDebate`. */
+  debate: {
+    kind: "delegated",
+    target: (ctx) => activationForDebate(ctx.debate),
+    why: "the sub-mode a press lands on is whatever `?debate=` says: Reception arms the search, Claims the claims list",
+  },
   citations: { kind: "fixed", target: "citations" },
   faq: { kind: "fixed", target: "faq" },
   /* The target is the route even when the job it starts writes the Quotes
@@ -563,6 +579,30 @@ export function activationForSummary(view: SummaryView): AutoRunTarget | null {
 }
 
 /**
+ * **What a press that lands on one of Debate's sub-modes arms**: the `debate`
+ * search for Reception, and the `debate-claims` list for Claims.
+ *
+ * One answer for the three places that must agree, as `activationForSummary`
+ * is: the bar's delegated row, the command bar's sub-mode rows
+ * (`subModeTarget`), and the token the boundary retires (`bandTarget`). The
+ * panel's own segments arm through `subModeTarget` too (DebatePanel.tsx §
+ * `DebateViews`).
+ *
+ * **Two targets, never one** (2026-10-08). Until `debate/7` both sub-modes
+ * armed the one `debate` run, which searched for both; the press now searches
+ * for Reception only, so a Claims press arming it would buy Reception for a
+ * reader who asked for claims (GPT Sol's F1 on plan
+ * docs/plans/261008i-debate-claims-picked-by-the-reader.md). Claims' own work
+ * is the list of the article's claims, one call and no search (that plan's
+ * § 2), and each hook spends only its own target and only while its sub-mode
+ * is showing (useDebate.ts, useDebateClaims.ts), so neither press can buy the
+ * other's work.
+ */
+export function activationForDebate(view: DebateView): AutoRunTarget {
+  return view === "reception" ? "debate" : "debate-claims";
+}
+
+/**
  * **Which picture a press on the bar's Diagram button is about to land on**,
  * as an `AutoRunTarget` — or `null` for the three that have no artefact behind
  * them. Whatever `?diagram=` currently says, `sketch` by default.
@@ -660,7 +700,8 @@ export function armActivationForRefereeView(slug: string, view: RefereeView): vo
  *  - Summary: `activationForSummary` of the view **the row names** — `simple`
  *    for Brief and Fuller, nothing for Thread (SummaryMode.tsx §
  *    `SummaryControls`, and `bandTarget` below);
- *  - Debate: `debate` for both, the mode's own target.
+ *  - Debate: `activationForDebate` of the sub-mode **the row names** —
+ *    `debate` for Reception, `debate-claims` for Claims.
  *
  * `bandTarget` below gives the same answer for the band that mounts, which is
  * what lets a token armed here be claimed — tests/command-bar-sub-modes.test.tsx holds
@@ -679,14 +720,13 @@ export function subModeTarget(sub: SubMode): AutoRunTarget | null {
     /* Nothing to generate in either view: the tree is in the page's payload. */
     case "structure":
       return null;
-    /* **The one `debate` run, whichever sub-mode the row names** — the mode
-       row's own answer (`MODE_TARGET.debate`), because Reception and Claims
-       are two views of one stored search, not two searches to buy. One token
-       under one key, so opening either can never arm a second (plan 261003o,
-       step 10). The band's own segments arm nothing: they are drawn only once
-       a debate is stored. */
+    /* **Reception's row arms the `debate` search; Claims' arms the claims
+       list** — the mode row's own answer (`activationForDebate`), since the
+       press searches for Reception only (`debate/7`, plan 261008i). The
+       panel's own segments arm through here too (DebatePanel.tsx §
+       `DebateViews`). */
     case "debate":
-      return "debate";
+      return activationForDebate(sub.view);
     default: {
       const unhandled: never = sub;
       throw new Error(`unhandled sub-mode: ${JSON.stringify(unhandled)}`);
@@ -736,7 +776,7 @@ export function subModeGenerates(sub: SubMode): boolean {
  */
 export function bandTarget(
   mode: Mode,
-  sub: { diagram: DiagramKind; referee: RefereeView; learn: LearnView; summary: SummaryView },
+  sub: { diagram: DiagramKind; referee: RefereeView; learn: LearnView; summary: SummaryView; debate: DebateView },
 ): AutoRunTarget | null {
   if (mode === "referee") return REFEREE_TARGET[sub.referee];
   if (mode === "learn") return sub.learn === "quiz" ? "quiz" : null;
@@ -745,7 +785,7 @@ export function bandTarget(
     case "fixed":
       return decision.target;
     case "delegated":
-      return decision.target({ diagram: sub.diagram, summary: sub.summary });
+      return decision.target({ diagram: sub.diagram, summary: sub.summary, debate: sub.debate });
     /* No press was armed, so there is none to retire. */
     case "none":
       return null;

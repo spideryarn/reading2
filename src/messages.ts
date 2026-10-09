@@ -5229,16 +5229,11 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
   search: "The questions you have put to this piece, in your words, and the passages they found.",
   learn: "What you said you took from the piece, and the quizzes on it.",
   referee: "Your peer-review pass over the piece: your criteria, and what it found against them.",
-  /* **"went looking for", not "found"**, and the tense is the whole row. This
-     is the only mode whose content is not in the article, so an owner reading
-     this line has to be told what was searched rather than what exists — and
-     the commonest honest answer is that nobody has written about their piece
-     (src/debate.ts § the search never comes back empty). A row promising
-     *"what other people said about this"* would be a claim about the web that
-     an empty panel then contradicts. */
+  /* Reception is current; claim sources can only be present on a legacy
+     artefact. Say both without implying a current press searched for claims,
+     and without promising that Reception found anything. */
   debate:
-    "What we went looking for on the open web: replies to this piece, and the argument around " +
-    "the claims it makes.",
+    "The Reception search, and any claim sources kept by an earlier search.",
   /* **"where there are gists"**, for the reason the note above `summary`
      gives: a provisional tree has none, and this row is read about articles
      that have not finished ingesting (src/public/dto.ts § `provisional`).
@@ -5488,15 +5483,126 @@ export function debateClaimsHandoff(sources: number): string {
 }
 
 /**
- * **What each of Debate's two searches is, said once before the button and
- * once in the band's (i).** The sub-mode control's own cards say the same of
- * each (src/web/sub-modes.ts § `DEBATE_SUB_MODES`); no sentence sits under the
- * control, because docs/project/mode.md bans a description line there.
+ * **What the press on Debate searches, said before the button.** Since
+ * `debate/7` (2026-10-08) it is one search, for Reception only: the claims are
+ * the reader's to pick (plan 261008i). The sub-mode control's own cards say
+ * what each sub-mode is (src/web/sub-modes.ts § `DEBATE_SUB_MODES`); no
+ * sentence sits under the control, because docs/project/mode.md bans a
+ * description line there.
  */
 export const DEBATE_BEFORE_SEARCH =
-  "Two searches of the open web. Reception: what others have written about this piece. " +
-  "Claims: what has been written about the claims it makes. It takes about a minute and " +
-  "costs real money. Many pieces have no reception at all. Searched once and kept.";
+  "One search of the open web, for what others have written about this piece. It takes about " +
+  "a minute and costs real money. Many pieces have no reception at all. Searched once and kept.";
+
+/* ---- Claims: the list of the article's claims (plan 261008i § 2) ----
+
+   Since 2026-10-08 Claims draws a list of the claims the article rests on,
+   made by one model call over the article and no web search, on the owner's
+   press. These are its states' sentences. The sentence that stood here until
+   then, DEBATE_CLAIMS_NOT_SEARCHED, said the list was coming; the list is the
+   answer to it. */
+
+/** The owner's Claims before a list is made: what *List its claims* does, before the button. */
+export const DEBATE_CLAIMS_LIST_NONE =
+  "List the claims this piece rests on that someone outside could argue with, so you can pick which " +
+  "to check. One model call over the article, no web search, and it takes a few tens of seconds.";
+
+/** The button that makes the list, on the owner's Claims with none. */
+export const DEBATE_CLAIMS_LIST_RUN = "List its claims";
+
+/** The button beside a stale list, which makes it again. */
+export const DEBATE_CLAIMS_LIST_AGAIN = "List again";
+
+/** A visitor's Claims with no list: there is nothing to press, so it says only what is true. */
+export const DEBATE_CLAIMS_LIST_NONE_SHARED = "No list of this piece's claims has been made.";
+
+/** A list that came back empty: a real answer, not a failure. */
+export const DEBATE_CLAIMS_LIST_EMPTY =
+  "No claim in this piece stood out as one someone outside could argue with.";
+
+/** The banner over a list made from an older version of the article. Read-only until made again. */
+export const DEBATE_CLAIMS_LIST_STALE =
+  "The article has changed since these claims were listed, so some may no longer be in it.";
+
+/** The label under each listed claim's statement: whose words those are. */
+export const DEBATE_CLAIMS_LIST_AI = "In the AI's words";
+
+/** The owner's Claims while the GET is in flight. */
+export const DEBATE_CLAIMS_LIST_LOADING = "Looking for the list of its claims…";
+
+/** …the visitor's, and the band's (i) for both: what is true of the stored search, and only that. */
+export const DEBATE_CLAIMS_NOT_SEARCHED_SHARED = "This search did not look into what the piece claims.";
+
+/**
+ * **The heading over the claim rows an older search stored** — a debate
+ * searched before `debate/7`, when the press also picked three or four claims
+ * by itself and searched them. Its rows are drawn as they always were, under
+ * this, so they are not taken for claims the reader chose.
+ */
+export const DEBATE_CLAIMS_EARLIER = "Claims the earlier search chose";
+
+/* ---- Claims: checking the claims the reader picked (plan 261008i § 3) ----
+
+   The reader ticks claims, or types one, and presses Check: one web search
+   over them all. These are the panel's words for it and the route's refusals.
+   No sentence here ever carries the reader's typed claim. */
+
+/** The box for a claim of the reader's own: its accessible name, and (with an ellipsis) its placeholder. */
+export const DEBATE_CHECK_OWN_LABEL = "Check a claim of your own";
+
+/** The tooltip on Check: what one press buys. */
+export const DEBATE_CHECK_TIP =
+  "One search of the open web for what has been written about the claims you picked. It takes " +
+  "about a minute and a half and costs real money.";
+
+/** Under a claim a check answered with nothing: the search said so for this claim. */
+export const DEBATE_CHECK_FOUND_NOTHING = "This search found nothing it could quote on this claim.";
+
+/** Under a claim a check did not answer: the model left it out, so nothing is known either way. */
+export const DEBATE_CHECK_NOT_ANSWERED =
+  "The search did not answer for this claim, so this says nothing about it either way. Check it again.";
+
+/** While a check is out. */
+export const DEBATE_CHECK_PENDING = "Searching the web for these claims…";
+
+/** Dig further's tooltip: one more search, for this claim alone, somewhere new. */
+export const DEBATE_DIG_FURTHER_TIP =
+  "One more web search for this claim alone, told what has been found already so it looks " +
+  "elsewhere. Costs real money.";
+
+/** The heading over a typed claim's checks. The words after it are the reader's. */
+export const DEBATE_CHECK_YOUR_CLAIM = "Your claim";
+
+/** A check pressed while another is out — from the partial unique index. */
+export const DEBATE_CHECK_IN_FLIGHT =
+  "A check is already running on this article. Its answer will appear here when it lands.";
+
+/** A check pressed on a list made from an older version of the article. */
+export const DEBATE_CHECK_LIST_STALE =
+  "The article has changed since its claims were listed. List them again before checking any.";
+
+/** A check pressed with no list at all. */
+export const DEBATE_CHECK_NO_LIST = "List this piece's claims before checking any.";
+
+/** A check still running when the server stopped. What the sweep writes. */
+export const DEBATE_CHECK_SWEPT = "The server stopped before this check finished.";
+
+/** The shared allowance's three refusals (src/dig-deeper.ts § `admitDig`), said of a check. */
+export const DEBATE_CHECK_BUSY =
+  "Another web search you asked for is still running. Wait for it to finish, then check again.";
+export const DEBATE_CHECK_LIMITED =
+  "You have asked for a lot of web searches recently. Try again in a while; nothing was searched.";
+/** The 503 of the three. */
+export const DEBATE_CHECK_RESTING =
+  "Web searches like this one have done as many as they can for today. Try again tomorrow; " +
+  "nothing was searched.";
+
+/** Dig further on a claim no finished check has answered yet. */
+export const DEBATE_DIG_FURTHER_FIRST = "Check this claim before digging further into it.";
+
+/** Ids from a list that has since been made again: a stale tab. */
+export const DEBATE_CHECK_LIST_CHANGED =
+  "The list of claims has changed since this page loaded. Reload it and pick again.";
 
 /* ---- Reception's *Cited by*: the papers that cite the piece, from OpenAlex ----
 

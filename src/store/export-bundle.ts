@@ -426,6 +426,7 @@ const REVISION_WRITTEN_ELSEWHERE = [
   "quiz",
   "faq",
   "relations",
+  "debateClaims",
   "skim",
   "crossrefs",
   "simpleSummary",
@@ -506,6 +507,7 @@ function augmentationFiles(rows: ArticleRows): Map<string, string> {
   at("quiz.json", revision.quiz);
   at("faq.json", revision.faq);
   at("relations.json", revision.relations);
+  at("debate-claims.json", revision.debateClaims);
   at("skim.json", revision.skim);
   at("crossrefs.json", revision.crossrefs);
   at("simple-summary.json", revision.simpleSummary);
@@ -549,6 +551,11 @@ function augmentationFiles(rows: ArticleRows): Map<string, string> {
   }
   const claims = rows.refereeClaims[0];
   if (claims) at("referee-claims.json", { run: rowJson(claims) });
+  if (rows.debateClaimChecks.length) {
+    at("debate-claim-checks.json", { checks: rows.debateClaimChecks.map((row) => rowJson(row)) });
+  }
+  const hiddenCheck = rows.refereeHiddenChecks[0];
+  if (hiddenCheck) at("referee-hidden-check.json", { check: rowJson(hiddenCheck) });
   if (rows.glossaryLookups.length) {
     at("glossary-lookups.json", { lookups: rows.glossaryLookups.map((row) => rowJson(row)) });
   }
@@ -644,6 +651,8 @@ one thing that will make the rest of these files make sense.
       quiz.json            Questions generated from the article.
       faq.json             Questions a careful reader might put to the article, and the passages that respond.
       relations.json       How each paragraph bears on the one before it, one word each.
+      debate-claims.json   The claims the article rests on that someone outside could argue with,
+                           each in the article's words and the model's.
       skim.json            A route through the quotes, in the order to read them, at three depths.
       crossrefs.json       Links from a phrase in one paragraph to the paragraph that backs it.
       simple-summary.json  A few paragraphs in plain words, and the passages each rests on.
@@ -656,6 +665,8 @@ one thing that will make the rest of these files make sense.
                            nested inside the thread it belongs to.
       searches.json        Meaning-searches you ran, and what they matched.
       referee-claims.json  Referee mode: what the paper claims.
+      debate-claim-checks.json Debate: the claims you picked or typed, and what each search found.
+      referee-hidden-check.json Referee mode: Opus's opinion of each row of hidden text.
       referee-criteria.json Referee mode: the criteria you set, and how the article scored.
 
 \`manifest.json\` lists every file in the zip under \`entries\`, with its uncompressed size —
@@ -833,6 +844,8 @@ const FILE_NOTES: Readonly<Record<string, string>> = {
   "augmentations/faq.json":
     "Questions a careful reader might put to the article, and the passages that respond.",
   "augmentations/relations.json": "How each paragraph bears on the one before it, one word each.",
+  "augmentations/debate-claims.json":
+    "The claims the article rests on that someone outside could argue with, each in the article's words and the model's.",
   "augmentations/skim.json":
     "A route through the quotes, in the order to read them, at three depths.",
   "augmentations/crossrefs.json":
@@ -851,6 +864,9 @@ const FILE_NOTES: Readonly<Record<string, string>> = {
   "augmentations/chat.json": "Your conversations: threads, with every message nested inside its thread.",
   "augmentations/searches.json": "Meaning-searches you ran, and what they matched.",
   "augmentations/referee-claims.json": "Referee mode: what the paper claims.",
+  "augmentations/debate-claim-checks.json":
+    "Debate: the claims you picked or typed, and what each search found.",
+  "augmentations/referee-hidden-check.json": "Referee mode: Opus's opinion of each row of hidden text.",
   "augmentations/referee-criteria.json": "Referee mode: the criteria you set, and how the article scored.",
 };
 
@@ -947,6 +963,7 @@ function bundleCounts(rows: ArticleRows): { readonly label: string; readonly n: 
     { label: "cited works", n: countOf(revision.citations, "citations") },
     { label: "quiz questions", n: countOf(revision.quiz, "questions") },
     { label: "FAQ questions", n: countOf(revision.faq, "questions") },
+    { label: "Debate's listed claims", n: countOf(revision.debateClaims, "claims") },
     { label: "Skim stops", n: countOf(revision.skim, "stops") },
     { label: "cross-references", n: countOf(revision.crossrefs, "links") },
     /* Every level, counted apart: a `simple/1` row (one `paragraphs` list)

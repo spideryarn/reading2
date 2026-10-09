@@ -33,7 +33,8 @@ import {
   helpMarkdownText,
   helpSectionText,
   renderHelpMarkdown,
-  renderHelpModeHalves,
+  helpModeSections,
+  renderHelpModeSections,
 } from "../src/web/help/help-markdown.js";
 import { HELP_IMAGES } from "../src/web/help/help-images.js";
 import { HELP_TOPIC_FILES, HELP_TOPIC_PAGES } from "../src/web/help/help-pages.js";
@@ -156,21 +157,35 @@ describe("drawing a file", () => {
     expect(helpMarkdownText(`A.\n\n![What it shows](images/${name} "The caption.")`, "t")).toBe("A.\nThe caption.");
   });
 
-  it("splits a mode's file into its two halves, and a missing half is null", () => {
-    const both = renderHelpModeHalves("## When to use it\n\nA.\n\n## Reading it\n\nB.", "t");
-    expect(renderToStaticMarkup(<>{both.whenToUse}</>)).toBe("<p>A.</p>");
-    expect(renderToStaticMarkup(<>{both.reading}</>)).toBe("<p>B.</p>");
-    expect(renderHelpModeHalves("## Reading it\n\nB.", "t").whenToUse).toBeNull();
-    expect(renderHelpModeHalves("## When to use it\n\nA.", "t").reading).toBeNull();
+  it("splits a mode's file into its three sections, and a missing later section is null", () => {
+    const all = renderHelpModeSections("## In short\n\nS.\n\n## When to use it\n\nA.\n\n## Reading it\n\nB.", "t");
+    expect(renderToStaticMarkup(<>{all.inShort}</>)).toBe("<p>S.</p>");
+    expect(renderToStaticMarkup(<>{all.whenToUse}</>)).toBe("<p>A.</p>");
+    expect(renderToStaticMarkup(<>{all.reading}</>)).toBe("<p>B.</p>");
+    expect(renderHelpModeSections("## In short\n\nS.\n\n## Reading it\n\nB.", "t").whenToUse).toBeNull();
+    expect(renderHelpModeSections("## In short\n\nS.\n\n## When to use it\n\nA.", "t").reading).toBeNull();
+  });
+
+  it("gives each section's Markdown as written, heading included, for the corpus", () => {
+    const md = "## In short\n\nS **s**.\n\n## When to use it\n\nA.\n\n- one\n- two\n\n## Reading it\n\nB.";
+    const sections = helpModeSections(md, "t");
+    expect(sections.inShort.markdown).toBe("## In short\n\nS **s**.");
+    expect(sections.whenToUse?.markdown).toBe("## When to use it\n\nA.\n\n- one\n- two");
+    expect(sections.reading?.markdown).toBe("## Reading it\n\nB.");
   });
 
   it.each([
-    ["words before the first heading", "A.\n\n## Reading it\n\nB.", /must start with a ## heading/],
-    ["a misspelt heading", "## When to use\n\nA.", /a mode's headings are/],
-    ["the halves out of order", "## Reading it\n\nB.\n\n## When to use it\n\nA.", /repeated or out of order/],
-    ["a half twice", "## Reading it\n\nB.\n\n## Reading it\n\nC.", /repeated or out of order/],
+    ["words before the first heading", "A.\n\n## In short\n\nS.", /must start with a ## heading/],
+    ["a misspelt heading", "## In short\n\nS.\n\n## When to use\n\nA.", /a mode's headings are/],
+    ["no In short", "## When to use it\n\nA.\n\n## Reading it\n\nB.", /must open with "## In short"/],
+    ["an empty In short", "## In short\n\n## When to use it\n\nA.", /must open with "## In short"/],
+    ["In short after When to use it", "## When to use it\n\nA.\n\n## In short\n\nS.", /repeated or out of order/],
+    ["In short after Reading it", "## Reading it\n\nB.\n\n## In short\n\nS.", /repeated or out of order/],
+    ["the later two out of order", "## In short\n\nS.\n\n## Reading it\n\nB.\n\n## When to use it\n\nA.", /repeated or out of order/],
+    ["a section twice", "## In short\n\nS.\n\n## Reading it\n\nB.\n\n## Reading it\n\nC.", /repeated or out of order/],
+    ["In short twice", "## In short\n\nS.\n\n## In short\n\nT.", /repeated or out of order/],
   ])("a mode's file throws on %s", (_name, md, message) => {
-    expect(() => renderHelpModeHalves(md, "t")).toThrow(message);
+    expect(() => renderHelpModeSections(md, "t")).toThrow(message);
   });
 });
 
@@ -213,7 +228,8 @@ describe("a section's plain text", () => {
   it("says what the page says", () => {
     expect(helpSectionText("spine")).toContain("It is proportional — a part that fills half the piece");
     expect(helpSectionText("keyboard")).toContain("⌘K (Mac) or Ctrl K opens the command bar.");
-    expect(helpSectionText("mode-plain")).toMatch(/^When to use it\nFor reading straight through\./);
+    expect(helpSectionText("mode-plain")).toMatch(/^In short\nPlain is the article with no panel or column beside it\./);
+    expect(helpSectionText("mode-plain")).toMatch(/\nWhen to use it\nFor reading straight through\./);
     expect(helpSectionText("modes")).toContain(`${MODE_LABEL.chat}: reach for it when you have a question of your own`);
   });
 });

@@ -41,7 +41,9 @@ import {
   listArticles,
   readerStore,
   refereeClaimsStore,
+  refereeHiddenCheckStore,
   refereeCriteriaStore,
+  debateClaimChecksStore,
   searchStore,
   shelfStore,
   tagStore,
@@ -60,6 +62,7 @@ import {
   loadSketch,
   loadQuiz,
   loadFaq,
+  loadDebateClaims,
   loadRelations,
   loadCrossrefs,
   loadSimpleSummary,
@@ -141,6 +144,7 @@ import { scanArticleSource } from "./source-scan.js";
    used it would trade the reader's first sentence for a spinner. */
 import { isRefereeLeft, mirrorStream } from "./referee-mirror.js";
 import { hiddenCheckStream, isReaderLeft as isHiddenCheckReaderLeft } from "./referee-hidden-check.js";
+import type { StoredHiddenCheck } from "./referee-hidden-check-types.js";
 import { grouped, ordered } from "./scan-groups.js";
 /* A pure predicate. It was imported this way so as not to drag the
    filesystem store (gone 2026-09-05) into a file that had to work with either
@@ -216,7 +220,7 @@ import { withOldClientBands } from "./quiz.js";
 import { similarBlocks } from "./similar.js";
 import { projectArticle } from "./projection.js";
 import { EmbeddingFailure } from "./embeddings.js";
-import { isSpideryarnId, isUuid } from "./ids.js";
+import { isSpideryarnId, isUuid, mintId } from "./ids.js";
 import { prefixWithinBytes } from "./json-budget.js";
 /* **The one exception to "every paid call goes through OpenRouter"**, and it is
    Greg's, weighed rather than slipped past: OpenRouter has no realtime API at
@@ -283,6 +287,7 @@ import {
 } from "./store/ai-calls-spend-pg.js";
 import { ownedArticleIdentity } from "./store/pg.js";
 import type {
+  ClaimCheckFinish,
   ClaimsFinish,
   CriterionFinish,
   NewFeedback,
@@ -304,6 +309,16 @@ import { noteArrival } from "./arrivals.js";
 import { afterResponse, withAfterResponseTasks } from "./after-response.js";
 import { stageFailure } from "./job-failure.js";
 import {
+  DEBATE_CHECK_BUSY,
+  DEBATE_CHECK_LIMITED,
+  DEBATE_CHECK_LIST_CHANGED,
+  DEBATE_CHECK_LIST_STALE,
+  DEBATE_CHECK_NO_LIST,
+  DEBATE_CHECK_RESTING,
+  DEBATE_DIG_FURTHER_FIRST,
+  DIG_DEEPER_BUSY,
+  DIG_DEEPER_LIMITED,
+  DIG_DEEPER_RESTING,
   LIVE_UPSTREAM,
   NOT_READ_YET,
   NOT_READ_YET_HIGH_POWER,
@@ -508,6 +523,17 @@ import {
      413 cannot drift apart. */
   MAX_QUIZ_ANSWER_CHARS,
 } from "./types.js";
+/* Debate's reader claim checks — plan 261008i § 3. The two caps the panel's
+   button and this route must agree on, and the shapes the route builds. */
+import {
+  type DebateCheckTarget,
+  type DebateClaimCheck,
+  type DebateClaimList,
+  MAX_CHECK_TARGETS,
+  MAX_OWN_CLAIM_CHARS,
+} from "./types.js";
+import { DEBATE_CHECK_TIMEOUT_MS, generateClaimCheck } from "./debate.js";
+import { inputFingerprint as debateClaimsFingerprint } from "./debate-claims.js";
 /* A value, not a type — the one list a legacy stance is validated against
    (`streamChat` says why one is still accepted at all).
    src/types.ts § LEARN_STANCES. */
@@ -1378,12 +1404,13 @@ function sse(res: ServerResponse): {
    * with `runMirror` moved up a row on 2026-10-05:
    *
    *   stops the model call    `streamLinkSummary`, `streamAskedTerm`,
-   *                           `markOneAnswer`, `runMirror`, `runHiddenCheck`,
+   *                           `markOneAnswer`, `runMirror`,
    *                           `streamHelpAnswer`,
    *                           and `search` for a quick run
    *   lets it run to the end  `answer` (comments), `streamTermLookup`,
    *                           `streamCitationInvestigation`,
-   *                           `runRefereeCriterion`, `runRefereeClaims`, and
+   *                           `runRefereeCriterion`, `runRefereeClaims`, `runHiddenCheck`
+   *                           (since 2026-10-09, plan 261009a), and
    *                           `search` for a meaning run
    *
    * Every stream that runs on has a save path for its answer; a deleted or
@@ -5748,6 +5775,248 @@ async function runRefereeClaims(slug: string, res: ServerResponse): Promise<void
   }
 }
 
+/* ------------------------------------------ debate's reader claim checks --
+   The reader ticks claims in Debate's Claims, or types one, and presses Check:
+   one web search over them all, stored as a check. Plan
+   docs/plans/261008i-debate-claims-picked-by-the-reader.md § 3;
+   src/store/pg-debate-claim-checks.ts; src/debate.ts § `generateClaimCheck`. */
+
+/** The checks this process is running, keyed `slug/id`, so its own GET never sweeps one. */
+const checkingClaims = liveKeys();
+
+/** A check request's three fields, their shapes checked and nothing else yet. */
+interface CheckAsked {
+  claimIds: string[];
+  /** The typed claim, trimmed and within bounds, or `null`. */
+  own: string | null;
+  digFurther: string | null;
+}
+
+/**
+ * **The body's shape, refused for free.** Ids and the typed words, nothing
+ * else is read: an anchor, a quote or an address in the body is ignored,
+ * because every one of those is the server's to derive.
+ *
+ * **The typed claim is never echoed** into an error, and is trimmed and
+ * refused rather than cut: 400 empty, 413 over `MAX_OWN_CLAIM_CHARS`, the
+ * angle box's limit and status.
+ */
+function readCheckRequest(body: unknown): CheckAsked {
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    throw httpError(400, "A check needs a JSON object");
+  }
+  const b = body as Record<string, unknown>;
+  const ids = b.claimIds ?? [];
+  if (!Array.isArray(ids) || !ids.every((id): id is string => typeof id === "string" && id !== "")) {
+    throw httpError(400, "claimIds must be a list of claim ids");
+  }
+  if (new Set(ids).size !== ids.length) throw httpError(400, "claimIds names a claim twice");
+  let own: string | null = null;
+  if (b.own !== undefined) {
+    if (typeof b.own !== "string") throw httpError(400, "own must be text");
+    own = b.own.trim();
+    if (own === "") throw httpError(400, "A claim of your own cannot be empty");
+    if (own.length > MAX_OWN_CLAIM_CHARS) {
+      throw httpError(413, `A claim of your own may be at most ${MAX_OWN_CLAIM_CHARS} characters`);
+    }
+  }
+  let digFurther: string | null = null;
+  if (b.digFurther !== undefined) {
+    if (typeof b.digFurther !== "string" || b.digFurther === "") {
+      throw httpError(400, "digFurther must be one claim id");
+    }
+    if (ids.length > 0 || own !== null) throw httpError(400, "Dig further checks one claim, alone");
+    digFurther = b.digFurther;
+  }
+  const count = ids.length + (own === null ? 0 : 1) + (digFurther === null ? 0 : 1);
+  if (count === 0) throw httpError(400, "Pick a claim to check");
+  if (count > MAX_CHECK_TARGETS) {
+    throw httpError(400, `One check may cover at most ${MAX_CHECK_TARGETS} claims`);
+  }
+  return { claimIds: ids, own, digFurther };
+}
+
+/**
+ * **What one check searches for, built from stored state only** — the
+ * current list for a ticked claim, an earlier check's target for a typed
+ * claim being dug into, and for Dig further the addresses that claim already
+ * has. Every refusal here is free.
+ */
+function checkTargets(
+  asked: CheckAsked,
+  list: DebateClaimList,
+  checks: readonly DebateClaimCheck[],
+): { targets: DebateCheckTarget[]; alreadyFound: string[] } {
+  const listed = new Map(list.claims.map((c) => [c.id, c]));
+  const fromList = (claimId: string): DebateCheckTarget | null => {
+    const c = listed.get(claimId);
+    return c ? { kind: "listed", claimId, blockId: c.blockId, quote: c.quote, statement: c.statement } : null;
+  };
+
+  if (asked.digFurther !== null) {
+    const claimId = asked.digFurther;
+    /* Only checks drawn under this list: an older list's are not on screen. */
+    const mine = checks.filter((c) => c.listSourceHash === list.sourceHash);
+    const target =
+      fromList(claimId) ??
+      mine.flatMap((c) => c.targets).find((t) => t.kind === "own" && t.claimId === claimId) ??
+      null;
+    if (target === null) throw httpError(409, DEBATE_CHECK_LIST_CHANGED);
+    const done = mine.filter((c) => c.status === "done" && c.targets.some((t) => t.claimId === claimId));
+    if (done.length === 0) throw httpError(409, DEBATE_DIG_FURTHER_FIRST);
+    const alreadyFound = [
+      ...new Set(
+        done.flatMap((c) =>
+          c.results.flatMap((r) => (r.claimId === claimId && r.outcome === "answered" ? r.rows.map((row) => row.url) : [])),
+        ),
+      ),
+    ];
+    return { targets: [target], alreadyFound };
+  }
+
+  const targets: DebateCheckTarget[] = [];
+  for (const claimId of asked.claimIds) {
+    const target = fromList(claimId);
+    /* An id from a list made again since this tab loaded it. */
+    if (target === null) throw httpError(409, DEBATE_CHECK_LIST_CHANGED);
+    targets.push(target);
+  }
+  if (asked.own !== null) targets.push({ kind: "own", claimId: mintId(), text: asked.own });
+  return { targets, alreadyFound: [] };
+}
+
+/** The shared allowance's refusals, said of a check rather than of Dig deeper. */
+function checkRefusal(err: unknown): unknown {
+  const message = (err as { message?: unknown } | null)?.message;
+  if (message === DIG_DEEPER_BUSY) return httpError(429, DEBATE_CHECK_BUSY);
+  if (message === DIG_DEEPER_LIMITED) return httpError(429, DEBATE_CHECK_LIMITED);
+  if (message === DIG_DEEPER_RESTING.message) return httpError(503, DEBATE_CHECK_RESTING);
+  return err;
+}
+
+/**
+ * **Check the claims a reader picked** — `POST /api/debate-claims/:slug/checks`,
+ * a JSON body in, SSE out. `runRefereeClaims`' shape: the refusals before a
+ * header, the `pending` row before the call, an attempt-fenced finish, and the
+ * stream ends only after the answer is stored.
+ *
+ * ## The order of the refusals, which is the point
+ *
+ * Every refusal that costs nothing comes before the one that spends:
+ *
+ *  1. the body's shape (400, 413 for a typed claim over the limit);
+ *  2. the article — owner-scoped, so somebody else's is a 404;
+ *  3. no list (409);
+ *  4. **the list is stale** against the article just loaded (409) — before
+ *     the allowance, so a stale tab spends nothing (GPT Sol's F6);
+ *  5. ids not in the current list, or a Dig further with nothing to dig (409);
+ *  6. **a check already pending** (409) — the reservation insert, held by the
+ *     partial unique index, so two tabs at once get one search;
+ *  7. **the `dig-deeper` allowance** (429, 503), its limits unchanged — and a
+ *     refusal there takes the reservation back, so nothing is left pending;
+ *  8. then the stream and the model.
+ *
+ * ## A dropped client does not cancel the call
+ *
+ * The call runs on its own deadline (`DEBATE_CHECK_TIMEOUT_MS`), never on
+ * `sse().gone`: the answer is paid for either way, and a reader who closed the
+ * tab finds it stored on the next GET.
+ *
+ * ## The allowance's lease is shorter than the call
+ *
+ * `DIG_DEEPER_RATE_POLICY.leaseMs` is 170 s and a check can run longer, so a
+ * slow check may stop holding its concurrency slot before it ends. The hourly
+ * and daily counts still hold, and so does the one-pending-per-article index.
+ * The policy is not changed here (plan § 3).
+ */
+async function runDebateClaimCheck(slug: string, body: unknown, res: ServerResponse): Promise<void> {
+  const asked = readCheckRequest(body);
+  const article = await loadArticle(slug);
+
+  let list: DebateClaimList;
+  try {
+    list = (await loadDebateClaims(slug)).claimList;
+  } catch (err) {
+    if (err instanceof ArtefactNotMadeYet) throw httpError(409, DEBATE_CHECK_NO_LIST);
+    throw err;
+  }
+  /* Against the article just loaded — the one the model will be shown — not a
+     stale flag read beside the list. */
+  if (list.sourceHash !== debateClaimsFingerprint(article.blocks, article.tree, article.meta)) {
+    throw httpError(409, DEBATE_CHECK_LIST_STALE);
+  }
+
+  const earlier = asked.digFurther === null ? [] : await debateClaimChecksStore.list(slug);
+  const { targets, alreadyFound } = checkTargets(asked, list, earlier);
+
+  const { check, attempt } = await debateClaimChecksStore.begin(slug, {
+    listSourceHash: list.sourceHash,
+    targets,
+    digFurther: asked.digFurther !== null,
+  });
+
+  let free: () => Promise<void>;
+  try {
+    free = await admitDig(fetchAllowanceStore);
+  } catch (err) {
+    /* Nothing was spent, so the reservation goes: a row left `pending` would
+       hold the article's one check until the sweep. If the delete itself
+       fails, the sweep is what frees it, and the reader still gets the
+       refusal. */
+    try {
+      await debateClaimChecksStore.abandon(slug, check.id, attempt);
+    } catch (abandonErr) {
+      log("store").error({ ...errorFields(abandonErr), slug }, `could not take back a claim check for ${slug}`);
+    }
+    throw checkRefusal(err);
+  }
+
+  const release = checkingClaims.hold(`${slug}/${check.id}`);
+  try {
+    const { frame } = sse(res);
+    frame("begin", check);
+
+    let patch: ClaimCheckFinish;
+    try {
+      const run = await generateClaimCheck({
+        article,
+        targets,
+        alreadyFound,
+        power: powerOf(article),
+        signal: AbortSignal.timeout(DEBATE_CHECK_TIMEOUT_MS),
+      });
+      patch = {
+        status: "done",
+        results: run.results,
+        counts: run.counts,
+        webSearches: run.webSearches,
+        model: run.model,
+      };
+    } catch (err) {
+      captureFailure(err, { route: "debate-claim-check", slug });
+      patch = { status: "error", error: sayToReader(err, { route: "debate-claim-check", slug }) };
+    }
+
+    try {
+      /* `null` is a check the sweep ended under us: send what is stored, so the
+         panel draws the same row a reload would. */
+      const stored =
+        (await debateClaimChecksStore.finish(slug, check.id, patch, attempt)) ??
+        (await debateClaimChecksStore.list(slug)).find((c) => c.id === check.id) ??
+        null;
+      if (stored) frame("done", stored);
+    } catch (storeErr) {
+      log("store").error({ ...errorFields(storeErr), slug }, `could not record a claim check for ${slug}`);
+      captureFailure(storeErr, { route: "debate-claim-check", phase: "record-result", slug });
+    } finally {
+      res.end();
+    }
+  } finally {
+    release();
+    await free();
+  }
+}
+
 /* ----------------------------------------------- referee mirror (stage 5b) --
    The model reads the referee's own comments and remarks on them. It is never
    given the article, so "it says nothing about the paper" is true of the input
@@ -5866,8 +6135,9 @@ async function runMirror(slug: string, res: ServerResponse): Promise<void> {
 
 /* ------------------------------------- referee hidden text: the Opus check --
    The Hidden text sub-mode's *Ask Opus about these*: the scan's flagged rows,
-   never the article, one opinion per row, nothing stored.
+   never the article, one opinion per row, the last answer kept.
    docs/plans/261007l-hidden-text-an-opus-check-the-reader-asks-for-over-the-flagged-fragments-only.md,
+   docs/plans/261009a-save-hidden-text-opinions.md (kept since 2026-10-09),
    and src/referee-hidden-check.ts, which is the thinking. */
 
 /**
@@ -5887,6 +6157,10 @@ async function runMirror(slug: string, res: ServerResponse): Promise<void> {
  * in those states, so only a stale tab gets here.
  */
 async function runHiddenCheck(slug: string, res: ServerResponse): Promise<void> {
+  /* Captured before any awaited preflight work: this is request order, not
+     whichever scan/article read happened to finish first. The store uses it
+     to stop an older press that finishes late replacing a newer answer. */
+  const startedAt = new Date();
   /* Ownership first, before a byte of the manuscript is read — the scan
      route's order, and `sendSource`'s. */
   await shelfStore.read(slug);
@@ -5901,20 +6175,42 @@ async function runHiddenCheck(slug: string, res: ServerResponse): Promise<void> 
      overrides for this job: it is Opus on every article. */
   const article = await loadArticle(slug);
 
-  /* `gone` goes to the model call: nothing is stored, so an answer that
-     finishes after the referee has left has nowhere to go. Mirror's decision,
-     for Mirror's reason. */
-  const { frame, gone } = sse(res);
+  /* **It runs to the end**, and `gone` is not passed on: the answer is kept
+     (plan 261009a), so one that finishes after the referee has left is waiting
+     for them on their next visit rather than paid for twice. Until 2026-10-09
+     nothing was stored and leaving stopped the call, Mirror's way. */
+  const { frame } = sse(res);
   let chars = 0;
   try {
-    for await (const event of hiddenCheckStream({ groups, power: powerOf(article), slug, signal: gone })) {
+    for await (const event of hiddenCheckStream({ groups, power: powerOf(article), slug })) {
       if (event.type === "delta") {
         chars += event.text.length;
         frame("delta", { chars });
         continue;
       }
       const { type: _type, ...result } = event;
-      frame("done", result);
+      /* Kept before it is shown, so an answer the referee has seen is one a
+         reload brings back. A failed save does not throw the answer away - it
+         is already paid for - so the referee gets it, told it was not kept. */
+      let stored: StoredHiddenCheck;
+      try {
+        stored = await refereeHiddenCheckStore.save(slug, result, startedAt);
+      } catch (err) {
+        /* Content-free diagnostics only. A reason may quote an unpublished
+           manuscript, so neither it nor the judgments object crosses into
+           monitoring. The guarded store has already scrubbed failed query
+           parameters before the error reaches this catch. */
+        captureFailure(err, {
+          route: "referee-hidden-check-save",
+          slug,
+          judgments: result.judgments.length,
+          unanswered: result.unanswered,
+          notSent: result.notSent,
+          model: result.model,
+        });
+        stored = { ...result, checkedAt: new Date().toISOString(), saved: false };
+      }
+      frame("done", stored);
     }
   } catch (err) {
     if (!isHiddenCheckReaderLeft(err)) captureFailure(err, { route: "referee-hidden-check", slug });
@@ -8952,6 +9248,10 @@ const JOB_PATTERN = /^\/api\/jobs\/([\w.%-]+)$/;
 const CRITERIA_PATTERN = /^\/api\/referee\/criteria\/([\w.%-]+)$/;
 const ONE_CRITERION_PATTERN = /^\/api\/referee\/criteria\/([\w.%-]+)\/([\w.%-]+)$/;
 const REFEREE_CLAIMS_PATTERN = /^\/api\/referee\/claims\/([\w.%-]+)$/;
+/* Debate's reader claim checks (plan 261008i § 3): GET lists them, POST makes
+   one. One pattern for both rows, as Claims above. */
+const DEBATE_CHECKS_PATTERN = /^\/api\/debate-claims\/([\w.%-]+)\/checks$/;
+const REFEREE_HIDDEN_CHECK_PATTERN = /^\/api\/referee\/hidden-check\/([\w.%-]+)$/;
 /* Search: the runs of one article, and one run of one article. Two rows apiece,
    so both are named here rather than spelled into the rows twice. */
 const SEARCHES_PATTERN = /^\/api\/search\/([\w.%-]+)$/;
@@ -10583,6 +10883,55 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     },
   },
 
+  /* Debate's claims list — docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2.
+     GET only, and no DELETE, for `faq`'s reason: the step replaces, so asking
+     again is POST /api/jobs { slug, steps: ["debate-claims"] }. This route
+     never spends. A visitor reads the list off the public payload, without
+     the staleness verdict, so there is no anonymous twin. None yet is
+     `200 null` to a client that asks — `orNullWhenNotMadeYet`. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/debate-claims\/([\w.%-]+)$/,
+    article: "first-capture",
+    handler: async ({ request: { req, res } }, captures) => {
+      const found = await orNullWhenNotMadeYet({ req, res }, () => loadDebateClaims(slugPart(captures, 1)));
+      if (!found) return;
+      send(res, 200, found);
+    },
+  },
+
+  /* Debate's reader claim checks — plan 261008i § 3, `runDebateClaimCheck`.
+     **Owner-only, both of them**: every store read is owner-scoped, so somebody
+     else's article is a 404, and there is no public twin — a check may hold
+     the reader's own typed claim. The GET never spends; it sweeps a `pending`
+     check whose process died, so an orphan cannot hold the article's one
+     check for ever. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: DEBATE_CHECKS_PATTERN,
+    article: "first-capture",
+    handler: async ({ request: { res } }, captures) => {
+      const slug = slugPart(captures, 1);
+      const checks = await debateClaimChecksStore.sweep(slug, (id) => checkingClaims.has(`${slug}/${id}`));
+      send(res, 200, { checks });
+    },
+  },
+
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: DEBATE_CHECKS_PATTERN,
+    article: "first-capture",
+    handler: async ({ request: { req, res } }, captures) => {
+      /* SSE on success; every refusal is JSON, before a header is written.
+         `article: "first-capture"` because the call inside pays, and the
+         ledger row must say which article. */
+      await runDebateClaimCheck(slugPart(captures, 1), await readBody(req), res);
+    },
+  },
+
   /* Relation words — docs/plans/261003f-marginalia-relation-words-and-timeline-events.md.
      GET only, and no DELETE: the step replaces, so asking again is
      POST /api/jobs { slug, steps: ["relations"] }. This route never spends.
@@ -11817,13 +12166,27 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     },
   },
 
-  /* Hidden text's Opus check. POST only, for Mirror's reason: a run is a model
-     call the referee asks for and nothing is stored. `article: "first-capture"`
-     because it pays, and the cost report has to say which paper it was about. */
+  /* Hidden text's Opus check, kept since 2026-10-09 (plan 261009a). GET is the
+     last finished answer or `null`, asked on the same ownership question as
+     the run, and owner-scoped again in the store. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: REFEREE_HIDDEN_CHECK_PATTERN,
+    article: "first-capture",
+    handler: async ({ request: { res } }, captures) => {
+      const slug = slugPart(captures, 1);
+      await shelfStore.read(slug);
+      send(res, 200, { check: await refereeHiddenCheckStore.read(slug) });
+    },
+  },
+
+  /* POST runs the check. `article: "first-capture"` because it pays, and the
+     cost report has to say which paper it was about. */
   {
     kind: "pattern",
     method: "POST",
-    pattern: /^\/api\/referee\/hidden-check\/([\w.%-]+)$/,
+    pattern: REFEREE_HIDDEN_CHECK_PATTERN,
     article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       await runHiddenCheck(slugPart(captures, 1), res);

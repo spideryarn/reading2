@@ -2912,6 +2912,12 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      row back after a refused Dig deeper to show it was left alone — a read
      a neighbour answering the same slug could falsify. No model is called. */
   "tests/dig-deeper-comment.test.ts": "private-postgres",
+  /* Plan 261008i stage 3. Debate's claim checks through the routes and the
+     store: seeds its own scratch articles, writes the list onto the revision
+     in SQL, and races two reservations on two connections, so it needs a
+     database of its own. The allowance and the search are stubbed; no model
+     is called. */
+  "tests/debate-claim-checks-routes.test.ts": "private-postgres",
   "tests/comment-sweep.test.ts": "private-postgres",
   "tests/corpus-lock.test.ts": "private-postgres",
   /* 2026-09-05. Its second block drives a collector whose sink is `costStore`,
@@ -3627,6 +3633,11 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
      `/api/mcp` for not being the administrator. */
   "tests/mcp-remote.test.ts": {
     "00000000-0000-4000-8000-00000000b0b0": { kind: "seeded" },
+  },
+  /* Plan 261008i. `seedAuthUser` in `beforeAll`: a second reader who owns an
+     article, so a check pressed on it by somebody else is refused. */
+  "tests/debate-claim-checks-routes.test.ts": {
+    "7c0de5a1-0000-4000-8000-00000000d1c5": { kind: "seeded" },
   },
   "tests/a-paper-queued-before-the-resolver.test.ts": {
     "0b111a99-0000-4000-8000-0000a2c51d01": { kind: "seeded" },

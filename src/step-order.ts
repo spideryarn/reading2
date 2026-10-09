@@ -167,6 +167,13 @@ export const STEP_ORDER = [
      it in would spend that on somebody who pressed a button one band along.
      docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md. */
   "debate",
+  /* **Straight after `debate`**, the mode it serves: the article's claims,
+     listed for Debate's Claims sub-mode to pick from. One Messages call over
+     the body, `faq`'s bytes and effort and its own schema; no web search.
+     Off `DEFAULT_INGEST_STEPS` and in `FORCE_ONLY_WHEN_NAMED` — a model call
+     over the whole article that a reader asks for by pressing Claims.
+     docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2. */
+  "debate-claims",
   /* **After `debate`**: it sends `articleWithIds` over every block, notes and
      bibliography included, so its bytes match no other stage's. Off
      `DEFAULT_INGEST_STEPS` and in `FORCE_ONLY_WHEN_NAMED` — a model call over

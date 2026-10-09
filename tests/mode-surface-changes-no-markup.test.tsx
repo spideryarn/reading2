@@ -157,6 +157,7 @@ import { act, createElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { checksOwner, claimListOwner } from "./helpers/debate-claims-owner.js";
 
 import type { DebateOwner } from "../src/web/DebatePanel.js";
 import type { DiagramAccess } from "../src/web/DiagramPanel.js";
@@ -1623,7 +1624,7 @@ const NO_CLAIM_CHATS = { summaries: [], onCheck: () => {}, onLens: () => {}, onO
 
 function mountDebate(debate: Debate | null, over: Partial<DebateOwner> = {}): ReactNode {
   return createElement(DebatePanel, {
-    access: { kind: "owner", owner: debateOwner(debate, over), citers: { result: { kind: "no-doi" }, retry: () => {} }, claimChats: NO_CLAIM_CHATS },
+    access: { kind: "owner", owner: debateOwner(debate, over), claimList: claimListOwner(), checks: checksOwner(), citers: { result: { kind: "no-doi" }, retry: () => {} }, claimChats: NO_CLAIM_CHATS },
     onJump: noop,
     /* What a reader who has never touched `?debate=` sends: Reception. */
     view: "reception",
@@ -1935,7 +1936,12 @@ const DEBATE_SHAPE: BandShape = {
  *  `div.dbt-scroll` holds the owner's *Cited by*, which since 2026-10-04 is on
  *  screen before a search is stored (plan 261004h) — a deliberate change to
  *  this shape. In `DEBATE_SHAPE` it is inside `div.dbt-scroll`, at the end of
- *  Reception's list, so that shape did not move. */
+ *  Reception's list, so that shape did not move.
+ *
+ *  `div.summ-controls.dbt-controls`, the Reception | Claims control, is drawn
+ *  before a search is stored since 2026-10-08 (plan 261008i stage 2, GPT Sol's
+ *  F9): Claims has a list of its own to reach — a deliberate change to this
+ *  shape. */
 const DEBATE_LOADING: BandShape = {
   className: "mode-band gloss dbt has-about",
   label: "Debate",
@@ -1944,6 +1950,7 @@ const DEBATE_LOADING: BandShape = {
     "button.band-about[aria-expanded,aria-haspopup,aria-label,type]",
     "div.band-head",
     "div.gloss-ask.dbt-lens",
+    "div.summ-controls.dbt-controls",
     "p.band-waiting.gloss-quiet[role]",
     "div.dbt-scroll",
   ],
