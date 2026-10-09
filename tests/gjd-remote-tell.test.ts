@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { parseMessageBody } from "../tools/fleet/routes-steer.js";
 import { steerMessageBody } from "../tools/fleet/web/src/steer-client.js";
 import { parseRow } from "../tools/fleet/web/src/types.js";
 
-import { overseerTarget, readTellAnswer, splitStatus, tellPostCommand } from "../scripts/gjd-remote-tell.js";
+import { overseerTarget, readTellAnswer, sessionTarget, splitStatus, tellPostCommand } from "../scripts/gjd-remote-tell.js";
 
 const NOW = "2026-10-09T22:43:28.580Z";
 
@@ -107,6 +107,82 @@ describe("overseerTarget", () => {
       if (t.ok) throw new Error("expected a refusal");
       expect(hasTerminalControl(t.why)).toBe(false);
     }
+  });
+});
+
+describe("sessionTarget", () => {
+  it("builds the same body as the dashboard card for the row with that exact name", () => {
+    const t = sessionTarget(snapshot([overseer, peer]), "peer", "hello");
+    const webRow = parseRow(peer, { kind: "known", ms: 0 });
+    if (!t.ok || webRow === null) throw new Error("expected a target");
+    expect(t.name).toBe("peer");
+    expect(t.body).toEqual(steerMessageBody(webRow, "hello"));
+  });
+
+  it("refuses a name that matches only when case is ignored, naming the likely one", () => {
+    const t = sessionTarget(snapshot([overseer, peer]), "overseer", "hello");
+    if (t.ok) throw new Error("expected a refusal");
+    expect(t.why).toContain("did you mean 'Overseer'");
+  });
+
+  it("refuses an unknown name, saying the list may lag a new session", () => {
+    const t = sessionTarget(snapshot([peer]), "brand-new", "hello");
+    if (t.ok) throw new Error("expected a refusal");
+    expect(t.why).toMatch(/once a minute/);
+  });
+
+  it("refuses rows from a failed collection, which are the last good ones and may be gone", () => {
+    expect(sessionTarget(snapshot([peer], { error: "tmux died" }), "peer", "hello").ok).toBe(false);
+  });
+
+  it("refuses an exact row with no usable id instead of suggesting the same name", () => {
+    for (const id of [undefined, null, "", 42, "peer"]) {
+      const t = sessionTarget(snapshot([{ ...peer, id }]), "peer", "hello");
+      if (t.ok) throw new Error("expected a refusal");
+      expect(t.why).toContain("no usable tmux session id");
+      expect(t.why).not.toContain("did you mean");
+    }
+  });
+
+  it("refuses duplicates, including a duplicate without an id", () => {
+    for (const id of [peer.id, "$999", undefined]) {
+      const t = sessionTarget(snapshot([peer, { ...peer, id }]), "peer", "hello");
+      expect(t).toEqual({ ok: false, why: "2 sessions are called 'peer'" });
+    }
+  });
+
+  it("uses an exact match even when another name differs only by case", () => {
+    const t = sessionTarget(snapshot([peer, { ...overseer, name: "Peer" }]), "peer", "hello");
+    expect(t).toMatchObject({ ok: true, body: { sessionId: peer.id } });
+    const ambiguous = sessionTarget(snapshot([peer, { ...overseer, name: "Peer" }]), "PEER", "hello");
+    expect(ambiguous.ok).toBe(false);
+    if (!ambiguous.ok) expect(ambiguous.why).not.toContain("did you mean");
+  });
+
+  it("refuses a collection that has stopped refreshing, using the box's clock", () => {
+    expect(sessionTarget(snapshot([peer], { servedAt: "2026-10-09T23:42:33.630Z" }), "peer", "hello").ok).toBe(false);
+    for (const collectedAt of [null, "not a date"]) {
+      expect(sessionTarget(snapshot([peer], { collectedAt }), "peer", "hello").ok).toBe(false);
+    }
+    for (const servedAt of [null, "not a date", "2026-10-09T21:42:33.630Z"]) {
+      expect(sessionTarget(snapshot([peer], { servedAt }), "peer", "hello").ok).toBe(false);
+    }
+    expect(sessionTarget(snapshot([peer], { servedAt: "2026-10-09T22:47:33.630Z" }), "peer", "hello").ok).toBe(true);
+  });
+
+  it("escapes exact names in duplicate and missing-id refusals", () => {
+    const name = "Evil\u001b[2J\r\n\u009b2J";
+    for (const rows of [[{ ...peer, name, id: null }], [{ ...peer, name }, { ...overseer, name }]]) {
+      const t = sessionTarget(snapshot(rows), name, "x");
+      if (t.ok) throw new Error("expected a refusal");
+      expect(hasTerminalControl(t.why)).toBe(false);
+    }
+  });
+
+  it("escapes a near-miss session name it prints", () => {
+    const t = sessionTarget(snapshot([{ ...peer, name: "Evil\u001b[2J" }]), "evil\u001b[2j", "x");
+    if (t.ok) throw new Error("expected a refusal");
+    expect(hasTerminalControl(t.why)).toBe(false);
   });
 });
 
@@ -229,6 +305,72 @@ describe("tell-overseer arguments", () => {
     expect(result.stderr).toContain("port number");
     expect(result.stderr).not.toContain("\u001b");
   });
+});
+
+describe("tell arguments", () => {
+  // Exercise the real dispatch without reaching a real box. The ssh stand-in
+  // records the POST body; accepting syntax alone would miss a wrong target.
+  function run(args: string[], input = "", name = "peer") {
+    const dir = mkdtempSync(path.join(tmpdir(), "gjd-tell-test-"));
+    try {
+      writeFileSync(path.join(dir, "state.json"), JSON.stringify(snapshot([{ ...peer, name }])));
+      writeFileSync(path.join(dir, "ssh"), `#!${process.execPath}
+const fs = require("node:fs");
+const path = require("node:path");
+const dir = process.env.GJD_REMOTE_LOG_DIR;
+const command = process.argv.at(-1);
+if (command.includes("/api/state")) {
+  process.stdout.write(fs.readFileSync(path.join(dir, "state.json")));
+} else if (command.includes("/api/steer/message")) {
+  fs.writeFileSync(path.join(dir, "post.json"), fs.readFileSync(0));
+  fs.writeFileSync(path.join(dir, "command.txt"), command);
+  process.stdout.write(JSON.stringify({ ok: true, op: "message", sent: [["Enter"]] }) + "\\n200");
+} else if (!process.argv.includes("-M") && !process.argv.includes("-O")) {
+  process.exit(99);
+}
+`, { mode: 0o755 });
+      const result = spawnSync(process.execPath, ["--import", "tsx", "scripts/gjd-remote.ts", "tell", ...args], {
+        input, encoding: "utf8", timeout: 10_000,
+        env: { ...process.env, PATH: `${dir}${path.delimiter}${process.env.PATH}`, NO_COLOR: "1", GJD_REMOTE_LOG_DIR: dir, GJD_REMOTE_HOST: "test.invalid" },
+      });
+      const postFile = path.join(dir, "post.json");
+      const post: unknown = existsSync(postFile) ? JSON.parse(readFileSync(postFile, "utf8")) : null;
+      const command = post === null ? null : readFileSync(path.join(dir, "command.txt"), "utf8");
+      const log = readFileSync(path.join(dir, "gjd-remote.ndjson"), "utf8");
+      expect(log).not.toContain("secret-message");
+      return { ...result, post, command };
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it.each([
+    { args: ["peer", "secret-message"], input: "", name: "peer", text: "secret-message", port: 8787 },
+    { args: ["peer", "-p", "secret-message"], input: "", name: "peer", text: "secret-message", port: 8787 },
+    { args: ["-psecret-message", "peer"], input: "", name: "peer", text: "secret-message", port: 8787 },
+    { args: ["--port", "8788", "-p", "-", "peer"], input: "secret-message\n", name: "peer", text: "secret-message", port: 8788 },
+    { args: ["peer", "--", "-secret-message"], input: "", name: "peer", text: "-secret-message", port: 8787 },
+    { args: ["--port", "8788", "--", "-peer", "secret-message"], input: "", name: "-peer", text: "secret-message", port: 8788 },
+    { args: ["-p", "secret-message", "--", "-peer"], input: "", name: "-peer", text: "secret-message", port: 8787 },
+    { args: ["peer", "--", "-p", "secret-message"], input: "", name: "peer", text: "-p secret-message", port: 8787 },
+  ])("posts the intended name, text and port for $args", ({ args, input, name, text, port }) => {
+    const r = run(args, input, name);
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.post).toMatchObject({ sessionId: peer.id, text, speaker: "greg" });
+    expect(r.command).toContain(`http://127.0.0.1:${port}/api/steer/message`);
+    expect(r.command).not.toContain("secret-message");
+    expect(r.stdout).toContain(`sent to '${name}'`);
+  });
+
+  it.each([[], ["peer"], ["peer", "--"], ["peer", "-p", ""], ["peer", "-p", "secret-message", "extra"], ["--unknown-peer", "secret-message"], ["peer", "--secret-message"]])(
+    "refuses incomplete or conflicting arguments without posting: %j", (...args) => {
+      const r = run(args);
+      expect(r.status).toBe(1);
+      expect(r.post).toBeNull();
+      expect(r.stderr).toContain("usage:");
+      expect(r.stderr).not.toContain("secret-message");
+    },
+  );
 });
 
 describe("tellPostCommand", () => {
