@@ -1474,6 +1474,30 @@ const rawPgJobStore: JobStore = {
   },
 
   /**
+   * The contract is in src/store/jobs.ts. The lock first and the whole of
+   * `liveAttempt` again on the write, for the reasons `pauseForDeadline` above
+   * gives; nothing else about the row is touched.
+   */
+  async beginPaidStep(id, attempt, step) {
+    return await getDb().transaction(async (tx) => {
+      const [row] = await tx
+        .select({ paidStepBegun: jobs.paidStepBegun })
+        .from(jobs)
+        .where(liveAttempt(id, attempt))
+        .for("update");
+      if (!row) throw new StaleAttemptError(id);
+      if (row.paidStepBegun === step) return "begun-before" as const;
+      const moved = await tx
+        .update(jobs)
+        .set({ paidStepBegun: step, paidStepBegunAt: sql`clock_timestamp()` })
+        .where(liveAttempt(id, attempt))
+        .returning({ id: jobs.id });
+      if (!moved[0]) throw new StaleAttemptError(id);
+      return "begun" as const;
+    }, READ_COMMITTED);
+  },
+
+  /**
    * **One statement decides which kind of ending each of these is** — the same
    * shape `requestCancel` has, and for the same reason.
    *

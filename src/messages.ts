@@ -275,6 +275,21 @@ export const INTERRUPTED: ReaderFacingFailure = {
     `starting over. [${INTERRUPTED_CODE}]`,
 };
 
+/**
+ * **A paid step this job may already have begun, not begun again by itself.**
+ * The marker is written before the request can leave, so after the process
+ * stops or the job reaches its own deadline we cannot tell whether the search
+ * started. For a `oncePerJob` step (src/pipeline.ts), starting it again could
+ * buy the paid work a second time on nobody's press, so the step fails here
+ * instead and the reader decides. Plan 261009l.
+ */
+export const PAID_STEP_NOT_REPEATED: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "This search may already have started when the job stopped, so it may already have been paid " +
+    "for. It was not started again by itself. Press Retry to run it. [jb-paid-once]",
+};
+
 export const CODE_KINDS: Record<string, FailureKind> = {
   "ai-busy": "retry",
   "ai-no-credit": "ours",
@@ -371,6 +386,11 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      an interrupted job resumes from its artefacts rather than starting again,
      so another go is both allowed and cheap. See `INTERRUPTED`. */
   "jb-gone": "retry",
+  /* A `oncePerJob` step a later window of the same job would have bought
+     again. `retry` because the Retry is the point: it is a new job and a press,
+     which is the only way this work is bought twice. See
+     `PAID_STEP_NOT_REPEATED`. */
+  "jb-paid-once": "retry",
   /* **The two refusals *Dig deeper* on a glossary entry can give**, and the only `gl-` pair.
      Neither is a model call and neither is a fault: one says the article never
      quotes the term, the other that the glossary no longer fits the article.

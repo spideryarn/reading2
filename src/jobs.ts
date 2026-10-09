@@ -117,6 +117,7 @@ import {
 } from "./pipeline.js";
 import {
   INTERRUPTED,
+  PAID_STEP_NOT_REPEATED,
   NOT_READ_YET,
   NOT_READ_YET_RESET,
   type FailureKind,
@@ -420,7 +421,7 @@ class DeadlineReached extends CallDeadlineReached {
  * re-buying whatever is not checkpointed for a reader who is no longer watching.
  *
  * **And nothing here requires progress before granting a window**, which is what
- * makes the number the whole of the protection. The requeue is decided by
+ * makes the number the protection for every step but one kind. The requeue is decided by
  * `settleExpired` from the lease alone — it has no view of what the attempt got
  * done — so a step whose paid call is *not* checkpointed can be bought once per
  * window. Three windows is three of those. A progress test (say, "requeue only
@@ -428,6 +429,15 @@ class DeadlineReached extends CallDeadlineReached {
  * expensive fan-outs are checkpointed already, so what it would save is the
  * `assets` outline call and little else, at the price of a second concept in the
  * sweep. Worth revisiting if a third un-checkpointed paid step ever appears.
+ *
+ * **The one kind is a step marked `oncePerJob`** (src/pipeline.ts): `debate`,
+ * whose web search costs 15–20 cents a call and cannot be fetched back from a
+ * window that died with it in flight. The requeue still grants the window; the
+ * next window refuses to begin that step again and fails it with
+ * `PAID_STEP_NOT_REPEATED`, so only a reader's press buys it twice. `illustrated`'s
+ * plates are the other dear un-checkpointed purchase and are not covered: the
+ * step hands itself to a second window on purpose, so marking the whole step would
+ * refuse that. docs/plans/261009l-a-requeued-job-does-not-buy-the-debate-search-again.md.
  *
  * **And the budget is per job, not per article, which is deliberate.** Pressing
  * Retry makes a *new* job with a fresh two — so the reader is the outer loop.
@@ -1297,6 +1307,8 @@ async function runStep(
   onStepSpend: AdvanceParts["onStepSpend"],
   /* `AdvanceParts.power` — which capable model this step's calls go to. */
   readPower: AdvanceParts["power"],
+  /* `JobStore.beginPaidStep` on this claim, for a `oncePerJob` step. */
+  beginPaidStep: (name: StepName) => Promise<"begun" | "begun-before">,
 ): Promise<{ outcome: StepOutcome; settlement?: JobSettlement }> {
   /* **The article's power, read once per step, when the step starts** (plan
      260930f decision 3): flipping High-powered AI mid-job moves the steps
@@ -1479,6 +1491,17 @@ async function runStep(
        success path below, which means a throw, a cancel or a kill all leave
        the step honestly not-done. See `beginStep` in
        src/store/artifacts.ts. */
+    /* **A step whose paid work cannot be bought twice is begun once per job**
+       (`PipelineStep.oncePerJob`). Here, after every refusal above and before
+       `beginStep`, so a step that would have been refused or skipped leaves
+       no marker, and the marker is down before anything is dispatched. Set
+       before the work and never cleared, so a window that died after it and
+       before the request left is refused too: the case that billed and the
+       case that did not look the same from here. Plan 261009l. */
+    if (registry[step.name].oncePerJob) {
+      const begun = await beginPaidStep(step.name);
+      if (begun === "begun-before") throw stageFailure(PAID_STEP_NOT_REPEATED);
+    }
     const attempt = await session.beginStep(job.slug, step.name);
     /* Opening the marker also yields: honour a Stop/deadline that arrived
        there before invoking a step that might ignore its signal. */
@@ -3199,6 +3222,7 @@ async function walkClaim(
         transitionAfter,
         parts.onStepSpend,
         parts.power,
+        (name) => store.beginPaidStep(job.id, attempt, name),
       );
 
       if (ran.outcome === "skipped") continue;
