@@ -705,7 +705,7 @@ const INLINE_TEXT_ELEMENTS: ReadonlySet<string> = new Set([
  * place; `STOOD_FOR` names the macros that stood for something more, only when
  * their phrase is present on both sides. Measured on 79 arXiv papers,
  * 2026-10-09:
- * docs/plans/261009e-latex-undefined-macros-leave-the-page.md.
+ * docs/plans/261009f-latex-undefined-macros-leave-the-page.md.
  */
 function removeUndefinedMacro(marker: Element, targets: ReadonlySet<string>): boolean {
   if (marker.children.length > 0 || marker.parentElement?.closest(SKIP)) return false;

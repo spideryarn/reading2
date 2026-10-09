@@ -1,4 +1,4 @@
-You are reviewing a PLAN (read-only) in this repo: docs/plans/261009e-latex-undefined-macros-leave-the-page.md.
+You are reviewing a PLAN (read-only) in this repo: docs/plans/261009f-latex-undefined-macros-leave-the-page.md.
 
 Context: Spideryarn imports arXiv HTML (LaTeXML) papers. src/latexml.ts § prepareLatexml rewrites LaTeXML shapes before Readability (called from src/extract.ts § prepareDocument). The reported bug: LaTeXML's undefined-macro marker `<span class="ltx_ERROR undefined">\hohsettheme</span>` and its orphaned argument `<p>hohRose</p>` reached the reader. The plan adds a rule that removes the marker, plus (narrowly) a one-token argument paragraph, a citation key after a *cite* macro, and a paragraph left empty.
 

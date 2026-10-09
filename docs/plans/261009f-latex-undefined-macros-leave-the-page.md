@@ -70,7 +70,7 @@ sometimes junk. The fix has to tell those apart, and it can only do that where t
 A seventh rewrite in `prepareLatexml` (`removeUndefinedMacro`, src/latexml.ts), under the three
 rules every rewrite in that module already follows: only at arXiv's or ar5iv's `/html/`, only
 beneath `article.ltx_document`, and the page is left as it was when an id a link points at would go.
-Revised after GPT Sol's plan review ([its answer](261009e-latex-undefined-macros-plan-review-sol.md)),
+Revised after GPT Sol's plan review ([its answer](261009f-latex-undefined-macros-plan-review-sol.md)),
 which found the first draft's argument rules could delete an author's words.
 
 1. **The report goes.** A `span.ltx_ERROR.undefined` whose whole text is one control sequence and
@@ -170,12 +170,12 @@ here deletes an author's words*: an argument that is a name from the source.
 
 ## Code review
 
-GPT Sol's code review ([its answer](261009e-latex-undefined-macros-code-review-sol.md)) found and
+GPT Sol's code review ([its answer](261009f-latex-undefined-macros-code-review-sol.md)) found and
 fixed three bugs, each red-first in `tests/latexml.test.ts`, all one class: the text repair after a
 removal looked only at the marker's DOM siblings, not at the rendered text either side of it. A
 marker at the edge of an `<em>` joined two words; a citation key removed after a source space left
 `structure ;` (three of them in 2610.11126, which the survey above had not checked for); `\sep`
 inside a wrapper left `alpha ; beta`. One helper now reads the inline run on each side and stops at
 a block. Write-up:
-[postmortems/261009e](../postmortems/261009e-dom-siblings-are-not-rendered-text-boundaries.md).
+[postmortems/261009f](../postmortems/261009f-dom-siblings-are-not-rendered-text-boundaries.md).
 Re-run on four of the ten pages afterwards: no report, key or stray space before punctuation left.

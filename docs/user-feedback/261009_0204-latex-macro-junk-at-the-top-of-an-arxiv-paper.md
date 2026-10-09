@@ -19,7 +19,7 @@ next feedback sweep marks the Sentry issue.
 > ```
 
 **Ending: Shipped**, on `dev`. Plan
-[261009e](../plans/261009e-latex-undefined-macros-leave-the-page.md).
+[261009f](../plans/261009f-latex-undefined-macros-leave-the-page.md).
 
 **Why it happened.** The article (`arxiv-2609-01481v1-spya-sjatfv`) came through the HTML path,
 not the PDF one. arXiv's HTML is made by LaTeXML, and when LaTeXML meets a macro it has no

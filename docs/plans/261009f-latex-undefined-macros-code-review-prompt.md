@@ -1,4 +1,4 @@
-You are the code reviewer-fixer for one stage of work in this worktree. Plan: docs/plans/261009e-latex-undefined-macros-leave-the-page.md (read it first; your own earlier plan review is docs/plans/261009e-latex-undefined-macros-plan-review-sol.md, and the plan says which of its points were taken and which declined, and why).
+You are the code reviewer-fixer for one stage of work in this worktree. Plan: docs/plans/261009f-latex-undefined-macros-leave-the-page.md (read it first; your own earlier plan review is docs/plans/261009f-latex-undefined-macros-plan-review-sol.md, and the plan says which of its points were taken and which declined, and why).
 
 The change: `removeUndefinedMacro` and `sourceNameArgument` in src/latexml.ts (called from `prepareLatexml`), its tests in tests/latexml.test.ts § "fix 8", fixtures tests/fixtures/latexml/undefined-macro-*.html, and doc edits in docs/project/content-extraction.md and the module header of src/latexml.ts. See the diff with:
 

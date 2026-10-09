@@ -3,7 +3,7 @@
 Up: [postmortems.md](../project/postmortems.md)
 
 Found and fixed in code review of
-[261009e](../plans/261009e-latex-undefined-macros-leave-the-page.md), before the change reached
+[261009f](../plans/261009f-latex-undefined-macros-leave-the-page.md), before the change reached
 `origin/dev` or a reader.
 
 ## What happened
