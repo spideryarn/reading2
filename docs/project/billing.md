@@ -945,8 +945,10 @@ the route still knows what was asked for.
 
 | | |
 |---|---|
-| `POST /api/jobs {url}` | reserves |
+| `POST /api/jobs {url}` otherwise | reserves |
 | `POST /api/jobs {url}` for an article the reader already has, with no `steps` or `force` | free: answers `{ article, repeat: true }` and queues nothing |
+| `POST /api/jobs {url}` for an address somebody else has made public, without `ownCopy` | free: answers `{ publicCopy: { slug, title } }` and queues nothing, so the reader can choose ([261009j](../plans/261009j-a-public-copy-offered-at-import.md)) |
+| `POST /api/jobs {url, ownCopy: true}` | reserves: the reader chose their own copy over the public one |
 | `POST /api/jobs {uploadId}` | reserves |
 | `POST /api/jobs/:id/retry`, when the old job carried a slot | reserves a **fresh** one |
 | `POST /api/jobs {slug, steps}` — a glossary, ideas, a quiz | free |

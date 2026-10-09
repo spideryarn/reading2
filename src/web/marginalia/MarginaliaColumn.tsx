@@ -25,7 +25,7 @@ import {
 } from "react";
 import { ChevronRight, X } from "lucide-react";
 import { TOAST_MS, useGoesByItself } from "../Toast.js";
-import type { CitedWork, Faq, Ideas, TimelineEvent } from "../../types.js";
+import type { BlockId, CitedWork, Faq, Ideas, TimelineEvent } from "../../types.js";
 import { isFolded, subscribeFold } from "../fold.js";
 import { useDebateRead } from "../useDebate.js";
 import { useStepFinished } from "../useStepJob.js";
@@ -53,6 +53,7 @@ import { MARK_KIND_LABEL } from "../comment-nav.js";
 import { ARC_ORIGIN, IDEA_ORIGIN, MARG_TIPS, type MargTipKey, PATH_ORIGIN, RELATION_TIPS } from "./tips.js";
 import { type Voice, voiceClass, withVoice } from "../voice.js";
 import { ownLabel, plainWords } from "../lib/own-label.js";
+import { Excerpt } from "../Excerpt.js";
 
 /** The gap the collision pass keeps between two notes, in px. */
 export const NOTE_GAP_PX = 8;
@@ -77,10 +78,13 @@ const PROVENANCE_TIP = {
  * F3 on the plan.
  */
 export function MarginNotesSlot({
+  blockId,
   notes,
   viewer,
   onOpenAsked,
 }: {
+  /** The block these notes sit beside — whose markup a note's quote is drawn from (plan 261009k). */
+  blockId: BlockId;
   notes: readonly MarginaliaNote[];
   /** Whose comments these are, for their card: the reader's own, or the owner's to a visitor. */
   viewer: "owner" | "visitor";
@@ -89,7 +93,7 @@ export function MarginNotesSlot({
 }) {
   return (
     <NoteBoundary>
-      <MarginNotes notes={notes} viewer={viewer} onOpenAsked={onOpenAsked} />
+      <MarginNotes blockId={blockId} notes={notes} viewer={viewer} onOpenAsked={onOpenAsked} />
     </NoteBoundary>
   );
 }
@@ -187,10 +191,12 @@ function RelationWord({ relation }: { relation: DrawnRelation }) {
 /** One block's notes. `user-select: none` in marginalia.css, so a copy of the
     prose never carries them. */
 function MarginNotes({
+  blockId,
   notes,
   viewer,
   onOpenAsked,
 }: {
+  blockId: BlockId;
   notes: readonly MarginaliaNote[];
   viewer: "owner" | "visitor";
   onOpenAsked?: ((id: string) => void) | undefined;
@@ -207,9 +213,9 @@ function MarginNotes({
           case "idea":
             return <IdeaStamp key={`i${note.ideaId}`} note={note} />;
           case "faq":
-            return <FaqNote key="faq" items={note.items} />;
+            return <FaqNote key="faq" blockId={blockId} items={note.items} />;
           case "timeline":
-            return <TimelineNote key="timeline" items={note.items} />;
+            return <TimelineNote key="timeline" blockId={blockId} items={note.items} />;
           case "debate":
             return <DebateNote key="debate" items={note.items} />;
           case "citation":
@@ -319,7 +325,13 @@ function ShutNote({
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-function FaqNote({ items }: { items: Extract<MarginaliaNote, { kind: "faq" }>["items"] }) {
+function FaqNote({
+  blockId,
+  items,
+}: {
+  blockId: BlockId;
+  items: Extract<MarginaliaNote, { kind: "faq" }>["items"];
+}) {
   const only = items.length === 1 ? items[0] : undefined;
   return (
     <ShutNote
@@ -334,7 +346,7 @@ function FaqNote({ items }: { items: Extract<MarginaliaNote, { kind: "faq" }>["i
           {!only && <p className={withVoice("marg-open-head", "ai")}>{question.question}</p>}
           {/* Our words, then the article's. */}
           <p className="marg-open-quote">
-            Answered here: “<span className="marg-faq-quote">{quote}</span>”
+            Answered here: “<span className="marg-faq-quote"><Excerpt blockId={blockId} words={quote} /></span>”
           </p>
           {morePassages > 0 && (
             <p className="marg-open-by">+{plural(morePassages, "more passage", "more passages")}</p>
@@ -352,7 +364,13 @@ function FaqNote({ items }: { items: Extract<MarginaliaNote, { kind: "faq" }>["i
  * margin has no head to say it in. `words` is the article's own phrase, so
  * the author's face; a computed date is ours, and the label is the model's.
  */
-function TimelineNote({ items }: { items: Extract<MarginaliaNote, { kind: "timeline" }>["items"] }) {
+function TimelineNote({
+  blockId,
+  items,
+}: {
+  blockId: BlockId;
+  items: Extract<MarginaliaNote, { kind: "timeline" }>["items"];
+}) {
   const only = items.length === 1 ? items[0] : undefined;
   const when = (event: TimelineEvent) => {
     const words = datingWords(event.dating, true).text;
@@ -382,7 +400,7 @@ function TimelineNote({ items }: { items: Extract<MarginaliaNote, { kind: "timel
           )}
           {/* Our words, then the article's. */}
           <p className="marg-open-quote">
-            Mentioned here: “<span className={voiceClass("author")}>{quote}</span>”
+            Mentioned here: “<span className={voiceClass("author")}><Excerpt blockId={blockId} words={quote} /></span>”
           </p>
         </div>
       ))}
@@ -514,7 +532,9 @@ function CommentNote({
               <p className="marg-open-head">
                 <span className="marg-stamp">{MARK_KIND_LABEL.question}</span>{" "}
                 {e.asked.quote !== undefined ? (
-                  <span className={voiceClass("author")}>“{e.asked.quote}”</span>
+                  <span className={voiceClass("author")}>
+                  “<Excerpt blockId={e.asked.blockId} words={e.asked.quote} near={e.asked.start} />”
+                </span>
                 ) : (
                   "About this paragraph"
                 )}

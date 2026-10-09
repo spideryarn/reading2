@@ -585,7 +585,9 @@ const HIT: Found = {
   valence: null,
   reasoning: null,
   short: "phrenology",
+  shortStart: 0,
   long: "…the utility of phrenology…",
+  longStart: 0,
   at: 0.3,
   whole: false,
   /* Not a quote. See `Found.quoteStroke`. */

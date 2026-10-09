@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * The Diagram mode's geometry — src/web/diagram.ts.
  *

@@ -158,6 +158,7 @@ const {
   SHARING_STOP_TIP,
   LINK_AT_ADD_ON,
   LINK_AT_ADD_UNKNOWN,
+  LINK_AT_ADD_UNKNOWN_STOP_TIP,
   LINK_AT_ADD_WAITING,
   sharingAtAddSummary,
 } = await import("../src/messages.js");
@@ -701,6 +702,37 @@ describe("2b: before the article's row exists, and an answer that did not come b
     expect(linkReads).toEqual([SLUG, SLUG]);
     expect(linkShown()).toBe(`${location.origin}/read/${SLUG}?key=${KEY}`);
     expect(writes).toEqual([CREATE()]);
+  });
+
+  it("*Turn off* stops a link that create may have made, while the reads still fail (plan 261009l)", async () => {
+    linkCreate = async () => Promise.reject(new TypeError("Failed to fetch"));
+    await importing();
+    await createLink();
+    linkRead = async () => Promise.reject(new TypeError("Failed to fetch"));
+    click(button("Check again"), "Check again button");
+    await settle();
+    expect(text()).toContain(LINK_AT_ADD_UNKNOWN);
+    await expectTooltip(button("Turn off"), LINK_AT_ADD_UNKNOWN_STOP_TIP);
+    click(button("Turn off"), "Turn off button");
+    await settle();
+    expect(writes).toEqual([CREATE(), REMOVE()]);
+    expect(text()).not.toContain(LINK_AT_ADD_UNKNOWN);
+    expect(button(LINK_AT_ADD_LABEL)).toBeDefined();
+  });
+
+  it("*Turn off* stays pressable while *Check again*'s read is out", async () => {
+    linkCreate = async () => Promise.reject(new TypeError("Failed to fetch"));
+    await importing();
+    await createLink();
+    linkRead = () => new Promise<Response>(() => {});
+    click(button("Check again"), "Check again button");
+    await settle();
+    expect(button("Checking…")?.disabled).toBe(true);
+    expect(button("Turn off")?.disabled).toBe(false);
+    click(button("Turn off"), "Turn off button");
+    await settle();
+    expect(writes).toEqual([CREATE(), REMOVE()]);
+    expect(button(LINK_AT_ADD_LABEL)).toBeDefined();
   });
 });
 

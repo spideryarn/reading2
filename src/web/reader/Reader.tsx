@@ -2497,7 +2497,7 @@ export function Reader({
         blockId,
         <>
           {blockId === chatCardBlock ? cardHost : null}
-          <MarginNotesSlot notes={notes} viewer={marginViewer} onOpenAsked={openAskedFromMargin} />
+          <MarginNotesSlot blockId={blockId} notes={notes} viewer={marginViewer} onOpenAsked={openAskedFromMargin} />
         </>,
       );
     /* **The card's host: first in its block's cell, above the block's own

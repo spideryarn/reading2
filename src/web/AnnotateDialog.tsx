@@ -160,6 +160,7 @@ import { ClipboardCheck, Copy, MessageSquarePlus, TriangleAlert, X } from "lucid
 
 import type { ChatAnchor, HighlightColour } from "../types.js";
 import { mintId } from "../ids.js";
+import { Excerpt } from "./Excerpt.js"; // quotes drawn from the block's markup (plan 261009k)
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { HighlightSwatches } from "./HighlightSwatches.js";
 import { DEFAULT_HIGHLIGHT } from "./fresh-highlight.js";
@@ -629,7 +630,7 @@ export function AnnotateDialog({
       <div className="annotate-body">
         {/* The reader's own selection, quoted back — without it the box is a
             question about words you can no longer see once the page scrolls. */}
-        <blockquote className="annotate-quote">{anchor.quote}</blockquote>
+        <blockquote className="annotate-quote"><Excerpt blockId={anchor.blockId} words={anchor.quote} near={anchor.start} /></blockquote>
 
         <form
           onSubmit={(e) => {

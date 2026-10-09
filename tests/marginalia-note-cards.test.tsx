@@ -72,7 +72,7 @@ function paint(notes: MarginaliaNote[], viewer: "owner" | "visitor" = "owner"): 
   act(() =>
     root.render(
       <BlockLinkProvider index={new Map()}>
-        <MarginNotesSlot notes={notes} viewer={viewer} />
+        <MarginNotesSlot blockId="spya-aaaaaa" notes={notes} viewer={viewer} />
       </BlockLinkProvider>,
     ),
   );

@@ -78,6 +78,7 @@ import {
   type ReaderRowComment,
 } from "./quote-band-rows.js";
 import { BandWaiting } from "./BandWaiting.js";
+import { Excerpt } from "./Excerpt.js";
 
 /**
  * **The owner's half of this panel** — the read's status, the job choosing the
@@ -1378,7 +1379,10 @@ function QuoteRow({
             model-touched text even though every character of it came out of the
             article (src/quotes.ts slices the block), and the rule in
             docs/project/security.md does not have an exception for that. */}
-        <blockquote className="quotes-text">{quote.text}</blockquote>
+        <blockquote className="quotes-text">
+          {/* The article's own words, drawn from the block's markup (Excerpt.tsx, plan 261009k). */}
+          <Excerpt blockId={quote.blockId} words={quote.text} />
+        </blockquote>
         {/* **Drawn, not printed** — Greg, 2026-08-31: *"Prefer to use UI (e.g. a
             little sparkline/bar rather than numbers) plus tooltip instead of
             numbers"*. A row is meant to be skimmed, and two decimals are read
@@ -1459,7 +1463,9 @@ function YoursRow({
   return (
     <li className="quotes-row quotes-row-yours" data-yours-row={comment.id} data-colour={comment.colour}>
       <button type="button" className="quotes-quote" onClick={onOpen}>
-        <blockquote className="quotes-text">{comment.quote}</blockquote>
+        <blockquote className="quotes-text">
+          <Excerpt blockId={comment.blockId} words={comment.quote} near={comment.start} />
+        </blockquote>
         <span className="quotes-yours">yours</span>
       </button>
       <div className="quotes-row-side">

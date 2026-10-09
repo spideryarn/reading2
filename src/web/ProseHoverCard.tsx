@@ -64,6 +64,7 @@ import {
   type Quote,
 } from "../types.js";
 import { LABEL as QUOTE_SCORE_LABEL } from "./QuotesPanel.js";
+import { Excerpt } from "./Excerpt.js"; // quotes drawn from the block's markup (plan 261009k)
 import { aiProvenance } from "./quote-band-rows.js";
 import { urlKey } from "../ingest.js";
 import { hostOf } from "../urls.js";
@@ -113,7 +114,13 @@ import { HOVER_DELAY, useHoverCard } from "./useHoverCard.js";
 export const QUOTE_OPEN_MS = 600;
 import { TermJump } from "./TermJump.js";
 import { describeLink, type ExternalPreview, type LinkPreview } from "./link-preview.js";
-import { REPEAT_PASTE_ON_THE_CARD, worthRetrying } from "../messages.js";
+import {
+  PUBLIC_COPY_ON_THE_CARD,
+  PUBLIC_COPY_OWN_ON_THE_CARD,
+  PUBLIC_COPY_READ_ON_THE_CARD,
+  REPEAT_PASTE_ON_THE_CARD,
+  worthRetrying,
+} from "../messages.js";
 import { blockOfLink, refreshShelf, useLinkFacts, type LinkFacts } from "./link-facts.js";
 import { leavesTheApp } from "./external-links.js";
 import { QuotaNotice } from "./QuotaNotice.js";
@@ -963,6 +970,13 @@ type AddToShelf =
    */
   | { kind: "have"; slug: string }
   /**
+   * **Somebody else has already made it public**, so nothing was added and
+   * nothing spent: the reader chooses between reading that, free, and their own
+   * copy, which `addOwn` asks for and which is the ordinary paid add.
+   * docs/plans/261009j-a-public-copy-offered-at-import.md.
+   */
+  | { kind: "public"; slug: string; addOwn(): void }
+  /**
    * It went wrong and **another press would not help**, so this arm has no
    * action in it at all. `message` is the server's own sentence and may be a
    * quota refusal, which is why it goes to `QuotaNotice` rather than into a
@@ -1024,7 +1038,10 @@ type Asked =
   | { kind: "sending"; wait: Promise<void> }
   | { kind: "queued"; jobId: string }
   | { kind: "have"; slug: string }
-  | { kind: "refused"; message: string };
+  | { kind: "public"; slug: string }
+  /* The kind of POST is retained so a retry does not turn the reader's chosen
+     own copy back into the public-copy question. */
+  | { kind: "refused"; message: string; ownCopy?: true };
 
 const asked = new Map<string, Asked>();
 
@@ -1133,10 +1150,12 @@ function WithAddToShelf({
     });
   }, [finished]);
 
-  const add = () => {
+  const add = (options?: { ownCopy?: true }) => {
     const generation = askedGeneration;
+    const ownCopy = options?.ownCopy === true;
     const wait = (async () => {
-      const started = await queue.add(url);
+      /* `options` is read for the one flag only: a plain press passes the click event here. */
+      const started = await queue.add(url, ownCopy ? { ownCopy: true } : undefined);
       /* An answer made for the previous reader must not refill the cleared map. */
       if (generation !== askedGeneration) return;
       /* **Read straight after the await.** `error` on the queue is engine state
@@ -1145,8 +1164,9 @@ function WithAddToShelf({
          before it existed. useJobs.ts § lastFailure. */
       const why = started ? null : queue.lastFailure();
       if (started && "article" in started) asked.set(key, { kind: "have", slug: started.article });
+      else if (started && "publicCopy" in started) asked.set(key, { kind: "public", slug: started.publicCopy.slug });
       else if (started) asked.set(key, { kind: "queued", jobId: started.id });
-      else if (why) asked.set(key, { kind: "refused", message: why });
+      else if (why) asked.set(key, { kind: "refused", message: why, ...(ownCopy ? { ownCopy: true as const } : {}) });
       /* Refused with nothing to say — which should not happen, since every
          refusal carries the server's sentence. Put the button back rather than
          leave a silent dead end. */
@@ -1166,13 +1186,19 @@ function WithAddToShelf({
  * decision over two inputs that can disagree, and every wrong branch of it is a
  * card that lies about a metered action.
  */
-export function describeAdd(state: Asked | undefined, job: Job | null, add: () => void): AddToShelf {
+export function describeAdd(
+  state: Asked | undefined,
+  job: Job | null,
+  add: (options?: { ownCopy?: true }) => void,
+): AddToShelf {
   if (!state) return { kind: "offer", add, after: null };
   switch (state.kind) {
     case "sending":
       return { kind: "working", line: ADDING };
     case "have":
       return { kind: "have", slug: state.slug };
+    case "public":
+      return { kind: "public", slug: state.slug, addOwn: () => add({ ownCopy: true }) };
     case "refused":
       /* **`worthRetrying` decides whether there is a button at all**, and it is
          the same question `AddArticle.tsx` asks of a failed job. A `[pay-free]`
@@ -1180,7 +1206,7 @@ export function describeAdd(state: Asked | undefined, job: Job | null, add: () =
          putting *try again* under that sentence invites the reader to spend the
          attempt the sentence has just told them will not work. src/messages.ts. */
       return worthRetrying(state.message)
-        ? { kind: "offer", add, after: state.message }
+        ? { kind: "offer", add: state.ownCopy ? () => add({ ownCopy: true }) : add, after: state.message }
         : { kind: "refused", message: state.message };
     case "queued":
       /* The POST has answered and the engine has not polled since — the common
@@ -1306,7 +1332,7 @@ function LinkCard({
               paragraph's first sentence is the author's, and a gist of it would
               be ours — and the reader can see the whole thing by following the
               link, which is one click away and already works. */}
-          <p className="prose-card-text prose-card-quote">{clip(anchor.text, 260)}</p>
+          <p className="prose-card-text prose-card-quote"><Excerpt blockId={anchor.blockId} words={clip(anchor.text, 260)} /></p>
           <p className="prose-card-foot">
             <button
               type="button"
@@ -1618,6 +1644,12 @@ function ExternalBody({
           {REPEAT_PASTE_ON_THE_CARD}
         </p>
       )}
+      {adding.kind === "public" && (
+        <p className="prose-card-text prose-card-waiting">
+          <BookCheck size={11} />
+          {PUBLIC_COPY_ON_THE_CARD}
+        </p>
+      )}
       {/* **Why it did not go through** — the refusal that ends it, and the one
           the reader may press past, drawn identically because they read
           identically to whoever is looking.
@@ -1696,6 +1728,19 @@ function ExternalBody({
             <BookOpen size={10} />
             read it here
           </Link>
+        )}
+        {/* Somebody else's public copy: theirs to read free, or your own. */}
+        {adding.kind === "public" && (
+          <>
+            <Link className="prose-card-open" href={readHref(adding.slug)}>
+              <BookOpen size={10} />
+              {PUBLIC_COPY_READ_ON_THE_CARD}
+            </Link>
+            <button type="button" className="prose-card-open" onClick={adding.addOwn}>
+              <Plus size={10} />
+              {PUBLIC_COPY_OWN_ON_THE_CARD}
+            </button>
+          </>
         )}
         {adding.kind === "offer" && (
           <button type="button" className="prose-card-open" onClick={adding.add}>

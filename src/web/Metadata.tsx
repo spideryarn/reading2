@@ -311,6 +311,7 @@ import { RERUN_COST_NOTE, RERUN_LABEL } from "./rerun-commands.js";
 import { useOrderedRead, type ArtefactRead } from "./useOrderedRead.js";
 import { useStepJob } from "./useStepJob.js";
 import { articleTitleVoice, voiceClass, withVoice } from "./voice.js";
+import { BlockExcerpt } from "./Excerpt.js";
 
 /**
  * Clear of the fixed bottom bar, in terms of `--dock-space` rather than a number.
@@ -1348,7 +1349,7 @@ export function Metadata({
             <Row icon={Target} label="Where you left off">
               {lastRead ? (
                 <Link href={backHref} className={withVoice("tw:text-highlight-text", "author")}>
-                  “{snippet(lastRead.text)}”
+                  “<BlockExcerpt block={lastRead} words={snippet(lastRead.text)} />”
                 </Link>
               ) : (
                 <span className="tw:text-muted-foreground">

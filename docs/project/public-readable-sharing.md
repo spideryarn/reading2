@@ -156,6 +156,13 @@ defence: it is a link to a door the reader could already type. Greg chose it on 
 is [261007m](../plans/261007m-a-private-copy-of-a-public-article-on-your-own-shelf.md), the rule is
 `privateCopyOffer` in `src/web/PublicChrome.tsx`.
 
+**And a reader who pastes the address of a public article is offered it, free, before they are
+charged for their own** (since 2026-10-09): the add page answers with the public copy and asks.
+Following *Add a private copy* above with a plain same-tab press has already answered, so that press
+goes straight to the paid add; a new-tab or modified press cannot carry the one-shot and sees the
+choice again. What the asker learns is the article's slug and extracted title, never who shared it —
+[261009j](../plans/261009j-a-public-copy-offered-at-import.md).
+
 ## A private link: the same republishing, to fewer people
 
 Since 2026-10-05 an owner can make a **private link**, `/read/<slug>?key=<key>`, instead of or as
@@ -278,8 +285,11 @@ Greg's answers to the three questions stage 1 ended on, in his words, are in the
   own requests behind its own confirmation. Unlike the public switch **it can read its state
   before publication**: `GET /api/article/:slug/share-link` needs only the owner's row. So it
   reads on every attachment and keeps no mark. **A create that did not come back is never sent
-  again by itself**, because a second create replaces the first link: it shows *unknown* and a
-  *Check again* button. An older read that answers after a newer write is dropped
+  again by itself**, because a second create replaces the first link: it shows *unknown*, with *Check
+  again* and *Turn off*. The turn-off is idempotent on the server, so it is safe to send without
+  knowing whether there is a link
+  ([261009l](../plans/261009l-add-page-private-link-lost-reply-cannot-be-turned-off.md), which
+  also names the race that remains). An older read that answers after a newer write is dropped
   ([postmortem 261006b](../postmortems/261006b-a-read-completion-does-not-prove-it-followed-a-write.md)).
 - **Controllers belong to one reader.** The registry is keyed by reader and slug and is emptied
   when the session changes, where the upload engine is fenced

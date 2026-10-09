@@ -38,7 +38,7 @@
  *   and what it returns is what `PublicMeta.url` carries. See the field.
  * - **`meta.fetchedAt`, `meta.note`, and the whole PDF provenance block**
  *   (`source`, `method`, `pages`, `rawSha256`, `unverified`, `recall`,
- *   `pagesChecked`). Facts about our pipeline and about somebody's uploaded
+ *   `pagesChecked`, `quality`). Facts about our pipeline and about somebody's uploaded
  *   file, not about the piece.
  * - **`Block.note`**, which says why the splitter marked a block ungistable.
  *   Not merely projected away: the public blocks query never selects it, which

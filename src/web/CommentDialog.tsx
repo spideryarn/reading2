@@ -22,6 +22,7 @@ import { PROVIDER_UNREADABLE, worthRetrying } from "../messages.js";
 import { isImeComposing } from "./key-chord.js";
 import type { ClientComment } from "./useComments.js";
 import { MARK_KIND_LABEL, commentKind, passageOf } from "./comment-nav.js";
+import { Excerpt } from "./Excerpt.js"; // quotes drawn from the block's markup (plan 261009k)
 import { HighlightSwatches } from "./HighlightSwatches.js";
 import type { HighlightColour } from "../types.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
@@ -658,10 +659,10 @@ export function CommentDialog({
           <blockquote className="cmt-quote">
             {passage.whole ? (
               <>
-                <em className="passage-whole">Whole paragraph</em> — {passage.text}
+                <em className="passage-whole">Whole paragraph</em> — <Excerpt blockId={comment.blockId} words={passage.text} />
               </>
             ) : (
-              passage.text
+              <Excerpt blockId={comment.blockId} words={passage.text} near={comment.start} />
             )}
           </blockquote>
         );

@@ -1,9 +1,10 @@
 ---
 id: q-u04sye
 report: spya-x0rfs2
-status: open
+status: answered
 asked: 2026-10-09
 title: Skim: make the current stop quieter, so the quote stands out?
+acted: spya-uzpm5s, spya-nphhbf, spya-d8nc0h
 refs: docs/plans/261009j-skim-question-optional-and-the-border.md § Not built · docs/plans/261009j-shots/proposal-before-row.png · proposal-after-row.png · proposal-before-door.png · proposal-after-door.png · proposal-after-page.png · docs/user-feedback/261009_1028-skim-question-optional-smaller-and-one-bar.md
 ---
 In Skim, the open stop's quote is the third-loudest thing in its own box, under a bold two-line section heading and above black-filled chips. Should we quieten the rest so the quote is what you read first?
@@ -29,3 +30,22 @@ Before and after pictures, the after ones made by injecting the CSS into the pag
 Proposed and left out, so you know they were considered: putting the profile banner on one line (it was changed this morning by another piece of work); making the other stops in the list quieter and their headings one line (it would make the route harder to scan as a list); a label such as "Ask yourself:" before the question (the band's (i) now explains it instead).
 
 What would decide it: whether the section heading earns its weight. It tells you where in the paper the stop is, which matters when the route jumps about; quieter, it is still there, just not first.
+
+## Greg's answer, 2026-10-09 (in the Feedback dialog, replies `spya-uzpm5s`, `spya-nphhbf`, `spya-d8nc0h`)
+
+> Okay, try these and let's see how it goes.
+
+> Perhaps we could also do something to make it clearer that these are quotes. So you know how drop
+> caps are, like you know, they make a single character really large. I wonder about creating a pair
+> of quite big kind of quote icon symbols just to the left of the actual quote to make it clear that
+> it's a quote. Maybe that's not necessary. Maybe the fact that it's already in Times New Roman
+> indicates that it's from the article.
+
+> I should say that I don't have it open in front of me and I can't quite visualize it, so I'm not
+> 100% sure of what you're suggesting. So this is an experiment.
+
+Settled: A, built as an experiment in [261009m](../../plans/261009m-skim-quieter-open-stop.md), on
+`dev`, not deployed. The heading was already semi-bold, so only its size and colour changed. The
+large quote marks were tried in two screenshots and not kept: they did not clearly help, for the
+reasons in the plan's § Result.
+

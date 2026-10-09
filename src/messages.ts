@@ -275,6 +275,21 @@ export const INTERRUPTED: ReaderFacingFailure = {
     `starting over. [${INTERRUPTED_CODE}]`,
 };
 
+/**
+ * **A paid step this job may already have begun, not begun again by itself.**
+ * The marker is written before the request can leave, so after the process
+ * stops or the job reaches its own deadline we cannot tell whether the search
+ * started. For a `oncePerJob` step (src/pipeline.ts), starting it again could
+ * buy the paid work a second time on nobody's press, so the step fails here
+ * instead and the reader decides. Plan 261009l.
+ */
+export const PAID_STEP_NOT_REPEATED: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "This search may already have started when the job stopped, so it may already have been paid " +
+    "for. It was not started again by itself. Press Retry to run it. [jb-paid-once]",
+};
+
 export const CODE_KINDS: Record<string, FailureKind> = {
   "ai-busy": "retry",
   "ai-no-credit": "ours",
@@ -371,6 +386,11 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      an interrupted job resumes from its artefacts rather than starting again,
      so another go is both allowed and cheap. See `INTERRUPTED`. */
   "jb-gone": "retry",
+  /* A `oncePerJob` step a later window of the same job would have bought
+     again. `retry` because the Retry is the point: it is a new job and a press,
+     which is the only way this work is bought twice. See
+     `PAID_STEP_NOT_REPEATED`. */
+  "jb-paid-once": "retry",
   /* **The two refusals *Dig deeper* on a glossary entry can give**, and the only `gl-` pair.
      Neither is a model call and neither is a fault: one says the article never
      quotes the term, the other that the glossary no longer fits the article.
@@ -4743,6 +4763,24 @@ export const REPEAT_PASTE_ON_THE_SHELF =
 /** The same, on a link's hover card, in the card's own lower-case voice. */
 export const REPEAT_PASTE_ON_THE_CARD = "already on your shelf, nothing spent";
 
+/**
+ * **Somebody else has already made this address public**, and nothing has been
+ * spent yet: the add asks which the reader wants. Greg, 2026-10-09: *"ask them
+ * if they'd rather use the public one for free or have their own version which
+ * will use up one of their allotted slots."* What each gives is said, because
+ * the free one is read-only: no notes, chat or search of the reader's own
+ * (plan 261006k). docs/plans/261009j-a-public-copy-offered-at-import.md.
+ */
+export const PUBLIC_COPY_FOUND = (title: string): string => `“${title}” is already public on Spideryarn.`;
+export const PUBLIC_COPY_EXPLAIN =
+  "You can read it there for free, with everything already made for it. Your own copy is yours to annotate, search, chat with and make new modes for, and uses one article from your allowance.";
+export const PUBLIC_COPY_READ = "Read the public copy (free)";
+export const PUBLIC_COPY_OWN = "Add my own copy";
+/** The same, on a link's hover card, in the card's own lower-case voice. */
+export const PUBLIC_COPY_ON_THE_CARD = "already public here, nothing spent";
+export const PUBLIC_COPY_READ_ON_THE_CARD = "read it free";
+export const PUBLIC_COPY_OWN_ON_THE_CARD = "add my own copy";
+
 /** Confirmed, and not sent yet: the import has not made the article's row. */
 export const SHARE_AT_ADD_WAITING = "Will be made public as soon as the import is ready for it.";
 
@@ -4872,8 +4910,14 @@ export const LINK_AT_ADD_GAVE_UP =
  * review). *Check again* reads the state, which changes nothing.
  */
 export const LINK_AT_ADD_UNKNOWN =
-  "That did not come back, so we cannot say whether it took effect. Check again before making " +
-  "another link: a new link replaces the one before it.";
+  "That did not come back, so we cannot say whether it took effect. Check again to see, or turn " +
+  "it off. A new link replaces the one before it.";
+
+/** *Turn off* while a write's outcome is unknown: name the lost-create race rather than promising the result. */
+export const LINK_AT_ADD_UNKNOWN_STOP_TIP =
+  "Turns off any private link this article has. If the link you asked for is still being made, " +
+  "it can appear just afterwards, so check again in a moment. What somebody has already read or " +
+  "copied stays with them.";
 
 /** The read of the link's state failed on coming back to this page. Nothing was changed, and no link is drawn from memory. */
 export const LINK_AT_ADD_UNREAD =

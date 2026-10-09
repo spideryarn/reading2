@@ -313,8 +313,8 @@ end`;
  * most of what a projection is for.
  *
  * Read the absences. No `fetched_at`, no `note`, no `doi`, no `abstract`, and
- * none of the six PDF provenance columns. `articles.title_override` is not selected either, so there
- * is nothing here for a `titleFor()` to be called on.
+ * none of the seven PDF provenance columns. `articles.title_override` is not
+ * selected either, so there is nothing here for a `titleFor()` to be called on.
  *
  * **`final_url` is selected, since 2026-08-30, and does not reach the wire as
  * itself.** It was held back here with a note saying a visible "read the

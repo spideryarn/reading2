@@ -57,7 +57,9 @@ const HEDGED: Found = {
      assertion below is about which passages reach which projection — but the
      type is what stops a `Found` being half-built somewhere that does. */
   short: "hedge",
+  shortStart: 0,
   long: "a hedged match",
+  longStart: 0,
   at: 0,
   whole: false,
 };

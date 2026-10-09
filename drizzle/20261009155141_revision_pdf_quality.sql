@@ -1,0 +1,2 @@
+ALTER TABLE "spideryarn"."article_revisions" ADD COLUMN "quality" text[];--> statement-breakpoint
+ALTER TABLE "spideryarn"."article_revisions" ADD CONSTRAINT "article_revisions_quality_nonempty" CHECK ("spideryarn"."article_revisions"."quality" is null or (cardinality("spideryarn"."article_revisions"."quality") > 0 and array_position("spideryarn"."article_revisions"."quality", null) is null));

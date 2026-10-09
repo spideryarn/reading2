@@ -174,6 +174,11 @@ describe("each tool calls the route it claims", () => {
       args: { url: "https://example.com/p" },
       expect: [{ method: "POST", path: "/api/jobs", body: { url: "https://example.com/p" } }],
     },
+    {
+      tool: "import_article",
+      args: { url: "https://example.com/p", own_copy: true },
+      expect: [{ method: "POST", path: "/api/jobs", body: { url: "https://example.com/p", ownCopy: true } }],
+    },
     { tool: "get_import_status", args: { id: "job-1" }, expect: [{ method: "GET", path: "/api/jobs/job-1" }] },
     { tool: "list_imports", expect: [{ method: "GET", path: "/api/jobs" }] },
     {
@@ -227,6 +232,16 @@ describe("each tool calls the route it claims", () => {
     const h = await harness({ "POST /api/jobs": { status: 200, body: { article: "on-tools", repeat: true } } });
     const result = await h.call("import_article", { url: "https://example.com/p" });
     expect(result.json()).toEqual({ article: "on-tools", repeat: true, link: `${SITE}/read/on-tools` });
+  });
+
+  /* Somebody else's public copy is answered, free and with nothing queued, so
+     the agent can ask the reader which they want (plan 261009j). */
+  it("import_article of an address somebody made public answers that copy, with its link", async () => {
+    const h = await harness({
+      "POST /api/jobs": { status: 200, body: { publicCopy: { slug: "theirs", title: "Theirs" } } },
+    });
+    const result = await h.call("import_article", { url: "https://example.com/p" });
+    expect(result.json()).toEqual({ publicCopy: { slug: "theirs", title: "Theirs" }, link: `${SITE}/read/theirs` });
   });
 
   /* list_users and create_private_link arrived with plan 261007o, once Greg said
