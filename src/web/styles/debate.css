@@ -42,7 +42,12 @@
    dock, so without a scrolling child everything past the dock is unreachable —
    and it looks perfectly fine on a tall window, which is how it shipped wrong
    once already. */
-.dbt-scroll {
+/* `.dbt-listed-wrap` is Claims' list (and, for the owner, its ticks, box and
+   Check button), and needs the same rule for the same reason: without it the
+   band held 1,226px in 816 at 1440 × 900 and the Check button was under the
+   dock (261008i's browser check; tests/debate-claims-scroll.test.ts). */
+.dbt-scroll,
+.dbt-listed-wrap {
   flex: 1;
   min-height: 0;
   overflow-y: auto;

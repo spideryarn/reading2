@@ -772,8 +772,9 @@
    **Not on the pages that mount a `Dock` since 2026-09-06** — the article, its
    metadata page (and its tweets page until 2026-09-29), and the three visitor stand-ins draw `.dock-home`
    in the bottom bar instead (Dock.tsx § the way home is back). This rule is for
-   everywhere else: the shelf-adjacent pages, `/privacy`, the article's loading
-   and error screens, and the two refusal pages. */
+   everywhere else: the shelf-adjacent pages, `/privacy`, and the article's
+   error, refusal, unread and still-being-added screens. Not the loading screen
+   since 2026-10-09, whose spinner is the wordmark itself (ArticlePage.tsx). */
 .logo-home {
   position: fixed;
   /* Fixed in the corner the phone rounds off, so both insets apply. `--safe-top`

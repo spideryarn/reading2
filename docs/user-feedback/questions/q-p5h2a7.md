@@ -5,6 +5,7 @@ status: answered
 asked: 2026-10-08
 title: Public shelf topic pills: may I build them, automatic up to 20 articles with an admin rebuild button beyond?
 refs: SPIDERYARN-READING2-BX · qi-4far27sc · follows q-deh67j · docs/plans/261008j-public-shelf-topic-pills-automatic-billed-to-the-site.md · docs/investigations/261008a-public-shelf-topic-rethink-cost.md · docs/user-feedback/261004_1000-topic-pills-on-the-public-shelf.md
+acted: spya-fs0bfp
 ---
 You said: make the public shelf's topic pills update by themselves, billed to the site, if each update costs half a cent or less and I am confident of it; otherwise an admin-only button. I measured it. Filing one article into a 20-article tree was far under half a cent; it remains one bounded call as the shelf grows, so I expect that to stay under the bar. Full rebuilds are under it only while the shelf is small. Nothing is built yet, because it changes what a stranger's page receives, which is a security defence only you can approve. May I build it?
 
@@ -42,3 +43,10 @@ What would decide it. A if you want it automatic within your half-cent bar. B if
 
 Option A: automatic up to 20 public articles, billed to a site account, with a Rebuild button on
 /admin beyond that. Built in plan docs/plans/261008j-public-shelf-topic-pills-automatic-billed-to-the-site.md.
+
+## Greg's answer again, 2026-10-09 (in the Feedback dialog, reply `spya-fs0bfp`, 02:30 UTC)
+
+> A
+
+The same answer as above, given in the dialog as well. Nothing more to build; recorded so
+`feedback-questions.ts --answers` stops listing it. Recorded by the feedback sweep.

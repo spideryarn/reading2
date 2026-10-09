@@ -354,3 +354,25 @@ this beta warrants. Opus arbitrated and agreed (accept, with two stale comments 
 limits written into debate.md § Checking, which they are). The other accepted limit: a single store
 write hanging for over a minute is unbounded (no statement timeout), so a third concurrent check
 could then start, under the hourly, daily and global counts.
+
+### Browser check (2026-10-09)
+
+Sonnet, Playwright on the box, the local dev server, article `fowler-phrenology`, real calls (one
+list, one Check, one Dig further, plus an unplanned Reception search and one chat send from a
+too-loose selector). Passed: arriving at Claims by URL only reads and pressing *List its claims*
+makes the list (8 claims); each claim's quote, jump, the AI's line and a tick box; Check disabled
+with nothing picked or more than four; one Check, about five minutes here, put sources under the
+ticked claims and under *Your claim*; Dig further took the first claim from 2 sources to 4; a
+signed-out visitor on the shared article sees the list read-only with no controls; no console or
+server errors. Pressing the Reception segment with no debate stored starts the Reception search:
+that is the press rule (stage 1's C2), not a defect.
+
+**Found and fixed**: `.dbt-listed-wrap` had no rule, so at 1440 × 900 the Claims panel held
+1,226px in an 816px band and the box and Check button were under the dock. It now shares
+`.dbt-scroll`'s rule (`tests/debate-claims-scroll.test.ts`, seen red first); re-checked at 1440, 820
+and 390, the panel scrolls and both sit above the dock. Not chased: one source's address was on
+`exa.ai`, the search engine's own domain, which the row checks admit because the search returned
+it.
+
+Screenshots: `261008i-shot-1440-{claims-list,claims-picked,claims-checked,after-dig,visitor,scrolled}.png`,
+`261008i-shot-820-{claims,scrolled}.png`, `261008i-shot-390-{claims,scrolled}.png`.
