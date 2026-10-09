@@ -25,7 +25,7 @@ promising "read this in 2 minutes" is not one we use.
   contacts, not cold ones. Mostly computational psychology and neuroscience and nearby fields, with a
   few in social psychology, biology, computer science and classics. Their fields decide which papers
   to make the first private links from.
-- **A live product with paying readers** (since 2026-09-03), a public shelf at `/read/public`, and
+- **A live product, with billing working since 2026-09-03**, a public shelf at `/read/public`, and
   private links for single articles ([public-shelf.md](public-shelf.md),
   [public-readable-sharing.md](public-readable-sharing.md)).
 
