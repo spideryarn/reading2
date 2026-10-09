@@ -521,8 +521,9 @@ deduplication and the 402 all arrive without a second implementation
 So do its two free answers: an article the reader already has (*read it here*), and one somebody
 else has made public (*read it free*, or *add my own copy*, which is the press that spends —
 [261009j](../plans/261009j-a-public-copy-offered-at-import.md)).
-**One press spends a metered ingest slot**, and a free account has three for life, so this is a
-genuinely new low-friction front door onto a metered action.
+An unmatched first press starts a metered ingest; after a public-copy answer, only *add my own copy*
+does. A free account has three for life, so this remains a genuinely low-friction front door onto a
+metered action.
 
 **Only an owner is offered it, and the seam is that `useJobs` is not called** — `canAddToShelf`
 gates whether `WithAddToShelf` exists, exactly as `lookUpLinks` gates `WithLinkFacts`, and for the

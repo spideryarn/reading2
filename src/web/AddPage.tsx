@@ -1780,7 +1780,7 @@ function PublicChoice({ found, onOwnCopy }: { found: PublicCopyFound["publicCopy
       <p className="tw:mt-0 tw:mb-3 tw:text-sm tw:text-muted-foreground">{PUBLIC_COPY_EXPLAIN}</p>
       <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
         <Button asChild size="sm">
-          <Link href={readHref(found.slug)}>{PUBLIC_COPY_READ}</Link>
+          <Link href={readHref(found.slug)} className="tw:no-underline">{PUBLIC_COPY_READ}</Link>
         </Button>
         <Button type="button" variant="outline" size="sm" onClick={onOwnCopy}>
           {PUBLIC_COPY_OWN}

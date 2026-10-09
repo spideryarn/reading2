@@ -19,6 +19,7 @@
  */
 
 import { urlKey } from "./ingest.js";
+import type { PublicCopyFound } from "./types.js";
 
 /**
  * The part of a `CitedCandidate` (src/cited-in-spideryarn.ts) this reads,
@@ -33,10 +34,6 @@ interface Candidate {
   matchTitle: string | null;
 }
 
-/** The answer to `POST /api/jobs { url }` when a public copy exists. Nothing was reserved. */
-export interface PublicCopyFound {
-  publicCopy: { slug: string; title: string };
-}
 
 /**
  * The public article at this `urlKey`, if a stranger has one. Several: the

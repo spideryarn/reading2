@@ -8294,3 +8294,12 @@ export interface PublicShelfTopicsStatus {
   /** The cut-off, for the page's sentence. */
   autoMax: number;
 }
+
+/**
+ * The answer to `POST /api/jobs { url }` when somebody else has already made
+ * that address public: nothing was reserved and nothing queued, and the reader
+ * chooses (src/public-copy.ts, docs/plans/261009j-a-public-copy-offered-at-import.md).
+ */
+export interface PublicCopyFound {
+  publicCopy: { slug: string; title: string };
+}

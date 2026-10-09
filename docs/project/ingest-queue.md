@@ -2383,10 +2383,11 @@ because a failed import's *Report this* carries the job id
 deleted traced nothing. `trimFinished` still retires a dismissed job with the other finished ones.
 Greg, Q-import-report-details.
 
-`POST /api/jobs` answers **202**, not 200: the work has been accepted and has not been done, and the
-body is a receipt to poll. Retry creates a new job rather than mutating the old one — what went
-wrong the first time is worth keeping, and overwriting it would erase the only evidence at exactly
-the moment somebody is trying to work out what happened.
+A `POST /api/jobs` that creates work answers **202**, not 200: the work has been accepted and has
+not been done, and the body is a receipt to poll. The two free early answers in the route table above
+answer 200 because they create no job. Retry creates a new job rather than mutating the old one —
+what went wrong the first time is worth keeping, and overwriting it would erase the only evidence at
+exactly the moment somebody is trying to work out what happened.
 
 **Retry answers 409 for anything the card would not have offered**, and until 2026-08-31 it checked
 nothing but ownership. That was harmless while a retry of a finished job forced nothing — every step

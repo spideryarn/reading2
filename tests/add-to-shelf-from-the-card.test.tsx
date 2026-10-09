@@ -461,6 +461,30 @@ describe("pressing it", () => {
     expect(posted).toEqual([url, `own:${url}`]);
   });
 
+  it("retries the reader's own copy after a temporary refusal", async () => {
+    const { PUBLIC_COPY_OWN_ON_THE_CARD } = await import("../src/messages.js");
+    const url = "https://example.org/public-own-retry";
+    added = { publicCopy: { slug: "their-retry-copy", title: "Theirs" } };
+    await render(url, true);
+    await hover();
+    await press();
+    await settle();
+
+    const own = [...(card()?.querySelectorAll("button") ?? [])].find((b) =>
+      b.textContent?.includes(PUBLIC_COPY_OWN_ON_THE_CARD),
+    );
+    failure = "The server did not answer just then.";
+    added = null;
+    await act(async () => own?.click());
+    await settle();
+    expect(tryAgainButton()).not.toBeNull();
+
+    failure = null;
+    added = job("job-own-retry", url);
+    await press2();
+    expect(posted).toEqual([url, `own:${url}`, `own:${url}`]);
+  });
+
   it("posts the link's own address and shows the step that is running", async () => {
     const url = "https://example.org/three";
     added = job("job-3", url);

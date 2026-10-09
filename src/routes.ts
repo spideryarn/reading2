@@ -272,7 +272,7 @@ import type { CitersResult } from "./types.js";
 import { linkSummaryStream } from "./link-summary.js";
 import { liveKeys } from "./live-keys.js";
 import { isSlug, normaliseUrl, slugFromFilename, slugFromUrl, urlKey } from "./ingest.js";
-import { publicCopyAmong, type PublicCopyFound } from "./public-copy.js";
+import { publicCopyAmong } from "./public-copy.js";
 import { slugForUrlKey } from "./store/find-article.js";
 import { isOwnReadingPage } from "./own-reading-page.js";
 import {
@@ -543,7 +543,7 @@ import { inputFingerprint as debateClaimsFingerprint } from "./debate-claims.js"
    (`streamChat` says why one is still accepted at all).
    src/types.ts § LEARN_STANCES. */
 import { LEARN_STANCES, NONE_YET_AS_NULL_HEADER } from "./types.js";
-import type { Article, CommentAnchor, HighlightColour, ResetResponse } from "./types.js";
+import type { Article, CommentAnchor, HighlightColour, PublicCopyFound, ResetResponse } from "./types.js";
 
 /** Big enough for any selection, small enough that nothing can wedge the server. */
 const MAX_BODY_BYTES = 64 * 1024;

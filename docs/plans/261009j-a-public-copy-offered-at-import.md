@@ -194,3 +194,37 @@ first).
 5. *Deterministic choice among several public copies*: slug order, title falling back to the slug.
 6. *Parser and docs*: `ownCopy` must be `true` and only beside a `url`; stripped before `enqueue`.
    billing.md, ingest-queue.md, links.md, mcp.md and public-readable-sharing.md now say so.
+
+## What the code review changed
+
+GPT Sol, write-capable ([findings](261009j-public-copy-code-review-sol.md)): ready, with fixes made
+in place, each with a test it saw fail first:
+
+1. The own-copy mark could pass to a second reader in the same tab, or survive an interrupted
+   navigation into a later paste. It is now cleared on a reader change, and any arrival at the add
+   page uses it up, whatever the address.
+2. On the hover card, *add my own copy* → a refusal worth retrying → *try again* posted a plain add
+   and asked the public question again. The refusal now remembers which add it was.
+3. Four reference docs overstated things (every `{url}` reserves; every POST answers 202; the
+   private-copy press always skips the question). Qualified.
+4. Sol also added a paragraph to security-map.md. That is an entry-point doc whose wording needs
+   Greg's approval ([edit-important-docs.md](../reusable/edit-important-docs.md)), so it was taken
+   back out and is proposed here instead, for § The unauthenticated namespace, after the paragraph
+   ending *"a wrong predicate on the listing publishes the shelf."*:
+
+   > There is also an **authenticated source-address lookup**, uncapped like Citations rather than bounded
+   > like the public shelf: a plain `POST /api/jobs { url }` may answer with the slug and extracted title
+   > of an older public copy at that address before reserving a slot. It deliberately reaches articles
+   > outside the 200-card listing, because the caller has named their source address, but it does not make
+   > the public predicate reusable: [`publicCopyAmong`](../../src/public-copy.ts) only matches rows from
+   > Citations' closed candidate read ([`citedCandidatesQuery`](../../src/store/pg-cited-in-spideryarn.ts)).
+   > That read admits a stranger's article only when it is public, unarchived and openable, and exposes
+   > only its extracted title and publishable final URL — never the owner's title override, requested URL,
+   > upload guess or private-link token. [Plan 261009j](../plans/261009j-a-public-copy-offered-at-import.md)
+   > records why this extra discovery surface was accepted.
+
+The browser check (Sonnet, Playwright, local Supabase, 1440, 820, 390 and iPhone WebKit) passed:
+the choice with no import boxes, *Read the public copy* to the public view, *Add my own copy*
+starting the import, and *Add a private copy* on the public article skipping the question. One nit,
+fixed: the *Read the public copy* link inside a button kept its underline. Screenshots
+`261009j-shot-*.png` (the headless browser forces dark mode, so they are all dark).

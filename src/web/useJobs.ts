@@ -21,8 +21,7 @@
  * The queue itself is src/jobs.ts; the routes are in src/routes.ts.
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
-import type { Job, ResetResponse, StepName } from "../types.js";
-import type { PublicCopyFound } from "../public-copy.js";
+import type { Job, PublicCopyFound, ResetResponse, StepName } from "../types.js";
 import { retireAddSharing } from "./add-sharing-session.js";
 import { handOverAutoModesChoice } from "./auto-modes-setting.js";
 import { jobEngine, send } from "./jobEngine.js";

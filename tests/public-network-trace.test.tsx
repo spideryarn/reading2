@@ -2927,7 +2927,9 @@ describe("a signed-in reader who does not own it", () => {
     expect(location.pathname).toBe(addHref(address));
     expect(trace.filter((r) => r.url === "/api/jobs" && r.method === "POST")).toHaveLength(1);
     // The add page strips the fragment; the query belongs to the fetched URL.
-    expect(postedBodies).toEqual([{ url: "https://example.com/the-piece?source=shared" }]);
+    // `ownCopy`: the press chose the reader's own copy, so the add does not ask
+    // whether they would rather read this public one (plan 261009j).
+    expect(postedBodies).toEqual([{ url: "https://example.com/the-piece?source=shared", ownCopy: true }]);
     expect(host.textContent).toContain(REPEAT_PASTE_ON_THE_SHELF);
   });
 

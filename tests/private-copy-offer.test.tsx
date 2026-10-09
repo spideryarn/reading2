@@ -141,6 +141,20 @@ describe("the mounted offer, with a shelf that does not hold the article", () =>
     expect(takeOwnCopyIntent(ADDRESS), "answered twice").toBe(false);
   });
 
+  it("does not carry one reader's own-copy choice to the next reader", async () => {
+    const { markOwnCopy, takeOwnCopyIntent } = await import("../src/web/own-copy-intent.js");
+    markOwnCopy(ADDRESS);
+    noteReader("reader-after-the-click");
+    expect(takeOwnCopyIntent(ADDRESS)).toBe(false);
+  });
+
+  it("discards an interrupted choice when a different add page is opened", async () => {
+    const { markOwnCopy, takeOwnCopyIntent } = await import("../src/web/own-copy-intent.js");
+    markOwnCopy(ADDRESS);
+    expect(takeOwnCopyIntent("https://example.com/a-different-article")).toBe(false);
+    expect(takeOwnCopyIntent(ADDRESS), "the old mark survived another add").toBe(false);
+  });
+
   it("so does the visitor's band", async () => {
     await act(async () =>
       root.render(<VisitorBand gap={{ kind: "owners-only", feature: "Chat" }} copy={FACTS} />),

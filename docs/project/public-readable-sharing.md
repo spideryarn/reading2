@@ -158,8 +158,9 @@ is [261007m](../plans/261007m-a-private-copy-of-a-public-article-on-your-own-she
 
 **And a reader who pastes the address of a public article is offered it, free, before they are
 charged for their own** (since 2026-10-09): the add page answers with the public copy and asks.
-Pressing *Add a private copy* above has already answered, so that press goes straight to the paid
-add. What the asker learns is the article's slug and extracted title, never who shared it —
+Following *Add a private copy* above with a plain same-tab press has already answered, so that press
+goes straight to the paid add; a new-tab or modified press cannot carry the one-shot and sees the
+choice again. What the asker learns is the article's slug and extracted title, never who shared it —
 [261009j](../plans/261009j-a-public-copy-offered-at-import.md).
 
 ## A private link: the same republishing, to fewer people

@@ -1029,7 +1029,9 @@ type Asked =
   | { kind: "queued"; jobId: string }
   | { kind: "have"; slug: string }
   | { kind: "public"; slug: string }
-  | { kind: "refused"; message: string };
+  /* The kind of POST is retained so a retry does not turn the reader's chosen
+     own copy back into the public-copy question. */
+  | { kind: "refused"; message: string; ownCopy?: true };
 
 const asked = new Map<string, Asked>();
 
@@ -1140,9 +1142,10 @@ function WithAddToShelf({
 
   const add = (options?: { ownCopy?: true }) => {
     const generation = askedGeneration;
+    const ownCopy = options?.ownCopy === true;
     const wait = (async () => {
       /* `options` is read for the one flag only: a plain press passes the click event here. */
-      const started = await queue.add(url, options?.ownCopy === true ? { ownCopy: true } : undefined);
+      const started = await queue.add(url, ownCopy ? { ownCopy: true } : undefined);
       /* An answer made for the previous reader must not refill the cleared map. */
       if (generation !== askedGeneration) return;
       /* **Read straight after the await.** `error` on the queue is engine state
@@ -1153,7 +1156,7 @@ function WithAddToShelf({
       if (started && "article" in started) asked.set(key, { kind: "have", slug: started.article });
       else if (started && "publicCopy" in started) asked.set(key, { kind: "public", slug: started.publicCopy.slug });
       else if (started) asked.set(key, { kind: "queued", jobId: started.id });
-      else if (why) asked.set(key, { kind: "refused", message: why });
+      else if (why) asked.set(key, { kind: "refused", message: why, ...(ownCopy ? { ownCopy: true as const } : {}) });
       /* Refused with nothing to say — which should not happen, since every
          refusal carries the server's sentence. Put the button back rather than
          leave a silent dead end. */
@@ -1193,7 +1196,7 @@ export function describeAdd(
          putting *try again* under that sentence invites the reader to spend the
          attempt the sentence has just told them will not work. src/messages.ts. */
       return worthRetrying(state.message)
-        ? { kind: "offer", add, after: state.message }
+        ? { kind: "offer", add: state.ownCopy ? () => add({ ownCopy: true }) : add, after: state.message }
         : { kind: "refused", message: state.message };
     case "queued":
       /* The POST has answered and the engine has not polled since — the common

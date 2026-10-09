@@ -13,15 +13,24 @@
  * cannot ride there. A link opened in a new tab loses the mark, and that reader
  * is asked: a redundant question, never a wrong charge.
  *
- * One address at a time, and only for a minute, so a mark nobody took does not
- * answer a paste of the same address much later.
+ * One address at a time, and only for a minute. A reader change or arrival at a
+ * different add address clears it, so an interrupted navigation cannot answer a
+ * later reader's or later paste's choice.
  */
 
 import { normaliseUrl } from "../ingest.js";
+import { forgetOnReaderChange } from "./lib/reader-change.js";
 
 const FRESH_MS = 60_000;
 
 let marked: { url: string; at: number } | null = null;
+
+/* An intent belongs to the reader who pressed the public article's link. A
+   second reader in the same tab must never inherit a choice that spends one of
+   their articles. */
+forgetOnReaderChange(() => {
+  marked = null;
+});
 
 /** The address `addHref` was built from, compared as the add page normalises it. */
 export function markOwnCopy(url: string): void {
@@ -31,7 +40,9 @@ export function markOwnCopy(url: string): void {
 /** Whether the add page at this address was asked for an own copy. Answers true once. */
 export function takeOwnCopyIntent(url: string): boolean {
   const mark = marked;
-  if (mark === null || mark.url === "" || mark.url !== normaliseUrl(url) || Date.now() - mark.at > FRESH_MS) return false;
+  /* Any Add-page arrival consumes the one-shot. If it is for another address,
+     the intended navigation was interrupted or superseded; leaving the mark
+     behind could turn a later ordinary paste into a paid own-copy request. */
   marked = null;
-  return true;
+  return mark !== null && mark.url !== "" && mark.url === normaliseUrl(url) && Date.now() - mark.at <= FRESH_MS;
 }
