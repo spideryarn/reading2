@@ -115,3 +115,20 @@ export function unsettledTokenLineAt(text: string, startsLine: boolean): number 
   const token = match[0].indexOf("[cmd:");
   return token === -1 ? -1 : match.index + token;
 }
+
+/**
+ * **An answer with its command tokens taken out**, for a voice model's seed
+ * (`liveSeedItems` in src/live.ts, plan 261009i). A typed answer's buttons are
+ * on lines of their own, so a line left empty by the removal goes too. Seeding
+ * a voice with `[cmd:…]` is few-shot pressure to say brackets aloud, the same
+ * reason block ids come out.
+ */
+export function withoutCommandButtons(text: string): string {
+  return text
+    .split("\n")
+    .flatMap((line) => {
+      const left = line.replace(new RegExp(COMMAND_TOKEN_SOURCE, "g"), "");
+      return left === line ? [line] : left.trim() === "" ? [] : [left.replace(/\s+$/, "")];
+    })
+    .join("\n");
+}

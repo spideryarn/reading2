@@ -467,12 +467,14 @@ export interface SpokenTurn {
 /**
  * The kinds a spoken exchange may create. Not `candidates`: a referee's
  * candidates conversation has no Live control, and a spoken turn creating one
- * would be a mode nobody has designed.
+ * would be a mode nobody has designed. The guide since plan 261009i (Greg,
+ * 2026-10-09: *"Why doesn't the Guide chat have a live conversation
+ * option?"*); `targetOf` keeps it one per article whichever way it is begun.
  */
-export type SpokenKind = Extract<ThreadKind, "chat" | "learn">;
+export type SpokenKind = Extract<ThreadKind, "chat" | "learn" | "guide">;
 
 export function isSpokenKind(value: unknown): value is SpokenKind {
-  return value === "chat" || value === "learn";
+  return value === "chat" || value === "learn" || value === "guide";
 }
 
 /**

@@ -30,11 +30,13 @@ import {
   GPT_LIVE_BACKEND_MODEL,
   GPT_LIVE_MODEL,
   LIVE_VOICE,
+  SPOKEN_GUIDE,
   SPOKEN_RULES,
   UNTRUSTED_TOOL_RESULTS,
   liveSeedItems,
   liveTools,
 } from "./live.js";
+import { spokenModeWords } from "./guide.js";
 import { plainWords } from "./plain-words.js";
 import { untrusted } from "./untrusted-fence.js";
 import type { Block, ChatMessage, Meta, ThreadKind, Tree, TreeNode } from "./types.js";
@@ -284,6 +286,8 @@ export function gptLiveVoiceInstructions(opts: {
   blocks: readonly Block[];
   tree: Tree;
   profile?: string | null;
+  /** A guide's voice is told it is the guide, and the modes' names (plan 261009i). */
+  kind?: ThreadKind | undefined;
 }): string {
   const { meta, blocks, tree } = opts;
   const root = tree.nodes[tree.rootId];
@@ -302,13 +306,15 @@ export function gptLiveVoiceInstructions(opts: {
 
   const articleIntro =
     "# The article\n\nWhat the piece is and how it is laid out. This is a map, not the text: delegate for anything it says.";
-  const fixed = [GPT_LIVE_VOICE_SYSTEM, `${articleIntro}\n\n${untrusted("article", head)}`, who].filter(Boolean).join("\n\n");
+  const guide = opts.kind === "guide" ? `${SPOKEN_GUIDE}\n\n${spokenModeWords()}` : "";
+  const fixed = [GPT_LIVE_VOICE_SYSTEM, guide, `${articleIntro}\n\n${untrusted("article", head)}`, who].filter(Boolean).join("\n\n");
   /* Sixty held back for the outline's own heading and the joins. */
   const left = VOICE_INSTRUCTION_BUDGET - pessimisticTokens(fixed) - 60;
   const outline = left > 0 ? gptLiveOutline({ tree, blocks, budget: left }) : "";
 
   return [
     GPT_LIVE_VOICE_SYSTEM,
+    guide,
     `${articleIntro}\n\n${untrusted("article", [head, outline ? `OUTLINE:\n${outline}` : ""].filter(Boolean).join("\n\n"))}`,
     who,
   ]
@@ -408,12 +414,15 @@ export function gptLiveBackendInstructions(opts: {
   meta: Meta;
   blocks: readonly Block[];
   profile?: string | null;
+  /** A guide's backend is told the guide's intent too, without the mode list the voice says (plan 261009i). */
+  kind?: ThreadKind | undefined;
 }): string {
   const who = opts.profile
     ? `WHO THE READER IS\n\nThe reader has told us this about themselves. Use it to pitch the answer; do not mention that you have it.\n\n${opts.profile}`
     : "";
   return [
     GPT_LIVE_BACKEND_SYSTEM,
+    opts.kind === "guide" ? SPOKEN_GUIDE : "",
     who,
     `THE ARTICLE\n\nHere is the whole thing, with an id on every paragraph.\n\n${untrusted("article", articleWithIds(opts.meta, opts.blocks))}`,
   ]
@@ -541,11 +550,12 @@ export function gptLiveSession(opts: {
         instructions: gptLiveBackendInstructions(opts),
         /* Low: the reader is waiting in silence while this model thinks. */
         reasoning: { effort: "low" },
-        /* The same nine the Realtime engine has — `show_passage` and the eight
-           chat tools — already in the flat function shape the Responses API
-           takes. Not `strict`: their schemas have optional parameters and no
-           `additionalProperties: false`, which strict mode refuses. */
-        tools: liveTools(),
+        /* The same tools the Realtime engine has — `show_passage` and this
+           conversation kind's server tools — already in the flat function
+           shape the Responses API takes. Not `strict`: their schemas have
+           optional parameters and no `additionalProperties: false`, which
+           strict mode refuses. */
+        tools: liveTools(opts.kind),
       },
     },
   };

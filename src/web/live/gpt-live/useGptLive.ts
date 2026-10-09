@@ -98,7 +98,7 @@ import {
 } from "../session-shared.js";
 import { stallOf, type LiveStall } from "../stall.js";
 import type { LiveApi, LiveLine, LiveOptions, LivePhase, LivePointer, LiveStep, LiveToolRun } from "../useLiveConversation.js";
-import { apiWiringFor } from "../wiring.js";
+import { apiWiringFor, type LiveThreadKind } from "../wiring.js";
 import { useMadeFor } from "../../lib/made-for.js";
 import { ownLabel } from "../../lib/own-label.js";
 import { DelegationLoop, type DelegationEffect } from "./delegations.js";
@@ -286,6 +286,9 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
   const tail = useRef<string | null>(null);
   const boundThread = useRef<string | null>(null);
   const startedThread = useRef("");
+  /* The kind this call was started for, read once at start: it chose the
+     prompt and the tools, so every tool call says it (plan 261009i). */
+  const sessionKind = useRef<LiveThreadKind | undefined>(undefined);
 
   /** Segment ids whose exchange has been handed to `speak`, so their lines leave the live transcript. */
   const handedOff = useRef(new Set<string>());
@@ -588,7 +591,7 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
     const timeout = setTimeout(() => request.abort(), TOOL_TIMEOUT_MS);
     try {
       const out = await Promise.race([
-        (wired.current.wiring ?? defaultWiring).runTool(slug, name, args, request.signal),
+        (wired.current.wiring ?? defaultWiring).runTool(slug, name, args, request.signal, sessionKind.current),
         new Promise<never>((_, reject) => {
           request.signal.addEventListener("abort", () => reject(new Error("The tool took too long. Try again.")), { once: true });
         }),
@@ -918,6 +921,7 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
     setHasUnsavedLines(preserve);
     handedOff.current = new Set();
     startedThread.current = o.threadId;
+    sessionKind.current = wired.current.kindOf?.(o.threadId);
     sessionNo.current += 1;
     segmenter.current = new Segmenter();
     loop.current = new DelegationLoop();
@@ -1163,7 +1167,8 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
         /* **Three: our server opens the session** and returns OpenAI's answer.
            Last, because this is the step that is billed. */
         setStep("transport");
-        const ticket = await wiring.session(slug, o.threadId, { sdp: offer.sdp }, abort.signal);
+        const kind = sessionKind.current;
+        const ticket = await wiring.session(slug, o.threadId, { sdp: offer.sdp, ...(kind === undefined ? {} : { kind }) }, abort.signal);
         const transport = {
           liveConnected: (id: string, keepalive: boolean) => wiring.liveConnected(id, keepalive),
           liveUsage: (id: string, report: GptLiveUsageReport, keepalive: boolean) =>

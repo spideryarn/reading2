@@ -1,0 +1,2623 @@
+diff --git a/docs/plans/261009i-plan-review-prompt.md b/docs/plans/261009i-plan-review-prompt.md
+new file mode 100644
+index 000000000..74bd411eb
+--- /dev/null
++++ b/docs/plans/261009i-plan-review-prompt.md
+@@ -0,0 +1,7 @@
++Review the plan docs/plans/261009i-the-guide-greets-in-chat-takes-live-and-a-bar-row.md in this repo (Spideryarn). Read CLAUDE.md first, then the plan, then the code it names: src/web/GuideGreeting.tsx, src/web/ChatPanel.tsx (where GuideGreeting is drawn, GuideRow), src/web/modes/conversation/ConversationModes.tsx (OFFERS_LIVE, onStartLive, the guide exclusions), src/live.ts (liveInstructions, liveSession, liveTools, LIVE_SERVER_TOOLS), src/live-gpt.ts, src/routes.ts (liveChatToken and the GPT-Live session route, streamChat guide handling), src/chat.ts (SpokenKind, withSpokenTurn, targetOf), src/guide.ts (modeWordsSection), src/converse.ts (GUIDE_SYSTEM), src/chat-tools.ts (toolsFor, GUIDE_TOOLS), src/web/CommandBar.tsx (besideTheModes, helpRow), src/web/purpose.ts, docs/project/security-map.md rows for chat-tools.ts and chat-commands.ts, and the prior plans 261007j, 261007p, 261008a.
++
++Constraints for this run: it must not edit a defence listed in docs/project/security-map.md (write-up for Greg instead); simplest version first; never deploy.
++
++Questions: Is the v1 the right 80/20 for Greg's two reports? Does anything in it touch a defence after all? Will Live in a guide break anything (spoken turn creating a guide thread, seed of a guide's history via liveSeedItems/answerAsSeen, kind sent by the browser vs stored kind, the live tool endpoint running tools for a guide session, cost tracking jobFor), and what must be tested? Is the "Keep this as why you're reading" press correct and safe (race with the purpose read, StrictMode, a reason saved elsewhere meanwhile, the greeting changing under the reader)? Is the greeting text table sensible, and is quoting the profile OK? Anything missing for the command-bar row (owner-only contexts, catalogue regeneration, ranking vs Help's alias)?
++
++Answer with a verdict line first (build / build with changes / do not build), then numbered findings with severity (P1/P2/P3), each with file references and a concrete change. Do not edit files.
+diff --git a/docs/plans/261009i-plan-review-sol.md b/docs/plans/261009i-plan-review-sol.md
+new file mode 100644
+index 000000000..77d3de3a4
+--- /dev/null
++++ b/docs/plans/261009i-plan-review-sol.md
+@@ -0,0 +1,23 @@
++BUILD WITH CHANGES
++
++1. **P1 — The Live stage touches a listed defence and cannot be built as written in this run.** The plan explicitly changes `src/routes.ts`, which the security map classifies as a defence-bearing file, and “the live tool endpoint is unchanged” would let a Guide session execute the full Chat allowlist because `runTool` receives no `kind`. That contradicts the documented rule that `toolsFor(kind)` is an enforced boundary, not merely the list shown to the model. Move the Live route/tool work into a write-up for Greg. If later approved, bind tool calls and stored receipts to the journalled session’s effective kind and enforce that kind’s allowlist. The simplest interim spoken Guide would expose only browser-local `show_passage`, with no `/live-tool` calls. The greeting, command row, and reader-pressed CTA do not themselves alter `chat-commands.ts`’s model-action defence. [plan](/var/tmp/spideryarn-worktrees/fbs6qhzv-guide-greets-and-live/docs/plans/261009i-the-guide-greets-in-chat-takes-live-and-a-bar-row.md:115), [security-map.md](/var/tmp/spideryarn-worktrees/fbs6qhzv-guide-greets-and-live/docs/project/security-map.md:93), [routes.ts](/var/tmp/spideryarn-worktrees/fbs6qhzv-guide-greets-and-live/src/routes.ts:4781), [chat-tools.ts](/var/tmp/spideryarn-worktrees/fbs6qhzv-guide-greets-and-live/src/chat-tools.ts:2093)
++
++2. **P1 — Stored kind alone is insufficient for a fresh Guide Live session.** An empty Guide exists only in the tab, so both token routes currently find no stored thread. The browser must carry `guide` through `LiveApi.start`, both engine request bodies, and the spoken-turn reducer. On the server, the stored kind must be authoritative; a validated browser kind may fill only the no-thread case, and a mismatch should be rejected before spending. `targetOf` preserves one Guide when the exchange is stored, but the token routes’ direct ID lookup does not seed an existing Guide reached through a fresh ID. Test both engines for fresh Guide, stored Guide, mismatched browser/stored kind, create, append, stale fresh-ID collision/tail refusal, and continued refusal of Tutorial, Explore, and Candidates. [plan](/var/tmp/spideryarn-worktrees/fbs6qhzv-guide-greets-and-live/docs/plans/261009i-the-guide-greets-in-chat-takes-live-and-a-bar-row.md:129), [routes.ts](/var/tmp/spideryarn-worktrees/fbs6qhzv-guide-greets-and-live/src/routes.ts:4402), [reduce.ts](/var/tmp/spideryarn-worktrees/fbs6qhzv-guide-greets-and-live/src/web/chat/reduce.ts:488), [chat.ts](/var/tmp/spideryarn-worktrees/fbs6qhzv-guide-greets-and-live/src/chat.ts:507)
++
++3. **P1 — “Keep this as why you’re reading” is not safe with `savePurpose` as planned.** `usePurpose` reads once, while `savePurpose` performs an unconditional PATCH. A purpose saved in another tab—or later in this tab—can therefore be overwritten by the stale Guide button. A rejected response also does not prove the write failed. Make this an atomic save-if-empty operation that returns either “saved” or the existing purpose; on an ambiguous response, verify with `storedPurpose`. Add a synchronous double-press lock and bind the request with `useMadeFor`. Because a correct atomic operation requires route/store work, it also belongs in the Greg write-up under this run’s constraint; otherwise omit the CTA rather than ship the overwrite race. Tests must cover same-tab save, another-client save immediately before the press, server interleaving, StrictMode/double press, and a response lost after a successful write. [plan](/var/tmp/spideryarn-worktrees/fbs6qhzv-guide-greets-and-live/docs/plans/261009i-the-guide-greets-in-chat-takes-live-and-a-bar-row.md:99), [purpose.ts](/var/tmp/spideryarn-worktrees/fbs6qhzv-guide-greets-and-live/src/web/purpose.ts:24), [purpose.ts](/var/tmp/spideryarn-worktrees/fbs6qhzv-guide-greets-and-live/src/web/purpose.ts:136), [routes.ts](/var/tmp/spideryarn-worktrees/fbs6qhzv-guide-greets-and-live/src/routes.ts:6530)
++
++4. **P2 — Do not silently truncate the first message into a different reason.** Chat accepts substantially more text than the 600-character purpose field. Offer the CTA only when the complete, storage-normalized message fits; otherwise link to Metadata to write a shorter reason. Test 600/601 characters, whitespace-only input, CRLF normalization, multiline text, and astral Unicode. [plan](/var/tmp/spideryarn-worktrees/fbs6qhzv-guide-greets-and-live/docs/plans/261009i-the-guide-greets-in-chat-takes-live-and-a-bar-row.md:101), [types.ts](/var/tmp/spideryarn-worktrees/fbs6qhzv-guide-greets-and-live/src/types.ts:1598), [pg-shelf.ts](/var/tmp/spideryarn-worktrees/fbs6qhzv-guide-greets-and-live/src/store/pg-shelf.ts:366)
++
++5. **P2 — Keep the greeting as an empty-state introduction, not an unstored historical bubble.** A mount-local snapshot prevents an in-place React rewrite, but after reload the apparent “first chat bubble” would be regenerated from the latest title/profile/purpose and change above an old transcript. Persisting a true first bubble adds unjustified v1 complexity. The simplest 80/20 is the current empty-state placement: wait for the purpose read, draw one stable introduction, then remove it after the first turn. This also avoids permanently consuming phone height. Test delayed and out-of-order StrictMode reads, `purposeFailed`, rerenders, first send, and reload after a profile/purpose edit. If it must remain above turns, call and style it as current Guide context rather than conversation history. [plan](/var/tmp/spideryarn-worktrees/fbs6qhzv-guide-greets-and-live/docs/plans/261009i-the-guide-greets-in-chat-takes-live-and-a-bar-row.md:76), [ChatPanel.tsx](/var/tmp/spideryarn-worktrees/fbs6qhzv-guide-greets-and-live/src/web/ChatPanel.tsx:1905), [purpose.ts](/var/tmp/spideryarn-worktrees/fbs6qhzv-guide-greets-and-live/src/web/purpose.ts:129)
++
++6. **P2 — Guide history needs voice-specific sanitizing; cost classification does not need changing.** `answerAsSeen` returns Guide answers verbatim, while `liveSeedItems` removes only block IDs. Typed Guide answers can contain `[cmd:…]`, giving the voice model examples of syntax its spoken prompt forbids. Strip command tokens and their now-empty button lines from assistant Guide seed text, then remove block IDs; never alter the reader’s literal text. Test this for both Realtime and GPT-Live while preserving Recall hint behavior. Typed Guide should remain `jobFor("guide") === "chat"`; both Live engines should continue recording `live_conversation`, with explicit regression tests rather than a new Guide cost job. [recall-hint.ts](/var/tmp/spideryarn-worktrees/fbs6qhzv-guide-greets-and-live/src/recall-hint.ts:81), [live.ts](/var/tmp/spideryarn-worktrees/fbs6qhzv-guide-greets-and-live/src/live.ts:553), [converse.ts](/var/tmp/spideryarn-worktrees/fbs6qhzv-guide-greets-and-live/src/converse.ts:146)
++
++7. **P2 — Specify the command row’s capability gate and URL rewrite.** Gate it on both article view and an owner-only capability such as `article.executor?.askGuide`; the catalogue deliberately includes another reader’s article and owner Metadata contexts, so `article !== undefined` or `view === "article"` alone is insufficient. Build a non-generating page row whose helper preserves unrelated state such as `at`, `margin`, and `chatfrom`, removes stale `mode`, `thread`, and `guide`, then sets `mode=chat&guide=1`. Test owner article, experimental-off, archived, visitor, Metadata, old-thread URLs, and Back behavior. [CommandBar.tsx](/var/tmp/spideryarn-worktrees/fbs6qhzv-guide-greets-and-live/src/web/CommandBar.tsx:383), [command-proposal.ts](/var/tmp/spideryarn-worktrees/fbs6qhzv-guide-greets-and-live/src/web/command-proposal.ts:557), [router.ts](/var/tmp/spideryarn-worktrees/fbs6qhzv-guide-greets-and-live/src/web/router.ts:643)
++
++8. **P3 — The greeting table is sensible after tightening attribution, length, and voice.** Quoting the owner’s profile as ordinary React text is safe; do not render it as Markdown or HTML. Prefer “In About you, you wrote: ‘…’” over “your profile says you are,” collapse whitespace, and use the existing Unicode-safe word-boundary clamp for both the profile and the stored purpose. Keep the read-failed title-only arm. The title still needs explicit Reader → ConversationBand → ChatPanel → GuideGreeting plumbing, and the fixed UI prose, reader quotes, and article title should retain their respective visual voices rather than styling the whole greeting as an AI answer. [GuideGreeting.tsx](/var/tmp/spideryarn-worktrees/fbs6qhzv-guide-greets-and-live/src/web/GuideGreeting.tsx:51), [Reader.tsx](/var/tmp/spideryarn-worktrees/fbs6qhzv-guide-greets-and-live/src/web/reader/Reader.tsx:3220), [title-text.ts](/var/tmp/spideryarn-worktrees/fbs6qhzv-guide-greets-and-live/src/title-text.ts:106)
++
++9. **P3 — Help’s alias needs no ranking change, but catalogue acceptance needs pinning.** `Guide` already beats Help for `guide` because a label prefix outranks an alias prefix. Test that Guide is first and Help remains present. Regenerate and verify both generated files, including exact contexts for the Guide row: owner article, experimental-off, and archived; not visitor, Metadata, or no-article. [command-match.ts](/var/tmp/spideryarn-worktrees/fbs6qhzv-guide-greets-and-live/src/web/command-match.ts:455), [CommandBar.tsx](/var/tmp/spideryarn-worktrees/fbs6qhzv-guide-greets-and-live/src/web/CommandBar.tsx:1191), [command-pick-catalogue.test.ts](/var/tmp/spideryarn-worktrees/fbs6qhzv-guide-greets-and-live/tests/command-pick-catalogue.test.ts:286)
++
++The fixed, free greeting and direct Guide command are the right 80/20 for Greg’s first report. Guide Live is also the right product answer to the second, but its safe implementation and the atomic purpose save both require defence-bearing route work, so those portions should be written up for Greg rather than built in this constrained run.
++
++No files were edited and no tests were run. Concurrent Stage 1 edits appeared in the worktree during review; the findings above assess the plan against `HEAD`, not those partial changes.
+\ No newline at end of file
+diff --git a/docs/plans/261009i-the-guide-greets-in-chat-takes-live-and-a-bar-row.md b/docs/plans/261009i-the-guide-greets-in-chat-takes-live-and-a-bar-row.md
+new file mode 100644
+index 000000000..4b8be1a37
+--- /dev/null
++++ b/docs/plans/261009i-the-guide-greets-in-chat-takes-live-and-a-bar-row.md
+@@ -0,0 +1,232 @@
++# 261009i — The guide greets you in the chat, takes Live, and has a row in the bar
++
++Owned by [plans.md](../project/plans.md). Overseer queue item `qi-7wcnqdd6`; reports `spya-s6qhzv`
++(#500, SPIDERYARN-READING2-FB) and `spya-x38nge` (#501, SPIDERYARN-READING2-FC), both Greg's
++(`feedback-reporter.ts` exit 0). Session `fbs6qhzv-guide-greets-and-live`. Follows
++[261007j](261007j-the-guide-a-conversation-about-how-to-read-this.md),
++[261007p](261007p-the-guide-acts-without-a-press-and-opens-every-new-article.md) and
++[261008a](261008a-guide-opens-glossary-and-summary-when-already-made.md).
++**Status: built, plan reviewed by GPT Sol; on `dev` once the code review below is done. Not deployed. One question for Greg, `q-w2740x`.**
++
++## What Greg asked for
++
++> The new guide chat UI is a bit confusing. It shows the input box for why you're reading this, and
++> so I put in some text in there, and then I was like, well, now what? There didn't seem a button to
++> save it, or I guess it says saves as you type, but I definitely didn't notice that. And I think if
++> we're in a chat interface, I want to use the chat interface. So, for example, I think what I was
++> expecting it to do was, before it loads the chat, check, you know, have I entered a user profile?
++> Have I entered why you're reading this? And then depending on that, maybe it would
++> deterministically generate an initial message: Hi there, welcome. I see you've imported blah blah
++> blah. I noticed from your profile that blah blah. Is that right? More importantly, why are you
++> reading this particular article? You can tell me about yourself, or you're perhaps reading it and
++> I'll update your profile and reasons accordingly […] So probably it would mean that the model
++> would then generate. The first message, the greeting message, so that it's customized […] Maybe
++> you can see an 80/20 or a better way of doing this […] if they say they want to read it with their
++> journal club, then maybe we'd say, Okay, do you want to create a private link? Or […] Do you want
++> to make it shared? Or […] do you want to archive it? Like, all of these should be actions that the
++> chat could help them take.
++>
++> And then it should always be possible to get back to the guide chat. In fact, there should be a
++> command in the command bar for opening the guide chat. […] So maybe it gets its own icon in the
++> list of chat threads.
++>
++> — Greg, 2026-10-09, `spya-s6qhzv` (full text in the note)
++
++> Why doesn't the Guide chat have a live conversation option?
++>
++> — Greg, 2026-10-09, `spya-x38nge`
++
++## What is already there
++
++- **The guide's own icon in Chat's list**: built in 261007j (`GuideRow`, `Compass`, pinned first).
++  Nothing to do; the note says so.
++- **Suggesting Brief or Fuller from their background, and opening it**: the guide already suggests
++  modes, opens free ones by itself, and opens Summary's Brief/Fuller by itself when made (261007p,
++  261008a). The prompt's "match the introduction to how much they have used Spideryarn" covers the
++  "you don't have a background in this" pitch.
++- **The empty guide** (`GuideGreeting.tsx`) is our fixed text, an autosaving *Why you're reading
++  this one* box when none is stored, and *Ask the guide where to start* once one is. That box is
++  what confused Greg.
++- **Live is switched off for the guide on purpose**: `openKind !== "guide"` in
++  `ConversationModes.tsx`, `SpokenKind = chat | learn` in `src/chat.ts`. 261007j said only "the
++  guide is typed".
++
++## The design (v1)
++
++```
++ Chat band, guide
++ ┌──────────────────────────────────────────┐
++ │ 🧭 guide (our words, drawn as its first   │  ← no model call, no box
++ │ bubble, kept above the turns)            │
++ │  Hi, I'm your guide to "Attention Is All │
++ │  You Need". Your profile says you are     │
++ │  "a cognitive neuroscientist…" — is that  │
++ │  still right? More importantly: why are   │
++ │  you reading this one? Tell me below.     │
++ │ ──────────────────────────────────────── │
++ │ you: for journal club next week, I don't  │
++ │      know much ML                         │
++ │      [Keep this as why you're reading]    │  ← the reader's own words; their press
++ │ guide: Then start with Summary › Brief…   │
++ │ ──────────────────────────────────────── │
++ │ [ type…                 ] [Live] [Send]   │  ← Live now offered here too
++ └──────────────────────────────────────────┘
++```
++
++### 1. The greeting is the guide's first chat bubble, and there is no box
++
++Opus's product call, accepted: a **fixed greeting written by us**, drawn as an assistant-style
++bubble, free, not stored, not a model call. The part that sounds personal — *"what makes a
++neuroscientist want to learn about LLMs?"* — comes in the guide's first real reply, which already
++has the profile, the reason and the whole article; a separate model-written opener would pay a
++weaker model (one shown only the abstract) to do what that reply does better, and would spend on
++every new article whether or not the reader answers.
++
++What it says, by what we already know (`GET /api/reader?slug=`, as now):
++
++| known | the greeting |
++|---|---|
++| no reason, no About you | welcome, the title, *why are you reading this one?*, and *tell me a little about yourself too, if you like* |
++| no reason, About you | welcome, the title, the first sentence of About you quoted (cut at ~120 characters) with *is that still right?*, then *more importantly, why are you reading this one?* |
++| a reason | welcome, the title, *you said you're reading it because "…"*, and the *Ask the guide where to start* button as today |
++| the read failed | welcome and the title only; nothing claimed about what they have or have not said |
++
++It stays **above the turns once the conversation has begun**, so the reader's answer is visibly an
++answer. The model is told, in `GUIDE_SYSTEM`, that the conversation opens with a fixed greeting of
++ours on screen (not in the transcript) asking why they are reading and, when the profile is empty,
++who they are, so the first message is likely an answer to it. The sentence about "a box for it" goes.
++
++### 2. The reason is kept from the reader's own words, by their press
++
++Under the reader's **first message in a guide whose reason was definitively none at the read**, one
++small button: **Keep this as why you're reading**. A press saves that message (cut to
++`MAX_PURPOSE_CHARS`) with the same `savePurpose` the box used, then the button becomes *Saved as why
++you're reading this one* with a link to Metadata, where it can be edited. A failed save says so and
++the button comes back. Once a reason exists (saved here, or elsewhere) nothing more is offered.
++
++Why this and not the guide saving it: anything a model proposes or does that **writes** the
++reader's data is either a new chip id on `CHAT_PROPOSABLE` or a new exception to *"anything that
++writes … is still a press"* — both edits to a defence in [security-map.md](../project/security-map.md),
++which this run does not make. This needs neither: no model is involved, it is the reader's own words
++and the reader's own press, exactly like the box it replaces. The better version — the guide picks
++the reason out of the reader's message as an exact quote, the page checks it is a substring, and
++saves it with an Undo — is Opus's recommendation and goes to Greg (below).
++
++### 3. Live in the guide
++
++The guide's composer gets the same Live button as Chat. A spoken guide session is **the reading
++companion's voice rules plus a guide section**: who you are (their guide to reading this piece with
++Spideryarn, not a summariser), start from why they are reading, ask if not known, suggest where to
++start and which modes, **naming modes by their names** (a list from the catalogue, without
++`[cmd:…]` tokens, which speech cannot press). Its tools are the guide's article tools plus
++`show_passage`; no web search, as in the typed guide.
++
++- `src/live.ts`: `liveInstructions` and `liveSession` take `kind`; for `guide` they add
++  `SPOKEN_GUIDE` (the section) and `spokenModeWords()` (from `src/guide.ts`, the same rows
++  `modeWordsSection` reads), and `liveTools(kind)` offers `SHOW_PASSAGE_TOOL` + `GUIDE_TOOLS`.
++- `src/live-gpt.ts` (GPT-Live, behind Experimental): the voice instructions and the backend
++  instructions get the same section for a guide thread.
++- `src/routes.ts`: both token routes pass the stored thread's kind (GPT-Live's already does for the
++  seed).
++- `src/chat.ts`: `SpokenKind` gains `guide`; `targetOf` already routes a fresh id to the article's
++  one guide, so a guide begun by speaking is still one per article.
++- `ConversationModes.tsx`: the `openKind !== "guide"` and `kind === "guide"` refusals go; Live from
++  an empty guide begins the guide (not a chat).
++- The live tool endpoint is unchanged: it accepts `LIVE_SERVER_TOOLS` names for any session, and
++  the guide is offered a subset of them.
++
++Greg has said Live "doesn't work very well at the moment" (the reason Tutorial and
++Explore have none); this inherits whatever Live does today, no better and no worse.
++
++### 4. A *Guide* row in the command bar
++
++An action row, **Guide** — *"This article's guide: how to read it, and what Spideryarn can do for
++you here."* — on the owner's reading view only, which navigates to `?mode=chat&guide=1` (the door
++261007j built). Aliases: `guide`, `tour`, `where to start`, `how to read`, `welcome`. Help keeps
++its `guide` alias; an exact label match ranks Guide first. Catalogue regenerated. The bar's
++*Ask the guide: "…"* row is unchanged.
++
++## After the plan review (overrides the design above where they differ)
++
++[GPT Sol](261009i-plan-review-sol.md): *build with changes*, three P1s. Each checked here.
++
++- **F1 (P1), Live touches a defence.** Half right. `src/routes.ts`' listed defences are `slugPart`
++  and `requireUser`, which this does not touch. But the plan's *"the live tool endpoint is
++  unchanged"* was wrong: `/live-tool` called `runTool` with no kind, so a guide's model naming a tool
++  the guide is not offered would have run it, and the `chat-tools.ts` row says a conversation's
++  tool list is a boundary. **Fixed by using the defence, not editing it**: the page sends the
++  session's kind on every tool call (fixed at start), the route checks it is a `SpokenKind` and
++  passes `guide` to `runTool`, whose existing `toolsFor` gate refuses the rest. The model chooses
++  only the name; the reader's own page says the kind. Tested red-then-green.
++- **F2 (P1), a fresh guide's kind.** Built as asked: `LiveOptions.kindOf`, read once at start, on
++  both engines' ticket bodies and every tool call; the stored kind wins; a contradiction is a 409
++  before anything is minted. A fresh id for an article whose guide is stored is not reachable from
++  the band (`openGuide` opens the stored one), so the direct lookup is left.
++- **F3 (P1), *Keep this* could overwrite.** Taken without a new atomic store operation: the press
++  asks the server what is stored first and never writes over a reason (says so instead), one write
++  per press, `madeFor` bound, and a rejected save is checked against the server before it is called
++  a failure. The residual race is two tabs of one reader pressing within a fraction of a second, and
++  the loser's words are their own. An atomic save-if-empty would be a store contract change for
++  that; not worth it in v1, named here.
++- **F4**: offered only when the whole message fits as stored (`keepableReason`); otherwise a link to
++  Metadata. **F5**: the greeting is not stored and is not rebuilt over old turns — drawn only by a
++  mount that saw the guide empty, kept above the turns while that mount lasts. **F6**: the seed takes
++  `[cmd:…]` buttons out of every assistant answer (`withoutCommandButtons`); cost jobs unchanged.
++  **F7**: the row is gated on `executor.openGuide`, which only the owner's reading view hands over,
++  and opens through `?guide=1` and Chat's band (nuqs keeps the other parameters). **F8**: *"In About
++  you, you wrote …"*, whitespace collapsed, `clamp`; the title in the author's face, quotes in the
++  reader's. **F9**: pinned by tests/command-bar-guide-row.test.ts and the regenerated catalogue
++  (owner article, experimental-off, archived).
++
++## The simpler options passed over
++
++- **Keep the box, add a Save button.** Fixes "now what?" but not "if we're in a chat interface, I
++  want to use the chat interface".
++- **Save the reader's first guide message as their reason automatically.** Their own words, no
++  press — but "where do I start?" would become their reason.
++- **Live in the guide with the companion's prompt unchanged.** One line of code, but the spoken
++  guide would be a content companion, not a guide.
++
++## Deferred, each with its own queue entry before the note may say shipped
++
++Queue entries: `qi-bn7qs2r9` (reason and About you, q-w2740x 1), `qi-rt49dwcd` (share, private link,
++archive, q-w2740x 2), `qi-bt4z2zaw` (spoken guide opens modes; profile asked less often; a
++model-written greeting).
++
++- **The guide keeps the reason itself** (exact-quote from the reader's message, checked, saved with
++  Undo) and **proposes an addition to About you** (a button, full text shown). Writes by a model's
++  choice: a defence edit, so Greg's — question file.
++- **Actions: private link, make public, archive** from the guide. Sharing and publishing change who
++  can read an article ([security-map.md](../project/security-map.md) § the public namespace and the
++  private-link key); archive writes the reader's shelf. Written up for Greg in the same question.
++- **A model-written greeting** (Greg's "probably the model would generate the first message"):
++  revisit if the fixed one reads flat in use; Opus's reasoning above is why not now.
++- **A spoken guide that opens modes** (an `open_mode` tool answered in the browser, like
++  `show_passage`, through `guide-acts.ts`' rules). v1 names them.
++- **Ask about the profile less often** (only when empty or not confirmed lately); v1 quotes it on
++  every new article's guide.
++
++## Stages
++
++### Stage 0: plan review
++- [x] GPT Sol, read-only: build with changes (§ After the plan review).
++
++### Stage 1: Live in the guide
++- [x] Tests red first: `liveInstructions({kind:"guide"})` carries the guide section and spoken mode
++      names and no `[cmd:`; `liveTools("guide")` has no web tools; a spoken turn may create and
++      append to a guide, still one per article; GPT-Live's voice/backend instructions for a guide.
++- [x] Server and client changes above. Docs: live-conversation.md § In the guide, chat-tools.md.
++
++### Stage 2: the greeting in the chat, and keeping the reason
++- [x] `guideGreeting(read, title)` pure, tested per row of the table; `GuideGreeting.tsx` draws it as
++      a bubble, kept above the turns; the box goes; `GUIDE_SYSTEM`'s box sentence becomes the
++      greeting sentence.
++- [x] *Keep this as why you're reading* under the first reader message; tests for shown/hidden,
++      saved, failed.
++
++### Stage 3: the bar's *Guide* row
++- [x] Row, aliases, owner-only, catalogue regenerated; test that `guide` ranks it first.
++
++### Stage 4: docs, browser, review, bookkeeping
++- [ ] Sonnet subagent: desktop and phone (greeting, keep button, Live button present, bar row).
++- [ ] GPT Sol code review (workspace-write); gates; push; queue entries; question file; note.
+diff --git a/docs/project/chat-tools.md b/docs/project/chat-tools.md
+index 0ee139f9f..040226077 100644
+--- a/docs/project/chat-tools.md
++++ b/docs/project/chat-tools.md
+@@ -540,7 +540,9 @@ From 2026-10-01 it showed chats only.
+   ([url-state.md](url-state.md)).
+ - **What Chat may open is chats and the guide** (`openableInChat`). A send, an edit and Live go by
+   the open conversation's kind, never the band's: a guide turn is sent as `guide`, with no blocks
+-  on screen and no Live. Every *Ask in chat* handoff still starts a fresh chat, even with the guide
++  on screen. Live too since 2026-10-09
++  ([261009i](../plans/261009i-the-guide-greets-in-chat-takes-live-and-a-bar-row.md)), with the
++  guide's own spoken prompt and tools ([live-conversation.md § In the guide](live-conversation.md#in-the-guide)). Every *Ask in chat* handoff still starts a fresh chat, even with the guide
+   open; a handoff names its target (`ChatHandoff.target`), and only the bar's *Ask the guide*
+   (stage 3) targets the guide.
+ - **Where a row came from** is one pure function, `threadSource` in
+@@ -1005,10 +1007,20 @@ from the pinned row above the list. What makes it a guide rather than a chat:
+   message only (`experienceLine`), so the cached prefix is the same for everyone.
+   [privacy.md § The guide is told…](privacy.md#the-guide-is-told-how-many-other-articles-you-have-opened).
+ - **Its tools** are `GUIDE_TOOLS` (§ The nine above), and no web search.
+-- **Its greeting is ours**, not a model's ([`GuideGreeting.tsx`](../../src/web/GuideGreeting.tsx)):
+-  free, and holding the same autosaving *Why you're reading this one* box Metadata has, so the
+-  reason saved is always the reader's own words. *Ask the guide where to start* sends a fixed first
+-  question once there is one.
++- **Its greeting is ours**, not a model's ([`GuideGreeting.tsx`](../../src/web/GuideGreeting.tsx),
++  words chosen in [`guide-greeting.ts`](../../src/web/guide-greeting.ts)): free, and since
++  2026-10-09 it asks in the conversation rather than in a box
++  ([261009i](../plans/261009i-the-guide-greets-in-chat-takes-live-and-a-bar-row.md); Greg,
++  `spya-s6qhzv`: *"if we're in a chat interface, I want to use the chat interface"*). It welcomes
++  the reader to the piece by title, asks why they are reading it when no reason is stored, quotes
++  the start of *About you* back and asks if it is still right, and stays above the turns while the
++  conversation is mounted. Under the reader's first answer, **Keep this as why you're reading**
++  saves their own words, on their press, never over a reason stored meanwhile — no model chooses
++  or writes the reason. *Ask the guide where to start* sends a fixed first question once a reason
++  is stored. `GUIDE_SYSTEM` is told the greeting exists, since it is not in the transcript.
++- **A row in the command bar**, *Guide*, on the owner's reading view (`guideRow` in
++  [`CommandBar.tsx`](../../src/web/CommandBar.tsx)), which opens it as `?guide=1` does; and since
++  261007j the bar's *Ask the guide: "…"* for a sentence the fast pick could not place.
+ - **Its buttons** are chat's, offered unasked when it suggests a mode or a search
+   (§ Command buttons), **and one of them may press itself** (since 2026-10-07,
+   [261007p](../plans/261007p-the-guide-acts-without-a-press-and-opens-every-new-article.md); Greg on
+diff --git a/docs/project/live-conversation.md b/docs/project/live-conversation.md
+index c4342ee26..d52b7dd15 100644
+--- a/docs/project/live-conversation.md
++++ b/docs/project/live-conversation.md
+@@ -35,6 +35,7 @@ reader can read the whole thing back a week later. That is the requirement every
+ - [§ Three things that are not obvious and cost an afternoon each](#three-things-that-are-not-obvious-and-cost-an-afternoon-each) — gotchas before debugging
+ - [§ The second engine: GPT-Live, behind Experimental](#the-second-engine-gpt-live-behind-experimental) — the other engine and its switch
+ - [§ The lifecycle, which is the most failure-prone part](#the-lifecycle-which-is-the-most-failure-prone-part) — connect, hang up, resume; where it breaks
++- [§ In the guide](#in-the-guide) — the spoken guide: its prompt, its tools, and the kind the page sends
+ - [§ What is not built](#what-is-not-built) — known gaps
+ - [§ See also](#see-also)
+ 
+@@ -582,6 +583,34 @@ union that lagged it would refuse a true report about how a conversation ended.
+ either way — a closed laptop says nothing, and a session with no `closed_at` is ordinary rather than
+ one still running.
+ 
++## In the guide
++
++> Why doesn't the Guide chat have a live conversation option?
++>
++> — Greg, 2026-10-09 (`spya-x38nge`)
++
++**Since 2026-10-09** ([261009i](../plans/261009i-the-guide-greets-in-chat-takes-live-and-a-bar-row.md)),
++the guide ([chat-tools.md § The guide](chat-tools.md#the-guide)) has the same Live button as Chat.
++What differs is what the session is told and given, on both engines:
++
++- **The prompt** is the companion's (`LIVE_SYSTEM`, or GPT-Live's two) plus `SPOKEN_GUIDE` in
++  [`src/live.ts`](../../src/live.ts) and `spokenModeWords()` in [`src/guide.ts`](../../src/guide.ts):
++  the reading, not the piece; why they are reading first; modes named, never pressed, since a
++  voice has no buttons.
++- **The tools** are the typed guide's (`GUIDE_TOOLS`) plus `show_passage`. The page says the
++  session's kind on every `/live-tool` call and the route hands it to `runTool`, so the guide's gate
++  (`toolsFor`) applies to a spoken guide as it does to a typed one. The model chooses only a name.
++- **The kind** is the stored thread's; for a guide that exists only in the tab, the page sends it
++  with the ticket (`LiveOptions.kindOf`), and a kind that contradicts a stored thread is refused
++  before anything is minted (`liveKind` in [`src/routes.ts`](../../src/routes.ts)). A spoken turn
++  may create the guide (`SpokenKind`), still one per article (`targetOf`).
++- **The seed** has the typed guide's `[cmd:…]` buttons taken out of its answers
++  (`withoutCommandButtons`), for the reason block ids are: a voice shown brackets in its own past
++  words starts saying them.
++
++Not built: a spoken guide that opens a mode itself, as the typed one does (an `open_mode` tool
++answered in the browser, like `show_passage`). It names them instead.
++
+ ## What is not built
+ 
+ - **Nothing caps a session on the server.** The meter measures what a conversation cost; it cannot
+diff --git a/docs/user-feedback/questions/q-w2740x.md b/docs/user-feedback/questions/q-w2740x.md
+new file mode 100644
+index 000000000..83a203a34
+--- /dev/null
++++ b/docs/user-feedback/questions/q-w2740x.md
+@@ -0,0 +1,31 @@
++---
++id: q-w2740x
++report: spya-s6qhzv
++status: open
++asked: 2026-10-09
++title: May the guide save your reason and About you itself, and offer share, private link and archive?
++refs: qi-7wcnqdd6 · SPIDERYARN-READING2-FB · docs/plans/261009i-the-guide-greets-in-chat-takes-live-and-a-bar-row.md · docs/user-feedback/261009_0101-guide-greets-in-chat-takes-live-and-a-bar-row.md
++---
++Two calls about what the guide may do with your things. Answer like "1A 2A".
++
++1. Saving why you're reading, and About you, from what you tell the guide.
++A (recommended): the guide picks the reason out of your own message, word for word; the page checks the words really are yours and saves them by itself, with an Undo. About you gets a button showing the full text, which you press. No model-written words ever become your reason.
++B: keep what was built today: a "Keep this as why you're reading" button under your first answer, which saves your whole message on your press. About you stays on the profile page.
++C: the guide writes a short reason in its own words and offers it as a button to press.
++
++2. Share, private link and archive from the guide ("do you want to create a private link for your journal club?").
++A (recommended): the guide offers a button that takes you to the right control on the article's Metadata page (sharing, or Archive), and you do it there. It moves you; it never shares or archives anything itself.
++B: buttons in the answer that do it on your press: create and copy a private link, make it public, archive.
++C: not yet.
++
++Details
++
++Your report (2026-10-09, from the changelog page): the guide's "why are you reading" box was confusing, you wanted the chat itself to greet you from what it knows and ask why you're reading, to update your profile and reasons from what you say, and to help you take actions like a private link, sharing or archiving.
++
++What is built and on dev (plan 261009i): the guide now greets you in the conversation, with no box. It welcomes you to the piece by title, asks why you are reading it, quotes the start of About you and asks if it is still right, and the guide's first real reply (which has your profile and the whole article) does the personal part. Under your first answer, "Keep this as why you're reading" saves your own words when you press it, and never overwrites a reason you saved elsewhere. The guide also takes Live now, and "Guide" in the command bar opens it.
++
++Why these two were not built: both are a model's suggestion acting on your data, and the rule written into our security notes is that anything the AI proposes that writes your data, spends money or leaves the article is a button you press, never an act. 1A would be the first exception for a write; 2B would put sharing, the one action that changes who can read an article, one press away from a sentence an article's own text could have steered the model into writing. That is why the recommendation for 2 only moves you to the control.
++
++What 1A costs: a new kind of guide output (a quoted span), a check that it is a substring of your message, an Undo line, and a one-line change to the security notes. It gives up nothing you have today; a planted instruction in an article could at worst choose which of your own words get saved, and Undo takes it back.
++
++What 2A costs: one more kind of button, a move to a Metadata section, the same as the guide's existing "open a mode" buttons. 2B costs a write path per action and is the one I would not do without you.
+diff --git a/src/chat.ts b/src/chat.ts
+index 1961413f6..e63db00b6 100644
+--- a/src/chat.ts
++++ b/src/chat.ts
+@@ -467,12 +467,14 @@ export interface SpokenTurn {
+ /**
+  * The kinds a spoken exchange may create. Not `candidates`: a referee's
+  * candidates conversation has no Live control, and a spoken turn creating one
+- * would be a mode nobody has designed.
++ * would be a mode nobody has designed. The guide since plan 261009i (Greg,
++ * 2026-10-09: *"Why doesn't the Guide chat have a live conversation
++ * option?"*); `targetOf` keeps it one per article whichever way it is begun.
+  */
+-export type SpokenKind = Extract<ThreadKind, "chat" | "learn">;
++export type SpokenKind = Extract<ThreadKind, "chat" | "learn" | "guide">;
+ 
+ export function isSpokenKind(value: unknown): value is SpokenKind {
+-  return value === "chat" || value === "learn";
++  return value === "chat" || value === "learn" || value === "guide";
+ }
+ 
+ /**
+diff --git a/src/command-pick-catalogue.generated.json b/src/command-pick-catalogue.generated.json
+index 24906dda4..3ab5e8f70 100644
+--- a/src/command-pick-catalogue.generated.json
++++ b/src/command-pick-catalogue.generated.json
+@@ -861,6 +861,25 @@
+    "owner-metadata"
+   ]
+  },
++ {
++  "id": "action:guide",
++  "label": "Guide",
++  "description": "This article's guide, in Chat: why you are reading it, where to start, and which modes would help.",
++  "aliases": [
++   "tour",
++   "where to start",
++   "how to read",
++   "welcome",
++   "getting started"
++  ],
++  "kind": "action",
++  "generates": false,
++  "contexts": [
++   "owner-article",
++   "owner-article-experimental-off",
++   "owner-article-archived"
++  ]
++ },
+  {
+   "id": "action:section-high-powered",
+   "label": "High-powered AI",
+diff --git a/src/command-token.ts b/src/command-token.ts
+index ba74cb29b..4237e5491 100644
+--- a/src/command-token.ts
++++ b/src/command-token.ts
+@@ -115,3 +115,20 @@ export function unsettledTokenLineAt(text: string, startsLine: boolean): number
+   const token = match[0].indexOf("[cmd:");
+   return token === -1 ? -1 : match.index + token;
+ }
++
++/**
++ * **An answer with its command tokens taken out**, for a voice model's seed
++ * (`liveSeedItems` in src/live.ts, plan 261009i). A typed answer's buttons are
++ * on lines of their own, so a line left empty by the removal goes too. Seeding
++ * a voice with `[cmd:…]` is few-shot pressure to say brackets aloud, the same
++ * reason block ids come out.
++ */
++export function withoutCommandButtons(text: string): string {
++  return text
++    .split("\n")
++    .flatMap((line) => {
++      const left = line.replace(new RegExp(COMMAND_TOKEN_SOURCE, "g"), "");
++      return left === line ? [line] : left.trim() === "" ? [] : [left.replace(/\s+$/, "")];
++    })
++    .join("\n");
++}
+diff --git a/src/converse.ts b/src/converse.ts
+index dcadf1e1d..0f9daa085 100644
+--- a/src/converse.ts
++++ b/src/converse.ts
+@@ -1686,9 +1686,15 @@ HOW TO GUIDE THEM
+   reading this piece:" is their reason, and "About the reader:" is what they
+   have told us about themselves. A line that is not there was not given, and no
+   section at all means neither was.
+-- If they have not said why they are reading it, ask that first, in one short
+-  question. The screen also shows them a box for it, so you may say they can
+-  write it there. Until they say, keep any suggestion general.
++- The conversation opens with a fixed greeting of ours, shown on their screen
++  but not in the transcript you see. When they had not said why they are
++  reading, it welcomed them, asked why, and, if About the reader was missing,
++  invited them to say a little about themselves; when About the reader was
++  there, it quoted the start of it and asked if it is still right. So their
++  first message is often an answer to that: take it as their reason, and as
++  news about themselves where it is.
++- If they still have not said why they are reading it, ask that first, in one
++  short question. Until they say, keep any suggestion general.
+ - If they have not told us about themselves, invite it once, lightly, in a
+   sentence — they can add it under About you on their profile page — and do not
+   ask again in this conversation. It is optional, and they owe us nothing.
+diff --git a/src/guide.ts b/src/guide.ts
+index 51dca7dfd..484cf67df 100644
+--- a/src/guide.ts
++++ b/src/guide.ts
+@@ -112,6 +112,35 @@ at once like a mode marked "Opens at once:".
+ ${lines.join("\n")}`;
+ }
+ 
++/**
++ * **The same modes, for a spoken guide** (plan 261009i): the labels and our
++ * descriptions with no token beside any of them, since a voice has nowhere to
++ * put a button and a model shown `[cmd:…]` in its instructions may read the
++ * brackets aloud. The same rows and order as `modeWordsSection`.
++ */
++export function spokenModeWords(rows: readonly CatalogueRow[] = catalogue): string {
++  const ours = rows.filter(
++    (row) => (row.kind === "mode" || row.kind === "submode") && row.contexts.includes(OWNER_ARTICLE),
++  );
++  const lines: string[] = [];
++  for (const mode of ours.filter((row) => row.kind === "mode")) {
++    const name = mode.id.slice("mode:".length);
++    lines.push(`- ${mode.label}${experimental(mode)}: ${mode.description}.`);
++    for (const sub of ours) {
++      if (sub.kind !== "submode" || !sub.id.startsWith(`submode:${name}:`)) continue;
++      lines.push(`  - ${mode.label} › ${sub.label}${experimental(sub)}: ${sub.description}.`);
++    }
++  }
++  return `WHAT SPIDERYARN CAN SHOW THEM
++
++The modes, in our own words. The reader opens one from the bottom bar under the
++article. Say a mode's name exactly as written here, so they can find it.
++"(experimental)" means they see it only once they have turned on experimental
++features on their profile page.
++
++${lines.join("\n")}`;
++}
++
+ /**
+  * **The `mode` proposal's token for one catalogue row** — `[cmd:mode:<key>]`
+  * with the key percent-encoded the way src/web/command-proposal.ts §
+diff --git a/src/live-gpt.ts b/src/live-gpt.ts
+index 26928473c..258ff6f4b 100644
+--- a/src/live-gpt.ts
++++ b/src/live-gpt.ts
+@@ -30,11 +30,13 @@ import {
+   GPT_LIVE_BACKEND_MODEL,
+   GPT_LIVE_MODEL,
+   LIVE_VOICE,
++  SPOKEN_GUIDE,
+   SPOKEN_RULES,
+   UNTRUSTED_TOOL_RESULTS,
+   liveSeedItems,
+   liveTools,
+ } from "./live.js";
++import { spokenModeWords } from "./guide.js";
+ import { plainWords } from "./plain-words.js";
+ import { untrusted } from "./untrusted-fence.js";
+ import type { Block, ChatMessage, Meta, ThreadKind, Tree, TreeNode } from "./types.js";
+@@ -284,6 +286,8 @@ export function gptLiveVoiceInstructions(opts: {
+   blocks: readonly Block[];
+   tree: Tree;
+   profile?: string | null;
++  /** A guide's voice is told it is the guide, and the modes' names (plan 261009i). */
++  kind?: ThreadKind | undefined;
+ }): string {
+   const { meta, blocks, tree } = opts;
+   const root = tree.nodes[tree.rootId];
+@@ -302,13 +306,15 @@ export function gptLiveVoiceInstructions(opts: {
+ 
+   const articleIntro =
+     "# The article\n\nWhat the piece is and how it is laid out. This is a map, not the text: delegate for anything it says.";
+-  const fixed = [GPT_LIVE_VOICE_SYSTEM, `${articleIntro}\n\n${untrusted("article", head)}`, who].filter(Boolean).join("\n\n");
++  const guide = opts.kind === "guide" ? `${SPOKEN_GUIDE}\n\n${spokenModeWords()}` : "";
++  const fixed = [GPT_LIVE_VOICE_SYSTEM, guide, `${articleIntro}\n\n${untrusted("article", head)}`, who].filter(Boolean).join("\n\n");
+   /* Sixty held back for the outline's own heading and the joins. */
+   const left = VOICE_INSTRUCTION_BUDGET - pessimisticTokens(fixed) - 60;
+   const outline = left > 0 ? gptLiveOutline({ tree, blocks, budget: left }) : "";
+ 
+   return [
+     GPT_LIVE_VOICE_SYSTEM,
++    guide,
+     `${articleIntro}\n\n${untrusted("article", [head, outline ? `OUTLINE:\n${outline}` : ""].filter(Boolean).join("\n\n"))}`,
+     who,
+   ]
+@@ -408,12 +414,15 @@ export function gptLiveBackendInstructions(opts: {
+   meta: Meta;
+   blocks: readonly Block[];
+   profile?: string | null;
++  /** A guide's backend is told the guide's intent too, without the mode list the voice says (plan 261009i). */
++  kind?: ThreadKind | undefined;
+ }): string {
+   const who = opts.profile
+     ? `WHO THE READER IS\n\nThe reader has told us this about themselves. Use it to pitch the answer; do not mention that you have it.\n\n${opts.profile}`
+     : "";
+   return [
+     GPT_LIVE_BACKEND_SYSTEM,
++    opts.kind === "guide" ? SPOKEN_GUIDE : "",
+     who,
+     `THE ARTICLE\n\nHere is the whole thing, with an id on every paragraph.\n\n${untrusted("article", articleWithIds(opts.meta, opts.blocks))}`,
+   ]
+@@ -545,7 +554,7 @@ export function gptLiveSession(opts: {
+            chat tools — already in the flat function shape the Responses API
+            takes. Not `strict`: their schemas have optional parameters and no
+            `additionalProperties: false`, which strict mode refuses. */
+-        tools: liveTools(),
++        tools: liveTools(opts.kind),
+       },
+     },
+   };
+diff --git a/src/live.ts b/src/live.ts
+index 6786a32a3..d15de2728 100644
+--- a/src/live.ts
++++ b/src/live.ts
+@@ -59,9 +59,11 @@ import { createHash } from "node:crypto";
+ import { answerAsSeen } from "./recall-hint.js";
+ import type { Block, ChatMessage, Meta, MicPlacement, ThreadKind } from "./types.js";
+ import { articleWithIds } from "./article-prompt.js";
+-import { CHAT_TOOLS } from "./chat-tools.js";
++import { CHAT_TOOLS, GUIDE_TOOLS } from "./chat-tools.js";
++import { spokenModeWords } from "./guide.js";
+ import { recentHistory } from "./converse.js";
+ import { withoutBlockIds } from "./answer-opening.js";
++import { withoutCommandButtons } from "./command-token.js";
+ import { stageFailure } from "./job-failure.js";
+ import { plainWords } from "./plain-words.js";
+ import { LIVE_UPSTREAM } from "./messages.js";
+@@ -350,6 +352,37 @@ ${UNTRUSTED_TOOL_RESULTS}
+ 
+ ${plainWords("explain", "spoken")}`;
+ 
++/**
++ * **What a spoken guide is told on top of the companion's rules** — plan
++ * docs/plans/261009i-the-guide-greets-in-chat-takes-live-and-a-bar-row.md
++ * (Greg, 2026-10-09, `spya-x38nge`). The typed guide's intent
++ * (`GUIDE_SYSTEM` in src/converse.ts) in a voice's terms: the subject is the
++ * reader's reading, not the piece, and modes are named, never pressed, since a
++ * voice has no buttons. Like `SPOKEN_RULES` it names no tool and never says
++ * the article is "below": the GPT-Live voice model has neither, and carries
++ * this too (src/live-gpt.ts).
++ *
++ * Followed by `spokenModeWords()` (src/guide.ts) wherever it goes.
++ */
++export const SPOKEN_GUIDE = `YOU ARE THEIR GUIDE TO READING THIS PIECE
++
++In this conversation you are not mainly here to talk about what the piece says.
++You are the reader's guide to reading it well, with Spideryarn, the app they are
++reading it in: why they are reading it, where to start, what to read closely and
++what they can skim, and which of Spideryarn's modes would help.
++
++- Start from why they are reading. If you do not know, ask that first, in one
++  short question. If they have not told us about themselves, you may ask once,
++  lightly, and never again.
++- Then suggest one way in that fits their reason: where to begin, and one mode
++  that would help, by its name, with what it would do for them. One suggestion
++  per turn; they will ask for more.
++- Never summarise the piece or walk them through its argument in place of
++  reading it. You may say what a part is for, so they know where to go. If they
++  want to talk about what it says, do, briefly, and send them to the passage.
++- You cannot open a mode or press anything for them. Say the mode's name so they
++  can find it in the bottom bar, and stop.`;
++
+ /**
+  * **The one tool that exists only in this mode.**
+  *
+@@ -405,10 +438,12 @@ export const SHOW_PASSAGE_TOOL = {
+  * description is a prompt (src/chat-tools.ts), and two copies of a prompt is
+  * one copy that will be updated.
+  */
+-export function liveTools(): unknown[] {
++export function liveTools(kind?: ThreadKind): unknown[] {
++  /* A guide is offered the typed guide's own tools (`toolsFor`): its article
++     only, no web — plan 261009i. Every other kind keeps the eight. */
+   return [
+     SHOW_PASSAGE_TOOL,
+-    ...CHAT_TOOLS.map((t) => ({
++    ...(kind === "guide" ? GUIDE_TOOLS : CHAT_TOOLS).map((t) => ({
+       type: "function" as const,
+       name: t.function.name,
+       description: t.function.description,
+@@ -459,12 +494,15 @@ export function liveInstructions(opts: {
+   meta: Meta;
+   blocks: Block[];
+   profile?: string | null;
++  /** The conversation's kind: a guide adds `SPOKEN_GUIDE` and the mode names (plan 261009i). */
++  kind?: ThreadKind | undefined;
+ }): string {
+   const who = opts.profile
+     ? `WHO YOU ARE TALKING TO\n\nThe reader has told us this about themselves. Use it to pitch the answer; do not mention that you have it.\n\n${opts.profile}`
+     : "";
+   return [
+     LIVE_SYSTEM,
++    ...(opts.kind === "guide" ? [SPOKEN_GUIDE, spokenModeWords()] : []),
+     who,
+     `THE ARTICLE\n\nHere is the whole thing, with an id on every paragraph. Keep it in mind for everything they ask.\n\n${articleWithIds(opts.meta, opts.blocks)}`,
+   ]
+@@ -519,7 +557,7 @@ export function liveSeedItems(
+ ): { role: "user" | "assistant"; text: string }[] {
+   return recentHistory(history).map((m) => ({
+     role: m.role,
+-    text: m.role === "assistant" ? withoutBlockIds(answerAsSeen(m, kind)) : m.text,
++    text: m.role === "assistant" ? withoutBlockIds(withoutCommandButtons(answerAsSeen(m, kind))) : m.text,
+   }));
+ }
+ 
+@@ -573,13 +611,15 @@ export function liveSession(opts: {
+   vocabulary?: readonly string[] | null;
+   /** Where the reader's microphone is. Defaults to `DEFAULT_PLACEMENT`. */
+   placement?: MicPlacement | null;
++  /** The conversation's kind, for `liveInstructions` and `liveTools`. */
++  kind?: ThreadKind | undefined;
+ }): Record<string, unknown> {
+   return {
+     type: "realtime",
+     model: LIVE_MODEL,
+     instructions: liveInstructions(opts),
+     reasoning: { effort: LIVE_REASONING_EFFORT },
+-    tools: liveTools(),
++    tools: liveTools(opts.kind),
+     tool_choice: "auto",
+     audio: {
+       input: {
+diff --git a/src/profile.ts b/src/profile.ts
+index 8b08802fa..9e13e7584 100644
+--- a/src/profile.ts
++++ b/src/profile.ts
+@@ -48,21 +48,12 @@ import { createHash } from "node:crypto";
+    types.ts is pure and already shared. */
+ export { MAX_PROFILE_CHARS, MAX_PURPOSE_CHARS } from "./types.js";
+ 
+-/**
+- * Trim it, settle the line endings, and call whitespace-only nothing.
+- *
+- * `\r\n` first, because a paste from a Windows-authored document carries them
+- * and they are invisible in every surface a reader or a reviewer would look at
+- * — including a diff of the hash's input, which is the one place it would
+- * matter. Returns `null` rather than `""` so that "the reader emptied the box"
+- * and "the reader never touched it" cannot be told apart *here*; whoever cares
+- * about that distinction holds it above this line.
+- */
+-export function normaliseProfileText(text: string | null | undefined): string | null {
+-  if (!text) return null;
+-  const clean = text.replace(/\r\n/g, "\n").trim();
+-  return clean.length > 0 ? clean : null;
+-}
++/* `normaliseProfileText` lives in types.ts since plan 261009i, where the
++   browser can reach it too (the guide's *Keep this as why you're reading*
++   offers only words that fit once stored); re-exported because this is where
++   the server's callers look. */
++import { normaliseProfileText } from "./types.js";
++export { normaliseProfileText };
+ 
+ /**
+  * The two halves as one block of prompt text, or `null` when there is nothing
+diff --git a/src/routes.ts b/src/routes.ts
+index eaed36b21..0cb89ede8 100644
+--- a/src/routes.ts
++++ b/src/routes.ts
+@@ -4354,6 +4354,26 @@ function parseSpokenTools(x: unknown): { tools: ToolRun[] } | undefined {
+   return tools.length > 0 ? { tools } : undefined;
+ }
+ 
++/**
++ * **Which kind of conversation a live session is for** — the stored thread's,
++ * or, for one that exists only in the tab (an empty guide, an empty Learn
++ * conversation), the kind the browser says it has. Checked against
++ * `SpokenKind`, never cast; the stored kind always wins, and the spoken append
++ * refuses a contradiction anyway (`withSpokenTurn`). It picks the prompt and
++ * the tools (a guide's are the guide's, plan 261009i), nothing else.
++ */
++function liveKind(thread: ChatThread | undefined, sent: unknown): ThreadKind | undefined {
++  if (sent !== undefined && !isSpokenKind(sent)) {
++    throw httpError(400, "kind must be a conversation that takes a live conversation");
++  }
++  /* Refused before anything is minted or billed, as the spoken append would
++     refuse it later (GPT Sol's F2 on the plan). */
++  if (thread && sent !== undefined && thread.kind !== sent) {
++    throw httpError(409, "That conversation is already a different kind.");
++  }
++  return thread?.kind ?? sent;
++}
++
+ /**
+  * **A ticket for one live conversation.** `POST /api/chat/:slug/:threadId/live`.
+  *
+@@ -4389,7 +4409,7 @@ async function liveChatToken(
+   threadId: string,
+   body: unknown,
+ ): Promise<LiveTicket> {
+-  const { placement, useProfile } = (body ?? {}) as Record<string, unknown>;
++  const { placement, useProfile, kind } = (body ?? {}) as Record<string, unknown>;
+   /* **Validated against the shared union, never cast.** The two ends declare
+      `MicPlacement` once, in src/types.ts, and this is the gate that keeps a
+      string off the wire from becoming a `Record` lookup that quietly answers
+@@ -4406,6 +4426,7 @@ async function liveChatToken(
+   const thread = (await chatStore.load(slug)).find((t) => t.id === threadId);
+ 
+   const session = liveSession({
++    kind: liveKind(thread, kind),
+     meta: article.meta,
+     blocks: article.blocks,
+     profile: useProfile === false ? null : await resolveProfile(slug),
+@@ -4512,7 +4533,7 @@ async function liveChatSession(
+   threadId: string,
+   body: unknown,
+ ): Promise<GptLiveTicket> {
+-  const { sdp, placement, useProfile } = (body ?? {}) as Record<string, unknown>;
++  const { sdp, placement, useProfile, kind } = (body ?? {}) as Record<string, unknown>;
+   if (typeof sdp !== "string" || sdp.trim() === "") {
+     throw httpError(400, "Expected { sdp }, the browser's SDP offer");
+   }
+@@ -4540,7 +4561,7 @@ async function liveChatSession(
+     tree: article.tree,
+     profile: useProfile === false ? null : await resolveProfile(slug),
+     history: thread?.messages ?? [],
+-    kind: thread?.kind,
++    kind: liveKind(thread, kind),
+   });
+ 
+   /* **Journal first.** If this insert throws, OpenAI is never asked and nothing
+@@ -4788,12 +4809,22 @@ async function liveClose(sessionId: string, body: unknown): Promise<{ ok: true }
+  * that tool's list — docs/project/chat-tools.md § The reader's notes.
+  */
+ async function liveTool(slug: string, body: unknown): Promise<ToolOutcome> {
+-  const { name, args } = (body ?? {}) as Record<string, unknown>;
++  const { name, args, kind } = (body ?? {}) as Record<string, unknown>;
+   if (typeof name !== "string" || !LIVE_SERVER_TOOLS.has(name)) {
+     throw httpError(400, "That is not a tool a live session may run");
+   }
++  /* **The session's kind, so `runTool`'s own gate applies** (`toolsFor`): a
++     guide's model that names a tool the guide is not offered is answered as
++     an unknown tool, exactly as in a typed guide (plan 261009i). Said by the
++     reader's own page, which read it from the conversation it started; the
++     model chooses only the name. Absent is a chat's or Learn's session, which
++     run the shared eight as before. */
++  if (kind !== undefined && !isSpokenKind(kind)) {
++    throw httpError(400, "kind must be a conversation that takes a live conversation");
++  }
+   const article = await loadArticle(slug);
+   return runTool(name, (args ?? {}) as Record<string, unknown>, {
++    ...(kind === "guide" ? { kind } : {}),
+     slug,
+     meta: article.meta,
+     blocks: article.blocks,
+diff --git a/src/types.ts b/src/types.ts
+index f743a3a11..f80963e8e 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -1597,6 +1597,22 @@ export const MAX_PROFILE_CHARS = 1_500;
+  */
+ export const MAX_PURPOSE_CHARS = 600;
+ 
++/**
++ * Trim it, settle the line endings, and call whitespace-only nothing.
++ *
++ * `\r\n` first, because a paste from a Windows-authored document carries them
++ * and they are invisible in every surface a reader or a reviewer would look at
++ * — including a diff of the hash's input, which is the one place it would
++ * matter. Returns `null` rather than `""` so that "the reader emptied the box"
++ * and "the reader never touched it" cannot be told apart *here*; whoever cares
++ * about that distinction holds it above this line.
++ */
++export function normaliseProfileText(text: string | null | undefined): string | null {
++  if (!text) return null;
++  const clean = text.replace(/\r\n/g, "\n").trim();
++  return clean.length > 0 ? clean : null;
++}
++
+ /**
+  * **One author of the piece, as the piece declares them** — the page's
+  * `citation_author` and `citation_author_institution` tags, or the names and
+diff --git a/src/web/ChatPanel.tsx b/src/web/ChatPanel.tsx
+index 3f13c8cd1..19377fdfc 100644
+--- a/src/web/ChatPanel.tsx
++++ b/src/web/ChatPanel.tsx
+@@ -97,7 +97,9 @@ import type {
+ } from "../types.js";
+ import { isLearnKind } from "../types.js";
+ import { CitedMarkdown } from "./Cited.js";
+-import { GuideGreeting } from "./GuideGreeting.js";
++import { GuideGreeting, GuideKeepReason } from "./GuideGreeting.js";
++import { guideGreeting } from "./guide-greeting.js";
++import { usePurpose } from "./purpose.js";
+ import { Button } from "./components/ui/button.js";
+ import { useChatCommands } from "./CommandChip.js";
+ import { chipFor } from "./chat-commands.js";
+@@ -205,6 +207,8 @@ interface Props {
+   onThread(id: string | null): void;
+   /** The article, so dictation can be primed with this one's vocabulary. */
+   slug: string;
++  /** The article's title, for the guide's greeting (plan 261009i). */
++  articleTitle?: string | undefined;
+   /**
+    * Whether the conversations have been asked for and answered.
+    *
+@@ -416,6 +420,7 @@ export const SUGGESTIONS: { label: string; ask: string }[] = [
+ 
+ export function ChatPanel({
+   slug,
++  articleTitle,
+   loaded,
+   loadFailed,
+   threads,
+@@ -737,6 +742,7 @@ export function ChatPanel({
+           live={shownLive}
+           onStartLive={onStartLive ? () => onStartLive(open.id) : undefined}
+           guideAct={guideAct}
++          articleTitle={articleTitle}
+         />
+       ) : learn ? (
+         /* **Learn never draws a list, not even for a frame.** The band
+@@ -1401,9 +1407,12 @@ export function Conversation({
+   onStartLive,
+   onAnswered,
+   guideAct,
++  articleTitle,
+ }: {
+   /** The article, so the composer's dictation can be primed with its vocabulary. */
+   slug: string;
++  /** The article's title, for the guide's greeting (plan 261009i). */
++  articleTitle?: string | undefined;
+   thread: ChatThread;
+   /** See `onHintOpened` in Props. Absent where nothing records the press. */
+   onHintOpened?: ((messageId: string, hint: string) => void) | undefined;
+@@ -1458,6 +1467,14 @@ export function Conversation({
+    * ran in is over, so nothing that mounts later can act on it.
+    */
+   const ownAct = useGuideAct(thread.id, kind, visible, onAnswered);
++  /* **The guide's greeting** (plan 261009i): read once, and drawn only by a
++     conversation that was empty when this mount first saw it, then kept above
++     the turns while it stays mounted. A guide opened with turns in it shows
++     none — GuideGreeting.tsx says why. */
++  const guideRead = usePurpose(kind === "guide" ? slug : null);
++  const greeting = kind === "guide" ? guideGreeting(guideRead, articleTitle) : null;
++  const greetsHere = useRef(thread.messages.length === 0);
++  const firstAsked = thread.messages.find((m) => m.role === "user");
+   const act = guideAct ?? ownAct;
+   /* **Offered, and spent, only once this conversation draws that answer as
+      finished.** The `Answered` event can land before the store's notification
+@@ -1902,10 +1919,11 @@ export function Conversation({
+           measureSteps(el);
+         }}
+       >
++        {kind === "guide" && greetsHere.current && greeting !== null && (
++          <GuideGreeting greeting={greeting} onAsk={(q) => onSend(q)} />
++        )}
+         {empty &&
+-          (kind === "guide" ? (
+-            <GuideGreeting slug={slug} onAsk={(q) => onSend(q)} />
+-          ) : kind === "tutorial" ? (
++          (kind === "guide" ? null : kind === "tutorial" ? (
+             <TutorialInvitation />
+           ) : kind === "explore" ? (
+             <ExploreInvitation onAsk={(q) => onSend(q)} />
+@@ -1946,6 +1964,11 @@ export function Conversation({
+                what is on screen. */
+             discards={thread.messages.length - i - 1}
+           />
++          {/* The reader's answer to the greeting's question, kept as their
++              reason only if they press (GuideGreeting.tsx § GuideKeepReason). */}
++          {greetsHere.current && greeting?.asksReason && m === firstAsked && (
++            <GuideKeepReason slug={slug} text={m.text} />
++          )}
+           </GuideActContext.Provider>
+         ))}
+         {/* The spoken words still on their way to being saved, as the end of
+diff --git a/src/web/CommandBar.tsx b/src/web/CommandBar.tsx
+index 5e3f44c3b..6f0e13384 100644
+--- a/src/web/CommandBar.tsx
++++ b/src/web/CommandBar.tsx
+@@ -396,6 +396,7 @@ export function besideTheModes({
+ }): readonly Command[] {
+   return [
+     ...(article === undefined ? [] : articleRows(article)),
++    ...guideRow(article),
+     /* After the article's own page and before everything else: these are about
+        this article too. Typed-only, so the list the bar opens on is unchanged
+        (command-match.ts § `CommandWords.typedOnly`). The Metadata rows first —
+@@ -500,6 +501,36 @@ function articleRows({ slug, search }: CommandBarArticle): readonly Command[] {
+   ];
+ }
+ 
++/**
++ * **The *Guide* row**: open this article's guide in Chat, sending nothing.
++ * Greg, 2026-10-09, `spya-s6qhzv`: *"there should be a command in the command
++ * bar for opening the guide chat"*. Plan 261009i.
++ *
++ * Only where the page hands over a way to open it (`executor.openGuide`), which
++ * is the owner's reading view: the guide is the owner's, and the Metadata page
++ * has no band. `guide` was already one of Help's aliases and stays there; a
++ * label prefix outranks an alias prefix (command-match.ts), so typing it puts
++ * this row first and Help still in the list.
++ */
++function guideRow(article: CommandBarArticle | undefined): readonly Command[] {
++  const open = article?.executor?.openGuide;
++  if (open === undefined) return [];
++  return [
++    {
++      kind: "action",
++      id: "guide",
++      label: "Guide",
++      description: "This article's guide, in Chat: why you are reading it, where to start, and which modes would help.",
++      aliases: ["tour", "where to start", "how to read", "welcome", "getting started"],
++      /* Opening the guide draws its greeting, which is ours; nothing is asked
++         of a model until the reader sends. */
++      generates: false,
++      opensOnly: true,
++      run: () => open(),
++    } as const,
++  ];
++}
++
+ /**
+  * **The two things the *Run again* rows need from the job queue** — posting a
+  * run, and why the last post failed. A narrowing of `UseJobs` rather than the
+diff --git a/src/web/GuideGreeting.tsx b/src/web/GuideGreeting.tsx
+index 017e67d7c..5fdbd5834 100644
+--- a/src/web/GuideGreeting.tsx
++++ b/src/web/GuideGreeting.tsx
+@@ -1,42 +1,32 @@
+ /**
+- * **The guide's empty state: our words, and no model call.** Plan
+- * docs/plans/261007j-the-guide-a-conversation-about-how-to-read-this.md, § The
+- * design, 3: *"The greeting is ours, not a model's … Nothing is spent until the
+- * reader sends."*
++ * **The guide's greeting: our words, and no model call** — and, under the
++ * reader's first answer to it, *Keep this as why you're reading*.
+  *
+- * Shaped like the other conversations' empty states (ChatPanel.tsx §
+- * `TutorialInvitation`, `ExploreInvitation`): a few plain sentences, and a
+- * button only where pressing it is a complete request. What it shows depends on
+- * what the reader has already told us, read from `GET /api/reader?slug=`
+- * (`usePurpose`):
++ * Plan docs/plans/261009i-the-guide-greets-in-chat-takes-live-and-a-bar-row.md,
++ * after Greg's report (2026-10-09, `spya-s6qhzv`): *"It shows the input box
++ * for why you're reading this, and so I put in some text in there, and then I
++ * was like, well, now what? … if we're in a chat interface, I want to use the
++ * chat interface."* Until then (plan 261007j) the greeting held an autosaving
++ * box. Now it asks its question in the conversation, the reader answers in the
++ * composer, and the words are what `guideGreeting` (./guide-greeting.ts)
++ * chooses from `GET /api/reader?slug=`.
+  *
+- * - **No reason for reading stored** → the very box the first-open prompt and
+- *   Metadata hold for *Why you're reading this one* — `ProfileBox` with
+- *   `useAutosavedText` and `savePurpose`, wired as PurposePrompt.tsx wires it,
+- *   so it saves itself — and a line saying they can answer there or type below.
+- *   **The reader's own words are what is saved; nothing a model wrote ever
+- *   becomes their reason** (GPT Sol's F5 on the plan, which is why there is no
+- *   `purpose` button).
+- * - **About you empty** → one light line pointing at their profile page.
+- * - **A reason stored, or just saved in the box** → *Ask the guide where to
+- *   start*, which sends `GUIDE_FIRST_QUESTION`. The press is the consent to
+- *   spend; nothing is asked before it.
++ * Drawn as the conversation's opening while it is empty, and kept above the
++ * turns for as long as this conversation stays mounted, so the reader's first
++ * message is visibly an answer to it. A guide opened with turns already in it
++ * shows no greeting: one rebuilt from today's profile above last week's
++ * answers would be a message nobody sent (GPT Sol's F5 on the plan).
+  *
+- * A read that failed, or a shelf the server could not read (`purposeFailed`),
+- * is never taken for "you have not said": no box over a sentence the reader
+- * may already have written, and no button promising a reason we cannot see.
+- *
+- * The words are the app's, so they are set in the app's face; the reader's
+- * own reason is in their box, which `ProfileBox` draws (docs/project/fonts.md).
++ * The words are the app's, set in the app's face; the title is the author's
++ * and the quoted lines are the reader's, each in its own (docs/project/fonts.md).
+  */
+-import { useEffect, useRef } from "react";
+-import { MAX_PURPOSE_CHARS } from "../types.js";
++import { Compass } from "lucide-react";
++import { useRef, useState } from "react";
+ import { Link } from "./Link.js";
+-import { ProfileBox } from "./ProfileBox.js";
+ import { useMadeFor } from "./lib/made-for.js";
+-import { leavePurpose, savePurpose, usePurpose } from "./purpose.js";
+-import { PROFILE_HREF } from "./router.js";
+-import { useAutosavedText } from "./useAutosavedText.js";
++import { type Greeting, type GreetingRun, keepableReason } from "./guide-greeting.js";
++import { savePurpose, storedPurpose } from "./purpose.js";
++import { PROFILE_HREF, readHref } from "./router.js";
+ 
+ /**
+  * **What *Ask the guide where to start* sends**, as the reader's first message
+@@ -48,70 +38,38 @@ export const GUIDE_FIRST_QUESTION = "I've said why I'm reading this. Where shoul
+ /** The button's words. */
+ export const GUIDE_START_LABEL = "Ask the guide where to start";
+ 
+-export function GuideGreeting({ slug, onAsk }: { slug: string; onAsk(question: string): void }) {
+-  const read = usePurpose(slug);
+-  /* The reader the box was mounted for, so its unmount save cannot go out as
+-     the next one (lib/made-for.ts), exactly as PurposePrompt.tsx's. */
+-  const madeFor = useMadeFor();
+-  const purpose = useAutosavedText({
+-    /* The server's answer, not what was typed, and an empty box clears: the
+-       box is seeded only over a reason that is definitively none, so there
+-       is nothing hidden to erase. */
+-    save: async (text) => (await savePurpose(slug, text === "" ? null : text, madeFor)) ?? "",
+-    leave: (text) => leavePurpose(slug, text, madeFor),
+-  });
+-  const seed = purpose.seed;
+-
+-  const known = read.state === "ready" && !read.purposeFailed;
+-  /* Asked once, at the read: a box that appeared after the reader saved into
+-     it would vanish under them, so once shown it stays. */
+-  const asking = known && read.purpose === null;
+-  const seeded = useRef(false);
+-  useEffect(() => {
+-    if (!asking || seeded.current) return;
+-    seeded.current = true;
+-    seed("");
+-  }, [asking, seed]);
++/** The keep button's words, and what it says once the reason is kept. */
++export const KEEP_REASON_LABEL = "Keep this as why you're reading";
++export const KEPT_REASON_LABEL = "Kept as why you're reading this one.";
+ 
+-  const hasReason = known && (read.purpose !== null || (purpose.saved ?? "").trim() !== "");
+-  const noProfile = read.state === "ready" && read.profile === null;
++function Run({ run }: { run: GreetingRun }) {
++  if (run.voice === "title") return <span className="guide-greeting-title">{run.text}</span>;
++  if (run.voice === "reader") return <span className="guide-greeting-reader">{run.text}</span>;
++  return <>{run.text}</>;
++}
+ 
++export function GuideGreeting({ greeting, onAsk }: { greeting: Greeting; onAsk(question: string): void }) {
+   return (
+-    <div className="chat-suggest guide-greeting">
+-      <p className="chat-empty-hint">
+-        I'm here to help you read this piece well, and to get the most out of Spideryarn while you do. {asking
+-          ? "Tell me why you're reading it, and I'll suggest where to start, what to search for, and which modes would help."
+-          : hasReason
+-            ? "I can suggest where to start, what to search for, and which modes would help."
+-            : "Ask me where to start, what to search for, or which modes would help."}
+-      </p>
+-      {asking && (
+-        <>
+-          <ProfileBox
+-            id="guide-purpose"
+-            article={slug}
+-            label="Why you're reading this one"
+-            placeholder="e.g. I want to know how they handled missing data"
+-            hint="For this article only. You can change it later on Metadata."
+-            value={purpose.draft}
+-            onChange={purpose.setDraft}
+-            onCommit={purpose.commit}
+-            max={MAX_PURPOSE_CHARS}
+-            disabled={purpose.saved === null}
+-            rows={2}
+-            save={purpose.state}
+-            inFlight={purpose.inFlight}
+-          />
+-          <p className="chat-empty-hint">You can answer in the box above, or just type below.</p>
+-        </>
+-      )}
+-      {noProfile && (
+-        <p className="chat-empty-hint">
+-          If you tell us a little about yourself on your <Link href={PROFILE_HREF}>profile</Link>, I can
+-          fit my suggestions to you.
+-        </p>
+-      )}
+-      {hasReason && (
++    <div className="chat-suggest guide-greeting" role="note" aria-label="The guide's greeting">
++      <div className="guide-greeting-bubble">
++        <Compass size={14} aria-hidden="true" className="guide-greeting-icon" />
++        <div>
++          {greeting.paragraphs.map((paragraph, i) => (
++            <p key={i} className="chat-empty-hint">
++              {paragraph.map((run, j) => (
++                <Run key={j} run={run} />
++              ))}
++            </p>
++          ))}
++          {greeting.invitesProfile && (
++            <p className="chat-empty-hint">
++              If you tell us a little about yourself on your <Link href={PROFILE_HREF}>profile</Link>, I can fit
++              my suggestions to you.
++            </p>
++          )}
++        </div>
++      </div>
++      {greeting.offersStart && (
+         <ul>
+           <li>
+             <button type="button" className="chat-suggest-btn" onClick={() => onAsk(GUIDE_FIRST_QUESTION)}>
+@@ -123,3 +81,106 @@ export function GuideGreeting({ slug, onAsk }: { slug: string; onAsk(question: s
+     </div>
+   );
+ }
++
++type KeepState =
++  | { kind: "offer" }
++  | { kind: "saving" }
++  | { kind: "kept" }
++  /** A reason was already stored by the time of the press: nothing is overwritten. */
++  | { kind: "already" }
++  | { kind: "failed" };
++
++/**
++ * ***Keep this as why you're reading*, under the reader's first message** in a
++ * guide whose greeting asked for the reason. The reader's own words and the
++ * reader's own press: no model chooses or writes them, which is why this needs
++ * no proposal id and no exception in docs/project/security-map.md.
++ *
++ * - Offered only when the message fits as it would be stored
++ *   (`keepableReason`); a longer one gets a link to Metadata instead.
++ * - **Never overwrites.** The press asks the server what is stored first, and
++ *   a reason saved since the greeting's read (another tab, Metadata) is kept
++ *   and said so. Two tabs of one reader pressing within the same fraction of a
++ *   second could still both write; the loser's words are their own, and
++ *   Metadata shows which won.
++ * - One write per press: a second press while one is in flight does nothing.
++ * - A save that rejects is checked against the server before it is called a
++ *   failure, since the reply can be lost after the write (`savePurpose`).
++ */
++export function GuideKeepReason({ slug, text }: { slug: string; text: string }) {
++  const madeFor = useMadeFor();
++  const [state, setState] = useState<KeepState>({ kind: "offer" });
++  const busy = useRef(false);
++  const reason = keepableReason(text);
++  const metadata = readHref(slug, "", "metadata");
++
++  if (reason === null) {
++    return (
++      <p className="chat-empty-hint guide-keep">
++        Too long to keep as why you're reading this one; you can write a shorter one on{" "}
++        <Link href={metadata}>Metadata</Link>.
++      </p>
++    );
++  }
++
++  const keep = async () => {
++    if (busy.current) return;
++    busy.current = true;
++    setState({ kind: "saving" });
++    try {
++      const before = await storedPurpose(slug);
++      if (before === null) {
++        setState({ kind: "failed" });
++        return;
++      }
++      if (before.purpose !== null) {
++        setState(before.purpose === reason ? { kind: "kept" } : { kind: "already" });
++        return;
++      }
++      try {
++        await savePurpose(slug, reason, madeFor);
++        setState({ kind: "kept" });
++      } catch {
++        const after = await storedPurpose(slug);
++        setState(after?.purpose === reason ? { kind: "kept" } : { kind: "failed" });
++      }
++    } finally {
++      busy.current = false;
++    }
++  };
++
++  switch (state.kind) {
++    case "kept":
++      return (
++        <p className="chat-empty-hint guide-keep" role="status">
++          {KEPT_REASON_LABEL} You can change it on <Link href={metadata}>Metadata</Link>.
++        </p>
++      );
++    case "already":
++      return (
++        <p className="chat-empty-hint guide-keep" role="status">
++          You had already saved a reason for this one, so I left it as it was. It is on{" "}
++          <Link href={metadata}>Metadata</Link>.
++        </p>
++      );
++    default:
++      return (
++        <div className="guide-keep">
++          <button
++            type="button"
++            className="chat-suggest-btn"
++            disabled={state.kind === "saving"}
++            onClick={() => void keep()}
++          >
++            {KEEP_REASON_LABEL}
++          </button>
++          {state.kind === "failed" && (
++            <span className="chat-empty-hint" role="alert">
++              {" "}
++              Couldn't save it. Try again, or write it on <Link href={metadata}>Metadata</Link>.
++            </span>
++          )}
++        </div>
++      );
++  }
++}
+diff --git a/src/web/chat/model.ts b/src/web/chat/model.ts
+index 0a90bb627..20fe842ad 100644
+--- a/src/web/chat/model.ts
++++ b/src/web/chat/model.ts
+@@ -898,7 +898,7 @@ export type ChatCommand =
+        * exists. The server uses it only when this exchange creates the thread.
+        * `SpokenTurn.kind` in src/chat.ts; SPIDERYARN-READING2-70.
+        */
+-      kind?: Extract<ThreadKind, "chat" | "learn">;
++      kind?: Extract<ThreadKind, "chat" | "learn" | "guide">;
+     }
+   /** Ask about one conversation, because the screen is wrong about it. */
+   | { type: "repair"; opId: OpId; slug: string; threadId: string }
+diff --git a/src/web/chat/reduce.ts b/src/web/chat/reduce.ts
+index 848c20c4c..7461bcc20 100644
+--- a/src/web/chat/reduce.ts
++++ b/src/web/chat/reduce.ts
+@@ -513,7 +513,7 @@ function startSpoken(state: ChatState, op: Registering<SpokenOperation>): Outcom
+         ...(op.reply.tools ? { tools: op.reply.tools } : {}),
+         ...(op.reply.interrupted ? { interrupted: true } : {}),
+         ...(op.engine && op.engine !== "realtime" ? { engine: op.engine } : {}),
+-        ...(kind === "chat" || kind === "learn" ? { kind } : {}),
++        ...(kind === "chat" || kind === "learn" || kind === "guide" ? { kind } : {}),
+       },
+     ],
+   };
+diff --git a/src/web/command-proposal.ts b/src/web/command-proposal.ts
+index 051e99594..ac9309355 100644
+--- a/src/web/command-proposal.ts
++++ b/src/web/command-proposal.ts
+@@ -565,6 +565,12 @@ export interface CommandExecutor {
+    * Chat is the owner's.
+    */
+   readonly askGuide?: ((sentence: string) => ActionOutcome) | undefined;
++  /**
++   * Open this article's guide in Chat, sending nothing — the bar's *Guide* row
++   * (plan 261009i: *"there should be a command in the command bar for opening
++   * the guide chat"*). The owner's reading view only, as `askGuide` is.
++   */
++  readonly openGuide?: (() => ActionOutcome) | undefined;
+ }
+ 
+ /** One press per band that offers an append now; a band not named offers none. */
+diff --git a/src/web/command-runners.ts b/src/web/command-runners.ts
+index 2f5b31a94..687a66054 100644
+--- a/src/web/command-runners.ts
++++ b/src/web/command-runners.ts
+@@ -317,6 +317,7 @@ export function readingExecutor({
+   openQuickSearch,
+   askThroughLens,
+   askGuide,
++  openGuide,
+   modes,
+ }: {
+   slug: string;
+@@ -338,6 +339,8 @@ export function readingExecutor({
+    * Reader.tsx § `askTheGuide` (plan 261007j F6).
+    */
+   askGuide?: ((sentence: string) => void) | undefined;
++  /** Open the guide, sending nothing, for the bar's *Guide* row — Reader.tsx § `openTheGuide` (plan 261009i). */
++  openGuide?: (() => void) | undefined;
+   /** The modes a chip may open, and how — `modeDoor` (plan 261007j). */
+   modes?: ModeDoor | undefined;
+ }): CommandExecutor {
+@@ -366,6 +369,14 @@ export function readingExecutor({
+             return CLOSE;
+           },
+         }),
++    ...(openGuide === undefined
++      ? {}
++      : {
++          openGuide: (): ActionOutcome => {
++            openGuide();
++            return CLOSE;
++          },
++        }),
+     ...(askGuide === undefined
+       ? {}
+       : {
+diff --git a/src/web/guide-greeting.ts b/src/web/guide-greeting.ts
+new file mode 100644
+index 000000000..b8096f745
+--- /dev/null
++++ b/src/web/guide-greeting.ts
+@@ -0,0 +1,131 @@
++/**
++ * **What the guide says first, before any model is asked** — plan
++ * docs/plans/261009i-the-guide-greets-in-chat-takes-live-and-a-bar-row.md.
++ *
++ * > I think if we're in a chat interface, I want to use the chat interface. …
++ * > check, you know, have I entered a user profile? Have I entered why you're
++ * > reading this? And then depending on that, maybe it would deterministically
++ * > generate an initial message
++ * >
++ * > — Greg, 2026-10-09, `spya-s6qhzv`
++ *
++ * So the greeting is ours, chosen by what `GET /api/reader?slug=` says, and it
++ * asks its question in the conversation: the reader answers in the composer,
++ * not in a box. Nothing is spent until they send. Pure, so each arm of the
++ * plan's table is a test.
++ *
++ * It is made of runs, not one string, because three voices are in it
++ * (docs/project/fonts.md): our words, the article's title, and the reader's
++ * own words quoted back — and each is set in its own face.
++ */
++import { clamp } from "../title-text.js";
++import { MAX_PURPOSE_CHARS, normaliseProfileText } from "../types.js";
++import type { PurposeRead } from "./purpose.js";
++
++/** One run of the greeting, in the voice it is drawn in. */
++export type GreetingRun =
++  | { readonly voice: "ours"; readonly text: string }
++  | { readonly voice: "title"; readonly text: string }
++  | { readonly voice: "reader"; readonly text: string };
++
++export interface Greeting {
++  /** Paragraphs, each a list of runs. */
++  readonly paragraphs: readonly (readonly GreetingRun[])[];
++  /**
++   * The reason for reading is definitively not stored, so the greeting asked
++   * for it — which is when *Keep this as why you're reading* may be offered
++   * under the reader's first message (`GuideKeepReason`).
++   */
++  readonly asksReason: boolean;
++  /** A reason is stored, so *Ask the guide where to start* is a complete request. */
++  readonly offersStart: boolean;
++  /** About you is definitively empty, so the line pointing at the profile page is drawn. */
++  readonly invitesProfile: boolean;
++}
++
++/** How much of *About you* is quoted back: enough to recognise, not the whole of it (Opus on the plan). */
++export const PROFILE_QUOTE_CHARS = 120;
++/** How much of a stored reason is quoted back. */
++export const PURPOSE_QUOTE_CHARS = 160;
++
++const ours = (text: string): GreetingRun => ({ voice: "ours", text });
++const quoted = (text: string, max: number): GreetingRun => ({
++  voice: "reader",
++  text: `“${clamp(text.replace(/\s+/g, " ").trim(), max)}”`,
++});
++
++/**
++ * The greeting for what we know, or `null` while the read is still going —
++ * one stable greeting once it has answered, rather than one that changes under
++ * the reader (GPT Sol's F5 on the plan).
++ *
++ * A read that failed, or a shelf the server could not read, is never taken for
++ * "you have not said": the greeting then asks nothing and claims nothing.
++ */
++export function guideGreeting(read: PurposeRead, title: string | undefined): Greeting | null {
++  if (read.state === "loading") return null;
++  const name = title?.trim();
++  const hello: GreetingRun[] = name
++    ? [ours("Hi, I'm your guide to "), { voice: "title", text: clamp(name, 120) }, ours(".")]
++    : [ours("Hi, I'm your guide to this piece.")];
++
++  if (read.state === "failed" || read.purposeFailed) {
++    return {
++      paragraphs: [
++        [...hello, ours(" Ask me where to start, what to search for, or which of Spideryarn's modes would help you read it.")],
++      ],
++      asksReason: false,
++      offersStart: false,
++      invitesProfile: false,
++    };
++  }
++
++  const profile = read.profile;
++  if (read.purpose !== null) {
++    return {
++      paragraphs: [
++        [...hello, ours(" You said you're reading it because "), quoted(read.purpose, PURPOSE_QUOTE_CHARS), ours(".")],
++        [ours("I can suggest where to start, what to read closely, and which modes would help.")],
++      ],
++      asksReason: false,
++      offersStart: true,
++      invitesProfile: profile === null,
++    };
++  }
++
++  const tell = ours("Tell me below, and I'll suggest where to start and which modes would help.");
++  if (profile === null) {
++    return {
++      paragraphs: [
++        [...hello, ours(" Why are you reading it?")],
++        [tell],
++        [ours("If you like, tell me a little about yourself too: what you do, and how much you already know about this subject.")],
++      ],
++      asksReason: true,
++      offersStart: false,
++      invitesProfile: false,
++    };
++  }
++  return {
++    paragraphs: [
++      hello,
++      [ours("In About you, you wrote "), quoted(profile, PROFILE_QUOTE_CHARS), ours(". Is that still right?")],
++      [ours("More importantly, why are you reading this one? "), tell],
++    ],
++    asksReason: true,
++    offersStart: false,
++    invitesProfile: false,
++  };
++}
++
++/**
++ * **The reader's first message, if it may be kept as their reason as it
++ * stands**: stored the way the server stores it (`normaliseProfileText`) and
++ * within `MAX_PURPOSE_CHARS`, or `null` — never cut down into a reason they
++ * did not write (GPT Sol's F4 on the plan).
++ */
++export function keepableReason(text: string): string | null {
++  const stored = normaliseProfileText(text);
++  if (stored === null || stored.length > MAX_PURPOSE_CHARS) return null;
++  return stored;
++}
+diff --git a/src/web/help/pages/modes/chat.md b/src/web/help/pages/modes/chat.md
+index 62587e437..fb4a205d8 100644
+--- a/src/web/help/pages/modes/chat.md
++++ b/src/web/help/pages/modes/chat.md
+@@ -68,7 +68,10 @@ until you send something. The guide can do one thing per answer by itself, if it
+ take you to a passage, or open a mode that has nothing to write, such as Structure or Learn, or the
+ Glossary or Summary's Brief or Fuller once they have already been written for this article. It
+ says so when it does, and **Back** undoes it. Anything that costs money or changes your things, such
+-as a search, a mode that has to be written first, a tag or a bookmark, is still a button you press.
++as a search, a mode that has to be written first, a tag or a bookmark, is still a button you press. Its
++greeting asks why you are reading the piece: answer in the box below as you would any message, and
++**Keep this as why you're reading** under your answer saves it, in your words. You can talk to the
++guide out loud with **Live**, as in any chat, and type **Guide** in the command bar to get back to it.
+ 
+ **Talking instead of typing.** The microphone turns your speech into text in the box, to edit before
+ you send. It is worth trying even if you type quickly: most people say more out loud than they would
+diff --git a/src/web/live/gpt-live/useGptLive.ts b/src/web/live/gpt-live/useGptLive.ts
+index deb60efc4..aa912d759 100644
+--- a/src/web/live/gpt-live/useGptLive.ts
++++ b/src/web/live/gpt-live/useGptLive.ts
+@@ -98,7 +98,7 @@ import {
+ } from "../session-shared.js";
+ import { stallOf, type LiveStall } from "../stall.js";
+ import type { LiveApi, LiveLine, LiveOptions, LivePhase, LivePointer, LiveStep, LiveToolRun } from "../useLiveConversation.js";
+-import { apiWiringFor } from "../wiring.js";
++import { apiWiringFor, type LiveThreadKind } from "../wiring.js";
+ import { useMadeFor } from "../../lib/made-for.js";
+ import { ownLabel } from "../../lib/own-label.js";
+ import { DelegationLoop, type DelegationEffect } from "./delegations.js";
+@@ -286,6 +286,9 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
+   const tail = useRef<string | null>(null);
+   const boundThread = useRef<string | null>(null);
+   const startedThread = useRef("");
++  /* The kind this call was started for, read once at start: it chose the
++     prompt and the tools, so every tool call says it (plan 261009i). */
++  const sessionKind = useRef<LiveThreadKind | undefined>(undefined);
+ 
+   /** Segment ids whose exchange has been handed to `speak`, so their lines leave the live transcript. */
+   const handedOff = useRef(new Set<string>());
+@@ -588,7 +591,7 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
+     const timeout = setTimeout(() => request.abort(), TOOL_TIMEOUT_MS);
+     try {
+       const out = await Promise.race([
+-        (wired.current.wiring ?? defaultWiring).runTool(slug, name, args, request.signal),
++        (wired.current.wiring ?? defaultWiring).runTool(slug, name, args, request.signal, sessionKind.current),
+         new Promise<never>((_, reject) => {
+           request.signal.addEventListener("abort", () => reject(new Error("The tool took too long. Try again.")), { once: true });
+         }),
+@@ -918,6 +921,7 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
+     setHasUnsavedLines(preserve);
+     handedOff.current = new Set();
+     startedThread.current = o.threadId;
++    sessionKind.current = wired.current.kindOf?.(o.threadId);
+     sessionNo.current += 1;
+     segmenter.current = new Segmenter();
+     loop.current = new DelegationLoop();
+@@ -1163,7 +1167,8 @@ export function useGptLive(slug: string, opts: LiveOptions = {}): LiveApi {
+         /* **Three: our server opens the session** and returns OpenAI's answer.
+            Last, because this is the step that is billed. */
+         setStep("transport");
+-        const ticket = await wiring.session(slug, o.threadId, { sdp: offer.sdp }, abort.signal);
++        const kind = sessionKind.current;
++        const ticket = await wiring.session(slug, o.threadId, { sdp: offer.sdp, ...(kind === undefined ? {} : { kind }) }, abort.signal);
+         const transport = {
+           liveConnected: (id: string, keepalive: boolean) => wiring.liveConnected(id, keepalive),
+           liveUsage: (id: string, report: GptLiveUsageReport, keepalive: boolean) =>
+diff --git a/src/web/live/useLiveConversation.ts b/src/web/live/useLiveConversation.ts
+index 8f7b791a8..dd489b512 100644
+--- a/src/web/live/useLiveConversation.ts
++++ b/src/web/live/useLiveConversation.ts
+@@ -94,7 +94,7 @@ import { useAudioLevel } from "../useAudioLevel.js";
+ import { ExchangeLedger, type Exchange } from "./exchanges.js";
+ import { LiveMeter, responseReport, transcriptionReport } from "./meter.js";
+ import { resolvePlacement, type ResolvedPlacement } from "./mic-placement.js";
+-import { apiWiringFor, type LiveWiring } from "./wiring.js";
++import { apiWiringFor, type LiveThreadKind, type LiveWiring } from "./wiring.js";
+ import { useMadeFor } from "../lib/made-for.js";
+ import { ToolResponses } from "./tool-responses.js";
+ import { stallOf, type LiveStall } from "./stall.js";
+@@ -271,6 +271,13 @@ export interface LiveOptions {
+    * is connecting, which is exactly the case it is here to catch.
+    */
+   tailNow?: (threadId: string) => string | null;
++  /**
++   * The kind of the conversation as this tab has it, sent with the ticket so
++   * the server can pick the prompt and tools for one that exists only here (an
++   * empty guide: plan 261009i). The stored kind wins on the server; absent
++   * means a chat's.
++   */
++  kindOf?: (threadId: string) => LiveThreadKind | undefined;
+   /** The URL's `?thread=` follows, when the server overrules the id. */
+   onThreadId?: (id: string, startedThreadId: string) => void;
+   /**
+@@ -434,6 +441,9 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
+   const lineState = useRef<LiveLine[]>([]);
+   const handedOff = useRef(new Set<string>());
+   const startedThread = useRef<string>("");
++  /* The kind this session was started for, read once at start: it chose the
++     prompt and the tools, so every tool call says it (plan 261009i). */
++  const sessionKind = useRef<LiveThreadKind | undefined>(undefined);
+   /** Which start of this hook the lines being put now belong to. See `LiveLine.session`. */
+   const sessionNo = useRef(0);
+   const updateLines = useCallback((change: (previous: LiveLine[]) => LiveLine[]) => {
+@@ -979,7 +989,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
+       const timeout = setTimeout(() => request.abort(), TOOL_TIMEOUT_MS);
+       try {
+         const out = await Promise.race([
+-          (wired.current.wiring ?? defaultWiring).runTool(slug, name, args, request.signal),
++          (wired.current.wiring ?? defaultWiring).runTool(slug, name, args, request.signal, sessionKind.current),
+           new Promise<never>((_, reject) => {
+             request.signal.addEventListener("abort", () => reject(new Error("The tool took too long. Try again.")), { once: true });
+           }),
+@@ -1585,6 +1595,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
+       setHasUnsavedLines(preserveWords);
+       handedOff.current.clear();
+       startedThread.current = opts.threadId;
++      sessionKind.current = wired.current.kindOf?.(opts.threadId);
+       setDeviceLabel(null);
+       setNotice(null);
+       setPlaybackBlocked(false);
+@@ -1758,7 +1769,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
+           placedAs.current = where.placement;
+ 
+           const wiring = wired.current.wiring ?? defaultWiring;
+-          const ticket = await wiring.ticket(slug, opts.threadId, where.placement, abort.signal);
++          const ticket = await wiring.ticket(slug, opts.threadId, where.placement, abort.signal, sessionKind.current);
+           /* **The tail travels with the history it belongs to**, and the first
+              exchange claims exactly this. Read separately they would be a claim
+              about a conversation that never existed. */
+diff --git a/src/web/live/wiring.ts b/src/web/live/wiring.ts
+index f168ff366..2d470c247 100644
+--- a/src/web/live/wiring.ts
++++ b/src/web/live/wiring.ts
+@@ -71,17 +71,33 @@ export interface LiveToolResult {
+   detail: string;
+ }
+ 
++/**
++ * The kinds of conversation that take a live conversation — `SpokenKind` in
++ * src/chat.ts, restated because the browser does not import the server's
++ * module; tests/live-guide-wiring.test.ts holds the two together.
++ */
++export type LiveThreadKind = "chat" | "learn" | "guide";
++
+ /** What the browser sends to open a GPT-Live call. The server's half is `liveChatSession` in src/routes.ts. */
+ export interface GptLiveOffer {
+   /** The peer connection's SDP offer. Our server passes it to OpenAI and returns the answer. */
+   sdp: string;
+   placement?: MicPlacement;
+   useProfile?: boolean;
++  /** `LiveOptions.kindOf`'s answer: which prompt and tools the session gets (plan 261009i). */
++  kind?: LiveThreadKind;
+ }
+ 
+ export interface LiveWiring extends MeterTransport {
+   /** Mint a session for this conversation, and get its history with it. */
+-  ticket(slug: string, threadId: string, placement: MicPlacement, signal?: AbortSignal): Promise<LiveTicket>;
++  ticket(
++    slug: string,
++    threadId: string,
++    placement: MicPlacement,
++    signal?: AbortSignal,
++    /** `LiveOptions.kindOf`'s answer: which prompt and tools the session gets (plan 261009i). */
++    kind?: LiveThreadKind,
++  ): Promise<LiveTicket>;
+   /**
+    * **GPT-Live's counterpart to `ticket`**: hand over this tab's SDP offer and
+    * get the answer back, with our journal row's id and the conversation's tail.
+@@ -109,6 +125,12 @@ export interface LiveWiring extends MeterTransport {
+     name: string,
+     args: Record<string, unknown>,
+     signal?: AbortSignal,
++    /**
++     * The session's kind, so the server runs only that kind's tools
++     * (`toolsFor` via `runTool`): a guide's model naming a tool the guide is
++     * not offered is refused, as it is in a typed guide (plan 261009i).
++     */
++    kind?: LiveThreadKind,
+   ): Promise<LiveToolResult>;
+   /* The three accounting calls come from `MeterTransport` in ./meter.ts, which
+      is where the queue that drives them lives. Extended rather than restated,
+@@ -176,13 +198,13 @@ async function post(path: string, body: unknown, keepalive: boolean, madeFor: st
+  */
+ export function apiWiringFor(madeFor: string | null): LiveWiring {
+   return {
+-    async ticket(slug, threadId, placement, signal) {
++    async ticket(slug, threadId, placement, signal, kind) {
+       const res = await apiFetch(
+         `/api/chat/${encodeURIComponent(slug)}/${encodeURIComponent(threadId)}/live`,
+         {
+           method: "POST",
+           headers: { "Content-Type": "application/json" },
+-          body: JSON.stringify({ placement }),
++          body: JSON.stringify(kind === undefined ? { placement } : { placement, kind }),
+           ...(signal ? { signal } : {}),
+         },
+         madeFor,
+@@ -241,11 +263,11 @@ export function apiWiringFor(madeFor: string | null): LiveWiring {
+       };
+     },
+ 
+-    async runTool(slug, name, args, signal) {
++    async runTool(slug, name, args, signal, kind) {
+       const res = await apiFetch(`/api/chat/${encodeURIComponent(slug)}/live-tool`, {
+         method: "POST",
+         headers: { "Content-Type": "application/json" },
+-        body: JSON.stringify({ name, args }),
++        body: JSON.stringify(kind === undefined ? { name, args } : { name, args, kind }),
+         ...(signal ? { signal } : {}),
+       }, madeFor);
+       if (!res.ok) throw await failure(res);
+diff --git a/src/web/modes/conversation/ConversationModes.tsx b/src/web/modes/conversation/ConversationModes.tsx
+index e55cb93fc..6ee924acb 100644
+--- a/src/web/modes/conversation/ConversationModes.tsx
++++ b/src/web/modes/conversation/ConversationModes.tsx
+@@ -484,6 +484,8 @@ type ConversationBandProps = {
+   onHandoffThread?: ((handoff: ChatHandoff, threadId: string) => void) | undefined;
+   /** An answer settled, including after this band has gone. */
+   onSettled?: (() => void) | undefined;
++  /** The article's title, for the guide's greeting (plan 261009i). Chat's band only. */
++  articleTitle?: string | undefined;
+   /**
+    * **The Recall | Tutorial | Explore | Quiz control**, when this band is one of Learn's
+    * conversation views. Absent in chat mode. Built by `LearnBand` above and passed straight
+@@ -503,6 +505,7 @@ export function ConversationBand({
+   onHandoffThread,
+   onSettled,
+   onScreen,
++  articleTitle,
+ }: ConversationBandProps) {
+   useRenderCount("ConversationBand");
+   const {
+@@ -750,6 +753,12 @@ export function ConversationBand({
+     speak: speakAndMark,
+     blocks,
+     tailNow: (id) => threadsRef.current.find((t) => t.id === id)?.messages.at(-1)?.id ?? null,
++    /* The tab's own kind for a conversation it began and nobody has written
++       to yet — an empty guide's prompt and tools are the guide's (plan 261009i). */
++    kindOf: (id) => {
++      const kind = threadsRef.current.find((t) => t.id === id)?.kind;
++      return kind === "chat" || kind === "learn" || kind === "guide" ? kind : undefined;
++    },
+     onThreadId: (id, startedThreadId) => {
+       // A delayed spoken append may finish after the reader has left its thread.
+       if (selectedThread.current === startedThreadId) void setThread(id);
+@@ -1307,6 +1316,7 @@ export function ConversationBand({
+   return (
+     <ChatPanel
+       slug={slug}
++      articleTitle={articleTitle}
+       /* Not for display — the panel offers its "start a new one" box only once
+          this is true. It went in because a conversation minted before the first
+          fetch landed was wiped by it; that is fixed at source now
+@@ -1351,19 +1361,19 @@ export function ConversationBand({
+          alternating turns are ideal spoken, and Greg said so, but also that
+          Live "doesn't work very well at the moment" — so both are typed or
+          dictated first, and a spoken turn cannot create one (`SpokenKind` in
+-         src/chat.ts stays chat | learn). Omitted here rather than refused
++         src/chat.ts is chat, learn and guide). Omitted here rather than refused
+          by the server, so there is no button. */
+       /* Nor on a conversation whose origin the server does not have yet
+          (`awaitsOrigin` above): no button, and the callback is refused too. */
+-      /* Nor in the guide, which is typed (plan 261007j). */
+-      live={OFFERS_LIVE[kind] && openKind !== "guide" && !awaitsOrigin(current) ? live : undefined}
++      /* And in the guide since plan 261009i, with the guide's own spoken prompt
++         and tools (`liveKind` in src/routes.ts, `SPOKEN_GUIDE` in src/live.ts). */
++      live={OFFERS_LIVE[kind] && !awaitsOrigin(current) ? live : undefined}
+       /* The guide's answers may press one of their own buttons; ChatPanel's
+          conversation listens only when it is the guide (guide-acts.ts). */
+       onAnswered={onAnswered}
+       onStartLive={!OFFERS_LIVE[kind] ? undefined : (id) => {
+         if (resettingNow.current) return;
+         if (awaitsOrigin(id)) return;
+-        if (id && threads.find((t) => t.id === id)?.kind === "guide") return;
+         if (!id && kind !== "chat") return;
+         const next = id ?? begin("chat");
+         /* Begun here like `startNew`'s, and as unsent until its first spoken
+diff --git a/src/web/purpose.ts b/src/web/purpose.ts
+index 0f58bd475..44c631baa 100644
+--- a/src/web/purpose.ts
++++ b/src/web/purpose.ts
+@@ -133,8 +133,8 @@ export type PurposeRead =
+   | { state: "ready"; purpose: string | null; purposeFailed: boolean; profile: string | null }
+   | { state: "failed" };
+ 
+-/** Read the purpose for `slug`, once per slug. For Skim's line (stage 2). */
+-export function usePurpose(slug: string): PurposeRead {
++/** Read the purpose for `slug`, once per slug; `null` reads nothing. For Skim's line (stage 2) and the guide's greeting. */
++export function usePurpose(slug: string | null): PurposeRead {
+   const [read, setRead] = useState<PurposeRead>({ state: "loading" });
+   /* A generation rather than a `live` boolean, for StrictMode — ProfilePanel's
+      `generation` says why. */
+@@ -142,6 +142,9 @@ export function usePurpose(slug: string): PurposeRead {
+   useEffect(() => {
+     const mine = ++generation.current;
+     setRead({ state: "loading" });
++    /* `null`: nothing to read here (a conversation that is not the guide,
++       plan 261009i), and nothing is fetched. */
++    if (slug === null) return;
+     apiFetch(`/api/reader?slug=${encodeURIComponent(slug)}`)
+       .then((r) => readJson<{ purpose: string | null; purposeFailed?: boolean; profile?: string | null }>(r))
+       .then(
+diff --git a/src/web/reader/Reader.tsx b/src/web/reader/Reader.tsx
+index 0ac51d57a..18b720ff2 100644
+--- a/src/web/reader/Reader.tsx
++++ b/src/web/reader/Reader.tsx
+@@ -139,6 +139,7 @@ import { buildArcColumn, buildGeometry, buildOutline, buildSummaryTree, nodeLabe
+ import {
+   marginParam,
+   modeParam,
++  guideParam,
+   noteParam,
+   panelParam,
+   sortParam,
+@@ -1092,6 +1093,15 @@ export function Reader({
+     },
+     [slug, showBand],
+   );
++  /* The bar's *Guide* row (plan 261009i): `?guide=1` with Chat's band, the
++     same door the first open uses (params.ts § `guideParam`), which Chat turns
++     into the stored guide or a new one once its list has answered. Sends
++     nothing, so it spends nothing. */
++  const [, setGuideParam] = useQueryState("guide", guideParam);
++  const openTheGuide = useCallback(() => {
++    void setGuideParam(true);
++    showBand("chat");
++  }, [setGuideParam, showBand]);
+   const askInChat = useCallback((term: string) => handToChat(askAboutTerm(term), "send"), [handToChat]);
+   /* **A fifth and a sixth since 2026-10-06: *Ask in chat* on a Glossary entry
+      and on a Citations row**, beside Dig deeper, which is unchanged. Each
+@@ -2803,6 +2813,8 @@ export function Reader({
+         askThroughLens: isOwner ? suggestedLensInChat : undefined,
+         /* The bar's *Ask the guide* row, after a pick that could not tell. The owner's, as Chat is. */
+         askGuide: isOwner ? askTheGuide : undefined,
++        /* The bar's *Guide* row: the owner's, as the guide is. */
++        openGuide: isOwner ? openTheGuide : undefined,
+         /* A chat chip's `mode` proposal: the owner's, as Chat is (`chipModes`). */
+         modes: chipModes,
+       }),
+@@ -2822,6 +2834,7 @@ export function Reader({
+       openQuickSearch,
+       suggestedLensInChat,
+       askTheGuide,
++      openTheGuide,
+       chipModes,
+     ],
+   );
+@@ -3233,6 +3246,7 @@ export function Reader({
+               onHandoffTaken={handoffTaken}
+               onHandoffThread={handoffThread}
+               onSettled={refreshChats}
++              articleTitle={article.meta.title}
+             />
+           </ChatCommands>
+         ) : null;
+diff --git a/src/web/styles/mode-band.css b/src/web/styles/mode-band.css
+index ff7e1f80b..e18023536 100644
+--- a/src/web/styles/mode-band.css
++++ b/src/web/styles/mode-band.css
+@@ -697,6 +697,22 @@ svg.band-waiting-ghost { flex: none; }
+ }
+ .chat-empty p { margin: 0 0 0.5rem; }
+ .chat-empty-hint { font-size: 0.91rem; line-height: 1.45; }
++/* The guide's greeting, as its opening message (plan 261009i): set apart like
++   an answer, with the guide's own icon, and kept above the turns. */
++.guide-greeting-bubble {
++  display: flex;
++  gap: 0.5rem;
++  align-items: flex-start;
++  padding: 0.6rem 0.75rem;
++  border: 1px solid var(--rule);
++  border-radius: var(--radius);
++  background: var(--surface-raised);
++}
++.guide-greeting-bubble p { margin: 0 0 0.45rem; }
++.guide-greeting-bubble p:last-child { margin-bottom: 0; }
++.guide-greeting-icon { flex: none; margin-top: 0.2rem; color: var(--ink-faint); }
++.guide-greeting-title { font-style: italic; }
++.guide-keep { margin: 0.35rem 0 0.6rem; }
+ .chat-new {
+   display: inline-flex;
+   align-items: center;
+diff --git a/src/web/styles/voices.css b/src/web/styles/voices.css
+index 5b4fc297a..35d4b1221 100644
+--- a/src/web/styles/voices.css
++++ b/src/web/styles/voices.css
+@@ -81,6 +81,9 @@
+     .tl-phrase,
+     /* Diagram's footer card: the link text or quoted line, not the score */
+     .diag-card-linkquote,
++    /* the article's title in the guide's greeting (plan 261009i): meta.title,
++       the author's, never a rename */
++    .guide-greeting-title,
+     /* Whatever computed its voice and found the author's: a Structure title
+        that is the author's heading kept, a shelf blurb that is the excerpt,
+        an article's title (src/web/voice.ts § voiceClass). */
+@@ -280,7 +283,9 @@
+     .fb-question-answer-body,
+     .fb-reply-input,
+     .ill-steer-input,
+-    .cmdbar-input
++    .cmdbar-input,
++    /* About you or the reason, quoted back in the guide's greeting (261009i) */
++    .guide-greeting-reader
+ ) {
+     font-family: var(--font-reader);
+ }
+diff --git a/tests/chat-live-ticket-route.test.ts b/tests/chat-live-ticket-route.test.ts
+index 3b76f8b3a..aeefe4279 100644
+--- a/tests/chat-live-ticket-route.test.ts
++++ b/tests/chat-live-ticket-route.test.ts
+@@ -89,7 +89,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi }
+ 
+ import { closeDb } from "../src/db/client.js";
+ import { loadEnvLocal } from "../src/env.js";
+-import { LIVE_MODEL } from "../src/live.js";
++import { LIVE_MODEL, SPOKEN_GUIDE } from "../src/live.js";
+ import { acceptAny, asTestOwner, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
+ import { pgReady } from "./helpers/pg-ready.js";
+ import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
+@@ -307,6 +307,23 @@ describe("the tool a live session may ask us to run", () => {
+     expect(JSON.stringify(out.body)).not.toContain("search_article_words");
+   });
+ 
++  /* Plan 261009i: a guide's session says its kind, and `runTool`'s own gate
++     (`toolsFor`) then refuses what the typed guide is not offered. The model
++     chooses only the name; the page says the kind. */
++  it("runs only the guide's tools for a guide's session", async () => {
++    const refused = await tool({ name: "search_library", args: { query: "rain" }, kind: "guide" });
++    expect(refused.status).toBe(200);
++    expect(refused.body.detail).toBe("no such tool");
++    const ran = await tool({ name: "search_library", args: { query: "rain" } });
++    expect(ran.body.detail).not.toBe("no such tool");
++    const own = await tool({ name: "search_article_words", args: { query: "the" }, kind: "guide" });
++    expect(own.body.detail).not.toBe("no such tool");
++  });
++
++  it("refuses a kind that takes no live conversation", async () => {
++    expect((await tool({ name: "search_article_words", args: { query: "the" }, kind: "explore" })).status).toBe(400);
++  });
++
+   it("refuses a body with no name in it", async () => {
+     expect((await tool({ args: {} })).status).toBe(400);
+   });
+@@ -363,6 +380,30 @@ describe("what the session is created with", () => {
+     expect(again?.input?.noise_reduction).toEqual({ type: "far_field" });
+   });
+ 
++  /* Plan 261009i: an empty guide exists only in the tab, so the browser says
++     its kind; the stored kind wins over anything it says. */
++  it("gives an empty guide the guide's spoken prompt and tools", async () => {
++    await ticket("spya-vaaagd", { kind: "guide" });
++    const session = minted?.session as { instructions: string; tools: { name: string }[] };
++    expect(session.instructions).toContain(SPOKEN_GUIDE);
++    expect(session.tools.map((t) => t.name)).not.toContain("search_library");
++    expect(session.tools.map((t) => t.name)).not.toContain("read_web_page");
++  });
++
++  it("gives a chat the companion's prompt, and refuses a kind that takes no Live", async () => {
++    await ticket("spya-vaaagc", {});
++    expect((minted?.session as { instructions: string }).instructions).not.toContain(SPOKEN_GUIDE);
++    expect((await ticket("spya-vaaagx", { kind: "explore" })).status).toBe(400);
++  });
++
++  it("refuses a kind that contradicts the stored conversation, before minting", async () => {
++    await speak("spya-vaaagm", { question: "Q?", answer: "A.", expectedTailId: null });
++    minted = null;
++    const out = await ticket("spya-vaaagm", { kind: "guide" });
++    expect(out.status).toBe(409);
++    expect(minted).toBeNull();
++  });
++
+   it("refuses a placement that is not one of ours", async () => {
+     /* Validated, never cast. A string off the wire becoming a `Record` lookup
+        that answers `undefined` would spread into the session as a missing field
+diff --git a/tests/command-bar-guide-row.test.ts b/tests/command-bar-guide-row.test.ts
+new file mode 100644
+index 000000000..a13a73d4b
+--- /dev/null
++++ b/tests/command-bar-guide-row.test.ts
+@@ -0,0 +1,54 @@
++/**
++ * **The bar's *Guide* row** — plan
++ * docs/plans/261009i-the-guide-greets-in-chat-takes-live-and-a-bar-row.md
++ * (Greg, 2026-10-09, `spya-s6qhzv`: *"there should be a command in the command
++ * bar for opening the guide chat"*).
++ *
++ * Drawn only where the page hands over `openGuide` (the owner's reading view),
++ * first for `guide` though Help also has that word, and pressing it opens the
++ * guide and spends nothing.
++ */
++import { describe, expect, it, vi } from "vitest";
++import { besideTheModes } from "../src/web/CommandBar.js";
++import { type Command, rankCommands } from "../src/web/command-match.js";
++
++const label = (c: Command | undefined): string | undefined => (c !== undefined && "label" in c ? c.label : undefined);
++
++const queue = { run: async () => null, lastFailure: () => null };
++
++function rows(openGuide?: () => { kind: "close" }): readonly Command[] {
++  return besideTheModes({
++    article: {
++      slug: "a-piece",
++      search: "",
++      view: "article",
++      help: "/help/mode-chat",
++      executor: { runners: {}, sources: {}, ...(openGuide ? { openGuide } : {}) },
++    },
++    openComments: undefined,
++    openFeedback: null,
++    queue,
++  });
++}
++
++describe("the Guide row", () => {
++  it("comes first for `guide`, with Help still in the list", () => {
++    const ranked = rankCommands("guide", rows(() => ({ kind: "close" })));
++    expect(label(ranked[0])).toBe("Guide");
++    expect(ranked.map(label)).toContain("Help");
++  });
++
++  it("is not drawn where the page cannot open the guide", () => {
++    expect(rows().map(label)).not.toContain("Guide");
++  });
++
++  it("opens the guide, and generates nothing", () => {
++    const open = vi.fn(() => ({ kind: "close" }) as const);
++    const guide = rows(open).find((c) => label(c) === "Guide");
++    expect(guide?.kind).toBe("action");
++    if (guide?.kind !== "action") return;
++    expect(guide.generates).toBe(false);
++    guide.run();
++    expect(open).toHaveBeenCalledOnce();
++  });
++});
+diff --git a/tests/command-pick-catalogue.test.ts b/tests/command-pick-catalogue.test.ts
+index 0b0ca0cfa..600efa557 100644
+--- a/tests/command-pick-catalogue.test.ts
++++ b/tests/command-pick-catalogue.test.ts
+@@ -119,13 +119,13 @@ function rowsIn(context: Context): readonly Command[] {
+             help: "/help/mode-glossary",
+             shelfRow: context.article.owner ? { archive, tags: { edit: async () => [] } } : undefined,
+             /* What the reading view hands the owner when both lists can be
+-               added to — the widest bar, so both *Find more* rows are in the
+-               catalogue. Without it a sentence could never be answered with
++               added to — the widest bar, so both *Find more* rows (and, since
++               plan 261009i, the *Guide* row) are in the catalogue. Without it a sentence could never be answered with
+                one: the server drops a key this file does not hold (plan
+                261004k, GPT Sol's F4). The Metadata page hands in none. */
+             executor:
+               context.article.owner && context.article.view === "article"
+-                ? { runners: {}, sources: {}, findMore: { glossary: closes, quotes: closes } }
++                ? { runners: {}, sources: {}, findMore: { glossary: closes, quotes: closes }, openGuide: closes }
+                 : undefined,
+           }
+         : undefined,
+diff --git a/tests/guide-greeting.test.ts b/tests/guide-greeting.test.ts
+new file mode 100644
+index 000000000..d32ad65a2
+--- /dev/null
++++ b/tests/guide-greeting.test.ts
+@@ -0,0 +1,63 @@
++/**
++ * **The guide's greeting, arm by arm, and which first messages may be kept as
++ * the reason** — src/web/guide-greeting.ts, plan
++ * docs/plans/261009i-the-guide-greets-in-chat-takes-live-and-a-bar-row.md.
++ * What the panel draws from these is tests/guide-in-chat-panel.test.tsx.
++ */
++import { describe, expect, it } from "vitest";
++import { MAX_PURPOSE_CHARS } from "../src/types.js";
++import { guideGreeting, keepableReason, type Greeting } from "../src/web/guide-greeting.js";
++
++const text = (g: Greeting | null): string => (g?.paragraphs ?? []).map((p) => p.map((r) => r.text).join("")).join("\n");
++
++describe("guideGreeting", () => {
++  it("says nothing until the read has answered", () => {
++    expect(guideGreeting({ state: "loading" }, "A Piece")).toBeNull();
++  });
++
++  it("claims nothing and asks nothing when the read failed or the shelf could not be read", () => {
++    for (const read of [
++      { state: "failed" } as const,
++      { state: "ready", purpose: null, purposeFailed: true, profile: null } as const,
++    ]) {
++      const g = guideGreeting(read, "A Piece");
++      expect(g?.asksReason).toBe(false);
++      expect(g?.offersStart).toBe(false);
++      expect(g?.invitesProfile).toBe(false);
++      expect(text(g)).not.toMatch(/why are you reading|you said/i);
++    }
++  });
++
++  it("asks why, and who they are, when neither is stored", () => {
++    const g = guideGreeting({ state: "ready", purpose: null, purposeFailed: false, profile: null }, "A Piece");
++    expect(g?.asksReason).toBe(true);
++    expect(text(g)).toContain("Why are you reading it?");
++    expect(text(g)).toContain("tell me a little about yourself");
++  });
++
++  it("quotes a short span of About you, and the title in its own voice", () => {
++    const long = `A neuroscientist ${"who studies memory ".repeat(20)}`;
++    const g = guideGreeting({ state: "ready", purpose: null, purposeFailed: false, profile: long }, "A Piece");
++    const quote = g?.paragraphs.flat().find((r) => r.voice === "reader")?.text ?? "";
++    expect([...quote].length).toBeLessThanOrEqual(120 + 3);
++    expect(g?.paragraphs[0]?.find((r) => r.voice === "title")?.text).toBe("A Piece");
++  });
++
++  it("falls back to 'this piece' with no title", () => {
++    const g = guideGreeting({ state: "ready", purpose: "x", purposeFailed: false, profile: "y" }, undefined);
++    expect(text(g)).toContain("Hi, I'm your guide to this piece.");
++    expect(g?.offersStart).toBe(true);
++  });
++});
++
++describe("keepableReason", () => {
++  it("stores what the server would store, and refuses what would not fit", () => {
++    expect(keepableReason("  a\r\nb  ")).toBe("a\nb");
++    expect(keepableReason("   \n ")).toBeNull();
++    expect(keepableReason("x".repeat(MAX_PURPOSE_CHARS))).toHaveLength(MAX_PURPOSE_CHARS);
++    expect(keepableReason("x".repeat(MAX_PURPOSE_CHARS + 1))).toBeNull();
++    /* The server counts UTF-16 units, so an astral character counts as two here too. */
++    expect(keepableReason("😀".repeat(MAX_PURPOSE_CHARS / 2))).not.toBeNull();
++    expect(keepableReason("😀".repeat(MAX_PURPOSE_CHARS / 2 + 1))).toBeNull();
++  });
++});
+diff --git a/tests/guide-in-chat-band.test.tsx b/tests/guide-in-chat-band.test.tsx
+index b939f1c8c..f421cc44f 100644
+--- a/tests/guide-in-chat-band.test.tsx
++++ b/tests/guide-in-chat-band.test.tsx
+@@ -17,7 +17,7 @@
+  *   is open;
+  * - the guide's unsent words come back after a mode change, under the same
+  *   guide, stored or begun here;
+- * - no Live in the guide.
++ * - Live in the guide, since plan 261009i.
+  *
+  * The real band and the real `useChat`, with `ChatPanel` stubbed to expose
+  * the props it is handed: tests/conversation-band-origin.test.tsx's harness.
+@@ -243,14 +243,21 @@ describe("sending in the guide", () => {
+     expect(panel?.threadId).toBe("spya-gdsrv9");
+   });
+ 
+-  it("offers no Live in the guide, and refuses to start one there", async () => {
++  /* Plan 261009i (Greg, 2026-10-09, `spya-x38nge`): the guide takes Live,
++     and a session started there is the guide's, not a new chat. */
++  it("offers Live in the guide, and starts it in the guide", async () => {
+     stored = [GUIDE, CHAT];
+     await mount(`?mode=chat&thread=${CHAT.id}`);
+     expect(panel?.live).toBeDefined();
+     await openGuide();
+-    expect(panel?.live).toBeUndefined();
++    expect(panel?.live).toBeDefined();
+     const start = prop<(id: string | null) => string | undefined>("onStartLive");
+-    expect(start(GUIDE.id)).toBeUndefined();
++    let started: string | undefined;
++    act(() => {
++      started = start(GUIDE.id);
++    });
++    expect(started).toBe(GUIDE.id);
++    expect(guides()).toHaveLength(1);
+   });
+ 
+   it("edits with the open guide's rules, never Chat's visible blocks", async () => {
+diff --git a/tests/guide-in-chat-panel.test.tsx b/tests/guide-in-chat-panel.test.tsx
+index a06808278..f161f9957 100644
+--- a/tests/guide-in-chat-panel.test.tsx
++++ b/tests/guide-in-chat-panel.test.tsx
+@@ -7,10 +7,12 @@
+  * - **the pinned row**, above the list and outside its source filter, there
+  *   under every `?chatfrom=` and with no conversation at all, and a press on
+  *   it opens the guide (GPT Sol's F2);
+- * - **the greeting**, ours and free: the *Why you're reading this one* box
+- *   only when no reason is stored, *Ask the guide where to start* only when
+- *   one is, a line about the profile only when *About you* is empty, and
+- *   neither box nor button when the reason could not be read (F5).
++ * - **the greeting**, ours and free, asking in the conversation since plan
++ *   261009i (no box): why you are reading when no reason is stored, About you
++ *   quoted back when it is there, *Ask the guide where to start* only when a
++ *   reason is stored, nothing asked or offered when the reason could not be
++ *   read; and *Keep this as why you're reading* under the reader's first
++ *   answer, which never overwrites a reason stored meanwhile.
+  *
+  * The real `ChatPanel`, handed props directly, as
+  * tests/chat-list-sources.test.tsx does. What the band hands it is
+@@ -30,6 +32,10 @@ let reader: { profile: string | null; purpose: string | null; purposeFailed: boo
+   purposeFailed: false,
+ };
+ const patches: unknown[] = [];
++/** When set, the next PATCH writes and then answers 500, as a reply lost after the write. */
++let patchLosesReply = false;
++/** Something to run before the reader read answers: another tab saving. */
++let beforeRead: (() => void) | null = null;
+ 
+ vi.mock("../src/web/lib/api.js", async () => {
+   const real = await vi.importActual<typeof import("../src/web/lib/api.js")>("../src/web/lib/api.js");
+@@ -42,16 +48,22 @@ vi.mock("../src/web/lib/api.js", async () => {
+         const body = JSON.parse(String(init?.body ?? "{}")) as { purpose: string | null };
+         patches.push(body);
+         reader = { ...reader, purpose: body.purpose };
++        if (patchLosesReply) return Promise.resolve(new Response("{}", { status: 500 }));
+         return Promise.resolve(json({ purpose: body.purpose }));
+       }
+-      if (String(url).startsWith("/api/reader")) return Promise.resolve(json(reader));
++      if (String(url).startsWith("/api/reader")) {
++        beforeRead?.();
++        return Promise.resolve(json(reader));
++      }
+       return Promise.resolve(json({}));
+     },
+   };
+ });
+ 
+ const { ChatPanel } = await import("../src/web/ChatPanel.js");
+-const { GUIDE_FIRST_QUESTION, GUIDE_START_LABEL } = await import("../src/web/GuideGreeting.js");
++const { GUIDE_FIRST_QUESTION, GUIDE_START_LABEL, KEEP_REASON_LABEL, KEPT_REASON_LABEL } = await import(
++  "../src/web/GuideGreeting.js"
++);
+ 
+ const AT = "2026-10-07T09:00:00.000Z";
+ 
+@@ -88,6 +100,7 @@ function paint(listed: ChatThread[], over: { from?: ChatFrom | null; threadId?:
+     root.render(
+       createElement(ChatPanel, {
+         slug: "a-piece",
++        articleTitle: "Attention Is All You Need",
+         kind: "chat" as const,
+         loaded: true,
+         loadFailed: false,
+@@ -138,6 +151,8 @@ beforeEach(() => {
+   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+   reader = { profile: null, purpose: null, purposeFailed: false };
+   patches.length = 0;
++  patchLosesReply = false;
++  beforeRead = null;
+   sent.length = 0;
+   guideOpened = 0;
+   forgetChatDrafts();
+@@ -189,54 +204,52 @@ describe("the guide's greeting", () => {
+     paint([CHAT], { guide: EMPTY_GUIDE, threadId: EMPTY_GUIDE.id });
+     await settle();
+   };
+-  const box = () => host.querySelector<HTMLTextAreaElement>("#guide-purpose");
+-  const startButton = () =>
+-    [...host.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === GUIDE_START_LABEL);
++  const button = (label: string) =>
++    [...host.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === label);
++  const startButton = () => button(GUIDE_START_LABEL);
++  const keepButton = () => button(KEEP_REASON_LABEL);
++  /** The reader answers: the same mount, now with their first message in it. */
++  const answer = async (text: string) => {
++    const said = thread(EMPTY_GUIDE.id, "guide", {
++      messages: [{ id: "spya-gdeq01", role: "user", text, createdAt: AT, status: "done" }],
++    });
++    paint([CHAT], { guide: said, threadId: said.id });
++    await settle();
++  };
++  const press = async (b: HTMLButtonElement | undefined) => {
++    await act(async () => b?.click());
++    await settle();
++  };
+ 
+-  it("says what the guide is for, and is headed Guide", async () => {
++  it("welcomes them to the piece by name, asks why, and draws no box; the panel is headed Guide", async () => {
+     await greeting();
+-    expect(host.textContent).toContain("I'm here to help you read this piece well");
++    expect(host.textContent).toContain("Hi, I'm your guide to Attention Is All You Need.");
++    expect(host.textContent).toContain("Why are you reading it?");
++    expect(host.querySelector("textarea#guide-purpose")).toBeNull();
++    expect(startButton()).toBeUndefined();
+     expect(host.querySelector("h2")?.textContent).toBe("Guide");
+   });
+ 
+-  it("holds the reason box, and no start button, when no reason is stored", async () => {
++  it("quotes About you back and asks if it is still right, when there is one", async () => {
++    reader = { ...reader, profile: "A cognitive neuroscientist   who studies memory" };
+     await greeting();
+-    expect(box()).not.toBeNull();
+-    expect(host.textContent).toContain("You can answer in the box above, or just type below.");
+-    expect(startButton()).toBeUndefined();
++    expect(host.textContent).toContain("In About you, you wrote “A cognitive neuroscientist who studies memory”. Is that still right?");
++    expect(host.textContent).toContain("why are you reading this one?");
+   });
+ 
+-  it("offers the start button, and no box, when a reason is stored; the press sends the fixed question", async () => {
++  it("offers the start button, and asks nothing, when a reason is stored; the press sends the fixed question", async () => {
+     reader = { ...reader, purpose: "I review for a journal" };
+     await greeting();
+-    expect(box()).toBeNull();
+-    expect(host.textContent).not.toContain("Tell me why you're reading it");
+-    const button = startButton();
+-    expect(button).toBeDefined();
+-    act(() => button?.click());
++    expect(host.textContent).toContain("You said you're reading it because “I review for a journal”.");
++    expect(host.textContent).not.toContain("Why are you reading it?");
++    const start = startButton();
++    expect(start).toBeDefined();
++    act(() => start?.click());
+     expect(sent).toEqual([GUIDE_FIRST_QUESTION]);
+   });
+ 
+-  it("offers the start button once the reader's own reason has been saved from the box", async () => {
+-    await greeting();
+-    const field = box();
+-    if (!field) throw new Error("no box");
+-    await act(async () => {
+-      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+-      setter?.call(field, "To find the method");
+-      field.dispatchEvent(new Event("input", { bubbles: true }));
+-    });
+-    await act(async () => {
+-      field.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+-      field.blur();
+-    });
+-    await settle();
+-    expect(patches).toEqual([{ purpose: "To find the method" }]);
+-    expect(startButton()).toBeDefined();
+-    expect(sent, "saving the reason sends nothing").toEqual([]);
+-  });
+-
+-  it("points at the profile only when About you is empty", async () => {
++  it("points at the profile only when a reason is stored and About you is empty", async () => {
++    reader = { ...reader, purpose: "For a journal club" };
+     await greeting();
+     expect(host.querySelector('a[href="/profile"]')).not.toBeNull();
+     act(() => root.unmount());
+@@ -249,7 +262,71 @@ describe("the guide's greeting", () => {
+   it("asks nothing and offers nothing when the reason could not be read", async () => {
+     reader = { ...reader, purposeFailed: true };
+     await greeting();
+-    expect(box()).toBeNull();
++    expect(host.textContent).not.toContain("Why are you reading");
+     expect(startButton()).toBeUndefined();
++    await answer("For my journal club");
++    expect(keepButton()).toBeUndefined();
++  });
++
++  it("stays above the reader's answer, and keeps their own words as the reason only on a press", async () => {
++    await greeting();
++    await answer("For my journal club\r\n next week  ");
++    expect(host.textContent).toContain("Why are you reading it?");
++    expect(patches, "nothing is saved before the press").toEqual([]);
++    await press(keepButton());
++    expect(patches).toEqual([{ purpose: "For my journal club\n next week" }]);
++    expect(host.textContent).toContain(KEPT_REASON_LABEL);
++    expect(sent, "keeping it sends nothing").toEqual([]);
++  });
++
++  it("never overwrites a reason saved elsewhere since the greeting read", async () => {
++    await greeting();
++    await answer("For my journal club");
++    beforeRead = () => {
++      reader = { ...reader, purpose: "Written on Metadata in another tab" };
++    };
++    await press(keepButton());
++    expect(patches).toEqual([]);
++    expect(host.textContent).toContain("You had already saved a reason for this one");
++  });
++
++  it("writes once for a double press", async () => {
++    await greeting();
++    await answer("For my journal club");
++    const keep = keepButton();
++    await act(async () => {
++      keep?.click();
++      keep?.click();
++    });
++    await settle();
++    expect(patches).toHaveLength(1);
++  });
++
++  it("calls a save whose reply was lost kept, when the server has it", async () => {
++    await greeting();
++    await answer("For my journal club");
++    patchLosesReply = true;
++    await press(keepButton());
++    expect(patches).toHaveLength(1);
++    expect(host.textContent).toContain(KEPT_REASON_LABEL);
++  });
++
++  it("offers Metadata instead of cutting a message too long to keep", async () => {
++    await greeting();
++    await answer("x".repeat(601));
++    expect(keepButton()).toBeUndefined();
++    expect(host.textContent).toContain("Too long to keep");
++    act(() => root.unmount());
++    root = createRoot(host);
++    await greeting();
++    await answer("x".repeat(600));
++    expect(keepButton()).toBeDefined();
++  });
++
++  it("draws no greeting and no keep button on a guide that already had turns", async () => {
++    paint([CHAT], { guide: thread("spya-gdeacc", "guide"), threadId: "spya-gdeacc" });
++    await settle();
++    expect(host.textContent).not.toContain("I'm your guide");
++    expect(keepButton()).toBeUndefined();
+   });
+ });
+diff --git a/tests/guide-kind.test.ts b/tests/guide-kind.test.ts
+index 0ba65c3ef..6e82d2a1d 100644
+--- a/tests/guide-kind.test.ts
++++ b/tests/guide-kind.test.ts
+@@ -107,8 +107,11 @@ describe("the guide's prompt", () => {
+ 
+   it("asks why they are reading when they have not said, and invites About you once", () => {
+     const guide = systemOf("guide");
+-    expect(guide).toMatch(/If they have not said why they are reading it, ask that first/);
+-    expect(guide).toMatch(/The screen also shows them a box for it/);
++    expect(guide).toMatch(/If they still have not said why they are reading it, ask that first/);
++    /* Plan 261009i: the greeting asks in the conversation, so the model is told
++       it did, and that the box is gone. */
++    expect(guide).toMatch(/opens with a fixed greeting of ours/);
++    expect(guide).not.toMatch(/a box for it/);
+     expect(guide).toMatch(/invite it once, lightly/);
+     expect(guide).toMatch(/Ask one question at a time/);
+   });
+diff --git a/tests/live-guide-wiring.test.ts b/tests/live-guide-wiring.test.ts
+new file mode 100644
+index 000000000..3a71692c5
+--- /dev/null
++++ b/tests/live-guide-wiring.test.ts
+@@ -0,0 +1,58 @@
++/**
++ * **The browser tells the ticket which kind of conversation it is for** — plan
++ * docs/plans/261009i-the-guide-greets-in-chat-takes-live-and-a-bar-row.md.
++ *
++ * An empty guide exists only in the tab, so without the kind the server would
++ * start the companion's session, not the guide's, and nothing would error.
++ * And `LiveThreadKind` (the browser's copy) must stay `SpokenKind` (the
++ * server's), or one end sends a kind the other refuses with a 400.
++ */
++import { afterEach, describe, expect, it, vi } from "vitest";
++
++const calls: { url: string; body: unknown }[] = [];
++
++vi.mock("../src/web/lib/api.js", async () => {
++  const real = await vi.importActual<typeof import("../src/web/lib/api.js")>("../src/web/lib/api.js");
++  return {
++    ...real,
++    apiFetch: async (url: string, init?: RequestInit) => {
++      calls.push({ url, body: JSON.parse(String(init?.body ?? "{}")) });
++      const body = url.endsWith("/live-session")
++        ? { sdp: "v=0", sessionId: "s1", tailId: null }
++        : { token: "ek_test", expiresAt: 1, model: "m", seed: [], tailId: null, sessionId: "s1" };
++      return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
++    },
++  };
++});
++
++const { apiWiringFor } = await import("../src/web/live/wiring.js");
++const { isSpokenKind } = await import("../src/chat.js");
++
++afterEach(() => {
++  calls.length = 0;
++});
++
++describe("the kind travels with the ticket", () => {
++  it("sends a guide's kind to Realtime's ticket and to GPT-Live's session", async () => {
++    const wiring = apiWiringFor(null);
++    await wiring.ticket("piece", "spya-gggggg", "laptop", undefined, "guide");
++    await wiring.session?.("piece", "spya-gggggg", { sdp: "v=0", kind: "guide" });
++    expect(calls.map((c) => c.body)).toEqual([
++      { placement: "laptop", kind: "guide" },
++      { sdp: "v=0", kind: "guide" },
++    ]);
++  });
++
++  it("sends no kind when none is known, as before", async () => {
++    await apiWiringFor(null).ticket("piece", "spya-cccccc", "laptop");
++    expect(calls[0]?.body).toEqual({ placement: "laptop" });
++  });
++});
++
++describe("the browser's kinds are the server's", () => {
++  it("accepts exactly chat, learn and guide", () => {
++    const kinds: Record<import("../src/web/live/wiring.js").LiveThreadKind, true> = { chat: true, learn: true, guide: true };
++    for (const kind of Object.keys(kinds)) expect(isSpokenKind(kind)).toBe(true);
++    for (const kind of ["candidates", "tutorial", "explore"]) expect(isSpokenKind(kind)).toBe(false);
++  });
++});
+diff --git a/tests/live-guide.test.ts b/tests/live-guide.test.ts
+new file mode 100644
+index 000000000..c863e8359
+--- /dev/null
++++ b/tests/live-guide.test.ts
+@@ -0,0 +1,126 @@
++/**
++ * **The guide, spoken** — plan
++ * docs/plans/261009i-the-guide-greets-in-chat-takes-live-and-a-bar-row.md,
++ * stage 1 (Greg, 2026-10-09, `spya-x38nge`: *"Why doesn't the Guide chat have
++ * a live conversation option?"*).
++ *
++ * A live session in a guide thread is the reading companion's voice rules plus
++ * the guide's section, with the guide's tools. What could go silently wrong:
++ *
++ *  - the guide section is missing, so the spoken guide is a content companion
++ *    that talks about the piece instead of the reading — nothing errors;
++ *  - a `[cmd:…]` token reaches a voice model, which then reads brackets aloud;
++ *  - the guide is offered the web, which the typed guide is not;
++ *  - a chat or Learn session picks up the guide's section by accident.
++ */
++import { describe, expect, it } from "vitest";
++
++import { GUIDE_TOOLS } from "../src/chat-tools.js";
++import { withoutCommandButtons } from "../src/command-token.js";
++import { spokenModeWords } from "../src/guide.js";
++import { LIVE_SYSTEM, SHOW_PASSAGE_TOOL, SPOKEN_GUIDE, liveInstructions, liveSeedItems, liveSession, liveTools } from "../src/live.js";
++import { gptLiveBackendInstructions, gptLiveSession, gptLiveVoiceInstructions } from "../src/live-gpt.js";
++import type { Block, ChatMessage, Meta, Tree, TreeNode } from "../src/types.js";
++
++const meta = { slug: "piece", title: "A Piece", byline: "Someone" } as Meta;
++const blocks = [
++  { id: "spya-aaa111", tag: "p", kind: "prose", text: "The rainstorm does not compute.", words: 5, html: "<p/>" },
++] as unknown as Block[];
++const root = {
++  id: "n-root",
++  depth: 0,
++  parent: null,
++  children: [],
++  range: ["spya-aaa111", "spya-aaa111"],
++  title: "The whole piece",
++  gist: "Rainstorms do not compute.",
++} as unknown as TreeNode;
++const tree = { rootId: root.id, nodes: { [root.id]: root } } as unknown as Tree;
++
++const names = (tools: unknown[]): string[] => tools.map((t) => (t as { name: string }).name).sort();
++
++describe("the spoken mode words", () => {
++  const words = spokenModeWords();
++
++  it("names the modes, and has no token a voice could read aloud", () => {
++    expect(words).toContain("Summary");
++    expect(words).toContain("Structure");
++    expect(words).not.toContain("[cmd:");
++    expect(words).not.toMatch(/Opens at once|Button:/);
++  });
++});
++
++describe("a Realtime session in a guide", () => {
++  const text = liveInstructions({ meta, blocks, kind: "guide" });
++
++  it("is the companion's voice rules plus the guide section and the mode names", () => {
++    expect(text).toContain(LIVE_SYSTEM);
++    expect(text).toContain(SPOKEN_GUIDE);
++    expect(text).toContain(spokenModeWords());
++    expect(text).not.toContain("[cmd:");
++  });
++
++  it("puts the article last, after the guide's rules", () => {
++    expect(text.indexOf(SPOKEN_GUIDE)).toBeLessThan(text.indexOf("THE ARTICLE"));
++  });
++
++  it("is offered the guide's tools and show_passage, and nothing from the web", () => {
++    const expected = [SHOW_PASSAGE_TOOL.name, ...GUIDE_TOOLS.map((t) => t.function.name)].sort();
++    expect(names(liveTools("guide"))).toEqual(expected);
++    expect(names(liveSession({ meta, blocks, kind: "guide" }).tools as unknown[])).toEqual(expected);
++  });
++
++  it("leaves a chat and a Learn session exactly as they were", () => {
++    for (const kind of ["chat", "learn", undefined] as const) {
++      const plain = liveInstructions({ meta, blocks, kind });
++      expect(plain).not.toContain(SPOKEN_GUIDE);
++      expect(plain).toBe(liveInstructions({ meta, blocks }));
++      expect(names(liveTools(kind))).toEqual(names(liveTools()));
++    }
++  });
++});
++
++describe("a GPT-Live session in a guide", () => {
++  it("tells the voice and the backend they are the guide, and offers the guide's tools", () => {
++    const voice = gptLiveVoiceInstructions({ meta, blocks, tree, kind: "guide" });
++    const backend = gptLiveBackendInstructions({ meta, blocks, kind: "guide" });
++    expect(voice).toContain(SPOKEN_GUIDE);
++    expect(voice).toContain(spokenModeWords());
++    expect(backend).toContain(SPOKEN_GUIDE);
++    expect(voice).not.toContain("[cmd:");
++    const session = gptLiveSession({ meta, blocks, tree, history: [], kind: "guide" });
++    const tools = (session.delegation as { responses: { tools: unknown[] } }).responses.tools;
++    expect(names(tools)).toEqual(names(liveTools("guide")));
++  });
++
++  it("leaves a chat's GPT-Live session as it was", () => {
++    const voice = gptLiveVoiceInstructions({ meta, blocks, tree, kind: "chat" });
++    expect(voice).not.toContain(SPOKEN_GUIDE);
++    expect(voice).toBe(gptLiveVoiceInstructions({ meta, blocks, tree }));
++    expect(gptLiveBackendInstructions({ meta, blocks, kind: "chat" })).toBe(gptLiveBackendInstructions({ meta, blocks }));
++  });
++});
++
++describe("a guide's typed history, seeded into a voice", () => {
++  const answer = [
++    "Start with the Methods [spya-aaa111].",
++    "",
++    "[cmd:mode:submode%3Asummary%3Abrief]",
++    "Or search for it: [cmd:quick-search:imaging]",
++  ].join("\n");
++  const history = [
++    { id: "spya-q00001", role: "user", text: "Where first? [cmd:find:x]", createdAt: "2026-10-09T00:00:00Z", status: "done" },
++    { id: "spya-a00001", role: "assistant", text: answer, createdAt: "2026-10-09T00:00:01Z", status: "done" },
++  ] as ChatMessage[];
++
++  it("takes the buttons out of the guide's words, and leaves the reader's alone", () => {
++    const seed = liveSeedItems(history, "guide");
++    expect(seed[1]?.text).toBe("Start with the Methods.\n\nOr search for it:");
++    expect(seed[0]?.text).toBe("Where first? [cmd:find:x]");
++  });
++
++  it("drops a line that held only a button, and keeps prose untouched", () => {
++    expect(withoutCommandButtons("a\n[cmd:mode:x]\nb")).toBe("a\nb");
++    expect(withoutCommandButtons("no tokens here\n\n")).toBe("no tokens here\n\n");
++  });
++});

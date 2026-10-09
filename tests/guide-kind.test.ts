@@ -107,8 +107,11 @@ describe("the guide's prompt", () => {
 
   it("asks why they are reading when they have not said, and invites About you once", () => {
     const guide = systemOf("guide");
-    expect(guide).toMatch(/If they have not said why they are reading it, ask that first/);
-    expect(guide).toMatch(/The screen also shows them a box for it/);
+    expect(guide).toMatch(/If they still have not said why they are reading it, ask that first/);
+    /* Plan 261009i: the greeting asks in the conversation, so the model is told
+       it did, and that the box is gone. */
+    expect(guide).toMatch(/opens with a fixed greeting of ours/);
+    expect(guide).not.toMatch(/a box for it/);
     expect(guide).toMatch(/invite it once, lightly/);
     expect(guide).toMatch(/Ask one question at a time/);
   });

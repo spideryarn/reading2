@@ -139,6 +139,18 @@ export function useDebateChecks(slug: string): UseDebateChecks {
   /** The article on screen, so an answer for another one is never drawn here. */
   const current = useRef(slug);
   current.current = slug;
+  /* **Unmounting leaves the article too.** Every late answer, and the
+     broken-stream poll in `waitForStoredCheck`, stops on `current` no longer
+     being its slug, and without this an unmount changed nothing, so that poll
+     read and set state every fifteen seconds for as long as the check stayed
+     pending. Set again on mount, before the first read's effect, for a remount
+     that comes without a render. docs/postmortems/261009e-live-stall-tick-outlived-the-test.md. */
+  useEffect(() => {
+    current.current = slug;
+    return () => {
+      current.current = "";
+    };
+  }, [slug]);
   const checksNow = useRef(checks);
   checksNow.current = checks;
   const url = `/api/debate-claims/${encodeURIComponent(slug)}/checks`;

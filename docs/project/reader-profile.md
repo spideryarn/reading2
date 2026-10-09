@@ -56,7 +56,9 @@ if the article still has none — a one-shot `sessionStorage` mark from the add 
 ([`src/web/PurposePrompt.tsx`](../../src/web/PurposePrompt.tsx),
 [plan 261001s](../plans/261001s-imports-detail-on-home-and-why-reading-saved-state-and-first-open-prompt.md)).
 Since 2026-10-07, where that open is the article's first and a band fits beside the text, it opens
-on the guide in Chat instead, whose greeting holds the same box, and there is no dialog; on a phone
+on the guide in Chat instead, whose greeting asks why in the conversation (since 2026-10-09 there is
+no box: the reader answers below and may press *Keep this as why you're reading*,
+[261009i](../plans/261009i-the-guide-greets-in-chat-takes-live-and-a-bar-row.md)), and there is no dialog; on a phone
 the dialog stays ([url-state.md § An article never opened here arrives at a default](url-state.md#an-article-never-opened-here-arrives-at-a-default),
 [plan 261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md) F4).
 

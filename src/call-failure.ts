@@ -240,6 +240,31 @@ function networkCodeOf(links: readonly object[]): (typeof NETWORK_CODES)[number]
 }
 
 /**
+ * **The network codes that prove no request left**: each is raised before a
+ * connection exists (`ECONNREFUSED`, `UND_ERR_CONNECT_TIMEOUT`) or before one
+ * is attempted (`ENOTFOUND`, `EAI_AGAIN`). A reused keep-alive socket that
+ * turns out dead fails with `ECONNRESET`, `UND_ERR_SOCKET` or `EPIPE`, none of
+ * them here. `ETIMEDOUT` is not here either: it can come after the write.
+ * docs/plans/261009e-paid-web-search-not-retried-after-it-was-sent.md.
+ */
+const UNSENT_NETWORK_CODES: ReadonlySet<(typeof NETWORK_CODES)[number]> = new Set([
+  "ECONNREFUSED",
+  "ENOTFOUND",
+  "EAI_AGAIN",
+  "UND_ERR_CONNECT_TIMEOUT",
+]);
+
+/**
+ * **Does this failure's cause prove the request was never sent?** Only a code
+ * on `UNSENT_NETWORK_CODES` says so; a failure that names no code does not.
+ * The caller must already know it was the network.
+ */
+export function sentNothing(err: unknown): boolean {
+  const code = networkCodeOf(chain(err));
+  return code !== null && UNSENT_NETWORK_CODES.has(code);
+}
+
+/**
  * The label for a failure **the caller already knows was the network** — an
  * error `fetch` itself rejected with, or the SDK's connection error.
  * `network:<CODE>` when a known code is on it or its causes, `network`

@@ -1617,6 +1617,22 @@ export const MAX_PROFILE_CHARS = 1_500;
 export const MAX_PURPOSE_CHARS = 600;
 
 /**
+ * Trim it, settle the line endings, and call whitespace-only nothing.
+ *
+ * `\r\n` first, because a paste from a Windows-authored document carries them
+ * and they are invisible in every surface a reader or a reviewer would look at
+ * — including a diff of the hash's input, which is the one place it would
+ * matter. Returns `null` rather than `""` so that "the reader emptied the box"
+ * and "the reader never touched it" cannot be told apart *here*; whoever cares
+ * about that distinction holds it above this line.
+ */
+export function normaliseProfileText(text: string | null | undefined): string | null {
+  if (!text) return null;
+  const clean = text.replace(/\r\n/g, "\n").trim();
+  return clean.length > 0 ? clean : null;
+}
+
+/**
  * **One author of the piece, as the piece declares them** — the page's
  * `citation_author` and `citation_author_institution` tags, or the names and
  * affiliations the PDF front-matter pass copied off the front page with their
