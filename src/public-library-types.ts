@@ -78,11 +78,42 @@ export interface PublicLibraryEntry {
    * server did rather than by a proxy for it.
    */
   publicAt: string | null;
+  /**
+   * **The keys of the public topics this card is under**, naming entries of
+   * `PublicLibrary.topics`. `[]` when it is under none, or no topics are sent.
+   */
+  topics: string[];
+}
+
+/**
+ * **One of the public shelf's topic pills.** Named by a model from the shared
+ * articles' titles and one-line summaries only, stored under the site account,
+ * and sent here as stored: nothing is worked out or spent for the visitor.
+ * src/public-library-topics.ts; plan 261008j, approved as "q-p5h2a7 A".
+ *
+ * A hostile shared title can nudge these labels; the bounds are a reader's
+ * own pills': at most 40 characters, drawn as plain text, and only articles
+ * the model was shown.
+ */
+export interface PublicShelfTopic {
+  /** What a card's `topics` names. */
+  key: string;
+  label: string;
+  /** 0 for broad, towards 1 for finer, as a reader's shelf's terms. */
+  granularity: number;
+  /** The `key` of the broader topic this is inside, when that one is sent too. */
+  within?: string;
 }
 
 /** The shelf itself. */
 export interface PublicLibrary {
   entries: PublicLibraryEntry[];
+  /**
+   * **The topic pills, broad first.** Empty below eight cards, before the
+   * first tree, and **while any article the tree was made from is no longer
+   * listed** (src/public-library-topics.ts says why the whole set goes).
+   */
+  topics: PublicShelfTopic[];
   /**
    * **There were more, and you are not seeing them.**
    *

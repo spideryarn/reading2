@@ -1,7 +1,7 @@
 ---
 reports: spya-mdp0em
-ending: awaiting
-comment: Waiting on you again: measured against your half-cent bar, the plan is automatic up to 20 public articles, billed to a site account, with an admin rebuild button beyond. It edits a security defence, so it needs your yes to build.
+ending: shipped
+comment: Built as you chose (option A). The public shelf now has topic pills, kept up to date by themselves up to 20 shared articles and billed to a site account; past 20, a Rebuild button on the admin page. They appear once 8 articles are shared.
 ---
 # Topic pills on the public shelf
 
@@ -41,3 +41,10 @@ articles, billed to a site account, with a rebuild button on `/admin` beyond
 ([261008j](../plans/261008j-public-shelf-topic-pills-automatic-billed-to-the-site.md)). Still
 **awaiting**: building it edits listed defences, so it waits for his yes, asked as
 `docs/user-feedback/questions/q-p5h2a7.md`. Queue item `qi-4far27sc`.
+
+**2026-10-09: Greg chose A** (`q-p5h2a7 A`, in the Overseer's terminal), and it was built the same
+day: automatic up to 20 public articles, billed to a new site account, with a Rebuild button on
+`/admin` beyond; pills from 8 public articles; an un-share hides them until the rebuild. **Ending:
+Shipped** on `dev`. What was built, and where it differs from the plan, is
+[261008j § As built](../plans/261008j-public-shelf-topic-pills-automatic-billed-to-the-site.md#as-built-2026-10-09);
+the site account reaches production with the migration, at the Overseer's next deploy.

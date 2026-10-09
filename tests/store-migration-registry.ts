@@ -3041,6 +3041,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      `shelf_topic_sets`, `rate_limit_events` and `ai_calls`. The provider is a
      stubbed `fetch` with a fake key. */
   "tests/shelf-topics-route.test.ts": "private-postgres",
+  "tests/public-shelf-topics-pg.test.ts": "private-postgres",
   /* The model's topic set, 261003f. Seeds two owners and a handful of bare
      articles by hand, and reads and writes `shelf_topic_sets` through the
      store. No model is called. */
@@ -3680,6 +3681,14 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
      minted per run. 260929c stage 2, rewritten for 261003f. */
   "tests/shelf-topics-route.test.ts": {
     "00000000-0000-4000-8000-00000000c7a1": { kind: "seeded" },
+  },
+  /* Two sharing readers, seeded; and the site account, which the migration
+     drizzle/20261009022454_site_account.sql made, so it is in every database.
+     Its rows here — the topic set, allowance and ai_calls — are deleted by the
+     file. Plan 261008j. */
+  "tests/public-shelf-topics-pg.test.ts": {
+    "00000000-0000-4000-8000-0000000a7a11": { kind: "seeded" },
+    "00000000-0000-4000-8000-0000000a7b22": { kind: "seeded" },
   },
   /* Two readers: `shelf_topic_sets.owner_id` references `auth.users`, both
      own articles, and one's claim id is tried in the other's hands. 261003f. */

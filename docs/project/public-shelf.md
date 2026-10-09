@@ -198,9 +198,39 @@ sits beside it, never inside it.
 - **No cursor.** The row cap is a ceiling rather than a page size, so there is nothing to paginate
   through. The ordering is total on `(public_at, slug)` precisely so that a cursor is possible the
   day it starts biting.
-- **No topic pills, yet.** Greg asked for them (2026-10-04) and chose the shape (2026-10-08):
-  regenerated automatically when an article is shared, billed to a site account rather than any
-  reader, if each regeneration is half a cent or less. Measured, that holds up to about 20 public
-  articles, so the plan adds a rebuild button on `/admin` beyond. Planned in
-  [261008j](../plans/261008j-public-shelf-topic-pills-automatic-billed-to-the-site.md); it edits
-  listed defences, so it waits for his yes (`q-p5h2a7`).
+- **Topic pills are no longer on this list**: they arrived on 2026-10-09, [§ Topic pills](#topic-pills).
+
+## Topic pills
+
+**Since 2026-10-09.** Greg asked for them (report `spya-mdp0em`, 2026-10-04), set the bar on
+2026-10-08 — automatic and billed to the site if each regeneration is half a cent or less — and
+chose option A of `q-p5h2a7` on 2026-10-09:
+
+> q-p5h2a7 A
+>
+> — Greg, 2026-10-09
+
+What that is, as built (plan
+[261008j](../plans/261008j-public-shelf-topic-pills-automatic-billed-to-the-site.md)):
+
+- **The same row of pills as a reader's shelf** above the cards (`PublicShelfTopics.tsx`, the same
+  `TermChip` and the same AND narrowing), with no "More detail" view and no URL state. It arrives in
+  the page's one request; nothing is worked out or spent for the visitor.
+- **Named from the shared articles' titles and one-line summaries only**, by the same model and
+  coordinator as a reader's topics ([shelf-terms.md](shelf-terms.md)), stored under the **site
+  account** ([`src/site-account.ts`](../../src/site-account.ts)), an account that owns nothing and
+  cannot sign in. Each card is its own work: two readers sharing one article are two cards.
+- **Kept up to date by the requests that change the listing** — share, un-share, archive, restore,
+  delete — after their answer, billed to the site with no article. A share is filed into the pills
+  (about 0.01 of a cent); a full rebuild runs by itself while the public shelf has 20 articles or
+  fewer (about 0.1 of a cent at 20). Past 20 a due rebuild waits for **Rebuild on `/admin`**, which
+  says when one is due; new shares are still filed.
+- **Pills appear from 8 public articles**, the same rule as a reader's shelf.
+- **An un-share hides every pill until the rebuild**, because a pill's name may have come from that
+  article's title. Under 20 articles the un-share itself rebuilds.
+- **Abuse** is capped by the site's allowance, 12 runs an hour and 40 a day: about 8 cents a day at
+  most, after which the pills stop updating until the next day.
+
+The security change — what a stranger's page receives — is
+[security-map.md § the listing carries topic pills](security-map.md#and-since-2026-10-09-the-listing-carries-topic-pills-a-model-named);
+the privacy line is [privacy.md § Shelf topics](privacy.md#shelf-topics).

@@ -17,6 +17,10 @@ import {
 } from "../src/shelf-topic-sets.js";
 import type { AllowanceTaken, ShelfTermsStore, StoredTopicSet, TopicSetResult, TopicShelfArticle } from "../src/store/contracts.js";
 import type { LibraryTermsResponse } from "../src/types.js";
+import { publicTopicsFor } from "../src/public-library-topics.js";
+import { beginPublicShelfTopicsRefresh, setPublicShelfTopicDepsForTests } from "../src/public-shelf-topics.js";
+import { currentOwnerId } from "../src/owner.js";
+import { SITE_OWNER_ID } from "../src/site-account.js";
 
 const MODEL = "test/model";
 
@@ -237,10 +241,115 @@ describe("whatIsDue", () => {
     expect(got.kind === "file" && got.works).toHaveLength(3);
     expect(due(row(result({ works: 100, members: filedAll(MAX_WORKS + 3) })), MAX_WORKS + 3).kind).toBe("nothing");
   });
+
+  /* The public shelf's policy, plan 261008j: a re-think runs by itself only up
+     to 20 cards, and an article that has left the shelf makes one due. */
+  it("with a lower re-think cap: above it, files but never re-thinks", () => {
+    const policy = { rethinkUpTo: 20 };
+    expect(whatIsDue(null, worksOf(shelfOf(20)), MODEL, "", policy).kind).toBe("rethink");
+    expect(whatIsDue(null, worksOf(shelfOf(21)), MODEL, "", policy).kind).toBe("nothing");
+    const stored = row(result({ works: 20, members: filedAll(20) }));
+    /* Grown by a quarter: due for a reader, not for the capped public shelf. */
+    expect(whatIsDue(stored, worksOf(shelfOf(26)), MODEL, "").kind).toBe("rethink");
+    const capped = whatIsDue(stored, worksOf(shelfOf(26)), MODEL, "", policy);
+    expect(capped.kind === "file" && capped.works).toHaveLength(6);
+  });
+
+  it("re-thinks when a filed article has gone, only when asked to", () => {
+    /* a1..a10 filed; the shelf now holds a2..a10 — a1 was un-shared. */
+    const stored = row(result({ works: 10, members: filedAll(10) }));
+    const shelf = worksOf(shelfOf(10).slice(1));
+    expect(whatIsDue(stored, shelf, MODEL, "").kind).toBe("nothing");
+    expect(whatIsDue(stored, shelf, MODEL, "", { rethinkWhenGone: true }).kind).toBe("rethink");
+    /* Above the cap the gone article cannot be re-thought away: nothing runs by itself. */
+    expect(whatIsDue(stored, shelf, MODEL, "", { rethinkWhenGone: true, rethinkUpTo: 8 }).kind).toBe("nothing");
+  });
 });
 
 describe("shelfTopicSet", () => {
   const filedAll = (n: number, topics: string[] = ["t1"]) => Object.fromEntries(Array.from({ length: n }, (_, i) => [`a${i + 1}`, topics]));
+
+  it("does not carry wording from a withdrawn public article into a rebuilt tree", async () => {
+    const withdrawnLabel = "Secret project Nightingale";
+    const shelf = shelfOf(9).slice(1);
+    const { store, state } = fakeStore(shelf, result({
+      topics: [{ id: "t1", key: keyOf(withdrawnLabel), label: withdrawnLabel, parent: null, depth: 0 }],
+      works: 9,
+      /* Even an unplaced article was read when the labels were named. */
+      members: { ...filedAll(9), a1: [] },
+    }));
+    const previous: string[][] = [];
+    const deps = depsFor(store, {
+      due: { rethinkUpTo: 20, rethinkWhenGone: true },
+      calls: {
+        name: async (works, options) => {
+          previous.push([...options.previous]);
+          /* Follow the real prompt's request to keep an old label where supplied. */
+          return [named(options.previous[0] ?? "Public science", works.map((w) => w.id))];
+        },
+        file: async () => new Map(),
+      },
+    });
+    const { refresh } = await shelfTopicSet(false, deps);
+    expect(refresh).not.toBeNull();
+    await refresh?.();
+    expect(previous).toEqual([[]]);
+    expect(state.row?.result?.members).not.toHaveProperty("a1");
+    const answer = publicTopicsFor(shelf, state.row?.result ?? null);
+    expect(answer.topics.map((t) => t.label)).toEqual(["Public science"]);
+  });
+
+  it("keeps previous labels on a reader's rebuild after an article is deleted", async () => {
+    const { store } = fakeStore(shelfOf(15), result({ works: 20, members: filedAll(20) }));
+    const deps = depsFor(store);
+    const inner = deps.calls.name;
+    const previous: string[][] = [];
+    deps.calls = { ...deps.calls, name: async (works, options, forbid) => {
+      previous.push([...options.previous]);
+      return inner(works, options, forbid);
+    } };
+    const { refresh } = await shelfTopicSet(false, deps);
+    await refresh?.();
+    expect(previous[0]).toEqual(["Neuroscience", "Buddhism"]);
+  });
+
+  it.each([false, true])("reconciles a public un-share during a live re-think, with an arrival: %s", async (arrival) => {
+    const { store, state } = fakeStore(shelfOf(9));
+    let names = 0;
+    let concurrent = false;
+    let files = 0;
+    const owners: string[] = [];
+    const deps = depsFor(store, { calls: {
+      name: async (works) => {
+        owners.push(currentOwnerId());
+        if (++names === 1) {
+          state.shelf = state.shelf.slice(1);
+          if (arrival) state.shelf.push(article(10));
+          const trigger = await beginPublicShelfTopicsRefresh();
+          await trigger();
+          concurrent = true;
+        }
+        return [named("Public science", works.map((w) => w.id))];
+      },
+      file: async () => {
+        files += 1;
+        return new Map();
+      },
+    } });
+    setPublicShelfTopicDepsForTests((due) => ({ ...deps, due }));
+    try {
+      const work = await beginPublicShelfTopicsRefresh();
+      await work();
+      expect(concurrent).toBe(true);
+      expect(state.row?.result?.members).not.toHaveProperty("a1");
+      expect(publicTopicsFor(state.shelf, state.row?.result ?? null).topics.map((t) => t.label)).toEqual(["Public science"]);
+      expect(owners).toEqual([SITE_OWNER_ID, SITE_OWNER_ID]);
+      expect(files).toBe(0);
+      expect(deps.asked.allowance).toEqual(["take", "finish", "take", "finish"]);
+    } finally {
+      setPublicShelfTopicDepsForTests(null);
+    }
+  });
 
   it("with no tree: answers with the fallback, says refreshing, and the refresh stores a re-think", async () => {
     const { store, state } = fakeStore(shelfOf(10));

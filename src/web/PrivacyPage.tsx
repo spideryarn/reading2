@@ -55,7 +55,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
  * can honestly promise: there is no changelog, no diff view and nobody to email
  * about a wording change during a beta. Bump it when you change the words.
  */
-const LAST_UPDATED = "8 October 2026";
+const LAST_UPDATED = "9 October 2026";
 
 /**
  * A heading and its paragraphs. Eight of them; nothing else on the page.
@@ -505,7 +505,9 @@ export function PrivacyPage() {
           (the question is not kept, and is not written to our logs);{" "}
           <code>gpt-6-luna</code> to name the topics above your shelf and sort your articles into them,
           for which it is shown your articles’ titles and one-line summaries (a paper’s abstract, when
-          it has no summary yet) and your profile if you wrote one;{" "}
+          it has no summary yet) and your profile if you wrote one, and to name the topics on the
+          public shelf, for which it is shown the titles and one-line summaries of the articles shared
+          there and nothing else;{" "}
           <code>voyage-4</code> to turn passages into the numbers that make search-by-meaning work;{" "}
           <code>jev-1.13</code>, TypeSafe’s, through OpenRouter, for quick search, for which it is
           shown the article’s passages and the words you searched for, and to work out which command

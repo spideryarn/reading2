@@ -511,6 +511,16 @@ has no gist yet**, which is new; it is no longer shown candidate phrases. What i
 topic names, and which article is in which) is stored against the reader in `shelf_topic_sets`,
 deleted with the account, and never logged. The page's sentence and `LAST_UPDATED` moved.
 
+**Changed 2026-10-09**, with [public-shelf.md](public-shelf.md) and plan
+[261008j](../plans/261008j-public-shelf-topic-pills-automatic-billed-to-the-site.md): the public
+shelf now has topics too, so the sentence above (*"the public shelf gets no topics at all"*) no
+longer holds. The same model is shown the titles and one-line summaries of the articles shared on
+`/read/public` — what that page already shows anybody — and no profile and nothing private. They
+already went to it for their owner's own topics, so this is a new purpose for data already sent,
+not new data. What it returns is stored under the site account (`shelf_topic_sets`), not against any
+reader. The models paragraph says so in one clause, and `LAST_UPDATED` moved. Greg approved it as
+"q-p5h2a7 A".
+
 ## Quick search
 
 **Added 2026-10-02**, with [search.md § Quick search](search.md#quick-search-a-meaning-search-in-about-a-second):

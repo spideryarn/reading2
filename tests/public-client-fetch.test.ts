@@ -324,7 +324,7 @@ describe("the client and the server agree about the paths", () => {
    * nothing else would notice it had moved.
    */
   it("and the library loader asks for exactly the collection path the server spells", async () => {
-    const shelf: PublicLibrary = { entries: [], truncated: false };
+    const shelf: PublicLibrary = { entries: [], topics: [], truncated: false };
     next = () => new Response(JSON.stringify(shelf), { status: 200 });
     calls.length = 0;
     await loadPublicLibrary();
