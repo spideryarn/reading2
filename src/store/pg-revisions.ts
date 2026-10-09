@@ -269,6 +269,9 @@ export const REVISION_CARRY_POLICY: Record<
   unverified: "carry",
   recall: "carry",
   pagesChecked: "carry",
+  /* With `recall`, whose complaints these are: a revision that does not
+     re-extract keeps the transcription they are about. */
+  quality: "carry",
 
   extractedHtml: "carry",
   stampedHtml: "carry",

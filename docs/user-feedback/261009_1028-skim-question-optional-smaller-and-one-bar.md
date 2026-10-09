@@ -1,7 +1,7 @@
 ---
 reports: spya-qpgvq9, spya-zdkqx4, spya-x0rfs2
 ending: shipped
-comment: spya-x0rfs2: the bar is fixed; the wider layout is put to Greg as q-u04sye
+comment: spya-x0rfs2: the bar is fixed; the quieter open stop Greg chose in q-u04sye is on dev as an experiment
 ---
 # Skim: the question before a quote is optional, smaller and explained; the bar is one bar
 
@@ -16,7 +16,10 @@ does that.
 > — Greg, 2026-10-09 (`spya-zdkqx4`)
 
 **Ending: Shipped**, all three. It is on `dev` and not deployed. The wider layout half of
-`spya-x0rfs2` is put to Greg as [q-u04sye](questions/q-u04sye.md).
+`spya-x0rfs2` was put to Greg as [q-u04sye](questions/q-u04sye.md). He chose option A as an
+experiment, and it is on `dev` in [261009m](../plans/261009m-skim-quieter-open-stop.md): the open
+stop's heading smaller and grey, the chips outlined, the door's cue upright. The large quote marks
+he floated were tried and not kept.
 
 What we did, in [261009j](../plans/261009j-skim-question-optional-and-the-border.md):
 

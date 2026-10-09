@@ -66,7 +66,8 @@ are not on the list, so a pooled connection cannot sneak through.
    `redirect: "error"` in `send`. Undici's own 421 replay and HTTP/2 refused-stream replay remain;
    both are, by protocol, requests the server did not process.
 3. *A requeued pipeline step buys the searches again.* **Documented**, not fixed: that is the job
-   lease's behaviour, not the gateway's.
+   lease's behaviour, not the gateway's. Fixed since by
+   [261009l](261009l-a-requeued-job-does-not-buy-the-debate-search-again.md).
 4. Keep the four codes; no broad TLS list. **Agreed.**
 5. The predicate covers every current caller; add a default-engine case. **Added.**
 

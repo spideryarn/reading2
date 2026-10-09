@@ -958,7 +958,7 @@ export const articleRevisions = spideryarn.table(
     /**
      * **How this revision was extracted, when the answer is not "Readability".**
      *
-     * All six are null for a web page and that is the common case — they exist
+     * All seven are null for a web page and that is the common case — they exist
      * because a PDF is read by a *model*, and a reader is owed the difference.
      * docs/plans/260826c-pdf-ingestion.md.
      *
@@ -979,6 +979,16 @@ export const articleRevisions = spideryarn.table(
     unverified: boolean("unverified"),
     recall: doublePrecision("recall"),
     pagesChecked: integer("pages_checked"),
+    /**
+     * `Meta.quality`: what the transcription checker complained about, in its
+     * own words. Null means **no complaints stored**, which is two facts: the
+     * checker found nothing (the common case), or the revision predates this
+     * column (2026-10-09), when the complaints were computed and dropped at
+     * the store's door because nothing here named them. Never `{}` and never
+     * a null element (`article_revisions_quality_nonempty`), so "none" has one
+     * spelling. docs/plans/261009n-pdf-quality-warnings-not-stored.md.
+     */
+    quality: text("quality").array(),
 
     extractedHtml: text("extracted_html"),
     /** Post-sanitiser, post-id-stamping. docs/project/security.md — stage 3 owns this. */
@@ -1449,6 +1459,13 @@ export const articleRevisions = spideryarn.table(
     check(
       "article_revisions_published_day_or_year",
       sql`${t.publishedAt} is null or ${t.publishedYear} is null`,
+    ),
+    /* No complaints is NULL, never an empty list, and no complaint is NULL:
+       `metaColumns` writes null for none, and this refuses any other writer
+       that would give "none" a second spelling. Plan 261009n. */
+    check(
+      "article_revisions_quality_nonempty",
+      sql`${t.quality} is null or (cardinality(${t.quality}) > 0 and array_position(${t.quality}, null) is null)`,
     ),
     /**
      * The three of `NavLabelStatus`, and **this literal is hand-kept** — the
@@ -2963,6 +2980,17 @@ export const jobs = spideryarn.table(
      * that would not otherwise have happened.
      */
     requeues: integer("requeues").notNull().default(0),
+
+    /**
+     * **The `oncePerJob` step this job has begun, and when** (src/pipeline.ts §
+     * `PipelineStep.oncePerJob`). Written by `beginPaidStep` before the step's
+     * paid work starts, and never cleared: a step that finished is skipped as
+     * done before the marker is read, and a step that did not finish must not
+     * be bought again by a later window of the same job. Per job, so a reader's
+     * Retry — a new row — starts clean. Plan 261009l.
+     */
+    paidStepBegun: text("paid_step_begun"),
+    paidStepBegunAt: timestamp("paid_step_begun_at", { withTimezone: true }),
 
     /**
      * **`urlKey(url)`** (src/ingest.ts), persisted so that `jobs_active_source`

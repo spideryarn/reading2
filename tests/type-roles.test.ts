@@ -67,7 +67,8 @@ interface Row {
  * cannot see.
  */
 const WITNESSES: Record<string, string> = {
-  ".skim-place": ".skim-row.current button.skim-go .skim-place",
+  /* A row that is not the open stop: that one is a named exception below. */
+  ".skim-place": ".skim-row button.skim-go .skim-place",
   ".skim-words": ".skim-row.current button.skim-go .skim-words",
   ".skim-cluster-h": ".skim-card section.skim-cluster .skim-cluster-h",
   ".tl-label": ".tl-item.open button.tl-row .tl-label",
@@ -185,6 +186,15 @@ interface Exception {
 }
 
 const EXCEPTIONS: Exception[] = [
+  {
+    file: "skim.css",
+    selector: ".skim-row.current .skim-place",
+    value: "0.82rem",
+    reason:
+      "The open stop's section heading, a step below --type-item and in the soft ink, so the " +
+      "quote under it is read first (Greg's answer to q-u04sye, plan 261009m). The other rows " +
+      "keep --type-item, so the route still scans as a list.",
+  },
   {
     file: "skim.css",
     selector: ".skim-cue",
@@ -472,6 +482,15 @@ describe("the named exceptions", () => {
       );
     });
   }
+
+  /* The exact-selector check above cannot see a later, more specific rule
+     that wins on the open stop (GPT Sol on plan 261009m), so its heading is
+     put through the cascade too. */
+  it("the open Skim stop's heading resolves to 0.82rem through the full cascade", () => {
+    const open = witness(".skim-row.current button.skim-go .skim-place");
+    expect(window.getComputedStyle(open.target).fontSize).toBe("0.82rem");
+    open.host.remove();
+  });
 
   it("uses the author's face only to measure the Skim door, then restores each child's voice", () => {
     const fixed = witness(".skim-door > p.skim-door-cue");

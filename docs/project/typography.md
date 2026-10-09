@@ -112,7 +112,9 @@ foldable claim quotation stays 0.85rem; Mirror's reader-written criterion and bl
 0.88rem. They occupy similar places without doing one of the six jobs. Skim's question before a
 quote (`.skim-cue`) does a body line's job but stays 0.78rem: Greg asked that it be smaller than the
 quote, and in monospace a body-sized line reads larger than the serif quote beside it (plan
-[261009j](../plans/261009j-skim-question-optional-and-the-border.md)).
+[261009j](../plans/261009j-skim-question-optional-and-the-border.md)). The open Skim stop's section heading
+(`.skim-row.current .skim-place`) is 0.82rem rather than `--type-item`, so the quote under it is
+read first; the other rows keep the role (plan [261009m](../plans/261009m-skim-quieter-open-stop.md)).
 
 **Left out on purpose:** Timeline's and Ideas' group blurbs (small explanatory copy, neither meta
 nor body); Marginalia, drawn small beside the prose; Structure and the outline, which size rows by

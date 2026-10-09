@@ -808,6 +808,9 @@ const REVISION_READ_POLICY: Record<
   unverified: { article: "value", library: "value" },
   recall: { article: "value", library: "value" },
   pagesChecked: { article: "value", library: "value" },
+  /* The library takes it only because it shares `META_COLUMNS` with the
+     article read, as `recall` does; the shelf shows neither. */
+  quality: { article: "value", library: "value" },
 
   /* The tree: the article renders it, `ideas` compares it (src/ideas.ts §
      `inputFingerprint` — that artefact is written from the skeleton as much as
@@ -1151,6 +1154,7 @@ const META_COLUMNS = {
   unverified: articleRevisions.unverified,
   recall: articleRevisions.recall,
   pagesChecked: articleRevisions.pagesChecked,
+  quality: articleRevisions.quality,
   readingLanguage: articleRevisions.readingLanguage,
   readingIdeas: articleRevisions.readingIdeas,
   readingDifficultyReason: articleRevisions.readingDifficultyReason,
@@ -1849,7 +1853,7 @@ export async function sourceHashFor(
  * view's row now genuinely differ (one has the tree, the other has five
  * scalars), and this is the part they share.
  */
-type MetaRow = { [C in keyof typeof META_COLUMNS]: Selected[C] };
+export type MetaRow = { [C in keyof typeof META_COLUMNS]: Selected[C] };
 
 /**
  * `Meta.authors` from its column, for the one read that selects it — the
@@ -1896,7 +1900,8 @@ function unreadPaperFrom(
   };
 }
 
-function metaFrom(
+/** Exported for tests/meta-from-columns.test.ts, which holds it to every column it is given. */
+export function metaFrom(
   slug: string,
   /* **`MetaRow`, not `$inferSelect`** — the columns this function actually
      reads, which is a good deal less than the table. Widening it back would
@@ -1968,6 +1973,7 @@ function metaFrom(
     ...(revision.unverified === null ? {} : { unverified: revision.unverified }),
     ...(revision.recall === null ? {} : { recall: revision.recall }),
     ...(revision.pagesChecked === null ? {} : { pagesChecked: revision.pagesChecked }),
+    ...(revision.quality === null ? {} : { quality: revision.quality }),
     ...(readingDifficulty === null ? {} : { readingDifficulty }),
   };
 }

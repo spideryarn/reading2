@@ -3127,6 +3127,8 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      puts a bucket object in as well, so it wants the lane that leaves
      `SUPABASE_URL` alone as much as the one that serialises. */
   "tests/jobs-walk.test.ts": "private-postgres",
+  /* A real claim, sweep and pause on a seeded article: plan 261009l. */
+  "tests/jobs-paid-step-once.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04, and the lane follows from two of its
      cases in particular. One puts a *second* job on a busy article and asserts
      that the queue appends rather than renames, which is `jobs_active_slug`
@@ -3514,6 +3516,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/upload-acquire.test.ts": "private-postgres",
   "tests/an-uploaded-html-file-becomes-an-article.test.ts": "private-postgres",
   "tests/uploads-api.test.ts": "private-postgres",
+  "tests/pdf-quality-pg.test.ts": "private-postgres",
 };
 
 /**
