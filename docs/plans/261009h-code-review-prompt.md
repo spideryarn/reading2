@@ -1,9 +1,9 @@
 You are reviewing CODE in the Spideryarn repo (worktree /var/tmp/spideryarn-worktrees/bug-hp-chat-cutoff), and you may FIX what you find inside this change's scope. Report anything wider rather than fixing it.
 
 The plan, as built, and your own earlier review of it:
-- docs/plans/261009e-high-powered-chat-cut-off-at-its-ceiling.md
-- docs/plans/261009e-plan-review-sol.md (your REJECT; the plan's "Review" section says how each finding was taken — check that each really was)
-- docs/postmortems/261009e-a-flag-the-store-did-not-keep.md
+- docs/plans/261009h-high-powered-chat-cut-off-at-its-ceiling.md
+- docs/plans/261009h-plan-review-sol.md (your REJECT; the plan's "Review" section says how each finding was taken — check that each really was)
+- docs/postmortems/261009h-a-flag-the-store-did-not-keep.md
 
 The diff: `git diff origin/dev -- . ':!drizzle/meta'` (uncommitted, in this worktree), plus the new untracked files: tests/chat-truncated-stored.test.ts, tests/pg-chat-row-roundtrip.test.ts, tests/converse-ceiling.test.ts, drizzle/20261009053445_chat_messages_truncated.sql.
 

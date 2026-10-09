@@ -13,7 +13,7 @@
  * A lost field looks fine: the zip opens, the JSON parses and the thread is
  * there. The tests below began as contrasts with the rollback; `kind`,
  * `passages` and `interrupted` have since been fixed there, so those cases now
- * assert both projections keep them. `truncated` joins them under plan 261009e.
+ * assert both projections keep them. `truncated` joins them under plan 261009h.
  *
  * ## And it never reads the bucket
  *
@@ -697,7 +697,7 @@ describe("the bundle is the faithful projection", () => {
   });
 
   /* This used to assert the rollback **dropped** both — a known gap pinned as
-     a difference between the two exports. Plan 261009e names them in
+     a difference between the two exports. Plan 261009h names them in
      src/store/export.ts, so the two now agree. */
   it("keeps passages, interrupted and truncated on both exports", async () => {
     const threads = parsed("augmentations/chat.json").threads as {

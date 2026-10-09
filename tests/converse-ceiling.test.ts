@@ -5,7 +5,7 @@
  * high-power model is sent `effort: "high"` (src/ai-call.ts § `wireEffort`), so
  * a ceiling sized for the standard model is one Opus can spend thinking. Chat's
  * 4,000 and explain's 1,500 were both sized that way.
- * docs/plans/261009e-high-powered-chat-cut-off-at-its-ceiling.md.
+ * docs/plans/261009h-high-powered-chat-cut-off-at-its-ceiling.md.
  *
  * What is pinned is the request body each call puts on the wire — the one
  * thing the provider sees — not a constant that might not reach it.
@@ -116,7 +116,7 @@ describe("chat's ceiling", () => {
 /* **Keyed on the model, not on `power`** — a production environment override
    can put either power on either model, and it is the model that is sent `high`
    (`wireEffort`). These cases set the real task override rather than passing
-   `model`, which is the test/eval seam. GPT Sol, plan 261009e F3. */
+   `model`, which is the test/eval seam. GPT Sol, plan 261009h F3. */
 describe("the ceiling follows the model actually sent", () => {
   it("chat: a production override to the high-power model gets the high-power ceiling", async () => {
     vi.stubEnv("SPIDERYARN_CHAT_MODEL", HIGH_POWER_MODEL_OPENROUTER);

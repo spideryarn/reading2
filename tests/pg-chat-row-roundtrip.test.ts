@@ -6,7 +6,7 @@
  * dropped without a word: the types allow it, because leaving out an optional
  * key always compiles. `tools`, then `passages` and `interrupted`, then
  * `truncated` went that way —
- * docs/postmortems/261009e-a-flag-the-store-did-not-keep.md.
+ * docs/postmortems/261009h-a-flag-the-store-did-not-keep.md.
  *
  * So the fixture is a **`Required<ChatMessage>`**: a field added to the type
  * does not compile here until it is given a value, and once it has one this

@@ -54,7 +54,7 @@ Three things, and the first changes the picture.
 | 3 | Chat's ceiling on the **high-power model**: **6,000**, else 4,000; Candidates keeps 12,000 on either. `chatCeiling(kind, model)`, keyed on the model like `wireEffort`. | `src/converse.ts` |
 | 4 | Explain's ceiling on the high-power model: `DIG_ANSWER_TOKENS` (4,000), the figure already chosen for Opus at `high` on explain's own prompt. Standard stays 1,500. | `src/explain.ts` |
 | 5 | Correct the investigation's sentence: the cut-off was the harness, the risk is smaller than it said. The eval harness's `CHAT_MAX_TOKENS` is relabelled as that day's value, kept so the run reproduces. | `docs/investigations/261009a-…`, `evals/digest/run.ts` |
-| 6 | Postmortem naming the class. | `docs/postmortems/261009e-a-flag-the-store-did-not-keep.md` |
+| 6 | Postmortem naming the class. | `docs/postmortems/261009h-a-flag-the-store-did-not-keep.md` |
 
 **Why 6,000.** This was 9,000 in the draft and GPT Sol rejected it (F4), rightly: the 4,550
 tokens of thinking it was built on were a Candidates run, not a chat round, and 9,000 used in full
@@ -120,12 +120,12 @@ in another stage's store — reported to Greg rather than reached into.
 
 ## Review
 
-GPT Sol on the plan: [261009e-plan-review-sol.md](261009e-plan-review-sol.md), verdict REJECT. All
+GPT Sol on the plan: [261009h-plan-review-sol.md](261009h-plan-review-sol.md), verdict REJECT. All
 nine findings taken: F1–F2 and F7 are rows 1, 1b and 2; F3 the override tests; F4 and F9 the
 change from 9,000 to 6,000 and its argument above; F5 the explain wording; F6 the eval label and
 `src/models.ts`'s note; F8 the sibling table.
 
-GPT Sol on the code: [261009e-code-review-sol.md](261009e-code-review-sol.md), APPROVE WITH
+GPT Sol on the code: [261009h-code-review-sol.md](261009h-code-review-sol.md), APPROVE WITH
 CHANGES MADE. It fixed four: `retry` also clears `editedAt`; the override tests now go through the
 production seams (`SPIDERYARN_CHAT_MODEL`, `SPIDERYARN_EXPLAIN_MODEL`) rather than the eval-only
 `model` argument; the rollback and restore tests assert `truncated`, `passages` and `interrupted`;

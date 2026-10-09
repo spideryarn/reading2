@@ -328,7 +328,7 @@ export async function seedChatFromFiles(slug: string): Promise<{ threads: number
         error: message.error ?? null,
         stopped: message.stopped ?? false,
         /* Named for the reason `effort` gives above; all three were missing
-           until 2026-10-09 (plan 261009e). */
+           until 2026-10-09 (plan 261009h). */
         truncated: message.truncated ?? false,
         interrupted: message.interrupted ?? false,
         passages: message.passages ?? null,

@@ -4563,7 +4563,7 @@ export const chatMessages = spideryarn.table(
      * A column because the flag outlived only the tab that watched it arrive
      * until 2026-10-09: the route sent it and `finish` dropped it, so a reload
      * showed a cut-off answer as a whole one.
-     * docs/postmortems/261009e-a-flag-the-store-did-not-keep.md.
+     * docs/postmortems/261009h-a-flag-the-store-did-not-keep.md.
      */
     truncated: boolean("truncated").notNull().default(false),
     /**

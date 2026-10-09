@@ -223,12 +223,12 @@ export const CHAT_STALL_MS = 45_000;
  * `deadlineFor(6_000)` (src/token-budget.ts) is 79 s of a 120 s
  * `CHAT_TIMEOUT_MS`, which leaves room for a tool round before it; at 9,000 a
  * round using its allowance would need the whole deadline on its own (GPT Sol,
- * plan 261009e F4). If a round still runs out, the reader is told —
+ * plan 261009h F4). If a round still runs out, the reader is told —
  * `truncated` — and `warnIfThinkingAteTheCeiling` logs it.
  *
  * Unused allowance costs nothing: output is billed as produced, and nothing
  * reserves spend against this number.
- * docs/plans/261009e-high-powered-chat-cut-off-at-its-ceiling.md.
+ * docs/plans/261009h-high-powered-chat-cut-off-at-its-ceiling.md.
  */
 export const CHAT_ANSWER_TOKENS = 4_000;
 export const CHAT_HIGH_POWER_ANSWER_TOKENS = 6_000;

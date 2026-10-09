@@ -678,7 +678,7 @@ export async function exportArticle(
             stopped: row.stopped ? true : null,
             /* Three more named for `stance`'s reason below: a column not named
                here is not exported, and nothing says so. All three were missing
-               until 2026-10-09 (plan 261009e). */
+               until 2026-10-09 (plan 261009h). */
             truncated: row.truncated ? true : null,
             interrupted: row.interrupted ? true : null,
             passages: row.passages,

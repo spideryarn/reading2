@@ -522,7 +522,7 @@ const rawPgChatStore: ChatStore = {
           ...(patch.stopped === undefined ? {} : { stopped: patch.stopped }),
           /* Named here or it never reaches the row: the route has always sent it
              and this patch used to drop it on the floor —
-             docs/postmortems/261009e-a-flag-the-store-did-not-keep.md. */
+             docs/postmortems/261009h-a-flag-the-store-did-not-keep.md. */
           ...(patch.truncated === undefined ? {} : { truncated: patch.truncated }),
           ...(patch.editedAt === undefined ? {} : { editedAt: new Date(patch.editedAt) }),
           // The attempt is over. Both columns or neither — the CHECK says so.
@@ -599,7 +599,7 @@ const rawPgChatStore: ChatStore = {
           stopped: false,
           /* A finish that was not cut off omits the flag rather than sending
              `false`, so the last attempt's `true` must go here or it outlives
-             the answer it was about (GPT Sol, plan 261009e F2). */
+             the answer it was about (GPT Sol, plan 261009h F2). */
           truncated: false,
           /* Retrying is a new one-voice attempt. The row id survives, but the
              legacy instruction on an old answer does not; omitting this field

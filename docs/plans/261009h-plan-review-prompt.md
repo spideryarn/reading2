@@ -1,6 +1,6 @@
 You are reviewing a PLAN (read-only) in the Spideryarn repo, before any code is written.
 
-Plan: docs/plans/261009e-high-powered-chat-cut-off-at-its-ceiling.md — read it first, then check its claims against the code:
+Plan: docs/plans/261009h-high-powered-chat-cut-off-at-its-ceiling.md — read it first, then check its claims against the code:
 - src/converse.ts (search `max_tokens: kind === "candidates"`, `truncated`, CHAT_TIMEOUT_MS)
 - src/store/pg-chat.ts (`toMessage`, `messageRow`, `finish`), src/db/schema.ts (chatMessages), src/types.ts (`ChatMessage.truncated`)
 - src/routes.ts (~3870-3890, the chat `finished` patch), src/web/ChatPanel.tsx (~2459), src/web/guide-acts.ts:100

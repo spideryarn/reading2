@@ -133,7 +133,7 @@ describe("a chat answer cut off at max_tokens", () => {
  * field-by-field enumeration in src/store/pg-chat.ts, and the one `truncated`
  * actually fell out of. The patch is typed from `ChatMessage` minus an
  * explicit list of what a finish does not set, so a new field fails to compile
- * here until it is put in one or the other (GPT Sol, plan 261009e F7).
+ * here until it is put in one or the other (GPT Sol, plan 261009h F7).
  */
 type NotFinishable =
   | "id"

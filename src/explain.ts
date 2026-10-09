@@ -526,7 +526,7 @@ export async function* explainStream({
        a whole one — `Comment` has nowhere to say otherwise — so the ceiling is
        the whole defence here for now. It fits `EXPLAIN_TIMEOUT_MS` and the
        comment lease built on it, which already cover a dug answer at this
-       size. Keyed on the model, like `wireEffort`. Plan 261009e. */
+       size. Keyed on the model, like `wireEffort`. Plan 261009h. */
     max_tokens: dig || isHighPowerModel(model) ? DIG_ANSWER_TOKENS : 1500,
     tools: [
       {

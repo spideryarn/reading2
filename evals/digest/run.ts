@@ -44,7 +44,7 @@ const DIGEST_MAX_TOKENS = 16_000;
 /**
  * Production chat's ceiling **as it was on 2026-10-09, when this ran** — kept
  * so the run reproduces. Production now sends more on the high-power model
- * (src/converse.ts § `chatCeiling`, plan 261009e); a future run comparing Opus
+ * (src/converse.ts § `chatCeiling`, plan 261009h); a future run comparing Opus
  * should use that rather than this.
  */
 const CHAT_MAX_TOKENS = 4000;

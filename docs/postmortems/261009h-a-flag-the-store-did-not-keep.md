@@ -1,7 +1,7 @@
 # A flag the store did not keep
 
 Up: [postmortems.md](../project/postmortems.md) · plan:
-[261009e](../plans/261009e-high-powered-chat-cut-off-at-its-ceiling.md)
+[261009h](../plans/261009h-high-powered-chat-cut-off-at-its-ceiling.md)
 
 When the model's `max_tokens` cuts a chat answer off, chat says so: *"This answer ran out of room
 and stopped mid-sentence. Try again."* It says so only to the tab that watched the answer arrive.

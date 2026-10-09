@@ -147,7 +147,7 @@ Simple is not part of the default ingest and already uses Opus whenever it is re
   model's 4,000; explain sends 4,000 instead of 1,500. Both key this choice on the model actually sent,
   not the article setting, so a deliberate model override carries the matching ceiling. `max_tokens`
   is outside the cached prompt and unused allowance is not billed
-  ([261009e](../plans/261009e-high-powered-chat-cut-off-at-its-ceiling.md)).
+  ([261009h](../plans/261009h-high-powered-chat-cut-off-at-its-ceiling.md)).
 - **The cache floor.** Opus 5.5 caches a prefix from **512** tokens, and so does Sonnet 5.5; Sonnet 5 needed 1,024 (until
   2026-10-09) — Opus measured live on 2026-09-30 (the plan's § Measurements). `underCacheFloor` takes the model.
 - **The run is read per step.** The job runner reads the article's setting as each step starts, so
