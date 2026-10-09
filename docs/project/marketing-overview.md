@@ -73,7 +73,7 @@ Status: **idea** (not started), **trying** (running now) or **done** (with what 
 | Five old contacts, each sent a private link to their own latest paper, with a phone call. | trying, from 2026-10-09 | [marketing-author-gifts.md](marketing-author-gifts.md) |
 | Give an author a Spideryarn version of their own piece, privately, and ask what it gets wrong. Plus the admin tool that makes it cheap. | tool being built | [marketing-author-gifts.md](marketing-author-gifts.md) |
 | Talks: product conferences, meetups, and AI / HCI / human-augmentation venues near London. Best first: Feeling of Computing London. | venues found, none booked | [marketing-talks.md](marketing-talks.md) |
-| Podcasts: tools for thought, learning, AI and cognition. | researching | not yet written |
+| Podcasts: tools for thought, learning, AI and cognition. Best first: Every, Cortex, Brain Inspired; and Ness Labs (not a podcast, but London and the closest stance). | shows found, none pitched | [marketing-podcasts.md](marketing-podcasts.md) |
 | Bloggers and newsletter writers who would take a Zoom call. | researching | not yet written |
 | Follow up the one or two people who signed up after talking to Greg and did not come back. | idea | here |
 | Evidence pages: the research behind the product, as blog posts or pages ([positioning.md § Evidence](positioning.md#evidence-and-where-it-goes)). Also marketing, especially for academics. | idea | here |
@@ -90,3 +90,5 @@ Each is also listed under [vision.md](vision.md), which owns every doc in this a
 - **[marketing-author-gifts.md](marketing-author-gifts.md)** — giving people their own writing, in
   Spideryarn: the five-contacts experiment, the author-gift idea and its risks, and the admin tool.
 - **[marketing-talks.md](marketing-talks.md)** — where Greg could give a talk, and what kind.
+- **[marketing-podcasts.md](marketing-podcasts.md)** — shows Greg could go on as a guest, and
+  what has replaced the tools-for-thought podcasts that stopped.
