@@ -56,7 +56,7 @@ import {
   overBundleCap,
 } from "../src/store/export-bundle.js";
 import { exportArticle } from "../src/store/export.js";
-import type { DebateClaimList, Relations, SimpleSummary } from "../src/types.js";
+import type { Debate, DebateClaimList, Relations, SimpleSummary } from "../src/types.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
@@ -173,6 +173,42 @@ const DEBATE_CLAIMS_FIXTURE: DebateClaimList = {
   dropped: { unknownIds: 0, unquoted: 1, tooLong: 0, duplicate: 0, overCap: 0, malformed: 0 },
   generatedAt: "2026-10-08T12:00:00.000Z",
   elapsedMs: 456,
+};
+
+/**
+ * A stored Debate, the search's own artefact (qi-mv7wk6ap). The rollback had no
+ * `debate.json` put until 2026-10-09, so an exported article lost its debate;
+ * the bundle always carried it, inside content/revision.json's row. A
+ * `debate/7`-shaped one: Reception searched, claims not run.
+ */
+const DEBATE_FIXTURE: Debate = {
+  version: "debate/export-fixture",
+  generator: "fixture-model",
+  slug: SLUG,
+  sourceHash: "89abcdef01234567",
+  searchedAt: "2026-10-09T12:00:00.000Z",
+  direct: {
+    rows: [],
+    counts: {
+      returnedSources: 3,
+      reportedRows: 1,
+      keptRows: 0,
+      omittedOverCap: 0,
+      lost: {
+        uncited: 1,
+        selfSource: 0,
+        unverifiedSource: 0,
+        directnessUnverified: 0,
+        sourceIsCopy: 0,
+        claimNotInBlock: 0,
+        unknownBlockId: 0,
+        malformed: 0,
+      },
+      webSearches: 2,
+    },
+  },
+  claims: { pass: "not-run", rows: [] },
+  elapsedMs: 789,
 };
 
 /* A real source document, so the rollback's `readRawDocument` actually reaches
@@ -342,6 +378,7 @@ describe("the bundle is the faithful projection", () => {
         simpleSummary: SIMPLE,
         relations: RELATIONS_FIXTURE,
         debateClaims: DEBATE_CLAIMS_FIXTURE,
+        debate: DEBATE_FIXTURE,
         rawSourceSha256: RAW_SHA256,
         rawSourceKind: "html",
       })
@@ -603,6 +640,14 @@ describe("the bundle is the faithful projection", () => {
       await readFile(path.join(out, SLUG, "debate-claims.json"), "utf8"),
     ) as DebateClaimList;
     expect(rollback).toEqual(DEBATE_CLAIMS_FIXTURE);
+  });
+
+  it("carries a stored Debate through the bundle and rollback exports", async () => {
+    expect(parsed("content/revision.json").debate).toEqual(DEBATE_FIXTURE);
+    const rollback = JSON.parse(
+      await readFile(path.join(out, SLUG, "debate.json"), "utf8"),
+    ) as Debate;
+    expect(rollback).toEqual(DEBATE_FIXTURE);
   });
 
   /* Sol's plan review of 261001b, P2-7: the page counted `paragraphs`, which a
