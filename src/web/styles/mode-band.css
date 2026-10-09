@@ -743,7 +743,21 @@ svg.band-waiting-ghost { flex: none; }
 .guide-greeting-bubble p:last-child { margin-bottom: 0; }
 .guide-greeting-icon { flex: none; margin-top: 0.2rem; color: var(--ink-faint); }
 .guide-greeting-title { font-style: italic; }
-.guide-keep { margin: 0.35rem 0 0.6rem; }
+/* The guide's offer to save the reader's reason or About you (plan 261009o):
+   a card under its answer, the words in the model's face (`.voice-ai`), and a
+   button only the reader presses. */
+.guide-offer {
+  margin: 0.35rem 0 0.8rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+.guide-offer p { margin: 0 0 0.4rem; }
+.guide-offer-heading { font-size: 0.8rem; color: var(--ink-faint); }
+.guide-offer-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.88rem; line-height: 1.45; }
+.guide-offer .guide-offer-status,
+.guide-offer-actions { margin-bottom: 0; }
 .chat-new {
   display: inline-flex;
   align-items: center;

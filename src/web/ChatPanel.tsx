@@ -98,7 +98,8 @@ import type {
 } from "../types.js";
 import { isLearnKind } from "../types.js";
 import { CitedMarkdown } from "./Cited.js";
-import { GuideGreeting, GuideKeepReason } from "./GuideGreeting.js";
+import { GuideGreeting } from "./GuideGreeting.js";
+import { GuideSaveOffers } from "./GuideSaveOffer.js";
 import { guideGreeting } from "./guide-greeting.js";
 import { usePurpose } from "./purpose.js";
 import { Button } from "./components/ui/button.js";
@@ -1526,14 +1527,12 @@ export function Conversation({
      that was empty when this mount first saw it, and snapshotted only while it
      is still empty. `usePurpose` is asynchronous; if the reader sends before
      it answers, drawing its eventual greeting above that message would turn
-     words written without seeing the question into an apparent answer (and
-     offer to save them as the reason). Once shown, the snapshot stays above
+     words written without seeing the question into an apparent answer. Once shown, the snapshot stays above
      the turns while this mount lasts. A guide opened with turns in it shows
      none — GuideGreeting.tsx says why. */
   const guideRead = usePurpose(kind === "guide" ? slug : null);
   const greeting = kind === "guide" ? guideGreeting(guideRead, articleTitle) : null;
   const greetsHere = useRef(thread.messages.length === 0);
-  const firstAsked = thread.messages.find((m) => m.role === "user");
   const act = guideAct ?? ownAct;
   /* **Offered, and spent, only once this conversation draws that answer as
      finished.** The `Answered` event can land before the store's notification
@@ -2028,11 +2027,9 @@ export function Conversation({
                what is on screen. */
             discards={thread.messages.length - i - 1}
           />
-          {/* The reader's answer to the greeting's question, kept as their
-              reason only if they press (GuideGreeting.tsx § GuideKeepReason). */}
-          {openingGreeting?.asksReason && m === firstAsked && (
-            <GuideKeepReason slug={slug} text={m.text} />
-          )}
+          {/* The guide's offers to save their reason or About you, each a
+              card they press (GuideSaveOffer.tsx, plan 261009o). */}
+          {kind === "guide" && <GuideSaveOffers slug={slug} message={m} />}
           </GuideActContext.Provider>
         ))}
         {/* The spoken words still on their way to being saved, as the end of

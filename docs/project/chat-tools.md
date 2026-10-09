@@ -962,8 +962,8 @@ prompt.
   activator (`useActivateMode`), so it arms what the bar's row arms. Chat's prompt is shown the
   key's shape and a few examples; the guide's carries every ordinary mode with its token beside it
   ([`src/guide.ts`](../../src/guide.ts) § `modeWordsSection`). There is no `purpose` button (the plan's F5): the
-  guide's greeting asks in the conversation, and since 261009i *Keep this as why you're reading*
-  under the reader's first answer saves their own words on their press.
+  guide offers the reason and About you through its own tool instead, `offer_to_save`, drawn as a
+  card the reader presses (§ The guide, below).
 - **Asked twice.** `chipFor` runs at the draw and again at the press
   ([`CommandChip.tsx`](../../src/web/CommandChip.tsx)), so whether the page can run it is never
   remembered from the render. A press goes through `chatExecutor`
@@ -1010,7 +1010,21 @@ from the pinned row above the list. What makes it a guide rather than a chat:
 - **How experienced the reader is**: none, a few or many other articles opened, in the last
   message only (`experienceLine`), so the cached prefix is the same for everyone.
   [privacy.md § The guide is told…](privacy.md#the-guide-is-told-how-many-other-articles-you-have-opened).
-- **Its tools** are `GUIDE_TOOLS` (§ The nine above), and no web search.
+- **Its tools** are `GUIDE_TOOLS` (§ The nine above), no web search, and one of its own since
+  2026-10-09: **`offer_to_save`**, which saves nothing
+  ([261009o](../plans/261009o-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md);
+  Greg, on q-w2740x: *"the guide should have a tool to enable it to save to why you're reading or
+  your profile … stay fairly close to the user's input"*). The model gives a field (`reason` or
+  `about_you`) and the words, as close to the reader's own as it can; the tool checks them as the
+  store would and puts an offer on the run (`ToolRun.offer`, with the field's value as the turn
+  read it, its *basis*). The page draws it under the answer as a card
+  ([`GuideSaveOffer.tsx`](../../src/web/GuideSaveOffer.tsx)) with a button, and **the reader's press
+  is the only write**: it reads what is stored, saves only over the basis, and offers an Undo that
+  puts back only over its own write. A planted instruction in the article can at worst put words
+  on a card the reader reads before pressing. Reading the two fields is no tool: every guide turn
+  carries both under WHO IS READING THIS, read fresh. Not offered in Live (`GUIDE_TOOLS` is what
+  Live reads, and a voice has nowhere for the button). It replaced 261009i's *Keep this as why
+  you're reading*.
 - **Its greeting is ours**, not a model's ([`GuideGreeting.tsx`](../../src/web/GuideGreeting.tsx),
   words chosen in [`guide-greeting.ts`](../../src/web/guide-greeting.ts)): free, and since
   2026-10-09 it asks in the conversation rather than in a box
@@ -1018,9 +1032,8 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   `spya-s6qhzv`: *"if we're in a chat interface, I want to use the chat interface"*). It welcomes
   the reader to the piece by title, asks why they are reading it when no reason is stored, quotes
   the start of *About you* back and asks if it is still right, and stays above the turns while the
-  conversation is mounted. Under the reader's first answer, **Keep this as why you're reading**
-  saves their own words, on their press, never over a reason stored meanwhile — no model chooses
-  or writes the reason. *Ask the guide where to start* sends a fixed first question once a reason
+  conversation is mounted. What the reader answers is saved only through the guide's offer and
+  their press (above). *Ask the guide where to start* sends a fixed first question once a reason
   is stored. `GUIDE_SYSTEM` is told the greeting exists, since it is not in the transcript.
 - **A row in the command bar**, *Guide*, on the owner's reading view (`guideRow` in
   [`CommandBar.tsx`](../../src/web/CommandBar.tsx)), which opens it as `?guide=1` does; and since

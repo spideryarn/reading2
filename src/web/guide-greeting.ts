@@ -19,7 +19,6 @@
  * own words quoted back — and each is set in its own face.
  */
 import { clamp } from "../title-text.js";
-import { MAX_PURPOSE_CHARS, normaliseProfileText } from "../types.js";
 import type { PurposeRead } from "./purpose.js";
 
 /** One run of the greeting, in the voice it is drawn in. */
@@ -31,12 +30,6 @@ export type GreetingRun =
 export interface Greeting {
   /** Paragraphs, each a list of runs. */
   readonly paragraphs: readonly (readonly GreetingRun[])[];
-  /**
-   * The reason for reading is definitively not stored, so the greeting asked
-   * for it — which is when *Keep this as why you're reading* may be offered
-   * under the reader's first message (`GuideKeepReason`).
-   */
-  readonly asksReason: boolean;
   /** A reason is stored, so *Ask the guide where to start* is a complete request. */
   readonly offersStart: boolean;
   /** About you is definitively empty, so the line pointing at the profile page is drawn. */
@@ -74,7 +67,6 @@ export function guideGreeting(read: PurposeRead, title: string | undefined): Gre
       paragraphs: [
         [...hello, ours(" Ask me where to start, what to search for, or which of Spideryarn's modes would help you read it.")],
       ],
-      asksReason: false,
       offersStart: false,
       invitesProfile: false,
     };
@@ -87,7 +79,6 @@ export function guideGreeting(read: PurposeRead, title: string | undefined): Gre
         [...hello, ours(" You said you're reading it because "), quoted(read.purpose, PURPOSE_QUOTE_CHARS), ours(".")],
         [ours("I can suggest where to start, what to read closely, and which modes would help.")],
       ],
-      asksReason: false,
       offersStart: true,
       invitesProfile: profile === null,
     };
@@ -101,7 +92,6 @@ export function guideGreeting(read: PurposeRead, title: string | undefined): Gre
         [tell],
         [ours("If you like, tell me a little about yourself too: what you do, and how much you already know about this subject.")],
       ],
-      asksReason: true,
       offersStart: false,
       invitesProfile: false,
     };
@@ -112,20 +102,7 @@ export function guideGreeting(read: PurposeRead, title: string | undefined): Gre
       [ours("In About you, you wrote "), quoted(profile, PROFILE_QUOTE_CHARS), ours(". Is that still right?")],
       [ours("More importantly, why are you reading this one? "), tell],
     ],
-    asksReason: true,
     offersStart: false,
     invitesProfile: false,
   };
-}
-
-/**
- * **The reader's first message, if it may be kept as their reason as it
- * stands**: stored the way the server stores it (`normaliseProfileText`) and
- * within `MAX_PURPOSE_CHARS`, or `null` — never cut down into a reason they
- * did not write (GPT Sol's F4 on the plan).
- */
-export function keepableReason(text: string): string | null {
-  const stored = normaliseProfileText(text);
-  if (stored === null || stored.length > MAX_PURPOSE_CHARS) return null;
-  return stored;
 }

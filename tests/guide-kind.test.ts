@@ -12,7 +12,7 @@
 import { describe, expect, it } from "vitest";
 
 import { withTurn } from "../src/chat.js";
-import { CHAT_TOOLS, GUIDE_TOOLS, toolsFor } from "../src/chat-tools.js";
+import { CHAT_TOOLS, GUIDE_TOOLS, OFFER_TO_SAVE_TOOL, toolsFor } from "../src/chat-tools.js";
 import { buildConverseMessages, defaultModel, jobFor, roundTools, webSearchTool } from "../src/converse.js";
 import { cachedText } from "../src/article-prompt.js";
 import { A_FEW_ARTICLES, experienceLine, experienceOf, madeLine, modeWordsSection } from "../src/guide.js";
@@ -277,8 +277,8 @@ describe("which modes are already made", () => {
 });
 
 describe("the guide's tools", () => {
-  it("are the article's own five, in chat's order", () => {
-    expect(toolsFor("guide")).toBe(GUIDE_TOOLS);
+  it("are the article's own five, in chat's order, then the offer to save", () => {
+    expect(toolsFor("guide")).toEqual([...GUIDE_TOOLS, OFFER_TO_SAVE_TOOL]);
     expect(GUIDE_TOOLS.map((t) => t.function.name)).toEqual([
       "search_article_words",
       "search_article_meaning",
@@ -297,10 +297,10 @@ describe("the guide's tools", () => {
     for (const round of [first, last]) {
       expect(JSON.stringify(round)).not.toContain("web_search");
     }
-    expect(first).toEqual({ tools: GUIDE_TOOLS });
+    expect(first).toEqual({ tools: toolsFor("guide") });
     /* The last round still declares its tools, for the calls in its history,
        and asks for none. */
-    expect(last).toEqual({ tools: GUIDE_TOOLS, tool_choice: "none" });
+    expect(last).toEqual({ tools: toolsFor("guide"), tool_choice: "none" });
   });
 
   it("leave every other kind's rounds as they were", () => {

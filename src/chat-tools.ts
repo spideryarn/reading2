@@ -81,9 +81,11 @@ import type {
   CitedWork,
   Comment,
   Meta,
+  SaveOffer,
   ThreadKind,
   ToolRun,
 } from "./types.js";
+import { MAX_PROFILE_CHARS, MAX_PURPOSE_CHARS, normaliseProfileText } from "./types.js";
 import type { ModelPower } from "./models.js";
 import { isSearchable } from "./block-policy.js";
 import { FetchFailure, fetchDocument } from "./fetch.js";
@@ -242,6 +244,19 @@ export interface ToolContext {
    * lists and refuses to read it back: it is already in front of the model.
    */
   threadId?: string | undefined;
+  /**
+   * What the reader's reason and About you held when this guide turn read
+   * them — the basis `offer_to_save` records, so a card pressed after either
+   * changed does not save over the newer words. Guide turns only; a field the
+   * route could not read is absent.
+   */
+  saved?: SavedNow | undefined;
+}
+
+/** A turn's read of the reader's two profile fields, each normalised; a field that could not be read is absent. */
+export interface SavedNow {
+  purpose?: string | null;
+  profile?: string | null;
 }
 
 /** What `runTool` hands back: two lines for the reader, one payload for the model. */
@@ -250,6 +265,8 @@ export interface ToolOutcome {
   detail: string;
   /** The `tool` message's content. Never empty — see `nothing()`. */
   content: string;
+  /** `offer_to_save`'s offer, copied onto the stored run (`ToolRun.offer`). No other tool sets it. */
+  offer?: SaveOffer;
 }
 
 /* ----------------------------------------------------------- the definitions --
@@ -544,6 +561,58 @@ export const GUIDE_TOOLS: FunctionTool[] = (() => {
 })();
 
 /**
+ * **The guide's offer to save what the reader told it** — plan
+ * docs/plans/261009o-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md,
+ * after Greg's reply to q-w2740x: *"the guide should have a tool to enable it
+ * to save to why you're reading or your profile … stay very close to the
+ * user's wording"*.
+ *
+ * **It saves nothing.** It checks the words and hands them back as an offer on
+ * the run, which the page draws as a card under the answer with a button the
+ * reader presses (src/web/GuideSaveOffer.tsx). A press is the only write, so a
+ * planted instruction in the article can at worst put words on a card the
+ * reader reads before pressing (docs/project/security-map.md: anything a model
+ * proposes that writes is a press).
+ *
+ * Reading is not a tool: every guide turn already carries both fields, read
+ * fresh, under WHO IS READING THIS — the header's `summarise_article` point.
+ *
+ * Guide only, and typed only: not in `GUIDE_TOOLS`, which Live offers, since a
+ * voice has nowhere to put the button.
+ */
+export const OFFER_TO_SAVE_TOOL: FunctionTool = {
+  type: "function",
+  function: {
+    name: "offer_to_save",
+    description:
+      "Offer to save something the reader told you, as why they are reading this piece (field " +
+      "\"reason\") or as their About you (field \"about_you\"). This saves nothing: the reader " +
+      "sees your words under your answer with a button, and only their press saves them. Keep " +
+      "to their own words: an exact quote, or a very close paraphrase that only tidies it into " +
+      "a sentence. For about_you, give the whole new text, starting from their current About " +
+      "the reader exactly as written and changing only what they told you.",
+    parameters: {
+      type: "object",
+      properties: {
+        field: {
+          type: "string",
+          enum: ["reason", "about_you"],
+          description: "Which to offer: reason (why they are reading this piece) or about_you.",
+        },
+        text: {
+          type: "string",
+          description: `The words to save, as they would be stored. At most ${MAX_PURPOSE_CHARS} characters for a reason, ${MAX_PROFILE_CHARS} for About you.`,
+        },
+      },
+      required: ["field", "text"],
+    },
+  },
+};
+
+/** What `toolsFor("guide")` offers a typed guide: its article tools, then the offer. Built once, for the cached prefix. */
+const GUIDE_TYPED_TOOLS: FunctionTool[] = [...GUIDE_TOOLS, OFFER_TO_SAVE_TOOL];
+
+/**
  * The tools of ours a conversation of this kind is offered.
  *
  * Exhaustive, so a fifth `ThreadKind` is a red compile here rather than a
@@ -562,7 +631,7 @@ export function toolsFor(kind: ThreadKind): FunctionTool[] {
     case "candidates":
       return CHAT_TOOLS;
     case "guide":
-      return GUIDE_TOOLS;
+      return GUIDE_TYPED_TOOLS;
     default: {
       const unknown: never = kind;
       throw new Error(`unknown thread kind: ${String(unknown)}`);
@@ -648,6 +717,10 @@ export function describeCall(name: string, args: Record<string, unknown>): strin
       return typeof args.thread === "string" && args.thread.trim() !== ""
         ? "read one of your earlier conversations"
         : "read your notes on this article";
+    /* Our words for what the card under the answer is; never the offered
+       text, which the card shows and this row would repeat. */
+    case "offer_to_save":
+      return args.field === "about_you" ? "offered to update About you" : "offered to save why you're reading";
     default:
       return `tried ${name}`;
   }
@@ -2064,6 +2137,39 @@ async function readReaderNotes(
   };
 }
 
+/**
+ * `offer_to_save`: the words checked as the store would check them, and handed
+ * back as an offer. Never a store read or write — see `OFFER_TO_SAVE_TOOL`.
+ */
+function offerToSave(args: Record<string, unknown>, ctx: ToolContext): ToolOutcome {
+  const field = args.field === "reason" ? "purpose" : args.field === "about_you" ? "profile" : null;
+  const label = describeCall("offer_to_save", args);
+  const refuse = (why: string): ToolOutcome => ({
+    label,
+    detail: "not offered",
+    content: `Nothing was offered: ${why} Do not tell the reader you offered anything.`,
+  });
+  if (field === null) return refuse(`field must be "reason" or "about_you".`);
+  const text = typeof args.text === "string" ? normaliseProfileText(args.text) : null;
+  if (text === null) return refuse("text was empty.");
+  const max = field === "purpose" ? MAX_PURPOSE_CHARS : MAX_PROFILE_CHARS;
+  if (text.length > max) return refuse(`text was ${text.length} characters, and the most is ${max}. Offer a shorter one, still in their words.`);
+  /* What the field held when this turn read it, if the route could read it:
+     the card saves only over that (GuideSaveOffer.tsx), so an old card pressed
+     later cannot replace newer words. */
+  const basis = ctx.saved?.[field];
+  if (basis === text) return refuse("those are already their saved words, exactly.");
+  return {
+    label,
+    detail: "",
+    content:
+      "The reader now sees these words under your answer, with a button to save them. Nothing is saved " +
+      "unless they press it, so do not say it is saved: say in a few words that they can save it with " +
+      "the button under your answer. On a later turn, WHO IS READING THIS shows what is saved.",
+    offer: { field, text, ...(basis === undefined ? {} : { basis }) },
+  };
+}
+
 /** What a model that asked for a tool it does not have is told: the ones it does. */
 function noSuchTool(name: string, kind: ThreadKind | undefined): ToolOutcome {
   return {
@@ -2122,6 +2228,8 @@ export async function runTool(
       return readWebPage(args.url, ctx);
     case "reader_notes":
       return readReaderNotes(args, ctx);
+    case "offer_to_save":
+      return offerToSave(args, ctx);
     default:
       return noSuchTool(name, ctx.kind);
   }

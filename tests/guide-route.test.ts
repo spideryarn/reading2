@@ -73,6 +73,7 @@ beforeEach(async () => {
   sent.length = 0;
   written.length = 0;
   answerWith = null;
+  replies = [];
   storedReads.glossary = null;
   storedReads.simple = null;
   vi.restoreAllMocks();
@@ -97,6 +98,8 @@ const sent: Sent[] = [];
 const written: string[] = [];
 /** When set, the model answers with these words and finishes, instead of failing. */
 let answerWith: string | null = null;
+/** When set, each model request takes the next of these, before `answerWith`. */
+let replies: Response[] = [];
 
 function finishedBody(words: string): Response {
   const chunk = (data: unknown) => `data: ${JSON.stringify(data)}\n\n`;
@@ -123,6 +126,8 @@ beforeAll(() => {
     } catch {
       /* not a model request */
     }
+    const next = replies.shift();
+    if (next !== undefined) return Promise.resolve(next);
     if (answerWith !== null) return Promise.resolve(finishedBody(answerWith));
     return Promise.reject(new Error("no model in tests"));
   }) as unknown as typeof fetch;
@@ -209,8 +214,47 @@ describe("a guide turn", () => {
       "article_links",
       "article_glossary",
       "article_citations",
+      /* Its own, and it saves nothing (plan 261009o). */
+      "offer_to_save",
     ]);
     expect(JSON.stringify(sent.at(-1)?.tools)).not.toContain("web_search");
+  });
+
+  it("stores an offer to save with what the reason held when the turn read it", async () => {
+    vi.spyOn(shelfStore, "articlesOpenedBefore").mockResolvedValue(3);
+    const call = (data: unknown) => `data: ${JSON.stringify(data)}\n\n`;
+    replies = [
+      new Response(
+        call({
+          model: "test/model",
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: "toolu_0",
+                    type: "function",
+                    function: {
+                      name: "offer_to_save",
+                      arguments: JSON.stringify({ field: "reason", text: "For my journal club." }),
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        }) +
+          call({ model: "test/model", choices: [{ delta: {}, finish_reason: "tool_calls" }] }) +
+          "data: [DONE]\n\n",
+        { status: 200, headers: { "content-type": "text/event-stream" } },
+      ),
+      finishedBody("Start with the abstract."),
+    ];
+    expect(await post({ threadId: "spya-gdrtf2", question: "For my journal club.", kind: "guide" })).toBe(200);
+    const stored = await asTestOwner(() => chatStore.load(SLUG));
+    const answer = stored.find((t) => t.id === "spya-gdrtf2")?.messages.at(-1);
+    expect(answer?.tools?.[0]?.offer).toEqual({ field: "purpose", text: "For my journal club.", basis: null });
   });
 
   it("refuses visible blocks before any model call", async () => {
