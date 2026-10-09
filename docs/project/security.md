@@ -1097,6 +1097,13 @@ bidi characters as code points, isolated, in a clipped box. It costs a model cal
 scan route this one carries spend attribution. `tests/hidden-check-panel.test.tsx`,
 `tests/referee-hidden-check.test.ts` and `tests/referee-hidden-check-route.test.ts` hold it.
 
+**Since 2026-10-09 the answer is kept** (`referee_hidden_checks`, plan
+[261009a](../plans/261009a-save-hidden-text-opinions.md)), which changes none of the above: only a
+validated answer is stored, a reload draws it through the same validator (`isResult` in
+`src/web/useHiddenCheck.ts`) and the same renderer, and a kept judgment is still shown only beside a
+row identical to the one it was made from. The read is owner-scoped like the run — another reader's
+slug is a 404 — and the reasons, which may quote the hidden words, are never logged.
+
 ## The bibliographic registries are outside sources too <a id="registries"></a>
 
 **Crossref, DataCite and OpenAlex send us strings that end up on the page** — a cited work's title,

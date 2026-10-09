@@ -83,7 +83,7 @@ describe("the privacy page", () => {
 
   it("names every model this app can send text to", () => {
     /* `DISPLAY_NAME` maps several wire ids onto one readable name — both
-       spellings of Claude land on `claude-sonnet-5` — and the readable name is
+       spellings of Claude land on `claude-sonnet-5-5` — and the readable name is
        what the page should carry. src/models.ts § DISPLAY_NAME. A model with an
        approved general wording is covered by that wording instead. */
     const collapsed = PAGE.replace(/\s+/g, " ");
@@ -92,7 +92,7 @@ describe("the privacy page", () => {
       return !PAGE.includes(name) && !(general !== undefined && collapsed.includes(general));
     });
     expect(missing, "models missing from src/web/PrivacyPage.tsx").toEqual([]);
-    expect(PAGE).toContain("High-powered AI; <code>gpt-5.6-luna</code>");
+    expect(PAGE).toContain("High-powered AI; <code>gpt-6-luna</code>");
   });
 
   it("has an approved general wording only for models that exist", () => {
@@ -194,7 +194,15 @@ describe("the privacy page", () => {
   });
 
   it("dates the privacy notice to the latest disclosure change", () => {
-    expect(PAGE).toContain('const LAST_UPDATED = "8 October 2026"');
+    expect(PAGE).toContain('const LAST_UPDATED = "9 October 2026"');
+  });
+
+  it("says the public shelf's topics are named from shared titles and summaries only", () => {
+    /* Plan 261008j, approved as "q-p5h2a7 A": the one privacy line it asked for. */
+    const prose = PAGE.replace(/\s+/g, " ");
+    expect(prose).toContain(
+      "to name the topics on the public shelf, for which it is shown the titles and one-line summaries of the articles shared there and nothing else",
+    );
   });
 
   it("says a reader is emailed when their feedback ships, without their words", () => {
@@ -284,7 +292,7 @@ describe("the privacy page", () => {
     expect(prose).toContain("the question is not kept, and is not written to our logs");
     const models = readFileSync(path.join(ROOT, "src/models.ts"), "utf8");
     expect(models).toContain('{ job: "help-chat", id: HELP_CHAT_MODEL');
-    expect(models).toContain('export const HELP_CHAT_MODEL = "openai/gpt-5.6-luna";');
+    expect(models).toContain('export const HELP_CHAT_MODEL = "openai/gpt-6-luna";');
   });
 
   it("says the guide is told roughly how many other articles you have opened", () => {

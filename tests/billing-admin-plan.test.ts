@@ -28,6 +28,7 @@ import { describe, expect, it } from "vitest";
 
 import type { AdminUser } from "../src/admin.js";
 import type { TierRow } from "../src/billing/tiers.js";
+import { SITE_OWNER_ID } from "../src/site-account.js";
 import { mergeUsers, type AccountRow, type UserCounts } from "../src/store/pg-admin.js";
 import type { AccountSnapshot } from "../src/store/pg-billing.js";
 
@@ -312,5 +313,27 @@ describe("an owner with a subscription", () => {
       ingestLimit: 20,
       ingestWindow: "stale",
     });
+  });
+});
+
+/* **The site account is not a reader** (src/site-account.ts, plan 261008j):
+   it has an address, so without its own filter it would be a row and a count
+   on /admin. */
+describe("the site account", () => {
+  it("is left out of the readers /admin lists and counts", () => {
+    const empty: UserCounts = {
+      shelf: [],
+      uploads: [],
+      questions: [],
+      chats: [],
+      searches: [],
+      spend: new Map(),
+      spendMonth: "2026-09",
+      ingests: [],
+      accounts: new Map(),
+      tiers: TIERS,
+    };
+    const users = mergeUsers([account(OWNER, "reader@example.test"), account(SITE_OWNER_ID, "site@spideryarn.invalid")], empty);
+    expect(users.map((u) => u.id)).toEqual([OWNER]);
   });
 });

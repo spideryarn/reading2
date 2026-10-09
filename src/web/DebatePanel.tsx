@@ -167,6 +167,14 @@ import {
   citedTimes,
   citersLines,
   DEBATE_BEFORE_SEARCH,
+  DEBATE_CHECK_FOUND_NOTHING,
+  DEBATE_CHECK_NOT_ANSWERED,
+  DEBATE_CHECK_OWN_LABEL,
+  DEBATE_CHECK_PENDING,
+  DEBATE_CHECK_TIP,
+  DEBATE_CHECK_EARLIER,
+  DEBATE_CHECK_YOUR_CLAIM,
+  DEBATE_DIG_FURTHER_TIP,
   DEBATE_CLAIMS_EARLIER,
   DEBATE_CLAIMS_NONE,
   DEBATE_CLAIMS_LIST_AGAIN,
@@ -200,13 +208,16 @@ import {
   type ClaimOrigin,
   type Debate,
   type DebateBears,
+  type DebateCheckRow,
   type DebateClaimsNotRun,
   type DebateCounts,
   type DebateKeySource,
   type DebateLean,
   type IdentificationLevel,
   type ListedClaim,
+  MAX_CHECK_TARGETS,
   MAX_LENS_CHARS,
+  MAX_OWN_CLAIM_CHARS,
   type RegistrySource,
   type ThreadSummary,
   distinctSources,
@@ -265,6 +276,8 @@ import { OriginChatMark } from "./OriginChat.js";
 import { useRenderCount } from "./perf.js";
 import type { UseDebate } from "./useDebate.js";
 import type { UseDebateClaims } from "./useDebateClaims.js";
+import type { UseDebateChecks } from "./useDebateChecks.js";
+import { anyPending, type CheckGroup, checkedRowCount, type ClaimFindings, drawChecks } from "./debate-checks.js";
 import type { UseCiters } from "./useCiters.js";
 import { dayOf } from "./relative-time.js";
 import type {
@@ -288,6 +301,13 @@ type ClaimRow = PublicClaimDebateRow;
 
 /** Either search's row, so one component can draw both. */
 type DebateRow = DirectRow | ClaimRow;
+
+/**
+ * **Any row `Row` draws** — a search's, or a reader's check's. A check's row
+ * for a typed claim has no block and no claim quote (`OwnClaimDebateRow`),
+ * and nothing `Row` reads needs either.
+ */
+type DrawnRow = DebateRow | DebateCheckRow;
 
 /**
  * **Which of the two searches a sentence is about**, in the reader's terms
@@ -337,12 +357,12 @@ const NO_CLAIMS: readonly ClaimRow[] = [];
  * The rows that name this article in their own extract — the ones that carry
  * `identifies`, and therefore the ones with a level to put on a chip.
  */
-function directOf(row: DebateRow): DirectRow | null {
+function directOf(row: DrawnRow): DirectRow | null {
   return "articleReferenceQuote" in row ? row : null;
 }
 
 /** The witness that a page names this article, for the row's `more`. */
-function referenceOf(row: DebateRow): string | null {
+function referenceOf(row: DrawnRow): string | null {
   return directOf(row)?.articleReferenceQuote ?? null;
 }
 
@@ -873,10 +893,15 @@ export type DebateAccess =
   /* `claimList` is the owner's third read, Claims' list of the article's
      claims (src/web/useDebateClaims.ts, plan 261008i § 2). Its own hook, read,
      job and press, independent of whether a Reception search is stored. */
+  /* `checks` is the owner's fourth read: the claims the reader picked and the
+     web search each press bought (src/web/useDebateChecks.ts, plan 261008i
+     § 3). Owner-only — a check may hold the reader's own typed claim — so a
+     visitor's arm has none. */
   | {
       kind: "owner";
       owner: DebateOwner;
       claimList: UseDebateClaims;
+      checks: UseDebateChecks;
       citers: UseCiters;
       claimChats: DebateClaimChats;
     }
@@ -1117,7 +1142,20 @@ export function DebatePanel({
         ? (access.claimList.claimList?.claims ?? null)
         : null
       : (access.claimList?.claims ?? null);
-  const claimsCount = listed !== null ? listed.length : claimsShown.length;
+  /* **Once the reader's checks have put sources on screen, the count is
+     those sources** (plan § 5): each claim's rows, an address once, plus an
+     older search's rows still drawn below. Before then it is the listed
+     claims, which is what there is to pick from. A visitor has no checks. */
+  const checkedRows = useMemo(
+    () =>
+      access.kind === "owner" && access.claimList.status === "ready"
+        ? checkedRowCount(drawChecks(access.checks.checks, access.claimList.claimList))
+        : 0,
+    [access],
+  );
+  const claimsCount =
+    checkedRows > 0 ? checkedRows + claimsShown.length : listed !== null ? listed.length : claimsShown.length;
+  const claimsUnit = checkedRows === 0 && listed !== null ? "claim" : "source";
 
   /* **The rows on screen**: the sub-mode's own, through its bar and its thread.
      The head count in the (i) reads this. */
@@ -1303,7 +1341,7 @@ export function DebatePanel({
         <DebateViews
           view={view}
           counts={{ reception: receptionShown.length, claims: claimsCount }}
-          claimsUnit={listed !== null ? "claim" : "source"}
+          claimsUnit={claimsUnit}
           ownerSlug={owner?.slug ?? null}
           onView={onView}
         />
@@ -1319,6 +1357,7 @@ export function DebatePanel({
         (listOwner !== null ? (
           <OwnerListedClaims
             list={listOwner}
+            checks={access.kind === "owner" ? access.checks : null}
             onJump={onJump}
             chats={access.kind === "owner" ? access.claimChats : null}
           />
@@ -2123,7 +2162,7 @@ function Rows({
   rows,
   keyRows,
 }: {
-  rows: readonly DebateRow[];
+  rows: readonly DrawnRow[];
   /** Each key source's reason, by row id — empty for an older debate. */
   keyRows: ReadonlyMap<string, DebateKeySource>;
 }) {
@@ -2313,9 +2352,9 @@ function ClaimsList({
 }
 
 /**
- * **The owner's Claims list, in each of its states** — plan 261008i § 2 and
- * § 5. The states are the read's and the job's, as every artefact panel's
- * are (FaqPanel.tsx is the sibling):
+ * **The owner's Claims list, in each of its states** — plan 261008i § 2, § 3
+ * and § 5. The list's states are the read's and the job's, as every artefact
+ * panel's are (FaqPanel.tsx is the sibling):
  *
  *  - **loading** — the GET is in flight;
  *  - **error** — the GET failed; `ReadError`'s *Try again* sends only a GET;
@@ -2324,21 +2363,46 @@ function ClaimsList({
  *    runs, `JobProgress` draws the progress, and a failed run its sentence and
  *    *Retry*;
  *  - **done** — the list; **done-empty** — a sentence;
- *  - **stale** — the list, **read-only** (no chat button on a claim, and in
- *    stage 3 no ticks or Check), under a banner with *List again*.
+ *  - **stale** — the list, **read-only** (no chat button, no tick boxes, no
+ *    box, no Check, no Dig further), under a banner with *List again*.
  *
- * **Laid out for a tick box in front of each claim** (stage 3): each claim is
- * one `<li>` whose first column is free.
+ * ## Checking, on a current list (§ 3)
+ *
+ * ```
+ *  ☐ "memories … survive metamorphosis"   [jump] [chat]
+ *     Memories can outlast the brain … · In the AI's words
+ *  ☑ "RNA from trained animals …"         [jump] [chat] [Dig further]
+ *     row, row, row
+ *  [ Check a claim of your own…                       ]
+ *  [ Check 1 claim ]
+ *  Your claim: "RNA can carry a memory between animals"   [Dig further]
+ *     row, row
+ * ```
+ *
+ * A tick box per claim, the box, and **Check**, which is off with nothing
+ * picked, with more than `MAX_CHECK_TARGETS`, with a typed claim over the
+ * limit, and while a check is out — this tab's, from the press until its
+ * answer has been read (`UseDebateChecks.sending`), or another tab's
+ * (`anyPending`). Each claim's rows are every finished check's for it, an
+ * address once (debate-checks.ts). *Dig further* is one search for one claim
+ * that a finished check has looked at. The two sentences for a claim with
+ * nothing to read are different on purpose: *found nothing* is what the
+ * search said; *did not answer* is the model leaving the claim out.
  */
 function OwnerListedClaims({
   list,
+  checks,
   onJump,
   chats,
 }: {
   list: UseDebateClaims;
+  /** The owner's checks; `null` only where the type cannot see the owner. */
+  checks: UseDebateChecks | null;
   onJump(id: BlockId): void;
   chats: DebateClaimChats | null;
 }) {
+  const [ticked, setTicked] = useState<ReadonlySet<string>>(() => new Set());
+  const [own, setOwn] = useState("");
   const waiting = list.rewriting && !list.job && !list.starting && !list.failed;
   const run = (label: string, again = false) =>
     again && waiting && !list.error ? (
@@ -2362,6 +2426,40 @@ function OwnerListedClaims({
   /* A job started elsewhere — Metadata, another tab — on a current list. */
   const showJob =
     claims !== null && !list.stale && (list.job || list.starting || list.failed || (waiting && !list.error));
+
+  /* Where each check is drawn — from its stored targets, so a list made
+     again, or a changed article, hides nothing that was paid for (E5). */
+  const drawn = useMemo(() => drawChecks(checks === null ? [] : checks.checks, list.claimList), [checks, list.claimList]);
+  /* Until the checks have been read, nobody knows whether one is out, so
+     Check waits: the server would refuse a second one anyway, but only after
+     the reader had pressed. */
+  const searching = checks !== null && (checks.sending || anyPending(checks.checks));
+  /* A history read holds the controls too, but it is free and must not wear the
+     spinner or sentence that say a paid web search is running. */
+  const busy = checks !== null && (searching || checks.status !== "ready");
+  const picking = checks !== null && claims !== null && !list.stale;
+  /* Only ticks on claims still in the list count: a list made again has new ids. */
+  const ids = claims === null ? [] : claims.filter((c) => ticked.has(c.id)).map((c) => c.id);
+  const words = own.trim();
+  const picked = ids.length + (words === "" ? 0 : 1);
+  const canCheck = picking && !busy && picked > 0 && picked <= MAX_CHECK_TARGETS && words.length <= MAX_OWN_CLAIM_CHARS;
+
+  const press = async () => {
+    if (checks === null || !canCheck) return;
+    const stored = await checks.check({ claimIds: ids, ...(words === "" ? {} : { own: words }) });
+    /* What was picked has become a check; on a refusal it stays, to press again. */
+    if (stored) {
+      setTicked(new Set());
+      setOwn("");
+    }
+  };
+  const dig = (claimId: string) => {
+    if (checks === null || busy) return;
+    void checks.check({ digFurther: claimId });
+  };
+  const findings = (claimId: string) => drawn.listed.get(claimId) ?? null;
+  const onDig = picking && !busy ? dig : null;
+
   return (
     <div className="dbt-listed-wrap">
       {list.error && <ReadError error={list.error} onRetry={list.retryRead} />}
@@ -2386,11 +2484,204 @@ function OwnerListedClaims({
           {claims.length === 0 ? (
             <p className="gloss-quiet dbt-listed-none">{DEBATE_CLAIMS_LIST_EMPTY}</p>
           ) : (
-            <ListedClaims claims={claims} onJump={onJump} chats={list.stale ? null : chats} />
+            <ListedClaims
+              claims={claims}
+              onJump={onJump}
+              chats={list.stale ? null : chats}
+              pick={
+                picking
+                  ? {
+                      ticked,
+                      disabled: busy,
+                      onTick: (id, on) =>
+                        setTicked((was) => {
+                          const next = new Set(was);
+                          if (on) next.add(id);
+                          else next.delete(id);
+                          return next;
+                        }),
+                    }
+                  : null
+              }
+              findings={findings}
+              onDig={onDig}
+            />
+          )}
+          {/* Checked claims the list no longer names: their own groups, from
+              what each check stored, still dug into. */}
+          {drawn.unlisted.map((group) => (
+            <CheckedClaim key={group.key} group={group} onJump={onJump} onDig={onDig} />
+          ))}
+          {picking && (
+            <form
+              className="gloss-ask dbt-check"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void press();
+              }}
+            >
+              <div className="gloss-ask-row dbt-check-row">
+                {/* `maxLength` is the route's cap, counted before trimming —
+                    the harmless direction (`Angles` above). */}
+                <input
+                  className="gloss-ask-input"
+                  type="text"
+                  enterKeyHint="go"
+                  value={own}
+                  maxLength={MAX_OWN_CLAIM_CHARS}
+                  placeholder={`${DEBATE_CHECK_OWN_LABEL}…`}
+                  aria-label={DEBATE_CHECK_OWN_LABEL}
+                  disabled={busy}
+                  onChange={(e) => setOwn(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && isImeComposing(e)) e.preventDefault();
+                  }}
+                />
+                <button type="submit" className="gloss-btn dbt-check-send" disabled={!canCheck} title={DEBATE_CHECK_TIP}>
+                  {searching ? <LoaderCircle size={12} className="spin" aria-hidden="true" /> : <Globe size={12} aria-hidden="true" />}
+                  {checkLabel(picked)}
+                </button>
+              </div>
+              {searching && <p className="gloss-quiet dbt-check-pending">{DEBATE_CHECK_PENDING}</p>}
+              {checks?.pressError && <p className="dbt-check-error">{checks.pressError}</p>}
+              {/* The checks' own read failed. Quieter than the list's
+                  `ReadError`: the list above is still right, only what was
+                  checked is missing. */}
+              {checks?.status === "error" && checks.error && (
+                <p className="gloss-quiet dbt-check-error">
+                  {checks.error}{" "}
+                  <button type="button" className="gloss-btn" onClick={() => void checks.refresh()}>
+                    Try again
+                  </button>
+                </p>
+              )}
+            </form>
+          )}
+          {drawn.own.map((group) => (
+            <CheckedClaim key={group.key} group={group} onJump={onJump} onDig={onDig} />
+          ))}
+          {/* Checks against an earlier version of the article: kept, because
+              they were paid for, but read-only — their anchors were that
+              version's, so no Dig further and no box. */}
+          {drawn.earlier.length > 0 && (
+            <section className="dbt-check-earlier">
+              <p className="gloss-quiet dbt-check-earlier-head">{DEBATE_CHECK_EARLIER}</p>
+              {drawn.earlier.map((group) => (
+                <CheckedClaim key={group.key} group={group} onJump={onJump} />
+              ))}
+            </section>
           )}
           {showJob && <div className="dbt-again">{run(DEBATE_CLAIMS_LIST_AGAIN, true)}</div>}
         </>
       )}
+    </div>
+  );
+}
+
+/** Check's label: how many claims one press would search. */
+export function checkLabel(picked: number): string {
+  if (picked === 0) return "Check";
+  return `Check ${picked} ${picked === 1 ? "claim" : "claims"}`;
+}
+
+/** The tick boxes' state, handed down by the owner's list on a current one. */
+interface ClaimPick {
+  ticked: ReadonlySet<string>;
+  /** A check is out: the boxes hold still until it lands. */
+  disabled: boolean;
+  onTick(id: string, on: boolean): void;
+}
+
+/** Nothing here is a key source: the synthesis is Reception's, not the checks'. */
+const NO_KEY_SOURCES: ReadonlyMap<string, DebateKeySource> = new Map();
+
+/** *Dig further* on a claim a finished check has looked at, or nothing. */
+function DigFurther({
+  claimId,
+  findings,
+  onDig,
+}: {
+  claimId: string;
+  findings: ClaimFindings | null;
+  /** `null` on a stale list, while a check is out, and for a visitor. */
+  onDig: ((claimId: string) => void) | null;
+}) {
+  if (findings === null || !findings.canDig) return null;
+  return (
+    <button
+      type="button"
+      className="gloss-btn dbt-dig"
+      disabled={onDig === null}
+      title={DEBATE_DIG_FURTHER_TIP}
+      onClick={() => onDig?.(claimId)}
+    >
+      Dig further
+    </button>
+  );
+}
+
+/**
+ * **One checked claim drawn as its own group** — a typed claim as *Your
+ * claim*, or a listed claim the current list no longer names, headed by the
+ * quote and statement its check stored, with the jump to its block. Without
+ * `onDig` it is read-only: the earlier-version group.
+ */
+function CheckedClaim({
+  group,
+  onJump,
+  onDig,
+}: {
+  group: CheckGroup;
+  onJump(id: BlockId): void;
+  /** `undefined` for a read-only group; `null` while Dig further is held. */
+  onDig?: ((claimId: string) => void) | null;
+}) {
+  const { head } = group;
+  return (
+    <section
+      className={`dbt-group ${head.kind === "own" ? "dbt-own-claim" : "dbt-checked-claim"}`}
+      data-claim={group.claimId}
+    >
+      <p className="dbt-group-claim dbt-listed-head">
+        {head.kind === "own" ? (
+          <>
+            <span className="dbt-own-label">{DEBATE_CHECK_YOUR_CLAIM}: </span>
+            {/* The reader's words in the reader's face (docs/project/fonts.md). */}
+            <span className="dbt-group-quote">
+              “<span className="voice-reader">{head.text}</span>”
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="dbt-group-quote">“{head.quote}”</span>
+            <BlockRef id={head.blockId} onJump={onJump} />
+          </>
+        )}
+        {onDig !== undefined && <DigFurther claimId={group.claimId} findings={group.findings} onDig={onDig} />}
+      </p>
+      {head.kind === "listed" && (
+        <p className="dbt-listed-statement">
+          <span className="voice-ai">{head.statement}</span>
+          <span className="dbt-listed-ai"> · {DEBATE_CLAIMS_LIST_AI}</span>
+        </p>
+      )}
+      <CheckFindings findings={group.findings} />
+    </section>
+  );
+}
+
+/** What the checks found under one claim, and the sentence when there is nothing to read. */
+function CheckFindings({ findings }: { findings: ClaimFindings | null }) {
+  if (findings === null) return null;
+  return (
+    <div className="dbt-check-found">
+      {findings.rows.length > 0 && <Rows rows={findings.rows} keyRows={NO_KEY_SOURCES} />}
+      {findings.line === "found-nothing" && <p className="gloss-quiet dbt-check-line">{DEBATE_CHECK_FOUND_NOTHING}</p>}
+      {findings.line === "not-answered" && <p className="gloss-quiet dbt-check-line">{DEBATE_CHECK_NOT_ANSWERED}</p>}
+      {findings.pending && (
+        <BandWaiting className="gloss-quiet dbt-check-line">{DEBATE_CHECK_PENDING}</BandWaiting>
+      )}
+      {findings.error !== null && <p className="dbt-check-error">{findings.error}</p>}
     </div>
   );
 }
@@ -2405,25 +2696,50 @@ function OwnerListedClaims({
  * stale list: *Check this claim in chat* takes the claim's block and quote,
  * which a listed claim has (`ClaimOrigin`), so the same chat and the same mark
  * serve both kinds of claim.
+ *
+ * `pick`, `findings` and `onDig` are the owner's checks (`OwnerListedClaims`):
+ * a tick box in the first column, the claim's checked rows under it, and Dig
+ * further. A visitor passes none, so a visitor's list has no box and no rows
+ * from any check.
  */
 function ListedClaims({
   claims,
   onJump,
   chats,
+  pick = null,
+  findings = () => null,
+  onDig = null,
 }: {
   claims: readonly ListedClaim[];
   onJump(id: BlockId): void;
   chats: DebateClaimChats | null;
+  pick?: ClaimPick | null;
+  findings?: (claimId: string) => ClaimFindings | null;
+  onDig?: ((claimId: string) => void) | null;
 }) {
   return (
     <ol className="dbt-listed">
       {claims.map((claim) => {
         const origin: ClaimOrigin = { mode: "debate", blockId: claim.blockId, quote: claim.quote };
         const chat = chats ? threadForOrigin(chats.summaries, origin) : undefined;
+        const found = findings(claim.id);
         return (
           <li key={claim.id} className="dbt-listed-claim" data-claim={claim.id}>
-            {/* The first column, empty until stage 3 puts a tick box in it. */}
-            <span className="dbt-listed-pick" aria-hidden="true" />
+            {/* The first column: the owner's tick box on a current list. */}
+            {pick !== null ? (
+              <span className="dbt-listed-pick">
+                <input
+                  type="checkbox"
+                  className="dbt-listed-tick"
+                  aria-label={`Check this claim: ${claim.statement}`}
+                  checked={pick.ticked.has(claim.id)}
+                  disabled={pick.disabled}
+                  onChange={(e) => pick.onTick(claim.id, e.target.checked)}
+                />
+              </span>
+            ) : (
+              <span className="dbt-listed-pick" aria-hidden="true" />
+            )}
             <div className="dbt-listed-body">
               <p className="dbt-group-claim dbt-listed-head">
                 <span className="dbt-group-quote">“{claim.quote}”</span>
@@ -2450,6 +2766,7 @@ function ListedClaims({
                     onOpen={chats.onOpen}
                   />
                 )}
+                <DigFurther claimId={claim.id} findings={found} onDig={onDig} />
               </p>
               {/* The model's words in the model's face (fonts.md, voices.css §
                   `.voice-ai`), and the label in ours. */}
@@ -2457,6 +2774,7 @@ function ListedClaims({
                 <span className="voice-ai">{claim.statement}</span>
                 <span className="dbt-listed-ai"> · {DEBATE_CLAIMS_LIST_AI}</span>
               </p>
+              <CheckFindings findings={found} />
             </div>
           </li>
         );
@@ -2529,7 +2847,7 @@ function isCutShort(title: string): boolean {
  * Then the record's authors and year win, and `registry` names where they came
  * from; a cut-short engine title gives way to the record's whole one too.
  */
-export function rowWork(row: DebateRow): {
+export function rowWork(row: DrawnRow): {
   headline: string;
   titleIsAI: boolean;
   headlineIsAddress: boolean;
@@ -2595,7 +2913,7 @@ function Row({
   row,
   keySource,
 }: {
-  row: DebateRow;
+  row: DrawnRow;
   /** Set when the AI picked this row as a key source (plan 260930j). */
   keySource: DebateKeySource | undefined;
 }) {
@@ -2772,7 +3090,7 @@ function RowDetail({
   hidden,
 }: {
   id: string;
-  row: DebateRow;
+  row: DrawnRow;
   work: ReturnType<typeof rowWork>;
   hidden: boolean;
 }) {

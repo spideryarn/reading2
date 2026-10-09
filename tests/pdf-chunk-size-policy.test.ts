@@ -122,6 +122,7 @@ describe("A: the allowance is the reader model's", () => {
 
   it("allows the model that reads PDFs today 40 MiB, and an unlisted model the old 30", () => {
     expect(maxEncodedBytesFor(PDF_READER_MODEL)).toBe(40 * MIB);
+    expect(maxEncodedBytesFor("openai/gpt-5.6-luna")).toBe(40 * MIB);
     expect(maxEncodedBytesFor("somebody/else")).toBe(30 * MIB);
     expect(openRouterReader().maxEncodedBytes).toBe(maxEncodedBytesFor(PDF_READER_MODEL));
     expect(openRouterReader("somebody/else").maxEncodedBytes).toBe(30 * MIB);

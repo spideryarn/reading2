@@ -1237,8 +1237,11 @@ function ReplyBox({
     context: { kind: "profile" },
     transcribe,
     /* Its own keeper name, so a recording left by the Write box is never
-       offered here or the other way round; and only while it can be seen. */
-    ...(active ? { keep: keepDictation("feedback-reply") } : {}),
+       offered here or the other way round; and only while it can be seen. Per
+       question, because Previous and Next reuse this one box, and the name is
+       what a transcript is bound to (dictation.md § Words go only where they
+       were said). */
+    ...(active ? { keep: keepDictation(`feedback-reply:${question.id}`) } : {}),
     /* A double press on Stop also sends (dictation.md), by the same guarded
        function the button calls, and never from a box out of sight. */
     onDone: trySend,

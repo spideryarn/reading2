@@ -88,7 +88,9 @@ import type {
   ReaderStore,
   RealtimeSessionStore,
   RefereeClaimsStore,
+  RefereeHiddenCheckStore,
   RefereeCriteriaStore,
+  DebateClaimChecksStore,
   SearchStore,
   ShelfStore,
   ShelfTermsStore,
@@ -118,6 +120,8 @@ import { pgGlossaryHiddenStore } from "./pg-glossary-hidden.js";
 import { pgQuizAttemptStore } from "./pg-quiz-attempts.js";
 import { pgReaderStore } from "./pg-reader.js";
 import { pgRefereeClaimsStore } from "./pg-referee-claims.js";
+import { pgDebateClaimChecksStore } from "./pg-debate-claim-checks.js";
+import { pgRefereeHiddenCheckStore } from "./pg-referee-hidden-checks.js";
 import { pgRefereeCriteriaStore } from "./pg-referee-criteria.js";
 import { pgSearchStore } from "./pg-searches.js";
 import { pgLibrarySearch, pgShelfStore } from "./pg-shelf.js";
@@ -340,6 +344,27 @@ export const refereeCriteriaStore: RefereeCriteriaStore = guarded("referee-crite
  * [db-errors.ts](db-errors.ts).
  */
 export const refereeClaimsStore: RefereeClaimsStore = guarded("referee-claims", pgRefereeClaimsStore);
+
+/**
+ * Debate's reader-picked claim checks (plan 261008i § 3). Owner-only, and a
+ * target may be the reader's own typed words — db-errors.ts is why nothing a
+ * failed query says leaves it.
+ */
+export const debateClaimChecksStore: DebateClaimChecksStore = guarded(
+  "debate-claim-checks",
+  pgDebateClaimChecksStore,
+);
+
+/**
+ * Hidden text's Opus check, kept — one row per article. Guarded for the
+ * reason above: a failed query's parameters would carry the model's reasons,
+ * which may quote a manuscript's hidden words.
+ * docs/plans/261009a-save-hidden-text-opinions.md.
+ */
+export const refereeHiddenCheckStore: RefereeHiddenCheckStore = guarded(
+  "referee-hidden-checks",
+  pgRefereeHiddenCheckStore,
+);
 
 export const glossaryLookupStore: GlossaryLookupStore = guarded("lookups", pgGlossaryLookupStore);
 

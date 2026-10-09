@@ -1,0 +1,190 @@
+{
+  "judge": "sol",
+  "slug": "scaling-hypothesis",
+  "lineups": {
+    "summary-fuller": {
+      "scores": {
+        "V": {
+          "accuracy": 3,
+          "coverage": 4,
+          "nuance": 4,
+          "usefulness": 4,
+          "overall": 6,
+          "note": "Generally faithful, but several paragraph citations omit their actual evidence: the GPT-4 projection requires spya-edr6mj, and the expert-accountability claim requires spya-m9r8zx."
+        },
+        "W": {
+          "accuracy": 3,
+          "coverage": 4,
+          "nuance": 3,
+          "usefulness": 4,
+          "overall": 6,
+          "note": "Labels the 1.73 WebText cross-entropy estimate as bits per character, which spya-edr6mj does not establish, and presents the tentative ensemble explanation too confidently."
+        },
+        "X": {
+          "accuracy": 4,
+          "coverage": 3,
+          "nuance": 4,
+          "usefulness": 3,
+          "overall": 6,
+          "note": "Spends its pretraining paragraph on elementary letter and word statistics while omitting the central understanding argument at spya-g3b5y7 and the ensemble explanation."
+        },
+        "Y": {
+          "accuracy": 4,
+          "coverage": 5,
+          "nuance": 4,
+          "usefulness": 4,
+          "overall": 8,
+          "note": "Covers the central mechanisms and appendix well, but the claim that no model exceeded 17 billion parameters needs the competing-model context of spya-fyy04z."
+        },
+        "Z": {
+          "accuracy": 5,
+          "coverage": 5,
+          "nuance": 4,
+          "usefulness": 4,
+          "overall": 9,
+          "note": "Connects scaling evidence, the shortcut-to-generalization explanation, practical doubts and agency while preserving the conditional projection at spya-edr6mj."
+        }
+      },
+      "rank": ["Z", "Y", ["V", "W", "X"]],
+      "separates": "Z gives the most complete, well-supported account of the argument and its uncertainties; Y is close but leaves a misleading historical comparison unqualified. The remaining summaries have substantial citation problems, technical imprecision or omissions, and all are longer than the requested few short paragraphs."
+    },
+    "ideas": {
+      "scores": {
+        "V": {
+          "accuracy": 1,
+          "coverage": 1,
+          "nuance": 1,
+          "usefulness": 1,
+          "overall": 1,
+          "note": "Empty answer; provides no analysis of propositions such as the strong scaling hypothesis at spya-m3gtj6."
+        },
+        "W": {
+          "accuracy": 2,
+          "coverage": 4,
+          "nuance": 2,
+          "usefulness": 3,
+          "overall": 4,
+          "note": "Its first heading contradicts its explanation, and it treats predictable loss curves as forecasts of capability despite the explicit uncertainty at spya-f6zupy."
+        },
+        "X": {
+          "accuracy": 3,
+          "coverage": 3,
+          "nuance": 2,
+          "usefulness": 3,
+          "overall": 5,
+          "note": "Says extrapolation is treated as reliable even while quoting its uncertainty at spya-hqpffq; also omits the strong-versus-weak distinction and the last-bits argument."
+        },
+        "Y": {
+          "accuracy": 3,
+          "coverage": 5,
+          "nuance": 4,
+          "usefulness": 4,
+          "overall": 7,
+          "note": "Offers the strongest conceptual map, but confuses the tiny contribution of individual errors at spya-rz8jsm with the total remaining prediction gap, which exceeds 0.4 at spya-rjwfkb."
+        },
+        "Z": {
+          "accuracy": 1,
+          "coverage": 1,
+          "nuance": 1,
+          "usefulness": 1,
+          "overall": 1,
+          "note": "Empty answer; provides no analysis of propositions such as the strong scaling hypothesis at spya-m3gtj6."
+        }
+      },
+      "rank": ["Y", "X", "W", ["V", "Z"]],
+      "separates": "Y best explains the concepts a reader needs, including power laws, competing scaling hypotheses and informative forecasting, although its numerical account of the remaining error is wrong. X and W flatten important qualifications and mostly catalogue claims rather than consistently explain their role in the argument."
+    },
+    "chat-q1": {
+      "scores": {
+        "V": {
+          "accuracy": 5,
+          "coverage": 5,
+          "nuance": 4,
+          "usefulness": 5,
+          "overall": 8,
+          "note": "Clearly separates the objective's demands from practical attainability using spya-faees7, though it gives less attention to uncertainty about capabilities at any particular loss."
+        },
+        "W": {
+          "accuracy": 3,
+          "coverage": 5,
+          "nuance": 3,
+          "usefulness": 4,
+          "overall": 6,
+          "note": "Overstates mutual dependence: needing sufficiently rich tasks at spya-wq498y does not make the broader scaling hypothesis depend on the text-specific pretraining thesis."
+        },
+        "X": {
+          "accuracy": 4,
+          "coverage": 5,
+          "nuance": 4,
+          "usefulness": 5,
+          "overall": 8,
+          "note": "Explains the mainly one-way practical dependence and spya-f6zupy's uncertainty well, but presents the proposed sub-model mechanism more definitively than spya-jg69cy warrants."
+        },
+        "Y": {
+          "accuracy": 5,
+          "coverage": 5,
+          "nuance": 5,
+          "usefulness": 5,
+          "overall": 9,
+          "note": "Distinguishes logical claims from practical evidence, preserves the speculative mechanism at spya-jg69cy, and includes uncertainty about the loss-to-capability relationship at spya-f6zupy."
+        },
+        "Z": {
+          "accuracy": 4,
+          "coverage": 4,
+          "nuance": 4,
+          "usefulness": 4,
+          "overall": 7,
+          "note": "Explains the conditional at spya-nhgv5g well, but omits the non-text examples establishing scaling's independence and overstates that only large models can escape shortcuts."
+        }
+      },
+      "rank": ["Y", ["V", "X"], "Z", "W"],
+      "separates": "Y most carefully distinguishes what ideal prediction would require from whether training can achieve it, without treating the proposed mechanism as established. V and X are strong explanations; Z supplies less evidence for independence, while W confuses complementary claims with mutual dependence."
+    },
+    "chat-q2": {
+      "scores": {
+        "V": {
+          "accuracy": 3,
+          "coverage": 4,
+          "nuance": 2,
+          "usefulness": 3,
+          "overall": 5,
+          "note": "Introduces pursuing goals 'on its own' as a requirement, although spya-cw7jg4 and spya-fm6pfc explicitly defend prompted, externally connected agency."
+        },
+        "W": {
+          "accuracy": 4,
+          "coverage": 5,
+          "nuance": 3,
+          "usefulness": 4,
+          "overall": 7,
+          "note": "Clearly explains both routes and fairly notes external scaffolding, but saying the identity claim at spya-nkzwpu is unargued underplays the behavioral-cloning and functional arguments."
+        },
+        "X": {
+          "accuracy": 3,
+          "coverage": 4,
+          "nuance": 3,
+          "usefulness": 3,
+          "overall": 5,
+          "note": "Infers that agent-like behavior comes from wiring rather than prediction, whereas spya-cw7jg4 assigns planning capability to the learned model and execution to attached effectors."
+        },
+        "Y": {
+          "accuracy": 4,
+          "coverage": 5,
+          "nuance": 4,
+          "usefulness": 5,
+          "overall": 8,
+          "note": "Best grounds its criticism in the acknowledged empirical gap at spya-nxp8hh and cost conditions at spya-dbrxu8, though it understates the concrete SayCan evidence."
+        },
+        "Z": {
+          "accuracy": 3,
+          "coverage": 4,
+          "nuance": 3,
+          "usefulness": 4,
+          "overall": 6,
+          "note": "Identifies the speculative extension well, but turns spya-jrm0w9's limitation of sampling into the stronger claim that no possible check could establish agency's absence."
+        }
+      },
+      "rank": ["Y", "W", "Z", ["V", "X"]],
+      "separates": "Y most carefully separates the stronger human-imitation case from the speculative extension to non-agent data and anchors its criticism in Gwern's concessions. W gives a useful alternative critique, while V and X impose stronger autonomy requirements or attribute learned capabilities too exclusively to external wiring."
+    }
+  }
+}

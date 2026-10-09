@@ -273,6 +273,7 @@ const HOMES: Record<string, string> = {
      fixture in tests/store-export-covers-tables.test.ts, which inserts a row and
      requires it back out of this file. See `COVERED_BY_ANOTHER_TEST`. */
   "referee-claims.json": "referee_claims (one row per article, claims stay JSONB)",
+  "referee-hidden-check.json": "referee_hidden_checks (one finished Opus check per article)",
   "glossary-lookups.json": "glossary_lookups",
   "citation-finds.json": "citation_finds",
   "citation-investigations.json": "citation_investigations",
@@ -515,6 +516,13 @@ const COVERED_BY_ANOTHER_TEST: Record<string, Unexampled> = {
     evidence: {
       file: "tests/store-export-covers-tables.test.ts",
       contains: "referee_claims",
+    },
+  },
+  "referee-hidden-check.json": {
+    why: "no committed article carries a hidden-text check; a sentinel row is inserted and required back out of this filename",
+    evidence: {
+      file: "tests/store-export-covers-tables.test.ts",
+      contains: "referee_hidden_checks",
     },
   },
   /* The same arrangement: tests/store-export-covers-tables.test.ts inserts a

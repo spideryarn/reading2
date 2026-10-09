@@ -103,6 +103,7 @@ import {
   setFeedbackIgnoredAcrossOwners,
 } from "./pg-admin-feedback.js";
 import { onTheShelf } from "./pg.js";
+import { SITE_OWNER_ID } from "../site-account.js";
 
 /* ------------------------------------------------------- the pure half --- */
 
@@ -401,6 +402,11 @@ export function mergeUsers(people: AccountRow[], counts: UserCounts): AdminUser[
        sign in as is a product question rather than a bug —
        docs/plans/260903c-admin-users-count-disagrees-with-rows.md § Reviews. */
     .filter((p): p is AccountRow & { email: string } => typeof p.email === "string" && p.email !== "")
+    /* **The site account is not a reader** (src/site-account.ts): it stands in
+       for the public shelf, owns no articles and cannot sign in, so it is left
+       out of the list and the count. Its spend is on /admin/costs, as *the
+       site*. Plan 261008j. */
+    .filter((p) => p.id !== SITE_OWNER_ID)
     .map((p): AdminUser => {
       const mine = shelf.get(p.id);
       return {

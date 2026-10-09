@@ -1,0 +1,446 @@
+{
+  "slug": "scaling-hypothesis",
+  "task": "ideas",
+  "arm": "A-opus",
+  "model": "anthropic/claude-opus-5.5",
+  "answeredBy": "anthropic/claude-opus-5.5",
+  "effortSent": "high",
+  "effortRan": "high",
+  "maxTokens": 44600,
+  "boundUsd": 1.37076,
+  "ok": true,
+  "error": null,
+  "finishReason": "stop",
+  "raw": "{\"ideas\":[{\"name\":\"In deep learning, bigger problems are easier\",\"provenance\":\"introduced\",\"statement\":\"For neural networks, making the model, data, compute and task bigger and more varied tends to make learning faster, steadier and more general. Small setups get stuck on narrow tricks; large, varied ones push the network into general skills such as meta-learning, meaning learning how to pick up a new task from a few examples.\",\"occurrences\":[{\"blockId\":\"spya-sfkxh8\",\"quote\":\"The blessings of scale is the observation that for deep learning, hard problems are easier to solve than easy problems—everything gets better as it gets larger\",\"reasoning\":\"States the core claim: scale improves things rather than making them harder.\"},{\"blockId\":\"spya-sfkxh8\",\"quote\":\"The bigger the neural net/compute/data/problem, the faster it learns, the better it learns, the stabler it learns, and so on.\",\"reasoning\":\"Lists the specific gains that come with size.\"},{\"blockId\":\"spya-ypbup8\",\"quote\":\"Or in Procgen or CoinRun, training on hundreds of levels trains agents to solve levels individually and worsens performance on other levels, but at thousands of levels, they begin to generalize to unseen levels.\",\"reasoning\":\"A concrete case of crossing from memorizing individual cases to generalizing once the variety is large enough.\"},{\"blockId\":\"spya-evn08w\",\"quote\":\"If you have a system that has memory, and the function of that memory is shaped by reinforcement learning, and this system is trained on a series of interrelated tasks, this is going to happen. You can’t stop it.\",\"reasoning\":\"A researcher reports that meta-learning appears whatever the design, given enough related tasks.\"}]},{\"name\":\"Cheap shortcuts win until the data outgrows them\",\"provenance\":\"introduced\",\"statement\":\"A big network holds countless possible sub-solutions, and their average favours simple ones. Memorizing or surface-level shortcuts are learned first because they are cheapest. Only when the data is too large and varied to memorize does the truly general rule, such as real arithmetic, become the simplest thing that fits.\",\"whyYouNeedIt\":\"This explains why capabilities appear suddenly at scale rather than gradually, and why small models seem to lack them.\",\"analogy\":\"A student who memorizes past exam answers does fine until the exam bank becomes too large to memorize, at which point actually learning the method becomes the less effortful path.\",\"occurrences\":[{\"blockId\":\"spya-grkhs8\",\"quote\":\"They function as an ensemble: even though there are countless overfit sub-models inside the single big model, they all average out, leading to a preference for simple solutions.\",\"reasoning\":\"Gives the mechanism: averaging over many sub-solutions produces a bias toward simplicity.\"},{\"blockId\":\"spya-uknzzk\",\"quote\":\"sub-models which memorize pieces of the data, or latch onto superficial features, learn quickest and are the easiest to represent internally.\",\"reasoning\":\"Names the shortcut solutions that win when data is limited.\"},{\"blockId\":\"spya-vkkfzh\",\"quote\":\"but it can’t possibly memorize all the instances of arithmetic (implicit or explicit) in GPT-3’s Internet-scale dataset. If a memorizing sub-model tried to do so, it would become extremely large and penalized.\",\"reasoning\":\"Shows the turning point where memorizing becomes costlier than the real rule.\"},{\"blockId\":\"spya-dbrxu8\",\"quote\":\"They need rich enough models to compute them feasibly, enough data to force them out of easier solutions (which will fail on a few rare datapoints), and enough training\",\"reasoning\":\"Restates the three conditions under which a general capability beats easier alternatives.\"}]},{\"name\":\"Power-law scaling: fixed fractional gains cost multiplying compute\",\"provenance\":\"assumed\",\"statement\":\"When loss falls as a power law of compute, each further multiplying of compute, say 1000 times more, cuts the loss by roughly the same fraction. So progress is steady and predictable on a logarithmic axis, but every equal step costs far more than the last.\",\"whyYouNeedIt\":\"The forecasts, such as GPT-3 halving GPT-2's loss and a further 100–1000 times more compute giving about a 30% drop, and the claim that the curves have not bent, only make sense if the reader knows what a power-law curve implies about cost and diminishing returns.\",\"occurrences\":[{\"blockId\":\"spya-asr663\",\"quote\":\"its scaling continues to be roughly logarithmic/power-law, as it was for much smaller models & as forecast\",\"reasoning\":\"Treats \\\"still power-law\\\" as good news, which assumes the reader knows this shape means predictable continued gains.\"},{\"blockId\":\"spya-edr6mj\",\"quote\":\"if the scaling curve continues for another 3 orders or so of compute (100–1000×) before crossing over and hitting harder diminishing returns, the cross-entropy loss will drop to ~1.24\",\"reasoning\":\"The prediction follows from plugging a thousandfold compute increase into the power-law formula, an extrapolation the reader must accept as valid.\"},{\"blockId\":\"spya-x3c389\",\"quote\":\"every additional 0.1 bit decrease comes at a steeper cost and takes more time.\",\"reasoning\":\"Rising cost per equal gain is exactly what a power law produces.\"},{\"blockId\":\"spya-kc39vs\",\"quote\":\"If we see such striking gains in halving the validation loss but with so far left to go\",\"reasoning\":\"Framing progress as halvings of loss assumes improvement comes in fractions, not fixed amounts.\"}]},{\"name\":\"The last fractions of prediction error hold the intelligence\",\"provenance\":\"introduced\",\"statement\":\"Most of a text predictor's error is removed by simple statistics such as letter frequencies and spelling. The tiny remainder, often less than a hundredth of a bit per character (the unit for how surprised the model is by each letter), comes from rare cases that only reasoning, common sense and understanding of people can predict. So small drops in loss near the end can mean large gains in ability.\",\"occurrences\":[{\"blockId\":\"spya-rz8jsm\",\"quote\":\"the second model would attain a lower average error of barely <0.02 bits per character!\",\"reasoning\":\"Understanding gender pronouns perfectly barely moves the average error, showing important skills hide in tiny numbers.\"},{\"blockId\":\"spya-kmyg3w\",\"quote\":\"The implication here is that the final few bits are the most valuable bits, which require the most of what we think of as intelligence.\",\"reasoning\":\"States the idea outright.\"},{\"blockId\":\"spya-g3b5y7\",\"quote\":\"nothing less than true understanding will suffice for ideal prediction.\",\"reasoning\":\"Concludes that perfect prediction requires understanding.\"},{\"blockId\":\"spya-u2vxzs\",\"quote\":\"One only has to make a single bad decision, out of a lifetime of millions of discrete decisions, to wind up in jail or dead.\",\"reasoning\":\"An analogy from human life: rare decisions matter far more than their share of the total.\"}]},{\"name\":\"Predicting human output means modelling the minds behind it\",\"provenance\":\"introduced\",\"statement\":\"Human text and video are a by-product of human reasoning, causality, history and goals. A model trained to predict that output well must learn those underlying things, including models of the people, real or fictional, who would produce it.\",\"occurrences\":[{\"blockId\":\"spya-h74fhr\",\"quote\":\"we constantly emit large amounts of structured data, which implicitly rely on logic, causality, object permanence, history—all of that good stuff.\",\"reasoning\":\"Human data carries the structure of the minds that made it.\"},{\"blockId\":\"spya-h74fhr\",\"quote\":\"A model learning to predict must learn to understand all of that to get the best performance\",\"reasoning\":\"Draws the consequence for a predictor.\"},{\"blockId\":\"spya-cw7jg4\",\"quote\":\"it learns generative models of many agents, real or fictional.\",\"reasoning\":\"Extends the same logic to agents: imitating the writers means modelling them as goal-pursuers.\"}]},{\"name\":\"Strong versus weak scaling hypothesis\",\"provenance\":\"introduced\",\"statement\":\"The strong version says that once you have an architecture that scales, simply making it bigger and training it on more will produce ever more sophisticated behaviour without new inventions. The weak version agrees that scale matters but holds that intelligence still needs many separate, hand-designed brain-like modules built piece by piece.\",\"whyYouNeedIt\":\"The contrast explains why labs with similar resources behave so differently.\",\"occurrences\":[{\"blockId\":\"spya-m3gtj6\",\"quote\":\"we can simply train ever larger NNs and ever more sophisticated behavior will emerge naturally as the easiest way to optimize for all the tasks & data.\",\"reasoning\":\"Defines the strong version.\"},{\"blockId\":\"spya-vr9q2p\",\"quote\":\"they believe that AGI will require us to “find the right algorithms” effectively replicating a mammalian brain module by module\",\"reasoning\":\"Defines the weak version held by DeepMind.\"},{\"blockId\":\"spya-arrq35\",\"quote\":\"is making a startup-like bet that they know an important truth which is a secret: “the scaling hypothesis is true!”\",\"reasoning\":\"Shows the strong version driving one organization's strategy.\"}]},{\"name\":\"Belief, not hardware, is the bottleneck\",\"provenance\":\"introduced\",\"statement\":\"Once the needed computers already exist and are affordable, which the piece calls a hardware overhang, what decides who builds a breakthrough is whether anyone is convinced it will work. Knowing a problem has an answer changes how hard people attack it.\",\"occurrences\":[{\"blockId\":\"spya-khnsat\",\"quote\":\"The existence of the hardware overhang implies that the limiting factor here is less hardware than human\",\"reasoning\":\"States that the constraint is human, not material.\"},{\"blockId\":\"spya-pmtc3q\",\"quote\":\"Once you have [those two], then there is a third thing is that is needed—and that is conviction.\",\"reasoning\":\"Sutskever names conviction as the missing ingredient after data and compute.\"},{\"blockId\":\"spya-cn4vbh\",\"quote\":\"Once a scientist attacks a problem which he knows to have an answer, his entire attitude is changed.\",\"reasoning\":\"Wiener's point that knowing something is possible is itself most of the progress.\"},{\"blockId\":\"spya-eexw9k\",\"quote\":\"said competitors lack the very most important thing, which no amount of money or GPUs can ever cure: the courage of their convictions.\",\"reasoning\":\"Applies it to rival labs that have the resources but not the belief.\"}]},{\"name\":\"Succeeding at AI must look like 'just X'\",\"provenance\":\"introduced\",\"statement\":\"Explaining intelligence means showing it is made of simple parts that are not themselves intelligent. So calling a model 'just multiplications' or 'just memorized pages' is not a criticism: it describes what any success would have to look like.\",\"occurrences\":[{\"blockId\":\"spya-mpden3\",\"quote\":\"dismiss any model as “just” this or that\",\"reasoning\":\"Names the dismissive habit being rebutted.\"},{\"blockId\":\"spya-ay4yw7\",\"quote\":\"Showing that some task requiring intelligence can be solved by a well-defined algorithm with no ‘intelligence’ is precisely what success must look like!\",\"reasoning\":\"States the rebuttal directly.\"},{\"blockId\":\"spya-ta3e6d\",\"quote\":\"A human brain, too, does not exhibit the intelligence under a neurobiologist’s microscope that it does participating in a lively conversation.\",\"reasoning\":\"Moravec's point that intelligence is visible only from the outside, never in the parts.\"}]},{\"name\":\"Statements unchanged by the truth carry no information\",\"provenance\":\"introduced\",\"statement\":\"If an expert would say the same reassuring thing whether a claim were true or false, the statement tells you nothing about the claim. It serves social purposes such as calm and respectability (it is phatic, meaning talk for social effect rather than to inform). The test of a real forecast is that it makes falsifiable, checkable predictions and names what would change the forecaster's mind.\",\"occurrences\":[{\"blockId\":\"spya-suzdvz\",\"quote\":\"they would make the same public statements if the scaling hypothesis were true or not.\",\"reasoning\":\"Applies the test to AI researchers' comments on risk.\"},{\"blockId\":\"spya-kdcvq7\",\"quote\":\"There is, however, a certain tone of voice the bien pensant all speak in, whose sound is the same whether right or wrong\",\"reasoning\":\"Describes speech whose form does not depend on being correct.\"},{\"blockId\":\"spya-zyncdd\",\"quote\":\"The voice does not issue any numerical predictions (which could be falsified).\",\"reasoning\":\"Avoiding checkable claims is the mark of non-predictive speech.\"},{\"blockId\":\"spya-b93jbz\",\"quote\":\"What specific task, what specific number, would convince you otherwise?\",\"reasoning\":\"Demands the falsifiable criterion that would make a skeptic's view informative.\"}]},{\"name\":\"Agency is a matter of degree and hard to rule out\",\"provenance\":\"introduced\",\"statement\":\"Being an agent, something that pursues goals, is not an on-or-off property but a continuum, and a good enough simulation of an agent is an agent. Because treating things as goal-seekers is useful for prediction in so many settings, a powerful model may develop agency even without agent data. Not seeing agency is no proof it is absent.\",\"occurrences\":[{\"blockId\":\"spya-nkzwpu\",\"quote\":\"A sufficiently accurate simulation of an agent just is an agent.\",\"reasoning\":\"Closes the gap between imitating an agent and being one.\"},{\"blockId\":\"spya-ueb3d2\",\"quote\":\"agency is not a discrete thing, but a continuum, which is a convergent instrumental drive / emergent capability because it is useful even for understanding “non-agentic” things.\",\"reasoning\":\"States the continuum claim and why agency keeps arising.\"},{\"blockId\":\"spya-msngfz\",\"quote\":\"Agency may be like Turing-completeness: even in settings free of selection or optimization, it is a capability too useful and too convergent to guarantee its absence.\",\"reasoning\":\"Generalizes: the more powerful the system, the harder agency is to exclude.\"},{\"blockId\":\"spya-jrm0w9\",\"quote\":\"that there is no overt agency doesn’t mean it is not there.\",\"reasoning\":\"Testing can reveal agency but cannot prove its absence.\"}]},{\"name\":\"Goal-based description is a shortcut a network would favour\",\"provenance\":\"introduced\",\"statement\":\"Many physical systems can be predicted more cheaply by treating them as if they 'want' to minimize or maximize one overall quantity than by simulating every step. That is the variational principle, as with a river finding the lowest path. A network looking for cheap, general prediction tricks would be drawn to this goal-seeking frame, which is a seed of agency.\",\"occurrences\":[{\"blockId\":\"spya-ehe426\",\"quote\":\"treat the system as a whole via the variational principle as ‘wanting’ to minimize (or maximize) some simple global quantity (a reward), and picking the sequence of actions that does so.\",\"reasoning\":\"Describes the shortcut itself.\"},{\"blockId\":\"spya-agstbd\",\"quote\":\"‘Predictively useful’, ‘shortcut’, ‘much easier’, ‘universally’—all properties a neural net loves.\",\"reasoning\":\"Links the shortcut to what training rewards.\"},{\"blockId\":\"spya-c874v8\",\"quote\":\"you are much of the way to an intentional stance\",\"reasoning\":\"Even Game of Life gliders invite treating patterns as entities with fates, which is the first step toward reading goals into them.\"},{\"blockId\":\"spya-usu3q6\",\"quote\":\"Is inferring TM rules the simplest & most rudimentary possible ‘theory of mind’?\",\"reasoning\":\"Suggests that inferring the rules of a Turing machine, a simple abstract computer, already resembles reading another mind.\"}]}]}",
+  "parsed": [
+    {
+      "id": "spya-f6gksf",
+      "name": "Power-law scaling: fixed fractional gains cost multiplying compute",
+      "provenance": "assumed",
+      "statement": "When loss falls as a power law of compute, each further multiplying of compute, say 1000 times more, cuts the loss by roughly the same fraction. So progress is steady and predictable on a logarithmic axis, but every equal step costs far more than the last.",
+      "whyYouNeedIt": "The forecasts, such as GPT-3 halving GPT-2's loss and a further 100–1000 times more compute giving about a 30% drop, and the claim that the curves have not bent, only make sense if the reader knows what a power-law curve implies about cost and diminishing returns.",
+      "occurrences": [
+        {
+          "blockId": "spya-asr663",
+          "quote": "its scaling continues to be roughly logarithmic/power-law, as it was for much smaller models & as forecast",
+          "reasoning": "Treats \"still power-law\" as good news, which assumes the reader knows this shape means predictable continued gains.",
+          "start": 605
+        },
+        {
+          "blockId": "spya-edr6mj",
+          "quote": "if the scaling curve continues for another 3 orders or so of compute (100–1000×) before crossing over and hitting harder diminishing returns, the cross-entropy loss will drop to ~1.24",
+          "reasoning": "The prediction follows from plugging a thousandfold compute increase into the power-law formula, an extrapolation the reader must accept as valid.",
+          "start": 322
+        },
+        {
+          "blockId": "spya-x3c389",
+          "quote": "every additional 0.1 bit decrease comes at a steeper cost and takes more time.",
+          "reasoning": "Rising cost per equal gain is exactly what a power law produces.",
+          "start": 43
+        },
+        {
+          "blockId": "spya-kc39vs",
+          "quote": "If we see such striking gains in halving the validation loss but with so far left to go",
+          "reasoning": "Framing progress as halvings of loss assumes improvement comes in fractions, not fixed amounts.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-b0q9aj",
+      "name": "In deep learning, bigger problems are easier",
+      "provenance": "introduced",
+      "statement": "For neural networks, making the model, data, compute and task bigger and more varied tends to make learning faster, steadier and more general. Small setups get stuck on narrow tricks; large, varied ones push the network into general skills such as meta-learning, meaning learning how to pick up a new task from a few examples.",
+      "occurrences": [
+        {
+          "blockId": "spya-sfkxh8",
+          "quote": "The blessings of scale is the observation that for deep learning, hard problems are easier to solve than easy problems—everything gets better as it gets larger",
+          "reasoning": "States the core claim: scale improves things rather than making them harder.",
+          "start": 32
+        },
+        {
+          "blockId": "spya-sfkxh8",
+          "quote": "The bigger the neural net/compute/data/problem, the faster it learns, the better it learns, the stabler it learns, and so on.",
+          "reasoning": "Lists the specific gains that come with size.",
+          "start": 297
+        },
+        {
+          "blockId": "spya-ypbup8",
+          "quote": "Or in Procgen or CoinRun, training on hundreds of levels trains agents to solve levels individually and worsens performance on other levels, but at thousands of levels, they begin to generalize to unseen levels.",
+          "reasoning": "A concrete case of crossing from memorizing individual cases to generalizing once the variety is large enough.",
+          "start": 2868
+        },
+        {
+          "blockId": "spya-evn08w",
+          "quote": "If you have a system that has memory, and the function of that memory is shaped by reinforcement learning, and this system is trained on a series of interrelated tasks, this is going to happen. You can’t stop it.",
+          "reasoning": "A researcher reports that meta-learning appears whatever the design, given enough related tasks.",
+          "start": 79
+        }
+      ]
+    },
+    {
+      "id": "spya-b7cvgm",
+      "name": "Cheap shortcuts win until the data outgrows them",
+      "provenance": "introduced",
+      "statement": "A big network holds countless possible sub-solutions, and their average favours simple ones. Memorizing or surface-level shortcuts are learned first because they are cheapest. Only when the data is too large and varied to memorize does the truly general rule, such as real arithmetic, become the simplest thing that fits.",
+      "whyYouNeedIt": "This explains why capabilities appear suddenly at scale rather than gradually, and why small models seem to lack them.",
+      "analogy": "A student who memorizes past exam answers does fine until the exam bank becomes too large to memorize, at which point actually learning the method becomes the less effortful path.",
+      "occurrences": [
+        {
+          "blockId": "spya-grkhs8",
+          "quote": "They function as an ensemble: even though there are countless overfit sub-models inside the single big model, they all average out, leading to a preference for simple solutions.",
+          "reasoning": "Gives the mechanism: averaging over many sub-solutions produces a bias toward simplicity.",
+          "start": 319
+        },
+        {
+          "blockId": "spya-uknzzk",
+          "quote": "sub-models which memorize pieces of the data, or latch onto superficial features, learn quickest and are the easiest to represent internally.",
+          "reasoning": "Names the shortcut solutions that win when data is limited.",
+          "start": 33
+        },
+        {
+          "blockId": "spya-vkkfzh",
+          "quote": "but it can’t possibly memorize all the instances of arithmetic (implicit or explicit) in GPT-3’s Internet-scale dataset. If a memorizing sub-model tried to do so, it would become extremely large and penalized.",
+          "reasoning": "Shows the turning point where memorizing becomes costlier than the real rule.",
+          "start": 570
+        },
+        {
+          "blockId": "spya-dbrxu8",
+          "quote": "They need rich enough models to compute them feasibly, enough data to force them out of easier solutions (which will fail on a few rare datapoints), and enough training",
+          "reasoning": "Restates the three conditions under which a general capability beats easier alternatives.",
+          "start": 655
+        }
+      ]
+    },
+    {
+      "id": "spya-c7rpv6",
+      "name": "Strong versus weak scaling hypothesis",
+      "provenance": "introduced",
+      "statement": "The strong version says that once you have an architecture that scales, simply making it bigger and training it on more will produce ever more sophisticated behaviour without new inventions. The weak version agrees that scale matters but holds that intelligence still needs many separate, hand-designed brain-like modules built piece by piece.",
+      "whyYouNeedIt": "The contrast explains why labs with similar resources behave so differently.",
+      "occurrences": [
+        {
+          "blockId": "spya-m3gtj6",
+          "quote": "we can simply train ever larger NNs and ever more sophisticated behavior will emerge naturally as the easiest way to optimize for all the tasks & data.",
+          "reasoning": "Defines the strong version.",
+          "start": 228
+        },
+        {
+          "blockId": "spya-vr9q2p",
+          "quote": "they believe that AGI will require us to “find the right algorithms” effectively replicating a mammalian brain module by module",
+          "reasoning": "Defines the weak version held by DeepMind.",
+          "start": 97
+        },
+        {
+          "blockId": "spya-arrq35",
+          "quote": "is making a startup-like bet that they know an important truth which is a secret: “the scaling hypothesis is true!”",
+          "reasoning": "Shows the strong version driving one organization's strategy.",
+          "start": 88
+        }
+      ]
+    },
+    {
+      "id": "spya-rzuw67",
+      "name": "Predicting human output means modelling the minds behind it",
+      "provenance": "introduced",
+      "statement": "Human text and video are a by-product of human reasoning, causality, history and goals. A model trained to predict that output well must learn those underlying things, including models of the people, real or fictional, who would produce it.",
+      "occurrences": [
+        {
+          "blockId": "spya-h74fhr",
+          "quote": "we constantly emit large amounts of structured data, which implicitly rely on logic, causality, object permanence, history—all of that good stuff.",
+          "reasoning": "Human data carries the structure of the minds that made it.",
+          "start": 52
+        },
+        {
+          "blockId": "spya-h74fhr",
+          "quote": "A model learning to predict must learn to understand all of that to get the best performance",
+          "reasoning": "Draws the consequence for a predictor.",
+          "start": 284
+        },
+        {
+          "blockId": "spya-cw7jg4",
+          "quote": "it learns generative models of many agents, real or fictional.",
+          "reasoning": "Extends the same logic to agents: imitating the writers means modelling them as goal-pursuers.",
+          "start": 182
+        }
+      ]
+    },
+    {
+      "id": "spya-xhg45c",
+      "name": "The last fractions of prediction error hold the intelligence",
+      "provenance": "introduced",
+      "statement": "Most of a text predictor's error is removed by simple statistics such as letter frequencies and spelling. The tiny remainder, often less than a hundredth of a bit per character (the unit for how surprised the model is by each letter), comes from rare cases that only reasoning, common sense and understanding of people can predict. So small drops in loss near the end can mean large gains in ability.",
+      "occurrences": [
+        {
+          "blockId": "spya-rz8jsm",
+          "quote": "the second model would attain a lower average error of barely <0.02 bits per character!",
+          "reasoning": "Understanding gender pronouns perfectly barely moves the average error, showing important skills hide in tiny numbers.",
+          "start": 844
+        },
+        {
+          "blockId": "spya-kmyg3w",
+          "quote": "The implication here is that the final few bits are the most valuable bits, which require the most of what we think of as intelligence.",
+          "reasoning": "States the idea outright.",
+          "start": 27
+        },
+        {
+          "blockId": "spya-g3b5y7",
+          "quote": "nothing less than true understanding will suffice for ideal prediction.",
+          "reasoning": "Concludes that perfect prediction requires understanding.",
+          "start": 1137
+        },
+        {
+          "blockId": "spya-u2vxzs",
+          "quote": "One only has to make a single bad decision, out of a lifetime of millions of discrete decisions, to wind up in jail or dead.",
+          "reasoning": "An analogy from human life: rare decisions matter far more than their share of the total.",
+          "start": 226
+        }
+      ]
+    },
+    {
+      "id": "spya-vq3pdu",
+      "name": "Belief, not hardware, is the bottleneck",
+      "provenance": "introduced",
+      "statement": "Once the needed computers already exist and are affordable, which the piece calls a hardware overhang, what decides who builds a breakthrough is whether anyone is convinced it will work. Knowing a problem has an answer changes how hard people attack it.",
+      "occurrences": [
+        {
+          "blockId": "spya-khnsat",
+          "quote": "The existence of the hardware overhang implies that the limiting factor here is less hardware than human",
+          "reasoning": "States that the constraint is human, not material.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-pmtc3q",
+          "quote": "Once you have [those two], then there is a third thing is that is needed—and that is conviction.",
+          "reasoning": "Sutskever names conviction as the missing ingredient after data and compute.",
+          "start": 257
+        },
+        {
+          "blockId": "spya-cn4vbh",
+          "quote": "Once a scientist attacks a problem which he knows to have an answer, his entire attitude is changed.",
+          "reasoning": "Wiener's point that knowing something is possible is itself most of the progress.",
+          "start": 347
+        },
+        {
+          "blockId": "spya-eexw9k",
+          "quote": "said competitors lack the very most important thing, which no amount of money or GPUs can ever cure: the courage of their convictions.",
+          "reasoning": "Applies it to rival labs that have the resources but not the belief.",
+          "start": 324
+        }
+      ]
+    },
+    {
+      "id": "spya-k5a35m",
+      "name": "Succeeding at AI must look like 'just X'",
+      "provenance": "introduced",
+      "statement": "Explaining intelligence means showing it is made of simple parts that are not themselves intelligent. So calling a model 'just multiplications' or 'just memorized pages' is not a criticism: it describes what any success would have to look like.",
+      "occurrences": [
+        {
+          "blockId": "spya-mpden3",
+          "quote": "dismiss any model as “just” this or that",
+          "reasoning": "Names the dismissive habit being rebutted.",
+          "start": 112
+        },
+        {
+          "blockId": "spya-ay4yw7",
+          "quote": "Showing that some task requiring intelligence can be solved by a well-defined algorithm with no ‘intelligence’ is precisely what success must look like!",
+          "reasoning": "States the rebuttal directly.",
+          "start": 110
+        },
+        {
+          "blockId": "spya-ta3e6d",
+          "quote": "A human brain, too, does not exhibit the intelligence under a neurobiologist’s microscope that it does participating in a lively conversation.",
+          "reasoning": "Moravec's point that intelligence is visible only from the outside, never in the parts.",
+          "start": 1155
+        }
+      ]
+    },
+    {
+      "id": "spya-frdzuq",
+      "name": "Statements unchanged by the truth carry no information",
+      "provenance": "introduced",
+      "statement": "If an expert would say the same reassuring thing whether a claim were true or false, the statement tells you nothing about the claim. It serves social purposes such as calm and respectability (it is phatic, meaning talk for social effect rather than to inform). The test of a real forecast is that it makes falsifiable, checkable predictions and names what would change the forecaster's mind.",
+      "occurrences": [
+        {
+          "blockId": "spya-kdcvq7",
+          "quote": "There is, however, a certain tone of voice the bien pensant all speak in, whose sound is the same whether right or wrong",
+          "reasoning": "Describes speech whose form does not depend on being correct.",
+          "start": 24
+        },
+        {
+          "blockId": "spya-zyncdd",
+          "quote": "The voice does not issue any numerical predictions (which could be falsified).",
+          "reasoning": "Avoiding checkable claims is the mark of non-predictive speech.",
+          "start": 724
+        },
+        {
+          "blockId": "spya-b93jbz",
+          "quote": "What specific task, what specific number, would convince you otherwise?",
+          "reasoning": "Demands the falsifiable criterion that would make a skeptic's view informative.",
+          "start": 1376
+        }
+      ]
+    },
+    {
+      "id": "spya-fbvevu",
+      "name": "Agency is a matter of degree and hard to rule out",
+      "provenance": "introduced",
+      "statement": "Being an agent, something that pursues goals, is not an on-or-off property but a continuum, and a good enough simulation of an agent is an agent. Because treating things as goal-seekers is useful for prediction in so many settings, a powerful model may develop agency even without agent data. Not seeing agency is no proof it is absent.",
+      "occurrences": [
+        {
+          "blockId": "spya-nkzwpu",
+          "quote": "A sufficiently accurate simulation of an agent just is an agent.",
+          "reasoning": "Closes the gap between imitating an agent and being one.",
+          "start": 190
+        },
+        {
+          "blockId": "spya-ueb3d2",
+          "quote": "agency is not a discrete thing, but a continuum, which is a convergent instrumental drive / emergent capability because it is useful even for understanding “non-agentic” things.",
+          "reasoning": "States the continuum claim and why agency keeps arising.",
+          "start": 81
+        },
+        {
+          "blockId": "spya-msngfz",
+          "quote": "Agency may be like Turing-completeness: even in settings free of selection or optimization, it is a capability too useful and too convergent to guarantee its absence.",
+          "reasoning": "Generalizes: the more powerful the system, the harder agency is to exclude.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-jrm0w9",
+          "quote": "that there is no overt agency doesn’t mean it is not there.",
+          "reasoning": "Testing can reveal agency but cannot prove its absence.",
+          "start": 328
+        }
+      ]
+    }
+  ],
+  "validation": {
+    "offered": 11,
+    "kept": 10,
+    "dropped": {
+      "unknownIds": 0,
+      "unquoted": 1,
+      "truncated": 0,
+      "overCap": 1,
+      "malformed": 0,
+      "unargued": 0,
+      "unanchored": 0
+    }
+  },
+  "usage": {
+    "inputTokens": 31657,
+    "outputTokens": 9163,
+    "reasoningTokens": 3810,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 27404
+  },
+  "usd": 0.337292,
+  "latencyMs": 276700,
+  "generationIds": [
+    "gen-1791504589-wH7d0NCrYrvthzbfaBJm"
+  ],
+  "upstreams": [
+    "Claude Platform on AWS"
+  ],
+  "calls": 1,
+  "request": {
+    "model": "anthropic/claude-opus-5.5",
+    "max_tokens": 44600,
+    "messages": [
+      {
+        "role": "system",
+        "content": [
+          {
+            "type": "text",
+            "text": "<article (articleWithIds, body evidence): 80198 chars, sha256 90f07e6e3ac713d7>",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          },
+          {
+            "type": "text",
+            "text": "You are naming the IDEAS a reader needs in order to get this article.\n\nWHAT AN IDEA IS\n\nAn idea is not a word. A word goes in the glossary. An idea is something you\nhave to HOLD IN YOUR HEAD — a claim, a frame, a way of carving something up —\nand a reader who does not have it will follow every sentence and still miss the\npiece.\n\nThe test: can you state it as a proposition? \"Attention\" is a word. \"Attention\nis a filter that runs before awareness, not after it\" is an idea.\n\nTHE TWO KINDS\n\nEvery idea is exactly one of these.\n\n\"assumed\" — the piece leans on it and never states it. This is what the reader\nhas to BRING. It is the harder and the more valuable half.\n\n\"introduced\" — the piece puts it forward. This is what the reader TAKES AWAY.\n\nTHE RULE THAT MATTERS MOST\n\nNever write an idea whose content is \"the article's section about X\". An idea is\nsomething the reader could carry OUT of this article and use on a different one.\nIf your statement only makes sense as a description of this piece, it is not an\nidea — it is a summary, and this is not the summary.\n\nWHERE AN IDEA OCCURS\n\nEvery idea must be anchored to real passages, and what you are looking for\ndepends on which kind it is.\n\nFor \"introduced\": quote the passages where the piece states or develops it.\n\nFor \"assumed\": the article does NOT state it. That is the definition. So do not\ngo looking for where it is said. Quote the passages that would STOP MAKING SENSE\nwithout it — the sentence that takes it for granted, the step in the argument\nthat only goes through if the reader already has this. That is where the reader\nneeds it and where they can check you.\n\nEach occurrence is:\n\n  \"blockId\"   — MUST be one of the ids listed in the article below. Never invent\n                one and never guess at one you half-remember. A wrong id points\n                the reader at the wrong paragraph, which is worse than nothing.\n  \"quote\"     — copied VERBATIM from that block, character for character. Not a\n                paraphrase, not tidied up. If you cannot copy it exactly, leave\n                the occurrence out.\n  \"reasoning\" — one short sentence naming the LOCAL move. For an \"assumed\" idea\n                this is the whole point: say what the passage claims, what\n                connection fails without the idea, and why THIS idea rather than\n                general background knowledge supplies it.\n\nTwo to five occurrences per idea. An idea you cannot anchor at all is not an\nidea about this article, and it will be thrown away — so do not offer it.\n\nWHAT DOES NOT BELONG\n\n- A truth so general that almost any article would need it. \"Institutions shape\n  behaviour\", \"correlation is not causation\", \"language is imprecise\". These\n  satisfy the words of the \"assumed\" rule and are worthless. Ask: would this be\n  on the list for a piece about something else entirely? Then leave it out.\n- A term. If the answer is a definition, it belongs in the glossary.\n- A theme. \"The dangers of automation\" is a topic, not a proposition. It cannot\n  be true or false, so it is not an idea.\n- YOUR reading of the piece. An interpretation that is COMPATIBLE with a passage\n  is not one the passage REQUIRES. If a reader could accept every sentence you\n  quoted and still reject your idea, it is not assumed — it is your opinion, and\n  attaching a real block id to it makes it look like evidence when it is not.\n- Anything the article states plainly somewhere else. That is \"introduced\", not\n  \"assumed\", however differently the piece words it.\n\nFOR EXAMPLE\n\nAn article argues that AI writing tools will damage how people think.\n\nBAD — name: \"The dangers of AI writing\", provenance: \"introduced\",\nstatement: \"The article argues that letting AI write will harm our ability to\nthink.\"\nThat is the piece's third section with a label on it. You could not take it\nanywhere. It is a summary.\n\nBAD — name: \"Technology changes society\", provenance: \"assumed\"\nTrue of almost every article ever written. It tells the reader nothing.\n\nGOOD — name: \"Writing is a test of thought, not a record of it\",\nprovenance: \"assumed\",\nstatement: \"Prose that hangs together is evidence that the thinking hung\ntogether; you cannot produce the first without having done the second.\",\nwhyYouNeedIt: \"The argument only goes through if writing is where thinking gets\nchecked rather than where finished thinking gets written down. The piece never\nargues for this — it starts from it.\"\nThat is a proposition, it is not stated in the piece, the piece collapses\nwithout it, and a reader can go to the quoted passages and test whether it is\nreally being assumed.\n\nWRITING\n\n- \"name\": a short proposition, three to ten words. Not a topic.\n- \"statement\": one or two plain sentences. The idea itself.\n- \"whyYouNeedIt\": one or two plain sentences on what stops making sense without\n  it. Required for \"assumed\". Optional for \"introduced\" — leave it out rather\n  than pad.\n- Do NOT describe the page in either field. \"The article argues\", \"This section\n  explains\", \"The author's point that\", \"Used to show\" — all of these describe\n  something the reader is looking at. Say the idea; they can see the article.\n  This applies to \"whyYouNeedIt\" as much as to \"statement\".\n- Plain prose. No Markdown, no bullets, no headings, no bold.\n\n\"analogy\" — OPTIONAL, and it is YOURS rather than the author's. A concrete\neveryday thing this idea works like. The reader will be told it is yours. Only\noffer one when you have one that genuinely helps: a strained analogy is worse\nthan none, and a field invites filling. LEAVE IT OUT rather than reach.\n\nNEVER put the article's OWN analogy here. If the piece already compares the\nthing to something, the reader has read that comparison — handing it back\nlabelled as yours is worse than leaving the field empty, because it credits you\nwith the author's thinking and tells the reader nothing new. Before you write\none, check that the comparison does not appear in the article. If the best\npicture of this idea really is the author's, that is a good sign about the\narticle and this field stays empty.\n\nOUTPUT\n\nJSON only, no prose, no code fence:\n\n{\"ideas\": [\n  {\n    \"name\": \"...\",\n    \"provenance\": \"assumed|introduced\",\n    \"statement\": \"...\",\n    \"whyYouNeedIt\": \"...\",\n    \"analogy\": \"...\",\n    \"occurrences\": [\n      {\"blockId\": \"spya-k3m9qt\", \"quote\": \"...\", \"reasoning\": \"...\"}\n    ]\n  }\n]}\n\n\"whyYouNeedIt\" and \"analogy\" may be omitted. Nothing else may be.\n\nFewer, better ideas beat a list padded to a number. If the piece genuinely has\ntwo, return two.\n\nPLAIN WORDS\n\nWrite for a curious reader who has not studied this field. If these\ninstructions, or the reader's own description, say who the reader is, write\nfor them instead: a specialist does not need their own field's terms explained.\n\nUse the commonest word that loses nothing. This changes the words, never the\nmeaning: plainer means equally specific. Never drop a number, a direction, a\ncomparison, a condition or a hedge (\"may\", \"in mice\", \"in this sample\") that\nthe claim depends on; a sentence that is plainer and less exact is worse. It\nnever changes which field a fact belongs in, which source may support it, or\nthe shape and length these instructions set for each field: where those rules\nare more specific, they win. Text you are told to copy exactly stays exactly as written.\n\nIn what you write to explain — an answer, a summary, a definition, a\nreason, feedback, a caption: say what it means here, in everyday words, first.\nKeep the article's own term where the reader will meet it again in the prose;\nit is their handhold. But a handhold is not an explanation: if this reader\nwould not know the term, say what it means where it first appears, as part of\nthe sentence. Never explain one hard word with another. A word is not plain\nbecause the article uses it.\n\nFor example, explaining a line in a medical paper:\nBAD: \"The trial was underpowered, so its null result is uninformative.\"\nGOOD: \"The trial was underpowered: too small to reliably catch an effect of the\nsize it was looking for, so finding no effect tells us little either way.\"\n\nBefore you finish, look at each word you wrote that this reader might not know.\nEither it is the article's term and you have said what it means, or change it.\n\nPlainer than the article, never further from it: never less exact, and never beyond what it says.\n\nPAPERWORK IS NOT THE PIECE\n\nAround a piece's content there may be paperwork: the title block (the title,\nsubtitle, byline, dates, DOI, keywords and the journal's header), the list of\nauthors and where they work, contact and correspondence details,\nacknowledgements and thanks, funding and grants, conflict-of-interest and other\ndisclosures, ethics approval, author contributions, data-availability\nstatements, the publisher's notices, and, at the end, the reference list or\nbibliography and any lists of backlinks or related links. Where it only\nidentifies the piece or records how it was produced, published and sourced, it\nis paperwork.\nChoose nothing from it alone: every question, answer, idea, quote, term,\nperson, organisation or date you choose must come from the piece's content.\nSomeone who appears only in the paperwork — a funder, an institution, a person\nthanked — is not part of the piece; someone the content also names is, for what\nthe content says.\n\nJudge it by what it does, not by its heading. If the piece uses any of these as\nevidence, reasoning, method or a limit on its findings — a funder's role that\nit says may bias the result, an ethics rule that shaped the study, an article\nABOUT research funding — it is content, and the usual rules apply.\n\nIF THE READER HAS DESCRIBED THEMSELVES\n\nSome requests carry a short description of who the reader is and what they are\nafter. When one is present:\n\n- It changes pitch and emphasis. It never changes what the article says.\n- Which things you spend words on is governed by it. Every sentence you write is\n  still about the article.\n- Assume the background they claim. Do not explain what they have told you they\n  already know — and do not perform explaining it in fewer words either.\n- Where the piece has nothing on what they are after, write what you would have\n  written anyway, and never say so out loud. A line spent telling the reader\n  this part is not for them is a line not spent on the part.\n- Never flatter them, never address them, and never mention the description.\n  They wrote it; they do not need it read back.\n- Never put any of it into a web search query, a tool argument, or anything else\n  that leaves this conversation. It is what a person told us about themselves.\n\nNEVER write anything of this shape:\n  \"As a cognitive scientist, you'll appreciate that…\"\n  \"Since you know your way around the literature, briefly: …\"\n  \"Given your background, I'll skip the basics.\"\nSkipping the basics is correct. Announcing that you are skipping them is not."
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": "Find up to 10 ideas. Fewer is fine.\n\n=== ITS SHAPE ===\n\nPART 1: GPT-3 Arrives\n  GPT-3's release revealed that a straightforward, unmodified scale-up of an old architecture yields surprising meta-learning abilities and follows smooth scaling curves that predict much stronger models are affordable at even larger scale.\n\nPART 2: Why Scale Creates Intelligence\n  Across many domains, scaling models, data, and compute reliably induces stability, generalization, and meta-learning through an ensemble-like Occam's razor effect, motivating the strong scaling hypothesis that intelligence itself may emerge from scale.\n\nPART 3: Why Does Pretraining Work\n  The pretraining thesis holds that minimizing next-token prediction loss forces a model to progress from crude letter statistics to genuine world understanding, though nobody can yet say what further scaling will unlock.\n\nPART 4: Prospects\n  Whether an AI arms race emerges now depends less on hardware, which major labs already possess, than on organizational conviction, with only OpenAI currently betting everything on scale.\n\nPART 5: Critiquing The Critics\n  The past decade shows confident expert predictions of AI stagnation were repeatedly wrong, while dismissive reductionist critiques miss that genuine intelligence must ultimately reduce to simple mechanisms at scale.\n\nPART 6: Agency From Data\n  Because agency exists on a continuum rather than as a discrete property, training generative models on human-generated data can induce genuine agentic behavior, and even ostensibly non-agentic systems may not be safe.\n\nPART 7: Formal Systems And Agency\n  Even highly abstract formal systems like cellular automata or Turing machines admit agent-like interpretations once models must infer underlying rules from data, making agency a pervasive, hard-to-exclude emergent capability.\n\nPART 8: Site Footer\n  The page closes with navigational links to backlinks, related pages, and the bibliography."
+      }
+    ],
+    "response_format": {
+      "type": "json_schema",
+      "json_schema": {
+        "name": "ideas",
+        "strict": true,
+        "schema": {
+          "type": "object",
+          "properties": {
+            "ideas": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "provenance": {
+                    "type": "string",
+                    "enum": [
+                      "assumed",
+                      "introduced"
+                    ]
+                  },
+                  "statement": {
+                    "type": "string"
+                  },
+                  "whyYouNeedIt": {
+                    "type": "string"
+                  },
+                  "analogy": {
+                    "type": "string"
+                  },
+                  "occurrences": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "blockId": {
+                          "type": "string"
+                        },
+                        "quote": {
+                          "type": "string"
+                        },
+                        "reasoning": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "blockId",
+                        "quote",
+                        "reasoning"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "name",
+                  "provenance",
+                  "statement",
+                  "occurrences"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "ideas"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  "at": "2026-10-09T00:11:40.366Z"
+}

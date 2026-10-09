@@ -115,9 +115,11 @@ describe("what the model is sent", () => {
 
 describe("the help-chat job, registered everywhere a job must be", () => {
   it("pins the model the eval chose, independently of the general quick tier", () => {
-    expect(HELP_CHAT_MODEL).toBe("openai/gpt-5.6-luna");
+    /* GPT-6 Luna since 2026-10-09: the same eval re-run on it (plan 261009a)
+       answered at least as well at about half the warm cost. */
+    expect(HELP_CHAT_MODEL).toBe("openai/gpt-6-luna");
     const models = readFileSync(new URL("../src/models.ts", import.meta.url), "utf8");
-    expect(models).toContain('export const HELP_CHAT_MODEL = "openai/gpt-5.6-luna";');
+    expect(models).toContain('export const HELP_CHAT_MODEL = "openai/gpt-6-luna";');
     expect(NON_TASK_MODELS).toContainEqual({ job: "help-chat", id: HELP_CHAT_MODEL, provider: "openrouter" });
   });
 

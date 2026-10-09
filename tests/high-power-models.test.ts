@@ -60,7 +60,9 @@ describe("which model a task sends at each power", () => {
     const quick = ALL_TASKS.filter((t) => TASK_TIER[t] === "quick");
     expect(quick.length).toBeGreaterThan(0);
     for (const task of quick) {
-      expect(modelFor(task, "high"), task).toBe(QUICK_MODEL_OPENROUTER);
+      expect(modelFor(task, "high"), task).toBe(
+        task === "simple-check" ? "openai/gpt-5.6-luna" : QUICK_MODEL_OPENROUTER,
+      );
       expect(modelFor(task, "high"), task).toBe(modelFor(task, "standard"));
     }
   });
@@ -108,6 +110,22 @@ describe("freshness treats standard and high as one generation", () => {
     expect(generationKey(HIGH_POWER_MODEL_OPENROUTER)).toBe(CAPABLE_GENERATION_KEY);
     expect(generationKey("someone/else-9")).toBe("someone/else-9");
   });
+
+  it.each(["claude-sonnet-5", "anthropic/claude-sonnet-5"])(
+    "keeps the stored %s stamps and citation hashes current after the upgrade",
+    (old) => {
+      const base = { inputHash: "abc", promptVersion: "x/1" };
+      expect(generationKey(old)).toBe("anthropic/claude-sonnet-5");
+      expect(sameStamp({ ...base, model: old }, { ...base, model: "claude-sonnet-5-5" })).toBe(true);
+      /* SHA-256 of the pre-upgrade serialized tuples, not of current constants. */
+      expect(lookupContextHash(LOOKUP, "anthropic/claude-sonnet-5.5")).toBe("accca1ce48491244");
+      expect(investigateContextHash(INVESTIGATE, "article-key", null, null, "anthropic/claude-sonnet-5.5")).toBe("63d74d379cd35e4b");
+      expect(lookupContextHash(LOOKUP, old)).toBe(lookupContextHash(LOOKUP, "anthropic/claude-sonnet-5.5"));
+      expect(investigateContextHash(INVESTIGATE, "article-key", null, null, old)).toBe(
+        investigateContextHash(INVESTIGATE, "article-key", null, null, "anthropic/claude-sonnet-5.5"),
+      );
+    },
+  );
 
   it("sameStamp calls an Opus artefact current against a Sonnet expectation, and vice versa", () => {
     const base = { inputHash: "abc", promptVersion: "x/1" };

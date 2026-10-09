@@ -156,6 +156,7 @@ describe("every Postgres store, asked for the seam it was guarded under", () => 
     ["../src/store/pg-source.js", "pgSourceStore", "source"],
     ["../src/store/pg-referee-criteria.js", "pgRefereeCriteriaStore", "referee-criteria"],
     ["../src/store/pg-referee-claims.js", "pgRefereeClaimsStore", "referee-claims"],
+    ["../src/store/pg-referee-hidden-checks.js", "pgRefereeHiddenCheckStore", "referee-hidden-checks"],
     ["../src/store/pg-lookups.js", "pgGlossaryLookupStore", "glossary-lookup"],
     ["../src/store/pg-citation-finds.js", "pgCitationFindStore", "citation-finds"],
     ["../src/store/pg-citation-investigations.js", "pgCitationInvestigationStore", "citation-investigations"],
@@ -363,6 +364,7 @@ describe("no Postgres store is selected without a guard", () => {
          addresses from articles they may open. */
       "pgCitedInSpideryarnStore",
       "pgCommentStore",
+      "pgDebateClaimChecksStore",
       "pgFeedbackStore",
       /* The link preview's two, 2026-09-05. Worth one line of why they are
          guarded rather than only that they are: a failed Drizzle query puts
@@ -391,6 +393,7 @@ describe("no Postgres store is selected without a guard", () => {
       "pgRealtimeSessionStore",
       "pgRefereeClaimsStore",
       "pgRefereeCriteriaStore",
+      "pgRefereeHiddenCheckStore",
       "pgSearchStore",
       /* The private link, 2026-10-05: its parameters are the link's key. */
       "pgShareLinkStore",

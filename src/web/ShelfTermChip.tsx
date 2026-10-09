@@ -16,6 +16,12 @@ import { topicColourStyle } from "./topic-colour.js";
 import { TipNote, Tooltip } from "./Tooltip.js";
 import { voiceClass, withVoice } from "./voice.js";
 
+/** The quiet buttons beside the pills ("All N topics", "Clear"), on a reader's shelf and the public one alike. */
+export const QUIET_BUTTON =
+  "tw:inline-flex tw:h-7 tw:items-center tw:gap-1 tw:rounded-md tw:bg-transparent tw:px-2 tw:text-xs tw:text-muted-foreground tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground";
+/** The row the pills wrap in. */
+export const TERMS_ROW = "tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-2";
+
 /** How many articles a tooltip names. */
 const TIP_ARTICLES = 5;
 
@@ -34,6 +40,12 @@ export interface TermTipScope {
    * Absent where topics have no broader topic (the reader's tags).
    */
   labelOf?: (key: string) => string | undefined;
+  /**
+   * Whose articles a model-named topic was named from, in the card's last
+   * line: "your articles’" on a reader's shelf (the default), and the shared
+   * ones on `/read/public`, where they are nobody's who is looking.
+   */
+  whoseArticles?: string;
 }
 
 /**
@@ -173,6 +185,7 @@ export function TermTip({
   scopeWord,
   titleOf,
   labelOf,
+  whoseArticles = "your articles’",
 }: {
   term: ShelfTerm;
   shown: number;
@@ -206,7 +219,7 @@ export function TermTip({
       </span>
       <span className="tw:mt-1 tw:block tw:text-ink-faint">
         {isModelTopic(term)
-          ? "Named by a model from your articles’ titles and summaries; the articles above are the newest in it. A finer topic can include matching articles from outside the broader topic it is grouped under. Choosing two topics shows only articles in both."
+          ? `Named by a model from ${whoseArticles} titles and summaries; the articles above are the newest in it. A finer topic can include matching articles from outside the broader topic it is grouped under. Choosing two topics shows only articles in both.`
           : "Picked automatically from the words your articles use — nobody wrote this list. Choosing two shows only articles that have both."}
       </span>
     </TipNote>

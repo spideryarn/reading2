@@ -615,6 +615,11 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/debate-claims/w1"],
   },
   {
+    match: { kind: "regex", source: "^\\/api\\/debate-claims\\/([\\w.%-]+)\\/checks$", flags: "" },
+    methods: ["GET", "POST"],
+    witnesses: ["/api/debate-claims/w1/checks"],
+  },
+  {
     match: { kind: "regex", source: "^\\/api\\/relations\\/([\\w.%-]+)$", flags: "" },
     methods: ["GET"],
     witnesses: ["/api/relations/w1"],
@@ -904,7 +909,7 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
   },
   {
     match: { kind: "regex", source: "^\\/api\\/referee\\/hidden-check\\/([\\w.%-]+)$", flags: "" },
-    methods: ["POST"],
+    methods: ["GET", "POST"],
     witnesses: ["/api/referee/hidden-check/w1"],
   },
   {
@@ -976,13 +981,16 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
    97 with the Help pages' chatbot (plan 261007k); 98 with Hidden text's Opus
    check (plan 261007l); 99 with an admin's deferral of a question (plan 261008i);
    100 with Debate's claims list (plan 261008i of the same day, a different 'i'
-   in another tree: docs/plans/261008i-debate-claims-picked-by-the-reader.md). */
-const EXPECTED_MATCHER_COUNT = 100;
+   in another tree: docs/plans/261008i-debate-claims-picked-by-the-reader.md);
+   101 with that plan's claim checks (its stage 3). */
+const EXPECTED_MATCHER_COUNT = 101;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
    with the admin's earlier feedback; 118 with their replies to questions; 119
    with the Help pages' chatbot; 120 with Hidden text's Opus check; 121 with the
-   deferral of a question; 122 with Debate's claims list. */
-const EXPECTED_GUARD_COUNT = 122;
+   deferral of a question; 122 with Debate's claims list; 123 with the kept
+   Hidden text check's GET (plan 261009a); 125 with Debate's claim checks'
+   GET and POST (plan 261008i). */
+const EXPECTED_GUARD_COUNT = 125;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2205,6 +2213,9 @@ describe("the authenticated API's route contract", () => {
         "GET regex /^\\/api\\/quiz\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/faq\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/debate-claims\\/([\\w.%-]+)$/",
+        // Debate's claim checks, 261008i stage 3 — beside the list they check
+        "GET regex /^\\/api\\/debate-claims\\/([\\w.%-]+)\\/checks$/",
+        "POST regex /^\\/api\\/debate-claims\\/([\\w.%-]+)\\/checks$/",
         "GET regex /^\\/api\\/relations\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/crossrefs\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/simple\\/([\\w.%-]+)$/",
@@ -2266,7 +2277,9 @@ describe("the authenticated API's route contract", () => {
         "POST regex /^\\/api\\/referee\\/claims\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/referee\\/scan\\/([\\w.%-]+)$/",
         "POST regex /^\\/api\\/referee\\/mirror\\/([\\w.%-]+)$/",
-        // Hidden text's Opus check, 261007l — beside Mirror, whose shape it is
+        // Hidden text's Opus check, 261007l — beside Mirror, whose shape it is;
+        // its GET, the kept answer, 261009a
+        "GET regex /^\\/api\\/referee\\/hidden-check\\/([\\w.%-]+)$/",
         "POST regex /^\\/api\\/referee\\/hidden-check\\/([\\w.%-]+)$/",
         // jobs and uploads, 260907b stage 3b
         "GET literal /api/jobs",

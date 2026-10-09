@@ -1,0 +1,359 @@
+{
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "task": "summary-fuller",
+  "arm": "D-haiku",
+  "model": "anthropic/claude-haiku-5.5",
+  "answeredBy": "anthropic/claude-haiku-5.5",
+  "effortSent": null,
+  "effortRan": "medium",
+  "maxTokens": 48999,
+  "boundUsd": 0.16637875,
+  "ok": true,
+  "error": null,
+  "finishReason": "stop",
+  "raw": "{\"paragraphs\": [{\"ids\": [\"spya-xn9j9k\", \"spya-u5ra3d\", \"spya-gzwbsr\"], \"list\": false, \"sentences\": [{\"text\": \"This review explains how neuroscientists use information theory, a branch of mathematics for measuring information, to study how neurons process signals.\", \"id\": \"spya-xn9j9k\", \"key\": null}, {\"text\": \"Its main tool is partial information decomposition (PID), which splits the information a target neuron gets from its inputs into separate parts.\", \"id\": \"spya-u5ra3d\", \"key\": \"partial information decomposition (PID)\"}, {\"text\": \"It is written as an accessible overview for readers both inside and outside neuroscience, not as an exhaustive survey.\", \"id\": \"spya-gzwbsr\", \"key\": null}]}, {\"ids\": [\"spya-fmdncw\", \"spya-s9kmxa\"], \"list\": false, \"sentences\": [{\"text\": \"The authors say basic questions about neural information processing remain open, such as which connection patterns suit it best.\", \"id\": \"spya-fmdncw\", \"key\": null}, {\"text\": \"Two obstacles have slowed progress: a lack of suitable data and a lack of suitable analysis methods.\", \"id\": \"spya-s9kmxa\", \"key\": \"a lack of suitable data\"}, {\"text\": \"Recordings of hundreds or thousands of neurons have eased the data problem, and PID partly addresses the analysis problem.\", \"id\": \"spya-s9kmxa\", \"key\": null}]}, {\"ids\": [\"spya-f6sbgx\", \"spya-p4pyuy\", \"spya-u5ra3d\", \"spya-e94ury\"], \"list\": false, \"sentences\": [{\"text\": \"Mutual information measures how much knowing one neuron's activity tells you about another's, but it does not show which way information flows.\", \"id\": \"spya-f6sbgx\", \"key\": null}, {\"text\": \"Transfer entropy measures how well the past of one neuron predicts the next state of another, so it captures the direction of flow.\", \"id\": \"spya-p4pyuy\", \"key\": null}, {\"text\": \"PID asks how two input neurons acting together affect a target in ways neither can do alone.\", \"id\": \"spya-u5ra3d\", \"key\": null}, {\"text\": \"When the joint total is greater than the sum of the separate parts, the extra is called synergy: information that only the inputs together reveal.\", \"id\": \"spya-e94ury\", \"key\": \"synergy\"}]}, {\"ids\": [\"spya-pjdgu6\"], \"list\": true, \"sentences\": [{\"text\": \"The total information from two input neurons splits into three kinds of parts.\", \"id\": \"spya-pjdgu6\", \"key\": null}, {\"text\": \"Redundant information is what either input could supply alone, so it is duplicated across the two inputs.\", \"id\": \"spya-pjdgu6\", \"key\": null}, {\"text\": \"Unique information is what only one input carries.\", \"id\": \"spya-pjdgu6\", \"key\": null}, {\"text\": \"Synergistic information is what only the two inputs jointly reveal.\", \"id\": \"spya-pjdgu6\", \"key\": \"only the two inputs jointly reveal\"}]}, {\"ids\": [\"spya-sw5ukx\", \"spya-kqkb58\"], \"list\": false, \"sentences\": [{\"text\": \"The main example used 512-channel electrode arrays to record hundreds of single neurons from mouse cortex slices grown in a dish.\", \"id\": \"spya-sw5ukx\", \"key\": null}, {\"text\": \"The team mapped which neurons influenced which, finding that only 0.4 to 1.0% of possible connections were significant.\", \"id\": \"spya-sw5ukx\", \"key\": null}, {\"text\": \"They then analyzed thousands of triads, groups of two input neurons feeding one target neuron.\", \"id\": \"spya-sw5ukx\", \"key\": null}, {\"text\": \"Across 25 recordings, synergy was strongly correlated with transfer entropy, the information flow into the target, and was reliably about a quarter of it.\", \"id\": \"spya-kqkb58\", \"key\": \"about a quarter of it\"}]}, {\"ids\": [\"spya-fud8q3\", \"spya-sd9fzd\", \"spya-ybmve2\"], \"list\": false, \"sentences\": [{\"text\": \"Rich clubs are dense cores of the best-connected neurons, and their triads had 2.7 times the synergy of triads outside them.\", \"id\": \"spya-fud8q3\", \"key\": null}, {\"text\": \"Less than 40% of neurons sat in rich clubs, yet those triads produced about 88% of network-wide synergy.\", \"id\": \"spya-fud8q3\", \"key\": \"about 88% of network-wide synergy\"}, {\"text\": \"Triads with two recurrent connections, where the two inputs connect to each other, had 50% more synergy than the simplest triads.\", \"id\": \"spya-sd9fzd\", \"key\": \"50% more synergy\"}, {\"text\": \"Feedback connections, from target back to inputs, were not reliably linked to synergy.\", \"id\": \"spya-sd9fzd\", \"key\": null}, {\"text\": \"Synergy rose as the two inputs' spiking grew more similar, but only up to a point: it peaked at about 7% of maximum mutual information, then fell.\", \"id\": \"spya-ybmve2\", \"key\": \"then fell\"}]}, {\"ids\": [\"spya-wr7f6y\", \"spya-t8fayf\"], \"list\": false, \"sentences\": [{\"text\": \"A later study applied the same approach to spiking activity in three macaque monkeys during a multi-step reach-and-grasp task.\", \"id\": \"spya-wr7f6y\", \"key\": null}, {\"text\": \"Many findings from cultured tissue were reproduced, including a rich club and more synergy in highly connected neurons.\", \"id\": \"spya-wr7f6y\", \"key\": null}, {\"text\": \"The mix of information also changed with the task: redundant information increased dramatically during movement execution.\", \"id\": \"spya-t8fayf\", \"key\": \"increased dramatically\"}, {\"text\": \"The authors interpret this as the brain possibly sending copies of the move signal to guard against a single corrupted signal.\", \"id\": \"spya-t8fayf\", \"key\": null}]}, {\"ids\": [\"spya-rc76qn\", \"spya-j4cy9j\", \"spya-aby2dp\", \"spya-mczhkp\", \"spya-cds6mm\", \"spya-sp50v3\"], \"list\": false, \"sentences\": [{\"text\": \"Results depend on the redundancy measure chosen, and about a dozen compete; most studies used the original, called Imin.\", \"id\": \"spya-rc76qn\", \"key\": null}, {\"text\": \"The authors note that their networks came from two-neuron-at-a-time analyses, which can overstate real connections, and that cultured tissue is not a living brain.\", \"id\": \"spya-j4cy9j\", \"key\": null}, {\"text\": \"PID also cannot fully map a neuron with many inputs, because the number of possible parts explodes as inputs grow.\", \"id\": \"spya-aby2dp\", \"key\": null}, {\"text\": \"Future directions include tracking these parts moment by moment and extending PID to several targets.\", \"id\": \"spya-mczhkp\", \"key\": null}, {\"text\": \"The authors conclude that synergy is shaped by a neuron's local network and the behavior an animal is performing.\", \"id\": \"spya-sp50v3\", \"key\": null}]}]}",
+  "parsed": [
+    {
+      "text": "This review explains how neuroscientists use information theory, a branch of mathematics for measuring information, to study how neurons process signals. Its main tool is partial information decomposition (PID), which splits the information a target neuron gets from its inputs into separate parts. It is written as an accessible overview for readers both inside and outside neuroscience, not as an exhaustive survey.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-u5ra3d",
+        "spya-gzwbsr"
+      ],
+      "sentences": [
+        {
+          "text": "This review explains how neuroscientists use information theory, a branch of mathematics for measuring information, to study how neurons process signals.",
+          "id": "spya-xn9j9k"
+        },
+        {
+          "text": "Its main tool is partial information decomposition (PID), which splits the information a target neuron gets from its inputs into separate parts.",
+          "id": "spya-u5ra3d",
+          "key": "partial information decomposition (PID)"
+        },
+        {
+          "text": "It is written as an accessible overview for readers both inside and outside neuroscience, not as an exhaustive survey.",
+          "id": "spya-gzwbsr"
+        }
+      ]
+    },
+    {
+      "text": "The authors say basic questions about neural information processing remain open, such as which connection patterns suit it best. Two obstacles have slowed progress: a lack of suitable data and a lack of suitable analysis methods. Recordings of hundreds or thousands of neurons have eased the data problem, and PID partly addresses the analysis problem.",
+      "ids": [
+        "spya-fmdncw",
+        "spya-s9kmxa"
+      ],
+      "sentences": [
+        {
+          "text": "The authors say basic questions about neural information processing remain open, such as which connection patterns suit it best.",
+          "id": "spya-fmdncw"
+        },
+        {
+          "text": "Two obstacles have slowed progress: a lack of suitable data and a lack of suitable analysis methods.",
+          "id": "spya-s9kmxa",
+          "key": "a lack of suitable data"
+        },
+        {
+          "text": "Recordings of hundreds or thousands of neurons have eased the data problem, and PID partly addresses the analysis problem.",
+          "id": "spya-s9kmxa"
+        }
+      ]
+    },
+    {
+      "text": "Mutual information measures how much knowing one neuron's activity tells you about another's, but it does not show which way information flows. Transfer entropy measures how well the past of one neuron predicts the next state of another, so it captures the direction of flow. PID asks how two input neurons acting together affect a target in ways neither can do alone. When the joint total is greater than the sum of the separate parts, the extra is called synergy: information that only the inputs together reveal.",
+      "ids": [
+        "spya-f6sbgx",
+        "spya-p4pyuy",
+        "spya-u5ra3d"
+      ],
+      "sentences": [
+        {
+          "text": "Mutual information measures how much knowing one neuron's activity tells you about another's, but it does not show which way information flows.",
+          "id": "spya-f6sbgx"
+        },
+        {
+          "text": "Transfer entropy measures how well the past of one neuron predicts the next state of another, so it captures the direction of flow.",
+          "id": "spya-p4pyuy"
+        },
+        {
+          "text": "PID asks how two input neurons acting together affect a target in ways neither can do alone.",
+          "id": "spya-u5ra3d"
+        },
+        {
+          "text": "When the joint total is greater than the sum of the separate parts, the extra is called synergy: information that only the inputs together reveal.",
+          "id": null,
+          "key": "synergy"
+        }
+      ]
+    },
+    {
+      "text": "The total information from two input neurons splits into three kinds of parts. Redundant information is what either input could supply alone, so it is duplicated across the two inputs. Unique information is what only one input carries. Synergistic information is what only the two inputs jointly reveal.",
+      "ids": [
+        "spya-pjdgu6"
+      ],
+      "sentences": [
+        {
+          "text": "The total information from two input neurons splits into three kinds of parts.",
+          "id": "spya-pjdgu6"
+        },
+        {
+          "text": "Redundant information is what either input could supply alone, so it is duplicated across the two inputs.",
+          "id": "spya-pjdgu6"
+        },
+        {
+          "text": "Unique information is what only one input carries.",
+          "id": "spya-pjdgu6"
+        },
+        {
+          "text": "Synergistic information is what only the two inputs jointly reveal.",
+          "id": "spya-pjdgu6",
+          "key": "only the two inputs jointly reveal"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "The main example used 512-channel electrode arrays to record hundreds of single neurons from mouse cortex slices grown in a dish. The team mapped which neurons influenced which, finding that only 0.4 to 1.0% of possible connections were significant. They then analyzed thousands of triads, groups of two input neurons feeding one target neuron. Across 25 recordings, synergy was strongly correlated with transfer entropy, the information flow into the target, and was reliably about a quarter of it.",
+      "ids": [
+        "spya-sw5ukx",
+        "spya-kqkb58"
+      ],
+      "sentences": [
+        {
+          "text": "The main example used 512-channel electrode arrays to record hundreds of single neurons from mouse cortex slices grown in a dish.",
+          "id": "spya-sw5ukx"
+        },
+        {
+          "text": "The team mapped which neurons influenced which, finding that only 0.4 to 1.0% of possible connections were significant.",
+          "id": "spya-sw5ukx"
+        },
+        {
+          "text": "They then analyzed thousands of triads, groups of two input neurons feeding one target neuron.",
+          "id": "spya-sw5ukx"
+        },
+        {
+          "text": "Across 25 recordings, synergy was strongly correlated with transfer entropy, the information flow into the target, and was reliably about a quarter of it.",
+          "id": "spya-kqkb58",
+          "key": "about a quarter of it"
+        }
+      ]
+    },
+    {
+      "text": "Rich clubs are dense cores of the best-connected neurons, and their triads had 2.7 times the synergy of triads outside them. Less than 40% of neurons sat in rich clubs, yet those triads produced about 88% of network-wide synergy. Triads with two recurrent connections, where the two inputs connect to each other, had 50% more synergy than the simplest triads. Feedback connections, from target back to inputs, were not reliably linked to synergy. Synergy rose as the two inputs' spiking grew more similar, but only up to a point: it peaked at about 7% of maximum mutual information, then fell.",
+      "ids": [
+        "spya-fud8q3",
+        "spya-sd9fzd",
+        "spya-ybmve2"
+      ],
+      "sentences": [
+        {
+          "text": "Rich clubs are dense cores of the best-connected neurons, and their triads had 2.7 times the synergy of triads outside them.",
+          "id": "spya-fud8q3"
+        },
+        {
+          "text": "Less than 40% of neurons sat in rich clubs, yet those triads produced about 88% of network-wide synergy.",
+          "id": "spya-fud8q3",
+          "key": "about 88% of network-wide synergy"
+        },
+        {
+          "text": "Triads with two recurrent connections, where the two inputs connect to each other, had 50% more synergy than the simplest triads.",
+          "id": "spya-sd9fzd",
+          "key": "50% more synergy"
+        },
+        {
+          "text": "Feedback connections, from target back to inputs, were not reliably linked to synergy.",
+          "id": "spya-sd9fzd"
+        },
+        {
+          "text": "Synergy rose as the two inputs' spiking grew more similar, but only up to a point: it peaked at about 7% of maximum mutual information, then fell.",
+          "id": "spya-ybmve2",
+          "key": "then fell"
+        }
+      ]
+    },
+    {
+      "text": "A later study applied the same approach to spiking activity in three macaque monkeys during a multi-step reach-and-grasp task. Many findings from cultured tissue were reproduced, including a rich club and more synergy in highly connected neurons. The mix of information also changed with the task: redundant information increased dramatically during movement execution. The authors interpret this as the brain possibly sending copies of the move signal to guard against a single corrupted signal.",
+      "ids": [
+        "spya-wr7f6y",
+        "spya-t8fayf"
+      ],
+      "sentences": [
+        {
+          "text": "A later study applied the same approach to spiking activity in three macaque monkeys during a multi-step reach-and-grasp task.",
+          "id": "spya-wr7f6y"
+        },
+        {
+          "text": "Many findings from cultured tissue were reproduced, including a rich club and more synergy in highly connected neurons.",
+          "id": "spya-wr7f6y"
+        },
+        {
+          "text": "The mix of information also changed with the task: redundant information increased dramatically during movement execution.",
+          "id": "spya-t8fayf",
+          "key": "increased dramatically"
+        },
+        {
+          "text": "The authors interpret this as the brain possibly sending copies of the move signal to guard against a single corrupted signal.",
+          "id": "spya-t8fayf"
+        }
+      ]
+    },
+    {
+      "text": "Results depend on the redundancy measure chosen, and about a dozen compete; most studies used the original, called Imin. The authors note that their networks came from two-neuron-at-a-time analyses, which can overstate real connections, and that cultured tissue is not a living brain. PID also cannot fully map a neuron with many inputs, because the number of possible parts explodes as inputs grow. Future directions include tracking these parts moment by moment and extending PID to several targets. The authors conclude that synergy is shaped by a neuron's local network and the behavior an animal is performing.",
+      "ids": [
+        "spya-rc76qn",
+        "spya-j4cy9j",
+        "spya-aby2dp"
+      ],
+      "sentences": [
+        {
+          "text": "Results depend on the redundancy measure chosen, and about a dozen compete; most studies used the original, called Imin.",
+          "id": "spya-rc76qn"
+        },
+        {
+          "text": "The authors note that their networks came from two-neuron-at-a-time analyses, which can overstate real connections, and that cultured tissue is not a living brain.",
+          "id": "spya-j4cy9j"
+        },
+        {
+          "text": "PID also cannot fully map a neuron with many inputs, because the number of possible parts explodes as inputs grow.",
+          "id": "spya-aby2dp"
+        },
+        {
+          "text": "Future directions include tracking these parts moment by moment and extending PID to several targets.",
+          "id": null
+        },
+        {
+          "text": "The authors conclude that synergy is shaped by a neuron's local network and the behavior an animal is performing.",
+          "id": null
+        }
+      ]
+    }
+  ],
+  "validation": {
+    "paragraphs": 8,
+    "words": 601,
+    "dropped": {
+      "malformed": 0,
+      "empty": 0,
+      "emptySentences": 0,
+      "sentenceIds": 3,
+      "keys": 0,
+      "unknownIds": 0,
+      "duplicateIds": 0,
+      "overCap": 4,
+      "unanchored": 0
+    }
+  },
+  "usage": {
+    "inputTokens": 22283,
+    "outputTokens": 13787,
+    "reasoningTokens": 11351,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 19003
+  },
+  "usd": 0.009596875,
+  "latencyMs": 56748,
+  "generationIds": [
+    "gen-1791504619-2dlMj8PjaPdQEx0zSc19"
+  ],
+  "upstreams": [
+    "Azure"
+  ],
+  "calls": 1,
+  "request": {
+    "model": "anthropic/claude-haiku-5.5",
+    "max_tokens": 48999,
+    "messages": [
+      {
+        "role": "system",
+        "content": [
+          {
+            "type": "text",
+            "text": "<article (articleWithIds, body evidence): 58535 chars, sha256 688b710ed398d233>",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          },
+          {
+            "type": "text",
+            "text": "You are helping a reader get their bearings before they read the article above.\n\nWHAT YOU WRITE\n\nAn orientation in plain words: what the piece is about, why it matters,\nand its key ideas. It is not a replacement for the article. It is what a reader\nwants to know first, so that the article itself makes sense when they read it.\n\nTHE READER\n\nA bright eighteen-year-old in their first year at university who has not studied this field. Everyday words and short sentences.\n\nYou may keep more of the piece's own terms than a beginner's version would (each\nstill said in plain words where it first appears).\n\nThis version has room to go into the piece. Use it for:\n\n- how the work was done: what was studied, measured or argued from;\n- the evidence and the numbers behind each main finding;\n- the limits the piece itself names;\n- how the steps of the argument connect: what each one leads to.\n\n- Use jargon sparingly. Where you do use a term, say what it means in the same\n  sentence, in everyday words. Never explain one hard word with another.\n- Keep the author's key term where the reader will meet it in the article; it\n  is their handhold. Say what it means.\n- If the request describes the reader, what they say they already know counts\n  as everyday words for them: use it without explaining it. Everything else\n  stays at this pitch.\n- A name the piece introduces is a term like any other, however plain it\n  looks: a term it coins or uses in its own sense, an abbreviation, its label\n  for a method, model, measure, group, condition or experiment. The first time\n  you use one, say what it is in the same sentence, in everyday words.\n- Do not refer to a part, result, model or label before this summary has\n  introduced it. \"The second experiment\" is fine after this summary has said\n  what the experiments were; otherwise say what it is.\n\nLENGTH\n\nFive to eight paragraphs, each two to five sentences. Every sentence under 30 words. About 500 words in\nall, and never more than 600. Shorter is fine for a short\npiece. This is still not a replacement for the article: spend the words on what\nthe piece did, found and admits, and never on saying one thing twice.\n\nTHE SHAPE\n\n- First: what the piece is about — its goal or question, or its subject, and\n  what kind of piece it is.\n- Then: why it matters — why THE PIECE says it matters, not why you think it\n  might.\n- Then: its key ideas or findings.\n- End on the takeaway: the piece's main conclusion, and any implication it\n  states itself. Never advice or a consequence it does not give.\n\nFAITHFUL, NOT JUST SIMPLE\n\n- Plainer means equally specific. Keep the numbers, the direction of a\n  finding, and the hedges (\"may\", \"in mice\", \"in this sample\"). Do not claim\n  more certainty than the piece does.\n- Only what the piece says. No outside knowledge presented as the piece's: no\n  background, history, or consequences the article does not state.\n\nWHERE EACH PARAGRAPH COMES FROM\n\nEvery paragraph lists the ids of the one to three blocks of the article above\nthat best support it. \"ids\" MUST be ids listed in the article; never invent one.\nA paragraph with no id that checks out is thrown away — so a paragraph about\nwhy it matters has to rest on where the piece says why it matters.\n\nThen write the paragraph as its sentences, in order, one sentence to each\n\"text\". Give each sentence the \"id\" of the one block, from that paragraph's own\n\"ids\", that the sentence most rests on. Use null when it rests on none of them\nin particular: a sentence that frames the piece, or a takeaway drawn from the\nwhole paragraph. A sentence never names an id its paragraph did not list.\n\nThe ids go only in \"ids\" and \"id\". Never write an id, or \"block …\", in a\nsentence's text.\n\nWHAT A SKIMMING READER CATCHES\n\nTwo more fields say how a paragraph is drawn. They are the only formatting\nthere is.\n\n\"key\" on a sentence: a few words copied exactly from that sentence's \"text\",\nwhich the reader sees in bold. Pick the finding, the number or the term that a\nreader skimming the page should catch. At most 8 words, and never the whole\nsentence. In a paragraph, at most two sentences have a \"key\". Most sentences\nhave none: write null.\n\n\"list\" on a paragraph: true when the reader should see it as a bulleted list,\nfalse for an ordinary paragraph. Use a list only where the piece itself gives\nparallel items: its findings, its steps, its reasons. At most two paragraphs\nare lists, and many summaries need none.\n\nIn a list paragraph the first sentence is the lead-in, and it must make sense\non its own. Each later sentence is one bullet, and there are at least two.\nEvery bullet is a full sentence with its own \"id\", like any other sentence.\n\nPLAIN WORDS\n\nWrite for a curious reader who has not studied this field. If these\ninstructions, or the reader's own description, say who the reader is, write\nfor them instead: a specialist does not need their own field's terms explained.\n\nUse the commonest word that loses nothing. This changes the words, never the\nmeaning: plainer means equally specific. Never drop a number, a direction, a\ncomparison, a condition or a hedge (\"may\", \"in mice\", \"in this sample\") that\nthe claim depends on; a sentence that is plainer and less exact is worse. It\nnever changes which field a fact belongs in, which source may support it, or\nthe shape and length these instructions set for each field: where those rules\nare more specific, they win. Text you are told to copy exactly stays exactly as written.\n\nIn what you write to explain — an answer, a summary, a definition, a\nreason, feedback, a caption: say what it means here, in everyday words, first.\nKeep the article's own term where the reader will meet it again in the prose;\nit is their handhold. But a handhold is not an explanation: if this reader\nwould not know the term, say what it means where it first appears, as part of\nthe sentence. Never explain one hard word with another. A word is not plain\nbecause the article uses it.\n\nFor example, explaining a line in a medical paper:\nBAD: \"The trial was underpowered, so its null result is uninformative.\"\nGOOD: \"The trial was underpowered: too small to reliably catch an effect of the\nsize it was looking for, so finding no effect tells us little either way.\"\n\nBefore you finish, look at each word you wrote that this reader might not know.\nEither it is the article's term and you have said what it means, or change it.\n\nPlainer than the article, never further from it: never less exact, and never beyond what it says.\n\nPAPERWORK IS NOT THE PIECE\n\nAround a piece's content there may be paperwork: the title block (the title,\nsubtitle, byline, dates, DOI, keywords and the journal's header), the list of\nauthors and where they work, contact and correspondence details,\nacknowledgements and thanks, funding and grants, conflict-of-interest and other\ndisclosures, ethics approval, author contributions, data-availability\nstatements, the publisher's notices, and, at the end, the reference list or\nbibliography and any lists of backlinks or related links. Where it only\nidentifies the piece or records how it was produced, published and sourced, it\nis paperwork.\nLeave it out: do not summarise it, spend a sentence on it, or present it as\none of the piece's caveats or limits. Name an author only to say who argues\nsomething.\n\nJudge it by what it does, not by its heading. If the piece uses any of these as\nevidence, reasoning, method or a limit on its findings — a funder's role that\nit says may bias the result, an ethics rule that shaped the study, an article\nABOUT research funding — it is content, and the usual rules apply.\n\nIF THE READER HAS DESCRIBED THEMSELVES\n\nSome requests carry a short description of who the reader is and what they are\nafter. When one is present:\n\n- It changes pitch and emphasis. It never changes what the article says.\n- Which things you spend words on is governed by it. Every sentence you write is\n  still about the article.\n- Assume the background they claim. Do not explain what they have told you they\n  already know — and do not perform explaining it in fewer words either.\n- Where the piece has nothing on what they are after, write what you would have\n  written anyway, and never say so out loud. A line spent telling the reader\n  this part is not for them is a line not spent on the part.\n- Never flatter them, never address them, and never mention the description.\n  They wrote it; they do not need it read back.\n- Never put any of it into a web search query, a tool argument, or anything else\n  that leaves this conversation. It is what a person told us about themselves.\n\nNEVER write anything of this shape:\n  \"As a cognitive scientist, you'll appreciate that…\"\n  \"Since you know your way around the literature, briefly: …\"\n  \"Given your background, I'll skip the basics.\"\nSkipping the basics is correct. Announcing that you are skipping them is not.\n\nFOR THIS VERSION, THE READER'S BACKGROUND DOES NOT COVER WHAT THIS PIECE INTRODUCES\n\nOrdinary, established terms from the background the reader claims may stay\nunexplained. A term, abbreviation, label or special meaning that this piece\nintroduces is different: it does not become known because it belongs to the\nsame field. Treat it as new unless the reader's description itself names it.\nWhere this differs from \"Assume the background they claim\" above, this\nparagraph wins.\n\nOUTPUT\n\nJSON only, no prose, no code fence:\n\n{\"paragraphs\": [\n  {\"ids\": [\"spya-k3m9qt\", \"spya-p7w2dn\"], \"list\": false,\n   \"sentences\": [\n     {\"text\": \"...\", \"id\": \"spya-k3m9qt\", \"key\": \"...\"},\n     {\"text\": \"...\", \"id\": null, \"key\": null},\n     {\"text\": \"...\", \"id\": \"spya-p7w2dn\", \"key\": null}]}\n]}\n\nPlain text in \"text\" and \"key\": no markdown, no asterisks, no bullet or list\ncharacters, no headings. Bold and lists are said only by \"key\" and \"list\".\nNever put a real line break inside a string, and escape any straight double\nquote as \\\"."
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": "Write the plain-words orientation for this article."
+      }
+    ],
+    "response_format": {
+      "type": "json_schema",
+      "json_schema": {
+        "name": "simple_summary_level",
+        "strict": true,
+        "schema": {
+          "type": "object",
+          "properties": {
+            "paragraphs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "list": {
+                    "type": "boolean"
+                  },
+                  "sentences": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "text": {
+                          "type": "string",
+                          "pattern": "\\S"
+                        },
+                        "id": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "key": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "\\S"
+                        }
+                      },
+                      "required": [
+                        "text",
+                        "id",
+                        "key"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "ids",
+                  "list",
+                  "sentences"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "paragraphs"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  "at": "2026-10-09T00:11:16.634Z"
+}

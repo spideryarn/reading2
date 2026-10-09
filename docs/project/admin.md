@@ -456,6 +456,12 @@ and it is deliberately the same shape it was when the accounts came out of a `se
 and its tests never learned that the source moved, which is the point of putting it in a file of its
 own.
 
+**One account is not a reader, and `mergeUsers` drops it**: the site account
+([`src/site-account.ts`](../../src/site-account.ts), since 2026-10-09), which the public shelf's topic
+pills are stored under and billed to. It owns nothing and cannot sign in, so it is not a row or a
+count here; its spend is on `/admin/costs` as *the site*, and the `/admin` index has its own panel,
+with the Rebuild button ([public-shelf.md § Topic pills](public-shelf.md#topic-pills)).
+
 `email_confirmed_at`, deliberately **not** `confirmed_at` — Supabase's backwards-compatibility field
 means "email *or* phone was confirmed", and the page prints "email unconfirmed" beneath an email
 address, so the wrong one labels a phone-confirmed account the opposite of the truth. Sol found that

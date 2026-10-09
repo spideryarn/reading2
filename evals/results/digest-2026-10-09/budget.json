@@ -1,0 +1,386 @@
+{
+  "capUsd": 6,
+  "spentUsd": 5.0279535200000005,
+  "reserved": {},
+  "settled": [
+    {
+      "id": "the-mythology-of-conscious-ai-spya-rn5m0q/digest",
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q/digest",
+      "usd": 0.292546,
+      "at": "2026-10-09T00:06:35.875Z"
+    },
+    {
+      "id": "scaling-hypothesis/digest",
+      "label": "scaling-hypothesis/digest",
+      "usd": 0.368306,
+      "at": "2026-10-09T00:06:46.481Z"
+    },
+    {
+      "id": "entropy-24-00930-spya-pywwkq/digest",
+      "label": "entropy-24-00930-spya-pywwkq/digest",
+      "usd": 0.325285,
+      "at": "2026-10-09T00:06:47.270Z"
+    },
+    {
+      "id": "entropy-24-00930-spya-pywwkq/chat-q1/A-opus",
+      "label": "entropy-24-00930-spya-pywwkq/chat-q1/A-opus",
+      "usd": 0.141427,
+      "at": "2026-10-09T00:07:03.586Z"
+    },
+    {
+      "id": "the-mythology-of-conscious-ai-spya-rn5m0q/chat-q1/A-opus",
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q/chat-q1/A-opus",
+      "usd": 0.140564,
+      "at": "2026-10-09T00:07:03.636Z"
+    },
+    {
+      "id": "entropy-24-00930-spya-pywwkq/summary-fuller/A-opus",
+      "label": "entropy-24-00930-spya-pywwkq/summary-fuller/A-opus",
+      "usd": 0.162675,
+      "at": "2026-10-09T00:07:35.426Z"
+    },
+    {
+      "id": "the-mythology-of-conscious-ai-spya-rn5m0q/summary-fuller/A-opus",
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q/summary-fuller/A-opus",
+      "usd": 0.163296,
+      "at": "2026-10-09T00:07:38.322Z"
+    },
+    {
+      "id": "scaling-hypothesis/chat-q1/A-opus",
+      "label": "scaling-hypothesis/chat-q1/A-opus",
+      "usd": 0.236183,
+      "at": "2026-10-09T00:07:57.251Z"
+    },
+    {
+      "id": "the-mythology-of-conscious-ai-spya-rn5m0q/summary-fuller/B-sonnet",
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q/summary-fuller/B-sonnet",
+      "usd": 0.071658,
+      "at": "2026-10-09T00:08:09.925Z"
+    },
+    {
+      "id": "the-mythology-of-conscious-ai-spya-rn5m0q/chat-q1/B-sonnet",
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q/chat-q1/B-sonnet",
+      "usd": 0.068712,
+      "at": "2026-10-09T00:08:20.286Z"
+    },
+    {
+      "id": "the-mythology-of-conscious-ai-spya-rn5m0q/ideas/B-sonnet",
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q/ideas/B-sonnet",
+      "usd": 0.092468,
+      "at": "2026-10-09T00:08:22.519Z"
+    },
+    {
+      "id": "the-mythology-of-conscious-ai-spya-rn5m0q/summary-fuller/C-sonnet+digest",
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q/summary-fuller/C-sonnet+digest",
+      "usd": 0.0417704,
+      "at": "2026-10-09T00:08:33.847Z"
+    },
+    {
+      "id": "the-mythology-of-conscious-ai-spya-rn5m0q/ideas/A-opus",
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q/ideas/A-opus",
+      "usd": 0.284076,
+      "at": "2026-10-09T00:08:42.510Z"
+    },
+    {
+      "id": "the-mythology-of-conscious-ai-spya-rn5m0q/chat-q1/C-sonnet+digest",
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q/chat-q1/C-sonnet+digest",
+      "usd": 0.0292156,
+      "at": "2026-10-09T00:08:43.789Z"
+    },
+    {
+      "id": "the-mythology-of-conscious-ai-spya-rn5m0q/ideas/C-sonnet+digest",
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q/ideas/C-sonnet+digest",
+      "usd": 0.0679824,
+      "at": "2026-10-09T00:08:51.302Z"
+    },
+    {
+      "id": "entropy-24-00930-spya-pywwkq/summary-fuller/B-sonnet",
+      "label": "entropy-24-00930-spya-pywwkq/summary-fuller/B-sonnet",
+      "usd": 0.0722775,
+      "at": "2026-10-09T00:08:57.177Z"
+    },
+    {
+      "id": "entropy-24-00930-spya-pywwkq/chat-q1/B-sonnet",
+      "label": "entropy-24-00930-spya-pywwkq/chat-q1/B-sonnet",
+      "usd": 0.0710535,
+      "at": "2026-10-09T00:09:01.402Z"
+    },
+    {
+      "id": "entropy-24-00930-spya-pywwkq/ideas/B-sonnet",
+      "label": "entropy-24-00930-spya-pywwkq/ideas/B-sonnet",
+      "usd": 0.0892435,
+      "at": "2026-10-09T00:09:07.392Z"
+    },
+    {
+      "id": "entropy-24-00930-spya-pywwkq/summary-fuller/C-sonnet+digest",
+      "label": "entropy-24-00930-spya-pywwkq/summary-fuller/C-sonnet+digest",
+      "usd": 0.0413503,
+      "at": "2026-10-09T00:09:10.379Z"
+    },
+    {
+      "id": "entropy-24-00930-spya-pywwkq/chat-q1/C-sonnet+digest",
+      "label": "entropy-24-00930-spya-pywwkq/chat-q1/C-sonnet+digest",
+      "usd": 0.0282495,
+      "at": "2026-10-09T00:09:16.694Z"
+    },
+    {
+      "id": "scaling-hypothesis/summary-fuller/B-sonnet",
+      "label": "scaling-hypothesis/summary-fuller/B-sonnet",
+      "usd": 0.093608,
+      "at": "2026-10-09T00:09:24.538Z"
+    },
+    {
+      "id": "entropy-24-00930-spya-pywwkq/ideas/C-sonnet+digest",
+      "label": "entropy-24-00930-spya-pywwkq/ideas/C-sonnet+digest",
+      "usd": 0.0626483,
+      "at": "2026-10-09T00:09:27.905Z"
+    },
+    {
+      "id": "scaling-hypothesis/ideas/B-sonnet",
+      "label": "scaling-hypothesis/ideas/B-sonnet",
+      "usd": 0.083696,
+      "at": "2026-10-09T00:09:33.268Z"
+    },
+    {
+      "id": "scaling-hypothesis/chat-q1/B-sonnet",
+      "label": "scaling-hypothesis/chat-q1/B-sonnet",
+      "usd": 0.1159815,
+      "at": "2026-10-09T00:09:36.549Z"
+    },
+    {
+      "id": "entropy-24-00930-spya-pywwkq/ideas/A-opus",
+      "label": "entropy-24-00930-spya-pywwkq/ideas/A-opus",
+      "usd": 0.263987,
+      "at": "2026-10-09T00:09:37.470Z"
+    },
+    {
+      "id": "scaling-hypothesis/ideas/C-sonnet+digest",
+      "label": "scaling-hypothesis/ideas/C-sonnet+digest",
+      "usd": 0.0346064,
+      "at": "2026-10-09T00:09:42.765Z"
+    },
+    {
+      "id": "scaling-hypothesis/chat-q1/C-sonnet+digest",
+      "label": "scaling-hypothesis/chat-q1/C-sonnet+digest",
+      "usd": 0.0320587,
+      "at": "2026-10-09T00:09:49.554Z"
+    },
+    {
+      "id": "the-mythology-of-conscious-ai-spya-rn5m0q/chat-q1/D-haiku",
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q/chat-q1/D-haiku",
+      "usd": 0.0035946,
+      "at": "2026-10-09T00:09:58.787Z"
+    },
+    {
+      "id": "scaling-hypothesis/summary-fuller/C-sonnet+digest",
+      "label": "scaling-hypothesis/summary-fuller/C-sonnet+digest",
+      "usd": 0.0694764,
+      "at": "2026-10-09T00:10:09.724Z"
+    },
+    {
+      "id": "the-mythology-of-conscious-ai-spya-rn5m0q/ideas/D-haiku",
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q/ideas/D-haiku",
+      "usd": 0.0056439,
+      "at": "2026-10-09T00:10:10.317Z"
+    },
+    {
+      "id": "the-mythology-of-conscious-ai-spya-rn5m0q/chat-q1/E-haiku+digest",
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q/chat-q1/E-haiku+digest",
+      "usd": 0.00187706,
+      "at": "2026-10-09T00:10:19.871Z"
+    },
+    {
+      "id": "the-mythology-of-conscious-ai-spya-rn5m0q/summary-fuller/D-haiku",
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q/summary-fuller/D-haiku",
+      "usd": 0.0079934,
+      "at": "2026-10-09T00:10:22.177Z"
+    },
+    {
+      "id": "the-mythology-of-conscious-ai-spya-rn5m0q/ideas/E-haiku+digest",
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q/ideas/E-haiku+digest",
+      "usd": 0.00359394,
+      "at": "2026-10-09T00:10:31.232Z"
+    },
+    {
+      "id": "entropy-24-00930-spya-pywwkq/ideas/D-haiku",
+      "label": "entropy-24-00930-spya-pywwkq/ideas/D-haiku",
+      "usd": 0.004130675,
+      "at": "2026-10-09T00:10:34.461Z"
+    },
+    {
+      "id": "entropy-24-00930-spya-pywwkq/chat-q1/D-haiku",
+      "label": "entropy-24-00930-spya-pywwkq/chat-q1/D-haiku",
+      "usd": 0.003627675,
+      "at": "2026-10-09T00:10:39.236Z"
+    },
+    {
+      "id": "entropy-24-00930-spya-pywwkq/ideas/E-haiku+digest",
+      "label": "entropy-24-00930-spya-pywwkq/ideas/E-haiku+digest",
+      "usd": 0.00273103,
+      "at": "2026-10-09T00:10:51.631Z"
+    },
+    {
+      "id": "entropy-24-00930-spya-pywwkq/chat-q1/E-haiku+digest",
+      "label": "entropy-24-00930-spya-pywwkq/chat-q1/E-haiku+digest",
+      "usd": 0.00157805,
+      "at": "2026-10-09T00:10:58.954Z"
+    },
+    {
+      "id": "entropy-24-00930-spya-pywwkq/summary-fuller/E-haiku+digest",
+      "label": "entropy-24-00930-spya-pywwkq/summary-fuller/E-haiku+digest",
+      "usd": 0.00561853,
+      "at": "2026-10-09T00:11:12.919Z"
+    },
+    {
+      "id": "entropy-24-00930-spya-pywwkq/summary-fuller/D-haiku",
+      "label": "entropy-24-00930-spya-pywwkq/summary-fuller/D-haiku",
+      "usd": 0.009596875,
+      "at": "2026-10-09T00:11:16.630Z"
+    },
+    {
+      "id": "scaling-hypothesis/ideas/D-haiku",
+      "label": "scaling-hypothesis/ideas/D-haiku",
+      "usd": 0.0051908,
+      "at": "2026-10-09T00:11:26.143Z"
+    },
+    {
+      "id": "scaling-hypothesis/chat-q1/D-haiku",
+      "label": "scaling-hypothesis/chat-q1/D-haiku",
+      "usd": 0.005896075,
+      "at": "2026-10-09T00:11:26.383Z"
+    },
+    {
+      "id": "the-mythology-of-conscious-ai-spya-rn5m0q/summary-fuller/E-haiku+digest",
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q/summary-fuller/E-haiku+digest",
+      "usd": 0.01139374,
+      "at": "2026-10-09T00:11:33.386Z"
+    },
+    {
+      "id": "scaling-hypothesis/summary-fuller/D-haiku",
+      "label": "scaling-hypothesis/summary-fuller/D-haiku",
+      "usd": 0.0079344,
+      "at": "2026-10-09T00:11:36.546Z"
+    },
+    {
+      "id": "scaling-hypothesis/ideas/A-opus",
+      "label": "scaling-hypothesis/ideas/A-opus",
+      "usd": 0.337292,
+      "at": "2026-10-09T00:11:40.343Z"
+    },
+    {
+      "id": "scaling-hypothesis/chat-q1/E-haiku+digest",
+      "label": "scaling-hypothesis/chat-q1/E-haiku+digest",
+      "usd": 0.00242517,
+      "at": "2026-10-09T00:11:46.969Z"
+    },
+    {
+      "id": "scaling-hypothesis/ideas/E-haiku+digest",
+      "label": "scaling-hypothesis/ideas/E-haiku+digest",
+      "usd": 0.00396984,
+      "at": "2026-10-09T00:11:50.078Z"
+    },
+    {
+      "id": "scaling-hypothesis/summary-fuller/E-haiku+digest",
+      "label": "scaling-hypothesis/summary-fuller/E-haiku+digest",
+      "usd": 0.00752224,
+      "at": "2026-10-09T00:12:20.283Z"
+    },
+    {
+      "id": "scaling-hypothesis/summary-fuller/A-opus",
+      "label": "scaling-hypothesis/summary-fuller/A-opus",
+      "usd": 0.256516,
+      "at": "2026-10-09T00:12:49.794Z"
+    },
+    {
+      "id": "scaling-hypothesis/chat-q2/A-opus",
+      "label": "scaling-hypothesis/chat-q2/A-opus",
+      "usd": 0.235943,
+      "at": "2026-10-09T00:13:50.493Z"
+    },
+    {
+      "id": "the-mythology-of-conscious-ai-spya-rn5m0q/chat-q2/A-opus",
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q/chat-q2/A-opus",
+      "usd": 0.149732,
+      "at": "2026-10-09T00:13:54.506Z"
+    },
+    {
+      "id": "the-mythology-of-conscious-ai-spya-rn5m0q/chat-q2/B-sonnet",
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q/chat-q2/B-sonnet",
+      "usd": 0.063396,
+      "at": "2026-10-09T00:14:01.519Z"
+    },
+    {
+      "id": "entropy-24-00930-spya-pywwkq/chat-q2/C-sonnet+digest",
+      "label": "entropy-24-00930-spya-pywwkq/chat-q2/C-sonnet+digest",
+      "usd": 0.0327495,
+      "at": "2026-10-09T00:14:03.480Z"
+    },
+    {
+      "id": "entropy-24-00930-spya-pywwkq/chat-q2/A-opus",
+      "label": "entropy-24-00930-spya-pywwkq/chat-q2/A-opus",
+      "usd": 0.197567,
+      "at": "2026-10-09T00:14:05.451Z"
+    },
+    {
+      "id": "scaling-hypothesis/chat-q2/B-sonnet",
+      "label": "scaling-hypothesis/chat-q2/B-sonnet",
+      "usd": 0.0177887,
+      "at": "2026-10-09T00:14:07.077Z"
+    },
+    {
+      "id": "entropy-24-00930-spya-pywwkq/chat-q2/B-sonnet",
+      "label": "entropy-24-00930-spya-pywwkq/chat-q2/B-sonnet",
+      "usd": 0.0199971,
+      "at": "2026-10-09T00:14:16.421Z"
+    },
+    {
+      "id": "the-mythology-of-conscious-ai-spya-rn5m0q/chat-q2/D-haiku",
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q/chat-q2/D-haiku",
+      "usd": 0.00153886,
+      "at": "2026-10-09T00:14:17.746Z"
+    },
+    {
+      "id": "entropy-24-00930-spya-pywwkq/chat-q2/D-haiku",
+      "label": "entropy-24-00930-spya-pywwkq/chat-q2/D-haiku",
+      "usd": 0.00129591,
+      "at": "2026-10-09T00:14:18.820Z"
+    },
+    {
+      "id": "the-mythology-of-conscious-ai-spya-rn5m0q/chat-q2/C-sonnet+digest",
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q/chat-q2/C-sonnet+digest",
+      "usd": 0.0327096,
+      "at": "2026-10-09T00:14:19.036Z"
+    },
+    {
+      "id": "the-mythology-of-conscious-ai-spya-rn5m0q/chat-q2/E-haiku+digest",
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q/chat-q2/E-haiku+digest",
+      "usd": 0.00233126,
+      "at": "2026-10-09T00:14:20.489Z"
+    },
+    {
+      "id": "scaling-hypothesis/chat-q2/D-haiku",
+      "label": "scaling-hypothesis/chat-q2/D-haiku",
+      "usd": 0.00123267,
+      "at": "2026-10-09T00:14:26.861Z"
+    },
+    {
+      "id": "scaling-hypothesis/chat-q2/C-sonnet+digest",
+      "label": "scaling-hypothesis/chat-q2/C-sonnet+digest",
+      "usd": 0.0343487,
+      "at": "2026-10-09T00:14:29.892Z"
+    },
+    {
+      "id": "entropy-24-00930-spya-pywwkq/chat-q2/E-haiku+digest",
+      "label": "entropy-24-00930-spya-pywwkq/chat-q2/E-haiku+digest",
+      "usd": 0.00246205,
+      "at": "2026-10-09T00:14:31.941Z"
+    },
+    {
+      "id": "scaling-hypothesis/chat-q2/E-haiku+digest",
+      "label": "scaling-hypothesis/chat-q2/E-haiku+digest",
+      "usd": 0.00233417,
+      "at": "2026-10-09T00:14:32.185Z"
+    }
+  ],
+  "halted": null
+}

@@ -1,7 +1,7 @@
 ---
 id: q-p5h2a7
 report: spya-mdp0em
-status: open
+status: answered
 asked: 2026-10-08
 title: Public shelf topic pills: may I build them, automatic up to 20 articles with an admin rebuild button beyond?
 refs: SPIDERYARN-READING2-BX · qi-4far27sc · follows q-deh67j · docs/plans/261008j-public-shelf-topic-pills-automatic-billed-to-the-site.md · docs/investigations/261008a-public-shelf-topic-rethink-cost.md · docs/user-feedback/261004_1000-topic-pills-on-the-public-shelf.md
@@ -33,3 +33,12 @@ One new risk. Today a hostile title can only put its own words on its own card. 
 Abuse. Someone who shares and un-shares over and over can make the site pay at most about 8 cents a day before the usual limit stops it. Then the public pills stop updating until the next day.
 
 What would decide it. A if you want it automatic within your half-cent bar. B if a cent or two now and then, once the shelf is big, does not bother you. C if you would rather nothing was ever spent automatically. D if 6 public articles do not need pills yet.
+
+## Greg's answer, 2026-10-09 (in the Overseer's terminal, not the Feedback dialog, so no reply id)
+
+> q-p5h2a7 A
+>
+> — Greg, 2026-10-09
+
+Option A: automatic up to 20 public articles, billed to a site account, with a Rebuild button on
+/admin beyond that. Built in plan docs/plans/261008j-public-shelf-topic-pills-automatic-billed-to-the-site.md.

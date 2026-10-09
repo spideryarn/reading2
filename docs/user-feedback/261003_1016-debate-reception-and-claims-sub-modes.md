@@ -1,7 +1,7 @@
 ---
 reports: spya-caue42, spya-thpsnd
 ending: shipped
-comment: Shipped: the Reception and Claims sub-modes. Still waiting on you: should Claims let you choose which claim is checked, by typing or picking one, or stay as built, where the search chooses?
+comment: Shipped: Reception and Claims, and since 2026-10-09 the claims picker you chose: Claims lists the claims, you tick some or type your own, and one search checks them. Still waiting on you: should a visitor see your checks?
 ---
 
 # Debate: Reception and Claims sub-modes, and a tidier panel
@@ -29,7 +29,7 @@ evals: [investigation 261003g](../investigations/261003g-debate-on-a-thinly-rece
 Not built, each queued:
 
 - Choosing which claim is checked, or typing one (also the "steer the debate" box from
-  `spya-thpsnd`): qi-k9deez4b, on [awaiting-approval.md](awaiting-approval.md).
+  `spya-thpsnd`): qi-k9deez4b, then qi-7e32ngyt. **Shipped 2026-10-09** (below).
 - Listing every citer from a citation index: qi-aabv7jjy, already waiting on Greg since 261002i.
   On this paper the open web has no discussion to find and 39 papers cite it, so this is what
   would answer "how has it been received".
@@ -38,3 +38,11 @@ Not built, each queued:
 **The question for Greg is now a file**, `docs/user-feedback/questions/q-sn37bt.md`, moved there from
 `awaiting-approval.md` on 2026-10-07. He sees it in the Feedback dialog and replies there
 ([feedback-reports.md § Asking Greg a question](../project/feedback-reports.md#asking-greg-a-question-and-acting-on-his-answer)).
+
+**Greg answered q-sn37bt on 2026-10-08** (*"C list the claims first, let them pick, and also B allow
+them to input their own"*), and both shipped on 2026-10-09 as
+[261008i](../plans/261008i-debate-claims-picked-by-the-reader.md). Pressing Debate searches for
+Reception only. Pressing Claims lists the piece's main claims, with no web search. The owner ticks
+claims or types one, and Check runs one search over them, about 20 cents, each claim answered on its
+own; Dig further looks again elsewhere. Checks are the owner's; whether a visitor should see them is
+the follow-up question `q-cgwene`.

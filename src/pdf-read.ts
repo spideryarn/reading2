@@ -370,7 +370,7 @@ const UNMEASURED_READER_BYTES = 30 * MIB;
  * what the new model takes. A model that is not listed — `openRouterReader`
  * accepts any string — gets `UNMEASURED_READER_BYTES`.
  *
- * **40 MiB for `openai/gpt-5.6-luna`, and where that comes from.** OpenAI
+ * **40 MiB for Luna (measured on `openai/gpt-5.6-luna`), and where that comes from.** OpenAI
  * documents 50 MB a file, and OpenRouter passes a PDF through natively. Nobody
  * documents OpenRouter's limit on the whole request, and the one live run was at
  * 32 MB (2026-09-28, the paper above, $0.066). 40 fixes that paper and leaves
@@ -380,7 +380,10 @@ const UNMEASURED_READER_BYTES = 30 * MIB;
  */
 const READER_REQUEST_BYTES = {
   "openai/gpt-5.6-luna": 40 * MIB,
-} as const satisfies Record<typeof PDF_READER_MODEL, number>;
+  /* GPT-5.6 Luna's figure, carried to GPT-6 Luna on 2026-10-09 (plan 261009a):
+     the same vendor's file limit, and the request limit was never the model's. */
+  "openai/gpt-6-luna": 40 * MIB,
+} as const satisfies Record<string, number> & Record<typeof PDF_READER_MODEL, number>;
 
 /** The most `model` takes in one request, in encoded bytes. See `READER_REQUEST_BYTES`. */
 export function maxEncodedBytesFor(model: string): number {

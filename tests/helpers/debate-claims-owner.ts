@@ -7,6 +7,7 @@
  */
 import type { DebateClaimList, ListedClaim } from "../../src/types.js";
 import type { UseDebateClaims } from "../../src/web/useDebateClaims.js";
+import type { UseDebateChecks } from "../../src/web/useDebateChecks.js";
 
 export function claimListOwner(over: Partial<UseDebateClaims> = {}): UseDebateClaims {
   return {
@@ -42,5 +43,23 @@ export function claimListOf(claims: ListedClaim[]): DebateClaimList {
     dropped: { unknownIds: 0, unquoted: 0, tooLong: 0, duplicate: 0, overCap: 0, malformed: 0 },
     generatedAt: "2026-10-08T10:00:00.000Z",
     elapsedMs: 1,
+  };
+}
+
+/**
+ * **The owner's claim checks, as a test hands them to `DebatePanel`** — none
+ * yet and nothing out, unless a test says otherwise. Required on the owner's
+ * arm since plan 261008i stage 3.
+ */
+export function checksOwner(over: Partial<UseDebateChecks> = {}): UseDebateChecks {
+  return {
+    status: "ready",
+    checks: [],
+    error: null,
+    sending: false,
+    pressError: null,
+    check: async () => true,
+    refresh: async () => {},
+    ...over,
   };
 }

@@ -1,0 +1,330 @@
+{
+  "at": "2026-10-09T00:04:28.977Z",
+  "questionsHash": "b8198110ee60b269",
+  "calls": 48,
+  "estimateUsd": 4.972772057142857,
+  "estimateWithBothQuestionsUsd": 5.934993885714286,
+  "droppedSecondChatQuestion": true,
+  "worstCaseUsd": 23.916083750000006,
+  "capUsd": 6,
+  "assumptions": "estimate: request characters / 3.5 as input tokens, no cache discount, output per task {\"digest\":9000,\"summary-fuller\":5000,\"ideas\":12000,\"chat-q1\":2500,\"chat-q2\":2500}; worst case: one input token per request byte at the dearer of input and cache-write prices, plus max_tokens at the output price (Haiku at its >100k rate). Calls reserve their worst case before dispatch and wait while the cap has no room; with nothing in flight and no room, the run stops.",
+  "perModel": {
+    "opus": {
+      "calls": 12,
+      "estimateUsd": 2.786732571428571,
+      "worstCaseUsd": 11.56837,
+      "effort": {
+        "sent": "high",
+        "ran": "high"
+      }
+    },
+    "sonnet": {
+      "calls": 18,
+      "estimateUsd": 2.0819428571428573,
+      "worstCaseUsd": 9.878179999999999,
+      "effort": {
+        "sent": null,
+        "ran": "high"
+      }
+    },
+    "haiku": {
+      "calls": 18,
+      "estimateUsd": 0.10409662857142858,
+      "worstCaseUsd": 2.4695337500000005,
+      "effort": {
+        "sent": null,
+        "ran": "medium"
+      }
+    }
+  },
+  "rows": [
+    {
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q digest",
+      "model": "opus",
+      "estimate": 0.24890285714285715,
+      "bound": 0.62389
+    },
+    {
+      "label": "entropy-24-00930-spya-pywwkq digest",
+      "model": "opus",
+      "estimate": 0.25269485714285717,
+      "bound": 0.639655
+    },
+    {
+      "label": "scaling-hypothesis digest",
+      "model": "opus",
+      "estimate": 0.2775577142857143,
+      "bound": 0.751995
+    },
+    {
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q summary-fuller A-opus",
+      "model": "opus",
+      "estimate": 0.17605714285714283,
+      "bound": 1.31526
+    },
+    {
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q ideas A-opus",
+      "model": "opus",
+      "estimate": 0.3185565714285714,
+      "bound": 1.238405
+    },
+    {
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q chat-q1 A-opus",
+      "model": "opus",
+      "estimate": 0.1314,
+      "bound": 0.438935
+    },
+    {
+      "label": "entropy-24-00930-spya-pywwkq summary-fuller A-opus",
+      "model": "opus",
+      "estimate": 0.17984914285714285,
+      "bound": 1.331025
+    },
+    {
+      "label": "entropy-24-00930-spya-pywwkq ideas A-opus",
+      "model": "opus",
+      "estimate": 0.323416,
+      "bound": 1.25882
+    },
+    {
+      "label": "entropy-24-00930-spya-pywwkq chat-q1 A-opus",
+      "model": "opus",
+      "estimate": 0.13515657142857143,
+      "bound": 0.454545
+    },
+    {
+      "label": "scaling-hypothesis summary-fuller A-opus",
+      "model": "opus",
+      "estimate": 0.204712,
+      "bound": 1.443365
+    },
+    {
+      "label": "scaling-hypothesis ideas A-opus",
+      "model": "opus",
+      "estimate": 0.3481874285714286,
+      "bound": 1.37076
+    },
+    {
+      "label": "scaling-hypothesis chat-q1 A-opus",
+      "model": "opus",
+      "estimate": 0.1902422857142857,
+      "bound": 0.701715
+    },
+    {
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q summary-fuller B-sonnet",
+      "model": "sonnet",
+      "estimate": 0.0880297142857143,
+      "bound": 0.657635
+    },
+    {
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q ideas B-sonnet",
+      "model": "sonnet",
+      "estimate": 0.15927942857142857,
+      "bound": 0.6192075
+    },
+    {
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q chat-q1 B-sonnet",
+      "model": "sonnet",
+      "estimate": 0.06570114285714286,
+      "bound": 0.2194725
+    },
+    {
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q summary-fuller C-sonnet+digest",
+      "model": "sonnet",
+      "estimate": 0.0962902857142857,
+      "bound": 0.693775
+    },
+    {
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q ideas C-sonnet+digest",
+      "model": "sonnet",
+      "estimate": 0.16754,
+      "bound": 0.6553475
+    },
+    {
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q chat-q1 C-sonnet+digest",
+      "model": "sonnet",
+      "estimate": 0.07396171428571428,
+      "bound": 0.2556125
+    },
+    {
+      "label": "entropy-24-00930-spya-pywwkq summary-fuller B-sonnet",
+      "model": "sonnet",
+      "estimate": 0.08992571428571429,
+      "bound": 0.6655175
+    },
+    {
+      "label": "entropy-24-00930-spya-pywwkq ideas B-sonnet",
+      "model": "sonnet",
+      "estimate": 0.16170914285714283,
+      "bound": 0.629415
+    },
+    {
+      "label": "entropy-24-00930-spya-pywwkq chat-q1 B-sonnet",
+      "model": "sonnet",
+      "estimate": 0.06757942857142858,
+      "bound": 0.2272775
+    },
+    {
+      "label": "entropy-24-00930-spya-pywwkq summary-fuller C-sonnet+digest",
+      "model": "sonnet",
+      "estimate": 0.09818628571428571,
+      "bound": 0.7016575
+    },
+    {
+      "label": "entropy-24-00930-spya-pywwkq ideas C-sonnet+digest",
+      "model": "sonnet",
+      "estimate": 0.16996971428571428,
+      "bound": 0.665555
+    },
+    {
+      "label": "entropy-24-00930-spya-pywwkq chat-q1 C-sonnet+digest",
+      "model": "sonnet",
+      "estimate": 0.07584,
+      "bound": 0.2634175
+    },
+    {
+      "label": "scaling-hypothesis summary-fuller B-sonnet",
+      "model": "sonnet",
+      "estimate": 0.10235714285714285,
+      "bound": 0.7216875
+    },
+    {
+      "label": "scaling-hypothesis ideas B-sonnet",
+      "model": "sonnet",
+      "estimate": 0.17409485714285716,
+      "bound": 0.685385
+    },
+    {
+      "label": "scaling-hypothesis chat-q1 B-sonnet",
+      "model": "sonnet",
+      "estimate": 0.09512228571428571,
+      "bound": 0.3508625
+    },
+    {
+      "label": "scaling-hypothesis summary-fuller C-sonnet+digest",
+      "model": "sonnet",
+      "estimate": 0.11061771428571429,
+      "bound": 0.7578275
+    },
+    {
+      "label": "scaling-hypothesis ideas C-sonnet+digest",
+      "model": "sonnet",
+      "estimate": 0.18235542857142858,
+      "bound": 0.721525
+    },
+    {
+      "label": "scaling-hypothesis chat-q1 C-sonnet+digest",
+      "model": "sonnet",
+      "estimate": 0.10338285714285715,
+      "bound": 0.3870025
+    },
+    {
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q summary-fuller D-haiku",
+      "model": "haiku",
+      "estimate": 0.004401457142857143,
+      "bound": 0.164408125
+    },
+    {
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q ideas D-haiku",
+      "model": "haiku",
+      "estimate": 0.007963942857142857,
+      "bound": 0.15480125
+    },
+    {
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q chat-q1 D-haiku",
+      "model": "haiku",
+      "estimate": 0.0032850285714285713,
+      "bound": 0.0548675
+    },
+    {
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q summary-fuller E-haiku+digest",
+      "model": "haiku",
+      "estimate": 0.004814485714285714,
+      "bound": 0.173443125
+    },
+    {
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q ideas E-haiku+digest",
+      "model": "haiku",
+      "estimate": 0.008376971428571429,
+      "bound": 0.16383625
+    },
+    {
+      "label": "the-mythology-of-conscious-ai-spya-rn5m0q chat-q1 E-haiku+digest",
+      "model": "haiku",
+      "estimate": 0.003698057142857143,
+      "bound": 0.0639025
+    },
+    {
+      "label": "entropy-24-00930-spya-pywwkq summary-fuller D-haiku",
+      "model": "haiku",
+      "estimate": 0.004496257142857143,
+      "bound": 0.16637875
+    },
+    {
+      "label": "entropy-24-00930-spya-pywwkq ideas D-haiku",
+      "model": "haiku",
+      "estimate": 0.008085428571428572,
+      "bound": 0.157353125
+    },
+    {
+      "label": "entropy-24-00930-spya-pywwkq chat-q1 D-haiku",
+      "model": "haiku",
+      "estimate": 0.0033789428571428574,
+      "bound": 0.05681875
+    },
+    {
+      "label": "entropy-24-00930-spya-pywwkq summary-fuller E-haiku+digest",
+      "model": "haiku",
+      "estimate": 0.004909285714285714,
+      "bound": 0.17541375
+    },
+    {
+      "label": "entropy-24-00930-spya-pywwkq ideas E-haiku+digest",
+      "model": "haiku",
+      "estimate": 0.008498457142857144,
+      "bound": 0.166388125
+    },
+    {
+      "label": "entropy-24-00930-spya-pywwkq chat-q1 E-haiku+digest",
+      "model": "haiku",
+      "estimate": 0.003791971428571429,
+      "bound": 0.06585375
+    },
+    {
+      "label": "scaling-hypothesis summary-fuller D-haiku",
+      "model": "haiku",
+      "estimate": 0.0051178285714285725,
+      "bound": 0.18042125
+    },
+    {
+      "label": "scaling-hypothesis ideas D-haiku",
+      "model": "haiku",
+      "estimate": 0.008704714285714286,
+      "bound": 0.171345625
+    },
+    {
+      "label": "scaling-hypothesis chat-q1 D-haiku",
+      "model": "haiku",
+      "estimate": 0.004756085714285715,
+      "bound": 0.087715
+    },
+    {
+      "label": "scaling-hypothesis summary-fuller E-haiku+digest",
+      "model": "haiku",
+      "estimate": 0.005530857142857143,
+      "bound": 0.18945625
+    },
+    {
+      "label": "scaling-hypothesis ideas E-haiku+digest",
+      "model": "haiku",
+      "estimate": 0.009117742857142857,
+      "bound": 0.180380625
+    },
+    {
+      "label": "scaling-hypothesis chat-q1 E-haiku+digest",
+      "model": "haiku",
+      "estimate": 0.005169114285714286,
+      "bound": 0.09675
+    }
+  ]
+}

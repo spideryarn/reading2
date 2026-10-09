@@ -225,11 +225,16 @@ vi.mock("../src/source-scan.js", async (importOriginal) => ({
 
 await pgReady({
   suite: "tests/referee-stream-lifetime.test.ts",
-  tables: ["spideryarn.referee_criteria", "spideryarn.referee_claims", "spideryarn.revision_blocks"],
+  tables: [
+    "spideryarn.referee_criteria",
+    "spideryarn.referee_claims",
+    "spideryarn.referee_hidden_checks",
+    "spideryarn.revision_blocks",
+  ],
 });
 
 const { handleApi, CRITERION_ORPHAN_GRACE_MS } = await import("../src/routes.js");
-const { refereeClaimsStore, refereeCriteriaStore } = await import("../src/store/index.js");
+const { refereeClaimsStore, refereeCriteriaStore, refereeHiddenCheckStore } = await import("../src/store/index.js");
 const { CLAIMS_ORPHAN_GRACE_MS } = await import("../src/store/pg-referee-claims.js");
 
 /**
@@ -412,6 +417,7 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
     gates.criterion.reset();
     gates.claims.reset();
     gates.mirror.reset();
+    gates.hidden.reset();
     await asTestOwner(async () => {
       for (const row of await refereeCriteriaStore.load(SLUG)) {
         await refereeCriteriaStore.remove(SLUG, row.id);
@@ -426,6 +432,7 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
     gates.criterion.release();
     gates.claims.release();
     gates.mirror.release();
+    gates.hidden.release();
     await article?.remove();
   });
 
@@ -917,21 +924,77 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
 
   describe("POST /api/referee/hidden-check/:slug", () => {
     /* Mirror's shape: no lock, so lifetime is what there is to check — a fourth
-       closure that can forget to return its promise — and the paid call must be
-       handed `gone`, since nothing is stored for an answer nobody waits for. */
-    it("holds the request open until the stream is finished, and hands the call the reader's signal", async () => {
+       closure that can forget to return its promise. Since 2026-10-09 the
+       answer is kept (plan 261009a), so the paid call is **not** handed `gone`:
+       it runs to the end and is saved for the referee's next visit. */
+    it("holds the request open until the stream is finished, runs on without the reader's signal, and saves", async () => {
       const call = begin("POST", `/api/referee/hidden-check/${SLUG}`);
       await reachedOrSettled(gates.hidden, call, "POST /api/referee/hidden-check/:slug");
 
       expect(call.settled(), "the request answered while the stream was still running").toBe(false);
       expect(call.ended()).toBe(false);
-      expect(gates.hiddenSignal.at(-1)).toBeInstanceOf(AbortSignal);
+      expect(gates.hiddenSignal.at(-1)).toBeUndefined();
 
       gates.hidden.release();
       await call.promise;
       expect(call.settled()).toBe(true);
       expect(call.ended()).toBe(true);
       expect(call.written()).toContain("event: done");
+      /* Saved: the frame carries the stored check's date and no `saved: false`. */
+      expect(call.written()).toContain('"checkedAt"');
+      expect(call.written()).not.toContain('"saved":false');
+    });
+
+    it("does not send done until the answer is saved", async () => {
+      const real = refereeHiddenCheckStore.save.bind(refereeHiddenCheckStore);
+      let reachedSave!: () => void;
+      const saving = new Promise<void>((resolve) => {
+        reachedSave = resolve;
+      });
+      let releaseSave!: () => void;
+      const held = new Promise<void>((resolve) => {
+        releaseSave = resolve;
+      });
+      const save = vi.spyOn(refereeHiddenCheckStore, "save").mockImplementationOnce(async (...args) => {
+        reachedSave();
+        await held;
+        return real(...args);
+      });
+
+      try {
+        const call = begin("POST", `/api/referee/hidden-check/${SLUG}`);
+        await reachedOrSettled(gates.hidden, call, "POST /api/referee/hidden-check/:slug");
+        gates.hidden.release();
+        await saving;
+        expect(call.written()).not.toContain("event: done");
+        expect(call.settled()).toBe(false);
+
+        releaseSave();
+        await call.promise;
+        expect(call.written()).toContain("event: done");
+      } finally {
+        releaseSave?.();
+        save.mockRestore();
+      }
+    });
+
+    it("still sends the paid answer as not saved when keeping it fails", async () => {
+      const saveError = "a save failure containing words that must not reach the wire";
+      const save = vi.spyOn(refereeHiddenCheckStore, "save").mockRejectedValueOnce(new Error(saveError));
+
+      try {
+        const call = begin("POST", `/api/referee/hidden-check/${SLUG}`);
+        await reachedOrSettled(gates.hidden, call, "POST /api/referee/hidden-check/:slug");
+        gates.hidden.release();
+        await call.promise;
+
+        expect(call.written()).toContain("event: done");
+        expect(call.written()).toContain('"saved":false');
+        expect(call.written()).not.toContain("event: error");
+        expect(call.written()).not.toContain(saveError);
+      } finally {
+        save.mockRestore();
+      }
     });
   });
 

@@ -81,7 +81,9 @@ import { getDb } from "../db/client.js";
 import { articleRevisions, articles, revisionBlocks } from "../db/schema.js";
 import { log } from "../log.js";
 import { STORAGE_FAILED } from "../messages.js";
+import { publicTopicsFor } from "../public-library-topics.js";
 import type { PublicLibrary, PublicLibraryEntry } from "../public-library-types.js";
+import { readPublicTopicTree } from "./public-topic-tree.js";
 
 /**
  * **How many cards an anonymous request may cost us**, and the reason there is
@@ -204,6 +206,12 @@ end`;
  * set, so adding a column is an edit somebody has to make twice, on purpose.
  */
 const PUBLIC_LIBRARY_CARD = {
+  /* **Server-only, never on the wire.** What the public topic tree's
+     memberships are keyed by, and what the withholding rule compares against
+     (src/public-library-topics.ts). `listPublic` builds the card without it,
+     and owner-isolation.test.ts checks the response never carries it. Plan
+     261008j. */
+  articleId: articles.id,
   slug: articles.slug,
   publicAt: articles.publicAt,
   /* Every `text` column goes out through `capped` — see `PUBLIC_CARD_CHARS` for
@@ -330,19 +338,32 @@ async function scrubbed<T>(what: string, run: () => Promise<T>): Promise<T> {
   }
 }
 
-export const pgPublicLibraryReader: PublicLibraryReader = {
-  async listPublic(): Promise<PublicLibrary> {
-    return scrubbed("library", async () => {
-      /* **One more than the cap**, which is how the answer knows it was capped.
-         Asking for exactly `PUBLIC_LIBRARY_LIMIT` gives a full page that is
-         indistinguishable from a shelf that happens to be exactly that size,
-         and a list that quietly stops being the list is the failure shape
-         docs/reusable/silent-success.md is about. */
-      const rows = await publicLibraryQuery(getDb(), PUBLIC_LIBRARY_LIMIT + 1);
-      const truncated = rows.length > PUBLIC_LIBRARY_LIMIT;
+/** A listed card as the server holds it: the wire's fields and the article id. */
+export interface PublicCardRow {
+  articleId: string;
+  entry: Omit<PublicLibraryEntry, "topics">;
+}
 
-      const entries = rows.slice(0, PUBLIC_LIBRARY_LIMIT).map(
-        (row): PublicLibraryEntry => ({
+/**
+ * **The listing, once, for both of its readers**: the page below, and the
+ * public topic tree's input (src/public-shelf-topics.ts), so the tree is made
+ * from exactly the cards a stranger is shown and there is no second ownerless
+ * read of `articles` to keep in step.
+ */
+export async function readPublicCards(): Promise<{ cards: PublicCardRow[]; truncated: boolean }> {
+  return scrubbed("library", async () => {
+    /* **One more than the cap**, which is how the answer knows it was capped.
+       Asking for exactly `PUBLIC_LIBRARY_LIMIT` gives a full page that is
+       indistinguishable from a shelf that happens to be exactly that size,
+       and a list that quietly stops being the list is the failure shape
+       docs/reusable/silent-success.md is about. */
+    const rows = await publicLibraryQuery(getDb(), PUBLIC_LIBRARY_LIMIT + 1);
+    const truncated = rows.length > PUBLIC_LIBRARY_LIMIT;
+
+    const cards = rows.slice(0, PUBLIC_LIBRARY_LIMIT).map(
+      (row): PublicCardRow => ({
+        articleId: row.articleId,
+        entry: {
           slug: row.slug,
           /* The same three-step fallback `metaFrom` and `loadHead` use, so the
              card, the tab and the masthead say one thing. `??` and not `||`:
@@ -356,10 +377,24 @@ export const pgPublicLibraryReader: PublicLibraryReader = {
           siteName: row.siteName,
           words: row.words,
           publicAt: row.publicAt?.toISOString() ?? null,
-        }),
-      );
+        },
+      }),
+    );
+    return { cards, truncated };
+  });
+}
 
-      return { entries, truncated };
-    });
+export const pgPublicLibraryReader: PublicLibraryReader = {
+  async listPublic(): Promise<PublicLibrary> {
+    const [{ cards, truncated }, tree] = await Promise.all([
+      readPublicCards(),
+      /* The topics are never worth a failed shelf: a tree that cannot be read
+         is no topics, and the cards still go. */
+      scrubbed("library topics", readPublicTopicTree).catch(() => null),
+    ]);
+    const { topics, keysOf } = publicTopicsFor(cards, tree);
+    /* Built from `entry`, so `articleId` is never on the wire. */
+    const entries = cards.map(({ articleId, entry }): PublicLibraryEntry => ({ ...entry, topics: keysOf(articleId) }));
+    return { entries, topics, truncated };
   },
 };

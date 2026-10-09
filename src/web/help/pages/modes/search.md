@@ -3,6 +3,15 @@ keywords: find look for passage words meaning quick fast phrase highlight mark c
 related: spine
 ---
 
+## In short
+
+Search finds a passage when you remember roughly what it said but not where. Search by **words** for
+an exact phrase, or by **meaning** to ask a question of the whole piece — “where does she concede a
+weakness?” — and find passages the AI thinks answer it even when they use none of your words. The
+matches are marked in the text, so you can see where a theme runs through the piece.
+
+![A search for the word science: 16 passages, each shown with the words around the match](../images/mode-search.png "A search by words: every passage that uses them, in the order they come.")
+
 ## When to use it
 
 Use **words** when you remember a phrase. Use **meaning** to ask a question of the whole piece —
@@ -30,8 +39,6 @@ second finds the exact words. The box keeps your words after a search, so you ca
 **×** at its right-hand end empties it, and the box in the Search panel has one as well.
 
 ## Reading it
-
-![A search for the word science: 16 passages, each shown with the words around the match](../images/mode-search.png "A search by words: every passage that uses them, in the order they come.")
 
 Each meaning search gets its own colour, and its matches are marked in the text in that colour and
 **down the spine** as thin bars, so you can see at a glance whether a theme sits in one place or

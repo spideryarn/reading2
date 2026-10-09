@@ -77,8 +77,9 @@ article and no web search**: a few cents, where the Reception search is the dear
 app. Each claim is the article's own words, re-found in the paragraph it names and stored as the
 article's characters (the Referee rule, `findQuote` in `"spaced"` mode), with a jump to that
 paragraph, and under it one short line in the AI's words, labelled so. A claim whose quote is not
-in its paragraph is dropped and counted. Picking claims and checking them on the web is the plan's
-next stage; until then each listed claim has *Check this claim in chat*.
+in its paragraph is dropped and counted. Each listed claim keeps *Check this claim in chat*, and on
+a current list the owner can tick claims and check them on the web
+([§ Checking the claims you pick](#checking-the-claims-you-pick)).
 
 **The press rule.** Pressing the Claims chip — the panel's segment, the command bar's *Debate:
 Claims*, or the Debate button when it lands on Claims — makes the list when there is none. A link,
@@ -95,8 +96,73 @@ article has changed since — when the list is drawn read-only under a banner wi
 read-only — each claim's id, paragraph, quote and statement, through the public projection — and
 nothing to press; the list alone, with no search stored, is enough to open Debate to them.
 
-The Claims segment's count is the number of listed claims when there is a list, and otherwise the
-older search's claim sources, as before.
+The Claims segment's count is the number of listed claims when there is a list and no check has
+found anything yet; once checks have put sources on screen, it is those sources (each claim's,
+an address once) plus any older search's; with no list, the older search's claim sources, as
+before.
+
+## Checking the claims you pick
+
+Since 2026-10-09, for the owner, on a current list
+([261008i § 3](../plans/261008i-debate-claims-picked-by-the-reader.md)). Greg chose this over an
+automatic claims search: *"C list the claims first, let them pick … and also B allow them to input
+their own"* (2026-10-08, q-sn37bt).
+
+**What a press buys.** Tick claims, type one of your own in the box (at most 600 characters,
+refused rather than cut), and press **Check**: **one web search**, about 20 cents and a minute and a
+half, over every ticked claim and the typed one together, at most four. It is pass B's call from
+the old automatic search (`generateClaimCheck`, `src/debate.ts`), handed the claims instead of
+picking them, and every row passes the same checks (a URL the search returned, a quotation found
+in that page's extract, never the article itself). A listed claim's rows are anchored to the list's
+own quote and paragraph, never to anything the model wrote; a typed claim's rows have no anchor.
+**Dig further**, on a claim a finished check has looked at, is one more search for that claim
+alone, told the addresses it already has so it looks elsewhere; its rows join the claim's, an
+address drawn once. Nothing searches by itself: only these two buttons spend.
+
+**What stops a press spending by accident.** The press is the only trigger; the list must still
+match the article (a stale list is read-only, and the server answers 409 before anything else);
+**one check per article at a time**, held by Postgres (a partial unique index on
+`debate_claim_checks`, so two tabs pressing at once get one search and one 409); and the check's
+own **allowance** (`DEBATE_CHECK_RATE_POLICY`, `src/debate.ts`: 10 an hour, 30 a day per reader,
+two at once, a global fuse of 100 a day), taken after every free refusal and before the model. At
+about 20 cents a check that is about $6 a day for one reader at the very worst and about $20 a day
+for everybody; the numbers are Greg's to move. It is its own bucket, not Dig deeper's, because
+Dig deeper's lease (170 s) is shorter than a check may run, and a check that outlives its lease
+stops holding its concurrency slot; the check's lease is its deadline (360 s) plus a minute. The
+button is held from the press until the stored answer has been read, and while another tab's check
+is out. A closed tab does not cancel a check: its answer is stored and the next read finds it.
+
+**Its limits, accepted** (GPT Sol's review, three rounds, and Opus's arbitration, in the plan). The
+deadline starts at the reservation, so the setup, the call and storing the answer all fit inside
+the lease. If storing the answer fails, the write is tried three more times over 14 s and then
+given up: the answer (about 20 cents) is lost, the failure goes to the log and Sentry, and the row
+stays pending until the sweep ends it, so a press on that article is a 409 for up to about eight
+minutes. Nothing bounds a single store write that hangs for over a minute (Postgres has no
+statement timeout here); then a third check could start while the hourly, daily and global counts
+still hold. And the gateway's retry after a dropped connection could resend a paid request, which
+is true of every web-search call and is queued on its own (`qi-2gaxfaaj`).
+
+**Where a check is drawn comes from what it stored**, not only from the current list's ids, so
+nothing paid for is hidden. A list made again mints new ids, so a check's claim is drawn under the
+listed claim with the same id, or else the same paragraph and quote; a checked claim the new list
+does not name is drawn as a group of its own, headed by the quote and statement the check stored,
+and can still be dug into (the server finds its words in the stored check). Checks made against an
+earlier version of the article go in one read-only group at the end, *Checked against an earlier
+version of this article*, grouped the same way, with no Dig further and no box.
+
+**Found nothing is not the same as not answered.** The model answers one group per claim. An
+explicit empty group says *This search found nothing it could quote on this claim.* A claim the
+answer left out, or answered twice, is *not answered*, and says so in different words: that search
+tells you nothing either way about it.
+
+**Visitors** see the list and nothing of the checks: a check may hold the owner's own words, and
+the checks are in a table the public reader does not read. Whether a visitor should see the checks
+of the article's own listed claims is a question for Greg in the plan.
+
+The table is `debate_claim_checks` (one row per press; [export.md](export.md) carries it). The
+routes are `GET` and `POST /api/debate-claims/:slug/checks`; the panel's half is
+[`src/web/useDebateChecks.ts`](../../src/web/useDebateChecks.ts) and
+[`src/web/debate-checks.ts`](../../src/web/debate-checks.ts).
 
 ## Check a claim in chat
 
@@ -364,6 +430,10 @@ Each module's header comment says what it owns and why; start with `src/debate.t
 - [`src/debate-claims.ts`](../../src/debate-claims.ts) — Claims' list: the `debate-claims` step,
   its prompt and the anchoring of each claim. The panel's half is
   [`src/web/useDebateClaims.ts`](../../src/web/useDebateClaims.ts).
+- The reader's checks: `generateClaimCheck` and `readCheckedClaimGroup` at the foot of
+  `src/debate.ts`; the store
+  [`src/store/pg-debate-claim-checks.ts`](../../src/store/pg-debate-claim-checks.ts); the route
+  `runDebateClaimCheck` in `src/routes.ts`, whose docblock lists the refusals in order.
 - [`src/debate-themes.ts`](../../src/debate-themes.ts) — the optional search-free synthesis call:
   the themes the Reception sources share, and the key sources.
 - [`src/debate-synthesis.ts`](../../src/debate-synthesis.ts) — the rules a synthesis must keep, read
