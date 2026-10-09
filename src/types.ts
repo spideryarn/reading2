@@ -3266,12 +3266,14 @@ export interface SaveOffer {
   field: "purpose" | "profile";
   text: string;
   /**
-   * What the field held when the guide made the offer (`null`: empty), or
-   * absent when that turn could not read it. The card saves only while the
-   * field still holds this, so a card pressed after the words changed — an
-   * older offer, another tab, Metadata — saves nothing and says so.
+   * What the field held when the guide made the offer (`null`: empty). The
+   * tool makes no offer when that turn could not read it: without a basis the
+   * card could not distinguish an empty field from one it was about to
+   * overwrite. The card saves only while the field still holds this, so a
+   * card pressed after the words changed — an older offer, another tab,
+   * Metadata — saves nothing and says so.
    */
-  basis?: string | null;
+  basis: string | null;
 }
 
 

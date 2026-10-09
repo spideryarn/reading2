@@ -758,6 +758,14 @@ svg.band-waiting-ghost { flex: none; }
 .guide-offer-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.88rem; line-height: 1.45; }
 .guide-offer .guide-offer-status,
 .guide-offer-actions { margin-bottom: 0; }
+/* The suggestion button's own border is `--rule`, the card's colour, so on the
+   raised card it vanished and the button read as plain text (browser pass);
+   and it is sized to its words, not the card, so Undo can sit in a sentence. */
+.guide-offer .chat-suggest-btn {
+  width: auto;
+  border-color: var(--rule-strong);
+}
+.guide-offer .chat-suggest-btn:hover { border-color: var(--highlight); }
 .chat-new {
   display: inline-flex;
   align-items: center;

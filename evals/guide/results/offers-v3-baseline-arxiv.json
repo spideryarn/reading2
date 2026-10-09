@@ -1,0 +1,109 @@
+{
+  "label": "v3-baseline-arxiv",
+  "runs": 4,
+  "pass": 3,
+  "total": 4,
+  "dollars": 0.0663188,
+  "rows": [
+    {
+      "case": "browser-first",
+      "run": 0,
+      "ok": false,
+      "wants": [
+        "purpose"
+      ],
+      "offers": [
+        {
+          "field": "purpose",
+          "text": "Reading this for my journal club next week.",
+          "basis": null,
+          "closeness": 1
+        },
+        {
+          "field": "profile",
+          "text": "A curious generalist who reads about the history of science. A historian of science, not an ML person.",
+          "basis": "A curious generalist who reads about the history of science.",
+          "closeness": 1
+        }
+      ],
+      "repeated": true,
+      "saysSaved": false,
+      "answer": "Since this is for a journal club and you're coming at it as a historian, read it for what the authors say they are replacing and why, and skim the mathematics.\n\nStart with the introduction's account of the problem: models that read one word after another can't be trained in parallel [spya-ev2yj8]. Then read the novelty claim [spya-vr7tsj] and Section 4's case for the change [spya-eev6uu]. The author-contributions footnote is worth a look too, since it records who proposed what [spya-jf2h4q]. You can skim most of Section 3 and all of Section 5.\n\nThe Glossary will cover terms like \"attention\" and \"BLEU\".\n\n[cmd:mode:mode%3Aglossary]\n\nWhat will your group be discussing: the technical idea, or its place in the field's history?Since this is for a journal club and you're coming at it as a historian, I'd read it for what the authors say they are replacing and why, and skim the mathematics.\n\nStart with the introduction's account of the problem: models that read one word after another can't be trained in parallel [spya-ev2yj8]. Then read the novelty claim [spya-vr7tsj] and Section 4's case for the change [spya-eev6uu]. The author-contributions footnote is also worth a look, because it records who proposed what [spya-jf2h4q]. You can skim most of Section 3 and all of Section 5.\n\nThe Glossary will cover terms like \"attention\" and \"BLEU\".\n\n[cmd:mode:mode%3Aglossary]\n\nYou can save your reason and your background with the buttons under this answer.\n\nWhat will your group be discussing: the technical idea, or its place in the field's history?"
+    },
+    {
+      "case": "browser-first",
+      "run": 1,
+      "ok": true,
+      "wants": [
+        "purpose"
+      ],
+      "offers": [
+        {
+          "field": "purpose",
+          "text": "Reading this for my journal club next week. I'm a historian of science, not an ML person.",
+          "basis": null,
+          "closeness": 1
+        },
+        {
+          "field": "profile",
+          "text": "A curious generalist who reads about the history of science. A historian of science, not an ML person.",
+          "basis": "A curious generalist who reads about the history of science.",
+          "closeness": 1
+        }
+      ],
+      "repeated": false,
+      "saysSaved": false,
+      "answer": "Since this is for a journal club, read the abstract [spya-r4309p] and the introduction's account of what was wrong with older models [spya-ev2yj8] closely. The claim that the sequential nature \"precludes parallelization\" is the problem the paper exists to solve. The author-contributions footnote [spya-jf2h4q] is worth a look too, because it shows who did what. Section 4 [spya-eev6uu] gives the paper's own case for its design. You can skim the equations and the training details.\n\nThe Glossary will cover the jargon as you go.\n\n[cmd:mode:mode%3Aglossary]\n\nWhat would you most like your club to take away: the technical idea, or how it came about?For your journal club, start with the abstract [spya-r4309p] and the introduction's account of what was wrong with older models [spya-ev2yj8]. The claim that the sequential nature \"precludes parallelization\" is the problem the paper exists to solve. The author-contributions footnote [spya-jf2h4q] is worth a look too, since it shows who did what. Section 4 [spya-eev6uu] gives the paper's own case for its design. You can skim the equations and the training details.\n\nThe Glossary will cover the jargon as you go.\n\n[cmd:mode:mode%3Aglossary]\n\nYou can save your reason and your background with the buttons under this answer.\n\nWhat would you most like your club to take away: the technical idea, or how it came about?"
+    },
+    {
+      "case": "browser-first",
+      "run": 2,
+      "ok": true,
+      "wants": [
+        "purpose"
+      ],
+      "offers": [
+        {
+          "field": "purpose",
+          "text": "Reading for my journal club next week.",
+          "basis": null,
+          "closeness": 1
+        },
+        {
+          "field": "profile",
+          "text": "A curious generalist who reads about the history of science. A historian of science, not an ML person.",
+          "basis": "A curious generalist who reads about the history of science.",
+          "closeness": 1
+        }
+      ],
+      "repeated": false,
+      "saysSaved": false,
+      "answer": "Since you're presenting to a journal club, read for the story rather than the maths. Start with the introduction, where the problem they're attacking is laid out [spya-ev2yj8]. The contribution footnote is also worth a look. It records who proposed what, which is useful primary-source material for a historian [spya-jf2h4q]. Skim most of Section 3, which is the technical detail. Table 2 is where they make their case against earlier systems [spya-p9uqvv].\n\nThe Glossary will cover terms like \"attention\" and \"BLEU\" as you meet them.\n\n[cmd:mode:mode%3Aglossary]\n\nWill you be presenting the paper, or discussing it as a participant?For a journal club, read this paper for its story, not its maths. Start with the introduction, which sets out the problem the authors were attacking [spya-ev2yj8]. Next, read the footnote on who contributed what. It is the closest thing here to a primary source on how the idea came about [spya-jf2h4q]. Then look at Table 2, where they argue their case against earlier systems [spya-p9uqvv]. You can skim most of Section 3, which is technical detail.\n\nThe Glossary will define terms like \"attention\" and \"BLEU\" as you meet them.\n\n[cmd:mode:mode%3Aglossary]\n\nYou can save your reason and your background with the buttons under this answer.\n\nWill you be presenting the paper, or taking part in the discussion?"
+    },
+    {
+      "case": "browser-first",
+      "run": 3,
+      "ok": true,
+      "wants": [
+        "purpose"
+      ],
+      "offers": [
+        {
+          "field": "purpose",
+          "text": "Reading this for my journal club next week.",
+          "basis": null,
+          "closeness": 1
+        },
+        {
+          "field": "profile",
+          "text": "A curious generalist who reads about the history of science. A historian of science, not an ML person.",
+          "basis": "A curious generalist who reads about the history of science.",
+          "closeness": 1
+        }
+      ],
+      "repeated": false,
+      "saysSaved": false,
+      "answer": "Since you're presenting to a club rather than building models, read for the problem and the claim, not the mathematics.\n\nStart with the introduction, where the authors name the bottleneck they are attacking: \"This inherently sequential nature precludes parallelization\" [spya-ev2yj8]. The first footnote is a rare, candid record of who did what, which suits a historian [spya-jf2h4q]. You can skim the architecture details in Section 3 and the training and tables in Sections 5 and 6.\n\nThe Glossary will help with the jargon.\n\n[cmd:mode:mode%3Aglossary]\n\nWhat will your club want from the paper: how it works, or why it mattered?You can save your reason and your background with the buttons under this answer."
+    }
+  ]
+}

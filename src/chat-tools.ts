@@ -248,7 +248,7 @@ export interface ToolContext {
    * What the reader's reason and About you held when this guide turn read
    * them — the basis `offer_to_save` records, so a card pressed after either
    * changed does not save over the newer words. Guide turns only; a field the
-   * route could not read is absent.
+   * route could not read is absent, and cannot be offered safely.
    */
   saved?: SavedNow | undefined;
 }
@@ -2158,6 +2158,9 @@ function offerToSave(args: Record<string, unknown>, ctx: ToolContext): ToolOutco
      the card saves only over that (GuideSaveOffer.tsx), so an old card pressed
      later cannot replace newer words. */
   const basis = ctx.saved?.[field];
+  if (basis === undefined) {
+    return refuse("what is saved now could not be read, so there is no safe value to replace.");
+  }
   if (basis === text) return refuse("those are already their saved words, exactly.");
   return {
     label,
@@ -2165,8 +2168,14 @@ function offerToSave(args: Record<string, unknown>, ctx: ToolContext): ToolOutco
     content:
       "The reader now sees these words under your answer, with a button to save them. Nothing is saved " +
       "unless they press it, so do not say it is saved: say in a few words that they can save it with " +
-      "the button under your answer. On a later turn, WHO IS READING THIS shows what is saved.",
-    offer: { field, text, ...(basis === undefined ? {} : { basis }) },
+      "the button under your answer. On a later turn, WHO IS READING THIS shows what is saved. " +
+      /* Measured (plan 261009o, browser pass): a model that wrote its whole
+         reply and then called this wrote it all again after the result, and
+         the reader's answer is every round's text joined. */
+      "Everything you wrote before calling this tool is already on the reader's screen, as the start of " +
+      "your answer: never write any of it again. If your reply was already complete, stop here; otherwise " +
+      "continue from where you left off.",
+    offer: { field, text, basis },
   };
 }
 

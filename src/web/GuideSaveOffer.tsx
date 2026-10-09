@@ -72,9 +72,16 @@ export function offerOf(run: ToolRun): SaveOffer | null {
   const { field, text, basis } = run.offer as { field?: unknown; text?: unknown; basis?: unknown };
   if (field !== "purpose" && field !== "profile") return null;
   if (typeof text !== "string" || normaliseProfileText(text) !== text) return null;
-  if (text.length > (field === "purpose" ? MAX_PURPOSE_CHARS : MAX_PROFILE_CHARS)) return null;
-  if (basis !== undefined && basis !== null && typeof basis !== "string") return null;
-  return { field, text, ...(basis === undefined ? {} : { basis }) };
+  const max = field === "purpose" ? MAX_PURPOSE_CHARS : MAX_PROFILE_CHARS;
+  if (text.length > max) return null;
+  /* No basis is not an old/looser offer: it is one that cannot prove what it
+     is replacing. Refuse it at the stored-JSON boundary as well as in the
+     tool, so a forged or partial run cannot turn the fresh read into blanket
+     permission to overwrite whatever it finds. */
+  if (basis !== null && (typeof basis !== "string" || normaliseProfileText(basis) !== basis || basis.length > max)) {
+    return null;
+  }
+  return { field, text, basis };
 }
 
 /**
@@ -170,7 +177,7 @@ export function GuideSaveOffer({ slug, offer }: { slug: string; offer: SaveOffer
         /* Saved only over what the guide saw when it offered this: an older
            card pressed after the words changed (a later offer saved, another
            tab, Metadata) would otherwise put back words the reader replaced. */
-        if (offer.basis !== undefined && before !== offer.basis) return { kind: "offer", note: "changed" };
+        if (before !== offer.basis) return { kind: "offer", note: "changed" };
         return (await landed(offer.text)) ? { kind: "saved", before } : { kind: "offer", note: "failed" };
       },
       { kind: "offer", note: "failed" },
@@ -238,4 +245,3 @@ export function GuideSaveOffer({ slug, offer }: { slug: string; offer: SaveOffer
     </section>
   );
 }
-

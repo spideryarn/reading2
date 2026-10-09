@@ -1017,7 +1017,9 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   your profile … stay fairly close to the user's input"*). The model gives a field (`reason` or
   `about_you`) and the words, as close to the reader's own as it can; the tool checks them as the
   store would and puts an offer on the run (`ToolRun.offer`, with the field's value as the turn
-  read it, its *basis*). The page draws it under the answer as a card
+  read it, its *basis*). If that field could not be read, the tool makes no offer: without a basis
+  the page could not tell whether its press was replacing newer words. The page draws a valid
+  offer under the answer as a card
   ([`GuideSaveOffer.tsx`](../../src/web/GuideSaveOffer.tsx)) with a button, and **the reader's press
   is the only write**: it reads what is stored, saves only over the basis, and offers an Undo that
   puts back only over its own write. A planted instruction in the article can at worst put words

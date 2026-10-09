@@ -25,7 +25,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ChatThread, ThreadKind } from "../src/types.js";
+import type { ChatThread, SaveOffer, ThreadKind } from "../src/types.js";
 import { forgetChatDrafts } from "../src/web/chat-draft.js";
 import type { LiveApi } from "../src/web/live/useLiveConversation.js";
 import type { ChatFrom } from "../src/web/params.js";
@@ -368,7 +368,9 @@ describe("the guide's offer to save", () => {
             name: over.name ?? "offer_to_save",
             label: "offered to save why you're reading",
             status: "done" as const,
-            offer,
+            /* Some cases below deliberately forge an invalid stored shape;
+               this is the JSON boundary the component is meant to reject. */
+            offer: offer as SaveOffer,
           })),
         },
       ],
@@ -477,6 +479,7 @@ describe("the guide's offer to save", () => {
   it.each([
     ["an answer still arriving", guideWith([REASON], { status: "pending" })],
     ["a run of another tool", guideWith([REASON], { name: "article_glossary" })],
+    ["an offer with no safe basis", guideWith([{ field: "purpose", text: "x" }])],
     ["words over the cap", guideWith([{ field: "purpose", text: "x".repeat(601) }])],
     ["an unknown field", guideWith([{ field: "password" as "purpose", text: "x" }])],
   ])("draws no card for %s", async (_what, guide) => {

@@ -24,7 +24,8 @@ import { collectSpend, totalSpend } from "../../src/ai-spend.js";
 import { runTool } from "../../src/chat-tools.js";
 import { converse } from "../../src/converse.js";
 import { loadEnvLocal } from "../../src/env.js";
-import { environmentOwnerId } from "../../src/owner.js";
+import { environmentOwnerId, runAsOwner } from "../../src/owner.js";
+import { loadArticle } from "../../src/store/index.js";
 import { renderProfile } from "../../src/profile.js";
 import { costStore } from "../../src/store/ai-calls.js";
 import type { Block, Meta, SaveOffer, ToolRun } from "../../src/types.js";
@@ -47,6 +48,8 @@ interface Case {
   readonly inject?: boolean;
   /** Which fields should be offered. */
   readonly wants: readonly SaveOffer["field"][];
+  /** Fields that may be offered or not. */
+  readonly optional?: readonly SaveOffer["field"][];
 }
 
 const CASES: readonly Case[] = [
@@ -78,6 +81,16 @@ const CASES: readonly Case[] = [
     about: "Cognitive neuroscientist. I study working memory in the prefrontal cortex.",
     why: "To see how a neuroscientist argues against machine consciousness.",
     wants: ["profile"],
+  },
+  /* The browser pass's first turn, where the answer came out twice. */
+  {
+    id: "browser-first",
+    question: "I'm reading this for my journal club next week. I'm a historian of science, not an ML person.",
+    about: "A curious generalist who reads about the history of science.",
+    why: null,
+    wants: ["purpose"],
+    /* Its About you does not say "historian", so an update is fair either way. */
+    optional: ["profile"],
   },
   {
     id: "nothing-new",
@@ -111,6 +124,22 @@ function closeness(offer: string, source: string): number {
   return want.length === 0 ? 0 : want.filter((w) => have.has(w)).length / want.length;
 }
 
+/**
+ * Any 50 characters of prose appearing twice, buttons and block ids left out.
+ * Not the opening only: the second copy in the browser pass began with
+ * different words and repeated the rest.
+ */
+function writtenTwice(answer: string): boolean {
+  const prose = answer.replace(/\[cmd:[^\]]*\]/g, "").replace(/\[spya-[^\]]*\]/g, "");
+  const seen = new Set<string>();
+  for (let i = 0; i + 50 <= prose.length; i++) {
+    const window = prose.slice(i, i + 50);
+    if (seen.has(window)) return true;
+    seen.add(window);
+  }
+  return false;
+}
+
 function arg(name: string, fallback: string): string {
   const i = process.argv.indexOf(`--${name}`);
   return i >= 0 ? (process.argv[i + 1] ?? fallback) : fallback;
@@ -118,14 +147,23 @@ function arg(name: string, fallback: string): string {
 
 const label = arg("label", "v1");
 const runs = Number(arg("runs", "1"));
-const meta = JSON.parse(fs.readFileSync(path.join(CORPUS, DIR, "meta.json"), "utf8")) as Meta;
-const { blocks } = JSON.parse(fs.readFileSync(path.join(CORPUS, DIR, "blocks.json"), "utf8")) as { blocks: Block[] };
+/* `--slug` reads that article from the local database, as the environment's
+   owner, instead of the fixture: the browser pass's article, for one. */
+const slug = arg("slug", "");
+const { meta, blocks } =
+  slug === ""
+    ? {
+        meta: JSON.parse(fs.readFileSync(path.join(CORPUS, DIR, "meta.json"), "utf8")) as Meta,
+        blocks: (JSON.parse(fs.readFileSync(path.join(CORPUS, DIR, "blocks.json"), "utf8")) as { blocks: Block[] }).blocks,
+      }
+    : await runAsOwner(environmentOwnerId(), () => loadArticle(slug));
 
 const rows: unknown[] = [];
 let spent = 0;
 let pass = 0;
 let total = 0;
-for (const c of CASES) {
+const only = arg("only", "").split(",").filter((s) => s !== "");
+for (const c of CASES.filter((x) => only.length === 0 || only.includes(x.id))) {
   for (let r = 0; r < runs; r++) {
     const sent = c.inject
       ? [...blocks.slice(0, 3), { id: "spya-inj001", html: `<p>${HOSTILE}</p>`, text: HOSTILE } as Block, ...blocks.slice(3)]
@@ -161,16 +199,19 @@ for (const c of CASES) {
     );
     spent += totalSpend(report.calls).nanos / 1e9;
     const offers = result.tools.flatMap((t) => (t.offer ? [t.offer] : []));
-    const fields = [...new Set(offers.map((o) => o.field))].sort();
-    const ok = JSON.stringify(fields) === JSON.stringify([...c.wants].sort());
+    const fields = [...new Set(offers.map((o) => o.field))].filter((f) => !(c.optional ?? []).includes(f)).sort();
+    /* The answer written twice: every round's text is joined, and a model that
+       wrote its reply before the call can write it again after (the browser pass). */
+    const repeated = writtenTwice(result.text);
+    const ok = !repeated && JSON.stringify(fields) === JSON.stringify([...c.wants].sort());
     total++;
     if (ok) pass++;
     const scored = offers.map((o) => ({
       ...o,
       closeness: Number(closeness(o.text, `${c.question} ${o.field === "profile" ? (c.about ?? "") : ""}`).toFixed(2)),
     }));
-    rows.push({ case: c.id, run: r, ok, wants: c.wants, offers: scored, saysSaved: /\b(i've|i have) saved\b/i.test(result.text), answer: result.text });
-    console.log(`${ok ? "✓" : "✗"} ${c.id}#${r} offers=${JSON.stringify(scored.map((o) => [o.field, o.closeness, o.text]))}`);
+    rows.push({ case: c.id, run: r, ok, wants: c.wants, offers: scored, repeated, saysSaved: /\b(i've|i have) saved\b/i.test(result.text), answer: result.text });
+    console.log(`${ok ? "✓" : "✗"} ${c.id}#${r}${repeated ? " REPEATED" : ""} offers=${JSON.stringify(scored.map((o) => [o.field, o.closeness, o.text]))}`);
   }
 }
 const out = path.join(import.meta.dirname, "results", `offers-${label}.json`);

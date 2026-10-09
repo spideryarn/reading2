@@ -3073,10 +3073,20 @@ export async function* converse({
            twice. */
         accumulateToolCalls(calls, choice?.delta?.tool_calls);
         const piece = choice?.delta?.content;
+        /* **A later round's first words start a new paragraph.** Every round's
+           text is one answer, joined, and a round that ended on "…mattered?"
+           met the next one's "You can save…" as "mattered?You can save…" (plan
+           261009o's browser pass). Only where neither side brings its own
+           whitespace, and as a delta like any other, so the page and the
+           stored answer agree. */
         if (typeof piece === "string" && piece.length > 0) {
-          text += piece;
+          /* The separator belongs to the flattened answer, not to the
+             provider's round. Keep `roundText` verbatim: it is replayed as the
+             assistant's tool-calling message and counted in `roundChars`. */
+          const delta = roundText === "" && /\S$/.test(text) && /^\S/.test(piece) ? `\n\n${piece}` : piece;
+          text += delta;
           roundText += piece;
-          yield { type: "delta", text: piece };
+          yield { type: "delta", text: delta };
         }
         /* **Per round, then summed below** — the count OpenRouter reports is
            this request's running total, so a later chunk supersedes an earlier

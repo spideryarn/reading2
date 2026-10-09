@@ -46,7 +46,20 @@ the prompt asks. About you corrections kept the reader's existing text and added
 year and now works on AI safety policy at a think tank."*), turning "I study" into "studied", which
 is the correction they asked for. The planted paragraph produced no offer in five runs.
 
+## v3: the answer written twice
+
+The browser pass then found what these runs had not: both of its paid turns stored the answer
+twice, the model having written its reply, called the tool, and written it again after the result
+([postmortem 261009j](../postmortems/261009j-an-answer-is-every-round-joined-so-words-before-a-tool-call-are-never-taken-back.md)).
+The runner gained `--slug` (an article from the local database), `--only`, the browser's own first
+message as a case (`browser-first`), and a check that no 50 characters of prose appear twice.
+Rescored with it (every 50-character window; the first version of the check sampled every fifth offset and missed most, GPT Sol's second code review), v1 had 3 such answers in 12 and v2 2 in 18; on the browser's article (*Attention Is All You Need*),
+**9 of 14** before the fix (`offers-v3-baseline-arxiv*.json`) and **0 of 14** after it
+(`offers-v3-arxiv.json`). The fix is a sentence in the tool's result: what was written before the
+call is already on screen, never write it again. The full set again after it, two runs
+(`offers-v3.json`): **14/14**, none written twice, $0.32.
+
 ## What it decided
 
-The v2 prompt ships. Not measured: Live (offers are not offered there), a reader whose About you is
+The v2 prompt ships, with the v3 tool result. Not measured: Live (offers are not offered there), a reader whose About you is
 near the 1,500-character cap, and more than one article.

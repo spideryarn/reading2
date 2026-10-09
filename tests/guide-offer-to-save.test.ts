@@ -39,6 +39,7 @@ const ctx = (kind: ThreadKind | undefined) => ({
   power: "standard" as const,
   kind,
   threadId: "spya-gdeab2",
+  saved: { purpose: null, profile: null },
 });
 
 const names = (tools: readonly { function: { name: string } }[]) => tools.map((t) => t.function.name);
@@ -79,7 +80,7 @@ describe("who is offered it", () => {
 describe("what it returns", () => {
   it("offers a reason, in our field name, normalised as the store would", async () => {
     const out = await runTool("offer_to_save", { field: "reason", text: "  For journal club\r\nnext week  " }, ctx("guide"));
-    expect(out.offer).toEqual({ field: "purpose", text: "For journal club\nnext week" });
+    expect(out.offer).toEqual({ field: "purpose", text: "For journal club\nnext week", basis: null });
     expect(out.content).toMatch(/nothing is saved unless they press/i);
     expect(out.label).toBe("offered to save why you're reading");
     expect(calls.store).toEqual([]);
@@ -87,7 +88,7 @@ describe("what it returns", () => {
 
   it("offers About you", async () => {
     const out = await runTool("offer_to_save", { field: "about_you", text: "A cognitive neuroscientist." }, ctx("guide"));
-    expect(out.offer).toEqual({ field: "profile", text: "A cognitive neuroscientist." });
+    expect(out.offer).toEqual({ field: "profile", text: "A cognitive neuroscientist.", basis: null });
     expect(out.label).toBe("offered to update About you");
   });
 
@@ -105,14 +106,15 @@ describe("what it returns", () => {
     expect(out.content).toMatch(/nothing was offered/i);
   });
 
-  it("records what the field held when the turn read it, and nothing when it could not read it", async () => {
+  it("records what the field held when the turn read it, and refuses when it could not read it", async () => {
     const withSaved = { ...ctx("guide"), saved: { purpose: null, profile: "A historian" } };
     const reason = await runTool("offer_to_save", { field: "reason", text: "For journal club." }, withSaved);
     expect(reason.offer).toEqual({ field: "purpose", text: "For journal club.", basis: null });
     const about = await runTool("offer_to_save", { field: "about_you", text: "A historian of science." }, withSaved);
     expect(about.offer?.basis).toBe("A historian");
     const unread = await runTool("offer_to_save", { field: "reason", text: "x" }, { ...ctx("guide"), saved: { profile: null } });
-    expect(unread.offer).toEqual({ field: "purpose", text: "x" });
+    expect(unread.offer).toBeUndefined();
+    expect(unread.content).toMatch(/what is saved now could not be read/i);
   });
 
   it("offers nothing that is already saved word for word", async () => {

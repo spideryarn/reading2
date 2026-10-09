@@ -6,7 +6,7 @@ Owned by [plans.md](../project/plans.md). Overseer queue item `qi-x6hteva9`; que
 [261009i](261009i-the-guide-greets-in-chat-takes-live-and-a-bar-row.md) § Deferred, which put the
 question. Part 2 of the same reply (share, private link, archive) is another session's
 (`fbpqaftb-guide-action-buttons`); this one keeps off its files.
-**Status: planned.**
+**Status: built, GPT Sol on the plan and the code, measured (18/18), on `dev`. Not deployed. Two follow-ups for Greg in q-w2740x.**
 
 ## What Greg asked for
 
@@ -159,7 +159,9 @@ write path is added on the server: the press uses the two routes the boxes alrea
   offer records what its field held (`SaveOffer.basis`), and the card saves only while the field
   still holds it. So an old card pressed after a later offer was saved, or after Metadata or the
   profile page changed it, saves nothing and says so; the tool also refuses to offer words already
-  saved verbatim. **Not taken: an atomic compare-and-set on the two `PATCH` routes.** What is left
+  saved verbatim. The code review made the basis required: if this turn could not read the target
+  field (including `useProfile: false`), the tool makes no offer, and a stored run without a basis
+  draws no card. **Not taken: an atomic compare-and-set on the two `PATCH` routes.** What is left
   is the reader's own second tab writing in the milliseconds between the card's read and its write,
   the same residual 261009i's F3 accepted; closing it is a store contract change on two routes and
   two stores for a race only the reader can cause. Named, not fixed.
@@ -202,6 +204,32 @@ write path is added on the server: the press uses the two routes the boxes alrea
   "I'm a postdoc" either, which is what Greg's "so it can update them" asks for. The full text is
   shown and Undo restores it.
 
+## Code review
+
+[GPT Sol](261009o-code-review-sol.md) on [the diff](261009o-code-review.diff): *land with fixes*.
+
+- **P1, fixed by the reviewer**: an offer with no basis (the turn could not read that field, or the
+  reader had turned the profile off for the turn) skipped the card's staleness check, so its press
+  could overwrite whatever the fresh read found. `SaveOffer.basis` is now required: the tool makes
+  no offer for a field it could not read, and a stored run without a well-formed basis draws no
+  card. Tests on the tool, the route and the card. Checked here: right, and it removes the one path
+  where the basis rule had an exception.
+- **P2, left for Greg**: the security map's row for the card, proposed in q-w2740x.
+- **P3, left as named**: the read-then-write race between two tabs of one reader (§ After the plan
+  review, F1).
+- Its sandbox could not reach Postgres, so the route test was run here afterwards: 11 files, 213
+  passed.
+
+### Second round
+
+After the browser pass's written-twice answers were fixed (§ Log),
+[GPT Sol](261009o-code-review-2-sol.md) on [that diff](261009o-code-review-2.diff): *land with
+fixes*, both fixed by the reviewer and checked here. **P2**: the paragraph break between rounds had
+gone into `roundText` too, so the round replayed to the model, and its character count, carried
+bytes the model never wrote; now only the answer gets it, with a three-round test. **P2**: the
+eval's written-twice check sampled every fifth offset and missed most repeats; it checks every
+offset now, and the saved runs were rescored (9/14 before the fix, 0/14 after).
+
 ## For Greg (in the question file, not built)
 
 - **Saving without a press** (1A's "the page saves it by itself"). Would need: an offer whose words
@@ -214,21 +242,47 @@ write path is added on the server: the press uses the two routes the boxes alrea
 ## Stages
 
 ### Stage 0: plan review
-- [ ] GPT Sol, read-only.
+- [x] GPT Sol, read-only.
 
 ### Stage 1: the tool
-- [ ] Tests red first: `toolsFor("guide")` has `offer_to_save`, `toolsFor("chat")` and
+- [x] Tests red first: `toolsFor("guide")` has `offer_to_save`, `toolsFor("chat")` and
       `liveTools("guide")` do not; `runTool` returns an offer for valid input and none for a bad
       field, empty or over-cap text, and refuses it for a chat; `converse` puts the offer on the
       finished run.
-- [ ] `offer_to_save`, `GUIDE_TYPED_TOOLS`, `ToolRun.offer`, `describeCall`; the prompt section.
+- [x] `offer_to_save`, `GUIDE_TYPED_TOOLS`, `ToolRun.offer`, `describeCall`; the prompt section.
 
 ### Stage 2: the card
-- [ ] Tests red first (jsdom): the card draws for a valid offer and not for a bad one; press reads,
+- [x] Tests red first (jsdom): the card draws for a valid offer and not for a bad one; press reads,
       saves, shows Undo; Undo restores; Undo refuses when changed since; read failure writes
       nothing; already saved.
-- [ ] `GuideSaveOffer`, ChatPanel wiring, styles; *Keep this* removed.
+- [x] `GuideSaveOffer`, ChatPanel wiring, styles; *Keep this* removed.
 
 ### Stage 3: measure, browser, review, land
-- [ ] Prompt check on real-model turns; Sonnet browser pass (desktop and phone); GPT Sol code
+- [x] Prompt check on real-model turns; Sonnet browser pass (desktop and phone); GPT Sol code
       review; docs (chat-tools.md, reader-profile.md); gates; push; question file and note.
+
+## Log
+
+- 2026-10-09: **measured**, [261009c](../investigations/261009c-the-guide-s-offers-to-save-measured.md):
+  v1 10/12 (one answer pointed at a button it had not made), v2 18/18 after two prompt sentences,
+  v3 14/14 after the tool-result sentence below.
+- 2026-10-09: **seen in a browser**, Sonnet subagent, Playwright, 1440 and 390, the local *Attention
+  Is All You Need*, two paid turns. Passed: no *Keep this* button; a reason card with the reader's
+  words, nothing saved before the press, Metadata showing it after, Undo putting it back; an About
+  you card that kept the old text and added the new, saved and undone with /profile exact; the card
+  fits at 390 with no horizontal scroll; the card still there after a reload; no console errors.
+  Shots: [offer](261009o-shot-1-offer.png), [saved](261009o-shot-2-saved.png),
+  [undone](261009o-shot-3-undone.png), [phone](261009o-shot-4-phone.png),
+  [About you saved](261009o-shot-5-about.png).
+- 2026-10-09: **the browser pass found both answers written twice**, the model having written its
+  reply, called the tool, and written it again; and the two copies glued without a space. Fixed in
+  the tool's result and in `converse`'s joining of rounds; reproduced and measured 9/14 → 0/14 on
+  that article. [Postmortem 261009j](../postmortems/261009j-an-answer-is-every-round-joined-so-words-before-a-tool-call-are-never-taken-back.md).
+  A second, focused GPT Sol review of that change: § Code review, second round.
+- 2026-10-09: **left as they are**, from the browser pass. After a reload, an offer already saved
+  shows its button again (the saved state is the mount's); pressing it says *Already saved*. A card
+  under a held answer can sit under the composer until the reader scrolls, as any long answer's end
+  does.
+- 2026-10-09: **fixed from the browser pass**: the card's buttons (`chat-suggest-btn`, the greeting's
+  own) read as plain text, their `--rule` border being the card's colour; inside the card they now
+  take `--rule-strong` and size to their words.

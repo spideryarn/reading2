@@ -61,7 +61,7 @@ await pgReady({
 });
 
 const { handleApi } = await import("../src/routes.js");
-const { chatStore, shelfStore } = await import("../src/store/index.js");
+const { chatStore, readerStore, shelfStore } = await import("../src/store/index.js");
 
 let article: ScratchArticle | undefined;
 
@@ -222,6 +222,7 @@ describe("a guide turn", () => {
 
   it("stores an offer to save with what the reason held when the turn read it", async () => {
     vi.spyOn(shelfStore, "articlesOpenedBefore").mockResolvedValue(3);
+    const profileRead = vi.spyOn(readerStore, "readProfile");
     const call = (data: unknown) => `data: ${JSON.stringify(data)}\n\n`;
     replies = [
       new Response(
@@ -255,6 +256,54 @@ describe("a guide turn", () => {
     const stored = await asTestOwner(() => chatStore.load(SLUG));
     const answer = stored.find((t) => t.id === "spya-gdrtf2")?.messages.at(-1);
     expect(answer?.tools?.[0]?.offer).toEqual({ field: "purpose", text: "For my journal club.", basis: null });
+    expect(profileRead).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not read the profile or make an unbased offer when profile use is off", async () => {
+    vi.spyOn(shelfStore, "articlesOpenedBefore").mockResolvedValue(3);
+    const profileRead = vi.spyOn(readerStore, "readProfile");
+    const call = (data: unknown) => `data: ${JSON.stringify(data)}\n\n`;
+    replies = [
+      new Response(
+        call({
+          model: "test/model",
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: "toolu_0",
+                    type: "function",
+                    function: {
+                      name: "offer_to_save",
+                      arguments: JSON.stringify({ field: "reason", text: "For my journal club." }),
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        }) +
+          call({ model: "test/model", choices: [{ delta: {}, finish_reason: "tool_calls" }] }) +
+          "data: [DONE]\n\n",
+        { status: 200, headers: { "content-type": "text/event-stream" } },
+      ),
+      finishedBody("Start with the abstract."),
+    ];
+    expect(
+      await post({
+        threadId: "spya-gdrtg2",
+        question: "For my journal club.",
+        kind: "guide",
+        useProfile: false,
+      }),
+    ).toBe(200);
+    expect(profileRead).not.toHaveBeenCalled();
+    const stored = await asTestOwner(() => chatStore.load(SLUG));
+    const answer = stored.find((t) => t.id === "spya-gdrtg2")?.messages.at(-1);
+    expect(answer?.tools?.[0]?.detail).toBe("not offered");
+    expect(answer?.tools?.[0]?.offer).toBeUndefined();
   });
 
   it("refuses visible blocks before any model call", async () => {
