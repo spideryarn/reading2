@@ -124,7 +124,7 @@ for that.
   Press a claim to fold its sources away. The **relevance** slider hides sources the AI judged to
   bear on their claim only loosely or partly.
 
-![The Claims view of an older search: a relevance slider, a thread shared by two sources, one claim quoted from the piece, and under it an arXiv paper marked as a key source, Critical, with an excerpt from it](../images/mode-debate.png "Claims: one of the piece’s claims, and a paper the AI judges to dispute it. The AI tags are the model’s reading; the excerpt is the source’s own words.")
+![The Claims view: two claims quoted from the piece, each with a line in the AI’s words and, under it, “Cited in this paragraph” naming a work](../images/mode-debate.png "Claims: each claim in the piece’s own words, then the AI’s line on it, then the works the piece cites in the same paragraph. Nothing is searched until you press Check.")
 
 Anything tagged **AI** is the AI’s reading, checked against nothing: the threads across sources, the
 key-source picks (starred), each page’s lean (Supportive, Critical, Neither for nor against, Could

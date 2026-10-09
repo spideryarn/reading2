@@ -276,8 +276,8 @@ export const HELP_IMAGES: Readonly<Record<string, HelpImage>> = {
   "mode-citations.png": {
     src: modeCitationsPng,
     w: 1088,
-    h: 768,
-    shows: "?mode=citations, prioritised, the band alone; cropped after the second work.",
+    h: 860,
+    shows: "?mode=peer-review (Bibliography, prioritised), the chip row and the band alone; clip x12 y44 w544 h430 CSS, cropped after the second work.",
     article: "The Scaling Hypothesis (scaling-hypothesis)",
     window: "1440×900 at 2×",
     taken: "2026-10-09",
@@ -351,12 +351,12 @@ export const HELP_IMAGES: Readonly<Record<string, HelpImage>> = {
   "mode-debate.png": {
     src: modeDebatePng,
     w: 1088,
-    h: 1200,
+    h: 896,
     shows:
-      "?mode=debate on the run already made, the Claims tab (Reception was empty), the band alone; clip x12 y138 w544 h600 CSS.",
-    article: "Claude’s Constitution (claudes-constitution-spya-cr8bzk)",
+      "?mode=peer-review&peer-review=claims on a listed claims list, the chip row and the band alone, two claims each with its Cited in this paragraph line; clip x12 y44 w544 h448 CSS.",
+    article: "The Scaling Hypothesis (scaling-hypothesis)",
     window: "1440×900 at 2×",
-    taken: "2026-10-07",
+    taken: "2026-10-09",
   },
   "mode-referee.png": {
     src: modeRefereePng,

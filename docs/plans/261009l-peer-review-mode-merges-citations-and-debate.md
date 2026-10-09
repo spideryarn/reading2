@@ -325,6 +325,20 @@ iPad and phone widths by a Sonnet subagent, then the bookkeeping: the question f
 
 ## Log
 
+- 2026-10-09: Browser pass (Sonnet, Playwright, scaling-hypothesis) at 1440, 820 and 390: one
+  Peer review button with the switch on or off; the chips switch; the three old links rewrite to the
+  right sub-mode; *Cited in this paragraph* appears and opens the work's Bibliography row. **At 820
+  the chip row is wider than the ~290px band and scrolls sideways, so Claims shows cut off beside the
+  (i)** ([shot 1](261009l-shot-1-ipad-chip-row-clipped.png)). That is the house rule for every
+  part-switcher (scroll inside its outline rather than wrap: `quiz.css`, `diagram.css`), now with
+  three counted chips. Left as is. If it bothers Greg, dropping the zero counts is the first lever.
+  Help's Bibliography and Claims pictures were reshot with the chip row.
+- 2026-10-09: GPT Sol's code review
+  ([261009l-peer-review-code-review-sol.md](261009l-peer-review-code-review-sol.md)): LAND AFTER
+  FIXES. It fixed C1 to C3 itself. C4 is the screenshots, reshot above. C5 (two docs stale) was fixed
+  by me. C6 (no Reader-level test that a focus clears on a sub-mode change; the pure rule is tested
+  and the wiring is right) is left as test hardening.
+
 - 2026-10-09: GPT Sol's plan review: BUILD WITH CHANGES, F1 to F9, all accepted and written into
   Stage 1 § 10. F2 corrected a false claim about Reception's spend, and the repeat press is accepted
   as is. F6 softened C1's completeness and order claims.
