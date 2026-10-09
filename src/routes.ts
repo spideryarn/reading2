@@ -4949,7 +4949,7 @@ function parseAnchor(anchor: unknown): ChatAnchor | undefined {
  * The `origin` field of a chat request, as a `ThreadOrigin` or nothing.
  *
  * Shape only; whether a claim's block is the article's is checked by the
- * caller, which has the article. A glossary or citations `itemId` is never
+ * caller, which has the article. A glossary, citations or ideas `itemId` is never
  * checked against anything. A mode that is not built is a 400, including the ones
  * the database's CHECK already lists.
  *
@@ -4989,6 +4989,7 @@ function parseOrigin(origin: unknown): ThreadOrigin | undefined {
     }
     case "glossary":
     case "citations":
+    case "ideas":
       return parseItemOrigin(built, origin as Record<string, unknown>);
     /* A mode added to `ORIGIN_MODES` has to say here what it is made of. */
     default:
@@ -4997,7 +4998,7 @@ function parseOrigin(origin: unknown): ThreadOrigin | undefined {
 }
 
 /**
- * **A glossary entry's or a cited work's origin**: the entry's durable id,
+ * **A glossary entry's, a cited work's or an idea's origin**: the item's durable id,
  * and a snapshot of its name (plan 261006d, D1 and D3).
  *
  * **Shape only.** The id is not looked up, so a regenerated or removed entry
@@ -5005,7 +5006,7 @@ function parseOrigin(origin: unknown): ThreadOrigin | undefined {
  * which every sender cuts to (`originName` in src/types.ts), so only a
  * hand-made body meets the 413. No part of the name reaches a thrown message.
  */
-function parseItemOrigin(mode: "glossary" | "citations", body: Record<string, unknown>): ThreadOrigin {
+function parseItemOrigin(mode: "glossary" | "citations" | "ideas", body: Record<string, unknown>): ThreadOrigin {
   const { itemId, quote, blockId, lens } = body;
   if (blockId !== undefined || lens !== undefined) {
     throw httpError(400, "origin of this mode is an itemId and a quote, with no blockId and no lens");

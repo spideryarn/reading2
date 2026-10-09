@@ -37,8 +37,12 @@
  * reason `SearchBand` does — see the comment there, and note in particular that
  * ideas must not share search's `found` state.
  */
+import { useRef } from "react";
 import { Lightbulb, TriangleAlert } from "lucide-react";
 import type { Idea } from "../types.js";
+import { type ItemFocus, useLandOnItem } from "./item-focus.js";
+import { ASK_IDEA_IN_CHAT, AskInChatButton, type IdeaChats, OPEN_IDEA_CHAT, OriginChatMark } from "./OriginChat.js";
+import { threadForOrigin } from "./useChatAnchors.js";
 import type { UseIdeas } from "./useIdeas.js";
 import type { Found } from "./search-hits.js";
 import { BlockNav, nudgeTo } from "./BlockNav.js";
@@ -72,8 +76,19 @@ export type IdeasOwner = UseIdeas;
  * why the owner's list is nullable and the visitor's is not.
  */
 export type IdeasAccess =
-  | { kind: "owner"; owner: IdeasOwner; ideas: { ideas: Idea[] } | null }
-  | { kind: "visitor"; ideas: { ideas: Idea[] }; owner?: never };
+  | {
+      kind: "owner";
+      owner: IdeasOwner;
+      ideas: { ideas: Idea[] } | null;
+      /**
+       * **A chat about one idea**: its *Ask in chat* and the mark that reopens
+       * a chat already started from it (OriginChat.tsx § `ItemChats`; plan
+       * 261009i, stage 3). On the owner's arm because a visitor has no chat.
+       * Optional, so a panel drawn without it (most tests) has no button.
+       */
+      chats?: IdeaChats;
+    }
+  | { kind: "visitor"; ideas: { ideas: Idea[] }; owner?: never; chats?: never };
 
 interface Props {
   access: IdeasAccess;
@@ -86,6 +101,15 @@ interface Props {
   openKey: string | null;
   onOpenKey(key: string | null): void;
   onJump(id: BlockId): void;
+  /**
+   * **One idea to bring into view, once** — a chat's way back to the idea it
+   * was started from (src/web/item-focus.ts; plan 261009i, stage 2). The
+   * idea is selected by `?idea=`; this only scrolls its row into view, and
+   * does not jump the prose the way a press on the row does. An id the list
+   * does not have is handed back at once, and the band shows its list.
+   */
+  focus?: ItemFocus | null | undefined;
+  onFocusTaken?: ((focus: ItemFocus) => void) | undefined;
 }
 
 /**
@@ -122,11 +146,28 @@ export function IdeasPanel({
   openKey,
   onOpenKey,
   onJump,
+  focus = null,
+  onFocusTaken,
 }: Props) {
   useRenderCount("IdeasPanel");
   const owner = access.kind === "owner" ? access.owner : null;
   const ideas = access.ideas;
   const all = ideas?.ideas ?? [];
+  const chats = access.kind === "owner" ? (access.chats ?? null) : null;
+  /* **Land on the focused idea** (src/web/item-focus.ts). Every idea in a
+     ready list is drawn, in one of the two groups, so known is drawn — unless
+     one has a provenance neither group takes. */
+  const surface = useRef<HTMLElement>(null);
+  const focused = focus ? all.find((i) => i.id === focus.id) : undefined;
+  useLandOnItem({
+    focus,
+    ready: ideas !== null && (owner === null || owner.status === "ready"),
+    known: focused !== undefined,
+    drawn: focused !== undefined && GROUPS.some((g) => g.provenance === focused.provenance),
+    scope: surface,
+    attribute: "data-idea-id",
+    onTaken: onFocusTaken,
+  });
   /* **Returns nothing for a visitor**, which is what makes every call site
      below one line rather than a conditional: this whole block is a button that
      spends a model call, and a visitor has none. */
@@ -191,6 +232,7 @@ export function IdeasPanel({
 
   return (
     <ModeSurface
+      ref={surface}
       label="Ideas"
       feature="gloss ideas"
       mode="ideas"
@@ -362,6 +404,7 @@ export function IdeasPanel({
                         openKey={openKey}
                         onOpenKey={onOpenKey}
                         onJump={onJump}
+                        chats={chats}
                       />
                     ))}
                   </ul>
@@ -383,6 +426,7 @@ function IdeaRow({
   openKey,
   onOpenKey,
   onJump,
+  chats,
 }: {
   idea: Idea;
   open: boolean;
@@ -391,10 +435,17 @@ function IdeaRow({
   openKey: string | null;
   onOpenKey(key: string | null): void;
   onJump(id: BlockId): void;
+  /** The owner's; `null` for a visitor, who gets neither the button nor the mark. */
+  chats: IdeaChats | null;
 }) {
   const assumed = idea.provenance === "assumed";
+  /* The chat started from this idea, matched by its id alone (`sameOrigin`),
+     so the name in the origin built here is not compared. Only for the open
+     row, which is the only one that draws it. */
+  const chat =
+    open && chats ? threadForOrigin(chats.summaries, { mode: "ideas", itemId: idea.id, quote: idea.name }) : undefined;
   return (
-    <li className={`ideas-item${open ? " open" : ""}`}>
+    <li className={`ideas-item${open ? " open" : ""}`} data-idea-id={idea.id}>
       <button type="button" className="ideas-name" onClick={onSelect} aria-expanded={open}>
         {idea.name}
       </button>
@@ -518,6 +569,22 @@ function IdeaRow({
               </p>
             )}
           </div>
+
+          {/* **Ask in chat, and the way back to a chat already started from
+              this idea** (plan 261009i, stage 3), drawn as a Glossary entry
+              draws them (GlossaryPanel.tsx § `Looked`). The press sends the
+              idea's name and statement, fenced, and a question about it
+              (chat-handoff.ts § `askAboutIdea`). Owner only. */}
+          {chats && (
+            <div className="gloss-look ideas-ask">
+              <AskInChatButton
+                label={ASK_IDEA_IN_CHAT}
+                className="gloss-btn ideas-ask-chat"
+                onAsk={() => chats.onAsk(idea)}
+              />
+              {chat && <OriginChatMark chat={chat} label={OPEN_IDEA_CHAT} onOpen={chats.onOpen} />}
+            </div>
+          )}
         </div>
       )}
     </li>

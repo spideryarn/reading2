@@ -367,7 +367,8 @@ export const guideParam = parseAsBit.withOptions({ history: "replace" });
 
 /**
  * **Which conversations Chat's list is narrowed to, by where they came from**
- * — `?chatfrom=chats`, `debate`, `learn` or `passage`. Since 2026-10-05
+ * — `?chatfrom=chats`, a mode (`debate`, `glossary`, `citations`, `ideas`), `learn` or
+ * `passage`. Since 2026-10-05
  * the list shows every conversation about the article (report `spya-hyfqkq`,
  * docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md
  * D5), and this is its filter.
@@ -385,7 +386,7 @@ export const guideParam = parseAsBit.withOptions({ history: "replace" });
  * `remember` until 2026-10-06 and is not aliased: an old `?chatfrom=remember`
  * is an unknown word, which reads as All.
  */
-export const CHAT_FROM_WORDS = ["chats", "debate", "glossary", "citations", "learn", "passage"] as const;
+export const CHAT_FROM_WORDS = ["chats", "debate", "glossary", "citations", "ideas", "learn", "passage"] as const;
 export type ChatFrom = (typeof CHAT_FROM_WORDS)[number];
 
 export const chatFromParam = createParser<ChatFrom>({

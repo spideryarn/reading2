@@ -93,6 +93,7 @@ import type {
   ChatThread,
   Citation,
   ThreadKind,
+  ThreadOrigin,
   ToolRun,
 } from "../types.js";
 import { isLearnKind } from "../types.js";
@@ -124,6 +125,7 @@ import {
   GUIDE_LABEL,
   type LearnConversationView,
   narrowed,
+  originBack,
   sourcesIn,
   type ThreadSource,
   threadSource,
@@ -312,6 +314,16 @@ interface Props {
   /** A transport failure. Model failures live on the message that failed. */
   error: string | null;
   /**
+   * **Where the open conversation was started from**, when it was started
+   * from an item in another mode: the stored origin, or the one still waiting
+   * for the server to name the thread (`ConversationBand` resolves which). A
+   * line above the transcript then offers the way back (`OriginBack`; plan
+   * 261009i, stage 2). Chat's alone: Learn never passes one.
+   */
+  origin?: ThreadOrigin | undefined;
+  /** Open the origin's mode on its item (Reader.tsx § `openOrigin`). */
+  onOrigin?: ((origin: ThreadOrigin) => void) | undefined;
+  /**
    * Which mode this panel is being shown in — chat, or Learn.
    *
    * **One panel with a kind, not two panels.** Everything under here is the
@@ -448,6 +460,8 @@ export function ChatPanel({
   live,
   onStartLive,
   onAnswered,
+  origin,
+  onOrigin,
 }: Props) {
   useRenderCount("ChatPanel");
   /* **Learn's layout, for all three of its conversations** — Recall,
@@ -707,6 +721,10 @@ export function ChatPanel({
           § There is a `foot` slot, in
           docs/plans/260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen.md */}
       {error && <p className="chat-error">{error}</p>}
+
+      {/* **The way back to the item this chat was started from** (plan
+          261009i, stage 2). A chat only: not Learn, not the guide. */}
+      {!learn && open?.kind === "chat" && origin && onOrigin && <OriginBack origin={origin} onBack={onOrigin} />}
 
       {open ? (
         <Conversation
@@ -1247,6 +1265,43 @@ function GuideRow({
  * the author's for the article's words, the reader's for an angle they typed
  * (`ThreadSource.voice`).
  */
+/**
+ * **One line above the transcript: back to the item this chat was started
+ * from**, in its mode (plan 261009i, stage 2; the words are
+ * thread-source.ts § `originBack`). It wears the mode's own icon, because a
+ * control that takes you into a mode does (docs/project/icons.md). The
+ * item's name is the article's or a model's words, so it is in the author's
+ * face as the list's tooltip draws it (`ThreadSourceMark`), and it is clipped
+ * by CSS on one line: the whole sentence is the button's name and title.
+ *
+ * Not drawn in the floating chat beside a mode (`ChatDialog`): that one was
+ * opened from the item's own mark, so the item is already on screen.
+ */
+function OriginBack({ origin, onBack }: { origin: ThreadOrigin; onBack(origin: ThreadOrigin): void }) {
+  const back = originBack(origin);
+  const Icon = MODE_ICON[back.mode];
+  return (
+    <button
+      type="button"
+      className="chat-origin-back tap-target"
+      aria-label={back.text}
+      title={back.text}
+      onClick={() => onBack(origin)}
+    >
+      <Icon size={13} aria-hidden="true" />
+      <span className="chat-origin-back-text">
+        Back to{" "}
+        {back.quote === null ? (
+          "your angle"
+        ) : (
+          <span className={withVoice("chat-origin-back-quote", "author")}>“{back.quote}”</span>
+        )}{" "}
+        in {back.modeLabel}
+      </span>
+    </button>
+  );
+}
+
 function ThreadSourceMark({ source }: { source: ThreadSource }) {
   const { open, onOpenChange, trigger } = usePressToggle();
   /* A passage is not a mode and has no icon on the bar. */

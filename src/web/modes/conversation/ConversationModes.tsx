@@ -485,6 +485,12 @@ type ConversationBandProps = {
   /** An answer settled, including after this band has gone. */
   onSettled?: (() => void) | undefined;
   /**
+   * **Open the mode an origin names, on its item** — the way back from a chat
+   * started from an item in another mode (Reader.tsx § `openOrigin`; plan
+   * 261009i, stage 2). Chat's band only; Learn's conversations have no origin.
+   */
+  onOrigin?: ((origin: ThreadOrigin) => void) | undefined;
+  /**
    * **The Recall | Tutorial | Explore | Quiz control**, when this band is one of Learn's
    * conversation views. Absent in chat mode. Built by `LearnBand` above and passed straight
    * through to `ChatPanel`, which is where it is drawn.
@@ -503,6 +509,7 @@ export function ConversationBand({
   onHandoffThread,
   onSettled,
   onScreen,
+  onOrigin,
 }: ConversationBandProps) {
   useRenderCount("ConversationBand");
   const {
@@ -1335,6 +1342,16 @@ export function ConversationBand({
         void setWhere({ mode: "learn", learn: view, thread: id }, { history: "push" });
       } : undefined}
       threadId={current}
+      /* **Where the open chat was started from**: the server's origin once it
+         has named the thread, and until then the one the handoff left
+         pending, so the way back is there from the first frame of a fresh
+         Ask in chat (plan 261009i, stage 2). */
+      origin={
+        kind === "chat" && current !== null
+          ? (threads.find((t) => t.id === current)?.origin ?? pendingOrigin(current))
+          : undefined
+      }
+      onOrigin={kind === "chat" ? onOrigin : undefined}
       /* Open a conversation from the list, or close one back to it — chat's
          only, since Learn has neither. The panel calls this for a chat's
          row and `onOpenLearn` for a Learn row. */

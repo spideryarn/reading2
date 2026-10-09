@@ -4222,7 +4222,7 @@ export type ChatAnchor =
  * Set on the turn that creates the thread and never again, like `anchor`.
  * Written by conditional spread, never `origin: undefined`.
  */
-export type ThreadOrigin = ClaimOrigin | LensOrigin | GlossaryOrigin | CitationsOrigin;
+export type ThreadOrigin = ClaimOrigin | LensOrigin | GlossaryOrigin | CitationsOrigin | IdeasOrigin;
 
 /** One of Debate's claims: the block it sits in and its words when the chat started. */
 export type ClaimOrigin = { mode: "debate"; blockId: BlockId; quote: string };
@@ -4248,6 +4248,16 @@ export type GlossaryOrigin = { mode: "glossary"; itemId: string; quote: string }
 
 /** One work the article cites: its id, and its title when the chat started. `GlossaryOrigin`'s rules. */
 export type CitationsOrigin = { mode: "citations"; itemId: string; quote: string };
+
+/**
+ * One of Ideas' propositions: its id, and its name when the chat started
+ * (plan docs/plans/261009i-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md).
+ * `GlossaryOrigin`'s rules, with one difference: an idea keeps its id across
+ * a re-run only while it keeps its normalised name (src/ideas.ts), so a
+ * paraphrased idea gets a new id and this origin then finds nothing. Best
+ * effort, said plainly (that plan's F6).
+ */
+export type IdeasOrigin = { mode: "ideas"; itemId: string; quote: string };
 
 /**
  * The most the name snapshot of a glossary or citations origin may be. The
@@ -4288,7 +4298,7 @@ export function isClaimOrigin(origin: ThreadOrigin): origin is ClaimOrigin {
 }
 
 /** The origin modes that are built. The route refuses any other. */
-export const ORIGIN_MODES = ["debate", "glossary", "citations"] as const satisfies readonly ThreadOrigin["mode"][];
+export const ORIGIN_MODES = ["debate", "glossary", "citations", "ideas"] as const satisfies readonly ThreadOrigin["mode"][];
 
 /**
  * Are these the same anchor? What the route's 409 and `withTurn`'s refusal
@@ -4323,6 +4333,7 @@ export function sameOrigin(a: ThreadOrigin, b: ThreadOrigin): boolean {
   switch (a.mode) {
     case "glossary":
     case "citations":
+    case "ideas":
       return b.mode === a.mode && a.itemId === b.itemId;
     case "debate":
       if (b.mode !== "debate") return false;

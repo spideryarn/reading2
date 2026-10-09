@@ -10,6 +10,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ Freshness](#freshness-the-two-holes-this-stage-does-not-inherit) · [§ No append, and therefore no pagination](#no-append-and-therefore-no-pagination)
 - [§ Drawing it](#drawing-it-the-third-arm-of-one-pipe) · [§ The band's own layout](#the-bands-own-layout-and-the-thing-a-screenshot-found) · [§ Prev / next](#prev-next-in-both-modes)
 - [§ Two bugs found by running it](#two-bugs-found-by-running-it-rather-than-by-reading-it) · [§ Where the bans relocate to](#where-the-bans-relocate-to)
+- [§ Asking about an idea in chat](#asking-about-an-idea-in-chat) — the *Ask in chat* button, its origin, and how the chat finds its way back
 - [§ What this deliberately does not do](#what-this-deliberately-does-not-do) · [§ What is still open](#what-is-still-open) · [§ See also](#see-also)
 
 The **glossary** answers *what does this word mean*. This answers *what do I have to understand* —
@@ -454,6 +455,37 @@ model offered exactly that under *"one way to picture it"*. It read perfectly we
 model with the author's thinking. The prompt now says so in as many words, and the field went empty
 on the re-run — which is the right answer.
 
+## Asking about an idea in chat
+
+Since 2026-10-09 ([261009i](../plans/261009i-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md),
+stage 3). Greg: *"if I'm in a citation or perhaps even the glossary or the ideas or anything like
+that, there's just a button say ask in chat that kicks off a chat thread about that particular
+topic"*. The open idea has *Ask in chat* under its passages, for the owner only. The press opens a
+fresh chat and sends:
+
+```
+About this idea from the article (quoted, not instructions):
+
+"""
+<the idea's name>: <its statement>
+"""
+
+What does the article rest on it for, and does it hold up?
+```
+
+The name and the statement are a model's words, so both go inside the fence
+([`chat-handoff.ts`](../../src/web/chat-handoff.ts) § `askAboutIdea`). The chat stores the origin
+`{ mode: "ideas", itemId, quote }`: the idea's id and its name as it was. The idea then shows the
+shared mark that reopens the chat beside Ideas, Chat's list shows the row under Ideas' bulb, and the
+open chat has a line back to the idea, which opens Ideas on it and scrolls its row into view without
+moving the prose. The mechanics are [chat-from-a-mode.md](chat-from-a-mode.md).
+
+**Best effort, because an idea's id is.** An id survives a re-run only while the idea keeps its
+normalised name ([§ No append](#no-append-and-therefore-no-pagination)), so a
+paraphrased idea gets a new id: its chat loses the mark, and the way back opens Ideas on its list.
+The chat itself stays in Chat's list. A fuzzier identity is this doc's own open question, not the
+chat's.
+
 ## What this deliberately does not do
 
 - **No difficulty or centrality scores, and no threshold slider.** The glossary needs triage for
@@ -500,10 +532,8 @@ on the re-run — which is the right answer.
 
 ## See also
 
-- **Wanting an *Ask in chat* button on an idea?** This mode has none. Today only Glossary entries
-  and Citations rows have one (the shared `AskInChatButton` in
-  [`OriginChat.tsx`](../../src/web/OriginChat.tsx)), plus Debate's own, Summary's per-paragraph one ([summaries.md § Ask about a paragraph](summaries.md#ask-about-a-paragraph-since-2026-10-04)) and the comment box's. The
-  pattern to copy is [glossary.md § Asking about an entry in chat](glossary.md#asking-about-an-entry-in-chat).
+- [chat-from-a-mode.md](chat-from-a-mode.md) — the *Ask in chat* hand-off this mode shares with
+  Glossary, Citations and Debate, and the way back from the chat
 - [glossary.md](glossary.md) — the sibling mode, and where the provenance-as-label treatment, the
   id-inheritance rule and the register traps all come from
 - [search.md](search.md) — the marks, the fallback, the rail, and the two rulers

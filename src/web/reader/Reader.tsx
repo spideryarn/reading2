@@ -33,6 +33,8 @@ import {
   type CitedWork,
   type ClaimOrigin,
   type GlossaryEntry,
+  type Idea,
+  isLensOrigin,
   type ThreadOrigin,
 } from "../../types.js";
 import { marginaliaNotes, arcAt, headBlock, headPath } from "../marginalia/notes.js";
@@ -91,6 +93,7 @@ import {
   askAboutSummaryParagraph,
   askAboutCitedWork,
   askAboutGlossaryEntry,
+  askAboutIdea,
   askAboutBlock,
   askAboutTerm,
   itemOrigin,
@@ -120,6 +123,7 @@ import { Dock, useActivateMode, useActivateSubMode, visibleModes } from "../Dock
 import { gateToReveal, PRIORITY_GATE } from "../GlossaryPanel.js";
 import { ProseHoverCard, type QuoteCardSource } from "../ProseHoverCard.js";
 import type { CiteFocus } from "../CitationsPanel.js";
+import { claimFocusKey, focusOn, focusTaken, type ItemFocus } from "../item-focus.js";
 import { shownEntries } from "../glossary-shown.js";
 import { editArticleTags } from "../article-tags.js";
 import { chatExecutor, type ModeCommand, modeDoor, readingExecutor, type TagsControl } from "../command-runners.js";
@@ -155,6 +159,8 @@ import {
   summaryParam,
   structureParam,
   debateParam,
+  bearsParam,
+  debateThreadParam,
   type BandMode,
   type Mode,
 } from "../params.js";
@@ -1111,6 +1117,14 @@ export function Reader({
       handToChat(askAboutCitedWork(work), "send", itemOrigin("citations", work.id, work.title)),
     [handToChat],
   );
+  /* **A seventh since 2026-10-09: an idea's *Ask in chat*** (plan 261009i,
+     stage 3). The name and the statement go in the fence; the origin is the
+     idea's id and its name. */
+  const askIdeaInChat = useCallback(
+    (idea: Pick<Idea, "id" | "name" | "statement">) =>
+      handToChat(askAboutIdea(idea), "send", itemOrigin("ideas", idea.id, idea.name)),
+    [handToChat],
+  );
   /* The one sender that waits: the paragraph, quoted, and an empty line for
      the reader's question. There is nothing to ask until they type it. */
   const askAboutSummary = useCallback(
@@ -1425,15 +1439,12 @@ export function Reader({
    * URL parameter because nothing about it should survive a reload. The prose
    * card's *Dig deeper* set it from plan 261004b until 2026-10-09, when that
    * button became *Ask in chat* (plan 261009i), which goes to Chat instead.
-   * Nothing sets it for now: Stage 2 (plan 261009i) opens Citations on a row
-   * with this, from a chat's way back to its item.
+   * Since then a chat's way back to its item sets it (`openOrigin` below, plan
+   * 261009i stage 2); Glossary, Ideas and Debate have the same shape (item-focus.ts).
    */
   const [citeFocus, setCiteFocus] = useState<CiteFocus | null>(null);
   /* Only the request that was served: a second press may have replaced it. */
-  const citeFocusTaken = useCallback(
-    (taken: CiteFocus) => setCiteFocus((now) => (now?.n === taken.n ? null : now)),
-    [],
-  );
+  const citeFocusTaken = useCallback((taken: CiteFocus) => setCiteFocus(focusTaken(taken)), []);
 
   const citeSelections = useMemo<CiteSelection[]>(
     () =>
@@ -1586,6 +1597,88 @@ export function Reader({
    */
   const [ideaFound, setIdeaFound] = useState<Found[]>([]);
   const [openOccurrence, setOpenOccurrence] = useState<string | null>(null);
+
+  /**
+   * **One row to bring into view in Glossary, Ideas and Debate's Claims**,
+   * once each — `citeFocus` above is Citations' (src/web/item-focus.ts). Only
+   * the way back from a chat sets them (`openOrigin` below). One piece of
+   * state per band, so a request for one band cannot be spent by another.
+   */
+  const [termFocus, setTermFocus] = useState<ItemFocus | null>(null);
+  const termFocusTaken = useCallback((taken: ItemFocus) => setTermFocus(focusTaken(taken)), []);
+  const [ideaFocus, setIdeaFocus] = useState<ItemFocus | null>(null);
+  const ideaFocusTaken = useCallback((taken: ItemFocus) => setIdeaFocus(focusTaken(taken)), []);
+  const [claimFocus, setClaimFocus] = useState<ItemFocus | null>(null);
+  const claimFocusTaken = useCallback((taken: ItemFocus) => setClaimFocus(focusTaken(taken)), []);
+  /* **Mode and the parameters that could hide the item, in one pushed
+     entry**, so one Back returns to the chat (GPT Sol's F4 on plan 261009i).
+     Each closed on a line of its own: tests/last-view.test.ts reads them. */
+  const [, setDebateWay] = useQueryStates({
+    mode: modeParam,
+    debate: debateParam,
+    bears: bearsParam,
+    debatethread: debateThreadParam,
+  });
+  const [, setIdeaWay] = useQueryStates({
+    mode: modeParam,
+    idea: ideaParam,
+  });
+  /**
+   * **The way back from a chat to the item it was started from** — the line
+   * above the transcript in Chat's band (ChatPanel.tsx § `OriginBack`; plan
+   * docs/plans/261009i-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md,
+   * stage 2). Each arm opens the origin's mode and asks its band to bring the
+   * item's row into view; **none jumps the prose**: on a phone the band lies
+   * over it, so the flash would be held until the band moved and the reader
+   * would see nothing (F4). The row's own block link is the next press.
+   *
+   * An item the mode no longer has (renamed, hidden, re-run away) opens the
+   * mode on its list: each band hands an unknown focus back at once.
+   *
+   * **Exhaustive**, so a new origin mode cannot be forgotten here: the
+   * `never` arm stops compiling.
+   */
+  const openOrigin = useCallback(
+    (origin: ThreadOrigin) => {
+      switch (origin.mode) {
+        case "glossary":
+          /* `?term=` and the gate lowered if it hides the entry. */
+          openTermInGlossary(origin.itemId);
+          setTermFocus(focusOn(origin.itemId));
+          return;
+        case "citations":
+          setCiteFocus(focusOn(origin.itemId));
+          showBand("citations");
+          return;
+        case "ideas":
+          /* Not Ideas' row press, which jumps the prose. The old occurrence
+             names another idea, so it goes, as a row press clears it. */
+          setOpenOccurrence(null);
+          setIdeaFocus(focusOn(origin.itemId));
+          setBandAway(false);
+          void setIdeaWay({ mode: "ideas", idea: origin.itemId }, { history: "push" });
+          return;
+        case "debate":
+          setBandAway(false);
+          if (isLensOrigin(origin)) {
+            /* An angle is not in the article: the angles box is Reception's. */
+            void setDebateWay({ mode: "debate", debate: "reception" }, { history: "push" });
+            return;
+          }
+          setClaimFocus(focusOn(claimFocusKey(origin)));
+          void setDebateWay(
+            { mode: "debate", debate: "claims", bears: null, debatethread: null },
+            { history: "push" },
+          );
+          return;
+        default: {
+          const never: never = origin;
+          return never;
+        }
+      }
+    },
+    [openTermInGlossary, showBand, setIdeaWay, setDebateWay],
+  );
   /**
    * **The quotes, and they are not a state at all** — since 2026-09-08.
    *
@@ -2500,6 +2593,11 @@ export function Reader({
     () => ({ summaries: chatSummaries, onAsk: askCitedWorkInChat, onOpen: openClaimChat }),
     [chatSummaries, askCitedWorkInChat, openClaimChat],
   );
+  /* And Ideas' rows (plan 261009i, stage 3), from the same raw summaries. */
+  const ideaChats = useMemo(
+    () => ({ summaries: chatSummaries, onAsk: askIdeaInChat, onOpen: openClaimChat }),
+    [chatSummaries, askIdeaInChat, openClaimChat],
+  );
 
   /**
    * **One press, one model call, and the reader keeps reading.**
@@ -3209,6 +3307,7 @@ export function Reader({
               onHandoffTaken={handoffTaken}
               onHandoffThread={handoffThread}
               onSettled={refreshChats}
+              onOrigin={openOrigin}
             />
           </ChatCommands>
         ) : null;
@@ -3258,6 +3357,8 @@ export function Reader({
               onSelected={setTerm}
               onAskChat={askInChat}
               chats={entryChats}
+              focus={termFocus}
+              onFocusTaken={termFocusTaken}
             />
           );
         return artefacts?.glossary ? (
@@ -3379,6 +3480,9 @@ export function Reader({
               onFound={setIdeaFound}
               openKey={openOccurrence}
               onOpenKey={setOpenOccurrence}
+              chats={ideaChats}
+              focus={ideaFocus}
+              onFocusTaken={ideaFocusTaken}
             />
           );
         return artefacts?.ideas ? (
@@ -3474,6 +3578,8 @@ export function Reader({
             publishedAt={publishedAt}
             articleTitle={article.meta.title}
             claimChats={claimChats}
+            focus={claimFocus}
+            onFocusTaken={claimFocusTaken}
           />
         );
       /* **The owner/visitor pair, since 2026-09-29.** It was the owner alone

@@ -1,7 +1,8 @@
 /**
  * **A chat started from an item in a mode: the button that starts one, and
- * the mark that reopens it.** Shared by Debate's claims, Glossary's entries
- * and Citations' rows, so the three are one design and not three copies.
+ * the mark that reopens it.** Shared by Debate's claims, Glossary's entries,
+ * Citations' rows and Ideas' rows (since plan 261009i), so they are one
+ * design and not four copies.
  *
  * - `OriginChatMark` is the way back: the chat's count of questions and how
  *   its latest answer begins. A press opens that chat beside the mode. It was
@@ -25,7 +26,7 @@ import { MessagesSquare } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
-import type { CitedWork, GlossaryEntry, ThreadSummary } from "../types.js";
+import type { CitedWork, GlossaryEntry, Idea, ThreadSummary } from "../types.js";
 import { TipNote, Tooltip } from "./Tooltip.js";
 
 /**
@@ -45,15 +46,19 @@ export interface ItemChats<Item> {
 export type GlossaryEntryChats = ItemChats<Pick<GlossaryEntry, "id" | "name">>;
 /** What Citations' rows are handed: `onAsk` takes the work's id and what names it. */
 export type CitedWorkChats = ItemChats<Pick<CitedWork, "id" | "title" | "authors" | "year">>;
+/** What Ideas' rows are handed: `onAsk` takes the idea's id, its name and its statement (plan 261009i, stage 3). */
+export type IdeaChats = ItemChats<Pick<Idea, "id" | "name" | "statement">>;
 
-/** The words on Glossary's and Citations' button. */
+/** The words on Glossary's, Citations' and Ideas' button. */
 export const ASK_IN_CHAT = "Ask in chat";
 /** The button's accessible name on a Glossary entry, and on a cited work. */
 export const ASK_ENTRY_IN_CHAT = "Ask about this term in chat";
 export const ASK_WORK_IN_CHAT = "Ask about this work in chat";
+export const ASK_IDEA_IN_CHAT = "Ask about this idea in chat";
 /** The mark's accessible name on each. Debate's is `DEBATE_OPEN_CLAIM_CHAT`. */
 export const OPEN_ENTRY_CHAT = "Open the chat about this term";
 export const OPEN_WORK_CHAT = "Open the chat about this work";
+export const OPEN_IDEA_CHAT = "Open the chat about this idea";
 
 /** What the button's card says under its name: where the press goes, and that the press is the Send (since 2026-10-06, plan 261006j). */
 export const ASK_IN_CHAT_SAYS = "Opens a new chat and asks a question about it straight away.";

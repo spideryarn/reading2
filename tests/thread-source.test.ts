@@ -17,6 +17,7 @@ import {
   chatFrom,
   listedInChat,
   narrowed,
+  originBack,
   sourcesIn,
   threadSource,
 } from "../src/web/thread-source.js";
@@ -88,6 +89,15 @@ describe("threadSource", () => {
     });
   });
 
+  it("names an idea under Ideas' icon and word", () => {
+    expect(threadSource(t("chat", { origin: { mode: "ideas", itemId: "spya-idd222", quote: "Attention suffices" } }))).toEqual({
+      from: "ideas",
+      mode: "ideas",
+      label: "Started from an idea",
+      quote: "Attention suffices",
+    });
+  });
+
   it("says nothing for a plain chat", () => {
     expect(threadSource(t("chat"))).toBeNull();
   });
@@ -125,7 +135,10 @@ describe("the filter", () => {
   it("puts a glossary chat and a cited-work chat under their own words", () => {
     const g = { id: "g", ...t("chat", { origin: { mode: "glossary", itemId: "spya-ttm222", quote: "qualia" } }) };
     const c = { id: "c2", ...t("chat", { origin: { mode: "citations", itemId: "spya-ttm333", quote: "A work" } }) };
+    const i = { id: "i", ...t("chat", { origin: { mode: "ideas", itemId: "spya-idd222", quote: "An idea" } }) };
     expect(sourcesIn([...all, c, g])).toEqual(["chats", "debate", "glossary", "citations", "learn", "passage"]);
+    expect(sourcesIn([...all, i, c, g])).toEqual(["chats", "debate", "glossary", "citations", "ideas", "learn", "passage"]);
+    expect(narrowed([...all, i, c, g], "ideas").map((x) => x.id)).toEqual(["i"]);
     expect(narrowed([...all, c, g], "glossary").map((x) => x.id)).toEqual(["g"]);
     expect(narrowed([...all, c, g], "citations").map((x) => x.id)).toEqual(["c2"]);
   });
@@ -145,7 +158,8 @@ describe("the filter", () => {
     expect(CHAT_FROM_LABEL.debate).toBe("Debate");
     expect(CHAT_FROM_LABEL.glossary).toBe("Glossary");
     expect(CHAT_FROM_LABEL.citations).toBe("Citations");
-    expect([...CHAT_FROM_WORDS]).toEqual(["chats", "debate", "glossary", "citations", "learn", "passage"]);
+    expect(CHAT_FROM_LABEL.ideas).toBe("Ideas");
+    expect([...CHAT_FROM_WORDS]).toEqual(["chats", "debate", "glossary", "citations", "ideas", "learn", "passage"]);
   });
 
   it("reads `?chatfrom=` as one of those words, and anything else as All", () => {
@@ -153,5 +167,39 @@ describe("the filter", () => {
     expect(chatFromParam.parse("all")).toBeNull();
     expect(chatFromParam.parse("recall")).toBeNull();
     expect(chatFromParam.parse("")).toBeNull();
+  });
+});
+
+/**
+ * **The way back's words** (plan 261009i, stage 2): which mode a press opens,
+ * whose icon the line wears, and the sentence it says.
+ */
+describe("originBack", () => {
+  it("names the item and its mode, for every item origin", () => {
+    expect(originBack(CLAIM)).toEqual({
+      mode: "debate",
+      modeLabel: "Debate",
+      quote: "RNA can transfer a memory",
+      text: "Back to “RNA can transfer a memory” in Debate",
+    });
+    expect(originBack({ mode: "glossary", itemId: "spya-ttm222", quote: "qualia" }).text).toBe(
+      "Back to “qualia” in Glossary",
+    );
+    expect(originBack({ mode: "citations", itemId: "spya-ttm333", quote: "A work" }).text).toBe(
+      "Back to “A work” in Citations",
+    );
+    expect(originBack({ mode: "ideas", itemId: "spya-dea222", quote: "An idea" })).toMatchObject({
+      mode: "ideas",
+      text: "Back to “An idea” in Ideas",
+    });
+  });
+
+  it("calls an angle the reader's, with no quote: it is not an item in the article", () => {
+    expect(originBack({ mode: "debate", lens: "how it relates to Nagel" })).toEqual({
+      mode: "debate",
+      modeLabel: "Debate",
+      quote: null,
+      text: "Back to your angle in Debate",
+    });
   });
 });

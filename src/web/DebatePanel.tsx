@@ -273,6 +273,7 @@ import { ControlTip, TipNote, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useRevealChosen } from "./useRevealChosen.js";
 import { lensThreads, threadForOrigin } from "./useChatAnchors.js";
 import { OriginChatMark } from "./OriginChat.js";
+import { claimFocusKey, type ItemFocus, useLandOnItem } from "./item-focus.js";
 import { useRenderCount } from "./perf.js";
 import type { UseDebate } from "./useDebate.js";
 import type { UseDebateClaims } from "./useDebateClaims.js";
@@ -1029,6 +1030,18 @@ interface Props {
    * not a search. The owner's and a visitor's meta both carry it.
    */
   articleTitle: string | null;
+  /**
+   * **One claim to bring into view in Claims, once** — a chat's way back to
+   * the claim it was started from (src/web/item-focus.ts; plan 261009i,
+   * stage 2). Its id is `claimFocusKey` of the claim's block and words. The
+   * caller has already opened Claims and cleared `?bears=` and
+   * `?debatethread=`, which could hide it; this scrolls its row into view
+   * and unfolds an older search's claim. It does not jump the prose: on a
+   * phone the band covers it, and the row's own block link does that (the
+   * plan's F4). A claim no list has is handed back, and Claims shows its list.
+   */
+  focus?: ItemFocus | null | undefined;
+  onFocusTaken?: ((focus: ItemFocus) => void) | undefined;
 }
 
 export function DebatePanel({
@@ -1045,6 +1058,8 @@ export function DebatePanel({
   thread: threadParam,
   onThread,
   articleTitle,
+  focus = null,
+  onFocusTaken,
 }: Props) {
   useRenderCount("DebatePanel");
   /* `null` for a visitor, and every owner-only thing below is behind it. */
@@ -1156,6 +1171,32 @@ export function DebatePanel({
   const claimsCount =
     checkedRows > 0 ? checkedRows + claimsShown.length : listed !== null ? listed.length : claimsShown.length;
   const claimsUnit = checkedRows === 0 && listed !== null ? "claim" : "source";
+
+  /* **Land on the focused claim** (src/web/item-focus.ts), in either of
+     Claims' lists: the listed claims, and an older search's claim groups.
+     Ready once both reads have answered, so a claim in the slower one is not
+     dropped by the faster. Every claim either list holds is drawn: the
+     filters that could hide an older one were cleared by the way back. */
+  const surface = useRef<HTMLElement>(null);
+  const focusKnown =
+    focus !== null &&
+    ((listed?.some((c) => claimFocusKey(c) === focus.id) ?? false) ||
+      claimGroups.some((g) => claimFocusKey({ blockId: g.blockId, quote: g.claimQuote }) === focus.id));
+  useLandOnItem({
+    focus,
+    ready:
+      view === "claims" &&
+      (listOwner === null || listOwner.status !== "loading") &&
+      (owner === null || owner.status !== "loading"),
+    known: focusKnown,
+    drawn: focusKnown,
+    scope: surface,
+    attribute: "data-claim-key",
+    onTaken: onFocusTaken,
+    onLand: (row) => {
+      if (row instanceof HTMLDetailsElement) row.open = true;
+    },
+  });
 
   /* **The rows on screen**: the sub-mode's own, through its bar and its thread.
      The head count in the (i) reads this. */
@@ -1284,6 +1325,7 @@ export function DebatePanel({
 
   return (
     <ModeSurface
+      ref={surface}
       label="Debate"
       feature="gloss dbt"
       mode="debate"
@@ -2303,7 +2345,12 @@ function ClaimsList({
         const origin: ClaimOrigin = { mode: "debate", blockId: group.blockId, quote: group.claimQuote };
         const chat = chats ? threadForOrigin(chats.summaries, origin) : undefined;
         return (
-          <details key={`${group.blockId} ${group.claimQuote}`} className="dbt-group dbt-claim-group" open>
+          <details
+            key={`${group.blockId} ${group.claimQuote}`}
+            className="dbt-group dbt-claim-group"
+            data-claim-key={claimFocusKey(origin)}
+            open
+          >
             <summary className="dbt-group-head dbt-group-claim">
               <span className="dbt-group-quote">“{group.claimQuote}”</span>
               <BlockRef id={group.blockId} onJump={onJump} />
@@ -2724,7 +2771,7 @@ function ListedClaims({
         const chat = chats ? threadForOrigin(chats.summaries, origin) : undefined;
         const found = findings(claim.id);
         return (
-          <li key={claim.id} className="dbt-listed-claim" data-claim={claim.id}>
+          <li key={claim.id} className="dbt-listed-claim" data-claim={claim.id} data-claim-key={claimFocusKey(origin)}>
             {/* The first column: the owner's tick box on a current list. */}
             {pick !== null ? (
               <span className="dbt-listed-pick">

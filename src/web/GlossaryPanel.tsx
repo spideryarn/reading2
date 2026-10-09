@@ -68,7 +68,7 @@
  * The four designs this was chosen from, and the two things it is a bet on, are
  * in docs/plans/260826b-glossary-prioritised-order.md.
  */
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   ExternalLink,
   Eye,
@@ -97,6 +97,7 @@ import {
   OriginChatMark,
 } from "./OriginChat.js";
 import { threadForOrigin } from "./useChatAnchors.js";
+import { type ItemFocus, useLandOnItem } from "./item-focus.js";
 /* One `hostOf`, not four. src/urls.ts has said since 2026-08-26 that the copies
    in this file, CommentDialog and ChatPanel should converge on it "when somebody
    is next in those files" — the hover card (ProseHoverCard.tsx) made this the
@@ -267,6 +268,16 @@ interface Props {
    * `ChatHandoff` in src/web/modes/conversation/ConversationModes.tsx.
    */
   onAskChat?: ((term: string) => void) | undefined;
+  /**
+   * **One entry to bring into view, once** — a chat's way back to the entry
+   * it was started from (src/web/item-focus.ts; plan 261009i, stage 2). The
+   * entry is selected by `?term=`, and the gate lowered if it hid the row,
+   * by the caller (`openTermInGlossary` in Reader.tsx); this scrolls the row
+   * into view once it is drawn. An entry the list does not have (renamed
+   * away, or hidden by the owner) is handed back at once.
+   */
+  focus?: ItemFocus | null | undefined;
+  onFocusTaken?: ((focus: ItemFocus) => void) | undefined;
 }
 
 export function GlossaryPanel({
@@ -279,6 +290,8 @@ export function GlossaryPanel({
   onGate,
   onJump,
   onAskChat,
+  focus = null,
+  onFocusTaken,
 }: Props) {
   useRenderCount("GlossaryPanel");
   const owner = access.kind === "owner" ? access.owner : null;
@@ -294,6 +307,19 @@ export function GlossaryPanel({
   const shown = glossary ? sortEntries(all, order, gate) : [];
   const shownIds = new Set(shown.map((entry) => entry.id));
   const hidden = access.hidden ?? [];
+  /* **Land on the focused entry** (src/web/item-focus.ts). `all` is the
+     visible list, so an entry the owner hid is not known and the band opens
+     on its list. */
+  const surface = useRef<HTMLElement>(null);
+  useLandOnItem({
+    focus,
+    ready: glossary !== null && (owner === null || owner.status === "ready"),
+    known: focus !== null && all.some((entry) => entry.id === focus.id),
+    drawn: focus !== null && shownIds.has(focus.id),
+    scope: surface,
+    attribute: "data-term-id",
+    onTaken: onFocusTaken,
+  });
   /* Against the raw list, hidden included: a dig that finished on an entry
      the reader has since hidden is not an answer whose term left the glossary. */
   const orphanedLookup = keptWithoutEntry(owner, owner?.glossary?.entries ?? all);
@@ -383,6 +409,7 @@ export function GlossaryPanel({
 
   return (
     <ModeSurface
+      ref={surface}
       label="Glossary"
       feature="gloss"
       mode="glossary"

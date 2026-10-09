@@ -233,3 +233,50 @@ Left as they are:
 Tests that pinned the button now pin its absence and Ask in chat's presence. Three were watched red
 against the old code (`glossary-entry-ask-in-chat-in-place-of-dig-deeper`, `glossary-card-actions`,
 `citation-hover-card`); 41 files and 1322 tests are green; typecheck is clean.
+
+### Stage 3 (2026-10-09)
+
+Built as planned, with F6, F7 and F8. `IdeasOrigin` went through the twelve steps; Ideas' open row
+has *Ask in chat* and the mark (`IdeaRow`, owner only, through the owner arm of `IdeasAccess`), the
+sender is `askIdeaInChat` and the bundle `ideaChats` is built from the raw `chatSummaries`. The seed
+is `askAboutIdea` (name and statement in one fence). Chat's list labels it *Started from an idea*;
+the title is *Idea: <name>*; `?chatfrom=ideas` filters it.
+
+Migration `drizzle/20261009085926_chat_thread_origin_ideas.sql`, generated from `schema.ts`: `ideas`
+in `chat_threads_origin_mode` and `chat_threads_origin_item`, and a new null-safe
+`chat_threads_origin_summary` (a `summary` origin carries no item id, block or quote; the lens was
+already `chat_threads_origin_lens_debate_only`'s). **Not applied to the shared local database**:
+`npm run db:migrate` (Target `postgresql://postgres@127.0.0.1:54362/postgres`) refused, because a
+peer worktree's unlanded migration (ledger row 1791531297004, from `fbud2w92-dismiss-profile-notice`)
+is applied there and absent from this journal. database.md says the peer resolves that, so it was
+left. The test suite mints its own database from this tree's journal, so the CHECKs are exercised.
+
+Watched red before the code: the columns round trip in `thread-origin-way-back` (`originFromColumns`
+read `ideas` as no origin, step 5's silent hole), the route and CHECK cases in `chat-origin-route`
+(10 failures, the summary-with-shape case among them), and `askAboutIdea` in `chat-handoff`. The
+`thread-source` and `chat-origin-transaction` cases were added after the compiler had already forced
+the code, and passed at once.
+
+### Stage 2 (2026-10-09)
+
+Built as planned, with F3 and F4. The line is `OriginBack` in ChatPanel.tsx, fed `open.origin ??
+pendingOrigin(id)` by `ConversationBand`; its words are `originBack` in thread-source.ts (*Back to
+"…" in Mode*, *Back to your angle in Debate*). The press is `openOrigin` in Reader.tsx, an exhaustive
+switch. The one-shot became `ItemFocus` and `useLandOnItem` in `src/web/item-focus.ts`; `CiteFocus`
+is that type under its old name, Citations keeps its own effect (it has the bar step), and Glossary,
+Ideas and Debate's Claims use the hook, with one piece of state per band in Reader. Debate's two
+pushes are one `useQueryStates` write each (`setDebateWay`, `setIdeaWay`), so one Back returns to
+the chat, which the tests press. A claim row carries `data-claim-key` (`claimFocusKey`), and an
+older search's `<details>` is unfolded on landing. No arm jumps the prose.
+
+Tests: nine in `the way back from a chat to its item` in
+`tests/glossary-and-citations-ask-in-chat.test.tsx` (each origin, a plain chat, a pending origin, an
+idea and an entry that have gone), and `originBack` in `thread-source.test.ts`. Written after the
+code, so they were proved by mutation instead: with `onOrigin` unwired all eight line tests fail;
+with the hook's scroll removed, Glossary, Ideas, Debate and the pending case fail; with
+`pendingOrigin` dropped from the line, the pending case fails; with `ideaChats` unwired, six Ideas
+tests fail.
+
+Not done here: the Help page for Ideas (`src/web/help/pages/modes/ideas.md`) does not mention Ask in
+chat yet, and the browser check at 390 and 1440 is the end-of-plan pass.
+

@@ -37,6 +37,7 @@
  * the day it was read. It is neither of the two scores and moves no order.
  */
 import { type ReactNode, useEffect, useRef } from "react";
+import type { ItemFocus } from "./item-focus.js";
 import { useTapReveal } from "./useTapReveal.js";
 import { ScoreBars } from "./ScoreBars.js";
 import { OrderGroup } from "./OrderGroup.js";
@@ -863,11 +864,12 @@ interface Props {
   onFocusTaken?(focus: CiteFocus): void;
 }
 
-/** `Props.focus`. */
-export interface CiteFocus {
-  id: string;
-  n: number;
-}
+/**
+ * `Props.focus`. The shared `ItemFocus` (src/web/item-focus.ts) since plan
+ * 261009i, where Glossary, Ideas and Debate took the same shape; the name
+ * stays for this panel's callers.
+ */
+export type CiteFocus = ItemFocus;
 
 export function CitationsPanel({
   access,

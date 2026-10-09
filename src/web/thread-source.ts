@@ -17,7 +17,7 @@
  */
 import type { Mode } from "../modes.js";
 import { MODE_LABEL } from "../title-text.js";
-import { type ChatThread, isLensOrigin, type LearnKind, type ThreadKind } from "../types.js";
+import { type ChatThread, isLensOrigin, type LearnKind, type ThreadKind, type ThreadOrigin } from "../types.js";
 import { CHAT_FROM_WORDS, type ChatFrom, type LearnView } from "./params.js";
 import { LEARN_SUB_MODES } from "./sub-modes.js";
 
@@ -59,6 +59,8 @@ export const SOURCE_DEBATE_LENS = "Started from an angle in Debate";
 export const SOURCE_GLOSSARY_ENTRY = "Started from a glossary entry";
 /** And for one started from a cited work's *Ask in chat*. */
 export const SOURCE_CITED_WORK = "Started from a cited work";
+/** And for one started from an idea's *Ask in chat* (plan 261009i, stage 3). */
+export const SOURCE_IDEA = "Started from an idea";
 
 /** …and for a chat anchored to a block or to words in one: the "?" and a comment's question. */
 export const SOURCE_PASSAGE = "About a passage";
@@ -117,6 +119,8 @@ export function threadSource(thread: SourcedThread): ThreadSource | null {
         return { from: "glossary", mode: "glossary", label: SOURCE_GLOSSARY_ENTRY, quote: origin.quote };
       case "citations":
         return { from: "citations", mode: "citations", label: SOURCE_CITED_WORK, quote: origin.quote };
+      case "ideas":
+        return { from: "ideas", mode: "ideas", label: SOURCE_IDEA, quote: origin.quote };
       default:
         return origin satisfies never;
     }
@@ -165,6 +169,7 @@ export const CHAT_FROM_LABEL: Readonly<Record<ChatFrom, string>> = {
   debate: MODE_LABEL.debate,
   glossary: MODE_LABEL.glossary,
   citations: MODE_LABEL.citations,
+  ideas: MODE_LABEL.ideas,
   learn: MODE_LABEL.learn,
   passage: SOURCE_PASSAGE,
 };
@@ -179,3 +184,35 @@ export function sourcesIn(threads: readonly SourcedThread[]): ChatFrom[] {
 export function narrowed<T extends SourcedThread>(threads: readonly T[], from: ChatFrom | null): T[] {
   return from === null ? [...threads] : threads.filter((t) => chatFrom(t) === from);
 }
+
+/**
+ * **The way back from an open chat to the item it was started from** — the
+ * line above the transcript in Chat's band (ChatPanel.tsx § `OriginBack`;
+ * plan docs/plans/261009i-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md,
+ * stage 2). Greg, 2026-10-09: *"I want to be able to go back to the
+ * citations mode, and also sort of highlight the … block or whatever that
+ * the chat is relevant to."*
+ *
+ * `mode` is the mode the press opens, whose icon the line wears
+ * (docs/project/icons.md). `quote` is the item's name as the chat stored it,
+ * in `threadSource`'s voice; a lens has none, since an angle is the reader's
+ * own words and not an item in the article, and reads *your angle*.
+ */
+export interface OriginBackWords {
+  mode: Mode;
+  /** The mode's own word: *Glossary*, *Citations*. */
+  modeLabel: string;
+  /** The item's name snapshot, or `null` for a lens. */
+  quote: string | null;
+  /** The whole line as one sentence, for its accessible name and its tooltip. */
+  text: string;
+}
+
+export function originBack(origin: ThreadOrigin): OriginBackWords {
+  const mode: Mode = origin.mode;
+  const modeLabel = MODE_LABEL[mode];
+  const quote = isLensOrigin(origin) ? null : origin.quote;
+  const what = quote === null ? "your angle" : `“${quote}”`;
+  return { mode, modeLabel, quote, text: `Back to ${what} in ${modeLabel}` };
+}
+

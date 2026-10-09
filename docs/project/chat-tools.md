@@ -566,14 +566,17 @@ From 2026-10-01 it showed chats only.
   origin; see `ConversationBand`'s arrival rule and `tests/chat-draft-survives-a-mode-change.test.tsx`.
 - **The filter** above the list is All, Chats, then one choice per other source present, with
   Learn's three sub-modes as one. It is drawn only when there is more than one source. The
-  choice is `?chatfrom=` ([url-state.md](url-state.md)). The sources are Debate, Glossary and
-  Citations (a chat started from a claim or an angle, an entry, a cited work), Learn, and a
-  passage.
+  choice is `?chatfrom=` ([url-state.md](url-state.md)). The sources are Debate, Glossary,
+  Citations and Ideas (a chat started from a claim or an angle, an entry, a cited work, an idea),
+  Learn, and a passage.
+- **An open chat with an origin has a way back** to its item, one line above the transcript:
+  [chat-from-a-mode.md § The way back from the chat](chat-from-a-mode.md#the-way-back-from-the-chat).
 
 A chat started from an item in a mode (`ThreadOrigin` in [`src/types.ts`](../../src/types.ts)) is
 written up where it is built: [debate.md § Check a claim in chat](debate.md#check-a-claim-in-chat),
 [glossary.md § Asking about an entry in chat](glossary.md#asking-about-an-entry-in-chat),
-[citations.md § Ask in chat](citations.md#ask-in-chat-a-conversation-about-one-work).
+[citations.md § Ask in chat](citations.md#ask-in-chat-a-conversation-about-one-work),
+[ideas.md § Asking about an idea in chat](ideas.md#asking-about-an-idea-in-chat).
 
 Tests: `tests/thread-source.test.ts`, `tests/chat-lists-every-conversation.test.tsx` (the band),
 `tests/chat-list-sources.test.tsx` (the panel).
