@@ -359,46 +359,55 @@ export function partialEvidenceFor(opts: {
   }
   const onX = settled.filter((r) => r.sha === x).sort((a, b) => b.atMs - a.atMs);
   const chosen = onX[0] as FullRun;
+  /* **A refusal names the run that may answer soon.** A run still going on a
+     commit nearer the candidate did not decide (above), but may once it
+     finishes: on 2026-10-09 the gate refused a void run and said nothing
+     of the run 48 minutes into its parent, which passed 26 minutes later
+     (docs/plans/261009b). The words change; the decision does not. */
+  const nearerGoing = related
+    .filter((r) => r.running === true && r.sha !== x && isAncestor(x, r.sha) === true)
+    .sort((a, b) => b.atMs - a.atMs)[0];
+  const refuse = (why: string): PartialEvidence => ({
+    kind: "run",
+    why:
+      nearerGoing === undefined
+        ? why
+        : `${why}; a run on ${nearerGoing.sha.slice(0, 8)} (${nearerGoing.source} ${nearerGoing.id}), started ${hoursAgo(nowMs - nearerGoing.atMs)}, is still going and may stand in once it finishes`,
+  });
   /* A run on this same commit that has not finished may yet contradict the
      one chosen, whenever it started. */
   const running = related.find((r) => r.sha === x && r.running === true);
   if (running !== undefined) {
-    return { kind: "run", why: `a run on ${x.slice(0, 8)} (${running.source} ${running.id}) is still going — an unfinished run cannot stand behind a deploy` };
+    return refuse(`a run on ${x.slice(0, 8)} (${running.source} ${running.id}) is still going — an unfinished run cannot stand behind a deploy`);
   }
   if (onX.some((r) => r !== chosen && r.atMs === chosen.atMs)) {
-    return { kind: "run", why: `two runs on ${x.slice(0, 8)} share one instant, so which decides cannot be said` };
+    return refuse(`two runs on ${x.slice(0, 8)} share one instant, so which decides cannot be said`);
   }
   const label = `the newest run on ${x.slice(0, 8)} (${chosen.source} ${chosen.id})`;
-  if (chosen.atMs > nowMs) return { kind: "run", why: `${label} says it finished in the future on this clock` };
+  if (chosen.atMs > nowMs) return refuse(`${label} says it finished in the future on this clock`);
   const age = nowMs - chosen.atMs;
   if (age > TEST_EVIDENCE_MAX_AGE_MS) {
-    return { kind: "run", why: `no full run in the last ${TEST_EVIDENCE_MAX_AGE_MS / 3_600_000}h on the nearest commit: ${label} finished ${hoursAgo(age)}` };
+    return refuse(`no full run in the last ${TEST_EVIDENCE_MAX_AGE_MS / 3_600_000}h on the nearest commit: ${label} finished ${hoursAgo(age)}`);
   }
-  if (chosen.refusal !== null) return { kind: "run", why: `${label} cannot stand in: ${chosen.refusal}` };
-  if (chosen.outcome.kind === "unusable") return { kind: "run", why: `${label} cannot be rerun in part: ${chosen.outcome.why}` };
+  if (chosen.refusal !== null) return refuse(`${label} cannot stand in: ${chosen.refusal}`);
+  if (chosen.outcome.kind === "unusable") return refuse(`${label} cannot be rerun in part: ${chosen.outcome.why}`);
   if (x !== sha && age > CROSS_COMMIT_MAX_AGE_MS) {
-    return {
-      kind: "run",
-      why: `${label} finished ${hoursAgo(age)}; a run on another commit may stand in for ${CROSS_COMMIT_MAX_AGE_MS / 3_600_000}h at most`,
-    };
+    return refuse(`${label} finished ${hoursAgo(age)}; a run on another commit may stand in for ${CROSS_COMMIT_MAX_AGE_MS / 3_600_000}h at most`);
   }
 
   const changed = x === sha ? [] : changedSince(x);
-  if (changed === null) return { kind: "run", why: `git could not list what changed between ${x.slice(0, 8)} and ${sha.slice(0, 8)}` };
+  if (changed === null) return refuse(`git could not list what changed between ${x.slice(0, 8)} and ${sha.slice(0, 8)}`);
   const infra = changed.filter(isTestInfrastructure);
   if (infra.length > 0) {
-    return {
-      kind: "run",
-      why: `the test harness changed since ${x.slice(0, 8)} (${infra.slice(0, 4).join(", ")}${infra.length > 4 ? " …" : ""})`,
-    };
+    return refuse(`the test harness changed since ${x.slice(0, 8)} (${infra.slice(0, 4).join(", ")}${infra.length > 4 ? " …" : ""})`);
   }
 
   const failed = chosen.outcome.kind === "red-in-files" ? chosen.outcome.failed : [];
   const missing = failed.filter((p) => !existsAtCandidate(p) && !changed.includes(p));
-  if (missing.length > 0) return { kind: "run", why: `failed files are missing without a committed deletion: ${missing.join(" ")}` };
+  if (missing.length > 0) return refuse(`failed files are missing without a committed deletion: ${missing.join(" ")}`);
   const files = [...new Set([...failed, ...changed.filter(isTestFile)])].filter(existsAtCandidate).sort();
   if (files.length > RERUN_FILES_MAX) {
-    return { kind: "run", why: `${files.length} files to rerun — more than ${RERUN_FILES_MAX}, so the suite in all but name` };
+    return refuse(`${files.length} files to rerun — more than ${RERUN_FILES_MAX}, so the suite in all but name`);
   }
 
   const was = chosen.outcome.kind === "pass" ? "green" : `red only in ${failed.join(" ")}`;
