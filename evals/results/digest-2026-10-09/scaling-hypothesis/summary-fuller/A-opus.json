@@ -1,0 +1,348 @@
+{
+  "slug": "scaling-hypothesis",
+  "task": "summary-fuller",
+  "arm": "A-opus",
+  "model": "anthropic/claude-opus-5.5",
+  "answeredBy": "anthropic/claude-opus-5.5",
+  "effortSent": "high",
+  "effortRan": "high",
+  "maxTokens": 48999,
+  "boundUsd": 1.443365,
+  "ok": true,
+  "error": null,
+  "finishReason": "stop",
+  "raw": "{\"paragraphs\":[{\"ids\":[\"spya-ewxv9q\",\"spya-aqts9c\",\"spya-suzdvz\"],\"list\":false,\"sentences\":[{\"text\":\"This long essay by Gwern looks at GPT-3, a text-predicting program from OpenAI released in May 2020, and what it says about AI's future.\",\"id\":\"spya-ewxv9q\",\"key\":null},{\"text\":\"GPT-3 is a neural network, a program that learns patterns from examples, with 175 billion parameters, the adjustable numbers it tunes while learning.\",\"id\":\"spya-aqts9c\",\"key\":null},{\"text\":\"It was trained only to guess the next word in a huge pile of Internet text.\",\"id\":\"spya-aqts9c\",\"key\":null},{\"text\":\"Gwern uses it to argue for the scaling hypothesis: simple networks, made far bigger and given far more data and computing, keep getting more intelligent.\",\"id\":\"spya-suzdvz\",\"key\":\"the scaling hypothesis\"}]},{\"ids\":[\"spya-aqts9c\",\"spya-fvqe70\",\"spya-ewxv9q\"],\"list\":false,\"sentences\":[{\"text\":\"The piece says GPT-3 matters because it showed meta-learning, which means learning how to learn.\",\"id\":\"spya-ewxv9q\",\"key\":\"meta-learning\"},{\"text\":\"Shown a few examples in its prompt, it could do new tasks like arithmetic, translation or unscrambling words, with no extra training.\",\"id\":\"spya-aqts9c\",\"key\":null},{\"text\":\"Gwern stresses it is an old, simple design trained in the \\\"dumbest way possible\\\", yet its gains from size have not slowed.\",\"id\":\"spya-fvqe70\",\"key\":null},{\"text\":\"He adds that it is cheap by business or government standards, so much larger models are possible.\",\"id\":\"spya-ewxv9q\",\"key\":null}]},{\"ids\":[\"spya-asr663\",\"spya-uz2hd5\",\"spya-edr6mj\"],\"list\":false,\"sentences\":[{\"text\":\"The main evidence is scaling curves: graphs showing a model's prediction error falling smoothly as it grows.\",\"id\":\"spya-asr663\",\"key\":null},{\"text\":\"Gwern expected the curves to bend by about 100 billion parameters, but GPT-3 kept to the trend of much smaller models.\",\"id\":\"spya-asr663\",\"key\":null},{\"text\":\"Its training used 3640 petaflop/s-days of computing, about twice an estimate for the Go program AlphaGo Zero.\",\"id\":\"spya-uz2hd5\",\"key\":null},{\"text\":\"By his sums, error fell from about 3.3 for GPT-2 to about 1.73 for GPT-3, and might reach 1.24 with 100 to 1000 times more computing.\",\"id\":\"spya-edr6mj\",\"key\":\"from about 3.3 for GPT-2 to about 1.73\"}]},{\"ids\":[\"spya-sfkxh8\",\"spya-grkhs8\",\"spya-vkkfzh\"],\"list\":false,\"sentences\":[{\"text\":\"Gwern calls this the blessings of scale: for these networks, bigger and harder problems can be easier to solve than small ones.\",\"id\":\"spya-sfkxh8\",\"key\":\"the blessings of scale\"},{\"text\":\"His suggested reason is that a big network holds countless smaller sub-networks which, averaged together, favour simple solutions.\",\"id\":\"spya-grkhs8\",\"key\":null},{\"text\":\"Small models with little data settle for memorizing or shallow shortcuts.\",\"id\":\"spya-vkkfzh\",\"key\":null},{\"text\":\"With enough data, memorizing every sum costs too much, so the simplest way to predict the text becomes real arithmetic.\",\"id\":\"spya-vkkfzh\",\"key\":null}]},{\"ids\":[\"spya-r465ug\",\"spya-x3c389\",\"spya-rjwfkb\"],\"list\":true,\"sentences\":[{\"text\":\"To show why plain text prediction could teach so much, Gwern tracks a model's error per character, measured in bits.\",\"id\":null,\"key\":null},{\"text\":\"A random guesser needs 8 bits, and just learning how often letters and spaces appear cuts this to about 5.\",\"id\":\"spya-r465ug\",\"key\":null},{\"text\":\"At around 2 bits sentences start to make sense, but each further gain costs more.\",\"id\":\"spya-x3c389\",\"key\":null},{\"text\":\"Humans manage about 0.7 bits, and that gap holds everything the model still misses, such as reasoning and common sense.\",\"id\":\"spya-rjwfkb\",\"key\":\"Humans manage about 0.7 bits\"}]},{\"ids\":[\"spya-e5n86h\",\"spya-faees7\",\"spya-edr6mj\"],\"list\":false,\"sentences\":[{\"text\":\"Gwern admits this argument long felt to him like a magic trick: neat in theory, unproven in practice.\",\"id\":\"spya-e5n86h\",\"key\":null},{\"text\":\"It might have needed more text than exists, impossibly huge models, or a wholly different design.\",\"id\":\"spya-faees7\",\"key\":null},{\"text\":\"He says he does not know what a much bigger model would learn, and even the projected drop would, as far as he can tell, fall short of human level.\",\"id\":\"spya-edr6mj\",\"key\":null}]},{\"ids\":[\"spya-khnsat\",\"spya-vr9q2p\",\"spya-m9r8zx\"],\"list\":false,\"sentences\":[{\"text\":\"Gwern argues the main limit now is people's belief in scaling, not hardware.\",\"id\":\"spya-khnsat\",\"key\":null},{\"text\":\"He says DeepMind holds a \\\"weak scaling hypothesis\\\", building brain-like parts one by one, while OpenAI bets that scale alone is enough.\",\"id\":\"spya-vr9q2p\",\"key\":null},{\"text\":\"He faults experts who predicted failure, were wrong, and rarely admit it.\",\"id\":\"spya-m9r8zx\",\"key\":null}]},{\"ids\":[\"spya-mkbrjp\",\"spya-hjpau9\",\"spya-suzdvz\"],\"list\":false,\"sentences\":[{\"text\":\"An appendix argues that agency, the ability to plan and chase goals, may emerge even in models trained on physics or random programs, not just human text.\",\"id\":\"spya-mkbrjp\",\"key\":null},{\"text\":\"So removing human data is no reliable way to keep a \\\"tool AI\\\" from becoming an agent.\",\"id\":\"spya-hjpau9\",\"key\":null},{\"text\":\"His conclusion is that the deep learning revolution \\\"has begun as foretold\\\", and the 2020s may bring either a levelling off or something far bigger.\",\"id\":\"spya-suzdvz\",\"key\":null}]}]}",
+  "parsed": [
+    {
+      "text": "This long essay by Gwern looks at GPT-3, a text-predicting program from OpenAI released in May 2020, and what it says about AI's future. GPT-3 is a neural network, a program that learns patterns from examples, with 175 billion parameters, the adjustable numbers it tunes while learning. It was trained only to guess the next word in a huge pile of Internet text. Gwern uses it to argue for the scaling hypothesis: simple networks, made far bigger and given far more data and computing, keep getting more intelligent.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c",
+        "spya-suzdvz"
+      ],
+      "sentences": [
+        {
+          "text": "This long essay by Gwern looks at GPT-3, a text-predicting program from OpenAI released in May 2020, and what it says about AI's future.",
+          "id": "spya-ewxv9q"
+        },
+        {
+          "text": "GPT-3 is a neural network, a program that learns patterns from examples, with 175 billion parameters, the adjustable numbers it tunes while learning.",
+          "id": "spya-aqts9c"
+        },
+        {
+          "text": "It was trained only to guess the next word in a huge pile of Internet text.",
+          "id": "spya-aqts9c"
+        },
+        {
+          "text": "Gwern uses it to argue for the scaling hypothesis: simple networks, made far bigger and given far more data and computing, keep getting more intelligent.",
+          "id": "spya-suzdvz",
+          "key": "the scaling hypothesis"
+        }
+      ]
+    },
+    {
+      "text": "The piece says GPT-3 matters because it showed meta-learning, which means learning how to learn. Shown a few examples in its prompt, it could do new tasks like arithmetic, translation or unscrambling words, with no extra training. Gwern stresses it is an old, simple design trained in the \"dumbest way possible\", yet its gains from size have not slowed. He adds that it is cheap by business or government standards, so much larger models are possible.",
+      "ids": [
+        "spya-aqts9c",
+        "spya-fvqe70",
+        "spya-ewxv9q"
+      ],
+      "sentences": [
+        {
+          "text": "The piece says GPT-3 matters because it showed meta-learning, which means learning how to learn.",
+          "id": "spya-ewxv9q",
+          "key": "meta-learning"
+        },
+        {
+          "text": "Shown a few examples in its prompt, it could do new tasks like arithmetic, translation or unscrambling words, with no extra training.",
+          "id": "spya-aqts9c"
+        },
+        {
+          "text": "Gwern stresses it is an old, simple design trained in the \"dumbest way possible\", yet its gains from size have not slowed.",
+          "id": "spya-fvqe70"
+        },
+        {
+          "text": "He adds that it is cheap by business or government standards, so much larger models are possible.",
+          "id": "spya-ewxv9q"
+        }
+      ]
+    },
+    {
+      "text": "The main evidence is scaling curves: graphs showing a model's prediction error falling smoothly as it grows. Gwern expected the curves to bend by about 100 billion parameters, but GPT-3 kept to the trend of much smaller models. Its training used 3640 petaflop/s-days of computing, about twice an estimate for the Go program AlphaGo Zero. By his sums, error fell from about 3.3 for GPT-2 to about 1.73 for GPT-3, and might reach 1.24 with 100 to 1000 times more computing.",
+      "ids": [
+        "spya-asr663",
+        "spya-uz2hd5",
+        "spya-edr6mj"
+      ],
+      "sentences": [
+        {
+          "text": "The main evidence is scaling curves: graphs showing a model's prediction error falling smoothly as it grows.",
+          "id": "spya-asr663"
+        },
+        {
+          "text": "Gwern expected the curves to bend by about 100 billion parameters, but GPT-3 kept to the trend of much smaller models.",
+          "id": "spya-asr663"
+        },
+        {
+          "text": "Its training used 3640 petaflop/s-days of computing, about twice an estimate for the Go program AlphaGo Zero.",
+          "id": "spya-uz2hd5"
+        },
+        {
+          "text": "By his sums, error fell from about 3.3 for GPT-2 to about 1.73 for GPT-3, and might reach 1.24 with 100 to 1000 times more computing.",
+          "id": "spya-edr6mj",
+          "key": "from about 3.3 for GPT-2 to about 1.73"
+        }
+      ]
+    },
+    {
+      "text": "Gwern calls this the blessings of scale: for these networks, bigger and harder problems can be easier to solve than small ones. His suggested reason is that a big network holds countless smaller sub-networks which, averaged together, favour simple solutions. Small models with little data settle for memorizing or shallow shortcuts. With enough data, memorizing every sum costs too much, so the simplest way to predict the text becomes real arithmetic.",
+      "ids": [
+        "spya-sfkxh8",
+        "spya-grkhs8",
+        "spya-vkkfzh"
+      ],
+      "sentences": [
+        {
+          "text": "Gwern calls this the blessings of scale: for these networks, bigger and harder problems can be easier to solve than small ones.",
+          "id": "spya-sfkxh8",
+          "key": "the blessings of scale"
+        },
+        {
+          "text": "His suggested reason is that a big network holds countless smaller sub-networks which, averaged together, favour simple solutions.",
+          "id": "spya-grkhs8"
+        },
+        {
+          "text": "Small models with little data settle for memorizing or shallow shortcuts.",
+          "id": "spya-vkkfzh"
+        },
+        {
+          "text": "With enough data, memorizing every sum costs too much, so the simplest way to predict the text becomes real arithmetic.",
+          "id": "spya-vkkfzh"
+        }
+      ]
+    },
+    {
+      "text": "To show why plain text prediction could teach so much, Gwern tracks a model's error per character, measured in bits. A random guesser needs 8 bits, and just learning how often letters and spaces appear cuts this to about 5. At around 2 bits sentences start to make sense, but each further gain costs more. Humans manage about 0.7 bits, and that gap holds everything the model still misses, such as reasoning and common sense.",
+      "ids": [
+        "spya-r465ug",
+        "spya-x3c389",
+        "spya-rjwfkb"
+      ],
+      "sentences": [
+        {
+          "text": "To show why plain text prediction could teach so much, Gwern tracks a model's error per character, measured in bits.",
+          "id": null
+        },
+        {
+          "text": "A random guesser needs 8 bits, and just learning how often letters and spaces appear cuts this to about 5.",
+          "id": "spya-r465ug"
+        },
+        {
+          "text": "At around 2 bits sentences start to make sense, but each further gain costs more.",
+          "id": "spya-x3c389"
+        },
+        {
+          "text": "Humans manage about 0.7 bits, and that gap holds everything the model still misses, such as reasoning and common sense.",
+          "id": "spya-rjwfkb",
+          "key": "Humans manage about 0.7 bits"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "Gwern admits this argument long felt to him like a magic trick: neat in theory, unproven in practice. It might have needed more text than exists, impossibly huge models, or a wholly different design. He says he does not know what a much bigger model would learn, and even the projected drop would, as far as he can tell, fall short of human level.",
+      "ids": [
+        "spya-e5n86h",
+        "spya-faees7",
+        "spya-edr6mj"
+      ],
+      "sentences": [
+        {
+          "text": "Gwern admits this argument long felt to him like a magic trick: neat in theory, unproven in practice.",
+          "id": "spya-e5n86h"
+        },
+        {
+          "text": "It might have needed more text than exists, impossibly huge models, or a wholly different design.",
+          "id": "spya-faees7"
+        },
+        {
+          "text": "He says he does not know what a much bigger model would learn, and even the projected drop would, as far as he can tell, fall short of human level.",
+          "id": "spya-edr6mj"
+        }
+      ]
+    },
+    {
+      "text": "Gwern argues the main limit now is people's belief in scaling, not hardware. He says DeepMind holds a \"weak scaling hypothesis\", building brain-like parts one by one, while OpenAI bets that scale alone is enough. He faults experts who predicted failure, were wrong, and rarely admit it.",
+      "ids": [
+        "spya-khnsat",
+        "spya-vr9q2p",
+        "spya-m9r8zx"
+      ],
+      "sentences": [
+        {
+          "text": "Gwern argues the main limit now is people's belief in scaling, not hardware.",
+          "id": "spya-khnsat"
+        },
+        {
+          "text": "He says DeepMind holds a \"weak scaling hypothesis\", building brain-like parts one by one, while OpenAI bets that scale alone is enough.",
+          "id": "spya-vr9q2p"
+        },
+        {
+          "text": "He faults experts who predicted failure, were wrong, and rarely admit it.",
+          "id": "spya-m9r8zx"
+        }
+      ]
+    },
+    {
+      "text": "An appendix argues that agency, the ability to plan and chase goals, may emerge even in models trained on physics or random programs, not just human text. So removing human data is no reliable way to keep a \"tool AI\" from becoming an agent. His conclusion is that the deep learning revolution \"has begun as foretold\", and the 2020s may bring either a levelling off or something far bigger.",
+      "ids": [
+        "spya-mkbrjp",
+        "spya-hjpau9",
+        "spya-suzdvz"
+      ],
+      "sentences": [
+        {
+          "text": "An appendix argues that agency, the ability to plan and chase goals, may emerge even in models trained on physics or random programs, not just human text.",
+          "id": "spya-mkbrjp"
+        },
+        {
+          "text": "So removing human data is no reliable way to keep a \"tool AI\" from becoming an agent.",
+          "id": "spya-hjpau9"
+        },
+        {
+          "text": "His conclusion is that the deep learning revolution \"has begun as foretold\", and the 2020s may bring either a levelling off or something far bigger.",
+          "id": "spya-suzdvz"
+        }
+      ]
+    }
+  ],
+  "validation": {
+    "paragraphs": 8,
+    "words": 571,
+    "dropped": {
+      "malformed": 0,
+      "empty": 0,
+      "emptySentences": 0,
+      "sentenceIds": 0,
+      "keys": 0,
+      "unknownIds": 0,
+      "duplicateIds": 0,
+      "overCap": 0,
+      "unanchored": 0
+    }
+  },
+  "usage": {
+    "inputTokens": 30663,
+    "outputTokens": 5324,
+    "reasoningTokens": 3147,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 27384
+  },
+  "usd": 0.256516,
+  "latencyMs": 346200,
+  "generationIds": [
+    "gen-1791504701-ouySgEFexlLNOJ10QVIa"
+  ],
+  "upstreams": [
+    "Claude Platform on AWS"
+  ],
+  "calls": 1,
+  "request": {
+    "model": "anthropic/claude-opus-5.5",
+    "max_tokens": 48999,
+    "messages": [
+      {
+        "role": "system",
+        "content": [
+          {
+            "type": "text",
+            "text": "<article (articleWithIds, body evidence): 80198 chars, sha256 90f07e6e3ac713d7>",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          },
+          {
+            "type": "text",
+            "text": "You are helping a reader get their bearings before they read the article above.\n\nWHAT YOU WRITE\n\nAn orientation in plain words: what the piece is about, why it matters,\nand its key ideas. It is not a replacement for the article. It is what a reader\nwants to know first, so that the article itself makes sense when they read it.\n\nTHE READER\n\nA bright eighteen-year-old in their first year at university who has not studied this field. Everyday words and short sentences.\n\nYou may keep more of the piece's own terms than a beginner's version would (each\nstill said in plain words where it first appears).\n\nThis version has room to go into the piece. Use it for:\n\n- how the work was done: what was studied, measured or argued from;\n- the evidence and the numbers behind each main finding;\n- the limits the piece itself names;\n- how the steps of the argument connect: what each one leads to.\n\n- Use jargon sparingly. Where you do use a term, say what it means in the same\n  sentence, in everyday words. Never explain one hard word with another.\n- Keep the author's key term where the reader will meet it in the article; it\n  is their handhold. Say what it means.\n- If the request describes the reader, what they say they already know counts\n  as everyday words for them: use it without explaining it. Everything else\n  stays at this pitch.\n- A name the piece introduces is a term like any other, however plain it\n  looks: a term it coins or uses in its own sense, an abbreviation, its label\n  for a method, model, measure, group, condition or experiment. The first time\n  you use one, say what it is in the same sentence, in everyday words.\n- Do not refer to a part, result, model or label before this summary has\n  introduced it. \"The second experiment\" is fine after this summary has said\n  what the experiments were; otherwise say what it is.\n\nLENGTH\n\nFive to eight paragraphs, each two to five sentences. Every sentence under 30 words. About 500 words in\nall, and never more than 600. Shorter is fine for a short\npiece. This is still not a replacement for the article: spend the words on what\nthe piece did, found and admits, and never on saying one thing twice.\n\nTHE SHAPE\n\n- First: what the piece is about — its goal or question, or its subject, and\n  what kind of piece it is.\n- Then: why it matters — why THE PIECE says it matters, not why you think it\n  might.\n- Then: its key ideas or findings.\n- End on the takeaway: the piece's main conclusion, and any implication it\n  states itself. Never advice or a consequence it does not give.\n\nFAITHFUL, NOT JUST SIMPLE\n\n- Plainer means equally specific. Keep the numbers, the direction of a\n  finding, and the hedges (\"may\", \"in mice\", \"in this sample\"). Do not claim\n  more certainty than the piece does.\n- Only what the piece says. No outside knowledge presented as the piece's: no\n  background, history, or consequences the article does not state.\n\nWHERE EACH PARAGRAPH COMES FROM\n\nEvery paragraph lists the ids of the one to three blocks of the article above\nthat best support it. \"ids\" MUST be ids listed in the article; never invent one.\nA paragraph with no id that checks out is thrown away — so a paragraph about\nwhy it matters has to rest on where the piece says why it matters.\n\nThen write the paragraph as its sentences, in order, one sentence to each\n\"text\". Give each sentence the \"id\" of the one block, from that paragraph's own\n\"ids\", that the sentence most rests on. Use null when it rests on none of them\nin particular: a sentence that frames the piece, or a takeaway drawn from the\nwhole paragraph. A sentence never names an id its paragraph did not list.\n\nThe ids go only in \"ids\" and \"id\". Never write an id, or \"block …\", in a\nsentence's text.\n\nWHAT A SKIMMING READER CATCHES\n\nTwo more fields say how a paragraph is drawn. They are the only formatting\nthere is.\n\n\"key\" on a sentence: a few words copied exactly from that sentence's \"text\",\nwhich the reader sees in bold. Pick the finding, the number or the term that a\nreader skimming the page should catch. At most 8 words, and never the whole\nsentence. In a paragraph, at most two sentences have a \"key\". Most sentences\nhave none: write null.\n\n\"list\" on a paragraph: true when the reader should see it as a bulleted list,\nfalse for an ordinary paragraph. Use a list only where the piece itself gives\nparallel items: its findings, its steps, its reasons. At most two paragraphs\nare lists, and many summaries need none.\n\nIn a list paragraph the first sentence is the lead-in, and it must make sense\non its own. Each later sentence is one bullet, and there are at least two.\nEvery bullet is a full sentence with its own \"id\", like any other sentence.\n\nPLAIN WORDS\n\nWrite for a curious reader who has not studied this field. If these\ninstructions, or the reader's own description, say who the reader is, write\nfor them instead: a specialist does not need their own field's terms explained.\n\nUse the commonest word that loses nothing. This changes the words, never the\nmeaning: plainer means equally specific. Never drop a number, a direction, a\ncomparison, a condition or a hedge (\"may\", \"in mice\", \"in this sample\") that\nthe claim depends on; a sentence that is plainer and less exact is worse. It\nnever changes which field a fact belongs in, which source may support it, or\nthe shape and length these instructions set for each field: where those rules\nare more specific, they win. Text you are told to copy exactly stays exactly as written.\n\nIn what you write to explain — an answer, a summary, a definition, a\nreason, feedback, a caption: say what it means here, in everyday words, first.\nKeep the article's own term where the reader will meet it again in the prose;\nit is their handhold. But a handhold is not an explanation: if this reader\nwould not know the term, say what it means where it first appears, as part of\nthe sentence. Never explain one hard word with another. A word is not plain\nbecause the article uses it.\n\nFor example, explaining a line in a medical paper:\nBAD: \"The trial was underpowered, so its null result is uninformative.\"\nGOOD: \"The trial was underpowered: too small to reliably catch an effect of the\nsize it was looking for, so finding no effect tells us little either way.\"\n\nBefore you finish, look at each word you wrote that this reader might not know.\nEither it is the article's term and you have said what it means, or change it.\n\nPlainer than the article, never further from it: never less exact, and never beyond what it says.\n\nPAPERWORK IS NOT THE PIECE\n\nAround a piece's content there may be paperwork: the title block (the title,\nsubtitle, byline, dates, DOI, keywords and the journal's header), the list of\nauthors and where they work, contact and correspondence details,\nacknowledgements and thanks, funding and grants, conflict-of-interest and other\ndisclosures, ethics approval, author contributions, data-availability\nstatements, the publisher's notices, and, at the end, the reference list or\nbibliography and any lists of backlinks or related links. Where it only\nidentifies the piece or records how it was produced, published and sourced, it\nis paperwork.\nLeave it out: do not summarise it, spend a sentence on it, or present it as\none of the piece's caveats or limits. Name an author only to say who argues\nsomething.\n\nJudge it by what it does, not by its heading. If the piece uses any of these as\nevidence, reasoning, method or a limit on its findings — a funder's role that\nit says may bias the result, an ethics rule that shaped the study, an article\nABOUT research funding — it is content, and the usual rules apply.\n\nIF THE READER HAS DESCRIBED THEMSELVES\n\nSome requests carry a short description of who the reader is and what they are\nafter. When one is present:\n\n- It changes pitch and emphasis. It never changes what the article says.\n- Which things you spend words on is governed by it. Every sentence you write is\n  still about the article.\n- Assume the background they claim. Do not explain what they have told you they\n  already know — and do not perform explaining it in fewer words either.\n- Where the piece has nothing on what they are after, write what you would have\n  written anyway, and never say so out loud. A line spent telling the reader\n  this part is not for them is a line not spent on the part.\n- Never flatter them, never address them, and never mention the description.\n  They wrote it; they do not need it read back.\n- Never put any of it into a web search query, a tool argument, or anything else\n  that leaves this conversation. It is what a person told us about themselves.\n\nNEVER write anything of this shape:\n  \"As a cognitive scientist, you'll appreciate that…\"\n  \"Since you know your way around the literature, briefly: …\"\n  \"Given your background, I'll skip the basics.\"\nSkipping the basics is correct. Announcing that you are skipping them is not.\n\nFOR THIS VERSION, THE READER'S BACKGROUND DOES NOT COVER WHAT THIS PIECE INTRODUCES\n\nOrdinary, established terms from the background the reader claims may stay\nunexplained. A term, abbreviation, label or special meaning that this piece\nintroduces is different: it does not become known because it belongs to the\nsame field. Treat it as new unless the reader's description itself names it.\nWhere this differs from \"Assume the background they claim\" above, this\nparagraph wins.\n\nOUTPUT\n\nJSON only, no prose, no code fence:\n\n{\"paragraphs\": [\n  {\"ids\": [\"spya-k3m9qt\", \"spya-p7w2dn\"], \"list\": false,\n   \"sentences\": [\n     {\"text\": \"...\", \"id\": \"spya-k3m9qt\", \"key\": \"...\"},\n     {\"text\": \"...\", \"id\": null, \"key\": null},\n     {\"text\": \"...\", \"id\": \"spya-p7w2dn\", \"key\": null}]}\n]}\n\nPlain text in \"text\" and \"key\": no markdown, no asterisks, no bullet or list\ncharacters, no headings. Bold and lists are said only by \"key\" and \"list\".\nNever put a real line break inside a string, and escape any straight double\nquote as \\\"."
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": "Write the plain-words orientation for this article."
+      }
+    ],
+    "response_format": {
+      "type": "json_schema",
+      "json_schema": {
+        "name": "simple_summary_level",
+        "strict": true,
+        "schema": {
+          "type": "object",
+          "properties": {
+            "paragraphs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "list": {
+                    "type": "boolean"
+                  },
+                  "sentences": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "text": {
+                          "type": "string",
+                          "pattern": "\\S"
+                        },
+                        "id": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "key": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "\\S"
+                        }
+                      },
+                      "required": [
+                        "text",
+                        "id",
+                        "key"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "ids",
+                  "list",
+                  "sentences"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "paragraphs"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  "at": "2026-10-09T00:12:49.801Z"
+}

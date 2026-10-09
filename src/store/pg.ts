@@ -88,6 +88,12 @@ import {
   PROMPT_VERSION as FAQ_PROMPT_VERSION,
 } from "../faq.js";
 import {
+  inputFingerprint as debateClaimsFingerprint,
+  isOutdated as debateClaimsAreOutdated,
+  isStale as debateClaimsIsStale,
+  PROMPT_VERSION as DEBATE_CLAIMS_PROMPT_VERSION,
+} from "../debate-claims.js";
+import {
   inputFingerprint as relationsFingerprint,
   isOutdated as relationsAreOutdated,
   isStale as relationsIsStale,
@@ -194,6 +200,8 @@ import type {
   DebateFound,
   Faq,
   FaqFound,
+  DebateClaimList,
+  DebateClaimListFound,
   Relations,
   RelationsResponse,
   Crossrefs,
@@ -548,6 +556,7 @@ type RevisionReader =
   | "citations"
   | "faq"
   | "relations"
+  | "debateClaims"
   | "skim"
   | "crossrefs"
   | "simpleSummary"
@@ -598,6 +607,7 @@ const REVISION_READ_POLICY: Record<
     sketch: "value", arc: "value", timeline: "value", quiz: "value", rawSource: "value",
     illustrated: "value", debate: "value", assets: "value", citations: "value", faq: "value",
     relations: "value", skim: "value", crossrefs: "value", simpleSummary: "value",
+    debateClaims: "value",
   },
   articleId: { publish: "value" },
   /* `publish` refuses a revision that is not still a draft. */
@@ -645,6 +655,8 @@ const REVISION_READ_POLICY: Record<
     faq: "value",
     /* `faq`'s bytes and `faq`'s fingerprint, so the same cited columns. */
     relations: "value",
+    /* Debate Claims' rendered article head carries this field. */
+    debateClaims: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
     crossrefs: "value",
     /* `articleWithIds` over the body, so the same cited head as `crossrefs`. */
@@ -670,6 +682,8 @@ const REVISION_READ_POLICY: Record<
     faq: "value",
     /* `faq`'s bytes and `faq`'s fingerprint, so the same cited columns. */
     relations: "value",
+    /* Debate Claims' rendered article head carries this field. */
+    debateClaims: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
     crossrefs: "value",
     /* `articleWithIds` over the body, so the same cited head as `crossrefs`. */
@@ -695,6 +709,8 @@ const REVISION_READ_POLICY: Record<
     faq: "value",
     /* `faq`'s bytes and `faq`'s fingerprint, so the same cited columns. */
     relations: "value",
+    /* Debate Claims' rendered article head carries this field. */
+    debateClaims: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
     crossrefs: "value",
     /* `articleWithIds` over the body, so the same cited head as `crossrefs`. */
@@ -772,6 +788,8 @@ const REVISION_READ_POLICY: Record<
     faq: "value",
     /* `faq`'s bytes and `faq`'s fingerprint, so the same cited columns. */
     relations: "value",
+    /* Debate Claims' rendered article head carries this field. */
+    debateClaims: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
     crossrefs: "value",
     /* `articleWithIds` over the body, so the same cited head as `crossrefs`. */
@@ -790,6 +808,9 @@ const REVISION_READ_POLICY: Record<
   unverified: { article: "value", library: "value" },
   recall: { article: "value", library: "value" },
   pagesChecked: { article: "value", library: "value" },
+  /* The library takes it only because it shares `META_COLUMNS` with the
+     article read, as `recall` does; the shelf shows neither. */
+  quality: { article: "value", library: "value" },
 
   /* The tree: the article renders it, `ideas` compares it (src/ideas.ts §
      `inputFingerprint` — that artefact is written from the skeleton as much as
@@ -828,6 +849,8 @@ const REVISION_READ_POLICY: Record<
     faq: "value",
     /* FAQ's fingerprint exactly, so the outline too. */
     relations: "value",
+    /* Only for Debate Claims' fallback head when metadata has no title. */
+    debateClaims: "value",
     /* The top-level skeleton is in its user message, so it needs the tree. */
     crossrefs: "value",
     /* Not for a skeleton — its user message is a constant — but for the
@@ -968,6 +991,12 @@ const REVISION_READ_POLICY: Record<
      read**: src/store/public-reader.ts does not select it (Sol P1-4,
      docs/plans/261003f-marginalia-relation-words-and-timeline-events.md). */
   relations: { metadata: "value", relations: "value" },
+  /* Its own reader and the metadata page, and not the library — the call
+     `faq` makes. `isCurrent` needs the column for its arm. And the public
+     read, in src/store/public-reader.ts: generated output is readable by a
+     visitor by default (docs/project/mode.md § The artefact).
+     docs/plans/261008i-debate-claims-picked-by-the-reader.md. */
+  debateClaims: { metadata: "value", debateClaims: "value" },
   /* Its own reader and the metadata page, and not the library — the call
      `faq` makes. `isCurrent` needs the column for its arm, and
      `personalisedSteps` needs it because the route carries a `profileHash`. */
@@ -1125,6 +1154,7 @@ const META_COLUMNS = {
   unverified: articleRevisions.unverified,
   recall: articleRevisions.recall,
   pagesChecked: articleRevisions.pagesChecked,
+  quality: articleRevisions.quality,
   readingLanguage: articleRevisions.readingLanguage,
   readingIdeas: articleRevisions.readingIdeas,
   readingDifficultyReason: articleRevisions.readingDifficultyReason,
@@ -1297,6 +1327,8 @@ export const REVISION_PROJECTIONS = {
     /* For `isCurrent`'s arm, as `debate` above. */
     relations: articleRevisions.relations,
     /* For `isCurrent`'s arm, as `debate` above. */
+    debateClaims: articleRevisions.debateClaims,
+    /* For `isCurrent`'s arm, as `debate` above. */
     crossrefs: articleRevisions.crossrefs,
     /* For `isCurrent`'s arm, as `debate` above. */
     simpleSummary: articleRevisions.simpleSummary,
@@ -1387,6 +1419,12 @@ export const REVISION_PROJECTIONS = {
   relations: {
     id: articleRevisions.id,
     relations: articleRevisions.relations,
+    ...CITED_FINGERPRINT_COLUMNS,
+  },
+  /* The cited head and tree fallback its exact-request fingerprint needs. */
+  debateClaims: {
+    id: articleRevisions.id,
+    debateClaims: articleRevisions.debateClaims,
     ...CITED_FINGERPRINT_COLUMNS,
   },
   /* The cited head and tree its own exact-request fingerprint needs. */
@@ -1815,7 +1853,7 @@ export async function sourceHashFor(
  * view's row now genuinely differ (one has the tree, the other has five
  * scalars), and this is the part they share.
  */
-type MetaRow = { [C in keyof typeof META_COLUMNS]: Selected[C] };
+export type MetaRow = { [C in keyof typeof META_COLUMNS]: Selected[C] };
 
 /**
  * `Meta.authors` from its column, for the one read that selects it — the
@@ -1862,7 +1900,8 @@ function unreadPaperFrom(
   };
 }
 
-function metaFrom(
+/** Exported for tests/meta-from-columns.test.ts, which holds it to every column it is given. */
+export function metaFrom(
   slug: string,
   /* **`MetaRow`, not `$inferSelect`** — the columns this function actually
      reads, which is a good deal less than the table. Widening it back would
@@ -1934,6 +1973,7 @@ function metaFrom(
     ...(revision.unverified === null ? {} : { unverified: revision.unverified }),
     ...(revision.recall === null ? {} : { recall: revision.recall }),
     ...(revision.pagesChecked === null ? {} : { pagesChecked: revision.pagesChecked }),
+    ...(revision.quality === null ? {} : { quality: revision.quality }),
     ...(readingDifficulty === null ? {} : { readingDifficulty }),
   };
 }
@@ -1998,6 +2038,7 @@ export const STEP_STORAGE: Record<StepName, string[]> = {
      the same shape `assets` above has. */
   illustrated: ["article_revisions.illustrated"],
   debate: ["article_revisions.debate"],
+  "debate-claims": ["article_revisions.debate_claims"],
   citations: ["article_revisions.citations"],
   faq: ["article_revisions.faq"],
   relations: ["article_revisions.relations"],
@@ -2723,6 +2764,8 @@ export function shareableArtefacts(revision: {
   simpleSummary: SimpleSummary | null;
   citations: Citations | null;
   debate: Debate | null;
+  /** Claims' list: on its own it opens Peer review to a visitor (plan 261009l § Visitors). */
+  debateClaims: DebateClaimList | null;
 }): PublicArtefacts {
   const present: Record<keyof PublicArtefacts, object | null> = {
     arc: revision.arc,
@@ -2742,7 +2785,14 @@ export function shareableArtefacts(revision: {
         ? revision.simpleSummary
         : null,
     citations: revision.citations,
-    debate: revision.debate,
+    /* **Debate is on a shared link when either of its artefacts is**: a claims
+       list made with no Reception search stored is still the visitor's to read
+       (src/public/dto.ts § `publicDebateClaimList`, the same `claims` test). */
+    debate:
+      revision.debate ??
+      (revision.debateClaims !== null && Array.isArray(revision.debateClaims.claims)
+        ? revision.debateClaims
+        : null),
   };
   return {
     arc: present.arc !== null,
@@ -3421,6 +3471,23 @@ const rawPgArticleReader: ArticleReader = {
             },
           );
         }
+        /* Its exact rendered body and cited head, with the tree as title fallback. */
+        case "debate-claims": {
+          const list = revision.debateClaims as DebateClaimList | null;
+          if (!list || !tree || blocks.length === 0) return false;
+          return sameStamp(
+            {
+              inputHash: list.sourceHash,
+              promptVersion: list.version,
+              model: list.generator,
+            },
+            {
+              inputHash: debateClaimsFingerprint(blocks, tree, citedFingerprint),
+              promptVersion: DEBATE_CLAIMS_PROMPT_VERSION,
+              model: CAPABLE_MODEL,
+            },
+          );
+        }
         /* The same stamp shape as `faq`, over its own exact request input. */
         case "crossrefs": {
           const crossrefs = revision.crossrefs as Crossrefs | null;
@@ -3627,6 +3694,7 @@ const rawPgArticleReader: ArticleReader = {
           simpleSummary: revision.simpleSummary as SimpleSummary | null,
           citations: revision.citations as Citations | null,
           debate: revision.debate as Debate | null,
+          debateClaims: revision.debateClaims as DebateClaimList | null,
         }),
       },
     };
@@ -3916,6 +3984,38 @@ const rawPgArticleReader: ArticleReader = {
   },
 
   /**
+   * Debate's claims list on its own — the Postgres half of `loadDebateClaims`.
+   *
+   * `loadFaq`'s shape: the cited head and the tree, because the fingerprint is
+   * FAQ's. **A 404 is the ordinary case** (the step runs only on a press on
+   * Claims); an EMPTY list is a 200 — a piece with no claim an outsider could
+   * argue with — as `SHAPE["debate-claims"]` decides at the store boundary.
+   * docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2.
+   */
+  async loadDebateClaims(slug: string): Promise<DebateClaimListFound> {
+    requireSlug(slug);
+    const found = await currentRevision(slug, "debateClaims");
+    if (!found) throw notFound(slug);
+    const claimList = found.revision.debateClaims as DebateClaimList | null;
+    if (!claimList || !Array.isArray(claimList.claims)) {
+      throw new ArtefactNotMadeYet(
+        `No claims list for "${slug}" yet. Make one with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["debate-claims"] }.`,
+      );
+    }
+    const blocks = await blockHashInputs(found.revision.id);
+    const tree = found.revision.tree as Tree | null;
+    return {
+      claimList,
+      // Unknown counts as stale, the same way round as its neighbours.
+      stale:
+        !tree ||
+        debateClaimsIsStale(claimList, blocks, tree, citedMetaFingerprintOf(found.revision)),
+      outdated: debateClaimsAreOutdated(claimList),
+    };
+  },
+
+  /**
    * The relation words on their own — the Postgres half of `loadRelations`.
    *
    * The cited head supplies the rendered prompt head; the tree supplies its
@@ -4073,6 +4173,7 @@ const rawPgArticleReader: ArticleReader = {
           skim.sourceHash !== skimInputHash(input)),
       outdated: skim.version !== SKIM_PROMPT_VERSION,
       notOnRoute: current.filter((q) => !onRoute.has(q.id) && !leftOut.has(q.id)).length,
+      profileNoticeDismissedFor: found.article.skimProfileNoticeDismissedFor,
     };
   },
 

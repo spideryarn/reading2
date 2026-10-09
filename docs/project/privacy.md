@@ -14,6 +14,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ If something here is yours](#if-something-here-is-yours) — the takedown section
 - [§ Where a reader's voice goes](#where-a-readers-voice-goes) — dictation lost zero-data-retention; the sources the copy is written from
 - [§ Deleting an article](#deleting-an-article-for-good) — what a delete removes and what survives
+- [§ Import records](#import-records) — the record of each import, and when it goes
 - [§ Reading time](#reading-time) — the bullet and what it must keep true
 - [§ Shelf topics](#shelf-topics) — what the topic model is shown
 - [§ Quick search](#quick-search) — what a quick search sends
@@ -26,6 +27,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ Feedback to the admin](#the-admin-is-emailed-each-readers-feedback) — their words in our inbox
 - [§ DOI lookups](#crossref-datacite-and-openalex-are-sent-a-doi) — Crossref, DataCite, OpenAlex
 - [§ Quiz answers](#quiz-answers) — stored since 2026-10-05
+- [§ A claim typed into Debate](#a-claim-typed-into-debate) — the reader's words to the search, kept with the check
 - [§ A private link](#a-private-link) — the four places the page names it
 - [§ An administrator's AI assistant](#an-administrators-ai-assistant-can-look-up-accounts) — account details through the admin's own assistant
 - [§ What is pinned by a test](#what-is-pinned-by-a-test-and-what-is-not) — what to re-read when X moves; the checklist
@@ -179,6 +181,13 @@ article you were reading"* — false, so it went. Its replacement hedges ("may",
 limit, the screenshot) for reasons
 [plan 260913a § The proposed reader-facing wording](../plans/260913a-send-the-source-file-and-the-article-with-extra-diagnostics.md#the-proposed-reader-facing-wording)
 gives clause by clause.
+
+**A failed import's *Report this* starts the box with three more things, since 2026-10-08**: the
+address the import came from (whole) or the uploaded file's name, and the error sentence. They are
+typed into the box for the reader, who reads them and can delete them before sending, and the page
+says so — the third clause of [feedback.md § The one rule](feedback.md#the-one-rule). Greg's call,
+answering q-a7kffw; plan
+[261008j](../plans/261008j-a-failed-import-report-carries-the-address-and-a-record-of-every-import.md).
 
 **And the whole address reaches Sentry**, not just our own database. Asked and
 answered, 2026-09-02: Greg chose the full URL everywhere over a path-only copy.
@@ -415,6 +424,26 @@ see the section below for what is pinned and why this is not. The rule it broke 
 the page has to stay true of the code, and a feature that falsifies a sentence on it is not finished
 until that sentence moves. The same trap took three sentences down on 2026-09-02 (`fcb0a209`).
 
+## Import records
+
+**Added 2026-10-08**: `import_records` keeps one row per import that ended — the address or file
+name, when, and for a failure the step and the error sentence — so a failed import can be debugged
+after its job row is trimmed ([ingest-queue.md § The record of every
+import](ingest-queue.md#the-record-of-every-import)). The page's *What we keep* gained a bullet for
+it. What the code has to keep true for that bullet:
+
+- **It goes with the article.** `deleteTerminalJobs` (src/store/pg-shelf.ts) deletes the owner's
+  records for the slug in Delete permanently's own transaction, so *Deleting things* — "everything
+  you did with it" — stays true, and no fifth item joins the list of what outlives an erasure.
+- **One that never became an article stays until the account goes.** An import stopped while queued
+  has no article and so no Delete button; the bullet says so rather than promising otherwise. The
+  owner key cascades, so the by-hand account erasure takes them.
+- **Nothing serves it to anybody.** No route reads the table; only a developer, through
+  `scripts/import-records.ts`.
+
+Plan [261008j](../plans/261008j-a-failed-import-report-carries-the-address-and-a-record-of-every-import.md),
+GPT Sol's finding 2.
+
 ## Reading time
 
 **Added 2026-09-16**, with [reading-time.md](reading-time.md): for an owner, a running total of
@@ -482,6 +511,16 @@ has no gist yet**, which is new; it is no longer shown candidate phrases. What i
 topic names, and which article is in which) is stored against the reader in `shelf_topic_sets`,
 deleted with the account, and never logged. The page's sentence and `LAST_UPDATED` moved.
 
+**Changed 2026-10-09**, with [public-shelf.md](public-shelf.md) and plan
+[261008j](../plans/261008j-public-shelf-topic-pills-automatic-billed-to-the-site.md): the public
+shelf now has topics too, so the sentence above (*"the public shelf gets no topics at all"*) no
+longer holds. The same model is shown the titles and one-line summaries of the articles shared on
+`/read/public` — what that page already shows anybody — and no profile and nothing private. They
+already went to it for their owner's own topics, so this is a new purpose for data already sent,
+not new data. What it returns is stored under the site account (`shelf_topic_sets`), not against any
+reader. The models paragraph says so in one clause, and `LAST_UPDATED` moved. Greg approved it as
+"q-p5h2a7 A".
+
 ## Quick search
 
 **Added 2026-10-02**, with [search.md § Quick search](search.md#quick-search-a-meaning-search-in-about-a-second):
@@ -499,7 +538,7 @@ criterion or a passage.
 [reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar): a sentence
 the bar cannot match, sent on Enter by a signed-in reader, goes to TypeSafe's `jev-1.13` with our
 own words for the bar's commands, and, when the command picked takes words (a search, a term, a
-tag), to `gpt-5.6-luna` as well, which copies them out. Neither is shown the article. **A new flow
+tag), to `gpt-6-luna` as well (`gpt-5.6-luna` until 9 October 2026), which copies them out. Neither is shown the article. **A new flow
 of the reader's own words to two models already on the page**, not a new subprocessor, so the
 `jev-1.13` clause in the models paragraph says so and `LAST_UPDATED` moved to 3 October 2026. The
 sentence is not stored, and [`src/command-pick-call.ts`](../../src/command-pick-call.ts) logs the
@@ -509,9 +548,10 @@ outcome's kind, counts and timings, never the sentence or the words.
 
 **Added 2026-10-07**, with [help-page.md § Ask about Spideryarn](help-page.md#ask-about-spideryarn)
 and [plan 261007k](../plans/261007k-help-chatbot.md): a signed-in reader's question in Help's *Ask
-about Spideryarn* box goes to `gpt-5.6-luna` (OpenAI's, through OpenRouter, job `help-chat`), with
-every Help page and nothing of the reader's besides — no article, no profile. **A new flow of the
-reader's own words to a model already on the page**, so the `gpt-5.6-luna` clause in the models
+about Spideryarn* box goes to `gpt-6-luna` (`gpt-5.6-luna` until 9 October 2026; OpenAI's, through
+OpenRouter, job `help-chat`), with every Help page and nothing of the reader's besides — no
+article, no profile. **A new flow of the
+reader's own words to a model already on the page**, so the `gpt-6-luna` clause in the models
 paragraph says so; `LAST_UPDATED` already read 7 October 2026. The question and the answer are not
 stored, and [`src/help-chat-call.ts`](../../src/help-chat-call.ts) logs the outcome, timings, token
 counts and model, never the question or the answer. What is kept is the allowance's row (who asked,
@@ -525,9 +565,10 @@ plan's option B keeps a keyed hash of their address, and the page gains a line f
 [reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar) and
 [plan 261005k](../plans/261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md):
 when the owner of an article presses *Suggest what to do here*, the reader's profile and their
-reason for reading that article go to `gpt-5.6-luna`, with our own words for the bar's modes. It is
+reason for reading that article go to `gpt-6-luna` (`gpt-5.6-luna` until 9 October 2026), with our
+own words for the bar's modes. It is
 not shown the article. **A new flow of the profile to a model already on the page**, so the
-`gpt-5.6-luna` clause in the models paragraph says so. `LAST_UPDATED` already reads 5 October 2026.
+`gpt-6-luna` clause in the models paragraph says so. `LAST_UPDATED` already reads 5 October 2026.
 
 **The page also says what follows, because that is the part a reader could not guess.** The model
 writes up to three searches and one question for chat, and words them from what it was shown. One
@@ -637,6 +678,18 @@ all three, links each, and says what is and is not sent. `LAST_UPDATED` moved to
 **Pinned by a test from the code's own list**: `tests/privacy-page.test.ts` reads
 `BIBLIOGRAPHIC_HOSTS` in [`src/fetch.ts`](../../src/fetch.ts), the only hosts that fetcher will
 dial, and requires the page to name each. A fourth index turns it red until the page names it.
+
+## A claim typed into Debate
+
+**Added 2026-10-09**, with [debate.md § Checking the claims you pick](debate.md#checking-the-claims-you-pick)
+([261008i § 3](../plans/261008i-debate-claims-picked-by-the-reader.md)): the owner of an article can
+type a claim of their own into Debate's Claims and press Check. Their words go, with the article,
+to the model doing the web search, through OpenRouter, as a chat message's words already do — so
+**no new flow and no new party**, and the page needed no change; `LAST_UPDATED` did not move. The
+words are stored with the check (`debate_claim_checks.targets`), are in the article's export, go
+when the article is deleted, and are never shown to a visitor of a shared article: checks are not
+in the public payload. [`src/store/pg-debate-claim-checks.ts`](../../src/store/pg-debate-claim-checks.ts)
+and the route log counts and ids, never the words.
 
 ## Quiz answers
 

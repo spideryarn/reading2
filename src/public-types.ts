@@ -38,7 +38,7 @@
  *   and what it returns is what `PublicMeta.url` carries. See the field.
  * - **`meta.fetchedAt`, `meta.note`, and the whole PDF provenance block**
  *   (`source`, `method`, `pages`, `rawSha256`, `unverified`, `recall`,
- *   `pagesChecked`). Facts about our pipeline and about somebody's uploaded
+ *   `pagesChecked`, `quality`). Facts about our pipeline and about somebody's uploaded
  *   file, not about the piece.
  * - **`Block.note`**, which says why the splitter marked a block ungistable.
  *   Not merely projected away: the public blocks query never selects it, which
@@ -72,8 +72,10 @@ import type {
   DebateBears,
   DebateLean,
   DebateRelation,
+  DebateClaimsNotRun,
   DebateSynthesis,
   FaqQuestion,
+  ListedClaim,
   SimpleLevel,
   SimpleParagraph,
   GlossaryKind,
@@ -423,6 +425,7 @@ export interface PublicArtefactSet {
   simpleSummary?: PublicSimpleSummary;
   citations?: PublicCitations;
   debate?: PublicDebate;
+  debateClaims?: PublicDebateClaimList;
   sketch?: PublicSketch;
 }
 
@@ -554,7 +557,8 @@ export interface PublicTimeline {
  *
  * **The stops cross field by field** — `{ quoteId, depth, role, cue, again }`,
  * all of them about the article: a quote id the payload's `quotes` resolves, a
- * pass, the model's one line on what to look for there, and the deeper passes
+ * pass, the model's optional line to read the passage with (`null` where it
+ * gave none, which since `skim/11` is most stops), and the deeper passes
  * the stop is walked in again (`skim/9`, plan 261003l — without it a visitor
  * would walk a different pass from the owner).
  *
@@ -600,6 +604,27 @@ export interface PublicSkim {
  */
 export interface PublicFaq {
   questions: FaqQuestion[];
+}
+
+/**
+ * **Debate's claims list, as a visitor gets it** — from the day it was built
+ * (2026-10-08, docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2).
+ * Generated output about the article, so readable by a visitor by default
+ * (docs/project/mode.md § The artefact); only making it spends.
+ *
+ * **Each claim crosses field by field** — `{ id, blockId, quote, statement }`:
+ * the article's own words, where they are, and the model's one-line wording of
+ * the claim. No profile is in this stage, so there is nothing about a person
+ * to drop. **Read-only**: the visitor's panel has no button to make, redo or
+ * check one.
+ *
+ * **What does not cross** is the pipeline, as everywhere in this file —
+ * `version`, `generator`, `slug`, `sourceHash`, `generatedAt`, `elapsedMs` —
+ * and `dropped`, our checking's tally. Nor does any check the owner ran on a
+ * listed claim: those are a separate table (plan § 4).
+ */
+export interface PublicDebateClaimList {
+  claims: ListedClaim[];
 }
 
 /**
@@ -763,7 +788,7 @@ export interface PublicClaimDebateRow extends PublicDebateRowBase {
 }
 
 /**
- * One of the two searches, as a visitor gets it: its rows, and **how many
+ * One Debate group, as a visitor gets it: its rows, and **how many
  * rows the public boundary withheld** — computed there, never read off the
  * artefact (260905f § What is counted, Sol's F17). The stored `counts` do not
  * cross: `returnedSources`, `reportedRows`, `keptRows`, `omittedOverCap`, the
@@ -783,11 +808,16 @@ export interface PublicDebateGroup<Row> {
   sourceNotPublishable: number;
 }
 
+/** The claims group as a visitor gets it: searched (a legacy debate), or not run. src/types.ts § `DebateClaims`. */
+export type PublicDebateClaims =
+  | (PublicDebateGroup<PublicClaimDebateRow> & { pass?: undefined })
+  | DebateClaimsNotRun;
+
 /**
  * **The Debate, as a visitor gets it** — since 2026-09-29, the fourth mode plan
  * 260929c moved off `owners-only` (SPIDERYARN-READING2-56), by the contract its
  * own plan set (260905f § Security, § Stage 4). Showing a stored search costs
- * nothing; only running one spends (two metered web searches, ~$0.27).
+ * nothing; only running Reception spends its metered web-search call.
  *
  * `searchedAt` crosses **deliberately** — a shared link outlives a search, and
  * a visitor must be able to see how old it is (260905f § `searchedAt`). The
@@ -797,10 +827,16 @@ export interface PublicDebateGroup<Row> {
 export interface PublicDebate {
   searchedAt: string;
   direct: PublicDebateGroup<PublicDirectDebateRow>;
-  claims: PublicDebateGroup<PublicClaimDebateRow>;
+  /**
+   * The claims search's rows — or `{pass: "not-run"}` for a debate searched at
+   * `debate/7` or later, when the press stopped searching for claims
+   * (src/types.ts § `DebateClaims`). Carried across as it is stored, so a
+   * visitor is never told a search found nothing when none ran.
+   */
+  claims: PublicDebateClaims;
   /**
    * **The threads and the key sources** — since 2026-10-01 (plan 261001b,
-   * SPIDERYARN-READING2-6M). The model's words over the rows both passes kept;
+   * SPIDERYARN-READING2-6M). The model's words over the rows the search kept;
    * no profile goes into the call.
    *
    * **A `made` synthesis crosses only when no row was withheld** in either

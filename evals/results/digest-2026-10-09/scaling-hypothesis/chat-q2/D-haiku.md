@@ -1,0 +1,9 @@
+# scaling-hypothesis — chat-q2 — D-haiku
+
+> What does Gwern mean when he says agency can come from data, and what is the weakest step in his argument that a model trained only to predict text can end up behaving as an agent?
+
+Gwern means that agency is not a special ingredient that must be built in or filtered out. It is a capability that a model can pick up because it is useful for predicting data. He argues that "agency is not discrete or immaterial, but an ordinary continuum of capability" [spya-mkbrjp]. Models trained on human text learn to imitate agents, and a prompted model can act as one: "A sufficiently accurate simulation of an agent just is an agent" [spya-nkzwpu]. Gwern also argues that even physics data does not guarantee safety, since "all 'agency' is constructed of non-agentic bits like atoms" [spya-jn3pv0]. Because goal-directed description is a shortcut for predicting many systems, a strong predictor may adopt it anywhere [spya-ehe426].
+
+The weakest step is the move from "the model can represent agents" to "the model becomes an agent." The article's evidence supports the first. Prompted roleplay and the SayCan robot show the model can carry out a plan [spya-cw7jg4, spya-fm6pfc]. The second needs the model to pursue goals on its own, and the article admits this is unproven. Gwern concedes that whether agency emerges from a given dataset "is an empirical matter" [spya-nxp8hh], and that inducing it "is expensive" and need not happen for simple systems [spya-dbrxu8]. His strongest support, that agency is a "convergent" capability, is also hedged: he says there is "maybe not even that small" a possibility [spya-ueb3d2].
+
+My inference is that the weakest point is the definitional step: calling any sufficiently accurate simulation an agent makes the conclusion easy to reach, and the article's own critic disputes that framing [spya-e23u6n].

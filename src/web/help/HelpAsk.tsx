@@ -25,6 +25,17 @@
  * For Greg: the signed-out door). Which shell is drawn is `SignedInShell`'s
  * answer, as for `DocumentPage` around this, never a session call of its own.
  *
+ * ## A microphone, like every other box that sends
+ *
+ * Greg, `spya-y5gfpf`, 2026-10-08: *"Add a voice dictate button to the help
+ * chat."* The three lines of docs/project/dictation.md § Adding it to a box,
+ * with the Feedback dialog as the twin: no article, so the vocabulary place is
+ * `profile` (the app's own words and the reader's profile prose), and a double
+ * press on Stop sends. **The hook lives in `useHelpAsk`, not in the box**, for
+ * the same reason the question does: the box is remounted when the reader
+ * follows a link from `/help` to a page, and a hook in it would stop the
+ * microphone mid-sentence (GPT Sol's plan review of 261009a, finding 1).
+ *
  * ## The answer is a model's
  *
  * Drawn through `CitedMarkdown`'s walk — no HTML, anything it does not know
@@ -32,13 +43,16 @@
  * address the Help itself has (help-answer-links.ts). In the model's face
  * (docs/project/fonts.md); the question box in the reader's.
  */
-import { useContext, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useContext, useEffect, useRef, useState, type FormEvent, type ReactNode, type RefObject } from "react";
 import { Square } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { HELP_CHAT_PATH, MAX_HELP_QUESTION_CHARS, type HelpChatDone } from "../../help-chat.js";
 import { SignedInShell } from "../BackLink.js";
 import { CitedMarkdown } from "../Cited.js";
+import { DictationButton, DictationStrip } from "../DictationStrip.js";
+import { keepDictation } from "../dictation-keep.js";
+import { useReaderTranscriber } from "../dictation-upload.js";
 import { isHeldSendEnter, isImeComposing, isSendEnter } from "../key-chord.js";
 import { apiFetch, readJson } from "../lib/api.js";
 import { describeFetchFailure } from "../lib/describe-failure.js";
@@ -46,6 +60,7 @@ import { ReaderFacingError } from "../lib/reader-facing.js";
 import { readAnswerStream } from "../lib/sse.js";
 import { Link } from "../Link.js";
 import { loginHref } from "../router.js";
+import { type UseDictationField, useDictationField } from "../useDictationField.js";
 import { voiceClass } from "../voice.js";
 import { helpAnswerHref } from "./help-answer-links.js";
 import { HELP_LINK_CLASS } from "./help-parts.js";
@@ -96,8 +111,22 @@ export interface HelpAskState {
   readonly value: string;
   setValue(v: string): void;
   readonly asked: Asked | null;
+  /**
+   * Sends the question, unless something refuses it: an answer still
+   * arriving, an empty box, `over`, or the microphone (`dictate.busy`). The
+   * one path the Ask button, Enter and a double press on Stop all take.
+   */
   ask(): void;
   stop(): void;
+  /**
+   * Longer than the server takes. `maxLength` stops typing past it, not a
+   * transcript, so dictation can get here; the words are never cut, the
+   * reader is told and trims them (GPT Sol's plan review of 261009a, F2).
+   */
+  readonly over: boolean;
+  /** The textarea, whichever of the two boxes is drawn. */
+  readonly box: RefObject<HTMLTextAreaElement | null>;
+  readonly dictate: UseDictationField;
 }
 
 export function useHelpAsk(): HelpAskState {
@@ -111,6 +140,9 @@ export function useHelpAsk(): HelpAskState {
   const live = useRef<AbortController | null>(null);
   /** Stopped by the reader, not by a failure — the catch reads it. */
   const stoppedBy = useRef<AbortController | null>(null);
+  const box = useRef<HTMLTextAreaElement | null>(null);
+  /* The server's count: after trimming (src/help-chat.ts § parseHelpChatRequest). */
+  const over = value.trim().length > MAX_HELP_QUESTION_CHARS;
 
   /* Leaving Help stops the answer, and the server's `gone` stops the paid
      call behind it (src/routes.ts § streamHelpAnswer). */
@@ -164,15 +196,37 @@ export function useHelpAsk(): HelpAskState {
     }
   }
 
+  /* Every refusal, so the double press's `onDone` — called on the render
+     after the words land, with `busy` false — takes the same road. */
+  const ask = () => {
+    const question = value.trim();
+    if (live.current || question === "" || over || dictate.busy) return;
+    void run(question);
+  };
+
+  /* No article in scope, so `profile`: the app's own words and the reader's
+     profile prose, as in the Feedback dialog. One kept box for all of Help,
+     and keepDictation partitions it by reader. */
+  const transcribe = useReaderTranscriber();
+  const dictate = useDictationField({
+    value,
+    onChange: setValue,
+    box,
+    context: { kind: "profile" },
+    transcribe,
+    keep: keepDictation("help-ask"),
+    /* A double press on Stop also sends (dictation.md § A double press). */
+    onDone: ask,
+  });
+
   return {
     value,
     setValue,
     asked,
-    ask() {
-      const question = value.trim();
-      if (live.current || question === "") return;
-      void run(question);
-    },
+    over,
+    box,
+    dictate,
+    ask,
     stop() {
       const controller = live.current;
       if (!controller) return;
@@ -212,7 +266,7 @@ export function HelpAsk({ state, className }: { state: HelpAskState; className?:
 }
 
 function AskBox({ state }: { state: HelpAskState }) {
-  const { value, setValue, asked, ask, stop } = state;
+  const { value, setValue, asked, ask, stop, over, box, dictate } = state;
   const arriving = asked?.kind === "arriving";
 
   const onSubmit = (e: FormEvent) => {
@@ -224,7 +278,9 @@ function AskBox({ state }: { state: HelpAskState }) {
     <>
       <form onSubmit={onSubmit} className="tw:flex tw:flex-col tw:gap-2">
         <textarea
+          ref={box}
           value={value}
+          readOnly={dictate.readOnly}
           onChange={(e) => setValue(e.target.value)}
           rows={3}
           /* The server's number. It counts after trimming and this counts as
@@ -261,7 +317,25 @@ function AskBox({ state }: { state: HelpAskState }) {
              enough). */
           className={`${voiceClass("reader")} tw:box-border tw:block tw:w-full tw:resize-y tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-3 tw:py-1.5 tw:text-sm tw:leading-relaxed tw:text-foreground tw:any-pointer-coarse:text-[max(1rem,16px)] tw:placeholder:text-ink-faint tw:focus-visible:border-highlight-text tw:focus-visible:outline-none`}
         />
+        {over && (
+          <p className={NOTE_CLASS}>
+            {value.trim().length} characters — a question can be at most {MAX_HELP_QUESTION_CHARS}.
+          </p>
+        )}
         <div className="tw:flex tw:items-center tw:justify-end tw:gap-2">
+          {/* The microphone every other box has, left of Ask. Hidden where the
+             browser cannot open one; off while an answer is arriving, as
+             chat's is while it is busy. */}
+          {dictate.dictation.supported && (
+            <DictationButton
+              dictation={dictate.dictation}
+              toggle={dictate.toggle}
+              disabled={arriving}
+              again={dictate.again}
+              sendingAfter={dictate.sendingAfter}
+              doubleStop={dictate.doubleStop}
+            />
+          )}
           {/* Two keys, so Stop and Ask are never one reused <button>. Reused,
              its type flipped from "button" to "submit" while a Stop click was
              still being dispatched (React renders a discrete event's update
@@ -273,12 +347,13 @@ function AskBox({ state }: { state: HelpAskState }) {
               Stop
             </Button>
           ) : (
-            <Button key="ask" type="submit" size="sm" disabled={value.trim() === ""}>
+            <Button key="ask" type="submit" size="sm" disabled={value.trim() === "" || over || dictate.busy}>
               Ask
             </Button>
           )}
         </div>
       </form>
+      <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} />
       <Answer asked={asked} />
     </>
   );

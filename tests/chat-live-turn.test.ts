@@ -162,6 +162,20 @@ beforeEach(async () => {
   vi.stubGlobal(
     "fetch",
     vi.fn((_url: string, init: RequestInit) => {
+      /* A finished answer — a stopped one included — is followed by a second,
+         structured request for the conversation's gist, awaited inside the
+         handler (plan 261008e). Given the hanging body below it never ends,
+         because this stub's body ignores the abort, and the test's `Call.done`
+         waits on the handler for ever. The server's `Live.done` has already
+         resolved. docs/postmortems/261008d-two-streaming-tests-that-hung-instead-of-failing.md. */
+      const request = JSON.parse(String(init.body)) as { response_format?: { json_schema?: { name?: unknown } } };
+      if (request.response_format?.json_schema?.name === "conversation_gist") {
+        return Promise.resolve(
+          Response.json({
+            choices: [{ finish_reason: "stop", message: { content: JSON.stringify({ gist: "A short answer" }) } }],
+          }),
+        );
+      }
       const signal = init.signal as AbortSignal;
       return new Promise<Response>((resolve, reject) => {
         if (signal.aborted) return reject(signal.reason);

@@ -43,7 +43,8 @@ import { PROFILE_RULES } from "../src/profile.js";
 import { MAX_LENS_CHARS } from "../src/types.js";
 
 const SKIM: PickKey = { id: "mode:skim", label: "Skim" };
-const DEBATE: PickKey = { id: "mode:debate", label: "Debate" };
+/* Debate's row until 2026-10-09; Peer review's since (plan 261009l). */
+const DEBATE: PickKey = { id: "mode:peer-review", label: "Peer review" };
 const QUIZ: PickKey = { id: "submode:learn:quiz", label: "Quiz" };
 const ARCHIVE: PickKey = { id: "action:archive", label: "Archive this article" };
 const CHANGELOG: PickKey = { id: "page:/changelog", label: "What’s new" };
@@ -112,7 +113,7 @@ describe("readSuggestions — the model's answer", () => {
         modes: [
           { key: "action:archive", why: "Tidy up." },
           { key: "mode:nonsense", why: "x" },
-          { key: "mode:debate", why: "See the argument." },
+          { key: "mode:peer-review", why: "See the argument." },
         ],
       }),
       offered,
@@ -136,7 +137,7 @@ describe("readSuggestions — the model's answer", () => {
         modes: [
           { key: "mode:skim", why: "a" },
           { key: "mode:skim", why: "again" },
-          { key: "mode:debate", why: "b" },
+          { key: "mode:peer-review", why: "b" },
         ],
         lens: { words: "z".repeat(MAX_SUGGESTED_LENS_CHARS + 1), why: "too long" },
       }),
@@ -148,7 +149,7 @@ describe("readSuggestions — the model's answer", () => {
       { words: "two", why: "" },
       { words: "three words", why: "ok" },
     ]);
-    expect(read?.modes.map((m) => m.key.id)).toEqual(["mode:skim", "mode:debate"]);
+    expect(read?.modes.map((m) => m.key.id)).toEqual(["mode:skim", "mode:peer-review"]);
     expect(read?.lens).toBeNull();
     expect(MAX_SUGGESTED_LENS_CHARS).toBeLessThanOrEqual(MAX_LENS_CHARS);
   });
@@ -159,7 +160,7 @@ describe("readSuggestions — the model's answer", () => {
         searches: [],
         modes: [
           { key: "mode:skim", why: "" },
-          { key: "mode:debate", why: "" },
+          { key: "mode:peer-review", why: "" },
           { key: "submode:learn:quiz", why: "" },
         ],
         lens: null,
@@ -280,7 +281,7 @@ describe("what the model is asked", () => {
     expect(system?.content).toBe(SUGGEST_SYSTEM);
     expect(user?.content).toContain(RENDERED);
     expect(user?.content).toMatch(/^mode:skim \| Skim: .+$/m);
-    expect(user?.content).toMatch(/^mode:debate \| Debate: .+$/m);
+    expect(user?.content).toMatch(/^mode:peer-review \| Peer review: .+$/m);
   });
 });
 
@@ -344,7 +345,9 @@ describe("suggestCommands", () => {
     expect(sent).toHaveLength(1);
     expect(sent[0]?.url).toBe("https://openrouter.ai/api/v1/chat/completions");
     expect(sent[0]?.body).toMatchObject({
-      model: "openai/gpt-5.6-luna",
+      /* GPT-6 Luna since 2026-10-09: the eval re-run on it passed every check
+         GPT-5.6 Luna did (evals/command-suggest/results/261009/, plan 261009a). */
+      model: "openai/gpt-6-luna",
       max_completion_tokens: COMMAND_SUGGEST_MAX_TOKENS,
       reasoning: { effort: "none" },
       provider: { require_parameters: true },
@@ -355,7 +358,7 @@ describe("suggestCommands", () => {
 
   it("shows the model only the modes — an Archive key the browser sent is not in the request, and cannot come back (F1)", async () => {
     const sent = stubModel(() =>
-      says({ searches: [], modes: [{ key: "action:archive", why: "Tidy up." }, { key: "mode:debate", why: "ok" }], lens: null }),
+      says({ searches: [], modes: [{ key: "action:archive", why: "Tidy up." }, { key: "mode:peer-review", why: "ok" }], lens: null }),
     );
     const { result } = await collectSpend(() => suggestCommands(input()));
     expect(sent[0]?.text).not.toContain("action:archive");
@@ -366,7 +369,7 @@ describe("suggestCommands", () => {
     const format = sent[0]?.body.response_format as {
       json_schema: { schema: { properties: { modes: { items: { properties: { key: { enum: string[] } } } } } } };
     };
-    expect(format.json_schema.schema.properties.modes.items.properties.key.enum).toEqual(["mode:skim", "mode:debate"]);
+    expect(format.json_schema.schema.properties.modes.items.properties.key.enum).toEqual(["mode:skim", "mode:peer-review"]);
     expect(result).toEqual({ ok: true, suggestions: { searches: [], modes: [{ key: DEBATE, why: "ok" }], lens: null } });
   });
 

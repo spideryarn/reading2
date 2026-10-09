@@ -263,6 +263,10 @@ Then the residue, which is why this page exists:
   [`voice.ts`](../../src/web/voice.ts) where the voice depends on the data. *[`tests/voices-css.test.ts`](../../tests/voices-css.test.ts) §
   `VOICES_BY_MODE`, a `Record<Mode, …>`: the mode's AI classes, or why it has none. It cannot see an
   element you forgot to name.*
+- **Each recurring line at its role's size**: a row's main line, a quotation, an explaining
+  sentence, a provenance line, a count or a group heading takes its `--type-*` token —
+  [typography.md § Text roles in a band](typography.md#text-roles-in-a-band). *[`tests/type-roles.test.ts`](../../tests/type-roles.test.ts)
+  § `REGISTRY`, once you add your lines to it; nothing, if you don't.*
 - **What [`Reader.tsx`](../../src/web/reader/Reader.tsx) asks about the mode outside the
   `modeBand()` switch.** A signpost, not a rule: the switch is compiler-checked, and the plain
   `mode === "…"` comparisons elsewhere in that file are not, so a new mode that needs one finds
@@ -541,6 +545,10 @@ resolved after the parse — [prompting-guide.md § What the model writes back](
 
 ## Its cost
 
+**What it paid for is kept.** A model's answer is stored with when it happened, unless saving would
+add enormous complexity or the answer is certainly ephemeral or worthless —
+[database.md § AI output we paid for is kept](database.md#ai-output-we-paid-for-is-kept).
+
 **Nothing to add, if the mode spends through a pipeline step or an article route** —
 [cost-tracking.md](cost-tracking.md) is the three rules that make that true. A step's spend is
 attributed to the article by `runStep`, and its `(step, job)` pair becomes its own line in the
@@ -643,9 +651,9 @@ red by themselves. These do not all, and `debate` is the specimen each was check
   [`src/feedback-payload.ts`](../../src/feedback-payload.ts); stored reports are not rewritten.
 - [`src/models.ts`](../../src/models.ts) § `MODEL_ENV_VAR` — the key is checked, the value
   (`SPIDERYARN_DEBATE_MODEL`) is a string, and so is wherever it is set. *Silent.*
-- [`src/web/params.ts`](../../src/web/params.ts) — the mode's own URL words (`?debate=`,
-  `?debateby=`, `?debatethread=`) and `CHAT_FROM_WORDS`; the literal query keys are in
-  [`DebateMode.tsx`](../../src/web/modes/debate/DebateMode.tsx). *Silent:* an old link loses the parameter.
+- [`src/web/params.ts`](../../src/web/params.ts) — the mode's own URL words (`?debate=` until
+  2026-10-09, `?debateby=`, `?debatethread=`) and `CHAT_FROM_WORDS`; the literal query keys are in
+  [`PeerReviewMode.tsx`](../../src/web/modes/peer-review/PeerReviewMode.tsx) (`DebateMode.tsx` then). *Silent:* an old link loses the parameter.
 - [`src/web/last-view.ts`](../../src/web/last-view.ts) § `REMEMBERED`, `lastViewKey` — localStorage
   keeps `mode=debate` and the mode's query keys in the saved search. Decide which old words restore;
   the Learn precedent also moves a retired query key to `NEVER_REMEMBERED` so an old link still wins.
@@ -678,6 +686,13 @@ red by themselves. These do not all, and `debate` is the specimen each was check
   template for a name stored as a value under a CHECK (`chat_threads.kind`, plus the partial unique
   index rebuilt with the new kind in its predicate), for which old URL words
   get an alias and which are let go, and for the list of what keeps the old word on purpose.
+- **Citations + Debate → Peer review**
+  ([261009l](../plans/261009l-peer-review-mode-merges-citations-and-debate.md),
+  [peer-review.md](peer-review.md)) is the template for **two modes merged into one as its
+  sub-modes**: both words in `RETIRED_MODES`, one lift from each old address to the sub-mode it
+  meant (boot, navigation, Back *and* a restored last view), the old words as the sub-mode rows'
+  aliases, one wrapper drawing the two panels under one chip row — and the stored names held, on
+  purpose, until the provisional name is confirmed.
 
 **Two cautions.** An ordinary English word ("debate") also matches prose, comments and Greg's
 quotes, none of which is renamed. And dated plans, postmortems and applied migrations are history:
@@ -737,7 +752,8 @@ guard against the cheap wrong fix, quietly adding it to the `NO_FOUND` arm to ma
 stop.
 
 **Since 2026-10-02 Help asks too**, with two more `Record<Mode, …>` tables in `src/web/help/`: the
-mode's own page, a Markdown file under `pages/modes/` since 2026-10-07 (when to use it, how to read
-it), and its row in *Which mode when*. Write them for a reader, not a developer —
+mode's own page, a Markdown file under `pages/modes/` since 2026-10-07 (since 2026-10-09 a
+required `## In short` on why a reader would care, then when to use it and how to read it), and
+its row in *Which mode when*. Write them for a reader, not a developer —
 [help-page.md](help-page.md). Retiring a mode keeps its `/help/mode-…` link working on its own,
 through `RETIRED_MODES`.

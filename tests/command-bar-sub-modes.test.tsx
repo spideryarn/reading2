@@ -24,7 +24,7 @@ import {
 import { GENERATES_MARKER } from "../src/web/CommandBar.js";
 import { Dock } from "../src/web/Dock.js";
 import {
-  debateParam,
+  peerReviewParam,
   diagramParam,
   modeParam,
   refereeParam,
@@ -96,7 +96,7 @@ function ReaderNavHarness(): ReturnType<typeof createElement> {
     referee: refereeParam,
     summary: summaryParam,
     structure: structureParam,
-    debate: debateParam,
+    "peer-review": peerReviewParam,
   });
   return createElement(Dock, {
     slug: "a-piece",
@@ -563,72 +563,153 @@ describe("Enter on Referee › Hidden text, on the reading view", () => {
   });
 });
 
-/* Debate's Reception | Claims, since 2026-10-03 (plan 261003o; GPT Sol's F6):
-   the bar gets its sub-mode rows from `subModesOf`, so a sub-mode that lives
-   only in the panel is one the bar never offers; and Reader's batched setter
-   enumerates its keys, so one missing from it opens the mode and drops the
-   view. */
-describe("Debate's two sub-modes", () => {
-  const CLAIMS: SubMode = { mode: "debate", view: "claims" };
-  const RECEPTION: SubMode = { mode: "debate", view: "reception" };
+/* Peer review's Bibliography | Reception | Claims, since 2026-10-09 (plan
+   261009l); Debate's Reception | Claims before that, since 2026-10-03 (plan
+   261003o; GPT Sol's F6): the bar gets its sub-mode rows from `subModesOf`,
+   so a sub-mode that lives only in the panel is one the bar never offers; and
+   Reader's batched setter enumerates its keys, so one missing from it opens
+   the mode and drops the view. */
+describe("Peer review's three sub-modes", () => {
+  const BIBLIOGRAPHY: SubMode = { mode: "peer-review", view: "bibliography" };
+  const CLAIMS: SubMode = { mode: "peer-review", view: "claims" };
+  const RECEPTION: SubMode = { mode: "peer-review", view: "reception" };
 
-  it("lists both under Debate, in the control's order", () => {
+  it("lists all three under Peer review, in the control's order", () => {
     reading();
     openBar();
-    type("debate");
-    expect(fullName(rows()[0] as HTMLElement)).toBe("Debate");
-    /* The sub-mode rows only: *Debate › Run again* is a different kind of row. */
-    expect(subRows().map(fullName).filter((n) => n.startsWith("Debate ›"))).toEqual([
-      "Debate › Reception",
-      "Debate › Claims",
+    type("peer review");
+    expect(fullName(rows()[0] as HTMLElement)).toBe("Peer review");
+    expect(subRows().map(fullName).filter((n) => n.startsWith("Peer review ›"))).toEqual([
+      "Peer review › Bibliography",
+      "Peer review › Reception",
+      "Peer review › Claims",
     ]);
   });
 
-  it("finds Debate's Claims by the compound a reader would say, beside Referee's", () => {
+  it("finds Claims by the compound a reader would say, the old Debate one too, beside Referee's", () => {
     reading();
     openBar();
+    type("peer review claims");
+    expect(fullName(rows()[0] as HTMLElement)).toBe("Peer review › Claims");
     type("debate claims");
-    expect(fullName(rows()[0] as HTMLElement)).toBe("Debate › Claims");
+    expect(fullName(rows()[0] as HTMLElement)).toBe("Peer review › Claims");
     type("claims");
-    expect(rows().map(fullName)).toEqual(expect.arrayContaining(["Debate › Claims", "Referee › Claims"]));
+    expect(rows().map(fullName)).toEqual(expect.arrayContaining(["Peer review › Claims", "Referee › Claims"]));
   });
 
-  /* **One search, never a second.** Either row arms the one `debate` run — the
-     mode row's own target — under one key, and the band that mounts claims
-     that one token. Two keys, or a second arm, would be two metered searches. */
-  it("arms the one `debate` run for either sub-mode, as the mode row does", () => {
-    for (const sub of [RECEPTION, CLAIMS]) {
-      expect(subModeTarget(sub), sub.view).toBe("debate");
-      expect(subModeGenerates(sub), sub.view).toBe(true);
-    }
+  /* **The retired mode words select the view each old link opens**
+     (docs/project/mode.md § Retiring a mode, step 2): `citations` is
+     Bibliography's own alias, `debate` Reception's. */
+  it("opens Bibliography for `citations` and Reception for `debate`", () => {
+    reading();
+    openBar();
+    type("citations");
+    expect(fullName(rows()[0] as HTMLElement)).toBe("Peer review › Bibliography");
+    type("bibliography");
+    expect(fullName(rows()[0] as HTMLElement)).toBe("Peer review › Bibliography");
+    type("debate");
+    expect(fullName(rows()[0] as HTMLElement)).toBe("Peer review › Reception");
+  });
+
+  /* **Each row buys its own sub-mode's work and nothing else**: the
+     citations for Bibliography, the `debate` search for Reception (since
+     `debate/7`, 2026-10-08, the search is Reception's only — plan 261008i,
+     GPT Sol's F1), the claims list for Claims: one call, no search. */
+  it("arms the citations for Bibliography, the `debate` search for Reception and the claims list for Claims", () => {
+    expect(subModeTarget(BIBLIOGRAPHY)).toBe("citations");
+    expect(subModeGenerates(BIBLIOGRAPHY)).toBe(true);
+    expect(subModeTarget(RECEPTION)).toBe("debate");
+    expect(subModeGenerates(RECEPTION)).toBe(true);
+    expect(subModeTarget(CLAIMS)).toBe("debate-claims");
+    expect(subModeGenerates(CLAIMS)).toBe(true);
+  });
+
+  it("opens Peer review on Claims from the bar arming the list and never the Reception search", () => {
     const onMode = vi.fn();
     reading({ onMode });
     openBar();
-    type("debate claims");
+    type("peer review claims");
     press("Enter");
-    expect(onMode).toHaveBeenCalledWith("debate", CLAIMS);
-    expect(pendingActivation("a-piece", "debate")).not.toBeNull();
+    expect(onMode).toHaveBeenCalledWith("peer-review", CLAIMS);
+    expect(pendingActivation("a-piece", "debate")).toBeNull();
+    expect(pendingActivation("a-piece", "citations")).toBeNull();
+    expect(pendingActivation("a-piece", "debate-claims")).not.toBeNull();
   });
 
-  it("opens Debate on Claims through the Reader's setter, in one pushed entry", async () => {
+  /* **The mode row too**: it lands on whatever sub-mode the reading view says
+     is showing, so it arms by that, from the parsed state the Reader hands the
+     bar (`<Dock peerReview>`) — the address lags a press (activation.ts §
+     `PressContext`). */
+  it("arms the claims list, not the search, from the mode row when Peer review would open on Claims", () => {
+    const onMode = vi.fn();
+    reading({ onMode, peerReview: "claims" });
+    openBar();
+    type("peer review");
+    expect(fullName(rows()[0] as HTMLElement)).toBe("Peer review");
+    press("Enter");
+    expect(onMode).toHaveBeenCalledWith("peer-review", undefined, false);
+    expect(pendingActivation("a-piece", "debate")).toBeNull();
+    expect(pendingActivation("a-piece", "citations")).toBeNull();
+    expect(pendingActivation("a-piece", "debate-claims")).not.toBeNull();
+  });
+
+  it("arms the search from the mode row when Peer review would open on Reception", () => {
+    const onMode = vi.fn();
+    reading({ onMode, peerReview: "reception" });
+    openBar();
+    type("peer review");
+    press("Enter");
+    expect(pendingActivation("a-piece", "debate")).not.toBeNull();
+    /* …and never Claims' list (plan 261008i stage 2), nor the citations. */
+    expect(pendingActivation("a-piece", "debate-claims")).toBeNull();
+    expect(pendingActivation("a-piece", "citations")).toBeNull();
+  });
+
+  /* Bibliography is the default: a mode row with nothing named buys the
+     citations, and never the search. */
+  it("arms the citations from the mode row when Peer review would open on Bibliography", () => {
+    const onMode = vi.fn();
+    reading({ onMode });
+    openBar();
+    type("peer review");
+    press("Enter");
+    expect(pendingActivation("a-piece", "citations")).not.toBeNull();
+    expect(pendingActivation("a-piece", "debate")).toBeNull();
+    expect(pendingActivation("a-piece", "debate-claims")).toBeNull();
+  });
+
+  it("opens Peer review on Reception from the bar and arms the search, as the mode row does", () => {
+    const onMode = vi.fn();
+    reading({ onMode });
+    openBar();
+    type("peer review reception");
+    press("Enter");
+    expect(onMode).toHaveBeenCalledWith("peer-review", RECEPTION);
+    expect(pendingActivation("a-piece", "debate")).not.toBeNull();
+    expect(pendingActivation("a-piece", "debate-claims")).toBeNull();
+  });
+
+  it("opens Peer review on Claims through the Reader's setter, in one pushed entry", async () => {
     readingThroughReader("?mode=plain&at=spya-k3m9qt");
     const push = vi.spyOn(history, "pushState");
     openBar();
-    type("debate claims");
+    type("peer review claims");
     press("Enter");
     await until(() => {
       const params = new URLSearchParams(location.search);
-      return params.get("mode") === "debate" && params.get("debate") === "claims";
+      return params.get("mode") === "peer-review" && params.get("peer-review") === "claims";
     });
     expect(push).toHaveBeenCalledTimes(1);
     expect(new URLSearchParams(location.search).get("at")).toBe("spya-k3m9qt");
   });
 
-  it("leaves Reception, the default, out of the address", () => {
-    expect(subModeParams(RECEPTION)).toEqual({ mode: "debate", debate: null });
-    expect(subModeParams(CLAIMS)).toEqual({ mode: "debate", debate: "claims" });
-    expect(withSubMode("?mode=debate&debate=claims&at=spya-aaaaaa", RECEPTION)).toBe("?mode=debate&at=spya-aaaaaa");
-    expect(withSubMode("?mode=plain", CLAIMS)).toBe("?mode=debate&debate=claims");
+  it("leaves Bibliography, the default, out of the address", () => {
+    expect(subModeParams(BIBLIOGRAPHY)).toEqual({ mode: "peer-review", "peer-review": null });
+    expect(subModeParams(CLAIMS)).toEqual({ mode: "peer-review", "peer-review": "claims" });
+    expect(withSubMode("?mode=peer-review&peer-review=claims&at=spya-aaaaaa", BIBLIOGRAPHY)).toBe(
+      "?mode=peer-review&at=spya-aaaaaa",
+    );
+    expect(withSubMode("?mode=plain", CLAIMS)).toBe("?mode=peer-review&peer-review=claims");
   });
 });
 
@@ -663,6 +744,7 @@ describe("the registry's two answers agree", () => {
     referee: "criteria",
     learn: "recall",
     summary: "brief",
+    "peer-review": "bibliography",
   } as const;
 
   it("a sub-mode row arms exactly the target the band that mounts would claim", () => {
@@ -712,7 +794,7 @@ describe("the registry's two answers agree", () => {
       /* Brief, Summary's default since 8N (plan 261002c); Simple was until then. */
       { mode: "summary", view: "brief" },
       { mode: "structure", view: "fisheye" },
-      { mode: "debate", view: "reception" },
+      { mode: "peer-review", view: "bibliography" },
     ] as const satisfies readonly SubMode[]) {
       const key = sub.mode;
       expect(subModeParams(sub)).toEqual({ mode: sub.mode, [key]: null });

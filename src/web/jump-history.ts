@@ -96,59 +96,52 @@ const TOP = "top";
  * rather than bookkeeping.**
  *
  * A stamp is written by the code that is running and read by whatever code is
- * running when the entry comes back, and those need not be the same deploy: an
- * entry stamped at depth 2 can be reloaded onto the *previous* bundle, whose
- * `readStamp` knows only `from` and whose chip is `history.back()`. It would
- * draw a chip, ignore the depth, step one entry, and land the reader somewhere
- * the label does not name — failing **open**, which is the bad direction.
+ * running when the entry comes back, and those need not be the same deploy. An
+ * older bundle's chip was `history.go(-depth)`; handed this shape it must draw
+ * nothing rather than guess a depth and step to somewhere its label does not
+ * name — failing **closed**. Both older parsers do: the one before 2026-09-16
+ * looks for `from` and finds none, and the v2 one sees a `v` it does not know.
+ * GPT Sol's first finding on the 260916a plan.
  *
- * So the new shape carries no `from` at all. The old parser looks for one,
- * finds nothing, and returns `null`: no chip, which is the honest answer from
- * code that cannot honour this stamp. GPT Sol's first finding on the plan,
- * 2026-09-16.
+ * **3 since 2026-10-08**, when the chip stopped travelling the stack at all
+ * (docs/plans/261008g-the-way-back-chip-moves-the-position-and-leaves-the-modes-alone.md):
+ * the depth went, and `earlier` came.
  *
  * **Under the same `STAMP_KEY`, deliberately.** A second key would be invisible
- * to the old `withStamp(state, null)`, which deletes `STAMP_KEY` and nothing
+ * to an old `withStamp(state, null)`, which deletes `STAMP_KEY` and nothing
  * else — so an old bundle would carry an unfamiliar stamp forward through every
  * push of the session with nothing able to clear it.
  */
-const VERSION = 2;
+const VERSION = 3;
 
 /**
- * **The ceiling on how far back the origin may be**, and it is plausibility
- * rather than policy.
- *
- * The plan's first draft capped inheritance at ten, so that one press could not
- * undo eleven deliberate acts. That was refused in review and the refusal is
- * right: at depth eleven the origin is exactly as reachable as at depth one, so
- * a cap takes a working way back away for a feeling, and the reader already has
- * the × for a return that has outlived its use. What is left here is only a
- * guard against a number that cannot have come from us — `history.state`
- * survives a browser restore and an older deploy — because `history.go(-n)` for
- * an absurd `n` walks the reader out of the session. GPT Sol's fifth finding.
+ * **How many journeys a stamp remembers behind the current one.** A bound on a
+ * state object the browser stores per entry, not a policy anybody will reach by
+ * reading: fifty jumps without once pressing the chip or leaving the article.
+ * Past it the oldest journey is forgotten, which is the least valuable one.
  */
-const MAX_PLAUSIBLE_DEPTH = 4096;
+export const MAX_EARLIER = 50;
 
 /**
- * **Where the reader jumped from, and how many entries back that is now.**
+ * **Where the reader jumped from, and the journeys before that one.**
  *
- * The depth is a claim about *the stack*, not about the page, and that is what
- * makes it safe to carry while the entries remain available: every successful
- * same-document push adds exactly one entry, so `depth + 1` names the origin's
- * distance whatever the push changed — a mode, a column, a sort, or something
- * added next year that this file has never heard of.
+ * `origin` is what the chip offers now. `earlier` is the origins of the jumps
+ * made before it, nearest first: pressing the chip moves the reader to `origin`
+ * and leaves `earlier[0]` as the next way back, so repeated presses unwind the
+ * journeys in order — the "dropdown" Greg imagined when the chip was built
+ * (260906g).
  *
- * The History API has one platform ceiling this count cannot observe. Browsers
- * may evict old same-document state entries at an implementation-defined
- * limit, and expose neither the entries nor the current index. If eviction
- * removes the origin, no local counter can discover that; router.ts records
- * the boundary beside `stampFor` rather than pretending the arithmetic solves
- * retention too.
+ * Until 2026-10-08 this carried a `depth` instead, the number of entries back
+ * the origin's entry lay, because the chip was `history.go(-depth)` and the
+ * earlier journeys lived on the earlier entries. That brought the reader's old
+ * modes back with the position, which is what Greg asked it not to do
+ * (spya-q3dfmw); a press now writes only `?at=`, and the chain it needs has to
+ * travel with the entry, since nothing can read another entry's state without
+ * going there.
  */
 export interface JumpStamp {
   readonly origin: JumpOrigin;
-  /** Entries between here and the origin: `1` on the entry a jump landed on. */
-  readonly depth: number;
+  readonly earlier: readonly JumpOrigin[];
 }
 
 /**
@@ -166,39 +159,32 @@ export interface JumpStamp {
  * and is not this function's: it is a syntactically fine id, and only the
  * caller that resolves it against the article can tell.
  *
- * **Two shapes are read and one is written.** `{ v: 2, origin, depth }` is
- * ours; `{ from }` is what the deploy before 2026-09-16 wrote, and it reads as
- * depth 1 because that is what it meant — the chip of that era could only ever
- * step one entry. Costs a line, and spares a reader who kept a tab open across
- * the deploy a chip that does nothing.
+ * **Three shapes are read and one is written.** `{ v: 3, origin, earlier }` is
+ * ours. `{ v: 2, origin, depth }` (2026-09-16 to 2026-10-08) and `{ from }`
+ * (before that) are what a reader who kept a tab open across a deploy still has
+ * on their entries; both read as their origin with no earlier journeys, since
+ * those lived on other entries this code will never travel to. An `earlier`
+ * that is not a list of origins we minted reads as empty rather than failing
+ * the whole stamp: the way back it does name is still good.
  */
 export function readStamp(state: unknown): JumpStamp | null {
   if (!isPlainObject(state)) return null;
   const mine = state[STAMP_KEY];
   if (!isPlainObject(mine)) return null;
 
-  if (Object.hasOwn(mine, "v") && mine.v === VERSION) {
+  if (Object.hasOwn(mine, "v")) {
+    /* Unknown versions fail closed even if a later format happens to reuse
+       a field: interpreting it could make the chip land somewhere its label
+       does not name. */
+    if (mine.v !== VERSION && mine.v !== 2) return null;
     const origin = originOf(mine.origin);
     if (origin === null) return null;
-    const depth = mine.depth;
-    /* An implausible depth draws nothing rather than being clamped to
-       something: clamping would aim the labelled button at an entry nobody
-       chose, which is the failure the label makes worse. */
-    if (typeof depth !== "number" || !Number.isSafeInteger(depth)) return null;
-    if (depth < 1 || depth > MAX_PLAUSIBLE_DEPTH) return null;
-    return { origin, depth };
+    return { origin, earlier: mine.v === VERSION ? earlierOf(mine.earlier) : [] };
   }
 
-  /* A version marker means this is not the legacy shape. Unknown versions
-     fail closed even if a later format happens to reuse `from`: interpreting
-     that field as a one-entry legacy stamp could make the chip land somewhere
-     its label does not name. */
-  if (Object.hasOwn(mine, "v")) return null;
-
-  /* The pre-2026-09-16 shape: no `v`, the origin under `from`, and a chip that
-     could only ever step one entry — so depth 1 is what it meant. */
+  /* The pre-2026-09-16 shape: no `v`, the origin under `from`. */
   const origin = originOf(mine.from);
-  return origin === null ? null : { origin, depth: 1 };
+  return origin === null ? null : { origin, earlier: [] };
 }
 
 /** The origin a stamp field spells, or `null` if it spells nothing we minted. */
@@ -207,6 +193,18 @@ function originOf(value: unknown): JumpOrigin | null {
   if (typeof value === "string" && isSpideryarnId(value))
     return { kind: "block", blockId: value as BlockId };
   return null;
+}
+
+/** The journeys behind a stamp, or none if the field is not a list we wrote. */
+function earlierOf(value: unknown): JumpOrigin[] {
+  if (!Array.isArray(value) || value.length > MAX_EARLIER) return [];
+  const origins = value.map(originOf);
+  return origins.every((o) => o !== null) ? (origins as JumpOrigin[]) : [];
+}
+
+/** How an origin is spelled inside the stamp. */
+function spell(origin: JumpOrigin): string {
+  return origin.kind === "top" ? TOP : origin.blockId;
 }
 
 /**
@@ -228,9 +226,9 @@ function originOf(value: unknown): JumpOrigin | null {
  * away. It is returned unchanged: the chip is worth less than a stranger's
  * state. Not reachable today, since only nuqs and router.ts write here.
  *
- * **It writes only the current shape**, never the legacy `{ from }` one, so
- * there is one writer and one thing to reason about. `readStamp` is where the
- * two shapes meet, and it is the only place they do.
+ * **It writes only the current shape**, never an older one, so there is one
+ * writer and one thing to reason about. `readStamp` is where the shapes meet,
+ * and it is the only place they do.
  */
 export function withStamp(state: unknown, stamp: JumpStamp | null): unknown {
   if (!canStamp(state)) return state;
@@ -243,25 +241,31 @@ export function withStamp(state: unknown, stamp: JumpStamp | null): unknown {
   else
     next[STAMP_KEY] = {
       v: VERSION,
-      origin: stamp.origin.kind === "top" ? TOP : stamp.origin.blockId,
-      depth: stamp.depth,
+      origin: spell(stamp.origin),
+      earlier: stamp.earlier.slice(0, MAX_EARLIER).map(spell),
     };
   return Object.keys(next).length === 0 ? null : next;
 }
 
 /**
- * **The same stamp, one entry further from its origin** — what an ordinary push
- * does with the stamp it inherits, and `null` when there is nothing to carry.
+ * **The stamp a new jump writes**: its own origin, with the journey the reader
+ * was already on (if any) pushed onto the front of `earlier`.
  *
- * Here rather than in router.ts because the arithmetic and the bound it has to
+ * Here rather than in router.ts because the list and the bound it has to
  * respect are one fact, and splitting them is how a bound stops being applied.
- * A stamp already at the ceiling is dropped rather than grown past it, so
- * nothing this file writes can fail this file's own reader.
  */
-export function oneFurtherBack(stamp: JumpStamp | null): JumpStamp | null {
-  if (stamp === null) return null;
-  const depth = stamp.depth + 1;
-  return depth > MAX_PLAUSIBLE_DEPTH ? null : { origin: stamp.origin, depth };
+export function jumpedFrom(origin: JumpOrigin, current: JumpStamp | null): JumpStamp {
+  const earlier = current === null ? [] : [current.origin, ...current.earlier];
+  return { origin, earlier: earlier.slice(0, MAX_EARLIER) };
+}
+
+/**
+ * **The stamp left once the reader has gone back along this one** — the next
+ * journey out, or `null` when this was the only one.
+ */
+export function oneJourneyBack(stamp: JumpStamp): JumpStamp | null {
+  const [origin, ...earlier] = stamp.earlier;
+  return origin === undefined ? null : { origin, earlier };
 }
 
 /**
@@ -324,7 +328,40 @@ interface ArmedJump {
 }
 
 /**
- * **The armed jump, waiting for the push that will carry it.**
+ * **A press of the return chip, waiting for its push** — the same handshake as
+ * a jump, run backwards (keynav.ts § `beginReturn`).
+ *
+ * It goes through nuqs's queue rather than writing history itself, and that is
+ * GPT Sol's first finding on the plan (261008g): a raw push would abort any
+ * write nuqs still had queued, so a reader who pressed a mode and then the chip
+ * inside 50ms would have the mode taken back, and its address copied from
+ * before the mode — the one thing this press promises to leave alone. Through
+ * the queue, the mode and `?at=` go out in one push.
+ *
+ * `target` is `null` for a return to the top of the article, which is written
+ * as the absence of `?at=` (router.ts § `originHref`). `next` is the stamp the
+ * entry should carry afterwards: the journey before this one, or none.
+ */
+interface ArmedReturn {
+  readonly pathname: string;
+  /** As `ArmedJump.from`, for its reason. */
+  readonly from: string;
+  readonly target: BlockId | null;
+  readonly next: JumpStamp | null;
+}
+
+/** What the push that claims an arm is for. */
+export type ArmedWrite =
+  | {
+      readonly kind: "jump";
+      readonly origin: JumpOrigin;
+      /** The journey after a queued return this jump superseded, if there was one. */
+      readonly base: JumpStamp | null | undefined;
+    }
+  | { readonly kind: "return"; readonly next: JumpStamp | null };
+
+/**
+ * **The armed jump or return, waiting for the push that will carry it.**
  *
  * Module-level state rather than an argument, and that is not laziness: the
  * `pushState` call that completes a jump is not one we make. `jumpTo` asks
@@ -333,26 +370,42 @@ interface ArmedJump {
  * off the global object (nuqs/dist/debounce-*.js § ThrottledQueue.flush). There
  * is no parameter to thread through that. The only place that sees both the
  * intent and the write is `watchHistoryWrites`'s wrapper, which sees every push
- * in the app and knows nothing about jumps; a one-slot handshake is the
+ * in the app and knows nothing about jumps or returns; a one-slot handshake is the
  * narrowest thing that can join the two.
  *
- * **Matched, not merely consumed.** The wrapper takes it only for a push whose
- * pathname and `?at=` are the ones this jump asked for, so an unrelated push
- * landing in the same window — a `cols` toggle, a `navigate` out of the article
- * — cannot wear somebody else's origin and draw a chip promising a return it
- * cannot make. GPT Sol F3 and F11, 2026-09-06.
+ * **Matched, not merely consumed.** The wrapper takes it only for a push from
+ * the same address and to the same pathname. A raw push must also name the
+ * exact `?at=`; only the marked nuqs batch may carry a later value from its own
+ * keyed queue (§ `consumeArmedJump`). Thus an unrelated `cols` push or a
+ * navigation out of the article cannot wear somebody else's origin and draw a
+ * chip promising a return it cannot make. GPT Sol F3 and F11, 2026-09-06.
  */
-let armed: ArmedJump | null = null;
+let armed:
+  | ({ readonly kind: "jump"; readonly base: JumpStamp | null | undefined } & ArmedJump)
+  | ({ readonly kind: "return" } & ArmedReturn)
+  | null = null;
 
 /** Say that a push is coming, where it starts, and where it is going. */
 export function armJump(jump: ArmedJump): void {
-  armed = jump;
+  /* A return has already moved the page before nuqs writes its entry. If a new
+     jump wins the same queued `?at=` slot, its journey starts from the return's
+     result, not from the stale pre-return stamp still on `history.state`. Carry
+     that base into the one push that will actually land. */
+  const base = armed?.kind === "return" ? armed.next : undefined;
+  armed = { kind: "jump", ...jump, base };
+  announce();
+}
+
+/** Say that the push coming is the return chip's, and what it leaves behind. */
+export function armReturn(back: ArmedReturn): void {
+  armed = { kind: "return", ...back };
   announce();
 }
 
 /**
- * **Is a jump in flight?** — which is to say, has the reader asked to be
- * somewhere else, and has the history write that records it not landed yet.
+ * **Is a jump or return write in flight?** — which is to say, has the reader
+ * asked to be somewhere else, and has the history write that records it not
+ * landed yet.
  *
  * The window is 50ms here and up to 320ms on an older Safari, and in it the
  * page is already scrolling towards the destination while the current entry
@@ -364,7 +417,7 @@ export function armJump(jump: ArmedJump): void {
  *
  * ## The simpler fix, and why it was passed over
  *
- * The obvious answer is to hold the scroll until the push commits — one thing
+ * For a jump, the obvious answer is to hold the scroll until the push commits — one thing
  * happening once, no window at all. It was refused because nuqs **abandons** a
  * queued write when the page navigates, so a jump whose push never lands would
  * become a tap that silently does nothing: a worse failure than the one being
@@ -379,7 +432,7 @@ export function isJumpArmed(): boolean {
 /* ---------------------------------------------------------- who to tell -- */
 
 /**
- * Arming is not a history write, so nothing else would notice it.
+ * Arming a jump or return is not a history write, so nothing else would notice it.
  *
  * `watchHistoryWrites` fires `NAVIGATED` on every write and that is what
  * redraws the chip — but an arm changes what the chip should say *without*
@@ -401,12 +454,21 @@ function announce(): void {
 }
 
 /**
- * The armed origin **if this push is the one it was armed for**, taken once.
+ * The armed write **if this push is the one it was armed for**, taken once.
  *
- * Three things have to agree: the push goes to the article the jump was armed
- * on, it names the block the jump was aimed at, and the reader has not moved
- * since — `here` is the address being written *from*, and it must still be the
- * one the arm was set at (§ `from` above).
+ * Three things have to agree: the push goes to the article the arm was set on,
+ * it names the block the arm was aimed at (or, for a return to the top, no
+ * block), and the reader has not moved since — `here` is the address being
+ * written *from*, and it must still be the one the arm was set at (§ `from`
+ * above).
+ *
+ * A marked nuqs batch has one deliberate exception to the target match. On an
+ * older Safari nuqs may hold it for 320ms, while the position spy's debounce
+ * is 300ms; if the reader scrolls immediately after a jump or return, that
+ * later `?at=` replaces the act's target in nuqs's keyed queue. It is still the
+ * same marked push, from the same address and on the same article, and the act
+ * still owns the journey transition. `retargetedNuqs` is true only for such a
+ * marked nuqs write; an unrelated raw push cannot claim the arm.
  *
  * `target` is the `?at=` of the push being made, or null when it names no
  * block. Match or not, an actual push ends the arm: nuqs has one global queue,
@@ -417,23 +479,29 @@ export function consumeArmedJump(
   here: string,
   pathname: string,
   target: BlockId | null,
-): JumpOrigin | null {
+  retargetedNuqs = false,
+): ArmedWrite | null {
   if (armed === null) return null;
-  const matches = armed.from === here && armed.pathname === pathname && armed.target === target;
-  const origin = matches ? armed.origin : null;
+  const matchesTarget = armed.target === target || retargetedNuqs;
+  const matches = armed.from === here && armed.pathname === pathname && matchesTarget;
+  const claimed: ArmedWrite | null = !matches
+    ? null
+    : armed.kind === "jump"
+      ? { kind: "jump", origin: armed.origin, base: armed.base }
+      : { kind: "return", next: armed.next };
   armed = null;
   /* No `announce()` here on purpose: the caller is the wrapper, mid-write, and
      it fires `NAVIGATED` immediately afterwards. Announcing first would redraw
      the chip against the entry the push is about to replace. */
-  return origin;
+  return claimed;
 }
 
 /**
  * Forget an arm nobody claimed.
  *
- * Called at the top of every jump and after every history write that did not
- * claim the arm (router.ts): nuqs can coalesce a queued update away, an
- * ordinary navigation makes it abandon one outright, and a component can
+ * Called before a return supersedes any older arm and after every history write
+ * that did not claim one (router.ts): nuqs can coalesce a queued update away,
+ * an ordinary navigation makes it abandon one outright, and a component can
  * unmount between the arming and the flush, so an arm that never met its push
  * is ordinary rather than exotic. One that outlived its jump would withhold
  * the chip and rail mark indefinitely, and could attach a stale origin to a

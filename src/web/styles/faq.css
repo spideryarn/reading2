@@ -39,7 +39,7 @@
 .faq-question {
   margin: 0;
   color: var(--ink);
-  font-size: 0.93rem;
+  font-size: var(--type-item);
   font-weight: 600;
   line-height: 1.35;
 }
@@ -50,7 +50,11 @@
   align-items: baseline;
   gap: 0.4rem;
 }
-.faq-quote { flex: 1; min-width: 0; color: var(--ink); }
+/* The article's words, so the quote role — not the body size of the
+   `.gloss-part-text` it shares an element with (FaqPanel.tsx). Both classes in
+   the selector make that override structural rather than dependent on which
+   sheet happens to load later. */
+.gloss-part-text.faq-quote { flex: 1; min-width: 0; color: var(--ink); font-size: var(--type-quote); }
 
 /* The jump, drawn the way the glossary's "used in" ids are: a small raised
    chip, so it reads as a control beside the words rather than part of them. */

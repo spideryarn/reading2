@@ -74,6 +74,7 @@ function render(): HTMLButtonElement {
     root.render(
       createElement(ProfileBox, {
         id: "about",
+        article: null,
         label: "About you",
         hint: "What the model is told about you.",
         placeholder: "",

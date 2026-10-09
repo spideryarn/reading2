@@ -78,7 +78,7 @@ let signedInAs: string | null = "user-1";
 const { apiFetch, NONE_YET_AS_NULL } = await import("../src/web/lib/api.js");
 
 /**
- * The sixteen reads that may answer `200 null` — `NONE_YET_AS_NULL` in
+ * The seventeen reads that may answer `200 null` — `NONE_YET_AS_NULL` in
  * lib/api.ts. Every artefact read since plan 261007n; the list is
  * src/store/artefact-not-made-yet.ts.
  */
@@ -91,6 +91,7 @@ const NONE_YET_READS = [
   "faq",
   "timeline",
   "debate",
+  "debate-claims",
   "glossary",
   "quotes",
   "tweets",

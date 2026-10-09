@@ -123,6 +123,38 @@ describe("the mounted offer, with a shelf that does not hold the article", () =>
     expect(add()).toBe(addHref(ADDRESS));
   });
 
+  /* **The press is the reader choosing their own copy**, so the add page does
+     not ask whether they would rather read this public one (plan 261009j). A
+     ⌘-click opens another tab the mark cannot reach, so it marks nothing. */
+  it("a plain press marks the address as the reader's own copy; a ⌘-press does not", async () => {
+    const { takeOwnCopyIntent } = await import("../src/web/own-copy-intent.js");
+    await act(async () => root.render(createElement(SharedNotice, FACTS)));
+    const link = host.querySelector<HTMLAnchorElement>('[data-private-copy="add"] a')!;
+    const click = (init: MouseEventInit) =>
+      act(() => {
+        link.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0, ...init }));
+      });
+    click({ metaKey: true });
+    expect(takeOwnCopyIntent(ADDRESS)).toBe(false);
+    click({});
+    expect(takeOwnCopyIntent(ADDRESS)).toBe(true);
+    expect(takeOwnCopyIntent(ADDRESS), "answered twice").toBe(false);
+  });
+
+  it("does not carry one reader's own-copy choice to the next reader", async () => {
+    const { markOwnCopy, takeOwnCopyIntent } = await import("../src/web/own-copy-intent.js");
+    markOwnCopy(ADDRESS);
+    noteReader("reader-after-the-click");
+    expect(takeOwnCopyIntent(ADDRESS)).toBe(false);
+  });
+
+  it("discards an interrupted choice when a different add page is opened", async () => {
+    const { markOwnCopy, takeOwnCopyIntent } = await import("../src/web/own-copy-intent.js");
+    markOwnCopy(ADDRESS);
+    expect(takeOwnCopyIntent("https://example.com/a-different-article")).toBe(false);
+    expect(takeOwnCopyIntent(ADDRESS), "the old mark survived another add").toBe(false);
+  });
+
   it("so does the visitor's band", async () => {
     await act(async () =>
       root.render(<VisitorBand gap={{ kind: "owners-only", feature: "Chat" }} copy={FACTS} />),

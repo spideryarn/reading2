@@ -355,6 +355,17 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     methods: ["GET"],
     witnesses: ["/api/admin/users"],
   },
+  /* 261008j — the public shelf's topic pills: status, and an admin's Rebuild. */
+  {
+    match: { kind: "literal", path: "/api/admin/public-shelf-topics" },
+    methods: ["GET"],
+    witnesses: ["/api/admin/public-shelf-topics"],
+  },
+  {
+    match: { kind: "literal", path: "/api/admin/public-shelf-topics/rebuild" },
+    methods: ["POST"],
+    witnesses: ["/api/admin/public-shelf-topics/rebuild"],
+  },
   /* Gift vouchers, 261001m — the list and create share one literal. */
   {
     match: { kind: "literal", path: "/api/admin/vouchers" },
@@ -388,6 +399,12 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     match: { kind: "literal", path: "/api/admin/feedback/answers" },
     methods: ["POST"],
     witnesses: ["/api/admin/feedback/answers"],
+  },
+  {
+    /* An admin's "defer for now" on a question, 261008i. One segment, as `answers` is. */
+    match: { kind: "literal", path: "/api/admin/feedback/deferrals" },
+    methods: ["POST"],
+    witnesses: ["/api/admin/feedback/deferrals"],
   },
   {
     match: { kind: "regex", source: "^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)$", flags: "" },
@@ -604,6 +621,16 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/faq/w1"],
   },
   {
+    match: { kind: "regex", source: "^\\/api\\/debate-claims\\/([\\w.%-]+)$", flags: "" },
+    methods: ["GET"],
+    witnesses: ["/api/debate-claims/w1"],
+  },
+  {
+    match: { kind: "regex", source: "^\\/api\\/debate-claims\\/([\\w.%-]+)\\/checks$", flags: "" },
+    methods: ["GET", "POST"],
+    witnesses: ["/api/debate-claims/w1/checks"],
+  },
+  {
     match: { kind: "regex", source: "^\\/api\\/relations\\/([\\w.%-]+)$", flags: "" },
     methods: ["GET"],
     witnesses: ["/api/relations/w1"],
@@ -622,6 +649,12 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     match: { kind: "regex", source: "^\\/api\\/skim\\/([\\w.%-]+)$", flags: "" },
     methods: ["GET"],
     witnesses: ["/api/skim/w1"],
+  },
+  {
+    /* Sending the profile-changed notice away — plan 261009i. Owner only, no model. */
+    match: { kind: "regex", source: "^\\/api\\/skim\\/([\\w.%-]+)\\/profile-notice-dismissal$", flags: "" },
+    methods: ["POST"],
+    witnesses: ["/api/skim/w1/profile-notice-dismissal"],
   },
   {
     match: { kind: "regex", source: "^\\/api\\/debate\\/([\\w.%-]+)$", flags: "" },
@@ -841,6 +874,16 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/chat/w1/w2/hint-opened"],
   },
   {
+    /* The reader deleted a question and what follows it (plan 261009o). */
+    match: {
+      kind: "regex",
+      source: "^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/delete-from$",
+      flags: "",
+    },
+    methods: ["POST"],
+    witnesses: ["/api/chat/w1/w2/delete-from"],
+  },
+  {
     match: { kind: "regex", source: "^\\/api\\/live\\/([\\w-]+)\\/connected$", flags: "" },
     methods: ["POST"],
     witnesses: ["/api/live/w1/connected"],
@@ -893,7 +936,7 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
   },
   {
     match: { kind: "regex", source: "^\\/api\\/referee\\/hidden-check\\/([\\w.%-]+)$", flags: "" },
-    methods: ["POST"],
+    methods: ["GET", "POST"],
     witnesses: ["/api/referee/hidden-check/w1"],
   },
   {
@@ -963,12 +1006,24 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
    the command bar's suggestions (plan 261005k); 95 with an admin's own earlier
    feedback (plan 261007d); 96 with their replies to questions (its stage 2);
    97 with the Help pages' chatbot (plan 261007k); 98 with Hidden text's Opus
-   check (plan 261007l). */
-const EXPECTED_MATCHER_COUNT = 98;
+   check (plan 261007l); 99 with an admin's deferral of a question (plan 261008i);
+   100 with Debate's claims list (plan 261008i of the same day, a different 'i'
+   in another tree: docs/plans/261008i-debate-claims-picked-by-the-reader.md);
+   101 with that plan's claim checks (its stage 3); 103 with the public shelf
+   topic pills' status and Rebuild (plan 261008j); 104 with Skim's profile
+   notice dismissal (plan 261009i); 105 with deleting a chat question and what
+   follows it (plan 261009o). */
+const EXPECTED_MATCHER_COUNT = 105;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
    with the admin's earlier feedback; 118 with their replies to questions; 119
-   with the Help pages' chatbot; 120 with Hidden text's Opus check. */
-const EXPECTED_GUARD_COUNT = 120;
+   with the Help pages' chatbot; 120 with Hidden text's Opus check; 121 with the
+   deferral of a question; 122 with Debate's claims list; 123 with the kept
+   Hidden text check's GET (plan 261009a); 125 with Debate's claim checks'
+   GET and POST (plan 261008i); 127 with the public shelf topic pills' status
+   and Rebuild (plan 261008j); 128 with Skim's profile notice dismissal (plan
+   261009i); 129 with deleting a chat question and what follows it (plan
+   261009o). */
+const EXPECTED_GUARD_COUNT = 129;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2118,6 +2173,9 @@ describe("the authenticated API's route contract", () => {
       ).toEqual([
         // the top of the chain, from the admin routes to shelfOpen, 260911d
         "GET literal /api/admin/users",
+        // the public shelf's topic pills, 261008j — beside the users list
+        "GET literal /api/admin/public-shelf-topics",
+        "POST literal /api/admin/public-shelf-topics/rebuild",
         // gift vouchers, 261001m — beside the users list
         "GET literal /api/admin/vouchers",
         "POST literal /api/admin/vouchers",
@@ -2129,6 +2187,8 @@ describe("the authenticated API's route contract", () => {
         "GET literal /api/admin/feedback/earlier",
         // an admin's reply to a question, 261007d stage 2 — beside the list that carries the questions
         "POST literal /api/admin/feedback/answers",
+        // an admin's deferral of a question, 261008i — beside the replies
+        "POST literal /api/admin/feedback/deferrals",
         "GET regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)$/",
         // mark one report ignored, 261003j — beside the read of it
         "PATCH regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)$/",
@@ -2188,10 +2248,16 @@ describe("the authenticated API's route contract", () => {
         "GET regex /^\\/api\\/timeline\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/quiz\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/faq\\/([\\w.%-]+)$/",
+        "GET regex /^\\/api\\/debate-claims\\/([\\w.%-]+)$/",
+        // Debate's claim checks, 261008i stage 3 — beside the list they check
+        "GET regex /^\\/api\\/debate-claims\\/([\\w.%-]+)\\/checks$/",
+        "POST regex /^\\/api\\/debate-claims\\/([\\w.%-]+)\\/checks$/",
         "GET regex /^\\/api\\/relations\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/crossrefs\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/simple\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/skim\\/([\\w.%-]+)$/",
+        // Skim's profile notice, 261009i
+        "POST regex /^\\/api\\/skim\\/([\\w.%-]+)\\/profile-notice-dismissal$/",
         "GET regex /^\\/api\\/debate\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/citers\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/citations\\/([\\w.%-]+)$/",
@@ -2233,6 +2299,7 @@ describe("the authenticated API's route contract", () => {
         "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/spoken$/",
         "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/stop$/",
         "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/hint-opened$/",
+        "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/delete-from$/",
         "PATCH regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
         "DELETE regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
         // search, 260907b stage 5
@@ -2249,7 +2316,9 @@ describe("the authenticated API's route contract", () => {
         "POST regex /^\\/api\\/referee\\/claims\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/referee\\/scan\\/([\\w.%-]+)$/",
         "POST regex /^\\/api\\/referee\\/mirror\\/([\\w.%-]+)$/",
-        // Hidden text's Opus check, 261007l — beside Mirror, whose shape it is
+        // Hidden text's Opus check, 261007l — beside Mirror, whose shape it is;
+        // its GET, the kept answer, 261009a
+        "GET regex /^\\/api\\/referee\\/hidden-check\\/([\\w.%-]+)$/",
         "POST regex /^\\/api\\/referee\\/hidden-check\\/([\\w.%-]+)$/",
         // jobs and uploads, 260907b stage 3b
         "GET literal /api/jobs",

@@ -562,6 +562,21 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "copy step.",
   },
   /**
+   * **Written 2026-10-09 (plan 261009o), after the witness ran**, so
+   * `static-only`, like its sibling above. No model call; the seeder's copy step
+   * is the one door.
+   */
+  "tests/chat-delete-from-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Deleting a chat question and everything after it, at the route: the rows at and after it " +
+      "go, the rows before stay, the gist is cleared, and a stale tail, an answer, the first " +
+      "question, a pending answer or somebody else's article are refused. It seeds through " +
+      "`scratchArticleInPg`; what it still reaches is the seeder's copy step.",
+  },
+  /**
    * **Written 2026-09-12 (fb30 stage 1b), after the witness ran**, so
    * `static-only` for the ordinary reason the header gives. Its request harness
    * is `chat-anchor-route.test.ts`'s and it reaches what that file reaches, by
@@ -2016,6 +2031,18 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "seeder's copy step, as for `tests/reading-time-route.test.ts`. Read off the graph, not " +
       "re-witnessed.",
   },
+  "tests/skim-profile-notice-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran, with dismissing Skim's profile notice (plan 261009i, " +
+      "2026-10-09). It seeds three articles with `scratchArticleInPg`, writes a route onto each, " +
+      "and drives `POST /api/skim/:slug/profile-notice-dismissal` and `GET /api/skim/:slug` " +
+      "through `handleApi` — entirely Postgres. Its reach into the condemned modules is the " +
+      "seeder's copy step, as for `tests/glossary-hidden-route.test.ts`. Read off the graph, not " +
+      "re-witnessed.",
+  },
   "tests/quiz-attempts-route.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["fixture-loader"],
@@ -2850,6 +2877,8 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      `shared-services` would buy nothing while the clone keeps a growing journal
      of stub sessions out of the shared stack's own. */
   "tests/chat-hint-opened-route.test.ts": "private-postgres",
+  /* Its sibling's lane, for its reason: it seeds `SOMEBODY_ELSE` over SQL. */
+  "tests/chat-delete-from-route.test.ts": "private-postgres",
   "tests/chat-live-ticket-route.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04. The lane is decided by what the cases do
      rather than by what they seed: each one leaves a model call hanging open
@@ -2874,6 +2903,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/chat-origin-route.test.ts": "private-postgres",
   "tests/chat-visible-route.test.ts": "private-postgres",
   "tests/chat-route.test.ts": "private-postgres",
+  /* Plan 261009 (high-powered chat ceiling). chat-route's harness: it reads the
+     thread back with `chatStore.load` and asserts on the answer it wrote. */
+  "tests/chat-truncated-stored.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04, and the lane follows from the read-backs
      rather than from the writes: three cases go and look in the store, and two
      of them assert a `load()` is **empty**. An emptiness assertion is the one
@@ -2912,6 +2944,12 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      row back after a refused Dig deeper to show it was left alone — a read
      a neighbour answering the same slug could falsify. No model is called. */
   "tests/dig-deeper-comment.test.ts": "private-postgres",
+  /* Plan 261008i stage 3. Debate's claim checks through the routes and the
+     store: seeds its own scratch articles, writes the list onto the revision
+     in SQL, and races two reservations on two connections, so it needs a
+     database of its own. The allowance and the search are stubbed; no model
+     is called. */
+  "tests/debate-claim-checks-routes.test.ts": "private-postgres",
   "tests/comment-sweep.test.ts": "private-postgres",
   "tests/corpus-lock.test.ts": "private-postgres",
   /* 2026-09-05. Its second block drives a collector whose sink is `costStore`,
@@ -2988,6 +3026,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      glossary hide PUT and DELETE and the owner's GET through the route,
      reading rows back out of `glossary_hidden_entries`. No model is called. */
   "tests/glossary-hidden-route.test.ts": "private-postgres",
+  /* Seeds three articles, writes a Skim route on two, and drives the profile
+     notice's dismissal POST and the owner's GET through the route, reading the
+     two `articles` columns back. No model is called. */
+  "tests/skim-profile-notice-route.test.ts": "private-postgres",
   /* Seeds three articles with a quiz each and drives the quiz mark POST and
      the owner's GET through the route, reading rows back out of
      `quiz_attempts`. The marker is a script; no model is called. */
@@ -3009,6 +3051,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      runs the tool (and Live's tool endpoint) as one owner against the other's
      slug and thread id. No model is called. */
   "tests/reader-notes-owner-isolation.test.ts": "private-postgres",
+  "tests/chat-gist-store.test.ts": "private-postgres",
   /* Explore's notes digest, 261003l stage 2. Seeds one article, a comment and
      finished conversations of several kinds, and posts chat turns through the
      route with `fetch` stubbed to keep the request and fail. No model is called. */
@@ -3034,6 +3077,8 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      `shelf_topic_sets`, `rate_limit_events` and `ai_calls`. The provider is a
      stubbed `fetch` with a fake key. */
   "tests/shelf-topics-route.test.ts": "private-postgres",
+  "tests/public-shelf-topics-pg.test.ts": "private-postgres",
+  "tests/site-account-pg.test.ts": "private-postgres",
   /* The model's topic set, 261003f. Seeds two owners and a handful of bare
      articles by hand, and reads and writes `shelf_topic_sets` through the
      store. No model is called. */
@@ -3067,6 +3112,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* Storage, not Postgres — see `an-upload-is-queued-…` above. */
   "tests/illustrated-pg.test.ts": "private-postgres",
   "tests/illustrated-route.test.ts": "private-postgres",
+  /* Plan 261008j: the `jobs_record_import` trigger, through plain SQL on
+     `jobs` and once through `enqueue`, and Delete permanently taking the rows. */
+  "tests/import-records-pg.test.ts": "private-postgres",
   /* Storage, not Postgres — see `an-upload-is-queued-…` above. */
   "tests/job-failure.test.ts": "private-postgres",
   /* Plan 261005j, stage C of the rest of 1a: a structure step whose slices run
@@ -3096,6 +3144,8 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      puts a bucket object in as well, so it wants the lane that leaves
      `SUPABASE_URL` alone as much as the one that serialises. */
   "tests/jobs-walk.test.ts": "private-postgres",
+  /* A real claim, sweep and pause on a seeded article: plan 261009l. */
+  "tests/jobs-paid-step-once.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04, and the lane follows from two of its
      cases in particular. One puts a *second* job on a busy article and asserts
      that the queue appends rather than renames, which is `jobs_active_slug`
@@ -3483,6 +3533,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/upload-acquire.test.ts": "private-postgres",
   "tests/an-uploaded-html-file-becomes-an-article.test.ts": "private-postgres",
   "tests/uploads-api.test.ts": "private-postgres",
+  "tests/pdf-quality-pg.test.ts": "private-postgres",
+  "tests/export-meta-abstract-pg.test.ts": "private-postgres",
+  "tests/metadata-rerun-keeps-extract-pg.test.ts": "private-postgres",
 };
 
 /**
@@ -3624,6 +3677,11 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
   "tests/mcp-remote.test.ts": {
     "00000000-0000-4000-8000-00000000b0b0": { kind: "seeded" },
   },
+  /* Plan 261008i. `seedAuthUser` in `beforeAll`: a second reader who owns an
+     article, so a check pressed on it by somebody else is refused. */
+  "tests/debate-claim-checks-routes.test.ts": {
+    "7c0de5a1-0000-4000-8000-00000000d1c5": { kind: "seeded" },
+  },
   "tests/a-paper-queued-before-the-resolver.test.ts": {
     "0b111a99-0000-4000-8000-0000a2c51d01": { kind: "seeded" },
   },
@@ -3665,6 +3723,14 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
      minted per run. 260929c stage 2, rewritten for 261003f. */
   "tests/shelf-topics-route.test.ts": {
     "00000000-0000-4000-8000-00000000c7a1": { kind: "seeded" },
+  },
+  /* Two sharing readers, seeded; and the site account, which the migration
+     drizzle/20261009022454_site_account.sql made, so it is in every database.
+     Its rows here — the topic set, allowance and ai_calls — are deleted by the
+     file. Plan 261008j. */
+  "tests/public-shelf-topics-pg.test.ts": {
+    "00000000-0000-4000-8000-0000000a7a11": { kind: "seeded", why: "seedAuthUser in beforeAll, over a [id, email] list the scan cannot read" },
+    "00000000-0000-4000-8000-0000000a7b22": { kind: "seeded", why: "seedAuthUser in beforeAll, over a [id, email] list the scan cannot read" },
   },
   /* Two readers: `shelf_topic_sets.owner_id` references `auth.users`, both
      own articles, and one's claim id is tried in the other's hands. 261003f. */
@@ -3773,6 +3839,12 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
      `lockBillingAccount` before it deletes anything. */
   "tests/article-delete-pg.test.ts": {
     "de1e1e00-0000-4000-8000-0000000000a1": { kind: "seeded" },
+  },
+  /* Plan 261008j. Both seeded in `beforeEach`: OTHER owns the record that
+     Delete permanently must leave alone. */
+  "tests/import-records-pg.test.ts": {
+    "1d0e7ec0-0000-4000-8000-0000000000a1": { kind: "seeded" },
+    "1d0e7ec0-0000-4000-8000-0000000000a2": { kind: "seeded" },
   },
   /* Plan 261007f. `seedAuthUser` in `beforeEach`, deleted again in `afterAll`:
      the articles hang off it, and `destroy` creates its billing anchor. */

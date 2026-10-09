@@ -19,11 +19,18 @@ import {
   ANSWERS_NOT_DEPLOYED,
   answersSql,
   classifyAnswers,
+  type DeferralRow,
+  DEFERRALS_DEPLOYED_SQL,
+  DEFERRALS_NOT_DEPLOYED,
+  deferralsSql,
   newQuestion,
   parseCommand,
   type ReadProduction,
+  renderIncompleteSplits,
   renderOpenQuestions,
+  renderWaitingWithoutQuestion,
   runAnswers,
+  waitingWithoutQuestion,
 } from "../scripts/feedback-questions.js";
 import { ADMIN_USER_ID_PROD } from "../src/admin.js";
 import { isFeedbackQuestionId } from "../src/feedback-question-values.js";
@@ -155,7 +162,12 @@ describe("classifyAnswers — which replies an agent still has to act on", () =>
 
 describe("runAnswers — the run, through a fake reader", () => {
   const TARGET = ".env.prod → aws-0.pooler.supabase.com";
-  function reader(deployed: boolean | "throws" | "cannot", rows: AnswerRow[] | "throws" = []) {
+  /** `deferrals`: false before that table is deployed, or the rows it holds (plan 261008i). */
+  function reader(
+    deployed: boolean | "throws" | "cannot",
+    rows: AnswerRow[] | "throws" = [],
+    deferrals: false | DeferralRow[] = false,
+  ) {
     const statements: string[] = [];
     const read: ReadProduction = async <T>(sql: string) => {
       statements.push(sql);
@@ -163,6 +175,19 @@ describe("runAnswers — the run, through a fake reader", () => {
         if (deployed === "cannot") throw new CannotTell("no .env.prod here");
         if (deployed === "throws") throw new Error("password=hunter2 refused");
         return { target: TARGET, rows: [{ deployed }] as T[] };
+      }
+      if (sql === DEFERRALS_DEPLOYED_SQL) return { target: TARGET, rows: [{ deployed: deferrals !== false }] as T[] };
+      if (sql === deferralsSql()) {
+        return {
+          target: TARGET,
+          rows: (deferrals === false ? [] : deferrals).map((one) => ({
+            owner_id: one.ownerId,
+            question_id: one.questionId,
+            deferred_at: one.deferredAt,
+            updated_at: new Date("2026-10-08T10:00:00Z"),
+            environment: one.environment,
+          })) as T[],
+        };
       }
       if (rows === "throws") throw new Error("password=hunter2 refused");
       return {
@@ -203,7 +228,73 @@ describe("runAnswers — the run, through a fake reader", () => {
     expect(lines[0]).toBe(`Target: ${TARGET}`);
     expect(lines[1]).toMatch(/^0 replies in production/);
     expect(lines[1]).toMatch(/0 to act on/);
-    expect(statements).toEqual([ANSWERS_DEPLOYED_SQL, answersSql()]);
+    expect(statements).toEqual([ANSWERS_DEPLOYED_SQL, answersSql(), DEFERRALS_DEPLOYED_SQL]);
+    expect(lines).toContain(DEFERRALS_NOT_DEPLOYED);
+  });
+
+  /* Deferrals: "not now, do not chase" (plan 261008i), held to the replies' rule (F6). */
+  it("prints the deferrals in force, an administrator's only, and leaves a brought-back one out", async () => {
+    const { read, statements } = reader(true, [], [
+      { ownerId: ADMIN_USER_ID_PROD, questionId: "q-aaaaaa", deferredAt: new Date("2026-10-08T09:00:00Z"), environment: "production" },
+      { ownerId: ADMIN_USER_ID_PROD, questionId: "q-bbbbbb", deferredAt: null, environment: "production" },
+      { ownerId: STRANGER, questionId: "q-cccccc", deferredAt: new Date("2026-10-08T09:00:00Z"), environment: "production" },
+    ]);
+    const { code, text } = await run(read, [question("q-aaaaaa")]);
+    expect(code).toBe(0);
+    expect(statements).toEqual([ANSWERS_DEPLOYED_SQL, answersSql(), DEFERRALS_DEPLOYED_SQL, deferralsSql()]);
+    expect(text).toMatch(/1 question\(s\) deferred by an administrator/);
+    expect(text).toMatch(/1 row\(s\) from an account that is not an administrator's, left out/);
+    expect(text).toContain("q-aaaaaa  ·  deferred 2026-10-08T09:00:00.000Z");
+    expect(text).not.toContain("q-bbbbbb");
+    expect(text).not.toContain("q-cccccc");
+  });
+
+  it("does not call a deferral in force once its question is answered or absent from this checkout", async () => {
+    const { read } = reader(true, [], [
+      { ownerId: ADMIN_USER_ID_PROD, questionId: "q-aaaaaa", deferredAt: new Date("2026-10-08T09:00:00Z"), environment: "production" },
+      { ownerId: ADMIN_USER_ID_PROD, questionId: "q-bbbbbb", deferredAt: new Date("2026-10-08T09:00:00Z"), environment: "production" },
+      { ownerId: ADMIN_USER_ID_PROD, questionId: "q-cccccc", deferredAt: new Date("2026-10-08T09:00:00Z"), environment: "production" },
+    ]);
+    const { code, text } = await run(read, [
+      question("q-aaaaaa"),
+      question("q-bbbbbb", { status: "answered" }),
+    ]);
+    expect(code).toBe(0);
+    expect(text).toContain("q-aaaaaa  ·  deferred");
+    expect(text).not.toContain("q-bbbbbb  ·  deferred");
+    expect(text).not.toContain("q-cccccc  ·  deferred");
+  });
+
+  it("uses the same latest-action rule as the server: a later reply supersedes a deferral, and a tie does not", async () => {
+    const at = new Date("2026-10-08T10:00:00Z");
+    const { read } = reader(
+      true,
+      [
+        row("spya-aaaaaa", "q-aaaaaa", { createdAt: at }),
+        row("spya-bbbbbb", "q-bbbbbb", { createdAt: at }),
+      ],
+      [
+        { ownerId: ADMIN_USER_ID_PROD, questionId: "q-aaaaaa", deferredAt: new Date("2026-10-08T09:59:59Z"), environment: "production" },
+        { ownerId: ADMIN_USER_ID_PROD, questionId: "q-bbbbbb", deferredAt: at, environment: "production" },
+      ],
+    );
+    const { code, text } = await run(read, [
+      question("q-aaaaaa", { acted: ["spya-aaaaaa"] }),
+      question("q-bbbbbb"),
+    ]);
+    expect(code).toBe(0);
+    expect(text).not.toContain("q-aaaaaa  ·  deferred");
+    expect(text).toContain("q-bbbbbb  ·  deferred 2026-10-08T10:00:00.000Z");
+    expect(text).toContain("1 stored deferral(s) no longer in force, left out");
+  });
+
+  it("is exit 2 when a deferral was not written in production (F6)", async () => {
+    const { read } = reader(true, [], [
+      { ownerId: ADMIN_USER_ID_PROD, questionId: "q-aaaaaa", deferredAt: new Date(), environment: "development" },
+    ]);
+    const { code, text } = await run(read, [question("q-aaaaaa")]);
+    expect(code).toBe(2);
+    expect(text).not.toMatch(/deferred by an administrator/);
   });
 
   it("prints each reply to act on: its id, its question and the words, quoted line by line", async () => {
@@ -317,10 +408,35 @@ describe("the listing and the command line", () => {
     expect(lines.join("\n")).not.toContain("q-cccccc");
   });
 
-  it("reads --answers, --new <title>, and nothing as the listing; anything else is refused", () => {
+  /* spya-u6h6q8, plan 261008i § The bug: a waiting report with no question
+     was a row under Needs a decision with nothing to answer. */
+  it("names each report waiting on Greg that no open question asks about", () => {
+    const endings = new Map<string, "shipped" | "declined" | "awaiting">([
+      ["spya-aaaaaa", "awaiting"],
+      ["spya-bbbbbb", "awaiting"],
+      ["spya-cccccc", "shipped"],
+      ["spya-dddddd", "awaiting"],
+    ]);
+    const asked = [
+      question("q-aaaaaa", { report: "spya-aaaaaa" }),
+      /* An answered question does not count as asking. */
+      question("q-dddddd", { report: "spya-dddddd", status: "answered" }),
+    ];
+    expect(waitingWithoutQuestion(endings, asked)).toEqual(["spya-bbbbbb", "spya-dddddd"]);
+    expect(renderWaitingWithoutQuestion([])).toEqual(["Every report waiting on Greg has an open question."]);
+    expect(renderWaitingWithoutQuestion(["spya-bbbbbb"]).join("\n")).toContain("spya-bbbbbb");
+    expect(renderIncompleteSplits([])).toEqual(["Every split report has a note for each of its parts."]);
+    expect(renderIncompleteSplits(["spya-eeeeee"]).join("\n")).toContain("spya-eeeeee");
+  });
+
+  it("reads --answers, --new <title>, --show <id>, and nothing as the listing; anything else is refused", () => {
     expect(parseCommand([])).toEqual({ kind: "list" });
     expect(parseCommand(["--answers"])).toEqual({ kind: "answers" });
     expect(parseCommand(["--new", "A title"])).toEqual({ kind: "new", title: "A title" });
+    /* The id Greg reads off the dialog (spya-krvuc9). */
+    expect(parseCommand(["--show", "q-k3m9qt"])).toEqual({ kind: "show", id: "q-k3m9qt" });
+    expect(() => parseCommand(["--show", "spya-k3m9qt"])).toThrow(/usage/);
+    expect(() => parseCommand(["--show"])).toThrow(/usage/);
     expect(() => parseCommand(["--new"])).toThrow(/usage/);
     expect(() => parseCommand(["--answers", "extra"])).toThrow(/usage/);
     expect(() => parseCommand(["--anwsers"])).toThrow(/usage/);

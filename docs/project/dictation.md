@@ -26,14 +26,16 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ This is not two-way voice](#this-is-not-two-way-voice) — Talk versus Live
 
 A microphone button beside a text box. Press it, talk, press it again, and your words are in the
-box. It is on ten boxes today — both profile boxes, the chat composer, the comment follow-up, the
+box. It is on eleven boxes today — both profile boxes, the chat composer, the comment follow-up, the
 annotate box, the quiz answer box ([quiz.md](quiz.md)), the Feedback dialog
 ([feedback.md](feedback.md)) and, for an admin, the box that replies to a question in its Earlier tab
 ([feedback.md § Questions for an admin](feedback.md#questions-for-an-admin-and-replies-to-them-since-2026-10-07)),
 the note under an Illustrated picture
 ([illustrated.md](illustrated.md#steering)) and the command bar's box
-([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)) — and adding
-it to an eleventh is three lines.
+([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)), and the
+*Ask about Spideryarn* box on every Help page
+([help-page.md § Ask about Spideryarn](help-page.md#ask-about-spideryarn)) — and adding it to a
+twelfth is three lines.
 
 This is **one-shot and one-way**. The other thing — a conversation, where you talk and it talks
 back and either of you can cut the other off — is a separate feature, not a setting on this one:
@@ -349,15 +351,17 @@ the stop button, then it should automatically send that message after it's finis
 A box hands `useDictationField` its own done action as **`onDone`**, and passes the field's `again`
 and `sendingAfter` on to `DictationButton` and `DictationStrip`. Six boxes send: Feedback (Send),
 Feedback's reply to a question (Send reply), chat (Send), the comment follow-up (Ask in chat), the
-quiz answer (Answer) and the annotate box (Save, never Ask AI). A sixth, the command bar, presses Enter (below). The plan, with what was deferred and why, is
+quiz answer (Answer) and Help's Ask box (Ask). The annotate box saves (Save, never Ask AI), so its
+button and strip take `done="save"`; the command bar presses Enter (below). The plan, with what was deferred and why, is
 [261005a](../plans/261005a-dictation-double-press-on-stop-also-sends.md).
 
 - **The second press has to be able to land.** A `disabled` button is sent no click. So on a box
   with `onDone`, **for 600 ms after Stop** (`DOUBLE_PRESS_MS`), the button stays enabled and is
-  named "Send when the words arrive"; its only press there is `again()`, and it never starts a
-  dictation. After that, or once the press is taken, it is `disabled` as it always was. The field
-  returns `again` only while a second press would count, which is the whole of how the button
-  knows. Not `aria-disabled`: that says "cannot be used" at the one moment it can (GPT Sol).
+  named for the box's action — "Send", "Save" or "Press Enter" when the words arrive; its only
+  press there is `again()`, and it never starts a dictation. After that, or once the press is taken,
+  it is `disabled` as it always was. The field returns `again` only while a second press would
+  count, which is the whole of how the button knows. Not `aria-disabled`: that says "cannot be
+  used" at the one moment it can (GPT Sol).
 - **The button has to be where the first press left it.** Nothing that positions it may change
   size at Stop. In Chat the composer grows upwards from a pinned bottom edge, so a line leaving the
   strip *under* the button moves the button down; the "Microphone: … Change" line did exactly that
@@ -368,7 +372,13 @@ quiz answer (Answer) and the annotate box (Save, never Ask AI). A sixth, the com
   same rule: drawn from listening through transcribing, or not at all.
   [261008d](../plans/261008d-dictation-button-holds-still-and-why-the-iphone-asks-again.md),
   `tests/dictation-strip-holds-still.test.tsx`.
-- **Once taken, the strip says** *"Turning that into text, then sending…"*.
+- **The button's card says so beforehand**, on a box that takes it (`doubleStop` from the field),
+  because a double press is a trick nobody would find
+  ([tooltips.md § A shortcut is named on its card](tooltips.md#a-shortcut-is-named-on-its-card)).
+  The same card says why talking is worth it and the fifteen-minute limit (Greg, 2026-10-09,
+  `spya-xdvnrg`); it is shown only while the microphone is idle.
+- **Once taken, the strip names the same action**: *"Turning that into text, then sending…"*,
+  *"…then saving…"* or *"…then pressing Enter…"*.
 - **It sends only where it was said.** A box that is reused across things — one comment dialog for
   every comment, one quiz box for every question — passes **`doneKey`**, and a wish made on one is
   not honoured on another. Feedback's key is whether it is open.
@@ -431,7 +441,7 @@ const dictate = useDictationField({
   value, onChange, box,
   context: { kind: "article", slug },
   transcribe,
-  keep: keepDictation(`chat:${slug}`), // names this box; § A closed tab
+  keep: keepDictation(`comment:${comment.id}`), // everything these words are about; § A closed tab
 });
 
 <textarea ref={box} readOnly={dictate.readOnly} … />
@@ -657,6 +667,32 @@ box, which cannot run Safari: the `dictation transcribed` log line carries `form
 and `kbps`, from the provider's own `usage.seconds`, and ~48 on an `m4a` row is the answer.
 [260912b](../plans/260912b-dictation-slow-on-weak-wifi.md), with the spike that measured it.
 
+## Words go only where they were said
+
+The comment dialog and the quiz panel keep one dictation mounted while the reader steps from comment
+to comment, or question to question, and clear the box on the step. On Safari and Firefox there are
+no live words in the box to prove it is still the box the words were for, so a transcript that came
+back after the step used to land in the next comment's box. Now a dictation is bound to its
+**keeper's box name** (`comment:<id>`, `quiz:<slug>:<question>`) at the press, and when the box has
+become a different one by the time the words arrive, they are not put in: the recording stays on the
+strip under `[mic-moved]`, with Try again holding the words already transcribed, so pressing it back
+in the right box puts them there without paying twice. A failure's Try again is bound the same way,
+and sends nothing at all from the wrong box. Chromium's live phrases are bound too: one confirmed
+after the step is not put in the new box. A new press would clear the offer, so where the device
+could not keep a copy (`keptOnDevice` false) the press is refused under `[mic-moved-held]` until the
+reader tries again or discards the offer (saving a copy first if wanted). Save downloads a copy and
+leaves the offer in place. A tape left behind in the new box waits until words still on their way
+and their offer are settled; recovery then runs again without another navigation.
+
+A box that has merely **shut** has no keeper, and that is not a different box: Feedback and the
+command bar still receive a transcript that arrives after closing, as
+[§ A double press on Stop also sends](#a-double-press-on-stop-also-sends) needs. **A box that serves
+several targets from one mount must name its keeper for what the words are *about*** — Feedback's
+reply box is `feedback-reply:<question>` and Annotate's is the whole `annotateKey` for that reason.
+Plan
+[261009a](../plans/261009a-dictation-transcript-lands-in-the-next-box.md);
+`tests/dictation-lands-in-its-own-box.test.tsx`.
+
 ## A closed tab does not lose a dictation
 
 > I would be really sad if at the end of a few minutes of really rich thought, the contents got lost
@@ -683,8 +719,15 @@ passed over, and GPT Sol's review.
   [`transcriber.ts`](../../src/web/transcriber.ts) is types only; the product passes
   `keep: keepDictation("<box>")` from [`dictation-keep.ts`](../../src/web/dictation-keep.ts), and
   the fleet dashboard passes nothing and is unchanged. **A new box adds that one line**, naming
-  itself: `feedback`, `feedback-reply`, `chat:<slug>`, `comment:<id>`, `annotate:<block>:<start>`,
-  `quiz:<slug>:<question>`, `profile:<field>`. A recording is offered back only in the box it was
+  itself: `feedback`, `feedback-reply:<question>`, `chat:<slug>:<thread>` (and `:new:<kind>`,
+  `:draft:<block>`), `comment:<id>`, `annotate:<slug>:<block>:<start>:<quote>`,
+  `quiz:<slug>:<question>`, `commands:<slug>`, `profile:<field>` for About you and
+  `profile:<field>:<slug>` for *Why you're reading this one*. **The name is the partition, so it
+  names everything the words are about**: a per-article box keeping under a name without the slug
+  offered one article's recording back on the next, and Try again put it there (Greg, 2026-10-09,
+  `spya-vzj8fc`; [261009g](../plans/261009g-dictation-stays-with-its-article-and-the-button-says-its-tricks.md)
+  has every box's verdict). `ProfileBox`'s `article` and `Composer`'s `keepAs` are required for
+  that reason. A recording is offered back only in the box it was
   made in, to the reader who made it, and is transcribed against the `where` it was recorded with.
 - **Web Locks decide which tab may offer it.** The page holding a tape holds a lock named for it,
   and a recovery takes the lock with `ifAvailable`, so a tape being recorded in one tab is never
@@ -819,6 +862,7 @@ a recorder that hit its cap. They live beside the code that raises them.
 | `[mic-unplugged]` `[mic-no-start]` `[mic-full]` `[mic-broken]` `[mic-empty]` `[mic-silent]` `[mic-unexpected]` | the capture and the ending, in [`useDictation.ts`](../../src/web/useDictation.ts) — `[mic-full]` is the fifteen-minute ceiling and `[mic-broken]` a part that lost audio; [§ The sizes](#the-sizes-and-the-wall-behind-them) |
 | `[mic-no-tape]` | no recording was made at all, so there was no authoritative pass |
 | `[mic-recovered]` `[mic-cut-off]` | a recording an earlier page left behind, offered back — whole, or cut off mid-sentence; [§ A closed tab](#a-closed-tab-does-not-lose-a-dictation) |
+| `[mic-moved]` `[mic-moved-held]` | the words came back after the reader moved the box on — the next comment, the next quiz question — so they were offered back rather than put in the wrong one; and a new press refused because it would clear them; [§ Words go only where they were said](#words-go-only-where-they-were-said) |
 | `[mic-format]` `[mic-too-long]` `[mic-slow]` `[mic-offline]` | the upload, in [`dictation-upload.ts`](../../src/web/dictation-upload.ts) |
 | `[mic-not-set-up]` `[mic-upstream]` `[mic-no-upstream]` `[mic-unreadable]` `[mic-too-long]` | the server, in [`src/transcribe.ts`](../../src/transcribe.ts) — see below |
 | `[ai-busy]` `[ai-no-credit]` `[ai-key]` `[ai-refused]` `[ai-no-model]` `[ai-bad-request]` `[ai-upstream]` `[ai-timeout]` | also the server, but the sentences come from [`messages.ts`](../../src/messages.ts) — every provider refusal has gone through `providerHttpFailure` since 2026-09-07, so a dictation can now show the same words as any other failed model call |

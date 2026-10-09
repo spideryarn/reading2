@@ -561,6 +561,8 @@ describe("a round trip through Postgres", () => {
         opens: articles.opens,
         lastOpenedAt: articles.lastOpenedAt,
         purpose: articles.purpose,
+        skimProfileNoticeDismissedFor: articles.skimProfileNoticeDismissedFor,
+        skimProfileNoticeDismissedAt: articles.skimProfileNoticeDismissedAt,
       })
       .from(articles)
       .where(mine);
@@ -572,7 +574,15 @@ describe("a round trip through Postgres", () => {
          file was written at all. */
       await db
         .update(articles)
-        .set({ archivedAt: null, titleOverride: null, opens: 0, lastOpenedAt: null, purpose })
+        .set({
+          archivedAt: null,
+          titleOverride: null,
+          opens: 0,
+          lastOpenedAt: null,
+          purpose,
+          skimProfileNoticeDismissedFor: null,
+          skimProfileNoticeDismissedAt: null,
+        })
         .where(mine);
       await exportArticle(slug, {
         dataRoot: path.join(dir, "data"),
@@ -581,6 +591,57 @@ describe("a round trip through Postgres", () => {
       const shelf = await readJsonIfPresent(path.join(dir, "data", slug, "shelf.json"));
       expect(shelf, "no shelf.json was written for an article whose only state is a purpose").toBeDefined();
       expect(shelf).toMatchObject({ purpose });
+    } finally {
+      await db.update(articles).set(before).where(mine);
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("exports Skim's dismissed profile notice, and writes a shelf file for it alone", async () => {
+    const slug = slugs[0];
+    if (!slug) throw new Error("no article to test with");
+    const db = getDb();
+    const mine = and(eq(articles.ownerId, currentOwnerId()), eq(articles.slug, slug));
+    const dismissedFor = "2026-10-09T01:00:00.000Z none";
+    const dismissedAt = new Date("2026-10-09T01:02:03.000Z");
+    const [before] = await db
+      .select({
+        archivedAt: articles.archivedAt,
+        titleOverride: articles.titleOverride,
+        opens: articles.opens,
+        lastOpenedAt: articles.lastOpenedAt,
+        purpose: articles.purpose,
+        skimProfileNoticeDismissedFor: articles.skimProfileNoticeDismissedFor,
+        skimProfileNoticeDismissedAt: articles.skimProfileNoticeDismissedAt,
+      })
+      .from(articles)
+      .where(mine);
+    if (!before) throw new Error(`${slug} is not in Postgres`);
+
+    const dir = await mkdtemp(path.join(tmpdir(), "spideryarn-skim-notice-"));
+    try {
+      await db
+        .update(articles)
+        .set({
+          archivedAt: null,
+          titleOverride: null,
+          opens: 0,
+          lastOpenedAt: null,
+          purpose: null,
+          skimProfileNoticeDismissedFor: dismissedFor,
+          skimProfileNoticeDismissedAt: dismissedAt,
+        })
+        .where(mine);
+      await exportArticle(slug, {
+        dataRoot: path.join(dir, "data"),
+        outputRoot: path.join(dir, "output"),
+      });
+      const shelf = await readJsonIfPresent(path.join(dir, "data", slug, "shelf.json"));
+      expect(shelf, "no shelf.json was written when the dismissal was its only state").toBeDefined();
+      expect(shelf).toMatchObject({
+        skimProfileNoticeDismissedFor: dismissedFor,
+        skimProfileNoticeDismissedAt: dismissedAt.toISOString(),
+      });
     } finally {
       await db.update(articles).set(before).where(mine);
       await rm(dir, { recursive: true, force: true });

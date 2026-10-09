@@ -156,6 +156,8 @@ export interface ChatEffects {
   ): Promise<WriteOutcome>;
   /** Record that the reader opened a Recall answer's hint. Answers with the time. */
   markHintOpened(slug: string, threadId: string, messageId: string, hint: string): Promise<HintOutcome>;
+  /** Delete a question and what follows it, if the tail is still the one named. */
+  deleteFrom(slug: string, threadId: string, messageId: string, expectedTailId: string): Promise<WriteOutcome>;
 }
 
 /**
@@ -617,6 +619,16 @@ export class ChatController {
               ? { type: "hint.succeeded", opId: command.opId, hintOpenedAt: outcome.hintOpenedAt }
               : { type: "hint.failed", opId: command.opId, error: outcome.error },
           (error) => ({ type: "hint.failed", opId: command.opId, error }),
+        );
+        return;
+      case "prune":
+        this.#settle(
+          this.#effects.deleteFrom(command.slug, command.threadId, command.messageId, command.expectedTailId),
+          (outcome) =>
+            outcome.ok
+              ? { type: "prune.succeeded", opId: command.opId }
+              : { type: "prune.failed", opId: command.opId, error: outcome.error },
+          (error) => ({ type: "prune.failed", opId: command.opId, error }),
         );
         return;
       case "named":

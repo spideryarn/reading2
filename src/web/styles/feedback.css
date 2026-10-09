@@ -129,6 +129,18 @@
   font-family: var(--font-ui);
 }
 
+/* **Bigger on a big screen** — Greg, 2026-10-08 (`spya-frpy22`): *"Can you
+   make the feedback dialog a bit taller and wider, especially on a big
+   screen"*. Wider from 1024px; and on a window tall enough, at least most of
+   it tall, the scroller taking the room. `max-height: 90%` above stays the cap,
+   so a phone with the keyboard up is untouched (plan 261008i, decision 12). */
+@media (min-width: 1024px) {
+  .fb-panel { width: min(92vw, 46rem); }
+}
+@media (min-width: 1024px) and (min-height: 760px) {
+  .fb-panel { min-height: min(90%, 44rem); }
+}
+
 /* The two that stay put, and the one that moves. `min-height: 0` is
    load-bearing and silent — a flex item's default `min-height: auto` refuses to
    shrink below its content, so without it `.fb-scroll` grows past the panel's
@@ -182,6 +194,15 @@
   border-bottom-color: var(--highlight);
 }
 .fb-tab:focus-visible { outline: 1px solid var(--highlight-text); outline-offset: 2px; border-radius: 3px; }
+/* The admin's way straight to Needs a decision (plan 261008i): a tab's look,
+   at the far end, and pressed rather than selected, because it is a shortcut
+   into the Earlier panel and not a panel of its own. */
+.fb-tab-shortcut { margin-left: auto; display: inline-flex; align-items: baseline; gap: 0.3rem; }
+.fb-tab-shortcut[aria-pressed="true"] {
+  color: var(--ink);
+  font-weight: 600;
+  border-bottom-color: var(--highlight);
+}
 
 /* The reader's earlier reports — FeedbackEarlier.tsx. */
 .fb-earlier-list {
@@ -302,14 +323,6 @@ a.fb-earlier-page:focus-visible {
   font-weight: 600;
   color: var(--ink);
 }
-.fb-questions-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
 /* One question: a card, so its reply box plainly belongs to it. */
 .fb-question {
   display: flex;
@@ -339,7 +352,6 @@ a.fb-earlier-page:focus-visible {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.fb-question-report-line { overflow-wrap: anywhere; }
 /* What the admin replied, set apart the way a note's comment is. */
 .fb-question-answer {
   align-self: stretch;
@@ -367,6 +379,53 @@ a.fb-earlier-page:focus-visible {
   gap: 0.5rem;
 }
 .fb-reply-send:disabled { opacity: 0.45; cursor: default; }
+/* **As tall as its words, never a scroller of its own** (useFitTextarea.ts):
+   the panel is the one scroller, which is what lets iOS keep the caret in
+   view with the keyboard up (spya-za2tse). */
+.fb-reply-input { overflow: hidden; resize: none; }
+
+/* The contents of Needs a decision: three groups, one row a thread (261008i). */
+.fb-threads { display: flex; flex-direction: column; gap: 0.75rem; }
+.fb-threads-group { display: flex; flex-direction: column; gap: 0.35rem; }
+details.fb-threads-group > summary { cursor: pointer; }
+.fb-threads-list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.fb-thread-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  width: 100%;
+  padding: 0.45rem 0.5rem;
+  border: 0;
+  border-top: 1px solid var(--rule);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.fb-thread-row:hover { background: var(--page); }
+.fb-thread-row:focus-visible { outline: 1px solid var(--highlight-text); outline-offset: -1px; }
+.fb-thread-title { font-size: 0.82rem; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
+.fb-thread-row .fb-earlier-meta { margin: 0; }
+/* One thread on its own: the way back and the pager above it. */
+.fb-thread { display: flex; flex-direction: column; gap: 0.5rem; }
+.fb-thread-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
+.fb-thread-place { margin-inline: auto; font-size: 0.76rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+/* Said when an end is pressed anyway: a phone has no hover to show the title. */
+.fb-thread-end { flex-basis: 100%; margin: 0; text-align: end; font-size: 0.76rem; color: var(--ink-soft); }
+/* Empty, it is out of the flow rather than hidden: the row's gap would otherwise
+   open under it, and `display: none` would take the live region away. */
+.fb-thread-end:empty { position: absolute; }
+/* The ids Greg reads off to a terminal (spya-krvuc9): selectable whole. */
+.fb-question-id { font-size: 0.72rem; user-select: all; overflow-wrap: anywhere; }
+/* Details, and his own report: shut until opened. */
+.fb-question-more { align-self: stretch; }
+.fb-question-more > summary { cursor: pointer; font-size: 0.78rem; font-weight: 600; color: var(--ink-soft); }
+.fb-question-more > p { margin-top: 0.35rem; }
+.fb-question-answer-one + .fb-question-answer-one { margin-top: 0.4rem; }
+/* Waiting reports no question has been written for (spya-u6h6q8). */
+.fb-orphans { display: flex; flex-direction: column; gap: 0.35rem; }
 /* On the Needs a decision pill, after its report count: how many questions. */
 .fb-show-questions { font-weight: 400; }
 
@@ -614,6 +673,11 @@ a.fb-earlier-page:focus-visible {
   cursor: pointer;
 }
 .fb-copy:hover { color: var(--highlight-text); border-color: var(--rule-strong); }
+/* Unavailable, such as an end of the Needs-a-decision pager: `aria-disabled` so
+   its `title` still shows (261009m § 4), drawn as unavailable as `disabled`
+   would be, as button.tsx's third edit does. */
+.fb-copy[aria-disabled="true"] { opacity: 0.5; cursor: default; }
+.fb-copy[aria-disabled="true"]:hover { color: var(--ink); }
 
 /* **The hairline says the buttons are a foot, not the end of the content.**
    Once the middle scrolls under them — a phone with the keyboard up, where

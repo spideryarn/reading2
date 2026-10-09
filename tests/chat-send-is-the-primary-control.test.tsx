@@ -87,6 +87,7 @@ describe("the send button", () => {
       root.render(
         createElement(Composer, {
           slug: "a-piece",
+          keepAs: "chat:a-piece:t1",
           onSend: () => {},
           busy: false,
           focusNonce: 0,

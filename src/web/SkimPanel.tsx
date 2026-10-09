@@ -50,10 +50,11 @@ import {
   Lightbulb,
   Route,
   TriangleAlert,
+  X,
 } from "lucide-react";
 import type { UseSkim } from "./useSkim.js";
 import type { PublicSkim } from "../public-types.js";
-import type { SkimDepth } from "../types.js";
+import type { BlockId, SkimDepth } from "../types.js";
 import type { DoorView, SkimView } from "./modes/skim/SkimMode.js";
 import { FOLLOW_ATTR, useFollow } from "./follow.js";
 import { JobProgress } from "./JobProgress.js";
@@ -62,13 +63,14 @@ import { ModeSurface } from "./ModeSurface.js";
 import { PurposeLine } from "./SkimPurpose.js";
 import { useRenderCount } from "./perf.js";
 import { snippet } from "./citations.js";
+import { Excerpt } from "./Excerpt.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useRevealChosen } from "./useRevealChosen.js";
 import { StepTip } from "./StepTip.js";
 import { ReadError } from "./ReadError.js";
 import { RewriteWaiting } from "./RewriteWaiting.js";
 import { type CardTarget, cardIsEmpty, type StopCard } from "./stop-card.js";
-import { TermCard, type TermActions } from "./ProseHoverCard.js";
+import { type AskAboutTerm, TermCard, type TermActions } from "./ProseHoverCard.js";
 import type { GlossaryEntry } from "../types.js";
 import { sparkline, sparkWidth } from "./route-spark.js";
 import type { WhereRow } from "./where.js";
@@ -126,6 +128,12 @@ export interface SkimRow {
    * the current one, the whole of it in a tooltip (plan 260928e).
    */
   words: string | null;
+  /**
+   * The block the quote is in, so `words` are drawn from its markup — a
+   * formula as maths, an italic as italic (Excerpt.tsx, plan 261009k). `null`
+   * when the quote has gone, and then the words are drawn as a string.
+   */
+  blockId: BlockId | null;
   /** Where it sits in the article's outline, for its position mark's card — `[]` for none (260929f § 3). */
   where: readonly WhereRow[];
   /**
@@ -277,6 +285,15 @@ export function skimPromise(profiled: boolean): string {
 }
 
 /**
+ * **What the question above a quote is** (Greg, spya-qpgvq9, plan 261009j): in
+ * the band's (i), which a keyboard and a finger reach, and on the question's
+ * own card for a mouse. Since `skim/11` most stops have none, so it says why
+ * a stop has one.
+ */
+export const SKIM_CUE_EXPLAINED =
+  "The line above a quote is a question to read it with, written by AI. It is there only where it helps: to say what the quote refers to, what it settles, or why it matters.";
+
+/**
  * At Most, how much of the Quotes offered to this route the three passes walk
  * between them — *"every one of the N quotes offered to this route"*, or *"M of
  * N"*. **All three, not Most alone**: since plan 260929e a pass does not
@@ -338,7 +355,9 @@ export function emptyHint(owner: Pick<UseSkim, "quotesFirst" | "ideasFirst">): s
  * `outdated` itself is still read — the stop card treats outdated sources as
  * usable. docs/plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md.
  */
-export function bannerReason(owner: Pick<UseSkim, "stale" | "profileChanged">): string | null {
+export function bannerReason(
+  owner: Pick<UseSkim, "stale" | "profileChanged" | "profileNoticeDismissed">,
+): string | null {
   if (owner.stale) {
     /* One input hash covers all three, so this read cannot honestly attribute
        the mismatch to Quotes. `notOnRoute` is also only a present-day count: a
@@ -346,8 +365,56 @@ export function bannerReason(owner: Pick<UseSkim, "stale" | "profileChanged">): 
        arrived later. */
     return "The Quotes, Ideas, or outline have changed since this route was planned.";
   }
-  if (owner.profileChanged) return "This route was planned before your profile said what it says now.";
+  /* **Dismissible, and only this one** — Greg, 2026-10-09 (`spya-ud2w92`):
+     *"there should be a way to dismiss it if I decide that I actually don't
+     care and I don't want to plan it again."* The stale reason above is not:
+     a route over Quotes that have moved can stop where nothing is. The
+     dismissal holds for this route under this profile (src/skim.ts §
+     `profileNoticeKey`). docs/plans/261009i-skim-profile-notice-can-be-dismissed.md. */
+  if (owner.profileChanged && !owner.profileNoticeDismissed) return PROFILE_NOTICE;
   return null;
+}
+
+const PROFILE_NOTICE = "This route was planned before your profile said what it says now.";
+
+/**
+ * **The one banner over a route** (`bannerReason` says which), with *Plan it
+ * again* — and, on the profile notice only, the × that sends it away (plan
+ * 261009i). A failed × is said here, inside the banner, which is back by
+ * then; if the read shows the dismissal landed after all, there is no banner
+ * and nothing is said.
+ */
+function RouteBanner({ owner, again }: { owner: UseSkim; again: ReactNode }) {
+  const reason = bannerReason(owner);
+  if (reason === null) return null;
+  const dismissible = reason === PROFILE_NOTICE;
+  return (
+    <div className="gloss-stale">
+      <p>
+        <TriangleAlert size={13} />
+        {reason}
+        {dismissible && (
+          <Tooltip
+            content={<p>Keep this route, and stop saying so until your profile changes again.</p>}
+            placement="bottom"
+          >
+            <button
+              type="button"
+              className="skim-notice-close close-x"
+              aria-label="Dismiss: keep this route"
+              onClick={() => void owner.dismissProfileNotice()}
+            >
+              <X aria-hidden="true" />
+            </button>
+          </Tooltip>
+        )}
+      </p>
+      {dismissible && owner.dismissFailed && (
+        <p className="skim-notice-failed">Could not hide this: {owner.dismissFailed}</p>
+      )}
+      {again}
+    </div>
+  );
 }
 
 /** The sparkline's drawing — src/web/route-spark.ts has the geometry. */
@@ -645,6 +712,7 @@ export function SkimPanel({ access, view, away }: Props) {
   const about = routed ? (
     <>
       <p>{promise}</p>
+      <p>{SKIM_CUE_EXPLAINED}</p>
       {pips && <p>{pipsLegend(pips)}</p>}
       {coverage && <p>{coverage}</p>}
       {made && (
@@ -682,8 +750,9 @@ export function SkimPanel({ access, view, away }: Props) {
            docs/plans/260929b-one-place-to-re-run-ai-processing.md. */
         owner &&
         ready &&
-        !owner.stale &&
-        !owner.profileChanged &&
+        /* No banner — not "no reason for one": a dismissed profile notice
+           has no button left, so a job from Metadata shows here (plan 261009i). */
+        bannerReason(owner) === null &&
         (owner.job || owner.starting || owner.failed || (waiting && !owner.error)) ? (
           <div className="skim-foot">
             <div className="skim-again">{run("Plan it again", true)}</div>
@@ -705,15 +774,7 @@ export function SkimPanel({ access, view, away }: Props) {
 
       {ready && (
         <>
-          {owner && bannerReason(owner) && (
-            <div className="gloss-stale">
-              <p>
-                <TriangleAlert size={13} />
-                {bannerReason(owner)}
-              </p>
-              {run("Plan it again", true)}
-            </div>
-          )}
+          {owner && <RouteBanner owner={owner} again={run("Plan it again", true)} />}
 
           {/* What the route was planned for, or the question — owner only,
               and only over a ready route (Sol F6: the empty state's automatic
@@ -772,8 +833,17 @@ export function SkimPanel({ access, view, away }: Props) {
                           )}
                           {/* The cue before the quote: it is the question to
                               read the passage with (Greg, SPIDERYARN-READING2-8J). */}
-                          {row.current && row.cue && <span className="skim-cue">{row.cue}</span>}
-                          {words && <span className="skim-words">“{words.shown}”</span>}
+                          {/* Its card says what it is, for a mouse; the band's
+                              (i) says the same for a keyboard and a finger,
+                              since the question sits inside the row's button
+                              and cannot take focus or a tap of its own
+                              (plan 261009j, Sol's plan review F5). */}
+                          {row.current && row.cue && (
+                            <Tooltip content={<p>{SKIM_CUE_EXPLAINED}</p>} placement="top">
+                              <span className="skim-cue">{row.cue}</span>
+                            </Tooltip>
+                          )}
+                          {words && <span className="skim-words">“<Excerpt blockId={row.blockId} words={words.shown} />”</span>}
                         </span>
                       </button>
                     );
@@ -794,7 +864,7 @@ export function SkimPanel({ access, view, away }: Props) {
                             Controlled, which makes it mouse-only: a tap's
                             synthetic hover must not flash it (Sol, plan review). */}
                         <Tooltip
-                          content={words?.whole ? <p>“{words.whole}”</p> : null}
+                          content={words?.whole ? <p>“<Excerpt blockId={row.blockId} words={words.whole} />”</p> : null}
                           enabled={Boolean(words?.whole)}
                           open={tipFor === row.quoteId}
                           onOpenChange={(open) =>
@@ -835,6 +905,7 @@ export function SkimPanel({ access, view, away }: Props) {
                             onToggle={toggle}
                             onCloseTerm={closeTerm}
                             termActions={view.termActions}
+                            onAskTerm={view.onAskTerm}
                             onHidden={focusCurrentRow}
                             onOpen={view.onOpen}
                             canOpen={view.canOpen}
@@ -870,6 +941,7 @@ function StopCardView({
   onToggle,
   onCloseTerm,
   termActions,
+  onAskTerm,
   onHidden,
   onOpen,
   canOpen,
@@ -880,6 +952,8 @@ function StopCardView({
   onCloseTerm(id: string): void;
   /** `null` for a visitor. */
   termActions: TermActions | null;
+  /** *Ask in chat* on a term's card; `null` for a visitor. */
+  onAskTerm: AskAboutTerm | null;
   /** A term was hidden from its card, and its chip is gone or going. */
   onHidden(from: Element | null): void;
   onOpen(target: CardTarget): void;
@@ -901,6 +975,7 @@ function StopCardView({
                 onPress={() => onToggle("term", entry.id)}
                 onUnpin={() => onCloseTerm(entry.id)}
                 actions={termActions}
+                onAsk={onAskTerm}
                 onHidden={onHidden}
                 onOpen={
                   canOpen({ kind: "term", id: entry.id })
@@ -979,8 +1054,9 @@ function StopCardView({
  * goes when the pointer does (GPT Sol, plan review F2).
  *
  * `onOpen` is the way into Glossary, or `null` when this reader has no
- * Glossary control. Then the card has no *Open glossary*, and no *Dig deeper*
- * either, since that is where a dig's answer is drawn.
+ * Glossary control. Then the card has no *Open glossary*. Its *Ask in chat*
+ * (the owner's, since plan 261009k; *Dig deeper* until then) goes to Chat, so
+ * it is drawn either way.
  */
 function TermChip({
   entry,
@@ -988,6 +1064,7 @@ function TermChip({
   onPress,
   onUnpin,
   actions,
+  onAsk,
   onHidden,
   onOpen,
 }: {
@@ -996,6 +1073,7 @@ function TermChip({
   onPress(): void;
   onUnpin(): void;
   actions: TermActions | null;
+  onAsk: AskAboutTerm | null;
   onHidden(from: Element | null): void;
   onOpen: (() => void) | null;
 }) {
@@ -1010,9 +1088,6 @@ function TermChip({
   };
   /* Hide, and then put the keyboard somewhere: the chip is about to go. */
   const acts: TermActions | null = actions && {
-    look: actions.look,
-    looking: actions.looking,
-    stale: actions.stale,
     hiding: actions.hiding,
     setHidden: async (id, hidden) => {
       /* Keep our actual focus owner, not the whole cluster: another term can
@@ -1034,6 +1109,7 @@ function TermChip({
           <TermCard
             entry={entry}
             actions={acts}
+            onAsk={onAsk}
             onClose={close}
             onOpen={
               onOpen
@@ -1043,7 +1119,6 @@ function TermChip({
                   }
                 : undefined
             }
-            onOpenTerm={onOpen ?? undefined}
           />
         </div>
       }

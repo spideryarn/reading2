@@ -46,6 +46,7 @@
  */
 
 import { isAdmin, type AdminUser } from "../admin.js";
+import type { HiddenCheckResult, StoredHiddenCheck } from "../referee-hidden-check-types.js";
 import type { OwnerId } from "../owner.js";
 import type { Db } from "../db/client.js";
 import type { Assets } from "../assets.js";
@@ -98,6 +99,11 @@ import type {
   QuizKeptAnswer,
   QuizQuestionId,
   FaqFound,
+  DebateClaimListFound,
+  DebateCheckCounts,
+  DebateCheckResult,
+  DebateCheckTarget,
+  DebateClaimCheck,
   RelationsResponse,
   CrossrefsFound,
   SimpleSummaryFound,
@@ -294,6 +300,15 @@ export interface ArticleReader {
    * docs/plans/260916d-faq-mode.md.
    */
   loadFaq(slug: string): Promise<FaqFound>;
+
+  /**
+   * Debate's claims list, plus whether its rendered body and cited head still
+   * describe the article, and whether its prompt/model generation is current.
+   * A visitor reads the list off the public payload instead
+   * (src/store/public-reader.ts), without the staleness verdict.
+   * docs/plans/261008i-debate-claims-picked-by-the-reader.md.
+   */
+  loadDebateClaims(slug: string): Promise<DebateClaimListFound>;
 
   /**
    * How each paragraph bears on the one before it, plus whether it still
@@ -1100,9 +1115,10 @@ export interface SweepOptions {
  *   write-everything — which is precisely the read-modify-write the table
  *   exists to delete. There is one caller and it does one thing, so the method
  *   is that thing.
- * - **`finishTurn` returns nothing.** Both call sites discard the list today,
- *   and returning it costs a full read of every thread in the article on every
- *   streamed answer.
+ * - **`finish` returns only whether this attempt landed.** Returning the whole
+ *   list would cost a full read of every thread in the article on every
+ *   streamed answer. The update already knows whether its attempt fence
+ *   matched, and the route needs that one bit before it may refresh a gist.
  *
  * `begin` / `retry` / `edit` keep the thread *with its messages*, because
  * `streamChat` builds the model's history from `thread.messages.slice(0, -2)`.
@@ -1187,8 +1203,8 @@ export interface ChatStore {
 
   /**
    * Patch one message in place. **Never appends**, and bumps the thread's
-   * `updatedAt` whenever the *thread* matches — even if the message does not.
-   * The panel's ordering depends on that clock.
+   * `updatedAt` only when the fenced message update lands. A stale attempt is
+   * not stored activity and must not reorder the conversation.
    *
    * **Pass the `attempt` this answer belongs to.** A retry keeps the message
    * id, so identity cannot say which call is reporting: without the attempt, a
@@ -1203,7 +1219,7 @@ export interface ChatStore {
     messageId: string,
     patch: Partial<ChatMessage>,
     opts: { attempt: string; now?: (() => string) | undefined },
-  ): Promise<void>;
+  ): Promise<boolean>;
 
   /**
    * Blank the last answer so the model can have another go at the same
@@ -1244,8 +1260,34 @@ export interface ChatStore {
    */
   appendSpoken(slug: string, spoken: SpokenTurn, now?: () => string): Promise<StoredExchange>;
 
+  /**
+   * **Delete one of the reader's questions and every message after it.** Not
+   * the first question, not an answer, and not while an answer is arriving —
+   * `withDeleteFrom` in src/chat.ts refuses each with a `ChatConflict`.
+   * `expectedTailId` is edit's guard, and required here: a stale tab is
+   * refused rather than deleting turns it never saw. Answers with the whole
+   * list, read back inside the transaction, and how many messages went.
+   */
+  deleteFrom(
+    slug: string,
+    threadId: string,
+    messageId: string,
+    opts: { expectedTailId: string },
+  ): Promise<{ threads: ChatThread[]; deleted: number }>;
+
   rename(slug: string, threadId: string, title: string): Promise<ChatThread[]>;
   remove(slug: string, threadId: string): Promise<ChatThread[]>;
+
+  /**
+   * **Store a conversation's one-line gist** (src/chat-gist.ts), written from
+   * the thread as it stood at `basedOn` — the snapshot used to make the gist.
+   *
+   * Written **only if nothing has been stored in the thread since**, so a slow
+   * gist of an older transcript cannot land over a newer one; the newer turn
+   * writes its own. Returns whether it was written. Does not touch
+   * `updated_at`, which the list sorts by (the reason `rename` does not).
+   */
+  setGist(slug: string, threadId: string, gist: string, basedOn: ChatThread): Promise<boolean>;
 
   /**
    * **The reader pressed Hint under a Recall answer.** Stamps
@@ -1579,6 +1621,87 @@ export interface RefereeClaimsStore {
 }
 
 /**
+ * **How a reader's claim check ends**: the answer, or the reader's sentence for
+ * why there is none. Two arms, so an `error` cannot carry results — the
+ * database refuses that row too (`debate_claim_checks_results_only_done`).
+ */
+export type ClaimCheckFinish =
+  | {
+      status: "done";
+      results: DebateCheckResult[];
+      counts: DebateCheckCounts;
+      webSearches: number;
+      model: string;
+    }
+  | { status: "error"; error: string };
+
+/** What a check is when it is pressed — everything but the outcome. */
+export interface ClaimCheckBegin {
+  listSourceHash: string;
+  targets: DebateCheckTarget[];
+  digFurther: boolean;
+}
+
+/**
+ * **Debate's reader-picked claim checks** — src/store/pg-debate-claim-checks.ts,
+ * plan docs/plans/261008i-debate-claims-picked-by-the-reader.md § 3.
+ *
+ * Owner-scoped like every reader-state store: each method takes a slug and
+ * refuses one this reader does not own with the reader's 404.
+ */
+export interface DebateClaimChecksStore {
+  /** Every check on the article, oldest first. */
+  list(slug: string): Promise<DebateClaimCheck[]>;
+
+  /**
+   * **The reservation**: insert a `pending` check, or throw a 409
+   * (`CheckInFlight`) when the article already has one — the partial unique
+   * index decides, so two presses at once cannot both get through.
+   */
+  begin(slug: string, check: ClaimCheckBegin): Promise<{ check: DebateClaimCheck; attempt: string }>;
+
+  /**
+   * **Take back a reservation nothing was spent on** — the allowance refused
+   * the press after `begin`. Deletes the row only while it is still this
+   * attempt's `pending` one.
+   */
+  abandon(slug: string, id: string, attempt: string): Promise<void>;
+
+  /**
+   * Write the outcome over the `pending` check **this attempt began**. `null`
+   * when it is not there to write to: the sweep ended it, or the article went.
+   */
+  finish(slug: string, id: string, patch: ClaimCheckFinish, attempt: string): Promise<DebateClaimCheck | null>;
+
+  /**
+   * End abandoned `pending` checks — older than the call's deadline and its
+   * margin, and not one `live` says this process is running — then list.
+   */
+  sweep(slug: string, live: (id: string) => boolean): Promise<DebateClaimCheck[]>;
+}
+
+/**
+ * **Hidden text's Opus check, kept** — one row per article, the last finished
+ * answer. src/store/pg-referee-hidden-checks.ts;
+ * docs/plans/261009a-save-hidden-text-opinions.md.
+ *
+ * Only a validated answer is ever written, so there is no begin, no attempt
+ * and no sweep: a failed run leaves the last good answer where it was. Both
+ * methods are owner-scoped: a slug the caller does not own is a 404.
+ */
+export interface RefereeHiddenCheckStore {
+  /** The kept check, or `null` when this article has never been checked. */
+  read(slug: string): Promise<StoredHiddenCheck | null>;
+  /**
+   * Keep `result`, replacing whatever was there. `startedAt` is when the
+   * referee pressed; the store stamps the finish. Returns the row kept after
+   * the attempt, which may be a newer check when this write loses the freshness
+   * fence.
+   */
+  save(slug: string, result: HiddenCheckResult, startedAt: Date): Promise<StoredHiddenCheck>;
+}
+
+/**
  * What the reader has asked the web about, one answer per glossary entry.
  *
  * Keyed by entry id, which is why the Postgres table is keyed
@@ -1743,6 +1866,21 @@ export interface GlossaryHiddenStore {
   hide(slug: string, entryId: string): Promise<void>;
   /** Show it again. No existence check, so an orphaned row can still be removed. */
   unhide(slug: string, entryId: string): Promise<void>;
+}
+
+/**
+ * The Skim profile-changed notice the owner sent away on one article —
+ * docs/plans/261009i-skim-profile-notice-can-be-dismissed.md. Owner-scoped (a
+ * stranger's slug is a 404). The read is `loadSkim`, which returns the stored
+ * key; there is no second GET.
+ */
+export interface SkimNoticeStore {
+  /**
+   * Store `key` (src/skim.ts § `profileNoticeKey`) and the time, **only if the
+   * article's current route is still the one stamped `generatedAt`**. `false`
+   * when it is not — a re-plan landed in between — and nothing is written.
+   */
+  dismissProfileNotice(slug: string, generatedAt: string, key: string): Promise<boolean>;
 }
 
 /**
@@ -2423,6 +2561,27 @@ export interface LinkedFeedbackReport {
   number: number;
   /** The first line of what the reader wrote, cut to a line's length. */
   firstLine: string;
+  /** All of it, for the thread's shut *Your report* (plan 261008i, decision 7). */
+  body: string;
+}
+
+/** One admin's deferral of one question. Times are the database's. */
+export interface StoredFeedbackDeferral {
+  questionId: string;
+  /** ISO when deferred; null once brought back. */
+  deferredAt: string | null;
+  /** ISO: when it was last deferred or brought back. */
+  updatedAt: string;
+}
+
+/** A question's deferral as it stands after a write: what the route answers with. */
+export type FeedbackDeferralNow = Pick<StoredFeedbackDeferral, "questionId" | "deferredAt">;
+
+/** What the deferral route hands the store: the environment is the server's, never the caller's. */
+export interface NewFeedbackDeferral {
+  questionId: string;
+  deferred: boolean;
+  environment: FeedbackEnvironment;
 }
 
 /** How many reports this reader has filed, and how many of them are among `countIds`. */
@@ -2746,11 +2905,25 @@ export interface FeedbackStore {
    */
   submitAnswer(input: NewFeedbackAnswer): Promise<FeedbackAnswerSubmission>;
   /**
-   * **This owner's newest reply to each of these questions**, at most one a
-   * question; a question they have not replied to is simply absent.
-   * Owner-scoped: another admin's reply is never this one's.
+   * **Every reply of this owner's to these questions**, oldest first; a
+   * question they have not replied to has none. Owner-scoped: another admin's
+   * reply is never this one's. The route keeps the ones not yet acted on and
+   * works out each thread's state from all of them (plan 261008i).
    */
-  newestAnswers(questionIds: readonly string[]): Promise<StoredFeedbackAnswer[]>;
+  answersTo(questionIds: readonly string[]): Promise<StoredFeedbackAnswer[]>;
+  /**
+   * **This owner's deferral of each of these questions**, where there is a
+   * row: deferred (a time) or brought back (null). Owner-scoped.
+   */
+  deferrals(questionIds: readonly string[]): Promise<StoredFeedbackDeferral[]>;
+  /**
+   * **Defer a question, or bring it back** — `POST
+   * /api/admin/feedback/deferrals`. Conditional both ways (GPT Sol's plan
+   * review, F5): deferring writes only when it is not deferred, bringing back
+   * only when it is, so a retry changes neither time. Answers the deferral as
+   * it now stands. The owner is `currentOwnerId()`.
+   */
+  setDeferred(input: NewFeedbackDeferral): Promise<FeedbackDeferralNow>;
   /**
    * **The number and first line of these reports, among this owner's own.**
    * An id the owner did not file (another reader's report, or none) is absent,
@@ -2967,7 +3140,12 @@ export type RateBucket =
   /* *Ask about Spideryarn* on the Help pages — a streamed answer from the
      whole Help, free to the reader and so bounded here instead, with a global
      fuse (src/help-chat-call.ts § `HELP_CHAT_RATE_POLICY`, plan 261007k). */
-  | "help-chat";
+  | "help-chat"
+  /* Debate's reader-picked claim checks — one paid web search over the
+     claims a reader ticked or typed (src/debate.ts §
+     `DEBATE_CHECK_RATE_POLICY`, plan 261008i § 3). Not Dig deeper's bucket,
+     because Dig deeper's lease is shorter than a check (GPT Sol's E1). */
+  | "debate-check";
 
 /**
  * **How many outbound fetches one reader's pointer may cause.**

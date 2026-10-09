@@ -102,6 +102,12 @@ import {
   PROMPT_VERSION as FAQ_PROMPT_VERSION,
 } from "./faq.js";
 import {
+  DEBATE_CLAIMS_OUTPUT_SCHEMA,
+  generateDebateClaims,
+  inputFingerprint as debateClaimsFingerprint,
+  PROMPT_VERSION as DEBATE_CLAIMS_PROMPT_VERSION,
+} from "./debate-claims.js";
+import {
   RELATIONS_OUTPUT_SCHEMA,
   generateRelations,
   inputFingerprint as relationsFingerprint,
@@ -170,6 +176,7 @@ import {
   PROMPT_VERSION as SKETCH_PROMPT_VERSION,
   SKETCH_OUTPUT_SCHEMA,
 } from "./sketch.js";
+import { arxivAffiliationReader } from "./arxiv-affiliations.js";
 import { openRouterAuthorsReader } from "./pdf-authors.js";
 import { openRouterFrontMatterReader } from "./pdf-frontmatter.js";
 import { runPdfExtract } from "./pdf-read.js";
@@ -204,6 +211,7 @@ import {
   ILLUSTRATE_SKETCH_PROFILE,
   ILLUSTRATE_SKETCH_STALE,
   pdfTooManyPages,
+  PLATES_NOT_REPEATED,
   type ReaderFacingFailure,
   SOURCE_DOCUMENT_DAMAGED,
   SOURCE_DOCUMENT_GONE,
@@ -241,6 +249,7 @@ import {
   type Block,
   type JobUpload,
   type Meta,
+  type PaidPurchase,
   type StepName,
   type StepPreview,
   type StoredReadingDifficulty,
@@ -384,6 +393,7 @@ export const ARTICLE_OUTPUT_FORMAT: Readonly<Record<ArticleStage, ArticleOutputF
   quiz: jsonSchemaFormat(QUIZ_OUTPUT_SCHEMA),
   faq: jsonSchemaFormat(FAQ_OUTPUT_SCHEMA),
   relations: jsonSchemaFormat(RELATIONS_OUTPUT_SCHEMA),
+  "debate-claims": jsonSchemaFormat(DEBATE_CLAIMS_OUTPUT_SCHEMA),
   crossrefs: jsonSchemaFormat(CROSSREFS_OUTPUT_SCHEMA),
   simple: jsonSchemaFormat(SIMPLE_SUMMARY_OUTPUT_SCHEMA),
 };
@@ -630,6 +640,11 @@ export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
      really has moved it re-runs without being forced. And it replaces rather
      than appends. */
   "debate",
+  /* It reads the body and metadata head (with the tree as a title fallback),
+     nothing in the pipeline reads what it writes, and it replaces rather than
+     appends. A positional cascade from a press one band along must not buy it.
+     docs/plans/261008i-debate-claims-picked-by-the-reader.md. */
+  "debate-claims",
   /* A model call over the whole article that nothing else reads, so the
      positional cascade would buy it for nothing; and it replaces rather than
      appends. docs/plans/260911g-citations-mode.md. */
@@ -706,6 +721,18 @@ export interface StepContext {
    * (src/illustrated.ts § `BriefBank`).
    */
   jobId?: string;
+  /**
+   * **Mark a purchase this job must not make twice**, on the job row and this
+   * claim's fence (`JobStore.beginPaidStep`). `"begun"`: go ahead. `"begun-before"`:
+   * an earlier window of this same job began it and never finished, so it may
+   * already be paid for, and the step fails rather than buy it again.
+   *
+   * `oncePerJob` marks a whole step; this is for a step whose purchase comes
+   * after its own deliberate hand-back, which marking the step would refuse —
+   * Illustrated's plates. Absent from a command line or a test, where nothing
+   * requeues. docs/plans/261009o-a-requeued-job-does-not-buy-the-illustrated-plates-again.md.
+   */
+  beginPaidWork?: (purchase: PaidPurchase) => Promise<"begun" | "begun-before">;
   /**
    * How long the queue allows this step, `STEP_BUDGET_MS[step]` in src/jobs.ts,
    * which this file cannot import. The structure step's slices path stops
@@ -939,6 +966,24 @@ export interface PipelineStep<N extends StepName = StepName> {
    * docs/plans/260827j-transactional-stage-runner.md § D.
    */
   isDone?(ctx: StepContext, store: ArtifactReads): Promise<boolean>;
+  /**
+   * **This step's paid work must not be bought twice by one job.** A later
+   * lease window of the same job — after a lapse (`settleExpired`) or the
+   * claimant's own deadline (`pauseForDeadline`) — refuses to begin it again
+   * and fails it with `PAID_STEP_NOT_REPEATED`, rather than re-running it from
+   * the start. A reader's Retry is a new job, and runs it.
+   *
+   * For work that is dear, cannot be checkpointed and cannot be fetched back
+   * once its process has died: `debate`'s web search, 15–20 cents a call. The
+   * marker is the job row's `paid_step_begun` (`JobStore.beginPaidStep`), and
+   * `runStep` (src/jobs.ts) is the one reader.
+   * docs/plans/261009l-a-requeued-job-does-not-buy-the-debate-search-again.md.
+   *
+   * A step whose purchase comes after a hand-back of its own marks that
+   * purchase instead, through `StepContext.beginPaidWork` — `illustrated`'s
+   * plates (plan 261009o).
+   */
+  oncePerJob?: true;
   /**
    * Do the work, and hand back what was done — see `StepProduct`.
    *
@@ -1822,6 +1867,17 @@ function refuseToIllustrate(reason: IllustrateRefusal): never {
   throw stageFailure(ILLUSTRATE_REFUSAL[reason]);
 }
 
+/** `generateIllustrated`'s `beginPlates`, on the job's once-per-job marker. Plan 261009o. */
+function beginIllustratedPlates(
+  beginPaidWork: NonNullable<StepContext["beginPaidWork"]>,
+): () => Promise<void> {
+  return async () => {
+    if ((await beginPaidWork("illustrated-plates")) === "begun-before") {
+      throw stageFailure(PLATES_NOT_REPEATED);
+    }
+  };
+}
+
 /**
  * **A PDF article's reference list, for the Citations stage** — plan 260930i
  * (SPIDERYARN-READING2-6K). Stage 2 does not render a PDF's bibliography, so
@@ -2054,6 +2110,91 @@ export const metadataReaders = {
   pdf: extractPaperMetadata,
   html: extractHtmlMetadata,
 };
+
+/**
+ * **Which `Meta` fields the `metadata` step makes, which it fills, and which
+ * it keeps from the revision it writes into.** Its `meta` goes through
+ * `metaColumns`, which writes every column `?? null`, so a field it left out
+ * would be a column it cleared. On a minimal paper's first run there is nothing
+ * there; run alone by the administrator on an article `extract` already read,
+ * it was how the PDF was read (`recall`, `pagesChecked`, `quality` and the
+ * rest), the page's `siteName`, `lang`, `excerpt` and `note`, and any byline,
+ * date or DOI this run did not find again. Plan 261009s.
+ *
+ * - **`made`**: the step always says it. The title pair (`stepTitleTidier`
+ *   already holds a pair steady when the raw title repeats) and `source`.
+ * - **`filled`**: what this run finds replaces what was there, and what it
+ *   does not find leaves what was there — `metadataOverPrevious` says how,
+ *   because three of them travel in pairs.
+ * - **`kept`**: the step never says it. Those not in `metaColumns` (`url`,
+ *   `fetchedAt`, `filename`, `rawSha256`, `readingDifficulty`) ride along and
+ *   the write ignores them.
+ *
+ * A `Record` over `keyof Meta`, so a new field does not compile until somebody
+ * has said which.
+ */
+export const METADATA_STEP_FIELDS: Readonly<Record<keyof Meta, "made" | "filled" | "kept">> = {
+  slug: "made",
+  title: "made",
+  titleOriginal: "made",
+  source: "made",
+  byline: "filled",
+  authors: "filled",
+  abstract: "filled",
+  doi: "filled",
+  journal: "filled",
+  publishedAt: "filled",
+  publishedYear: "filled",
+  readingDifficulty: "kept",
+  siteName: "kept",
+  lang: "kept",
+  url: "kept",
+  fetchedAt: "kept",
+  excerpt: "kept",
+  note: "kept",
+  filename: "kept",
+  rawSha256: "kept",
+  method: "kept",
+  pages: "kept",
+  unverified: "kept",
+  recall: "kept",
+  pagesChecked: "kept",
+  quality: "kept",
+};
+
+/**
+ * **The `metadata` step's `meta`, laid over the revision's**, by
+ * `METADATA_STEP_FIELDS`. Pure, so the rules are tested without a store.
+ *
+ * The `filled` fields go in three pairs and one single, each as one fact:
+ *
+ * - **authors and byline** — the run's, unless it found none, or found the
+ *   same names in the same order, when what was there stands: `extract` reads
+ *   affiliations and a page's own byline, and this step reads neither.
+ * - **DOI and journal** — the journal is the registry's word about that DOI, so
+ *   the old one stands only beside the same DOI (or no new one).
+ * - **the day and the year** — one or the other, by CHECK; the old pair
+ *   stands only when the run found neither.
+ * - **the abstract** — the run's, else what was there.
+ */
+export function metadataOverPrevious(previous: Meta | null, made: Meta): Meta {
+  if (previous === null) return made;
+  const was = <K extends keyof Meta>(...keys: K[]): Partial<Pick<Meta, K>> =>
+    Object.fromEntries(keys.filter((k) => previous[k] !== undefined).map((k) => [k, previous[k]])) as Partial<Pick<Meta, K>>;
+  const kept = Object.fromEntries(
+    Object.entries(previous).filter(([key]) => METADATA_STEP_FIELDS[key as keyof Meta] === "kept"),
+  ) as Partial<Meta>;
+  const names = (authors: Meta["authors"]) => (authors ?? []).map((a) => a.name).join("\n");
+  const people =
+    made.authors === undefined || names(made.authors) === names(previous.authors) ? was("authors", "byline") : {};
+  /* DOI identity is case-insensitive. Keep the registry facts when the reader
+     and the previous extraction copied different capitals from the same DOI. */
+  const sameDoi = made.doi === undefined || made.doi.toLowerCase() === previous.doi?.toLowerCase();
+  const work = sameDoi ? { ...was("doi"), ...(made.journal === undefined ? was("journal") : {}) } : {};
+  const date = made.publishedAt === undefined && made.publishedYear === undefined ? was("publishedAt", "publishedYear") : {};
+  const abstract = made.abstract === undefined ? was("abstract") : {};
+  return { ...kept, ...made, ...people, ...work, ...date, ...abstract };
+}
 
 /**
  * **What tidies an imported title** in `extract` and `metadata`: a small model,
@@ -2581,7 +2722,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           ? await metadataReaders.pdf(bytes, { signal: ctx.signal })
           : await metadataReaders.html(new TextDecoder().decode(bytes), { signal: ctx.signal });
       const paper = { slug: ctx.slug, ...(manifest.filename ? { filename: manifest.filename } : {}), found };
-      const meta = await withArticleRegistry(
+      const made = await withArticleRegistry(
         ctx,
         "metadata",
         paperMeta({
@@ -2593,6 +2734,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         }),
         [],
       );
+      const meta = metadataOverPrevious(await store.read(ctx.slug, "extract", "meta"), made);
       /* Counts and the branch, never a word of the paper (docs/project/logging.md). */
       plog.info(
         {
@@ -2736,7 +2878,16 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
            encoding so that stays visible. */
         const html = new TextDecoder().decode(bytes);
         try {
-          const result = await runExtract({ html, url, slug: ctx.slug, titleTidier: stepTitleTidier(ctx, store) });
+          const result = await runExtract({
+            html,
+            url,
+            slug: ctx.slug,
+            titleTidier: stepTitleTidier(ctx, store),
+            /* An arXiv HTML paper's affiliations, by the PDF path's authors
+               pass on the same model (plan 261009m). Called only on a LaTeXML
+               title block whose names are the whole author list. */
+            affiliations: arxivAffiliationReader(openRouterAuthorsReader(modelFor("pdf-frontmatter", ctx.power)), ctx),
+          });
           /* **The audit line for the named pre-Readability removers.**
              `removePlatformFurniture` and `removeReaderComments` delete an
              element because of a publisher/platform name, and a delete
@@ -5008,6 +5159,13 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
            docs/plans/261007l-illustrated-fits-a-claim-and-a-late-stop-says-so.md. */
         ...(ctx.deadlineAt !== undefined ? { deadlineAt: ctx.deadlineAt } : {}),
         ...(ctx.jobId ? { bank: briefBank(ctx, ctx.jobId, checkpoints, sourceHash) } : {}),
+        /* **The plates are bought once per job.** A window that died with them
+           out has lost them — they are stored only once the set is back — and
+           the requeue would hand the banked brief to a window that buys them
+           all again. Marked here rather than as `oncePerJob`, because the
+           step's own hand-back after the brief is a second window too.
+           docs/plans/261009o-a-requeued-job-does-not-buy-the-illustrated-plates-again.md. */
+        ...(ctx.beginPaidWork ? { beginPlates: beginIllustratedPlates(ctx.beginPaidWork) } : {}),
       });
 
       /* **Written here rather than in `generateIllustrated`**, which writes
@@ -5231,6 +5389,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
     name: "debate",
     label: "Asking the web",
     produces: ["debate"],
+    /* The Reception search is bought from the provider and cannot be fetched
+       back if this window dies with it in flight, so a requeue does not buy it
+       again: plan 261009l. */
+    oncePerJob: true,
     /**
      * `articleWithIdsFingerprint`, the one `ideas`, `sketch` and `quiz` use —
      * the blocks, the tree and a metadata head that carries `URL:`.
@@ -5252,9 +5414,8 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       if (!article) return null;
       return {
         /* **`article.meta`, `null` and all — never a stub**, for the reason
-           `quiz` and `timeline` state above: `generateDebate` builds a stub for
-           the PROMPT and hands the fingerprint the real value, and hashing the
-           stub here would make every article without metadata report stale for
+           `quiz` and `timeline` state above: `generateDebate` hands the
+           fingerprint the real value, and hashing a stub head here would make every article without metadata report stale for
            ever with nothing red. */
         inputHash: debateFingerprint(article.blocks, article.tree, article.meta),
         promptVersion: DEBATE_PROMPT_VERSION,
@@ -5275,12 +5436,14 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       });
       /* Stage 6 of plan 261001a: a source whose address carries a DOI or arXiv
          id gets the registry's authors and year, when its title agrees.
-         After the searches and outside the stamp; it never fails the step. */
+         After the search and outside the stamp; it never fails the step. */
       const registryStarted = Date.now();
       const registered = await attachDebateRegistry(run.debate, debateRegistryDeps);
       const registryMs = Date.now() - registryStarted;
       run.debate = registered.debate;
-      const { direct, claims } = run.debate;
+      /* Reception only since `debate/7`: `claims` is stored `not-run`, so it
+         has no counts to log (src/types.ts § `DebateClaims`). */
+      const { direct } = run.debate;
       plog.info(
         {
           slug: ctx.slug,
@@ -5292,8 +5455,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              watched a cap of four results cost thirty-six searches. A run
              logging 36 is a prompt that has drifted toward thoroughness. */
           webSearches: run.webSearches,
-          /* Per group, never summed, or this line cannot say which of the two
-             searches lost rows. Counts and hostnames only — never a URL, never
+          /* Per group, never summed. Counts and hostnames only — never a URL, never
              an extract, never a quotation. docs/project/logging.md. */
           directReturned: direct.counts.returnedSources,
           directReported: direct.counts.reportedRows,
@@ -5305,12 +5467,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              zero and `directKept` is high on an obscure article is the rule
              failing open, not the web being kind. */
           directLost: direct.counts.lost,
-          claimsReturned: claims.counts.returnedSources,
-          claimsReported: claims.counts.reportedRows,
-          claimsKept: claims.counts.keptRows,
-          claimsOverCap: claims.counts.omittedOverCap,
-          claimsLost: claims.counts.lost,
-          /* The third call's outcome, so a `failed` is visible in the logs
+          /* The optional synthesis call's outcome, so a `failed` is visible in the logs
              rather than only as a missing box on screen (plan 260930j). */
           registryIdentified: registered.counts.identified,
           registryFound: registered.counts.found,
@@ -5323,13 +5480,70 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           themes: run.debate.synthesis?.kind === "made" ? run.debate.synthesis.themes.length : null,
           keySources: run.debate.synthesis?.kind === "made" ? run.debate.synthesis.key.length : null,
         },
-        `debate ${ctx.slug}: ${direct.counts.keptRows} direct, ${claims.counts.keptRows} on its claims`,
+        `debate ${ctx.slug}: ${direct.counts.keptRows} direct`,
       );
       return {
         parts: { debate: run.debate },
-        detail:
-          `${direct.counts.keptRows} about this piece, ` +
-          `${claims.counts.keptRows} about what it claims`,
+        detail: `${direct.counts.keptRows} about this piece`,
+      };
+    },
+  },
+  /* Debate's claims list: the claims the article rests on that someone outside
+     could argue with, for the Claims sub-mode to pick from. Off
+     DEFAULT_INGEST_STEPS and in FORCE_ONLY_WHEN_NAMED; made by a press on
+     Claims. docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2.
+
+     **No baseline read**, like `faq`: ids are minted per run. Nothing stored
+     names a listed claim's id yet; the checks of the plan's § 3 will, and
+     they are drawn only under the list they were made from. */
+  "debate-claims": {
+    name: "debate-claims",
+    label: "Listing its claims",
+    produces: ["debate-claims"],
+    /**
+     * Its exact rendered body and cited head, with the **real, nullable**
+     * metadata and the tree only as a fallback title. This is what
+     * `generateDebateClaims` hashes too. **No `profileHash`**.
+     */
+    stamp: async (ctx, store) => {
+      const article = await tryReadArticle(ctx.slug, store);
+      if (!article) return null;
+      return {
+        inputHash: debateClaimsFingerprint(article.blocks, article.tree, article.meta),
+        promptVersion: DEBATE_CLAIMS_PROMPT_VERSION,
+        model: CAPABLE_MODEL,
+      };
+    },
+    async run(ctx, store) {
+      const run = await generateDebateClaims({
+        article: await readArticle(ctx.slug, store),
+        onProgress: ctx.report,
+        signal: ctx.signal,
+        power: ctx.power,
+        cacheArticle: ctx.cacheArticle,
+      });
+      const claims = run.claimList.claims.length;
+      plog.info(
+        {
+          slug: ctx.slug,
+          step: "debate-claims",
+          model: run.model,
+          inputTokens: run.inputTokens,
+          outputTokens: run.outputTokens,
+          cacheReadTokens: run.cacheReadTokens,
+          cacheWriteTokens: run.cacheWriteTokens,
+          maxTokens: run.maxTokens,
+          ms: run.elapsedMs,
+          claims,
+          /* Counts only — never a claim or a quote. `unquoted` is the one to
+             watch: the model paraphrasing where it was told to copy. */
+          ...run.dropped,
+        },
+        `debate-claims ${ctx.slug}: ${claims} claims`,
+      );
+      return {
+        parts: { "debate-claims": run.claimList },
+        detail: `${claims} ${claims === 1 ? "claim" : "claims"}`,
       };
     },
   },

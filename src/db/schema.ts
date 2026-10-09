@@ -73,6 +73,7 @@ import type { RefereeResult } from "../referee-criteria.js";
    shape and the validator that guarantees it live together in
    src/referee-claims.ts. */
 import type { Claim } from "../referee-claims.js";
+import type { HiddenJudgment } from "../referee-hidden-check-types.js";
 import type { Sketch } from "../sketch-scene.js";
 import type { Illustrated } from "../illustrated-plate.js";
 import type { LabelsFile } from "../labels.js";
@@ -85,8 +86,12 @@ import type {
   Arc,
   Citation,
   Debate,
+  DebateCheckCounts,
+  DebateCheckResult,
+  DebateCheckTarget,
   Faq,
   Relations,
+  DebateClaimList,
   Crossrefs,
   SimpleSummary,
   Skim,
@@ -248,6 +253,21 @@ export const articles = spideryarn.table("articles", {
    * article, because it is not this article's state to lose.
    */
   purpose: text("purpose"),
+  /**
+   * **The Skim notice the reader sent away** — *"This route was planned before
+   * your profile said what it says now"*, dismissed with its ×. Greg,
+   * 2026-10-09 (`spya-ud2w92`): *"there should be a way to dismiss it if I
+   * decide that I actually don't care and I don't want to plan it again."*
+   *
+   * The key is `<route generatedAt> <profile hash or "none">`
+   * (src/skim.ts § `profileNoticeKey`), so the dismissal holds for that route
+   * under that profile only: a re-plan or a further profile change brings the
+   * notice back. Columns here rather than a table for the shelf columns'
+   * reason — one per article, the owner's state. `_at` is when, set again on
+   * every dismiss. docs/plans/261009i-skim-profile-notice-can-be-dismissed.md.
+   */
+  skimProfileNoticeDismissedFor: text("skim_profile_notice_dismissed_for"),
+  skimProfileNoticeDismissedAt: timestamp("skim_profile_notice_dismissed_at", { withTimezone: true }),
 
   /* ---- sharing: may a stranger read this? docs/plans/260827ai-public-read-only-access.md --
 
@@ -938,7 +958,7 @@ export const articleRevisions = spideryarn.table(
     /**
      * **How this revision was extracted, when the answer is not "Readability".**
      *
-     * All six are null for a web page and that is the common case — they exist
+     * All seven are null for a web page and that is the common case — they exist
      * because a PDF is read by a *model*, and a reader is owed the difference.
      * docs/plans/260826c-pdf-ingestion.md.
      *
@@ -959,6 +979,16 @@ export const articleRevisions = spideryarn.table(
     unverified: boolean("unverified"),
     recall: doublePrecision("recall"),
     pagesChecked: integer("pages_checked"),
+    /**
+     * `Meta.quality`: what the transcription checker complained about, in its
+     * own words. Null means **no complaints stored**, which is two facts: the
+     * checker found nothing (the common case), or the revision predates this
+     * column (2026-10-09), when the complaints were computed and dropped at
+     * the store's door because nothing here named them. Never `{}` and never
+     * a null element (`article_revisions_quality_nonempty`), so "none" has one
+     * spelling. docs/plans/261009n-pdf-quality-warnings-not-stored.md.
+     */
+    quality: text("quality").array(),
 
     extractedHtml: text("extracted_html"),
     /** Post-sanitiser, post-id-stamping. docs/project/security.md — stage 3 owns this. */
@@ -1250,6 +1280,19 @@ export const articleRevisions = spideryarn.table(
     debate: jsonb("debate").$type<Debate>(),
 
     /**
+     * The article's claims, listed for Debate's Claims sub-mode to pick from —
+     * `DebateClaimList`, src/types.ts, written by the `debate-claims` step.
+     * docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2.
+     *
+     * The WHOLE artefact, like its neighbours; `sourceHash` covers its rendered
+     * body and cited head. **Public**, read-only, through `PUBLIC_PROJECTIONS`: model
+     * output about the article, which mode.md makes a visitor's by default.
+     * A column of its own rather than a field inside `debate`, because the
+     * two are made by different presses and go stale on different clocks.
+     */
+    debateClaims: jsonb("debate_claims").$type<DebateClaimList>(),
+
+    /**
      * Every work the piece cites — `Citations`, src/types.ts, written by the
      * `citations` step. docs/plans/260911g-citations-mode.md.
      *
@@ -1416,6 +1459,13 @@ export const articleRevisions = spideryarn.table(
     check(
       "article_revisions_published_day_or_year",
       sql`${t.publishedAt} is null or ${t.publishedYear} is null`,
+    ),
+    /* No complaints is NULL, never an empty list, and no complaint is NULL:
+       `metaColumns` writes null for none, and this refuses any other writer
+       that would give "none" a second spelling. Plan 261009n. */
+    check(
+      "article_revisions_quality_nonempty",
+      sql`${t.quality} is null or (cardinality(${t.quality}) > 0 and array_position(${t.quality}, null) is null)`,
     ),
     /**
      * The three of `NavLabelStatus`, and **this literal is hand-kept** — the
@@ -2236,6 +2286,154 @@ export const refereeClaims = spideryarn.table(
   ],
 );
 
+/* -------------------------------------------------- debate claim checks -- */
+
+/**
+ * **A reader's claim check in Debate's Claims** — the claims they ticked and
+ * the one they typed, searched on the open web in one call. `DebateClaimCheck`
+ * in src/types.ts is the shape; src/store/pg-debate-claim-checks.ts is the
+ * store; docs/plans/261008i-debate-claims-picked-by-the-reader.md § 3 is the
+ * design.
+ *
+ * ## Keyed `(article_id, id)`: a check is an event, not a slot
+ *
+ * Unlike `referee_claims`, a second check does not replace the first. Each
+ * press is one row, and the panel draws every finished check's rows under the
+ * claims they answered, so Dig further adds to a claim rather than overwriting
+ * it.
+ *
+ * ## One pending check per article, held by Postgres
+ *
+ * `debate_claim_checks_one_pending` is a **partial unique index** on
+ * `article_id` where `status = 'pending'`, and the route's reservation *is*
+ * the insert, before any allowance or model call. Two tabs pressing Check at
+ * once get one search and one 409 — a read-then-insert would let both through
+ * (GPT Sol's F2 on the plan).
+ *
+ * ## The attempt, and the lease
+ *
+ * `attempt_id` is written by the insert and presented by `finish`, which lands
+ * only on a `pending` row carrying it; the sweep clears it. `created_at` is
+ * the lease's clock: a `pending` row older than the call's deadline plus a
+ * margin is one whose process died, and the next GET marks it `error` so it
+ * cannot hold the index for ever (src/store/pg-debate-claim-checks.ts §
+ * `CHECK_ORPHAN_GRACE_MS`).
+ *
+ * ## `targets`, `results` and `counts` are JSONB, for `referee_claims`' reason
+ *
+ * One call's wholesale output, written together, read as a unit, never edited
+ * a row at a time, and never queried across: docs/project/sql.md's exception,
+ * argued the way `referee_claims.claims` argues it.
+ */
+export const debateClaimChecks = spideryarn.table(
+  "debate_claim_checks",
+  {
+    articleId: uuid("article_id")
+      .notNull()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    /** `mintId()`, unique within its article. */
+    id: text("id").notNull(),
+    /** `auth.users(id)`. FK in the migration by hand, like every other owner key. */
+    ownerId: uuid("owner_id").notNull(),
+    /** Written `pending` before the model is called, so a crash leaves a visible unfinished check. */
+    status: text("status").notNull(),
+    /** Which call may finish this row. Set while `pending`, null after. */
+    attemptId: text("attempt_id"),
+    /** `DebateClaimList.sourceHash` of the list it was pressed on. Checks are drawn under that list. */
+    listSourceHash: text("list_source_hash").notNull(),
+    /** `CHECK_PROMPT_VERSION` in src/debate.ts when it was asked. */
+    promptVersion: text("prompt_version").notNull(),
+    /** Dig further on one claim: the prompt carried the addresses it already had. */
+    digFurther: boolean("dig_further").notNull().default(false),
+    /** What was searched for — built by the server from stored ids. */
+    targets: jsonb("targets").$type<DebateCheckTarget[]>().notNull(),
+    /** One per target once `done`; `[]` otherwise. */
+    results: jsonb("results").$type<DebateCheckResult[]>().notNull().default([]),
+    /** What the reading dropped and why. Null until `done`. */
+    counts: jsonb("counts").$type<DebateCheckCounts>(),
+    /** The provider's own search count — the spend alarm. Null until `done`. */
+    webSearches: integer("web_searches"),
+    model: text("model"),
+    /** The reader's sentence for a failed check. **Never logged** — referee_claims' reason. */
+    error: text("error"),
+    /** When it was pressed, and the lease's clock. */
+    createdAt: createdAt(),
+    /** When the answer landed, the call failed, or the sweep gave up on it. */
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.articleId, t.id] }),
+    check("debate_claim_checks_id_format", sql`${t.id} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`),
+    check("debate_claim_checks_status", sql`${t.status} in ('pending','done','error')`),
+    /* A pending row is the one with an attempt; nothing else has one. */
+    check(
+      "debate_claim_checks_attempt_while_pending",
+      sql`(${t.status} = 'pending') = (${t.attemptId} is not null)`,
+    ),
+    /* Results only on a finished answer, as `referee_claims_empty_unless_done`. */
+    check(
+      "debate_claim_checks_results_only_done",
+      sql`${t.status} = 'done' or jsonb_array_length(${t.results}) = 0`,
+    ),
+    uniqueIndex("debate_claim_checks_one_pending")
+      .on(t.articleId)
+      .where(sql`${t.status} = 'pending'`),
+  ],
+);
+
+/**
+ * **Hidden text's Opus check: the last finished answer, one per article** —
+ * docs/plans/261009a-save-hidden-text-opinions.md. Until 2026-10-09 the answer
+ * was thrown away on reload and a second press paid again; Greg asked for it
+ * kept (report spya-gqq38u, and docs/project/database.md § AI output we paid
+ * for is kept).
+ *
+ * `referee_claims`' shape with less in it: **no status, no attempt, no error**,
+ * because only a finished, validated answer is ever written, as one upsert. A
+ * failed or abandoned run leaves the last good answer where it was.
+ *
+ * **No source hash either.** Each judgment carries the inputs it was made from
+ * (`CheckedInputs`, src/scan-groups.ts) and the panel shows it only beside a
+ * row equal to them, so an answer about an older scan reads *not checked*
+ * rather than as current.
+ */
+export const refereeHiddenChecks = spideryarn.table(
+  "referee_hidden_checks",
+  {
+    /** The key, on its own: one check per article, and a new one replaces it. */
+    articleId: uuid("article_id")
+      .primaryKey()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    /** `auth.users(id)`. FK in the migration by hand, like every other owner key. */
+    ownerId: uuid("owner_id").notNull(),
+    /**
+     * The accepted judgments, validated by `validateJudgments`
+     * (src/referee-hidden-check.ts) before they get here. JSONB for the reason
+     * `referee_claims.claims` is: one call's output, written and replaced whole,
+     * never queried across. **The reasons are model text that may quote a
+     * manuscript's hidden words: never logged.**
+     */
+    judgments: jsonb("judgments").$type<HiddenJudgment[]>().notNull(),
+    /** `HiddenCheckResult.unanswered`. */
+    unanswered: integer("unanswered").notNull(),
+    /** `HiddenCheckResult.notSent`, counted in `unanswered` too. */
+    notSent: integer("not_sent").notNull(),
+    /** The model that answered, as the gateway reported it. */
+    model: text("model").notNull(),
+    /** When the referee pressed the button. */
+    createdAt: createdAt(),
+    /** When the answer arrived and was validated. Shown as the check's date. */
+    finishedAt: timestamp("finished_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    check(
+      "referee_hidden_checks_counts",
+      sql`${t.unanswered} >= 0 and ${t.notSent} >= 0 and ${t.notSent} <= ${t.unanswered}`,
+    ),
+    check("referee_hidden_checks_judgments_array", sql`jsonb_typeof(${t.judgments}) = 'array'`),
+  ],
+);
+
 /* ------------------------------------------------------------- comments -- */
 
 /**
@@ -2693,10 +2891,9 @@ export const jobs = spideryarn.table(
      * Dismiss used to delete the row. Since 2026-10-02 it stamps this instead
      * and every reader-facing lookup treats a stamped row as gone, so to the
      * reader it is gone exactly as before. The row stays because a failed import's
-     * *Report this* names the job by id and nothing else — no URL, filename or
-     * error, which may be private (Greg, Q-import-report-details) — and an id
-     * whose record Dismiss deleted traces nothing. `trimFinished` still
-     * retires it with the rest, so it is kept for as long as any finished job.
+     * *Report this* names the job by id, and an id whose record Dismiss
+     * deleted traces nothing. `trimFinished` still retires it with the rest;
+     * an import's ending outlives that in `import_records` below (2026-10-08).
      */
     dismissedAt: timestamp("dismissed_at", { withTimezone: true }),
 
@@ -2783,6 +2980,18 @@ export const jobs = spideryarn.table(
      * that would not otherwise have happened.
      */
     requeues: integer("requeues").notNull().default(0),
+
+    /**
+     * **The paid purchase this job has begun, and when** (`PaidPurchase`,
+     * `JobStore.beginPaidStep`). Usually the whole `oncePerJob` step; for
+     * Illustrated it is the plates inside the step, after its deliberate
+     * hand-back. Written before the purchase starts and never cleared: finished
+     * work is skipped before the marker is read, and unfinished paid work must
+     * not be bought again by a later window of the same job. Per job, so a
+     * reader's Retry — a new row — starts clean. Plans 261009l and 261009o.
+     */
+    paidStepBegun: text("paid_step_begun"),
+    paidStepBegunAt: timestamp("paid_step_begun_at", { withTimezone: true }),
 
     /**
      * **`urlKey(url)`** (src/ingest.ts), persisted so that `jobs_active_source`
@@ -3072,6 +3281,80 @@ export const jobs = spideryarn.table(
 );
 
 /**
+ * **One row for every import that ended, kept** — the record a developer reads
+ * to debug a production import after the fact. Greg, 2026-10-08
+ * (spya-f9c9pe): *"let's just make sure that we are making it possible for the
+ * dev agent to access, find, debug whatever it needs to solve problems from
+ * production after the fact."* Plan
+ * docs/plans/261008j-a-failed-import-report-carries-the-address-and-a-record-of-every-import.md.
+ *
+ * A `jobs` row holds all of this already, and does not last: `trimFinished`
+ * keeps fifty finished jobs per owner. Keeping the job row itself instead was
+ * the simpler option, and it is passed over because other code reads a job
+ * row as "something is still attached here" (the draft sweep, the
+ * never-published tidy), so keeping it would pin the leftovers of every failed
+ * import for ever. Nothing reads this table but a person.
+ *
+ * **Written by a trigger, `jobs_record_import`**, never by the application —
+ * four code paths move a job into a terminal status and only two pass through
+ * `noteEnded` (drizzle/20261008212426_import_records.sql). The trigger is a
+ * narrowly qualified security-definer so a missing runtime-role grant on this
+ * auxiliary table cannot stop the job's own ending; PUBLIC cannot execute the
+ * function. An import is a job whose steps include `fetch`, as `isImportJob`
+ * (src/job-state.ts) says. One row is the **first** terminal ending of one job
+ * id; Retry makes a new job and so a new row.
+ *
+ * **Never trimmed. Deleted with the article** — `deleteTerminalJobs`
+ * (src/store/pg-shelf.ts) takes the owner's rows for the slug with its jobs.
+ * One that never became an article stays until the account goes (the owner
+ * key cascades), which is what /privacy says.
+ */
+export const importRecords = spideryarn.table(
+  "import_records",
+  {
+    /** The job's id. No foreign key: the job row is trimmed and this outlives it. */
+    jobId: text("job_id").primaryKey(),
+    /** `auth.users(id)`, ON DELETE CASCADE — an erased account takes its records. FK in the migration. */
+    ownerId: uuid("owner_id").notNull(),
+    /**
+     * The article's address when it ran. Slugs are not renamed today; if that
+     * arrives, this is one more table it has to reach.
+     */
+    slug: text("slug").notNull(),
+    status: text("status").notNull(),
+    failureKind: text("failure_kind"),
+    /** The first step whose status was `error` — the column to filter on. */
+    failedStep: text("failed_step"),
+    /** That step's error sentence, else the job's own. */
+    error: text("error"),
+    url: text("url"),
+    uploadId: uuid("upload_id").references(() => uploads.id, { onDelete: "set null" }),
+    uploadFilename: text("upload_filename"),
+    /**
+     * With `owner_id`, FK into `ingest_events (id, owner_id)` as
+     * `jobs_ingest_event_fk`, ON DELETE SET NULL on this column only.
+     */
+    ingestEventId: uuid("ingest_event_id"),
+    /**
+     * Every step's name, status, error and times, as the job had them. JSON
+     * because it is the job's own shape, read whole by a person and never
+     * filtered on; the field anyone filters on is `failed_step`, above.
+     */
+    steps: jsonb("steps").$type<JobStep[]>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    /** When the trigger wrote this row. */
+    recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("import_records_status", sql`${t.status} in ('done','error','cancelled')`),
+    index("import_records_finished_idx").on(t.finishedAt.desc()),
+    index("import_records_owner_slug_idx").on(t.ownerId, t.slug),
+  ],
+);
+
+/**
  * One row, ever, and **it is a lock, not a record**. Every transition of a job
  * into `running` takes this row `FOR UPDATE NOWAIT` first
  * (src/store/pg-jobs.ts § `claim`), so claimants are decided one at a time.
@@ -3198,7 +3481,7 @@ export const revisionStepRuns = spideryarn.table(
          `tests/db-step-constraint.test.ts` compares the last `ADD CONSTRAINT`
          in the migrations against `STEP_ORDER` in both directions, which is
          what makes there not be a third drift. */
-      sql`${t.stepName} in ('fetch','metadata','extract','blocks','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','relations','sketch','illustrated','debate','citations','crossrefs','simple')`,
+      sql`${t.stepName} in ('fetch','metadata','extract','blocks','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','relations','sketch','illustrated','debate','debate-claims','citations','crossrefs','simple')`,
     ),
     check(
       "revision_step_runs_status",
@@ -4003,6 +4286,18 @@ export const chatThreads = spideryarn.table(
      * conversation to the top. Stored, not shown (plan 261003j).
      */
     renamedAt: timestamp("renamed_at", { withTimezone: true }),
+    /**
+     * **One line saying what this conversation covered**, written by a small
+     * model after each finished answer (src/chat-gist.ts, plan 261008e). Read
+     * by the model in the reader's *other* conversations, beside the title, so
+     * a new one can see what an earlier one already said. Never shown on
+     * screen and never the title: the reader's title and renames are untouched.
+     * Null until the first gist, and whenever the last attempt failed before
+     * any succeeded.
+     */
+    gist: text("gist"),
+    /** When `gist` was written. Store when it happened. */
+    gistAt: timestamp("gist_at", { withTimezone: true }),
 
     /**
      * **The passage this conversation was started from**, as three columns.
@@ -4141,7 +4436,7 @@ export const chatThreads = spideryarn.table(
        article's and the quote is not empty. */
     check(
       "chat_threads_origin_mode",
-      sql`${t.originMode} is null or ${t.originMode} in ('debate','summary','glossary','citations')`,
+      sql`${t.originMode} is null or ${t.originMode} in ('debate','summary','glossary','citations','ideas')`,
     ),
     /* No mode, no origin: the other four columns mean nothing without it. */
     check(
@@ -4156,15 +4451,24 @@ export const chatThreads = spideryarn.table(
       "chat_threads_origin_debate",
       sql`${t.originMode} is distinct from 'debate' or (${t.originItemId} is null and ((${t.originBlockId} is not null and ${t.originQuote} is not null and ${t.originLens} is null) or (${t.originBlockId} is null and ${t.originQuote} is null and ${t.originLens} is not null)))`,
     ),
-    /* A glossary entry or a cited work is an id and a snapshot of its name,
-       with no block and no lens (plan 261006d, D2). Spelled null-safe: a row
-       with no mode, or another mode, passes without the last arm being read. */
+    /* A glossary entry, a cited work or an idea is an id and a snapshot of
+       its name, with no block and no lens (plan 261006d, D2; the idea is plan
+       261009k). Spelled null-safe: a row with no mode, or another mode, passes
+       without the last arm being read. */
     check(
       "chat_threads_origin_item",
-      sql`${t.originMode} is null or ${t.originMode} not in ('glossary','citations') or (${t.originItemId} is not null and ${t.originQuote} is not null and ${t.originBlockId} is null and ${t.originLens} is null)`,
+      sql`${t.originMode} is null or ${t.originMode} not in ('glossary','citations','ideas') or (${t.originItemId} is not null and ${t.originQuote} is not null and ${t.originBlockId} is null and ${t.originLens} is null)`,
     ),
-    /* Only Debate takes a lens. `summary`, which the list above reserves, has
-       no shape of its own yet, and must not get one by accident. */
+    /* `summary`, which the list above reserves, has no shape of its own yet,
+       so it carries none of the shape columns and cannot get one by accident
+       before it is built (plan 261009k, GPT Sol's F8). Null-safe, like the
+       item check: any other mode, or none, passes without the last arm. The
+       lens is the next check's. */
+    check(
+      "chat_threads_origin_summary",
+      sql`${t.originMode} is distinct from 'summary' or (${t.originItemId} is null and ${t.originBlockId} is null and ${t.originQuote} is null)`,
+    ),
+    /* Only Debate takes a lens. */
     check(
       "chat_threads_origin_lens_debate_only",
       sql`${t.originLens} is null or ${t.originMode} = 'debate'`,
@@ -4304,6 +4608,17 @@ export const chatMessages = spideryarn.table(
      * so, because an answer ending mid-sentence reads exactly like a bug.
      */
     stopped: boolean("stopped").notNull().default(false),
+    /**
+     * **The model's token ceiling cut this answer off.** `stopped`'s opposite:
+     * nobody asked for it to end here, so the panel says so as a failure and
+     * offers the retry (`ChatMessage.truncated`, src/types.ts).
+     *
+     * A column because the flag outlived only the tab that watched it arrive
+     * until 2026-10-09: the route sent it and `finish` dropped it, so a reload
+     * showed a cut-off answer as a whole one.
+     * docs/postmortems/261009h-a-flag-the-store-did-not-keep.md.
+     */
+    truncated: boolean("truncated").notNull().default(false),
     /**
      * **Passages a spoken answer pointed at instead of citing in words.**
      *
@@ -5811,6 +6126,59 @@ export const feedbackQuestionAnswers = spideryarn.table(
   ],
 );
 
+/**
+ * **An admin's "not now" on a question an agent asked** — one row per admin
+ * per question, written only by `POST /api/admin/feedback/deferrals`, read by
+ * the Earlier tab (which group the thread is in) and by
+ * `scripts/feedback-questions.ts --answers` (so agents do not chase it).
+ * docs/plans/261008i-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md, decision 3.
+ *
+ * > And maybe there should be a button to say, do you know what, I think for
+ * > now let's defer this as an alternative to replying.
+ * >
+ * > — Greg, 2026-10-08 (`spya-t6nmxt`)
+ *
+ * **A time, not a flag, and reversible**: `deferred_at` is when it was
+ * deferred, null once brought back; `updated_at` is when either last
+ * happened. Both are the database's `now()`, the same clock as a reply's
+ * `created_at`, because the thread's state is the later of the two (F2).
+ * Writes are conditional both ways (F5), so a retry changes neither time.
+ *
+ * `question_id` has no foreign key, for `feedback_question_answers`' reason.
+ * `environment` is the server's, as there (F6).
+ */
+export const feedbackQuestionDeferrals = spideryarn.table(
+  "feedback_question_deferrals",
+  {
+    /** `auth.users(id)`. FK in the migration by hand, as with every other `owner_id`. */
+    ownerId: uuid("owner_id").notNull(),
+    /** `q-k3m9qt`. */
+    questionId: text("question_id").notNull(),
+    /** When it was deferred; null once brought back. */
+    deferredAt: timestamp("deferred_at", { withTimezone: true }),
+    /** When it was last deferred or brought back. */
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    /** Which deployment wrote the row, asked of the server. */
+    environment: text("environment").notNull(),
+    /**
+     * When it was first deferred, which neither of the two times above keeps:
+     * both move on a later press. Store when it happened (docs/project/sql.md).
+     */
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.ownerId, t.questionId] }),
+    check(
+      "feedback_question_deferrals_question_id_format",
+      sql`${t.questionId} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX.replace(ID_PREFIX, "q-")}'`)}`,
+    ),
+    check(
+      "feedback_question_deferrals_environment",
+      sql`${t.environment} in ('production', 'preview', 'development', 'test')`,
+    ),
+  ],
+);
+
 /* ----------------------------------------------------------- checkpoints -- */
 
 /**
@@ -7111,7 +7479,7 @@ export const rateLimitEvents = spideryarn.table(
        rows remain; the per-bucket sweep no longer reaches them (plan 261004h). */
     check(
       "rate_limit_events_bucket",
-      sql`${t.bucket} in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate', 'dig-deeper', 'feedback-notice', 'help-chat')`,
+      sql`${t.bucket} in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate', 'dig-deeper', 'feedback-notice', 'help-chat', 'debate-check')`,
     ),
     /** Both counting queries, and the sweep, run over exactly this. */
     index("rate_limit_events_owner_bucket_started").on(t.ownerId, t.bucket, t.startedAt),

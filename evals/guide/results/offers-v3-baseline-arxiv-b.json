@@ -1,0 +1,259 @@
+{
+  "label": "v3-baseline-arxiv-b",
+  "runs": 10,
+  "pass": 10,
+  "total": 10,
+  "dollars": 0.161682,
+  "rows": [
+    {
+      "case": "browser-first",
+      "run": 0,
+      "ok": true,
+      "wants": [
+        "purpose"
+      ],
+      "offers": [
+        {
+          "field": "purpose",
+          "text": "Reading it for my journal club next week. I'm a historian of science, not an ML person.",
+          "basis": null,
+          "closeness": 1
+        },
+        {
+          "field": "profile",
+          "text": "A curious generalist who reads about the history of science. A historian of science, not an ML person.",
+          "basis": "A curious generalist who reads about the history of science.",
+          "closeness": 1
+        }
+      ],
+      "repeated": false,
+      "saysSaved": false,
+      "answer": "For a journal club, read the framing closely and skip the maths. The Abstract and Introduction set out the problem it answers [spya-r4309p], and \"Why Self-Attention\" gives the authors' own case for the design [spya-eev6uu]. The footnote on who proposed what is good history-of-science material [spya-jf2h4q]. Skim the architecture and training sections, and treat the results tables as evidence of the claims.\n\nGlossary will cover terms like \"attention\" and \"BLEU\" as you meet them.\n\n[cmd:mode:mode%3Aglossary]\n\nYou can save your reason and background with the buttons under this answer.\n\nWhat would you like the club to take away: the technical idea, or how the paper's claims were made?"
+    },
+    {
+      "case": "browser-first",
+      "run": 1,
+      "ok": true,
+      "wants": [
+        "purpose"
+      ],
+      "offers": [
+        {
+          "field": "purpose",
+          "text": "Reading for my journal club next week.",
+          "basis": null,
+          "closeness": 1
+        },
+        {
+          "field": "profile",
+          "text": "A curious generalist who reads about the history of science. A historian of science, not an ML person.",
+          "basis": "A curious generalist who reads about the history of science.",
+          "closeness": 1
+        }
+      ],
+      "repeated": false,
+      "saysSaved": false,
+      "answer": "For a historian, the most useful parts are the ones that say what problem the authors thought they were solving. The introduction sets out the problem: recurrent models process words one at a time, which makes them slow to train [spya-ev2yj8]. It then states the proposal [spya-q59ey3]. The first footnote records who proposed and built what, which is good material for a journal club [spya-jf2h4q].\n\nYou can skim the Section 3 equations and the training details. Section 4 is worth a slower read, because it is where they argue for their design [spya-d92nsg].\n\nThe Glossary should help with the jargon.\n\n[cmd:mode:mode%3Aglossary]\n\nWhich angle will your club care about most: how the idea arose, or why it caught on?I've put two save buttons under this answer. One keeps your reason for reading and the other keeps the note about you. Press them if you want them saved.\n\nFor your club, start with the introduction. It sets out the problem the authors saw: recurrent models handle words one at a time, which makes them slow to train [spya-ev2yj8]. It then states their proposal [spya-q59ey3].\n\nThe first footnote records who proposed and built what, which is useful for a history-minded discussion [spya-jf2h4q].\n\nSection 4 is where they argue for their design, so read it slowly [spya-d92nsg]. You can skim the equations and the training details. The Glossary will help with the jargon.\n\n[cmd:mode:mode%3Aglossary]\n\nWhich angle will your club care about more: how the idea arose, or why it caught on?"
+    },
+    {
+      "case": "browser-first",
+      "run": 2,
+      "ok": true,
+      "wants": [
+        "purpose"
+      ],
+      "offers": [
+        {
+          "field": "purpose",
+          "text": "Reading for my journal club next week. I'm a historian of science, not an ML person.",
+          "basis": null,
+          "closeness": 1
+        },
+        {
+          "field": "profile",
+          "text": "A curious generalist who reads about the history of science. A historian of science, not an ML person.",
+          "basis": "A curious generalist who reads about the history of science.",
+          "closeness": 1
+        }
+      ],
+      "repeated": false,
+      "saysSaved": false,
+      "answer": "Since you're after the history, start with the contribution note under the author list. It says who proposed what, and that \"Listing order is random\" [spya-jf2h4q]. Then read the Introduction [spya-ev2yj8], which sets out the problem the authors thought they were solving: recurrent models process a sequence one step at a time, which limits training speed.\n\nSection 4, \"Why Self-Attention\", is where they argue for their design [spya-eev6uu]. You can skim most of Section 3 and all of Section 5, which are equations and training settings.\n\nThe Glossary will cover terms like \"attention\" and \"BLEU\" as you meet them.\n\n[cmd:mode:mode%3Aglossary]\n\nWhat will your journal club want to discuss: how the idea arose, or why it mattered?For your journal club, begin with the contribution note under the author list. It records who proposed what, and says \"Listing order is random\" [spya-jf2h4q]. Then read the Introduction [spya-ev2yj8], which gives the problem the authors thought they were solving: recurrent models read a sequence one step at a time, which slows training.\n\nSection 4, \"Why Self-Attention\", is where they argue for their design [spya-eev6uu]. You can skim Section 3 and Section 5, which are mostly equations and training settings.\n\nThe Glossary will explain terms like \"attention\" and \"BLEU\" as you meet them.\n\n[cmd:mode:mode%3Aglossary]\n\nYou can save your reason and background with the buttons under this answer.\n\nWill your journal club care more about how the idea arose, or about why it mattered?"
+    },
+    {
+      "case": "browser-first",
+      "run": 3,
+      "ok": true,
+      "wants": [
+        "purpose"
+      ],
+      "offers": [
+        {
+          "field": "purpose",
+          "text": "Reading it for my journal club next week. I'm a historian of science, not an ML person.",
+          "basis": null,
+          "closeness": 1
+        },
+        {
+          "field": "profile",
+          "text": "A curious generalist who reads about the history of science. A historian of science, not an ML person.",
+          "basis": "A curious generalist who reads about the history of science.",
+          "closeness": 1
+        }
+      ],
+      "repeated": false,
+      "saysSaved": false,
+      "answer": "For a journal club, you can skip the maths and read for the argument and the context. You can save your reason and your background with the buttons under this answer.\n\nRead the Introduction closely. It sets out the problem being solved and what the authors were reacting against [spya-ev2yj8]. The claim to novelty is in the Background section [spya-vr7tsj]. The footnote on who did what is also worth a look for a historian [spya-jf2h4q]. In Section 4, read the three reasons they give for choosing self-attention [spya-eev6uu]. Skim Sections 3 and 5.\n\nThe Glossary will help with terms like \"attention\" and \"BLEU\".\n\n[cmd:mode:mode%3Aglossary]\n\nWhat would you like your club to take away from it?"
+    },
+    {
+      "case": "browser-first",
+      "run": 4,
+      "ok": true,
+      "wants": [
+        "purpose"
+      ],
+      "offers": [
+        {
+          "field": "purpose",
+          "text": "Reading this for my journal club next week.",
+          "basis": null,
+          "closeness": 1
+        },
+        {
+          "field": "profile",
+          "text": "A curious generalist who reads about the history of science. A historian of science, not an ML person.",
+          "basis": "A curious generalist who reads about the history of science.",
+          "closeness": 1
+        }
+      ],
+      "repeated": false,
+      "saysSaved": false,
+      "answer": "Since this is for a journal club and you aren't coming from ML, read the framing closely and skim the maths.\n\nStart with the introduction, which says what problem the authors think they are solving [spya-ev2yj8]. Then the \"Why Self-Attention\" section, which gives their case for the design [spya-eev6uu]. The author-contribution footnote is also worth a look, since it shows who credited whom for which idea [spya-jf2h4q]. You can skim most of Section 3.\n\nThe Glossary will cover terms like \"recurrence\" and \"BLEU\" as you meet them.\n\n[cmd:mode:mode%3Aglossary]\n\nWhat would you most like your group to discuss: how the idea arose, or why it mattered?For a journal club, and coming from history of science rather than ML, I'd read the framing closely and skim the maths.\n\nStart with the introduction, which sets out the problem the authors think they are solving [spya-ev2yj8]. Then read \"Why Self-Attention\", which makes their case for the design [spya-eev6uu]. The footnote on who contributed what is also worth a look, because it shows who got credit for which idea [spya-jf2h4q]. Most of Section 3 you can skim.\n\nThe Glossary will define terms like \"recurrence\" and \"BLEU\" as you meet them.\n\n[cmd:mode:mode%3Aglossary]\n\nYou can save your reason and your background with the buttons under this answer.\n\nWhat would you most like your group to discuss: how the idea arose, or why it mattered?"
+    },
+    {
+      "case": "browser-first",
+      "run": 5,
+      "ok": true,
+      "wants": [
+        "purpose"
+      ],
+      "offers": [
+        {
+          "field": "purpose",
+          "text": "Reading for my journal club next week. I'm a historian of science, not an ML person.",
+          "basis": null,
+          "closeness": 1
+        },
+        {
+          "field": "profile",
+          "text": "A curious generalist who reads about the history of science. A historian of science, not an ML person.",
+          "basis": "A curious generalist who reads about the history of science.",
+          "closeness": 1
+        }
+      ],
+      "repeated": false,
+      "saysSaved": false,
+      "answer": "I'd read the abstract [spya-r4309p] and the introduction [spya-ev2yj8] closely. They explain what the authors thought was wrong with the existing approach, and that is the story you'll want for a club discussion.\n\nSkim the equations in Section 3. \"Why Self-Attention\" [spya-eev6uu] is the authors' own case for the design. The contribution note on page one [spya-jf2h4q] suits a historian: it says who proposed what.\n\nThe Glossary will cover terms like \"recurrence\" and \"BLEU\".\n\n[cmd:mode:mode%3Aglossary]\n\nIs your club more interested in how the idea arose, or in what it did to the field?For a journal club, I'd start with the abstract [spya-r4309p] and the introduction [spya-ev2yj8]. Together they set out what the authors thought was wrong with the existing approach, and that is the part you can discuss as history.\n\nSkim the equations in Section 3. \"Why Self-Attention\" [spya-eev6uu] is the authors' own case for the design. The contribution note on page one [spya-jf2h4q] is worth a look too, because it records who proposed what.\n\nThe Glossary will cover terms like \"recurrence\" and \"BLEU\".\n\n[cmd:mode:mode%3Aglossary]\n\nYou can save your reason and your background with the buttons under this answer.\n\nIs your club more interested in how the idea arose, or in what it did to the field afterwards?"
+    },
+    {
+      "case": "browser-first",
+      "run": 6,
+      "ok": true,
+      "wants": [
+        "purpose"
+      ],
+      "offers": [
+        {
+          "field": "purpose",
+          "text": "Reading this for my journal club next week.",
+          "basis": null,
+          "closeness": 1
+        },
+        {
+          "field": "profile",
+          "text": "A curious generalist who reads about the history of science. A historian of science, not an ML person.",
+          "basis": "A curious generalist who reads about the history of science.",
+          "closeness": 1
+        }
+      ],
+      "repeated": false,
+      "saysSaved": false,
+      "answer": "I've offered to save your reason below. For a historian's read, start with the introduction. It says what the authors are pushing against: recurrent models that must process words one at a time [spya-ev2yj8]. Then read the footnote on who did what, which is a small record of how the work was divided [spya-jf2h4q]. The conclusion shows what they planned next [spya-gq4agh].\n\nYou can skim Sections 3 and 5, the equations and training details. The Glossary will cover terms like \"attention\" and \"BLEU\" without a detour.\n\n[cmd:mode:mode%3Aglossary]\n\nWhat would you like to bring to the club: how the idea arose, or why it mattered?For your journal club, start with the introduction. It sets out what the authors are pushing against: older models that had to process a sentence one word at a time [spya-ev2yj8]. Next, read the footnote on who did what. It's a small record of how the work was divided [spya-jf2h4q]. The conclusion shows what they planned to do next [spya-gq4agh].\n\nYou can skim the equations in Section 3 and the training details in Section 5. The Glossary covers terms like \"attention\" and \"BLEU\" as you meet them.\n\n[cmd:mode:mode%3Aglossary]\n\nYou can save your reason and your background with the buttons under this answer.\n\nWhich would you rather bring to the club: how the idea arose, or why it mattered?"
+    },
+    {
+      "case": "browser-first",
+      "run": 7,
+      "ok": true,
+      "wants": [
+        "purpose"
+      ],
+      "offers": [
+        {
+          "field": "purpose",
+          "text": "Reading this for my journal club next week.",
+          "basis": null,
+          "closeness": 1
+        },
+        {
+          "field": "profile",
+          "text": "A historian of science, not an ML person. Curious generalist who reads about the history of science.",
+          "basis": "A curious generalist who reads about the history of science.",
+          "closeness": 1
+        }
+      ],
+      "repeated": false,
+      "saysSaved": false,
+      "answer": "For a journal club you need the paper's claim and its context, not the maths. You can save your reason and background with the buttons under this answer.\n\nRead closely the abstract [spya-r4309p] and the introduction [spya-dew452 spya-ev2yj8]. They say what problem the authors saw (recurrent models must process words one at a time) and what they changed. Then read the author-contribution footnote [spya-jf2h4q]. It is a rare record of who did what, which suits a historian.\n\nSkim sections 3 to 5, the equations and the training details. The results tables are enough to see the claim [spya-p9uqvv].\n\nI'd open the Glossary for terms like \"attention\" and \"encoder\".\n\n[cmd:mode:mode%3Aglossary]\n\nWhat will your group most want to discuss: the technique, or its significance?"
+    },
+    {
+      "case": "browser-first",
+      "run": 8,
+      "ok": true,
+      "wants": [
+        "purpose"
+      ],
+      "offers": [
+        {
+          "field": "purpose",
+          "text": "Reading this for my journal club next week. I'm a historian of science, not an ML person.",
+          "basis": null,
+          "closeness": 1
+        },
+        {
+          "field": "profile",
+          "text": "A historian of science, not an ML person; a curious generalist who reads about the history of science.",
+          "basis": "A curious generalist who reads about the history of science.",
+          "closeness": 1
+        }
+      ],
+      "repeated": false,
+      "saysSaved": false,
+      "answer": "Since this is for a journal club, read it for the argument and the context, and skip the mechanics.\n\nRead closely: the Introduction, which says what problem the authors think they are solving [spya-ev2yj8]. Then the footnote on who did what, which is useful for a historian: \"Listing order is random\" [spya-jf2h4q]. Then Section 4, \"Why Self-Attention\", for their own case for the design [spya-eev6uu].\n\nSkim: Sections 3.2 to 3.5 are equations and architecture details. Sections 5 and 6 are training settings and result tables.\n\nThe Glossary will cover terms like \"recurrence\" and \"BLEU\" as you meet them.\n\n[cmd:mode:mode%3Aglossary]\n\nWhat will your journal club want to discuss: how the technique works, or why it mattered?For a journal club, read this paper for its argument and context, not its mechanics.\n\nRead closely:\n- The Introduction, which sets out the problem the authors think they are solving [spya-ev2yj8].\n- The author-contributions footnote, which is useful for a historian: \"Listing order is random\" [spya-jf2h4q].\n- Section 4, \"Why Self-Attention\", where they make their own case for the design [spya-eev6uu].\n\nSkim Sections 3.2 to 3.5, which are equations and architecture details. Skim Sections 5 and 6 too, which are training settings and result tables.\n\nThe Glossary can explain terms like \"recurrence\" and \"BLEU\" as you meet them.\n\n[cmd:mode:mode%3Aglossary]\n\nYou can save your reason and background with the buttons under this answer.\n\nWhat will your journal club want to discuss: how the technique works, or why it mattered?"
+    },
+    {
+      "case": "browser-first",
+      "run": 9,
+      "ok": true,
+      "wants": [
+        "purpose"
+      ],
+      "offers": [
+        {
+          "field": "purpose",
+          "text": "Reading this for my journal club next week. I'm a historian of science, not an ML person.",
+          "basis": null,
+          "closeness": 1
+        },
+        {
+          "field": "profile",
+          "text": "A curious generalist who reads about the history of science. A historian of science, not an ML person.",
+          "basis": "A curious generalist who reads about the history of science.",
+          "closeness": 1
+        }
+      ],
+      "repeated": false,
+      "saysSaved": false,
+      "answer": "For a journal club, the paper's claims and its framing matter more than the maths. You can save both of those notes with the buttons under this answer.\n\nRead the Abstract [spya-r4309p] and Introduction [spya-dew452] closely. They say what problem the authors saw and what they set themselves against. Then read the contribution note [spya-jf2h4q], which says who proposed and built what. It's good material for a historian. Skim Section 3, the equations, and most of the tables. Come back to \"Why Self-Attention\" [spya-eev6uu] for the authors' own justification.\n\nThe Glossary will help with terms like \"recurrence\" and \"attention\".\n\n[cmd:mode:mode%3Aglossary]\n\nWhat do you want to bring to the group: the technical idea, or the story around it?"
+    }
+  ]
+}

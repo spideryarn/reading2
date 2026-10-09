@@ -5,6 +5,10 @@
  * Hidden text's *Ask Opus about these* (src/web/useHiddenCheck.ts), held by
  * `RefereeBand` beside the scan. Harness and reasoning copied from
  * tests/referee-mirror-stream.test.tsx, which is the same argument for Mirror.
+ *
+ * And since 2026-10-09 (plan 261009a) **the kept answer comes back on load**:
+ * a `GET` the hook makes itself, which a press overtakes and a failed run does
+ * not wipe.
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -24,10 +28,14 @@ function Harness({ slug }: { slug: string }) {
 const enc = new TextEncoder();
 const frame = (event: string, data: unknown) => enc.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 
-const DONE = { judgments: [], unanswered: 2, notSent: 0, model: "m" };
+const DONE = { judgments: [], unanswered: 2, notSent: 0, model: "m", checkedAt: "2026-10-08T12:00:00.000Z" };
 
 let runBody: () => ReadableStream<Uint8Array>;
 let posts: { url: string; signal: AbortSignal | undefined }[] = [];
+/** What `GET` answers with: the kept check, or `null`. */
+let keptCheck: unknown = null;
+/** Held until released, so a test can make the read land late. */
+let keptGate: Promise<void> = Promise.resolve();
 
 async function settle(): Promise<void> {
   for (let i = 0; i < 12; i++) {
@@ -54,6 +62,8 @@ async function ask(): Promise<void> {
 beforeEach(async () => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   posts = [];
+  keptCheck = null;
+  keptGate = Promise.resolve();
   runBody = () =>
     new ReadableStream<Uint8Array>({
       start(c) {
@@ -67,6 +77,10 @@ beforeEach(async () => {
       if (init?.method === "POST" && url.startsWith("/api/referee/hidden-check/")) {
         posts.push({ url, signal: init.signal ?? undefined });
         return Promise.resolve({ ok: true, status: 200, body: runBody() } as unknown as Response);
+      }
+      if (!init?.method && url.startsWith("/api/referee/hidden-check/")) {
+        const check = keptCheck;
+        return keptGate.then(() => ({ ok: true, status: 200, json: async () => ({ check }) }) as unknown as Response);
       }
       throw new Error(`unexpected fetch: ${init?.method ?? "GET"} ${url}`);
     }),
@@ -141,6 +155,31 @@ describe("the terminal contract", () => {
     expect(latest?.result).toEqual(data);
   });
 
+  it("refuses a done frame without the date it was kept", async () => {
+    const { checkedAt: _checkedAt, ...undated } = DONE;
+    runBody = () => new ReadableStream<Uint8Array>({
+      start(c) {
+        c.enqueue(frame("done", undated));
+        c.close();
+      },
+    });
+    await ask();
+    expect(latest?.status).toBe("failed");
+  });
+
+  it("accepts a paid answer whose save failed, including its not-saved marker", async () => {
+    const notSaved = { ...DONE, saved: false as const };
+    runBody = () => new ReadableStream<Uint8Array>({
+      start(c) {
+        c.enqueue(frame("done", notSaved));
+        c.close();
+      },
+    });
+    await ask();
+    expect(latest?.status).toBe("done");
+    expect(latest?.result).toEqual(notSaved);
+  });
+
   it("refuses a done frame it cannot read", async () => {
     runBody = () =>
       new ReadableStream<Uint8Array>({
@@ -197,5 +236,54 @@ describe("a run belongs to its article", () => {
     expect(posts[0]?.signal?.aborted).toBe(true);
     expect(latest?.status).toBe("idle");
     expect(latest?.result).toBeNull();
+  });
+});
+
+describe("the kept answer (plan 261009a)", () => {
+  it("comes back on load, as a finished check, with no paid call", async () => {
+    keptCheck = DONE;
+    await render("a-kept-paper");
+    expect(latest?.status).toBe("done");
+    expect(latest?.result).toEqual(DONE);
+    expect(posts).toHaveLength(0);
+  });
+
+  it("is ignored when it cannot be read", async () => {
+    keptCheck = { judgments: "no", checkedAt: "2026-10-08T12:00:00.000Z" };
+    await render("a-garbled-paper");
+    expect(latest?.status).toBe("idle");
+    expect(latest?.result).toBeNull();
+  });
+
+  it("does not land over a run the referee started while it was arriving", async () => {
+    let release = () => {};
+    keptGate = new Promise((r) => {
+      release = r;
+    });
+    keptCheck = { ...DONE, model: "the-kept-one" };
+    await render("a-slow-paper");
+    runBody = () => new ReadableStream<Uint8Array>({ start() {} });
+    await ask();
+    release();
+    await settle();
+    expect(latest?.status).toBe("running");
+    expect(latest?.result).toBeNull();
+  });
+
+  it("stays on screen when a later run fails", async () => {
+    keptCheck = DONE;
+    await render("a-retried-paper");
+    await ask();
+    expect(latest?.status).toBe("failed");
+    expect(latest?.result).toEqual(DONE);
+  });
+
+  it("stays on screen while a later run is still arriving", async () => {
+    keptCheck = DONE;
+    await render("a-running-retry");
+    runBody = () => new ReadableStream<Uint8Array>({ start() {} });
+    await ask();
+    expect(latest?.status).toBe("running");
+    expect(latest?.result).toEqual(DONE);
   });
 });

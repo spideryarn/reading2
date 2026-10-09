@@ -313,8 +313,8 @@ end`;
  * most of what a projection is for.
  *
  * Read the absences. No `fetched_at`, no `note`, no `doi`, no `abstract`, and
- * none of the six PDF provenance columns. `articles.title_override` is not selected either, so there
- * is nothing here for a `titleFor()` to be called on.
+ * none of the seven PDF provenance columns. `articles.title_override` is not
+ * selected either, so there is nothing here for a `titleFor()` to be called on.
  *
  * **`final_url` is selected, since 2026-08-30, and does not reach the wire as
  * itself.** It was held back here with a note saying a visible "read the
@@ -424,7 +424,7 @@ const PUBLIC_PROJECTIONS = {
        docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
     simpleSummary: articleRevisions.simpleSummary,
     /* **The eleventh, 2026-09-29: the Debate** — withheld until then for the
-       cost of *running* a search (two metered web searches), which a visitor
+       cost of *running* its metered web-search call, which a visitor
        never pays, and because the boundary its rows must pass was not built.
        It is now: every row's address re-judged by `publicCitationUrl`, a
        refusal dropping the row and counting it, and the article's own address
@@ -432,6 +432,14 @@ const PUBLIC_PROJECTIONS = {
        `publicSourceUrl`, as the masthead's is. `publicDebate` in
        ../public/dto.ts. docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
     debate: articleRevisions.debate,
+    /* **Debate's claims list, from the day it was built** (2026-10-08):
+       generated output about the article, so a visitor sees the stored one
+       and only making it is the owner's (docs/project/mode.md § The
+       artefact). No profile, and the reader's checks of the listed claims
+       are a separate table this read never joins. `publicDebateClaimList`
+       in ../public/dto.ts keeps `{id, blockId, quote, statement}` per claim.
+       docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2. */
+    debateClaims: articleRevisions.debateClaims,
     /* **Cross-references, 2026-10-01** — Greg approved the defence edit
        (plan 261001b, SPIDERYARN-READING2-5Z). Not a mode but an annotation:
        links drawn in the prose. `loadArticle` below asks `isStale` of it with
@@ -1040,6 +1048,7 @@ export const pgPublicReader: PublicArticleReader = {
         simpleSummary: found.revision.simpleSummary,
         citations: found.revision.citations,
         debate: found.revision.debate,
+        debateClaims: found.revision.debateClaims,
         crossrefs,
         crossrefsFresh,
         sketch: found.revision.sketch,

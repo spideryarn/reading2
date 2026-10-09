@@ -1,5 +1,12 @@
 # Citations — every work the piece cites, with a link out
 
+**Since 2026-10-09 this is [Peer review](peer-review.md)'s Bibliography**, the first of its three
+sub-modes and the one it opens on; an old `?mode=citations` lands there. The mode, its address and
+its chip row are [peer-review.md](peer-review.md)'s; this page keeps the depth on the list itself.
+The stored names — the `citations` step, column and route, `CitationsPanel`, the `cite-` CSS — keep
+the word until the name is confirmed (plan
+[261009l § Stage 3](../plans/261009l-peer-review-mode-merges-citations-and-debate.md#stage-3-held-for-greg-the-stored-names)).
+
 A mode in the band between the spine and the prose. It answers *what does this piece lean on, and
 where do I find it*: the works the article cites — through a bibliography, footnotes, or a name in
 running text — each with a link. Asked for through the Feedback button on 2026-09-11
@@ -26,8 +33,9 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ The orders, and the bar](#the-orders-and-the-bar) — the five orders, the threshold, `?citeby=` / `?citebar=`
 - [§ Marked in the prose](#marked-in-the-prose-in-every-mode) — the marks on the article's own text, and the hover card on one
 - [§ Look it up on the web](#look-it-up-on-the-web) — finding a work that has no link (now a step of Dig deeper)
-- [§ Dig deeper](#dig-deeper-a-closer-look-at-one-work-on-demand) — the one press that reads a work and judges its influence
-- [§ Ask in chat](#ask-in-chat-a-conversation-about-one-work) — opening Chat anchored on one work
+- [§ Dig deeper](#dig-deeper-a-closer-look-at-one-work-on-demand) — the one press that read a work and judged its influence:
+  its button went on 2026-10-09; kept answers still show, the server half remains
+- [§ Ask in chat](#ask-in-chat-a-conversation-about-one-work) — opening Chat anchored on one work; the row's button, and the hover card's
 - [§ Already an article here](#already-an-article-here) — a cited work that is already on the shelf
 - [§ Chat can read it](#chat-can-read-it) — the `article_citations` tool
 - [§ Making it again](#making-it-again) — the Metadata redo
@@ -78,8 +86,9 @@ by itself.
 work's standing on the pages its web search returned, and kept a number (§ [Dig
 deeper](#dig-deeper-a-closer-look-at-one-work-on-demand), *It looks for the work's influence*). The words open a
 card, on hover, focus or tap, saying it is *an AI estimate from web evidence*, the site, the day,
-and the page's own words. The owner's card on *influence unknown* says Dig deeper looks for it; a
-visitor's does not, because a visitor has no Dig deeper and never sees what it found.
+and the page's own words. Since 2026-10-09 nothing on the client asks for a new one (plan
+[261009k](../plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)): a kept number still shows, and the card on *influence unknown* no longer says Dig
+deeper looks for it, for the owner or a visitor.
 
 **Every reader of a row's influence goes through one function**, `effectiveInfluence` in
 [`citation-effective-influence.ts`](../../src/citation-effective-influence.ts): the web number when
@@ -400,7 +409,7 @@ something* is the vague version of the question. The card closes that in words �
 paragraphs*.
 
 **Every work, not only those above the bar.** This departs from quotes, where the bar doubles as the
-density control, and follows the glossary. `?citebar=` is reachable only inside Citations mode while
+density control, and follows the glossary. `?citebar=` is reachable only inside Bibliography while
 the marks are visible from every mode, so barring them would change a paragraph's appearance from a
 control the reader cannot see.
 
@@ -425,28 +434,49 @@ like one of the article's own hyperlinks. `/design` has three specimens, includi
 
 **Pointing at one opens the work**, in the card the glossary and the links already share
 ([`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx)) — a fourth section, not a second card.
-It draws the title with its link, authors · year, the entry, and *cited in N paragraphs* — or *only in
-the references* for a bibliography-only work. The provenance
+It draws the title with its link, authors · year, the entry, and *cited in N paragraphs* with a
+jump to each (below) — or *only in the references* for a bibliography-only work. The provenance
 is the panel's own `sourceOf`, so a `search` row is drawn here as a search exactly as it is there:
 two surfaces disagreeing about whether an address is the work's own would teach a reader something
 false. Not in the card, each deliberately: the score bars (the card says meaning, the band says
 numbers), a kept *Dig deeper* answer (the row has the room), and a selected row in the mode (it
 needs `?cite=`).
 
-**The owner's card has *Dig deeper* in its foot**, since 2026-10-04. Greg, 2026-10-03 (report
-`spya-c2qmbg`):
+**From the card, back to every passage that cites the work**, since 2026-10-09. Greg, report
+`spya-tsd470`:
+
+> When it comes to citations, I often want to be able to jump back from the list of references to
+> the places where it's cited.
+
+The reference entry was already marked, so it already opened this card. Now *cited in N paragraphs*
+is followed by a numbered jump to each of them, 1 to N in document order (`citedAt`). Every marker
+for a recognised note counts; direct citations keep at most three mentions (`MAX_MENTIONS`), so
+once a work reaches that cap the stored list may omit later directly citing paragraphs, and the
+card qualifies its known count as *cited in at least N paragraphs*. Each number is a
+[`BlockRef`](../../src/web/BlockRef.tsx),
+so its own card shows the section and the paragraph first. A press closes the card and jumps
+aimed at `citePassageKey`: the citing words flash where the paragraph has them, the paragraph where
+it does not, and Back returns to the entry. The paragraph the card was opened from is drawn
+greyed and unlinked; a work cited only there gets no numbers. Past 20 it says *and N more*
+(`CITED_AT_JUMPS_SHOWN`). A line in Marginalia beside each reference entry was the other way
+offered, passed over for the margin's density —
+[261009e](../plans/261009e-citation-card-jumps-back-to-every-passage-that-cites-the-work.md).
+
+**The owner's card has *Ask in chat* in its foot.** Greg, 2026-10-03 (report `spya-c2qmbg`):
 
 > I clicked search Scholar and it took me to another page. It's just a Google Scholar search. That
 > wasn't that interesting. What I was hoping is that it would have a button for dig deeper in the
 > tooltip.
 
-One press starts the row's own *Dig deeper*
-(§ [Dig deeper](#dig-deeper-a-closer-look-at-one-work-on-demand)), closes the card, and opens
-Citations with that row scrolled into view, where the answer streams. If the prioritised order's bar
-was hiding the row, the bar is lowered to it, visibly, as *Open glossary* does for a term. The button
-is disabled while any dig runs. *search Scholar* stays beside it on a row with no link. The glossary
-card's *Dig deeper* is the same shape
-([261004b](../plans/261004b-citation-hover-card-offers-dig-deeper.md)).
+From 2026-10-04 that button was *Dig deeper*: a press started the row's own dig, closed the card,
+and opened the Citations mode with that row scrolled into view
+([261004b](../plans/261004b-citation-hover-card-offers-dig-deeper.md)). **Since 2026-10-09 it is
+*Ask in chat*** (plan [261009k](../plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)): the Bibliography row's own sender (`askCitedWorkInChat`), so
+the chat records the same origin as one started from the row, and the card closes. It is the
+card's own `onAskCitedWork` prop, owner only. *search Scholar* stays beside it on a row with no
+link. The glossary card's is the same shape. The one-shot that opened Citations on a row
+(`citeFocus`, `CitationsPanel` § `Props.focus`, which lowers the bar if it hides the row) stays in
+`Reader` for the way back from a chat to its row (that plan's stage 2).
 
 **A finger gets the card on the first tap.** `mark.cite` is in `tapSelector` and in
 `NOT_A_BLOCK_SELECTION` — both, and the pair is the point: the second alone would take the tap away
@@ -573,6 +603,16 @@ which brings its own job id and allowance and judges the page more strictly than
 <a id="investigate-a-closer-look-at-one-work-on-demand"></a>
 
 ## Dig deeper: a closer look at one work, on demand
+
+> **The button is gone, since 2026-10-09** (plan [261009k](../plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)):
+> Greg, *"we don't need the dig deeper button"*. *Ask in chat* stands where it was
+> (§ [Ask in chat](#ask-in-chat-a-conversation-about-one-work)), and *Dig deeper again* went from a
+> kept answer's foot. **A kept answer is still drawn on its row**, folded, read-only
+> (`KeptInvestigation` in [`CitationInvestigation.tsx`](../../src/web/CitationInvestigation.tsx)),
+> and so are a kept link and a kept *from the web* influence. Nothing new fills those fields: what
+> is lost, said plainly, is in that plan's D1. The route, `src/citation-investigate.ts`,
+> `useCitations`' `investigate` and the allowance are untouched until Greg decides (the plan's
+> D5). The rest of this section is how it worked and how kept answers were made.
 
 Asked for through the Feedback button on 2026-09-30 (SPIDERYARN-READING2-5Q), following 5G:
 
@@ -778,13 +818,14 @@ picked, `citation-influence` when a page of the search is about the work, and
 
 ## Ask in chat: a conversation about one work
 
-Since 2026-10-06 every owner row has **Ask in chat** beside Dig deeper, which is unchanged. It
+Since 2026-10-06 every owner row has **Ask in chat**; it sat beside Dig deeper until 2026-10-09,
+and stands in its place since (plan [261009k](../plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)). It
 opens a fresh conversation in Chat with the work quoted (its title, then the authors and year where
 the article gives them) and a question after it, and sends that as the first question: the press
 is the Send since 2026-10-06 ([261006j](../plans/261006j-ask-in-chat-sends-the-question.md)). Once a chat exists,
 a line under the row's controls shows how many questions were asked and how the latest answer
-begins, and pressing it opens that conversation beside Citations. Chat's list marks the
-conversation with Citations' icon. A visitor has neither the button nor the line.
+begins, and pressing it opens that conversation beside Peer review's Bibliography. Chat's list
+marks the conversation with Peer review's icon. A visitor has neither the button nor the line.
 
 It is the Glossary's button with a different origin, `{ mode: "citations", itemId, quote }`: the
 work's id, which a re-run inherits by its key, and a snapshot of its title. Matched by the mode and
@@ -792,7 +833,7 @@ the id alone, so a reworded title keeps the line. Everything else, and Greg's wo
 [glossary.md § Asking about an entry in chat](glossary.md#asking-about-an-entry-in-chat); the
 machinery under both is
 [debate.md § Check a claim in chat](debate.md#check-a-claim-in-chat). The hover card in the prose
-has no *Ask in chat*.
+has it too since 2026-10-09, in Dig deeper's old place (§ [Marked in the prose](#marked-in-the-prose-in-every-mode)).
 
 ## Already an article here
 
@@ -848,8 +889,8 @@ Chat — typed, a passage question, and Live — can read the stored list throug
 `article_citations` tool, to answer a question about a work the piece leans on or to aim a web search
 at the right paper. It reads the list and never makes one: no list is an ordinary answer, a stale one
 shows no rows, and a capped one is counted as *the stored list*, never the article's total. The
-experimental switch governs this mode's screen, not the reader's own derived data, so the tool is not
-behind it. [chat-tools.md](chat-tools.md) has the tool. Each row's influence is the effective one
+experimental switch never governed the reader's own derived data (and since 2026-10-09 it no longer
+governs this mode's screen either), so the tool is not behind it. [chat-tools.md](chat-tools.md) has the tool. Each row's influence is the effective one
 (§ [A row](#a-row)): where *Dig deeper* found one on the web, the row gives that number and says it
 is *an AI estimate from the web, from a page on* that host, and our words outside the fence say
 what that means. The page's words and its address are not in the row. `loadCitations` attaches the
@@ -860,9 +901,9 @@ work inside the fence, after filtering and caps; our words also say what the cou
 
 ## Making it again
 
-From the Metadata page: *AI processing* has a Citations row, since 2026-09-29, and it is the
-usual place to redo a list the article still matches — the panel says nothing when its list was made by an
-older prompt
+From the Metadata page: *AI processing* has a Bibliography row (Citations until 2026-10-09), and it
+is the usual place to redo a list the article still matches — the panel says nothing when its list
+was made by an older prompt
 ([260929c](../plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md)). When the
 article has changed under the list, the banner that says so has *Find them again*, which is held
 from the press until the new list has been read
@@ -871,14 +912,15 @@ After a refused start, the panel's foot also offers *Find them again* on a curre
 the same way.
 A press is one
 model call and no web search (that is *Look it up*, per row); the list is replaced only if the run
-succeeds, and a work found again keeps its id, so a link *Look it up* stored stays with it. The row is
-drawn with the experimental switch off too, as Timeline's and Debate's are. Why it is safe to offer
-is in [`src/rerun-steps.ts`](../../src/rerun-steps.ts).
+succeeds, and a work found again keeps its id, so a link *Look it up* stored stays with it. The
+Metadata row is drawn independently of the experimental switch; Peer review itself is outside it.
+Why it is safe to offer is in [`src/rerun-steps.ts`](../../src/rerun-steps.ts).
 
 ## Who sees it
 
-Making the list, and *Look it up*, are owner-only, and behind the
-[experimental switch](experimental-features.md). **Since 2026-09-29 a visitor to a public article
+Making the list, and *Look it up*, are owner-only. It was behind the
+[experimental switch](experimental-features.md) until 2026-10-09, when it came out as Peer review's
+Bibliography; the list is now made on every import (plan 261009l § On import). **Since 2026-09-29 a visitor to a public article
 sees a stored list** in the band, from the page's own payload: each work's address re-judged by
 `publicCitationUrl` (a refused one takes the link off the row, not the row), its dedupe `key` left
 behind, and the owner's *Look it up* results kept private (SPIDERYARN-READING2-56,
@@ -890,7 +932,7 @@ Selecting a work to mark every passage that cites it (`?cite=`), and with it an 
 button on the hover card that starts nothing; marking every occurrence of a
 mention in its block rather than only an unambiguous one; joining the citation section to the *link*
 and *note* cards, so a work cited by a hyperlink or a footnote marker gets it too; *Find more* past
-the cap; a citation count for a row Crossref does not hold (DataCite's `citationCount`, which would cover arXiv preprints and is thinly populated, and OpenAlex's `cited_by_count`, which is up to 80 more requests a list), a *most cited* order, feeding the count to *Dig deeper*'s influence call, and refreshing a count on read ([261005i](../plans/261005i-citations-show-crossref-citation-count-with-source-and-date-read.md) § Passed over); searching every unlinked row at once; marks in the prose for a visitor; *Dig deeper* on every row at once; folding Citations into Debate as a sub-mode, and placing a cited work in the debate's threads (a proposal awaiting Greg, [261004b § Part 2](../plans/261004b-citation-hover-card-offers-dig-deeper.md)); an HTML page as the paper's full text; quoting the paper inside the streamed answer; *In your library* for a visitor, or used as the text *Look it up* reads; a stranger's public upload matched by our guess at its DOI; an author–year PDF bibliography's entries; a PDF list's entry for a visitor; OpenAlex (needs an account). Each is in one of the plans' lists of what is deliberately not built, with the reason.
+the cap; a citation count for a row Crossref does not hold (DataCite's `citationCount`, which would cover arXiv preprints and is thinly populated, and OpenAlex's `cited_by_count`, which is up to 80 more requests a list), a *most cited* order, feeding the count to *Dig deeper*'s influence call, and refreshing a count on read ([261005i](../plans/261005i-citations-show-crossref-citation-count-with-source-and-date-read.md) § Passed over); searching every unlinked row at once; marks in the prose for a visitor; *Dig deeper* on every row at once; placing a cited work in the debate's threads (option C2 of [261004b § Part 2](../plans/261004b-citation-hover-card-offers-dig-deeper.md); folding Citations into Debate as a sub-mode was built on 2026-10-09 as [Peer review](peer-review.md)); an HTML page as the paper's full text; quoting the paper inside the streamed answer; *In your library* for a visitor, or used as the text *Look it up* reads; a stranger's public upload matched by our guess at its DOI; an author–year PDF bibliography's entries; a PDF list's entry for a visitor; OpenAlex (needs an account). Each is in one of the plans' lists of what is deliberately not built, with the reason.
 
 ## The code
 
@@ -899,13 +941,13 @@ the cap; a citation count for a row Crossref does not hold (DataCite's `citation
 [`useCitations.ts`](../../src/web/useCitations.ts) (`useCitationsRead` is the half `OwnedReader`
 mounts) ·
 [`CitationsPanel.tsx`](../../src/web/CitationsPanel.tsx) ·
-[`CitationInvestigation.tsx`](../../src/web/CitationInvestigation.tsx) (Dig deeper's row) ·
+[`CitationInvestigation.tsx`](../../src/web/CitationInvestigation.tsx) (a kept Dig deeper answer on its row) ·
 [`citation-influence.ts`](../../src/citation-influence.ts) (Dig deeper's influence call and what
 code keeps of it) ·
 [`citation-effective-influence.ts`](../../src/citation-effective-influence.ts) (the one read path) ·
 [`cited-in-spideryarn.ts`](../../src/cited-in-spideryarn.ts) and
 [`pg-cited-in-spideryarn.ts`](../../src/store/pg-cited-in-spideryarn.ts) (already an article here) ·
-[`CitationsMode.tsx`](../../src/web/modes/citations/CitationsMode.tsx) ·
+[`PeerReviewMode.tsx`](../../src/web/modes/peer-review/PeerReviewMode.tsx) (the band, since 2026-10-09; it was `CitationsMode.tsx`) ·
 [`citations.css`](../../src/web/styles/citations.css) ·
 [`annotate.ts`](../../src/web/annotate.ts) § `citeMarks` (the prose marks) ·
 [`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx) § `CiteCard` (the card).

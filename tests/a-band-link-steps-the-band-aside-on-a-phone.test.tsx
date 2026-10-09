@@ -303,6 +303,11 @@ let host: HTMLDivElement;
 let root: Root;
 
 enableHistorySync();
+/* And ours outside it, as main.tsx installs them: without it no jump is
+   stamped, so there is no section chip to press (router.ts §
+   `watchHistoryWrites`). */
+const { watchHistoryWrites } = await import("../src/web/router.js");
+watchHistoryWrites();
 
 /** A phone, where the band covers the article; and a desktop, where it sits beside it. */
 const PHONE = 390;
@@ -457,6 +462,41 @@ describe("a passage link in a band, on a phone", () => {
     expect(document.activeElement, "focus did not come back to the link").toBe(link);
   });
 
+  /**
+   * **The section chip, pressed while the band covers the prose** — Greg's
+   * spya-q3dfmw and the edge its plan (261008g) names. The chip moves only the
+   * position now, so the mode stays; and the origin is always in the prose, so
+   * with a band over it the landing would be invisible. The band steps aside
+   * as a link in it would, and the pill takes the chip's place and its focus
+   * (GPT Sol, plan review F3).
+   */
+  it("the section chip steps a covering band aside and keeps the mode", async () => {
+    await open(PHONE, "?mode=summary");
+    await pressBandLink();
+    await act(async () => pill()?.click());
+    await settle();
+    expect(bandShowing(), "the band came back over the article").toBe(true);
+    const chip = host.querySelector<HTMLButtonElement>(".return-chip:not(.band-back-chip) .return-chip-go");
+    expect(chip, "after the jump, with the band back, the section chip is the way back").not.toBeNull();
+
+    await act(async () => chip?.focus());
+    await act(async () => chip?.click());
+    await until(() => param("at") !== BAND_TARGET, "the chip never moved the position");
+
+    expect(param("mode"), "the chip changed the mode").toBe("summary");
+    expect(reader().classList.contains("band-away"), "the landing is under the band").toBe(true);
+    expect(pill()?.textContent).toContain(`back to ${MODE_LABEL.summary}`);
+    expect(document.activeElement, "focus was left on a chip that is no longer drawn").toBe(pill());
+
+    await act(async () => pill()?.click());
+    await settle();
+    expect(bandShowing()).toBe(true);
+    expect(
+      band()?.contains(document.activeElement),
+      "focus did not go into the band when it came back",
+    ).toBe(true);
+  });
+
   it("restores focus when a resize makes the stepped-aside band visible again", async () => {
     /* `bandAway` is retained across width changes, but `band-away` is only
        painted while the band covers the prose. Growing the window therefore
@@ -589,10 +629,13 @@ describe("Skim, which jumps on opening", () => {
 });
 
 
-/* Plan 261004b: a card can start another dig while its own mode is already
-   open but stepped aside. Changing the URL to the same mode must reveal it. */
-describe("the citation card brings its band back", () => {
-  it.each([PHONE, 600])("reveals a stepped-aside Citations band at %ipx", async (width) => {
+/* Plan 261004b: a card could start another dig while its own mode was already
+   open but stepped aside, and changing the URL to the same mode had to reveal
+   it. Since plan 261009k the card's button is *Ask in chat*, which goes to
+   Chat: what is pinned now is that it starts no dig, and that the band it
+   lands in is not left hidden. */
+describe("the citation card's Ask in chat lands in a band that is drawn", () => {
+  it.each([PHONE, 600])("goes to Chat from a stepped-aside Citations band at %ipx", async (width) => {
     const id = "spya-c2qmbg";
     const citation = {
       id, key: "work:plain", title: "The plain point", why: "Where the point comes from.",
@@ -614,7 +657,7 @@ describe("the citation card brings its band back", () => {
       }
       return Promise.resolve(reply(url, init?.method ?? "GET"));
     });
-    await open(width, "?mode=citations");
+    await open(width, "?mode=peer-review");
     expect(reader().classList.contains("band-covers")).toBe(true);
     const link = host.querySelector<HTMLAnchorElement>(`.cite-item a.block-ref[data-block-link="${FIRST}"]`);
     expect(link, "the citation row must provide its passage jump").not.toBeNull();
@@ -628,17 +671,14 @@ describe("the citation card brings its band back", () => {
       Object.defineProperty(event, "pointerType", { value: "mouse" });
       mark?.dispatchEvent(event);
     });
-    await until(() => document.querySelector(".prose-card-cite-dig") !== null, "the citation card did not open");
-    const pushed = vi.spyOn(history, "pushState");
-    await act(async () => document.querySelector<HTMLButtonElement>(".prose-card-cite-dig")?.click());
+    await until(() => document.querySelector(".prose-card-cite-ask") !== null, "the citation card did not open");
+    expect(document.querySelector(".prose-card")?.textContent, "Dig deeper is gone (plan 261009k)").not.toMatch(/Dig deeper/);
+    await act(async () => document.querySelector<HTMLButtonElement>(".prose-card-cite-ask")?.click());
     await settle();
-    /* `nuqs` does not elide a same-value push: writing the mode already open
-       added a Back step that changed nothing (GPT Sol, plan review 261004g F2). */
-    expect(pushed, "bringing the band back is not a history step").not.toHaveBeenCalled();
-    expect(digs, "the card must start the same row verb").toBe(1);
+    expect(digs, "Ask in chat starts no dig").toBe(0);
     expect(document.querySelector(".prose-card")).toBeNull();
-    expect(param("mode")).toBe("citations");
-    expect(reader().classList.contains("band-away"), "Dig deeper left the answer in a hidden band").toBe(false);
+    expect(param("mode")).toBe("chat");
+    expect(reader().classList.contains("band-away"), "the chat landed in a hidden band").toBe(false);
   });
 });
 

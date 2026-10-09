@@ -314,7 +314,7 @@ will eventually have to decide whether they are a system or an accident:
 ## Under this doc
 
 - **[typography.md](typography.md)** — one sans for the article and the chrome alike, the weight
-  axis, the vertical rhythm every gap in the article column is a multiple of, and the two kinds of
+  axis, the six text roles (`--type-*`) a band's recurring lines take their size from, the vertical rhythm every gap in the article column is a multiple of, and the two kinds of
   content that cannot reflow: a wide code block, and a figure drawn in black ink for a white page.
 - **[fonts.md](fonts.md)** — a face for each voice: the author's in a serif, the model's in IBM
   Plex Mono, the reader's in Arial, the chrome in Geist; the rule for deciding whose words an element
@@ -353,7 +353,9 @@ will eventually have to decide whether they are a system or an accident:
   computed in the browser from *resolved* values. Look at it after changing anything in
   `tokens.css`. Its **Controls across modes** section draws one example of each control the modes
   share, with a checklist for whoever adds a mode — look there before drawing a new one
-  ([controls.md](controls.md#controls-that-do-the-same-job-look-the-same)). It catches what tests cannot: a token change where every component still renders,
+  ([controls.md](controls.md#controls-that-do-the-same-job-look-the-same)); its **Text roles**
+  section does the same for a line's size
+  ([typography.md](typography.md#text-roles-in-a-band)). It catches what tests cannot: a token change where every component still renders,
   nothing throws, and one variant nobody looked at is now unreadable. **Linked from `/admin` and
   shown only to the administrator** since 2026-09-05 — a courtesy rather than a gate, since the page
   is in every reader's bundle and the address answers 200 whoever asks

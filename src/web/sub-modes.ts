@@ -1,7 +1,8 @@
 /**
  * **The sub-modes, named once** — the chips inside a mode that change the whole
  * band: Learn's Recall | Tutorial | Explore | Quiz, Diagram's five pictures, Referee's five views,
- * Summary's Brief | Fuller | Thread, Structure's Fisheye | Expanded, Debate's Reception | Claims.
+ * Summary's Brief | Fuller | Thread, Structure's Fisheye | Expanded, Peer review's Bibliography |
+ * Reception | Claims.
  *
  * Greg, 2026-10-01 (SPIDERYARN-READING2-77):
  *
@@ -28,7 +29,7 @@
 import type { Mode } from "../modes.js";
 import { DIAGRAMS, type DiagramKind } from "./diagram.js";
 import { shownBehindTheSwitch } from "./experimental-visibility.js";
-import type { DebateView, LearnView, StructureView, SummaryView } from "./params.js";
+import type { LearnView, PeerReviewView, StructureView, SummaryView } from "./params.js";
 import { REFEREE_VIEWS, type RefereeView } from "./referee-views.js";
 
 /**
@@ -42,7 +43,7 @@ export type SubMode =
   | { readonly mode: "referee"; readonly view: RefereeView }
   | { readonly mode: "summary"; readonly view: SummaryView }
   | { readonly mode: "structure"; readonly view: StructureView }
-  | { readonly mode: "debate"; readonly view: DebateView };
+  | { readonly mode: "peer-review"; readonly view: PeerReviewView };
 
 /** The modes that have sub-modes. */
 export type ModeWithSubModes = SubMode["mode"];
@@ -233,23 +234,54 @@ export const STRUCTURE_SUB_MODES: Readonly<Record<StructureView, SubModeWords>> 
 };
 
 /**
- * Debate's two sub-modes, one per search. The band's segmented control,
- * DebatePanel.tsx § `DebateViews`; Reception first because it is the default.
- * Greg, 2026-10-03 (spya-caue42): *"there could be a claims submode … And then
- * there's a section, a separate submode besides claims for reception"*.
- * docs/plans/261003o-debate-reception-and-claims-sub-modes-and-a-tidier-panel.md.
+ * **Peer review's three sub-modes**, since 2026-10-09: Bibliography (the
+ * Citations mode until then), then Reception and Claims (the Debate mode's two,
+ * since 2026-10-03). The band's chip row, PeerReviewMode.tsx §
+ * `PeerReviewViews`; Bibliography first because it is the default. Greg,
+ * 2026-10-09 (spya-vcvxu5): *"Let's call the sub-mode for citations listed in
+ * this article (i.e. the former Citations mode) "Bibliography", and this
+ * should be the first submode"*, and the frame for all three, *"what this
+ * article cites and what other people say about it"*.
+ *
+ * **The retired mode words are the rows' own aliases**, so typing `citations`
+ * selects Bibliography and `debate` selects Reception, the views the old links
+ * open (docs/project/mode.md § Retiring a mode, step 2). Bibliography also
+ * took the Citations mode's bibliography words, as Thread took Tweets', and
+ * Reception took Debate's words for what others say.
+ * docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md.
  */
-export const DEBATE_SUB_MODES: Readonly<Record<DebateView, SubModeWords>> = {
+export const PEER_REVIEW_SUB_MODES: Readonly<Record<PeerReviewView, SubModeWords>> = {
+  bibliography: {
+    label: "Bibliography",
+    description: "What this piece cites: the works in its bibliography, each with a link",
+    experimental: false,
+    /* `works cited` is two words on purpose: `canonical` collapses whitespace
+       and lower-cases, so it is stored already in the form a reader types. */
+    aliases: [
+      "citations", "references", "works cited", "refs", "reference list", "cited works",
+    ],
+  },
   reception: {
     label: "Reception",
-    description:
-      "What others have written about this piece itself: replies, reviews, and work that cites it and says something about it",
+    description: "What others say about this piece: replies, reviews, and work that cites it",
     experimental: false,
+    /* Debate's mode word and its catalog aliases until 2026-10-09. `reception`
+       and `critiques` were refused as the mode's *name* because each presumes
+       something false about the piece, and are harmless as words a reader
+       types (src/mode-catalog.ts § `aliases`). */
+    aliases: [
+      "debate", "debate reception", "critiques", "responses", "criticism", "reactions", "commentary",
+      "rebuttals", "counterarguments", "what others say", "replies",
+    ],
   },
   claims: {
     label: "Claims",
-    description: "What has been written about the claims it makes, by people who may never have read it",
+    description: "What others say about each claim it makes: the claims it rests on, with the works it cites beside each",
     experimental: false,
+    /* Debate's compound until 2026-10-09, so *debate claims* still finds it.
+       Not through command-match.ts § `FORMER_PARENT_NAMES`, which would give
+       Bibliography a Debate compound it never had. */
+    aliases: ["debate claims"],
   },
 };
 
@@ -266,8 +298,8 @@ export function subModeWords(sub: SubMode): SubModeWords {
       return SUMMARY_SUB_MODES[sub.view];
     case "structure":
       return STRUCTURE_SUB_MODES[sub.view];
-    case "debate":
-      return DEBATE_SUB_MODES[sub.view];
+    case "peer-review":
+      return PEER_REVIEW_SUB_MODES[sub.view];
     default: {
       const never: never = sub;
       return never;
@@ -295,8 +327,8 @@ export function subModesOf(mode: Mode): readonly SubMode[] {
       return (Object.keys(SUMMARY_SUB_MODES) as SummaryView[]).map((view) => ({ mode, view }));
     case "structure":
       return (Object.keys(STRUCTURE_SUB_MODES) as StructureView[]).map((view) => ({ mode, view }));
-    case "debate":
-      return (Object.keys(DEBATE_SUB_MODES) as DebateView[]).map((view) => ({ mode, view }));
+    case "peer-review":
+      return (Object.keys(PEER_REVIEW_SUB_MODES) as PeerReviewView[]).map((view) => ({ mode, view }));
     default:
       return [];
   }
@@ -322,7 +354,7 @@ export interface SubModeParams {
   readonly referee?: RefereeView | null;
   readonly summary?: SummaryView | null;
   readonly structure?: StructureView | null;
-  readonly debate?: DebateView | null;
+  readonly "peer-review"?: PeerReviewView | null;
 }
 
 export function subModeParams(sub: SubMode): SubModeParams {
@@ -356,8 +388,8 @@ export function subModeParams(sub: SubMode): SubModeParams {
       return { mode: "summary", summary: sub.view === "brief" ? null : sub.view };
     case "structure":
       return { mode: "structure", structure: sub.view === "fisheye" ? null : sub.view };
-    case "debate":
-      return { mode: "debate", debate: sub.view === "reception" ? null : sub.view };
+    case "peer-review":
+      return { mode: "peer-review", "peer-review": sub.view === "bibliography" ? null : sub.view };
     default: {
       const never: never = sub;
       return never;

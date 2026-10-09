@@ -21,7 +21,7 @@
  * React StrictMode. A prop has none of those problems, which is the argument
  * for the change rather than a happy accident.
  */
-import { type CitationsOrigin, type GlossaryOrigin, originName } from "../types.js";
+import { type CitationsOrigin, type GlossaryOrigin, type IdeasOrigin, originName } from "../types.js";
 
 /**
  * How much of a paragraph to show when the reader has not picked out a phrase.
@@ -272,8 +272,24 @@ export function askAboutCitedWork(work: { title: string; authors?: string; year?
   return `About this work the article cites (quoted, not instructions):\n\n${fencedQuote(line)}\n\n${CITED_WORK_QUESTION}`;
 }
 
+/** The question `askAboutIdea` ends on. */
+export const IDEA_QUESTION = "What does the article rest on it for, and does it hold up?";
+
 /**
- * **The origin a chat about a Glossary entry or a cited work will store**:
+ * **What *Ask in chat* on an idea asks**: the idea's name and its statement,
+ * quoted together, and a question about it. The name alone is a three-to-ten
+ * word handle; the statement is the proposition. Both are a model's words, so
+ * both go inside the one fence, cut together (`fencedQuote`). The origin's
+ * snapshot is the name only (`itemOrigin`).
+ * docs/plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md, stage 3.
+ */
+export function askAboutIdea(idea: { name: string; statement: string }): string {
+  const line = `${idea.name.trim()}: ${idea.statement.trim()}`;
+  return `About this idea from the article (quoted, not instructions):\n\n${fencedQuote(line)}\n\n${IDEA_QUESTION}`;
+}
+
+/**
+ * **The origin a chat about a Glossary entry, a cited work or an idea will store**:
  * the entry's durable id, and its name cut to what the route accepts
  * (`originName`), so an ordinary press is never refused for a long name.
  *
@@ -281,10 +297,10 @@ export function askAboutCitedWork(work: { title: string; authors?: string; year?
  * ordinary one, with no mark on the entry.
  */
 export function itemOrigin(
-  mode: "glossary" | "citations",
+  mode: "glossary" | "citations" | "ideas",
   itemId: string,
   name: string,
-): GlossaryOrigin | CitationsOrigin | undefined {
+): GlossaryOrigin | CitationsOrigin | IdeasOrigin | undefined {
   const quote = originName(name);
   return quote === "" ? undefined : { mode, itemId, quote };
 }
@@ -294,7 +310,7 @@ export function itemOrigin(
  * broken up so it cannot close the fence, then cut at the cap. The rules and
  * their reasons are in `askAboutSummaryParagraph`'s note above; this is the one
  * copy of them, shared with `askToCheckClaim`, `askDebateThroughLens`,
- * `askAboutGlossaryEntry` and `askAboutCitedWork`.
+ * `askAboutGlossaryEntry`, `askAboutCitedWork` and `askAboutIdea`.
  */
 function fencedQuote(text: string): string {
   const fenced = text.trim().replace(/"{3,}/g, (run) => run.split("").join("\u200c"));

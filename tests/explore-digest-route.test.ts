@@ -240,12 +240,24 @@ describe("an Explore turn carries the reader's notes", () => {
 });
 
 describe("a turn of any other kind carries none", () => {
-  it.each(["chat", "learn", "tutorial", "candidates"] as const)("%s", async (kind) => {
+  it.each(["learn", "tutorial", "candidates"] as const)("%s", async (kind) => {
     expect(await post({ threadId: mintId(), question: "what about this", kind })).toBe(200);
     expect(sent).toHaveLength(1);
     const request = JSON.stringify(sent.at(-1));
     expect(request).not.toContain(NOTE);
     expect(request).not.toContain(earlierChat);
+  });
+
+  /* **Chat carries the list of other conversations, and not the notes** —
+     plan 261008e. The notes are still read only through the tool; the list is
+     what tells the model an earlier conversation exists. */
+  it("chat: the other conversations, but not the notes", async () => {
+    expect(await post({ threadId: mintId(), question: "what about this", kind: "chat" })).toBe(200);
+    expect(sent).toHaveLength(1);
+    const { final } = lastRequest();
+    expect(final).not.toContain(NOTE);
+    expect(final).toContain("THE READER'S OTHER CONVERSATIONS");
+    expect(final).toContain(earlierChat);
   });
 
   /* The request cannot ask for one: a chat follow-up that says `explore` is the

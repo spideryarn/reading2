@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * **The bar's rows as a model is shown them** — `pickOption`
  * (src/web/command-match.ts) and the checked-in list built from it,
@@ -119,13 +120,13 @@ function rowsIn(context: Context): readonly Command[] {
             help: "/help/mode-glossary",
             shelfRow: context.article.owner ? { archive, tags: { edit: async () => [] } } : undefined,
             /* What the reading view hands the owner when both lists can be
-               added to — the widest bar, so both *Find more* rows are in the
-               catalogue. Without it a sentence could never be answered with
+               added to — the widest bar, so both *Find more* rows (and, since
+               plan 261009i, the *Guide* row) are in the catalogue. Without it a sentence could never be answered with
                one: the server drops a key this file does not hold (plan
                261004k, GPT Sol's F4). The Metadata page hands in none. */
             executor:
               context.article.owner && context.article.view === "article"
-                ? { runners: {}, sources: {}, findMore: { glossary: closes, quotes: closes } }
+                ? { runners: {}, sources: {}, findMore: { glossary: closes, quotes: closes }, openGuide: closes }
                 : undefined,
           }
         : undefined,

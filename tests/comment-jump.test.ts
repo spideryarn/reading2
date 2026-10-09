@@ -260,7 +260,7 @@ describe("moving to a comment", () => {
   it("stamps that entry with the place the reader jumped from", async () => {
     act(() => jumpToComment(COMMENTS, comment(FAR), note, jumpTo));
     await settled();
-    expect(readStamp(history.state)).toEqual({ origin: at(ORIGIN), depth: 1 });
+    expect(readStamp(history.state)).toEqual({ origin: at(ORIGIN), earlier: [] });
   });
 
   /**
@@ -321,11 +321,10 @@ describe("moving to a comment", () => {
       await settled();
     }
     expect(history.length).toBe(entries);
-    /* **Still depth 1 after ten steps**, and that is a second way of saying the
-       same thing the line above says: a step is a replace, and a replace moves
-       the reader without moving the stack. Ten pushes would have left the way
-       back eleven entries away. */
-    expect(readStamp(history.state)).toEqual({ origin: at(ORIGIN), depth: 1 });
+    /* **Still the one journey after ten steps**: a step is a replace, so it
+       neither starts a journey of its own nor pushes the first one back into
+       `earlier`. */
+    expect(readStamp(history.state)).toEqual({ origin: at(ORIGIN), earlier: [] });
     /* Not the previous question, which is what a per-step push would have left. */
     expect(readStamp(history.state)?.origin).not.toEqual(at(block(FAR)));
   });

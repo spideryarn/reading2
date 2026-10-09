@@ -40,6 +40,7 @@ import { PREVIEW_RATE_POLICY } from "../src/link-previews.js";
 import { SUMMARY_RATE_POLICY } from "../src/link-summary.js";
 import { FEEDBACK_NOTICE_POLICY } from "../src/feedback-notice.js";
 import { HELP_CHAT_RATE_POLICY } from "../src/help-chat-call.js";
+import { DEBATE_CHECK_RATE_POLICY } from "../src/debate.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
@@ -289,6 +290,26 @@ describe("the Help chatbot's bucket", () => {
     const ask = () => runAsOwner(ALICE, () => pgFetchAllowanceStore.take("help-chat", HELP_CHAT_RATE_POLICY));
     const first = await ask();
     if (first.kind !== "allowed") throw new Error(`expected allowance, got ${first.kind}`);
+    expect((await ask()).kind).toBe("concurrency");
+    await runAsOwner(ALICE, () => pgFetchAllowanceStore.finish(first.id));
+    expect((await ask()).kind).toBe("allowed");
+  });
+});
+
+describe("the Debate claim check's bucket", () => {
+  /**
+   * Plan 261008i § 3, GPT Sol's E1. Against the real table, for the feedback
+   * notice's reason: a bucket the CHECK does not know is a throw on every
+   * press. Two at once, and a third refused until one of them is finished.
+   */
+  it("takes two checks, refuses a third while both are in flight, and allows it after", async () => {
+    const ask = () =>
+      runAsOwner(ALICE, () => pgFetchAllowanceStore.take("debate-check", DEBATE_CHECK_RATE_POLICY));
+    const first = await ask();
+    const second = await ask();
+    if (first.kind !== "allowed" || second.kind !== "allowed") {
+      throw new Error(`expected two allowances, got ${first.kind} and ${second.kind}`);
+    }
     expect((await ask()).kind).toBe("concurrency");
     await runAsOwner(ALICE, () => pgFetchAllowanceStore.finish(first.id));
     expect((await ask()).kind).toBe("allowed");

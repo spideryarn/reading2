@@ -24,12 +24,13 @@
  * call that reported nothing are different facts and only one of them is a
  * number.
  *
- * ## Why the two-call check is a refusal and not a `throw`
+ * ## Why the call-shape check is a refusal and not a `throw`
  *
- * A completed debate run is **exactly two calls**, one per pass, both `debate`,
- * both reporting a positive search count. Anything else means the run was not
- * what it says on the tin — a retry we did not know about, a stage that called
- * something else, a collector that lost a row.
+ * A completed current run has exactly one search call and, when enough rows
+ * survived, one search-free synthesis call. Anything else means the run was
+ * not what it says on the tin — a retry we did not know about, the retired
+ * claims search returning, a stage that called something else, or a collector
+ * that lost a row.
  *
  * It is checked and reported rather than thrown, and the order matters: the
  * money has already been spent by the time this runs, so throwing here would
@@ -38,8 +39,8 @@
  */
 import { formatNanos, type SpendRecord, totalSpend } from "../../src/ai-spend.js";
 
-/** The two calls a completed run makes, one per pass. */
-export const EXPECTED_DEBATE_CALLS = 2;
+/** The current run's direct search, plus an optional synthesis. */
+export const EXPECTED_DEBATE_CALLS = [1, 2] as const;
 
 export interface RunCost {
   /**
@@ -77,7 +78,7 @@ export interface RunCost {
  *   we can get by slicing.
  * @param opts.completed whether the run reached the end. A failed run is priced
  *   too — the call that blew up had usually already been paid for — but the
- *   two-call rule is only asserted about a run that finished.
+ *   call-shape rule is only asserted about a run that finished.
  */
 export function costOf(
   calls: readonly SpendRecord[],
@@ -93,15 +94,15 @@ export function costOf(
         "this figure is not the price of a debate run",
     );
   }
-  if (opts.completed && calls.length !== EXPECTED_DEBATE_CALLS) {
+  if (opts.completed && !EXPECTED_DEBATE_CALLS.some((count) => count === calls.length)) {
     problems.push(
-      `a completed debate run is exactly ${String(EXPECTED_DEBATE_CALLS)} search calls, one per pass, and this run made ${String(calls.length)}`,
+      `a completed debate run is one search call plus at most one search-free synthesis call, and this run made ${String(calls.length)} calls`,
     );
   }
-  const searchless = calls.filter((c) => c.job === "debate" && !(c.webSearches && c.webSearches > 0));
-  if (opts.completed && searchless.length > 0) {
+  const searchful = calls.filter((c) => c.job === "debate" && c.webSearches !== null && c.webSearches > 0);
+  if (opts.completed && searchful.length !== 1) {
     problems.push(
-      `${String(searchless.length)} debate call(s) reported no server-side searches — a pass that did not search cannot have completed`,
+      `a completed debate run has exactly one call with server-side searches, and this run had ${String(searchful.length)}`,
     );
   }
 

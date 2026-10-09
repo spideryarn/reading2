@@ -72,7 +72,7 @@ function paint(notes: MarginaliaNote[], viewer: "owner" | "visitor" = "owner"): 
   act(() =>
     root.render(
       <BlockLinkProvider index={new Map()}>
-        <MarginNotesSlot notes={notes} viewer={viewer} />
+        <MarginNotesSlot blockId="spya-aaaaaa" notes={notes} viewer={viewer} />
       </BlockLinkProvider>,
     ),
   );
@@ -282,7 +282,7 @@ describe("a value this copy of the app was built before", () => {
     paint([{ kind: "debate", items: [claim, other] }]);
     /* Each page's own stamp is inside the note, which is shut until pressed. */
     act(() => host.querySelector<HTMLButtonElement>(".marg-shut-button")?.click());
-    expect(stamps()).toEqual(["Debate", "disputes", words(relation)]);
+    expect(stamps()).toEqual(["Others say", "disputes", words(relation)]);
   });
 
   it.each(UNKNOWN)("stamps an idea's provenance %s, and its card says only what it knows", async (provenance) => {

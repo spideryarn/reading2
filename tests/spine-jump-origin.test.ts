@@ -43,8 +43,17 @@ vi.mock("../src/web/Tooltip.js", () => ({
   TooltipGroup: ({ children }: { children: unknown }) => children,
 }));
 
+/* jsdom has no `CSS.escape`, which the real `scrollToBlock` uses, and § follows
+   the journey back presses a return through `beginReturn`, which scrolls. The
+   move itself is not what is under test. */
+vi.mock("../src/web/scroll.js", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../src/web/scroll.js")>();
+  return { ...real, scrollToBlock: () => {}, scrollToTop: () => {} };
+});
+
 import { Spine } from "../src/web/Spine.js";
 import { armJump, clearArmedJump, type JumpOrigin } from "../src/web/jump-history.js";
+import { beginReturn } from "../src/web/keynav.js";
 import { dismissJumpOrigin, watchHistoryWrites } from "../src/web/router.js";
 import type { OutlineEntry } from "../src/web/tree.js";
 import type { BlockId, NodeId, TreeNode } from "../src/types.js";
@@ -197,6 +206,24 @@ async function mount(matches?: Map<BlockId, BlockMatch>): Promise<void> {
 }
 
 /**
+ * The return chip's press, without the chip: `beginReturn` arms, and the push
+ * it makes is `history.pushState` of today's address with `?at=` changed — what
+ * nuqs's `setAt` flushes to (tests/return-chip.test.tsx drives it through nuqs
+ * itself).
+ */
+function returned(): void {
+  act(() => {
+    beginReturn((id) => {
+      const next = new URLSearchParams(location.search);
+      if (id === null) next.delete("at");
+      else next.set("at", id);
+      const query = next.toString();
+      history.pushState(history.state, "", `/read/x${query === "" ? "" : `?${query}`}`);
+    });
+  });
+}
+
+/**
  * A jump, as the wrapper sees one: arm the origin, then push the destination.
  * Straight `history.pushState`, which is what nuqs's flush eventually calls —
  * tests/return-chip.test.tsx drives the chip the same way.
@@ -299,21 +326,45 @@ describe("the mark for where the reader jumped from", () => {
   });
 
   /**
-   * Carrying a stamp changes only its distance. The rail draws the origin and
-   * has no use for that distance, so a mode/column push must not put this
-   * 2,000-row component back on the render path. `useJumpOrigin` is the
+   * A push that stays on the article carries the stamp unchanged. The rail
+   * draws the origin, which has not moved, so a mode/column push must not put
+   * this 2,000-row component back on the render path. `useJumpOrigin` is the
    * origin-only view of the store for precisely this reason.
    */
-  it("does not re-render when only the stamp depth changes", async () => {
+  it("does not re-render when a push carries the stamp unchanged", async () => {
     await mount();
     jumped(at(block(7)), block(18));
     const before = renders.Spine;
 
-    act(() => history.pushState(history.state, "", `/read/x?at=${block(18)}&mode=citations`));
+    act(() => history.pushState(history.state, "", `/read/x?at=${block(18)}&mode=peer-review`));
 
     expect(renders.Spine).toBe(before);
     expect(marks()).toHaveLength(1);
     expect(markTop()).toBe("35%");
+  });
+
+  /**
+   * **The mark follows the journey back, and goes with its last stop.** The
+   * chip's press leaves the stamp for the journey before this one (jump-history.ts
+   * § `oneJourneyBack`): after one return the mark is where the *earlier* jump
+   * began, and after the last there is no stamp, so no mark — the rail and the
+   * chip read one datum, and neither may outlive it.
+   *
+   * Two jumps first, from row 7 and then from row 3 (landing at 18 and 12), so
+   * the entry the reader ends on has origin 3 and `earlier` [7].
+   */
+  it("follows the journey back after a return, and disappears after the last", async () => {
+    await mount();
+    jumped(at(block(7)), block(18));
+    jumped(at(block(3)), block(12));
+    expect(markTop(), "the newest jump's origin").toBe("15%");
+
+    returned();
+    expect(marks(), "still one mark").toHaveLength(1);
+    expect(markTop(), "now where the earlier jump began").toBe("35%");
+
+    returned();
+    expect(marks(), "nothing left to go back to").toHaveLength(0);
   });
 
   /**

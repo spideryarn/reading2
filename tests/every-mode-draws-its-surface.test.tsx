@@ -94,6 +94,7 @@ import type {
   Citations,
   Debate,
   Faq,
+  DebateClaimList,
   DebateCounts,
   DebateLosses,
   Glossary,
@@ -510,6 +511,26 @@ const COUNTS: DebateCounts = {
   webSearches: 1,
 };
 
+/** A listed claim's own line, the model's words under the article's (plan 261008i § 2). */
+const CLAIM_STATEMENT = "The instrument came before any account of what it measured";
+const CLAIM_LIST: DebateClaimList = {
+  version: "debate-claims/1",
+  generator: "test",
+  slug: SLUG,
+  sourceHash: "hash",
+  claims: [
+    {
+      id: "spya-clm234",
+      blockId: "spya-bbbbbb" as BlockId,
+      quote: "instrument was built before anybody could say what it would measure",
+      statement: CLAIM_STATEMENT,
+    },
+  ],
+  dropped: { unknownIds: 0, unquoted: 0, tooLong: 0, duplicate: 0, overCap: 0, malformed: 0 },
+  generatedAt: "2026-10-08T10:00:00.000Z",
+  elapsedMs: 1,
+};
+
 const DEBATE: Debate = {
   version: "test",
   generator: "test",
@@ -763,6 +784,8 @@ const EVERY_TARGET: Record<AutoRunTarget, true> = {
   quotes: true,
   timeline: true,
   debate: true,
+  /* Debate's Claims list — armed one level down, by a press that lands on Claims. */
+  "debate-claims": true,
   citations: true,
   faq: true,
   relations: true,
@@ -801,6 +824,11 @@ function artefact(url: string): Response | null {
     return has ? json({ debate: DEBATE, stale: false, outdated: false }) : GONE();
   if (url.startsWith("/api/citations/"))
     return has ? json({ citations: CITATIONS, stale: false, outdated: false }) : GONE();
+  /* Peer review's Claims: the reader's checks (none), and the list. Before
+     2026-10-09 nothing here opened Claims, so neither was served. */
+  if (url.startsWith("/api/debate-claims/") && url.endsWith("/checks")) return json({ checks: [] });
+  if (url.startsWith("/api/debate-claims/"))
+    return has ? json({ claimList: CLAIM_LIST, stale: false, outdated: false }) : GONE();
   if (url.startsWith("/api/faq/"))
     return has ? json({ faq: FAQ, stale: false, outdated: false }) : GONE();
   /* Marginalia's relation words. */
@@ -1225,10 +1253,20 @@ const SPENDS: Record<Mode, Spend> = {
   ideas: { kind: "posts", steps: ["ideas"] },
   quotes: { kind: "posts", steps: ["quotes"] },
   timeline: { kind: "posts", steps: ["timeline"] },
-  /* The dearest press in the app — two calls out to the open web. */
-  debate: { kind: "posts", steps: ["debate"] },
-  /* One model call over the article, like the timeline. */
-  citations: { kind: "posts", steps: ["citations"] },
+  /* **Three presses since 2026-10-09**, one per sub-mode, as Diagram's are
+     one per picture: Peer review opens on whichever `?peer-review=` names
+     (plan 261009l). Bibliography, the default, is one model call over the
+     article (Citations' row until then); Reception is the dearest press in the
+     app, one call out to the open web (Debate's); Claims is its own list. Each
+     press buys only its own sub-mode's work. */
+  "peer-review": {
+    kind: "delegated",
+    presses: [
+      { search: "", steps: ["citations"], spends: [] },
+      { search: "?peer-review=reception", steps: ["debate"], spends: [] },
+      { search: "?peer-review=claims", steps: ["debate-claims"], spends: [] },
+    ],
+  },
   /* One model call over the article, like Ideas. */
   faq: { kind: "posts", steps: ["faq"] },
   /* **Three steps, and the first two are the point**: with no Quotes the
@@ -1502,12 +1540,12 @@ const DRAWS: Record<Mode, Draws> = {
   /* The event's label. The dating phrase beside it is drawn too, but a label is
      the row's own content where a phrase could come from a formatter. */
   timeline: { kind: "band", where: ".mode-band.timeline", says: TIMELINE_LABEL, about: "corner" },
-  /* What the found page is said to bear on — a row's body, not the group
-     heading above it, which is a constant sentence. */
-  debate: { kind: "band", where: ".mode-band.dbt", says: DEBATE_TITLE, about: "corner" },
-  /* A work's title — the row's own content, not the order buttons or the
-     foot's sentences, which are constants a panel with no rows still draws. */
-  citations: { kind: "band", where: ".mode-band.citations", says: CITATION_TITLE, about: "corner" },
+  /* Peer review opens on Bibliography: a work's title — the row's own
+     content, not the order buttons or the foot's sentences, which are
+     constants a panel with no rows still draws. Reception's row is
+     `PEER_REVIEW_VIEWS_DRAW` below, since this table asks of the default
+     view only (GPT Sol's F4 on plan 261009l). */
+  "peer-review": { kind: "band", where: ".mode-band.peer-review", says: CITATION_TITLE, about: "corner" },
   faq: { kind: "band", where: ".mode-band.faq", says: FAQ_QUESTION, about: "corner" },
   skim: { kind: "band", where: ".mode-band.skim", says: SKIM_ROLE, about: "corner" },
   /* A node **inside** the drawing, not the drawing's title: a title is drawn
@@ -1530,6 +1568,39 @@ const DRAWS: Record<Mode, Draws> = {
      rather than the thread's title. */
   learn: { kind: "band", where: ".mode-band.learn", says: LEARN_ANSWER, about: "corner" },
 };
+
+/**
+ * **Peer review's other two sub-modes**, each drawn by its real controller —
+ * `DRAWS` asks of the default view only, Bibliography, so Reception and Claims
+ * get a row each here (GPT Sol's F4 on plan 261009l). One band in every view,
+ * with one (i), the panel's: the chip row is that band's header, never a
+ * surface of its own.
+ */
+const PEER_REVIEW_VIEWS_DRAW: readonly { search: string; where: string; says: string }[] = [
+  { search: "?mode=peer-review", where: ".mode-band.peer-review.citations", says: CITATION_TITLE },
+  { search: "?mode=peer-review&peer-review=reception", where: ".mode-band.peer-review.dbt", says: DEBATE_TITLE },
+  { search: "?mode=peer-review&peer-review=claims", where: ".mode-band.peer-review.dbt", says: CLAIM_STATEMENT },
+];
+
+describe("phase B — Peer review's three sub-modes", () => {
+  for (const view of PEER_REVIEW_VIEWS_DRAW) {
+    it(
+      `${view.search}: one band, its own body, the chip row as its head and one (i)`,
+      async () => {
+        fixtures = "populated";
+        await open(view.search);
+        expect(host.querySelectorAll(".mode-band"), `${view.search}: not exactly one band`).toHaveLength(1);
+        const band = host.querySelector(view.where);
+        expect(band, `${view.search}: no ${view.where}`).not.toBeNull();
+        expect(readable(band as Element)).toContain(view.says);
+        expect((band as Element).querySelectorAll(":scope > .band-about")).toHaveLength(1);
+        const chips = (band as Element).querySelectorAll(":scope > .band-head .dbt-views [role='radio']");
+        expect([...chips].map((c) => c.textContent?.replace(/\d+$/, ""))).toEqual(["Bibliography", "Reception", "Claims"]);
+      },
+      PHASE_MS,
+    );
+  }
+});
 
 describe("phase B — what each mode's real controller drew", () => {
   for (const mode of MODES) {

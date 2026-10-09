@@ -631,9 +631,8 @@ const GENERATES: Record<Mode, boolean> = {
   ideas: true,
   quotes: true,
   timeline: true,
-  debate: true,
+  "peer-review": true,
   diagram: true,
-  citations: true,
   faq: true,
   skim: true,
 };

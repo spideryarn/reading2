@@ -13,6 +13,11 @@
  *   with no source each get a 409 with a sentence and no model call;
  * - **ownership is asked first**: another reader's slug is a 404 with no call;
  * - **Opus on a standard-power article**, through the route.
+ *
+ * And since 2026-10-09 (plan docs/plans/261009a-save-hidden-text-opinions.md),
+ * **the answer is kept**: `GET` brings it back with its date, a failed run
+ * leaves it, an older press cannot replace a newer one, and another reader's
+ * slug is a 404 on the read as on the run.
  */
 import { createHash } from "node:crypto";
 import { rm, writeFile } from "node:fs/promises";
@@ -26,7 +31,9 @@ import type { Verifier } from "../src/auth.js";
 import { closeDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
 import { HIGH_POWER_MODEL_OPENROUTER } from "../src/models.js";
+import { runAsOwner, type OwnerId } from "../src/owner.js";
 import { forgetCachedScans } from "../src/source-scan.js";
+import { refereeHiddenCheckStore } from "../src/store/index.js";
 import { acceptAny, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
@@ -35,7 +42,7 @@ loadEnvLocal();
 
 await pgReady({
   suite: "tests/referee-hidden-check-route.test.ts",
-  tables: ["spideryarn.raw_sources", "spideryarn.revision_blocks"],
+  tables: ["spideryarn.raw_sources", "spideryarn.revision_blocks", "spideryarn.referee_hidden_checks"],
   max: 2,
 });
 
@@ -100,13 +107,18 @@ interface Reply {
   text: string;
 }
 
-async function call(slug: string, body?: unknown, verify: Verifier = acceptAny): Promise<Reply> {
+async function call(
+  slug: string,
+  body?: unknown,
+  verify: Verifier = acceptAny,
+  method: "GET" | "POST" = "POST",
+): Promise<Reply> {
   const payload = body === undefined ? [] : [Buffer.from(JSON.stringify(body))];
   const req = Object.assign(
     (async function* () {
       yield* payload;
     })(),
-    { method: "POST", url: `/api/referee/hidden-check/${slug}`, headers: AUTHED_HEADERS },
+    { method, url: `/api/referee/hidden-check/${slug}`, headers: AUTHED_HEADERS },
   ) as unknown as IncomingMessage;
   let status = 0;
   let text = "";
@@ -142,6 +154,9 @@ async function call(slug: string, body?: unknown, verify: Verifier = acceptAny):
 
 /** Every request body that went to the model. */
 let sent: { model?: string; messages?: { content: unknown }[] }[] = [];
+/** What the stubbed model answers with; a test may swap it. */
+const ANSWER = JSON.stringify({ judgments: [{ row: 1, verdict: "worth-a-look", reason: "White text addressed to a model." }] });
+let reply = ANSWER;
 const realFetch = globalThis.fetch;
 const realKey = process.env.OPENROUTER_API_KEY;
 
@@ -181,9 +196,7 @@ beforeAll(async () => {
   globalThis.fetch = ((url: string | URL | Request, init?: RequestInit) => {
     if (!String(url instanceof Request ? url.url : url).includes("openrouter")) return realFetch(url, init);
     sent.push(JSON.parse(String(init?.body)));
-    return Promise.resolve(
-      answer(JSON.stringify({ judgments: [{ row: 1, verdict: "worth-a-look", reason: "White text addressed to a model." }] })),
-    );
+    return Promise.resolve(answer(reply));
   }) as unknown as typeof fetch;
 }, 120_000);
 
@@ -197,6 +210,7 @@ afterAll(async () => {
 
 beforeEach(() => {
   sent = [];
+  reply = ANSWER;
 });
 afterEach(() => {
   forgetCachedScans();
@@ -244,5 +258,69 @@ describe("POST /api/referee/hidden-check/:slug", { timeout: 60_000 }, () => {
     const reply = await call(SLUGS.hostile, undefined, stranger);
     expect(reply.status).toBe(404);
     expect(sent).toEqual([]);
+  });
+});
+
+const stranger: Verifier = async () => ({
+  ok: true,
+  claims: { sub: randomUUID(), email: "a-stranger@example.test", role: "authenticated", is_anonymous: false },
+});
+
+const kept = async (slug: string) =>
+  (JSON.parse((await call(slug, undefined, acceptAny, "GET")).text) as { check: unknown }).check as {
+    judgments: { verdict: string; reason: string }[];
+    checkedAt: string;
+    model: string;
+    saved?: boolean;
+  } | null;
+
+describe("the kept check: GET /api/referee/hidden-check/:slug", { timeout: 60_000 }, () => {
+  it("is null for an article never checked", async () => {
+    expect(await kept(SLUGS.clean)).toBeNull();
+  });
+
+  it("brings back what the run showed, dated, and the done frame says it was saved", async () => {
+    const run = await call(SLUGS.hostile);
+    const done = JSON.parse(run.text.split("event: done\ndata: ")[1]?.split("\n")[0] ?? "null") as {
+      checkedAt: string;
+      saved?: boolean;
+    };
+    expect(done.saved).toBeUndefined();
+    const check = await kept(SLUGS.hostile);
+    expect(check?.judgments[0]?.reason).toBe("White text addressed to a model.");
+    expect(check?.checkedAt).toBe(done.checkedAt);
+    expect(Date.now() - Date.parse(check?.checkedAt ?? "")).toBeLessThan(60_000);
+  });
+
+  it("keeps the last good answer when a later run fails", async () => {
+    await call(SLUGS.hostile);
+    const before = await kept(SLUGS.hostile);
+    reply = "not json at all";
+    const failed = await call(SLUGS.hostile);
+    expect(failed.text).toContain("event: error");
+    expect(await kept(SLUGS.hostile)).toEqual(before);
+  });
+
+  it("an older press finishing later does not replace a newer one", async () => {
+    await call(SLUGS.hostile);
+    const newer = await kept(SLUGS.hostile);
+    const older = {
+      judgments: [],
+      unanswered: 1,
+      notSent: 0,
+      model: "an-older-press",
+    };
+    const returned = await runAsOwner(TEST_OWNER as OwnerId, () =>
+      refereeHiddenCheckStore.save(SLUGS.hostile, older, new Date(Date.now() - 3_600_000)),
+    );
+    expect(returned.model).not.toBe("an-older-press");
+    expect(await kept(SLUGS.hostile)).toEqual(newer);
+  });
+
+  it("is a 404 for another reader's article, and shows them nothing", async () => {
+    await call(SLUGS.hostile);
+    const read = await call(SLUGS.hostile, undefined, stranger, "GET");
+    expect(read.status).toBe(404);
+    expect(read.text).not.toContain("White text addressed");
   });
 });

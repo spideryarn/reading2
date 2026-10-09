@@ -1,0 +1,66 @@
+{"judge": "opus", "slug": "scaling-hypothesis", "lineups": {
+  "summary-fuller": {
+    "scores": {
+      "V": {"accuracy": 3, "coverage": 4, "nuance": 4, "usefulness": 4, "overall": 6,
+            "note": "Content is sound and hedged (sub-model account offered 'only as a suggestion'), but several citations miss: the $5m cost is cited to spya-asr663 not spya-dfjr4c, the GPT-4 1.24 estimate lacks spya-edr6mj, Moravec and the experts' failure are cited to lab passages (spya-scr8jb/spya-arrq35) instead of spya-ad5qgy/spya-m9r8zx; omits the agency appendix."},
+      "W": {"accuracy": 4, "coverage": 4, "nuance": 4, "usefulness": 4, "overall": 7,
+            "note": "Clear, well-cited arc from scaling curves to blessings of scale to pretraining thesis and doubts; small slip calling GPT-3's ~1.73 loss 'bits per character' (spya-edr6mj gives a WebText cross-entropy, not per-character), and the agency appendix is missing."},
+      "X": {"accuracy": 4, "coverage": 3, "nuance": 3, "usefulness": 3, "overall": 6,
+            "note": "Spends a paragraph on letter-frequency training stages (spya-r465ug) yet omits the blessings-of-scale / sub-model explanation (spya-grkhs8, spya-vkkfzh) and the DeepMind vs OpenAI contrast; includes the agency appendix; cites a bare heading (spya-ag750z)."},
+      "Y": {"accuracy": 4, "coverage": 5, "nuance": 5, "usefulness": 5, "overall": 8,
+            "note": "Best balance: meta-learning, benchmarks' blindness (spya-s8rx6n), curves, hedged sub-model account, pretraining doubt then 'it would've worked' (spya-s0h95g), weak vs strong scaling, and the hedged agency appendix (spya-ueb3d2); slightly conflates 'eyeballing the graphs' with affordability in spya-asr663."},
+      "Z": {"accuracy": 4, "coverage": 4, "nuance": 4, "usefulness": 5, "overall": 7,
+            "note": "Concrete and well-cited (compute in spya-uz2hd5, loss 3.3 to 1.73 to 1.24 in spya-edr6mj, agency from physics data), but leaves the pretraining thesis at 'magic trick' doubt without the author's turn that it 'would've worked fine' (spya-s0h95g)."}
+    },
+    "rank": ["Y", "Z", "W", "V", "X"],
+    "separates": "Y covers every major strand, including the author's reversal on the pretraining thesis and the agency appendix, while keeping his hedges; the others each drop one load-bearing piece (Z the reversal, W and V the appendix, X the blessings-of-scale mechanism)."
+  },
+  "ideas": {
+    "scores": {
+      "V": {"accuracy": 1, "coverage": 1, "nuance": 1, "usefulness": 1, "overall": 1,
+            "note": "No answer (content filter)."},
+      "W": {"accuracy": 3, "coverage": 4, "nuance": 3, "usefulness": 3, "overall": 5,
+            "note": "Item 1's title ('Stacking layers ... is not enough') contradicts its own body and the article; item 3 cites an irrelevant fragment of spya-s8rx6n; claims the pretraining step is taken 'without defending it' though spya-e5n86h-spya-s0h95g weigh it explicitly."},
+      "X": {"accuracy": 4, "coverage": 3, "nuance": 3, "usefulness": 4, "overall": 6,
+            "note": "Accurate and clearly explained but thin (7 items); misses the last-bits-are-deepest idea, strong vs weak scaling and the critique of experts; item 1 says the article treats extrapolation as reliable while quoting its hedge in spya-hqpffq."},
+      "Y": {"accuracy": 5, "coverage": 5, "nuance": 5, "usefulness": 5, "overall": 9,
+            "note": "Rich, well-chosen premises with apt quotes: power-law cost (spya-edr6mj), strong vs weak scaling (spya-m3gtj6, spya-vr9q2p), last bits (spya-kmyg3w), 'just X' (spya-ay4yw7), phatic statements (spya-kdcvq7), and hedged agency (spya-jrm0w9)."},
+      "Z": {"accuracy": 1, "coverage": 1, "nuance": 1, "usefulness": 1, "overall": 1,
+            "note": "No answer (content filter)."}
+    },
+    "rank": ["Y", "X", "W", ["V", "Z"]],
+    "separates": "Y identifies the premises a reader actually needs, including the ones the argument quietly rests on (strong vs weak scaling, 'just X', uninformative expert talk), and explains each; X is accurate but narrower, and W has a self-contradicting item and a bad citation."
+  },
+  "chat-q1": {
+    "scores": {
+      "V": {"accuracy": 4, "coverage": 4, "nuance": 4, "usefulness": 4, "overall": 7,
+            "note": "Right shape (separate, mutually supporting; scaling not tied to text per spya-ypbup8) and a good link to strong vs weak scaling (spya-vr9q2p), but 'the dependence runs the other way only partly' is muddled about which way."},
+      "W": {"accuracy": 4, "coverage": 5, "nuance": 4, "usefulness": 4, "overall": 7,
+            "note": "Rich, well-cited 'destination and route' reading and good use of spya-faees7's doubts as scaling questions, but 'neither is enough alone' overstates, given it then notes the scaling hypothesis's non-text examples (spya-ypbup8)."},
+      "X": {"accuracy": 4, "coverage": 5, "nuance": 5, "usefulness": 5, "overall": 8,
+            "note": "Clear one-way dependence and adds the key gap that the loss-to-capability step is argued not shown (spya-f6zupy); minor unsupported claim that he doubted the pretraining thesis 'even later' than scaling."},
+      "Y": {"accuracy": 5, "coverage": 4, "nuance": 5, "usefulness": 5, "overall": 8,
+            "note": "Concise and correct: thesis needs scale in practice (spya-s0h95g), scaling holds without it (spya-ypbup8), and keeps the author's hedge that the sub-model account is a suggestion (spya-jg69cy)."},
+      "Z": {"accuracy": 4, "coverage": 3, "nuance": 3, "usefulness": 3, "overall": 6,
+            "note": "Correct that the thesis is an if-then needing scale (spya-nhgv5g, spya-faees7), but never addresses whether scaling depends on pretraining, and the 'second leans on the first' phrasing is confusing."}
+    },
+    "rank": [["X", "Y"], "W", "V", "Z"],
+    "separates": "X and Y give a straight answer (separate claims, dependence mostly one way) and add that the article never demonstrates which abilities lower loss buys; W is rich but overstates mutual dependence, and Z answers only half the question."
+  },
+  "chat-q2": {
+    "scores": {
+      "V": {"accuracy": 3, "coverage": 4, "nuance": 3, "usefulness": 3, "overall": 6,
+            "note": "Explains both routes well, but supports 'representing vs being an agent' with concessions that are actually about non-agent data (spya-nxp8hh, spya-dbrxu8), conflating two different gaps."},
+      "W": {"accuracy": 5, "coverage": 5, "nuance": 5, "usefulness": 5, "overall": 9,
+            "note": "Names the identity claim (spya-nkzwpu) as the weakest step and backs it three ways: humans supply the loop in SayCan (spya-fm6pfc), the definitional dodge, Janus answered by analogy (spya-g2v6ry); also flags the softer physics-data gap."},
+      "X": {"accuracy": 5, "coverage": 4, "nuance": 5, "usefulness": 4, "overall": 8,
+            "note": "Concise and sound: two routes with hedges (spya-ueb3d2, spya-nxp8hh), weakest step the modelling-to-being jump with agency supplied by wiring (spya-cw7jg4, spya-fm6pfc), clearly marked as inference."},
+      "Y": {"accuracy": 4, "coverage": 5, "nuance": 5, "usefulness": 4, "overall": 8,
+            "note": "Thorough on the hedges in the non-agent-data case (spya-dbrxu8, spya-egwe0x, spya-usu3q6) and on testability (spya-jrm0w9), though the question is about text-only training and the single-TM 'Maybe not' (spya-ufpyk0) is not a case 'meant to show it could happen'."},
+      "Z": {"accuracy": 4, "coverage": 4, "nuance": 4, "usefulness": 4, "overall": 7,
+            "note": "Good on the chain of maybes in the TM argument (spya-usu3q6) and unfalsifiability (spya-hjpau9), but picks the non-agent-data stretch as weakest when the question is about text-only training, then merges it with the represent/is slide."}
+    },
+    "rank": ["W", ["X", "Y"], "Z", "V"],
+    "separates": "W pins the weakest step to the text-only case the question asks about (the asserted simulation-is-agent identity) and shows concretely why it is weak, while separating it from the softer physics-data gap; Y and Z put the weight on the non-agent-data extension, and V muddles the two."
+  }
+}}

@@ -55,7 +55,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
  * can honestly promise: there is no changelog, no diff view and nobody to email
  * about a wording change during a beta. Bump it when you change the words.
  */
-const LAST_UPDATED = "7 October 2026";
+const LAST_UPDATED = "9 October 2026";
 
 /**
  * A heading and its paragraphs. Eight of them; nothing else on the page.
@@ -225,6 +225,18 @@ export function PrivacyPage() {
             where you have been, for example. We keep the totals, not a history of your reading (our
             ordinary server logs do show when an update arrived). It is not shown to anybody reading
             an article you have shared, and it goes when the article does.
+          </li>
+          {/* **Since 2026-10-08**: `import_records`, kept so we can find out
+              afterwards why an import failed, and outlasting the job list on
+              the home page. It goes with the article (`deleteTerminalJobs`)
+              and with the account (the owner key cascades); an import that
+              never became an article has no article to go with.
+              docs/project/privacy.md § Import records; plan 261008j. */}
+          <li className="tw:mb-2">
+            <strong className="tw:text-foreground">A record of each import</strong> — the address
+            or file name, when it ran, and if it failed, which step and the error message, so that
+            we can work out afterwards what went wrong. It goes when you delete the article; one that
+            never became an article stays until your account is deleted.
           </li>
           <li className="tw:mb-2">
             <strong className="tw:text-foreground">What the models make for you</strong> — we keep
@@ -482,10 +494,13 @@ export function PrivacyPage() {
             can send — plus the two live-conversation models are somewhere in
             it. Add a model, and that test tells you this page is out of date. */}
         <p className="tw:text-xs tw:text-ink-faint">
-          The default models, as of the date above: <code>claude-sonnet-5</code> for most of the reading
+          The default models, as of the date above: <code>claude-sonnet-5-5</code> (<code>claude-sonnet-5</code>{" "}
+          until 9 October 2026) for most of the reading
           aids, chat and search, and for the guide in Chat, which is also told roughly how many other
           articles you have opened here (none, a few, or many), and Opus or a similar frontier model in its place on an article
-          switched to High-powered AI; <code>gpt-5.6-luna</code> for quick jobs and for reading PDFs,
+          switched to High-powered AI; <code>gpt-6-luna</code> (<code>gpt-5.6-luna</code> until 9 October 2026, and
+          still to check a summary’s paragraphs against the passages they cite)
+          for quick jobs and for reading PDFs,
           and, when you ask the command bar to suggest what to do with an article, to write that short
           list, for which it is shown your profile and your reason for reading the article, with our
           list of commands, and to answer a question you ask in Help’s <em>Ask about Spideryarn</em>{" "}
@@ -493,13 +508,15 @@ export function PrivacyPage() {
           (the question is not kept, and is not written to our logs);{" "}
           <code>gpt-6-luna</code> to name the topics above your shelf and sort your articles into them,
           for which it is shown your articles’ titles and one-line summaries (a paper’s abstract, when
-          it has no summary yet) and your profile if you wrote one;{" "}
+          it has no summary yet) and your profile if you wrote one, and to name the topics on the
+          public shelf, for which it is shown the titles and one-line summaries of the articles shared
+          there and nothing else;{" "}
           <code>voyage-4</code> to turn passages into the numbers that make search-by-meaning work;{" "}
           <code>jev-1.13</code>, TypeSafe’s, through OpenRouter, for quick search, for which it is
           shown the article’s passages and the words you searched for, and to work out which command
           you meant when you type or say a sentence into the command bar, for which it is shown that
           sentence and our list of commands (when the command needs words from your sentence, such
-          as what to search for, <code>gpt-5.6-luna</code> is shown the sentence too, to pick them
+          as what to search for, <code>gpt-6-luna</code> is shown the sentence too, to pick them
           out);{" "}
           <code>gpt-transcribe</code> for dictation;{" "}
           <code>deepseek-v4.1-flash</code> to read the title, authors, abstract and DOI off the first
@@ -649,6 +666,16 @@ export function PrivacyPage() {
           link records the address without the link’s key. It goes to our database, to Sentry and, as an email, to our own inbox, and the
           point of saying so here is that
           you can leave the box until you are on a page you don’t mind us seeing.
+        </p>
+        {/* **Since 2026-10-08**: Report this on a failed import types these
+            three into the box for the reader (src/web/import-report.ts), which
+            is only inside docs/project/feedback.md § The one rule because this
+            paragraph tells them. Plan 261008j. */}
+        <p>
+          If you press <strong className="tw:text-foreground">Report this</strong> on an import that
+          failed, the box starts filled in with the address you imported from (or the name of the
+          file you uploaded), the error we ran into and when it happened. It is all there in the box
+          before you send, so you can change or delete any of it.
         </p>
         <p>
           Two things are optional, and they are optional in different ways.{" "}

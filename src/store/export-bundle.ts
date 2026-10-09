@@ -6,10 +6,11 @@
  * it is the whole design: `exportArticle` is the *rollback*, its output is
  * pinned byte for byte by `tests/store-roundtrip.test.ts` against what the
  * filesystem store writes, and it is therefore lossy in ways that cannot be
- * fixed in place — a `candidates` thread comes out as `chat`, `passages` and
- * `interrupted` are dropped from every message, `extractedHtml` is never written
- * at all. **The rollback's data model is not "my article data", and must not
- * become its definition.** docs/plans/260901h-export-article-data.md.
+ * fixed in place — `extractedHtml` is never written at all, and other legacy
+ * differences remain. (`candidates`, `passages` and `interrupted` were examples
+ * here until their rollback projection was corrected.) **The rollback's data
+ * model is not "my article data", and must not become its definition.**
+ * docs/plans/260901h-export-article-data.md.
  *
  * ## Rows out, not fields out
  *
@@ -426,6 +427,7 @@ const REVISION_WRITTEN_ELSEWHERE = [
   "quiz",
   "faq",
   "relations",
+  "debateClaims",
   "skim",
   "crossrefs",
   "simpleSummary",
@@ -506,6 +508,7 @@ function augmentationFiles(rows: ArticleRows): Map<string, string> {
   at("quiz.json", revision.quiz);
   at("faq.json", revision.faq);
   at("relations.json", revision.relations);
+  at("debate-claims.json", revision.debateClaims);
   at("skim.json", revision.skim);
   at("crossrefs.json", revision.crossrefs);
   at("simple-summary.json", revision.simpleSummary);
@@ -522,12 +525,10 @@ function augmentationFiles(rows: ArticleRows): Map<string, string> {
        rollback shape it — a flat list keyed by `threadId` would be closer to the
        tables and further from anything an importer wants.
 
-       **`kind` is written as it is stored.** The rollback flattens `candidates`
-       to `chat` because the round-trip test compares its bytes against a file
-       the filesystem store wrote; a reader's Candidates thread coming back as an
-       ordinary chat is precisely the loss this file exists not to repeat, and
-       `passages` and `interrupted` on each message are the other half of it.
-       Nothing below names a field, so all three survive by construction. */
+       **`kind` is written as it is stored**, as are `passages`, `interrupted`
+       and `truncated` on each message. The rollback names those fields too now;
+       this projection's stronger guarantee is that nothing below names a field,
+       so the next column survives without another edit. */
     const threads = rows.chatThreads.map((thread) => ({
       ...rowJson(thread),
       messages: messagesOfThread(rows, thread.id).map((row) => rowJson(row, ["threadId"])),
@@ -549,6 +550,11 @@ function augmentationFiles(rows: ArticleRows): Map<string, string> {
   }
   const claims = rows.refereeClaims[0];
   if (claims) at("referee-claims.json", { run: rowJson(claims) });
+  if (rows.debateClaimChecks.length) {
+    at("debate-claim-checks.json", { checks: rows.debateClaimChecks.map((row) => rowJson(row)) });
+  }
+  const hiddenCheck = rows.refereeHiddenChecks[0];
+  if (hiddenCheck) at("referee-hidden-check.json", { check: rowJson(hiddenCheck) });
   if (rows.glossaryLookups.length) {
     at("glossary-lookups.json", { lookups: rows.glossaryLookups.map((row) => rowJson(row)) });
   }
@@ -644,6 +650,8 @@ one thing that will make the rest of these files make sense.
       quiz.json            Questions generated from the article.
       faq.json             Questions a careful reader might put to the article, and the passages that respond.
       relations.json       How each paragraph bears on the one before it, one word each.
+      debate-claims.json   The claims the article rests on that someone outside could argue with,
+                           each in the article's words and the model's.
       skim.json            A route through the quotes, in the order to read them, at three depths.
       crossrefs.json       Links from a phrase in one paragraph to the paragraph that backs it.
       simple-summary.json  A few paragraphs in plain words, and the passages each rests on.
@@ -656,6 +664,8 @@ one thing that will make the rest of these files make sense.
                            nested inside the thread it belongs to.
       searches.json        Meaning-searches you ran, and what they matched.
       referee-claims.json  Referee mode: what the paper claims.
+      debate-claim-checks.json Debate: the claims you picked or typed, and what each search found.
+      referee-hidden-check.json Referee mode: Opus's opinion of each row of hidden text.
       referee-criteria.json Referee mode: the criteria you set, and how the article scored.
 
 \`manifest.json\` lists every file in the zip under \`entries\`, with its uncompressed size —
@@ -726,7 +736,9 @@ Each block also carries its \`ordinal\`, so you can sort the order back if you l
 - **Pipeline machinery** — caches, queue state, and which step is up to date. None of it is
   anything you wrote, and none of it means anything outside Spideryarn.
 - **Anything about you that isn't about this article** — your reader profile and settings are not
-  in here. This file is one article's data.
+  in here. This file is one article's data. What you said about yourself in this article's
+  conversations is part of them, and is here, including words the guide offered to save to your
+  profile.
 
 \`manifest.json\` repeats this list in machine-readable form under \`omitted\`, so an importer can
 check what it is missing rather than inferring it from absent files.
@@ -833,6 +845,8 @@ const FILE_NOTES: Readonly<Record<string, string>> = {
   "augmentations/faq.json":
     "Questions a careful reader might put to the article, and the passages that respond.",
   "augmentations/relations.json": "How each paragraph bears on the one before it, one word each.",
+  "augmentations/debate-claims.json":
+    "The claims the article rests on that someone outside could argue with, each in the article's words and the model's.",
   "augmentations/skim.json":
     "A route through the quotes, in the order to read them, at three depths.",
   "augmentations/crossrefs.json":
@@ -851,6 +865,9 @@ const FILE_NOTES: Readonly<Record<string, string>> = {
   "augmentations/chat.json": "Your conversations: threads, with every message nested inside its thread.",
   "augmentations/searches.json": "Meaning-searches you ran, and what they matched.",
   "augmentations/referee-claims.json": "Referee mode: what the paper claims.",
+  "augmentations/debate-claim-checks.json":
+    "Debate: the claims you picked or typed, and what each search found.",
+  "augmentations/referee-hidden-check.json": "Referee mode: Opus's opinion of each row of hidden text.",
   "augmentations/referee-criteria.json": "Referee mode: the criteria you set, and how the article scored.",
 };
 
@@ -947,6 +964,7 @@ function bundleCounts(rows: ArticleRows): { readonly label: string; readonly n: 
     { label: "cited works", n: countOf(revision.citations, "citations") },
     { label: "quiz questions", n: countOf(revision.quiz, "questions") },
     { label: "FAQ questions", n: countOf(revision.faq, "questions") },
+    { label: "Debate's listed claims", n: countOf(revision.debateClaims, "claims") },
     { label: "Skim stops", n: countOf(revision.skim, "stops") },
     { label: "cross-references", n: countOf(revision.crossrefs, "links") },
     /* Every level, counted apart: a `simple/1` row (one `paragraphs` list)

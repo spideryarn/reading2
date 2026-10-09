@@ -189,6 +189,11 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   "simple-check": "step-driven",
   skim: "step-driven",
   debate: "step-driven",
+  /* Debate's claims list, one Messages call and no search (src/debate-claims.ts). */
+  "debate-claims": "step-driven",
+  /* A reader's claim check: one press, one web search, in request scope —
+     `POST /api/debate-claims/:slug/checks` (src/routes.ts). */
+  "debate-check": "interactive request work",
   citations: "step-driven",
   /* Three tasks a reader waits on with the page open. */
   explain: "interactive request work",
@@ -269,6 +274,10 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   /* An imported title, tidied inside `extract` or the bulk import's
      `metadata` step. src/title-tidy-model.ts. */
   "title-tidy": "step-driven",
+  /* A conversation's one-line gist, written after a chat answer is stored and
+     its response sent — request scope, owner-attributed, triggered by the
+     reader's question. src/chat-gist.ts. */
+  "chat-gist": "interactive request work",
   /* The shelf's topics, scored after `GET /api/library/terms` has answered and
      awaited before the handler returns — request scope, owner-attributed,
      triggered by a reader opening their shelf. Nobody waits on it, but it is

@@ -43,6 +43,7 @@ import type {
   LoadOperation,
   Operation,
   OpId,
+  PruneOperation,
   RecoveryOperation,
   Registering,
   RenameOperation,
@@ -53,13 +54,14 @@ import type {
 } from "./model.js";
 import {
   attemptOf,
+  isSettled,
   isResult,
   mergedArrival,
   withoutEmpty,
   withServerIds,
   writerOf,
 } from "./model.js";
-import { storedSpoken, turnMessages } from "./project.js";
+import { prunedAt, storedSpoken, turnMessages } from "./project.js";
 
 export interface Outcome {
   state: ChatState;
@@ -144,6 +146,9 @@ function accepts(op: Operation, event: ChatResult): boolean {
     case "hint.succeeded":
     case "hint.failed":
       return op.kind === "hint";
+    case "prune.succeeded":
+    case "prune.failed":
+      return op.kind === "prune";
   }
 }
 
@@ -315,6 +320,27 @@ function startHint(state: ChatState, op: Registering<HintOperation>): Outcome {
   };
 }
 
+/** Start a prune only while the conversation is addressable and has no other work in flight. */
+function startPrune(state: ChatState, op: Registering<PruneOperation>): Outcome {
+  const { threadId, messageId, ids } = op;
+  const expectedTailId = ids.at(-1);
+  /* Nothing to delete is nothing to ask. The hook reads `ids` off the screen,
+     so this is a press on a row that has already gone. */
+  if (expectedTailId === undefined) return unchanged(state);
+  /* The button is gated during render, but controller notifications may trail
+     the current state. Ask again on the event itself: a stale armed button must
+     not overlap a turn, rename, recovery, spoken append or earlier prune, nor
+     address a thread the server has not named. */
+  if (!isSettled(state, threadId)) return unchanged(state);
+  return {
+    /* Supersedes nothing: the settled gate above admits no same-thread
+       operation for it to replace. A whole-thread delete may start later and
+       supersede this one by its own rule. */
+    state: register<PruneOperation>(state, op, () => false),
+    commands: [{ type: "prune", opId: op.id, slug: state.slug, threadId, messageId, expectedTailId }],
+  };
+}
+
 function applyInput(state: ChatState, event: ChatInput): Outcome {
   switch (event.type) {
     case "load.started": {
@@ -428,6 +454,8 @@ function applyInput(state: ChatState, event: ChatInput): Outcome {
       return startRecovery(state, event.op);
     case "hint.started":
       return startHint(state, event.op);
+    case "prune.started":
+      return startPrune(state, event.op);
     case "thread.begun":
       /* One of the two places this tab invents a conversation, so one of the two
          places `unnamed` grows. Nothing is written to disk until the reader
@@ -513,7 +541,7 @@ function startSpoken(state: ChatState, op: Registering<SpokenOperation>): Outcom
         ...(op.reply.tools ? { tools: op.reply.tools } : {}),
         ...(op.reply.interrupted ? { interrupted: true } : {}),
         ...(op.engine && op.engine !== "realtime" ? { engine: op.engine } : {}),
-        ...(kind === "chat" || kind === "learn" ? { kind } : {}),
+        ...(kind === "chat" || kind === "learn" || kind === "guide" ? { kind } : {}),
       },
     ],
   };
@@ -1083,11 +1111,11 @@ function applyTurn(state: ChatState, event: ChatResult, op: TurnOperation): Outc
       return moved(state, op, { ...op.reply, tools });
     }
     case "turn.done": {
-      /* `stopped` and `tools` are both defaulted *before* the spread, for one
-         reason: the server omits each of them when there is nothing to say, so
-         a spread alone cannot clear a stale one. This row may be a retry of one
-         that *was* stopped, and a complete answer wearing "Stopped" underneath
-         it is what leaving the field off looks like. */
+      /* `stopped`, `truncated` and `tools` are defaulted *before* the spread,
+         for one reason: the server omits each of them when there is nothing to
+         say, so a spread alone cannot clear a stale one. This row may be a retry
+         of one that was stopped or cut off, and a complete answer wearing either
+         warning underneath it is what leaving the field off looks like. */
       /* `opensFree` is the guide's, for this moment (`Answered`), and not a
          field of the message. */
       const { opensFree: _opensFree, ...done } = event.done;
@@ -1570,6 +1598,31 @@ function applyResult(state: ChatState, event: ChatResult, op: Operation): Outcom
          above the conversation about a hint the reader is reading would be
          noise. What matters is that nothing here claims it was saved. */
       return { state: { ...state, operations: withoutOp(state, op.id) }, commands: NOTHING };
+    case "prune.succeeded": {
+      const retired = { ...state, operations: withoutOp(state, op.id) };
+      if (op.kind !== "prune") return { state: retired, commands: NOTHING };
+      /* What was drawn, written down: these rows and no others, so a row this
+         tab appended since stays. The gist goes too, as the server's does. */
+      const base = rewrite(retired.base, op.threadId, (t) => {
+        const messages = t.messages.filter((m) => !op.ids.includes(m.id));
+        if (messages.length === t.messages.length && t.gist === undefined) return t;
+        const { gist: _gist, ...rest } = t;
+        return { ...rest, updatedAt: prunedAt(t, messages), messages };
+      });
+      return { state: { ...retired, base }, commands: NOTHING };
+    }
+    case "prune.failed":
+      /* The rows come back by this entry leaving the map, and the reader is
+         told why — a delete that silently undid itself would read as the
+         button not working. */
+      return {
+        state: {
+          ...state,
+          operations: withoutOp(state, op.id),
+          error: `Couldn't delete that: ${event.error}`,
+        },
+        commands: NOTHING,
+      };
     default:
       return applyTurn(state, event, op as TurnOperation);
   }

@@ -28,6 +28,7 @@ import { ARTICLE_OUTPUT_FORMAT } from "../src/pipeline.js";
 import { generateQuiz } from "../src/quiz.js";
 import { generateQuotes } from "../src/quotes.js";
 import { generateRelations } from "../src/relations.js";
+import { generateDebateClaims } from "../src/debate-claims.js";
 import { generateSimpleSummary } from "../src/simple-summary.js";
 import { generateSketch } from "../src/sketch.js";
 import { generateTimeline } from "../src/timeline.js";
@@ -70,6 +71,7 @@ const RUNNERS = {
   quiz: () => generateQuiz({ article, power: "standard" }),
   faq: () => generateFaq({ article, power: "standard" }),
   relations: () => generateRelations({ article, power: "standard" }),
+  "debate-claims": () => generateDebateClaims({ article, power: "standard" }),
   crossrefs: () => generateCrossrefs({ article, power: "standard" }),
   simple: () => generateSimpleSummary({ article, profile: null, guard: false, power: "standard" }),
 } satisfies Record<ArticleStage, () => Promise<unknown>>;
@@ -83,6 +85,7 @@ const STAGES_GAINING_SCHEMAS = [
   "quiz",
   "faq",
   "relations",
+  "debate-claims",
   "crossrefs",
   "simple",
 ] as const satisfies readonly ArticleStage[];

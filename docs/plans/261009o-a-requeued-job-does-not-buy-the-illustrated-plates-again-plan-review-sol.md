@@ -1,0 +1,27 @@
+## Must
+
+None. The core design is sound.
+
+## Should
+
+1. **Correct the red-first test description.** The plan says the plate stub “throws as a death would” ([plan:85](/var/tmp/spideryarn-worktrees/bug-illustrated-rebuys-plates/docs/plans/261009o-a-requeued-job-does-not-buy-the-illustrated-plates-again.md:85)), but `drawPlates` catches an ordinary thrown draw error, records that plate as failed, and continues ([illustrated.ts:1527](/var/tmp/spideryarn-worktrees/bug-illustrated-rebuys-plates/src/illustrated.ts:1527)). Such a test remains wrong after the fix.
+
+   The current never-resolving request is the correct simulation ([illustrated-step-registration.test.ts:841](/var/tmp/spideryarn-worktrees/bug-illustrated-rebuys-plates/tests/illustrated-step-registration.test.ts:841)): the first process effectively disappears while its request is outstanding, and without the fix the second run resolves and paints again. Update the plan to say “never returns,” not “throws.”
+
+2. **Name the full Retry cost for `sketch → illustrated`.** The plan says Retry buys the brief again ([plan:74](/var/tmp/spideryarn-worktrees/bug-illustrated-rebuys-plates/docs/plans/261009o-a-requeued-job-does-not-buy-the-illustrated-plates-again.md:74)). A plate-marker refusal is a stage failure, however, and stage failure discards the retained draft ([pg-session.ts:31](/var/tmp/spideryarn-worktrees/bug-illustrated-rebuys-plates/src/store/pg-session.ts:31), [pg-session.ts:563](/var/tmp/spideryarn-worktrees/bug-illustrated-rebuys-plates/src/store/pg-session.ts:563)). Since Sketch precedes Illustrated ([step-order.ts:139](/var/tmp/spideryarn-worktrees/bug-illustrated-rebuys-plates/src/step-order.ts:139)), a newly drawn forced Sketch in that draft is also lost and may be bought again on Retry; forced work is deliberately restored on a retry ([jobs.ts:5165](/var/tmp/spideryarn-worktrees/bug-illustrated-rebuys-plates/src/jobs.ts:5165)). The published article remains unchanged rather than half-finished, but the trade-off is understated.
+
+3. **Add coverage for the shared-column invariant and the promised fresh-job control.** `beginPaidStep` refuses only an equal marker and overwrites a different one ([pg-jobs.ts:1481](/var/tmp/spideryarn-worktrees/bug-illustrated-rebuys-plates/src/store/pg-jobs.ts:1481)). That is safe today because steps are de-duplicated and canonically ordered ([jobs.ts:1077](/var/tmp/spideryarn-worktrees/bug-illustrated-rebuys-plates/src/jobs.ts:1077)), with Illustrated before Debate, but this is the central premise of sharing one column.
+
+   Add a walk/store case that completes `illustrated-plates`, then begins Debate, requeues, and confirms Debate is refused. Also exercise the plan’s “new job id is not refused” promise ([plan:90](/var/tmp/spideryarn-worktrees/bug-illustrated-rebuys-plates/docs/plans/261009o-a-requeued-job-does-not-buy-the-illustrated-plates-again.md:90)); the current fake is only a purchase-keyed `Set` ([illustrated-step-registration.test.ts:815](/var/tmp/spideryarn-worktrees/bug-illustrated-rebuys-plates/tests/illustrated-step-registration.test.ts:815)).
+
+4. **Correct the orphan-blob claim.** The plan says a fully drawn set that dies before commit has no stored blobs ([plan:80](/var/tmp/spideryarn-worktrees/bug-illustrated-rebuys-plates/docs/plans/261009o-a-requeued-job-does-not-buy-the-illustrated-plates-again.md:80)). In fact, blobs are stored individually before the transactional step commit, and the code explicitly accepts orphans if execution fails between those operations ([pipeline.ts:5095](/var/tmp/spideryarn-worktrees/bug-illustrated-rebuys-plates/src/pipeline.ts:5095)). This is pre-existing and does not weaken the marker, but the trade-off should say that orphan blobs may remain.
+
+## Could
+
+1. **Soften the deadline claim.** “Cannot reach the plates” is too absolute ([plan:26](/var/tmp/spideryarn-worktrees/bug-illustrated-rebuys-plates/docs/plans/261009o-a-requeued-job-does-not-buy-the-illustrated-plates-again.md:26)): the fit calculation precedes the marker write, drawing overhead, and blob storage. A deadline can still race there. It remains safe because both deadline pause and lapse preserve the marker; the existing sibling tests already prove both requeue paths ([jobs-paid-step-once.test.ts:228](/var/tmp/spideryarn-worktrees/bug-illustrated-rebuys-plates/tests/jobs-paid-step-once.test.ts:228)).
+
+2. **Remove “or the reverse” from the shared-column explanation.** Canonical order permits Illustrated → Debate, not Debate → Illustrated ([step-order.ts:145](/var/tmp/spideryarn-worktrees/bug-illustrated-rebuys-plates/src/step-order.ts:145), [step-order.ts:169](/var/tmp/spideryarn-worktrees/bug-illustrated-rebuys-plates/src/step-order.ts:169)).
+
+The marker itself covers the requested paths: it is placed after the deliberate hand-back and before the first image call ([illustrated.ts:1393](/var/tmp/spideryarn-worktrees/bug-illustrated-rebuys-plates/src/illustrated.ts:1393)); Stop does not requeue cancelling jobs; Retry uses a new job row or joins equivalent active work; and eval/direct callers omit the hook. A per-plate checkpoint alone honestly fails the strict guarantee because it cannot recover or classify the request in flight when the process dies. There is no materially simpler equivalent that retains the existing live-attempt fence.
+
+VERDICT: APPROVE WITH CHANGES

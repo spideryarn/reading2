@@ -79,6 +79,53 @@ For every reader, on every page, since 2026-10-02: the author, the model and the
 their own face — a serif, IBM Plex Mono and Arial — and Geist stays the chrome. The rule,
 the tokens, and how to put a new element in its voice: **[fonts.md](fonts.md)**.
 
+## Text roles in a band
+
+The same jobs recur in every mode band's rows, and until 2026-10-08 each mode gave them its own rem —
+a row's main line anywhere from 0.88 to 0.96. Greg, 2026-10-08 (`q-dhnbhw`):
+
+> I think as much as anything, I'm trying to lay foundations so that development goes faster and is
+> more likely to produce good results without too many rounds of iteration going forwards.
+
+So six tokens, named by job, in [`src/web/styles/tokens.css`](../../src/web/styles/tokens.css):
+
+| Token | Job | Value |
+|---|---|---|
+| `--type-item` | a row's main line, the thing you scan down | 0.92rem |
+| `--type-quote` | verbatim source words under a row — the article's, or a cited page's | 0.88rem |
+| `--type-body` | a sentence under the row that explains it | 0.85rem |
+| `--type-meta` | a small line: where, when, from whom | 0.78rem |
+| `--type-count` | a number standing for how many | 0.83rem |
+| `--type-label` | a group's small uppercase heading | 0.77rem |
+
+**The rule: a line in a band that does one of these jobs uses its token; anything else may pick its
+own.** A button, a status line or a number in a chip keeps its odd value — the aim is that the six
+jobs are settled, not that every number is. `/design` § Text roles shows each against the voices it
+meets.
+
+**A role is decided by the line's job in its row, not by whose words they are.** In Quotes the
+quotation *is* the row, so it is `--type-item`; under a Debate title, a quotation is `--type-quote`.
+Search's results are Quotes' case. Face is a separate decision, [fonts.md](fonts.md)'s.
+
+**Exceptions, each with a comment beside the rule:** Quiz's one question stays 1.03rem; Debate's
+foldable claim quotation stays 0.85rem; Mirror's reader-written criterion and block-id fallback stay
+0.88rem. They occupy similar places without doing one of the six jobs. Skim's question before a
+quote (`.skim-cue`) does a body line's job but stays 0.78rem: Greg asked that it be smaller than the
+quote, and in monospace a body-sized line reads larger than the serif quote beside it (plan
+[261009j](../plans/261009j-skim-question-optional-and-the-border.md)). The open Skim stop's section heading
+(`.skim-row.current .skim-place`) is 0.82rem rather than `--type-item`, so the quote under it is
+read first; the other rows keep the role (plan [261009m](../plans/261009m-skim-quieter-open-stop.md)).
+
+**Left out on purpose:** Timeline's and Ideas' group blurbs (small explanatory copy, neither meta
+nor body); Marginalia, drawn small beside the prose; Structure and the outline, which size rows by
+distance on their own `--structure-tier-*` scale; Diagram, Sketch and Illustrated, whose type is
+part of a fixed composition; Chat, whose turns are prose; and everything outside the band.
+
+[`tests/type-roles.test.ts`](../../tests/type-roles.test.ts) holds each moved line to its token and
+each exception to its literal; a line that never joins its registry is not caught. The plan, the
+measurements and what was passed over:
+[261008k](../plans/261008k-text-styles-for-the-recurring-lines-in-a-mode-band.md).
+
 ## Weight, and the variable axis
 
 `--reading-weight` is **450, not 400**. Light text on a dark ground optically thins; the previous

@@ -249,6 +249,27 @@
   vertical-align: middle;
 }
 .design-table td:first-child { width: 10rem; }
+
+/* **Text roles** — the six band sizes against the four voices (DesignPage.tsx
+   § TEXT_ROLES). Five columns do not fit a phone, so the panel scrolls
+   sideways rather than the page; the samples keep their real size. */
+.design-roles-wrap { overflow-x: auto; }
+.design-roles { min-width: 44rem; }
+.design-roles th {
+  padding: 0.45rem 0.9rem 0.45rem 0;
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-align: left;
+  vertical-align: top;
+}
+.design-roles tbody th { width: 11rem; font-weight: 400; }
+.design-roles td { vertical-align: top; color: var(--ink); }
+.design-roles-use { display: block; margin: 0.2rem 0 0; }
+.design-roles-upper { letter-spacing: 0.06em; text-transform: uppercase; }
+.design-roles-none { color: var(--ink-faint); }
 /* Otherwise the last row's rule and the next section's top border stack up a
    few pixels apart and read as a mistake. */
 .design-table tr:last-child td { border-bottom: 0; }

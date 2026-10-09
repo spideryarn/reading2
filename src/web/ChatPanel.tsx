@@ -53,7 +53,7 @@
  * ordered list's `start`, which is a number; and a heading's element name,
  * clamped to h4–h6.
  */
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type RefObject, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   BookOpen,
@@ -93,11 +93,15 @@ import type {
   ChatThread,
   Citation,
   ThreadKind,
+  ThreadOrigin,
   ToolRun,
 } from "../types.js";
 import { isLearnKind } from "../types.js";
 import { CitedMarkdown } from "./Cited.js";
 import { GuideGreeting } from "./GuideGreeting.js";
+import { GuideSaveOffers } from "./GuideSaveOffer.js";
+import { guideGreeting } from "./guide-greeting.js";
+import { usePurpose } from "./purpose.js";
 import { Button } from "./components/ui/button.js";
 import { useChatCommands } from "./CommandChip.js";
 import { chipFor } from "./chat-commands.js";
@@ -124,6 +128,7 @@ import {
   GUIDE_LABEL,
   type LearnConversationView,
   narrowed,
+  originBack,
   sourcesIn,
   type ThreadSource,
   threadSource,
@@ -205,6 +210,8 @@ interface Props {
   onThread(id: string | null): void;
   /** The article, so dictation can be primed with this one's vocabulary. */
   slug: string;
+  /** The article's title, for the guide's greeting (plan 261009i). */
+  articleTitle?: string | undefined;
   /**
    * Whether the conversations have been asked for and answered.
    *
@@ -275,6 +282,16 @@ interface Props {
   onRetry(messageId: string): void;
   /** Rewrite one of the reader's questions. Discards everything after it. */
   onEdit(messageId: string, question: string): void;
+  /**
+   * Delete one of the reader's questions and everything after it (report
+   * spya-mx423m). **Required, and undefined while the conversation is not
+   * settled** — `settled` in useChat.ts: named by the server and nothing of
+   * this tab's still out for it. A question the server has not named yet
+   * cannot be addressed, and a second press while one delete is out would
+   * name a tail the first is about to remove. Required so a new caller has
+   * to decide (GPT Sol, plan review F3 and F6).
+   */
+  onDeleteFrom: ((messageId: string) => void) | undefined;
   /** Stop an answer that is still arriving. What has appeared is kept. */
   onStop(messageId: string): void;
   /**
@@ -311,6 +328,16 @@ interface Props {
   focusNonce: number;
   /** A transport failure. Model failures live on the message that failed. */
   error: string | null;
+  /**
+   * **Where the open conversation was started from**, when it was started
+   * from an item in another mode: the stored origin, or the one still waiting
+   * for the server to name the thread (`ConversationBand` resolves which). A
+   * line above the transcript then offers the way back (`OriginBack`; plan
+   * 261009k, stage 2). Chat's alone: Learn never passes one.
+   */
+  origin?: ThreadOrigin | undefined;
+  /** Open the origin's mode on its item (Reader.tsx § `openOrigin`). */
+  onOrigin?: ((origin: ThreadOrigin) => void) | undefined;
   /**
    * Which mode this panel is being shown in — chat, or Learn.
    *
@@ -416,6 +443,7 @@ export const SUGGESTIONS: { label: string; ask: string }[] = [
 
 export function ChatPanel({
   slug,
+  articleTitle,
   loaded,
   loadFailed,
   threads,
@@ -436,6 +464,7 @@ export function ChatPanel({
   startingOver = false,
   onRetry,
   onEdit,
+  onDeleteFrom,
   onStop,
   onHintOpened,
   onJump,
@@ -448,6 +477,8 @@ export function ChatPanel({
   live,
   onStartLive,
   onAnswered,
+  origin,
+  onOrigin,
 }: Props) {
   useRenderCount("ChatPanel");
   /* **Learn's layout, for all three of its conversations** — Recall,
@@ -708,6 +739,10 @@ export function ChatPanel({
           docs/plans/260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen.md */}
       {error && <p className="chat-error">{error}</p>}
 
+      {/* **The way back to the item this chat was started from** (plan
+          261009k, stage 2). A chat only: not Learn, not the guide. */}
+      {!learn && open?.kind === "chat" && origin && onOrigin && <OriginBack origin={origin} onBack={onOrigin} />}
+
       {open ? (
         <Conversation
           /* Keyed, so that switching conversation gets a fresh transcript and a
@@ -723,6 +758,7 @@ export function ChatPanel({
           onSubmitStarted={open.kind === "chat" ? () => drafts.submitted(open.id) : undefined}
           onRetry={onRetry}
           onEdit={onEdit}
+          onDeleteFrom={onDeleteFrom}
           onStop={onStop}
           onHintOpened={onHintOpened}
           focusNonce={focusNonce}
@@ -737,6 +773,7 @@ export function ChatPanel({
           live={shownLive}
           onStartLive={onStartLive ? () => onStartLive(open.id) : undefined}
           guideAct={guideAct}
+          articleTitle={articleTitle}
         />
       ) : learn ? (
         /* **Learn never draws a list, not even for a frame.** The band
@@ -845,6 +882,7 @@ export function ChatPanel({
           {loaded && (
             <Composer
               slug={slug}
+              keepAs={`chat:${slug}:new:${kind}`}
               onSend={onSendNew}
               busy={false}
               focusNonce={0}
@@ -891,11 +929,17 @@ function ArmedDelete({
   onDelete,
   title = "Delete this conversation",
   armedTitle = "Press again to delete this conversation",
+  size = 14,
+  buttonRef,
 }: {
   onDelete(): void;
   /** What the button says at rest, and once armed. Learn calls it Start over. */
   title?: string;
   armedTitle?: string;
+  /** The bin's size: 14 in a header, 12 beside a question's pencil. */
+  size?: number;
+  /** Lets a row hand focus somewhere stable before this button disappears. */
+  buttonRef?: RefObject<HTMLButtonElement | null>;
 }) {
   const [armed, setArmed] = useState(false);
   useEffect(() => {
@@ -906,14 +950,37 @@ function ArmedDelete({
 
   return (
     <button
+      ref={buttonRef}
       type="button"
       className={`chat-icon danger${armed ? " armed" : ""}`}
       title={armed ? armedTitle : title}
       onClick={() => (armed ? onDelete() : setArmed(true))}
     >
-      <Trash2 size={14} />
+      <Trash2 size={size} aria-hidden="true" />
     </button>
   );
+}
+
+/** The exact second-press warning: the answer is named separately from later rows. */
+function deleteFromArmedTitle(discards: number): string {
+  if (discards === 0) return "Press again to delete this question";
+  if (discards === 1) return "Press again to delete this question and its answer";
+  const trailing = discards - 1;
+  return `Press again to delete this question, its answer and the ${trailing} message${trailing === 1 ? "" : "s"} after it`;
+}
+
+/** Put focus on the retained question before the optimistic prune removes this row. */
+function focusBeforePrune(button: HTMLButtonElement | null): void {
+  const row = button?.closest(".chat-turn.you");
+  let previous = row?.previousElementSibling ?? null;
+  while (previous) {
+    const target = previous.querySelector<HTMLButtonElement>('button[title="Rewrite this question"]');
+    if (target) {
+      target.focus();
+      return;
+    }
+    previous = previous.previousElementSibling;
+  }
 }
 
 /** Where Learn's composer turns compact — see `short` in `Composer`. */
@@ -1246,6 +1313,43 @@ function GuideRow({
  * the author's for the article's words, the reader's for an angle they typed
  * (`ThreadSource.voice`).
  */
+/**
+ * **One line above the transcript: back to the item this chat was started
+ * from**, in its mode (plan 261009k, stage 2; the words are
+ * thread-source.ts § `originBack`). It wears the mode's own icon, because a
+ * control that takes you into a mode does (docs/project/icons.md). The
+ * item's name is the article's or a model's words, so it is in the author's
+ * face as the list's tooltip draws it (`ThreadSourceMark`), and it is clipped
+ * by CSS on one line: the whole sentence is the button's name and title.
+ *
+ * Not drawn in the floating chat beside a mode (`ChatDialog`): that one was
+ * opened from the item's own mark, so the item is already on screen.
+ */
+function OriginBack({ origin, onBack }: { origin: ThreadOrigin; onBack(origin: ThreadOrigin): void }) {
+  const back = originBack(origin);
+  const Icon = MODE_ICON[back.mode];
+  return (
+    <button
+      type="button"
+      className="chat-origin-back tap-target"
+      aria-label={back.text}
+      title={back.text}
+      onClick={() => onBack(origin)}
+    >
+      <Icon size={13} aria-hidden="true" />
+      <span className="chat-origin-back-text">
+        Back to{" "}
+        {back.quote === null ? (
+          "your angle"
+        ) : (
+          <span className={withVoice("chat-origin-back-quote", "author")}>“{back.quote}”</span>
+        )}{" "}
+        in {back.modeLabel}
+      </span>
+    </button>
+  );
+}
+
 function ThreadSourceMark({ source }: { source: ThreadSource }) {
   const { open, onOpenChange, trigger } = usePressToggle();
   /* A passage is not a mode and has no icon on the bar. */
@@ -1387,6 +1491,7 @@ export function Conversation({
   onSubmitStarted,
   onRetry,
   onEdit,
+  onDeleteFrom,
   onStop,
   onHintOpened,
   focusNonce,
@@ -1400,9 +1505,12 @@ export function Conversation({
   onStartLive,
   onAnswered,
   guideAct,
+  articleTitle,
 }: {
   /** The article, so the composer's dictation can be primed with its vocabulary. */
   slug: string;
+  /** The article's title, for the guide's greeting (plan 261009i). */
+  articleTitle?: string | undefined;
   thread: ChatThread;
   /** See `onHintOpened` in Props. Absent where nothing records the press. */
   onHintOpened?: ((messageId: string, hint: string) => void) | undefined;
@@ -1415,6 +1523,8 @@ export function Conversation({
   onSubmitStarted?: (() => void) | undefined;
   onRetry(messageId: string): void;
   onEdit(messageId: string, question: string): void;
+  /** See `onDeleteFrom` in Props. */
+  onDeleteFrom: ((messageId: string) => void) | undefined;
   onStop(messageId: string): void;
   focusNonce: number;
   /** See `focused` in ChatPanel — it outlives this component on purpose. */
@@ -1457,6 +1567,16 @@ export function Conversation({
    * ran in is over, so nothing that mounts later can act on it.
    */
   const ownAct = useGuideAct(thread.id, kind, visible, onAnswered);
+  /* **The guide's greeting** (plan 261009i): drawn only by a conversation
+     that was empty when this mount first saw it, and snapshotted only while it
+     is still empty. `usePurpose` is asynchronous; if the reader sends before
+     it answers, drawing its eventual greeting above that message would turn
+     words written without seeing the question into an apparent answer. Once shown, the snapshot stays above
+     the turns while this mount lasts. A guide opened with turns in it shows
+     none — GuideGreeting.tsx says why. */
+  const guideRead = usePurpose(kind === "guide" ? slug : null);
+  const greeting = kind === "guide" ? guideGreeting(guideRead, articleTitle) : null;
+  const greetsHere = useRef(thread.messages.length === 0);
   const act = guideAct ?? ownAct;
   /* **Offered, and spent, only once this conversation draws that answer as
      finished.** The `Answered` event can land before the store's notification
@@ -1473,6 +1593,8 @@ export function Conversation({
   const last = thread.messages.at(-1);
   const chars = last?.text.length ?? 0;
   const busy = last?.status === "pending";
+  /** A Live session is running in this conversation — the test `leave` uses. */
+  const speaking = live !== undefined && live.phase !== "idle" && live.phase !== "failed";
   /**
    * Which question the reader is rewriting, if any.
    *
@@ -1542,6 +1664,11 @@ export function Conversation({
   const liveChars = liveSize(liveLines);
   const hasTurns = thread.messages.length > 0;
   const empty = thread.messages.length === 0 && liveLines.length === 0;
+  const [openingGreeting, setOpeningGreeting] = useState<ReturnType<typeof guideGreeting>>(null);
+  useLayoutEffect(() => {
+    if (!greetsHere.current || openingGreeting !== null || greeting === null || !empty) return;
+    setOpeningGreeting(greeting);
+  }, [empty, greeting, openingGreeting]);
   const toolsNow = (last?.tools ?? []).map((run) => run.status).join() + (last?.searches ?? "");
   /**
    * ## A streamed answer stays where it starts
@@ -1901,10 +2028,11 @@ export function Conversation({
           measureSteps(el);
         }}
       >
+        {kind === "guide" && openingGreeting !== null && (
+          <GuideGreeting greeting={openingGreeting} onAsk={(q) => onSend(q)} />
+        )}
         {empty &&
-          (kind === "guide" ? (
-            <GuideGreeting slug={slug} onAsk={(q) => onSend(q)} />
-          ) : kind === "tutorial" ? (
+          (kind === "guide" ? null : kind === "tutorial" ? (
             <TutorialInvitation />
           ) : kind === "explore" ? (
             <ExploreInvitation onAsk={(q) => onSend(q)} />
@@ -1944,7 +2072,20 @@ export function Conversation({
                rendered list rather than passed down, so it cannot drift from
                what is on screen. */
             discards={thread.messages.length - i - 1}
+            /* Not on the first question: that would leave an empty
+               conversation, and the conversation's own delete is in the
+               header (`withDeleteFrom` in src/chat.ts refuses it too). Nor
+               while Live is talking here: its next exchange is appended
+               against the tail it last saw (GPT Sol, plan review F4). */
+            onDeleteFrom={i > 0 && !speaking ? onDeleteFrom : undefined}
+            /* The actionable callback disappears while a turn is out because
+               `settled()` becomes false. Keep the bin's place separately, as
+               the pencil does, so the row does not change width mid-answer. */
+            holdDeleteFrom={i > 0 && !speaking}
           />
+          {/* The guide's offers to save their reason or About you, each a
+              card they press (GuideSaveOffer.tsx, plan 261009q). */}
+          {kind === "guide" && <GuideSaveOffers slug={slug} message={m} />}
           </GuideActContext.Provider>
         ))}
         {/* The spoken words still on their way to being saved, as the end of
@@ -2030,6 +2171,7 @@ export function Conversation({
       </p>
       <Composer
         slug={slug}
+        keepAs={`chat:${slug}:${thread.id}`}
         onSend={onSend}
         onSubmitStarted={onSubmitStarted}
         busy={busy}
@@ -2212,6 +2354,8 @@ export function Turn({
   editing,
   onEditing,
   discards,
+  onDeleteFrom,
+  holdDeleteFrom = false,
 }: {
   message: ChatMessage;
   /**
@@ -2237,6 +2381,14 @@ export function Turn({
   onEditing(on: boolean): void;
   /** Turns an edit here would discard. */
   discards: number;
+  /**
+   * Delete this question and everything after it. Absent on the first
+   * question and wherever the caller offers no delete; withheld with the
+   * pencil while an answer is arriving.
+   */
+  onDeleteFrom?: ((messageId: string) => void) | undefined;
+  /** Reserve the bin's place in the held action row while it cannot be pressed. */
+  holdDeleteFrom?: boolean;
 }) {
   /**
    * Where the caret goes when an edit box closes.
@@ -2256,6 +2408,7 @@ export function Turn({
    * to be withdrawn would be worse.
    */
   const pencil = useRef<HTMLButtonElement>(null);
+  const remove = useRef<HTMLButtonElement>(null);
   const wasEditing = useRef(editing);
   const commands = useChatCommands() ?? undefined;
   useEffect(() => {
@@ -2345,6 +2498,11 @@ export function Turn({
             <span className="chat-icon">
               <Pencil size={12} />
             </span>
+            {holdDeleteFrom && (
+              <span className="chat-icon">
+                <Trash2 size={12} />
+              </span>
+            )}
           </div>
         )}
         {canEdit && (
@@ -2358,6 +2516,25 @@ export function Turn({
             >
               <Pencil size={12} />
             </button>
+            {/* Two presses, like the conversation's own delete: the bin is a
+                row away from the pencil, and a stray click would take the rest
+                of the conversation with it (report spya-mx423m). */}
+            {onDeleteFrom && (
+              <ArmedDelete
+                buttonRef={remove}
+                size={12}
+                title="Delete this question and everything after it"
+                armedTitle={deleteFromArmedTitle(discards)}
+                onDelete={() => {
+                  /* The optimistic prune unmounts this focused row. Put the
+                     caret on the preceding question's pencil first: that row
+                     is precisely the retained tail and survives both success
+                     and refusal. */
+                  focusBeforePrune(remove.current);
+                  onDeleteFrom(message.id);
+                }}
+              />
+            )}
           </div>
         )}
       </div>
@@ -2904,6 +3081,7 @@ function Answer({
  */
 export function Composer({
   slug,
+  keepAs,
   onSend,
   onSubmitStarted,
   busy,
@@ -2921,6 +3099,15 @@ export function Composer({
   onJump,
 }: {
   slug: string;
+  /**
+   * **The name this box keeps a dictation under** — what its words are about,
+   * so a recording left behind is offered back only there: a conversation's
+   * box `chat:<slug>:<thread id>`, the new-conversation box
+   * `chat:<slug>:new:<kind>`, a passage draft `chat:<slug>:draft:<block>`.
+   * Per article alone, a tape left in one conversation came back in another
+   * (Overseer, 2026-10-09; plan 261009g).
+   */
+  keepAs: string;
   onSend(question: string): void;
   /** The reader has submitted, even if Live must finish before `onSend`. */
   onSubmitStarted?: (() => void) | undefined;
@@ -3044,7 +3231,7 @@ export function Composer({
     box,
     context: { kind: "article", slug },
     transcribe,
-    keep: keepDictation(`chat:${slug}`),
+    keep: keepDictation(keepAs),
     /* A double press on Stop also sends (dictation.md § A double press). */
     onDone: () => void submit(),
   });
@@ -3267,14 +3454,14 @@ export function Composer({
              phases, the disabled-while-transcribing rule and the article's own
              glossary priming all come along unchanged. Only the label is new. */
           <span className="chat-talk">
-            <DictationButton dictation={dictate.dictation} toggle={toggleDictation} disabled={busy} again={dictate.again} sendingAfter={dictate.sendingAfter} />
+            <DictationButton dictation={dictate.dictation} toggle={toggleDictation} disabled={busy} again={dictate.again} sendingAfter={dictate.sendingAfter} doubleStop={dictate.doubleStop} />
             {/* Holds its width across Stop: in this wrapping row a wider word
                 could push Live onto a line of its own and move the microphone
                 in a bottom-pinned composer. `TalkLabel`. */}
             <TalkLabel field={dictate} className="chat-talk-label" hidden />
           </span>
         ) : (
-          <DictationButton dictation={dictate.dictation} toggle={toggleDictation} disabled={busy} again={dictate.again} sendingAfter={dictate.sendingAfter} />
+          <DictationButton dictation={dictate.dictation} toggle={toggleDictation} disabled={busy} again={dictate.again} sendingAfter={dictate.sendingAfter} doubleStop={dictate.doubleStop} />
         ))}
       {/* **Beside the microphone, not instead of it.** They are different
           things: one turns speech into text in this box, the other holds a

@@ -104,6 +104,14 @@ page), nothing that changes layout, and nothing at all before the 600ms threshol
 animations repaint rather than composite — Misregistration's `text-shadow`, Warm Drift's filter,
 Radius Sweep's conic gradient — which is fine for a page with nothing else on it.
 
+**It is the only wordmark on the page.** The article page's wait used to keep the corner
+`HomeLogo` beside it, as the page's other bar-less states do; with the loader up that was two of
+the same mark on an empty page, so the wait draws no corner mark at all, before the threshold or
+after. Greg, 2026-10-09: *"we don't need both."* The cost is that a wait which never ends has no
+in-page way home; a failed fetch becomes the error page, which does
+([261009b](../plans/261009b-one-wordmark-while-an-article-loads.md),
+[`tests/article-loading-one-wordmark.test.tsx`](../../tests/article-loading-one-wordmark.test.tsx)).
+
 **Live on `/design`**, in the Wordmark animations section, since a fast local fetch never shows it.
 
 ## Using it elsewhere

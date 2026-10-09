@@ -97,8 +97,10 @@ const FLAG = {
   timeline: "timeline",
   skim: "skim",
   faq: "faq",
-  citations: "citations",
-  debate: "debate",
+  /* Citations and Debate are one row since 2026-10-09, Peer review's, which
+     either flag moves (visitor.ts § POLICY, `any-artefact`). Keyed here by
+     the citations flag; the debate flag is the test after the sweep. */
+  "peer-review": "citations",
 } as const satisfies Record<string, keyof PublicArtefacts>;
 const ROWS = Object.keys(FLAG) as (keyof typeof FLAG)[];
 
@@ -283,6 +285,24 @@ describe("the sweep over the modes", () => {
     expect(row?.detail).toContain("what the model");
   });
 
+  /* The other half of Peer review's row: Reception's or Claims' artefact alone
+     moves it as Bibliography's does (plan 261009l, GPT Sol's F3). */
+  it("moves Peer review's row on the debate flag alone, and nothing else", () => {
+    const oneOn = sharedInventory({ ...NOTHING, debate: true });
+    expect(keys(oneOn.shared)).toContain("peer-review");
+    for (const other of ROWS) {
+      if (other === "peer-review") continue;
+      expect(keys(oneOn.ifBuilt), `${other} moved when only debate exists`).toContain(other);
+    }
+  });
+
+  it("does not tell the owner that a new Debate searched around individual claims", () => {
+    const row = sharedInventory(EVERYTHING).shared.find((item) => item.key === "peer-review");
+    expect(row?.detail).toContain("Reception");
+    expect(row?.detail).toContain("earlier search");
+    expect(row?.detail).not.toContain("went looking for");
+  });
+
   /**
    * **And `search` crossed the same day, from the other list.**
    *
@@ -374,14 +394,19 @@ const WIRE_ROW = {
      A cited work's address is re-judged on its way out (src/public/dto.ts §
      `publicCitedWork`), which is invisible to this table. */
   faq: "faq",
-  citations: "citations",
+  /* Peer review's Bibliography since 2026-10-09 (plan 261009l). */
+  citations: "peer-review",
   /* Simple, from the day it was built (2026-09-30): a sub-mode of Summary, so
      Summary's row. docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
   simpleSummary: "summary",
   /* And the Debate, the same day (plan 260929c stage 4). A row the boundary
      refuses is withheld and counted (src/public/dto.ts § `publicDebate`),
      which is invisible to this table too. */
-  debate: "debate",
+  debate: "peer-review",
+  /* Debate's claims list, from the day it was built (2026-10-08): what
+     Claims draws, so Debate's row (plan 261008i § 2), and Peer review's since
+     2026-10-09. */
+  debateClaims: "peer-review",
   /* Not a mode: comments have no button in the bar and are swept by neither
      `MODES` nor `visitorGap`. Their row is the prose one that moved out of
      `NEVER_SHARED` on 2026-09-04.
@@ -517,11 +542,42 @@ describe("what counts as shareable", () => {
       simpleSummary: null,
       citations: null,
       debate: null,
+      debateClaims: null,
       glossary: STALE,
       ideas: null,
       quotes: null,
     });
     expect(available.glossary).toBe(true);
+  });
+
+  /* Plan 261008i stage 2: Claims' list on its own opens Debate to a
+     visitor, as the public reading view draws it (Reader.tsx § "debate"). */
+  it("counts Debate when only its claims list is stored", () => {
+    const listOnly = shareableArtefacts({
+      arc: null,
+      tweets: null,
+      timeline: null,
+      sketch: null,
+      skim: null,
+      faq: null,
+      simpleSummary: null,
+      citations: null,
+      debate: null,
+      debateClaims: {
+        version: "debate-claims/1",
+        generator: "a-model",
+        slug: "noema",
+        sourceHash: "0",
+        claims: [],
+        dropped: { unknownIds: 0, unquoted: 0, tooLong: 0, duplicate: 0, overCap: 0, malformed: 0 },
+        generatedAt: "2026-10-08T00:00:00.000Z",
+        elapsedMs: 1,
+      },
+      glossary: null,
+      ideas: null,
+      quotes: null,
+    });
+    expect(listOnly.debate).toBe(true);
   });
 
   it("counts an empty one, and does not count an absent one", () => {
@@ -539,6 +595,7 @@ describe("what counts as shareable", () => {
       simpleSummary: null,
       citations: null,
       debate: null,
+      debateClaims: null,
       glossary: { ...STALE, entries: [] },
       ideas: null,
       quotes: null,
@@ -554,6 +611,7 @@ describe("what counts as shareable", () => {
       simpleSummary: null,
       citations: null,
       debate: null,
+      debateClaims: null,
       glossary: null,
       ideas: null,
       quotes: null,
@@ -591,6 +649,7 @@ describe("what counts as shareable", () => {
       },
       citations: null,
       debate: null,
+      debateClaims: null,
       glossary: null,
       ideas: null,
       quotes: null,
@@ -633,6 +692,7 @@ describe("what counts as shareable", () => {
       } as unknown as SimpleSummary,
       citations: null,
       debate: null,
+      debateClaims: null,
       glossary: null,
       ideas: null,
       quotes: null,

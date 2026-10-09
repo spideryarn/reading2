@@ -311,6 +311,7 @@ import { RERUN_COST_NOTE, RERUN_LABEL } from "./rerun-commands.js";
 import { useOrderedRead, type ArtefactRead } from "./useOrderedRead.js";
 import { useStepJob } from "./useStepJob.js";
 import { articleTitleVoice, voiceClass, withVoice } from "./voice.js";
+import { BlockExcerpt } from "./Excerpt.js";
 
 /**
  * Clear of the fixed bottom bar, in terms of `--dock-space` rather than a number.
@@ -395,6 +396,9 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
      moment the step exists, which is exactly what that record is for. The mode
      itself, its button and its panel are a later stage. */
   debate: MessagesSquare,
+  /* The same two speech marks: the list Debate's Claims picks from. Reused
+     rather than a new import. docs/plans/261008i-debate-claims-picked-by-the-reader.md. */
+  "debate-claims": MessagesSquare,
   /* A link: what the row is for is the address of each work the piece cites.
      Reused rather than a new import — the Citations panel is stage 2 of
      docs/plans/260911g-citations-mode.md, and may choose its own glyph. */
@@ -1302,6 +1306,7 @@ export function Metadata({
           <div className={`${CARD} tw:mb-3 tw:p-4`}>
             <ProfileBox
               id="article-purpose"
+              article={slug}
               label="Why you're reading this one"
               placeholder="e.g. I want the evidence, not the history"
               hint="Changes what the glossary, the ideas, chat and explanations put first — for this article only. Never what the article says."
@@ -1344,7 +1349,7 @@ export function Metadata({
             <Row icon={Target} label="Where you left off">
               {lastRead ? (
                 <Link href={backHref} className={withVoice("tw:text-highlight-text", "author")}>
-                  “{snippet(lastRead.text)}”
+                  “<BlockExcerpt block={lastRead} words={snippet(lastRead.text)} />”
                 </Link>
               ) : (
                 <span className="tw:text-muted-foreground">
@@ -1925,13 +1930,9 @@ const WHOLE_ARTICLE_KEYWORDS = "over reset whole";
  * tests/no-ai-cost-for-readers.test.ts fails on a figure here.
  *
  * The Sketch's wait is `SKETCH_WAIT` from ./sketch-cost.ts, so this page and
- * the Sketch panel cannot name two different waits. Debate is **up to** two
- * separately metered calls — pass B runs only if pass A succeeded
- * (src/debate.ts) — each with a web search. For developers: a completed live
- * run cost $0.3527, and per-pass cost varied 2.4× with how much the model
- * chose to search — docs/plans/260905f-debate-mode-stage-0-spike-results.md
- * § Stage 3½ § 1; the ~$0.27 in comments across `src/` is the superseded
- * ceiling. Skim refuses before any model call when there are
+ * the Sketch panel cannot name two different waits. Debate is one web-searching
+ * call plus an optional search-free synthesis call when enough sources survive
+ * (src/debate.ts). Skim refuses before any model call when there are
  * no Quotes (src/pipeline.ts), which is worth knowing before pressing rather
  * than learning from the failure.
  *

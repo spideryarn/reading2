@@ -1020,9 +1020,9 @@ GPT Sol's F43. `generateDebate` returns searches and elapsed time, not money; `w
 aggregate it does not return; and token `Usage` prices nothing here, because a web search is billed
 **per search** and is invisible to token arithmetic. So the figure comes from the collector's own
 `SpendRecord`s through `totalSpend`, with the contributing generation ids and the ledger run id
-recorded beside it — and a **completed run must hold exactly its two search calls**. Any unpriced
-call makes the whole figure `not measured`; nothing prints `$0.0000` about money it could not
-measure.
+recorded beside it — and a **completed current run must hold exactly one search call**, plus at
+most one search-free synthesis call. Any unpriced call makes the whole figure `not measured`;
+nothing prints `$0.0000` about money it could not measure.
 
 ### `check` runs first, and it is free
 

@@ -16,7 +16,11 @@
  *
  * and a fifth thing it writes that nothing read: the authors, in the title
  * block and in no `<meta>` tag (`latexmlAuthorNames`, which src/meta-authors.ts
- * calls).
+ * calls). And a sixth, that same title block drawn as one fused paragraph of
+ * pop-up labels, with an author's details deleted by Readability's byline search:
+ * `tidyTitleBlock` makes it one row per author. And a seventh, its own error
+ * report: a macro it could not expand, written into the prose as `\name`
+ * (`removeUndefinedMacro`).
  *
  * ## The three rules every rewrite here follows
  *
@@ -33,7 +37,11 @@
  *    (src/blocks.ts § `retargetAnchors`).
  *
  * Nothing here deletes an author's words: what is removed is the publisher's
- * layout (padding cells, an SVG frame's paths, a duplicate download link).
+ * layout (padding cells, an SVG frame's paths, a duplicate download link, the
+ * title block's pop-up labels and repeated marks) and LaTeXML's own error
+ * reports. The one exception is narrow and named: an undefined macro's argument
+ * when it is a name from the TeX source rather than prose — a colour theme, a
+ * .bib file, a citation key (`removeUndefinedMacro` says which shapes).
  *
  * docs/plans/261005l-an-arxiv-link-of-any-shape-imports-the-paper-and-a-source-resolver-other-sources-can-join.md
  * § *Stage: the HTML arm's faults*; tests/latexml.test.ts.
@@ -54,6 +62,10 @@ export interface LatexmlStats {
   svgObjects: number;
   listings: number;
   boxedPassages: number;
+  /** The author block rewritten as one row per author: 0 or 1. */
+  titleBlocks: number;
+  /** LaTeXML's `ltx_ERROR` reports of a macro it could not expand, removed. */
+  undefinedMacros: number;
 }
 
 /** The element every rule here must find above what it rewrites. */
@@ -69,7 +81,7 @@ const LATEXML_SOURCES: ReadonlyMap<string, string> = new Map([
 const SKIP = MATHS_SKIP_TAGS.join(",");
 
 /**
- * Rewrite the four shapes in a supported LaTeXML document in `doc`, and say
+ * Rewrite the five shapes in a supported LaTeXML document in `doc`, and say
  * how many of each. An unrecognised source address, or a page with no
  * `article.ltx_document`, is not touched.
  *
@@ -79,7 +91,7 @@ const SKIP = MATHS_SKIP_TAGS.join(",");
  * that pass converts nothing.
  */
 export function prepareLatexml(doc: Document): LatexmlStats {
-  const stats: LatexmlStats = { alignedEquations: 0, equationGroupsLeftAlone: 0, svgObjects: 0, listings: 0, boxedPassages: 0 };
+  const stats: LatexmlStats = { alignedEquations: 0, equationGroupsLeftAlone: 0, svgObjects: 0, listings: 0, boxedPassages: 0, titleBlocks: 0, undefinedMacros: 0 };
   if (!hasLatexmlSource(doc)) return stats;
   const roots = Array.from(doc.querySelectorAll(DOCUMENT));
   if (roots.length === 0) return stats;
@@ -101,7 +113,11 @@ export function prepareLatexml(doc: Document): LatexmlStats {
     for (const listing of Array.from(root.querySelectorAll("div.ltx_listing"))) {
       if (listingToPre(listing, targets)) stats.listings += 1;
     }
+    for (const marker of Array.from(root.querySelectorAll("span.ltx_ERROR.undefined"))) {
+      if (removeUndefinedMacro(marker, targets)) stats.undefinedMacros += 1;
+    }
   }
+  if (tidyTitleBlock(doc, targets)) stats.titleBlocks += 1;
   return stats;
 }
 
@@ -610,6 +626,199 @@ function liftBoxedPassage(svg: Element, targets: ReadonlySet<string>): boolean {
 }
 
 /* ------------------------------------------------------------------ *
+ * 8. A macro LaTeXML could not expand
+ * ------------------------------------------------------------------ */
+
+/** One TeX control sequence and nothing else: `\hohsettheme`, `\ucite`, `\\`. */
+const CONTROL_SEQUENCE = /^\\(?:[A-Za-z@]+\*?|[^A-Za-z@\s])$/u;
+
+/**
+ * A name from the TeX source, not a word: one token with an underscore or a
+ * lower-case letter straight before a capital — `hohRose`,
+ * `Biblio_paper_brillouin`. An ordinary word (`Funding`) and an acronym
+ * (`LP4FM`) have neither.
+ */
+const SOURCE_NAME = /^(?=[\w-]{1,64}$)[\w-]*(?:_|[a-z][A-Z])[\w-]*$/u;
+
+/** A citation key, or several joined by commas; a full stop or comma only between key characters. */
+const CITATION_KEY = /^[\w:\-/+]+(?:[.,][\w:\-/+]+)*/u;
+
+/** What a few measured macros stood for, where leaving nothing would join two phrases. */
+const STOOD_FOR: ReadonlyMap<string, string> = new Map([
+  /* elsarticle's and CEUR's keyword separator (2610.10541). */
+  ["\\sep", "; "],
+]);
+
+/** Inline elements whose text belongs to the same run on either side of a marker. */
+const INLINE_TEXT_ELEMENTS: ReadonlySet<string> = new Set([
+  "A",
+  "ABBR",
+  "B",
+  "BDI",
+  "BDO",
+  "CITE",
+  "CODE",
+  "DATA",
+  "DEL",
+  "DFN",
+  "EM",
+  "I",
+  "INS",
+  "KBD",
+  "LABEL",
+  "MARK",
+  "Q",
+  "RUBY",
+  "S",
+  "SAMP",
+  "SMALL",
+  "SPAN",
+  "STRONG",
+  "SUB",
+  "SUP",
+  "TIME",
+  "U",
+  "VAR",
+]);
+
+/**
+ * Remove LaTeXML's report of a macro it had no definition for, and the argument
+ * it orphaned where that is plainly a name from the source rather than prose.
+ * The report is the macro's name, set as text in
+ * `<span class="ltx_ERROR undefined">`; the argument follows as ordinary text,
+ * because LaTeXML did not know the macro took one.
+ *
+ * The report is never the author's words, so it always goes. What follows it
+ * usually is the author's (a funding statement after `\bmsection`, a workshop's
+ * name after `\workshoptitle`) and stays. Two shapes of argument are not, and
+ * go with it:
+ *
+ * - a `p.ltx_p` straight after it whose whole text is one `SOURCE_NAME` —
+ *   `\hohsettheme{hohRose}`, a colour theme (2609.01481v1), and
+ *   `\bibliographyfullrefs{Biblio_paper_brillouin}`, a .bib file (2610.11413);
+ * - a key straight after a macro whose name says `cite`, when the key has a
+ *   digit, an underscore or a capital inside it (so `\excite electrons` keeps
+ *   its word) —
+ *   `phases\ucite{dagotto2005}.` reads `phases.` (2610.11126, 104 of them).
+ *
+ * Where taking the report out would join two words, a space stands in its
+ * place; `STOOD_FOR` names the macros that stood for something more, only when
+ * their phrase is present on both sides. Measured on 79 arXiv papers,
+ * 2026-10-09:
+ * docs/plans/261009f-latex-undefined-macros-leave-the-page.md.
+ */
+function removeUndefinedMacro(marker: Element, targets: ReadonlySet<string>): boolean {
+  if (marker.children.length > 0 || marker.parentElement?.closest(SKIP)) return false;
+  const name = (marker.textContent ?? "").trim();
+  if (!CONTROL_SEQUENCE.test(name)) return false;
+  const argument = sourceNameArgument(marker);
+  if (holdsALinkTarget(marker, targets) || (argument && holdsALinkTarget(argument, targets))) return false;
+
+  const after = marker.nextSibling;
+  if (/cite/iu.test(name) && after?.nodeType === 3) {
+    const text = after.textContent ?? "";
+    const key = CITATION_KEY.exec(text)?.[0];
+    if (key && /\d|_|[a-z][A-Z]/u.test(key)) {
+      after.textContent = text.slice(key.length);
+      /* TeX source commonly puts a space before a citation command. Once the
+         unusable citation is gone, sentence punctuation belongs to the word. */
+      if (/^[,.;:!?)}\]]/u.test(after.textContent ?? "")) trimInlineWhitespaceBefore(marker);
+    }
+  }
+  argument?.remove();
+  const before = inlineTextBeside(marker, "before");
+  const next = inlineTextBeside(marker, "after");
+  const stoodFor = STOOD_FOR.get(name);
+  if (stoodFor !== undefined && /\S/u.test(before) && /\S/u.test(next)) {
+    trimInlineWhitespaceBefore(marker);
+    marker.replaceWith(stoodFor);
+  } else if (stoodFor !== undefined) {
+    /* A separator without a phrase on both sides is only another report. */
+    marker.remove();
+  } else if (/\S$/u.test(before) && /^[\p{L}\p{N}]/u.test(next)) {
+    marker.replaceWith(" ");
+  } else {
+    marker.remove();
+  }
+  return true;
+}
+
+/** The paragraph straight after `marker`, if its whole text is one name from the source. */
+function sourceNameArgument(marker: Element): Element | null {
+  let node = marker.nextSibling;
+  while (node && node.nodeType === 3 && (node.textContent ?? "").trim() === "") node = node.nextSibling;
+  if (node?.nodeType !== 1) return null;
+  const p = node as Element;
+  if (!p.matches("p.ltx_p") || p.children.length > 0) return null;
+  return SOURCE_NAME.test((p.textContent ?? "").trim()) ? p : null;
+}
+
+/**
+ * Text on one side in the same inline run. A marker may be the first or last
+ * child of a `<span>` or `<em>` even though words touch that wrapper outside;
+ * stop at the first block-like element rather than joining separate blocks.
+ */
+function inlineTextBeside(marker: Element, side: "before" | "after"): string {
+  const parts: string[] = [];
+  const siblingOf = side === "before" ? (node: Node) => node.previousSibling : (node: Node) => node.nextSibling;
+  const add = side === "before" ? (text: string) => parts.unshift(text) : (text: string) => parts.push(text);
+  let edge: Node = marker;
+  while (true) {
+    let sibling = siblingOf(edge);
+    while (sibling) {
+      const part = inlineSiblingText(sibling);
+      if (part === null) return parts.join("");
+      add(part);
+      sibling = siblingOf(sibling);
+    }
+    const parent = edge.parentElement;
+    if (!parent || !INLINE_TEXT_ELEMENTS.has(parent.tagName)) return parts.join("");
+    edge = parent;
+  }
+}
+
+/** Text contributed by one sibling; `null` means that sibling ends the inline run. */
+function inlineSiblingText(node: Node): string | null {
+  if (node.nodeType === 3) return node.textContent ?? "";
+  if (node.nodeType !== 1) return "";
+  const element = node as Element;
+  return INLINE_TEXT_ELEMENTS.has(element.tagName) ? (element.textContent ?? "") : null;
+}
+
+/** Remove whitespace immediately before `marker`, through inline wrappers. */
+function trimInlineWhitespaceBefore(marker: Element): void {
+  let edge: Node = marker;
+  while (true) {
+    let sibling = edge.previousSibling;
+    while (sibling) {
+      const result = trimInlineEnd(sibling);
+      if (result === "content" || result === "boundary") return;
+      sibling = sibling.previousSibling;
+    }
+    const parent = edge.parentElement;
+    if (!parent || !INLINE_TEXT_ELEMENTS.has(parent.tagName)) return;
+    edge = parent;
+  }
+}
+
+/** Trim an inline subtree's end; say whether content or a flow boundary stopped us. */
+function trimInlineEnd(node: Node): "content" | "empty" | "boundary" {
+  if (node.nodeType === 3) {
+    const text = node.textContent ?? "";
+    node.textContent = text.trimEnd();
+    return (node.textContent ?? "") === "" ? "empty" : "content";
+  }
+  if (node.nodeType !== 1) return "empty";
+  const element = node as Element;
+  if (!INLINE_TEXT_ELEMENTS.has(element.tagName)) return "boundary";
+  for (const child of Array.from(element.childNodes).reverse()) {
+    const result = trimInlineEnd(child);
+    if (result !== "empty") return result;
+  }
+  return "empty";
+}
+
+/* ------------------------------------------------------------------ *
  * 5. The paper's authors
  * ------------------------------------------------------------------ */
 
@@ -646,8 +855,8 @@ const ORCID_LINK_LABEL = /\b(?:orcid|profile|record)\b/iu;
  *   div.ltx_authors      (one)
  *     span.ltx_creator.ltx_role_author   ×n
  *       span.ltx_personname              one, holding one name
- *       span.ltx_note.ltx_role_thanks    the footnote `\thanks` makes, when it is set beside the name: not read
- *       span.ltx_author_notes            affiliations, addresses, emails: not read
+ *       span.ltx_note.ltx_role_thanks    the footnote `\thanks` makes, when it is set beside the name: not read here (`latexmlTitleBlock` hands it to a model)
+ *       span.ltx_author_notes            affiliations, addresses, emails: not read here (`latexmlTitleBlock` hands them to a model)
  *     span.ltx_author_before             the space, the ", " or the " and " between them: not read
  * ```
  *
@@ -669,6 +878,65 @@ const ORCID_LINK_LABEL = /\b(?:orcid|profile|record)\b/iu;
  * the one Readability made.
  */
 export function latexmlAuthorNames(doc: Document): string[] | null {
+  const block = titleBlockOf(doc);
+  return block ? (readCreators(block)?.map((c) => c.name) ?? null) : null;
+}
+
+/**
+ * **The title block as the authors pass reads it**: the names `latexmlAuthorNames`
+ * reads, and one line of text per creator — the name and everything set beside
+ * it (the `\thanks` note, the affiliation and email contacts) — which is what a
+ * model's affiliations are held to (src/arxiv-affiliations.ts). Read before
+ * `prepareDocument`, like the names: `tidyTitleBlock` moves these nodes. `null`
+ * exactly when `latexmlAuthorNames` is.
+ *
+ * **One projection of the page, defined here**: LaTeXML's furniture — a note's
+ * repeated marks and number (only in a note whose measured shape validates),
+ * and a contact's label when it is exactly one of the measured
+ * `CONTACT_LABELS` — is **replaced by a space**, never just deleted. Replaced,
+ * because deleting fuses the words either side:
+ * `Affiliation:Department` `Affiliation:University` became `DepartmentUniversity`,
+ * a word the page never printed (GPT Sol, plan review of 261009m). Taken out at
+ * all, because LaTeXML splits one institution over several contacts
+ * (`Affiliation: Department of Physics, Affiliation: University of Trento`), and
+ * with the labels in, that institution is no run of words (2610.08392). A label
+ * not in the list stays, as words: it may be the author's.
+ */
+export function latexmlTitleBlock(doc: Document): { names: string[]; creators: string[] } | null {
+  const block = titleBlockOf(doc);
+  const creators = block ? readCreators(block) : null;
+  if (!creators) return null;
+  return {
+    names: creators.map((c) => c.name),
+    creators: creators.map((c) => {
+      const copy = c.creator.cloneNode(true) as Element;
+      /* `NOTE_FURNITURE` is a selector, not proof. A stranger can put those
+         classes on arbitrary words; deleting them would make the words on
+         either side newly consecutive and let the model store a phrase the
+         page never printed. `noteContent` is the tidy rewrite's structural and
+         textual validation of the measured note shape. Malformed furniture
+         stays as evidence, so the verifier has to account for its words. */
+      const noteFurniture = Array.from(copy.querySelectorAll(".ltx_note")).flatMap((note) =>
+        noteContent(note) === null ? [] : Array.from(note.querySelectorAll(NOTE_FURNITURE)),
+      );
+      const furniture = [
+        ...noteFurniture,
+        ...Array.from(copy.querySelectorAll(".ltx_contact_name")).filter(
+          (label) => label.children.length === 0 && CONTACT_LABELS.has((label.textContent ?? "").trim()),
+        ),
+      ];
+      for (const el of furniture) el.replaceWith(copy.ownerDocument.createTextNode(" "));
+      /* And a space after the name and each contact and note, for the same
+         reason: they are separate lines in the pop-up, whatever whitespace the
+         markup has between them. */
+      for (const el of Array.from(copy.querySelectorAll(".ltx_personname, .ltx_contact, .ltx_note"))) el.after(" ");
+      return (copy.textContent ?? "").replace(/\s+/gu, " ").trim();
+    }),
+  };
+}
+
+/** The one `.ltx_authors` under the one `article.ltx_document` at a LaTeXML address, or `null`. */
+function titleBlockOf(doc: Document): Element | null {
   if (!hasLatexmlSource(doc)) return null;
   const roots = doc.querySelectorAll(DOCUMENT);
   const root = roots[0];
@@ -676,7 +944,20 @@ export function latexmlAuthorNames(doc: Document): string[] | null {
   const blocks = root.querySelectorAll(".ltx_authors");
   const block = blocks[0];
   if (blocks.length !== 1 || block === undefined || !noOwnText(block)) return null;
-  const names: string[] = [];
+  return block;
+}
+
+/** One creator in the title block: its element, its one personname, the name read off it, and what is beside it. */
+interface Creator {
+  readonly creator: Element;
+  readonly person: Element;
+  readonly name: string;
+  readonly beside: readonly Element[];
+}
+
+/** The creators of a title block in order, each plainly one name, or `null`: the shape documented on `latexmlAuthorNames`. */
+function readCreators(block: Element): Creator[] | null {
+  const creators: Creator[] = [];
   const children = Array.from(block.children);
   for (const [i, child] of children.entries()) {
     if (child.matches("span.ltx_author_before")) {
@@ -697,9 +978,9 @@ export function latexmlAuthorNames(doc: Document): string[] | null {
     if (person.length !== 1 || parts.some((p) => p !== person[0] && !p.matches(BESIDE_THE_NAME))) return null;
     const name = oneName(person[0] as Element);
     if (name === null) return null;
-    names.push(name);
+    creators.push({ creator: child, person: person[0] as Element, name, beside: parts.filter((p) => p !== person[0]) });
   }
-  return names.length > 0 ? names : null;
+  return creators.length > 0 ? creators : null;
 }
 
 /** The observed two-word ORCID-linked name, with at most a wordless logo beside its text. */
@@ -757,4 +1038,281 @@ function oneName(person: Element): string | null {
   if (/[,;:@\d/()&]/u.test(name) || /(^|\s)and(\s|$)/iu.test(name)) return null;
   if (name.split(" ").length > 6) return null;
   return name;
+}
+
+/* ------------------------------------------------------------------ *
+ * 6. The title block is one row per author
+ * ------------------------------------------------------------------ */
+
+/** A note's own furniture: the mark printed twice, the `thanks:` label, the repeated number. */
+const NOTE_FURNITURE = ".ltx_note_mark, .ltx_note_type, .ltx_tag_note";
+
+/** The exact labels measured in title-block contacts. Anything more may be the author's words. */
+const CONTACT_LABELS = new Set([
+  "Address:",
+  "Affiliation:",
+  "Correspondence to:",
+  "E-mail",
+  "Email address:",
+  "Email:",
+]);
+
+/** Elements that HTML parsing cannot leave inside the `<p>` this rewrite promises to make. */
+const NOT_IN_AN_AUTHOR_ROW =
+  "address, article, aside, blockquote, div, dl, fieldset, footer, form, h1, h2, h3, h4, h5, h6, header, hgroup, hr, main, nav, ol, p, pre, section, table, ul";
+
+/** Readability 0.6.0's byline name test; a matching short node is deleted during extraction. */
+const READABILITY_BYLINE = /byline|author|dateline|writtenby|p-author/iu;
+
+/** Everything the rewrite may leave behind. Every other word in the block must come out again. */
+const LEFT_BEHIND = `${NOTE_FURNITURE}, .ltx_contact_name, .ltx_author_before`;
+
+/** Marks this rewrite writes, which the word check does not count. Removed before the swap. */
+const OUR_MARK = "data-latexml-title-mark";
+
+/** `compareDocumentPosition`: the other node comes after this one. */
+const FOLLOWING = 4;
+
+/**
+ * **`div.ltx_authors` → one `<p>` per author, then each note once, numbered.**
+ *
+ * On arXiv each author's affiliation and email, and each `\thanks` footnote, sit
+ * in a pop-up that CSS hides. Without the CSS every label, mark and pop-up is
+ * text, so a reader got one paragraph: `Ashish Vaswani ††thanks: Equal
+ * contribution… Noam Shazeer11footnotemark: 1 Affiliation: Google Brain Email:
+ * …`. And the `ltx_*author*` classes are what Readability's byline search
+ * matches: it takes the first such element under 100 characters, keeps its
+ * text as the byline and **deletes it from the article** — one author's details,
+ * or a whole author.
+ *
+ * ```
+ * <div id="(the block's own)">
+ *   <p>Ashish Vaswani<sup>1</sup><br>Google Brain<br>avaswani@google.com</p>
+ *   <p>Aidan N. Gomez<sup>1,2</sup><br>University of Toronto<br>aidan@…</p>
+ *   <p><sup>1</sup> Equal contribution. Listing order is random. …</p>
+ *   <p><sup>2</sup> Work performed while at Google Brain.</p>
+ * </div>
+ * ```
+ *
+ * or, when no author has a contact or a note, one `<p>` of the names.
+ *
+ * **The marks are LaTeX's, renumbered.** The title's `\thanks` notes are
+ * numbered in order and `\footnotemark[N]` repeats the Nth, which is how a
+ * second author shares a note. LaTeXML prints the note's mark as `†` and the
+ * repeat as `N`, so here each worded note is numbered by its place in the block
+ * and each name carries the numbers it holds or repeats. A repeat whose Nth note
+ * is not in the block (a `\thanks` on the title counts towards N) is not proved,
+ * and refuses.
+ *
+ * **Moved, never retyped**, so a link, a formula or an id in a name, contact or
+ * note goes with it. Then two checks on the result before it replaces the
+ * block, either of which leaves the page as it was: the same words, as often,
+ * as the block less `LEFT_BEHIND`; and every id or name in the block that a
+ * link points at still there (rule 3). The shape is `readCreators`'s, plus:
+ * `ltx_author_notes` holds one `ltx_author_notes_content` holding only
+ * `ltx_contact`s, and a note is `ltx_role_thanks` with words or
+ * `ltx_role_footnotemark` with none.
+ *
+ * docs/plans/261009d-arxiv-html-title-block-tidied-at-import.md.
+ */
+function tidyTitleBlock(doc: Document, targets: ReadonlySet<string>): boolean {
+  const original = titleBlockOf(doc);
+  if (!original) return false;
+  const root = original.closest(DOCUMENT);
+  if (!root) return false;
+  const block = original.cloneNode(true) as Element;
+  const creators = readCreators(block);
+  if (!creators) return false;
+
+  /* The notes. A thanks before the block (on the title) still counts towards a repeat's N. */
+  const notes = Array.from(block.querySelectorAll(".ltx_note"));
+  const thanks = notes.filter((n) => n.matches(".ltx_role_thanks"));
+  const earlier = Array.from(root.querySelectorAll(".ltx_note.ltx_role_thanks, .ltx_pubnote.ltx_role_thanks")).filter(
+    (n) => !original.contains(n) && (n.compareDocumentPosition(original) & FOLLOWING) !== 0,
+  ).length;
+  const contentOf = new Map<Element, Node[]>();
+  const numberOf = new Map<Element, number>();
+  for (const note of notes) {
+    const content = noteContent(note);
+    if (content === null) return false;
+    const words = content.some((n) => (n.textContent ?? "").trim() !== "");
+    if (note.matches(".ltx_role_thanks")) {
+      if (!words) return false;
+      contentOf.set(note, content);
+      numberOf.set(note, thanks.indexOf(note) + 1);
+    } else if (note.matches(".ltx_role_footnotemark")) {
+      const tag = (note.querySelector(".ltx_tag_note")?.textContent ?? "").trim();
+      const nth = /^\d+$/u.test(tag) ? Number(tag) - earlier : 0;
+      if (words || nth < 1 || nth > thanks.length) return false;
+      numberOf.set(note, nth);
+    } else {
+      return false;
+    }
+  }
+
+  const rows: { name: Node[]; marks: number[]; contacts: Node[][] }[] = [];
+  for (const { creator, person, beside } of creators) {
+    const contacts: Node[][] = [];
+    for (const part of beside) {
+      if (!part.matches("span.ltx_author_notes")) continue;
+      const lines = contactLines(part);
+      if (lines === null) return false;
+      contacts.push(...lines);
+    }
+    const numbers = Array.from(creator.querySelectorAll(".ltx_note")).map((n) => numberOf.get(n) ?? 0);
+    const marks = [...new Set(numbers)].sort((a, b) => a - b);
+    const name = trimmed(Array.from(person.childNodes).filter((n) => !isElement(n, ".ltx_note")));
+    rows.push({ name, marks, contacts });
+  }
+
+  const out = doc.createElement("div");
+  const id = original.getAttribute("id");
+  if (id) out.setAttribute("id", id);
+  const mark = (numbers: readonly number[]) => {
+    const sup = doc.createElement("sup");
+    sup.setAttribute(OUR_MARK, "");
+    sup.textContent = numbers.join(",");
+    return sup;
+  };
+  if (rows.every((r) => r.marks.length === 0 && r.contacts.length === 0)) {
+    const p = doc.createElement("p");
+    rows.forEach((r, i) => {
+      if (i > 0) p.append(", ");
+      p.append(...r.name);
+    });
+    out.append(p);
+  } else {
+    for (const r of rows) {
+      const p = doc.createElement("p");
+      p.append(...r.name);
+      if (r.marks.length > 0) p.append(mark(r.marks));
+      for (const line of r.contacts) p.append(doc.createElement("br"), ...line);
+      out.append(p);
+    }
+    for (const note of thanks) {
+      const p = doc.createElement("p");
+      p.append(mark([numberOf.get(note) ?? 0]), " ", ...trimmed(contentOf.get(note) ?? []));
+      out.append(p);
+    }
+  }
+  /* An empty `mailto:` link goes nowhere: LaTeXML writes the address as its text only. */
+  for (const a of Array.from(out.querySelectorAll('a[href="mailto:"]'))) a.replaceWith(...Array.from(a.childNodes));
+
+  if (hasReadabilityBylineCandidate(out)) return false;
+  if (wordsIn(out, `[${OUR_MARK}]`).join(" ") !== wordsIn(original, LEFT_BEHIND).join(" ")) return false;
+  const kept = new Set([out, ...Array.from(out.querySelectorAll("[id], [name]"))].flatMap((el) => [el.getAttribute("id"), el.getAttribute("name")]));
+  for (const el of [original, ...Array.from(original.querySelectorAll("[id], [name]"))]) {
+    if (linkedNamesOf(el, targets).some((target) => !kept.has(target))) return false;
+  }
+  for (const sup of Array.from(out.querySelectorAll(`[${OUR_MARK}]`))) sup.removeAttribute(OUR_MARK);
+  original.replaceWith(out);
+  return true;
+}
+
+const isElement = (n: Node, selector: string): boolean => n.nodeType === 1 && (n as Element).matches(selector);
+
+/** A note's words, its furniture left out — or `null` if it is not the measured shape. */
+function noteContent(note: Element): Node[] | null {
+  const [markEl, outer, ...more] = Array.from(note.children);
+  if (more.length > 0 || !markEl?.matches("sup.ltx_note_mark") || !outer?.matches("span.ltx_note_outer") || !noOwnText(note)) return null;
+  const inner = Array.from(outer.children);
+  const content = inner[0];
+  if (inner.length !== 1 || !content?.matches("span.ltx_note_content") || !noOwnText(outer)) return null;
+  const kind = note.matches(".ltx_role_thanks")
+    ? "thanks:"
+    : note.matches(".ltx_role_footnotemark")
+      ? "footnotemark:"
+      : null;
+  if (kind === null) return null;
+  const marks = Array.from(note.querySelectorAll(".ltx_note_mark"));
+  const types = Array.from(note.querySelectorAll(".ltx_note_type"));
+  const tags = Array.from(note.querySelectorAll(".ltx_tag_note"));
+  const text = (el: Element) => (el.textContent ?? "").replace(/\s+/gu, " ").trim();
+  if (
+    marks.length !== 2 ||
+    marks.some((el) => el.children.length > 0 || !/^(?:\d+|[*∗†‡§¶‖]+)$/u.test(text(el))) ||
+    text(marks[0]!) !== text(marks[1]!) ||
+    types.length !== 1 ||
+    types[0]!.children.length > 0 ||
+    text(types[0]!).toLowerCase() !== kind ||
+    (kind === "thanks:"
+      ? tags.length !== 0
+      : tags.length !== 1 || tags[0]!.children.length > 0 || !/^\d+$/u.test(text(tags[0]!)))
+  ) {
+    return null;
+  }
+  const kept = Array.from(content.childNodes).filter((n) => !isElement(n, NOTE_FURNITURE));
+  if (kind === "footnotemark:" && kept.some((n) => n.nodeType === 1 || (n.textContent ?? "").trim() !== "")) return null;
+  if (hasParagraphBreakingContent(kept)) return null;
+  return kept;
+}
+
+/** Each contact's nodes, its label left out, one line each — or `null` if the notes hold anything else. */
+function contactLines(notes: Element): Node[][] | null {
+  const inner = Array.from(notes.children);
+  const content = inner[0];
+  if (inner.length !== 1 || !content?.matches("span.ltx_author_notes_content") || !noOwnText(notes) || !noOwnText(content)) return null;
+  const lines: Node[][] = [];
+  for (const contact of Array.from(content.children)) {
+    if (!contact.matches("span.ltx_contact")) return null;
+    const labels = Array.from(contact.children).filter((n) => n.matches(".ltx_contact_name"));
+    const label = labels[0];
+    if (
+      labels.length !== 1 ||
+      label !== contact.firstElementChild ||
+      label.children.length > 0 ||
+      !CONTACT_LABELS.has((label.textContent ?? "").replace(/\s+/gu, " ").trim())
+    ) {
+      return null;
+    }
+    const line = trimmed(Array.from(contact.childNodes).filter((n) => n !== label));
+    if (hasParagraphBreakingContent(line)) return null;
+    if (line.length > 0) lines.push(line);
+  }
+  return lines;
+}
+
+/** Whether moving these nodes into a `<p>` would make invalid paragraph content. */
+function hasParagraphBreakingContent(nodes: readonly Node[]): boolean {
+  return nodes.some((node) => {
+    if (node.nodeType !== 1) return false;
+    const el = node as Element;
+    return el.matches(NOT_IN_AN_AUTHOR_ROW) || el.querySelector(NOT_IN_AN_AUTHOR_ROW) !== null;
+  });
+}
+
+/** Whether Readability would take and delete any part of the rewritten block as its byline. */
+function hasReadabilityBylineCandidate(root: Element): boolean {
+  return [root, ...Array.from(root.querySelectorAll("*"))].some((el) => {
+    const rel = el.getAttribute("rel");
+    const itemprop = el.getAttribute("itemprop");
+    const named =
+      rel === "author" ||
+      itemprop?.includes("author") ||
+      READABILITY_BYLINE.test(`${el.getAttribute("class") ?? ""} ${el.getAttribute("id") ?? ""}`);
+    const length = (el.textContent ?? "").trim().length;
+    return !!named && length > 0 && length < 100;
+  });
+}
+
+/** Without the whitespace-only text at either end, and the ends' own whitespace trimmed. */
+function trimmed(nodes: readonly Node[]): Node[] {
+  const out = [...nodes];
+  const blank = (n: Node | undefined) => n !== undefined && n.nodeType === 3 && (n.textContent ?? "").trim() === "";
+  while (blank(out[0])) out.shift();
+  while (blank(out[out.length - 1])) out.pop();
+  const first = out[0];
+  const last = out[out.length - 1];
+  if (first?.nodeType === 3) first.textContent = (first.textContent ?? "").replace(/^\s+/u, "");
+  if (last?.nodeType === 3) last.textContent = (last.textContent ?? "").replace(/\s+$/u, "");
+  return out;
+}
+
+/** The letter-and-digit runs of `el`, sorted, less what `leaveOut` matches. */
+function wordsIn(el: Element, leaveOut: string): string[] {
+  const copy = el.cloneNode(true) as Element;
+  for (const f of Array.from(copy.querySelectorAll(leaveOut))) f.remove();
+  /* A row or a line ends a word, as it does on screen; `textContent` would glue `Zhang` to `Stephen`. */
+  for (const end of Array.from(copy.querySelectorAll("p, br"))) end.after(" ");
+  return ((copy.textContent ?? "").match(/[\p{L}\p{N}]+/gu) ?? []).sort();
 }

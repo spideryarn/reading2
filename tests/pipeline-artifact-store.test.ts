@@ -116,6 +116,11 @@ import {
   PROMPT_VERSION as RELATIONS_VERSION,
 } from "../src/relations.js";
 import {
+  emptyDropped as emptyDebateClaimsDropped,
+  inputFingerprint as debateClaimsFingerprint,
+  PROMPT_VERSION as DEBATE_CLAIMS_VERSION,
+} from "../src/debate-claims.js";
+import {
   emptyDropped as emptyCrossrefsDropped,
   inputFingerprint as crossrefsFingerprint,
   PROMPT_VERSION as CROSSREFS_VERSION,
@@ -263,6 +268,8 @@ const CITATIONS_SOURCE_HASH = citationsFingerprint(BLOCKS, TREE, META);
 const FAQ_SOURCE_HASH = faqFingerprint(BLOCKS, TREE, META);
 /* `relations` fingerprints its rendered body/head and eligible paragraph pairs. */
 const RELATIONS_SOURCE_HASH = relationsFingerprint(BLOCKS, TREE, META);
+/* `debate-claims` fingerprints the exact rendered body and cited head. */
+const DEBATE_CLAIMS_SOURCE_HASH = debateClaimsFingerprint(BLOCKS, TREE, META);
 /* `crossrefs` fingerprints the exact article and skeleton strings it sends. */
 const CROSSREFS_SOURCE_HASH = crossrefsFingerprint(BLOCKS, TREE, META);
 /* `simple` fingerprints the exact article string it sends, through its own module. */
@@ -656,6 +663,18 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
     version: RELATIONS_VERSION,
     relations: {},
     dropped: emptyRelationsDropped(),
+    generatedAt: new Date().toISOString(),
+    elapsedMs: 1,
+  });
+  /* **An EMPTY list**, which `SHAPE["debate-claims"]` accepts, as `faq`'s: a piece
+     with no claim an outsider could argue with is a real answer. */
+  store.plant(SLUG, "debate-claims", "debate-claims", {
+    generator: CAPABLE_MODEL,
+    slug: SLUG,
+    sourceHash: DEBATE_CLAIMS_SOURCE_HASH,
+    version: DEBATE_CLAIMS_VERSION,
+    claims: [],
+    dropped: emptyDebateClaimsDropped(),
     generatedAt: new Date().toISOString(),
     elapsedMs: 1,
   });

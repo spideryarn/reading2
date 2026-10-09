@@ -58,6 +58,7 @@ import {
   citationFinds,
   citationInvestigations,
   comments,
+  debateClaimChecks,
   glossaryHiddenEntries,
   glossaryLookups,
   ingestEvents,
@@ -65,6 +66,7 @@ import {
   quizAttempts,
   realtimeSessions,
   refereeClaims,
+  refereeHiddenChecks,
   refereeCriteria,
   revisionBlocks,
   searchRuns,
@@ -1035,6 +1037,16 @@ describe("destroying an article", () => {
           start: 0,
           status: "none",
         }),
+      debate_claim_checks: () =>
+        db.insert(debateClaimChecks).values({
+          articleId: GONE_ARTICLE,
+          id: mintId(),
+          ownerId: owner,
+          status: "done",
+          listSourceHash: "h",
+          promptVersion: "test",
+          targets: [],
+        }),
       glossary_hidden_entries: () =>
         db.insert(glossaryHiddenEntries).values({ articleId: GONE_ARTICLE, entryId: mintId() }),
       article_tags: () => db.insert(articleTags).values({ articleId: GONE_ARTICLE, tag: "gone" }),
@@ -1114,6 +1126,16 @@ describe("destroying an article", () => {
         db
           .insert(refereeClaims)
           .values({ articleId: GONE_ARTICLE, ownerId: owner, status: "pending" }),
+      referee_hidden_checks: () =>
+        db.insert(refereeHiddenChecks).values({
+          articleId: GONE_ARTICLE,
+          ownerId: owner,
+          judgments: [],
+          unanswered: 0,
+          notSent: 0,
+          model: "test/model",
+          finishedAt: new Date(),
+        }),
       referee_criteria: () =>
         db.insert(refereeCriteria).values({
           articleId: GONE_ARTICLE,

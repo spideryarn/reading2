@@ -96,6 +96,7 @@ async function loaded(onSettled?: () => void): Promise<Controller> {
     runTurn: effects.runTurn,
     renameThread: effects.renameThread,
     deleteThread: effects.deleteThread,
+    deleteFrom: effects.deleteFrom,
     appendSpoken: async () => ({ ok: false, conflict: false, error: "not in this test" }),
     settledAnswer: async () => null,
     stopAnswer: unused,

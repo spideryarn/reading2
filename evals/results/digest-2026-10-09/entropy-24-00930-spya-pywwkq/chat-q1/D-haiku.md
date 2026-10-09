@@ -1,0 +1,9 @@
+# entropy-24-00930-spya-pywwkq — chat-q1 — D-haiku
+
+> Why do the authors say that mutual information and transfer entropy are not enough to describe information processing in neurons, and how does that motivation connect to what the empirical PID studies in section 5 actually found?
+
+The authors say mutual information (MI) and transfer entropy (TE) capture only part of what matters. MI is "an undirected measure that describes the instantaneous dependency between two variables" with no sense of direction [spya-f6sbgx]. TE adds direction, measuring how much one neuron's past reduces uncertainty about another's future, so it tracks "information propagation" [spya-p4pyuy]. Even so, the authors say transfer "is limited in its ability to reveal how different streams of information 'interact' and how neurons produce novel or modified information from multiple sources" [spya-s0db2g]. Processing is the part that cannot be reduced to any single source, and PID is the tool for isolating it [spya-wer4cd].
+
+Section 5 tests that gap. The main finding is that synergy was about a quarter of TE in each triad, so feedforward transfer is "a reliable predictor" of processing [spya-kqkb58]. That supports linking the two, but it does not make them the same thing. The clearer evidence against treating transfer as enough comes from the timescale analysis. Total multivariate TE rose steadily with timescale, while synergy rose and then fell [spya-cs9fdy, spya-ybmve2]. A measure of flow alone would have shown a steady increase where processing actually declined.
+
+My inference is that this is why the authors needed the decomposition: transfer volume can grow while the share that is genuinely synergistic shrinks. The behavioural study adds a similar point, since redundancy rose sharply during movement execution [spya-t8fayf]. The article also notes a caveat that the networks came from bivariate TE, which the authors say overestimates edge significance [spya-j4cy9j].

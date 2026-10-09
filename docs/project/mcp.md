@@ -72,7 +72,7 @@ this one, not your browser) and deletes the file. A running server notices on it
 | `list_articles` | your shelf (`archive`: active, archived or all), each with its link, tags and visibility |
 | `search_library` | full-text search over your shelf |
 | `list_tags`, `edit_tags` | your tags, and adding or removing them on an article |
-| `import_article` | import a URL (uses a free article, as the web app does; one you already have answers that article, free — [261007k](../plans/261007k-repeat-paste-is-free-and-says-so.md)) |
+| `import_article` | import a URL (uses a free article, as the web app does; one you already have answers that article, free — [261007k](../plans/261007k-repeat-paste-is-free-and-says-so.md); one somebody else has made public answers that copy, free, and `own_copy: true` imports the reader's own — [261009j](../plans/261009j-a-public-copy-offered-at-import.md)) |
 | `get_import_status`, `list_imports` | how an import is going |
 | `set_auto_modes` | the "run the main modes after import" switch |
 | `make_article_private`, `make_article_public` | visibility; **public asks you first** |

@@ -527,6 +527,148 @@ describe("a repeat paste of an article on the shelf", () => {
 });
 
 /**
+ * **Somebody else has already made this address public**, so the add asks
+ * before it spends — Greg, 2026-10-09 (`spya-ahvk74`): *"ask them if they'd
+ * rather use the public one for free or have their own version which will use
+ * up one of their allotted slots."* The answer is `{ publicCopy }`, free and
+ * with nothing queued; `{ url, ownCopy: true }` is the ordinary paid add.
+ * docs/plans/261009j-a-public-copy-offered-at-import.md.
+ *
+ * Which public articles count is Citations' read (pg-cited-in-spideryarn.ts),
+ * so the absences below are the ones that matter: a stranger's private,
+ * archived or unopenable article at the same address is never offered.
+ */
+describe("an address somebody else has made public", () => {
+  const STRANGER = `${OWNER_STEM}${randomUUID().slice(-12)}` as OwnerId;
+  const BLOCK = "spya-c7ebq2";
+
+  beforeAll(async () => {
+    await seedAuthUser(pool, { id: STRANGER, email: `admission-${STRANGER}@example.invalid` });
+  });
+
+  /** A stranger's article fetched from `url`, as an import and a share leave it. */
+  async function strangers(
+    name: string,
+    url: string,
+    { visibility = "public", openable = true, archived = false } = {},
+  ): Promise<string> {
+    const slug = `test-admission-${name}`;
+    const { rows } = await pool.query<{ id: string }>(
+      `insert into spideryarn.articles (owner_id, slug, visibility, public_at, archived_at)
+       values ($1, $2, $3, case when $3 = 'public' then now() end, case when $4 then now() end)
+       returning id`,
+      [STRANGER, slug, visibility, archived],
+    );
+    const articleId = rows[0]?.id;
+    const tree = openable
+      ? JSON.stringify({
+          version: "1",
+          generator: "test",
+          slug,
+          rootId: "n0",
+          nodes: { n0: { id: "n0", depth: 0, parent: null, children: [], range: [BLOCK, BLOCK], title: "Root", gist: "x" } },
+        })
+      : null;
+    const revision = await pool.query<{ id: string }>(
+      `insert into spideryarn.article_revisions
+         (article_id, status, title, requested_url, final_url, fetched_at, tree)
+       values ($1, 'published', 'A public article', $2, $2, now(), $3::jsonb)
+       returning id`,
+      [articleId, url, tree],
+    );
+    const revisionId = revision.rows[0]?.id;
+    await pool.query("update spideryarn.articles set current_revision_id = $2 where id = $1", [articleId, revisionId]);
+    if (openable) {
+      await pool.query("insert into spideryarn.block_identities (article_id, block_id) values ($1, $2)", [articleId, BLOCK]);
+      await pool.query(
+        `insert into spideryarn.revision_blocks
+           (article_id, revision_id, block_id, ordinal, tag, kind, text, words, html, gistable)
+         values ($1, $2, $3, 0, 'p', 'text', 'A paragraph.', 2, '<p>A paragraph.</p>', true)`,
+        [articleId, revisionId, BLOCK],
+      );
+    }
+    return slug;
+  }
+
+  async function jobCount(): Promise<number> {
+    const { rows } = await pool.query<{ n: string }>(
+      "select count(*) as n from spideryarn.jobs where owner_id = $1",
+      [OWNER],
+    );
+    return Number(rows[0]?.n);
+  }
+
+  it("offers the public copy, spends nothing and queues nothing", async () => {
+    const slug = await strangers("pub", `${HOST}/pub`);
+    await alreadySpent(FREE_LIMIT);
+
+    /* Another spelling of the same address: the match is `urlKey`'s. */
+    const reply = await post("/api/jobs", { url: `http://www.${HOST.slice("https://".length)}/pub/` });
+    expect(reply.status, JSON.stringify(reply.body)).toBe(200);
+    expect(reply.body).toEqual({ publicCopy: { slug, title: "A public article" } });
+    expect(await ledger()).toEqual({ taken: FREE_LIMIT, inFlight: 0 });
+    expect(await jobCount()).toBe(0);
+  });
+
+  it("finds a public arXiv paper whatever version is pasted", async () => {
+    const slug = await strangers("pub-arxiv", "https://arxiv.org/abs/2601.99901v1");
+    const reply = await post("/api/jobs", { url: "https://arxiv.org/pdf/2601.99901v2" });
+    expect(reply.status, JSON.stringify(reply.body)).toBe(200);
+    expect(reply.body).toMatchObject({ publicCopy: { slug } });
+  });
+
+  it("is the ordinary paid add when the reader asks for their own copy", async () => {
+    await strangers("pub-own", `${HOST}/pub-own`);
+    const reply = await post("/api/jobs", { url: `${HOST}/pub-own`, ownCopy: true });
+    expect(reply.status, JSON.stringify(reply.body)).toBe(202);
+    expect(await ledger()).toEqual({ taken: 1, inFlight: 1 });
+  });
+
+  it("still refuses an own copy at the ceiling", async () => {
+    await strangers("pub-ceiling", `${HOST}/pub-ceiling`);
+    await alreadySpent(FREE_LIMIT);
+    const reply = await post("/api/jobs", { url: `${HOST}/pub-ceiling`, ownCopy: true });
+    expect(reply.status, JSON.stringify(reply.body)).toBe(402);
+  });
+
+  it("sends the reader to their own article first", async () => {
+    await strangers("pub-both", `${HOST}/both`);
+    const mine = "test-admission-mine-both";
+    const { rows } = await pool.query<{ id: string }>(
+      "insert into spideryarn.articles (owner_id, slug) values ($1, $2) returning id",
+      [OWNER, mine],
+    );
+    const revision = await pool.query<{ id: string }>(
+      `insert into spideryarn.article_revisions (article_id, status, title, requested_url, final_url, fetched_at)
+       values ($1, 'published', 'Mine', $2, $2, now()) returning id`,
+      [rows[0]?.id, `${HOST}/both`],
+    );
+    await pool.query("update spideryarn.articles set current_revision_id = $2 where id = $1", [
+      rows[0]?.id,
+      revision.rows[0]?.id,
+    ]);
+    const reply = await post("/api/jobs", { url: `${HOST}/both` });
+    expect(reply.body).toEqual({ article: mine, repeat: true });
+  });
+
+  it.each([
+    ["private", { visibility: "private" }],
+    ["archived", { archived: true }],
+    ["unopenable", { openable: false }],
+  ] as const)("never offers a stranger's %s article", async (name, how) => {
+    await strangers(`pub-${name}`, `${HOST}/pub-${name}`, how);
+    const reply = await post("/api/jobs", { url: `${HOST}/pub-${name}` });
+    expect(reply.status, JSON.stringify(reply.body)).toBe(202);
+    expect(reply.body).not.toHaveProperty("publicCopy");
+  });
+
+  it("refuses ownCopy anywhere but beside a url", async () => {
+    const reply = await post("/api/jobs", { slug: "test-admission-anything", ownCopy: true });
+    expect(reply.status).toBe(400);
+  });
+});
+
+/**
  * An upload whose bytes have landed, which is the only kind that may be queued.
  *
  * Two halves, and the second is new on 2026-09-03: `mintUpload` writes the

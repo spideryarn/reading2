@@ -129,6 +129,7 @@ import { Button } from "./components/ui/button.js";
 import { keepDictation } from "./dictation-keep.js";
 import { useReaderTranscriber } from "./dictation-upload.js";
 import { type UseDictationField, useDictationField } from "./useDictationField.js";
+import { useFitTextarea } from "./useFitTextarea.js";
 import { armActivation } from "./activation.js";
 import { LEARN_SUB_MODES, visibleLearnViews } from "./sub-modes.js";
 import { useRenderCount } from "./perf.js";
@@ -812,42 +813,10 @@ export function QuizPanel({
   /**
    * **The box is as tall as what is in it** — Greg, 2026-10-03 (spya-qnrxuw):
    * *"show the whole answer and don't put my answer in a scrollable box."*
-   * Chat's composer's mechanism without its roof: `auto` first, or the box could
-   * only ever grow. `rows` is the floor; the band is what scrolls.
-   *
-   * **Measured again when the width changes, and not only when the words do.**
-   * Rotate an iPad under a long answer and more lines wrap inside a height
-   * nobody re-asked for, with the overflow hidden — the words would be there
-   * and not on screen. GPT Sol's plan review, F1.
-   *
-   * The passed-over line of CSS is `field-sizing: content`: no Firefox, and a
-   * Safari too recent to promise on the iPad this was reported from.
+   * `rows` is the floor; the band is what scrolls. useFitTextarea.ts has the
+   * mechanism, and why it is measured again on a width change.
    */
-  const fitBox = () => {
-    const el = box.current;
-    if (!el) return;
-    el.style.height = "auto";
-    /* `scrollHeight` stops inside the border and the box is `border-box`. */
-    el.style.height = `${el.scrollHeight + (el.offsetHeight - el.clientHeight)}px`;
-  };
-  const hasQuestion = question !== undefined;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run trigger — the effect measures the DOM, and `typed` is what changed it; `hasQuestion` is the box mounting
-  useLayoutEffect(fitBox, [typed, hasQuestion]);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `hasQuestion` is the box mounting and unmounting, which is when there is an element to watch
-  useEffect(() => {
-    const el = box.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    /* Width only: the fit itself changes the height, and reacting to that
-       would be a loop. */
-    let width = el.clientWidth;
-    const watch = new ResizeObserver(() => {
-      if (el.clientWidth === width) return;
-      width = el.clientWidth;
-      fitBox();
-    });
-    watch.observe(el);
-    return () => watch.disconnect();
-  }, [hasQuestion]);
+  useFitTextarea(box, typed, question !== undefined);
 
   /**
    * **A finished mark that is about the words in the box.** From here the next
@@ -1815,7 +1784,7 @@ function Mic({ dictate, disabled }: { dictate: UseDictationField; disabled: bool
   if (!dictate.dictation.supported) return null;
   return (
     <span className="quiz-mic">
-      <DictationButton dictation={dictate.dictation} toggle={dictate.toggle} disabled={disabled} again={dictate.again} sendingAfter={dictate.sendingAfter} />
+      <DictationButton dictation={dictate.dictation} toggle={dictate.toggle} disabled={disabled} again={dictate.again} sendingAfter={dictate.sendingAfter} doubleStop={dictate.doubleStop} />
       <TalkLabel field={dictate} className="quiz-mic-label" />
     </span>
   );

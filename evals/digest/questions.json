@@ -1,0 +1,41 @@
+{
+  "frozen": "2026-10-09, before any digest was generated (GPT Sol's plan review, finding 2). Two per article: a synthesis question, and a detail or counterexample question that asks for a critical judgement. Do not edit after a run: the run records this file's hash.",
+  "questions": {
+    "the-mythology-of-conscious-ai-spya-rn5m0q": [
+      {
+        "id": "q1",
+        "kind": "synthesis",
+        "text": "Seth gives several separate reasons to doubt that computation alone could make an AI conscious. How do they fit together? Do they depend on each other, and which of them carries most of the weight in his conclusion that we should not try to build conscious AI?"
+      },
+      {
+        "id": "q2",
+        "kind": "detail-or-counterexample",
+        "text": "What does Seth mean when he says a simulation is not an instantiation? Is that convincing? What would a functionalist say back, and does the essay answer that reply or only assert its own view?"
+      }
+    ],
+    "entropy-24-00930-spya-pywwkq": [
+      {
+        "id": "q1",
+        "kind": "synthesis",
+        "text": "Why do the authors say that mutual information and transfer entropy are not enough to describe information processing in neurons, and how does that motivation connect to what the empirical PID studies in section 5 actually found?"
+      },
+      {
+        "id": "q2",
+        "kind": "detail-or-counterexample",
+        "text": "What exactly is 'synergy' in PID, and how far should I trust the finding that synergy concentrates in rich clubs and recurrent connections? What could the choice of redundancy measure, or the amount of data, do to that result?"
+      }
+    ],
+    "scaling-hypothesis": [
+      {
+        "id": "q1",
+        "kind": "synthesis",
+        "text": "How do the scaling hypothesis and the claim that pretraining on next-token prediction forces a model towards real world understanding relate to each other? Are they separate claims, or does one depend on the other?"
+      },
+      {
+        "id": "q2",
+        "kind": "detail-or-counterexample",
+        "text": "What does Gwern mean when he says agency can come from data, and what is the weakest step in his argument that a model trained only to predict text can end up behaving as an agent?"
+      }
+    ]
+  }
+}

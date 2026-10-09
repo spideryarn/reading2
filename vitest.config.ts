@@ -3,8 +3,10 @@ import type { InlineConfig } from "vitest/node";
 import { defaultExclude, defineConfig } from "vitest/config";
 
 import { recordRefusal } from "./admission-journal.js";
+import { TEST_OUTCOME_FILE_ENV } from "./scripts/vitest-outcome-reporter.js";
 import { TEST_LANES, type TestLane } from "./tests/store-migration-registry.js";
 import { ACCOUNT_ROUTING_VARIABLES } from "./tests/helpers/account-neutral-env.js";
+import { makeRunTempRoot } from "./tests/setup/run-temp-root.js";
 import {
   ADMISSION_POLICY_VERSION,
   decideAdmission,
@@ -160,6 +162,12 @@ function workersForThisRun(): number {
  */
 for (const name of ACCOUNT_ROUTING_VARIABLES) delete process.env[name];
 
+/* **Every temp file a test makes goes into one directory, removed when the run ends.** Tests
+   mkdtemp under os.tmpdir() in 243 files and mostly never clean up — 50,000 directories a day on
+   the box. Same mechanism as the line above: set before any worker exists, so they and their
+   children inherit it. tests/run-temp-root.test.ts checks from inside a worker. Plan 261009a. */
+makeRunTempRoot();
+
 const PARALLEL_WORKERS = workersForThisRun();
 
 /**
@@ -227,6 +235,8 @@ const COMMON = {
  */
 const NO_PROVIDER_CALLS = "./tests/setup/no-provider-calls.ts";
 
+const OUTCOME_REPORTER = "./scripts/vitest-outcome-reporter.ts";
+
 export default defineConfig({
   resolve: { alias: ALIAS },
   test: {
@@ -240,6 +250,10 @@ export default defineConfig({
        The private lane names its own `maxWorkers: 1` and so is unaffected by
        either, which is the point of it. */
     maxWorkers: PARALLEL_WORKERS,
+    /* Which files failed, for a later deploy to rerun only those — when asked,
+       by the readiness runner (scripts/vitest-outcome-reporter.ts). A
+       `--reporter` flag replaces this list, so the deploy names it there. */
+    ...(process.env[TEST_OUTCOME_FILE_ENV] ? { reporters: ["default", OUTCOME_REPORTER] } : {}),
     projects: [
       {
         resolve: { alias: ALIAS },

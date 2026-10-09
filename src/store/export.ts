@@ -389,10 +389,19 @@ export async function exportArticle(
        byte-identical. src/db/schema.ts § `publishedAt`. */
     publishedAt: revision.publishedAt,
     /* The year alone, for a paper with no whole day: the same fact, so it is
-       exported where the date is. `journal` and `doi` are still not, which is
-       261004a's open question and not this one's. */
+       exported where the date is. */
     publishedYear: revision.publishedYear,
     note: revision.note,
+    /* The paper's own summary, and for a minimal paper the only prose it has.
+       Left out with nothing saying so until plan 261009s.
+
+       **`doi` and `journal` are left out on purpose, for now**: whether the
+       rollback carries them is Greg's open question (plan 261004a), listed in
+       docs/project/export.md § Why there are two exporters. The reader's zip
+       (src/store/export-bundle.ts) keeps both, in `content/revision.json`.
+       tests/export-meta-abstract-pg.test.ts pins the omission, so deciding it
+       is a change there too. */
+    abstract: revision.abstract,
     source: revision.source,
     method: revision.extractMethod,
     pages: revision.pages,
@@ -404,6 +413,8 @@ export async function exportArticle(
     unverified: revision.unverified,
     recall: revision.recall,
     pagesChecked: revision.pagesChecked,
+    /* The checker's complaints: the reader's copy keeps what the store keeps. Plan 261009n. */
+    quality: revision.quality,
     /* The difficulty rating with all five of its facts, the model and the
        time included: this file is the reader's own copy, and nothing else in
        it says where the minutes on their shelf came from. Absent when the
@@ -458,6 +469,11 @@ export async function exportArticle(
   if (revision.quiz) await put("article_revisions", "quiz.json", revision.quiz);
   if (revision.faq) await put("article_revisions", "faq.json", revision.faq);
   if (revision.relations) await put("article_revisions", "relations.json", revision.relations);
+  /* Missing until 2026-10-09 (qi-mv7wk6ap): the bundle carried a stored debate
+     inside content/revision.json all along, and this rollback silently didn't. */
+  if (revision.debate) await put("article_revisions", "debate.json", revision.debate);
+  if (revision.debateClaims)
+    await put("article_revisions", "debate-claims.json", revision.debateClaims);
   if (revision.crossrefs)
     await put("article_revisions", "crossrefs.json", revision.crossrefs);
   if (revision.simpleSummary)
@@ -481,7 +497,7 @@ export async function exportArticle(
     written.push(path.join(target.outputRoot, `${slug}.html`));
   }
 
-  /* shelf.json — what the reader did to the card, from the five columns on
+  /* shelf.json — what the reader did to the card, from the seven columns on
      `articles` rather than on the revision. Written only when there is
      something to say: an untouched article has no shelf file, and inventing an
      empty one would mean every round trip added a file the app never wrote —
@@ -497,7 +513,7 @@ export async function exportArticle(
      tests/store-roundtrip.test.ts compares against that corpus. This is the
      rollback tool, so the loss was permanent.
 
-     The condition is now "any of the five", written from the same object rather
+     The condition is now "any of the seven", written from the same object rather
      than as a second list that can fall behind it. `opens` is excluded from the
      `some` because it is always present and `0` is not something to say. */
   const shelf = compact({
@@ -509,6 +525,11 @@ export async function exportArticle(
     opens: article.opens,
     lastOpenedAt: article.lastOpenedAt?.toISOString() ?? null,
     purpose: article.purpose,
+    /* Skim's dismissed profile notice is reader state on this article, not an
+       artefact on its revision. Keep both halves: the key says which notice,
+       and the time is the history Greg asked to retain (plan 261009i). */
+    skimProfileNoticeDismissedFor: article.skimProfileNoticeDismissedFor,
+    skimProfileNoticeDismissedAt: article.skimProfileNoticeDismissedAt?.toISOString() ?? null,
   });
   if (article.opens > 0 || Object.keys(shelf).some((key) => key !== "opens")) {
     await put("articles", "shelf.json", shelf);
@@ -649,6 +670,11 @@ export async function exportArticle(
            docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md
            stage 0. */
         kind: storedThreadKind(thread.kind),
+        /* What the conversation covered, for the model in the reader's other
+           conversations (src/chat-gist.ts, plan 261008e). Omitted where there
+           is none, as the store's own read omits it, so a thread written
+           before the column exists exports exactly as it did. */
+        ...(thread.gist ? { gist: thread.gist } : {}),
         messages: messageRows.map((row) =>
           compact({
             id: row.id,
@@ -669,6 +695,12 @@ export async function exportArticle(
             error: row.error,
             // `false` is the default and the file simply had no key.
             stopped: row.stopped ? true : null,
+            /* Three more named for `stance`'s reason below: a column not named
+               here is not exported, and nothing says so. All three were missing
+               until 2026-10-09 (plan 261009h). */
+            truncated: row.truncated ? true : null,
+            interrupted: row.interrupted ? true : null,
+            passages: row.passages,
             /* **The field this file's own comment warned about**, four lines
                up: `tools` went missing from an export exactly this way once
                already, because the row is built from named fields and a new one
@@ -802,6 +834,20 @@ export async function exportArticle(
      `claims` is JSONB and is written back verbatim. There is no `configFromRow`
      equivalent to fail on, because there is no discriminated union in the row —
      the shape is validated by `validateClaims` on the way in. */
+  /* Hidden text's Opus check, one row and no id, as above. Plan 261009a. */
+  const hiddenCheckRow = rows.refereeHiddenChecks[0];
+  if (hiddenCheckRow) {
+    await put("referee_hidden_checks", "referee-hidden-check.json", {
+      check: {
+        judgments: hiddenCheckRow.judgments,
+        unanswered: hiddenCheckRow.unanswered,
+        notSent: hiddenCheckRow.notSent,
+        model: hiddenCheckRow.model,
+        createdAt: hiddenCheckRow.createdAt.toISOString(),
+        finishedAt: hiddenCheckRow.finishedAt.toISOString(),
+      },
+    });
+  }
   const claimsRow = rows.refereeClaims[0];
   if (claimsRow) {
     await put("referee_claims", "referee-claims.json", {
@@ -821,6 +867,31 @@ export async function exportArticle(
         error: claimsRow.error,
         sourceHash: claimsRow.sourceHash,
       }),
+    });
+  }
+
+  /* debate-claim-checks.json — the reader's checks of the claims they picked
+     in Debate (plan 261008i § 3). No filesystem store ever read this back, so
+     the shape is the rows, columns as they are, as the bundle writes them. */
+  if (rows.debateClaimChecks.length) {
+    await put("debate_claim_checks", "debate-claim-checks.json", {
+      checks: rows.debateClaimChecks.map((row) =>
+        compact({
+          id: row.id,
+          status: row.status,
+          listSourceHash: row.listSourceHash,
+          promptVersion: row.promptVersion,
+          digFurther: row.digFurther,
+          targets: row.targets,
+          results: row.results,
+          counts: row.counts,
+          webSearches: row.webSearches,
+          model: row.model,
+          error: row.error,
+          createdAt: row.createdAt.toISOString(),
+          finishedAt: row.finishedAt?.toISOString(),
+        }),
+      ),
     });
   }
 

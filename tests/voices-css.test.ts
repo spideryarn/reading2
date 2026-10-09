@@ -190,10 +190,18 @@ const VOICES_BY_MODE: Record<Mode, readonly string[] | { noModelText: string }> 
   learn: [".chat-turn.model", ".quiz-question"],
   quotes: [".quotes-why-card"],
   timeline: [".tl-label"],
-  debate: [".dbt-ai", ".dbt-title-ai", ".dbt-thread-gist"],
+  /* Citations' and Debate's classes until 2026-10-09: Bibliography's, then
+     Reception's and Claims'. */
+  "peer-review": [
+    ".cite-why",
+    ".cite-does",
+    ".prose-card-cite-does-text",
+    ".dbt-ai",
+    ".dbt-title-ai",
+    ".dbt-thread-gist",
+  ],
   /* `.voice-ai`: a title or navLabel the model wrote (tree.ts § nodeLabel). */
   structure: [".struct-gist", ".voice-ai", ".tip-gist"],
-  citations: [".cite-why", ".cite-does", ".prose-card-cite-does-text"],
   faq: [".faq-question"],
   skim: [".skim-cue", ".skim-door-cue-next", ".skim-sense-text", ".skim-chip-name"],
   marginalia: [
@@ -229,8 +237,9 @@ const VOICES_BY_SURFACE: Record<Surface, readonly string[] | { none: string }> =
   add: [".voice-reader", ".prof-box-input"],
   "add-upload": [".voice-reader", ".prof-box-input"],
   profile: [".prof-box-input", ".prof-interim", ".voice-author"],
-  /* the reading column's specimen is a sample of an article */
-  design: [".prose"],
+  /* the reading column's specimen is a sample of an article; the text-roles
+     matrix sets one sample in each voice a role meets */
+  design: [".prose", ".voice-ai", ".voice-author", ".voice-reader"],
   login: { none: "a sign-in form: an email address is a credential, not something said" },
   admin: { none: "an administrator's tables; other readers' words there are left in the app's face" },
   privacy: { none: OURS },

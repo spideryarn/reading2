@@ -22,7 +22,7 @@ import { helpSectionText } from "../../src/web/help/help-markdown.js";
 
 const collapse = (text: string): string => text.replace(/\s+/g, " ").trim();
 
-/** Every word on one page of Help (for a mode: its two halves, without the catalog's sentences). */
+/** Every word on one page of Help (for a mode: its three sections, without the catalog's sentences). */
 export function helpWords(anchor: HelpAnchor): string {
   return collapse(helpSectionText(anchor));
 }

@@ -1,0 +1,207 @@
+{
+  "judge": "sol",
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "lineups": {
+    "summary-fuller": {
+      "scores": {
+        "V": {
+          "accuracy": 3,
+          "coverage": 4,
+          "nuance": 3,
+          "usefulness": 4,
+          "overall": 6,
+          "note": "Mistakes the excess over summed marginal information for synergy itself, overlooking the simultaneously redundant component described in spya-h5jzvm."
+        },
+        "W": {
+          "accuracy": 4,
+          "coverage": 4,
+          "nuance": 4,
+          "usefulness": 4,
+          "overall": 8,
+          "note": "Clearly covers the empirical patterns and finite-data limitations, but omits the unresolved redundancy-measure choice in spya-rc76qn."
+        },
+        "X": {
+          "accuracy": 3,
+          "coverage": 4,
+          "nuance": 4,
+          "usefulness": 4,
+          "overall": 7,
+          "note": "Incorrectly groups mutual information with measures of information flow, contrary to spya-f6sbgx, although its discussion of measure choice is valuable."
+        },
+        "Y": {
+          "accuracy": 4,
+          "coverage": 4,
+          "nuance": 4,
+          "usefulness": 4,
+          "overall": 8,
+          "note": "Explains transfer entropy's conditioning and the statistical-versus-mechanistic distinction well, but omits the measure dependence emphasized in spya-rc76qn."
+        },
+        "Z": {
+          "accuracy": 3,
+          "coverage": 4,
+          "nuance": 4,
+          "usefulness": 4,
+          "overall": 7,
+          "note": "Preserves the recurrent-versus-feedback distinction in spya-sd9fzd, but incorrectly identifies the joint-minus-marginal surplus as the full synergy component."
+        }
+      },
+      "rank": [
+        ["W", "Y"],
+        ["X", "Z"],
+        "V"
+      ],
+      "separates": "W and Y explain the central framework and empirical findings clearly while preserving important limitations. X mischaracterizes mutual information as flow, while Z and V confuse synergy with the net surplus after redundancy is double-counted."
+    },
+    "ideas": {
+      "scores": {
+        "V": {
+          "accuracy": 4,
+          "coverage": 4,
+          "nuance": 4,
+          "usefulness": 4,
+          "overall": 7,
+          "note": "The fixed-distribution assumption is useful, but saying every measure counts observed states overgeneralizes the continuous and parametric options in spya-qxggyj."
+        },
+        "W": {
+          "accuracy": 3,
+          "coverage": 4,
+          "nuance": 4,
+          "usefulness": 4,
+          "overall": 6,
+          "note": "Treats mutual information as a measure of information movement despite spya-f6sbgx explicitly distinguishing undirected dependence from transfer."
+        },
+        "X": {
+          "accuracy": 5,
+          "coverage": 3,
+          "nuance": 4,
+          "usefulness": 4,
+          "overall": 7,
+          "note": "Makes finite-data bias and measure choice understandable, but misses the interpretive limitation separating statistical synergy from mechanism in spya-spdx0y."
+        },
+        "Y": {
+          "accuracy": 4,
+          "coverage": 5,
+          "nuance": 4,
+          "usefulness": 5,
+          "overall": 8,
+          "note": "Connects timescale, underdetermination, triad comparisons, and estimation limits to the argument; its mechanistic caution goes slightly beyond spya-spdx0y's wording."
+        },
+        "Z": {
+          "accuracy": 4,
+          "coverage": 5,
+          "nuance": 4,
+          "usefulness": 5,
+          "overall": 8,
+          "note": "Provides a strong conceptual foundation, including unique information and uncertainty reduction, though its claim that the article never explains uncertainty reduction contradicts spya-t4pc0p."
+        }
+      },
+      "rank": [
+        ["Y", "Z"],
+        ["V", "X"],
+        "W"
+      ],
+      "separates": "Y and Z most consistently explain the propositions a reader needs and why they matter, covering both the mathematical framework and its interpretive limits. V gives more empirical findings at the expense of methodological foundations, X omits the mechanistic caveat, and W blurs dependence with flow."
+    },
+    "chat-q1": {
+      "scores": {
+        "V": {
+          "accuracy": 5,
+          "coverage": 5,
+          "nuance": 4,
+          "usefulness": 5,
+          "overall": 9,
+          "note": "Directly connects TE-built networks to PID findings and explains why increasing transfer can conceal declining synergy in spya-cs9fdy."
+        },
+        "W": {
+          "accuracy": 3,
+          "coverage": 4,
+          "nuance": 4,
+          "usefulness": 4,
+          "overall": 7,
+          "note": "Incorrectly says both measures necessarily examine one source at a time, overlooking the joint mutual information and multivariate TE used in spya-h5dz45 and spya-cs9fdy."
+        },
+        "X": {
+          "accuracy": 5,
+          "coverage": 3,
+          "nuance": 4,
+          "usefulness": 4,
+          "overall": 8,
+          "note": "Gives a clear explanation of the decisive timescale divergence in spya-cs9fdy, but omits the rich-club and recurrent-connectivity findings."
+        },
+        "Y": {
+          "accuracy": 4,
+          "coverage": 4,
+          "nuance": 3,
+          "usefulness": 4,
+          "overall": 7,
+          "note": "Covers several findings, but does not explain the opposing TE and synergy trends in spya-cs9fdy and gives disproportionate weight to their correlation."
+        },
+        "Z": {
+          "accuracy": 4,
+          "coverage": 5,
+          "nuance": 3,
+          "usefulness": 4,
+          "overall": 8,
+          "note": "Covers the principal findings, but its inference that PID adds information only where synergy and TE diverge is stronger than spya-kqkb58 supports."
+        }
+      },
+      "rank": [
+        "V",
+        ["X", "Z"],
+        ["W", "Y"]
+      ],
+      "separates": "V gives the most complete and direct connection between the motivation, analysis workflow, and empirical payoff. X is particularly clear but narrower; Z covers more findings while overstating its skeptical inference, and W introduces a false restriction on MI and TE."
+    },
+    "chat-q2": {
+      "scores": {
+        "V": {
+          "accuracy": 3,
+          "coverage": 5,
+          "nuance": 3,
+          "usefulness": 3,
+          "overall": 6,
+          "note": "Reverses the effect of redundancy choice: at fixed mutual information, lower redundancy lowers synergy, rather than raising it, under the decomposition in spya-h5jzvm and spya-bgsd4n."
+        },
+        "W": {
+          "accuracy": 1,
+          "coverage": 1,
+          "nuance": 1,
+          "usefulness": 1,
+          "overall": 1,
+          "note": "Provides an unfinished tool-call dump rather than an answer addressing the findings in spya-fud8q3 and spya-sd9fzd."
+        },
+        "X": {
+          "accuracy": 3,
+          "coverage": 4,
+          "nuance": 3,
+          "usefulness": 3,
+          "overall": 5,
+          "note": "Misdescribes synergy as a simple residual after subtracting redundancy and omits the important macaque corroboration in spya-wr7f6y."
+        },
+        "Y": {
+          "accuracy": 3,
+          "coverage": 3,
+          "nuance": 3,
+          "usefulness": 3,
+          "overall": 5,
+          "note": "Equates synergy with the whole-minus-parts surplus and leaves replication unverified despite the article reporting relevant macaque evidence in spya-wr7f6y."
+        },
+        "Z": {
+          "accuracy": 4,
+          "coverage": 5,
+          "nuance": 4,
+          "usefulness": 5,
+          "overall": 8,
+          "note": "Balances underdetermination, sampling bias, and macaque corroboration well, although spya-cs9fdy does not establish that measure sensitivity is greatest in highly correlated rich clubs."
+        }
+      },
+      "rank": [
+        "Z",
+        "V",
+        ["X", "Y"],
+        "W"
+      ],
+      "separates": "Z best balances the reported effect sizes, methodological caveats, partial corroboration in behaving animals, and uncertainty about measure robustness. V covers these issues but reverses the mathematical effect of redundancy choice; X and Y also mishandle the decomposition and omit relevant corroboration, while W supplies no answer."
+    }
+  }
+}

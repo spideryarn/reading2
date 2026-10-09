@@ -42,9 +42,11 @@
  *    inputs it was made from (`CheckedInputs`), and the panel shows it only
  *    beside a row equal to them.
  *
- * **Not stored.** Mirror's precedent: a run is a model call the referee asks for,
- * and a reload asking again is the referee asking again. The gateway records
- * the call itself (`ai_calls`), which is the timestamp a model call keeps here.
+ * **Kept, since 2026-10-09.** It shipped unsaved on Mirror's precedent, and
+ * Greg asked for it kept: paid model output is (report spya-gqq38u,
+ * docs/project/database.md § AI output we paid for is kept). The route saves
+ * the validated result (src/store/pg-referee-hidden-checks.ts) before the
+ * `done` frame, and this module still stores nothing itself.
  *
  * ## What may be logged
  *

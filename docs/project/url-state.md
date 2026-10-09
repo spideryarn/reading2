@@ -10,7 +10,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ Which article is the path](#which-article-is-the-path) — the path/query split, and the old `?slug=` and `#hash` addresses
 - [§ Three decisions](#three-decisions) — replace versus push, debouncing, and why the unit is a section
   - [Position replaces history](#position-replaces-history-deliberate-acts-push) — why scrolling never adds a Back entry
-  - [The way back](#the-way-back-lives-until-you-leave-the-article) — the pushed entry, the "back to X" chip, and jumps landing centred
+  - [The way back](#the-way-back-lives-until-you-leave-the-article) — the pushed entry, the "back to X" chip (which moves the position and leaves the modes alone), and jumps landing centred
   - [The unit is a section](#the-unit-is-a-section-not-a-position) — what `?at=` addresses
 - [§ Reopening an article where you left it](#reopening-an-article-where-you-left-it) — the remembered last view, what is never remembered, and the default for a new article
 - [§ Why the query string and not the hash](#why-the-query-string-and-not-the-hash) — the double-scroll reason
@@ -74,7 +74,7 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `margin` | whether **Marginalia's column of notes** is on, right of the prose — a switch of its own beside `mode` since 2026-10-01, so the notes can sit beside any band; absent is off. **`?mode=marginalia`**, and the old **`?mode=annotations`** from the one day the mode was called Annotations and was a value of `mode`, read as Plain on both client and server and are rewritten on arrival (a *replace*) to `?margin=1`; a remembered one is translated the same way (`rememberableSearch`). Which words count is `isMarginaliaModeWord` in [`src/modes.ts`](../../src/modes.ts). Not `notes`, which is one letter from `note` — [261001i](../plans/261001i-annotations-column-beside-a-band-mode.md), [261001n](../plans/261001n-rename-annotations-mode-to-marginalia-and-the-three-column-interface-vision.md) | push | `?margin=1` |
 | `thread` | which conversation is open — **`mode` decides how it is drawn** | **replace** | `?thread=spya-k3m9qt` |
 | `guide` | **open this article's guide in Chat**, whether or not it exists yet (one per article, so a link cannot know its id). Chat's band reads it once its list has loaded, opens the stored guide or begins one, replaces `thread` with its id and drops `guide`, so the address becomes the ordinary `?mode=chat&thread=<id>`. Acted on only while `mode=chat`; never restored — [261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md) ([`params.ts`](../../src/web/params.ts) § `guideParam`) | **replace** | `?mode=chat&guide=1` |
-| `chatfrom` | which source Chat's list of conversations is narrowed to: `chats`, `debate`, `glossary`, `citations`, `learn` (Recall, Tutorial and Explore together) or `passage`; absent is All, and so is an unknown word. A word this article has no conversation from is replaced with All once the list has loaded — [chat-tools.md § Chat's list shows every conversation about the article](chat-tools.md#chats-list-shows-every-conversation-about-the-article) ([`params.ts`](../../src/web/params.ts) § `chatFromParam`) | **replace** | `?chatfrom=learn` |
+| `chatfrom` | which source Chat's list of conversations is narrowed to: `chats`, `peer-review` (Bibliography, Reception and Claims together; `debate` and `citations` until 2026-10-09, lifted to it on arrival), `glossary`, `ideas`, `learn` (Recall, Tutorial and Explore together) or `passage`; absent is All, and so is an unknown word. A word this article has no conversation from is replaced with All once the list has loaded — [chat-tools.md § Chat's list shows every conversation about the article](chat-tools.md#chats-list-shows-every-conversation-about-the-article) ([`params.ts`](../../src/web/params.ts) § `chatFromParam`) | **replace** | `?chatfrom=learn` |
 | `term` | which glossary term is selected, absent for a list nobody has picked from — [glossary.md](glossary.md) | **replace** | `?term=spya-h4r2wd` |
 | `idea` | which idea is selected, absent for a list nobody has picked from — [ideas.md](ideas.md). Mirrors `term` above in every respect, including the reason it replaces rather than pushes | **replace** | `?idea=spya-k3m9qt` |
 | `quote` | which quote is selected, absent for a list nobody has picked from — [quotes.md](quotes.md). Mirrors `term` and `idea` above in every respect | **replace** | `?quote=spya-k3m9qt` |
@@ -90,9 +90,9 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `runs` | which saved meaning-searches are switched on, as a comma list of ids (`none` for the empty set); a bad id drops only itself — [search.md](search.md). `?run=` alone is still read, for links from before 2026-08-26 ([`params.ts`](../../src/web/params.ts) § `runsParam`) | **replace** | `?runs=spya-p7w2dn,spya-k3m9qt` |
 | `order` | how the results list is stacked: `document`, `confidence` or `prioritised` — the default, and absent, since 2026-09-15 ([search.md](search.md)) | push | `?order=document` |
 | `conf` | the bar the search results' `prioritised` order hides under, 0–100, in the unit the rows print. No default: absent means untouched | replace, debounced | `?conf=65` |
-| `debate` | which of debate mode's two sub-modes is showing: `reception` (the default, and absent — what others have written about the piece itself) or `claims` (what has been written about the claims it makes). An unknown value reads as Reception. Both draw the one stored search, so writing it never spends ([`params.ts`](../../src/web/params.ts) § `debateParam`, [debate.md](debate.md)) | push | `?debate=claims` |
-| `debateby` | how debate's **Reception** list is ordered: `prioritised` (*as found* — the default, and absent), `date` or `stance` (most critical first), each within Reception's two groups. An order the rows cannot support, or one that would draw the same list, draws *as found*, and the bar presses the order actually drawn ([`debate-order.ts`](../../src/web/debate-order.ts) § `effectiveReceptionOrder`). Claims ignores it: that sub-mode is always grouped by claim. Its own key for `citeby`'s reason. **`claim` was a fourth value until 2026-10-03**; `?debateby=claim` is rewritten to `?debate=claims` at boot and on Back ([`router.ts`](../../src/web/router.ts) § `liftLegacyDebateBy`) | push | `?debateby=stance` |
-| `bears` | debate mode's **relevance bar**, shown in Claims when some row carries the AI's judgment: how directly a claim row bears on its claim — **the word, not a number**: `loosely`, `partly` or `directly`. **Absent means nobody has touched it**, which the panel reads as `RELEVANCE_DEFAULT` — `loosely`, which hides nothing ([`debate-order.ts`](../../src/web/debate-order.ts)). Claim rows only; a row the AI did not judge is never hidden | **replace** | `?bears=partly` |
+| `peer-review` | which of Peer review's three sub-modes is showing: `bibliography` (the default, and absent — the works the piece cites, [citations.md](citations.md)), `reception` (what others have written about the piece itself) or `claims` (the list of the claims the piece rests on, and an older search's claim sources under it — [debate.md § The claims list](debate.md#the-claims-list)). An unknown value reads as Bibliography. Writing it never spends: each sub-mode's work starts on a press, not on arrival ([`params.ts`](../../src/web/params.ts) § `peerReviewParam`, [peer-review.md](peer-review.md)). **It was Debate's `debate`** (`reception` or `claims`) until 2026-10-09; an old `?mode=debate&debate=claims` is lifted to `?mode=peer-review&peer-review=claims` on boot, on Back and on a restored last view ([`router.ts`](../../src/web/router.ts) § `liftLegacyPeerReview`), and a stray `debate` is otherwise read by nothing | push | `?peer-review=claims` |
+| `debateby` | how debate's **Reception** list is ordered: `prioritised` (*as found* — the default, and absent), `date` or `stance` (most critical first), each within Reception's two groups. An order the rows cannot support, or one that would draw the same list, draws *as found*, and the bar presses the order actually drawn ([`debate-order.ts`](../../src/web/debate-order.ts) § `effectiveReceptionOrder`). Claims ignores it: that sub-mode is always grouped by claim. Its own key for `citeby`'s reason. **`claim` was a fourth value until 2026-10-03**; `?debateby=claim` is rewritten to `?debate=claims` at boot and on Back ([`router.ts`](../../src/web/router.ts) § `liftLegacyDebateBy`), and that to `?peer-review=claims` | push | `?debateby=stance` |
+| `bears` | Peer review's (Claims) **relevance bar**, shown in Claims when some row carries the AI's judgment: how directly a claim row bears on its claim — **the word, not a number**: `loosely`, `partly` or `directly`. **Absent means nobody has touched it**, which the panel reads as `RELEVANCE_DEFAULT` — `loosely`, which hides nothing ([`debate-order.ts`](../../src/web/debate-order.ts)). Claim rows only; a row the AI did not judge is never hidden | **replace** | `?bears=partly` |
 | `debatethread` | which of debate's threads narrows its list: a theme's id, or `key` for the key sources; absent is no filter, and an id this debate does not have reads as no filter — as does one with no stored row in the sub-mode on screen — [debate.md](debate.md). **Not `thread`**, which is the open conversation ([`params.ts`](../../src/web/params.ts) § `debateThreadParam`) | **replace** | `?debatethread=key` |
 | `citeby` | how the citations list is ordered: `prioritised` (the default, and absent), `document` (first cited), `relevance`, `influence` or `date` (oldest first; a list with no year draws first cited) — [citations.md](citations.md). **Not the glossary's `sort`**: every parameter survives a mode switch, and a shared key would carry one mode's order into the other | push | `?citeby=relevance` |
 | `citebar` | the bar the citations' prioritised order hides under — `(2 × relevance + influence) / 3`. **Absent means nobody has touched it**, which the panel reads as `CITATION_BAR_DEFAULT` ([`CitationsPanel.tsx`](../../src/web/CitationsPanel.tsx)). Not the glossary's `gate`, which `Reader` reads in every mode | **replace**, debounced | `?citebar=0.55` |
@@ -125,7 +125,7 @@ so all three push, and all three land an unrecognised value on the default rathe
 page. [`src/web/params.ts`](../../src/web/params.ts) says why beside each parser.
 
 **A sub-mode parameter outlives its mode, deliberately.** `learn`, `diagram`, `referee`,
-`summary`, `structure` and `debate` each say *which thing, within one mode*, and the bar's mode
+`summary`, `structure` and `peer-review` each say *which thing, within one mode*, and the bar's mode
 buttons write `mode` alone. So `?mode=chat&learn=quiz` is not a leak: the parameter is read only
 by its own mode and does nothing under any other, and it is what makes pressing Learn again
 return the reader to the Quiz, or Diagram to the picture last chosen. One return writes a second
@@ -520,12 +520,13 @@ parameters; the one place it is written down is
 
 #### The way back lives until you leave the article
 
-**A stamp carries a depth, and every push that stays on this article carries it one entry further
-back.** Since 2026-09-16, and it replaces the flat rule this section used to state — *any push
-strips the stamp* — which was right about a reader who had moved on and wrong about one who had not
-moved at all. On a phone the mode band **covers** the article
-([narrow-windows.md](narrow-windows.md)), so leaving the mode is the only way to *see* where a jump
-landed; the chip was therefore destroyed at exactly the moment it was needed. What Greg asked for:
+**Every ordinary push that stays on this article carries the stamp unchanged.** A jump or return
+writes its own transition, as the table below says. The ordinary-push rule dates from 2026-09-16 and
+replaces the flat rule this section used to state — *any push strips the stamp* — which was right
+about a reader who had moved on and wrong about one who had not moved at all. On a phone the mode
+band **covers** the article ([narrow-windows.md](narrow-windows.md)), so leaving the mode is the only
+way to *see* where a jump landed; the chip was therefore destroyed at exactly the moment it was
+needed. What Greg asked for:
 
 > ideally we want things across modes to use reusable machinery so that if we build something like
 > that back to X when you click on an entry in a mode, that should be true across citations and
@@ -541,12 +542,11 @@ That is already the design: every band's jump is the `onJump` it is handed, whic
 [`reader/useReadingPosition.ts`](../../src/web/reader/useReadingPosition.ts), so a mode that uses
 it gets the chip with no code of its own.
 
-So the chip is `history.go(-depth)` rather than `history.back()`, and:
-
 | The push | The stamp on the entry it creates |
 |---|---|
-| a jump armed it | new, naming the measured origin, `depth: 1` |
-| same pathname | the current entry's, at `depth + 1` |
+| a jump armed it | new, naming the measured origin, with the journey the reader was on kept behind it in `earlier` |
+| the return chip armed it | the journey before the one just undone, or none |
+| same pathname | the current entry's, unchanged |
 | a different pathname | none |
 
 **The condition is only the pathname, and that is the whole of it.** "Carry it only when the reader
@@ -556,30 +556,41 @@ where the reader is — and its write is debounced, so whether a genuine move ha
 by the time the reader pressed Plain would decide whether the chip survived. The same gesture, twice,
 with different answers 300ms apart.
 
-**The pathname rule is about stack arithmetic rather than about what a push means.** The depth is a
-claim about the *stack*, not about the page: a successful same-document push adds exactly one entry,
-so `depth + 1` is the origin's distance whatever the push changed — including a parameter added
-years from now. A rule that had to know what a push *meant* could be wrong about one it did not
-recognise.
+#### The chip moves the position, not the modes
 
-**It is exact only while the browser keeps the origin**, and that is a ceiling rather than a bug in
-the counting. The HTML standard lets an implementation cap how many same-document state entries it
-retains and evict the oldest, and the History API exposes neither the entries nor the current index —
-so if an origin is ever evicted there is no honest local way to find out, and `history.go` would land
-somewhere else. Detecting it would need the parallel history this feature deliberately does not keep
-([260906g](../plans/260906g-back-to-where-you-jumped-from.md) § the option that cannot be taken). An
-earlier draft of this paragraph called the rule *provably right*, which was a claim about the
-arithmetic dressed up as one about the platform. GPT Sol, reviewing the built code, 2026-09-16.
+> I think it would be better if it just changed the position, and so if I changed modes since, those
+> modes would stay as they are currently.
+>
+> — Greg, 2026-10-08 (spya-q3dfmw,
+> [261008g](../plans/261008g-the-way-back-chip-moves-the-position-and-leaves-the-modes-alone.md))
 
-Two consequences worth knowing:
+Until then the chip was `history.go(-depth)`, a Back that walked to the entry the jump had left — and
+that entry's `?mode=` came back with its position. Now a press **pushes today's address with only
+`?at=` changed** to the origin (removed, for the top), through nuqs's `setAt` like any jump, and
+moves the page itself: `beginReturn` in [`keynav.ts`](../../src/web/keynav.ts), beside `beginJump`.
+Three things about it were findings, not choices:
 
-- **The stamp's shape is versioned**, `{ v, origin, depth }`, and carries no `from`. That is what an
-  older bundle reads after a rollback, and it must fail *closed*: the old parser looks for `from`,
-  finds none, and draws no chip, rather than drawing one and stepping a single entry to somewhere
-  its own label does not name.
-- **There is no cap on the depth**, only a plausibility bound on a number that could have come from
-  a browser restore. A cap would take a working way back away for a feeling, and the reader already
-  has the × .
+- **Through nuqs's queue, not a raw `pushState`.** A raw write makes nuqs abort whatever it still had
+  queued, so a mode pressed a moment before the chip would be taken back. Through the queue, the two
+  go out in one push. GPT Sol, plan review.
+- **It scrolls unconditionally.** The restore effect moves the page only when `?at=` *changes*, and a
+  reader who jumped from a section's first block and wandered inside that section already has it in
+  the address. GPT Sol, plan review.
+- **Repeated presses still unwind the journeys in order**, which used to come free with the browser's
+  stack. A press now lands on a new entry and nothing can read another entry's state without going
+  there, so each stamp carries the origins of the journeys before it as `earlier` (at most fifty).
+
+The browser's Back is unchanged, and so is now the one that undoes everything: after a return, Back
+goes to where the jump had landed, modes and all. **On a phone with a band over the prose**, the
+press steps the band aside as a passage link in it would, so the landing is seen and the mode is
+kept ([reading-view-overview.md](reading-view-overview.md) has the band; `Reader.tsx` §
+`returnFromJump`).
+
+**The stamp's shape is versioned**, `{ v: 3, origin, earlier }`. That is what an older bundle reads
+after a rollback, and it must fail *closed*: the v2 parser sees a `v` it does not know, the one before
+that looks for `from` and finds none, and both draw no chip rather than stepping some number of
+entries to somewhere their label does not name. This code reads v2 `{ v: 2, origin, depth }` and the
+older `{ from }` as an origin with no earlier journeys.
 
 #### A jump flashes where it lands
 
@@ -817,7 +828,7 @@ it.
   the add page's *ask why* mark names this article, the arrival is applied at once, without waiting
   for the settings store, and the owner's purpose read decides only the modal
   ([`first-open-purpose.ts`](../../src/web/first-open-purpose.ts)): with room for a band, the
-  guide's greeting holds the same box and there is no modal; on a phone, no reason stored gets the
+  guide's greeting asks why in the conversation (261009i) and there is no modal; on a phone, no reason stored gets the
   modal over the article alone, as before. A failed read keeps the mark, so the next load asks with
   the modal, which is what it always did ([reader-profile.md](reader-profile.md)).
 

@@ -43,6 +43,11 @@ import type {
   SkimView,
 } from "../src/web/modes/skim/SkimMode.js";
 import { DELAY } from "../src/web/Tooltip.js";
+import temml from "temml";
+import { temmlRenderer } from "../src/maths-tex.js";
+import { renderArticleMaths } from "../src/web/maths.js";
+import { BlockLinkProvider, buildBlockLinkIndex } from "../src/web/BlockLinkCard.js";
+import type { Article } from "../src/types.js";
 
 /* jsdom has no `CSS.escape`, which `useFollow` uses to find the current row;
    the ids here need no escaping. scroll-glide.test.ts does the same. */
@@ -156,7 +161,7 @@ vi.mock("../src/web/flash.js", async (importOriginal) => {
   };
 });
 
-const { SkimPanel, SkimDoor, coverageNote, skimPromise } = await import(
+const { SkimPanel, SkimDoor, SKIM_CUE_EXPLAINED, coverageNote, skimPromise } = await import(
   "../src/web/SkimPanel.js"
 );
 const { armSkimOpening, firstSkimArrival, SkimBand } = await import(
@@ -372,6 +377,9 @@ function owner(over: Partial<UseSkim> = {}): UseSkim {
     stale: false,
     outdated: false,
     profileChanged: false,
+    profileNoticeDismissed: false,
+    dismissFailed: null,
+    dismissProfileNotice: async () => {},
     notOnRoute: 0,
     slug: "a-route",
     error: null,
@@ -419,9 +427,9 @@ function view(over: Partial<SkimView> = {}): SkimView {
       { depth: 3, label: "Most", count: 4 },
     ],
     rows: [
-      { quoteId: Q[2]!, n: 1, place: [{ title: "Methods", voice: "ai" }], cue: "What earlier work missed", current: false, missing: false, position: null, words: null, where: [], passes: null },
-      { quoteId: Q[0]!, n: 2, place: [{ title: "Results", voice: "ai" }], cue: "The headline result", current: true, missing: false, position: null, words: null, where: [], passes: null },
-      { quoteId: Q[3]!, n: 3, place: [{ title: "Methods", voice: "ai" }], cue: "Where it stops holding", current: false, missing: false, position: null, words: null, where: [], passes: null },
+      { quoteId: Q[2]!, n: 1, place: [{ title: "Methods", voice: "ai" }], cue: "What earlier work missed", current: false, missing: false, position: null, words: null, where: [], passes: null, blockId: null },
+      { quoteId: Q[0]!, n: 2, place: [{ title: "Results", voice: "ai" }], cue: "The headline result", current: true, missing: false, position: null, words: null, where: [], passes: null, blockId: null },
+      { quoteId: Q[3]!, n: 3, place: [{ title: "Methods", voice: "ai" }], cue: "Where it stops holding", current: false, missing: false, position: null, words: null, where: [], passes: null, blockId: null },
     ],
     position: 2,
     card: null,
@@ -431,19 +439,17 @@ function view(over: Partial<SkimView> = {}): SkimView {
     onOpen: (target) => void calls.push(`open ${target.kind}${"id" in target ? ` ${target.id}` : ""}`),
     canOpen: () => true,
     termActions: null,
+    onAskTerm: null,
     ...over,
   };
 }
 
-/** The owner's two verbs on a term, as the Skim band hands them to the card. */
+/** The owner's *Ask in chat* on a term, as the Skim band hands it to the card (plan 261009k). */
+const ask = (entry: { id: string }) => void calls.push(`ask ${entry.id}`);
+
+/** The owner's *Hide* on a term, as the Skim band hands it to the card. */
 function termActions(over: Partial<TermActions> = {}): TermActions {
   return {
-    look: async (id) => {
-      calls.push(`look ${id}`);
-      return true;
-    },
-    looking: null,
-    stale: false,
     setHidden: async (id) => void calls.push(`hide ${id}`),
     hiding: new Set<string>(),
     ...over,
@@ -456,7 +462,6 @@ const TERM: GlossaryEntry = {
   kind: "concept",
   aliases: [],
   senseHere: "How much a source's past says about a target's future.",
-  /* A recorded passage, so Dig deeper has something to anchor to (`unquoted`). */
   blocks: [B[0]!],
 };
 const CARD: StopCard = {
@@ -471,6 +476,11 @@ const CARD: StopCard = {
 async function draw(o: UseSkim, v: SkimView) {
   calls.length = 0;
   await act(async () => root.render(createElement(SkimPanel, { access: { kind: "owner", owner: o }, view: v, away: false })));
+}
+
+async function drawVisitor(v: SkimView) {
+  calls.length = 0;
+  await act(async () => root.render(createElement(SkimPanel, { access: { kind: "visitor", route: ROUTE }, view: v, away: false })));
 }
 
 const text = (sel: string) => host.querySelector(sel)?.textContent ?? null;
@@ -542,7 +552,7 @@ describe("the panel", () => {
       owner(),
       view({
         rows: [
-          { quoteId: Q[0]!, n: 1, place: [{ title: "Results", voice: "ai" }], cue: "What does it do?", current: true, missing: false, position: null, words: "The passage.", where: [], passes: null },
+          { quoteId: Q[0]!, n: 1, place: [{ title: "Results", voice: "ai" }], cue: "What does it do?", current: true, missing: false, position: null, words: "The passage.", where: [], passes: null, blockId: null },
         ],
       }),
     );
@@ -553,11 +563,32 @@ describe("the panel", () => {
     expect(order).toEqual(["skim-place", "skim-cue", "skim-words"]);
   });
 
+  it("explains the current cue on its mouse card without nesting another control in the row button", async () => {
+    const posed = view();
+    await draw(owner(), {
+      ...posed,
+      rows: posed.rows.map((row) => row.current ? { ...row, words: "The current quote is already shown whole." } : row),
+    });
+    const cue = host.querySelector<HTMLElement>(".skim-row.current .skim-cue")!;
+    expect(cue.closest("button")?.classList.contains("skim-go")).toBe(true);
+    expect(cue.matches("button, [role='button'], [tabindex='0']")).toBe(false);
+
+    vi.useFakeTimers();
+    cue.dispatchEvent(new MouseEvent("mouseenter"));
+    await act(async () => {
+      vi.advanceTimersByTime(DELAY.open);
+    });
+    const card = document.querySelector<HTMLElement>('[role="tooltip"]');
+    expect(document.querySelectorAll('[role="tooltip"]')).toHaveLength(1);
+    expect(card?.textContent).toContain(SKIM_CUE_EXPLAINED);
+    expect(cue.getAttribute("aria-describedby")).toBe(card?.id);
+  });
+
   it("draws a repeated section path for a screen reader only — no ditto mark beside a quote (260928e)", async () => {
     const repeated = view({
       rows: [
-        { quoteId: Q[2]!, n: 1, place: [{ title: "Methods", voice: "ai" }], cue: null, current: false, missing: false, position: null, words: "First.", where: [], passes: null },
-        { quoteId: Q[3]!, n: 2, place: [{ title: "Methods", voice: "ai" }], cue: null, current: false, missing: false, position: null, words: "Second.", where: [], passes: null },
+        { quoteId: Q[2]!, n: 1, place: [{ title: "Methods", voice: "ai" }], cue: null, current: false, missing: false, position: null, words: "First.", where: [], passes: null, blockId: null },
+        { quoteId: Q[3]!, n: 2, place: [{ title: "Methods", voice: "ai" }], cue: null, current: false, missing: false, position: null, words: "Second.", where: [], passes: null, blockId: null },
       ],
       position: 1,
     });
@@ -588,9 +619,10 @@ describe("the panel", () => {
           words: "First.",
           where: [],
           passes: null,
+          blockId: null,
         },
         // The same text in other voices is still the same place: said, not drawn.
-        { quoteId: Q[3]!, n: 2, place: [{ title: "Results", voice: "ai" }, { title: "Why it holds", voice: "ai" }], cue: null, current: false, missing: false, position: null, words: "Second.", where: [], passes: null },
+        { quoteId: Q[3]!, n: 2, place: [{ title: "Results", voice: "ai" }, { title: "Why it holds", voice: "ai" }], cue: null, current: false, missing: false, position: null, words: "Second.", where: [], passes: null, blockId: null },
       ],
       position: 1,
     });
@@ -734,6 +766,40 @@ describe("the panel", () => {
       await draw(owner(), withWords([null, null, null]));
       expect(rowsOf().map(words)).toEqual([null, null, null]);
     });
+
+    /* spya-pqae7m (Greg, 2026-10-09): a quote from Attention Is All You Need
+       showed its formula as raw TeX on the row. A quote is `block.text`, which
+       holds the TeX source; the row draws the block's own markup instead, with
+       the maths the prose drew (src/web/excerpt-html.ts, plan 261009k). */
+    it("draws a quote's maths as maths and keeps its italics, as the prose does (spya-pqae7m)", async () => {
+      const html =
+        '<p data-spya-id="spya-tr2abc">We scale the dot products by \\(\\frac{1}{\\sqrt{d_k}}\\), as <em>Vaswani et al.</em> do.</p>';
+      const source = { id: B[0]!, tag: "p", kind: "paragraph", text: "", words: 0, html, gistable: true } as unknown as Block;
+      const prose = (
+        await renderArticleMaths({ slug: "attention", title: "Attention", blocks: [source] } as unknown as Article, {
+          load: async () => temmlRenderer(temml),
+        })
+      ).blocks;
+      const quote = "We scale the dot products by \\(\\frac{1}{\\sqrt{d_k}}\\), as Vaswani et al. do.";
+      const v = view({
+        rows: view().rows.map((r, i) => ({ ...r, words: i === 1 ? quote : null, blockId: i === 1 ? B[0]! : null })),
+      });
+      calls.length = 0;
+      await act(async () =>
+        root.render(
+          createElement(BlockLinkProvider, {
+            index: buildBlockLinkIndex(prose, []),
+            children: createElement(SkimPanel, { access: { kind: "owner", owner: owner() }, view: v, away: false }),
+          }),
+        ),
+      );
+      const shown = rowsOf()[1]!.querySelector(".skim-words")!;
+      expect(shown.querySelector("math")).not.toBeNull();
+      expect(shown.textContent).not.toContain("\\(");
+      expect(shown.textContent).not.toContain("frac");
+      expect(shown.querySelector("em")?.textContent).toBe("Vaswani et al.");
+      expect(shown.querySelector("[data-spya-id], [id]")).toBeNull();
+    });
   });
 
   it("dims no row: every row is a stop of this pass (260929e)", async () => {
@@ -773,6 +839,7 @@ describe("the panel", () => {
     /* A tap — a click, with no hover first — opens it: touch has no hover. */
     await act(async () => info().click());
     expect(tip()).toContain(skimPromise(false));
+    expect(tip()).toContain(SKIM_CUE_EXPLAINED);
     expect(info().getAttribute("aria-expanded")).toBe("true");
     await act(async () => info().click());
     expect(info().getAttribute("aria-expanded"), "a second tap closes it").toBe("false");
@@ -792,7 +859,7 @@ describe("the panel", () => {
       depth: 3,
       /* Most walks only its own stop (260929e), so the count must come from the
          whole route, not from the rows drawn. */
-      rows: [{ quoteId: Q[1]!, n: 1, place: [{ title: "Results", voice: "ai" }], cue: null, current: true, missing: false, position: null, words: null, where: [], passes: null }],
+      rows: [{ quoteId: Q[1]!, n: 1, place: [{ title: "Results", voice: "ai" }], cue: null, current: true, missing: false, position: null, words: null, where: [], passes: null, blockId: null }],
     });
     /* The live Quotes list may include two abstract quotes; the route records
        the four it was actually offered, which is the honest denominator. */
@@ -805,6 +872,15 @@ describe("the panel", () => {
     expect(tip()).toContain("4 of the 6 quotes offered to this route");
     await act(async () => info().click());
     expect(coverageNote(4, 0)).toBeNull();
+  });
+
+  it("puts the cue explanation in the visitor's band info card too", async () => {
+    await drawVisitor(view());
+    const info = host.querySelector<HTMLButtonElement>(".mode-band > .band-about")!;
+    await act(async () => info.click());
+    expect(document.querySelector('[role="tooltip"], [role="dialog"]')?.textContent).toContain(
+      SKIM_CUE_EXPLAINED,
+    );
   });
 
   it("does not blame the Quotes when the Ideas or outline may have made the route stale", async () => {
@@ -845,13 +921,13 @@ describe("the panel", () => {
   const termChip = () => host.querySelector<HTMLButtonElement>(".skim-chip")!;
 
   it("opens a term chip to the glossary's own card on focus, with the owner's three actions (261006e)", async () => {
-    await draw(owner(), view({ card: CARD, termActions: termActions() }));
+    await draw(owner(), view({ card: CARD, termActions: termActions(), onAskTerm: ask }));
     expect(termCard()).toBeNull();
     expect(termChip().getAttribute("aria-expanded")).toBe("false");
     await act(async () => termChip().focus());
     expect(termChip().getAttribute("aria-expanded")).toBe("true");
     expect(termCard()?.textContent).toContain(TERM.senseHere!);
-    expect(cardButtons()).toEqual(["Dig deeper", "Hide", "Open glossary"]);
+    expect(cardButtons()).toEqual(["Ask in chat", "Hide", "Open glossary"]);
     /* The sense is in the card and nowhere in the band: one surface, not two. */
     expect(host.querySelector(".skim-sense")).toBeNull();
     expect(host.querySelector('[aria-label="Open in Glossary"]')).toBeNull();
@@ -860,15 +936,17 @@ describe("the panel", () => {
     expect(termChip().getAttribute("aria-expanded"), "leaving for Glossary closes it").toBe("false");
   });
 
-  it("digs deeper from the card: starts the look and opens Glossary on the term", async () => {
-    await draw(owner(), view({ card: CARD, termActions: termActions() }));
+  it("asks in chat from the card, with the Glossary band's sender, and closes the card (261009k)", async () => {
+    await draw(owner(), view({ card: CARD, termActions: termActions(), onAskTerm: ask }));
     await act(async () => termChip().focus());
-    await act(async () => cardButton("Dig deeper").click());
-    expect(calls).toEqual([`look ${TERM.id}`, `open term ${TERM.id}`]);
+    expect(cardButtons(), "Dig deeper is gone").not.toContain("Dig deeper");
+    await act(async () => cardButton("Ask in chat").click());
+    expect(calls).toEqual([`ask ${TERM.id}`]);
+    expect(termChip().getAttribute("aria-expanded")).toBe("false");
   });
 
   it("opens a term's card on a tap and keeps it until a tap elsewhere", async () => {
-    await draw(owner(), view({ card: CARD, termActions: termActions() }));
+    await draw(owner(), view({ card: CARD, termActions: termActions(), onAskTerm: ask }));
     /* The click-only activation also works without a preceding focus. The
        pointerdown/focus/click ordering is exercised separately below. */
     await act(async () => termChip().click());
@@ -941,7 +1019,7 @@ describe("the panel", () => {
 
   it("preserves unrelated keyboard focus when Hide is pressed from a hovered card", async () => {
     vi.useFakeTimers();
-    await draw(owner(), view({ card: CARD, termActions: termActions() }));
+    await draw(owner(), view({ card: CARD, termActions: termActions(), onAskTerm: ask }));
     const input = document.createElement("input");
     host.append(input);
     await act(async () => input.focus());
@@ -960,7 +1038,7 @@ describe("the panel", () => {
     const settle = async () => {
       for (const _ of [0, 1, 2]) await act(async () => { vi.advanceTimersByTime(500); });
     };
-    await draw(owner(), view({ card: CARD, termActions: termActions() }));
+    await draw(owner(), view({ card: CARD, termActions: termActions(), onAskTerm: ask }));
     await act(async () => termChip().focus());
     await settle();
     /* jsdom does not implement Tab's default action; use the same portal
@@ -969,7 +1047,7 @@ describe("the panel", () => {
     expect(guard.getAttribute("data-type")).toBe("outside");
     await act(async () => guard.focus());
     await settle();
-    expect(document.activeElement).toBe(cardButton("Dig deeper"));
+    expect(document.activeElement).toBe(cardButton("Ask in chat"));
     await act(async () => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
     await settle();
     expect(termCard()).toBeNull();
@@ -983,13 +1061,24 @@ describe("the panel", () => {
     expect(cardButtons()).toContain("Open glossary");
   });
 
-  it("draws a card with no way out when Glossary cannot be opened: no Open glossary, and no Dig deeper", async () => {
+  it("draws a card with no Open glossary when Glossary cannot be opened, and keeps Ask in chat and Hide", async () => {
     const closed = (target: CardTarget) => target.kind !== "term";
-    await draw(owner(), view({ card: CARD, canOpen: closed, termActions: termActions() }));
+    await draw(owner(), view({ card: CARD, canOpen: closed, termActions: termActions(), onAskTerm: ask }));
     await act(async () => termChip().focus());
     expect(termCard()?.textContent).toContain(TERM.senseHere!);
-    /* Dig deeper lands in Glossary, so it goes with the way there. Hide does not. */
-    expect(cardButtons()).toEqual(["Hide"]);
+    /* Dig deeper landed in Glossary, so it went with the way there, until
+       2026-10-09. Ask in chat goes to Chat, and Hide stays put (plan 261009k). */
+    expect(cardButtons()).toEqual(["Ask in chat", "Hide"]);
+  });
+
+  it("keeps Hide and Ask in chat independent: either can be drawn without the other (261009k, Sol F1)", async () => {
+    await draw(owner(), view({ card: CARD, termActions: termActions(), onAskTerm: null }));
+    await act(async () => termChip().focus());
+    expect(cardButtons()).toEqual(["Hide", "Open glossary"]);
+    await act(async () => termChip().blur());
+    await draw(owner(), view({ card: CARD, termActions: null, onAskTerm: ask }));
+    await act(async () => termChip().focus());
+    expect(cardButtons()).toEqual(["Ask in chat", "Open glossary"]);
   });
 
   it("draws a visitor's card with no button at all when Glossary cannot be opened", async () => {
@@ -1149,7 +1238,44 @@ describe("the panel", () => {
     expect(host.textContent).not.toContain("older version of the prompt");
     await draw(owner({ outdated: true, profileChanged: true }), view());
     expect(text(".gloss-stale")).toContain("before your profile said what it says now");
-    expect(host.querySelector(".gloss-stale button")?.textContent).toBe("Plan it again");
+    /* Beside the ×, plan 261009i. */
+    expect(
+      [...host.querySelectorAll(".gloss-stale button:not(.skim-notice-close)")].map((b) => b.textContent),
+    ).toEqual(["Plan it again"]);
+  });
+
+  /* Greg, 2026-10-09 (spya-ud2w92): the profile notice can be sent away;
+     plan 261009i. */
+  describe("the profile notice's ×", () => {
+    it("is on the profile notice, and pressing it asks the owner to dismiss", async () => {
+      let dismissed = 0;
+      await draw(owner({ profileChanged: true, dismissProfileNotice: async () => void dismissed++ }), view());
+      const close = host.querySelector<HTMLButtonElement>(".gloss-stale .skim-notice-close");
+      expect(close, "no × on the profile notice").toBeTruthy();
+      expect(close?.getAttribute("aria-label")).toContain("Dismiss");
+      await act(async () => close?.click());
+      expect(dismissed).toBe(1);
+    });
+
+    it("hides the banner once dismissed, and a job then shows in the foot", async () => {
+      await draw(owner({ profileChanged: true, profileNoticeDismissed: true }), view());
+      expect(host.querySelector(".gloss-stale")).toBeNull();
+      await draw(owner({ profileChanged: true, profileNoticeDismissed: true, job: RUNNING_SKIM_JOB }), view());
+      expect(host.querySelector(".skim-again")?.textContent, "a job after a dismissal shows nowhere").toContain("Stop");
+    });
+
+    it("is not on the stale banner, which a dismissal does not hide", async () => {
+      await draw(owner({ stale: true, profileChanged: true, profileNoticeDismissed: true }), view());
+      expect(text(".gloss-stale")).toContain("have changed since this route was planned");
+      expect(host.querySelector(".skim-notice-close")).toBeNull();
+      await draw(owner({ stale: true, profileChanged: true }), view());
+      expect(host.querySelector(".skim-notice-close")).toBeNull();
+    });
+
+    it("says why when a dismissal did not stick", async () => {
+      await draw(owner({ profileChanged: true, dismissFailed: "The server could not be reached." }), view());
+      expect(text(".skim-notice-failed")).toContain("The server could not be reached.");
+    });
   });
 
   it("shows a running job in the foot on an outdated route", async () => {
@@ -1492,6 +1618,7 @@ function Harness({ covers = false, stepped = false, arrival }: { covers?: boolea
       onOpenKey: setOpenKey,
       onControl,
       glossary: glossaryRead,
+      onAskTerm: () => {},
       onOpen: (target: CardTarget) => void opened.push(`${target.kind}${"id" in target ? ` ${target.id}` : ""}`),
       canOpen: () => true,
       arrival: arrival ?? ownArrival.current,

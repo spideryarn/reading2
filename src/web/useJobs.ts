@@ -21,7 +21,7 @@
  * The queue itself is src/jobs.ts; the routes are in src/routes.ts.
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
-import type { Job, ResetResponse, StepName } from "../types.js";
+import type { Job, PublicCopyFound, ResetResponse, StepName } from "../types.js";
 import { retireAddSharing } from "./add-sharing-session.js";
 import { handOverAutoModesChoice } from "./auto-modes-setting.js";
 import { jobEngine, send } from "./jobEngine.js";
@@ -37,6 +37,8 @@ import { describeFetchFailure } from "./lib/describe-failure.js";
  * the two answers arrive on the same wire — a key that only one of them can
  * have is what makes `"article" in answer` a narrowing rather than a guess.
  */
+export type { PublicCopyFound };
+
 export interface AlreadyAnArticle {
   article: string;
   /**
@@ -118,8 +120,13 @@ export interface UseJobs {
    * **Or the article itself**, when the address is one the reader already
    * has: a repeat paste is answered `{ article, repeat: true }`, free and with
    * no job (`AlreadyAnArticle`).
+   *
+   * **Or the public copy somebody else already made of it** (`PublicCopyFound`),
+   * also free and with no job, so the reader can choose: read that, or call
+   * again with `ownCopy` for their own, which is the ordinary paid add.
+   * docs/plans/261009j-a-public-copy-offered-at-import.md.
    */
-  add(url: string): Promise<Job | AlreadyAnArticle | null>;
+  add(url: string, options?: { ownCopy?: true }): Promise<Job | AlreadyAnArticle | PublicCopyFound | null>;
   /**
    * Queue a file that has **already been sent to the object store**, by its
    * upload id.
@@ -432,7 +439,8 @@ export function useJobs(cadence: QueueCadence, onFinished?: (job: Job) => void):
     error: snapshot.error,
     driverFailures: snapshot.driverFailures,
     lastFailure: () => lastFailure.current,
-    add: (url) => act(() => post<Job | AlreadyAnArticle>({ url })),
+    add: (url, options) =>
+      act(() => post<Job | AlreadyAnArticle | PublicCopyFound>({ url, ...(options?.ownCopy ? { ownCopy: true } : {}) })),
     addUpload: (uploadId) => act(() => post<Job | AlreadyAnArticle>({ uploadId })),
     run: (request) => act(() => post(request)),
     reset: (slug, regenerate) =>

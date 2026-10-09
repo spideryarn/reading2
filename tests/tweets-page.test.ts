@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * The Tweets band's one pure part: the text that lands on the clipboard.
  *

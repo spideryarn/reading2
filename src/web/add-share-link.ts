@@ -35,7 +35,8 @@
  *    that cannot be read is `unknown`, which sends nothing from anywhere:
  *    not a retry, not `settle`, not a Retry of the job. What leaves it is a
  *    read: *Check again* (`recheck`), or the next attachment. GPT Sol's stage
- *    2 plan review.
+ *    2 plan review. Or the reader's *Turn off*, which is idempotent on the
+ *    server and so safe to send without knowing (plan 261009l).
  *  - **A link it could not read again is not drawn.** If an attachment's read
  *    fails over a link held from an earlier visit, the key on screen may have
  *    been turned off or replaced since. It becomes `unknown`.
@@ -290,10 +291,17 @@ export class LinkAtAdd {
     this.kick();
   }
 
-  /** *Turn off*. No confirmation: this is the safe direction. */
+  /**
+   * *Turn off*. No confirmation: this is the safe direction. Also from
+   * `unknown`, where a link may be on that nothing can read back: the
+   * server's turn-off is idempotent, so sending it is safe whatever the truth
+   * is (plan 261009l). It does not wait for the `checking` read: `send` moves
+   * `turn` on, so that read's answer is dropped.
+   */
   turnOff(): void {
     const from = this.state;
-    if (from.kind !== "on" && !(from.kind === "refused" && from.link !== null)) return;
+    const mayBeOn = from.kind === "on" || from.kind === "unknown" || (from.kind === "refused" && from.link !== null);
+    if (!mayBeOn) return;
     this.send("off");
   }
 
@@ -468,6 +476,20 @@ export class LinkAtAdd {
           return;
         }
         this.retryOnNextAlive = to === "on" && status === 404;
+        if (to === "off" && status === 404) {
+          /* The turn-off's only 404 is that the reader owns no row at this
+             slug (signed out is a 401), and the key lives on the row: there
+             is no link, from whatever was drawn before. */
+          this.set({ kind: "off" });
+          return;
+        }
+        if (before.kind === "unknown" && status !== null && status >= 400 && status < 500) {
+          /* Refused, so nothing was written and what was not known still
+             is. `refused` with no link would offer a create over a link
+             that may be on. */
+          this.set({ kind: "unknown", because: before.because, checking: false });
+          return;
+        }
         if (status === null || status < 400 || status >= 500) {
           /* No answer, or a fault: it may have taken effect. This is the
              state nothing is sent from (the header's second point). */

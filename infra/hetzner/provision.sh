@@ -1670,7 +1670,10 @@ FLEET_DASHBOARD_UNIT
 
 install_unit overseer-watchdog.service <<'OVERSEER_WATCHDOG_SERVICE_UNIT'
 # Overseer watchdog: a periodic check that the Overseer daemon is still
-# writing its heartbeat. scripts/overseer-watchdog.ts,
+# writing its heartbeat, and (since 2026-10-08) that the Overseer session is
+# still pacing the queue and production is not over 12 hours behind dev. The
+# last one runs `git fetch` as @USER@, so it needs the GitHub token in
+# /etc/github-tokens. scripts/overseer-watchdog.ts,
 # docs/project/overseer-direction.md.
 #
 # THIS IS A LOCAL WATCHDOG, NOT THE OFF-BOX DEAD-MAN CHECK. If the host loses
@@ -1704,7 +1707,7 @@ install_unit overseer-watchdog.service <<'OVERSEER_WATCHDOG_SERVICE_UNIT'
 # script, because two copies of a unit file is exactly how one of them goes
 # stale.
 [Unit]
-Description=Overseer watchdog -- checks the Overseer daemon's heartbeat and snapshot clock
+Description=Overseer watchdog -- the daemon's heartbeat, the session's pacer, and production's lag behind dev
 Documentation=file:///home/@USER@/code/spideryarn2/docs/project/overseer-direction.md
 
 [Service]

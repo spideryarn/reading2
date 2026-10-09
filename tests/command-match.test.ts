@@ -191,8 +191,9 @@ describe("the ranking normalises what the reader typed", () => {
    * this one — so the two cannot disagree.
    */
   it("collapses runs of internal whitespace", () => {
-    expect(rankModes("peer  review", MODES)).toEqual(["referee"]);
-    expect(rankModes("PEER \t REVIEW ", MODES)).toEqual(["referee"]);
+    /* Peer review by its name since 2026-10-09, Referee after it by `peer reviewer` (plan 261009l). */
+    expect(rankModes("peer  review", MODES)).toEqual(["peer-review", "referee"]);
+    expect(rankModes("PEER \t REVIEW ", MODES)).toEqual(["peer-review", "referee"]);
   });
 
   it("matches nothing when nothing matches, rather than falling back to everything", () => {

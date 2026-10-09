@@ -74,16 +74,42 @@ export async function savePurpose(
  * the same rule for the same reason.
  */
 export async function storedPurpose(slug: string): Promise<{ purpose: string | null } | null> {
+  const stored = await storedReader(slug);
+  return stored?.purpose === undefined ? null : { purpose: stored.purpose };
+}
+
+/**
+ * **Both halves of the profile as the server holds them now, field by field**
+ * — this article's purpose and About you — each absent when that one cannot
+ * be established, and `null` when nothing could be (not a fresh 200, the
+ * offline copy, not an object). By `storedPurpose`'s rules: a purpose counts
+ * only when the shelf was read (`purposeFailed` false) and the field is well
+ * typed; About you only when its field is well typed, so a shelf that could
+ * not be read does not hide it. Empty is `null`, as the route sends it.
+ *
+ * For the guide's offer card (GuideSaveOffer.tsx), which reads before it
+ * writes so its Undo knows what to put back. `madeFor` as `savePurpose` has
+ * it: the card's read is bound to the reader it was drawn for.
+ */
+export async function storedReader(
+  slug: string,
+  madeFor: string | null = null,
+): Promise<{ purpose?: string | null; profile?: string | null } | null> {
   try {
-    const res = await apiFetch(`/api/reader?slug=${encodeURIComponent(slug)}`);
+    const res = await apiFetch(`/api/reader?slug=${encodeURIComponent(slug)}`, {}, madeFor);
     if (res.headers.get("x-spideryarn-offline") === "copy" || res.status !== 200) return null;
-    const body = await readJson<{ purpose?: unknown; purposeFailed?: unknown } | null>(res);
+    const body = await readJson<{ purpose?: unknown; purposeFailed?: unknown; profile?: unknown } | null>(res);
     /* A successful status is not evidence that we read a purpose. Missing or
        ill-typed fields cannot establish that the words are absent. */
     if (typeof body !== "object" || body === null || Array.isArray(body)) return null;
-    if (body.purpose !== null && typeof body.purpose !== "string") return null;
-    if (body.purposeFailed !== undefined && body.purposeFailed !== false) return null;
-    return { purpose: body.purpose };
+    const purposeRead =
+      (body.purpose === null || typeof body.purpose === "string") &&
+      (body.purposeFailed === undefined || body.purposeFailed === false);
+    const profileRead = body.profile === null || typeof body.profile === "string";
+    return {
+      ...(purposeRead ? { purpose: body.purpose as string | null } : {}),
+      ...(profileRead ? { profile: body.profile === "" ? null : (body.profile as string | null) } : {}),
+    };
   } catch {
     return null;
   }
@@ -133,8 +159,8 @@ export type PurposeRead =
   | { state: "ready"; purpose: string | null; purposeFailed: boolean; profile: string | null }
   | { state: "failed" };
 
-/** Read the purpose for `slug`, once per slug. For Skim's line (stage 2). */
-export function usePurpose(slug: string): PurposeRead {
+/** Read the purpose for `slug`, once per slug; `null` reads nothing. For Skim's line (stage 2) and the guide's greeting. */
+export function usePurpose(slug: string | null): PurposeRead {
   const [read, setRead] = useState<PurposeRead>({ state: "loading" });
   /* A generation rather than a `live` boolean, for StrictMode — ProfilePanel's
      `generation` says why. */
@@ -142,6 +168,9 @@ export function usePurpose(slug: string): PurposeRead {
   useEffect(() => {
     const mine = ++generation.current;
     setRead({ state: "loading" });
+    /* `null`: nothing to read here (a conversation that is not the guide,
+       plan 261009i), and nothing is fetched. */
+    if (slug === null) return;
     apiFetch(`/api/reader?slug=${encodeURIComponent(slug)}`)
       .then((r) => readJson<{ purpose: string | null; purposeFailed?: boolean; profile?: string | null }>(r))
       .then(

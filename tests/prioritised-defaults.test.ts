@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * **Where each prioritised bar rests when nobody has touched it, and what
  * search opens on.**

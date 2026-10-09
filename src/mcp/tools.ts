@@ -352,15 +352,24 @@ export const TOOLS: readonly Tool[] = [
       "Adds the article at a web address to your shelf. It runs in the background: this answers the import job, " +
       "and get_import_status says when it is done. On a free plan it uses one of your free articles; when they " +
       "are gone Spideryarn refuses. An address you already have answers that article instead " +
-      "({ article, repeat: true }), and costs nothing.",
-    input: z.strictObject({ url: z.string().url() }),
+      "({ article, repeat: true }), and costs nothing. An address somebody else has already made public answers " +
+      "that public copy instead ({ publicCopy: { slug, title }, link }), costs nothing and imports nothing: it can " +
+      "be read free at the link, read-only. Ask the reader which they want; call again with own_copy: true to " +
+      "import their own copy, which uses one of their articles.",
+    input: z.strictObject({ url: z.string().url(), own_copy: z.boolean().optional() }),
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     /* A job, or — for an address the reader already has — `{ article, repeat: true }`,
-       free and with nothing queued (plan 261007k). The link is the article's in both. */
-    handler: async (api, { url }) => {
-      const answer = await api.call("POST", "/api/jobs", { url });
+       free and with nothing queued (plan 261007k), or somebody else's public
+       copy, also free, for the reader to choose (plan 261009j). The link is the
+       article's in each. */
+    handler: async (api, { url, own_copy }) => {
+      const answer = await api.call("POST", "/api/jobs", { url, ...(own_copy === true ? { ownCopy: true } : {}) });
       if (answer && typeof answer === "object" && typeof (answer as { article?: unknown }).article === "string") {
         return { ...answer, link: articleLink(api, (answer as { article: string }).article) };
+      }
+      const found = answer && typeof answer === "object" ? (answer as { publicCopy?: { slug?: unknown } }).publicCopy : undefined;
+      if (found && typeof found.slug === "string") {
+        return { ...(answer as object), link: articleLink(api, found.slug) };
       }
       return withLink(api, answer);
     },

@@ -10,6 +10,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { checksOwner, claimListOwner } from "./helpers/debate-claims-owner.js";
 
 import type { BlockId, CitationRegistry, Citations, ClaimDebateRow, CitedWork, Debate, DebateCounts } from "../src/types.js";
 import type { UseCitations } from "../src/web/useCitations.js";
@@ -186,6 +187,7 @@ async function draw(citations: CitedWork[]) {
   await act(async () =>
     root.render(
       createElement(CitationsPanel, {
+        head: null,
         access: { kind: "owner", owner: owner(citations) },
         order: "document",
         onOrder: () => {},
@@ -355,7 +357,8 @@ describe("a Debate row on screen", () => {
     await act(async () =>
       root.render(
         createElement(DebatePanel, {
-          access: { kind: "owner", owner: debateOwner(row), citers: { result: { kind: "no-doi" }, retry: () => {} }, claimChats: NO_CLAIM_CHATS },
+          head: null,
+          access: { kind: "owner", owner: debateOwner(row), claimList: claimListOwner(), checks: checksOwner(), citers: { result: { kind: "no-doi" }, retry: () => {} }, claimChats: NO_CLAIM_CHATS },
           onJump: () => {},
           /* The fixture is a claim row, so Claims is the sub-mode that draws it. */
           view: "claims",

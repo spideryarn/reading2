@@ -606,15 +606,15 @@ describe("letting go of a mouse selection", () => {
     it(`a held selection create ${changeView ? "stays closed after changing Debate view" : "opens over unchanged Debate"}`, async () => {
       let release!: () => void;
       heldList = new Promise<void>((go) => { release = go; });
-      await open("?mode=debate&debate=reception");
-      expect(param("mode")).toBe("debate");
+      await open("?mode=peer-review&peer-review=reception");
+      expect(param("mode")).toBe("peer-review");
       await drag(4, 19);
       expect(commentPosts()).toHaveLength(0);
       expect(dialog()).toBeNull();
       if (changeView) {
-        await act(async () => history.pushState(null, "", `/read/${SLUG}?mode=debate&debate=claims`));
+        await act(async () => history.pushState(null, "", `/read/${SLUG}?mode=peer-review&peer-review=claims`));
         await settle();
-        expect(param("debate")).toBe("claims");
+        expect(param("peer-review")).toBe("claims");
       }
       await act(async () => release());
       await until(() => commentPosts().length === 1);

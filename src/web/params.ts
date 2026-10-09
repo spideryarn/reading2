@@ -367,7 +367,8 @@ export const guideParam = parseAsBit.withOptions({ history: "replace" });
 
 /**
  * **Which conversations Chat's list is narrowed to, by where they came from**
- * — `?chatfrom=chats`, `debate`, `learn` or `passage`. Since 2026-10-05
+ * — `?chatfrom=chats`, a mode (`peer-review`, `glossary`, `ideas`), `learn` or
+ * `passage`. Since 2026-10-05
  * the list shows every conversation about the article (report `spya-hyfqkq`,
  * docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md
  * D5), and this is its filter.
@@ -383,9 +384,13 @@ export const guideParam = parseAsBit.withOptions({ history: "replace" });
  * conversation belongs to which word is `chatFrom` in thread-source.ts; the
  * words are here so this eager file does not import that one. It was
  * `remember` until 2026-10-06 and is not aliased: an old `?chatfrom=remember`
- * is an unknown word, which reads as All.
+ * is an unknown word, which reads as All. **`peer-review` is one word for
+ * Bibliography, Reception and Claims** since 2026-10-09; the old
+ * `?chatfrom=debate` and `?chatfrom=citations` are lifted to it before
+ * anything reads them (router.ts § `liftLegacyPeerReview`), as GPT Sol's F5 on plan
+ * 261009l asked.
  */
-export const CHAT_FROM_WORDS = ["chats", "debate", "glossary", "citations", "learn", "passage"] as const;
+export const CHAT_FROM_WORDS = ["chats", "peer-review", "glossary", "ideas", "learn", "passage"] as const;
 export type ChatFrom = (typeof CHAT_FROM_WORDS)[number];
 
 export const chatFromParam = createParser<ChatFrom>({
@@ -1392,38 +1397,61 @@ export function learnInSearch(search: string): LearnView {
   return (named === null ? null : learnParam.parse(named)) ?? learnParam.defaultValue;
 }
 
-/* --------------------------------------------------------------- debate -- */
+/* ---------------------------------------------------------- peer review -- */
 
 /**
- * **Which of Debate's two searches the band draws** — `?debate=claims`, since
- * 2026-10-03 (docs/plans/261003o-debate-reception-and-claims-sub-modes-and-a-tidier-panel.md).
+ * **Which of Peer review's three sub-modes the band draws** — `?peer-review=`,
+ * since 2026-10-09 (docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md).
  *
+ * `bibliography` is what the piece cites (the Citations mode until that day);
  * `reception` is what others have written about the piece itself; `claims` is
- * what has been written about the claims it makes. *Which thing, within this
+ * the list of the claims the piece rests on (since 2026-10-08, plan 261008i
+ * § 2), with an older search's claim sources under it. The last two were
+ * Debate's `?debate=` from 2026-10-03, which this replaced: an old
+ * `?mode=debate&debate=claims` is lifted to `?mode=peer-review&peer-review=claims`
+ * before anything reads it (router.ts § `liftLegacyPeerReview`). *Which thing, within this
  * mode*, so the shape of `?summary=` and `?referee=`: in the URL, because it
  * changes the whole band, and pushed, because switching is a deliberate act
- * Back should undo. **`reception` is the default** and is omitted from the
- * address; an unknown value reads as Reception.
+ * Back should undo. **`bibliography` is the default** (Greg: "this should be
+ * the first submode") and is omitted from the address; an unknown value reads
+ * as Bibliography.
  *
- * **Writing it never spends.** Debate searches when its owner presses — the
- * mode's button, or either sub-mode's command-bar row, which arm the one
- * `debate` run (activation.ts § `subModeTarget`). Back, a pasted link and a
+ * **Writing it never spends.** Each sub-mode's work starts on its owner's
+ * press and only then — the mode's button, the sub-mode's command-bar row or
+ * its chip: a press landing on Bibliography arms the `citations` list, on
+ * Reception the `debate` search, on Claims the `debate-claims` list
+ * (activation.ts § `activationForPeerReview`). Back, a pasted link and a
  * last-view restore arrive here and buy nothing.
- *
- * `?name=` stood here until the same day: the identification threshold
- * (`named`, `quoted`, `linked`), whose default hid the rows the search was
- * changed to find. It is read by nothing now, so a link carrying it shows
- * every row. debate-levels.ts has the story.
  */
-export const DEBATE_VIEWS = ["reception", "claims"] as const;
-export type DebateView = (typeof DEBATE_VIEWS)[number];
+export const PEER_REVIEW_VIEWS = ["bibliography", "reception", "claims"] as const;
+export type PeerReviewView = (typeof PEER_REVIEW_VIEWS)[number];
+/**
+ * **The two sub-modes the Debate panel draws** — Reception and Claims. Named
+ * for the panel, which keeps its stored name until the deep rename (plan
+ * 261009l § Stage 3).
+ */
+export type DebateView = Exclude<PeerReviewView, "bibliography">;
 
-export const debateParam = createParser<DebateView>({
-  parse: (v) => ((DEBATE_VIEWS as readonly string[]).includes(v) ? (v as DebateView) : null),
+export const peerReviewParam = createParser<PeerReviewView>({
+  parse: (v) => ((PEER_REVIEW_VIEWS as readonly string[]).includes(v) ? (v as PeerReviewView) : null),
   serialize: (v) => v,
 })
-  .withDefault("reception")
+  .withDefault("bibliography")
   .withOptions({ history: "push" });
+
+/**
+ * **Which sub-mode a carried `?peer-review=` names**, degraded as
+ * `peerReviewParam` degrades it — `summaryInSearch`'s twin, for the bar off
+ * the reading view (Dock.tsx), which has no React state to read. On the
+ * reading view the bar is handed the parsed state, because the address lags a
+ * press (activation.ts § `PressContext`).
+ */
+export function peerReviewInSearch(search: string): PeerReviewView {
+  const asked = new URLSearchParams(search).get("peer-review");
+  return (asked === null ? null : peerReviewParam.parse(asked)) ?? peerReviewParam.defaultValue;
+}
+
+/* --------------------------------------------------------------- debate -- */
 
 /**
  * **How Reception's list is ordered** — `?debateby=`, since 2026-09-29
@@ -1437,7 +1465,8 @@ export const debateParam = createParser<DebateView>({
  *
  * `claim` was a fourth value until 2026-10-03, when *by claim* became the
  * Claims sub-mode. An old `?debateby=claim` never reaches this parser: it is
- * rewritten to `?debate=claims` first (router.ts § `liftLegacyDebateBy`).
+ * rewritten to `?debate=claims` first (router.ts § `liftLegacyDebateBy`), and that to
+ * `?peer-review=claims` (§ `liftLegacyPeerReview`).
  *
  * **Its own key**, for `citeby`'s reason: every parameter survives a mode
  * switch, so a shared `?sort=` would carry one mode's order into another. `push`,

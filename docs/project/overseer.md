@@ -581,17 +581,19 @@ Every few hours, as a tmux loop like the feedback sweep's:
    `scripts/tmux-job.ts`, logging to a file
    ([deployment.md § Deploying a commit already known green](deployment.md#deploying-a-commit-already-known-green);
    since 2026-10-07). It picks the newest commit on `origin/dev` whose full check the loop ran
-   green and stamped, reuses that run for the `test` gate instead of an hour of suite, and leaves
-   later `dev` commits for the next deploy. The notes from step 3 have to be **inside** that
-   commit, so after `prepare` wait for the loop to pass a commit after the notes commit — the
-   Readiness tab shows when; the `changelog` gate says so if you go early. If `--ready` finds no
-   green commit, `dev` is red: get it fixed on `dev` (dispatch, as for any red) rather than
-   forcing. **A readiness red that repeats on a second run is fixed that hour**, because until it
+   green and stamped, then deploys the first commit from it that carries the notes from step 3
+   (since 2026-10-08 — there is no waiting for a green run after the notes), reruns only the test
+   files changed in between, and leaves later `dev` commits for the next deploy. If `--ready` finds
+   no green commit, `dev` is red: get it fixed on `dev` (dispatch, as for any red), then deploy the
+   tip plainly — **after a red `test` gate, fix the named files and deploy again: the next deploy
+   reruns only those files and the tests changed since**, not the whole suite
+   ([deployment.md § The test gate reruns only what failed](deployment.md#the-test-gate-reruns-only-what-failed)). **A readiness red that repeats on a second run is fixed that hour**, because until it
    is, nothing can deploy: on 2026-10-08 one clock-dependent test failed five runs in a row from
    02:00, nobody acted on it, and production went 17 hours without a deploy while `dev` gathered
-   41 commits. Greg: *"Why haven't there been any deploys in 17h?"* Plain `npm run deploy` still deploys the tip and runs the suite itself — use it when a
-   fix cannot wait for the loop. Either way the summary's `test:` line says whether the suite ran
-   or a readiness run stood in for it; quote it in the report. It applies the migrations by
+   41 commits. Greg: *"Why haven't there been any deploys in 17h?"* Plain `npm run deploy` deploys the tip, and runs the
+   whole suite itself only when no recent run can stand in — use it when a fix cannot wait for the
+   loop. Either way the summary's `test:` line says whether the suite ran, a readiness run stood in
+   for it, or which files were rerun on the strength of which run; quote it in the report. It applies the migrations by
    default. `--force-gate=test` is allowed when the suite is red for reasons that are not the
    release's; say which tests in the report. `--force-gate=changelog` only for a fix that cannot wait
    for the notes; say so in the report. If a plain deploy fails only because `dev` moved during the

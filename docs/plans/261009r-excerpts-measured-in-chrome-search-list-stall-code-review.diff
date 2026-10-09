@@ -1,0 +1,140 @@
+diff --git a/docs/plans/261009k-excerpts-keep-maths-and-formatting.md b/docs/plans/261009k-excerpts-keep-maths-and-formatting.md
+index 517e4aea5..44ef4ef1f 100644
+--- a/docs/plans/261009k-excerpts-keep-maths-and-formatting.md
++++ b/docs/plans/261009k-excerpts-keep-maths-and-formatting.md
+@@ -147,6 +147,10 @@ security-map.md asks. It is parsed in an inert document, so nothing loads.
+   text nodes, so it is already escaped). In jsdom, 600 excerpts from 60 blocks went from 765 ms to
+   197 ms. Not re-measured in Chrome; if a common-word Search still stalls, the next step is drawing
+   excerpts only for rows on screen.
++- **Measured afterwards, in Chrome** ([261009o](261009o-excerpts-measured-in-chrome-search-list-stall.md)):
++  this change added about 1.0 s to the longest freeze of that 588-hit Search, on top of about 1.8 s
++  that was already there. Search's rows now format only once near the screen, which brings it back
++  to within about 0.1 s of the strings. Quotes and Ideas showed no difference.
+ - A stored quote whose words appear twice in a block draws the first, which is what the prose mark
+   does; a hit, an idea, a timeline occurrence and a comment draw the one they were placed at.
+ - Excerpts that sit inside elements with their own font rules keep them: the excerpt is a `<span>`.
+diff --git a/docs/project/maths.md b/docs/project/maths.md
+index eca6a0758..264c890be 100644
+--- a/docs/project/maths.md
++++ b/docs/project/maths.md
+@@ -78,6 +78,13 @@ because an excerpt usually sits inside a button that goes to the passage. The si
+ left as strings on purpose, are in
+ [261009k](../plans/261009k-excerpts-keep-maths-and-formatting.md).
+ 
++**A long list formats only the rows near the screen.** `Excerpt`'s `lazy` draws the plain string
++until the row comes within 400px of view (`src/web/when-seen.ts`), then formats it. Formatting all
++588 hits of a common-word Search at once froze the page about 1.0 s longer than strings did,
++measured in Chrome. Search's rows pass it, and nothing else does: every other list draws tens of
++excerpts at most, and a card's single excerpt should not flash as a string first
++([261009o](../plans/261009o-excerpts-measured-in-chrome-search-list-stall.md)).
++
+ ## Where it sits
+ 
+ In `src/web/article/access.ts` § `resolveAccess`: after the sanitiser, before the pictures are
+diff --git a/docs/project/performance.md b/docs/project/performance.md
+index 77575719f..5cdfa02bf 100644
+--- a/docs/project/performance.md
++++ b/docs/project/performance.md
+@@ -119,6 +119,20 @@ percentage.
+ 
+ ### Comparing a change against `main`
+ 
++**A cost you saw but cannot attribute is a reason to run this, not a note to leave.** 261009k's
++browser check recorded a 1–3 s freeze, wrote *"how much of that is this change is not known"*, and
++landed. The comparison afterwards found its own 1.0 s in it
++([261009j](../postmortems/261009j-a-freeze-measured-without-a-baseline-is-never-attributed.md)). A
++jsdom timing is no substitute: jsdom does no style or layout, which was most of that cost.
++
++**The cheapest fair comparison is one tree with a temporary switch**, when the change is a draw you
++can choose at run time. Add a throwaway `window.__xv` check at the site that picks the old or new
++code, set it per run from Playwright's `addInitScript`, and alternate the variants. Both sides then
++share every other commit, every dependency and every asset. Two trees from two commits did not:
++they differed by 26 commits, and the older one failed to load its fonts.
++[261009o](../plans/261009o-excerpts-measured-in-chrome-search-list-stall.md) did it this way; take
++the switch out before you commit. Otherwise, use the two-tree recipe below.
++
+ Do **not** edit source while a measurement is running, and do not measure a server another agent is
+ also editing under: Vite hot-reloads the page, the metric counters reset, and the run reports
+ *negative* CPU. Several hours went into learning that twice.
+diff --git a/src/web/Excerpt.tsx b/src/web/Excerpt.tsx
+index 752d62183..21918747d 100644
+--- a/src/web/Excerpt.tsx
++++ b/src/web/Excerpt.tsx
+@@ -12,11 +12,18 @@
+  * `words` may carry a leading or trailing `…` of the caller's own — a cut
+  * quote, a snippet around a hit. That is put back outside the drawn words,
+  * because it is not in the block. `near` is excerpt-html.ts § `ExcerptAt`'s.
++ *
++ * `lazy` is for a long list: the words are drawn as the string until the row
++ * comes near the screen, and formatted then (when-seen.ts). A Search for a
++ * common word lists hundreds of hits, and formatting them all at once froze
++ * the page about 0.8 s longer than strings did (plan 261009o). Not for a card
++ * or a dialog's one excerpt, which would flash as a string first.
+  */
+-import { useMemo } from "react";
++import { useMemo, useRef } from "react";
+ import type { Block, BlockId } from "../types.js";
+ import { useBlockLinks } from "./block-link-index.js";
+ import { excerptFallbackHtml, excerptHtml } from "./excerpt-html.js";
++import { useSeenOnce } from "./when-seen.js";
+ 
+ const ELLIPSIS = "…";
+ 
+@@ -24,24 +31,37 @@ interface Words {
+   words: string;
+   /** Where the words sit in the block's drawn text, when the caller knows — a hit's `Found.start`. */
+   near?: number | undefined;
++  /** Draw the string until this comes near the screen — for a long list's rows. */
++  lazy?: boolean | undefined;
+ }
+ 
+-export function Excerpt({ blockId, words, near }: Words & { blockId: BlockId | null | undefined }) {
++export function Excerpt({ blockId, words, near, lazy }: Words & { blockId: BlockId | null | undefined }) {
+   const index = useBlockLinks();
+-  return <BlockExcerpt block={blockId ? index?.get(blockId)?.block : undefined} words={words} near={near} />;
++  return (
++    <BlockExcerpt
++      block={blockId ? index?.get(blockId)?.block : undefined}
++      words={words}
++      near={near}
++      lazy={lazy}
++    />
++  );
+ }
+ 
+-export function BlockExcerpt({ block, words, near }: Words & { block: Block | undefined }) {
++export function BlockExcerpt({ block, words, near, lazy = false }: Words & { block: Block | undefined }) {
++  const holder = useRef<HTMLSpanElement>(null);
++  const seen = useSeenOnce(holder, lazy && block !== undefined);
+   const drawn = useMemo(() => {
+-    if (!block) return null;
++    if (!block || !seen) return null;
+     const lead = words.startsWith(ELLIPSIS);
+     const tail = words.endsWith(ELLIPSIS) && words.length > ELLIPSIS.length;
+     const inner = words.slice(lead ? ELLIPSIS.length : 0, tail ? -ELLIPSIS.length : undefined);
+     const html =
+       excerptHtml(block, inner, near === undefined ? {} : { near }) ?? excerptFallbackHtml(block, inner);
+     return html === null ? null : { html, lead, tail };
+-  }, [block, words, near]);
++  }, [block, words, near, seen]);
+ 
++  /* Waiting to be seen: the string, in an element the observer can watch. */
++  if (!seen) return <span ref={holder}>{words}</span>;
+   if (!drawn) return <>{words}</>;
+   return (
+     <>
+diff --git a/src/web/SearchPanel.tsx b/src/web/SearchPanel.tsx
+index ee223ff67..12307768c 100644
+--- a/src/web/SearchPanel.tsx
++++ b/src/web/SearchPanel.tsx
+@@ -2177,7 +2177,9 @@ function Hit({
+       >
+         <span className="srch-hit-body">
+           <span className="srch-hit-quote">
+-            <Excerpt blockId={found.blockId} words={found.short} near={found.shortStart ?? found.start} />
++            {/* `lazy`: a common word lists hundreds of these, and only the rows
++                near the screen are worth formatting (plan 261009o). */}
++            <Excerpt blockId={found.blockId} words={found.short} near={found.shortStart ?? found.start} lazy />
+           </span>
+           {found.reasoning && <span className="srch-hit-why">{found.reasoning}</span>}
+           {/* Said out loud rather than left to look like a styling bug. A

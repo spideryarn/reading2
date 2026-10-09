@@ -234,6 +234,7 @@ interface Row {
 }
 
 const noop = () => {};
+const openedWorks: string[] = [];
 
 const { useQuiz, useQuizRead } = await import("../src/web/useQuiz.js");
 const { QuizPanel } = await import("../src/web/QuizPanel.js");
@@ -249,8 +250,7 @@ const { QuotesBand } = await import("../src/web/modes/quotes/QuotesMode.js");
 const { useQuotesRead } = await import("../src/web/useQuotes.js");
 const { TimelineBand } = await import("../src/web/modes/timeline/TimelineMode.js");
 const { FaqBand } = await import("../src/web/modes/faq/FaqMode.js");
-const { DebateBand } = await import("../src/web/modes/debate/DebateMode.js");
-const { CitationsBand } = await import("../src/web/modes/citations/CitationsMode.js");
+const { PeerReviewBand } = await import("../src/web/modes/peer-review/PeerReviewMode.js");
 const { useCitationsRead } = await import("../src/web/useCitations.js");
 const { SkimBand } = await import("../src/web/modes/skim/SkimMode.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
@@ -274,18 +274,34 @@ function GlossaryOuter({ show }: { show: boolean }) {
     : null;
 }
 
-/* Quotes and Citations read above their band too, for the marks in the prose
-   (useQuotes.ts § `useQuotesRead`, useCitations.ts § `useCitationsRead`). */
+/* Quotes and Peer review's Bibliography read above their band too, for the
+   marks in the prose (useQuotes.ts § `useQuotesRead`, useCitations.ts §
+   `useCitationsRead`). Peer review's band holds Reception's and Claims' reads
+   itself, in every sub-mode (PeerReviewMode.tsx), so all three of its cases
+   mount the one band, on the sub-mode their `search` names. */
 function QuotesOuter({ show }: { show: boolean }) {
   const read = useQuotesRead(SLUG);
   return show
     ? createElement(QuotesBand, { slug: SLUG, read, onJump: noop, steps: [], yours: { rows: [], blocks: [], onOpen: noop } })
     : null;
 }
-function CitationsOuter({ show }: { show: boolean }) {
+function PeerReviewOuter({ show }: { show: boolean }) {
   const read = useCitationsRead(SLUG);
   return show
-    ? createElement(CitationsBand, { slug: SLUG, read, onJump: noop, focus: null, onFocusTaken: noop })
+    ? createElement(PeerReviewBand, {
+        slug: SLUG,
+        citationsRead: read,
+        onJump: noop,
+        blockOrder: new Map(BLOCKS.map((b, i) => [b.id, i])),
+        publishedAt: undefined,
+        articleTitle: "A piece",
+        claimChats: { summaries: [], onCheck: noop, onLens: noop, onOpen: noop },
+        citeFocus: null,
+        onCiteFocusTaken: noop,
+        claimFocus: null,
+        onClaimFocusTaken: noop,
+        onOpenWork: (workId) => openedWorks.push(workId),
+      })
     : null;
 }
 
@@ -301,6 +317,7 @@ function SkimOuter({ show }: { show: boolean }) {
         tree: ARTICLE.tree,
         quotes,
         glossary,
+        onAskTerm: noop,
         onOpen: noop,
         canOpen: () => false,
         arrival: { stop: null, open: false },
@@ -644,6 +661,8 @@ const ROWS: Row[] = [
     hook: "useDebate.ts",
     step: "debate",
     path: "/api/debate/",
+    /* Peer review's Reception since 2026-10-09 (plan 261009l). */
+    search: "?peer-review=reception",
     body: (which, { stale }) => ({
       debate: {
         version: "test",
@@ -678,22 +697,75 @@ const ROWS: Row[] = [
       stale,
       outdated: false,
     }),
-    mount: (show) =>
-      show
-        ? createElement(DebateBand, {
-            slug: SLUG,
-            onJump: noop,
-            blockOrder: new Map(BLOCKS.map((b, i) => [b.id, i])),
-            publishedAt: undefined,
-            articleTitle: "A piece",
-            claimChats: { summaries: [], onCheck: noop, onLens: noop, onOpen: noop },
-          })
-        : null,
+    mount: (show) => createElement(PeerReviewOuter, { show }),
     verb: "Search again",
     shape: ON_THE_BANNER,
     forced: ["Search again"],
     direct: [{ label: "Search again", stale: true }],
     waiting: "The new search hasn't loaded yet.",
+    readAgain: "Try again",
+  },
+  /* Claims' list (plan 261008i stage 2): the same band on
+     `?peer-review=claims` (`?debate=claims` until 2026-10-09), whose stale
+     banner's *List again* is the forced verb. */
+  {
+    name: "Debate's claims list",
+    hook: "useDebateClaims.ts",
+    step: "debate-claims",
+    path: "/api/debate-claims/",
+    search: "?peer-review=claims",
+    body: (which, { stale }) => ({
+      claimList: {
+        ...stamp(which, false),
+        claims: [
+          {
+            id: "spya-cdm2a4",
+            blockId: "spya-bbbbbb",
+            quote: "The instrument was built",
+            statement: `${SAYS[which]}: the rig came before its theory.`,
+          },
+        ],
+        dropped: { unknownIds: 0, unquoted: 0, tooLong: 0, duplicate: 0, overCap: 0, malformed: 0 },
+      },
+      stale,
+      outdated: false,
+    }),
+    /* The real owner wrapper keeps Bibliography's read mounted in Claims so
+       C1 can join the claim's paragraph to the work cited there. */
+    also: {
+      "/api/citations/": {
+        citations: {
+          ...stamp("old", false),
+          citations: [
+            {
+              id: "spya-c7t2wd",
+              key: "work:elements of episodic memory|tulving|1983",
+              title: "Elements of Episodic Memory",
+              authors: "Tulving",
+              year: "1983",
+              why: "The idea the piece tests.",
+              relevance: 0.9,
+              influence: 0.9,
+              mentions: [{ blockId: "spya-bbbbbb", quote: "The instrument was built", start: 0 }],
+              citedAt: ["spya-bbbbbb"],
+              firstCited: "spya-bbbbbb",
+              citedInBody: true,
+              url: "https://scholar.google.com/scholar?q=Elements",
+              linkFrom: "search",
+            },
+          ],
+          capped: false,
+        },
+        stale: false,
+        outdated: false,
+      },
+    },
+    mount: (show) => createElement(PeerReviewOuter, { show }),
+    verb: "List again",
+    shape: ON_THE_BANNER,
+    forced: ["List again"],
+    direct: [{ label: "List again", stale: true }],
+    waiting: "The new list hasn't loaded yet.",
     readAgain: "Try again",
   },
   {
@@ -727,7 +799,7 @@ const ROWS: Row[] = [
       stale,
       outdated: false,
     }),
-    mount: (show) => createElement(CitationsOuter, { show }),
+    mount: (show) => createElement(PeerReviewOuter, { show }),
     verb: "Find them again",
     shape: ON_THE_BANNER,
     forced: ["Find them again"],
@@ -916,6 +988,7 @@ beforeEach(() => {
   postGate = null;
   reads = 0;
   cache.clear();
+  openedWorks.length = 0;
   showBand = true;
   /* Sign-out's teardown, which is also what forgets a hold. */
   jobEngine.reset();
@@ -962,6 +1035,20 @@ it("releases a refused press even if the start callback rejects", async () => {
     await expect(hold.run(async () => { throw new Error("start rejected"); })).rejects.toThrow("start rejected");
   });
   expect(hold.rewriting, "no posted job can ever settle a rejected start").toBe(false);
+});
+
+it("wires an owner's Bibliography through the real Peer review wrapper into Claims' C1 line", async () => {
+  const claims = ROWS.find((candidate) => candidate.step === "debate-claims");
+  expect(claims).toBeDefined();
+  start(claims!);
+  await paint();
+
+  const line = host.querySelector(".dbt-cited-here");
+  expect(line?.textContent).toContain("Tulving 1983");
+  const work = line?.querySelector<HTMLButtonElement>("button");
+  expect(work).not.toBeNull();
+  await act(async () => work?.click());
+  expect(openedWorks).toEqual(["spya-c7t2wd"]);
 });
 
 describe.each(ROWS)("$name", (mode) => {

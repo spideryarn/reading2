@@ -1,0 +1,92 @@
+{
+  "the-mythology-of-conscious-ai-spya-rn5m0q": {
+    "summary-fuller": {
+      "V": "D-haiku",
+      "W": "C-sonnet+digest",
+      "X": "E-haiku+digest",
+      "Y": "A-opus",
+      "Z": "B-sonnet"
+    },
+    "ideas": {
+      "V": "E-haiku+digest",
+      "W": "C-sonnet+digest",
+      "X": "A-opus",
+      "Y": "B-sonnet",
+      "Z": "D-haiku"
+    },
+    "chat-q1": {
+      "V": "E-haiku+digest",
+      "W": "B-sonnet",
+      "X": "A-opus",
+      "Y": "D-haiku",
+      "Z": "C-sonnet+digest"
+    },
+    "chat-q2": {
+      "V": "B-sonnet",
+      "W": "D-haiku",
+      "X": "A-opus",
+      "Y": "C-sonnet+digest",
+      "Z": "E-haiku+digest"
+    }
+  },
+  "entropy-24-00930-spya-pywwkq": {
+    "summary-fuller": {
+      "V": "D-haiku",
+      "W": "B-sonnet",
+      "X": "C-sonnet+digest",
+      "Y": "A-opus",
+      "Z": "E-haiku+digest"
+    },
+    "ideas": {
+      "V": "A-opus",
+      "W": "E-haiku+digest",
+      "X": "D-haiku",
+      "Y": "C-sonnet+digest",
+      "Z": "B-sonnet"
+    },
+    "chat-q1": {
+      "V": "B-sonnet",
+      "W": "A-opus",
+      "X": "D-haiku",
+      "Y": "E-haiku+digest",
+      "Z": "C-sonnet+digest"
+    },
+    "chat-q2": {
+      "V": "C-sonnet+digest",
+      "W": "A-opus",
+      "X": "E-haiku+digest",
+      "Y": "D-haiku",
+      "Z": "B-sonnet"
+    }
+  },
+  "scaling-hypothesis": {
+    "summary-fuller": {
+      "V": "E-haiku+digest",
+      "W": "B-sonnet",
+      "X": "D-haiku",
+      "Y": "C-sonnet+digest",
+      "Z": "A-opus"
+    },
+    "ideas": {
+      "V": "B-sonnet",
+      "W": "D-haiku",
+      "X": "E-haiku+digest",
+      "Y": "A-opus",
+      "Z": "C-sonnet+digest"
+    },
+    "chat-q1": {
+      "V": "B-sonnet",
+      "W": "A-opus",
+      "X": "C-sonnet+digest",
+      "Y": "E-haiku+digest",
+      "Z": "D-haiku"
+    },
+    "chat-q2": {
+      "V": "D-haiku",
+      "W": "A-opus",
+      "X": "E-haiku+digest",
+      "Y": "C-sonnet+digest",
+      "Z": "B-sonnet"
+    }
+  }
+}

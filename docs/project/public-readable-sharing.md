@@ -156,6 +156,13 @@ defence: it is a link to a door the reader could already type. Greg chose it on 
 is [261007m](../plans/261007m-a-private-copy-of-a-public-article-on-your-own-shelf.md), the rule is
 `privateCopyOffer` in `src/web/PublicChrome.tsx`.
 
+**And a reader who pastes the address of a public article is offered it, free, before they are
+charged for their own** (since 2026-10-09): the add page answers with the public copy and asks.
+Following *Add a private copy* above with a plain same-tab press has already answered, so that press
+goes straight to the paid add; a new-tab or modified press cannot carry the one-shot and sees the
+choice again. What the asker learns is the article's slug and extracted title, never who shared it —
+[261009j](../plans/261009j-a-public-copy-offered-at-import.md).
+
 ## A private link: the same republishing, to fewer people
 
 Since 2026-10-05 an owner can make a **private link**, `/read/<slug>?key=<key>`, instead of or as
@@ -220,10 +227,13 @@ code by `tests/public-readable-sharing-page.test.tsx` and `tests/privacy-page.te
 
 ## While the article is still importing
 
-Since 2026-10-05 the add page has a **Make it public** box
+Since 2026-10-05 the add page has a **Make it public** control
 ([`AddShare.tsx`](../../src/web/AddShare.tsx) drawing a `ShareAtAdd`,
 [`src/web/add-share.ts`](../../src/web/add-share.ts)), which Greg asked for (`spya-e9t58e`). The plan
-is [261005l](../plans/261005l-permalink-and-share-while-an-article-is-importing.md). **The server
+is [261005l](../plans/261005l-permalink-and-share-while-an-article-is-importing.md). It was a tick
+box until 2026-10-09, when it became a button like the private link's, because the box stayed
+ticked while its confirmation was still asking; the presses call what the box did, so nothing it
+sends changed — [261009i](../plans/261009i-add-page-sharing-clearer.md). **The server
 did not change.** `PUT /api/article/:slug/visibility` has always needed only the owner's row, and
 every public read needs a published revision, so a switch pressed early exposes nothing early: the
 article becomes readable by others when the import publishes.
@@ -233,22 +243,22 @@ article becomes readable by others when the import publishes.
   article nothing has been built on, so everything a model makes is under *would be shared if
   built*.
 - **Which is why it first asks whether there is already an article.** An import can adopt one
-  already on the shelf, with a glossary and notes that would go out at once. The box is offered
+  already on the shelf, with a glossary and notes that would go out at once. The control is offered
   only when the owner's metadata read is a fresh 404. On a 200 it points at this card, and on
   anything else it offers nothing.
 - **One `ShareAtAdd` per slug, per tab** (`shareAtAddFor`), so two spellings of one add address
   never give one article two writers. A Retry that comes back under another slug shows that slug's
-  own unticked box.
-- **It sends `private` only when the reader unticks.** The first build also took a share back by
-  itself when the slug changed. GPT Sol's review showed that a take-back nobody is watching can be
+  own *Make it public…* button.
+- **It sends `private` only when the reader presses *Stop sharing*.** The first build also took a
+  share back by itself when the slug changed. GPT Sol's review showed that a take-back nobody is watching can be
   refused unseen, or land after a newer confirmation and undo it, so it went. What that leaves: a
   failed import that was shared stays public under its old slug, with nothing published for
   anyone to read.
 - **A reload cannot read the switch back before publication.** No owner read returns visibility
   until there is a published revision. So the tab writes a mark in `sessionStorage` before a
   share request is sent, and a reloaded page that finds the mark shows *we cannot read that back* and offers
-  the untick. The mark never sends a public request. A second tab has no mark and shows an
-  unticked box over an article that is public: accepted for now, and the fix is a server read
+  *Stop sharing*. The mark never sends a public request. A second tab has no mark and shows
+  *Make it public…* over an article that is public: accepted for now, and the fix is a server read
   ([postmortem 261005r](../postmortems/261005r-a-publication-404-does-not-establish-sharing-state.md)).
 - **Coming back to the add page asks again, and a published article belongs to this card.** The
   controller outlives the page, so on every return it repeats the metadata read before sending
@@ -275,8 +285,11 @@ Greg's answers to the three questions stage 1 ended on, in his words, are in the
   own requests behind its own confirmation. Unlike the public switch **it can read its state
   before publication**: `GET /api/article/:slug/share-link` needs only the owner's row. So it
   reads on every attachment and keeps no mark. **A create that did not come back is never sent
-  again by itself**, because a second create replaces the first link: it shows *unknown* and a
-  *Check again* button. An older read that answers after a newer write is dropped
+  again by itself**, because a second create replaces the first link: it shows *unknown*, with *Check
+  again* and *Turn off*. The turn-off is idempotent on the server, so it is safe to send without
+  knowing whether there is a link
+  ([261009l](../plans/261009l-add-page-private-link-lost-reply-cannot-be-turned-off.md), which
+  also names the race that remains). An older read that answers after a newer write is dropped
   ([postmortem 261006b](../postmortems/261006b-a-read-completion-does-not-prove-it-followed-a-write.md)).
 - **Controllers belong to one reader.** The registry is keyed by reader and slug and is emptied
   when the session changes, where the upload engine is fenced

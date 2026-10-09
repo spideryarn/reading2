@@ -28,6 +28,8 @@ export function titleFromOrigin(origin: ThreadOrigin): string {
       return titleFrom(`Glossary: ${origin.quote}`);
     case "citations":
       return titleFrom(`Cited work: ${origin.quote}`);
+    case "ideas":
+      return titleFrom(`Idea: ${origin.quote}`);
     default: {
       const never: never = origin;
       return never;

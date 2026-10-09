@@ -15,6 +15,7 @@ Up: [architecture.md](architecture.md)
 - [§ The failures Retry is not offered under](#the-failures-retry-is-not-offered-under) — which errors hide the button
 - [§ The one security check](#the-one-security-check) — `isSlug`, the path-traversal guard
 - [§ The routes](#the-routes) — the job and article endpoints
+- [§ The record of every import](#the-record-of-every-import) — `import_records`, kept for debugging production, and the script that reads it
 - [§ Naming the step is the point](#naming-the-step-is-the-point) — progress-list wording
 - [§ The box only shows this sitting](#the-box-only-shows-this-sitting) — what the Add box lists
 - [§ A finished job publishes the article](#a-finished-job-publishes-the-article-and-until-2026-08-30-it-did-not) — `publishRevision`, why a done job left the shelf empty (history)
@@ -667,7 +668,9 @@ Three things, all in the browser, in
   re-reads the article when the job is done. It does not send the reader to the add page, because
   arriving there posts an import.
 - **A *Sharing* section, shut by default**, holding *Make it public* and, since 2026-10-06,
-  *Create a private link*. What each asks and sends, and what a visitor sees who arrives before
+  *Create a private link*. Since 2026-10-09 the link comes first, both are buttons, and the row
+  reads *Sharing options* and opens on a line about the private default with a link to Help —
+  [261009i](../plans/261009i-add-page-sharing-clearer.md). What each asks and sends, and what a visitor sees who arrives before
   the import has published, are in
   [public-readable-sharing.md § While the article is still importing](public-readable-sharing.md#while-the-article-is-still-importing).
 - **The card is drawn from the POST's answer** (since 2026-10-06). The page used to look its job
@@ -741,6 +744,22 @@ stand-in tree. Neither was ever how a reader was meant to do it — the reading 
 for a tree that never arrived, and step re-runs are free —
 [261007k](../plans/261007k-repeat-paste-is-free-and-says-so.md).
 
+**An address somebody else has made public is offered, free, before it is charged** (since
+2026-10-09). Greg, 2026-10-09:
+
+> We should notice during the import process if a user tries to add an article that we already
+> have as public, and ask them if they'd rather use the public one for free or have their own
+> version which will use up one of their allotted slots.
+
+A plain add that is not on the reader's own shelf asks next whether a public article has the same
+`urlKey`, and if one does answers `200 { publicCopy: { slug, title } }`, with nothing reserved and
+no job. The add page stops on the choice: **Read the public copy (free)**, a link to it, or **Add my
+own copy**, which posts again with `ownCopy: true` and is the ordinary paid add. The link's hover
+card and the MCP tool offer the same two. *Add a private copy to your shelf* on a public article has
+already chosen, so it marks the address (`src/web/own-copy-intent.ts`) and the add page sends
+`ownCopy` at once. Which public articles count is Citations' ownerless read, reused unchanged —
+[261009j](../plans/261009j-a-public-copy-offered-at-import.md).
+
 **The add box stopped being an `<input type="url">` for this.** The browser will not submit one
 without a scheme, and `example.com/an-essay` is meant to work — so it is a plain text input whose
 validation is `slugFromUrl`, the same function the server derives the slug with. The one check that
@@ -780,14 +799,20 @@ happily slugged as `x` one function later.
 
 `urlKey` is where `http` and `https` become one article. On top of the above it drops the scheme
 entirely, a leading `www.`, one trailing slash, and the tracking parameters a share button staples on
-(`utm_*`, `fbclid`, `igshid` and a dozen more).
+(`utm_*`, `fbclid`, `igshid` and about twenty more — the list is `TRACKING` in `src/ingest.ts`).
 
 **And a paper a source recognises has one key whatever shape its link takes**, since 2026-10-05.
 arXiv serves one paper at `abs/`, `pdf/`, `html/` and its own DOI, and the fetch step reads the
 same document whichever was pasted ([fetching.md § A paper source](fetching.md#a-paper-source-one-paper-several-addresses)),
 so `urlKey` answers `arxiv.org/abs/<id>` for all of them, and `slugFromUrl` answers the source's
 slug (`arxiv-2608-13566`; it used to be `arxiv-2608`, because `.13566` read as a file extension).
-A version is part of the key: `2608.13566` and `2608.13566v1` are two articles.
+**Every version is one article**, since 2026-10-09. The 2026-10-05 version kept the version in the
+key, so `2608.13566` and `2608.13566v1` were two articles, and a reader who had imported a `…v1`
+link and then pasted the plain abstract link got the paper twice (report `spya-n50aft`). The key is
+now the versionless id; the version still decides what is fetched and the slug. The cost: a reader
+holding v1 who pastes v2 is told they already have it, and Refresh re-reads v1, so reading v2 means
+deleting v1 first. Telling versions apart was weighed and not built —
+[261009d](../plans/261009d-every-version-of-an-arxiv-paper-is-one-article.md).
 
 The same holds for the sources added on 2026-10-06. A Hugging Face or alphaXiv page about an arXiv
 paper has the arXiv paper's key. An ACL Anthology, PMLR, NeurIPS, CVF or JMLR paper has the key
@@ -1191,8 +1216,8 @@ and keeps the two-sided note only when the server cannot say
 ([261001i](../plans/261001i-glossary-undo-find-more-and-say-append-or-rewrite-in-metadata.md)). It is
 a prediction from the state the page read, and the page reads again after a run and after the
 purpose box saves; the
-sketch's price and wait, debate's **up to two separately metered calls** at $0.20–0.40 on a short
-article, and Skim's *needs Quotes first* are the same kind of note under those rows' names.
+sketch's wait, Debate's **one model call that searches the web plus optional search-free
+synthesis**, and Skim's *needs Quotes first* are the same kind of note under those rows' names.
 Each note is also its button's accessible description. A Retry is one press too, and holds
 *Starting…* across its round trip so a double click sends one. The whole-article reset, the first
 row of the same card, keeps its confirm — it removes the extras and can move comments, which is the
@@ -1848,7 +1873,12 @@ three covers a deploy landing during the second. **It said three requeues until 
 was four windows against a justification that counted three — the constant and its reasoning meant
 different things, and the reasoning was the half that was right (GPT Sol). Nothing requires *progress*
 before a window is granted, so an un-checkpointed paid call can be bought once per window; the two
-expensive fan-outs are checkpointed, which is why the number is the whole of the protection. The
+expensive fan-outs are checkpointed, which is why the number is the protection for most steps. The
+two dear purchases that cannot be checkpointed are marked once per job on the job row instead
+(`jobs.paid_step_begun`), and a later window refuses to buy them again: Debate's web search, at the
+step ([261009l](../plans/261009l-a-requeued-job-does-not-buy-the-debate-search-again.md)), and
+Illustrated's plates, at the plate phase, after the step's own deliberate hand-back
+([261009o](../plans/261009o-a-requeued-job-does-not-buy-the-illustrated-plates-again.md)). The
 budget is per *job*: pressing Retry makes a new job with a fresh two, so the reader is the outer loop,
 and the machine gives up before the person does. `jobs.requeues` is the counter on Postgres; the
 filesystem adapter (deleted 2026-09-05) kept it in memory, so a restart reset the cap there — weaker
@@ -2342,7 +2372,8 @@ derivation so the two agree by construction rather than by trust.
   GET    /api/jobs             every job this server knows about, newest first
   POST   /api/uploads          { filename, bytes, sha256 } → 201, where to PUT a PDF and for how long
   GET    /api/uploads/:id      what became of one upload
-  POST   /api/jobs             { url } | { uploadId } | { slug, steps?, force? }  → 202, the job
+  POST   /api/jobs             { url, ownCopy? } | { uploadId } | { slug, steps?, force? }  → 202, the job
+                               (a plain { url } may answer 200 { article, repeat } or 200 { publicCopy })
   GET    /api/jobs/:id         one job — what the poll reads
   DELETE /api/jobs/:id         hide a finished job from its reader (Dismiss); the row stays
   POST   /api/jobs/:id/cancel
@@ -2352,15 +2383,16 @@ derivation so the two agree by construction rather than by trust.
 **Dismiss hides a job; it does not delete it**, since 2026-10-02. `DELETE /api/jobs/:id` stamps
 `jobs.dismissed_at`, and every reader-facing lookup treats a stamped row as absent, so the card,
 poll, Retry and Advance all see the job as gone exactly as when the row was deleted. The row stays
-because a failed import's *Report this* carries the job id and nothing that might be private
+because a failed import's *Report this* carries the job id
 ([feedback.md § The one rule](feedback.md#the-one-rule)), and an id whose record Dismiss had
 deleted traced nothing. `trimFinished` still retires a dismissed job with the other finished ones.
 Greg, Q-import-report-details.
 
-`POST /api/jobs` answers **202**, not 200: the work has been accepted and has not been done, and the
-body is a receipt to poll. Retry creates a new job rather than mutating the old one — what went
-wrong the first time is worth keeping, and overwriting it would erase the only evidence at exactly
-the moment somebody is trying to work out what happened.
+A `POST /api/jobs` that creates work answers **202**, not 200: the work has been accepted and has
+not been done, and the body is a receipt to poll. The two free early answers in the route table above
+answer 200 because they create no job. Retry creates a new job rather than mutating the old one —
+what went wrong the first time is worth keeping, and overwriting it would erase the only evidence at
+exactly the moment somebody is trying to work out what happened.
 
 **Retry answers 409 for anything the card would not have offered**, and until 2026-08-31 it checked
 nothing but ownership. That was harmless while a retry of a finished job forced nothing — every step
@@ -2490,6 +2522,38 @@ writes `sourceHash: "stopped-part-way"` and the manifest is not current: those i
 publisher until a run that includes `assets` fetches them (*Refresh from source* and *Start again*
 force it). `illustrated` throws on a Stop between plates rather than publish a half-painted set
 over the last good one.
+
+## The record of every import
+
+> let's just make sure that we are making it possible for the dev agent to access, find, debug
+> whatever it needs to solve problems from production after the fact.
+>
+> — Greg, 2026-10-08 (spya-f9c9pe)
+
+A job row is the full account of an import — address, file name, every step's status, error and
+times — and it does not last: `trimFinished` keeps fifty finished jobs per owner. So **every import
+that ends is copied into `spideryarn.import_records`**, one row per job id, and that table is never
+trimmed. Successes too; their row is just short.
+
+- **To read one from production**: `npx tsx scripts/import-records.ts` lists the last twenty
+  failures (`--all` for every ending), and `npx tsx scripts/import-records.ts <job id>` shows one in
+  full. Read-only, through the same guarded connection as the feedback scripts. The job id is what
+  a failed import's *Report this* puts in the report.
+- **Written by a trigger, `jobs_record_import`**, on the transition into `done`, `error` or
+  `cancelled` of a job whose steps include `fetch` — not by the application, because four code paths
+  end a job and only two pass through `noteEnded`. The first ending of a job id is the one kept;
+  Retry is a new job and so a new row. Mode runs are not recorded.
+- **Deleted with the article.** `deleteTerminalJobs` (src/store/pg-shelf.ts) takes the owner's
+  records for that slug alongside the jobs. An import that never became an article stays until the
+  account goes; the owner key cascades.
+- **Why not keep the `jobs` row instead**: other code reads a job row as "something is still
+  attached here" — the draft sweep and the never-published tidy hold what a job names — so keeping
+  failed imports' rows would pin their leftovers for ever. Nothing reads `import_records` but a
+  person.
+
+The schema's note is `importRecords` in [src/db/schema.ts](../../src/db/schema.ts); the plan, with
+GPT Sol's reviews, is
+[261008j](../plans/261008j-a-failed-import-report-carries-the-address-and-a-record-of-every-import.md).
 
 ## Naming the step is the point
 

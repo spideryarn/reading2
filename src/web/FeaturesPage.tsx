@@ -142,7 +142,7 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
             of the main modes". */}
         <Showcase shot={SHOTS.skim} title="Skim." mode="skim" offset under>
           Skim the paper in increasing depth: a route through its quotes, walked three times — the
-          gist, then more, then most — each stop with a line on what to look for.
+          gist, then more, then most — with a question to read a stop with where one helps.
         </Showcase>
         {/* Alone rather than in a Gallery: one portrait in a three-column grid
             sits in the left third with two empty cells beside it, which reads as
@@ -234,8 +234,9 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
               address (src/public/dto.ts § `publicCitationUrl`, and the
               80-work cap in docs/project/citations.md). The orders are
               `orderOptions` in src/web/CitationsPanel.tsx: prioritised, first
-              cited, relevance, influence. */}
-          <Tile name="Citations." span="wide" mode="citations">
+              cited, relevance, influence. Peer review's Bibliography since
+              2026-10-09, titled with the sub-mode's name (plan 261009l). */}
+          <Tile name="Bibliography." span="wide" mode="peer-review">
             The works the piece cites — in its bibliography, its footnotes or the text itself — with a
             link out where there is one, in the order it first cites them, by how relevant or
             influential each is, or prioritised.
@@ -295,8 +296,9 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
               authoritative sources)", with "citation/linking"; and 2026-09-30
               (SPIDERYARN-READING2-6M), "key themes" and "key nodes". Both in
               docs/project/debate.md; the themes and key sources are
-              src/debate-themes.ts. */}
-          <Tile name="Debate." span="wide" mode="debate">
+              src/debate-themes.ts. Peer review's Reception since 2026-10-09,
+              titled with the sub-mode's name (plan 261009l). */}
+          <Tile name="Reception." span="wide" mode="peer-review">
             What the wider web says about the piece — reviews and critiques, ideally from
             authoritative sources, each linked — with the key themes and the key sources drawn out.
           </Tile>

@@ -32,7 +32,7 @@ import { ruleTitleTidier, type TitleTidier } from "./title-tidy.js";
 import { canonicaliseCallouts, type CalloutStats } from "./callouts.js";
 import { ChallengePage, challengeIn } from "./challenge-page.js";
 import { removePlatformFurniture } from "./furniture.js";
-import { prepareLatexml } from "./latexml.js";
+import { latexmlTitleBlock, prepareLatexml } from "./latexml.js";
 import { READER_COMMENTS_KEY, removeReaderComments } from "./reader-comments.js";
 import { canonicaliseMaths } from "./maths-import.js";
 import { loadMathsRenderer } from "./maths-server.js";
@@ -53,6 +53,7 @@ import type { WorkId } from "./bibliographic.js";
 import { authorsForByline, chooseByline, metaAuthors } from "./meta-authors.js";
 import { RESERVED_ATTRS, scrubReserved } from "./reserved.js";
 import { sanitizeHtml } from "./sanitize.js";
+import type { AffiliationReader, TitleBlock } from "./arxiv-affiliations.js";
 import type { Author, Meta } from "./types.js";
 
 /**
@@ -418,6 +419,12 @@ export function readArticle(
    * asking what Readability said still gets what Readability said.
    */
   authors: Author[] | null;
+  /**
+   * A LaTeXML title block as read before it was rewritten, when `authors` is
+   * its names and nothing the page declared elsewhere; otherwise `null`. What
+   * an affiliations reader is handed (src/arxiv-affiliations.ts).
+   */
+  titleBlock: TitleBlock | null;
   /** The identifiers the page declares for itself — src/article-registry.ts § `ownIdsOfDocument`. */
   ownIds: WorkId[];
   refusal: TooLittleTextToRead | ChallengePage | null;
@@ -437,6 +444,7 @@ export function readArticle(
   return {
     article: shipped.article,
     authors: shipped.authors,
+    titleBlock: shipped.titleBlock,
     ownIds: shipped.ownIds,
     refusal: refusalFor(shipped),
     notes: shipped.notes,
@@ -464,6 +472,7 @@ function readingArm(
   /** What the source said it was, before anything rewrote it — `refusalFor`. */
   challenge: ChallengePage | null;
   authors: Author[] | null;
+  titleBlock: TitleBlock | null;
   ownIds: WorkId[];
   notes: NoteStats;
   callouts: CalloutStats;
@@ -491,6 +500,11 @@ function readingArm(
      it and Readability deletes every `<script>`. `provenanceArm` has the same
      line in the same place. */
   const challenge = challengeIn(dom.window.document);
+  /* A LaTeXML title block's names, and each author's text for the affiliations
+     reader, before `prepareDocument` rewrites the block into one row per author
+     (src/latexml.ts § 6). `metaAuthors` still reads the `<meta>` tags where it
+     always has, below, and falls back to these names. */
+  const titleBlock = latexmlTitleBlock(dom.window.document);
   const { notes, callouts, removed, kept } = prepareDocument(dom.window.document, protect);
   /* Before the parse, and it has to be: Readability mutates the document it is
      given, and `keepClasses: false` takes the `noprint` class off whatever
@@ -498,7 +512,12 @@ function readingArm(
   const notForPrint = notForPrintText(dom.window.document);
   /* Before the parse for the same reason: every author the page declares,
      which Readability collapses to one — src/meta-authors.ts. */
-  const authors = metaAuthors(dom.window.document);
+  const authors = metaAuthors(dom.window.document, titleBlock?.names ?? null);
+  /* **Whether that list came from the title block**, asked now, while it can
+     be: a `citation_author` list of the same names is indistinguishable from it
+     afterwards, and a page that declares its authors has said what it has to
+     say (GPT Sol, plan review of 261009m). */
+  const fromTitleBlock = titleBlock !== null && authors !== null && metaAuthors(dom.window.document, null) === null;
   /* And the same again: the page's own DOI or arXiv id, off its meta tags and its address. */
   const ownIds = ownIdsOfDocument(dom.window.document, url);
   const article = new Readability(dom.window.document).parse();
@@ -506,6 +525,7 @@ function readingArm(
     article,
     challenge,
     authors,
+    titleBlock: fromTitleBlock ? titleBlock : null,
     ownIds,
     notes,
     callouts,
@@ -813,7 +833,8 @@ function prepareDocument(
   /* **A LaTeXML page's own shapes (arXiv's HTML, ar5iv), put into the shapes
      the rest of the pipeline already reads**: an aligned equation into one
      display formula, an SVG plot in an `<object>` into an `<img>`, a code
-     listing into a `<pre>`, a boxed passage out of the SVG that frames it.
+     listing into a `<pre>`, a boxed passage out of the SVG that frames it, and
+     a title block into one row per author.
      Before `canonicaliseMaths`, and it has to be: the aligned equation is
      joined from each cell's TeX annotation, which that pass consumes, and a
      boxed passage's formulas sit under an `<svg>`, where that pass converts
@@ -1242,6 +1263,15 @@ export class TooLittleTextToRead extends Error {
  * derive it from, and every caller already knows the slug. The command line
  * that could pass an explicit filename is gone too.
  */
+/** Whether `authors` is exactly `names`, in order, with no affiliations yet: the title block's list. */
+function sameNames(authors: readonly Author[] | null, names: readonly string[]): boolean {
+  return (
+    authors !== null &&
+    authors.length === names.length &&
+    authors.every((a, i) => a.name === names[i] && a.affiliations.length === 0)
+  );
+}
+
 /** The cheap test before loading temml: a `<math>` or a MathJax script anywhere in the raw page. */
 const MIGHT_HOLD_MATHS = /<math[\s>]|math\/tex/iu;
 
@@ -1266,6 +1296,12 @@ export async function runExtract(opts: {
    * (src/title-tidy-model.ts); absent, the rule alone, and no call.
    */
   titleTidier?: TitleTidier;
+  /**
+   * What reads an arXiv HTML paper's affiliations off its title block. Import
+   * hands in the PDF path's authors pass (src/arxiv-affiliations.ts, plan
+   * 261009m); absent, no call, and the names stay alone.
+   */
+  affiliations?: AffiliationReader;
 }): Promise<ExtractResult> {
   const { slug } = opts;
   /* Before the DOM pass that asks whether each formula would draw: this is the
@@ -1290,7 +1326,10 @@ export async function runExtract(opts: {
      Found by a GPT Sol review that reproduced it, 2026-08-26 — the fourth round
      of the same class, and the first one where the leak was a dependency's
      rather than ours. See docs/project/logging.md. */
-  const { article, authors, ownIds, refusal, notes, callouts, removed, kept } = readArticle(opts.html, opts.url);
+  const { article, authors: declaredAuthors, titleBlock, ownIds, refusal, notes, callouts, removed, kept } = readArticle(
+    opts.html,
+    opts.url,
+  );
   /* **Before the `!article` check, so it wins over `ReadabilityRefused` too.**
      A bot check Readability happens to decline is still a bot check, and that
      is the sentence with a move in it. src/challenge-page.ts. */
@@ -1323,6 +1362,14 @@ export async function runExtract(opts: {
      page's declared author list replaces it where it has dropped somebody,
      because Readability keeps only the last of a repeated tag —
      src/meta-authors.ts. */
+  /* **Affiliations for a LaTeXML title block's names**, and only when those
+     names are the whole list: a page that declares `citation_author` tags has
+     already said what it has to say. The reader returns the same names, in the
+     same order, or nothing (src/arxiv-affiliations.ts). Plan 261009m. */
+  const authors =
+    opts.affiliations && titleBlock && sameNames(declaredAuthors, titleBlock.names)
+      ? ((await opts.affiliations(titleBlock)) ?? declaredAuthors)
+      : declaredAuthors;
   const byline = chooseByline(authors?.map((a) => a.name) ?? null, tidyMetaText(article.byline));
   const declared = authorsForByline(authors, byline);
   /* **Plain text, once, before it branches** into `meta.title`, the page's

@@ -1529,21 +1529,15 @@ describe("batchFingerprint", () => {
 });
 
 describe("prefixIsCacheable", () => {
-  it("is false for the outlines our articles actually have", () => {
-    // ~660 tokens on the 141-block article and ~950 on the 360-block one, both
-    // under Sonnet 5's 1,024. So the warm-up that serialises the first batch to
-    // write a cache entry has nothing to write, and skipping it is the right
-    // call rather than a shortcut.
-    expect(prefixIsCacheable(renderOutline(fixture(6, 7).tree), "standard")).toBe(false);
-  });
-
-  it("uses Opus's lower floor for a high-power article", () => {
-    /* This real outline is between the two measured floors: too short for
-       Sonnet's 1,024-token prefix, but long enough for Opus's 512. Treating the
-       second answer like the first fans every label batch out at once and
-       throws away the cache hit the high-power run could have used. */
+  it("is true for the outlines our articles actually have, on both capable models", () => {
+    /* Until 2026-10-09 this was false at standard power: ~660 and ~950-token
+       outlines under Sonnet 5's 1,024 floor, so the warm-up was skipped.
+       Sonnet 5.5, like Opus 5.5, caches from 512 tokens (`cacheFloorFor`,
+       plan 261009a), and the system prompt alone clears that — so now every
+       labels run has a prefix worth warming, at either power. The 1,024 case
+       itself is tested in tests/article-prompt.test.ts. */
     const outline = renderOutline(fixture(6, 7).tree);
-    expect(prefixIsCacheable(outline, "standard")).toBe(false);
+    expect(prefixIsCacheable(outline, "standard")).toBe(true);
     expect(prefixIsCacheable(outline, "high")).toBe(true);
   });
 
@@ -1870,7 +1864,9 @@ describe("generateLabels, resuming", () => {
         const { tree, blocks } = fixture(6, 7);
         await checkpointFor(store, tree, blocks);
         const run = await generateLabels({ power: "standard", tree, blocks, slug: "test", checkpoints: store });
-        expect(run.estimatedCacheable).toBe(false);
+        /* Cacheable since Sonnet 5.5's 512 floor (plan 261009a) — and still
+           meaningless here, which is the point of reporting `calls` beside it. */
+        expect(run.estimatedCacheable).toBe(true);
         expect(run.calls).toBe(0);
         expect(run.cacheReadTokens).toBe(0);
     });

@@ -70,6 +70,7 @@ function paint(threadId: string | null): void {
         onDelete: () => {},
         canStartOver: true,
         onRetry: () => {},
+        onDeleteFrom: undefined,
         onEdit: (_message: string, next: string) => {
           edited.push(next);
         },
@@ -169,6 +170,7 @@ describe("the composer while an answer is arriving", () => {
       root.render(
         createElement(Composer, {
           slug: "a-piece",
+          keepAs: "chat:a-piece:t1",
           onSend: () => {},
           onStop: () => {
             stopped++;

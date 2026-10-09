@@ -113,6 +113,35 @@ ${lines.join("\n")}`;
 }
 
 /**
+ * **The same modes, for a spoken guide** (plan 261009i): the labels and our
+ * descriptions with no token beside any of them, since a voice has nowhere to
+ * put a button and a model shown `[cmd:…]` in its instructions may read the
+ * brackets aloud. The same rows and order as `modeWordsSection`.
+ */
+export function spokenModeWords(rows: readonly CatalogueRow[] = catalogue): string {
+  const ours = rows.filter(
+    (row) => (row.kind === "mode" || row.kind === "submode") && row.contexts.includes(OWNER_ARTICLE),
+  );
+  const lines: string[] = [];
+  for (const mode of ours.filter((row) => row.kind === "mode")) {
+    const name = mode.id.slice("mode:".length);
+    lines.push(`- ${mode.label}${experimental(mode)}: ${mode.description}.`);
+    for (const sub of ours) {
+      if (sub.kind !== "submode" || !sub.id.startsWith(`submode:${name}:`)) continue;
+      lines.push(`  - ${mode.label} › ${sub.label}${experimental(sub)}: ${sub.description}.`);
+    }
+  }
+  return `WHAT SPIDERYARN CAN SHOW THEM
+
+The modes, in our own words. The reader opens one from the bottom bar under the
+article. Say a mode's name exactly as written here, so they can find it.
+"(experimental)" means they see it only once they have turned on experimental
+features on their profile page.
+
+${lines.join("\n")}`;
+}
+
+/**
  * **The `mode` proposal's token for one catalogue row** — `[cmd:mode:<key>]`
  * with the key percent-encoded the way src/web/command-proposal.ts §
  * `formatProposalToken` encodes it. A key is lower-case letters, `-` and `:`

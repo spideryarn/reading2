@@ -12,7 +12,7 @@ Code: [`Tooltip.tsx`](../../src/web/Tooltip.tsx) (`Tooltip`, `ControlTip`, `Tool
 - [§ What we chose](#what-we-chose) — Floating UI, and what was rejected
 - [§ Where the code is](#where-the-code-is) — the table of every file that draws a card; open it to find the one to copy
 - [§ `ControlTip`](#controltip-which-is-what-most-of-them-are-now) — the common shape: a control described
-  - [A shortcut is named on its card](#a-shortcut-is-named-on-its-card) — the rule that a key is on its control's card
+  - [A shortcut is named on its card](#a-shortcut-is-named-on-its-card) — the rule that a key, or a gesture nobody would guess, is on its control's card
   - [The bar, and the two shapes of the same modes](#the-bar-and-the-two-shapes-of-the-same-modes) — the Dock's mode buttons
 - [§ What the card says, and why that](#what-the-card-says-and-why-that) — the content of the spine's card and Structure's
 - [§ Five things that are load-bearing](#five-things-that-are-load-bearing) — the ways the obvious version fails silently
@@ -340,6 +340,16 @@ that rule; [keyboard.md](keyboard.md) and [icons.md](icons.md) point here.
 > tooltip.
 >
 > — Greg, 2026-09-30 (SPIDERYARN-READING2-74)
+
+**So does a gesture a reader would not find by themselves**, such as a double press:
+
+> any time there's a keyboard shortcut or a hard-to-discover trick like double-clicking, it should be
+> in the tooltip.
+>
+> — Greg, 2026-10-09 (`spya-xdvnrg`)
+
+The microphone's card names its double press on Stop in its `press` line, on the boxes that take one
+([dictation.md](dictation.md#a-double-press-on-stop-also-sends)).
 
 The key is a fact a reader cannot guess by pressing the button, so keep it in the card's prose where
 it reads naturally. Skim says *While reading, press ←.* on ‹ › and on its door's *Next stop ›*;
@@ -716,7 +726,7 @@ of [Help](help-page.md) (`BandAbout.tsx`, given `help` by `ModeSurface`). The pr
 implementation says why it is separate — and is not a customer.
 
 The second, since 2026-10-06, is **Skim's term chips**: each opens the glossary's own entry card
-(`TermCard`, the one the prose card draws) with its *Dig deeper · Hide · Open glossary* row
+(`TermCard`, the one the prose card draws) with its *Ask in chat · Hide · Open glossary* row (*Dig deeper* in the first place until plan 261009k)
 (`TermChip` in `SkimPanel.tsx`; [skim.md](skim.md)). It is the first to combine `interactive` with
 a controlled `open`, so that a finger's tap keeps it up. Its content scrolls inside a height tied to
 the window. That cap is on a wrapper inside the panel, not on `.tooltip`, where `overflow` would

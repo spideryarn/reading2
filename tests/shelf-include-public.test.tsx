@@ -39,7 +39,7 @@ function entry(slug: string, title: string): LibraryEntry {
 }
 
 function pub(slug: string, title: string, byline: string | null = null): PublicLibraryEntry {
-  return { slug, title, byline, gist: null, siteName: null, words: 900, publicAt: "2026-09-02T00:00:00.000Z" };
+  return { slug, title, byline, gist: null, siteName: null, words: 900, publicAt: "2026-09-02T00:00:00.000Z", topics: [] };
 }
 
 let active: LibraryEntry[];

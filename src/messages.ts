@@ -275,6 +275,37 @@ export const INTERRUPTED: ReaderFacingFailure = {
     `starting over. [${INTERRUPTED_CODE}]`,
 };
 
+/**
+ * **A paid step this job may already have begun, not begun again by itself.**
+ * The marker is written before the request can leave, so after the process
+ * stops or the job reaches its own deadline we cannot tell whether the search
+ * started. For a `oncePerJob` step (src/pipeline.ts), starting it again could
+ * buy the paid work a second time on nobody's press, so the step fails here
+ * instead and the reader decides. Plan 261009l.
+ */
+export const PAID_STEP_NOT_REPEATED: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "This search may already have started when the job stopped, so it may already have been paid " +
+    "for. It was not started again by itself. Press Retry to run it. [jb-paid-once]",
+};
+
+/**
+ * **Illustrated's plates, which this job may already have begun, not painted
+ * again by themselves.** The twin of `PAID_STEP_NOT_REPEATED` for a purchase
+ * marked inside a step rather than at it (`StepContext.beginPaidWork`): the
+ * brief may have been banked and handed to this window on purpose, but the
+ * plates were sent by an earlier one, which stopped before they came back.
+ * Plan 261009o.
+ */
+export const PLATES_NOT_REPEATED: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "These pictures may already have started being painted when the job stopped, so they may " +
+    "already have been paid for. They were not painted again by themselves. Press Retry to paint " +
+    "them. [jb-plates-once]",
+};
+
 export const CODE_KINDS: Record<string, FailureKind> = {
   "ai-busy": "retry",
   "ai-no-credit": "ours",
@@ -371,6 +402,14 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      an interrupted job resumes from its artefacts rather than starting again,
      so another go is both allowed and cheap. See `INTERRUPTED`. */
   "jb-gone": "retry",
+  /* A `oncePerJob` step a later window of the same job would have bought
+     again. `retry` because the Retry is the point: it is a new job and a press,
+     which is the only way this work is bought twice. See
+     `PAID_STEP_NOT_REPEATED`. */
+  "jb-paid-once": "retry",
+  /* The same refusal for Illustrated's plates, marked at the plate phase
+     rather than at the step. See `PLATES_NOT_REPEATED`. */
+  "jb-plates-once": "retry",
   /* **The two refusals *Dig deeper* on a glossary entry can give**, and the only `gl-` pair.
      Neither is a model call and neither is a fault: one says the article never
      quotes the term, the other that the glossary no longer fits the article.
@@ -656,6 +695,10 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "fb-list": "retry",
   "fb-reply": "retry",
   "fb-reply-stale": "retry",
+  /* Defer for now or Bring back not getting through, and the question settled
+     before it arrived (261008i): nothing changed either way. */
+  "fb-defer": "retry",
+  "fb-defer-settled": "retry",
   /* The subscription allowance, `pay-`. All six are registered rather than
      left to fall through, and the four `blocked` ones are the reason: an
      unrecognised code means *offer another go*, so "you have used all three of
@@ -4384,7 +4427,7 @@ export const SHARING_MARK_NAME_PRIVATE = "Private — change who can read this";
 export const SHARED_LINK_CARRIES =
   "A shared link carries the article, its table of contents, and the reading " +
   "aids written for it — including the summaries, glossary, ideas, quotes, timeline, skim, " +
-  "FAQ, citations and Debate. It also carries the " +
+  "FAQ, and Peer review's bibliography, reception and claims. It also carries the " +
   "marks, notes and searches of whoever added it. Their conversations with the model are not " +
   "part of it.";
 
@@ -4491,7 +4534,7 @@ export const SHARING_CONFIRM_TITLE = "Share the full text of this article?";
  */
 export function sharingConfirmBody(title: string | null): string {
   /* No title: the add page asks while the article is still importing, and an
-     import may not have found one yet (`SHARE_AT_ADD_LABEL`, below). */
+     import may not have found one yet (`SHARE_AT_ADD_HEADING`, below). */
   const named = title === null ? "this article" : `“${title}”`;
   return (
     `This puts the whole extracted text of ${named} where anyone can read it without ` +
@@ -4687,20 +4730,34 @@ export const SHARING_RIGHTS_CONFIRM =
  * plan review, P2-6.
  */
 export const IMPORT_LINK_COPY_TIP =
-  "Copy the link this import's article will have. It opens for you once the import has " +
-  "finished, and for anyone else only if you share it. If the import fails, the link leads " +
-  "nowhere.";
+  "Copy the address this import's article will have. It opens for you once the import has " +
+  "finished, and for anyone else only if you make the article public: a private link is a " +
+  "different address. If the import fails, the address leads nowhere.";
 
 /** The copy did not happen. The card has no box holding the link, so this is followed by the address itself. */
 export const IMPORT_LINK_COPY_FAILED = "Your browser would not allow the copy. The link is";
 
-/** The add page's third box. */
-export const SHARE_AT_ADD_LABEL = "Make it public";
+/**
+ * The add page's public control: its heading, and the button that opens the
+ * confirmation. A button and not a tick box since 2026-10-09, the shape the
+ * private link beside it and the Metadata card's *Share with anyone…* already
+ * had: a box stayed ticked while the confirmation was still asking, so the
+ * page looked shared when nothing was. The ellipsis says the press asks
+ * before it does anything. Plan 261009i (spya-nsrkju).
+ */
+export const SHARE_AT_ADD_HEADING = "Public";
+export const SHARE_AT_ADD_LABEL = "Make it public…";
 
-/** Under the label, before anything is pressed. Nothing goes out on the tick: it opens the confirmation. */
-export const SHARE_AT_ADD_WHAT =
-  "Anyone can read it without signing in, and it is listed publicly, once the import has " +
-  "finished. Ticking this shows what would be shared and asks you to confirm.";
+/**
+ * Under the heading, before anything is pressed, followed by a link to the
+ * public shelf named `PUBLIC_SHELF_LABEL` and a full stop (AddShare.tsx), so
+ * *listed publicly* says where. Until 2026-10-09 it ended *"Ticking this shows
+ * what would be shared and asks you to confirm"*, which nobody read: the
+ * section's own first line and the button's tooltip say it now.
+ */
+export const SHARE_AT_ADD_WHAT_LEAD =
+  "Anyone can read it without signing in once the import has finished, and it is listed " +
+  "publicly, under";
 
 /**
  * **The import adopted an article already on the shelf** (`freeSlug`,
@@ -4724,6 +4781,24 @@ export const REPEAT_PASTE_ON_THE_SHELF =
 
 /** The same, on a link's hover card, in the card's own lower-case voice. */
 export const REPEAT_PASTE_ON_THE_CARD = "already on your shelf, nothing spent";
+
+/**
+ * **Somebody else has already made this address public**, and nothing has been
+ * spent yet: the add asks which the reader wants. Greg, 2026-10-09: *"ask them
+ * if they'd rather use the public one for free or have their own version which
+ * will use up one of their allotted slots."* What each gives is said, because
+ * the free one is read-only: no notes, chat or search of the reader's own
+ * (plan 261006k). docs/plans/261009j-a-public-copy-offered-at-import.md.
+ */
+export const PUBLIC_COPY_FOUND = (title: string): string => `“${title}” is already public on Spideryarn.`;
+export const PUBLIC_COPY_EXPLAIN =
+  "You can read it there for free, with everything already made for it. Your own copy is yours to annotate, search, chat with and make new modes for, and uses one article from your allowance.";
+export const PUBLIC_COPY_READ = "Read the public copy (free)";
+export const PUBLIC_COPY_OWN = "Add my own copy";
+/** The same, on a link's hover card, in the card's own lower-case voice. */
+export const PUBLIC_COPY_ON_THE_CARD = "already public here, nothing spent";
+export const PUBLIC_COPY_READ_ON_THE_CARD = "read it free";
+export const PUBLIC_COPY_OWN_ON_THE_CARD = "add my own copy";
 
 /** Confirmed, and not sent yet: the import has not made the article's row. */
 export const SHARE_AT_ADD_WAITING = "Will be made public as soon as the import is ready for it.";
@@ -4755,14 +4830,14 @@ export const SHARE_AT_ADD_UNKNOWN =
  * and the import has not published.** *Asked*, not *made*: the mark is
  * written before the request and kept through an answer that never came, so
  * that it took is not established (GPT Sol's fix check, F18). Nothing on the server can be asked about
- * visibility until it has, so the box does not claim either state: it is
- * drawn ticked, with this, and unticking sends the private write. The tab's
+ * visibility until it has, so the control claims neither state: it offers
+ * *Stop sharing* with this, and that press sends the private write. The tab's
  * own memory is a hint and not an answer (src/web/add-share.ts §
  * `ShareIo.marks`). GPT Sol's code review, F10.
  */
 export const SHARE_AT_ADD_RECALLED =
   "You asked to make this public before this page was reloaded, and we cannot read back " +
-  "whether it is until the import has finished. Untick this to make it private.";
+  "whether it is until the import has finished. Press Stop sharing to make it private.";
 
 /** The owner opened the import's address before the article was published. src/web/article/StillBeingAdded.tsx. */
 export const STILL_BEING_ADDED_HEADING = "Still being added";
@@ -4783,8 +4858,8 @@ export const STILL_BEING_ADDED =
 export const STILL_BEING_ADDED_VISITOR =
   "This article is still being added. This page will open it when it is ready.";
 
-/* The add page's Sharing section: *Make it public* above, and a private link
-   beside it, behind one row that starts shut. Greg, 2026-10-06: *"bundle all
+/* The add page's Sharing section: a private link first, then *Make it public*,
+   behind one row that starts shut. Greg, 2026-10-06: *"bundle all
    sharing-related stuff in a default-collapsed section, because most people
    won't want to use it"*. Plan 261005l § 2b. Drawn by src/web/AddSharing.tsx
    and src/web/AddShareLink.tsx. The link's confirmation is the Metadata
@@ -4798,14 +4873,42 @@ export function sharingAtAddSummary(isPublic: boolean, linkOn: boolean): string 
   if (isPublic && linkOn) return "Sharing: public, and a private link";
   if (isPublic) return "Sharing: public";
   if (linkOn) return "Sharing: private link";
-  return "Sharing";
+  /* *Options*, since 2026-10-09, and deliberately not *off*: a bare
+     *Sharing* read as the next step in the flow (plan 261009i), but *off* would
+     be a promise this tab cannot always keep. Another tab may have shared the
+     article, and before publication nothing can be read back (postmortem
+     261005r); a control that is unknown or saving is not *on* either. So the
+     row names a state only when one is on, and the private default is said
+     inside, as the general fact it is (`SHARING_AT_ADD_INTRO`). GPT Sol's plan
+     review, P1. */
+  return "Sharing options";
 }
 
-/** Under the link control's heading, before anything is pressed. The button opens the confirmation. */
+/**
+ * The open section's first line, then a *How sharing works* link to
+ * `/help/sharing`. Each clause is a fact already published elsewhere: Help's
+ * first sentence, the confirmation every share passes through, and Access &
+ * sharing on the Metadata page. Plan 261009i.
+ */
+export const SHARING_AT_ADD_INTRO =
+  "Every article starts private. Nothing is shared until you confirm, and you can also share " +
+  "it later from the article's Metadata page.";
+
+/** The link after `SHARING_AT_ADD_INTRO`. */
+export const SHARING_AT_ADD_HELP = "How sharing works";
+
+/**
+ * Under the link control's heading, before anything is pressed. *Can pass it
+ * on* since 2026-10-09, from `PRIVATE_LINK_WHAT` and the confirmation: a
+ * reader took *private* to mean *only me* (plan 261009i). The sentence about
+ * the button went the way `SHARE_AT_ADD_WHAT_LEAD`'s did.
+ */
 export const LINK_AT_ADD_WHAT =
-  "Anyone who has the link can read the article without signing in, once the import has " +
-  "finished. It is not listed anywhere. The button shows what would be shared and asks you to " +
-  "confirm.";
+  "Anyone who has the link can read it without signing in, and can pass it on, once the " +
+  "import has finished. The private link is not listed anywhere.";
+
+/** The link control's button, which opens the confirmation. */
+export const LINK_AT_ADD_LABEL = "Create a private link…";
 
 /** Confirmed, and not made yet: the import has not made the article's row. */
 export const LINK_AT_ADD_WAITING = "The link will be made as soon as the import is ready for it.";
@@ -4826,8 +4929,14 @@ export const LINK_AT_ADD_GAVE_UP =
  * review). *Check again* reads the state, which changes nothing.
  */
 export const LINK_AT_ADD_UNKNOWN =
-  "That did not come back, so we cannot say whether it took effect. Check again before making " +
-  "another link: a new link replaces the one before it.";
+  "That did not come back, so we cannot say whether it took effect. Check again to see, or turn " +
+  "it off. A new link replaces the one before it.";
+
+/** *Turn off* while a write's outcome is unknown: name the lost-create race rather than promising the result. */
+export const LINK_AT_ADD_UNKNOWN_STOP_TIP =
+  "Turns off any private link this article has. If the link you asked for is still being made, " +
+  "it can appear just afterwards, so check again in a moment. What somebody has already read or " +
+  "copied stays with them.";
 
 /** The read of the link's state failed on coming back to this page. Nothing was changed, and no link is drawn from memory. */
 export const LINK_AT_ADD_UNREAD =
@@ -5225,16 +5334,16 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
   search: "The questions you have put to this piece, in your words, and the passages they found.",
   learn: "What you said you took from the piece, and the quizzes on it.",
   referee: "Your peer-review pass over the piece: your criteria, and what it found against them.",
-  /* **"went looking for", not "found"**, and the tense is the whole row. This
-     is the only mode whose content is not in the article, so an owner reading
-     this line has to be told what was searched rather than what exists — and
-     the commonest honest answer is that nobody has written about their piece
-     (src/debate.ts § the search never comes back empty). A row promising
-     *"what other people said about this"* would be a claim about the web that
-     an empty panel then contradicts. */
-  debate:
-    "What we went looking for on the open web: replies to this piece, and the argument around " +
-    "the claims it makes.",
+  /* Citations' row and Debate's until 2026-10-09, in the sub-modes' order.
+     "The model found", because the bibliography is its reading — a work cited
+     only by name in running text is on it only if the model noticed it — while
+     the links are not the model's: each is one the article gave, or a search
+     that says it is one (src/citations.ts § linkFor). Reception is current;
+     claim sources can only be present on a legacy artefact, so neither half
+     implies a current press searched for claims or found anything. */
+  "peer-review":
+    "The works the model found this piece citing, with a link for each and why the piece uses it; " +
+    "the Reception search; and the claims it lists, with any claim sources kept by an earlier search.",
   /* **"where there are gists"**, for the reason the note above `summary`
      gives: a provisional tree has none, and this row is read about articles
      that have not finished ingesting (src/public/dto.ts § `provisional`).
@@ -5246,12 +5355,6 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
   structure:
     "The headings and the model's one-line gist for each section, arranged as two linked " +
     "columns or, on a narrow screen, one nested list — where there are gists.",
-  /* "The model found", because the list is its reading — a work cited only by
-     name in running text is on it only if the model noticed it — while the
-     links are not the model's: each is one the article gave, or a search that
-     says it is one (src/citations.ts § linkFor). */
-  citations:
-    "The works the model found this piece citing, with a link for each and why the piece uses it.",
   /* "The model thought", because the questions and which passage answers each
      are its reading; the passages themselves are the article's words (src/faq.ts
      § verifyPassage). */
@@ -5484,15 +5587,132 @@ export function debateClaimsHandoff(sources: number): string {
 }
 
 /**
- * **What each of Debate's two searches is, said once before the button and
- * once in the band's (i).** The sub-mode control's own cards say the same of
- * each (src/web/sub-modes.ts § `DEBATE_SUB_MODES`); no sentence sits under the
- * control, because docs/project/mode.md bans a description line there.
+ * **What the press on Debate searches, said before the button.** Since
+ * `debate/7` (2026-10-08) it is one search, for Reception only: the claims are
+ * the reader's to pick (plan 261008i). The sub-mode control's own cards say
+ * what each sub-mode is (src/web/sub-modes.ts § `PEER_REVIEW_SUB_MODES`); no
+ * sentence sits under the control, because docs/project/mode.md bans a
+ * description line there.
  */
 export const DEBATE_BEFORE_SEARCH =
-  "Two searches of the open web. Reception: what others have written about this piece. " +
-  "Claims: what has been written about the claims it makes. It takes about a minute and " +
-  "costs real money. Many pieces have no reception at all. Searched once and kept.";
+  "One search of the open web, for what others have written about this piece. It takes about " +
+  "a minute and costs real money. Many pieces have no reception at all. Searched once and kept.";
+
+/* ---- Claims: the list of the article's claims (plan 261008i § 2) ----
+
+   Since 2026-10-08 Claims draws a list of the claims the article rests on,
+   made by one model call over the article and no web search, on the owner's
+   press. These are its states' sentences. The sentence that stood here until
+   then, DEBATE_CLAIMS_NOT_SEARCHED, said the list was coming; the list is the
+   answer to it. */
+
+/** The owner's Claims before a list is made: what *List its claims* does, before the button. */
+export const DEBATE_CLAIMS_LIST_NONE =
+  "List the claims this piece rests on that someone outside could argue with, so you can pick which " +
+  "to check. One model call over the article, no web search, and it takes a few tens of seconds.";
+
+/** The button that makes the list, on the owner's Claims with none. */
+export const DEBATE_CLAIMS_LIST_RUN = "List its claims";
+
+/** The button beside a stale list, which makes it again. */
+export const DEBATE_CLAIMS_LIST_AGAIN = "List again";
+
+/** A visitor's Claims with no list: there is nothing to press, so it says only what is true. */
+export const DEBATE_CLAIMS_LIST_NONE_SHARED = "No list of this piece's claims has been made.";
+
+/** A list that came back empty: a real answer, not a failure. */
+export const DEBATE_CLAIMS_LIST_EMPTY =
+  "No claim in this piece stood out as one someone outside could argue with.";
+
+/** The banner over a list made from an older version of the article. Read-only until made again. */
+export const DEBATE_CLAIMS_LIST_STALE =
+  "The article has changed since these claims were listed, so some may no longer be in it.";
+
+/** The label under each listed claim's statement: whose words those are. */
+export const DEBATE_CLAIMS_LIST_AI = "In the AI's words";
+
+/** The owner's Claims while the GET is in flight. */
+export const DEBATE_CLAIMS_LIST_LOADING = "Looking for the list of its claims…";
+
+/** …the visitor's, and the band's (i) for both: what is true of the stored search, and only that. */
+export const DEBATE_CLAIMS_NOT_SEARCHED_SHARED = "This search did not look into what the piece claims.";
+
+/**
+ * **The heading over the claim rows an older search stored** — a debate
+ * searched before `debate/7`, when the press also picked three or four claims
+ * by itself and searched them. Its rows are drawn as they always were, under
+ * this, so they are not taken for claims the reader chose.
+ */
+export const DEBATE_CLAIMS_EARLIER = "Claims the earlier search chose";
+
+/* ---- Claims: checking the claims the reader picked (plan 261008i § 3) ----
+
+   The reader ticks claims, or types one, and presses Check: one web search
+   over them all. These are the panel's words for it and the route's refusals.
+   No sentence here ever carries the reader's typed claim. */
+
+/** The box for a claim of the reader's own: its accessible name, and (with an ellipsis) its placeholder. */
+export const DEBATE_CHECK_OWN_LABEL = "Check a claim of your own";
+
+/** The tooltip on Check: what one press buys. */
+export const DEBATE_CHECK_TIP =
+  "One search of the open web for what has been written about the claims you picked. It takes " +
+  "about a minute and a half and costs real money.";
+
+/** Under a claim a check answered with nothing: the search said so for this claim. */
+export const DEBATE_CHECK_FOUND_NOTHING = "This search found nothing it could quote on this claim.";
+
+/** Under a claim a check did not answer: the model left it out, so nothing is known either way. */
+export const DEBATE_CHECK_NOT_ANSWERED =
+  "The search did not answer for this claim, so this says nothing about it either way. Check it again.";
+
+/** While a check is out. */
+export const DEBATE_CHECK_PENDING = "Searching the web for these claims…";
+
+/** Dig further's tooltip: one more search, for this claim alone, somewhere new. */
+export const DEBATE_DIG_FURTHER_TIP =
+  "One more web search for this claim alone, told what has been found already so it looks " +
+  "elsewhere. Costs real money.";
+
+/** The heading over a typed claim's checks. The words after it are the reader's. */
+export const DEBATE_CHECK_YOUR_CLAIM = "Your claim";
+
+/**
+ * Above the checks made against an earlier version of the article — kept,
+ * because they were paid for, but read-only (GPT Sol's E5).
+ */
+export const DEBATE_CHECK_EARLIER = "Checked against an earlier version of this article";
+
+/** A check pressed while another is out — from the partial unique index. */
+export const DEBATE_CHECK_IN_FLIGHT =
+  "A check is already running on this article. Its answer will appear here when it lands.";
+
+/** A check pressed on a list made from an older version of the article. */
+export const DEBATE_CHECK_LIST_STALE =
+  "The article has changed since its claims were listed. List them again before checking any.";
+
+/** A check pressed with no list at all. */
+export const DEBATE_CHECK_NO_LIST = "List this piece's claims before checking any.";
+
+/** A check still running when the server stopped. What the sweep writes. */
+export const DEBATE_CHECK_SWEPT = "The server stopped before this check finished.";
+
+/** The check's allowance's three refusals (src/debate.ts § `admitDebateCheck`). Dig deeper keeps its own. */
+export const DEBATE_CHECK_BUSY =
+  "Another web search you asked for is still running. Wait for it to finish, then check again.";
+export const DEBATE_CHECK_LIMITED =
+  "You have asked for a lot of web searches recently. Try again in a while; nothing was searched.";
+/** The 503 of the three. */
+export const DEBATE_CHECK_RESTING =
+  "Web searches like this one have done as many as they can for today. Try again tomorrow; " +
+  "nothing was searched.";
+
+/** Dig further on a claim no finished check has answered yet. */
+export const DEBATE_DIG_FURTHER_FIRST = "Check this claim before digging further into it.";
+
+/** Ids from a list that has since been made again: a stale tab. */
+export const DEBATE_CHECK_LIST_CHANGED =
+  "The list of claims has changed since this page loaded. Reload it and pick again.";
 
 /* ---- Reception's *Cited by*: the papers that cite the piece, from OpenAlex ----
 
@@ -5686,21 +5906,25 @@ export const ADDING_SENDS_TEXT_AWAY =
   "The article's text is sent to a third-party model provider for processing.";
 
 /**
- * **The same fact, in the past tense, for the surfaces that never got to ask.**
+ * **The same sentence, in the past tense, after direct add accepts a job.**
  *
  * `/add/<url>` and `/add/upload/<id>` are direct-entry pages for bookmarklets
  * and shared links (src/web/AddPage.tsx). They exist precisely so that the
- * whole request fits in an address, which means there is no form, no Add
- * button and no moment before the POST: the page queues ingestion from its
- * first effect. By the time anybody can read a word on it, the article's text
- * is already on its way.
+ * whole request fits in an address, which means there is no form or Add
+ * button: the page queues ingestion from its first effect. Since 2026-10-09 it
+ * shows `ADDING_SENDS_TEXT_AWAY` while that POST is out and after a refusal,
+ * then this past tense after a job answer.
  *
  * So this is `ADDING_SENDS_TEXT_AWAY` with its tense corrected, and **the
  * asymmetry between the two is the point rather than an inconsistency to tidy
  * up**. Above, the reader still has a choice, so the sentence is present tense
- * and sits beside the control that makes it. Here the choice is already spent,
- * and a present-tense warning about something already done is simply false —
- * the same mistake, and the same fix, as `REFEREE_TEXT_ALREADY_SENT` below.
+ * and sits beside the control that makes it. Here the choice is already spent
+ * once the server accepts the job.
+ *
+ * **A job receipt does not prove a model provider has received the text.** The
+ * sentence predates that distinction; plan 261009i's review records it as a
+ * wider privacy-copy decision for Greg rather than claiming this predicate
+ * establishes it.
  * Anyone tempted to make the three agree should change the *page*, not the
  * copy: a confirmation gate on a deliberately frictionless surface is a product
  * decision and it is Greg's.
@@ -5877,6 +6101,28 @@ export const FEEDBACK_REPLY_STALE: ReaderFacingFailure = {
   message:
     "This page and the server are out of step, so that reply was not sent. Your words are still " +
     "in the box: copy them, reload the page, and reply again. [fb-reply-stale]",
+};
+
+/**
+ * **Defer for now, or Bring back, did not get through** — `POST
+ * /api/admin/feedback/deferrals` failed, or answered with something that is
+ * not a deferral. Nothing changed on screen; pressing again is safe, because
+ * the write is conditional both ways (plan 261008i, F5).
+ */
+export const FEEDBACK_DEFER_FAILED: ReaderFacingFailure = {
+  kind: "retry",
+  message: "That did not get through, so nothing changed. Try again in a moment. [fb-defer]",
+};
+
+/**
+ * **The question was settled before the press reached the server** — a 409:
+ * an agent marked it answered and the deploy carrying that landed after this
+ * page was loaded. There is nothing left to defer; reloading shows where it is.
+ */
+export const FEEDBACK_DEFER_SETTLED: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "That question has been settled since this page was loaded, so nothing changed. Reload the page and look again. [fb-defer-settled]",
 };
 
 /* ---- the subscription allowance. docs/project/billing.md ----------------------- */

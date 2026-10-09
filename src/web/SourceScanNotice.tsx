@@ -113,7 +113,7 @@ import type {
   ScanFinding,
   SourceScan,
 } from "../injection-scan-types.js";
-import type { HiddenJudgment, HiddenVerdict } from "../referee-hidden-check-types.js";
+import type { HiddenJudgment, HiddenVerdict, StoredHiddenCheck } from "../referee-hidden-check-types.js";
 import { type ScanGroup, checkedInputs, grouped, ordered, sameInputs } from "../scan-groups.js";
 import type { HiddenCheckApi } from "./useHiddenCheck.js";
 import type { SourceScanState } from "./useSourceScan.js";
@@ -514,7 +514,7 @@ function Examined({
             <Finding
               key={group.key}
               group={group}
-              opinion={check?.status === "done" && check.result ? opinionFor(group, check.result.judgments) : undefined}
+              opinion={check?.result ? opinionFor(group, check.result.judgments) : undefined}
             />
           ))}
         </ul>
@@ -679,6 +679,21 @@ export function checkSummary(groups: readonly ScanGroup[], judgments: readonly H
   return `Opus judged ${judged}${unchecked > 0 ? `, and did not check ${unchecked}` : ""}.`;
 }
 
+/**
+ * **When the opinion was made, and whether it was kept** — the answer is saved
+ * since 2026-10-09 (docs/plans/261009a-save-hidden-text-opinions.md), so a
+ * line on screen may be days old. A save that failed says so, because a
+ * reload will not bring it back.
+ */
+export function checkedWhen(check: StoredHiddenCheck): string {
+  const day = new Date(check.checkedAt).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+  return check.saved === false ? `Asked on ${day}; not saved, so a reload will lose it.` : `Asked on ${day}.`;
+}
+
 function AskOpus({ check, groups }: { check: HiddenCheckApi; groups: readonly ScanGroup[] }) {
   const running = check.status === "running";
   return (
@@ -700,8 +715,10 @@ function AskOpus({ check, groups }: { check: HiddenCheckApi; groups: readonly Sc
         </p>
       )}
       {check.status === "failed" && check.error && <p className="ref-scan-line ref-scan-warn">{check.error}</p>}
-      {check.status === "done" && check.result && (
-        <p className="ref-scan-line ref-scan-summary">{checkSummary(groups, check.result.judgments)}</p>
+      {check.result && (
+        <p className="ref-scan-line ref-scan-summary">
+          {checkSummary(groups, check.result.judgments)} {checkedWhen(check.result)}
+        </p>
       )}
     </div>
   );

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
- * **One branded home control per page, and never two Feedback buttons —
- * asserted by walking the routes rather than by reading them.**
+ * **Branded home controls and Feedback triggers stay in their intended chrome
+ * — asserted by walking the routes rather than by reading them.**
  *
  * On 2026-09-06 the wordmark and the Feedback button left the top corners of
  * the window on the pages that mount a `Dock` — the article, its metadata page
@@ -30,10 +30,10 @@
  *    top 44px of the spine on a phone that has scrolled its bars away — which
  *    is the live bug this move dissolves rather than fixes,
  *    docs/postmortems/260905g-the-top-of-the-spine-is-under-the-wordmark-on-a-phone.md.
- *  - **None at all.** `ArticlePage`'s final branch lost its `<HomeLogo />`, and
- *    the four branches that mount no `Dock` had to keep theirs, or a reader
- *    waiting for an article — or looking at one that failed — is on a page with
- *    no way off it and nowhere to report it from.
+ *  - **None at all by accident.** `ArticlePage`'s final branch lost its
+ *    `<HomeLogo />`, so its `Dock` had to gain one. Its loading branch is the
+ *    deliberate exception since 2026-10-09: the centred wordmark is not a link,
+ *    while the corner Feedback trigger remains for a stuck wait (plan 261009b).
  *
  * ## Why "at most one" is not enough on its own
  *
@@ -284,7 +284,7 @@ beforeEach(() => {
        "nothing built yet". */
     if (url.startsWith("/api/metadata/")) return json({ stages: [] });
     if (url === "/api/models") return json({ tasks: [] });
-    if (url === "/api/public/library") return json({ entries: [], truncated: false });
+    if (url === "/api/public/library") return json({ entries: [], topics: [], truncated: false });
     /* 404, and it is the ordinary answer: most articles have no thread. A 200
        with `{}` in it is the one thing the page cannot read. */
     if (url.startsWith("/api/tweets/")) return json({}, 404);
@@ -398,7 +398,7 @@ const BAR_ROUTES = [
  */
 const SIGNED_OUT_BAR_ROUTES = ["/", ...BAR_ROUTES, "/profile"];
 
-describe("the route walk: one branded home control, never two triggers", () => {
+describe("the route walk: branded home controls and Feedback triggers stay in their intended chrome", () => {
   it.each(PLAIN_ROUTES)("signed in at %s: the corner pair, and only that", async (path) => {
     signIn();
     await show(path);
@@ -602,7 +602,8 @@ describe("the route walk: one branded home control, never two triggers", () => {
   });
 
   /**
-   * **The four branches of `ArticlePage` with no bar keep the corner pair.**
+   * **These four no-bar states keep the corner trigger**, and all but loading
+   * keep the corner wordmark too.
    *
    * These are the branches `App.tsx`'s `route.kind !== "read"` gate stops
    * covering, so each has to draw the corner trigger itself. A reader waiting
@@ -615,13 +616,18 @@ describe("the route walk: one branded home control, never two triggers", () => {
    * answering 401 and the public one 404, which is the one state where we know
    * neither whose this is nor whether anybody may read it.
    */
-  it("waiting for the article: the corner pair, no bar", async () => {
+  /* **Loading keeps the trigger and not the corner wordmark**, since
+     2026-10-09: its spinner is the wordmark, large and centred, and the corner
+     one beside it was a second (Greg, spya-mdmqqq: *"we don't need both"*).
+     tests/article-loading-one-wordmark.test.tsx pins the page past the
+     threshold; plan 261009b. */
+  it("waiting for the article: the Feedback trigger, no corner wordmark, no bar", async () => {
     signIn();
     ownedReply = () => new Promise<Response>(() => {});
     await show(`/read/${SLUG}`);
     expect(document.querySelector(".dock")).toBeNull();
-    expect(waysHome()).toHaveLength(1);
-    expect(document.querySelector(".logo-home")).not.toBeNull();
+    expect(waysHome()).toHaveLength(0);
+    expect(document.querySelector(".logo-home")).toBeNull();
     expect(feedbackTriggers()).toHaveLength(1);
   });
 

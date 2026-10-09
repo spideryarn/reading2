@@ -21,6 +21,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ADMIN_EMAIL, ADMIN_USER_ID_LOCAL } from "../src/admin.js";
 import { isSpideryarnId } from "../src/ids.js";
 import { CONTACT_EMAIL } from "../src/site-text.js";
+import { MAX_FEEDBACK_QUESTION_BODY_CHARS } from "../src/feedback-question-values.js";
 import { EARLIER_FEEDBACK_LIMIT, MAX_FEEDBACK_ANSWER_CHARS } from "../src/types.js";
 import { exactly } from "../src/web/relative-time.js";
 
@@ -1503,9 +1504,17 @@ describe("the Earlier tab", () => {
   }
 
   /* docs/plans/261007d-…: for an admin the tab says what became of each report,
-     numbers them, and carries the note's one-line comment. */
+     numbers them, and carries the note's one-line comment. Reshaped by
+     docs/plans/261008i-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md:
+     the read asks for threads (`questions=2`), an admin's dialog reads Needs a
+     decision as soon as it opens, and Earlier opens there when a thread waits. */
   describe("for an admin", () => {
     const ADMIN_PATH = "/api/admin/feedback/earlier";
+    /** The admin route for one filter, as the client asks it: `show` first, then `questions=2` (F3). */
+    const url = (which?: string) =>
+      which === undefined ? `${ADMIN_PATH}?questions=2` : `${ADMIN_PATH}?show=${which}&questions=2`;
+    const ALL_URL = url();
+    const WAITING_URL = url("waiting");
     const ADMIN_COUNTS = { all: 5, open: 1, waiting: 1, aside: 2, shipped: 1 };
     const base = { createdAt: "2026-09-12T10:45:00.000Z", kind: null, page: null, at: null, comment: null, ignoredAt: null };
     const ADMIN_REPORTS = {
@@ -1534,6 +1543,33 @@ describe("the Earlier tab", () => {
       counts: ADMIN_COUNTS,
       questions: [] as unknown[],
     };
+    /** That answer cut to one filter's rows, the way the server would send it. */
+    function only<T extends { reports: readonly { status: string }[] }>(body: T, status: string): T {
+      return { ...body, reports: body.reports.filter((report) => report.status === status) };
+    }
+    /** Answer each read by the filter in its address; a read nobody planned for throws. */
+    function answerBy(bodies: Record<string, unknown>): (input: string) => Promise<Response> {
+      return (input) => {
+        const which = new URL(input, "https://www.spideryarn.com").searchParams.get("show") ?? "all";
+        if (!(which in bodies)) throw new Error(`no answer for ${input}`);
+        return page(bodies[which])();
+      };
+    }
+    /** A server whose every filter is this one answer, cut to that filter's rows. */
+    function serve<T extends { reports: readonly { status: string }[] }>(all: T, overrides: Record<string, unknown> = {}) {
+      return answerBy({
+        all,
+        open: only(all, "open"),
+        waiting: only(all, "waiting"),
+        aside: only(all, "aside"),
+        shipped: only(all, "shipped"),
+        ...overrides,
+      });
+    }
+    /** Every read in the air, landed, and whatever it set off landed too. */
+    async function settle() {
+      for (let i = 0; i < 4; i += 1) await act(async () => {});
+    }
     const pills = () =>
       [...panelOf("Earlier").querySelectorAll<HTMLButtonElement>(".fb-show-button")].map((b) =>
         (b.textContent ?? "").replace(/\s+/g, " ").trim(),
@@ -1545,10 +1581,11 @@ describe("the Earlier tab", () => {
       if (!found) throw new Error(`no ${name} filter`);
       return found;
     };
+    const shortcut = () => host.querySelector<HTMLButtonElement>("button.fb-tab-shortcut");
     async function openEarlier() {
       mount();
       click(tab("Earlier"));
-      await act(async () => {});
+      await settle();
     }
 
     it("gets the admin list through the production FeedbackHost's reader-id check", async () => {
@@ -1559,7 +1596,7 @@ describe("the Earlier tab", () => {
       host = document.createElement("div");
       document.body.append(host);
       root = createRoot(host);
-      listAnswer = page(ADMIN_REPORTS);
+      listAnswer = serve(ADMIN_REPORTS);
       act(() => {
         root.render(
           <FeedbackHost readerId={ADMIN_USER_ID_LOCAL}>
@@ -1569,24 +1606,41 @@ describe("the Earlier tab", () => {
       });
       click([...host.querySelectorAll("button")].find((button) => button.textContent === "Open feedback"));
       click(tab("Earlier"));
-      await act(async () => {});
+      await settle();
 
-      expect(lists).toEqual([ADMIN_PATH]);
+      expect(lists).toEqual([WAITING_URL, ALL_URL]);
       expect(pills()).toEqual(["All 5", "Open 1", "Needs a decision 1", "Set aside 2", "Shipped 1"]);
     });
 
-    it("reads the admin route, and shows five pills with report counts", async () => {
+    /* Plan 261008i, decision 8: the count on the shortcut is needed before
+       Earlier is opened, so an admin's dialog reads Needs a decision when it
+       opens, on Write, once per opening. */
+    it("reads Needs a decision as soon as the dialog opens, on Write, and again on the next opening", async () => {
       asAdmin = true;
-      listAnswer = page(ADMIN_REPORTS);
+      listAnswer = serve(ADMIN_REPORTS);
+      mount();
+      await settle();
+      expect(lists).toEqual([WAITING_URL]);
+      expect(tab("Write").getAttribute("aria-selected")).toBe("true");
+      reopen();
+      await settle();
+      expect(lists).toEqual([WAITING_URL, WAITING_URL]);
+    });
+
+    /* Decision 9: Earlier opens on Needs a decision only when a thread waits.
+       Here none does, and the reader has chosen nothing, so it moves to All. */
+    it("reads the admin route, and shows five pills with report counts, on All when no thread waits", async () => {
+      asAdmin = true;
+      listAnswer = serve(ADMIN_REPORTS);
       await openEarlier();
-      expect(lists).toEqual([ADMIN_PATH]);
+      expect(lists).toEqual([WAITING_URL, ALL_URL]);
       expect(pills()).toEqual(["All 5", "Open 1", "Needs a decision 1", "Set aside 2", "Shipped 1"]);
       expect(pill("All").getAttribute("aria-pressed")).toBe("true");
     });
 
     it("gives each row its number, its status word and its comment", async () => {
       asAdmin = true;
-      listAnswer = page(ADMIN_REPORTS);
+      listAnswer = serve(ADMIN_REPORTS);
       await openEarlier();
       const items = [...panelOf("Earlier").querySelectorAll("li")];
       expect(items.map((li) => li.querySelector(".fb-earlier-number")?.textContent)).toEqual([
@@ -1629,19 +1683,20 @@ describe("the Earlier tab", () => {
 
     it("asks the server for a status, and lists only what it answered", async () => {
       asAdmin = true;
-      listAnswer = page(ADMIN_REPORTS);
+      listAnswer = serve(ADMIN_REPORTS, {
+        aside: { reports: [], more: false, counts: { all: 1, open: 0, waiting: 1, aside: 0, shipped: 0 }, questions: [] },
+      });
       await openEarlier();
-      listAnswer = page({ reports: [ADMIN_REPORTS.reports[1]], more: false, counts: ADMIN_COUNTS, questions: [] });
       click(pill("Needs a decision"));
-      await act(async () => {});
-      expect(lists).toEqual([ADMIN_PATH, `${ADMIN_PATH}?show=waiting`]);
+      await settle();
+      /* Read once per opening, per filter: the opening's read is this filter's. */
+      expect(lists).toEqual([WAITING_URL, ALL_URL]);
       expect(pill("Needs a decision").getAttribute("aria-pressed")).toBe("true");
       expect(panelOf("Earlier").querySelectorAll("li")).toHaveLength(1);
 
-      listAnswer = page({ reports: [], more: false, counts: { all: 1, open: 0, waiting: 1, aside: 0, shipped: 0 }, questions: [] });
       click(pill("Set aside"));
-      await act(async () => {});
-      expect(lists.at(-1)).toBe(`${ADMIN_PATH}?show=aside`);
+      await settle();
+      expect(lists.at(-1)).toBe(url("aside"));
       expect(panelOf("Earlier").textContent).toContain("None of your reports has been set aside.");
     });
 
@@ -1650,34 +1705,34 @@ describe("the Earlier tab", () => {
       asAdmin = true;
       listAnswer = (input) => (input.startsWith(ADMIN_PATH) ? page({ error: "Not found" }, 404)() : page(REPORTS)());
       await openEarlier();
-      await act(async () => {});
-      expect(lists).toEqual([ADMIN_PATH, "/api/feedback"]);
+      expect(lists).toEqual([WAITING_URL, "/api/feedback"]);
       expect(pills()).toEqual(["All 2", "Shipped 1", "Not shipped 1"]);
       expect(panelOf("Earlier").querySelectorAll("li")).toHaveLength(2);
       expect(panelOf("Earlier").querySelector(".fb-earlier-number")).toBeNull();
+      expect(shortcut()).toBeNull();
       /* And it stays on the plain route for the rest of this opening. */
       click(showButton("Shipped"));
-      await act(async () => {});
+      await settle();
       expect(lists.at(-1)).toBe("/api/feedback?show=shipped");
       /* The next opening asks the admin route again: the deploy may have finished. */
       const before = lists.length;
       reopen();
       click(tab("Earlier"));
-      await act(async () => {});
-      await act(async () => {});
-      expect(lists.slice(before)).toEqual([ADMIN_PATH, "/api/feedback"]);
+      await settle();
+      expect(lists.slice(before)).toEqual([WAITING_URL, "/api/feedback"]);
     });
 
     it.each([403, 500])("does not fall back on a %s: it says the list would not load", async (status) => {
       asAdmin = true;
       listAnswer = page({ error: "no" }, status);
       await openEarlier();
-      await act(async () => {});
-      expect(lists).toEqual([ADMIN_PATH]);
+      expect(lists).toEqual([WAITING_URL]);
       expect(panelOf("Earlier").textContent).toContain("[fb-list]");
       expect(panelOf("Earlier").querySelectorAll("li")).toHaveLength(0);
     });
 
+    /* Each is the All answer; the opening's Needs a decision read is a good
+       one with no thread waiting, so Earlier moves to All and reads it. */
     it.each([
       ["the plain route's shape", REPORTS],
       ["counts that do not sum to All", { ...ADMIN_REPORTS, counts: { ...ADMIN_COUNTS, all: 6 } }],
@@ -1690,8 +1745,9 @@ describe("the Earlier tab", () => {
       ["a mark that is not a time", { ...ADMIN_REPORTS, reports: [{ ...ADMIN_REPORTS.reports[0], ignoredAt: "yesterday" }, ...ADMIN_REPORTS.reports.slice(1)] }],
     ])("refuses an admin answer with %s: the failure sentence and Try again, no rows", async (_case, body) => {
       asAdmin = true;
-      listAnswer = page(body);
+      listAnswer = answerBy({ waiting: only(ADMIN_REPORTS, "waiting"), all: body });
       await openEarlier();
+      expect(lists).toEqual([WAITING_URL, ALL_URL]);
       expect(panelOf("Earlier").textContent).toContain("[fb-list]");
       expect(panelOf("Earlier").querySelectorAll("li")).toHaveLength(0);
       expect([...panelOf("Earlier").querySelectorAll("button")].map((b) => b.textContent)).toContain("Try again");
@@ -1699,25 +1755,33 @@ describe("the Earlier tab", () => {
 
     it("refuses a row of another status in a filtered answer", async () => {
       asAdmin = true;
-      listAnswer = page(ADMIN_REPORTS);
+      listAnswer = serve(ADMIN_REPORTS, {
+        open: { reports: [ADMIN_REPORTS.reports[0]], more: false, counts: ADMIN_COUNTS, questions: [] },
+      });
       await openEarlier();
-      listAnswer = page({ reports: [ADMIN_REPORTS.reports[0]], more: false, counts: ADMIN_COUNTS, questions: [] });
       click(pill("Open"));
-      await act(async () => {});
+      await settle();
+      expect(lists.at(-1)).toBe(url("open"));
       expect(panelOf("Earlier").textContent).toContain("[fb-list]");
     });
 
-    /* Stage 2 of 261007d: an agent's questions, at the top of Needs a decision,
-       each with a box to reply in. */
+    /* Stage 2 of 261007d: an agent's questions, in Needs a decision, each with
+       a box to reply in. 261008i made them threads: a contents, one thread at
+       a time, three groups, and Defer for now. */
     describe("questions an agent has asked", () => {
       const ANSWERS_PATH = "/api/admin/feedback/answers";
+      const DEFERRALS_PATH = "/api/admin/feedback/deferrals";
+      /** A question as the server sends it when asked `questions=2` (src/types.ts § AdminFeedbackQuestion). */
       const Q1 = {
         id: "q-aaaaaa",
         title: "One switch or two?",
         body: "Background first.\n\nA. One <b>switch</b>.\nB. Two.",
         asked: "2026-10-05",
-        report: { id: "spya-a2b2c3", number: 214, firstLine: "One switch or two?" },
-        answer: null,
+        report: { id: "spya-a2b2c3", number: 214, firstLine: "One switch or two?", body: "One switch or two?\nI keep <b>pressing</b> both." },
+        answers: [] as unknown[],
+        olderAnswers: 0,
+        state: "waiting",
+        deferredAt: null as string | null,
       };
       const Q2 = {
         id: "q-bbbbbb",
@@ -1725,15 +1789,48 @@ describe("the Earlier tab", () => {
         body: "It stands alone.",
         asked: "2026-10-06",
         report: null,
-        answer: null,
+        answers: [] as unknown[],
+        olderAnswers: 0,
+        state: "waiting",
+        deferredAt: null as string | null,
+      };
+      const REPLIED = { id: "spya-a9b2c3", body: "<i>Two</i>, please.\nBoth.", createdAt: "2026-10-06T18:30:00.000Z" };
+      /** Greg has replied and no agent has acted on it yet: being considered. */
+      const Q3 = {
+        ...Q2,
+        id: "q-cccccc",
+        title: "Should Citations become part of Debate?",
+        asked: "2026-10-07",
+        answers: [REPLIED],
+        state: "responded",
+      };
+      /** Greg said not now. */
+      const Q4 = {
+        ...Q2,
+        id: "q-dddddd",
+        title: "Is waiting for the next deploy OK?",
+        asked: "2026-10-08",
+        state: "deferred",
+        deferredAt: "2026-10-08T07:00:00.000Z",
       };
       const WITH_QUESTIONS = { ...ADMIN_REPORTS, questions: [Q1, Q2] };
       const WAITING = { reports: [ADMIN_REPORTS.reports[1]], more: false, counts: ADMIN_COUNTS, questions: [Q1, Q2] };
       const questionsBox = () => panelOf("Earlier").querySelector<HTMLElement>(".fb-questions");
-      const cards = () => [...panelOf("Earlier").querySelectorAll<HTMLElement>(".fb-question")];
-      const card = (id: string) => {
-        const found = cards().find((one) => one.dataset.question === id);
-        if (!found) throw new Error(`no question ${id}`);
+      /** The contents' rows, by question id, in the order drawn. */
+      const rows = () =>
+        [...panelOf("Earlier").querySelectorAll<HTMLButtonElement>("button.fb-thread-row")].map((b) => b.dataset.question);
+      const row = (id: string) => {
+        const found = panelOf("Earlier").querySelector<HTMLButtonElement>(`button.fb-thread-row[data-question="${id}"]`);
+        if (!found) throw new Error(`no row for ${id}`);
+        return found;
+      };
+      const group = (state: string) => panelOf("Earlier").querySelector<HTMLElement>(`.fb-threads [data-group="${state}"]`);
+      const inGroup = (state: string) =>
+        [...(group(state)?.querySelectorAll<HTMLButtonElement>("button.fb-thread-row") ?? [])].map((b) => b.dataset.question);
+      /** The one thread showing on its own. */
+      const thread = () => {
+        const found = panelOf("Earlier").querySelector<HTMLElement>(".fb-thread");
+        if (!found) throw new Error("no thread showing");
         return found;
       };
       const button = (within: Element, name: string) => {
@@ -1741,6 +1838,12 @@ describe("the Earlier tab", () => {
         if (!found) throw new Error(`no ${name} button`);
         return found;
       };
+      /** `aria-disabled`, not `disabled`: an unavailable pager button keeps its hint (261009m § 4). */
+      const unavailable = (b: HTMLButtonElement) => b.getAttribute("aria-disabled") === "true" && !b.disabled;
+      const place = () => thread().querySelector(".fb-thread-place")?.textContent;
+      const showing = () => thread().querySelector<HTMLElement>(".fb-question")?.dataset.question;
+      const hasButton = (within: Element, name: string) =>
+        [...within.querySelectorAll("button")].some((b) => (b.textContent ?? "").trim() === name);
       const replyBoxes = () => [...panelOf("Earlier").querySelectorAll<HTMLTextAreaElement>("textarea.fb-reply-input")];
       function typeReply(text: string) {
         const box = replyBoxes()[0];
@@ -1755,13 +1858,23 @@ describe("the Earlier tab", () => {
         const last = JSON.parse(String(posts.at(-1)?.init.body)) as { id: string; body: string };
         return new Response(JSON.stringify({ answer: { id: last.id, body: last.body, createdAt } }), { status });
       };
+      /** The deferrals route's receipt for the last POST: the time it was deferred, or null for brought back. */
+      const deferral = (deferredAt = "2026-10-08T09:30:00.000Z") => async () => {
+        const last = JSON.parse(String(posts.at(-1)?.init.body)) as { question: string; deferred: boolean };
+        return new Response(JSON.stringify({ question: last.question, deferredAt: last.deferred ? deferredAt : null }), {
+          status: 200,
+        });
+      };
+      /** Open the dialog, then Earlier, which opens on Needs a decision because a thread waits. */
       async function openWaiting(body: unknown = WITH_QUESTIONS, waiting: unknown = WAITING) {
         asAdmin = true;
-        listAnswer = page(body);
+        listAnswer = answerBy({ all: body, waiting });
         await openEarlier();
-        listAnswer = page(waiting);
-        click(pill("Needs a decision"));
-        await act(async () => {});
+      }
+      /** …and open one thread. */
+      async function openThread(id = "q-aaaaaa", body: unknown = WITH_QUESTIONS, waiting: unknown = WAITING) {
+        await openWaiting(body, waiting);
+        click(row(id));
       }
       beforeEach(() => {
         replyMic.armed = false;
@@ -1771,86 +1884,342 @@ describe("the Earlier tab", () => {
         replyMicDone = undefined;
       });
 
+      /* Decision 9 (spya-bzwzfw): Earlier opens on Needs a decision when a
+         thread is waiting, and the opening's read is that filter's. */
+      it("opens Earlier on Needs a decision when a thread waits, from the read made on opening", async () => {
+        await openWaiting();
+        expect(lists).toEqual([WAITING_URL]);
+        expect(pill("Needs a decision").getAttribute("aria-pressed")).toBe("true");
+        expect(questionsBox()?.hidden).toBe(false);
+        expect(rows()).toEqual(["q-aaaaaa", "q-bbbbbb"]);
+      });
+
       it("says how many are open beside the pill in every view, and draws them only in Needs a decision", async () => {
-        asAdmin = true;
-        listAnswer = page(WITH_QUESTIONS);
-        await openEarlier();
+        await openWaiting();
+        /* The report count on the pill is still the report count; the questions are beside it. */
+        expect(pills()).toContain("Needs a decision 1 · 2 to decide");
+        /* The one waiting report is Q1's, so it is inside that thread and not listed. */
+        expect(panelOf("Earlier").querySelectorAll(".fb-earlier-list > li")).toHaveLength(0);
+
         /* In All: counted on the pill, after its report count, and not drawn. */
-        expect(pills()).toContain("Needs a decision 1 · 2 open questions");
+        click(pill("All"));
+        await settle();
+        expect(lists).toEqual([WAITING_URL, ALL_URL]);
+        expect(pills()).toContain("Needs a decision 1 · 2 to decide");
         expect(questionsBox()?.hidden ?? true).toBe(true);
         expect(panelOf("Earlier").querySelectorAll(".fb-earlier-list > li")).toHaveLength(5);
+      });
 
-        listAnswer = page(WAITING);
-        click(pill("Needs a decision"));
-        await act(async () => {});
-        expect(questionsBox()?.hidden).toBe(false);
-        expect(cards().map((one) => one.dataset.question)).toEqual(["q-aaaaaa", "q-bbbbbb"]);
-        /* First: the questions come before the list of reports in the panel. */
-        const list = panelOf("Earlier").querySelector(".fb-earlier-list");
-        expect(questionsBox()?.compareDocumentPosition(list as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-        /* The report count on the pill is still the report count. */
-        expect(pills()).toContain("Needs a decision 1 · 2 open questions");
-        expect(panelOf("Earlier").querySelectorAll(".fb-earlier-list > li")).toHaveLength(1);
+      /* spya-u6h6q8 (Greg, 2026-10-08): "There seems to be a few that are listed
+         there, but there doesn't appear to be a reply button or input box".
+         Waiting report rows were drawn under the question cards as a list of
+         their own, with nothing to press: one repeating a question above it,
+         one with no question at all. Plan 261008i § The bug. */
+      it("draws no report under Needs a decision that cannot be answered: it is inside its thread, or under the no-question heading", async () => {
+        const orphan = { ...base, id: "spya-a6b2c3", number: 210, status: "waiting", body: "Fewer modes, please." };
+        await openWaiting(WITH_QUESTIONS, {
+          reports: [ADMIN_REPORTS.reports[1], orphan],
+          more: false,
+          counts: { ...ADMIN_COUNTS, all: 6, waiting: 2 },
+          questions: [Q1, Q2],
+        });
+        const visible = (el: Element) => !el.closest("[hidden]");
+        const rows = [...panelOf("Earlier").querySelectorAll<HTMLElement>(".fb-earlier-list > li")].filter(visible);
+        /* Every report row left in the view is under the heading that says no
+           question has been written for it, and the one with a question is not
+           repeated outside its thread. */
+        expect(rows.map((li) => li.querySelector(".fb-earlier-number")?.textContent)).toEqual(["#210"]);
+        expect(rows.every((li) => li.closest(".fb-orphans") !== null)).toBe(true);
+        expect(panelOf("Earlier").querySelector(".fb-orphans")?.textContent).toMatch(/no question/i);
+      });
+
+      it("draws the threads before the reports no question is about, and no report at all while a thread is open", async () => {
+        const orphan = { ...base, id: "spya-a6b2c3", number: 210, status: "waiting", body: "Fewer modes, please." };
+        await openThread("q-aaaaaa", WITH_QUESTIONS, {
+          reports: [ADMIN_REPORTS.reports[1], orphan],
+          more: false,
+          counts: { ...ADMIN_COUNTS, all: 6, waiting: 2 },
+          questions: [Q1, Q2],
+        });
+        expect(panelOf("Earlier").querySelectorAll(".fb-earlier-list > li")).toHaveLength(0);
+        expect(panelOf("Earlier").querySelector(".fb-orphans")).toBeNull();
+        click(button(thread(), "‹ All threads"));
+        const orphans = panelOf("Earlier").querySelector(".fb-orphans");
+        expect(orphans).not.toBeNull();
+        expect(questionsBox()?.compareDocumentPosition(orphans as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
       });
 
       it("says one question in the singular, and nothing on the pill when there are none", async () => {
-        asAdmin = true;
-        listAnswer = page({ ...ADMIN_REPORTS, questions: [Q2] });
-        await openEarlier();
-        expect(pills()).toContain("Needs a decision 1 · 1 open question");
+        await openWaiting({ ...ADMIN_REPORTS, questions: [Q2] }, { ...WAITING, questions: [Q2] });
+        expect(pills()).toContain("Needs a decision 1 · 1 to decide");
+        listAnswer = serve(ADMIN_REPORTS);
         reopen();
-        listAnswer = page(ADMIN_REPORTS);
         click(tab("Earlier"));
-        await act(async () => {});
+        await settle();
         expect(pills()).toContain("Needs a decision 1");
-        expect(cards()).toHaveLength(0);
+        expect(pills().join(" ")).not.toContain("to decide");
+        expect(rows()).toHaveLength(0);
       });
 
-      it("shows each under its title, with the linked report's number and first line when it has one", async () => {
-        await openWaiting();
-        expect(card("q-aaaaaa").querySelector(".fb-question-title")?.textContent).toBe("One switch or two?");
-        expect(card("q-aaaaaa").querySelector(".fb-earlier-number")?.textContent).toBe("#214");
-        expect(card("q-aaaaaa").querySelector(".fb-question-report-line")?.textContent).toBe("One switch or two?");
-        expect(card("q-bbbbbb").querySelector(".fb-earlier-number")).toBeNull();
-        /* Text, never markup, with the lines kept by CSS: the tag is characters. */
-        expect(card("q-aaaaaa").querySelector(".fb-question-text")?.textContent).toBe(Q1.body);
-        expect(card("q-aaaaaa").querySelector(".fb-question-text b")).toBeNull();
-      });
+      /* Decision 4 (spya-t6nmxt, spya-bbe74w): the contents, three groups in
+         that order, Deferred shut; decision 6 (spya-krvuc9): each row's q- id. */
+      it("draws a contents of three groups, Deferred shut, each row its title, its q- id and its report", async () => {
+        const all = [Q4, Q3, Q2, Q1];
+        await openWaiting({ ...ADMIN_REPORTS, questions: all }, { ...WAITING, questions: all });
+        expect(panelOf("Earlier").querySelector(".fb-threads")).not.toBeNull();
+        expect([...panelOf("Earlier").querySelectorAll<HTMLElement>(".fb-threads [data-group]")].map((g) => g.dataset.group)).toEqual([
+          "waiting",
+          "responded",
+          "deferred",
+        ]);
+        expect(inGroup("waiting")).toEqual(["q-bbbbbb", "q-aaaaaa"]);
+        expect(inGroup("responded")).toEqual(["q-cccccc"]);
+        expect(inGroup("deferred")).toEqual(["q-dddddd"]);
+        const deferred = group("deferred");
+        expect(deferred?.tagName).toBe("DETAILS");
+        expect((deferred as HTMLDetailsElement | null)?.open).toBe(false);
+        expect(group("waiting")?.tagName).not.toBe("DETAILS");
 
-      it("shows questions even when no report needs a decision", async () => {
-        await openWaiting(WITH_QUESTIONS, {
-          reports: [],
-          more: false,
-          counts: { all: 4, open: 1, waiting: 0, aside: 2, shipped: 1 },
-          questions: [Q1, Q2],
-        });
-        expect(cards()).toHaveLength(2);
-        expect(panelOf("Earlier").textContent).toContain("None of your reports needs a decision.");
-      });
-
-      it("opens one reply box at a time: the others show Reply", async () => {
-        await openWaiting();
+        const first = row("q-aaaaaa");
+        expect(first.textContent).toContain("One switch or two?");
+        expect([...first.querySelectorAll("code.fb-question-id")].map((c) => c.textContent)).toEqual([
+          "q-aaaaaa",
+          "(spya-a2b2c3)",
+        ]);
+        expect(first.querySelector(".fb-earlier-number")?.textContent).toBe("#214");
+        expect(first.type).toBe("button");
+        const alone = row("q-bbbbbb");
+        expect([...alone.querySelectorAll("code.fb-question-id")].map((c) => c.textContent)).toEqual(["q-bbbbbb"]);
+        expect(alone.querySelector(".fb-earlier-number")).toBeNull();
+        /* The contents is not a thread: no reply box until one is opened. */
         expect(replyBoxes()).toHaveLength(0);
-        click(button(card("q-aaaaaa"), "Reply"));
-        expect(replyBoxes()).toHaveLength(1);
-        expect(card("q-aaaaaa").querySelector("textarea.fb-reply-input")).not.toBeNull();
-        typeReply("half a thought");
-        click(button(card("q-bbbbbb"), "Reply"));
-        expect(replyBoxes()).toHaveLength(1);
-        expect(card("q-bbbbbb").querySelector("textarea.fb-reply-input")).not.toBeNull();
-        expect(button(card("q-aaaaaa"), "Reply")).toBeTruthy();
-        /* And the first box's words were kept for when it is opened again. */
-        click(button(card("q-aaaaaa"), "Reply"));
-        expect(replyBoxes()[0]?.value).toBe("half a thought");
       });
 
-      it("posts a reply with a minted id, then shows Answered, the words, and Reply again", async () => {
-        await openWaiting();
-        click(button(card("q-aaaaaa"), "Reply"));
+      /* Decisions 4, 5 and 7: one thread alone, the pills gone, the box simply
+         there, the report shut under "Your report #N". */
+      it("shows a thread alone when its row is pressed: the pager, its ids, its words, its report shut, and the box", async () => {
+        await openThread();
+        expect(panelOf("Earlier").querySelector(".fb-threads")).toBeNull();
+        /* The pills go while one thread shows: on a phone they cost three lines. */
+        expect(panelOf("Earlier").querySelectorAll(".fb-show-button")).toHaveLength(0);
+        expect(place()).toBe("1 of 2 needing a decision");
+        expect(unavailable(button(thread(), "‹ Previous"))).toBe(true);
+        expect(unavailable(button(thread(), "Next ›"))).toBe(false);
+        expect([...thread().querySelectorAll("button")].every((b) => b.type === "button")).toBe(true);
+
+        const article = thread().querySelector<HTMLElement>(".fb-question");
+        expect(article?.dataset.question).toBe("q-aaaaaa");
+        expect(article?.querySelector(".fb-question-title")?.textContent).toBe("One switch or two?");
+        expect(article?.querySelector(".fb-earlier-meta")?.textContent).toContain("q-aaaaaa · about #214 (spya-a2b2c3)");
+        /* Text, never markup, with the lines kept by CSS: the tag is characters. */
+        expect(article?.querySelector(".fb-question-text")?.textContent).toBe(Q1.body);
+        expect(article?.querySelector(".fb-question-text b")).toBeNull();
+
+        const report = [...thread().querySelectorAll<HTMLDetailsElement>("details.fb-question-more")].find(
+          (d) => d.querySelector("summary")?.textContent === "Your report #214",
+        );
+        expect(report).toBeDefined();
+        expect(report?.open).toBe(false);
+        expect(report?.textContent).toContain("I keep <b>pressing</b> both.");
+        expect(report?.querySelector("b")).toBeNull();
+
+        /* The reply box is simply there: no Reply to press, nothing to cancel. */
+        expect(replyBoxes()).toHaveLength(1);
+        expect(hasButton(thread(), "Reply")).toBe(false);
+        expect(hasButton(thread(), "Cancel")).toBe(false);
+        expect(hasButton(thread(), "Send reply")).toBe(true);
+        expect(hasButton(thread(), "Defer for now")).toBe(true);
+
+        /* A thread with no report has no Your report. */
+        click(button(thread(), "Next ›"));
+        expect(thread().querySelector<HTMLElement>(".fb-question")?.dataset.question).toBe("q-bbbbbb");
+        expect(place()).toBe("2 of 2 needing a decision");
+        expect(unavailable(button(thread(), "Next ›"))).toBe(true);
+        expect(thread().querySelector("details.fb-question-more")).toBeNull();
+
+        /* And the way back: the contents, and the pills. */
+        click(button(thread(), "‹ All threads"));
+        expect(panelOf("Earlier").querySelector(".fb-thread")).toBeNull();
+        expect(rows()).toEqual(["q-aaaaaa", "q-bbbbbb"]);
+        expect(pills()).toContain("Needs a decision 1 · 2 to decide");
+      });
+
+      /* spya-nmt06n (Greg, 2026-10-09): "I only want them to cycle through the
+         next and previous that need a decision, rather than anything else. And
+         they should, I guess, be disabled with a tooltip or something if there's
+         no more." Plan 261009m. */
+      it("steps only through the threads that need a decision, skipping replied and deferred ones", async () => {
+        const later = { ...Q2, id: "q-eeeeee", asked: "2026-10-09" };
+        const all = [Q1, Q3, Q4, later];
+        await openThread("q-aaaaaa", { ...ADMIN_REPORTS, questions: all }, { ...WAITING, questions: all });
+        expect(place()).toBe("1 of 2 needing a decision");
+        click(button(thread(), "Next ›"));
+        expect(showing()).toBe("q-eeeeee");
+        expect(place()).toBe("2 of 2 needing a decision");
+        click(button(thread(), "‹ Previous"));
+        expect(showing()).toBe("q-aaaaaa");
+      });
+
+      it("makes an end unavailable with a hint, and says the hint on the row when it is pressed anyway", async () => {
+        const all = [Q4, Q3, Q1];
+        await openThread("q-aaaaaa", { ...ADMIN_REPORTS, questions: all }, { ...WAITING, questions: all });
+        expect(place()).toBe("1 of 1 needing a decision");
+        const previous = button(thread(), "‹ Previous");
+        const next = button(thread(), "Next ›");
+        expect(unavailable(previous)).toBe(true);
+        expect(unavailable(next)).toBe(true);
+        expect(previous.title).toBe("No earlier thread needs a decision");
+        expect(next.title).toBe("No later thread needs a decision");
+        /* The live region is there, empty, before anything is said in it (P2). */
+        const said = () => thread().querySelector(".fb-thread-end");
+        expect(said()?.getAttribute("role")).toBe("status");
+        expect(said()?.textContent).toBe("");
+        expect(said()?.matches(":empty")).toBe(true);
+
+        click(next);
+        expect(showing()).toBe("q-aaaaaa");
+        expect(said()?.textContent).toBe("No later thread needs a decision");
+        const firstSaying = said()?.firstElementChild;
+        click(next);
+        expect(said()?.firstElementChild).not.toBe(firstSaying);
+        expect(said()?.textContent).toBe("No later thread needs a decision");
+        click(previous);
+        expect(said()?.textContent).toBe("No earlier thread needs a decision");
+      });
+
+      it("does not revive an old end sentence after paging away and back", async () => {
+        await openThread();
+        const said = () => thread().querySelector(".fb-thread-end")?.textContent;
+        click(button(thread(), "‹ Previous"));
+        expect(said()).toBe("No earlier thread needs a decision");
+
+        click(button(thread(), "Next ›"));
+        expect(showing()).toBe("q-bbbbbb");
+        expect(said()).toBe("");
+        click(button(thread(), "‹ Previous"));
+        expect(showing()).toBe("q-aaaaaa");
+        expect(said()).toBe("");
+      });
+
+      it("takes an end sentence away when the showing thread stops needing a decision", async () => {
+        await openThread();
+        click(button(thread(), "‹ Previous"));
+        expect(thread().querySelector(".fb-thread-end")?.textContent).toBe("No earlier thread needs a decision");
+
+        typeReply("decided");
+        answer = stored(201);
+        click(button(thread(), "Send reply"));
+        await settle();
+        expect(place()).toBe("1 needs a decision");
+        expect(thread().querySelector(".fb-thread-end")?.textContent).toBe("");
+      });
+
+      it("steps from a replied or deferred thread opened from the contents to the waiting ones beside it", async () => {
+        const all = [Q1, Q3, Q4];
+        await openThread("q-cccccc", { ...ADMIN_REPORTS, questions: all }, { ...WAITING, questions: all });
+        /* Not one of them, so no position: only how many there are. */
+        expect(place()).toBe("1 needs a decision");
+        expect(button(thread(), "‹ Previous").title).toBe("Previous thread that needs a decision");
+        expect(unavailable(button(thread(), "Next ›"))).toBe(true);
+        click(button(thread(), "‹ Previous"));
+        expect(showing()).toBe("q-aaaaaa");
+        /* And from there, nothing waits after it: the deferred one is skipped. */
+        expect(unavailable(button(thread(), "Next ›"))).toBe(true);
+
+        click(button(thread(), "‹ All threads"));
+        const deferred = group("deferred") as HTMLDetailsElement;
+        deferred.open = true;
+        click(row("q-dddddd"));
+        expect(place()).toBe("1 needs a decision");
+        click(button(thread(), "‹ Previous"));
+        expect(showing()).toBe("q-aaaaaa");
+      });
+
+      it("says none are left when the thread showing is not waiting and nothing else is", async () => {
+        const all = [Q3, Q4];
+        await openThread("q-cccccc", { ...ADMIN_REPORTS, questions: all }, { ...WAITING, questions: all });
+        expect(place()).toBe("No threads need a decision now");
+        expect(unavailable(button(thread(), "‹ Previous"))).toBe(true);
+        expect(unavailable(button(thread(), "Next ›"))).toBe(true);
+      });
+
+      /* Decision 11 (spya-za2tse): TL;DR first; everything after a line that is
+         exactly "Details" is shut. F15: compared exactly, untrimmed. */
+      it("shuts everything after a line that is exactly Details, and splits on nothing else", async () => {
+        const split = { ...Q1, body: "Which one? Recommended: A.\nDetails\nWhat the report asked, at length." };
+        const unsplit = { ...Q2, body: "Short.\nDetails \nNot split: the line is not exactly the word." };
+        await openThread("q-aaaaaa", { ...ADMIN_REPORTS, questions: [split, unsplit] }, { ...WAITING, questions: [split, unsplit] });
+        const article = thread().querySelector(".fb-question");
+        expect(article?.querySelector(".fb-question-text")?.textContent).toBe("Which one? Recommended: A.");
+        const more = [...thread().querySelectorAll<HTMLDetailsElement>("details.fb-question-more")].find(
+          (d) => d.querySelector("summary")?.textContent === "Details",
+        );
+        expect(more?.open).toBe(false);
+        expect(more?.textContent).toContain("What the report asked, at length.");
+        expect(article?.querySelector(".fb-question-text")?.textContent).not.toContain("at length");
+
+        click(button(thread(), "Next ›"));
+        expect(thread().querySelector(".fb-question-text")?.textContent).toBe(unsplit.body);
+        expect(
+          [...thread().querySelectorAll("details.fb-question-more summary")].map((s) => s.textContent),
+        ).not.toContain("Details");
+      });
+
+      /* Decision 2: every reply no agent has acted on, oldest first, and how
+         many older ones were not sent (F12). */
+      it("shows every reply not yet acted on as You replied, oldest first, and says how many earlier ones are not shown", async () => {
+        const later = { id: "spya-b9b2c3", body: "And one more.", createdAt: "2026-10-07T08:00:00.000Z" };
+        const replied = { ...Q1, answers: [REPLIED, later], olderAnswers: 2, state: "responded" };
+        await openThread("q-aaaaaa", { ...ADMIN_REPORTS, questions: [replied, Q2] }, { ...WAITING, questions: [replied, Q2] });
+        const shown = thread().querySelector(".fb-question-answer");
+        expect([...(shown?.querySelectorAll(".fb-question-answer-body") ?? [])].map((p) => p.textContent)).toEqual([
+          "<i>Two</i>, please.\nBoth.",
+          "And one more.",
+        ]);
+        expect(shown?.querySelector("i")).toBeNull();
+        expect([...(shown?.querySelectorAll("time") ?? [])].map((t) => t.getAttribute("datetime"))).toEqual([
+          REPLIED.createdAt,
+          later.createdAt,
+        ]);
+        expect(shown?.textContent).toContain("You replied · ");
+        expect(shown?.textContent).toContain("And 2 earlier replies, not shown here.");
+        expect(thread().querySelector(".fb-question")?.getAttribute("data-state")).toBe("responded");
+        /* The box is still there: Greg can add to what he said. */
+        expect(replyBoxes()).toHaveLength(1);
+      });
+
+      /* F3, the other direction: a server from before 261008i ignores
+         `questions=2` and answers in the six-key shape, which the client maps. */
+      it("reads an older server's six-key questions: its reply as the one reply, being considered, and no report text", async () => {
+        const legacy = (question: typeof Q1 | typeof Q2, answer: unknown) => ({
+          id: question.id,
+          title: question.title,
+          body: question.body,
+          asked: question.asked,
+          report: question.report === null ? null : { id: question.report.id, number: question.report.number, firstLine: question.report.firstLine },
+          answer,
+        });
+        const old1 = legacy(Q1, REPLIED);
+        const old2 = legacy(Q2, null);
+        await openWaiting({ ...ADMIN_REPORTS, questions: [old1, old2] }, { ...WAITING, questions: [old1, old2] });
+        expect(panelOf("Earlier").textContent).not.toContain("[fb-list]");
+        expect(inGroup("waiting")).toEqual(["q-bbbbbb"]);
+        expect(inGroup("responded")).toEqual(["q-aaaaaa"]);
+        click(row("q-aaaaaa"));
+        expect(thread().querySelector(".fb-question-answer-body")?.textContent).toBe(REPLIED.body);
+        expect(thread().querySelector(".fb-earlier-meta")?.textContent).toContain("#214");
+        /* It had no report text to send, so there is no Your report. */
+        expect(
+          [...thread().querySelectorAll("details.fb-question-more summary")].map((s) => s.textContent),
+        ).not.toContain("Your report #214");
+      });
+
+      it("posts a reply with a minted id, then keeps the thread open, empties the box, and shows You replied", async () => {
+        await openThread();
         typeReply("  1A, and do B later  ");
         answer = stored(201);
-        click(button(card("q-aaaaaa"), "Send reply"));
-        await act(async () => {});
+        click(button(thread(), "Send reply"));
+        await settle();
 
         expect(posts).toHaveLength(1);
         expect(posts[0]?.input).toBe(ANSWERS_PATH);
@@ -1859,100 +2228,190 @@ describe("the Earlier tab", () => {
         expect(sent(0)).toMatchObject({ question: "q-aaaaaa", body: "1A, and do B later" });
         expect(isSpideryarnId(sent(0).id as string)).toBe(true);
 
-        expect(replyBoxes()).toHaveLength(0);
-        const answered = card("q-aaaaaa").querySelector(".fb-question-answer");
-        expect(answered?.textContent).toContain("Answered");
+        /* Still this thread, an empty box under it, and the reply above it. */
+        expect(thread().querySelector<HTMLElement>(".fb-question")?.dataset.question).toBe("q-aaaaaa");
+        expect(replyBoxes()).toHaveLength(1);
+        expect(replyBoxes()[0]?.value).toBe("");
+        const answered = thread().querySelector(".fb-question-answer");
+        expect(answered?.textContent).toContain("You replied");
         expect(answered?.querySelector("time")?.getAttribute("datetime")).toBe("2026-10-07T09:00:00.000Z");
         expect(answered?.querySelector(".fb-question-answer-body")?.textContent).toBe("1A, and do B later");
-        expect(button(card("q-aaaaaa"), "Reply again")).toBeTruthy();
-        /* The other question is untouched. */
-        expect(card("q-bbbbbb").querySelector(".fb-question-answer")).toBeNull();
+        /* Being considered at once: no longer one to decide, but still a stop,
+           so Next goes on to the one that is (261009m § 2). */
+        expect(thread().querySelector(".fb-question")?.getAttribute("data-state")).toBe("responded");
+        expect(place()).toBe("1 needs a decision");
+        expect(unavailable(button(thread(), "‹ Previous"))).toBe(true);
+        expect(unavailable(button(thread(), "Next ›"))).toBe(false);
 
-        /* Reply again: an empty box, and a second reply under a new id. */
-        click(button(card("q-aaaaaa"), "Reply again"));
-        expect(replyBoxes()[0]?.value).toBe("");
+        /* A second reply: a new id, and both shown, oldest first. */
         typeReply("one more thing");
-        click(button(card("q-aaaaaa"), "Send reply"));
-        await act(async () => {});
+        click(button(thread(), "Send reply"));
+        await settle();
         expect(posts).toHaveLength(2);
         expect(sent(1).id).not.toBe(sent(0).id);
-        expect(card("q-aaaaaa").querySelector(".fb-question-answer-body")?.textContent).toBe("one more thing");
+        expect([...thread().querySelectorAll(".fb-question-answer-body")].map((p) => p.textContent)).toEqual([
+          "1A, and do B later",
+          "one more thing",
+        ]);
+
+        /* And the contents has it under You've replied; the other is untouched. */
+        click(button(thread(), "‹ All threads"));
+        expect(inGroup("waiting")).toEqual(["q-bbbbbb"]);
+        expect(inGroup("responded")).toEqual(["q-aaaaaa"]);
+        expect(shortcut()?.textContent?.replace(/\s+/g, " ").trim()).toBe("Needs a decision 1");
       });
 
-      it("shows the server's stored reply as Answered when the tab is opened later", async () => {
-        const answered = { ...Q1, answer: { id: "spya-a9b2c3", body: "<i>Two</i>, please.\nBoth.", createdAt: "2026-10-06T18:30:00.000Z" } };
-        await openWaiting({ ...ADMIN_REPORTS, questions: [answered, Q2] }, { ...WAITING, questions: [answered, Q2] });
-        const shown = card("q-aaaaaa").querySelector(".fb-question-answer");
-        expect(shown?.querySelector(".fb-question-answer-body")?.textContent).toBe("<i>Two</i>, please.\nBoth.");
-        expect(shown?.querySelector("i")).toBeNull();
-        expect(button(card("q-aaaaaa"), "Reply again")).toBeTruthy();
-        expect(button(card("q-bbbbbb"), "Reply")).toBeTruthy();
+      /* F4: a reply just sent stands until a read started after it lands. A
+         read that began before the receipt and lands after it must not put
+         the thread back in Needs a decision. */
+      it("keeps a reply just sent when a read that started before it lands afterwards", async () => {
+        const gate: { release?: () => void } = {};
+        asAdmin = true;
+        const allAnswer = { ...WITH_QUESTIONS };
+        listAnswer = (input) =>
+          input === ALL_URL
+            ? new Promise((resolve) => {
+                gate.release = () => resolve(new Response(JSON.stringify(allAnswer), { status: 200 }));
+              })
+            : page(WAITING)();
+        await openEarlier();
+        /* All is asked for and has not answered; back to Needs a decision. */
+        click(pill("All"));
+        await settle();
+        expect(lists).toEqual([WAITING_URL, ALL_URL]);
+        click(pill("Needs a decision"));
+        click(row("q-aaaaaa"));
+        typeReply("1A");
+        answer = stored(201);
+        click(button(thread(), "Send reply"));
+        await settle();
+        expect(thread().querySelector(".fb-question")?.getAttribute("data-state")).toBe("responded");
+
+        /* The older read lands, saying q-aaaaaa still waits with no reply. */
+        await act(async () => gate.release?.());
+        await settle();
+        expect(thread().querySelector(".fb-question")?.getAttribute("data-state")).toBe("responded");
+        click(button(thread(), "‹ All threads"));
+        click(pill("All"));
+        /* Under All, whose answer is that older read: still one waiting, not two. */
+        expect(panelOf("Earlier").querySelectorAll(".fb-earlier-list > li")).toHaveLength(5);
+        expect(shortcut()?.textContent?.replace(/\s+/g, " ").trim()).toBe("Needs a decision 1");
+        click(pill("Needs a decision"));
+        expect(inGroup("responded")).toEqual(["q-aaaaaa"]);
+      });
+
+      /* F4, the other half: a read started after the receipt is the server's
+         word, so a reply an agent has already acted on is not drawn twice. */
+      it("takes a read started after the reply as the server's word: after reopening, and on a filter chosen after the send", async () => {
+        await openThread();
+        typeReply("1A");
+        answer = stored(201);
+        click(button(thread(), "Send reply"));
+        await settle();
+        expect(thread().querySelector(".fb-question")?.getAttribute("data-state")).toBe("responded");
+
+        /* A filter first read after the send: the server says q-aaaaaa waits again (acted on, left open). */
+        listAnswer = serve(ADMIN_REPORTS, {
+          aside: { ...only(ADMIN_REPORTS, "aside"), questions: [Q1, Q2] },
+        });
+        click(button(thread(), "‹ All threads"));
+        click(pill("Set aside"));
+        await settle();
+        expect(lists.at(-1)).toBe(url("aside"));
+        expect(shortcut()?.textContent?.replace(/\s+/g, " ").trim()).toBe("Needs a decision 2");
+
+        /* And the next opening's read, which started after the send. */
+        listAnswer = answerBy({ waiting: WAITING, all: WITH_QUESTIONS });
+        reopen();
+        click(tab("Earlier"));
+        await settle();
+        expect(pill("Needs a decision").getAttribute("aria-pressed")).toBe("true");
+        expect(inGroup("waiting")).toEqual(["q-aaaaaa", "q-bbbbbb"]);
+        expect(group("responded")).toBeNull();
+        click(row("q-aaaaaa"));
+        expect(thread().querySelector(".fb-question-answer")).toBeNull();
       });
 
       it("keeps the words when the send fails, and a retry of the same words carries the same id", async () => {
-        await openWaiting();
-        click(button(card("q-aaaaaa"), "Reply"));
+        await openThread();
         typeReply("1A");
         answer = ok(500);
-        click(button(card("q-aaaaaa"), "Send reply"));
-        await act(async () => {});
+        click(button(thread(), "Send reply"));
+        await settle();
         expect(replyBoxes()[0]?.value).toBe("1A");
-        expect(card("q-aaaaaa").textContent).toContain("[fb-reply]");
-        expect(card("q-aaaaaa").querySelector(".fb-question-answer")).toBeNull();
+        expect(thread().textContent).toContain("[fb-reply]");
+        expect(thread().querySelector(".fb-question-answer")).toBeNull();
+        expect(thread().querySelector(".fb-question")?.getAttribute("data-state")).toBe("waiting");
 
         answer = stored(200);
-        click(button(card("q-aaaaaa"), "Send reply"));
-        await act(async () => {});
+        click(button(thread(), "Send reply"));
+        await settle();
         expect(posts).toHaveLength(2);
         expect(sent(1).id).toBe(sent(0).id);
         /* A 200 is the stored row of the first try: answered, like a 201. */
-        expect(card("q-aaaaaa").querySelector(".fb-question-answer-body")?.textContent).toBe("1A");
-        expect(card("q-aaaaaa").textContent).not.toContain("[fb-reply]");
+        expect(thread().querySelector(".fb-question-answer-body")?.textContent).toBe("1A");
+        expect(thread().textContent).not.toContain("[fb-reply]");
       });
 
       it("gives edited words a new id after a failed send, so the server never sees one id with two bodies", async () => {
-        await openWaiting();
-        click(button(card("q-aaaaaa"), "Reply"));
+        await openThread();
         typeReply("1A");
         answer = async () => {
           throw new Error("offline");
         };
-        click(button(card("q-aaaaaa"), "Send reply"));
-        await act(async () => {});
-        expect(card("q-aaaaaa").textContent).toContain("[fb-reply]");
+        click(button(thread(), "Send reply"));
+        await settle();
+        expect(thread().textContent).toContain("[fb-reply]");
         typeReply("1B, on reflection");
         answer = stored(201);
-        click(button(card("q-aaaaaa"), "Send reply"));
-        await act(async () => {});
+        click(button(thread(), "Send reply"));
+        await settle();
         expect(sent(1).id).not.toBe(sent(0).id);
       });
 
       it("says to reload when the server has no such route (a 404), and keeps the words", async () => {
-        await openWaiting();
-        click(button(card("q-aaaaaa"), "Reply"));
+        await openThread();
         typeReply("1A, typed at length");
         answer = ok(404);
-        click(button(card("q-aaaaaa"), "Send reply"));
-        await act(async () => {});
+        click(button(thread(), "Send reply"));
+        await settle();
         expect(replyBoxes()[0]?.value).toBe("1A, typed at length");
-        expect(card("q-aaaaaa").textContent).toContain("[fb-reply-stale]");
-        expect(card("q-aaaaaa").textContent).toMatch(/reload/i);
+        expect(thread().textContent).toContain("[fb-reply-stale]");
+        expect(thread().textContent).toMatch(/reload/i);
       });
 
       it("treats a 2xx without a well-formed reply in it as not sent", async () => {
-        await openWaiting();
-        click(button(card("q-aaaaaa"), "Reply"));
+        await openThread();
         typeReply("1A");
         answer = ok(201);
-        click(button(card("q-aaaaaa"), "Send reply"));
-        await act(async () => {});
-        expect(card("q-aaaaaa").textContent).toContain("[fb-reply]");
+        click(button(thread(), "Send reply"));
+        await settle();
+        expect(thread().textContent).toContain("[fb-reply]");
+        expect(replyBoxes()[0]?.value).toBe("1A");
+        expect(thread().querySelector(".fb-question")?.getAttribute("data-state")).toBe("waiting");
+      });
+
+      it("treats a reply receipt with a field more as not sent", async () => {
+        await openThread();
+        typeReply("1A");
+        answer = async () => {
+          const request = sent(0);
+          return new Response(
+            JSON.stringify({
+              answer: { id: request.id, body: request.body, createdAt: "2026-10-07T09:00:00.000Z" },
+              environment: "production",
+            }),
+            { status: 201 },
+          );
+        };
+        click(button(thread(), "Send reply"));
+        await settle();
+        expect(thread().textContent).toContain("[fb-reply]");
         expect(replyBoxes()[0]?.value).toBe("1A");
       });
 
       it("treats a well-formed receipt for different words as not sent", async () => {
-        await openWaiting();
-        click(button(card("q-aaaaaa"), "Reply"));
+        await openThread();
         typeReply("1A");
         answer = async () => {
           const request = sent(0);
@@ -1961,56 +2420,368 @@ describe("the Earlier tab", () => {
             { status: 201 },
           );
         };
-        click(button(card("q-aaaaaa"), "Send reply"));
-        await act(async () => {});
-        expect(card("q-aaaaaa").textContent).toContain("[fb-reply]");
+        click(button(thread(), "Send reply"));
+        await settle();
+        expect(thread().textContent).toContain("[fb-reply]");
         expect(replyBoxes()[0]?.value).toBe("1A");
-        expect(card("q-aaaaaa").querySelector(".fb-question-answer")).toBeNull();
+        expect(thread().querySelector(".fb-question-answer")).toBeNull();
       });
 
       it("sends nothing empty, nothing over the cap, and one reply for two presses", async () => {
-        await openWaiting();
-        click(button(card("q-aaaaaa"), "Reply"));
-        expect(button(card("q-aaaaaa"), "Send reply").disabled).toBe(true);
+        await openThread();
+        expect(button(thread(), "Send reply").disabled).toBe(true);
         typeReply("   ");
-        expect(button(card("q-aaaaaa"), "Send reply").disabled).toBe(true);
+        expect(button(thread(), "Send reply").disabled).toBe(true);
         typeReply("x".repeat(MAX_FEEDBACK_ANSWER_CHARS + 1));
-        expect(button(card("q-aaaaaa"), "Send reply").disabled).toBe(true);
-        expect(card("q-aaaaaa").textContent).toContain(`the limit is ${MAX_FEEDBACK_ANSWER_CHARS}`);
+        expect(button(thread(), "Send reply").disabled).toBe(true);
+        expect(thread().textContent).toContain(`the limit is ${MAX_FEEDBACK_ANSWER_CHARS}`);
         typeReply("1A");
-        let release: (() => void) | null = null;
+        const gate: { release?: () => void } = {};
         answer = () =>
           new Promise((resolve) => {
-            release = () => resolve(new Response(JSON.stringify({ answer: { id: sent(0).id, body: "1A", createdAt: "2026-10-07T09:00:00.000Z" } }), { status: 201 }));
+            gate.release = () =>
+              resolve(new Response(JSON.stringify({ answer: { id: sent(0).id, body: "1A", createdAt: "2026-10-07T09:00:00.000Z" } }), { status: 201 }));
           });
-        const sendButton = button(card("q-aaaaaa"), "Send reply");
+        const sendButton = button(thread(), "Send reply");
         click(sendButton);
         click(sendButton);
         expect(posts).toHaveLength(1);
-        await act(async () => release?.());
-        expect(card("q-aaaaaa").querySelector(".fb-question-answer")).not.toBeNull();
+        await act(async () => gate.release?.());
+        await settle();
+        expect(thread().querySelector(".fb-question-answer")).not.toBeNull();
+      });
+
+      /* Decision 3 (spya-t6nmxt): "not now", reversible, a timestamp. */
+      it("defers a thread, and brings it back, with exactly the question and whether", async () => {
+        await openThread();
+        answer = deferral();
+        click(button(thread(), "Defer for now"));
+        await settle();
+        expect(posts).toHaveLength(1);
+        expect(posts[0]?.input).toBe(DEFERRALS_PATH);
+        expect(posts[0]?.init.method).toBe("POST");
+        expect(sent(0)).toEqual({ question: "q-aaaaaa", deferred: true });
+        /* Deferred at once: the word, the line under it, and the way back. */
+        expect(thread().querySelector(".fb-question")?.getAttribute("data-state")).toBe("deferred");
+        expect(thread().textContent).toMatch(/Deferred .*No agent will chase it/);
+        expect(hasButton(thread(), "Bring back")).toBe(true);
+        expect(hasButton(thread(), "Defer for now")).toBe(false);
+        click(button(thread(), "‹ All threads"));
+        expect(inGroup("deferred")).toEqual(["q-aaaaaa"]);
+        expect(inGroup("waiting")).toEqual(["q-bbbbbb"]);
+        expect(shortcut()?.textContent?.replace(/\s+/g, " ").trim()).toBe("Needs a decision 1");
+
+        click(row("q-aaaaaa"));
+        click(button(thread(), "Bring back"));
+        await settle();
+        expect(sent(1)).toEqual({ question: "q-aaaaaa", deferred: false });
+        expect(thread().querySelector(".fb-question")?.getAttribute("data-state")).toBe("waiting");
+        expect(hasButton(thread(), "Defer for now")).toBe(true);
+        click(button(thread(), "‹ All threads"));
+        expect(inGroup("waiting")).toEqual(["q-aaaaaa", "q-bbbbbb"]);
+        expect(group("deferred")).toBeNull();
+      });
+
+      it("brings a deferred thread back to being considered when it has a reply not yet acted on", async () => {
+        const deferred = { ...Q1, answers: [REPLIED], state: "deferred", deferredAt: "2026-10-08T07:00:00.000Z" };
+        await openThread("q-aaaaaa", { ...ADMIN_REPORTS, questions: [deferred, Q2] }, { ...WAITING, questions: [deferred, Q2] });
+        expect(thread().querySelector(".fb-question")?.getAttribute("data-state")).toBe("deferred");
+        answer = deferral();
+        click(button(thread(), "Bring back"));
+        await settle();
+        expect(thread().querySelector(".fb-question")?.getAttribute("data-state")).toBe("responded");
+      });
+
+      /* F2: the latest action wins, so a reply sent from a deferred thread moves it to being considered. */
+      it("moves a deferred thread to being considered when a reply is sent from it", async () => {
+        await openThread();
+        answer = deferral();
+        click(button(thread(), "Defer for now"));
+        await settle();
+        typeReply("Actually, A.");
+        answer = stored(201);
+        click(button(thread(), "Send reply"));
+        await settle();
+        expect(thread().querySelector(".fb-question")?.getAttribute("data-state")).toBe("responded");
+      });
+
+      it("does not start a reply while a deferral is still in flight through the keyboard path", async () => {
+        await openThread();
+        typeReply("Actually, A.");
+        const gate: { release?: () => void } = {};
+        answer = () => {
+          const last = posts.at(-1);
+          if (last?.input === DEFERRALS_PATH) {
+            return new Promise((resolve) => {
+              gate.release = () =>
+                resolve(
+                  new Response(
+                    JSON.stringify({ question: "q-aaaaaa", deferredAt: "2026-10-08T09:30:00.000Z" }),
+                    { status: 200 },
+                  ),
+                );
+            });
+          }
+          const posted = JSON.parse(String(last?.init.body)) as { id: string; body: string };
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({ answer: { id: posted.id, body: posted.body, createdAt: "2026-10-08T09:31:00.000Z" } }),
+              { status: 201 },
+            ),
+          );
+        };
+        click(button(thread(), "Defer for now"));
+        act(() => {
+          replyBoxes()[0]?.dispatchEvent(
+            new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true, bubbles: true }),
+          );
+        });
+        expect(posts).toHaveLength(1);
+        await act(async () => gate.release?.());
+        await settle();
+      });
+
+      it("accepts the deferral state now stored when another request superseded this one", async () => {
+        await openThread();
+        answer = async () =>
+          new Response(JSON.stringify({ question: "q-aaaaaa", deferredAt: null }), { status: 200 });
+        click(button(thread(), "Defer for now"));
+        await settle();
+        expect(thread().textContent).not.toContain("[fb-defer]");
+        expect(thread().querySelector(".fb-question")?.getAttribute("data-state")).toBe("waiting");
+      });
+
+      it("says a settled question is settled on a 409, and that it did not get through otherwise; nothing changes", async () => {
+        await openThread();
+        answer = ok(409);
+        click(button(thread(), "Defer for now"));
+        await settle();
+        expect(thread().textContent).toContain("[fb-defer-settled]");
+        expect(thread().querySelector(".fb-question")?.getAttribute("data-state")).toBe("waiting");
+
+        answer = ok(500);
+        click(button(thread(), "Defer for now"));
+        await settle();
+        expect(thread().textContent).toContain("[fb-defer]");
+        expect(thread().textContent).not.toContain("[fb-defer-settled]");
+        expect(thread().querySelector(".fb-question")?.getAttribute("data-state")).toBe("waiting");
+
+        answer = async () => {
+          throw new Error("offline");
+        };
+        click(button(thread(), "Defer for now"));
+        await settle();
+        expect(thread().textContent).toContain("[fb-defer]");
+        expect(thread().querySelector(".fb-question")?.getAttribute("data-state")).toBe("waiting");
+      });
+
+      it.each([
+        ["no deferredAt field", { question: "q-aaaaaa" }],
+        ["a time that is not one", { question: "q-aaaaaa", deferredAt: "soon" }],
+        ["another question", { question: "q-bbbbbb", deferredAt: "2026-10-08T09:30:00.000Z" }],
+        ["a field more", { question: "q-aaaaaa", deferredAt: "2026-10-08T09:30:00.000Z", state: "deferred" }],
+        ["nothing at all", null],
+      ])("treats a deferral receipt with %s as not done", async (_case, receipt) => {
+        await openThread();
+        answer = async () => new Response(JSON.stringify(receipt), { status: 200 });
+        click(button(thread(), "Defer for now"));
+        await settle();
+        expect(thread().textContent).toContain("[fb-defer]");
+        expect(thread().querySelector(".fb-question")?.getAttribute("data-state")).toBe("waiting");
+        expect(hasButton(thread(), "Defer for now")).toBe(true);
+      });
+
+      /* F11: a deferral stands like a reply, until a read started after it. */
+      it("keeps a deferral just made when a read that started before it lands afterwards", async () => {
+        const gate: { release?: () => void } = {};
+        asAdmin = true;
+        listAnswer = (input) =>
+          input === ALL_URL
+            ? new Promise((resolve) => {
+                gate.release = () => resolve(new Response(JSON.stringify(WITH_QUESTIONS), { status: 200 }));
+              })
+            : page(WAITING)();
+        await openEarlier();
+        click(pill("All"));
+        await settle();
+        click(pill("Needs a decision"));
+        click(row("q-aaaaaa"));
+        answer = deferral();
+        click(button(thread(), "Defer for now"));
+        await settle();
+        await act(async () => gate.release?.());
+        await settle();
+        expect(thread().querySelector(".fb-question")?.getAttribute("data-state")).toBe("deferred");
+        click(button(thread(), "‹ All threads"));
+        click(pill("All"));
+        expect(shortcut()?.textContent?.replace(/\s+/g, " ").trim()).toBe("Needs a decision 1");
+      });
+
+      /* Decision 8 and F7 (spya-t6nmxt): a button beside the two tabs, not a third tab. */
+      it("puts a Needs a decision shortcut beside the tabs, with the waiting count and a title that says the rest", async () => {
+        asAdmin = true;
+        const all = [Q1, Q2, Q3, Q4];
+        listAnswer = answerBy({ waiting: { ...WAITING, questions: all }, all: { ...ADMIN_REPORTS, questions: all } });
+        mount();
+        await settle();
+        const found = shortcut();
+        expect(found).not.toBeNull();
+        expect(found?.getAttribute("role")).toBeNull();
+        expect(found?.type).toBe("button");
+        expect(host.querySelectorAll('[role="tab"]')).toHaveLength(2);
+        expect(found?.closest('[role="tablist"]')).not.toBeNull();
+        expect(found?.textContent?.replace(/\s+/g, " ").trim()).toBe("Needs a decision 2");
+        expect(found?.getAttribute("title")).toBe(
+          "2 need a decision · newest asked 8 Oct 2026 · 1 you've replied to · 1 deferred",
+        );
+        /* On Write it is not pressed. */
+        expect(found?.getAttribute("aria-pressed")).toBe("false");
+      });
+
+      it("does not restore the shortcut from a retained draft before the next opening read lands", async () => {
+        await openThread();
+        typeReply("a decision in progress");
+        show(false);
+
+        const gate: { release?: () => void } = {};
+        listAnswer = (input) =>
+          input === WAITING_URL
+            ? new Promise((resolve) => {
+                gate.release = () => resolve(new Response(JSON.stringify({ ...WAITING, questions: [Q2] }), { status: 200 }));
+              })
+            : serve({ ...WITH_QUESTIONS, questions: [Q2] })(input);
+        show(true);
+
+        expect(gate.release).toBeTypeOf("function");
+        expect(shortcut()).toBeNull();
+        await act(async () => gate.release?.());
+        await settle();
+        expect(shortcut()?.textContent?.replace(/\s+/g, " ").trim()).toBe("Needs a decision 1");
+      });
+
+      it("takes the reader from Write straight to Needs a decision's contents, even from inside a thread", async () => {
+        await openThread();
+        click(tab("Write"));
+        expect(shortcut()?.getAttribute("aria-pressed")).toBe("false");
+        click(shortcut());
+        expect(tab("Earlier").getAttribute("aria-selected")).toBe("true");
+        expect(panelOf("Earlier").hidden).toBe(false);
+        expect(shortcut()?.getAttribute("aria-pressed")).toBe("true");
+        expect(panelOf("Earlier").querySelector(".fb-thread")).toBeNull();
+        expect(rows()).toEqual(["q-aaaaaa", "q-bbbbbb"]);
+        expect(pill("Needs a decision").getAttribute("aria-pressed")).toBe("true");
+        /* From All too; and pressed only while that filter shows. */
+        click(pill("All"));
+        await settle();
+        expect(shortcut()?.getAttribute("aria-pressed")).toBe("false");
+        click(shortcut());
+        expect(pill("Needs a decision").getAttribute("aria-pressed")).toBe("true");
+      });
+
+      it("shows the shortcut to nobody who is not an admin", async () => {
+        asAdmin = false;
+        listAnswer = page({ ...REPORTS, questions: [Q1] });
+        await openEarlier();
+        expect(shortcut()).toBeNull();
+        expect(host.querySelectorAll('[role="tab"]')).toHaveLength(2);
+      });
+
+      /* F8: the reader's choice wins over the opening's move to All. */
+      it("leaves a filter the reader chose before the opening's read landed where it is, even when nothing waits", async () => {
+        asAdmin = true;
+        const gate: { release?: () => void } = {};
+        listAnswer = (input) =>
+          input === WAITING_URL
+            ? new Promise((resolve) => {
+                gate.release = () => resolve(new Response(JSON.stringify(only(ADMIN_REPORTS, "waiting")), { status: 200 }));
+              })
+            : serve(ADMIN_REPORTS)(input);
+        mount();
+        click(tab("Earlier"));
+        expect(pill("Needs a decision").getAttribute("aria-pressed")).toBe("true");
+        /* The same filter, chosen: still a choice. */
+        click(pill("Needs a decision"));
+        await act(async () => gate.release?.());
+        await settle();
+        expect(pill("Needs a decision").getAttribute("aria-pressed")).toBe("true");
+        expect(lists).toEqual([WAITING_URL]);
+        /* No thread at all: what is left is the report no question is about. */
+        expect(rows()).toHaveLength(0);
+        expect(
+          [...panelOf("Earlier").querySelectorAll(".fb-orphans .fb-earlier-list > li .fb-earlier-number")].map((n) => n.textContent),
+        ).toEqual(["#214"]);
+      });
+
+      it("leaves another pill chosen before the opening's read landed where it is", async () => {
+        asAdmin = true;
+        const gate: { release?: () => void } = {};
+        listAnswer = (input) =>
+          input === WAITING_URL
+            ? new Promise((resolve) => {
+                gate.release = () => resolve(new Response(JSON.stringify(only(ADMIN_REPORTS, "waiting")), { status: 200 }));
+              })
+            : serve(ADMIN_REPORTS)(input);
+        mount();
+        click(tab("Earlier"));
+        click(pill("Set aside"));
+        await settle();
+        await act(async () => gate.release?.());
+        await settle();
+        expect(pill("Set aside").getAttribute("aria-pressed")).toBe("true");
+        expect(lists).toEqual([WAITING_URL, url("aside")]);
+      });
+
+      it("goes back to the opening default when shut: Needs a decision when a thread waits, whatever was chosen", async () => {
+        asAdmin = true;
+        listAnswer = serve(ADMIN_REPORTS);
+        await openEarlier();
+        expect(pill("All").getAttribute("aria-pressed")).toBe("true");
+        click(pill("Shipped"));
+        await settle();
+        listAnswer = answerBy({ waiting: WAITING, all: WITH_QUESTIONS });
+        reopen();
+        click(tab("Earlier"));
+        await settle();
+        expect(pill("Needs a decision").getAttribute("aria-pressed")).toBe("true");
+        expect(rows()).toEqual(["q-aaaaaa", "q-bbbbbb"]);
+      });
+
+      /* Decision 5: one box, one microphone, at a time; each thread keeps its own draft. */
+      it("has one reply box at a time, and keeps each thread's draft when moving between them", async () => {
+        await openThread();
+        expect(replyBoxes()).toHaveLength(1);
+        typeReply("half a thought");
+        click(button(thread(), "Next ›"));
+        expect(replyBoxes()).toHaveLength(1);
+        expect(replyBoxes()[0]?.value).toBe("");
+        typeReply("another");
+        click(button(thread(), "‹ Previous"));
+        expect(replyBoxes()[0]?.value).toBe("half a thought");
+        click(button(thread(), "‹ All threads"));
+        expect(replyBoxes()).toHaveLength(0);
+        click(row("q-bbbbbb"));
+        expect(replyBoxes()[0]?.value).toBe("another");
       });
 
       it("gives the reply box its own microphone: its own keeper, off the article, and Send off while it is busy", async () => {
-        await openWaiting();
-        click(button(card("q-aaaaaa"), "Reply"));
-        expect(card("q-aaaaaa").querySelector(".mock-mic")).not.toBeNull();
-        expect(replyMicUses.at(-1)).toEqual({ keep: "feedback-reply", doneKey: "reply:q-aaaaaa", context: { kind: "profile" } });
+        await openThread();
+        expect(thread().querySelector(".mock-mic")).not.toBeNull();
+        expect(replyMicUses.at(-1)).toEqual({ keep: "feedback-reply:q-aaaaaa", doneKey: "reply:q-aaaaaa", context: { kind: "profile" } });
         typeReply("said out loud");
-        expect(button(card("q-aaaaaa"), "Send reply").disabled).toBe(false);
+        expect(button(thread(), "Send reply").disabled).toBe(false);
 
         replyMic.armed = true;
         typeReply("said out loud.");
-        expect(button(card("q-aaaaaa"), "Send reply").disabled).toBe(true);
+        expect(button(thread(), "Send reply").disabled).toBe(true);
         /* And the guard is the function's too: a double press on Stop asks it directly. */
         act(() => replyMicDone?.());
-        await act(async () => {});
+        await settle();
         expect(posts).toHaveLength(0);
 
         replyMic.armed = false;
         replyMic.transcribing = true;
         typeReply("said out loud");
-        expect(button(card("q-aaaaaa"), "Send reply").disabled).toBe(true);
+        expect(button(thread(), "Send reply").disabled).toBe(true);
         expect(replyBoxes()[0]?.readOnly).toBe(true);
 
         /* Not busy: a double press on Stop sends, as the button would. */
@@ -2018,14 +2789,13 @@ describe("the Earlier tab", () => {
         typeReply("said out loud, done");
         answer = stored(201);
         act(() => replyMicDone?.());
-        await act(async () => {});
+        await settle();
         expect(posts).toHaveLength(1);
         expect(sent(0).body).toBe("said out loud, done");
       });
 
       it("stops the reply box's microphone on the way to Write, and when the dialog is shut", async () => {
-        await openWaiting();
-        click(button(card("q-aaaaaa"), "Reply"));
+        await openThread();
         replyMic.armed = true;
         typeReply("talking");
         replyMicToggles.length = 0;
@@ -2044,49 +2814,63 @@ describe("the Earlier tab", () => {
       });
 
       it("leaves the reply box's microphone alone while the box is showing", async () => {
-        await openWaiting();
-        click(button(card("q-aaaaaa"), "Reply"));
+        await openThread();
         replyMic.armed = true;
         typeReply("talking");
+        click(button(thread(), "Next ›"));
+        click(button(thread(), "‹ Previous"));
         expect(replyMicToggles).toEqual([]);
       });
 
       it("holds the page against a reload while a reply is half-written", async () => {
-        await openWaiting();
+        await openThread();
         expect(reloadVeto()).toBeNull();
-        click(button(card("q-aaaaaa"), "Reply"));
         typeReply("half a reply");
         expect(reloadVeto()).not.toBeNull();
+        /* Out of sight in another thread, still held. */
+        click(button(thread(), "‹ All threads"));
+        expect(reloadVeto()).not.toBeNull();
+        click(row("q-aaaaaa"));
         answer = stored(201);
-        click(button(card("q-aaaaaa"), "Send reply"));
-        await act(async () => {});
+        click(button(thread(), "Send reply"));
+        await settle();
         expect(reloadVeto()).toBeNull();
       });
 
       it("keeps a draft reachable when a refreshed question list no longer contains it", async () => {
-        await openWaiting();
-        click(button(card("q-aaaaaa"), "Reply"));
+        await openThread();
         typeReply("a decision in progress");
 
         show(false);
-        listAnswer = page({ ...WITH_QUESTIONS, questions: [Q2] });
+        listAnswer = answerBy({ waiting: { ...WAITING, questions: [Q2] }, all: { ...WITH_QUESTIONS, questions: [Q2] } });
         show(true);
         click(tab("Earlier"));
-        await act(async () => {});
-        listAnswer = page({ ...WAITING, questions: [Q2] });
-        click(pill("Needs a decision"));
-        await act(async () => {});
+        await settle();
 
-        expect(card("q-aaaaaa").querySelector<HTMLTextAreaElement>("textarea.fb-reply-input")?.value).toBe(
-          "a decision in progress",
-        );
-        expect(pills()).toContain("Needs a decision 1 · 1 open question");
-        expect(questionsBox()?.querySelector(".fb-questions-heading")?.textContent).toBe("2 questions for you");
+        /* The server's count is the server's: one thread waiting on a decision. */
+        if (panelOf("Earlier").querySelector(".fb-thread")) click(button(thread(), "‹ All threads"));
+        expect(pills()).toContain("Needs a decision 1 · 1 to decide");
+        expect(rows()).toContain("q-aaaaaa");
+        expect(rows()).toContain("q-bbbbbb");
+        expect(inGroup("waiting")).toEqual(["q-bbbbbb"]);
+        expect(inGroup("retained")).toEqual(["q-aaaaaa"]);
+        expect(shortcut()?.getAttribute("title")).toMatch(/^1 needs a decision/);
+        expect(
+          [...panelOf("Earlier").querySelectorAll(".fb-orphans .fb-earlier-number")].map((number) => number.textContent),
+        ).toEqual(["#214"]);
+        click(row("q-aaaaaa"));
+        expect(replyBoxes()[0]?.value).toBe("a decision in progress");
+        /* Kept only for its draft, so not one to decide although its stale state
+           says waiting, and it sits after every live thread (261009m § 2). */
+        expect(place()).toBe("1 needs a decision");
+        expect(unavailable(button(thread(), "Next ›"))).toBe(true);
+        click(button(thread(), "‹ Previous"));
+        expect(showing()).toBe("q-bbbbbb");
+        expect(place()).toBe("1 of 1 needing a decision");
       });
 
       it("keeps the reply box mounted while closing during transcription", async () => {
-        await openWaiting();
-        click(button(card("q-aaaaaa"), "Reply"));
+        await openThread();
         replyMic.transcribing = true;
         show(true);
         expect(replyBoxes()[0]?.readOnly).toBe(true);
@@ -2097,26 +2881,59 @@ describe("the Earlier tab", () => {
         expect(questionsBox()?.hidden).toBe(true);
       });
 
+      /* Each is the opening's Needs a decision answer; an answer that fails is
+         the failure sentence, never some of the threads. */
       it.each([
-        ["no questions key at all", (({ questions: _dropped, ...rest }) => rest)(WITH_QUESTIONS)],
-        ["questions that are not a list", { ...WITH_QUESTIONS, questions: {} }],
-        ["a question id of the wrong shape", { ...WITH_QUESTIONS, questions: [{ ...Q1, id: "spya-a2b2c3" }] }],
-        ["the same question twice", { ...WITH_QUESTIONS, questions: [Q1, Q1] }],
-        ["a title that is not text", { ...WITH_QUESTIONS, questions: [{ ...Q1, title: { html: "x" } }] }],
-        ["a title over the cap", { ...WITH_QUESTIONS, questions: [{ ...Q1, title: "x".repeat(121) }] }],
-        ["a body over the cap", { ...WITH_QUESTIONS, questions: [{ ...Q1, body: "x".repeat(4001) }] }],
-        ["a date that is not one", { ...WITH_QUESTIONS, questions: [{ ...Q1, asked: "last week" }] }],
-        ["a linked report without a number", { ...WITH_QUESTIONS, questions: [{ ...Q1, report: { id: "spya-a2b2c3", firstLine: "x" } }] }],
-        ["a reply that is not text", { ...WITH_QUESTIONS, questions: [{ ...Q1, answer: { id: "spya-a9b2c3", body: 7, createdAt: "2026-10-06T18:30:00.000Z" } }] }],
-        ["a reply with no time", { ...WITH_QUESTIONS, questions: [{ ...Q1, answer: { id: "spya-a9b2c3", body: "x", createdAt: "soon" } }] }],
-        ["an agent-only field on a question", { ...WITH_QUESTIONS, questions: [{ ...Q1, refs: "qi-8qvg5gwv" }] }],
-      ])("refuses an admin answer with %s: the failure sentence, no rows and no questions", async (_case, body) => {
+        ["no questions key at all", (({ questions: _dropped, ...rest }) => rest)(WAITING)],
+        ["questions that are not a list", { ...WAITING, questions: {} }],
+        ["a question id of the wrong shape", { ...WAITING, questions: [{ ...Q1, id: "spya-a2b2c3" }] }],
+        ["the same question twice", { ...WAITING, questions: [Q1, Q1] }],
+        ["a title that is not text", { ...WAITING, questions: [{ ...Q1, title: { html: "x" } }] }],
+        ["a title over the cap", { ...WAITING, questions: [{ ...Q1, title: "x".repeat(121) }] }],
+        ["a body over the cap", { ...WAITING, questions: [{ ...Q1, body: "x".repeat(MAX_FEEDBACK_QUESTION_BODY_CHARS + 1) }] }],
+        ["a date that is not one", { ...WAITING, questions: [{ ...Q1, asked: "last week" }] }],
+        ["a linked report without a number", { ...WAITING, questions: [{ ...Q1, report: { id: "spya-a2b2c3", firstLine: "x", body: "x" } }] }],
+        ["a linked report with no body key", { ...WAITING, questions: [{ ...Q1, report: { id: "spya-a2b2c3", number: 214, firstLine: "x" } }] }],
+        ["a reply that is not text", { ...WAITING, questions: [{ ...Q1, answers: [{ id: "spya-a9b2c3", body: 7, createdAt: "2026-10-06T18:30:00.000Z" }] }] }],
+        ["a reply with no time", { ...WAITING, questions: [{ ...Q1, answers: [{ id: "spya-a9b2c3", body: "x", createdAt: "soon" }] }] }],
+        ["a reply with a field more", { ...WAITING, questions: [{ ...Q1, answers: [{ ...REPLIED, environment: "production" }] }] }],
+        ["answers that are not a list", { ...WAITING, questions: [{ ...Q1, answers: REPLIED }] }],
+        ["older replies that are not a count", { ...WAITING, questions: [{ ...Q1, olderAnswers: -1 }] }],
+        ["a state it does not know", { ...WAITING, questions: [{ ...Q1, state: "answered" }] }],
+        ["deferred without a time", { ...WAITING, questions: [{ ...Q1, state: "deferred", deferredAt: null }] }],
+        ["a deferral time on a waiting question", { ...WAITING, questions: [{ ...Q1, deferredAt: "2026-10-08T07:00:00.000Z" }] }],
+        ["an agent-only field on a question", { ...WAITING, questions: [{ ...Q1, refs: "qi-8qvg5gwv" }] }],
+        [
+          "an older server's question with a field more",
+          {
+            ...WAITING,
+            questions: [{ id: Q2.id, title: Q2.title, body: Q2.body, asked: Q2.asked, report: null, answer: null, refs: "qi-8qvg5gwv" }],
+          },
+        ],
+        [
+          "an older server's reply with a field more",
+          {
+            ...WAITING,
+            questions: [{
+              id: Q2.id,
+              title: Q2.title,
+              body: Q2.body,
+              asked: Q2.asked,
+              report: null,
+              answer: { ...REPLIED, environment: "production" },
+            }],
+          },
+        ],
+      ])("refuses an admin answer with %s: the failure sentence, no rows and no threads", async (_case, body) => {
         asAdmin = true;
         listAnswer = page(body);
         await openEarlier();
+        expect(lists).toEqual([WAITING_URL]);
         expect(panelOf("Earlier").textContent).toContain("[fb-list]");
         expect(panelOf("Earlier").querySelectorAll("li")).toHaveLength(0);
-        expect(pills().join(" ")).not.toContain("open question");
+        expect(rows()).toHaveLength(0);
+        expect(shortcut()).toBeNull();
+        expect(pills().join(" ")).not.toContain("to decide");
       });
 
       it("shows no questions to a reader who is not an admin, whatever the answer carries", async () => {
@@ -2124,8 +2941,9 @@ describe("the Earlier tab", () => {
         listAnswer = page({ ...REPORTS, questions: [Q1] });
         await openEarlier();
         expect(lists).toEqual(["/api/feedback"]);
-        expect(cards()).toHaveLength(0);
-        expect(pills().join(" ")).not.toContain("open question");
+        expect(rows()).toHaveLength(0);
+        expect(panelOf("Earlier").querySelector(".fb-question")).toBeNull();
+        expect(pills().join(" ")).not.toContain("to decide");
       });
     });
 

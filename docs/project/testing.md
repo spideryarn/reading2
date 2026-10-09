@@ -6,6 +6,7 @@ Up: [code-quality-overview.md](code-quality-overview.md)
 
 - [§ The runner: Vitest](#the-runner-vitest) — why vitest, and where its config lives
 - [§ A run is not the only thing on the machine](#a-run-is-not-the-only-thing-on-the-machine) — the worker cap, `NO TESTS RAN` / `REFUSING TO START`, `VITEST_MAX_WORKERS`
+- [§ A test's temp files](#a-tests-temp-files) — `os.tmpdir()` is a per-run directory, removed when the run ends
 - [§ Three lanes, and which one your test is in](#three-lanes-and-which-one-your-test-is-in) — adding a test that touches Postgres or Storage; `TEST_LANES`
 - [§ `TEST DATABASE CONTENDED`](#test-database-contended) and [§ `POLLUTED`](#polluted) — what those red banners mean
 - [§ What we test, and what we don't](#what-we-test-and-what-we-dont) — what each older suite pins, and what is deliberately untested
@@ -166,6 +167,18 @@ file has — everything vitest does with it happens later.
 [`tests/vitest-worker-caps.test.ts`](../../tests/vitest-worker-caps.test.ts) pins **vitest's**
 behaviour as well as ours, so a release that fixes the ordering upstream turns red here instead of
 leaving behind a defence nobody dares delete.
+
+## A test's temp files
+
+Inside a run, `os.tmpdir()` is not `/tmp`: `vitest.config.ts` makes one `syv-<pid>-XXXXXX`
+directory per run, points `TMPDIR` at it before any worker exists, and removes it on orderly exit.
+Repeated config evaluation and nested Vitest instances reuse the inherited root; only the process
+that made it removes it. SIGKILL, fatal OOM and SIGHUP can leave that root behind; subsequent runs
+do not sweep it. See [`makeRunTempRoot()`](../../tests/setup/run-temp-root.ts) for the cleanup limit.
+Keep local cleanup where possible; the run root catches forgotten cleanup on normal exits, which
+previously filled the box's disk — 50,000 directories a day
+([261009a](../plans/261009a-tests-clean-up-their-temp-directories.md)). Two ways round it, both to
+avoid: a literal `/tmp/...` path, and spawning a child with an `env:` that leaves `TMPDIR` out.
 
 ## Three lanes, and which one your test is in
 

@@ -68,7 +68,7 @@
  * The four designs this was chosen from, and the two things it is a bet on, are
  * in docs/plans/260826b-glossary-prioritised-order.md.
  */
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   ExternalLink,
   Eye,
@@ -97,6 +97,7 @@ import {
   OriginChatMark,
 } from "./OriginChat.js";
 import { threadForOrigin } from "./useChatAnchors.js";
+import { type ItemFocus, useLandOnItem } from "./item-focus.js";
 /* One `hostOf`, not four. src/urls.ts has said since 2026-08-26 that the copies
    in this file, CommentDialog and ChatPanel should converge on it "when somebody
    is next in those files" — the hover card (ProseHoverCard.tsx) made this the
@@ -135,6 +136,7 @@ import { RewriteWaiting } from "./RewriteWaiting.js";
 import { GlossaryKindIcon } from "./GlossaryKindIcon.js";
 import { useRenderCount } from "./perf.js";
 import { BandWaiting } from "./BandWaiting.js";
+import { Excerpt } from "./Excerpt.js";
 
 /**
  * **The owner's half of this panel** — the read's status, the job writing it,
@@ -267,6 +269,16 @@ interface Props {
    * `ChatHandoff` in src/web/modes/conversation/ConversationModes.tsx.
    */
   onAskChat?: ((term: string) => void) | undefined;
+  /**
+   * **One entry to bring into view, once** — a chat's way back to the entry
+   * it was started from (src/web/item-focus.ts; plan 261009k, stage 2). The
+   * entry is selected by `?term=`, and the gate lowered if it hid the row,
+   * by the caller (`openTermInGlossary` in Reader.tsx); this scrolls the row
+   * into view once it is drawn. An entry the list does not have (renamed
+   * away, or hidden by the owner) is handed back at once.
+   */
+  focus?: ItemFocus | null | undefined;
+  onFocusTaken?: ((focus: ItemFocus) => void) | undefined;
 }
 
 export function GlossaryPanel({
@@ -279,6 +291,8 @@ export function GlossaryPanel({
   onGate,
   onJump,
   onAskChat,
+  focus = null,
+  onFocusTaken,
 }: Props) {
   useRenderCount("GlossaryPanel");
   const owner = access.kind === "owner" ? access.owner : null;
@@ -294,6 +308,19 @@ export function GlossaryPanel({
   const shown = glossary ? sortEntries(all, order, gate) : [];
   const shownIds = new Set(shown.map((entry) => entry.id));
   const hidden = access.hidden ?? [];
+  /* **Land on the focused entry** (src/web/item-focus.ts). `all` is the
+     visible list, so an entry the owner hid is not known and the band opens
+     on its list. */
+  const surface = useRef<HTMLElement>(null);
+  useLandOnItem({
+    focus,
+    ready: glossary !== null && (owner === null || owner.status === "ready"),
+    known: focus !== null && all.some((entry) => entry.id === focus.id),
+    drawn: focus !== null && shownIds.has(focus.id),
+    scope: surface,
+    attribute: "data-term-id",
+    onTaken: onFocusTaken,
+  });
   /* Against the raw list, hidden included: a dig that finished on an entry
      the reader has since hidden is not an answer whose term left the glossary. */
   const orphanedLookup = keptWithoutEntry(owner, owner?.glossary?.entries ?? all);
@@ -383,6 +410,7 @@ export function GlossaryPanel({
 
   return (
     <ModeSurface
+      ref={surface}
       label="Glossary"
       feature="gloss"
       mode="glossary"
@@ -604,18 +632,6 @@ export function GlossaryPanel({
                      button is not drawn for a visitor at all, so what they lose
                      is one sentence on a row with no occurrences. */
                   occurrencesFitTheArticle={owner ? !owner.stale : false}
-                  /* `null` for a visitor, and the button is not drawn: a
-                     lookup is a model call somebody pays for, and the
-                     answer it keeps is the owner's own research. */
-                  look={owner?.look ?? null}
-                  looking={owner?.looking === entry.id}
-                  lookBusy={(owner?.looking ?? null) !== null}
-                  lookDraft={owner?.lookDraft?.id === entry.id ? owner.lookDraft.text : null}
-                  /* The failure belongs to the request's entry, not whichever
-                     row the reader selected while that request was running. */
-                  lookFailed={
-                    owner?.lookFailed?.id === entry.id ? owner.lookFailed.message : null
-                  }
                   /* The owner's alone: a visitor's entry draws neither the
                      button nor the mark. */
                   chats={access.kind === "owner" ? (access.chats ?? null) : null}
@@ -1259,11 +1275,6 @@ function Term({
   showScore,
   unscored,
   occurrencesFitTheArticle,
-  look,
-  looking,
-  lookBusy,
-  lookDraft,
-  lookFailed,
   chats,
   onSelect,
   onJump,
@@ -1287,9 +1298,9 @@ function Term({
    * **We know that this list was written against the article on screen**, so
    * what it says about where a term is used describes what the reader can see.
    *
-   * It gates the two claims this row makes out of `entry.blocks`: that the
-   * article does not use these words, and that checking them on the web is
-   * therefore impossible. `entry.blocks` was computed against whichever
+   * It gates the claim this row makes out of `entry.blocks`: that the article
+   * does not use these words (until 2026-10-09 also that Dig deeper could not
+   * check them on the web, plan 261009k). `entry.blocks` was computed against whichever
    * extraction the list was written for — a glossary is carried into every new
    * revision — so where the list is stale an empty one says nothing at all
    * about the article in front of the reader. Saying it anyway is the bug this
@@ -1305,15 +1316,6 @@ function Term({
    * front of them are absent. GPT Sol, 2026-09-04, both rounds.
    */
   occurrencesFitTheArticle: boolean;
-  /** `null` for a visitor: there is no button, because there is nothing to spend. */
-  look: ((id: string) => Promise<unknown>) | null;
-  /** A lookup is running for *this* term. */
-  looking: boolean;
-  /** A lookup is running for some term — one at a time, so every button waits. */
-  lookBusy: boolean;
-  /** This term's lookup as it arrives, or what arrived before it broke. */
-  lookDraft: string | null;
-  lookFailed: string | null;
   /** `null` for a visitor: no *Ask in chat*, and no mark. `Looked` draws both. */
   chats: GlossaryEntryChats | null;
   onSelect(): void;
@@ -1501,16 +1503,7 @@ function Term({
               two are never merged: a reader who cannot tell the checked answer
               from the recalled one has lost the thing the labels above exist to
               give them. */}
-          <Looked
-            entry={entry}
-            look={look}
-            looking={looking}
-            busy={lookBusy}
-            unquoted={unquoted}
-            draft={lookDraft}
-            failed={lookFailed}
-            chats={chats}
-          />
+          <Looked entry={entry} chats={chats} />
 
           {entry.aliases.length > 0 && (
             <p className="gloss-aliases">also: {entry.aliases.join(", ")}</p>
@@ -1602,14 +1595,14 @@ function Term({
                banner said twice; a visitor gets no banner and no claim either,
                which is the honest end of a payload that carries no freshness.
 
-               The last clause is why the Check-the-web button above is
-               disabled, and it is said here rather than beside the button so it
-               is said once. src/messages.ts § `GLOSSARY_TERM_NOT_QUOTED`. */
+               It ended "but there is no passage to check it against on the
+               web" until 2026-10-09, the reason the entry's Dig deeper was
+               disabled; that button went with plan 261009k, and *Ask in chat*
+               needs no passage. */
             unquoted && (
               <p className="gloss-nowhere">
                 These exact words do not appear in the article. The definition may still be right;
-                the term was named rather than quoted — but there is no passage to check it
-                against on the web.
+                the term was named rather than quoted.
               </p>
             )
           )}
@@ -1848,7 +1841,10 @@ function AskATerm({
       {askDraft && !asked && (
         <div className="gloss-ask-answer">
           <p className="gloss-ask-found">
-            <strong>{askDraft.quote}</strong>
+            <strong>
+              {/* The article's own words, drawn from the block's markup (Excerpt.tsx, plan 261009k). */}
+              <Excerpt blockId={askDraft.blockId} words={askDraft.quote} />
+            </strong>
             <BlockRef id={askDraft.blockId} onJump={onJump} />
           </p>
           {askDraft.text && (
@@ -1867,7 +1863,9 @@ function AskATerm({
               the model was asked about. Showing the reader's string here would
               be the panel quoting something it did not use. */}
           <p className="gloss-ask-found">
-            <strong>{asked.quote}</strong>
+            <strong>
+              <Excerpt blockId={asked.blockId} words={asked.quote} />
+            </strong>
             <BlockRef id={asked.blockId} onJump={onJump} />
           </p>
           <AddedNote added={asked.added} shownIds={shownIds} onTerm={onTerm} onUnhide={onUnhide} />
@@ -1927,45 +1925,6 @@ function AddedNote({
 }
 
 /**
- * The web's answer for one term, or the button that asks for it.
- *
- * Greg, 2026-08-26: *"provide web citations (e.g. clickable links with
- * hover-tooltips for sources) if we're using the web"* — the conditional is
- * doing real work in that sentence, and this component is where the condition
- * becomes visible. The batch call that writes an entry **does not** search; its
- * `background` is the model's memory and its `url` is a guess at a canonical
- * page. So until somebody presses this, the honest thing to show is a button
- * rather than a badge claiming a check nobody ran.
- *
- * ## Three things it says that a simpler version would not
- *
- * **`searches: 0` is drawn, not hidden.** The model decides per call whether to
- * look anything up, so an answer with no searches is a real outcome — *I
- * already knew this* — and it is indistinguishable from a broken tool unless
- * something says which. Same call CommentDialog's search badge makes, and the
- * reason its comment gives: the absence of a search is a fact about the answer.
- *
- * **Sources are host names with the title in the tooltip.** The band is 18rem.
- * A page title is the useful thing to read and the wrong thing to lay out, so
- * the host is on the line and the title is one hover away — which is exactly
- * what was asked for, and it is `Tooltip.tsx` doing it rather than a `title=`
- * attribute, so it works on focus too.
- *
- * **The date is there.** An answer from the web is an answer about the web on
- * one day, and a lookup from a month ago is a different object from one from a
- * minute ago.
- */
-/**
- * *Dig deeper*'s two titles, **shared with the hover card's button**
- * (ProseHoverCard.tsx § `TermCard`, plan 261002c § 3), so the band and the card
- * cannot give one disabled button two explanations.
- */
-export const DIG_DEEPER_UNQUOTED =
-  "Dig deeper starts from a passage of the article, and this term is named rather than quoted anywhere in it.";
-export const DIG_DEEPER_SAYS =
-  "Searches the web and asks a stronger model about this one thing. It takes longer than the first answer.";
-
-/**
  * **The terms the owner hid, and the way back** — a collapsed *Hidden (n)* at
  * the foot of the list, only when there are any. Greg marked it LOW PRIORITY
  * (spya-yqfzkm: *"perhaps there'd be a thing in the Glossary mode to
@@ -2011,43 +1970,45 @@ function HiddenTerms({
 /** No hide on its way — the panel's fallback when there is no owner to ask. */
 const NOTHING_PENDING: ReadonlySet<string> = new Set();
 
+/**
+ * **An open entry's kept web answer, and the owner's *Ask in chat***.
+ *
+ * Greg, 2026-08-26: *"provide web citations (e.g. clickable links with
+ * hover-tooltips for sources) if we're using the web"* — the conditional is
+ * doing real work in that sentence, and this component is where the condition
+ * becomes visible. The batch call that writes an entry **does not** search; its
+ * `background` is the model's memory and its `url` is a guess at a canonical
+ * page. Until 2026-10-09 a *Dig deeper* button here asked the web and kept the
+ * answer on the entry; since plan 261009k the button is *Ask in chat*, and a
+ * kept answer is still drawn, by `LookupAnswer`.
+ *
+ * ## Three things it says that a simpler version would not
+ *
+ * **`searches: 0` is drawn, not hidden.** The model decides per call whether to
+ * look anything up, so an answer with no searches is a real outcome — *I
+ * already knew this* — and it is indistinguishable from a broken tool unless
+ * something says which. Same call CommentDialog's search badge makes, and the
+ * reason its comment gives: the absence of a search is a fact about the answer.
+ *
+ * **Sources are host names with the title in the tooltip.** The band is 18rem.
+ * A page title is the useful thing to read and the wrong thing to lay out, so
+ * the host is on the line and the title is one hover away — which is exactly
+ * what was asked for, and it is `Tooltip.tsx` doing it rather than a `title=`
+ * attribute, so it works on focus too.
+ *
+ * **The date is there.** An answer from the web is an answer about the web on
+ * one day, and a lookup from a month ago is a different object from one from a
+ * minute ago.
+ */
 export function Looked({
   entry,
-  look,
-  looking,
-  busy,
-  unquoted,
-  draft,
-  failed,
   chats = null,
 }: {
   entry: GlossaryEntry;
-  look: ((id: string) => Promise<unknown>) | null;
-  looking: boolean;
-  busy: boolean;
   /**
-   * The lookup as it arrives, or what arrived before it broke — drawn as
-   * unfinished, **never** as the entry's answer: no *checked* line, no
-   * sources. Only the stream's `done`, sent after the save, puts a lookup on
-   * the entry. docs/plans/260910g-stream-glossary-answers-as-they-arrive.md.
-   */
-  draft: string | null;
-  /**
-   * The article names this term rather than quoting it — **and the list is in a
-   * position to say so.** `Term` computes it; the second half of that sentence
-   * is the whole reason it is not `entry.blocks.length === 0` read here.
-   */
-  unquoted: boolean;
-  /** **Not a `StepFailure`.** A web lookup is a request, not a job — there is
-      nothing on the queue to retry and the only control the term has ever had
-      is the Dig deeper button itself, which simply comes back. See
-      `worthRetrying` in src/messages.ts § The two places that deliberately do
-      not ask. */
-  failed: string | null;
-  /**
-   * **A chat about this entry**: its *Ask in chat*, beside Dig deeper, and the
-   * mark that reopens a chat already started from it (plan 261006d, D5).
-   * `null` or absent for a visitor, who gets neither.
+   * **A chat about this entry**: its *Ask in chat*, and the mark that reopens
+   * a chat already started from it (plan 261006d, D5). `null` or absent for a
+   * visitor, who gets neither.
    */
   chats?: GlossaryEntryChats | null;
 }) {
@@ -2059,125 +2020,34 @@ export function Looked({
     ? threadForOrigin(chats.summaries, { mode: "glossary", itemId: entry.id, quote: entry.name })
     : undefined;
 
-  /* **Nothing at all for a visitor**, rather than a disabled button. The
-     marked-not-hidden rule is about controls a reader would otherwise go
-     looking for; this one they have never seen, and a dead globe on every row
-     of a list they can read perfectly well is furniture. The band's own
-     sentence already tells them what a shared link does not carry. */
-  if (!look) return lookup ? <LookupAnswer lookup={lookup} /> : null;
+  /* **Nothing at all for a visitor**, rather than a disabled button: they have
+     no chat. The band's own sentence already tells them what a shared link
+     does not carry. A kept answer is the entry's, so they see it. */
+  if (!chats) return lookup ? <LookupAnswer lookup={lookup} /> : null;
 
-  /* **Dig deeper again, under an answer already there** (plan 261001p, Sol
-     F10). Without it an entry checked before Dig deeper existed — perhaps one
-     that says *no web search* — could never be dug into, because the button
-     was drawn only while there was no answer. The old answer stays on screen
-     while the new one arrives under it, and stays if the new one fails: only
-     the stream's `done`, after the save, replaces it (the store upserts). */
-  const control = (() => {
-    /* **A term the article never quotes cannot be checked, and the button now
-       says so before it is pressed rather than after.** A lookup is `explain`
-       with a different selection: it needs a passage of the piece to anchor the
-       question to, and an entry with no occurrences has none — so this button
-       could only ever fail, every time, for as long as the entry exists. It
-       failed with a sentence naming the term, which a reader reported as the app
-       denying the entry was there (src/messages.ts § `GLOSSARY_TERM_NOT_QUOTED`).
-
-       **`unquoted` is decided in `Term`, not here**, because it takes a second
-       fact this component does not have: whether we know the list was written
-       against this article. Where we do not, an empty `entry.blocks` says
-       nothing, and a button disabled on the strength of it would be the same
-       wrong claim in a different medium.
-
-       **Marked, not hidden**, and the reason is the `gloss-nowhere` sentence
-       further down this same entry — one place, not two. The `title` is a
-       best-effort second copy of it: a disabled button does not reliably raise a
-       native tooltip, which is exactly why the sentence and not the tooltip is
-       where the explanation lives. Hiding the button would be the wrong call for
-       the reason `worthRetrying` gives about this control — it is the only route
-       a term has ever had to a lookup — and disabling it takes away nothing that
-       worked. */
-    return (
-      <div className="gloss-look">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="gloss-btn gloss-dig"
-          /* Disabled while any lookup runs, not just this one. Each is a model
-             call somebody pays for, and a panel that fires five because five
-             rows were clicked spends money on a mis-click. */
-          disabled={busy || unquoted}
-          title={unquoted ? DIG_DEEPER_UNQUOTED : DIG_DEEPER_SAYS}
-          onClick={() => void look(entry.id)}
-        >
-          {looking ? <LoaderCircle size={12} className="cmt-spinner" /> : <Globe size={12} />}
-          {looking ? "Digging deeper…" : lookup ? "Dig deeper again" : "Dig deeper"}
-        </Button>
-        {/* **Not disabled for a term the article never quotes**, unlike its
-            neighbour: Dig deeper needs a passage to anchor to, a chat does
-            not. It is its own conversation, so it does not wait for a
-            running lookup either. The press sends the question (plan 261006j). It stays once a chat exists: a second one
-            can be started. */}
-        {chats && (
-          <AskInChatButton
-            label={ASK_ENTRY_IN_CHAT}
-            className="gloss-btn gloss-ask-chat"
-            onAsk={() => chats.onAsk(entry)}
-          />
-        )}
-        {/* The way back to the chat started from this entry, on a line of its
-            own under the buttons. */}
-        {chats && chat && <OriginChatMark chat={chat} label={OPEN_ENTRY_CHAT} onOpen={chats.onOpen} />}
-        {/* The wait needs saying, not just spinning through. This call sends the
-            whole article and may run a web search on top, so it can sit for the
-            better part of a minute — long enough that a bare spinner reads as
-            stuck. The search panel already had this and this did not, which is
-            the only reason they differed.
-
-            "Up to a minute", not "a few seconds", which is what this said for
-            about an hour. The comment directly above already said "the better
-            part of a minute" — so the code and the copy disagreed in the same
-            screenful, and the copy was the optimistic one. Under-promising a
-            wait is the version that makes a reader think it has hung.
-
-            Both sentences earn their place: the first says why it is slow, so
-            the wait is expected rather than suspicious; the second says the
-            reader can leave, which is the thing that actually makes waiting
-            bearable and is true — the answer is stored against the entry, not
-            held in this component, and the server finishes the lookup even if
-            the reader closes the band (`streamTermLookup` in src/routes.ts).
-            Same promise the search panel makes.
-
-            Shown only until the first words land, since 2026-09-10: after that
-            the words are the progress. */}
-        {looking && !draft && !failed && (
-          <p className="gloss-look-wait">
-            This searches the web first, then the whole piece goes to a stronger model, so it can
-            take a minute or more. You can carry on reading — the answer is saved against this term
-            either way.
-          </p>
-        )}
-        {/* The failure first, then what arrived under it — the box's order,
-            for the same reason: the sentence says what the text is. */}
-        {failed && <p className="gloss-error">{failed}</p>}
-        {draft && (
-          <div className="gloss-look on">
-            <p className="gloss-part-label">
-              {looking && !failed ? "arriving…" : "unfinished"}
-            </p>
-            <p className="gloss-part-text">{draft}</p>
-          </div>
-        )}
-      </div>
-    );
-  })();
-
-  return lookup ? (
+  return (
     <>
-      <LookupAnswer lookup={lookup} />
-      {control}
+      {/* **A lookup kept from before 2026-10-09**, when the entry had a *Dig
+          deeper* that searched the web and stored its answer here, or the
+          answer *Look up a term* stored on a term it added. Dig deeper went
+          (plan 261009k: Greg, *"we don't need the dig deeper button"*); what
+          it kept stays on the entry. */}
+      {lookup && <LookupAnswer lookup={lookup} />}
+      <div className="gloss-look">
+        {/* **Ask in chat, where Dig deeper was** (plan 261009k). Never
+            disabled, a term the article never quotes included: a chat needs
+            no passage. The press sends the question (plan 261006j). It stays
+            once a chat exists: a second one can be started. */}
+        <AskInChatButton
+          label={ASK_ENTRY_IN_CHAT}
+          className="gloss-btn gloss-ask-chat"
+          onAsk={() => chats.onAsk(entry)}
+        />
+        {/* The way back to the chat started from this entry, on a line of its
+            own under the button. */}
+        {chat && <OriginChatMark chat={chat} label={OPEN_ENTRY_CHAT} onOpen={chats.onOpen} />}
+      </div>
     </>
-  ) : (
-    control
   );
 }
 

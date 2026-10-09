@@ -53,7 +53,9 @@ function passage(name: string): Found {
     valence: null,
     reasoning: null,
     short: name,
+    shortStart: 0,
     long: name,
+    longStart: 0,
     at: 0,
     whole: false,
     /* Not a quote. See `Found.quoteStroke`. */
@@ -106,13 +108,14 @@ const SILENT: BandMode[] = [
   "diagram",
   "learn",
   "structure",
-  "debate",
-  /* Earned, not the cheap fix: v1's row has a "first cited" *jump* to one
-     block and no selection, so there is nothing to mark. Selecting a work and
-     marking every passage that cites it (`?cite=`) is deferred —
+  /* Earned, not the cheap fix, in all three sub-modes. Bibliography (Citations
+     until 2026-10-09): v1's row has a "first cited" *jump* to one block and no
+     selection, so there is nothing to mark. Selecting a work and marking every
+     passage that cites it (`?cite=`) is deferred —
      docs/plans/260911g-citations-mode.md § What is deliberately not built. When
-     it lands, this entry moves to PRODUCERS. */
-  "citations",
+     it lands, this entry moves to PRODUCERS. Reception and Claims (Debate
+     until then): a row is a page on the web, and a claim's passage a jump. */
+  "peer-review",
   /* Earned for Citations' reason: each passage under a question is a jump, and
      a `?faq=` selection that marks a question's passages is deferred —
      docs/plans/260916d-faq-mode.md § Deferred. When it lands, this entry moves

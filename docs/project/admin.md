@@ -253,6 +253,9 @@ under the signed-in administrator's own id, again through `feedbackStore`. It is
 under `/api/admin/feedback/` (the first is the Ignore mark), it touches no report and no other
 reader's data, and it is under the namespace because only an administrator is asked anything
 ([feedback.md § Questions for an admin](feedback.md#questions-for-an-admin-and-replies-to-them-since-2026-10-07)).
+The third, since 2026-10-08, is **`POST /api/admin/feedback/deferrals`**, *Defer for now* on a
+question: a row in `feedback_question_deferrals` under the same id, for the same reasons
+([261008i](../plans/261008i-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md)).
 
 The metadata is exact and worth listing rather than gesturing at: the account **id**, the **email
 address**, the **providers** GoTrue records for it (`google`, `email`), whether that address is
@@ -452,6 +455,12 @@ The seam between them is `AccountRow` ([`src/store/account-row.ts`](../../src/st
 and it is deliberately the same shape it was when the accounts came out of a `select()`. `mergeUsers`
 and its tests never learned that the source moved, which is the point of putting it in a file of its
 own.
+
+**One account is not a reader, and `mergeUsers` drops it**: the site account
+([`src/site-account.ts`](../../src/site-account.ts), since 2026-10-09), which the public shelf's topic
+pills are stored under and billed to. It owns nothing and cannot sign in, so it is not a row or a
+count here; its spend is on `/admin/costs` as *the site*, and the `/admin` index has its own panel,
+with the Rebuild button ([public-shelf.md § Topic pills](public-shelf.md#topic-pills)).
 
 `email_confirmed_at`, deliberately **not** `confirmed_at` — Supabase's backwards-compatibility field
 means "email *or* phone was confirmed", and the page prints "email unconfirmed" beneath an email

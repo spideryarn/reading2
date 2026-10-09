@@ -108,6 +108,13 @@ export interface UseDictationField {
   again?: () => void;
   /** A double press was taken: the box will send when the words arrive. */
   sendingAfter: boolean;
+  /**
+   * **This box takes a double press on Stop at all** (it was given an
+   * `onDone`), so the button's card can say so before the reader needs it.
+   * `again` cannot: it exists only in the moment after Stop. Hand it to
+   * `DictationButton` as `doubleStop`.
+   */
+  doubleStop: boolean;
 }
 
 export function useDictationField<C>({
@@ -393,6 +400,10 @@ export function useDictationField<C>({
       againTimer.current = setTimeout(closeAgain, DOUBLE_PRESS_MS);
     }
     if (!dictation.armed) {
+      /* A moved offer may be the only copy of the reader's words. The hook
+         refuses that start; keep the ended dictation's caret/value proof and
+         focus until a new start is actually accepted. */
+      if (dictation.toggle() === false) return;
       wantSend.current = null;
       delivered.current = false;
       closeAgain();
@@ -405,8 +416,7 @@ export function useDictationField<C>({
       pressedAt.current = box.current?.selectionStart ?? null;
       /* A new press: there is no ended dictation to be stale relative to. */
       valueAtEnd.current = null;
-    }
-    dictation.toggle();
+    } else dictation.toggle();
     /* **Put the focus back where the words are going.** The header used to
        claim that `readOnly` "keeps focus"; GPT Sol pointed out that this is
        only true relative to `disabled` — clicking a separate button has already
@@ -437,5 +447,6 @@ export function useDictationField<C>({
     toggle,
     ...(onDone && againOpen && readOnly ? { again } : {}),
     sendingAfter,
+    doubleStop: onDone !== undefined,
   };
 }

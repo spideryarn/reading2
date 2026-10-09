@@ -89,11 +89,11 @@ describe("a conversation started from a claim is not its block's chat", () => {
 });
 
 describe("threadSource", () => {
-  it("says a conversation with a stored origin was started from a claim in Debate, with the claim's words", () => {
+  it("says a conversation with a stored origin was started from a claim in Peer review's Claims, with the claim's words", () => {
     expect(threadSource({ kind: "chat", origin: CLAIM })).toEqual({
-      from: "debate",
-      mode: "debate",
-      label: "Started from a claim in Debate",
+      from: "peer-review",
+      mode: "peer-review",
+      label: "Started from a claim in Peer review › Claims",
       quote: "RNA can transfer a memory",
     });
   });
@@ -102,11 +102,11 @@ describe("threadSource", () => {
     expect(threadSource({ kind: "chat" })).toBeNull();
   });
 
-  it("says a lens conversation was started from an angle in Debate, with the reader's words", () => {
+  it("says a lens conversation was started from an angle in Peer review's Reception, with the reader's words", () => {
     expect(threadSource({ kind: "chat", origin: LENS })).toEqual({
-      from: "debate",
-      mode: "debate",
-      label: "Started from an angle in Debate",
+      from: "peer-review",
+      mode: "peer-review",
+      label: "Started from an angle in Peer review › Reception",
       quote: "how it relates to Smith 2019",
       voice: "reader",
     });
@@ -156,9 +156,9 @@ describe("a lens and a claim", () => {
  * **A glossary entry and a cited work** (plan 261006d, D1). Each has a durable
  * id, so the id is its identity and the name stored beside it is a snapshot
  * for titles and tooltips. A regeneration that rewords the entry keeps the
- * mark; that is the difference from a claim.
+ * mark; that is the difference from a claim. An idea joined them in plan 261009k.
  */
-describe.each(["glossary", "citations"] as const)("a %s entry's origin", (mode) => {
+describe.each(["glossary", "citations", "ideas"] as const)("a %s entry's origin", (mode) => {
   const item = (over: { itemId?: string; quote?: string } = {}): ThreadOrigin => ({
     mode,
     itemId: "spya-ttm222",

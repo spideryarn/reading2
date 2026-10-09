@@ -60,6 +60,7 @@ function render(value: string, save: SaveState, inFlight = false) {
     root.render(
       createElement(ProfileBox, {
         id: "about",
+        article: null,
         label: "About you",
         hint: "What the model is told about you.",
         placeholder: "",

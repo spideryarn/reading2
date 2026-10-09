@@ -149,6 +149,7 @@ const TWO: PublicLibrary = {
       siteName: "Caltech",
       words: 3822,
       publicAt: "2026-09-03T10:00:00.000Z",
+      topics: [],
     },
     {
       slug: "a-bare-one-spya-000000",
@@ -158,12 +159,14 @@ const TWO: PublicLibrary = {
       siteName: null,
       words: null,
       publicAt: null,
+      topics: [],
     },
   ],
+  topics: [],
   truncated: false,
 };
 
-const EMPTY: PublicLibrary = { entries: [], truncated: false };
+const EMPTY: PublicLibrary = { entries: [], topics: [], truncated: false };
 
 let host: HTMLDivElement;
 let root: Root;
@@ -525,5 +528,86 @@ describe("if something on the shelf is yours", () => {
     expect(page.textContent).toContain(PUBLIC_SHELF_TAKEDOWN);
     const hrefs = [...page.querySelectorAll("a")].map((a) => a.getAttribute("href"));
     expect(hrefs).toContain(PUBLIC_SHARING_HREF);
+  });
+});
+
+/* **The topic pills** — plan 261008j, approved by Greg as "q-p5h2a7 A". They
+   arrive in the same one request; pressing one narrows the cards, AND across
+   pills, as a reader's own shelf does. */
+describe("the topic pills", () => {
+  const card = (slug: string, title: string, topics: string[]) => ({
+    slug,
+    title,
+    byline: null,
+    gist: null,
+    siteName: null,
+    words: 900,
+    publicAt: "2026-09-02T00:00:00.000Z",
+    topics,
+  });
+  const TOPICAL: PublicLibrary = {
+    entries: [
+      card("a-spya-aaaaaa", "Replay in sleep", ["neuroscience", "sleep"]),
+      card("b-spya-bbbbbb", "Retinal circuits", ["neuroscience"]),
+      card("c-spya-cccccc", "Dovetail joints", ["carpentry"]),
+      card("d-spya-dddddd", "Unsorted", []),
+    ],
+    topics: [
+      { key: "neuroscience", label: "Neuroscience", granularity: 0 },
+      { key: "carpentry", label: "Carpentry", granularity: 0 },
+      { key: "sleep", label: "Sleep", granularity: 0.5, within: "neuroscience" },
+    ],
+    truncated: false,
+  };
+  const pills = (page: HTMLElement) => [...page.querySelectorAll<HTMLButtonElement>("[data-public-topics] button[aria-pressed]")];
+  const titles = (page: HTMLElement) => cards(page).map((c) => c.querySelector("h2")?.textContent);
+
+  it("draws one pill per topic, with how many cards each holds", async () => {
+    const page = await show(() => TOPICAL);
+    expect(pills(page).map((b) => b.textContent)).toEqual(["Neuroscience2", "Carpentry1", "›Sleep1"]);
+    expect(titles(page)).toHaveLength(4);
+  });
+
+  it("narrows the cards to a pressed topic, and Clear brings them back, without asking again", async () => {
+    const page = await show(() => TOPICAL);
+    await act(async () => pills(page)[0]?.click());
+    expect(titles(page)).toEqual(["Replay in sleep", "Retinal circuits"]);
+    expect(pills(page)[0]?.getAttribute("aria-pressed")).toBe("true");
+    const sleep = pills(page).find((b) => b.textContent?.includes("Sleep"));
+    await act(async () => sleep?.click());
+    expect(titles(page)).toEqual(["Replay in sleep"]);
+    const clear = page.querySelector<HTMLButtonElement>('[data-public-topics] button[aria-label^="Clear"]');
+    await act(async () => clear?.click());
+    expect(titles(page)).toHaveLength(4);
+    expect(asked).toEqual(["/api/public/library"]);
+  });
+
+  it("says on a pill's card that it was named from the shared articles, not the visitor's", async () => {
+    const { TermTip } = await import("../src/web/ShelfTermChip.js");
+    const { publicTerms } = await import("../src/web/PublicShelfTopics.js");
+    const term = publicTerms(TOPICAL)[0];
+    if (!term) throw new Error("no term");
+    const tip = document.createElement("div");
+    const tipRoot = createRoot(tip);
+    await act(async () =>
+      tipRoot.render(
+        <TermTip term={term} shown={2} inScope={new Set(["a-spya-aaaaaa"])} scopeWord="on this shelf" titleOf={() => "x"} whoseArticles="the shared articles’" />,
+      ),
+    );
+    expect(tip.textContent).toContain("Named by a model from the shared articles’ titles");
+    expect(tip.textContent).not.toContain("your articles");
+    act(() => tipRoot.unmount());
+  });
+
+  it("treats an answer from a server older than the pills as having none", async () => {
+    const old = { entries: TOPICAL.entries.map(({ topics: _, ...e }) => e), truncated: false } as unknown as PublicLibrary;
+    const page = await show(() => old);
+    expect(page.querySelector("[data-public-topics]")).toBeNull();
+    expect(cards(page)).toHaveLength(4);
+  });
+
+  it("draws no row when the server sent no topics", async () => {
+    const page = await show();
+    expect(page.querySelector("[data-public-topics]")).toBeNull();
   });
 });

@@ -278,11 +278,14 @@ describe("declaredTables", () => {
       "citation_index_lookups",
       "citation_investigations",
       "comments",
+      "debate_claim_checks",
       "feedback",
       "feedback_question_answers",
+      "feedback_question_deferrals",
       "feedback_shipped_emails",
       "glossary_hidden_entries",
       "glossary_lookups",
+      "import_records",
       "ingest_events",
       "jobs",
       "link_previews",
@@ -297,6 +300,7 @@ describe("declaredTables", () => {
       "realtime_sessions",
       "referee_claims",
       "referee_criteria",
+      "referee_hidden_checks",
       "revision_blocks",
       "revision_phrase_runs",
       "revision_step_runs",
@@ -391,8 +395,12 @@ describe("against a real database", () => {
          (plan 261004h); forty-eight since `quiz_attempts`, 2026-10-05 (plan
          261005b); forty-nine since `article_share_link_events` the same day
          (plan 261005e); fifty since `feedback_question_answers`, 2026-10-07
-         (plan 261007d). */
-      expect(report.declaredTables).toBe(50);
+         (plan 261007d); fifty-one since `feedback_question_deferrals`, 2026-10-08
+         (plan 261008i); fifty-two since `import_records` the same day (plan
+         261008j); fifty-three since `referee_hidden_checks`, 2026-10-09 (plan
+         261009a); fifty-four since `debate_claim_checks` the same day (plan
+         261008i § 3). */
+      expect(report.declaredTables).toBe(54);
       expect(driftWarnings(report)).toEqual([]);
     });
   });

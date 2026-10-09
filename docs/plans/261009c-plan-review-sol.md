@@ -1,0 +1,15 @@
+The raw measurements match the plan. The home-edge invariant is sound under today’s CSS: moving More preserves the combined width of More plus the preceding shape buttons. I’d tighten these points before implementation:
+
+1. **P1 — Placement must update even when the rung stays unchanged.** `useDockFit` currently returns early when `next === applied.current`. A 390→410px resize can change More’s visibility while staying on rung 4. **Fix:** calculate and update `moreLeads` after every measurement, independently of the rung update; preserve state when `clientWidth === 0`.
+
+2. **P1 — Specify scroll normalization explicitly.** Raw bounding rects shift with `scrollLeft`, potentially returning More home after the reader scrolls. **Fix:** compare `max(more.right, anchor.right) - dockRect.left - dock.clientLeft + dock.scrollLeft` with `dock.clientWidth - rightInset`. Never temporarily reset scrolling. Mark the anchor from the **home split**, even when the rendered leading split is empty.
+
+3. **P2 — A stable More key does not preserve every moved control.** Today the frame renders `{lead.map(...)}`, More, `{rest.map(...)}` as separate child slots. Moving modes between those arrays can remount them despite their mode keys, losing focus and tooltip state. **Fix:** render one flat array with stable keys for every mode and More, under the same frame. Test node identity and retained focus through both reorder directions. [React state identity](https://react.dev/learn/preserving-and-resetting-state).
+
+4. **P2 — The notch-edge explanation is incomplete.** Right padding carries `--safe-right` only inside the narrow-window query; `.dock-tail` carries it at other widths. A landscape phone can exceed that breakpoint. **Fix:** derive the protected right edge from the resolved safe inset independently of the padding rule, and test landscape with a nonzero inset.
+
+5. **P2 — Static browser widths won’t catch the main regressions.** **Fix:** add browser assertions for both arms through 360→landscape→360, Experimental toggles and Diagram entry/exit without resizing, nonzero `scrollLeft`, and repeated measurements around the visibility threshold. Assert full trigger bounds, stable placement, actual tap operation, and menu/focus survival during rotation. Run WebKit and Chromium; mocked rects cannot validate flex layout or browser focus behavior.
+
+6. **P2 — Accessibility needs validation, but “More first” adds no inherent violation.** More remains a named menu button; the mixed radiogroup and unusual keyboard behavior already exist. **Fix:** keep its button semantics and verify VoiceOver traversal, radio counts, menu activation, Escape, and focus return. Don’t make More a radio. [ARIA radiogroup definition](https://www.w3.org/TR/wai-aria-1.2/#radiogroup).
+
+7. **P3 — A simpler design exists, with the stated placement trade-off.** Leading More whenever rung 4 still overflows would work at 360px with Experimental on and avoid anchor geometry. **Fix:** either choose that broader rule or retain D2 explicitly to preserve “after Skim” whenever visible. The proposed measurement is reasonable for that stricter requirement.

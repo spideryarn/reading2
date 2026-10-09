@@ -106,7 +106,11 @@ export interface AdminCosts {
   /** The window in words, so no figure is shown without its period. */
   label: string;
   rows: CostCubeRow[];
-  /** Every owner in `rows`. `email: null` when the Auth service has no such account. */
+  /**
+   * Every owner in `rows`. `email: null` when the Auth service has no such
+   * account; for the site account (src/site-account.ts) it is the words
+   * *the site*, which is what every label on the page shows.
+   */
   owners: { id: string; email: string | null }[];
   /**
    * False when the account listing failed: every `email` is then null because

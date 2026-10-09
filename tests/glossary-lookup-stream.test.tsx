@@ -354,51 +354,31 @@ describe("a lookup that ends without `done`", () => {
   });
 });
 
-/* Plan 261001p, found by the stage 2 browser check: a *Dig deeper again*
-   whose forced search failed (OpenRouter 402, our 502 `error` frame) showed
-   the busy label, then the button came back with the old answer and no
-   sentence anywhere. These drive the hook and the panel together, because the
-   sentence has to reach the screen, not just the hook's state. */
-describe("a failed Dig deeper, on screen", () => {
+/* Plan 261001p's browser check pinned here that a failed *Dig deeper again*
+   said why under the button, on screen. The button went on 2026-10-09 (plan
+   261009k), and the panel no longer draws a lookup's progress or failure: the
+   hook's `look` is the server half's, left in place until Greg decides (D5).
+   What the panel must still do is keep the stored answer on screen, and offer
+   no Dig deeper. */
+describe("the panel, around a lookup the hook still runs (261009k)", () => {
   const SENTENCE = "Our AI provider refused the request. Try again later. [ai-provider-402]";
   const HAD = {
     ...GLOSSARY,
     glossary: { ...GLOSSARY.glossary, entries: [{ ...ENTRY, lookup: LOOKUP }] },
   } as GlossaryResponse;
 
-  it("says why under Dig deeper again, and keeps the old answer, when the stream ends in `error`", async () => {
+  it("keeps the stored answer on screen and offers no Dig deeper, whatever the stream does", async () => {
     readResponse = HAD;
     await mount();
     expect(host.textContent).toContain(LOOKUP.answer);
+    expect(host.textContent).not.toMatch(/Dig deeper|Digging deeper/);
     const { running } = await start();
     send("error", { error: SENTENCE });
     end();
     await finished(running);
 
-    expect(host.textContent).toContain(SENTENCE);
     expect(host.textContent).toContain(LOOKUP.answer);
-    expect(host.textContent).toContain("Dig deeper again");
-  });
-
-  it("says why under Dig deeper again when the press is refused before the stream", async () => {
-    readResponse = HAD;
-    refuse = { status: 429, error: "Another Dig deeper is still running. Wait for it to finish, then try this one." };
-    await mount();
-    const { running } = await start();
-    await finished(running);
-
-    expect(host.textContent).toContain("Another Dig deeper is still running.");
-    expect(host.textContent).toContain(LOOKUP.answer);
-  });
-
-  it("says why under Dig deeper on a first press too", async () => {
-    await mount();
-    const { running } = await start();
-    send("error", { error: SENTENCE });
-    end();
-    await finished(running);
-
-    expect(host.textContent).toContain(SENTENCE);
+    expect(host.textContent).not.toMatch(/Dig deeper|Digging deeper/);
   });
 });
 

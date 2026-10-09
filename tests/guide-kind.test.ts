@@ -12,7 +12,7 @@
 import { describe, expect, it } from "vitest";
 
 import { withTurn } from "../src/chat.js";
-import { CHAT_TOOLS, GUIDE_TOOLS, toolsFor } from "../src/chat-tools.js";
+import { CHAT_TOOLS, GUIDE_TOOLS, OFFER_TO_SAVE_TOOL, toolsFor } from "../src/chat-tools.js";
 import { buildConverseMessages, defaultModel, jobFor, roundTools, webSearchTool } from "../src/converse.js";
 import { cachedText } from "../src/article-prompt.js";
 import { A_FEW_ARTICLES, experienceLine, experienceOf, madeLine, modeWordsSection } from "../src/guide.js";
@@ -107,8 +107,11 @@ describe("the guide's prompt", () => {
 
   it("asks why they are reading when they have not said, and invites About you once", () => {
     const guide = systemOf("guide");
-    expect(guide).toMatch(/If they have not said why they are reading it, ask that first/);
-    expect(guide).toMatch(/The screen also shows them a box for it/);
+    expect(guide).toMatch(/If they still have not said why they are reading it, ask that first/);
+    /* Plan 261009i: the greeting asks in the conversation, so the model is told
+       it did, and that the box is gone. */
+    expect(guide).toMatch(/opens with a fixed greeting of ours/);
+    expect(guide).not.toMatch(/a box for it/);
     expect(guide).toMatch(/invite it once, lightly/);
     expect(guide).toMatch(/Ask one question at a time/);
   });
@@ -167,7 +170,9 @@ describe("our words for the modes", () => {
 
   it("marks an experimental mode as one, and an ordinary one not", () => {
     const section = modeWordsSection();
-    expect(section).toContain("- Debate (experimental): ");
+    /* Debate was the example until 2026-10-09, when it came out as Peer review. */
+    expect(section).toContain("- Referee (experimental): ");
+    expect(section).toContain("- Peer review: ");
     expect(section).toContain("- Glossary: ");
     expect(section).toContain("  - Learn › Explore (experimental): ");
   });
@@ -274,8 +279,8 @@ describe("which modes are already made", () => {
 });
 
 describe("the guide's tools", () => {
-  it("are the article's own five, in chat's order", () => {
-    expect(toolsFor("guide")).toBe(GUIDE_TOOLS);
+  it("are the article's own five, in chat's order, then the offer to save", () => {
+    expect(toolsFor("guide")).toEqual([...GUIDE_TOOLS, OFFER_TO_SAVE_TOOL]);
     expect(GUIDE_TOOLS.map((t) => t.function.name)).toEqual([
       "search_article_words",
       "search_article_meaning",
@@ -294,10 +299,10 @@ describe("the guide's tools", () => {
     for (const round of [first, last]) {
       expect(JSON.stringify(round)).not.toContain("web_search");
     }
-    expect(first).toEqual({ tools: GUIDE_TOOLS });
+    expect(first).toEqual({ tools: toolsFor("guide") });
     /* The last round still declares its tools, for the calls in its history,
        and asks for none. */
-    expect(last).toEqual({ tools: GUIDE_TOOLS, tool_choice: "none" });
+    expect(last).toEqual({ tools: toolsFor("guide"), tool_choice: "none" });
   });
 
   it("leave every other kind's rounds as they were", () => {

@@ -1,0 +1,324 @@
+diff --git a/docs/project/public-readable-sharing.md b/docs/project/public-readable-sharing.md
+index 0da2a0104..8aa4d0188 100644
+--- a/docs/project/public-readable-sharing.md
++++ b/docs/project/public-readable-sharing.md
+@@ -285,8 +285,11 @@ Greg's answers to the three questions stage 1 ended on, in his words, are in the
+   own requests behind its own confirmation. Unlike the public switch **it can read its state
+   before publication**: `GET /api/article/:slug/share-link` needs only the owner's row. So it
+   reads on every attachment and keeps no mark. **A create that did not come back is never sent
+-  again by itself**, because a second create replaces the first link: it shows *unknown* and a
+-  *Check again* button. An older read that answers after a newer write is dropped
++  again by itself**, because a second create replaces the first link: it shows *unknown*, with *Check
++  again* and *Turn off*. The turn-off is idempotent on the server, so it is safe to send without
++  knowing whether there is a link
++  ([261009l](../plans/261009l-add-page-private-link-lost-reply-cannot-be-turned-off.md), which
++  also names the race that remains). An older read that answers after a newer write is dropped
+   ([postmortem 261006b](../postmortems/261006b-a-read-completion-does-not-prove-it-followed-a-write.md)).
+ - **Controllers belong to one reader.** The registry is keyed by reader and slug and is emptied
+   when the session changes, where the upload engine is fenced
+diff --git a/src/messages.ts b/src/messages.ts
+index c063bc12f..9ece00203 100644
+--- a/src/messages.ts
++++ b/src/messages.ts
+@@ -4890,8 +4890,8 @@ export const LINK_AT_ADD_GAVE_UP =
+  * review). *Check again* reads the state, which changes nothing.
+  */
+ export const LINK_AT_ADD_UNKNOWN =
+-  "That did not come back, so we cannot say whether it took effect. Check again before making " +
+-  "another link: a new link replaces the one before it.";
++  "That did not come back, so we cannot say whether it took effect. Check again to see, or turn " +
++  "it off. A new link replaces the one before it.";
+ 
+ /** The read of the link's state failed on coming back to this page. Nothing was changed, and no link is drawn from memory. */
+ export const LINK_AT_ADD_UNREAD =
+diff --git a/src/web/AddShareLink.tsx b/src/web/AddShareLink.tsx
+index 4adfacc66..72c7e2423 100644
+--- a/src/web/AddShareLink.tsx
++++ b/src/web/AddShareLink.tsx
+@@ -146,17 +146,27 @@ export function AddShareLink({
+         </Button>
+       )}
+ 
++      {/* There may be a link, and nothing could read it back. *Turn off* is
++          safe whatever the truth is (plan 261009l), so a link the reply was
++          lost for can be stopped from here even while the reads fail. */}
+       {state.kind === "unknown" && (
+-        <Button
+-          type="button"
+-          variant="outline"
+-          size="sm"
+-          className="tw:mt-2"
+-          disabled={state.checking}
+-          onClick={() => link.recheck()}
+-        >
+-          {state.checking ? "Checking…" : "Check again"}
+-        </Button>
++        <div className="tw:mt-2 tw:flex tw:flex-wrap tw:items-center tw:gap-2">
++          <Button
++            type="button"
++            variant="outline"
++            size="sm"
++            disabled={state.checking}
++            onClick={() => link.recheck()}
++          >
++            {state.checking ? "Checking…" : "Check again"}
++          </Button>
++          <Tooltip placement="bottom" content={<TipNote>{PRIVATE_LINK_STOP_TIP}</TipNote>}>
++            <Button type="button" variant="outline" size="sm" onClick={() => link.turnOff()}>
++              <Link2Off size={14} />
++              Turn off
++            </Button>
++          </Tooltip>
++        </div>
+       )}
+ 
+       {on && (
+diff --git a/src/web/add-share-link.ts b/src/web/add-share-link.ts
+index dca7a162d..567f3162f 100644
+--- a/src/web/add-share-link.ts
++++ b/src/web/add-share-link.ts
+@@ -35,7 +35,8 @@
+  *    that cannot be read is `unknown`, which sends nothing from anywhere:
+  *    not a retry, not `settle`, not a Retry of the job. What leaves it is a
+  *    read: *Check again* (`recheck`), or the next attachment. GPT Sol's stage
+- *    2 plan review.
++ *    2 plan review. Or the reader's *Turn off*, which is idempotent on the
++ *    server and so safe to send without knowing (plan 261009l).
+  *  - **A link it could not read again is not drawn.** If an attachment's read
+  *    fails over a link held from an earlier visit, the key on screen may have
+  *    been turned off or replaced since. It becomes `unknown`.
+@@ -290,10 +291,17 @@ export class LinkAtAdd {
+     this.kick();
+   }
+ 
+-  /** *Turn off*. No confirmation: this is the safe direction. */
++  /**
++   * *Turn off*. No confirmation: this is the safe direction. Also from
++   * `unknown`, where a link may be on that nothing can read back: the
++   * server's turn-off is idempotent, so sending it is safe whatever the truth
++   * is (plan 261009l). It does not wait for the `checking` read: `send` moves
++   * `turn` on, so that read's answer is dropped.
++   */
+   turnOff(): void {
+     const from = this.state;
+-    if (from.kind !== "on" && !(from.kind === "refused" && from.link !== null)) return;
++    const mayBeOn = from.kind === "on" || from.kind === "unknown" || (from.kind === "refused" && from.link !== null);
++    if (!mayBeOn) return;
+     this.send("off");
+   }
+ 
+@@ -468,6 +476,20 @@ export class LinkAtAdd {
+           return;
+         }
+         this.retryOnNextAlive = to === "on" && status === 404;
++        if (to === "off" && status === 404) {
++          /* The turn-off's only 404 is that the reader owns no row at this
++             slug (signed out is a 401), and the key lives on the row: there
++             is no link, from whatever was drawn before. */
++          this.set({ kind: "off" });
++          return;
++        }
++        if (before.kind === "unknown" && status !== null && status >= 400 && status < 500) {
++          /* Refused, so nothing was written and what was not known still
++             is. `refused` with no link would offer a create over a link
++             that may be on. */
++          this.set({ kind: "unknown", because: before.because, checking: false });
++          return;
++        }
+         if (status === null || status < 400 || status >= 500) {
+           /* No answer, or a fault: it may have taken effect. This is the
+              state nothing is sent from (the header's second point). */
+diff --git a/tests/add-page-sharing-section.test.tsx b/tests/add-page-sharing-section.test.tsx
+index 0cc2d4bc4..b9869eef4 100644
+--- a/tests/add-page-sharing-section.test.tsx
++++ b/tests/add-page-sharing-section.test.tsx
+@@ -702,6 +702,36 @@ describe("2b: before the article's row exists, and an answer that did not come b
+     expect(linkShown()).toBe(`${location.origin}/read/${SLUG}?key=${KEY}`);
+     expect(writes).toEqual([CREATE()]);
+   });
++
++  it("*Turn off* stops a link that create may have made, while the reads still fail (plan 261009l)", async () => {
++    linkCreate = async () => Promise.reject(new TypeError("Failed to fetch"));
++    await importing();
++    await createLink();
++    linkRead = async () => Promise.reject(new TypeError("Failed to fetch"));
++    click(button("Check again"), "Check again button");
++    await settle();
++    expect(text()).toContain(LINK_AT_ADD_UNKNOWN);
++    click(button("Turn off"), "Turn off button");
++    await settle();
++    expect(writes).toEqual([CREATE(), REMOVE()]);
++    expect(text()).not.toContain(LINK_AT_ADD_UNKNOWN);
++    expect(button(LINK_AT_ADD_LABEL)).toBeDefined();
++  });
++
++  it("*Turn off* stays pressable while *Check again*'s read is out", async () => {
++    linkCreate = async () => Promise.reject(new TypeError("Failed to fetch"));
++    await importing();
++    await createLink();
++    linkRead = () => new Promise<Response>(() => {});
++    click(button("Check again"), "Check again button");
++    await settle();
++    expect(button("Checking…")?.disabled).toBe(true);
++    expect(button("Turn off")?.disabled).toBe(false);
++    click(button("Turn off"), "Turn off button");
++    await settle();
++    expect(writes).toEqual([CREATE(), REMOVE()]);
++    expect(button(LINK_AT_ADD_LABEL)).toBeDefined();
++  });
+ });
+ 
+ describe("2b: the section opens itself when it has something to say, and names what is on when shut", () => {
+diff --git a/tests/add-share-link.test.ts b/tests/add-share-link.test.ts
+index 1d3e26a1d..8e910734e 100644
+--- a/tests/add-share-link.test.ts
++++ b/tests/add-share-link.test.ts
+@@ -343,6 +343,148 @@ describe("an answer to the create that did not come back", () => {
+   });
+ });
+ 
++/**
++ * Plan 261009l. A link that may be live must be possible to turn off from
++ * the page that made it, even while every read fails: the turn-off is
++ * idempotent on the server, so sending it from `unknown` is safe.
++ */
++describe("*Turn off* from not knowing", () => {
++  /** A create whose reply was lost, and reads that now fail too. */
++  async function lostCreate(...writes: Write[]) {
++    const s = scripted("none", "none", new TypeError("Failed to fetch"), ...writes);
++    const link = await offered(s.io);
++    confirm(link);
++    await vi.runAllTimersAsync();
++    expect(link.get()).toEqual({ kind: "unknown", because: "write", checking: false });
++    s.now.read = new Error("offline");
++    link.recheck();
++    await vi.advanceTimersByTimeAsync(0);
++    expect(link.get()).toEqual({ kind: "unknown", because: "write", checking: false });
++    return { ...s, link };
++  }
++
++  it("sends one delete and is off, with no second create", async () => {
++    const { link, calls, made } = await lostCreate(OFF);
++    const before = calls.length;
++    link.turnOff();
++    expect(link.get()).toEqual({ kind: "saving", to: "off" });
++    await vi.runAllTimersAsync();
++    expect(link.get()).toEqual({ kind: "off" });
++    expect(calls.slice(before)).toEqual(["remove"]);
++    expect(made()).toBe(1);
++  });
++
++  it("works the same after a turn-off whose reply was lost", async () => {
++    const { io, calls } = scripted("none", ON, new TypeError("Failed to fetch"), OFF);
++    const link = await offered(io);
++    link.turnOff();
++    await vi.runAllTimersAsync();
++    expect(link.get()).toEqual({ kind: "unknown", because: "write", checking: false });
++    link.turnOff();
++    await vi.runAllTimersAsync();
++    expect(link.get()).toEqual({ kind: "off" });
++    expect(calls.filter((c) => c === "remove")).toHaveLength(2);
++  });
++
++  it("works after a failed read on coming back over a link that was on", async () => {
++    const { io, now } = scripted("none", ON, OFF);
++    const link = await offered(io);
++    now.read = new Error("offline");
++    await reattach(link);
++    expect(link.get()).toEqual({ kind: "unknown", because: "read", checking: false });
++    link.turnOff();
++    await vi.runAllTimersAsync();
++    expect(link.get()).toEqual({ kind: "off" });
++  });
++
++  it("a 404 is off: the reader owns no row here, and the key lives on the row", async () => {
++    const { link } = await lostCreate(refusal(404, "No article artefacts"));
++    link.turnOff();
++    await vi.runAllTimersAsync();
++    expect(link.get()).toEqual({ kind: "off" });
++  });
++
++  it("a 404 from a link drawn as on is off too: a key on screen that opens nothing is not shown", async () => {
++    const { io } = scripted("none", ON, refusal(404, "No article artefacts"));
++    const link = await offered(io);
++    link.turnOff();
++    await vi.runAllTimersAsync();
++    expect(link.get()).toEqual({ kind: "off" });
++  });
++
++  it.each([
++    ["no answer", new TypeError("Failed to fetch") as Write],
++    ["a server error", refusal(500, "boom") as Write],
++    ["a success that cannot be read", null as Write],
++    ["a refusal, which wrote nothing", refusal(403, "Not yours") as Write],
++    ["signed out", refusal(401, "Sign in") as Write],
++  ])("after %s it still does not know, and offers nothing to create", async (_name, answer) => {
++    const { link, made } = await lostCreate(answer);
++    link.turnOff();
++    await vi.runAllTimersAsync();
++    expect(link.get()).toEqual({ kind: "unknown", because: "write", checking: false });
++    link.open();
++    expect(link.get().kind).toBe("unknown");
++    expect(made()).toBe(1);
++  });
++
++  it("pressed while *Check again*'s read is out, the read's late answer does not overwrite it", async () => {
++    let readBack: (read: ShareLinkState) => void = () => {};
++    const { link, io } = await lostCreate(OFF);
++    io.read = () => new Promise((resolve) => (readBack = resolve));
++    link.recheck();
++    expect(link.get()).toEqual({ kind: "unknown", because: "write", checking: true });
++    link.turnOff();
++    await vi.runAllTimersAsync();
++    expect(link.get()).toEqual({ kind: "off" });
++    readBack(ON);
++    await vi.advanceTimersByTimeAsync(0);
++    expect(link.get()).toEqual({ kind: "off" });
++  });
++
++  it.each([
++    ["before", true],
++    ["after", false],
++  ])("a reattachment's read answering %s the turn-off does not overwrite it", async (_when, readFirst) => {
++    let readBack: (read: ShareLinkState) => void = () => {};
++    let removed: (state: ShareLinkState) => void = () => {};
++    const { link, io, made } = await lostCreate();
++    io.read = () => new Promise((resolve) => (readBack = resolve));
++    io.remove = () => new Promise((resolve) => (removed = resolve));
++    link.pause();
++    link.resume();
++    await vi.advanceTimersByTimeAsync(0);
++    link.turnOff();
++    if (readFirst) {
++      readBack(ON);
++      await vi.advanceTimersByTimeAsync(0);
++      removed(OFF);
++    } else {
++      removed(OFF);
++      await vi.advanceTimersByTimeAsync(0);
++      readBack(ON);
++    }
++    await vi.runAllTimersAsync();
++    expect(link.get()).toEqual({ kind: "off" });
++    expect(made()).toBe(1);
++  });
++
++  it("gives way if the reattachment finds the article published, during or after the turn-off", async () => {
++    let removed: (state: ShareLinkState) => void = () => {};
++    const { link, io, now } = await lostCreate();
++    io.remove = () => new Promise((resolve) => (removed = resolve));
++    now.probe = "article";
++    link.turnOff();
++    link.pause();
++    link.resume();
++    await vi.advanceTimersByTimeAsync(0);
++    expect(link.get()).toEqual({ kind: "adopted" });
++    removed(OFF);
++    await vi.runAllTimersAsync();
++    expect(link.get()).toEqual({ kind: "adopted" });
++  });
++});
++
+ describe("the server's other answers", () => {
+   it("shows a refusal in the server's sentence, and nothing is on", async () => {
+     const { io } = scripted("none", OFF, refusal(409, "This paper has not been read through yet."));

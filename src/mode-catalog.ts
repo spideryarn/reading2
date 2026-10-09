@@ -95,9 +95,11 @@ export interface ModeCatalogEntry {
    * *"not saved notes or flashcards"* because the mode's **name** promises two
    * things it does not do, and that denial is the named cost of the 2026-09-01
    * rename — if the line is ever shortened, the denial is the part to keep.
-   * `debate`'s names the empty case because most pieces have no reception at
-   * all, and a mode that is empty four times in five reads as broken unless the
-   * button said so first.
+   * `debate`'s named the empty case, because most pieces have no reception at
+   * all and a mode that is empty four times in five reads as broken unless the
+   * button said so first. Since 2026-10-09 Debate is Peer review's Reception,
+   * which opens on Bibliography, so the button no longer promises the empty
+   * case; Reception's own empty state says it.
    */
   description: string;
   /**
@@ -225,9 +227,10 @@ export interface ModeCatalogEntry {
    * for the mode that took its place. `reception` and `critiques` were refused
    * for `debate` because each presumes something false about the piece — but
    * they are the words a reader reaches for, and reaching for them should land
-   * them somewhere. Likewise `review` and `reviewer`, which `referee` was named
-   * around (src/modes.ts § referee): the word is free, it is what a person
-   * would type, and it belongs to the peer-review mode.
+   * them somewhere (Reception's row, since 2026-10-09). Likewise `review` and
+   * `reviewer`, which `referee` was named around (src/modes.ts § referee): the
+   * word is free, it is what a person would type, and it belongs to the mode
+   * for somebody doing a peer review.
    */
   aliases: readonly string[];
   /**
@@ -283,7 +286,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     description: "Ask about this article — answers point back at the paragraphs they came from",
     how: "Nothing runs until you ask. It can reach past the article when it needs to — the open web, your other saved articles, a page this one links to — and where an answer used one of those, a strip above it says so.",
     /* Not `ai`: *AI processing* is a row's own name (article-commands.ts).
-       Not `discussion`, which belongs to neither this nor Debate: on Debate it
+       Not `discussion`, which belongs to neither this nor Reception: there it
        would take `discuss` from here, and here it is already found by it. */
     aliases: ["ask", "question", "talk", "discuss", "conversation", "assistant"],
     experimental: false,
@@ -328,10 +331,13 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        and `reviewer` was passed over only because it would have sat beside it.
        `referee` is what journals call the person; `review` is what everyone
        else calls the job. src/modes.ts § referee has the whole argument. */
-    /* Not `critique`: Debate has `critiques`, and Referee comes first in the
+    /* Not `critique`: Reception has `critiques`, and Referee comes first in the
        bar, so the shorter word here would take every start of the longer one.
        Not `criteria`, which is the chip's own row. */
-    aliases: ["review", "reviewer", "peer review", "peer reviewer", "referee report", "assess", "assessment"],
+    /* "peer review" was here until 2026-10-09, when it went to the mode
+       named Peer review (plan 261009l § The name). `peer reviewer` stays: it
+       is about the person doing one, which is who this mode is for. */
+    aliases: ["review", "reviewer", "peer reviewer", "referee report", "assess", "assessment"],
     experimental: true,
   },
   summary: {
@@ -466,86 +472,53 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     aliases: ["chronology", "dates", "events", "history", "sequence", "chronological", "time line", "order of events"],
     experimental: true,
   },
-  debate: {
-    description:
-      "What the rest of the web says about this piece — often nobody has written anything, and it says so",
-    /* **Three drafts of this sentence were wrong, all in the same direction:
-       claiming more about provenance than the mode can.** "Written by somebody
-       other than this article's author" is false — the author's own later
-       correction is one of the most useful rows here, and that is half of why
-       `reception` and `critiques` were refused as *names* (src/modes.ts §
-       debate). "Nothing here came out of the article itself" is false too: a
-       claim row prints the article's own `claimQuote` beside the response
-       (DebatePanel.tsx). And "two searches" undercounts — they are two metered
-       *passes*, one of which has run 36 searches on its own (src/debate.ts).
-       GPT Sol, 2026-09-07. */
-    how: "What it finds comes from two passes over the open web rather than from the article, and is stored once it lands. Every row links out, so you can check a source rather than take our word for it.",
-    /* The two names refused for the mode and the one refused on the code, all
-       three pointing here rather than nowhere. `reception` presumes the piece
-       was noticed and `critiques` presumes the response was hostile — false
-       promises in a *name*, which a reader reads before pressing, and harmless
-       in an *alias*, which they only meet by having typed it themselves.
-       `responses` was refused because `Response` means four things in `src/`;
-       that objection is about code and does not reach a reader's keyboard.
-       src/modes.ts § debate. `reception` has also been a chip of this mode
-       since 2026-10-03, and the one it opens on. */
-    aliases: [
-      "critiques", "reception", "responses", "criticism", "reactions", "commentary", "rebuttals",
-      "counterarguments", "what others say", "replies",
-    ],
-    experimental: true,
-  },
-  citations: {
-    description: "The works this piece cites, each with a link — ranked by how much the piece leans on them",
-    /* **Checked against the source, claim by claim** (docs/project/mode.md §
-       The card on the button):
-       - "one model call … written once and then stored": the `citations` step,
-         one messages-wire call over `articleWithIds`, written to the
-         `citations` column (src/citations.ts, src/pipeline.ts § STEPS).
-       - "every address … is one the article gave, found by code": `linkFor` in
-         src/citations.ts derives DOI → arXiv → a title-matching anchor → a
-         mention anchor from the article's own text and hrefs; a URL the model
-         writes is counted in `CitationDrops.modelUrls` and never read.
-       - "otherwise a Scholar search, marked as one": `linkFrom: "search"`,
-         labelled on the row (CitationsPanel.tsx § Source).
-       - "influence is the model's memory, not a count": `CitedWork.influence`
-         in src/types.ts; no citation database is consulted (deferred in the
-         plan).
-       - "*Find it* searches the web for the work … kept only if a result is
-         plainly the work's own page … marked as found": src/citation-find.ts —
-         one call with web search, and no count of searches promised, because
-         nothing bounds how many the provider runs inside it (GPT Sol F17);
-         `openrouter:web_search` on Exa; `readFind` keeps a URL only if it is
-         one of the call's own annotations and `pageNamesTitle` says the result
-         names the work; stored in `citation_finds` and drawn as `linkFrom:
-         "web"`, "found on the web" (CitationsPanel.tsx § Source). Since plan
-         260929g it is *Look it up*, on every row: a row the article gave a
-         link for keeps that link whatever is found (`attachFinds` upgrades
-         only searched rows).
-       - "reads that result's search extract … never the full work … quotes
-         only words found in it": src/citation-lookup.ts — the same one call
-         answers from the chosen result's `excerpt`, each quote is kept only
-         if `verifyQuote` finds it in that excerpt, and the row labels the
-         verdict as the AI's reading of the extract (CitationsPanel.tsx §
-         readNoteOf, LookupReading).
-       - "Investigate … first searches … Then it writes a longer reading":
-         since plan 260930d *Look it up* is the first step of the one
-         *Investigate* press (src/citation-investigate.ts), skipped when the
-         row already has a current checked reading, and the reading after it is
-         written from search extracts (plan 260930a).
-       The sentence is about the mode, not the press: *Investigate* is on a
-       row, owner-only, and the sentence says whose it is. No
-       price — mode.md § The card on the button.
-       docs/plans/260911g-citations-mode.md,
-       docs/plans/260929g-check-a-cited-paper-supports-the-claim.md. */
-    how: "One model call over the article, written once and then stored. Every address shown for a work is one the article itself gave — a DOI, an arXiv id or its own link, found by code rather than typed by the model — and where it gave none the row offers a Scholar search, marked as a search. Whoever owns the article can Dig deeper into any row, which first searches the web for the work: a result that plainly matches can become the link of a row that had only a search, never of one the article linked, and its search extract — usually the abstract, never the full work — is read against what the article uses the work for, quoting only words found in that extract. Then a stronger model writes a longer reading, from search extracts, of how the work bears on the article. How influential a work is comes from the model's memory, not from a citation count.",
-    /* `works cited` is two words on purpose: `canonical` collapses whitespace
-       and lower-cases, so it is stored already in the form a reader types. */
-    aliases: [
-      "references", "bibliography", "sources", "works cited", "refs", "reference list", "cited works",
-      "literature", "further reading",
-    ],
-    experimental: true,
+  /* **Citations and Debate until 2026-10-09**, now this mode's three
+     sub-modes (src/web/sub-modes.ts § `PEER_REVIEW_SUB_MODES`, where the
+     retired words and the bibliography words are the sub-mode rows' own
+     aliases, so each opens the view it means).
+     docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md. */
+  "peer-review": {
+    /* Greg's frame for it, 2026-10-09 (spya-vcvxu5): *"what this article
+       cites and what other people say about it, this article might be a good
+       sort of TLDR somehow for the different submodes"*. Each chip's card
+       leads with one half of it. */
+    description: "What this piece cites, and what others say about it",
+    /* **Checked against the source, claim by claim**, in the two halves the
+       two modes' cards were checked in (docs/project/mode.md § The card on
+       the button):
+       - Bibliography, "one model call … written once and then stored": the
+         `citations` step, one messages-wire call over `articleWithIds`,
+         written to the `citations` column (src/citations.ts, src/pipeline.ts §
+         STEPS). "Every address … is one the article gave, found by code":
+         `linkFor` in src/citations.ts derives DOI → arXiv → a title-matching
+         anchor → a mention anchor from the article's own text and hrefs; a URL
+         the model writes is counted in `CitationDrops.modelUrls` and never
+         read. "Otherwise a Scholar search": `linkFrom: "search"`, labelled on
+         the row (CitationsPanel.tsx § Source).
+       - Reception, "a pass over the open web … stored once it lands": the
+         `debate` step since `debate/7` (2026-10-08) is one pass, for
+         Reception only (src/debate.ts). "A pass" rather than "a search",
+         because one pass has run 36 searches on its own (GPT Sol,
+         2026-09-07).
+       - Claims, "listed by one model call … with no web search": the
+         `debate-claims` step (plan 261008i § 2); a check is the reader's own
+         press, per claim (src/debate.ts § `admitDebateCheck`).
+       - "Every source links out": every Reception and checked-claim row is a
+         page with its address (DebatePanel.tsx § Row).
+       No price — mode.md § The card on the button. */
+    how: "Bibliography is one model call over the article, written once and stored, and every address shown for a work is one the article itself gave, found by code rather than typed by the model, or else a Scholar search marked as one. Reception comes from a pass over the open web, and Claims lists the piece's claims with one model call and no web search, for you to check against the web; each is stored once it lands. Every source links out, so you can check it rather than take our word for it.",
+    /* "peer review" left Referee's aliases on 2026-10-09: it is this mode's
+       name, so the label finds it and an alias saying it again would be a
+       second copy (tests/mode-catalog.test.ts § never another mode's label).
+       Referee keeps `peer reviewer`, which is about the person (plan 261009l §
+       The name). The two retired mode words are the sub-mode rows' aliases,
+       not these. */
+    aliases: ["sources", "literature", "further reading"],
+    /* Out of the switch on the day it was made. Greg, 2026-10-09
+       (spya-vcvxu5): *"let's move this out of experimental, this combined
+       mode"*. Both halves were behind it until then.
+       docs/project/experimental-features.md. */
+    experimental: false,
   },
   structure: {
     /* **True of both faces**, since 2026-09-10: the two columns and the nested
@@ -664,7 +637,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        width is
        `fitView`'s `margW` (src/web/layout.ts): below it the column is not
        drawn. */
-    how: "It marks where the argument turns, with so, but or vs beside those paragraphs. One model call makes those words, the first time the article's owner opens the column; the notes are there meanwhile and the words join them when they are ready. Everything else is read, never made here: the questions come with the article's parts, the sentence at the top is where the argument has got to, and ideas, FAQ, Timeline, Debate and citations appear once they have been made in their own modes. It needs a wide window; on a narrow one the notes are hidden.",
+    how: "It marks where the argument turns, with so, but or vs beside those paragraphs. One model call makes those words, the first time the article's owner opens the column; the notes are there meanwhile and the words join them when they are ready. Everything else is read, never made here: the questions come with the article's parts, the sentence at the top is where the argument has got to, and ideas, FAQ, Timeline, and Peer review's claims and cited works appear once they have been made in their own modes. It needs a wide window; on a narrow one the notes are hidden.",
     /* `annotations` was the mode's own word until 2026-10-01 (261001n); the
        Comments row has it too and this row wins it. **Nothing here may start
        with `notes`**, which is the Comments row's. */

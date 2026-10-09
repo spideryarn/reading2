@@ -1,10 +1,19 @@
-# Debate mode
+# Debate mode — Peer review's Reception and Claims
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
-What the rest of the web says about this piece: replies to it, and the argument around the claims it
-makes. **The only mode whose content is not in the article at all**, which is why nearly everything
-the panel draws that is not a row is a disclosure.
+**Since 2026-10-09 this is two of [Peer review](peer-review.md)'s three sub-modes**, Reception and
+Claims, after Bibliography (the Citations mode until then). The mode, its address
+(`?mode=peer-review&peer-review=reception` or `claims`; an old `?mode=debate` lands there) and its
+chip row are [peer-review.md](peer-review.md)'s; this page keeps the depth on what the two
+sub-modes draw. The stored names — the `debate` and `debate-claims` steps, columns and routes,
+`DebatePanel`, the `dbt-` CSS — keep the word until the name is confirmed (plan
+[261009l § Stage 3](../plans/261009l-peer-review-mode-merges-citations-and-debate.md#stage-3-held-for-greg-the-stored-names)).
+
+Reception is what the rest of the web says about this piece. Claims starts with claims extracted
+from the article, then shows sources from checks the reader asks for and claim sources preserved
+from an earlier search. The source rows are outside the article, which is why nearly everything
+the panel draws around them is a disclosure.
 
 ## What it is for
 
@@ -36,7 +45,8 @@ the panel draws that is not a row is a disclosure.
 
 ## What the reader sees
 
-Two sub-modes, one per search, on a segmented control (`?debate=claims`; Reception is the default):
+Two of Peer review's three sub-modes on its segmented control
+(`?peer-review=reception` or `?peer-review=claims`; Bibliography is the default):
 
 - **Reception**: what others have written about the piece itself, including work that cites it and
   says something about it. Pages that link or quote the piece come first; pages that only name it
@@ -47,15 +57,22 @@ Two sub-modes, one per search, on a segmented control (`?debate=claims`; Recepti
   For the owner it ends with **Cited by**: the papers that cite the piece, from OpenAlex, most cited
   first, ten and then all (see [§ Cited by](#cited-by-the-papers-that-cite-the-piece) below). A
   visitor gets a Google Scholar search for who cites it instead.
-- **Claims**: what has been written about the claims the piece makes. One open disclosure per
-  claim, in article order, headed by the article's own words; the relevance bar belongs here.
+- **Claims**: the list of the claims the article rests on, for the reader to pick from
+  ([§ The claims list](#the-claims-list)). The Reception search no longer looks into claims. A
+  debate from before `debate/7` still draws its saved claim sources under the list, exactly as
+  before, headed *Claims the earlier search chose*: one open disclosure per claim, in article
+  order, headed by the article's own words; the relevance bar belongs there.
 
 When the article has changed since the search ran, a banner says so and offers *Search again*.
 That button is held from the press until the new search has been read, so one press cannot buy two
 searches: [reader-profile.md § Regenerate waits for its own result](reader-profile.md#regenerate-waits-for-its-own-result).
+Nor can the server: a search whose processing stopped part-way (a deploy, or the job's own
+deadline) is not started again by the job's next window, which fails it with *Press Retry to run
+it* instead (`oncePerJob`,
+[261009l](../plans/261009l-a-requeued-job-does-not-buy-the-debate-search-again.md)).
 
 Threads and key sources narrow whichever sub-mode is on screen. **The stored search cannot be
-steered**: its two searches choose their own queries, and what they keep is one result per article,
+steered**: its Reception search chooses its own queries, and what it keeps is one result per article,
 the same for the owner and for every visitor. What the owner can do, since 2026-10-05, is start a
 chat from it: about any one claim ([§ Check a claim in chat](#check-a-claim-in-chat)), or from an
 angle of their own typed into the box at the top
@@ -63,6 +80,104 @@ angle of their own typed into the box at the top
 
 Open this doc to find your way in; the plans below are still where the design and its reasoning
 live.
+
+## The claims list
+
+Since 2026-10-08 Claims opens on a list of up to eight claims the article rests on that someone
+outside could argue with, in article order
+([261008i § 2](../plans/261008i-debate-claims-picked-by-the-reader.md)). It is its own pipeline
+step and artefact, `debate-claims` (the `debate_claims` column), made by **one model call over the
+article and no web search**: a few cents, where the Reception search is the dearest press in the
+app. Each claim is the article's own words, re-found in the paragraph it names and stored as the
+article's characters (the Referee rule, `findQuote` in `"spaced"` mode), with a jump to that
+paragraph, and under it one short line in the AI's words, labelled so. A claim whose quote is not
+in its paragraph is dropped and counted. Each listed claim keeps *Check this claim in chat*, and on
+a current list the owner can tick claims and check them on the web
+([§ Checking the claims you pick](#checking-the-claims-you-pick)).
+
+**The press rule.** Pressing the Claims chip, the command bar's *Peer review › Claims*, or the Peer
+review button when it lands on Claims makes the list when there is none. A link, Back, a reload or
+a last-view restore that lands on Claims only reads, and shows *List its claims*. Peer review's
+sub-modes arm different targets (`activationForPeerReview`, `src/web/activation.ts`), and
+each hook spends only its own while its own sub-mode is showing, so a Claims press can never buy
+the Reception search, nor a Reception press the list.
+
+**Its states**: none (*List its claims* for the owner; a sentence for a visitor), running, an empty
+list (a sentence: a real answer), a failed run (its sentence and *Retry*), and **stale** — the
+article has changed since — when the list is drawn read-only under a banner with *List again*.
+
+**Who sees it.** The owner, with the controls. A visitor to a shared article sees the list
+read-only — each claim's id, paragraph, quote and statement, through the public projection — and
+nothing to press; the list alone, with no search stored, is enough to open Peer review to them.
+
+The Claims segment's count is the number of listed claims when there is a list and no check has
+found anything yet; once checks have put sources on screen, it is those sources (each claim's,
+an address once) plus any older search's; with no list, the older search's claim sources, as
+before.
+
+## Checking the claims you pick
+
+Since 2026-10-09, for the owner, on a current list
+([261008i § 3](../plans/261008i-debate-claims-picked-by-the-reader.md)). Greg chose this over an
+automatic claims search: *"C list the claims first, let them pick … and also B allow them to input
+their own"* (2026-10-08, q-sn37bt).
+
+**What a press buys.** Tick claims, type one of your own in the box (at most 600 characters,
+refused rather than cut), and press **Check**: **one web search**, about 20 cents and a minute and a
+half, over every ticked claim and the typed one together, at most four. It is pass B's call from
+the old automatic search (`generateClaimCheck`, `src/debate.ts`), handed the claims instead of
+picking them, and every row passes the same checks (a URL the search returned, a quotation found
+in that page's extract, never the article itself). A listed claim's rows are anchored to the list's
+own quote and paragraph, never to anything the model wrote; a typed claim's rows have no anchor.
+**Dig further**, on a claim a finished check has looked at, is one more search for that claim
+alone, told the addresses it already has so it looks elsewhere; its rows join the claim's, an
+address drawn once. Nothing searches by itself: only these two buttons spend.
+
+**What stops a press spending by accident.** The press is the only trigger; the list must still
+match the article (a stale list is read-only, and the server answers 409 before anything else);
+**one check per article at a time**, held by Postgres (a partial unique index on
+`debate_claim_checks`, so two tabs pressing at once get one search and one 409); and the check's
+own **allowance** (`DEBATE_CHECK_RATE_POLICY`, `src/debate.ts`: 10 an hour, 30 a day per reader,
+two at once, a global fuse of 100 a day), taken after every free refusal and before the model. At
+about 20 cents a check that is about $6 a day for one reader at the very worst and about $20 a day
+for everybody; the numbers are Greg's to move. It is its own bucket, not Dig deeper's, because
+Dig deeper's lease (170 s) is shorter than a check may run, and a check that outlives its lease
+stops holding its concurrency slot; the check's lease is its deadline (360 s) plus a minute. The
+button is held from the press until the stored answer has been read, and while another tab's check
+is out. A closed tab does not cancel a check: its answer is stored and the next read finds it.
+
+**Its limits, accepted** (GPT Sol's review, three rounds, and Opus's arbitration, in the plan). The
+deadline starts at the reservation, so the setup, the call and storing the answer all fit inside
+the lease. If storing the answer fails, the write is tried three more times over 14 s and then
+given up: the answer (about 20 cents) is lost, the failure goes to the log and Sentry, and the row
+stays pending until the sweep ends it, so a press on that article is a 409 for up to about eight
+minutes. Nothing bounds a single store write that hangs for over a minute (Postgres has no
+statement timeout here); then a third check could start while the hourly, daily and global counts
+still hold. The gateway no longer resends a web-search request after a dropped connection unless
+nothing can have left
+([261009e](../plans/261009e-paid-web-search-not-retried-after-it-was-sent.md)).
+
+**Where a check is drawn comes from what it stored**, not only from the current list's ids, so
+nothing paid for is hidden. A list made again mints new ids, so a check's claim is drawn under the
+listed claim with the same id, or else the same paragraph and quote; a checked claim the new list
+does not name is drawn as a group of its own, headed by the quote and statement the check stored,
+and can still be dug into (the server finds its words in the stored check). Checks made against an
+earlier version of the article go in one read-only group at the end, *Checked against an earlier
+version of this article*, grouped the same way, with no Dig further and no box.
+
+**Found nothing is not the same as not answered.** The model answers one group per claim. An
+explicit empty group says *This search found nothing it could quote on this claim.* A claim the
+answer left out, or answered twice, is *not answered*, and says so in different words: that search
+tells you nothing either way about it.
+
+**Visitors** see the list and nothing of the checks: a check may hold the owner's own words, and
+the checks are in a table the public reader does not read. Whether a visitor should see the checks
+of the article's own listed claims is a question for Greg in the plan.
+
+The table is `debate_claim_checks` (one row per press; [export.md](export.md) carries it). The
+routes are `GET` and `POST /api/debate-claims/:slug/checks`; the panel's half is
+[`src/web/useDebateChecks.ts`](../../src/web/useDebateChecks.ts) and
+[`src/web/debate-checks.ts`](../../src/web/debate-checks.ts).
 
 ## Check a claim in chat
 
@@ -82,16 +197,16 @@ What the reader gets:
 - **A button on each claim's heading**, *Check this claim in chat*. It goes to Chat and opens a
   fresh conversation with the claim quoted and sends its first question. The press is the Send
   since 2026-10-06 ([261006j](../plans/261006j-ask-in-chat-sends-the-question.md)), and Back returns
-  to Debate. It is the glossary's *Ask in chat* route
+  to Peer review's Claims. It is the glossary's *Ask in chat* route
   ([glossary.md](glossary.md)), with one thing added: the conversation records the claim it was
   started from.
 - **A mark under the claim once a chat exists**: how many questions were asked, and how the chat's
   latest answer begins. No model writes that line; it is the answer's first readable line, in plain
   words (`answerOpening` in `src/answer-opening.ts` removes markdown formatting and prose citations).
-  Pressing the mark opens the conversation beside Debate (`?thread=`, the mode unchanged), in the
+  Pressing the mark opens the conversation beside Peer review (`?thread=`, the mode unchanged), in the
   floating chat panel, which docks in the right-hand column only when Marginalia is open and the
   window is wide.
-- **In Chat's list** the conversation has Debate's icon, with a card that quotes the claim.
+- **In Chat's list** the conversation has Peer review's icon, with a card that quotes the claim.
 - **A visitor has neither** the button nor the mark. Chat is the owner's.
 
 How it works, and what to know before changing it:
@@ -176,15 +291,16 @@ What the reader gets:
   question: the angle, quoted, and a fixed question after it: *What do others say about the
   article from this angle? Search the web, and say so plainly if you find little.* The press is
   the Send since 2026-10-06 ([261006j](../plans/261006j-ask-in-chat-sends-the-question.md)); until
-  then the question waited in the box. Back returns to Debate.
+  then the question waited in the box. Back returns to Peer review's Reception.
 - **Your angles**, under the box: one line per chat started this way, newest first, three and then
   all. A chat appears once its first question is sent.
-  A line opens its conversation beside Debate, as a claim's mark does.
+  A line opens its conversation beside Peer review, as a claim's mark does.
 - **Both are there before any search has run**, while one is loading and on a stale one. An angle
   needs no stored debate.
-- **In Chat's list** the conversation has Debate's icon, with a card that quotes the angle.
-- **A visitor has neither.** With the [Experimental switch](experimental-features.md) off, Debate
-  is hidden and so is *Your angles*; the conversations are still in Chat's list.
+- **In Chat's list** the conversation has Peer review's icon, with a card that quotes the angle.
+- **A visitor has neither.** Peer review is outside the
+  [Experimental switch](experimental-features.md), but *Your angles* remains owner-only; the
+  conversations are still in Chat's list.
 
 **Why the angle is a chat and not a steered search.** Telling the stored search to check one named
 claim was tried and worked, at about 20 cents and a minute and a half a run
@@ -273,7 +389,7 @@ self-citations; an API key.
 The plan is the reference:
 [260905f](../plans/260905f-debate-mode-what-the-web-says-about-this-piece.md), and for how a row
 is laid out, the four orders and the relevance bar,
-[260929h](../plans/260929h-debate-mode-clearer-sources-and-orders.md). Behind the switch for now; since 2026-09-29 a visitor to a public article sees a stored one, every row's address
+[260929h](../plans/260929h-debate-mode-clearer-sources-and-orders.md). Behind the switch until 2026-10-09, when it came out as Peer review; since 2026-09-29 a visitor to a public article sees a stored one, every row's address
 re-judged at the boundary and a refused row withheld and counted — only running a search is the
 owner's ([260929c](../plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md)).
 Since 2026-09-30 a search also finds the themes its sources share and picks out the key ones,
@@ -304,22 +420,27 @@ How the mode was evaluated, and what that found:
 spike that showed a web search never comes back empty in
 [260905f-debate-mode-stage-0-spike-results.md](../plans/260905f-debate-mode-stage-0-spike-results.md).
 
-## Not decided: folding Citations into Debate
+## Decided: Citations folded into Debate, as Peer review
 
 Greg suggested it (spya-c2qmbg): the works a paper cites and what others say about it are two halves
 of one question, and from one cited work he would like to see where it sits in the wider debate. On
-2026-10-04 he deferred it:
+2026-10-04 he deferred it (*"needs more thought. Write up somewhere, and we'll come back to it"*),
+with the options in [261004b § Part 2](../plans/261004b-citation-hover-card-offers-dig-deeper.md).
+On 2026-10-09 he chose the second of them, one mode with three sub-modes, then the third, each
+claim listing the works cited in its paragraph, and took the merged mode out of the experimental
+switch:
 
-> needs more thought. Write up somewhere, and we'll come back to it
+> I'm inclined to go with B and then C1 to begin with. … For question two, I guess let's move this
+> out of experimental, this combined mode. I am hesitating what to call it. Debate doesn't feel
+> quite right. Maybe peer review …
+>
+> — Greg, 2026-10-09 (spya-vcvxu5, to q-xf2xvb)
 
-The options, with a diagram, are in
-[261004b § Part 2](../plans/261004b-citation-hover-card-offers-dig-deeper.md): keep two modes
-linked by buttons; one mode with Reception, Claims and Cited works; list beside each claim the works
-cited in its paragraph (no model call); or a model filing each cited work under a debate thread. The
-Overseer recommended the second then the third. Open with it: the merged mode's name, and whether it
-comes out from behind the experimental switch, which Debate is behind and Citations is not. The
-first small step, a Dig deeper button on a citation's card, shipped. It is part of the wider wish to
-declutter the bottom bar ([interface-vision.md](interface-vision.md#decluttering-the-bottom-bar)).
+What was built, and what is held until the name is confirmed, is
+[peer-review.md](peer-review.md) and plan
+[261009l](../plans/261009l-peer-review-mode-merges-citations-and-debate.md). It is part of the
+wider wish to declutter the bottom bar
+([interface-vision.md](interface-vision.md#decluttering-the-bottom-bar)).
 
 ## Where the code is
 
@@ -327,8 +448,15 @@ Each module's header comment says what it owns and why; start with `src/debate.t
 
 - [`src/debate.ts`](../../src/debate.ts) — the pipeline step: the searches, and what is kept. Its
   header opens with the one thing to understand first.
-- [`src/debate-themes.ts`](../../src/debate-themes.ts) — the third call: the themes the sources
-  share, and the key sources.
+- [`src/debate-claims.ts`](../../src/debate-claims.ts) — Claims' list: the `debate-claims` step,
+  its prompt and the anchoring of each claim. The panel's half is
+  [`src/web/useDebateClaims.ts`](../../src/web/useDebateClaims.ts).
+- The reader's checks: `generateClaimCheck` and `readCheckedClaimGroup` at the foot of
+  `src/debate.ts`; the store
+  [`src/store/pg-debate-claim-checks.ts`](../../src/store/pg-debate-claim-checks.ts); the route
+  `runDebateClaimCheck` in `src/routes.ts`, whose docblock lists the refusals in order.
+- [`src/debate-themes.ts`](../../src/debate-themes.ts) — the optional search-free synthesis call:
+  the themes the Reception sources share, and the key sources.
 - [`src/debate-synthesis.ts`](../../src/debate-synthesis.ts) — the rules a synthesis must keep, read
   on both sides of the wire.
 - [`src/debate-registry.ts`](../../src/debate-registry.ts) — authors and year from Crossref or
@@ -336,8 +464,8 @@ Each module's header comment says what it owns and why; start with `src/debate.t
 - [`src/debate-journal.ts`](../../src/debate-journal.ts) — the capture journal the evaluation
   replays.
 - [`src/web/DebatePanel.tsx`](../../src/web/DebatePanel.tsx) — the panel, and
-  [`src/web/modes/debate/`](../../src/web/modes/debate/DebateMode.tsx) the mode controller that
-  mounts it.
+  [`PeerReviewMode.tsx`](../../src/web/modes/peer-review/PeerReviewMode.tsx) the mode controller
+  that mounts it (`DebateMode.tsx` until 2026-10-09).
 - [`src/web/debate-levels.ts`](../../src/web/debate-levels.ts) — Reception's two groups, and why the
   slider that used to hide the title-only one is gone.
   [`src/web/debate-order.ts`](../../src/web/debate-order.ts) — Reception's orders, Claims' grouping
@@ -360,7 +488,7 @@ evaluation's scorer is [`debate-eval-score.test.ts`](../../tests/debate-eval-sco
 
 Related: [citations.md](citations.md) shares the bibliographic lookup
 ([`src/bibliographic.ts`](../../src/bibliographic.ts)) and names Debate's residual risk;
-[experimental-features.md](experimental-features.md) is the switch it sits behind; and
+[experimental-features.md](experimental-features.md) is the switch it sat behind until 2026-10-09; and
 [security.md § A third untrusted party](security.md#a-third-untrusted-party-what-the-model-returns)
 has the web-search evidence collector Debate added.
 

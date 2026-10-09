@@ -28,11 +28,11 @@
  *
  * | Constant | Reached through | The name |
  * |---|---|---|
- * | `CAPABLE_MODEL` | Anthropic's own spelling — sent by nothing, kept for reference | `claude-sonnet-5` |
- * | `CAPABLE_MODEL_OPENROUTER` | OpenRouter — the three request-path calls | `anthropic/claude-sonnet-5` |
- * | `QUICK_MODEL_OPENROUTER` | OpenRouter, and **only** OpenRouter | `openai/gpt-5.6-luna` |
+ * | `CAPABLE_MODEL` | Anthropic's own spelling — sent by nothing, kept for reference | `claude-sonnet-5-5` |
+ * | `CAPABLE_MODEL_OPENROUTER` | OpenRouter — the three request-path calls | `anthropic/claude-sonnet-5.5` |
+ * | `QUICK_MODEL_OPENROUTER` | OpenRouter, and **only** OpenRouter | `openai/gpt-6-luna` |
  *
- * `claude-sonnet-5` is the current Sonnet, and that dateless string is the whole
+ * `claude-sonnet-5-5` is the current Sonnet, and that dateless string is the whole
  * id — a pinned model, not an alias for one. So there is no `-latest` to ask for
  * and nothing to append: a date suffix on the end of it is a model id that does
  * not exist. (The two OpenRouter slugs were checked against OpenRouter's live
@@ -115,14 +115,16 @@
  * only costs more; see docs/project/prompt-caching.md.
  *
  * **The completion ceilings, and this is the one that would bite first.**
- * explain sends `max_tokens: 1500`, chat 4,000, search 4,000, and those were
- * sized for a model whose thinking is not billed against them the same way.
+ * On the standard model explain sends `max_tokens: 1500`, chat 4,000 and search
+ * 4,000. Explain sends 4,000 and chat 6,000 on the high-power model since plan
+ * 261009h (`chatCeiling` in src/converse.ts and the `max_tokens` line in
+ * src/explain.ts). The original figures were sized for a model whose thinking
+ * is not billed against them the same way.
  * Luna reasons by default and OpenRouter documents a 1,024-token floor for that
  * allocation, so explain could be left with a few hundred tokens of visible
- * answer. And all three treat `finish_reason` only as evidence that *something*
- * arrived — `length` is not an error anywhere — so the failure is a truncated
- * answer written to disk as a finished one. Raise the ceilings before flipping a
- * row, not after. (Luna also advertises `max_completion_tokens` rather than the
+ * answer. Explain and search can still store a `length` ending as finished;
+ * chat marks it `truncated` and persists that warning. Size the ceilings before
+ * flipping a row, not after. (Luna also advertises `max_completion_tokens` rather than the
  * deprecated `max_tokens` all three send; OpenRouter lets a provider ignore a
  * parameter it does not take, silently.)
  *
@@ -197,7 +199,13 @@ import {
  * parameter that *would* have broken is `budget_tokens`, which Sonnet 5 rejects
  * with a 400 — this app has never used it.
  */
-export const CAPABLE_MODEL = "claude-sonnet-5";
+export const CAPABLE_MODEL = "claude-sonnet-5-5";
+/* ^ Sonnet 5 until 2026-10-09 (plan 261009a: always the latest of each family).
+   Sonnet 5.5 is the same price and rejects what Opus 5.5 rejects — disabled
+   thinking, sampling parameters, a forced `tool_choice` — none of which the
+   capable tier sends, which is why High-powered AI already ran every capable
+   task on Opus 5.5 through these same seams. Sonnet 5's two spellings stay
+   in `generationKey` below, so nothing it wrote reads as stale. */
 /* ^ **Nothing puts this on the wire any more — and it is still load-bearing.**
    Since 2026-08-27 the seven stages send `CAPABLE_MODEL_OPENROUTER`, which is
    literally this string with a vendor prefix. But this one stayed, because the
@@ -225,14 +233,15 @@ export const CAPABLE_MODEL = "claude-sonnet-5";
  * this project's `.env.local` carries and because two of those three want the
  * `openrouter:web_search` server tool. See docs/project/setup-dev.md § Secrets.
  */
-export const CAPABLE_MODEL_OPENROUTER = "anthropic/claude-sonnet-5";
+export const CAPABLE_MODEL_OPENROUTER = "anthropic/claude-sonnet-5.5";
 
 /**
  * **The quick tier.** OpenRouter only — there is deliberately no Anthropic-SDK
  * spelling of this one, because there cannot be; see the header.
  *
- * $0.20 in / $1.20 out per million tokens against Sonnet 5's $2.00 / $10.00, so
- * roughly a tenth the price, with a 1.05M context window and `reasoning_effort`
+ * $0.10 in / $0.50 out per million tokens (GPT-6 Luna; GPT-5.6 Luna until
+ * 2026-10-09, at $0.20 / $1.20) against Sonnet 5.5's $2.00 / $10.00, so
+ * roughly a twentieth the price, with a 1.05M context window and `reasoning_effort`
  * and structured outputs both supported. What it does not take is `stop` or
  * `verbosity`, neither of which this app sends.
  *
@@ -243,7 +252,7 @@ export const CAPABLE_MODEL_OPENROUTER = "anthropic/claude-sonnet-5";
  * a reason to move one; moving one still needs an eval under `evals/` that says
  * what was gained and what was lost.
  */
-export const QUICK_MODEL_OPENROUTER = "openai/gpt-5.6-luna";
+export const QUICK_MODEL_OPENROUTER = "openai/gpt-6-luna";
 
 /**
  * **The high-power model — the capable tier's stronger model.** Most tasks use
@@ -254,7 +263,7 @@ export const QUICK_MODEL_OPENROUTER = "openai/gpt-5.6-luna";
  * each other, for the reason § Do not derive one spelling from the other gives
  * — and this pair is the proof of it: dashes in the name, a dot in the slug.
  *
- * Opus 5.5, at $4 / $20 per million tokens against Sonnet 5's $2 / $10 —
+ * Opus 5.5, at $4 / $20 per million tokens against Sonnet 5's (and 5.5's) $2 / $10 —
  * exactly twice, which is what Greg asked for ("broadly double"). Checked for
  * request compatibility before it was chosen: it rejects `thinking: {type:
  * "disabled"}` and a forced `tool_choice`, and `src/` sends neither; and its
@@ -296,6 +305,10 @@ export function generatorFor(power: ModelPower): string {
  */
 export const CAPABLE_GENERATION_KEY = "anthropic/claude-sonnet-5";
 
+/** Sonnet 5's two spellings, the capable model until 2026-10-09: one generation with its successor. */
+const PREVIOUS_CAPABLE_MODEL = "claude-sonnet-5";
+const PREVIOUS_CAPABLE_MODEL_OPENROUTER = "anthropic/claude-sonnet-5";
+
 /**
  * **Which generation of work a model id belongs to, for freshness only.**
  *
@@ -323,6 +336,11 @@ export function generationKey(modelId: string): string {
   switch (modelId) {
     case CAPABLE_MODEL:
     case CAPABLE_MODEL_OPENROUTER:
+    /* Sonnet 5, the capable model until 2026-10-09. Its work is not stale
+       for being Sonnet 5's: re-billing the corpus to rewrite it on the next
+       Sonnet would be the "large bill" the header warns about (plan 261009a). */
+    case PREVIOUS_CAPABLE_MODEL:
+    case PREVIOUS_CAPABLE_MODEL_OPENROUTER:
     case HIGH_POWER_MODEL:
     case HIGH_POWER_MODEL_OPENROUTER:
       return CAPABLE_GENERATION_KEY;
@@ -380,8 +398,12 @@ export function articlePower(highPowerSince: string | Date | null | undefined): 
  * reaches a model only through `PdfReader`. That seam exists because the
  * evidence behind this string is two documents and one comparison, which is
  * enough to start with and not enough to build around.
+ *
+ * Measured on GPT-5.6 Luna; moved to GPT-6 Luna, the same family, on
+ * 2026-10-09 (plan 261009a), after all three fixture types were transcribed
+ * and one scanned page was compared by eye.
  */
-export const PDF_READER_MODEL = "openai/gpt-5.6-luna";
+export const PDF_READER_MODEL = "openai/gpt-6-luna";
 
 /**
  * **What finds a figure the PDF itself could not place** — the model shown a
@@ -400,6 +422,13 @@ export const PDF_READER_MODEL = "openai/gpt-5.6-luna";
  * It is a *preview* model; if OpenRouter retires the id, every call fails and
  * every figure it would have found stays caption-only — the state it was
  * already in.
+ *
+ * **Not moved to Gemini 3.8 Flash on 2026-10-09**, though "always the latest
+ * of each family" is the rule (plan 261009a): 3.8 reasons on every call, so
+ * 11 calls took ~5.5 s and ~$0.0045 each against ~1.8 s and ~$0.0015, with
+ * 7 right, 3 correctly refused, 1 missed and none wrong — no gain to pay for.
+ * evals/results/latest-models-smoke-2026-10-09.md. Worth retrying with its
+ * reasoning off.
  */
 export const PDF_FIGURE_LOCATOR_MODEL = "google/gemini-3-flash-preview";
 
@@ -472,6 +501,19 @@ export const READING_DIFFICULTY_MODEL = "deepseek/deepseek-v4.1-flash";
 export const TITLE_TIDY_MODEL = "deepseek/deepseek-v4.1-flash";
 
 /**
+ * **What writes the one-line gist of a conversation** after each answer, so a
+ * later conversation about the same article can see what an earlier one
+ * covered (src/chat-gist.ts, plan
+ * docs/plans/261008e-chat-knows-the-reader-s-other-conversations.md). Greg,
+ * 2026-10-08: *"auto-generate a descriptive title for each chat thread with a
+ * small model after each response"*. The same cheap model as
+ * `PAPER_METADATA_MODEL` above, on a copy of its zero-retention route
+ * (`chat-gist` in src/ai-call.ts): what it reads is the reader's own
+ * conversation. Its own constant for the reason the two above have theirs.
+ */
+export const CHAT_GIST_MODEL = "deepseek/deepseek-v4.1-flash";
+
+/**
  * **What scores every block for a quick search** — TypeSafe's Jev, a "decision"
  * model that answers typed questions with probabilities rather than writing
  * text (src/quick-search.ts, docs/plans/261002e-quick-search-v1.md). One `noul`
@@ -522,7 +564,8 @@ export const COMMAND_PICK_MODEL = "typesafe/jev-1.13";
  * docs/investigations/261007b-help-chat-model-and-refusals.md: every
  * off-topic and jailbreak question declined, answers grounded in the pages,
  * about a second to the first word, and a prefix cache that reads across
- * different questions ($0.0068 cold, $0.0006 warm). DeepSeek answered as
+ * different questions ($0.0068 cold, $0.0006 warm) — on GPT-5.6 Luna; GPT-6
+ * Luna since 2026-10-09 (plan 261009a, re-run in its write-up). DeepSeek answered as
  * well but three to four times slower, on whichever small upstream OpenRouter
  * picked, with a cache that hit about half the time. Its own literal, though the
  * string is currently the same as `QUICK_MODEL_OPENROUTER`'s, so moving one job
@@ -531,7 +574,7 @@ export const COMMAND_PICK_MODEL = "typesafe/jev-1.13";
  * measured. Moving it to a non-OpenAI model is also a decision about caching:
  * `help-chat` in src/ai-call.ts says why.
  */
-export const HELP_CHAT_MODEL = "openai/gpt-5.6-luna";
+export const HELP_CHAT_MODEL = "openai/gpt-6-luna";
 
 /**
  * **What turns a dictation into text.** Not on a tier, for the same reason the
@@ -692,6 +735,10 @@ export type Task =
      docs/plans/261003f-marginalia-relation-words-and-timeline-events.md.
      Article-reading like `ideas`, answering block ids, so `articleWithIds`. */
   | "relations"
+  /* The article's claims, listed for Debate's Claims to pick from —
+     docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2. Article-reading
+     like `faq`, naming block ids and quotes, so `articleWithIds`. No web search. */
+  | "debate-claims"
   /* Links between the article's own blocks —
      docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md.
      Article-reading like `ideas`, naming block ids, so `articleWithIds`. */
@@ -822,6 +869,14 @@ export type Task =
    */
   | "debate"
   /**
+   * **A reader's claim check in Debate's Claims** — the ticked claims and the
+   * typed one, searched on the open web in one call (src/debate.ts §
+   * `generateClaimCheck`; plan docs/plans/261008i-debate-claims-picked-by-the-reader.md
+   * § 3). `debate`'s wire and model, its own job so the ledger files it as
+   * interactive request work rather than a pipeline step.
+   */
+  | "debate-check"
+  /**
    * **How the page on the far end of a hyperlink stands to the piece the reader
    * is holding** —
    * docs/plans/260905f-external-link-panel-add-to-spideryarn-and-server-side-preview.md
@@ -933,6 +988,9 @@ export type NonTaskAiJob =
   /* **An imported title, lightly tidied** — src/title-tidy-model.ts, on
      `TITLE_TIDY_MODEL` below. */
   | "title-tidy"
+  /* **A conversation's one-line gist**, written after each answer —
+     src/chat-gist.ts, on `CHAT_GIST_MODEL` below. */
+  | "chat-gist"
   /* ***Dig deeper*'s answer** — `explainStream` with a press's findings
      (src/dig-deeper.ts, plan 261001p). Not a `Task`, deliberately: its model
      is not a tier decision and must not be overridable. It is always the
@@ -1126,6 +1184,7 @@ export const TASK_TIER: Record<Task, Tier> = {
   quiz: "capable",
   faq: "capable",
   relations: "capable",
+  "debate-claims": "capable",
   crossrefs: "capable",
   simple: "capable",
   skim: "capable",
@@ -1166,6 +1225,8 @@ export const TASK_TIER: Record<Task, Tier> = {
      reception — the exact thing Stage 0 got back, and the thing every rule in
      src/debate.ts exists to refuse. */
   debate: "capable",
+  /* The same weighing as `debate`, for the claims a reader picked. */
+  "debate-check": "capable",
   citations: "capable",
   /* Capable, for `debate`'s reason: the whole job is weighing a handful of
      search results against one cited work and saying which, if any, is its
@@ -1406,6 +1467,7 @@ export const TASK_WIRE: Record<Task, Wire> = {
   quiz: "messages",
   faq: "messages",
   relations: "messages",
+  "debate-claims": "messages",
   crossrefs: "messages",
   simple: "messages",
   skim: "messages",
@@ -1428,6 +1490,8 @@ export const TASK_WIRE: Record<Task, Wire> = {
      shape. Every other artefact-producing step is `"messages"`. See `Task`
      above, and src/pdf-read.ts for the precedent. */
   debate: "chat",
+  /* `debate`'s reason: the web search is a chat/completions tool. */
+  "debate-check": "chat",
   citations: "messages",
   /* Chat, because `openrouter:web_search` is a server tool on chat/completions
      and does not exist on the Messages shape — `debate`'s reason. */
@@ -1477,6 +1541,8 @@ export const AI_JOB_WIRE: Record<AiJob, Wire> = {
   "reading-difficulty": "chat",
   /* A strict JSON schema back, on chat/completions. src/title-tidy-model.ts. */
   "title-tidy": "chat",
+  /* A strict JSON schema back, on chat/completions. src/chat-gist.ts. */
+  "chat-gist": "chat",
   /* Explain's wire: it is an explain call with a different job name. */
   "dig-deeper": "chat",
   dictation: "transcription",
@@ -1550,6 +1616,7 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   quiz: null,
   faq: null,
   relations: null,
+  "debate-claims": null,
   crossrefs: null,
   simple: null,
   skim: null,
@@ -1601,6 +1668,10 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
      until there is a rate to compare. A code change to run an arm would make
      the arm and the shipped path different things. */
   debate: "SPIDERYARN_DEBATE_MODEL",
+  /* Shares Debate's override rather than adding a name: a check is pass B's
+     call on the reader's claims, and a comparison run of one should move
+     both. */
+  "debate-check": "SPIDERYARN_DEBATE_MODEL",
   /* It has one because "is the cheap model good enough for this" is a question
      somebody will want to answer by running the real feature against a capable
      model for an evening rather than by editing the tier table and rebuilding.
@@ -1646,6 +1717,23 @@ export type ResolvedModel = {
  * modules call `loadEnvLocal()` inside a function rather than at import, so an
  * id captured at module load can be captured before `.env.local` has been read.
  */
+/**
+ * **A task held on a model its tier has moved past** — the exception to
+ * "always the latest of each family" (docs/project/setup-dev.md § Which model
+ * everything uses), and only where a measurement says the newer one is worse
+ * at this job. Each entry says what was measured; an entry without that is a
+ * task quietly left behind.
+ *
+ * `simple-check`, Summary's fidelity guard, stays on GPT-5.6 Luna (plan
+ * 261009a): re-run on GPT-6 Luna over the 261001h labels it caught the same
+ * 21 of 26 faults but raised 44 new alarms on faithful paragraphs — none of
+ * them a real fault on a hand read — and every alarm makes Opus rewrite that
+ * level. evals/results/fidelity-guard-luna6-new-alarms-2026-10-09.md.
+ */
+const PINNED_MODEL: Partial<Record<Task, string>> = {
+  "simple-check": "openai/gpt-5.6-luna",
+};
+
 export function resolveModel(task: Task, power: ModelPower): ResolvedModel {
   const wire = TASK_WIRE[task];
   const envVar = MODEL_ENV_VAR[task];
@@ -1653,8 +1741,10 @@ export function resolveModel(task: Task, power: ModelPower): ResolvedModel {
   /* **An override still wins at high power.** It is somebody running a
      comparison on purpose, and the comparison is what they asked for. */
   if (override) return { id: override, provider: GATEWAY, wire, source: "override" };
+  const pinned = PINNED_MODEL[task];
+  if (pinned !== undefined) return { id: pinned, provider: GATEWAY, wire, source: "default" };
   /* One spelling now, for every task on either wire: OpenRouter's. The Skin
-     wants `anthropic/claude-sonnet-5` exactly as chat/completions does. */
+     wants `anthropic/claude-sonnet-5.5` exactly as chat/completions does. */
   return {
     id: openRouterIdForTier(TASK_TIER[task], power),
     provider: GATEWAY,
@@ -1714,6 +1804,7 @@ export const NON_TASK_MODELS: readonly {
   { job: "paper-metadata", id: PAPER_METADATA_MODEL, provider: "openrouter" },
   { job: "reading-difficulty", id: READING_DIFFICULTY_MODEL, provider: "openrouter" },
   { job: "title-tidy", id: TITLE_TIDY_MODEL, provider: "openrouter" },
+  { job: "chat-gist", id: CHAT_GIST_MODEL, provider: "openrouter" },
   { job: "search-quick", id: QUICK_SEARCH_MODEL, provider: "openrouter" },
   { job: "command-pick", id: COMMAND_PICK_MODEL, provider: "openrouter" },
   { job: "command-pick-words", id: QUICK_MODEL_OPENROUTER, provider: "openrouter" },
@@ -1857,6 +1948,7 @@ export type ArticleStage =
   | "quiz"
   | "faq"
   | "relations"
+  | "debate-claims"
   | "crossrefs"
   | "simple";
 
@@ -2001,6 +2093,13 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      evals/results/effort-vs-quality.md; the plan names the quick tier as the
      next thing to measure. docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
   relations: "low",
+  /* `high`, `faq`'s: what it is paid for is reading the argument closely
+     enough to tell the claims it rests on from the ones it merely mentions,
+     and which of those an outsider could dispute. Its own schema, so it shares
+     no cached article. **NOT MEASURED**, like every effort choice not yet
+     through evals/results/effort-vs-quality.md.
+     docs/plans/261008i-debate-claims-picked-by-the-reader.md. */
+  "debate-claims": "high",
   /* `medium`, the plan's call: matching a claim to the paragraph that backs it
      is reading, not the multi-step inference `ideas` and `quiz` are paid `high`
      for. **It therefore shares a cached prefix with nothing** — the same bytes
@@ -2084,6 +2183,10 @@ export const ARTICLE_RENDERER: Record<ArticleStage, "text" | "ids"> = {
      body only, byte-identical to `ideas` and `faq`. `low` effort and its own
      schema, so no share. */
   relations: "ids",
+  /* Every claim names a block id and quotes it, so the ids have to be on the
+     page — and it sends the body only, byte-identical to `ideas` and `faq`.
+     Its own schema, so no share. */
+  "debate-claims": "ids",
   /* Two block ids a row, so the ids have to be on the page — and the body
      only, byte-identical to `ideas`. The effort differs, so no share. */
   crossrefs: "ids",

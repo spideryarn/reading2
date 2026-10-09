@@ -80,6 +80,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { useRenderCount } from "./perf.js";
 import { addressParts, GuessedSourceLink } from "./Masthead.js";
 import { type ShelfLookup, useShelfEntry } from "./link-facts.js";
+import { markOwnCopy } from "./own-copy-intent.js";
 import { addHref, LOGIN_HREF, PRIVACY_HREF, readHref, TAKEDOWN_HREF } from "./router.js";
 import type { PublicSharedBy } from "../public-types.js";
 import { CONTACT_EMAIL } from "../site-text.js";
@@ -355,10 +356,24 @@ export function PrivateCopy({
       </p>
     );
   }
+  const from = copyableFrom(props);
   return (
     <p data-private-copy="add" className={className}>
       {PRIVATE_COPY_WHY}{" "}
-      <Link href={offer.href} className={BANNER_LINK}>
+      <Link
+        href={offer.href}
+        className={BANNER_LINK}
+        /* **The press is the reader choosing their own copy**, so the add page
+           does not ask them whether they would rather read this public one
+           (plan 261009j, own-copy-intent.ts). Only a plain click, the one
+           `Link` keeps in this tab: a ⌘-click opens a tab the mark cannot
+           reach, and would leave it to answer a later paste. */
+        onClick={(event) => {
+          if (from === null || event.button !== 0) return;
+          if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+          markOwnCopy(from);
+        }}
+      >
         {PRIVATE_COPY_ADD}
       </Link>
       . {PRIVATE_COPY_COST}

@@ -38,6 +38,7 @@ function paint(startingOver: boolean) {
         canStartOver: false,
         onRetry: () => {},
         onEdit: () => {},
+        onDeleteFrom: undefined,
         onStop: () => {},
         onJump: () => {},
         recovering: new Set<string>(),

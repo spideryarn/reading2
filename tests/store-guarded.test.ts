@@ -156,6 +156,7 @@ describe("every Postgres store, asked for the seam it was guarded under", () => 
     ["../src/store/pg-source.js", "pgSourceStore", "source"],
     ["../src/store/pg-referee-criteria.js", "pgRefereeCriteriaStore", "referee-criteria"],
     ["../src/store/pg-referee-claims.js", "pgRefereeClaimsStore", "referee-claims"],
+    ["../src/store/pg-referee-hidden-checks.js", "pgRefereeHiddenCheckStore", "referee-hidden-checks"],
     ["../src/store/pg-lookups.js", "pgGlossaryLookupStore", "glossary-lookup"],
     ["../src/store/pg-citation-finds.js", "pgCitationFindStore", "citation-finds"],
     ["../src/store/pg-citation-investigations.js", "pgCitationInvestigationStore", "citation-investigations"],
@@ -163,6 +164,7 @@ describe("every Postgres store, asked for the seam it was guarded under", () => 
     ["../src/store/pg-source-guesses.js", "pgSourceGuessStore", "source-guesses"],
     ["../src/store/pg-reading-time.js", "pgReadingTimeStore", "reading-time"],
     ["../src/store/pg-glossary-hidden.js", "pgGlossaryHiddenStore", "glossary-hidden"],
+    ["../src/store/pg-skim-notice.js", "pgSkimNoticeStore", "skim-notice"],
     ["../src/store/pg-quiz-attempts.js", "pgQuizAttemptStore", "quiz-attempts"],
     ["../src/store/pg-admin.js", "pgAdminStore", "admin"],
     ["../src/store/pg-visibility.js", "pgVisibilityStore", "visibility"],
@@ -363,6 +365,7 @@ describe("no Postgres store is selected without a guard", () => {
          addresses from articles they may open. */
       "pgCitedInSpideryarnStore",
       "pgCommentStore",
+      "pgDebateClaimChecksStore",
       "pgFeedbackStore",
       /* The link preview's two, 2026-09-05. Worth one line of why they are
          guarded rather than only that they are: a failed Drizzle query puts
@@ -391,6 +394,7 @@ describe("no Postgres store is selected without a guard", () => {
       "pgRealtimeSessionStore",
       "pgRefereeClaimsStore",
       "pgRefereeCriteriaStore",
+      "pgRefereeHiddenCheckStore",
       "pgSearchStore",
       /* The private link, 2026-10-05: its parameters are the link's key. */
       "pgShareLinkStore",
@@ -398,6 +402,7 @@ describe("no Postgres store is selected without a guard", () => {
       /* The shelf's filter topics, 2026-09-28: its parameters are the
          reader's own articles' phrases. */
       "pgShelfTermsStore",
+      "pgSkimNoticeStore",
       /* An upload's guessed web address, 2026-09-29: its parameter is where
          somebody's upload lives. */
       "pgSourceGuessStore",

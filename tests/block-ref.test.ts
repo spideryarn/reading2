@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * How a block id is shown and linked — src/web/BlockRef.tsx.
  *

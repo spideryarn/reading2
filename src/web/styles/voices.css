@@ -81,6 +81,9 @@
     .tl-phrase,
     /* Diagram's footer card: the link text or quoted line, not the score */
     .diag-card-linkquote,
+    /* the article's title in the guide's greeting (plan 261009i): meta.title,
+       the author's, never a rename */
+    .guide-greeting-title,
     /* Whatever computed its voice and found the author's: a Structure title
        that is the author's heading kept, a shelf blurb that is the excerpt,
        an article's title (src/web/voice.ts § voiceClass). */
@@ -140,7 +143,6 @@
     .cite-does,
     .cite-inv-lead,
     .cite-inv-text,
-    .cite-inv-draft,
     .srch-hit-why,
     .clm-list .clm-claim,
     .clm-why:not(.clm-why-withheld),
@@ -220,9 +222,11 @@
     /* Feedback's Earlier tab, for an admin: the line a report's note says
        about it, which an agent wrote (261007d) */
     .fb-earlier-comment,
-    /* and a question an agent put to them: its title and its text */
+    /* and a question an agent put to them: its title and its text, and its
+       title again as a line in the contents (261008i) */
     .fb-question-title,
-    .fb-question-text
+    .fb-question-text,
+    .fb-thread-title
 ) {
     font-family: var(--font-ai);
 }
@@ -273,13 +277,14 @@
     .tip-hit-criterion,
     .fb-body,
     .fb-earlier-body,
-    /* a question's report in the admin's own words, their reply to it, and
+    /* the admin's reply to a question, and
        the box they reply in (261007d) */
-    .fb-question-report-line,
     .fb-question-answer-body,
     .fb-reply-input,
     .ill-steer-input,
-    .cmdbar-input
+    .cmdbar-input,
+    /* About you or the reason, quoted back in the guide's greeting (261009i) */
+    .guide-greeting-reader
 ) {
     font-family: var(--font-reader);
 }

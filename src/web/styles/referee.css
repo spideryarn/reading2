@@ -470,7 +470,7 @@
    rail. A coloured tick there would be pointing at the wrong thing
    (CriteriaPanel.tsx § `identityPaintsProse`). */
 .crit-tick input { margin-top: 0.15rem; accent-color: rgb(var(--cat-rgb, var(--hit-wash-rgb))); }
-.crit-criterion { font-size: 0.91rem; color: var(--ink); }
+.crit-criterion { font-size: var(--type-item); color: var(--ink); }
 
 .crit-colour, .crit-del {
   flex: none;
@@ -506,7 +506,7 @@
   padding: 0 0.3rem;
 }
 
-.crit-meta { margin: 0.15rem 0 0.25rem; font-size: 0.81rem; color: var(--ink-faint); }
+.crit-meta { margin: 0.15rem 0 0.25rem; font-size: var(--type-meta); color: var(--ink-faint); }
 
 .crit-results { margin: 0; padding: 0; list-style: none; }
 .crit-result { padding: 0.25rem 0; }
@@ -551,7 +551,7 @@ a.crit-jump.block-ref:hover { color: var(--ink); opacity: 1; text-decoration: no
   color: var(--ink-faint);
   min-width: 1.1rem;
 }
-.crit-quote { font-size: 0.9rem; }
+.crit-quote { font-size: var(--type-quote); }
 
 .crit-valence {
   display: flex;
@@ -617,7 +617,7 @@ a.crit-jump.block-ref:hover { color: var(--ink); opacity: 1; text-decoration: no
   font-variant-numeric: tabular-nums;
 }
 
-.crit-why { margin: 0.1rem 0 0 1.45rem; font-size: 0.83rem; color: var(--ink-faint); }
+.crit-why { margin: 0.1rem 0 0 1.45rem; font-size: var(--type-body); color: var(--ink-faint); }
 .crit-cites { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.15rem 0 0 1.45rem; font-size: 0.83rem; }
 
 /* --- Claims, the second sub-mode. src/web/ClaimsPanel.tsx.
@@ -667,7 +667,7 @@ a.crit-jump.block-ref:hover { color: var(--ink); opacity: 1; text-decoration: no
 
 /* The claim in one line, and the paper's own sentence under it — the label and
    the evidence that the paper said it, in that order. */
-.clm-claim { margin: 0 0 0.15rem; font-size: 0.91rem; font-weight: 600; color: var(--ink); }
+.clm-claim { margin: 0 0 0.15rem; font-size: var(--type-item); font-weight: 600; color: var(--ink); }
 
 /* A block link (BlockRef.tsx, plan 260928b), so it is also `.block-ref`, whose
    id-chip type prose.css sets: Courier at 0.58rem, faint, half opacity, and an
@@ -688,7 +688,7 @@ a.clm-jump.block-ref,
 a.clm-jump.block-ref:hover { color: inherit; opacity: 1; text-decoration: none; }
 a.clm-jump:hover .clm-quote { text-decoration: underline; }
 a.clm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
-.clm-quote { font-size: 0.88rem; color: var(--ink); }
+.clm-quote { font-size: var(--type-quote); color: var(--ink); }
 
 .clm-tick { display: flex; align-items: center; gap: 0.3rem; margin-top: 0.25rem; font-size: 0.81rem; color: var(--ink-faint); cursor: pointer; }
 .clm-tick input { accent-color: rgb(var(--cat-rgb, var(--hit-wash-rgb))); }
@@ -700,7 +700,7 @@ a.clm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight-text); o
 
 .clm-passages { margin: 0.25rem 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.3rem; }
 .clm-passage { padding-left: 0.5rem; border-left: 2px solid var(--rule); }
-.clm-why { margin: 0.1rem 0 0; font-size: 0.83rem; color: var(--ink-faint); }
+.clm-why { margin: 0.1rem 0 0; font-size: var(--type-body); color: var(--ink-faint); }
 
 /* --- Mirror, the third sub-mode. src/web/MirrorPanel.tsx.
 
@@ -765,7 +765,16 @@ a.clm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight-text); o
 }
 .mir-jump:hover .mir-quote { text-decoration: underline; }
 .mir-jump:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
-.mir-quote, .mir-criterion { font-size: 0.88rem; color: var(--ink); }
+.mir-quote { color: var(--ink); }
+.mir-quote:not(.mir-block-id) { font-size: var(--type-quote); }
+/* A named exception to the text roles: when the reader's quoted words can no
+   longer be found, this line is a block id rather than source words. */
+.mir-block-id { font-size: 0.88rem; }
+/* The reader's criterion, printed where a coverage remark has no passage to
+   quote. It stands in the quote's place at the quote's size, but it is the
+   reader's own line rather than source words, so it is a named exception to
+   the quote role (plan 261008k § F4). */
+.mir-criterion { font-size: 0.88rem; color: var(--ink); }
 
 /* The referee's own sentence, and the passage under it — set apart from the
    model's remark below, because on this panel who wrote which is the whole
@@ -850,15 +859,15 @@ a.clm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight-text); o
 /* How many names, not how good they are. A count of a list is not a score of a
    person, and it is the number an editor actually needs: the shortlist has to
    be deep enough to survive a 60–70% attrition rate. */
-.cnd-count { font-size: 0.81rem; font-weight: 400; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+.cnd-count { font-size: var(--type-count); font-weight: 400; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
 
 .cnd-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
 .cnd-row { border-top: 1px solid var(--rule); padding: 0.4rem 0 0; }
-.cnd-name { margin: 0; font-size: 0.91rem; font-weight: 600; color: var(--ink); }
+.cnd-name { margin: 0; font-size: var(--type-item); font-weight: 600; color: var(--ink); }
 /* The affiliation is the model's claim and reads as one. */
 .cnd-affil { font-weight: 400; font-size: 0.84rem; color: var(--ink-faint); }
 .cnd-requirement { margin: 0.15rem 0 0; font-size: 0.86rem; line-height: 1.45; color: var(--ink); }
-.cnd-why { margin: 0.1rem 0 0; font-size: 0.83rem; line-height: 1.45; color: var(--ink-faint); }
+.cnd-why { margin: 0.1rem 0 0; font-size: var(--type-body); line-height: 1.45; color: var(--ink-faint); }
 .cnd-sources { margin: 0.2rem 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.1rem; }
 .cnd-sources li { font-size: 0.83rem; }
 .cnd-sources a { color: var(--ink); }

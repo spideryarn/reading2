@@ -168,6 +168,7 @@ const SAYS = {
   timeline: "The Vienna calibration",
   quotes: QUOTE_LINE,
   debate: "The Leiden replication",
+  "debate-claims": "A rig can be built before its reading is understood.",
   glossary: "Kolmogorov depth",
   citations: "Elements of Episodic Memory",
   quiz: "What was built before it could be explained?",
@@ -182,6 +183,17 @@ const para = (text: string, id = "spya-bbbbbb") => ({ text, ids: [id] });
 
 /** What each artefact's GET answers when it answers. Keyed by the path segment after `/api/`. */
 const BODIES: Record<string, unknown> = {
+  /* Debate's Claims list (plan 261008i stage 2): one listed claim, whose
+     AI line is what the band draws. */
+  "debate-claims": {
+    claimList: {
+      ...STAMP,
+      claims: [{ id: "spya-cdm2a4", blockId: AT.blockId, quote: AT.quote, statement: "A rig can be built before its reading is understood." }],
+      dropped: { unknownIds: 0, unquoted: 0, tooLong: 0, duplicate: 0, overCap: 0, malformed: 0 },
+    },
+    stale: false,
+    outdated: false,
+  },
   faq: {
     faq: {
       ...STAMP,
@@ -502,10 +514,13 @@ async function reply(url: string, method: string, body: string | null): Promise<
      DOI. A 404 here would be its `unavailable`, which draws a second *Try
      again* in Debate's band beside the one this file counts (plan 261004h). */
   if (url.startsWith("/api/citers/")) return json({ kind: "no-doi" });
-  const other = /^\/api\/([a-z]+)\/([^/]+)$/.exec(url);
+  /* Debate's claim checks (plan 261008i stage 3): a second read beside the list, never the row under test. */
+  if (/^\/api\/debate-claims\/[^/]+\/checks$/.test(url)) return json({ checks: [] });
+  /* `debate-claims` by name: a general `[a-z-]+` would turn reading-time and the like from `{}` into a 404. */
+  const other = /^\/api\/(debate-claims|[a-z]+)\/([^/]+)$/.exec(url);
   const there = other?.[2] === undefined ? undefined : elsewhere[other[2]];
   if (there && other?.[1] && other[1] in there) return artefactResponse(other[1], there[other[1]] as Answer);
-  const kind = new RegExp(`^/api/([a-z]+)/${SLUG}$`).exec(url)?.[1];
+  const kind = new RegExp(`^/api/(debate-claims|[a-z]+)/${SLUG}$`).exec(url)?.[1];
   if (kind && kind in BODIES) {
     gets[kind] = (gets[kind] ?? 0) + 1;
     /* The arc is there unless a test says otherwise: `useArc` asks for one the
@@ -536,6 +551,7 @@ const { useIllustrated } = await import("../src/web/useIllustrated.js");
 const { useFaqRead } = await import("../src/web/useFaq.js");
 const { useTimelineRead } = await import("../src/web/useTimeline.js");
 const { useDebateRead } = await import("../src/web/useDebate.js");
+const { useDebateClaims } = await import("../src/web/useDebateClaims.js");
 const { useCitationsRead } = await import("../src/web/useCitations.js");
 const { useSimple } = await import("../src/web/useSimple.js");
 
@@ -652,9 +668,11 @@ const ROWS: readonly Row[] = [
   { hook: "useIdeas.ts", kind: "ideas", search: "?mode=ideas", where: ".mode-band.ideas" },
   { hook: "useTimeline.ts", kind: "timeline", search: "?mode=timeline", where: ".mode-band.timeline" },
   { hook: "useQuotes.ts", kind: "quotes", search: "?mode=quotes", where: ".mode-band.quotes" },
-  { hook: "useDebate.ts", kind: "debate", search: "?mode=debate", where: ".mode-band.dbt" },
+  { hook: "useDebate.ts", kind: "debate", search: "?mode=peer-review&peer-review=reception", where: ".mode-band.dbt" },
+  /* Claims' own read, on Claims (plan 261008i stage 2). */
+  { hook: "useDebateClaims.ts", kind: "debate-claims", search: "?mode=peer-review&peer-review=claims", where: ".mode-band.dbt" },
   { hook: "useGlossary.ts", kind: "glossary", search: "?mode=glossary", where: ".mode-band.gloss" },
-  { hook: "useCitations.ts", kind: "citations", search: "?mode=citations", where: ".mode-band.citations" },
+  { hook: "useCitations.ts", kind: "citations", search: "?mode=peer-review", where: ".mode-band.citations" },
   {
     hook: "useQuiz.ts",
     kind: "quiz",
@@ -1387,6 +1405,8 @@ const AFTER_NONE_READS: readonly { kind: string; use: (slug: string) => Artefact
   { kind: "timeline", use: useTimelineRead },
   { kind: "quotes", use: useQuotesRead },
   { kind: "debate", use: useDebateRead },
+  /* No read half of its own: the whole hook, unarmed, so nothing it mounts can spend. */
+  { kind: "debate-claims", use: (slug) => useDebateClaims(slug, false) },
   { kind: "glossary", use: useGlossaryRead },
   { kind: "citations", use: useCitationsRead },
   { kind: "quiz", use: useQuizRead },

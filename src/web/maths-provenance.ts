@@ -14,7 +14,22 @@
  * article's own markup, and a symbol cannot arrive in article JSON or authored
  * html. It is enumerable, so the object spreads `rehostImages` uses carry it
  * into both later draws; it never serialises or changes the stored `Block`.
+ *
+ * **Its value is the block as it was before, and the renderer that drew it**
+ * (since 2026-10-09). An excerpt of the block — a quote in Skim, a passage in
+ * Ideas — is found in the words the model saw, TeX and all, and then drawn
+ * with the same renderer (src/web/excerpt-html.ts, plan 261009k). Only a type is
+ * imported, so reading the mark still loads nothing.
  */
+
+import type { RenderTex } from "../maths-tex.js";
+
+/** What `RENDERED_MATHS` holds: the block's html before its maths was drawn, and what drew it. */
+export interface MathsSource {
+  /** Already through the article policy — `sanitizeArticle` ran first. */
+  html: string;
+  render: RenderTex;
+}
 
 /** The mark itself. Written only by `renderArticleMaths` in src/web/maths.ts. */
 export const RENDERED_MATHS: unique symbol = Symbol("spideryarn-rendered-maths");
@@ -25,4 +40,9 @@ export const RENDERED_MATHS: unique symbol = Symbol("spideryarn-rendered-maths")
  */
 export function rendersMaths(block: object): boolean {
   return RENDERED_MATHS in block;
+}
+
+/** The block before its maths was drawn, or `null` for one that had none drawn here. */
+export function mathsSource(block: object): MathsSource | null {
+  return (block as { [RENDERED_MATHS]?: MathsSource })[RENDERED_MATHS] ?? null;
 }

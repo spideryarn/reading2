@@ -77,6 +77,8 @@ vi.mock("../src/web/useChat.js", () => ({
     remove: (id: string) => {
       removed.push(id);
     },
+    deleteFrom: () => {},
+    settled: () => true,
     error: null,
   }),
 }));

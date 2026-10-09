@@ -269,6 +269,9 @@ export const REVISION_CARRY_POLICY: Record<
   unverified: "carry",
   recall: "carry",
   pagesChecked: "carry",
+  /* With `recall`, whose complaints these are: a revision that does not
+     re-extract keeps the transcription they are about. */
+  quality: "carry",
 
   extractedHtml: "carry",
   stampedHtml: "carry",
@@ -370,6 +373,14 @@ export const REVISION_CARRY_POLICY: Record<
      keeps it for the day the article moves back, and costs nothing.
      docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
   relations: "carry",
+  /* **Carries, like `faq`** — a replace-on-rerun list whose `sourceHash`
+     answers at read time whether the article moved underneath it. A carried
+     list that no longer matches is drawn **read-only**, with *List again*
+     (plan 261008i, Sol F6); its quotes are the article's characters as they
+     were, so a jump may land on a block that has changed. Carrying keeps the
+     reader's list rather than emptying the sub-mode until they pay again.
+     docs/plans/261008i-debate-claims-picked-by-the-reader.md. */
+  debateClaims: "carry",
   /* **Carries, like `faq`** — a replace-on-rerun list whose `sourceHash`
      answers at read time whether the article moved underneath it. A carried
      list that no longer matches is **not drawn** (Sol F8): a link can still

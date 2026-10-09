@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * The deterministic half of stage 5d — src/glossary.ts and src/term-match.ts.
  *

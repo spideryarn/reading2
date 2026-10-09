@@ -19,6 +19,8 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { checksOwner, claimListOwner } from "./helpers/debate-claims-owner.js";
+import { peerReviewHead } from "./helpers/peer-review-head.js";
 import type { BlockId, ClaimDebateRow, Debate, DebateCounts, ThreadSummary } from "../src/types.js";
 import type { PublicDebate } from "../src/public-types.js";
 import type { UseDebate } from "../src/web/useDebate.js";
@@ -131,6 +133,7 @@ function paintOwner(summaries: ThreadSummary[] = [], over: Partial<UseDebate> = 
   act(() => {
     root.render(
       createElement(DebatePanel, {
+        head: peerReviewHead({ view: "reception", onView: () => {}, ownerSlug: null }),
         ...shared,
         access: {
           kind: "owner",
@@ -143,6 +146,7 @@ function paintOwner(summaries: ThreadSummary[] = [], over: Partial<UseDebate> = 
             },
             ...over,
           }),
+          claimList: claimListOwner(), checks: checksOwner(),
           citers: { result: { kind: "no-doi" }, retry: () => {} },
           claimChats: {
             summaries,
@@ -163,7 +167,7 @@ function paintVisitor(): void {
     claims: { rows: [ROW], sourceNotPublishable: 0 },
   } as unknown as PublicDebate;
   act(() => {
-    root.render(createElement(DebatePanel, { ...shared, access: { kind: "visitor", debate } }));
+    root.render(createElement(DebatePanel, { head: null, ...shared, access: { kind: "visitor", debate, claimList: null } }));
   });
 }
 
@@ -214,9 +218,10 @@ describe("the owner's box", () => {
     expect(DEBATE_LENS_LABEL).toBe("Look at the debate from an angle");
     expect(input?.maxLength, "the cap the server refuses over").toBe(600);
     expect(send()?.textContent).toContain(DEBATE_LENS_SEND);
-    /* Above Reception | Claims and the list, not after them. */
-    const controls = host.querySelector(".dbt-controls") as Element;
-    expect(input && controls && input.compareDocumentPosition(controls) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    /* Under Peer review's chip row, the band's header since 2026-10-09, and
+       above the list rather than after it. */
+    const chips = host.querySelector(".band-head .dbt-views") as Element;
+    expect(input && chips && input.compareDocumentPosition(chips) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
   });
 
   it("hands over the words on Enter, trimmed, and starts no search", () => {

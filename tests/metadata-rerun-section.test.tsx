@@ -385,7 +385,8 @@ describe("the AI processing section", () => {
         expect(button(step, "Run it again"), `no button for ${step}`).toBeTruthy();
       }
       expect(row("faq")?.textContent).toContain("FAQ");
-      expect(row("citations")?.textContent).toContain("Citations");
+      /* Peer review's Bibliography since 2026-10-09 (plan 261009l); the step keeps its name. */
+      expect(row("citations")?.textContent).toContain("Bibliography");
     },
   );
 
@@ -564,21 +565,19 @@ describe("the AI processing section", () => {
   });
 
   /**
-   * **Debate is two separately metered calls, not one** (src/debate.ts § *Two
-   * groups, two passes, one atomic step*), and the dearest press on this page —
-   * $0.20–0.40 for a completed run on a short article, rising with length
-   * (docs/plans/260905f-debate-mode-stage-0-spike-results.md § Stage 3½ § 1).
+   * **Debate is one metered web search plus optional search-free synthesis**,
+   * and the dearest press on this page.
    *
    * **That range is no longer shown.** It was, until 2026-09-30: what AI
    * processing costs us is for the administrator alone (plan 260930k § 3). The
    * row still says what the reader is waiting on.
    */
-  it("names up to two calls on the debate row, and no price", async () => {
+  it("names Debate's web-searching call and optional synthesis call, and no price", async () => {
     await open();
 
     const text = row("debate")?.textContent ?? "";
-    /* *Up to*: pass B runs only if pass A succeeded (src/debate.ts). */
-    expect(text).toContain("Up to two model calls");
+    expect(text).toContain("One model call that searches the web");
+    expect(text).toContain("one search-free call to find themes");
     expect(text).not.toMatch(/[$£€]\s?\d/);
   });
 
@@ -619,7 +618,7 @@ describe("the AI processing section", () => {
     const ids = (run?.getAttribute("aria-describedby") ?? "").split(/\s+/).filter(Boolean);
     expect(ids, "Run is not described by anything").not.toEqual([]);
     const described = ids.map((id) => document.getElementById(id)?.textContent ?? "").join(" ");
-    expect(described).toContain("Up to two model calls");
+    expect(described).toContain("One model call that searches the web");
     expect(button("quotes", "Run it again")?.hasAttribute("aria-describedby")).toBe(false);
 
     await press(run);
@@ -635,7 +634,7 @@ describe("the AI processing section", () => {
     const retryDescription = retryIds
       .map((id) => document.getElementById(id)?.textContent ?? "")
       .join(" ");
-    expect(retryDescription).toContain("Up to two model calls");
+    expect(retryDescription).toContain("One model call that searches the web");
   });
 
   /**

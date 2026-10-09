@@ -471,6 +471,28 @@ export interface HintOperation extends Registered {
 }
 
 /**
+ * **The reader deleted one of their questions, and everything after it.**
+ * Report spya-mx423m; plan 261009o.
+ *
+ * It **draws** — the rows taken off the conversation on screen — because it can
+ * be withdrawn: a refused delete puts them back by this entry leaving the map,
+ * the rule that makes an edit's discard a projection (project.ts).
+ *
+ * `ids` are the rows it deletes, read off the screen at the press: the question
+ * and every row below it. Rows rather than a position, so that success can take
+ * exactly these out of `base` and nothing a later send appended. The last of
+ * them is the tail the server is told to expect, so a conversation that moved
+ * on since is refused rather than cut short in a place the reader never saw.
+ */
+export interface PruneOperation extends Registered {
+  kind: "prune";
+  threadId: string;
+  /** The question pressed, which is what the request names. */
+  messageId: string;
+  ids: readonly string[];
+}
+
+/**
  * Everything asynchronous this hook can be doing.
  *
  * **One map holds every kind, and that is a correction.** An earlier draft had
@@ -490,7 +512,8 @@ export type Operation =
   | RenameOperation
   | DeleteOperation
   | IntentOperation
-  | HintOperation;
+  | HintOperation
+  | PruneOperation;
 
 /**
  * An operation as its caller hands it over: the reducer adds the rest.
@@ -639,6 +662,8 @@ export type ChatInput =
     }
   /** The reader opened a Recall answer's hint. See `HintOperation`. */
   | { type: "hint.started"; op: Registering<HintOperation> }
+  /** The reader deleted a question and what follows it. See `PruneOperation`. */
+  | { type: "prune.started"; op: Registering<PruneOperation> }
   /** A new, empty conversation. Local: nothing is stored until you send. */
   | { type: "thread.begun"; thread: ChatThread }
   /** Forgetting one. A no-op on anything with a message in it. */
@@ -782,7 +807,11 @@ export type ChatResult =
    * It is not. Nothing is written and nothing is said: the hint is open on
    * screen either way, and the next press on a fresh mount tries again.
    */
-  | { type: "hint.failed"; opId: OpId; error: string };
+  | { type: "hint.failed"; opId: OpId; error: string }
+  /** The rows are gone from the server too. */
+  | { type: "prune.succeeded"; opId: OpId }
+  /** They are not, and the reader is told; the rows come back. */
+  | { type: "prune.failed"; opId: OpId; error: string };
 
 /** What the `done` frame carries — the finished answer, and its receipts. */
 export interface TurnDone {
@@ -862,6 +891,15 @@ export type ChatCommand =
   | { type: "load"; opId: OpId; slug: string }
   | { type: "rename"; opId: OpId; slug: string; threadId: string; title: string }
   | { type: "delete"; opId: OpId; slug: string; threadId: string }
+  /** Delete a question and what follows it, guarded by the tail the tab saw. */
+  | {
+      type: "prune";
+      opId: OpId;
+      slug: string;
+      threadId: string;
+      messageId: string;
+      expectedTailId: string;
+    }
   /** Open the POST, and read the stream until it ends one of its five ways. */
   | {
       type: "turn";
@@ -898,7 +936,7 @@ export type ChatCommand =
        * exists. The server uses it only when this exchange creates the thread.
        * `SpokenTurn.kind` in src/chat.ts; SPIDERYARN-READING2-70.
        */
-      kind?: Extract<ThreadKind, "chat" | "learn">;
+      kind?: Extract<ThreadKind, "chat" | "learn" | "guide">;
     }
   /** Ask about one conversation, because the screen is wrong about it. */
   | { type: "repair"; opId: OpId; slug: string; threadId: string }

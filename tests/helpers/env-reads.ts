@@ -353,8 +353,10 @@ const PINS: Pin[] = [
     kind: "function",
     name: "resolveModel",
     /* Re-pinned 2026-09-30 for plan 260930f: `power` is an argument now and the
-       default id depends on it; the environment read is the same line. */
-    checksum: "d2c502aff4811cf5",
+       default id depends on it; the environment read is the same line.
+       Re-pinned 2026-10-09 for plan 261009a: a `PINNED_MODEL` lookup after the
+       override; it reads no environment, and the read is the same line. */
+    checksum: "7fce20f3b15b1826",
     yields: [],
     why: "indexes process.env by MODEL_ENV_VAR's value; the twelve names come from that record at runtime",
   },

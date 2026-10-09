@@ -45,10 +45,14 @@
  * this file writes. docs/project/logging.md.
  */
 
-import { and, asc, desc, eq, inArray, isNull, type SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, type SQL, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
-import { feedback as feedbackTable, feedbackQuestionAnswers as answersTable } from "../db/schema.js";
+import {
+  feedback as feedbackTable,
+  feedbackQuestionAnswers as answersTable,
+  feedbackQuestionDeferrals as deferralsTable,
+} from "../db/schema.js";
 import { feedbackPageAt, feedbackPageLabel } from "../feedback-page.js";
 import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
@@ -74,7 +78,10 @@ import {
   type LinkedFeedbackReport,
   type NewFeedback,
   type NewFeedbackAnswer,
+  type NewFeedbackDeferral,
   type StoredFeedbackAnswer,
+  type StoredFeedbackDeferral,
+  type FeedbackDeferralNow,
 } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
 
@@ -271,6 +278,21 @@ const ANSWER_COLUMNS = {
 
 function toAnswer(row: { id: string; questionId: string; body: string; createdAt: Date }): StoredFeedbackAnswer {
   return { id: row.id, questionId: row.questionId, body: row.body, createdAt: row.createdAt.toISOString() };
+}
+
+/** The three fields of a deferral the caller reads back; never the environment. */
+const DEFERRAL_COLUMNS = {
+  questionId: deferralsTable.questionId,
+  deferredAt: deferralsTable.deferredAt,
+  updatedAt: deferralsTable.updatedAt,
+};
+
+function toDeferral(row: { questionId: string; deferredAt: Date | null; updatedAt: Date }): StoredFeedbackDeferral {
+  return {
+    questionId: row.questionId,
+    deferredAt: row.deferredAt === null ? null : row.deferredAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
 }
 
 /** As much of a report's first line as fits beside a question's title. */
@@ -561,16 +583,66 @@ const rawPgFeedbackStore: FeedbackStore = {
     return { kind: "duplicate", answer: toAnswer(existing) };
   },
 
-  async newestAnswers(questionIds: readonly string[]): Promise<StoredFeedbackAnswer[]> {
+  async answersTo(questionIds: readonly string[]): Promise<StoredFeedbackAnswer[]> {
     if (questionIds.length === 0) return [];
-    /* `distinct on`: the first row of each question in newest-first order. The
-       owner predicate is always there, and the question one beside it. */
+    /* Oldest first, the id breaking a tie so the order is the same every
+       time. The owner predicate is always there, and the question one beside it. */
     const rows = await getDb()
-      .selectDistinctOn([answersTable.questionId], ANSWER_COLUMNS)
+      .select(ANSWER_COLUMNS)
       .from(answersTable)
       .where(and(eq(answersTable.ownerId, currentOwnerId()), inArray(answersTable.questionId, [...questionIds])))
-      .orderBy(answersTable.questionId, desc(answersTable.createdAt), desc(answersTable.id));
+      .orderBy(asc(answersTable.createdAt), asc(answersTable.id));
     return rows.map(toAnswer);
+  },
+
+  async deferrals(questionIds: readonly string[]): Promise<StoredFeedbackDeferral[]> {
+    if (questionIds.length === 0) return [];
+    const rows = await getDb()
+      .select(DEFERRAL_COLUMNS)
+      .from(deferralsTable)
+      .where(and(eq(deferralsTable.ownerId, currentOwnerId()), inArray(deferralsTable.questionId, [...questionIds])));
+    return rows.map(toDeferral);
+  },
+
+  async setDeferred(input: NewFeedbackDeferral): Promise<FeedbackDeferralNow> {
+    const db = getDb();
+    const ownerId = currentOwnerId();
+    const mine = and(eq(deferralsTable.ownerId, ownerId), eq(deferralsTable.questionId, input.questionId));
+    /* **Each direction writes only when it changes something** (F5), in one
+       statement, so two copies of one press cannot both write and a retry
+       moves neither time. Deferring: a new row, or a brought-back one deferred
+       again; never a deferred one, whose first time stands. Bringing back:
+       only a deferred row. Both times are the database's `now()`, the clock a
+       reply's `created_at` is on, because the state compares them (F2). */
+    if (input.deferred) {
+      await db
+        .insert(deferralsTable)
+        .values({
+          ownerId,
+          questionId: input.questionId,
+          deferredAt: sql`now()`,
+          updatedAt: sql`now()`,
+          environment: input.environment,
+        })
+        .onConflictDoUpdate({
+          target: [deferralsTable.ownerId, deferralsTable.questionId],
+          set: { deferredAt: sql`now()`, updatedAt: sql`now()`, environment: input.environment },
+          setWhere: isNull(deferralsTable.deferredAt),
+        });
+    } else {
+      await db
+        .update(deferralsTable)
+        .set({ deferredAt: null, updatedAt: sql`now()`, environment: input.environment })
+        .where(and(mine, isNotNull(deferralsTable.deferredAt)));
+    }
+    const [row] = await db.select(DEFERRAL_COLUMNS).from(deferralsTable).where(mine);
+    logger.info(
+      { question: input.questionId, deferred: input.deferred, stored: row?.deferredAt != null },
+      "feedback question deferral set",
+    );
+    /* Bringing back a question never deferred writes nothing and finds no row:
+       it is not deferred, which is what was asked. */
+    return { questionId: input.questionId, deferredAt: row ? toDeferral(row).deferredAt : null };
   },
 
   async linkedReports(ids: readonly string[]): Promise<LinkedFeedbackReport[]> {
@@ -579,7 +651,7 @@ const rawPgFeedbackStore: FeedbackStore = {
       .select({ id: feedbackTable.id, number: feedbackTable.number, body: feedbackTable.body })
       .from(feedbackTable)
       .where(and(eq(feedbackTable.ownerId, currentOwnerId()), idMember(ids)));
-    return rows.map((row) => ({ id: row.id, number: row.number, firstLine: firstLineOf(row.body) }));
+    return rows.map((row) => ({ id: row.id, number: row.number, firstLine: firstLineOf(row.body), body: row.body }));
   },
 
   async markMirrorAttempted(id: string): Promise<void> {

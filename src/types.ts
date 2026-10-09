@@ -33,6 +33,7 @@
 import { CHAT_BEING_UPDATED, type FailureKind, type PaperUnreadableReason } from "./messages.js";
 import type { Assets } from "./assets.js";
 import { isSpideryarnId, isUuid } from "./ids.js";
+import type { FeedbackQuestionState } from "./feedback-question-values.js";
 import type { DifficultyLevel, RatedDifficulty } from "./reading-time.js";
 
 export type NodeId = string; // "n0042"
@@ -1081,8 +1082,8 @@ export interface IdeasResponse {
    prove the words are in the piece and cannot prove who wrote them
    (src/quotes.ts § authorVoice). The glossary answers *what does this word
    mean*; the ideas answer *what do I have to hold*; this answers *which lines
-   is it worth carrying out of here* — and every one of them is a sentence the
-   author wrote, found in the article rather than composed. */
+   is it worth carrying out of here* — and every one of them is a sentence
+   found in the article rather than composed. */
 
 /**
  * One quote, and where it sits.
@@ -1421,11 +1422,19 @@ export interface SkimDrops {
    */
   badRole: number;
   /**
-   * A cue that was missing, empty, not a string or over the cap — set to
-   * `null`, the stop kept. **Absent on routes before `trajectory/5`**, which
-   * had no cue; read it as 0.
+   * A cue that was missing, not a string or over the cap — set to `null`, the
+   * stop kept. **Absent on routes before `trajectory/5`**, which had no cue;
+   * read it as 0. An empty cue counted here too until `skim/11`, when it
+   * became the model's way of saying "no cue" (`noCue`).
    */
   badCue?: number;
+  /**
+   * Stops the model gave no cue on purpose (`"cue": ""`, or only spaces) —
+   * `null`, the stop kept, and not a fault. Since `skim/11`
+   * (docs/plans/261009j-skim-question-optional-and-the-border.md); absent
+   * before, read it as 0.
+   */
+  noCue?: number;
   /**
    * `again` entries dropped: not 2 or 3, not deeper than the stop's own depth,
    * repeated, or naming a depth no stop is first placed at. The stop is kept.
@@ -1504,10 +1513,29 @@ export interface SkimResponse {
    * not counting those in the abstract, which are left out on purpose.
    */
   notOnRoute: number;
+  /**
+   * The reader sent the profile-changed notice away with its ×, for this
+   * route under the profile they have now (src/skim.ts § `profileNoticeKey`).
+   * Only ever true beside `profileChanged`. Greg, 2026-10-09 (`spya-ud2w92`).
+   * docs/plans/261009i-skim-profile-notice-can-be-dismissed.md.
+   */
+  profileNoticeDismissed: boolean;
 }
 
-/** As `QuotesFound`: everything but the one question about the reader. */
-export type SkimFound = Omit<SkimResponse, "profileChanged">;
+/**
+ * As `QuotesFound`: everything but the questions about the reader — with the
+ * stored dismissal key in their place, which the route compares with the key
+ * for the profile the reader has now and never sends on.
+ */
+export type SkimFound = Omit<SkimResponse, "profileChanged" | "profileNoticeDismissed"> & {
+  profileNoticeDismissedFor: string | null;
+};
+
+/** `POST /api/skim/:slug/profile-notice-dismissal`: the route the reader was looking at. */
+export interface SkimProfileNoticeDismissalRequest {
+  /** That route's `Skim.generatedAt`, its identity. */
+  generatedAt: string;
+}
 
 /**
  * The Sketch diagram as the panel receives it — docs/project/diagram.md § Sketch.
@@ -1595,6 +1623,22 @@ export const MAX_PROFILE_CHARS = 1_500;
  * stands on the reasoning above rather than on the pairing.
  */
 export const MAX_PURPOSE_CHARS = 600;
+
+/**
+ * Trim it, settle the line endings, and call whitespace-only nothing.
+ *
+ * `\r\n` first, because a paste from a Windows-authored document carries them
+ * and they are invisible in every surface a reader or a reviewer would look at
+ * — including a diff of the hash's input, which is the one place it would
+ * matter. Returns `null` rather than `""` so that "the reader emptied the box"
+ * and "the reader never touched it" cannot be told apart *here*; whoever cares
+ * about that distinction holds it above this line.
+ */
+export function normaliseProfileText(text: string | null | undefined): string | null {
+  if (!text) return null;
+  const clean = text.replace(/\r\n/g, "\n").trim();
+  return clean.length > 0 ? clean : null;
+}
 
 /**
  * **One author of the piece, as the piece declares them** — the page's
@@ -3202,6 +3246,34 @@ export interface ToolRun {
   status: "running" | "done" | "error";
   /** Milliseconds. Absent while running. */
   ms?: number;
+  /**
+   * **Words the guide offers to save for the reader**, drawn under its answer
+   * as a card with a button they press (`offer_to_save` in src/chat-tools.ts,
+   * src/web/GuideSaveOffer.tsx). Nothing is saved by the tool: the reader's
+   * press is the write. The guide's runs only. Plan
+   * docs/plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md.
+   */
+  offer?: SaveOffer;
+}
+
+/**
+ * **One offer to save**: which of the reader's two profile fields, and the
+ * words, already normalised (`normaliseProfileText`) and within that field's
+ * cap. `purpose` is "why you're reading this one", `profile` is About you, the
+ * store's own names for them.
+ */
+export interface SaveOffer {
+  field: "purpose" | "profile";
+  text: string;
+  /**
+   * What the field held when the guide made the offer (`null`: empty). The
+   * tool makes no offer when that turn could not read it: without a basis the
+   * card could not distinguish an empty field from one it was about to
+   * overwrite. The card saves only while the field still holds this, so a
+   * card pressed after the words changed — an older offer, another tab,
+   * Metadata — saves nothing and says so.
+   */
+  basis: string | null;
 }
 
 
@@ -3461,9 +3533,11 @@ export type StepName =
      in front of it. src/pipeline.ts § illustrated. */
   | "illustrated"
   /* **What the rest of the web says about this piece** — docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md.
-     The only step whose content is not in the article at all: it runs two
-     metered web searches and returns pages that answer the piece, or the claims
-     it makes.
+     The only step whose content is not in the article at all: it runs a
+     metered web search and returns pages that answer the piece. Until
+     `debate/7` (2026-10-08) a second search looked for the argument around
+     the claims it makes; the reader now picks those (plan 261008i), from
+     the list `debate-claims` below makes.
 
      **It is deliberately NOT an `ArticleStage`** (src/models.ts). That type is
      the subset of these names that send the article bare on the Messages wire,
@@ -3473,6 +3547,12 @@ export type StepName =
      among the ones the compiler asks for, and a reader will otherwise go
      looking for the missing rows. */
   | "debate"
+  /* **The article's own claims, listed for Debate's Claims to pick from** —
+     docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2. One
+     Messages-wire call over `articleWithIds` on the body, **no web search**,
+     made by a press on Claims. Ideas' article block at `high` effort, so an
+     `ArticleStage`. */
+  | "debate-claims"
   /* **Every work the piece cites, linked** — docs/plans/260911g-citations-mode.md.
      One Messages-wire call over the whole article, bibliography and notes
      included, and a link derived by code from the article's own hrefs.
@@ -3496,6 +3576,15 @@ export type StepName =
      at `high` effort (measured against `medium` in stage 1), so an
      `ArticleStage`. */
   | "simple";
+
+/**
+ * **What a job's once-per-job marker can name** (`jobs.paid_step_begun`,
+ * `JobStore.beginPaidStep`): a whole step marked `oncePerJob` (`debate`), or a
+ * purchase inside a step that a later window of the same job must not make
+ * again — Illustrated's plates, which come after the step's own deliberate
+ * hand-back and so cannot be marked at the step. Plans 261009l and 261009o.
+ */
+export type PaidPurchase = StepName | "illustrated-plates";
 
 export type JobStatus = "queued" | "running" | "done" | "error" | "cancelled";
 export type StepStatus = "pending" | "running" | "done" | "skipped" | "error";
@@ -4198,7 +4287,8 @@ export type ChatAnchor =
  * not built: `chat_threads_origin_mode` in src/db/schema.ts lists it, and the
  * route accepts only the modes that are built (`ORIGIN_MODES`).
  *
- * **A glossary entry and a cited work since 2026-10-06**
+ * **A glossary entry and a cited work since 2026-10-06, and an idea since
+ * 2026-10-09**
  * (plan docs/plans/261006d-glossary-and-citations-ask-in-chat-with-origin.md, D1):
  * each has a durable id, so the id is its identity and the name beside it is
  * a snapshot. See `GlossaryOrigin`.
@@ -4213,7 +4303,7 @@ export type ChatAnchor =
  * Set on the turn that creates the thread and never again, like `anchor`.
  * Written by conditional spread, never `origin: undefined`.
  */
-export type ThreadOrigin = ClaimOrigin | LensOrigin | GlossaryOrigin | CitationsOrigin;
+export type ThreadOrigin = ClaimOrigin | LensOrigin | GlossaryOrigin | CitationsOrigin | IdeasOrigin;
 
 /** One of Debate's claims: the block it sits in and its words when the chat started. */
 export type ClaimOrigin = { mode: "debate"; blockId: BlockId; quote: string };
@@ -4241,9 +4331,19 @@ export type GlossaryOrigin = { mode: "glossary"; itemId: string; quote: string }
 export type CitationsOrigin = { mode: "citations"; itemId: string; quote: string };
 
 /**
- * The most the name snapshot of a glossary or citations origin may be. The
- * route refuses a longer one, so **every sender cuts with `originName`**: a
- * glossary name has no length limit of its own (plan 261006d's review, F1).
+ * One of Ideas' propositions: its id, and its name when the chat started
+ * (plan docs/plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md).
+ * `GlossaryOrigin`'s rules, with one difference: an idea keeps its id across
+ * a re-run only while it keeps its normalised name (src/ideas.ts), so a
+ * paraphrased idea gets a new id and this origin then finds nothing. Best
+ * effort, said plainly (that plan's F6).
+ */
+export type IdeasOrigin = { mode: "ideas"; itemId: string; quote: string };
+
+/**
+ * The most the name snapshot of a glossary, citations or ideas origin may be.
+ * The route refuses a longer one, so **every sender cuts with `originName`**:
+ * a glossary name has no length limit of its own (plan 261006d's review, F1).
  */
 export const MAX_ORIGIN_NAME_CHARS = 300;
 
@@ -4279,7 +4379,7 @@ export function isClaimOrigin(origin: ThreadOrigin): origin is ClaimOrigin {
 }
 
 /** The origin modes that are built. The route refuses any other. */
-export const ORIGIN_MODES = ["debate", "glossary", "citations"] as const satisfies readonly ThreadOrigin["mode"][];
+export const ORIGIN_MODES = ["debate", "glossary", "citations", "ideas"] as const satisfies readonly ThreadOrigin["mode"][];
 
 /**
  * Are these the same anchor? What the route's 409 and `withTurn`'s refusal
@@ -4306,14 +4406,15 @@ export function sameAnchor(stored: ChatAnchor | undefined, wanted: ChatAnchor): 
  * a different claim. **A claim and a lens are never the same**, whatever their
  * words, so the shapes are compared before any field is.
  *
- * **A glossary entry or a cited work is its id**: the name is a snapshot and
- * is not compared, so a reworded entry is still the same origin (plan
- * 261006d, D1).
+ * **A glossary entry, a cited work or an idea is its id**: the name is a
+ * snapshot and is not compared, so a reworded item is still the same origin
+ * (plans 261006d D1 and 261009k stage 3).
  */
 export function sameOrigin(a: ThreadOrigin, b: ThreadOrigin): boolean {
   switch (a.mode) {
     case "glossary":
     case "citations":
+    case "ideas":
       return b.mode === a.mode && a.itemId === b.itemId;
     case "debate":
       if (b.mode !== "debate") return false;
@@ -4363,6 +4464,13 @@ export interface ChatThread {
    * places instead of at every read.
    */
   kind: ThreadKind;
+  /**
+   * **One line saying what this conversation covered**, written by a small
+   * model after each finished answer (src/chat-gist.ts). For the model in the
+   * reader's other conversations (src/reader-notes.ts § `indexRow`), never
+   * drawn on screen. Absent until the first one is written.
+   */
+  gist?: string;
   messages: ChatMessage[];
 }
 
@@ -4810,6 +4918,10 @@ export interface CitedWork {
    * plus every body block carrying a `data-spya-note-ref` marker for a note the
    * work was found in. Footnote expansion is code's, because the model is shown
    * plain text and cannot see which paragraph a note hangs off.
+   *
+   * **Note expansion is complete for each recognised note; direct citations
+   * are capped.** A work cited directly in the text has at most `MAX_MENTIONS`
+   * mentions, so later directly citing blocks may be absent (plan 261009e).
    */
   citedAt: BlockId[];
   /**
@@ -5273,6 +5385,15 @@ export interface CitationScoreDrops {
  * the number.
  */
 export const MAX_CITATIONS = 80;
+
+/**
+ * Direct mentions kept per work — occurrences, not distinct paragraphs. The
+ * first-cited jump needs one; the prompt and verifier both stop at three. Here
+ * rather than in src/citations.ts for `MAX_CITATIONS`' reason: the hover card
+ * says *at least* when a work has hit it, since later directly citing paragraphs
+ * may not be in `citedAt`.
+ */
+export const MAX_MENTIONS = 3;
 
 /** The artefact. The `citations` column on `article_revisions`. */
 export interface Citations {
@@ -6794,6 +6915,39 @@ export interface DebateGroup<Row> {
 }
 
 /**
+ * **Debate's second group, which since `debate/7` is not searched at all.**
+ *
+ * Until 2026-10-08 every search ran two passes, and pass B picked three or four
+ * of the article's claims by itself and searched them. Greg asked for the
+ * reader to pick the claims instead (q-sn37bt; plan
+ * docs/plans/261008i-debate-claims-picked-by-the-reader.md), so the press now
+ * searches for Reception only.
+ *
+ * **"Not searched" is a state, not an empty group** (GPT Sol's F4 on that
+ * plan). An empty group with zeroed counts already means *a search ran and
+ * kept nothing*, and the panel says exactly that — so a run that never asked
+ * would be told it found nothing. Hence two members:
+ *
+ * - **searched** — `pass` absent. Every debate stored before `debate/7`, rows,
+ *   counts and all; read and drawn as before.
+ * - **`not-run`** — the press did not search for claims. No counts, because
+ *   there was no search to count; `rows` is stored empty only so that every
+ *   reader of `claims.rows` (the marginalia, the public boundary, the registry)
+ *   reads nothing without asking, and `isDebateDocument` keeps its rule.
+ *
+ * `counts` is reachable only after narrowing on `pass`, so a sentence about
+ * what the search found cannot be written over a search that did not run
+ * without the compiler asking first.
+ */
+export type DebateClaims = (DebateGroup<ClaimDebateRow> & { pass?: undefined }) | DebateClaimsNotRun;
+
+/** Pass B did not run — § `DebateClaims`. The only value this build writes. */
+export interface DebateClaimsNotRun {
+  pass: "not-run";
+  rows: [];
+}
+
+/**
  * **Did this group lose anything at all?**
  *
  * Here rather than in src/debate.ts, where it started, for the reason the types
@@ -6886,13 +7040,13 @@ export function distinctSources(rows: readonly { url: string }[]): number {
  * the *queries*, so from one blended call we could not tell *"nobody responded
  * to this piece"* from *"the model only ever searched for the topic"*, and group
  * one being empty is this mode's most common output. It must not be an
- * inference.
+ * inference. **Since `debate/7` (2026-10-08) only the first call runs**, and
+ * `claims` says so (`DebateClaims`); debates stored before then carry both.
  *
- * **The two passes are one atomic step**: a failure of either — zero or
- * unreadable search accounting, malformed JSON, `finish_reason: "length"`,
- * timeout, provider refusal — fails the whole step and writes none of this.
- * Only a *successful* pass A that kept no direct rows may say the search found
- * nothing.
+ * **The search is one atomic step**: a failure — zero or unreadable search
+ * accounting, malformed JSON, `finish_reason: "length"`, timeout, provider
+ * refusal — fails the whole step and writes none of this. Only a *successful*
+ * pass A that kept no direct rows may say the search found nothing.
  */
 export interface Debate {
   version: string;
@@ -6916,12 +7070,15 @@ export interface Debate {
   searchedAt: string;
   /** About this piece. Empty is the commonest correct answer. */
   direct: DebateGroup<DirectDebateRow>;
-  /** About what it claims. */
-  claims: DebateGroup<ClaimDebateRow>;
+  /**
+   * About what it claims — or, since `debate/7`, `{pass: "not-run"}`: the press
+   * searches for Reception only (`DebateClaims`).
+   */
+  claims: DebateClaims;
   elapsedMs: number;
   /**
    * **What the sources keep coming back to, and which of them matter most** —
-   * a third, search-free call over the rows both passes *kept*
+   * an optional search-free call over the rows the search *kept*
    * (src/debate-themes.ts; SPIDERYARN-READING2-6M, plan 260930j).
    *
    * **Absent means the debate was searched before 2026-09-30**, not that the
@@ -7001,7 +7158,7 @@ export interface DebateKeySource {
  *   whose sources share no thread has no themes, and that is an answer.
  * - `too-few` — fewer kept rows than a theme needs, so nothing was asked.
  * - `failed` — the call ran and its answer was refused or unreadable. The rows
- *   are kept anyway: they cost two web searches, and nothing about them
+ *   are kept anyway: they cost a web search, and nothing about them
  *   depends on this call.
  */
 export type DebateSynthesis =
@@ -7092,8 +7249,15 @@ export function readStoredLean(row: { lean?: unknown; valence?: unknown }): Deba
 
 export function isDebateDocument(value: unknown): boolean {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
-  const doc = value as { direct?: { rows?: unknown }; claims?: { rows?: unknown } };
-  return Array.isArray(doc.direct?.rows) && Array.isArray(doc.claims?.rows);
+  const doc = value as { direct?: { rows?: unknown }; claims?: { rows?: unknown; pass?: unknown } };
+  if (!Array.isArray(doc.direct?.rows) || !Array.isArray(doc.claims?.rows)) return false;
+  /* **The claims marker, when there is one, is the one this build writes**
+     (`DebateClaims`) — and a not-run group with rows in it is a document
+     nobody designed: the marker says no search ran, the rows say one did.
+     Absent is a debate stored before `debate/7`, which did search. */
+  const pass = doc.claims.pass;
+  if (pass === undefined) return true;
+  return pass === "not-run" && doc.claims.rows.length === 0;
 }
 
 /**
@@ -7181,6 +7345,196 @@ export type CitersResult =
  * by shape.
  */
 export type DebateFound = DebateResponse;
+
+/* ---------------------------------------------------------- debate-claims --
+   The article's own claims, listed for the reader to pick from — the
+   `debate_claims` column on `article_revisions`, written by the
+   `debate-claims` step (src/debate-claims.ts) and drawn by Debate's Claims
+   sub-mode. No web search: one model call over the article.
+   docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2. */
+
+/**
+ * **One claim the article rests on that someone outside could argue with.**
+ * Anchored the house way (docs/project/block-ids.md): `blockId` + `quote`,
+ * the quote re-found in its block with `findQuote(…, "spaced")` and stored as
+ * the article's characters, never the model's.
+ */
+export interface ListedClaim {
+  /** Minted per run (src/ids.ts). What a check will name the claim by (plan § 3). */
+  id: string;
+  blockId: BlockId;
+  /** The article's own words for the claim, copied out of its block. */
+  quote: string;
+  /** One short line in plain words: **the model's wording**, and labelled so on screen. */
+  statement: string;
+}
+
+/** What validation threw away. Counts only — never a claim or a quote. */
+export interface DebateClaimListDropped {
+  /** A claim naming a block id that is not in the body evidence. */
+  unknownIds: number;
+  /** A claim whose quote `findQuote` (`"spaced"`) could not find in its block. */
+  unquoted: number;
+  /** A located quote over the cap — dropped, never cut. */
+  tooLong: number;
+  /** A second claim on the same words of the same block. */
+  duplicate: number;
+  /** Claims past `MAX_LISTED_CLAIMS`, cut in the model's order. */
+  overCap: number;
+  /** Items we could not read: a missing field, an overlong statement, a non-object. */
+  malformed: number;
+}
+
+/** The artefact. The `debate_claims` column on `article_revisions`. */
+export interface DebateClaimList {
+  version: string;
+  generator: string;
+  slug: string;
+  /** Fingerprint of the rendered body and cited head; the tree only supplies a fallback title. */
+  sourceHash: string;
+  /**
+   * **In document order**, never a ranking. **An empty list is a real answer**:
+   * the model found no claim someone outside could argue with.
+   */
+  claims: ListedClaim[];
+  dropped: DebateClaimListDropped;
+  generatedAt: string;
+  elapsedMs: number;
+}
+
+/** `GET /api/debate-claims/:slug`. Two staleness facts: no profile is in this stamp. */
+export interface DebateClaimListResponse {
+  claimList: DebateClaimList;
+  /** The rendered body or cited head moved underneath this. */
+  stale: boolean;
+  /** The article is the same and we would write this differently now. */
+  outdated: boolean;
+}
+
+/** As `FaqFound`: the same type, because there is no `profileChanged` to omit. */
+export type DebateClaimListFound = DebateClaimListResponse;
+
+/* ------------------------------------------------------ debate claim checks --
+   One reader press: the ticked claims and the typed one, searched on the open
+   web in one call. The `debate_claim_checks` table, written by
+   `POST /api/debate-claims/:slug/checks` (src/routes.ts) and read by
+   src/debate.ts § `readCheckedClaimGroup`. Owner-only: a typed claim is the
+   reader's own words, and nothing here reaches the public payload.
+   docs/plans/261008i-debate-claims-picked-by-the-reader.md § 3. */
+
+/** The most claims one press may search: pass B's shape, one call over a few claims. */
+export const MAX_CHECK_TARGETS = 4;
+
+/** A typed claim's ceiling, the angle box's: refused when over, never cut. */
+export const MAX_OWN_CLAIM_CHARS = MAX_PURPOSE_CHARS;
+
+/**
+ * **What one check searched for.** Built by the server from stored ids, never
+ * from the request: a listed target's anchor and statement are copied off the
+ * stored list, and the client sends only its id (plan § 3, GPT Sol's F12).
+ */
+export type DebateCheckTarget =
+  | {
+      kind: "listed";
+      /** The `ListedClaim.id` it was ticked by. */
+      claimId: string;
+      blockId: BlockId;
+      /** The article's own words, from the list — never the model's. */
+      quote: string;
+      /** The list's one line, the model's wording. */
+      statement: string;
+    }
+  | {
+      kind: "own";
+      /** Minted by the server when the claim was first typed; a Dig further keeps it. */
+      claimId: string;
+      /** The reader's words, trimmed. Never logged, never echoed into an error. */
+      text: string;
+    };
+
+/**
+ * **A row found for a typed claim.** It answers the reader's words, not a
+ * passage, so it has no block and no claim quote — and `blockId` is spelled
+ * `never` so that a row cannot be both kinds by accident.
+ */
+export type OwnClaimDebateRow = DebateRowBase & { blockId?: never; claimQuote?: never };
+
+/** A row of a check: a listed claim's (anchored by the list) or a typed claim's. */
+export type DebateCheckRow = ClaimDebateRow | OwnClaimDebateRow;
+
+/**
+ * **What the search said about one target — and whether it said anything.**
+ *
+ * `answered` with no rows is *"this search found nothing it could quote on
+ * this claim"*. `not-answered` is the model leaving the claim out of its
+ * answer, or answering it twice: never shown as *found nothing*, because that
+ * would be a sentence about a search that may never have looked (F5).
+ */
+export type DebateCheckResult =
+  | { claimId: string; outcome: "answered"; rows: DebateCheckRow[] }
+  | { claimId: string; outcome: "not-answered" };
+
+/** What became of the answer's per-claim groups. Counts only. */
+export interface DebateCheckGroupCounts {
+  /** A requested claim with no group in the answer. */
+  missing: number;
+  /** A claim answered more than once; every one of its groups is set aside. */
+  duplicate: number;
+  /** A group naming no claim that was asked about. Its rows are dropped. */
+  unknown: number;
+  /** An item that was not a group: not an object, no `claimId`, `rows` not a list. */
+  malformed: number;
+  /** Rows inside the groups set aside above — duplicate and unknown. */
+  rowsSetAside: number;
+}
+
+/**
+ * **The whole call's counts**: the pass's own (`DebateCounts`, summed over
+ * the groups read; `returnedSources` and `webSearches` once for the call) and
+ * the groups'.
+ */
+export interface DebateCheckCounts extends DebateCounts {
+  groups: DebateCheckGroupCounts;
+}
+
+export type DebateCheckStatus = "pending" | "done" | "error";
+
+/** One check, as the owner's panel reads it. */
+export interface DebateClaimCheck {
+  id: string;
+  status: DebateCheckStatus;
+  /** The list it was made from — `DebateClaimList.sourceHash` when it was pressed. */
+  listSourceHash: string;
+  promptVersion: string;
+  /** Dig further on one claim: told the addresses it already had, to look elsewhere. */
+  digFurther: boolean;
+  targets: DebateCheckTarget[];
+  /** One per target, in the targets' order, once `done`. Empty otherwise. */
+  results: DebateCheckResult[];
+  counts?: DebateCheckCounts;
+  webSearches?: number;
+  model?: string;
+  /** The reader's sentence for a failed check. */
+  error?: string;
+  createdAt: string;
+  finishedAt?: string;
+}
+
+/** `GET /api/debate-claims/:slug/checks`: every check on the article, oldest first. */
+export interface DebateClaimChecksResponse {
+  checks: DebateClaimCheck[];
+}
+
+/**
+ * `POST /api/debate-claims/:slug/checks`. Ids and the typed words, nothing
+ * else: every anchor and every address a Dig further avoids is the server's.
+ */
+export interface DebateCheckRequest {
+  claimIds?: string[];
+  own?: string;
+  /** One claim, listed or typed, that already has a finished check. Alone. */
+  digFurther?: string;
+}
 
 /* ------------------------------------------------------------- feedback -- */
 
@@ -7369,7 +7723,7 @@ export interface AdminEarlierFeedback extends Omit<EarlierFeedback, "shipped"> {
 
 /**
  * **An admin's reply to a question, as the Earlier tab shows it under the
- * question**: the newest one this admin has sent. Their own words back to them.
+ * question**: their own words back to them.
  */
 export interface AdminFeedbackQuestionAnswer {
   id: string;
@@ -7379,11 +7733,13 @@ export interface AdminFeedbackQuestionAnswer {
 }
 
 /**
- * **One open question an agent has put to the admin** — part of
- * `GET /api/admin/feedback/earlier`. An agent wrote `title` and `body` (a
- * file under docs/user-feedback/questions/, compiled into the server): plain
- * text, to be drawn as text with its line breaks kept. The file's `refs` and
- * `acted` lines are for agents and are never here.
+ * **One open question an agent has put to the admin, as a thread** — part of
+ * `GET /api/admin/feedback/earlier?questions=2`. An agent wrote `title` and
+ * `body` (a file under docs/user-feedback/questions/, compiled into the
+ * server): plain text, to be drawn as text with its line breaks kept. The
+ * file's `refs` line is for agents and is never here, and its `acted` ids
+ * reach the browser only as `state` and as which replies are listed.
+ * docs/plans/261008i-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md.
  */
 export interface AdminFeedbackQuestion {
   /** `q-k3m9qt`. */
@@ -7394,11 +7750,45 @@ export interface AdminFeedbackQuestion {
   asked: string;
   /**
    * The report it is about, when it names one **and that report is this
-   * admin's own**; otherwise null, and the body has to stand without it.
+   * admin's own**, with its whole text (shown shut); otherwise null, and the
+   * body has to stand without it.
    */
+  report: { id: string; number: number; firstLine: string; body: string } | null;
+  /**
+   * This admin's replies **no agent has acted on yet**, oldest first. One that
+   * has been acted on is quoted in `body` by the agent that acted on it.
+   */
+  answers: AdminFeedbackQuestionAnswer[];
+  /**
+   * How many older unacted replies there are beyond `answers`, which holds at
+   * most the newest five, so one page stays bounded (GPT Sol's plan review, F12).
+   */
+  olderAnswers: number;
+  /** Which group the thread is in: src/feedback-question-values.ts § `questionState`. */
+  state: FeedbackQuestionState;
+  /** ISO: when this admin deferred it, while it is deferred; otherwise null. */
+  deferredAt: string | null;
+}
+
+/**
+ * **A question as a server before 261008i sends it**, and as the new server
+ * still sends it to a request without `questions=2`, so a tab from before the
+ * deploy keeps working after it (F3). Six keys, the newest reply only.
+ */
+export interface AdminFeedbackQuestionV1 {
+  id: string;
+  title: string;
+  body: string;
+  asked: string;
   report: { id: string; number: number; firstLine: string } | null;
-  /** This admin's newest reply, or null. */
   answer: AdminFeedbackQuestionAnswer | null;
+}
+
+/** What `POST /api/admin/feedback/deferrals` answers with: the question's deferral as it now stands. */
+export interface AdminFeedbackDeferralReceipt {
+  question: string;
+  /** ISO, or null when it is not deferred. */
+  deferredAt: string | null;
 }
 
 /**
@@ -7415,6 +7805,11 @@ export interface AdminEarlierFeedbackPage {
   more: boolean;
   counts: Record<AdminEarlierFeedbackShow, number>;
   questions: AdminFeedbackQuestion[];
+}
+
+/** The same answer to a request without `questions=2`: the shape before 261008i (F3). */
+export interface AdminEarlierFeedbackPageV1 extends Omit<AdminEarlierFeedbackPage, "questions"> {
+  questions: AdminFeedbackQuestionV1[];
 }
 
 /** What `POST /api/admin/feedback/answers` answers with: the stored reply, on a 201 and on a 200 alike. */
@@ -7934,3 +8329,34 @@ export type LinkSummaryEvent =
    * generating this very summary. Ask again shortly; it is not an answer.
    */
   | { kind: "pending" };
+
+/**
+ * **What /admin shows about the public shelf's topic pills**, from
+ * `GET /api/admin/public-shelf-topics` and its Rebuild. src/public-shelf-topics.ts;
+ * plan 261008j.
+ */
+export interface PublicShelfTopicsStatus {
+  /** Listed cards. */
+  cards: number;
+  /** When the tree was last re-thought, ISO, or null for never. */
+  rethoughtAt: string | null;
+  /** Cards the tree was made from or filed. */
+  filed: number;
+  /** An article the tree holds is no longer listed, so the page shows no topics. */
+  withheld: boolean;
+  /** A re-think is due that will not run by itself; the Rebuild button runs it. */
+  rebuildDue: boolean;
+  /** Somebody is working on it now. */
+  working: boolean;
+  /** The cut-off, for the page's sentence. */
+  autoMax: number;
+}
+
+/**
+ * The answer to `POST /api/jobs { url }` when somebody else has already made
+ * that address public: nothing was reserved and nothing queued, and the reader
+ * chooses (src/public-copy.ts, docs/plans/261009j-a-public-copy-offered-at-import.md).
+ */
+export interface PublicCopyFound {
+  publicCopy: { slug: string; title: string };
+}

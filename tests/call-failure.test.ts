@@ -21,6 +21,7 @@ import {
   isErrorEnvelope,
   networkClass,
   providerEventClass,
+  sentNothing,
   thrownClass,
 } from "../src/call-failure.js";
 
@@ -73,6 +74,35 @@ describe("networkClass", () => {
   it("never reads a name or a message", () => {
     const named = Object.assign(new Error("ECONNRESET"), { name: "ECONNRESET" });
     expect(networkClass(named)).toBe("network");
+  });
+});
+
+describe("sentNothing", () => {
+  it("accepts only codes that establish a connection was never made", () => {
+    for (const code of ["ECONNREFUSED", "ENOTFOUND", "EAI_AGAIN", "UND_ERR_CONNECT_TIMEOUT"]) {
+      expect(sentNothing(withCause(coded(code))), code).toBe(true);
+    }
+    for (const code of ["ECONNRESET", "ETIMEDOUT", "EPIPE", "UND_ERR_SOCKET", "UND_ERR_HEADERS_TIMEOUT", "UND_ERR_BODY_TIMEOUT"]) {
+      expect(sentNothing(withCause(coded(code))), code).toBe(false);
+    }
+  });
+
+  it("requires an exact code, not a message, name or string conversion", () => {
+    for (const err of [
+      undefined, "ECONNREFUSED", new TypeError("fetch failed"),
+      Object.assign(new Error("ECONNREFUSED"), { name: "ECONNREFUSED" }),
+      coded("econnrefused"), coded("ECONNREFUSED2"), coded({ toString: () => "ECONNREFUSED" }),
+    ]) expect(sentNothing(err)).toBe(false);
+  });
+
+  it("walks nested causes but stops on cycles and codes beyond the depth bound", () => {
+    expect(sentNothing(withCause(withCause(coded("ENOTFOUND"))))).toBe(true);
+    const cycle: { cause?: unknown } = new Error("cycle");
+    cycle.cause = cycle;
+    expect(sentNothing(cycle)).toBe(false);
+    let deep: unknown = coded("ENOTFOUND");
+    for (let i = 0; i < 12; i++) deep = withCause(deep);
+    expect(sentNothing(deep)).toBe(false);
   });
 });
 

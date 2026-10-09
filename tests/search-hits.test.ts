@@ -72,6 +72,14 @@ describe("findLiteral", () => {
     expect(found[0]!.start).toBeLessThan(found[1]!.start);
   });
 
+  it("carries each context snippet's own start for repeated-passage formatting", () => {
+    const text = `${"opening words ".repeat(10)}first target ${"middle words ".repeat(10)}second target`;
+    const [found] = findLiteral([block("spya-k3m9qt", `<p>${text}</p>`, text)], "first target");
+    const words = found!.short.replace(/^…|…$/gu, "");
+    expect(found!.shortStart).toBeLessThan(found!.start);
+    expect(text.slice(found!.shortStart, found!.shortStart! + words.length)).toBe(words);
+  });
+
   /**
    * A match that spans an inline element is the case a naive implementation
    * gets wrong — `"mind is software"` crosses into an `<em>`, and there is no
@@ -674,7 +682,9 @@ describe("orderFound", () => {
     valence: null,
     reasoning: null,
     short: "",
+    shortStart: start,
     long: "",
+    longStart: start,
     at: 0,
     whole: false,
     /* Not a quote. See `Found.quoteStroke`. */
@@ -737,7 +747,9 @@ describe("the prioritised threshold", () => {
     valence: null,
     reasoning: null,
     short: "",
+    shortStart: 0,
     long: "",
+    longStart: 0,
     at: 0,
     whole: false,
     /* Not a quote. See `Found.quoteStroke`. */

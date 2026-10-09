@@ -29,6 +29,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { checksOwner, claimListOwner } from "./helpers/debate-claims-owner.js";
 import type {
   BlockId,
   ClaimDebateRow,
@@ -150,7 +151,8 @@ function paint(o: UseDebate, view: DebateView = "reception", order: DebateOrder 
   act(() => {
     root.render(
       createElement(DebatePanel, {
-        access: { kind: "owner", owner: o, citers: { result: { kind: "no-doi" }, retry: () => {} }, claimChats: NO_CLAIM_CHATS },
+        head: null,
+        access: { kind: "owner", owner: o, claimList: claimListOwner(), checks: checksOwner(), citers: { result: { kind: "no-doi" }, retry: () => {} }, claimChats: NO_CLAIM_CHATS },
         onJump: () => {},
         view,
         onView: () => {},

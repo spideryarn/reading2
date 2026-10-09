@@ -107,6 +107,9 @@ const PINNED_ANCHORS = [
   "for-students",
   "for-reviewers",
   "for-experts",
+  /* 2026-10-09: Citations and Debate became Peer review (plan 261009l).
+     `mode-citations` and `mode-debate` above are aliases now (RETIRED_MODES). */
+  "mode-peer-review",
 ];
 
 const LIVE = new Set<string>(HELP_ANCHORS);
@@ -437,6 +440,20 @@ describe("a page", () => {
     }
   });
 
+  it("describes Peer review's article-bound Claims list separately from its optional web checks", () => {
+    mountAt("/help/ai-words");
+    expect(host.textContent).toContain("Claims list comes from the article");
+    expect(host.textContent).not.toContain("Reception and Claims are entirely about what the rest of the web says");
+
+    mountAt("/help/questions#faq-beyond-the-article");
+    expect(host.textContent).toContain("Claims list itself comes from the article");
+    expect(host.textContent).not.toContain("Reception and Claims are all about what the rest of the web says");
+
+    mountAt("/help/mode-peer-review");
+    expect(host.textContent).toContain("Bibliography is usually prepared in the background when the article is added");
+    expect(host.textContent).not.toContain("Each view is made the first time you choose it");
+  });
+
   it("marks itself, and only itself, in the contents beside it", () => {
     for (const a of ["spine", "mode-glossary", "for-students"] as const) {
       mountAt(helpHref(a));
@@ -465,7 +482,28 @@ describe("a page", () => {
     expect(h1()).toBe("Help");
   });
 
-  it("draws a mode's catalog sentences, its two halves and its Experimental tag", () => {
+  it("opens every mode's page with its In short and a picture, before How it works and the catalog's sentences", () => {
+    for (const m of MODES) {
+      mountAt(helpHref(`mode-${m}`));
+      const article = host.querySelector("article");
+      /* The page's own blocks, in order, after its title. */
+      const blocks = [...(article?.querySelectorAll("p, figure, h2") ?? [])].filter((el) => !el.closest("figure") || el.tagName === "FIGURE");
+      const first = blocks[0];
+      expect(first?.tagName, m).toBe("P");
+      expect(first?.textContent?.length ?? 0, m).toBeGreaterThan(80);
+      expect(first?.textContent, m).not.toContain(`${MODE_CATALOG[m].description}.`);
+      const figure = blocks.findIndex((el) => el.tagName === "FIGURE");
+      const how = blocks.findIndex((el) => el.tagName === "H2" && el.textContent === "How it works");
+      const description = blocks.findIndex((el) => el.textContent === `${MODE_CATALOG[m].description}.`);
+      expect(figure, m).toBeGreaterThan(0);
+      expect(how, m).toBeGreaterThan(figure);
+      expect(description, m).toBe(how + 1);
+      /* Nothing but the opening between the title and the picture. */
+      expect(blocks.slice(0, figure).every((el) => el.tagName === "P"), m).toBe(true);
+    }
+  });
+
+  it("draws a mode's catalog sentences, its sections and its Experimental tag", () => {
     for (const m of MODES) {
       mountAt(helpHref(`mode-${m}`));
       expect(host.querySelector("h1 > span")?.textContent, m).toBe(MODE_LABEL[m]);
@@ -477,6 +515,7 @@ describe("a page", () => {
     }
     mountAt("/help/mode-chat");
     expect([...host.querySelectorAll("article h2")].map((h) => h.textContent)).toEqual([
+      "How it works",
       "When to use it",
       "Reading it",
       "See also",
@@ -494,6 +533,21 @@ describe("a page", () => {
     mountAt("/help/mode-quotes");
     expect(words().length).toBeGreaterThan(200);
     expect(words()).not.toMatch(/author put best/i);
+    const article = host.querySelector("article");
+    const opening = [...(article?.children ?? [])]
+      .slice(0, [...(article?.children ?? [])].findIndex((el) => el.textContent === "How it works"))
+      .map((el) => el.textContent)
+      .join(" ");
+    /* The opening may say the words are the article's, never the author's:
+       a quotation the article left unmarked is in it too (the catalog's
+       `how`, drawn just below it, says so). */
+    expect(opening.length).toBeGreaterThan(80);
+    expect(opening).not.toMatch(/author/i);
+
+    mountAt("/help/mode-skim");
+    expect(words()).not.toMatch(/author’s sentence/i);
+    mountAt("/help/mode-summary");
+    expect(words()).not.toMatch(/what the author actually wrote/i);
   });
 
   it("names every reason Glossary can replace a list", () => {

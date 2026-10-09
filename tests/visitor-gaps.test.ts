@@ -367,10 +367,40 @@ describe("what a visitor is told, mode by mode", () => {
     expect([...markedModes(EVERYTHING_BUILT).keys()].sort()).toEqual(
       ["chat", "referee", "learn"].sort(),
     );
-    /* And one at a time, so a mode reading the wrong flag shows up. */
+    /* And one at a time, so a mode reading the wrong flag shows up. Citations'
+       and Debate's flags both open Peer review since 2026-10-09. */
+    const MODE_OF = { citations: "peer-review", debate: "peer-review" } as const;
     for (const built of ["glossary", "ideas", "quotes", "timeline", "skim", "faq", "citations", "debate"] as const) {
-      expect([...markedModes(only(built)).keys()], built).not.toContain(built);
+      const mode: Mode = built === "citations" || built === "debate" ? MODE_OF[built] : built;
+      expect([...markedModes(only(built)).keys()], built).not.toContain(mode);
     }
+  });
+
+  /**
+   * **Peer review opens for a visitor with any one of its artefacts** — the
+   * `any-artefact` policy, GPT Sol's F3 on plan 261009l. A shared article with
+   * a Reception search and no bibliography opens Peer review, whose
+   * Bibliography then says there is no list (tests/peer-review-band.test.tsx);
+   * one with nothing of the three is the one not-built gap, naming what is
+   * missing, in the current product words rather than the retired storage
+   * names (`citations` and `debate`).
+   */
+  it("opens Peer review on any one of its artefacts, and names them when there is none", () => {
+    const withFlags = (citations: boolean, debate: boolean): PublicArtefacts => ({
+      ...NOTHING_BUILT,
+      citations,
+      debate,
+    });
+    expect(visitorGap("peer-review", withFlags(true, false)), "citations only").toBeNull();
+    /* `debate` is set by the search or by Claims' list alone (public-artefacts.ts § artefactsIn). */
+    expect(visitorGap("peer-review", withFlags(false, true)), "reception or claims only").toBeNull();
+    expect(visitorGap("peer-review", withFlags(true, true)), "mixed").toBeNull();
+    expect(visitorGap("peer-review", withFlags(false, false))).toEqual({
+      kind: "not-built",
+      noun: "a Bibliography, a Reception search or a Claims list",
+    });
+    const sentence = visitorSentence(visitorGap("peer-review", withFlags(false, false)) as VisitorGap);
+    expect(sentence).not.toMatch(/Citations|Debate|citations|debate/);
   });
 
   it("answers for every mode there is, and gives away only what it should", () => {
@@ -396,10 +426,9 @@ describe("what a visitor is told, mode by mode", () => {
         /* And the FAQ and the Citations list, the same day, the same way
            (plan 260929c stages 2 and 3). */
         mode === "faq" ||
-        mode === "citations" ||
-        /* And the Debate, the same day, once its rows' boundary was built
-           (plan 260929c stage 4). */
-        mode === "debate" ||
+        /* And Citations and Debate the same day (plan 260929c stages 3 and
+           4), which are Peer review since 2026-10-09. */
+        mode === "peer-review" ||
         /* Free since 2026-09-04: the picture is drawn from the tree in the
            payload, and the panel's visitor arm buys nothing.
            docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 2. */
@@ -558,7 +587,7 @@ describe("what the payload says it has", () => {
   });
 
   /**
-   * **The lift carries the four artefacts and nothing else.**
+   * **The lift carries the artefacts and nothing else.**
    *
    * `PublicArticle` extends `PublicArtefactSet`, so handing the whole payload
    * down would typecheck — and would leave the prose, the blocks and the tree
@@ -566,8 +595,18 @@ describe("what the payload says it has", () => {
    * construct-rather-than-spread rule the server DTOs follow.
    */
   it("lifts the artefacts out without the article coming with them", () => {
-    const full: PublicArticle = { ...BARE, glossary: { entries: [] } };
-    expect(Object.keys(artefactsOf(full))).toEqual(["glossary"]);
+    const debateClaims = {
+      claims: [
+        {
+          id: "spya-cdm2a4",
+          blockId: "spya-bbbbbb",
+          quote: "the measurement",
+          statement: "A measurement has to carry its own meaning.",
+        },
+      ],
+    };
+    const full: PublicArticle = { ...BARE, glossary: { entries: [] }, debateClaims };
+    expect(artefactsOf(full)).toEqual({ glossary: { entries: [] }, debateClaims });
     expect(artefactsOf(BARE)).toEqual({});
   });
 });

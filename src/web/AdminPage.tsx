@@ -49,6 +49,7 @@ import {
   DESIGN_HREF,
 } from "./router.js";
 import { FeedbackCard } from "./AdminFeedbackList.js";
+import { AdminPublicTopics } from "./AdminPublicTopics.js";
 import { useAdminFeedback } from "./useAdminFeedback.js";
 import { useAdminUsers } from "./useAdminUsers.js";
 import { useNow } from "./useNow.js";
@@ -218,7 +219,8 @@ export function AdminHome() {
     <Shell title="Admin">
       <p className="tw:mb-6 tw:text-sm tw:text-muted-foreground">
         Everything on these pages reads across accounts. Two of them can also change something:
-        Gift vouchers makes and edits vouchers, and Feedback can mark a report as ignored.
+        Gift vouchers makes and edits vouchers, and Feedback can mark a report as ignored. Below
+        them, the public shelf's topics can be rebuilt.
       </p>
       <ul className="tw:m-0 tw:flex tw:list-none tw:flex-col tw:gap-3 tw:p-0">
         <Entry
@@ -267,6 +269,7 @@ export function AdminHome() {
           blurb="Every token, face and component variant on one page — look here after changing tokens.css"
         />
       </ul>
+      <AdminPublicTopics />
       <BuildStampLine />
     </Shell>
   );

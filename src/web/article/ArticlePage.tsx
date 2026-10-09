@@ -152,13 +152,13 @@ export function ArticlePage({
   );
 
   /* **Which of the six branches below draws a way home, and where.**
-     `LandingPage` draws its own wordmark, so this branch adds nothing. The four
-     that follow — not-shared, reauth-required, error and loading — keep the
-     corner mark, because the reader may have arrived straight here from a
-     pasted link with no shelf behind them, and a visitor with no account
-     especially so, since the mark is the only thing on screen that says whose
-     page this is. The last branch draws none: it mounts a `Dock`, and the bar
-     carries the wordmark there (2026-09-06 — see that branch). */
+     Every no-`Dock` outcome except loading supplies one through the page it
+     returns: `LandingPage` has its own wordmark, while the not-shared,
+     still-being-added, reauth-required, unread and error pages keep the corner
+     mark. Loading draws none since 2026-10-09: its spinner is the wordmark
+     itself (see that branch). The final branch draws none here either: it
+     mounts a `Dock`, and the bar carries the wordmark there (2026-09-06 — see
+     that branch). */
   /* **Signed in, it may be the reader's own import that has not published
      yet**, opened from the link its job card hands out. `OwnerNotShared` looks
      for that job and draws it; with none it is `NotSharedPage`, as it always
@@ -199,14 +199,14 @@ export function ArticlePage({
      because none of them has an article to draw. */
   if (access.kind === "unread") return <UnreadPaperPage paper={access.paper} onRead={reread} />;
 
-  /* **The corner pair, on the two branches with no bar to put it in.**
+  /* **The corner pair on the error branch, which has no bar to put it in.**
      `App` stopped drawing the corner Feedback trigger on the `read` route on
      2026-09-06, because the pages that mount a `Dock` draw it in the bar
-     instead — and these two mount none. Without this line a signed-in reader
-     waiting for an article, or looking at one that failed, would have no way to
-     report the thing they are looking at, which is the state a report is most
-     likely to be about. `FeedbackTrigger` renders nothing with no host above
-     it, so a stranger here still gets none. */
+     instead — and this branch mounts none. Without this line a signed-in reader
+     looking at a failed article would have no way to report the thing they are
+     looking at, which is the state a report is most likely to be about.
+     `FeedbackTrigger` renders nothing with no host above it, so a stranger here
+     still gets none. */
   if (access.kind === "error")
     return (
       <>
@@ -220,11 +220,17 @@ export function ArticlePage({
      then the wordmark as a spinner, with the sentence naming what is being
      waited for kept for a screen reader and for reduced motion — LogoLoader.tsx,
      docs/project/loading-spinner.md. Greg, 2026-10-01: *"Instead of 'Fetching
-     the article and its summaries', show an animated loading spinner."* */
+     the article and its summaries', show an animated loading spinner."*
+
+     **No corner `HomeLogo` here**, unlike its siblings: with the loader up it
+     was a second wordmark on an otherwise empty page. Greg, 2026-10-09
+     (spya-mdmqqq): *"we don't need both."* What that costs is an in-page way
+     home during a wait that never ends; a failed fetch becomes the `error`
+     branch, which has one. The Feedback trigger stays — a stuck wait is a
+     likely thing to report. Plan 261009b. */
   if (access.kind === "loading")
     return (
       <>
-        <HomeLogo />
         <FeedbackTrigger variant="corner" />
         {slow && (
           <div className="tw:flex tw:min-h-[70dvh] tw:items-center tw:justify-center">
@@ -619,14 +625,14 @@ function OwnedReader({
    *
    * `useCitationsRead` is the opening GET plus `applyFound` and
    * `applyInvestigation`, and nothing else.
-   * `CitationsBand` layers `useStepJob`, `useAutoRun` and the POST that is
+   * `PeerReviewBand` (`CitationsBand` until 2026-10-09) layers `useStepJob`, `useAutoRun` and the POST that is
    * *Find it on the web* on top of it — and those stay down there for the two
    * reasons the Quotes comment above gives, which apply here unchanged.
    *
-   * **Unconditional, and not behind the experimental switch** that Citations
-   * mode itself is behind. The saving is not real — the band has to read the
-   * list somehow — and gating it would make an existing `?mode=citations` URL
-   * half-work, which is not what that switch means. src/web/useCitations.ts
+   * **Unconditional.** Citations was behind the experimental switch until it
+   * became Peer review's Bibliography on 2026-10-09; even then, gating this
+   * read would only have made its old address half-work. The band has to read
+   * the same list, so the saving was never real. src/web/useCitations.ts
    * § CitationsRead.
    */
   const citations = useCitationsRead(slug);

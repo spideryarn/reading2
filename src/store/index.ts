@@ -76,6 +76,7 @@ import type {
   CommentStore,
   ReadingTimeStore,
   GlossaryHiddenStore,
+  SkimNoticeStore,
   QuizAttemptStore,
   FeedbackStore,
   FetchAllowanceStore,
@@ -88,7 +89,9 @@ import type {
   ReaderStore,
   RealtimeSessionStore,
   RefereeClaimsStore,
+  RefereeHiddenCheckStore,
   RefereeCriteriaStore,
+  DebateClaimChecksStore,
   SearchStore,
   ShelfStore,
   ShelfTermsStore,
@@ -115,9 +118,12 @@ import { pgCitedInSpideryarnStore } from "./pg-cited-in-spideryarn.js";
 import { pgSourceGuessStore } from "./pg-source-guesses.js";
 import { pgReadingTimeStore } from "./pg-reading-time.js";
 import { pgGlossaryHiddenStore } from "./pg-glossary-hidden.js";
+import { pgSkimNoticeStore } from "./pg-skim-notice.js";
 import { pgQuizAttemptStore } from "./pg-quiz-attempts.js";
 import { pgReaderStore } from "./pg-reader.js";
 import { pgRefereeClaimsStore } from "./pg-referee-claims.js";
+import { pgDebateClaimChecksStore } from "./pg-debate-claim-checks.js";
+import { pgRefereeHiddenCheckStore } from "./pg-referee-hidden-checks.js";
 import { pgRefereeCriteriaStore } from "./pg-referee-criteria.js";
 import { pgSearchStore } from "./pg-searches.js";
 import { pgLibrarySearch, pgShelfStore } from "./pg-shelf.js";
@@ -245,6 +251,7 @@ export const loadIdeas = reader.loadIdeas.bind(reader);
 export const loadTimeline = reader.loadTimeline.bind(reader);
 export const loadQuiz = reader.loadQuiz.bind(reader);
 export const loadFaq = reader.loadFaq.bind(reader);
+export const loadDebateClaims = reader.loadDebateClaims.bind(reader);
 export const loadRelations = reader.loadRelations.bind(reader);
 export const loadCrossrefs = reader.loadCrossrefs.bind(reader);
 export const loadSimpleSummary = reader.loadSimpleSummary.bind(reader);
@@ -340,6 +347,27 @@ export const refereeCriteriaStore: RefereeCriteriaStore = guarded("referee-crite
  */
 export const refereeClaimsStore: RefereeClaimsStore = guarded("referee-claims", pgRefereeClaimsStore);
 
+/**
+ * Debate's reader-picked claim checks (plan 261008i § 3). Owner-only, and a
+ * target may be the reader's own typed words — db-errors.ts is why nothing a
+ * failed query says leaves it.
+ */
+export const debateClaimChecksStore: DebateClaimChecksStore = guarded(
+  "debate-claim-checks",
+  pgDebateClaimChecksStore,
+);
+
+/**
+ * Hidden text's Opus check, kept — one row per article. Guarded for the
+ * reason above: a failed query's parameters would carry the model's reasons,
+ * which may quote a manuscript's hidden words.
+ * docs/plans/261009a-save-hidden-text-opinions.md.
+ */
+export const refereeHiddenCheckStore: RefereeHiddenCheckStore = guarded(
+  "referee-hidden-checks",
+  pgRefereeHiddenCheckStore,
+);
+
 export const glossaryLookupStore: GlossaryLookupStore = guarded("lookups", pgGlossaryLookupStore);
 
 export const citationFindStore: CitationFindStore = guarded("citation-finds", pgCitationFindStore);
@@ -348,6 +376,8 @@ export const citationFindStore: CitationFindStore = guarded("citation-finds", pg
 export const readingTimeStore: ReadingTimeStore = guarded("reading-time", pgReadingTimeStore);
 /** The glossary entries an owner hid on one article — plan 261002c § 2. */
 export const glossaryHiddenStore: GlossaryHiddenStore = guarded("glossary-hidden", pgGlossaryHiddenStore);
+/** The Skim profile-changed notice an owner sent away — plan 261009i. */
+export const skimNoticeStore: SkimNoticeStore = guarded("skim-notice", pgSkimNoticeStore);
 /** The reader's finished quiz marks, kept since 2026-10-05 — plan 261005b. */
 export const quizAttemptStore: QuizAttemptStore = guarded("quiz-attempts", pgQuizAttemptStore);
 

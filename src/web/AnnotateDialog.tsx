@@ -160,6 +160,7 @@ import { ClipboardCheck, Copy, MessageSquarePlus, TriangleAlert, X } from "lucid
 
 import type { ChatAnchor, HighlightColour } from "../types.js";
 import { mintId } from "../ids.js";
+import { Excerpt } from "./Excerpt.js"; // quotes drawn from the block's markup (plan 261009k)
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { HighlightSwatches } from "./HighlightSwatches.js";
 import { DEFAULT_HIGHLIGHT } from "./fresh-highlight.js";
@@ -434,8 +435,12 @@ export function AnnotateDialog({
     box,
     context: route.kind === "read" ? { kind: "article", slug: route.slug } : { kind: "profile" },
     transcribe,
-    /* One box per passage, as the draft itself is. */
-    keep: keepDictation(`annotate:${anchor.blockId}:${anchor.start}`),
+    /* One box per passage, as the draft itself is — the whole key, quote
+       included, since two selections can start at the same character. The
+       keeper's name is also what a transcript is bound to (dictation.md §
+       Words go only where they were said). The slug too: block ids are unique
+       within an article, not across them (plan 261009g). */
+    keep: keepDictation(`annotate:${route.kind === "read" ? route.slug : ""}:${annotateKey(anchor)}`),
     /* A double press on Stop also saves: Save is what ⌘+Enter does here, and
        never Ask AI (dictation.md § A double press). Only once `loaded`: `press`
        refuses before that, and a double press must not be taken and then
@@ -625,7 +630,7 @@ export function AnnotateDialog({
       <div className="annotate-body">
         {/* The reader's own selection, quoted back — without it the box is a
             question about words you can no longer see once the page scrolls. */}
-        <blockquote className="annotate-quote">{anchor.quote}</blockquote>
+        <blockquote className="annotate-quote"><Excerpt blockId={anchor.blockId} words={anchor.quote} near={anchor.start} /></blockquote>
 
         <form
           onSubmit={(e) => {
@@ -692,7 +697,7 @@ export function AnnotateDialog({
 
           <div className="annotate-actions">
             {dictate.dictation.supported && (
-              <DictationButton dictation={dictate.dictation} toggle={dictate.toggle} again={dictate.again} sendingAfter={dictate.sendingAfter} />
+              <DictationButton dictation={dictate.dictation} toggle={dictate.toggle} again={dictate.again} sendingAfter={dictate.sendingAfter} doubleStop={dictate.doubleStop} done="save" />
             )}
             {/* **Discard, not Cancel**: it is the only control here that throws
                 the reader's words away, and it says so. */}
@@ -719,7 +724,7 @@ export function AnnotateDialog({
               Save
             </button>
           </div>
-          <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} />
+          <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} done="save" />
         </form>
 
         {/* Said out loud, because the two behaviours this box has replaced both

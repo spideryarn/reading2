@@ -201,7 +201,7 @@ import { MODE_LABEL } from "../title-text.js";
 import type { BlockId, Comment } from "../types.js";
 import { type AskedQuestion, type DrawerEntry, MARK_KIND_LABEL, commentKind, orderDrawer, passageOf } from "./comment-nav.js";
 import { HighlightDot } from "./HighlightSwatches.js";
-import { armActivationForMode, armActivationForSubMode } from "./activation.js";
+import { armActivationForMode, armActivationForSubMode, type PressContext } from "./activation.js";
 import { returnToSubMode, withSubMode, withSubModeParams, type SubMode } from "./sub-modes.js";
 /* **This direction only.** `CommandBar` deliberately imports nothing from this
    file — the visible list and the one activation callback go down as props —
@@ -209,7 +209,7 @@ import { returnToSubMode, withSubMode, withSubModeParams, type SubMode } from ".
    docs/plans/260906h-mode-catalog-and-a-command-bar.md. */
 import { CommandBar, type CommandBarArticle, type CommandBarExperimental, type ShelfRow } from "./CommandBar.js";
 import type { CommandExecutor } from "./command-proposal.js";
-import { useDockFit } from "./dock-fit.js";
+import { MORE_HOME_ATTR, useDockFit } from "./dock-fit.js";
 /* Plain data and no React (help-anchors.ts says so on purpose), so the bar
    links into Help without pulling the page's words into its own chunk. */
 import { helpHref, modeAnchor } from "./help/help-anchors.js";
@@ -238,6 +238,8 @@ import {
   diagramInSearch,
   marginInSearch,
   type Mode,
+  peerReviewInSearch,
+  type PeerReviewView,
   type Panel,
   learnInSearch,
   summaryInSearch,
@@ -265,6 +267,7 @@ import {
    import graph. key-chord.ts imports nothing, so that argument is answered. */
 import { isImeComposing, isModChord, isTyping } from "./key-chord.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
+import { Excerpt } from "./Excerpt.js"; // quotes drawn from the block's markup (plan 261009k)
 import { BandWaiting } from "./BandWaiting.js";
 import { InstallHint } from "./InstallHint.js";
 import { DropdownMenu } from "radix-ui";
@@ -385,6 +388,15 @@ interface Props {
    * tests/every-mode-draws-its-surface.test.tsx holds it.
    */
   diagram?: DiagramKind;
+  /**
+   * **Which of Peer review's sub-modes is showing** (`?peer-review=`), as the
+   * reading view has parsed it — off the reading view the carried query string
+   * says (`peerReviewInSearch`). A Peer review press arms only the work of the
+   * sub-mode it lands on (activation.ts § `activationForPeerReview`; Debate's
+   * since 2026-10-08), so this is read for `summary`'s reason above: from the
+   * state, not the lagging address.
+   */
+  peerReview?: PeerReviewView;
   /**
    * **Whether this reader sees the modes that are still being built** — and
    * therefore how many buttons the bar draws at all. `visibleModes` is the rule.
@@ -945,27 +957,11 @@ const MODES_UI = [
     group: "guides",
     more: true,
   },
-  /* **First of the critical run — Citations, Referee, Debate — since
-     2026-10-04**: Greg, *"Move the citations mode one to the left in the
-     bottom bar"* (spya-tnqt2t, plan 261004j). It joined this run on
-     2026-09-29, between Referee and Debate — *"Move Citations further right,
-     next to Debate and Reviewer"* (SPIDERYARN-READING2-4E). Its list is the piece's own references, Debate's
-     is the web's, and Referee is somebody weighing the piece against other
-     work: the three are reading it critically. It stood after Timeline before
-     that.
-
-     `BookText` — a closed book with lines on it, i.e. *a work*. `Library` was
-     the obvious glyph and is refused: it is the shelf's, on every page. `Quote`
-     is Quotes'. docs/plans/260911g-citations-mode.md. */
-  {
-    mode: "citations",
-    group: "critical",
-  },
-  /* **In the critical run — Citations, Referee, Debate — since
-     2026-09-29**, which is Greg's grouping: *"Move Citations further right,
-     next to Debate and Reviewer"* (SPIDERYARN-READING2-4E). First of it until
-     2026-10-04, when Citations moved one place left past it (spya-tnqt2t,
-     plan 261004j). Before the run existed it sat
+  /* **First of the critical run — Referee, Peer review — since 2026-10-09**,
+     when Citations, which stood before it from 2026-10-04 (spya-tnqt2t, plan
+     261004j), became one of Peer review's sub-modes. The run is Greg's
+     grouping, 2026-09-29: *"Move Citations further right, next to Debate and
+     Reviewer"* (SPIDERYARN-READING2-4E). Before the run existed it sat
      straight after Search, because it is Search's kind of thing — a pass
      over the piece looking for passages — pointed at somebody who has been
      asked to peer-review it rather than at somebody reading it for themselves.
@@ -986,28 +982,22 @@ const MODES_UI = [
     mode: "referee",
     group: "critical",
   },
-  /* **Last of the critical run, before the input run, since 2026-09-29**, when
-     Greg moved Chat past it (*"Move Chat right, just before Recall"*) and put
-     Citations and Referee beside it (SPIDERYARN-READING2-4E). Debate's content
-     comes from neither the article nor the reader — it is the only mode in
-     this bar whose content is **not in the article at all** — so it stays at
-     the far end of the outward run, one run short of the reader's own.
+  /* **Peer review, last of the critical run and before the input run, where
+     Debate stood**, since 2026-10-09: Citations and Debate in one button, with
+     Bibliography, Reception and Claims as its chips. Greg (spya-vcvxu5): *"let's
+     move this out of experimental, this combined mode"*. Citations' list is
+     the piece's own references, Debate's is the web's, and Referee beside it
+     is somebody weighing the piece: the run reads it critically.
 
-     **`Globe`, and it is the same word this app already draws for "this came
-     from the open web"** — the glossary's web lookup, chat's search, the
-     reviewer brief (GlossaryPanel.tsx, ChatPanel.tsx, CandidatesPanel.tsx). No
-     other button in this bar is a globe, so it is unmistakable from Chat's two
-     bubbles, which `MessageSquareQuote` would not have been. The glyph's
-     other sense in this app — *shared publicly* — appears only on surfaces that
-     are about sharing, and the bar is not one. docs/project/icons.md.
-
-     Its description (src/mode-catalog.ts) names the empty case, because it is
-     the commonest one: most pieces have no critical reception at all, and a
-     mode that is empty four times in five reads as broken unless the button
-     said so first.
+     Debate's place, at the far end of the outward run, because most of what
+     the mode adds is **not in the article at all**. Its icon is Citations'
+     `BookText` (mode-icons.ts), because the button opens on Bibliography;
+     Debate's `Globe` stays on Reception's search button.
+     docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md;
+     Citations' row: docs/plans/260911g-citations-mode.md; Debate's:
      docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md. */
   {
-    mode: "debate",
+    mode: "peer-review",
     group: "critical",
   },
   /* **First of the input run — Search, Chat, Learn — since 2026-09-29.**
@@ -1214,6 +1204,8 @@ function drawnCount(bar: DockBar): number {
  * (its `MODES_UI` row), so More stands straight after it, inside the bands'
  * frame, with no line between them.
  * docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md.
+ * **Wherever that place can be seen** — on a phone where it is off the edge,
+ * More leads the frame instead (`bandsInOrder`, plan 261009c).
  */
 const MORE_AFTER: ModeGroup = "shape";
 
@@ -1230,6 +1222,37 @@ export function cutForMore(bands: readonly ModeUi[]): readonly [readonly ModeUi[
   const at = bands.length - [...bands].reverse().findIndex((m) => m.group === MORE_AFTER);
   if (at > bands.length) return [bands, []];
   return [bands.slice(0, at), bands.slice(at)];
+}
+
+/** `MORE_HOME_ATTR` on the row More's home follows, spread into its props. */
+const moreHomeAttr = (on: boolean) => (on ? { [MORE_HOME_ATTR]: "" } : {});
+
+/**
+ * **The bands' frame's children, in order, with More where it stands** — after
+ * `cutForMore`'s lead, or first of all when `moreLeads` (its own place is off
+ * the edge of a phone; dock-fit.ts § `moreOffTheEdge`, plan 261009c). Both arms
+ * draw through this, so they cannot disagree about where More is.
+ *
+ * `draw`'s second argument is true for the row More's home follows, which must
+ * carry `MORE_HOME_ATTR` in **either** order — it is how the measurement finds
+ * More's home without caring where More is drawn.
+ *
+ * **One flat array**, every child keyed (More by `"more"`), so a re-order moves
+ * the nodes rather than remounting them: a lead and a rest drawn as two arrays
+ * either side of More would remount every row that crossed between them,
+ * dropping focus and an open tooltip (GPT Sol, plan review 3).
+ */
+export function bandsInOrder<T>(
+  bands: readonly ModeUi[],
+  moreLeads: boolean,
+  draw: (m: ModeUi, moreHome: boolean) => T,
+  more: T,
+): T[] {
+  const [lead, rest] = cutForMore(bands);
+  const home = lead[lead.length - 1];
+  const rows = lead.map((m) => draw(m, m === home));
+  const after = rest.map((m) => draw(m, false));
+  return moreLeads ? [more, ...rows, ...after] : [...rows, more, ...after];
 }
 
 /**
@@ -1771,14 +1794,18 @@ function useMetadataEscape(enabled: boolean, href: string): void {
 export function useActivateMode(
   slug: string,
   search: string,
-  diagram: DiagramKind,
-  summary: SummaryView,
+  /* What the press would land on, per mode that asks (activation.ts §
+     `PressContext`): the reading view's parsed state, never the address. */
+  press: PressContext,
   onMode: Props["onMode"],
   arms: boolean,
   current: BandMode | undefined,
   toggles: boolean,
   margin: boolean,
 ): (next: Mode) => void {
+  /* Taken apart so the callback depends on the three answers, not on an
+     object a caller rebuilds every render. */
+  const { diagram, summary, peerReview } = press;
   return useCallback(
     (next: Mode) => {
       if (onMode === undefined) {
@@ -1805,10 +1832,10 @@ export function useActivateMode(
          Only the press that turns the column on can ask from the browser for
          relation words missing after import (plans 261003f and 261005d). */
       const marginOn = next === "marginalia" && margin;
-      if (arms && !again && !marginOn) armActivationForMode(slug, next, { diagram, summary });
+      if (arms && !again && !marginOn) armActivationForMode(slug, next, { diagram, summary, peerReview });
       onMode(next, undefined, toggles);
     },
-    [slug, search, diagram, summary, onMode, arms, current, toggles, margin],
+    [slug, search, diagram, summary, peerReview, onMode, arms, current, toggles, margin],
   );
 }
 
@@ -1880,6 +1907,7 @@ export function Dock({
   margin: marginProp,
   summary: summaryProp,
   diagram: diagramProp,
+  peerReview: peerReviewProp,
   marked,
   visitor,
   shelfRow,
@@ -2007,13 +2035,17 @@ export function Dock({
      own parsed state where there is one, and the carried address only off it,
      where a press is a link and arms nothing anyway. § Props `summary`. */
   const summary = summaryProp ?? summaryInSearch(search);
+  /* Which of Peer review's sub-modes a Peer review press would land on, the
+     same way round. § Props `peerReview`. */
+  const peerReview = peerReviewProp ?? peerReviewInSearch(search);
 
   /* **Opening a mode**, and it is one callback rather than two calls made
      twice — `useActivateMode` above holds the whole of the reasoning, which
      is the reason it is a named thing at all. */
-  const activateMode = useActivateMode(slug, search, diagram, summary, onMode, !isVisitor, mode, false, margin);
+  const press = { diagram, summary, peerReview };
+  const activateMode = useActivateMode(slug, search, press, onMode, !isVisitor, mode, false, margin);
   /* The bar's own buttons: the same door, but a second press closes. */
-  const pressMode = useActivateMode(slug, search, diagram, summary, onMode, !isVisitor, mode, true, margin);
+  const pressMode = useActivateMode(slug, search, press, onMode, !isVisitor, mode, true, margin);
   const activateSubMode = useActivateSubMode(slug, search, onMode, !isVisitor);
 
   /* **How much of itself the bar spells out is measured, not guessed** — the
@@ -2024,7 +2056,7 @@ export function Dock({
      running off the right-hand end. dock-fit.ts, and Greg's ask: *"more
      automatic/dynamic (so that we don't have to keep tweaking some
      constant)"*. */
-  const { ref: dockRef, fitClass } = useDockFit(
+  const { ref: dockRef, fitClass, moreLeads } = useDockFit(
     fitSignature(
       bar,
       mode,
@@ -2531,9 +2563,17 @@ export function Dock({
             marked={marked}
             margin={margin}
             comments={commentsControl}
+            moreLeads={moreLeads}
           />
         ) : (
-          <DockModeLinks slug={slug} search={search} bar={bar} marked={marked} comments={commentsControl} />
+          <DockModeLinks
+            slug={slug}
+            search={search}
+            bar={bar}
+            marked={marked}
+            comments={commentsControl}
+            moreLeads={moreLeads}
+          />
         )}
 
         {/* **Quick search, from anywhere** (plan 261002h): a box where
@@ -2944,6 +2984,7 @@ function DockModes({
   marked,
   margin,
   comments,
+  moreLeads,
 }: {
   /**
    * The rows to draw and the rows under More, already filtered and split —
@@ -2953,6 +2994,8 @@ function DockModes({
    * `fitSignature` is measuring the same set that is drawn.
    */
   bar: DockBar;
+  /** More leads the bands' frame — `useDockFit`'s answer; `bandsInOrder`. */
+  moreLeads: boolean;
   mode: BandMode;
   /**
    * **Opening a mode**, which since 2026-09-07 is one callback rather than the
@@ -3042,6 +3085,9 @@ function DockModes({
      It is between two radios in reading order, so in the DOM it has to be;
      the cost and the options weighed are in
      docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md § D2.
+     **Except where that place is off the edge of a phone**, where More leads
+     the frame instead (`bandsInOrder`, plan 261009c) — first in DOM and focus
+     order as well as on screen.
 
      **And Comments joined Marginalia's frame the same day**, after the
      toggle: Greg, *"put the comments icon inside a group with marginalia,
@@ -3050,10 +3096,9 @@ function DockModes({
   const radios = bar.drawn.filter((m) => m.mode !== "marginalia");
   const exits = radios.filter((m) => m.group === "exit");
   const bands = radios.filter((m) => m.group !== "exit");
-  const [lead, rest] = cutForMore(bands);
   const toggle = bar.drawn.find((m) => m.mode === "marginalia");
   const starts = groupStarts(bands);
-  const radio = (m: ModeUi) => (
+  const radio = (m: ModeUi, moreHome = false) => (
     <Tooltip
       key={m.mode}
       placement="top"
@@ -3099,6 +3144,7 @@ function DockModes({
         type="button"
         role="radio"
         data-mode={m.mode}
+        {...moreHomeAttr(moreHome)}
         className={`dock-btn${m.mode === mode ? " on" : ""}${marked?.has(m.mode) ? ` ${MARKED}` : ""}${starts.has(m.mode) ? " dock-group-start" : ""}`}
         aria-checked={m.mode === mode}
         /* Explicit, because the visible label is `display: none` at
@@ -3154,16 +3200,19 @@ function DockModes({
         >
           {exits.length > 0 && (
             <div className="dock-frame" style={{ "--dock-frame-count": exits.length } as CSSProperties}>
-              {exits.map(radio)}
+              {exits.map((m) => radio(m))}
             </div>
           )}
           <div
             className="dock-frame"
             style={{ "--dock-frame-count": bands.length + moreCount(bar) } as CSSProperties}
           >
-            {lead.map(radio)}
-            <DockMore menu={bar.menu} marked={marked} pick={{ kind: "open", open: onOpen, current: mode }} />
-            {rest.map(radio)}
+            {bandsInOrder(
+              bands,
+              moreLeads,
+              radio,
+              <DockMore key="more" menu={bar.menu} marked={marked} pick={{ kind: "open", open: onOpen, current: mode }} />,
+            )}
           </div>
         </div>
         <div className="dock-frame" style={{ "--dock-frame-count": (toggle ? 1 : 0) + 1 } as CSSProperties}>
@@ -3256,6 +3305,7 @@ function DockModeLinks({
   bar,
   marked,
   comments,
+  moreLeads,
 }: {
   slug: string;
   search: string;
@@ -3263,6 +3313,8 @@ function DockModeLinks({
    *  the segment is given, so the two arms cannot disagree about what is in
    *  the bar. */
   bar: DockBar;
+  /** More leads the bands' frame — as `DockModes` is told. */
+  moreLeads: boolean;
   marked?: ReadonlyMap<Mode, string> | undefined;
   /** The Comments link, after Marginalia in its frame, as `DockModes` draws it. */
   comments: ReactNode;
@@ -3281,14 +3333,14 @@ function DockModeLinks({
   const toggles = modes.filter((m) => m.mode === "marginalia");
   const exits = modes.filter((m) => m.mode !== "marginalia" && m.group === "exit");
   const bands = modes.filter((m) => m.mode !== "marginalia" && m.group !== "exit");
-  const [lead, rest] = cutForMore(bands);
   const starts = groupStarts(bands);
   const frameStyle = (count: number) => ({ "--dock-frame-count": count }) as CSSProperties;
-  function link(m: ModeUi) {
+  function link(m: ModeUi, moreHome = false) {
     return (
       <DockLink
         key={m.mode}
         mode={m.mode}
+        moreHome={moreHome}
         href={modeLinkHref(slug, search, m.mode)}
         current={false}
         icon={MODE_ICON[m.mode]}
@@ -3328,21 +3380,26 @@ function DockModeLinks({
           Comments as well as the modes; Metadata now stands alone after the
           segment (`Dock` § Metadata). */}
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
-        {exits.length > 0 && <div className="dock-frame" style={frameStyle(exits.length)}>{exits.map(link)}</div>}
+        {exits.length > 0 && <div className="dock-frame" style={frameStyle(exits.length)}>{exits.map((m) => link(m))}</div>}
         {/* More in the same place as on the reading view — straight after
-            the shape run (`cutForMore`) — and its items are these same links
+            the shape run, or first where that is off a phone's edge
+            (`bandsInOrder`) — and its items are these same links
             (`modeLinkHref`). Comments after Marginalia, as there. */}
         <div className="dock-frame" style={frameStyle(bands.length + moreCount(bar))}>
-          {lead.map(link)}
-          <DockMore
-            menu={bar.menu}
-            marked={marked}
-            pick={{ kind: "link", href: (m) => modeLinkHref(slug, search, m) }}
-          />
-          {rest.map(link)}
+          {bandsInOrder(
+            bands,
+            moreLeads,
+            link,
+            <DockMore
+              key="more"
+              menu={bar.menu}
+              marked={marked}
+              pick={{ kind: "link", href: (m) => modeLinkHref(slug, search, m) }}
+            />,
+          )}
         </div>
         <div className="dock-frame" style={frameStyle(toggles.length + 1)}>
-          {toggles.map(link)}
+          {toggles.map((m) => link(m))}
           {comments}
         </div>
       </TooltipGroup>
@@ -3401,7 +3458,8 @@ type MorePick =
  * **Not a radio, but inside the radiogroup since 2026-10-08**, straight after
  * Skim in the bands' frame (`cutForMore`), because Greg asked for it *"just
  * after the skim mode … as part of that group, rather than out on their own"*
- * (spya-mcs4gb). It had a frame of its own after the radiogroup for a day
+ * (spya-mcs4gb) — or first in that frame where its place is off a phone's
+ * edge (`bandsInOrder`, plan 261009c). It had a frame of its own after the radiogroup for a day
  * (261007c D6), kept out because a menu button is not one of *what the middle
  * column shows*. Between two radios in reading order, the DOM has to put it
  * inside; what it opens is a list of more of those choices, so the group's
@@ -4055,6 +4113,7 @@ function DockLink({
   className = "",
   keepLabel,
   mode,
+  moreHome,
 }: {
   href: string;
   current: boolean;
@@ -4105,6 +4164,8 @@ function DockLink({
   /** The mode this link opens, as `data-mode` — `MODE_ATTR`. Absent on the
    *  links that are not modes (Comments, Metadata). */
   mode?: Mode | undefined;
+  /** The row More's home follows — `MORE_HOME_ATTR`; `bandsInOrder`. */
+  moreHome?: boolean | undefined;
 }) {
   const link = (
     <Link
@@ -4112,6 +4173,7 @@ function DockLink({
       className={`dock-btn${current ? " on" : ""}${className ? ` ${className}` : ""}`}
       aria-current={current ? "page" : undefined}
       data-mode={mode}
+      {...moreHomeAttr(moreHome === true)}
       /* **No `title` here, and its absence is asserted rather than assumed.** A
          `title` beside a card is not a fallback, it is a race: the OS box
          appears over our panel a second later, saying a shorter version of the
@@ -4719,10 +4781,10 @@ function Questions({
                 const p = passageOf(entry.item, paragraphs.get(entry.item.blockId));
                 return p.whole ? (
                   <>
-                    <em className="passage-whole">Whole paragraph</em> — {p.text}
+                    <em className="passage-whole">Whole paragraph</em> — <Excerpt blockId={entry.item.blockId} words={p.text} />
                   </>
                 ) : (
-                  p.text
+                  <Excerpt blockId={entry.item.blockId} words={p.text} near={entry.item.start} />
                 );
               })()}
             </span>

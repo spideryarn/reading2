@@ -157,6 +157,7 @@ import { act, createElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { checksOwner, claimListOwner } from "./helpers/debate-claims-owner.js";
 
 import type { DebateOwner } from "../src/web/DebatePanel.js";
 import type { DiagramAccess } from "../src/web/DiagramPanel.js";
@@ -257,6 +258,7 @@ const { App } = await import("../src/web/App.js");
 const { ModeSurface } = await import("../src/web/ModeSurface.js");
 const { SearchPanel } = await import("../src/web/SearchPanel.js");
 const { DebatePanel } = await import("../src/web/DebatePanel.js");
+const { peerReviewHead } = await import("./helpers/peer-review-head.js");
 const { DiagramPanel } = await import("../src/web/DiagramPanel.js");
 const { GlossaryPanel } = await import("../src/web/GlossaryPanel.js");
 const { IdeasPanel } = await import("../src/web/IdeasPanel.js");
@@ -583,7 +585,9 @@ const HIT: Found = {
   valence: null,
   reasoning: null,
   short: "phrenology",
+  shortStart: 0,
   long: "…the utility of phrenology…",
+  longStart: 0,
   at: 0.3,
   whole: false,
   /* Not a quote. See `Found.quoteStroke`. */
@@ -715,6 +719,7 @@ async function mountChat(kind: "chat" | "learn"): Promise<void> {
         canStartOver: true,
         onRetry: () => {},
         onEdit: () => {},
+        onDeleteFrom: undefined,
         onStop: () => {},
         onJump: () => {},
         recovering: new Set<string>(),
@@ -754,6 +759,7 @@ async function mountChatList(): Promise<void> {
         canStartOver: true,
         onRetry: () => {},
         onEdit: () => {},
+        onDeleteFrom: undefined,
         onStop: () => {},
         onJump: () => {},
         recovering: new Set<string>(),
@@ -1623,7 +1629,9 @@ const NO_CLAIM_CHATS = { summaries: [], onCheck: () => {}, onLens: () => {}, onO
 
 function mountDebate(debate: Debate | null, over: Partial<DebateOwner> = {}): ReactNode {
   return createElement(DebatePanel, {
-    access: { kind: "owner", owner: debateOwner(debate, over), citers: { result: { kind: "no-doi" }, retry: () => {} }, claimChats: NO_CLAIM_CHATS },
+    /* Peer review's chip row, as `PeerReviewBand` hands it (since 2026-10-09). */
+    head: peerReviewHead({ view: "reception", onView: noop, ownerSlug: SLUG, debate }),
+    access: { kind: "owner", owner: debateOwner(debate, over), claimList: claimListOwner(), checks: checksOwner(), citers: { result: { kind: "no-doi" }, retry: () => {} }, claimChats: NO_CLAIM_CHATS },
     onJump: noop,
     /* What a reader who has never touched `?debate=` sends: Reception. */
     view: "reception",
@@ -1892,53 +1900,50 @@ const TWEETS_VISITOR: BandShape = {
 };
 
 /**
- * Debate, and its header is the one that **cannot** come out empty: the globe
- * and the `<h2>` are unconditional (the count that was gated moved into the (i)
- * since 2026-10-01, plan 261001m).
+ * Debate's panel — Peer review's Reception since 2026-10-09 — and its header is
+ * the one that **cannot** come out empty. It was the globe and an `<h2>` until
+ * that day; now it is Peer review's chip row, Bibliography | Reception |
+ * Claims, handed in by the mode (PeerReviewMode.tsx § `PeerReviewViews`), and
+ * the Reception | Claims control that sat under the head as
+ * `div.summ-controls.dbt-controls` went into it — a deliberate change to both
+ * shapes (plan 261009l). The band's name is the mode's.
  *
- * The icon's signature is long because `lucide-react` writes its presentation
- * attributes onto the `<svg>`. Recorded rather than trimmed — an icon that
- * stopped being `aria-hidden` is exactly the sort of change this file is for.
- *
- * `.dbt-controls` is the Reception | Claims control, **above the scroller and
- * outside it**, drawn only once a debate is stored — which is why
- * `DEBATE_LOADING` below has no trace of it. Until 2026-10-03 a `p.dbt-frame`
- * (the order's sentence) and `div.dbt-bar.dbt-name` (the identification
- * threshold) sat here instead; both went with plan 261003o. The relevance bar
- * (`.dbt-rel`) is Claims', so Reception, which this fixture opens on, has none.
+ * Until 2026-10-03 a `p.dbt-frame` (the order's sentence) and
+ * `div.dbt-bar.dbt-name` (the identification threshold) sat under the head;
+ * both went with plan 261003o. The relevance bar (`.dbt-rel`) is Claims', so
+ * Reception, which this fixture opens on, has none.
  *
  * `div.gloss-ask.dbt-lens` is the owner's *Look at the debate from an angle*
  * box, the first row since 2026-10-05 (plan 261005k, A) and a deliberate
  * change to both shapes: it is drawn with or without a stored debate.
  */
 const DEBATE_SHAPE: BandShape = {
-  className: "mode-band gloss dbt has-about",
-  label: "Debate",
+  className: "mode-band gloss dbt peer-review has-about",
+  label: "Peer review",
   head: true,
   children: [
     "button.band-about[aria-expanded,aria-haspopup,aria-label,type]",
     "div.band-head",
     "div.gloss-ask.dbt-lens",
-    "div.summ-controls.dbt-controls",
     "div.dbt-scroll",
   ],
-  headChildren: [
-    "svg.lucide.lucide-globe.band-head-icon[aria-hidden,fill,height,stroke,stroke-linecap,stroke-linejoin,stroke-width,viewBox,width,xmlns]",
-    "h2",
-  ],
+  headChildren: ["div.summ-views.dbt-views[aria-label,data-more-unmasked,role]"],
 };
 
-/** The same header, which no longer has a count either (the (i) since 2026-10-01,
- *  plan 261001m) — not empty, which is what makes Debate the
- *  control for the five bands whose headers do empty out.
+/** The same header — Peer review's chip row, not empty, which is what makes
+ *  this panel the control for the five bands whose headers do empty out.
  *
  *  `div.dbt-scroll` holds the owner's *Cited by*, which since 2026-10-04 is on
  *  screen before a search is stored (plan 261004h) — a deliberate change to
  *  this shape. In `DEBATE_SHAPE` it is inside `div.dbt-scroll`, at the end of
- *  Reception's list, so that shape did not move. */
+ *  Reception's list, so that shape did not move.
+ *
+ *  The chips are drawn before a search is stored, since 2026-10-08 as
+ *  Reception | Claims under the head (plan 261008i stage 2, GPT Sol's F9) and
+ *  since 2026-10-09 as the head itself: Claims has a list of its own to reach. */
 const DEBATE_LOADING: BandShape = {
-  className: "mode-band gloss dbt has-about",
-  label: "Debate",
+  className: "mode-band gloss dbt peer-review has-about",
+  label: "Peer review",
   head: true,
   children: [
     "button.band-about[aria-expanded,aria-haspopup,aria-label,type]",
@@ -1947,10 +1952,7 @@ const DEBATE_LOADING: BandShape = {
     "p.band-waiting.gloss-quiet[role]",
     "div.dbt-scroll",
   ],
-  headChildren: [
-    "svg.lucide.lucide-globe.band-head-icon[aria-hidden,fill,height,stroke,stroke-linecap,stroke-linejoin,stroke-width,viewBox,width,xmlns]",
-    "h2",
-  ],
+  headChildren: ["div.summ-views.dbt-views[aria-label,data-more-unmasked,role]"],
 };
 
 const QUIZ_SHAPE: BandShape = {
@@ -2128,7 +2130,7 @@ describe("the bands stage 2 migrated, as they stood before it", () => {
     expectShape(DEBATE_SHAPE);
   });
 
-  it("keeps Debate's icon and title in the header with nothing else to say", async () => {
+  it("keeps Peer review's chip row as the header, with nothing else in it", async () => {
     await paint(mountDebate(null));
     expectShape(DEBATE_LOADING);
   });

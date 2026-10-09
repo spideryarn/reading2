@@ -83,7 +83,8 @@ v1, for the article's owner only, and behind the experimental switch until later
 
 v2, the scrapbook, is built on top of that:
 
-- **A cue instead of a role.** The same call now gives each stop one **cue**: at most 140
+- **A cue instead of a role.** The same call now gives each stop one **cue** (or, since
+  `skim/11` on 2026-10-09, none, which is most stops; below): at most 140
   (200 since `skim/10`, 2026-10-06, below)
   characters, an instruction or a question naming what to *look for* in the passage, never what it
   found — *"Look for how rich-club membership changes the comparison."* It stands on its own and
@@ -91,8 +92,8 @@ v2, the scrapbook, is built on top of that:
   shows it — above the quote since 2026-10-01, so the question comes before the passage it is asked
   of (Greg, `SPIDERYARN-READING2-8J`, plan 261001n) — and a route written before cues shows its old role instead (`PROMPT_VERSION`
   `trajectory/5` marks those as out of date).
-- **The next stop's cue under the door.** Under **Next stop ›** in the prose, in small muted
-  italics, so the door says where it leads.
+- **The next stop's cue under the door.** Under **Next stop ›** in the prose, small and muted
+  (italic until 2026-10-09), so the door says where it leads.
 - **The stop card**, under the current row only
   ([`stop-card.ts`](../../src/web/stop-card.ts) gathers it; the panel draws it). It holds whatever
   the other modes have **already** written about this paragraph:
@@ -132,9 +133,10 @@ v2, the scrapbook, is built on top of that:
   - Hover or focus opens it for a mouse or a keyboard. A tap opens it for a finger and it stays
     until a tap elsewhere. A mouse click does not pin it. A tapped card is the panel's one open
     snippet, so opening an idea closes it and so does stepping to another stop.
-  - The owner's card has *Dig deeper*, *Hide* and *Open glossary*. A visitor's has *Open glossary*
-    alone. A reader whose Glossary control is hidden gets neither *Open glossary* nor *Dig deeper*,
-    because a dig's answer is drawn in Glossary.
+  - The owner's card has *Ask in chat*, *Hide* and *Open glossary* (*Dig deeper* where *Ask in chat*
+    is, until 2026-10-09, plan 261009k). A visitor's has *Open glossary* alone. A reader whose
+    Glossary control is hidden gets no *Open glossary* (and, until then, no *Dig deeper*, because
+    a dig's answer was drawn in Glossary); *Ask in chat* goes to Chat, so it stays.
   - The card scrolls inside half the window's height, so the buttons under a long entry can be
     reached on a short screen (`.skim-term-card` in
     [`skim.css`](../../src/web/styles/skim.css)).
@@ -172,6 +174,21 @@ Stage 5, asked for by Greg on 2026-09-28 (his words are in the
   > really want.
   >
   > — Greg, 2026-09-29
+
+  **The profile-changed banner has an ×** (since 2026-10-09,
+  [261009i](../plans/261009i-skim-profile-notice-can-be-dismissed.md)), and the stale one does not:
+
+  > I think that's helpful, but there should be a way to dismiss it if I decide that I actually
+  > don't care and I don't want to plan it again.
+  >
+  > — Greg, 2026-10-09 (`spya-ud2w92`)
+
+  The dismissal is stored on `articles` with its time, keyed on the route's `generatedAt` and the
+  reader's profile hash now (`profileNoticeKey` in [`src/skim.ts`](../../src/skim.ts)), so a
+  re-plan or a further profile change brings the notice back. Once it is gone, a job started from
+  Metadata shows in the foot, as it does on a route with no banner. The other personalised modes say
+  the same thing with the profile icon rather than a banner, so there is nothing of theirs to
+  dismiss; Illustrated's one grey sentence was looked at and left, for the plan's reasons.
 
   **Stale Quotes are chosen again first**, on the automatic run and on the banner's button, as missing
   ones always were — unforced, so current Quotes cost nothing — and the empty state says when they
@@ -426,6 +443,61 @@ the prompt is still given no prose. Handing it each quote's paragraph was measur
 clearly do better on the quotes it was meant for, cost about a third more per route, and was removed
 (its code is at commit `c943494a9`). An older route is outdated, not stale, so it keeps its cues
 until it is planned again from Metadata.
+
+**A cue only where it helps (`skim/11`, 2026-10-09)**: Greg, reports spya-qpgvq9 and spya-zdkqx4,
+plan [261009j](../plans/261009j-skim-question-optional-and-the-border.md):
+
+> I think there's no point in having a question that sort of almost verbatim sets up the quote as
+> the answer, because that adds nothing. In that case, we don't need the question. The point is for
+> the question to add something so that the quote means more for having read the question.
+>
+> — Greg, 2026-10-09
+
+`"cue": ""` is now a good answer and the default. A cue is written only when it does one of three
+things:
+
+- it says what the quote's "this" or "the latter" stands for. **This is the one case where a cue is
+  expected**: when the records name the referent, the stop gets a cue;
+- it names the question the passage settles;
+- it says which key idea the quote carries, or which choice it is the reason for, in the records'
+  own terms.
+
+The model applies an echo test: cover the quote, and ask what the cue tells the reader that the
+quote would not. Three rules stand beside it: ask only what the quote answers; prefer a question;
+and never describe the passage itself ("This passage says…"). An empty cue is counted as `noCue`,
+not `badCue`. The band and the door draw nothing for it.
+
+**Measured, and the rule overridden.** About a third of the stops keep a cue (24–35 of 99 per run).
+Both blind judges called most of `skim/10`'s cues echoes. Where both prompts wrote one, the new cue
+was usually preferred. Some dropped cues lost to the old ones, and overall preference did not clear
+the plan's bar in any of three rounds. It was built on the request and an arbiter's call:
+[261009b](../investigations/261009b-skim-cue-optional-eval.md) has the numbers and the reasons. A
+line *after* the quote was looked for and not built: none of 68 real cues worked only there, and
+it would end each stop on the model's words.
+
+**The question is smaller than the quote, and explained.** `.skim-cue` is 0.78rem, a named exception
+to the text roles ([typography.md](typography.md)): in monospace a body-sized line read larger
+than the serif quote. The band's (i) says what the line is (`SKIM_CUE_EXPLAINED` in
+[`SkimPanel.tsx`](../../src/web/SkimPanel.tsx)), and so does a card on the line itself for a
+mouse. The line is inside the row's button, so it cannot take focus or a tap of its own.
+
+**The current stop is one box with one bar**, report spya-x0rfs2. The `<li>` paints the ground, the
+corners and an inset strip for the bar. Before, the row and the card each painted their own, and the
+row's rounded corner bent its bar away just above the card's. **The door keeps to the prose's
+measure**, so the next stop's cue no longer runs across the rule at the prose's right edge.
+
+**The quote is the loudest line in the open stop** — Greg's answer to
+[q-u04sye](../user-feedback/questions/q-u04sye.md), plan
+[261009m](../plans/261009m-skim-quieter-open-stop.md), tried as an experiment:
+
+> Okay, try these and let's see how it goes.
+>
+> — Greg, 2026-10-09 (`spya-uzpm5s`)
+
+The open stop's section heading is a step smaller (0.82rem, a named exception in
+[typography.md](typography.md)) and in the soft ink; at rest, the chips are unfilled outlines with
+soft-ink names; both the model's door cue and the fixed end-of-pass line are upright. The other rows
+are unchanged, so the route still scans as a list.
 
 **On a phone, the head's controls stay in Skim; a row goes to the article** — Greg, 2026-10-03,
 report spya-kudr63, plan
