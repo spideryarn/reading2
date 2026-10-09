@@ -29,6 +29,16 @@ promising "read this in 2 minutes" is not one we use.
   private links for single articles ([public-shelf.md](public-shelf.md),
   [public-readable-sharing.md](public-readable-sharing.md)).
 
+## What success means right now
+
+> Right now, success would be a single person who is voluntarily choosing to use Spideryarn other
+> than me.
+>
+> — Greg, 2026-10-09
+
+One person, using it because they want to, not because they were asked. Judge every idea below by
+whether it gets us closer to that person. Raise the bar once we have one.
+
 ## Who first
 
 **Academics and researchers first. Long-form writers come second, as an experiment.** Greg,
@@ -53,6 +63,15 @@ learned).
 Greg's starting point. It is slow, but every conversation can also count as a user interview. It
 works better if each one ends with something to try: a private link to an article that person
 would actually read.
+
+### First experiment: five old contacts, their own papers — *trying, from 2026-10-09*
+
+Greg sends five grad-school contacts a private link to their own most recent paper in Spideryarn,
+with a short personal note asking what it gets wrong, and calls them where he can. They are warm,
+they will answer honestly, and they are the best judges of whether it got their argument right.
+Each reply is a user interview, and it tests the author-gift idea below on friendly ground first.
+Greg, 2026-10-09: *"That's a good idea for the first experiment. I might try and actually talk to
+them on the phone at the same time."*
 
 ### Talks — *idea*
 
