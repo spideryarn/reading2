@@ -43,6 +43,7 @@ inventing a process.
 | [playwright-browser-control.md](playwright-browser-control.md) | driving a browser from a script, with no eyes — on the remote box, where the Chrome extension cannot follow ([browser-control.md](../project/browser-control.md) is which mechanism goes where) |
 | [long-waits.md](long-waits.md) | waiting hours rather than minutes — which mechanism survives what, and the two that outlive the session |
 | [gjd-remote.md](gjd-remote.md) | driving the always-on box — the commands you actually type, and what bites when you run it from a repo that has never heard of it ([hetzner-remote-server-box.md](../project/hetzner-remote-server-box.md) is the whole of it) |
+| [handoff.md](handoff.md) | Greg is closing the laptop — push what matters, write one brief, and queue it for the Overseer on the box to hand to an agent |
 | [count-lines-in-a-repo.md](count-lines-in-a-repo.md) | making "how big is this thing" a command rather than an argument — take the file list from git, categorise by purpose, and the four ways cloc goes quiet |
 | [agent-fleet-dashboard.md](agent-fleet-dashboard.md) | building a page that watches — and steers — many coding agents on one machine: why the fast session listing is not enough on its own, why a socket write that cannot fail proves nothing, and why "needs you" is usually a menu rather than a prompt |
 | [find-big-files.md](find-big-files.md) | "which files are biggest, and should we worry" — rank by code rather than lines, then size × churn × braiding, because a long file nobody touches costs nothing |

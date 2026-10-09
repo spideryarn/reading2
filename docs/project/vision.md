@@ -52,14 +52,49 @@ Tools that make deep reading *cheaper*, not optional.
 - **Interrogate.** Ask questions of the text at the point of confusion, in place.
 - **Internalise.** Come away with something retained, not just something skimmed.
 
-The first feature built on this is [granularity zoom](granularity-zoom.md). It is one core feature,
-not the reason the app exists:
+## Deeply and efficiently
+
+The promise in one line is the 2025 tagline, *read more deeply & efficiently*
+([positioning.md § Depth, and efficiency](positioning.md#depth-and-efficiency)). What each half
+means, in Greg's words (2026-10-09):
+
+> reading deeply means like understanding it, learning, remembering, having ideas, noticing,
+> highlighting, perhaps seeing problems, seeing connections, perhaps to your own work, being a
+> referee for a journal. These are all examples of deeply.
+>
+> And then efficiently. Yeah, I think probably efficiently rather than effectively. Efficiently is
+> about doing this. You know, it takes less time and it works better than just reading the original
+> paper.
+
+And the paths to it, which are several rather than one:
+
+> the dog-eared copy from a smart friend is one path to reading deeply and efficiently. Having that
+> smart friend to then talk to and bounce ideas off is another. The fact that it knows you … it
+> personalizes to you, and so what you're getting is relevant to what you're trying to get. So the
+> interface is relevant to what your purpose is for reading the article. That it's AI helping you,
+> but not trying to do it instead of you. And I guess founded on, you know, evidence. So certainly a
+> lot of the learn mode stuff is based on the evidence of learning and memory.
+>
+> — Greg, 2026-10-09
+
+## No single headline feature
+
+The first feature built on this was [granularity zoom](granularity-zoom.md): the article as columns
+of summaries at several levels of detail beside the prose. The columns were removed on 2026-09-29,
+and what survives is the tree, drawn by [Structure](structure.md). It is one interesting feature
+among half a dozen or more, and not one to lead with:
 
 > granularity-zoom is *a* core feature, but by no means the only reason the app
 > exists! The glossary, concept-search, remembering, diagramming, etc all feel
 > novel and interesting.
 >
 > — Greg, 2026-09-07
+
+> Granularity zoom basically got a bit simplified and became Structure mode. … that still is one of
+> the interesting features. But I wouldn't want to emphasise it. It's probably one of a half dozen
+> or more things that I think are potentially interesting.
+>
+> — Greg, 2026-10-09
 
 So weigh a piece of work by what it does for the whole set of reading modes
 ([reading-view-overview.md](reading-view-overview.md)), not for the tree alone. Work on extraction
@@ -69,10 +104,9 @@ quality usually feeds all of them, which is the stronger argument for it.
 
 1. **The text is the destination, not the source material.** Summaries exist to route the reader
    into the prose. Every generated line should be a door, not a wall. (Concretely: **the reading
-   view never substitutes generated text for prose it could show instead** — leaves carry no `gist`,
-   so at the rightmost level you get the real paragraph. Navigation is a separate matter: a Hierarchy
-   row *is* a door, so leaves do carry a short `navLabel` that appears only in Hierarchy and the
-   spine.
+   view never substitutes generated text for prose it could show instead.** Navigation is a
+   separate matter: a row in Structure *is* a door, so the tree's leaves carry a short `navLabel`
+   that appears only in Structure and the spine.
    See [granularity-zoom.md § Node shape](granularity-zoom.md#node-shape).)
 2. **Speak the author's language.** Summaries reuse the author's own terms and framing where possible,
    so that when the reader arrives at the passage, they recognise it. Avoid the flattening "the author
@@ -95,8 +129,8 @@ quality usually feeds all of them, which is the stronger argument for it.
 The principles above are about reading. This one is about building, and it is the tiebreak whenever
 a tool or a layer is up for discussion.
 
-**Prefer boring**: filesystem over database, one server process, TypeScript + ESM throughout, `tsx`
-to run. *"It can be a simple one at first"* — no framework churn while the ideas are still moving.
+**Prefer boring**: one server process, TypeScript + ESM throughout, `tsx` to run. (It began
+"filesystem over database"; that half was reversed, as the first exception below says.) *"It can be a simple one at first"* — no framework churn while the ideas are still moving.
 Every hour spent on infrastructure is an hour not spent on the reading experience, and a tool
 adopted early is a tool you are stuck with once four agents have written against it.
 
@@ -114,8 +148,9 @@ anything.
 
 The principle did not lose an argument; it ran out of runway. A single writable disk is the thing
 serverless hosting does not have, so the choice is a database or no deploy. Planned in
-[260825f-postgres-migration.md](../plans/260825f-postgres-migration.md); until it lands, the filesystem layout in
-[database.md](database.md) is still what is true. "One server process" goes with it. Everything else
+[260825f-postgres-migration.md](../plans/260825f-postgres-migration.md) and finished on 2026-09-05,
+when the filesystem store was deleted; Postgres and Supabase Storage are now the only store
+([database.md](database.md)). "One server process" goes with it. Everything else
 in the bullet — TypeScript, ESM, `tsx`, no framework churn — is untouched.
 
 ### Two — shadcn
@@ -216,7 +251,11 @@ these, each to be judged against the principles above:
 Two of Greg's, 2026-09-05, recorded so they aren't lost — neither is on the near list, and
 *"for now I just want to make what we have work well"*:
 
-- **A command bar.** Type or talk, and the right mode opens on the right passage — *"a bit like
+- **A command bar.** *A first version is built: type or say a request and it opens the mode, jumps
+  to a phrase, or looks up a term
+  ([reading-view-overview.md](reading-view-overview.md), and
+  [chat-llm-help-commands-vision.md](chat-llm-help-commands-vision.md) for where it might go).*
+  Type or talk, and the right mode opens on the right passage — *"a bit like
   Spotlight/Alfred on the Mac"*: *"take me to the bit where the article introduces access
   consciousness"*, *"generate me Quotes and an Illustrated diagram"*, *"explain how access
   consciousness is different from phenomenal consciousness"*. Greg: *"Dunno if a mode registry would
@@ -228,11 +267,13 @@ Two of Greg's, 2026-09-05, recorded so they aren't lost — neither is on the ne
 
 ## Under this doc
 
-`vision.md` is one of the seven entry points listed in [AGENTS.md](../../AGENTS.md). Three things sit
+`vision.md` is one of the seven entry points listed in [AGENTS.md](../../AGENTS.md). Four things sit
 under it, and then the five folders that hold the project's memory.
 
 - **[positioning.md](positioning.md)** — what the website says, who it says it to first, and what
   the product is called; the decisions, in Greg's words, and the interview that turns them into copy.
+- **[marketing.md](marketing.md)** — how people come to hear about it: who we go looking for
+  first, the experiments, and the ideas not yet tried.
 - **[open-questions.md](open-questions.md)** — the calls nobody has made yet, each with a
   recommendation so nobody is blocked. It should shrink: when a question gets decided, the answer
   goes into the doc that owns it and the question is deleted.
