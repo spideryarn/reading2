@@ -172,7 +172,7 @@ Three things worth carrying to whatever is built next:
   past the bar's edge, More moves to the front of the bands' frame, in the DOM as well as on screen.
   The test is where More's *home* ends, never where it is drawn, or moving it would send it straight
   back: `moreOffTheEdge` in [`src/web/dock-fit.ts`](../../src/web/dock-fit.ts), `bandsInOrder` in
-  `Dock.tsx`, [261009b](../plans/261009b-phone-bottom-bar-more-leads-the-bands-frame-when-its-place-is-off-screen.md).
+  `Dock.tsx`, [261009c](../plans/261009c-phone-bottom-bar-more-leads-the-bands-frame-when-its-place-is-off-screen.md).
 - **When what has to fit is the content, a media query is the wrong tool.** The bottom bar dropped
   its labels at `max-width: 1100px`, a number measured against six modes. At thirteen the spelled-out
   row wants 1416px, so two thirds of a laptop screen showed every label *and* ran the last buttons

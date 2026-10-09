@@ -193,7 +193,7 @@ export const MORE_HOME_ATTR = "data-more-home";
  * **Whether More's own place, straight after Skim, is past the bar's visible
  * edge with the row at rest** — and so whether More leads the bands' frame
  * instead (queue item `qi-t22r9mt4`;
- * docs/plans/261009b-phone-bottom-bar-more-leads-the-bands-frame-when-its-place-is-off-screen.md).
+ * docs/plans/261009c-phone-bottom-bar-more-leads-the-bands-frame-when-its-place-is-off-screen.md).
  *
  * Measured in WebKit, 2026-10-09: every phone width sits on the last rung with
  * the row at its 44px floor, so the buttons have the same x at 390, 375 and

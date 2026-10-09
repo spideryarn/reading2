@@ -6,7 +6,7 @@
  * open, or Experimental on — More's place after Skim is x 354–398, past a 390,
  * 375 or 360 window. No label rung fits 360, so More moves to the front of the
  * bands' frame when, and only when, its own place is out of view.
- * docs/plans/261009b-phone-bottom-bar-more-leads-the-bands-frame-when-its-place-is-off-screen.md.
+ * docs/plans/261009c-phone-bottom-bar-more-leads-the-bands-frame-when-its-place-is-off-screen.md.
  *
  * jsdom has no layout, so the fake below lays the bar out **by DOM order**,
  * each button `W` wide from the bar's left edge. That is what makes the test

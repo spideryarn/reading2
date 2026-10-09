@@ -75,15 +75,15 @@ buttons earlier on the phone. Flagged to Greg in the debrief.
 
 ## GPT Sol's reviews
 
-[Plan review](261009b-plan-review-sol.md) ([prompt](261009b-plan-review-prompt.md)): no blocker. Taken:
+[Plan review](261009c-plan-review-sol.md) ([prompt](261009c-plan-review-prompt.md)): no blocker. Taken:
 re-measure placement on every measurement, not only when the rung changes (P1); scroll added back,
 anchor marked from the home split even when More leads (P1); one flat keyed array so a re-order
 moves nodes (P2). Passed over: subtracting the notch inset past the narrow-window query (P2) —
 More's home is ~400px in and a landscape phone is 667px or wider, so it cannot decide the answer;
 written into `moreOffTheEdge`'s comment instead.
 
-[Code review](261009b-code-review-sol.md) ([prompt](261009b-code-review-prompt.md),
-[diff](261009b-code-review.diff)): no defects in the production code; it added tests for a resize
+[Code review](261009c-code-review-sol.md) ([prompt](261009c-code-review-prompt.md),
+[diff](261009c-code-review.diff)): no defects in the production code; it added tests for a resize
 that keeps the rung, both arms, a scrolled bar, right padding, a bar with no layout, and focus
 through both re-order directions.
 
@@ -108,8 +108,8 @@ WebKit, the arrangement caught up in about a second. The rung shares the same
 `ResizeObserver` → `requestAnimationFrame` path, so the delay is not new with this change. It was
 not chased further.
 
-![360, Experimental on: More first in the bands' frame](261009b-shot-1-phone-360-experimental-on-more-first.png)
-![390, default: More after Skim](261009b-shot-2-phone-390-default-more-after-skim.png)
+![360, Experimental on: More first in the bands' frame](261009c-shot-1-phone-360-experimental-on-more-first.png)
+![390, default: More after Skim](261009c-shot-2-phone-390-default-more-after-skim.png)
 
 ## Done
 

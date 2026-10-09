@@ -59,7 +59,7 @@
 
    **The More button and Comments sit inside these frames since 2026-10-08**
    (plan 261008d): More in the bands' frame straight after Skim (first in it
-   where that place is off a phone's edge — plan 261009b), Comments in
+   where that place is off a phone's edge — plan 261009c), Comments in
    Marginalia's after the toggle. More had a fourth frame of its own for a day.
    Neither needs a rule of its own here: each is a `.dock-btn` with a
    `.dock-btn-label` inside `.dock-modes`, so every rung of the ladder below

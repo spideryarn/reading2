@@ -1226,7 +1226,7 @@ function drawnCount(bar: DockBar): number {
  * frame, with no line between them.
  * docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md.
  * **Wherever that place can be seen** — on a phone where it is off the edge,
- * More leads the frame instead (`bandsInOrder`, plan 261009b).
+ * More leads the frame instead (`bandsInOrder`, plan 261009c).
  */
 const MORE_AFTER: ModeGroup = "shape";
 
@@ -1251,7 +1251,7 @@ const moreHomeAttr = (on: boolean) => (on ? { [MORE_HOME_ATTR]: "" } : {});
 /**
  * **The bands' frame's children, in order, with More where it stands** — after
  * `cutForMore`'s lead, or first of all when `moreLeads` (its own place is off
- * the edge of a phone; dock-fit.ts § `moreOffTheEdge`, plan 261009b). Both arms
+ * the edge of a phone; dock-fit.ts § `moreOffTheEdge`, plan 261009c). Both arms
  * draw through this, so they cannot disagree about where More is.
  *
  * `draw`'s second argument is true for the row More's home follows, which must
@@ -3107,7 +3107,7 @@ function DockModes({
      the cost and the options weighed are in
      docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md § D2.
      **Except where that place is off the edge of a phone**, where More leads
-     the frame instead (`bandsInOrder`, plan 261009b) — first in DOM and focus
+     the frame instead (`bandsInOrder`, plan 261009c) — first in DOM and focus
      order as well as on screen.
 
      **And Comments joined Marginalia's frame the same day**, after the
@@ -3480,7 +3480,7 @@ type MorePick =
  * Skim in the bands' frame (`cutForMore`), because Greg asked for it *"just
  * after the skim mode … as part of that group, rather than out on their own"*
  * (spya-mcs4gb) — or first in that frame where its place is off a phone's
- * edge (`bandsInOrder`, plan 261009b). It had a frame of its own after the radiogroup for a day
+ * edge (`bandsInOrder`, plan 261009c). It had a frame of its own after the radiogroup for a day
  * (261007c D6), kept out because a menu button is not one of *what the middle
  * column shows*. Between two radios in reading order, the DOM has to put it
  * inside; what it opens is a list of more of those choices, so the group's
