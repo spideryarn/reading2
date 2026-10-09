@@ -65,6 +65,28 @@ npx tsx scripts/gjd-remote.ts ssh 'cd ~/code/spideryarn2 && npx tsx scripts/over
 brief's first line. `add` prints the id. `show` must say **`dispatchable: yes`**; anything else
 means the Overseer will never pick it up, however cleanly the `add` went.
 
+### If the queue doesn't work, tell the Overseer directly
+
+> As a backup, if the queue doesn't work, just tell the overseer and point it to whatever plan or
+> document has been pushed.
+>
+> — Greg, 2026-10-09
+
+Then the brief has to be somewhere it can read: commit it under `docs/plans/` (or push the plan doc
+that already holds it), and send the Overseer **one line** naming it. `gjd-remote ls` names the
+session holding the Overseer claim — `Overseer` today. Type the text and the Enter separately, and
+keep it to a single line, since a newline submits early. No apostrophes in the message; it sits inside
+single quotes:
+
+```
+npx tsx scripts/gjd-remote.ts ssh "tmux send-keys -t Overseer -l 'Handoff from the laptop (Greg asked; the queue add failed: <why>). Please queue and dispatch it: <path on dev>, branch <branch>.' && tmux send-keys -t Overseer Enter"
+npx tsx scripts/gjd-remote.ts ssh 'tmux capture-pane -p -t Overseer | tail -20'
+```
+
+The capture should show your line submitted, not still sitting in the input box. This bypasses the
+dashboard's delivery guards ([overseer.md § Steering](../project/overseer.md#steering-and-the-actions-you-have)),
+so it's for this fallback only, and only one line.
+
 ## 4. Tell Greg
 
 In a few lines: what was pushed and where, the queue id, anything left on the laptop and why. The
