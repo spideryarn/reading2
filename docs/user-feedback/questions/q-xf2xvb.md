@@ -1,10 +1,10 @@
 ---
 id: q-xf2xvb
 report: spya-c2qmbg
-status: open
+status: answered
 asked: 2026-10-03
 title: Peer review is built. Keep that name, now that it clashes with Referee mode?
-acted: spya-vcvxu5
+acted: spya-vcvxu5, spya-egmn6r
 refs: SPIDERYARN-READING2-BV · qi-vmnga65v · qi-m9sk699v · qi-j8py7rjw · docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md · docs/plans/261004b-citation-hover-card-offers-dig-deeper.md § Part 2 · docs/user-feedback/261003_1947-citation-card-dig-deeper-and-citations-in-debate.md
 ---
 Done as you said: one mode, Peer review, out of the Experimental switch, with Bibliography (the old Citations), Reception and Claims, plus the works cited under each claim (C1). It is on dev, waiting for the next deploy. One thing you could not have known when you picked the name: should it stay "Peer review"?
@@ -38,3 +38,11 @@ For question two, I guess let's move this out of experimental, this combined mod
 Let's call the sub-mode for citations listed in this article (i.e. the former Citations mode) "Bibliography", and this should be the first submode in this new peer review mode."
 
 The question it answered, asked 3 Oct: should Citations become part of Debate? Options were A (two modes linked by buttons), B (one mode with three parts), C1 (list the works cited in each claim's paragraph, no AI call) and C2 (an AI files each cited work under a Debate theme). You chose B then C1. C2 is not built.
+
+## Greg's answer, 2026-10-09 19:36 UTC (in the Feedback dialog, reply `spya-egmn6r`)
+
+> B Sources.
+>
+> Rename comprehensively, eg including docs, code, database etc
+
+Acted on 2026-10-09 by the feedback sweep: queued as qi-m9tmnpy3 (which replaces qi-j8py7rjw) and dispatched as session fbc2qmbg-rename-to-sources. It renames Peer review to Sources all the way down, together with the stored names that still say citations and debate. Old links keep working.

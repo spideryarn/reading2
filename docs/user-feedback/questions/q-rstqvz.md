@@ -4,7 +4,7 @@ report: none
 status: open
 asked: 2026-10-09
 title: Which way should agents write their questions and replies into the database?
-acted: spya-qnak8d
+acted: spya-qnak8d, spya-b3qx08
 refs: follows q-f6ub8e (reply spya-nhmghm) · qi-mmqzr385 · docs/plans/261009f-agent-questions-and-replies-in-the-database.md · docs/plans/261009f-agent-questions-plan-review-sol.md · docs/user-feedback/261006_2118-earlier-tab-says-what-became-of-each-report-and-asks-greg-in-place.md · qi-32rmtndv · docs/plans/261009o-security-risks-register-and-a-security-review.md
 ---
 You asked for these questions and replies to live in the database, with a command an agent runs to ask and to reply. I have planned it; nothing is built. The design is the same whichever you pick: the questions and the agents' replies go into new tables, an agent runs one command to ask, reply or close, and this dialog reads the tables, so both sides appear at once. The one real choice is what lets the agent's command write to the live database. Which?
@@ -42,3 +42,9 @@ What would decide it. If you are content to rely on agents keeping to the rule, 
 > A although I accept it's a bit of a security risk, so if you haven't already, can you create a doc for security risks and add this as a medium risk or whatever level you think it is? I don't have access to my computer network right now, I don't want to deal with it, but I also don't want to block the work from happening. And so at some point in the future we might switch it over to a separate database login. And then maybe can you kick off, and then maybe can you kick off another agent whose job it is just to do a security review and update that security risks doc with anything else, and then we can work through their proposals in it.
 
 So A, with the risk written down. The register is docs/project/security-risks.md (plan 261009o), where A is entry R1 and the later fix (B, then B+) is recorded; the security review's findings are in the same doc for Greg to work through. A itself is still to be built, under qi-mmqzr385 (plan 261009f), and that build is held for Greg because it relaxes a listed defence. This question stays open until A is built.
+
+## Greg's second answer, 2026-10-09 19:38 UTC (in the Feedback dialog, reply `spya-b3qx08`)
+
+> A. I think it's fine. Perhaps we have a script that they use for this, so they're not doing bespoke queries. And let's keep the rule against live writes in agents.md with this as the exception.
+
+Added to the held build, qi-dr9nnvjm. Still held: a reply cannot let an unattended run change a defence. It starts when you run it in a session you watch, or tell the Overseer an unattended one may.
