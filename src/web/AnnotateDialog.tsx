@@ -434,8 +434,11 @@ export function AnnotateDialog({
     box,
     context: route.kind === "read" ? { kind: "article", slug: route.slug } : { kind: "profile" },
     transcribe,
-    /* One box per passage, as the draft itself is. */
-    keep: keepDictation(`annotate:${anchor.blockId}:${anchor.start}`),
+    /* One box per passage, as the draft itself is — the whole key, quote
+       included, since two selections can start at the same character. The
+       keeper's name is also what a transcript is bound to (dictation.md §
+       Words go only where they were said). */
+    keep: keepDictation(`annotate:${annotateKey(anchor)}`),
     /* A double press on Stop also saves: Save is what ⌘+Enter does here, and
        never Ask AI (dictation.md § A double press). Only once `loaded`: `press`
        refuses before that, and a double press must not be taken and then

@@ -657,6 +657,32 @@ box, which cannot run Safari: the `dictation transcribed` log line carries `form
 and `kbps`, from the provider's own `usage.seconds`, and ~48 on an `m4a` row is the answer.
 [260912b](../plans/260912b-dictation-slow-on-weak-wifi.md), with the spike that measured it.
 
+## Words go only where they were said
+
+The comment dialog and the quiz panel keep one dictation mounted while the reader steps from comment
+to comment, or question to question, and clear the box on the step. On Safari and Firefox there are
+no live words in the box to prove it is still the box the words were for, so a transcript that came
+back after the step used to land in the next comment's box. Now a dictation is bound to its
+**keeper's box name** (`comment:<id>`, `quiz:<slug>:<question>`) at the press, and when the box has
+become a different one by the time the words arrive, they are not put in: the recording stays on the
+strip under `[mic-moved]`, with Try again holding the words already transcribed, so pressing it back
+in the right box puts them there without paying twice. A failure's Try again is bound the same way,
+and sends nothing at all from the wrong box. Chromium's live phrases are bound too: one confirmed
+after the step is not put in the new box. A new press would clear the offer, so where the device
+could not keep a copy (`keptOnDevice` false) the press is refused under `[mic-moved-held]` until the
+reader tries again or discards the offer (saving a copy first if wanted). Save downloads a copy and
+leaves the offer in place. A tape left behind in the new box waits until words still on their way
+and their offer are settled; recovery then runs again without another navigation.
+
+A box that has merely **shut** has no keeper, and that is not a different box: Feedback and the
+command bar still receive a transcript that arrives after closing, as
+[§ A double press on Stop also sends](#a-double-press-on-stop-also-sends) needs. **A box that serves
+several targets from one mount must name its keeper for what the words are *about*** — Feedback's
+reply box is `feedback-reply:<question>` and Annotate's is the whole `annotateKey` for that reason.
+Plan
+[261009a](../plans/261009a-dictation-transcript-lands-in-the-next-box.md);
+`tests/dictation-lands-in-its-own-box.test.tsx`.
+
 ## A closed tab does not lose a dictation
 
 > I would be really sad if at the end of a few minutes of really rich thought, the contents got lost
@@ -819,6 +845,7 @@ a recorder that hit its cap. They live beside the code that raises them.
 | `[mic-unplugged]` `[mic-no-start]` `[mic-full]` `[mic-broken]` `[mic-empty]` `[mic-silent]` `[mic-unexpected]` | the capture and the ending, in [`useDictation.ts`](../../src/web/useDictation.ts) — `[mic-full]` is the fifteen-minute ceiling and `[mic-broken]` a part that lost audio; [§ The sizes](#the-sizes-and-the-wall-behind-them) |
 | `[mic-no-tape]` | no recording was made at all, so there was no authoritative pass |
 | `[mic-recovered]` `[mic-cut-off]` | a recording an earlier page left behind, offered back — whole, or cut off mid-sentence; [§ A closed tab](#a-closed-tab-does-not-lose-a-dictation) |
+| `[mic-moved]` `[mic-moved-held]` | the words came back after the reader moved the box on — the next comment, the next quiz question — so they were offered back rather than put in the wrong one; and a new press refused because it would clear them; [§ Words go only where they were said](#words-go-only-where-they-were-said) |
 | `[mic-format]` `[mic-too-long]` `[mic-slow]` `[mic-offline]` | the upload, in [`dictation-upload.ts`](../../src/web/dictation-upload.ts) |
 | `[mic-not-set-up]` `[mic-upstream]` `[mic-no-upstream]` `[mic-unreadable]` `[mic-too-long]` | the server, in [`src/transcribe.ts`](../../src/transcribe.ts) — see below |
 | `[ai-busy]` `[ai-no-credit]` `[ai-key]` `[ai-refused]` `[ai-no-model]` `[ai-bad-request]` `[ai-upstream]` `[ai-timeout]` | also the server, but the sentences come from [`messages.ts`](../../src/messages.ts) — every provider refusal has gone through `providerHttpFailure` since 2026-09-07, so a dictation can now show the same words as any other failed model call |
