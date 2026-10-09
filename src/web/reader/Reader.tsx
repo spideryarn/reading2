@@ -139,6 +139,7 @@ import { buildArcColumn, buildGeometry, buildOutline, buildSummaryTree, nodeLabe
 import {
   marginParam,
   modeParam,
+  guideParam,
   noteParam,
   panelParam,
   sortParam,
@@ -1092,6 +1093,15 @@ export function Reader({
     },
     [slug, showBand],
   );
+  /* The bar's *Guide* row (plan 261009i): `?guide=1` with Chat's band, the
+     same door the first open uses (params.ts § `guideParam`), which Chat turns
+     into the stored guide or a new one once its list has answered. Sends
+     nothing, so it spends nothing. */
+  const [, setGuideParam] = useQueryState("guide", guideParam);
+  const openTheGuide = useCallback(() => {
+    void setGuideParam(true);
+    showBand("chat");
+  }, [setGuideParam, showBand]);
   const askInChat = useCallback((term: string) => handToChat(askAboutTerm(term), "send"), [handToChat]);
   /* **A fifth and a sixth since 2026-10-06: *Ask in chat* on a Glossary entry
      and on a Citations row**, beside Dig deeper, which is unchanged. Each
@@ -2803,6 +2813,8 @@ export function Reader({
         askThroughLens: isOwner ? suggestedLensInChat : undefined,
         /* The bar's *Ask the guide* row, after a pick that could not tell. The owner's, as Chat is. */
         askGuide: isOwner ? askTheGuide : undefined,
+        /* The bar's *Guide* row: the owner's, as the guide is. */
+        openGuide: isOwner ? openTheGuide : undefined,
         /* A chat chip's `mode` proposal: the owner's, as Chat is (`chipModes`). */
         modes: chipModes,
       }),
@@ -2822,6 +2834,7 @@ export function Reader({
       openQuickSearch,
       suggestedLensInChat,
       askTheGuide,
+      openTheGuide,
       chipModes,
     ],
   );
@@ -3233,6 +3246,7 @@ export function Reader({
               onHandoffTaken={handoffTaken}
               onHandoffThread={handoffThread}
               onSettled={refreshChats}
+              articleTitle={article.meta.title}
             />
           </ChatCommands>
         ) : null;

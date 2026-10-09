@@ -862,6 +862,25 @@
   ]
  },
  {
+  "id": "action:guide",
+  "label": "Guide",
+  "description": "This article's guide, in Chat: why you are reading it, where to start, and which modes would help.",
+  "aliases": [
+   "tour",
+   "where to start",
+   "how to read",
+   "welcome",
+   "getting started"
+  ],
+  "kind": "action",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-experimental-off",
+   "owner-article-archived"
+  ]
+ },
+ {
   "id": "action:section-high-powered",
   "label": "High-powered AI",
   "description": "The switch for a stronger model on this article, first in AI processing.",

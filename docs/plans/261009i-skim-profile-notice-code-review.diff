@@ -1,0 +1,1141 @@
+diff --git a/docs/plans/261009i-skim-profile-notice-can-be-dismissed.md b/docs/plans/261009i-skim-profile-notice-can-be-dismissed.md
+new file mode 100644
+index 000000000..e7b9072b3
+--- /dev/null
++++ b/docs/plans/261009i-skim-profile-notice-can-be-dismissed.md
+@@ -0,0 +1,103 @@
++# Skim's "planned before your profile" notice can be dismissed
++
++Report `spya-ud2w92` (#502), Sentry `SPIDERYARN-READING2-FD`, queue item `qi-rpfba2td`. Filed by
++Greg (admin; `feedback-reporter.ts` exit 0) on 2026-10-09 01:08 UTC from Skim on
++`arxiv-1706-03762-spya-wyt7j0`, kind *suggestion*.
++
++> Sometimes the mode shows a message saying "This route was planned before your profile said what
++> it says now."
++>
++> I think that's helpful, but there should be a way to dismiss it if I decide that I actually don't
++> care and I don't want to plan it again.
++>
++> — Greg, 2026-10-09
++
++The brief adds: if other modes show the same notice, consider one shared dismiss; store when a
++dismissal happened (AGENTS.md § Writing code, *Store when it happened*).
++
++## What is there now
++
++`bannerReason` (src/web/SkimPanel.tsx) draws a `gloss-stale` banner with a *Plan it again* button
++for two reasons: the Quotes/Ideas/outline moved under the route (`stale`), or the reader's profile is
++not the one the route was planned for (`profileChanged`, from `routeProfileIsStale` in
++`GET /api/skim/:slug`). The second is the one Greg wants to send away.
++
++**Other modes.** Skim is the only mode that turns a changed profile into a banner with a call to
++action. Every other personalised mode says it with the small `<WrittenForYou>` icon (UserRoundPen, a
++card on hover), which is a label rather than a notice and takes no room. Illustrated is the nearest
++thing: one sentence, *"It was painted from a Sketch drawn before your profile said what it says
++now"*, joined into its grey `ill-note` line with the plate's other facts. **It is left alone**: it is
++about the Sketch rather than the picture on screen, it shares one line with facts that are not
++dismissible, it offers no button and claims no room of its own, and Greg's report is about the Skim
++banner. Considered for "one shared dismiss" and declined for those reasons; if a second banner like
++Skim's ever appears, the columns below move to a table keyed by mode then.
++
++`stale` is **not** dismissible: a route over Quotes that have moved can point at stops that no longer
++exist, so its banner is a real fault, not a preference.
++
++## The change
++
++1. **An × on the banner, only when the reason is the profile.** Pressing it hides the banner at once
++   (optimistic) and records the dismissal. *Plan it again* stays beside it, and the Skim row in
++   Metadata still re-plans.
++2. **Two columns on `articles`**, beside the other per-owner reader state (shelf state, `purpose`),
++   rather than a table: there is exactly one Skim route per article, so a table keyed on
++   `(article_id, mode)` with only `skim` allowed would model one row per article at the cost of a
++   store, a cascade, and a dozen registries (GPT Sol's plan review, finding 2).
++
++   | column | |
++   |---|---|
++   | `skim_profile_notice_dismissed_for` text null | the notice the reader sent away: `<route generatedAt> <profile hash or "none">` |
++   | `skim_profile_notice_dismissed_at` timestamptz null | when — set again on every dismiss |
++
++   **The dismissal holds only for that route and that profile.** The route's `generatedAt` is its
++   identity (every run of the stage re-stamps it — useSkim.ts § the hold), so a re-plan always
++   brings the notice back once it goes out of date again, even under a profile hash seen before. A
++   first version keyed on the route's *profile hash* missed exactly that: planned for A, profile B,
++   dismiss, back to A, re-plan (still A), then B again — the old dismissal would hide the new
++   route's notice (Sol, finding 1). The reader's current hash is in the key too, so a further profile
++   change, which has something new to say, brings it back. `none` stands for "no profile", so a
++   first profile and a cleared one are both ordinary keys.
++3. **`POST /api/skim/:slug/profile-notice-dismissal`**, body `{ generatedAt }` — the route the
++   reader was looking at — owner only (`articleIdForOwned`, so a stranger's slug is a 404). The
++   **server** computes the reader's profile hash and reads the current route. No route → 404. A body
++   whose `generatedAt` is not the current route's → 409 (a re-plan landed in another tab; the
++   client reads again). Route and profile agree → 204 and nothing written (nothing to dismiss is an
++   idempotent success, Sol finding 4). Otherwise it writes both columns and answers 204.
++   `GET /api/skim/:slug` gains `profileNoticeDismissed`, true when `profileChanged` and the stored
++   key equals the current one.
++4. **Client.** `UseSkim` gains `profileNoticeDismissed` and `dismissProfileNotice()`.
++   `bannerReason` returns null for the profile reason when it is dismissed. The foot's gate, which
++   today reads `!owner.profileChanged` so as not to duplicate the banner's button, reads "no banner"
++   instead, so a job started from Metadata after a dismissal still shows its progress in the foot.
++   `PurposeLine`'s `bannerUp` already reads `bannerReason`. **A failed POST does not simply put the
++   banner back**: the write may have committed before the connection failed, so it reads the route
++   again and lets `profileNoticeDismissed` decide, and says it could not be sent only if the read
++   shows it was not (useGlossary.ts's hide does the same).
++5. **Export and registries**: the columns are on `articles`, so they go out with the article row;
++   the schema-drift, export-coverage, created-at and route-contract tests say what else must hear
++   of them.
++6. **Docs.** `skim.md` gets a sentence; the help page if it describes the banner.
++
++## Simpler options passed over
++
++- **localStorage per article.** No migration, no route. Passed over because Greg asked for the time
++  to be stored, and because it would not follow the reader to their phone, which is exactly where a
++  banner costs the most room.
++- **Rewrite the route's stamp to the current profile hash on dismiss** ("adopt" the profile). One
++  write, no column — but the stamp would then say the route was planned for a profile it was not,
++  which every other reader of `profileHash` (export, Metadata, a future badge) would believe.
++- **Dismiss forever, for every article.** Greg's words are about one route he does not care to
++  re-plan, not about the notice as a whole.
++- **A shared table across modes** — above; no second mode has a banner to dismiss.
++
++## Tests
++
++- Route: dismiss then read → `profileNoticeDismissed: true`; change the profile → false; change it
++  back → true again; re-plan → false (even under a hash seen before); first profile and cleared
++  profile both dismiss; stranger's slug → 404; nothing changed → 204 and no write; an old
++  `generatedAt` → 409; a second dismiss moves `dismissed_at` forward.
++- `bannerReason`: profile + dismissed → null; stale + dismissed → the stale sentence.
++- A component test that the × shows only for the profile reason and hides the banner.
++
++Seen in a browser at desktop and 390px width once built.
+diff --git a/docs/plans/261009i-skim-profile-notice-plan-review-prompt.md b/docs/plans/261009i-skim-profile-notice-plan-review-prompt.md
+new file mode 100644
+index 000000000..bd8cdf5d3
+--- /dev/null
++++ b/docs/plans/261009i-skim-profile-notice-plan-review-prompt.md
+@@ -0,0 +1,9 @@
++You are reviewing a plan before it is built, in the Spideryarn repo (this checkout). Read-only.
++
++Plan: docs/plans/261009i-skim-profile-notice-can-be-dismissed.md
++
++Read it, then read the code it touches: src/web/SkimPanel.tsx (bannerReason, the foot gate, PurposeLine use), src/web/useSkim.ts, src/web/SkimPurpose.tsx, the GET /api/skim/:slug route in src/routes.ts (search `/api/skim/`), src/skim.ts routeProfileIsStale, src/profile.ts hashProfile/resolveProfile, and the precedent table glossary_hidden_entries in src/db/schema.ts with src/store/pg-glossary-hidden.ts, and AGENTS.md.
++
++Questions: Is the design right and as simple as it should be? Is the hash-pair rule correct in every sequence (profile cleared, profile set for the first time, route re-planned, profile changed back)? Is anything about security/ownership wrong (docs/project/security-map.md)? Are there registries or tests a new per-article table must be added to that the plan misses? Should the 409 exist? Anything about other modes the plan has wrong?
++
++Answer with numbered findings, each with severity (P1/P2/P3), the evidence (file:line), and the fix. End with a one-line verdict: BUILD AS IS, BUILD WITH CHANGES, or RETHINK.
+diff --git a/docs/project/skim.md b/docs/project/skim.md
+index 21a92fa35..ec62b924a 100644
+--- a/docs/project/skim.md
++++ b/docs/project/skim.md
+@@ -173,6 +173,21 @@ Stage 5, asked for by Greg on 2026-09-28 (his words are in the
+   >
+   > — Greg, 2026-09-29
+ 
++  **The profile-changed banner has an ×** (since 2026-10-09,
++  [261009i](../plans/261009i-skim-profile-notice-can-be-dismissed.md)), and the stale one does not:
++
++  > I think that's helpful, but there should be a way to dismiss it if I decide that I actually
++  > don't care and I don't want to plan it again.
++  >
++  > — Greg, 2026-10-09 (`spya-ud2w92`)
++
++  The dismissal is stored on `articles` with its time, keyed on the route's `generatedAt` and the
++  reader's profile hash now (`profileNoticeKey` in [`src/skim.ts`](../../src/skim.ts)), so a
++  re-plan or a further profile change brings the notice back. Once it is gone, a job started from
++  Metadata shows in the foot, as it does on a route with no banner. The other personalised modes say
++  the same thing with the profile icon rather than a banner, so there is nothing of theirs to
++  dismiss; Illustrated's one grey sentence was looked at and left, for the plan's reasons.
++
+   **Stale Quotes are chosen again first**, on the automatic run and on the banner's button, as missing
+   ones always were — unforced, so current Quotes cost nothing — and the empty state says when they
+   will be. The Metadata row names only `skim`, so it never buys Quotes or Ideas, and refuses
+diff --git a/drizzle/20261009073456_skim_profile_notice_dismissed.sql b/drizzle/20261009073456_skim_profile_notice_dismissed.sql
+new file mode 100644
+index 000000000..7045337cf
+--- /dev/null
++++ b/drizzle/20261009073456_skim_profile_notice_dismissed.sql
+@@ -0,0 +1,2 @@
++ALTER TABLE "spideryarn"."articles" ADD COLUMN "skim_profile_notice_dismissed_for" text;--> statement-breakpoint
++ALTER TABLE "spideryarn"."articles" ADD COLUMN "skim_profile_notice_dismissed_at" timestamp with time zone;
+\ No newline at end of file
+diff --git a/src/db/schema.ts b/src/db/schema.ts
+index 807e27e2c..f585d697a 100644
+--- a/src/db/schema.ts
++++ b/src/db/schema.ts
+@@ -253,6 +253,21 @@ export const articles = spideryarn.table("articles", {
+    * article, because it is not this article's state to lose.
+    */
+   purpose: text("purpose"),
++  /**
++   * **The Skim notice the reader sent away** — *"This route was planned before
++   * your profile said what it says now"*, dismissed with its ×. Greg,
++   * 2026-10-09 (`spya-ud2w92`): *"there should be a way to dismiss it if I
++   * decide that I actually don't care and I don't want to plan it again."*
++   *
++   * The key is `<route generatedAt> <profile hash or "none">`
++   * (src/skim.ts § `profileNoticeKey`), so the dismissal holds for that route
++   * under that profile only: a re-plan or a further profile change brings the
++   * notice back. Columns here rather than a table for the shelf columns'
++   * reason — one per article, the owner's state. `_at` is when, set again on
++   * every dismiss. docs/plans/261009i-skim-profile-notice-can-be-dismissed.md.
++   */
++  skimProfileNoticeDismissedFor: text("skim_profile_notice_dismissed_for"),
++  skimProfileNoticeDismissedAt: timestamp("skim_profile_notice_dismissed_at", { withTimezone: true }),
+ 
+   /* ---- sharing: may a stranger read this? docs/plans/260827ai-public-read-only-access.md --
+ 
+diff --git a/src/routes.ts b/src/routes.ts
+index eaed36b21..2b8562d92 100644
+--- a/src/routes.ts
++++ b/src/routes.ts
+@@ -49,6 +49,7 @@ import {
+   tagStore,
+   readingTimeStore,
+   glossaryHiddenStore,
++  skimNoticeStore,
+   quizAttemptStore,
+   loadArticle,
+   loadGlossary,
+@@ -412,7 +413,7 @@ import { hashProfile, normaliseProfileText, profileIsStale, renderProfile } from
+ import { keysOpenFree, type MadeArtefact } from "./acts-alone.js";
+ import { type GuideExperience, experienceOf } from "./guide.js";
+ import { panelRunKind } from "./glossary.js";
+-import { routeProfileIsStale } from "./skim.js";
++import { profileNoticeKey, routeProfileIsStale } from "./skim.js";
+ import {
+   type ArticleStage,
+   articlePower,
+@@ -1230,6 +1231,23 @@ function readingTimeBatch(body: unknown): Record<string, number> {
+   return out;
+ }
+ 
++/**
++ * `POST /api/skim/:slug/profile-notice-dismissal`'s body: `{ generatedAt }`,
++ * the route the reader was looking at, and nothing else
++ * (`SkimProfileNoticeDismissalRequest`).
++ */
++function skimDismissalGeneratedAt(body: unknown): string {
++  const sent = objectBody(body);
++  for (const key of Object.keys(sent)) {
++    if (key !== "generatedAt") throw httpError(400, "That request has a field this endpoint does not take");
++  }
++  const { generatedAt } = sent;
++  if (typeof generatedAt !== "string" || generatedAt.length === 0 || generatedAt.length > 64) {
++    throw httpError(400, "Expected { generatedAt: <the route's generatedAt> }");
++  }
++  return generatedAt;
++}
++
+ /**
+  * The comments this process is answering right now, as `slug/id`.
+  *
+@@ -11204,17 +11222,52 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
+       const found = await orNullWhenNotMadeYet({ req, res }, () => loadSkim(at));
+       if (found === null) return;
+       const now = await profile;
++      const nowHash = now ? hashProfile(now) : null;
++      const { profileNoticeDismissedFor, ...rest } = found;
++      const profileChanged = routeProfileIsStale(found.skim.profileHash, nowHash);
+       const body: SkimResponse = {
+-        ...found,
+-        profileChanged: routeProfileIsStale(
+-          found.skim.profileHash,
+-          now ? hashProfile(now) : null,
+-        ),
++        ...rest,
++        profileChanged,
++        /* The stored key is never sent: it carries the profile's hash. */
++        profileNoticeDismissed:
++          profileChanged &&
++          profileNoticeDismissedFor === profileNoticeKey(found.skim.generatedAt, nowHash),
+       };
+       send(res, 200, body);
+     },
+   },
+ 
++  /* **Send the profile-changed notice away**, for this route under the profile
++     the reader has now — docs/plans/261009i-skim-profile-notice-can-be-dismissed.md
++     (Greg, 2026-10-09, `spya-ud2w92`). Body `{ generatedAt }`: the route the
++     reader was looking at. Owner-only through the store. The server works out
++     the profile hash itself. No route → 404; another route than the one named,
++     before or during the write → 409, and the client reads again; route and
++     profile agree → 204 and nothing written, since there is no notice to
++     dismiss. Never spends. */
++  {
++    kind: "pattern",
++    method: "POST",
++    pattern: /^\/api\/skim\/([\w.%-]+)\/profile-notice-dismissal$/,
++    article: "first-capture",
++    handler: async ({ request: { req, res } }, captures) => {
++      const at = slugPart(captures, 1);
++      const generatedAt = skimDismissalGeneratedAt(await readBody(req));
++      const profile = resolveProfile(at);
++      void profile.catch(() => {});
++      const found = await loadSkim(at);
++      const nowHash = await profile.then((now) => (now ? hashProfile(now) : null));
++      const replanned = () => httpError(409, "This route has been planned again since. Read it again.");
++      if (found.skim.generatedAt !== generatedAt) throw replanned();
++      if (routeProfileIsStale(found.skim.profileHash, nowHash)) {
++        const key = profileNoticeKey(generatedAt, nowHash);
++        if (!(await skimNoticeStore.dismissProfileNotice(at, generatedAt, key))) throw replanned();
++      }
++      res.statusCode = 204;
++      res.end();
++    },
++  },
++
+   /* What the rest of the web says about this piece —
+      docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md. GET
+      only, and no DELETE, for the reason `ideas`, `quotes` and `timeline` have
+diff --git a/src/skim.ts b/src/skim.ts
+index 67b254892..8759b678f 100644
+--- a/src/skim.ts
++++ b/src/skim.ts
+@@ -508,6 +508,24 @@ export function routeProfileIsStale(
+   return (recorded ?? null) !== now;
+ }
+ 
++/**
++ * **Which profile-changed notice the reader sent away** — the key stored in
++ * `articles.skim_profile_notice_dismissed_for` when they press its ×, and
++ * compared on every read. Greg, 2026-10-09 (`spya-ud2w92`).
++ *
++ * The route's `generatedAt` and the reader's profile hash now, so the
++ * dismissal holds for that route under that profile and nothing else: a
++ * re-plan re-stamps `generatedAt`, and a further profile change moves the
++ * hash, and either brings the notice back. **Not the route's `profileHash`**:
++ * planned for A, profile B, dismissed, back to A, re-planned (still A), B
++ * again — keyed on the stamp, the old dismissal would hide the new route's
++ * notice (GPT Sol's plan review, finding 1). `none` is no profile; a hash
++ * never contains a space. docs/plans/261009i-skim-profile-notice-can-be-dismissed.md.
++ */
++export function profileNoticeKey(routeGeneratedAt: string, profileHashNow: string | null): string {
++  return `${routeGeneratedAt} ${profileHashNow ?? "none"}`;
++}
++
+ /**
+  * **The abstract is not on the route.** Greg, 2026-09-28: *"prefer not to
+  * include the Abstract as part of a trajectory, since that's kinda obviously
+diff --git a/src/store/contracts.ts b/src/store/contracts.ts
+index a01ee24e2..eaef45d22 100644
+--- a/src/store/contracts.ts
++++ b/src/store/contracts.ts
+@@ -1853,6 +1853,21 @@ export interface GlossaryHiddenStore {
+   unhide(slug: string, entryId: string): Promise<void>;
+ }
+ 
++/**
++ * The Skim profile-changed notice the owner sent away on one article —
++ * docs/plans/261009i-skim-profile-notice-can-be-dismissed.md. Owner-scoped (a
++ * stranger's slug is a 404). The read is `loadSkim`, which returns the stored
++ * key; there is no second GET.
++ */
++export interface SkimNoticeStore {
++  /**
++   * Store `key` (src/skim.ts § `profileNoticeKey`) and the time, **only if the
++   * article's current route is still the one stamped `generatedAt`**. `false`
++   * when it is not — a re-plan landed in between — and nothing is written.
++   */
++  dismissProfileNotice(slug: string, generatedAt: string, key: string): Promise<boolean>;
++}
++
+ /**
+  * The reader's global profile — "about you", true on every article rather
+  * than on one. docs/plans/260826t-reader-profile.md is the design; src/profile.ts
+diff --git a/src/store/index.ts b/src/store/index.ts
+index 069596acf..c3ea402bb 100644
+--- a/src/store/index.ts
++++ b/src/store/index.ts
+@@ -76,6 +76,7 @@ import type {
+   CommentStore,
+   ReadingTimeStore,
+   GlossaryHiddenStore,
++  SkimNoticeStore,
+   QuizAttemptStore,
+   FeedbackStore,
+   FetchAllowanceStore,
+@@ -117,6 +118,7 @@ import { pgCitedInSpideryarnStore } from "./pg-cited-in-spideryarn.js";
+ import { pgSourceGuessStore } from "./pg-source-guesses.js";
+ import { pgReadingTimeStore } from "./pg-reading-time.js";
+ import { pgGlossaryHiddenStore } from "./pg-glossary-hidden.js";
++import { pgSkimNoticeStore } from "./pg-skim-notice.js";
+ import { pgQuizAttemptStore } from "./pg-quiz-attempts.js";
+ import { pgReaderStore } from "./pg-reader.js";
+ import { pgRefereeClaimsStore } from "./pg-referee-claims.js";
+@@ -374,6 +376,8 @@ export const citationFindStore: CitationFindStore = guarded("citation-finds", pg
+ export const readingTimeStore: ReadingTimeStore = guarded("reading-time", pgReadingTimeStore);
+ /** The glossary entries an owner hid on one article — plan 261002c § 2. */
+ export const glossaryHiddenStore: GlossaryHiddenStore = guarded("glossary-hidden", pgGlossaryHiddenStore);
++/** The Skim profile-changed notice an owner sent away — plan 261009i. */
++export const skimNoticeStore: SkimNoticeStore = guarded("skim-notice", pgSkimNoticeStore);
+ /** The reader's finished quiz marks, kept since 2026-10-05 — plan 261005b. */
+ export const quizAttemptStore: QuizAttemptStore = guarded("quiz-attempts", pgQuizAttemptStore);
+ 
+diff --git a/src/store/pg-skim-notice.ts b/src/store/pg-skim-notice.ts
+new file mode 100644
+index 000000000..5511349e4
+--- /dev/null
++++ b/src/store/pg-skim-notice.ts
+@@ -0,0 +1,43 @@
++/**
++ * The Skim notice the owner sent away — *"This route was planned before your
++ * profile said what it says now"* — on one article.
++ * docs/plans/261009i-skim-profile-notice-can-be-dismissed.md (report
++ * `spya-ud2w92`). Two columns on `articles`, not a table: one per article, the
++ * owner's state, beside `purpose`.
++ *
++ * Ownership first, through `articleIdForOwned`, so a stranger's slug is a 404
++ * here as everywhere. **The write is conditional on the route** in the same
++ * statement: a re-plan between the reader's read and their press re-stamps
++ * `generatedAt`, and the dismissal must not land on a route they never saw.
++ *
++ * ## What may be logged from this file
++ *
++ * Nothing, and nothing is. The key carries a hash of the reader's profile.
++ */
++
++import { sql } from "drizzle-orm";
++
++import { getDb } from "../db/client.js";
++import type { SkimNoticeStore } from "./contracts.js";
++import { guardDbStore } from "./db-errors.js";
++import { articleIdForOwned } from "./pg.js";
++
++const rawPgSkimNoticeStore: SkimNoticeStore = {
++  async dismissProfileNotice(slug: string, generatedAt: string, key: string): Promise<boolean> {
++    const articleId = await articleIdForOwned(slug);
++    const result = await getDb().execute(sql`
++      update spideryarn.articles a
++      set skim_profile_notice_dismissed_for = ${key},
++          skim_profile_notice_dismissed_at = now()
++      from spideryarn.article_revisions r
++      where a.id = ${articleId}
++        and r.id = a.current_revision_id
++        and r.skim ->> 'generatedAt' = ${generatedAt}
++      returning 1
++    `);
++    return result.rows.length > 0;
++  },
++};
++
++/** Guarded where it is built, not where it is selected — src/store/db-errors.ts. */
++export const pgSkimNoticeStore: SkimNoticeStore = guardDbStore("skim-notice", rawPgSkimNoticeStore);
+diff --git a/src/store/pg.ts b/src/store/pg.ts
+index 195507c5e..47dceb272 100644
+--- a/src/store/pg.ts
++++ b/src/store/pg.ts
+@@ -4167,6 +4167,7 @@ const rawPgArticleReader: ArticleReader = {
+           skim.sourceHash !== skimInputHash(input)),
+       outdated: skim.version !== SKIM_PROMPT_VERSION,
+       notOnRoute: current.filter((q) => !onRoute.has(q.id) && !leftOut.has(q.id)).length,
++      profileNoticeDismissedFor: found.article.skimProfileNoticeDismissedFor,
+     };
+   },
+ 
+diff --git a/src/types.ts b/src/types.ts
+index f743a3a11..b76e77b93 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -1505,10 +1505,29 @@ export interface SkimResponse {
+    * not counting those in the abstract, which are left out on purpose.
+    */
+   notOnRoute: number;
++  /**
++   * The reader sent the profile-changed notice away with its ×, for this
++   * route under the profile they have now (src/skim.ts § `profileNoticeKey`).
++   * Only ever true beside `profileChanged`. Greg, 2026-10-09 (`spya-ud2w92`).
++   * docs/plans/261009i-skim-profile-notice-can-be-dismissed.md.
++   */
++  profileNoticeDismissed: boolean;
+ }
+ 
+-/** As `QuotesFound`: everything but the one question about the reader. */
+-export type SkimFound = Omit<SkimResponse, "profileChanged">;
++/**
++ * As `QuotesFound`: everything but the questions about the reader — with the
++ * stored dismissal key in their place, which the route compares with the key
++ * for the profile the reader has now and never sends on.
++ */
++export type SkimFound = Omit<SkimResponse, "profileChanged" | "profileNoticeDismissed"> & {
++  profileNoticeDismissedFor: string | null;
++};
++
++/** `POST /api/skim/:slug/profile-notice-dismissal`: the route the reader was looking at. */
++export interface SkimProfileNoticeDismissalRequest {
++  /** That route's `Skim.generatedAt`, its identity. */
++  generatedAt: string;
++}
+ 
+ /**
+  * The Sketch diagram as the panel receives it — docs/project/diagram.md § Sketch.
+diff --git a/src/web/SkimPanel.tsx b/src/web/SkimPanel.tsx
+index fbfbe577a..e57d3bf1f 100644
+--- a/src/web/SkimPanel.tsx
++++ b/src/web/SkimPanel.tsx
+@@ -50,6 +50,7 @@ import {
+   Lightbulb,
+   Route,
+   TriangleAlert,
++  X,
+ } from "lucide-react";
+ import type { UseSkim } from "./useSkim.js";
+ import type { PublicSkim } from "../public-types.js";
+@@ -338,7 +339,9 @@ export function emptyHint(owner: Pick<UseSkim, "quotesFirst" | "ideasFirst">): s
+  * `outdated` itself is still read — the stop card treats outdated sources as
+  * usable. docs/plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md.
+  */
+-export function bannerReason(owner: Pick<UseSkim, "stale" | "profileChanged">): string | null {
++export function bannerReason(
++  owner: Pick<UseSkim, "stale" | "profileChanged" | "profileNoticeDismissed">,
++): string | null {
+   if (owner.stale) {
+     /* One input hash covers all three, so this read cannot honestly attribute
+        the mismatch to Quotes. `notOnRoute` is also only a present-day count: a
+@@ -346,10 +349,58 @@ export function bannerReason(owner: Pick<UseSkim, "stale" | "profileChanged">):
+        arrived later. */
+     return "The Quotes, Ideas, or outline have changed since this route was planned.";
+   }
+-  if (owner.profileChanged) return "This route was planned before your profile said what it says now.";
++  /* **Dismissible, and only this one** — Greg, 2026-10-09 (`spya-ud2w92`):
++     *"there should be a way to dismiss it if I decide that I actually don't
++     care and I don't want to plan it again."* The stale reason above is not:
++     a route over Quotes that have moved can stop where nothing is. The
++     dismissal holds for this route under this profile (src/skim.ts §
++     `profileNoticeKey`). docs/plans/261009i-skim-profile-notice-can-be-dismissed.md. */
++  if (owner.profileChanged && !owner.profileNoticeDismissed) return PROFILE_NOTICE;
+   return null;
+ }
+ 
++const PROFILE_NOTICE = "This route was planned before your profile said what it says now.";
++
++/**
++ * **The one banner over a route** (`bannerReason` says which), with *Plan it
++ * again* — and, on the profile notice only, the × that sends it away (plan
++ * 261009i). A failed × is said here, inside the banner, which is back by
++ * then; if the read shows the dismissal landed after all, there is no banner
++ * and nothing is said.
++ */
++function RouteBanner({ owner, again }: { owner: UseSkim; again: ReactNode }) {
++  const reason = bannerReason(owner);
++  if (reason === null) return null;
++  const dismissible = reason === PROFILE_NOTICE;
++  return (
++    <div className="gloss-stale">
++      <p>
++        <TriangleAlert size={13} />
++        {reason}
++        {dismissible && (
++          <Tooltip
++            content={<p>Keep this route, and stop saying so until your profile changes again.</p>}
++            placement="bottom"
++          >
++            <button
++              type="button"
++              className="skim-notice-close close-x"
++              aria-label="Dismiss: keep this route"
++              onClick={() => void owner.dismissProfileNotice()}
++            >
++              <X aria-hidden="true" />
++            </button>
++          </Tooltip>
++        )}
++      </p>
++      {dismissible && owner.dismissFailed && (
++        <p className="skim-notice-failed">Could not hide this: {owner.dismissFailed}</p>
++      )}
++      {again}
++    </div>
++  );
++}
++
+ /** The sparkline's drawing — src/web/route-spark.ts has the geometry. */
+ const SPARK_H = 26;
+ const SPARK_PAD = 4;
+@@ -682,8 +733,9 @@ export function SkimPanel({ access, view, away }: Props) {
+            docs/plans/260929b-one-place-to-re-run-ai-processing.md. */
+         owner &&
+         ready &&
+-        !owner.stale &&
+-        !owner.profileChanged &&
++        /* No banner — not "no reason for one": a dismissed profile notice
++           has no button left, so a job from Metadata shows here (plan 261009i). */
++        bannerReason(owner) === null &&
+         (owner.job || owner.starting || owner.failed || (waiting && !owner.error)) ? (
+           <div className="skim-foot">
+             <div className="skim-again">{run("Plan it again", true)}</div>
+@@ -705,15 +757,7 @@ export function SkimPanel({ access, view, away }: Props) {
+ 
+       {ready && (
+         <>
+-          {owner && bannerReason(owner) && (
+-            <div className="gloss-stale">
+-              <p>
+-                <TriangleAlert size={13} />
+-                {bannerReason(owner)}
+-              </p>
+-              {run("Plan it again", true)}
+-            </div>
+-          )}
++          {owner && <RouteBanner owner={owner} again={run("Plan it again", true)} />}
+ 
+           {/* What the route was planned for, or the question — owner only,
+               and only over a ready route (Sol F6: the empty state's automatic
+diff --git a/src/web/styles/skim.css b/src/web/styles/skim.css
+index df2cc2e96..829fe9e7d 100644
+--- a/src/web/styles/skim.css
++++ b/src/web/styles/skim.css
+@@ -240,6 +240,23 @@
+   padding-right: calc(0.7rem + var(--band-about-room));
+ }
+ 
++/* **The profile notice's ×** (plan 261009i), at the end of the banner's line.
++   Its size is close.css's; only the look is here, Marginalia's narrow
++   line's (`.marg-narrow-close`), so the two crosses that send a notice away
++   look alike. `margin-left: auto` keeps it at the right edge however the
++   sentence wraps. */
++.skim-notice-close {
++  flex: none;
++  margin-left: auto;
++  border: 0;
++  background: none;
++  color: var(--ink-faint);
++  cursor: pointer;
++}
++.skim-notice-close:hover { color: var(--ink); }
++.skim-notice-close:focus-visible { outline: 1px solid var(--highlight-text); outline-offset: 1px; }
++.skim-notice-failed { color: var(--ink-soft); font-size: 0.85rem; }
++
+ /* A rule above it, so the foot reads as being about the route rather than
+    the last row's — citations.css's `.cite-foot`. */
+ .skim-foot { padding: 0.4rem 0.7rem 0; border-top: 1px solid var(--rule); }
+diff --git a/src/web/useSkim.ts b/src/web/useSkim.ts
+index 0637bc844..b0a1b1632 100644
+--- a/src/web/useSkim.ts
++++ b/src/web/useSkim.ts
+@@ -25,7 +25,7 @@
+  * docs/project/skim.md.
+  */
+ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+-import { NONE_YET_AS_NULL_HEADER, type Job, type Skim, type SkimResponse } from "../types.js";
++import { NONE_YET_AS_NULL_HEADER, type Job, type Skim, type SkimProfileNoticeDismissalRequest, type SkimResponse } from "../types.js";
+ import { useOrderedRead } from "./useOrderedRead.js";
+ import { useFreshReads, useRewriteHold } from "./rewrite-hold.js";
+ import { type StepFailure, useStepJob } from "./useStepJob.js";
+@@ -48,6 +48,23 @@ export interface UseSkim {
+   outdated: boolean;
+   /** The route was written for another profile — including none, when you now have one. */
+   profileChanged: boolean;
++  /**
++   * The reader sent the profile-changed notice away, for this route under the
++   * profile they have now — `SkimResponse.profileNoticeDismissed`, or `true`
++   * from the moment they press its × until the server says otherwise.
++   */
++  profileNoticeDismissed: boolean;
++  /**
++   * Why the last × did not stick, once a read has shown it did not. Shown in
++   * the banner, which is back by then.
++   */
++  dismissFailed: string | null;
++  /**
++   * The banner's ×: hide the notice now and record it — plan 261009i. **A
++   * failure puts the banner back and reads the route again**, because the
++   * write may have landed before the answer was lost; the read decides.
++   */
++  dismissProfileNotice(): Promise<void>;
+   /** How many of the current Quotes are on no pass of this route. */
+   notOnRoute: number;
+   slug: string;
+@@ -100,6 +117,9 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
+   const [stale, setStale] = useState(false);
+   const [outdated, setOutdated] = useState(false);
+   const [profileChanged, setProfileChanged] = useState(false);
++  const [profileNoticeDismissed, setProfileNoticeDismissed] = useState(false);
++  /* Keyed by slug: the ×'s failure belongs to the article it was pressed on. */
++  const [dismissFailed, setDismissFailed] = useState<{ slug: string; why: string } | null>(null);
+   const [notOnRoute, setNotOnRoute] = useState(0);
+   const [error, setError] = useState<string | null>(null);
+   /* A manual press made while a prerequisite read is unresolved. Keep the
+@@ -140,6 +160,7 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
+           setStale(false);
+           setOutdated(false);
+           setProfileChanged(false);
++          setProfileNoticeDismissed(false);
+           setNotOnRoute(0);
+           landed(started, res, null);
+           setError(null);
+@@ -161,6 +182,8 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
+         setStale(loaded.stale);
+         setOutdated(loaded.outdated);
+         setProfileChanged(loaded.profileChanged);
++        /* `=== true`: a server from before the field (the minutes of a deploy) says nothing, which is "not dismissed". */
++        setProfileNoticeDismissed(loaded.profileNoticeDismissed === true);
+         setNotOnRoute(loaded.notOnRoute);
+         setError(null);
+         saidNoneFor.current = null;
+@@ -177,6 +200,31 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
+ 
+   const { reload, refresh } = useOrderedRead(load);
+ 
++  const dismissProfileNotice = useCallback(async () => {
++    if (skim === null) return;
++    const body: SkimProfileNoticeDismissalRequest = { generatedAt: skim.generatedAt };
++    setProfileNoticeDismissed(true);
++    setDismissFailed(null);
++    try {
++      const res = await apiFetch(`/api/skim/${encodeURIComponent(slug)}/profile-notice-dismissal`, {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify(body),
++      });
++      /* A 204 has no body; anything else is a JSON sentence `readJson` throws. */
++      if (!res.ok) await readJson(res);
++    } catch (err) {
++      /* Back, with why — and then the server's own answer, which hides it
++         again if the write landed after all, or if a re-plan (the 409) left
++         no notice to show. */
++      setProfileNoticeDismissed(false);
++      setDismissFailed({ slug, why: describeFetchFailure(err as Error) });
++    }
++    /* Either way, a read that was already in flight saw the route before the
++       press; trail it, so the last word is the server's. */
++    await refresh();
++  }, [skim, slug, refresh]);
++
+   const retryRead = useCallback(async () => {
+     setError(null);
+     if (skim === null) setStatus("loading");
+@@ -314,6 +362,9 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
+     stale,
+     outdated,
+     profileChanged,
++    profileNoticeDismissed,
++    dismissFailed: dismissFailed?.slug === slug ? dismissFailed.why : null,
++    dismissProfileNotice,
+     notOnRoute,
+     slug,
+     error,
+diff --git a/tests/authenticated-api-route-contract.test.ts b/tests/authenticated-api-route-contract.test.ts
+index 99e7d44fb..a8c390dd5 100644
+--- a/tests/authenticated-api-route-contract.test.ts
++++ b/tests/authenticated-api-route-contract.test.ts
+@@ -650,6 +650,12 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
+     methods: ["GET"],
+     witnesses: ["/api/skim/w1"],
+   },
++  {
++    /* Sending the profile-changed notice away — plan 261009i. Owner only, no model. */
++    match: { kind: "regex", source: "^\\/api\\/skim\\/([\\w.%-]+)\\/profile-notice-dismissal$", flags: "" },
++    methods: ["POST"],
++    witnesses: ["/api/skim/w1/profile-notice-dismissal"],
++  },
+   {
+     match: { kind: "regex", source: "^\\/api\\/debate\\/([\\w.%-]+)$", flags: "" },
+     methods: ["GET"],
+@@ -994,16 +1000,18 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
+    100 with Debate's claims list (plan 261008i of the same day, a different 'i'
+    in another tree: docs/plans/261008i-debate-claims-picked-by-the-reader.md);
+    101 with that plan's claim checks (its stage 3); 103 with the public shelf
+-   topic pills' status and Rebuild (plan 261008j). */
+-const EXPECTED_MATCHER_COUNT = 103;
++   topic pills' status and Rebuild (plan 261008j); 104 with Skim's profile
++   notice dismissal (plan 261009i). */
++const EXPECTED_MATCHER_COUNT = 104;
+ /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
+    with the admin's earlier feedback; 118 with their replies to questions; 119
+    with the Help pages' chatbot; 120 with Hidden text's Opus check; 121 with the
+    deferral of a question; 122 with Debate's claims list; 123 with the kept
+    Hidden text check's GET (plan 261009a); 125 with Debate's claim checks'
+    GET and POST (plan 261008i); 127 with the public shelf topic pills' status
+-   and Rebuild (plan 261008j). */
+-const EXPECTED_GUARD_COUNT = 127;
++   and Rebuild (plan 261008j); 128 with Skim's profile notice dismissal (plan
++   261009i). */
++const EXPECTED_GUARD_COUNT = 128;
+ 
+ /* ------------------------------------------------------------- the source read */
+ 
+@@ -2236,6 +2244,8 @@ describe("the authenticated API's route contract", () => {
+         "GET regex /^\\/api\\/crossrefs\\/([\\w.%-]+)$/",
+         "GET regex /^\\/api\\/simple\\/([\\w.%-]+)$/",
+         "GET regex /^\\/api\\/skim\\/([\\w.%-]+)$/",
++        // Skim's profile notice, 261009i
++        "POST regex /^\\/api\\/skim\\/([\\w.%-]+)\\/profile-notice-dismissal$/",
+         "GET regex /^\\/api\\/debate\\/([\\w.%-]+)$/",
+         "GET regex /^\\/api\\/citers\\/([\\w.%-]+)$/",
+         "GET regex /^\\/api\\/citations\\/([\\w.%-]+)$/",
+diff --git a/tests/close-cross.test.ts b/tests/close-cross.test.ts
+index 7a9b828f5..745c4f12e 100644
+--- a/tests/close-cross.test.ts
++++ b/tests/close-cross.test.ts
+@@ -24,6 +24,8 @@ const CLOSES: ReadonlyArray<readonly [string, string]> = [
+   /* Not a modal or a panel, but a cross a finger has to hit at tablet widths
+      (GPT Sol's F5 on plan 261006i). */
+   ["marginalia/MarginaliaColumn.tsx", "marg-narrow-close"],
++  /* The same kind: Skim's profile notice (plan 261009i). */
++  ["SkimPanel.tsx", "skim-notice-close"],
+ ];
+ 
+ /* Comments out, or the one above a rule becomes part of its selector. */
+diff --git a/tests/skim-panel.test.tsx b/tests/skim-panel.test.tsx
+index a071c174f..8961a709c 100644
+--- a/tests/skim-panel.test.tsx
++++ b/tests/skim-panel.test.tsx
+@@ -372,6 +372,9 @@ function owner(over: Partial<UseSkim> = {}): UseSkim {
+     stale: false,
+     outdated: false,
+     profileChanged: false,
++    profileNoticeDismissed: false,
++    dismissFailed: null,
++    dismissProfileNotice: async () => {},
+     notOnRoute: 0,
+     slug: "a-route",
+     error: null,
+@@ -1149,7 +1152,44 @@ describe("the panel", () => {
+     expect(host.textContent).not.toContain("older version of the prompt");
+     await draw(owner({ outdated: true, profileChanged: true }), view());
+     expect(text(".gloss-stale")).toContain("before your profile said what it says now");
+-    expect(host.querySelector(".gloss-stale button")?.textContent).toBe("Plan it again");
++    /* Beside the ×, plan 261009i. */
++    expect(
++      [...host.querySelectorAll(".gloss-stale button:not(.skim-notice-close)")].map((b) => b.textContent),
++    ).toEqual(["Plan it again"]);
++  });
++
++  /* Greg, 2026-10-09 (spya-ud2w92): the profile notice can be sent away;
++     plan 261009i. */
++  describe("the profile notice's ×", () => {
++    it("is on the profile notice, and pressing it asks the owner to dismiss", async () => {
++      let dismissed = 0;
++      await draw(owner({ profileChanged: true, dismissProfileNotice: async () => void dismissed++ }), view());
++      const close = host.querySelector<HTMLButtonElement>(".gloss-stale .skim-notice-close");
++      expect(close, "no × on the profile notice").toBeTruthy();
++      expect(close?.getAttribute("aria-label")).toContain("Dismiss");
++      await act(async () => close?.click());
++      expect(dismissed).toBe(1);
++    });
++
++    it("hides the banner once dismissed, and a job then shows in the foot", async () => {
++      await draw(owner({ profileChanged: true, profileNoticeDismissed: true }), view());
++      expect(host.querySelector(".gloss-stale")).toBeNull();
++      await draw(owner({ profileChanged: true, profileNoticeDismissed: true, job: RUNNING_SKIM_JOB }), view());
++      expect(host.querySelector(".skim-again")?.textContent, "a job after a dismissal shows nowhere").toContain("Stop");
++    });
++
++    it("is not on the stale banner, which a dismissal does not hide", async () => {
++      await draw(owner({ stale: true, profileChanged: true, profileNoticeDismissed: true }), view());
++      expect(text(".gloss-stale")).toContain("have changed since this route was planned");
++      expect(host.querySelector(".skim-notice-close")).toBeNull();
++      await draw(owner({ stale: true, profileChanged: true }), view());
++      expect(host.querySelector(".skim-notice-close")).toBeNull();
++    });
++
++    it("says why when a dismissal did not stick", async () => {
++      await draw(owner({ profileChanged: true, dismissFailed: "The server could not be reached." }), view());
++      expect(text(".skim-notice-failed")).toContain("The server could not be reached.");
++    });
+   });
+ 
+   it("shows a running job in the foot on an outdated route", async () => {
+diff --git a/tests/skim-profile-notice-route.test.ts b/tests/skim-profile-notice-route.test.ts
+new file mode 100644
+index 000000000..2a93b60e7
+--- /dev/null
++++ b/tests/skim-profile-notice-route.test.ts
+@@ -0,0 +1,250 @@
++/**
++ * **Sending Skim's profile-changed notice away, through the route and
++ * Postgres** — `POST /api/skim/:slug/profile-notice-dismissal`,
++ * src/store/pg-skim-notice.ts, and `GET /api/skim/:slug`'s
++ * `profileNoticeDismissed`. docs/plans/261009i-skim-profile-notice-can-be-dismissed.md
++ * (Greg, 2026-10-09, `spya-ud2w92`).
++ *
++ * The reader's profile is the test owner's global half, which other suites
++ * own, plus this article's `purpose`, which this file owns — so every change
++ * of profile here is a change of `purpose`, and no assertion needs to know
++ * what the global half says. The one place the current hash is needed, it is
++ * read back out of a stored key.
++ *
++ * 1. **A round trip**: dismissed, the read says so, and the time is stored.
++ * 2. **It holds for that route under that profile**: a further profile change
++ *    brings it back, changing back hides it again, and a re-plan — even under
++ *    the same profile hash — brings it back.
++ * 3. **An old `generatedAt` is a 409** and writes nothing.
++ * 4. **Nothing to dismiss is a 204 and writes nothing.**
++ * 5. **A second dismiss moves the time forward.**
++ * 6. **A stranger's slug, an article with no route, and a bad body.**
++ */
++import type { IncomingMessage, ServerResponse } from "node:http";
++import { eq } from "drizzle-orm";
++import { afterAll, beforeAll, describe, expect, it } from "vitest";
++
++import { closeDb, getDb } from "../src/db/client.js";
++import { articleRevisions, articles } from "../src/db/schema.js";
++import { loadEnvLocal } from "../src/env.js";
++import { EVAL_OWNER_ID } from "../src/owner.js";
++import type { Skim, SkimResponse } from "../src/types.js";
++import { acceptAny, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
++import { pgReady } from "./helpers/pg-ready.js";
++import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
++
++loadEnvLocal();
++
++const SLUG = "test-skim-profile-notice-route";
++const STRANGERS = "test-skim-profile-notice-route-strangers";
++const ROUTELESS = "test-skim-profile-notice-route-routeless";
++
++/** A profile hash nobody's profile has, so the notice is up whatever the global half says. */
++const NOBODYS = "f".repeat(64);
++const FIRST = "2026-10-09T01:00:00.000Z";
++const SECOND = "2026-10-09T02:00:00.000Z";
++
++await pgReady({
++  suite: "tests/skim-profile-notice-route.test.ts",
++  tables: ["spideryarn.articles", "spideryarn.article_revisions"],
++});
++
++const { handleApi } = await import("../src/routes.js");
++
++let article: ScratchArticle | undefined;
++let strangers: ScratchArticle | undefined;
++let routeless: ScratchArticle | undefined;
++
++async function revisionOf(which: ScratchArticle | undefined): Promise<string> {
++  if (!which) throw new Error("no scratch article");
++  const [row] = await getDb()
++    .select({ revisionId: articles.currentRevisionId })
++    .from(articles)
++    .where(eq(articles.id, which.articleId));
++  if (!row?.revisionId) throw new Error(`${which.slug} has no current revision`);
++  return row.revisionId;
++}
++
++/** Put a one-stop route on the article, as the step would after a (re-)plan. */
++async function plan(which: ScratchArticle | undefined, generatedAt: string, profileHash: string | null) {
++  const route: Skim = {
++    version: "test",
++    generator: "test",
++    slug: which?.slug ?? "",
++    sourceHash: "hash",
++    profileHash,
++    stops: [{ quoteId: "spya-sk2nqt", depth: 1, role: null, cue: "Look." }],
++    visible: [1, 1, 1],
++    offered: 1,
++    dropped: { unknownQuote: 0, duplicate: 0, sameBlock: 0, malformed: 0, badRole: 0, overCap: 0, collapsed: 0 },
++    generatedAt,
++    elapsedMs: 1,
++  };
++  await getDb()
++    .update(articleRevisions)
++    .set({ skim: route })
++    .where(eq(articleRevisions.id, await revisionOf(which)));
++}
++
++async function setPurpose(which: ScratchArticle | undefined, purpose: string | null) {
++  await getDb().update(articles).set({ purpose }).where(eq(articles.id, which?.articleId ?? ""));
++}
++
++async function stored(which: ScratchArticle | undefined) {
++  const [row] = await getDb()
++    .select({ key: articles.skimProfileNoticeDismissedFor, at: articles.skimProfileNoticeDismissedAt })
++    .from(articles)
++    .where(eq(articles.id, which?.articleId ?? ""));
++  return row ?? { key: null, at: null };
++}
++
++beforeAll(async () => {
++  article = await scratchArticleInPg(SLUG, { ownerId: TEST_OWNER });
++  /* Owned by somebody else: the requests below authenticate as `TEST_OWNER`. */
++  strangers = await scratchArticleInPg(STRANGERS, { ownerId: EVAL_OWNER_ID });
++  routeless = await scratchArticleInPg(ROUTELESS, { ownerId: TEST_OWNER });
++  await plan(article, FIRST, NOBODYS);
++  await plan(strangers, FIRST, NOBODYS);
++  await getDb()
++    .update(articleRevisions)
++    .set({ skim: null })
++    .where(eq(articleRevisions.id, await revisionOf(routeless)));
++}, 120_000);
++
++afterAll(async () => {
++  await article?.remove();
++  await strangers?.remove();
++  await routeless?.remove();
++  await closeDb();
++});
++
++async function request(method: string, url: string, body?: unknown): Promise<{ status: number; body: unknown }> {
++  const chunks = body === undefined ? [] : [Buffer.from(JSON.stringify(body))];
++  const req = Object.assign(
++    (async function* () {
++      yield* chunks;
++    })(),
++    { method, url, headers: { ...AUTHED_HEADERS, "content-type": "application/json" } },
++  ) as unknown as IncomingMessage;
++  let written = "";
++  const res = {
++    statusCode: 0,
++    writableEnded: false,
++    destroyed: false,
++    setHeader() {},
++    writeHead(s: number) {
++      (this as { statusCode: number }).statusCode = s;
++    },
++    flushHeaders() {},
++    on() {},
++    write(piece: string) {
++      written += piece;
++      return true;
++    },
++    end(piece?: string) {
++      if (piece) written += piece;
++      (this as { writableEnded: boolean }).writableEnded = true;
++    },
++  } as unknown as ServerResponse;
++  await handleApi(req, res, acceptAny);
++  return {
++    status: (res as unknown as { statusCode: number }).statusCode,
++    body: written ? JSON.parse(written) : null,
++  };
++}
++
++const dismiss = (slug: string, generatedAt: unknown) =>
++  request("POST", `/api/skim/${slug}/profile-notice-dismissal`, { generatedAt });
++
++async function read(slug: string): Promise<SkimResponse> {
++  const got = await request("GET", `/api/skim/${slug}`);
++  expect(got.status).toBe(200);
++  return got.body as SkimResponse;
++}
++
++describe("POST /api/skim/:slug/profile-notice-dismissal", () => {
++  it("dismisses the notice, the read says so, and the time is stored", async () => {
++    await setPurpose(article, "to see whether attention is all you need");
++    const before = await read(SLUG);
++    expect(before.profileChanged).toBe(true);
++    expect(before.profileNoticeDismissed).toBe(false);
++    expect("profileNoticeDismissedFor" in before, "the stored key leaked into the reply").toBe(false);
++
++    expect((await dismiss(SLUG, FIRST)).status).toBe(204);
++    const after = await read(SLUG);
++    expect(after.profileChanged).toBe(true);
++    expect(after.profileNoticeDismissed).toBe(true);
++    const row = await stored(article);
++    expect(row.key?.startsWith(`${FIRST} `)).toBe(true);
++    expect(row.at).toBeInstanceOf(Date);
++  });
++
++  it("comes back when the profile changes again, and goes when it changes back", async () => {
++    await setPurpose(article, "to see whether attention is all you need");
++    expect((await dismiss(SLUG, FIRST)).status).toBe(204);
++    await setPurpose(article, "for a reading group on transformers");
++    expect((await read(SLUG)).profileNoticeDismissed).toBe(false);
++    await setPurpose(article, "to see whether attention is all you need");
++    expect((await read(SLUG)).profileNoticeDismissed).toBe(true);
++  });
++
++  it("comes back after a re-plan, even one under the profile hash the old route had", async () => {
++    await setPurpose(article, "to see whether attention is all you need");
++    await plan(article, FIRST, NOBODYS);
++    expect((await dismiss(SLUG, FIRST)).status).toBe(204);
++    /* GPT Sol's plan review, finding 1: the same stamp, a new route. */
++    await plan(article, SECOND, NOBODYS);
++    const got = await read(SLUG);
++    expect(got.profileChanged).toBe(true);
++    expect(got.profileNoticeDismissed).toBe(false);
++  });
++
++  it("refuses a route that is no longer the one on the article, and writes nothing", async () => {
++    await plan(article, SECOND, NOBODYS);
++    await setPurpose(article, "something written only for this case");
++    const was = await stored(article);
++    expect((await dismiss(SLUG, FIRST)).status).toBe(409);
++    expect(await stored(article)).toEqual(was);
++  });
++
++  it("answers 204 and writes nothing when there is no notice to dismiss", async () => {
++    await setPurpose(article, "to see whether attention is all you need");
++    await plan(article, SECOND, NOBODYS);
++    expect((await dismiss(SLUG, SECOND)).status).toBe(204);
++    /* The hash the server sees now, read back out of the key it just stored. */
++    const nowHash = (await stored(article)).key?.split(" ")[1];
++    expect(nowHash).toMatch(/^[0-9a-f]+$/);
++    await plan(article, FIRST, nowHash ?? null);
++    expect((await read(SLUG)).profileChanged).toBe(false);
++    const was = await stored(article);
++    expect((await dismiss(SLUG, FIRST)).status).toBe(204);
++    expect(await stored(article)).toEqual(was);
++    await plan(article, FIRST, NOBODYS);
++  });
++
++  it("moves the time forward on a second dismiss", async () => {
++    await plan(article, FIRST, NOBODYS);
++    expect((await dismiss(SLUG, FIRST)).status).toBe(204);
++    const first = (await stored(article)).at;
++    await new Promise((resolve) => setTimeout(resolve, 20));
++    expect((await dismiss(SLUG, FIRST)).status).toBe(204);
++    const second = (await stored(article)).at;
++    expect(second && first && second.getTime() > first.getTime()).toBe(true);
++  });
++
++  it("is a 404 on a stranger's slug and writes nothing there", async () => {
++    expect((await dismiss(STRANGERS, FIRST)).status).toBe(404);
++    expect(await stored(strangers)).toEqual({ key: null, at: null });
++  });
++
++  it("is a 404 on an article with no route", async () => {
++    expect((await dismiss(ROUTELESS, FIRST)).status).toBe(404);
++    expect(await stored(routeless)).toEqual({ key: null, at: null });
++  });
++
++  it("is a 400 on a body without a route's time, or with anything else", async () => {
++    expect((await dismiss(SLUG, 7)).status).toBe(400);
++    expect((await dismiss(SLUG, "")).status).toBe(400);
++    expect((await request("POST", `/api/skim/${SLUG}/profile-notice-dismissal`, { generatedAt: FIRST, x: 1 })).status).toBe(400);
++  });
++});
+diff --git a/tests/skim-purpose-line.test.tsx b/tests/skim-purpose-line.test.tsx
+index 42cef0ee8..aa39e9dc6 100644
+--- a/tests/skim-purpose-line.test.tsx
++++ b/tests/skim-purpose-line.test.tsx
+@@ -89,6 +89,9 @@ function owner(over: Partial<UseSkim> = {}): UseSkim {
+     stale: false,
+     outdated: false,
+     profileChanged: false,
++    profileNoticeDismissed: false,
++    dismissFailed: null,
++    dismissProfileNotice: async () => {},
+     notOnRoute: 0,
+     slug: "a-route",
+     error: null,
+diff --git a/tests/store-migration-registry.ts b/tests/store-migration-registry.ts
+index fffbfbbf3..a22b4ac2d 100644
+--- a/tests/store-migration-registry.ts
++++ b/tests/store-migration-registry.ts
+@@ -2016,6 +2016,18 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
+       "seeder's copy step, as for `tests/reading-time-route.test.ts`. Read off the graph, not " +
+       "re-witnessed.",
+   },
++  "tests/skim-profile-notice-route.test.ts": {
++    category: "shared-mechanism-collateral",
++    mechanisms: ["fixture-loader"],
++    evidence: "static-only",
++    reason:
++      "Arrived after the witness ran, with dismissing Skim's profile notice (plan 261009i, " +
++      "2026-10-09). It seeds three articles with `scratchArticleInPg`, writes a route onto each, " +
++      "and drives `POST /api/skim/:slug/profile-notice-dismissal` and `GET /api/skim/:slug` " +
++      "through `handleApi` — entirely Postgres. Its reach into the condemned modules is the " +
++      "seeder's copy step, as for `tests/glossary-hidden-route.test.ts`. Read off the graph, not " +
++      "re-witnessed.",
++  },
+   "tests/quiz-attempts-route.test.ts": {
+     category: "shared-mechanism-collateral",
+     mechanisms: ["fixture-loader"],
+@@ -2997,6 +3009,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
+      glossary hide PUT and DELETE and the owner's GET through the route,
+      reading rows back out of `glossary_hidden_entries`. No model is called. */
+   "tests/glossary-hidden-route.test.ts": "private-postgres",
++  /* Seeds three articles, writes a Skim route on two, and drives the profile
++     notice's dismissal POST and the owner's GET through the route, reading the
++     two `articles` columns back. No model is called. */
++  "tests/skim-profile-notice-route.test.ts": "private-postgres",
+   /* Seeds three articles with a quiz each and drives the quiz mark POST and
+      the owner's GET through the route, reading rows back out of
+      `quiz_attempts`. The marker is a script; no model is called. */

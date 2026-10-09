@@ -27,7 +27,7 @@
  */
 import { type ReactNode, createElement } from "react";
 import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
+import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { resetMicrophoneLock } from "../src/web/mic-lock.js";
@@ -215,6 +215,10 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  /* Unmount before restoring globals, even when a test forgot or failed
+     before cleanup. A live hook's stall tick must not outlive jsdom.
+     docs/postmortems/261009e-live-stall-tick-outlived-the-test.md. */
+  for (const unmount of mounted) unmount();
   vi.unstubAllGlobals();
   resetMicrophoneLock();
 });
@@ -268,6 +272,9 @@ function wiringFor(ticket: LiveTicket): LiveWiring {
   };
 }
 
+/** The unmount of every hook still mounted; `afterEach` empties it. */
+const mounted = new Set<() => void>();
+
 function mount(opts: LiveOptions) {
   let api: ReturnType<typeof useLiveConversation> | null = null;
   function Probe(): ReactNode {
@@ -276,17 +283,20 @@ function mount(opts: LiveOptions) {
   }
   const host = document.createElement("div");
   document.body.appendChild(host);
-  let root!: Root;
-  act(() => {
-    root = createRoot(host);
-    root.render(createElement(Probe));
-  });
+  const root = createRoot(host);
+  const unmount = () => {
+    if (!mounted.delete(unmount)) return;
+    act(() => root.unmount());
+    host.remove();
+  };
+  mounted.add(unmount);
+  act(() => root.render(createElement(Probe)));
   return {
     get: () => {
       if (!api) throw new Error("the hook never rendered");
       return api;
     },
-    unmount: () => act(() => root.unmount()),
+    unmount,
   };
 }
 

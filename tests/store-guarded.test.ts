@@ -164,6 +164,7 @@ describe("every Postgres store, asked for the seam it was guarded under", () => 
     ["../src/store/pg-source-guesses.js", "pgSourceGuessStore", "source-guesses"],
     ["../src/store/pg-reading-time.js", "pgReadingTimeStore", "reading-time"],
     ["../src/store/pg-glossary-hidden.js", "pgGlossaryHiddenStore", "glossary-hidden"],
+    ["../src/store/pg-skim-notice.js", "pgSkimNoticeStore", "skim-notice"],
     ["../src/store/pg-quiz-attempts.js", "pgQuizAttemptStore", "quiz-attempts"],
     ["../src/store/pg-admin.js", "pgAdminStore", "admin"],
     ["../src/store/pg-visibility.js", "pgVisibilityStore", "visibility"],
@@ -401,6 +402,7 @@ describe("no Postgres store is selected without a guard", () => {
       /* The shelf's filter topics, 2026-09-28: its parameters are the
          reader's own articles' phrases. */
       "pgShelfTermsStore",
+      "pgSkimNoticeStore",
       /* An upload's guessed web address, 2026-09-29: its parameter is where
          somebody's upload lives. */
       "pgSourceGuessStore",

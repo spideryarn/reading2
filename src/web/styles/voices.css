@@ -81,6 +81,9 @@
     .tl-phrase,
     /* Diagram's footer card: the link text or quoted line, not the score */
     .diag-card-linkquote,
+    /* the article's title in the guide's greeting (plan 261009i): meta.title,
+       the author's, never a rename */
+    .guide-greeting-title,
     /* Whatever computed its voice and found the author's: a Structure title
        that is the author's heading kept, a shelf blurb that is the excerpt,
        an article's title (src/web/voice.ts § voiceClass). */
@@ -280,7 +283,9 @@
     .fb-question-answer-body,
     .fb-reply-input,
     .ill-steer-input,
-    .cmdbar-input
+    .cmdbar-input,
+    /* About you or the reason, quoted back in the guide's greeting (261009i) */
+    .guide-greeting-reader
 ) {
     font-family: var(--font-reader);
 }

@@ -7,10 +7,12 @@
  * - **the pinned row**, above the list and outside its source filter, there
  *   under every `?chatfrom=` and with no conversation at all, and a press on
  *   it opens the guide (GPT Sol's F2);
- * - **the greeting**, ours and free: the *Why you're reading this one* box
- *   only when no reason is stored, *Ask the guide where to start* only when
- *   one is, a line about the profile only when *About you* is empty, and
- *   neither box nor button when the reason could not be read (F5).
+ * - **the greeting**, ours and free, asking in the conversation since plan
+ *   261009i (no box): why you are reading when no reason is stored, About you
+ *   quoted back when it is there, *Ask the guide where to start* only when a
+ *   reason is stored, nothing asked or offered when the reason could not be
+ *   read; and *Keep this as why you're reading* under the reader's first
+ *   answer, which never overwrites a reason stored meanwhile.
  *
  * The real `ChatPanel`, handed props directly, as
  * tests/chat-list-sources.test.tsx does. What the band hands it is
@@ -21,6 +23,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatThread, ThreadKind } from "../src/types.js";
 import { forgetChatDrafts } from "../src/web/chat-draft.js";
+import type { LiveApi } from "../src/web/live/useLiveConversation.js";
 import type { ChatFrom } from "../src/web/params.js";
 
 /** What `GET /api/reader?slug=` answers. */
@@ -30,6 +33,12 @@ let reader: { profile: string | null; purpose: string | null; purposeFailed: boo
   purposeFailed: false,
 };
 const patches: unknown[] = [];
+/** When set, the next PATCH writes and then answers 500, as a reply lost after the write. */
+let patchLosesReply = false;
+/** Something to run before the reader read answers: another tab saving. */
+let beforeRead: (() => void) | null = null;
+/** A deliberately slow opening read, for the race between the greeting and a first send. */
+let delayedRead: Promise<Response> | null = null;
 
 vi.mock("../src/web/lib/api.js", async () => {
   const real = await vi.importActual<typeof import("../src/web/lib/api.js")>("../src/web/lib/api.js");
@@ -42,16 +51,23 @@ vi.mock("../src/web/lib/api.js", async () => {
         const body = JSON.parse(String(init?.body ?? "{}")) as { purpose: string | null };
         patches.push(body);
         reader = { ...reader, purpose: body.purpose };
+        if (patchLosesReply) return Promise.resolve(new Response("{}", { status: 500 }));
         return Promise.resolve(json({ purpose: body.purpose }));
       }
-      if (String(url).startsWith("/api/reader")) return Promise.resolve(json(reader));
+      if (String(url).startsWith("/api/reader")) {
+        beforeRead?.();
+        if (delayedRead !== null) return delayedRead;
+        return Promise.resolve(json(reader));
+      }
       return Promise.resolve(json({}));
     },
   };
 });
 
 const { ChatPanel } = await import("../src/web/ChatPanel.js");
-const { GUIDE_FIRST_QUESTION, GUIDE_START_LABEL } = await import("../src/web/GuideGreeting.js");
+const { GUIDE_FIRST_QUESTION, GUIDE_START_LABEL, KEEP_REASON_LABEL, KEPT_REASON_LABEL } = await import(
+  "../src/web/GuideGreeting.js"
+);
 
 const AT = "2026-10-07T09:00:00.000Z";
 
@@ -82,12 +98,16 @@ let root: Root;
 const sent: string[] = [];
 let guideOpened = 0;
 
-function paint(listed: ChatThread[], over: { from?: ChatFrom | null; threadId?: string | null; guide?: ChatThread | null } = {}) {
+function paint(
+  listed: ChatThread[],
+  over: { from?: ChatFrom | null; threadId?: string | null; guide?: ChatThread | null; live?: LiveApi } = {},
+) {
   const guide = over.guide ?? null;
   act(() => {
     root.render(
       createElement(ChatPanel, {
         slug: "a-piece",
+        articleTitle: "Attention Is All You Need",
         kind: "chat" as const,
         loaded: true,
         loadFailed: false,
@@ -119,6 +139,7 @@ function paint(listed: ChatThread[], over: { from?: ChatFrom | null; threadId?: 
         onJump: () => {},
         recovering: new Set<string>(),
         blocks: new Map<string, string>(),
+        live: over.live,
         focusNonce: 0,
         error: null,
       }),
@@ -138,6 +159,9 @@ beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   reader = { profile: null, purpose: null, purposeFailed: false };
   patches.length = 0;
+  patchLosesReply = false;
+  beforeRead = null;
+  delayedRead = null;
   sent.length = 0;
   guideOpened = 0;
   forgetChatDrafts();
@@ -189,54 +213,52 @@ describe("the guide's greeting", () => {
     paint([CHAT], { guide: EMPTY_GUIDE, threadId: EMPTY_GUIDE.id });
     await settle();
   };
-  const box = () => host.querySelector<HTMLTextAreaElement>("#guide-purpose");
-  const startButton = () =>
-    [...host.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === GUIDE_START_LABEL);
+  const button = (label: string) =>
+    [...host.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === label);
+  const startButton = () => button(GUIDE_START_LABEL);
+  const keepButton = () => button(KEEP_REASON_LABEL);
+  /** The reader answers: the same mount, now with their first message in it. */
+  const answer = async (text: string) => {
+    const said = thread(EMPTY_GUIDE.id, "guide", {
+      messages: [{ id: "spya-gdeq01", role: "user", text, createdAt: AT, status: "done" }],
+    });
+    paint([CHAT], { guide: said, threadId: said.id });
+    await settle();
+  };
+  const press = async (b: HTMLButtonElement | undefined) => {
+    await act(async () => b?.click());
+    await settle();
+  };
 
-  it("says what the guide is for, and is headed Guide", async () => {
+  it("welcomes them to the piece by name, asks why, and draws no box; the panel is headed Guide", async () => {
     await greeting();
-    expect(host.textContent).toContain("I'm here to help you read this piece well");
+    expect(host.textContent).toContain("Hi, I'm your guide to Attention Is All You Need.");
+    expect(host.textContent).toContain("Why are you reading it?");
+    expect(host.querySelector("textarea#guide-purpose")).toBeNull();
+    expect(startButton()).toBeUndefined();
     expect(host.querySelector("h2")?.textContent).toBe("Guide");
   });
 
-  it("holds the reason box, and no start button, when no reason is stored", async () => {
+  it("quotes About you back and asks if it is still right, when there is one", async () => {
+    reader = { ...reader, profile: "A cognitive neuroscientist   who studies memory" };
     await greeting();
-    expect(box()).not.toBeNull();
-    expect(host.textContent).toContain("You can answer in the box above, or just type below.");
-    expect(startButton()).toBeUndefined();
+    expect(host.textContent).toContain("In About you, you wrote “A cognitive neuroscientist who studies memory”. Is that still right?");
+    expect(host.textContent).toContain("why are you reading this one?");
   });
 
-  it("offers the start button, and no box, when a reason is stored; the press sends the fixed question", async () => {
+  it("offers the start button, and asks nothing, when a reason is stored; the press sends the fixed question", async () => {
     reader = { ...reader, purpose: "I review for a journal" };
     await greeting();
-    expect(box()).toBeNull();
-    expect(host.textContent).not.toContain("Tell me why you're reading it");
-    const button = startButton();
-    expect(button).toBeDefined();
-    act(() => button?.click());
+    expect(host.textContent).toContain("You said you're reading it because “I review for a journal”.");
+    expect(host.textContent).not.toContain("Why are you reading it?");
+    const start = startButton();
+    expect(start).toBeDefined();
+    act(() => start?.click());
     expect(sent).toEqual([GUIDE_FIRST_QUESTION]);
   });
 
-  it("offers the start button once the reader's own reason has been saved from the box", async () => {
-    await greeting();
-    const field = box();
-    if (!field) throw new Error("no box");
-    await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
-      setter?.call(field, "To find the method");
-      field.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await act(async () => {
-      field.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
-      field.blur();
-    });
-    await settle();
-    expect(patches).toEqual([{ purpose: "To find the method" }]);
-    expect(startButton()).toBeDefined();
-    expect(sent, "saving the reason sends nothing").toEqual([]);
-  });
-
-  it("points at the profile only when About you is empty", async () => {
+  it("points at the profile only when a reason is stored and About you is empty", async () => {
+    reader = { ...reader, purpose: "For a journal club" };
     await greeting();
     expect(host.querySelector('a[href="/profile"]')).not.toBeNull();
     act(() => root.unmount());
@@ -249,7 +271,128 @@ describe("the guide's greeting", () => {
   it("asks nothing and offers nothing when the reason could not be read", async () => {
     reader = { ...reader, purposeFailed: true };
     await greeting();
-    expect(box()).toBeNull();
+    expect(host.textContent).not.toContain("Why are you reading");
     expect(startButton()).toBeUndefined();
+    await answer("For my journal club");
+    expect(keepButton()).toBeUndefined();
+  });
+
+  it("stays above the reader's answer, and keeps their own words as the reason only on a press", async () => {
+    await greeting();
+    await answer("For my journal club\r\n next week  ");
+    expect(host.textContent).toContain("Why are you reading it?");
+    expect(patches, "nothing is saved before the press").toEqual([]);
+    await press(keepButton());
+    expect(patches).toEqual([{ purpose: "For my journal club\n next week" }]);
+    expect(host.textContent).toContain(KEPT_REASON_LABEL);
+    expect(sent, "keeping it sends nothing").toEqual([]);
+  });
+
+  it("does not turn a message sent before the purpose read into an answer to a greeting shown later", async () => {
+    let answerRead: ((response: Response) => void) | undefined;
+    delayedRead = new Promise<Response>((resolve) => {
+      answerRead = resolve;
+    });
+    paint([CHAT], { guide: EMPTY_GUIDE, threadId: EMPTY_GUIDE.id });
+    await answer("Where should I start?");
+    expect(host.textContent).not.toContain("Why are you reading it?");
+
+    delayedRead = null;
+    await act(async () =>
+      answerRead?.(
+        new Response(JSON.stringify(reader), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
+    await settle();
+    expect(host.textContent).not.toContain("Why are you reading it?");
+    expect(keepButton()).toBeUndefined();
+  });
+
+  it("does not put a late greeting above the first spoken words", async () => {
+    let answerRead: ((response: Response) => void) | undefined;
+    delayedRead = new Promise<Response>((resolve) => {
+      answerRead = resolve;
+    });
+    const live = {
+      lines: [
+        {
+          id: "spoken-1",
+          role: "reader",
+          text: "Where should I start?",
+          done: false,
+          exchange: "spoken-1",
+          session: 0,
+          order: 0,
+        },
+      ],
+    } as unknown as LiveApi;
+    paint([CHAT], { guide: EMPTY_GUIDE, threadId: EMPTY_GUIDE.id, live });
+    await settle();
+
+    delayedRead = null;
+    await act(async () =>
+      answerRead?.(
+        new Response(JSON.stringify(reader), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
+    await settle();
+    expect(host.textContent).not.toContain("Why are you reading it?");
+  });
+
+  it("never overwrites a reason saved elsewhere since the greeting read", async () => {
+    await greeting();
+    await answer("For my journal club");
+    beforeRead = () => {
+      reader = { ...reader, purpose: "Written on Metadata in another tab" };
+    };
+    await press(keepButton());
+    expect(patches).toEqual([]);
+    expect(host.textContent).toContain("You had already saved a reason for this one");
+  });
+
+  it("writes once for a double press", async () => {
+    await greeting();
+    await answer("For my journal club");
+    const keep = keepButton();
+    await act(async () => {
+      keep?.click();
+      keep?.click();
+    });
+    await settle();
+    expect(patches).toHaveLength(1);
+  });
+
+  it("calls a save whose reply was lost kept, when the server has it", async () => {
+    await greeting();
+    await answer("For my journal club");
+    patchLosesReply = true;
+    await press(keepButton());
+    expect(patches).toHaveLength(1);
+    expect(host.textContent).toContain(KEPT_REASON_LABEL);
+  });
+
+  it("offers Metadata instead of cutting a message too long to keep", async () => {
+    await greeting();
+    await answer("x".repeat(601));
+    expect(keepButton()).toBeUndefined();
+    expect(host.textContent).toContain("Too long to keep");
+    act(() => root.unmount());
+    root = createRoot(host);
+    await greeting();
+    await answer("x".repeat(600));
+    expect(keepButton()).toBeDefined();
+  });
+
+  it("draws no greeting and no keep button on a guide that already had turns", async () => {
+    paint([CHAT], { guide: thread("spya-gdeacc", "guide"), threadId: "spya-gdeacc" });
+    await settle();
+    expect(host.textContent).not.toContain("I'm your guide");
+    expect(keepButton()).toBeUndefined();
   });
 });

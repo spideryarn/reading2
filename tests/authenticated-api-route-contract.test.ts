@@ -651,6 +651,12 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/skim/w1"],
   },
   {
+    /* Sending the profile-changed notice away — plan 261009i. Owner only, no model. */
+    match: { kind: "regex", source: "^\\/api\\/skim\\/([\\w.%-]+)\\/profile-notice-dismissal$", flags: "" },
+    methods: ["POST"],
+    witnesses: ["/api/skim/w1/profile-notice-dismissal"],
+  },
+  {
     match: { kind: "regex", source: "^\\/api\\/debate\\/([\\w.%-]+)$", flags: "" },
     methods: ["GET"],
     witnesses: ["/api/debate/w1"],
@@ -994,16 +1000,18 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
    100 with Debate's claims list (plan 261008i of the same day, a different 'i'
    in another tree: docs/plans/261008i-debate-claims-picked-by-the-reader.md);
    101 with that plan's claim checks (its stage 3); 103 with the public shelf
-   topic pills' status and Rebuild (plan 261008j). */
-const EXPECTED_MATCHER_COUNT = 103;
+   topic pills' status and Rebuild (plan 261008j); 104 with Skim's profile
+   notice dismissal (plan 261009i). */
+const EXPECTED_MATCHER_COUNT = 104;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
    with the admin's earlier feedback; 118 with their replies to questions; 119
    with the Help pages' chatbot; 120 with Hidden text's Opus check; 121 with the
    deferral of a question; 122 with Debate's claims list; 123 with the kept
    Hidden text check's GET (plan 261009a); 125 with Debate's claim checks'
    GET and POST (plan 261008i); 127 with the public shelf topic pills' status
-   and Rebuild (plan 261008j). */
-const EXPECTED_GUARD_COUNT = 127;
+   and Rebuild (plan 261008j); 128 with Skim's profile notice dismissal (plan
+   261009i). */
+const EXPECTED_GUARD_COUNT = 128;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2236,6 +2244,8 @@ describe("the authenticated API's route contract", () => {
         "GET regex /^\\/api\\/crossrefs\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/simple\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/skim\\/([\\w.%-]+)$/",
+        // Skim's profile notice, 261009i
+        "POST regex /^\\/api\\/skim\\/([\\w.%-]+)\\/profile-notice-dismissal$/",
         "GET regex /^\\/api\\/debate\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/citers\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/citations\\/([\\w.%-]+)$/",

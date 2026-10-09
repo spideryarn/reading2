@@ -250,7 +250,8 @@ public projection that a pipeline step already has.
 - **Should a visitor to a shared article see the claims you checked?** As built they see the
   article's claim list and the old search's claims, but not your checks: a check may be a claim
   you typed, in your own words. Showing visitors the checks of the article's own listed claims
-  (never a typed one) is a small follow-up. Asked as [q-cgwene](../user-feedback/questions/q-cgwene.md).
+  (never a typed one) is a small follow-up. Asked as [q-cgwene](../user-feedback/questions/q-cgwene.md). **Answered 2026-10-09: A for now** —
+  leave it as built; nothing to do.
 
 ## Review ledger
 

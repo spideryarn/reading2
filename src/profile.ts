@@ -48,21 +48,12 @@ import { createHash } from "node:crypto";
    types.ts is pure and already shared. */
 export { MAX_PROFILE_CHARS, MAX_PURPOSE_CHARS } from "./types.js";
 
-/**
- * Trim it, settle the line endings, and call whitespace-only nothing.
- *
- * `\r\n` first, because a paste from a Windows-authored document carries them
- * and they are invisible in every surface a reader or a reviewer would look at
- * — including a diff of the hash's input, which is the one place it would
- * matter. Returns `null` rather than `""` so that "the reader emptied the box"
- * and "the reader never touched it" cannot be told apart *here*; whoever cares
- * about that distinction holds it above this line.
- */
-export function normaliseProfileText(text: string | null | undefined): string | null {
-  if (!text) return null;
-  const clean = text.replace(/\r\n/g, "\n").trim();
-  return clean.length > 0 ? clean : null;
-}
+/* `normaliseProfileText` lives in types.ts since plan 261009i, where the
+   browser can reach it too (the guide's *Keep this as why you're reading*
+   offers only words that fit once stored); re-exported because this is where
+   the server's callers look. */
+import { normaliseProfileText } from "./types.js";
+export { normaliseProfileText };
 
 /**
  * The two halves as one block of prompt text, or `null` when there is nothing

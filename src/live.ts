@@ -59,9 +59,11 @@ import { createHash } from "node:crypto";
 import { answerAsSeen } from "./recall-hint.js";
 import type { Block, ChatMessage, Meta, MicPlacement, ThreadKind } from "./types.js";
 import { articleWithIds } from "./article-prompt.js";
-import { CHAT_TOOLS } from "./chat-tools.js";
+import { CHAT_TOOLS, GUIDE_TOOLS } from "./chat-tools.js";
+import { spokenModeWords } from "./guide.js";
 import { recentHistory } from "./converse.js";
 import { withoutBlockIds } from "./answer-opening.js";
+import { withoutCommandButtons } from "./command-token.js";
 import { stageFailure } from "./job-failure.js";
 import { plainWords } from "./plain-words.js";
 import { LIVE_UPSTREAM } from "./messages.js";
@@ -351,6 +353,37 @@ ${UNTRUSTED_TOOL_RESULTS}
 ${plainWords("explain", "spoken")}`;
 
 /**
+ * **What a spoken guide is told on top of the companion's rules** — plan
+ * docs/plans/261009i-the-guide-greets-in-chat-takes-live-and-a-bar-row.md
+ * (Greg, 2026-10-09, `spya-x38nge`). The typed guide's intent
+ * (`GUIDE_SYSTEM` in src/converse.ts) in a voice's terms: the subject is the
+ * reader's reading, not the piece, and modes are named, never pressed, since a
+ * voice has no buttons. Like `SPOKEN_RULES` it names no tool and never says
+ * the article is "below": the GPT-Live voice model has neither, and carries
+ * this too (src/live-gpt.ts).
+ *
+ * Followed by `spokenModeWords()` (src/guide.ts) wherever it goes.
+ */
+export const SPOKEN_GUIDE = `YOU ARE THEIR GUIDE TO READING THIS PIECE
+
+In this conversation you are not mainly here to talk about what the piece says.
+You are the reader's guide to reading it well, with Spideryarn, the app they are
+reading it in: why they are reading it, where to start, what to read closely and
+what they can skim, and which of Spideryarn's modes would help.
+
+- Start from why they are reading. If you do not know, ask that first, in one
+  short question. If they have not told us about themselves, you may ask once,
+  lightly, and never again.
+- Then suggest one way in that fits their reason: where to begin, and one mode
+  that would help, by its name, with what it would do for them. One suggestion
+  per turn; they will ask for more.
+- Never summarise the piece or walk them through its argument in place of
+  reading it. You may say what a part is for, so they know where to go. If they
+  want to talk about what it says, do, briefly, and send them to the passage.
+- You cannot open a mode or press anything for them. Say the mode's name so they
+  can find it in the bottom bar, and stop.`;
+
+/**
  * **The one tool that exists only in this mode.**
  *
  * Written chat puts block ids in the answer text, and `src/web/Cited.tsx`
@@ -393,7 +426,8 @@ export const SHOW_PASSAGE_TOOL = {
 };
 
 /**
- * Every chat tool plus `show_passage`, in the shape realtime wants.
+ * The conversation's server tools plus `show_passage`, in the shape realtime
+ * wants: Chat's shared tools normally, or the guide's article-only subset.
  *
  * **Realtime flattens the function.** `CHAT_TOOLS` is chat/completions' shape —
  * `{ type: "function", function: { name, description, parameters } }` — and
@@ -401,14 +435,16 @@ export const SHOW_PASSAGE_TOOL = {
  * wrapper. Sending the nested form is rejected outright rather than quietly
  * ignored, which is a mercy and is why this is a `map` and not a hope.
  *
- * Reusing `CHAT_TOOLS` rather than restating them is the point: a tool
- * description is a prompt (src/chat-tools.ts), and two copies of a prompt is
- * one copy that will be updated.
+ * Reusing `CHAT_TOOLS` and `GUIDE_TOOLS` rather than restating either is the
+ * point: a tool description is a prompt (src/chat-tools.ts), and two copies of
+ * a prompt is one copy that will be updated.
  */
-export function liveTools(): unknown[] {
+export function liveTools(kind?: ThreadKind): unknown[] {
+  /* A guide is offered the typed guide's own tools (`toolsFor`): its article
+     only, no web — plan 261009i. Every other kind keeps the eight. */
   return [
     SHOW_PASSAGE_TOOL,
-    ...CHAT_TOOLS.map((t) => ({
+    ...(kind === "guide" ? GUIDE_TOOLS : CHAT_TOOLS).map((t) => ({
       type: "function" as const,
       name: t.function.name,
       description: t.function.description,
@@ -459,12 +495,15 @@ export function liveInstructions(opts: {
   meta: Meta;
   blocks: Block[];
   profile?: string | null;
+  /** The conversation's kind: a guide adds `SPOKEN_GUIDE` and the mode names (plan 261009i). */
+  kind?: ThreadKind | undefined;
 }): string {
   const who = opts.profile
     ? `WHO YOU ARE TALKING TO\n\nThe reader has told us this about themselves. Use it to pitch the answer; do not mention that you have it.\n\n${opts.profile}`
     : "";
   return [
     LIVE_SYSTEM,
+    ...(opts.kind === "guide" ? [SPOKEN_GUIDE, spokenModeWords()] : []),
     who,
     `THE ARTICLE\n\nHere is the whole thing, with an id on every paragraph. Keep it in mind for everything they ask.\n\n${articleWithIds(opts.meta, opts.blocks)}`,
   ]
@@ -519,7 +558,7 @@ export function liveSeedItems(
 ): { role: "user" | "assistant"; text: string }[] {
   return recentHistory(history).map((m) => ({
     role: m.role,
-    text: m.role === "assistant" ? withoutBlockIds(answerAsSeen(m, kind)) : m.text,
+    text: m.role === "assistant" ? withoutBlockIds(withoutCommandButtons(answerAsSeen(m, kind))) : m.text,
   }));
 }
 
@@ -573,13 +612,15 @@ export function liveSession(opts: {
   vocabulary?: readonly string[] | null;
   /** Where the reader's microphone is. Defaults to `DEFAULT_PLACEMENT`. */
   placement?: MicPlacement | null;
+  /** The conversation's kind, for `liveInstructions` and `liveTools`. */
+  kind?: ThreadKind | undefined;
 }): Record<string, unknown> {
   return {
     type: "realtime",
     model: LIVE_MODEL,
     instructions: liveInstructions(opts),
     reasoning: { effort: LIVE_REASONING_EFFORT },
-    tools: liveTools(),
+    tools: liveTools(opts.kind),
     tool_choice: "auto",
     audio: {
       input: {

@@ -41,6 +41,7 @@ import {
   isAbstractTitle,
   skimInput,
   skimInputHash,
+  profileNoticeKey,
   routeProfileIsStale,
   renderPrompt,
   targetsFor,
@@ -885,6 +886,16 @@ describe("freshness", () => {
     expect(routeProfileIsStale("abc", null)).toBe(true);
     expect(routeProfileIsStale("abc", "abc")).toBe(false);
     expect(routeProfileIsStale(null, null)).toBe(false);
+  });
+
+  it("keys a dismissal to both the route and the current profile, including no profile", () => {
+    const generatedAt = "2026-10-09T01:00:00.000Z";
+    expect(profileNoticeKey(generatedAt, null)).toBe(`${generatedAt} none`);
+    expect(profileNoticeKey(generatedAt, "abc")).toBe(`${generatedAt} abc`);
+    expect(profileNoticeKey(generatedAt, null)).not.toBe(profileNoticeKey(generatedAt, "abc"));
+    expect(profileNoticeKey(generatedAt, "abc")).not.toBe(
+      profileNoticeKey("2026-10-09T02:00:00.000Z", "abc"),
+    );
   });
 });
 

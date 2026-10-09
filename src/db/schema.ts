@@ -253,6 +253,21 @@ export const articles = spideryarn.table("articles", {
    * article, because it is not this article's state to lose.
    */
   purpose: text("purpose"),
+  /**
+   * **The Skim notice the reader sent away** — *"This route was planned before
+   * your profile said what it says now"*, dismissed with its ×. Greg,
+   * 2026-10-09 (`spya-ud2w92`): *"there should be a way to dismiss it if I
+   * decide that I actually don't care and I don't want to plan it again."*
+   *
+   * The key is `<route generatedAt> <profile hash or "none">`
+   * (src/skim.ts § `profileNoticeKey`), so the dismissal holds for that route
+   * under that profile only: a re-plan or a further profile change brings the
+   * notice back. Columns here rather than a table for the shelf columns'
+   * reason — one per article, the owner's state. `_at` is when, set again on
+   * every dismiss. docs/plans/261009i-skim-profile-notice-can-be-dismissed.md.
+   */
+  skimProfileNoticeDismissedFor: text("skim_profile_notice_dismissed_for"),
+  skimProfileNoticeDismissedAt: timestamp("skim_profile_notice_dismissed_at", { withTimezone: true }),
 
   /* ---- sharing: may a stranger read this? docs/plans/260827ai-public-read-only-access.md --
 

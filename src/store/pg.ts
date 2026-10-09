@@ -4167,6 +4167,7 @@ const rawPgArticleReader: ArticleReader = {
           skim.sourceHash !== skimInputHash(input)),
       outdated: skim.version !== SKIM_PROMPT_VERSION,
       notOnRoute: current.filter((q) => !onRoute.has(q.id) && !leftOut.has(q.id)).length,
+      profileNoticeDismissedFor: found.article.skimProfileNoticeDismissedFor,
     };
   },
 
