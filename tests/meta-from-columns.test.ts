@@ -52,7 +52,7 @@ const ROW: { [K in keyof MetaRow]: NonNullable<MetaRow[K]> } = {
 };
 
 /** Where each `Meta` field comes from on this read, or why it does not. */
-const WHERE: Record<keyof Meta, "surfaced" | string> = {
+const WHERE: Record<keyof Meta, "surfaced" | { elsewhere: string }> = {
   slug: "surfaced",
   title: "surfaced",
   titleOriginal: "surfaced",
@@ -60,7 +60,7 @@ const WHERE: Record<keyof Meta, "surfaced" | string> = {
   byline: "surfaced",
   /* The reading view's read adds it from its own column
      (`REVISION_READ_POLICY.authors`); the shelf does not take it. */
-  authors: "added by loadArticle, not here",
+  authors: { elsewhere: "added by loadArticle, not here" },
   siteName: "surfaced",
   lang: "surfaced",
   url: "surfaced",
