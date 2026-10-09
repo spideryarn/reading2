@@ -532,8 +532,11 @@ export function useGlossaryRead(slug: string): GlossaryRead {
 
   /**
    * Dig deeper into one term — the panel's *Dig deeper* button (was *Check the
-   * web*, plan 261001p), and since 2026-10-02 the hover card's too (plan
+   * web*, plan 261001p), and from 2026-10-02 the hover card's too (plan
    * 261002c § 3), which is why it lives on the read rather than in the band.
+   * **Nothing on the client calls it since 2026-10-09**: the buttons went with
+   * plan 261009k, and *Ask in chat* stands in their place. It stays, with the
+   * route, until Greg decides whether he wants Dig deeper back (that plan's D5).
    *
    * **A plain request rather than a job**, unlike everything else here. Finding
    * terms is one call over a whole article and belongs in the queue; checking a

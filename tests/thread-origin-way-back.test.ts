@@ -156,9 +156,9 @@ describe("a lens and a claim", () => {
  * **A glossary entry and a cited work** (plan 261006d, D1). Each has a durable
  * id, so the id is its identity and the name stored beside it is a snapshot
  * for titles and tooltips. A regeneration that rewords the entry keeps the
- * mark; that is the difference from a claim.
+ * mark; that is the difference from a claim. An idea joined them in plan 261009k.
  */
-describe.each(["glossary", "citations"] as const)("a %s entry's origin", (mode) => {
+describe.each(["glossary", "citations", "ideas"] as const)("a %s entry's origin", (mode) => {
   const item = (over: { itemId?: string; quote?: string } = {}): ThreadOrigin => ({
     mode,
     itemId: "spya-ttm222",

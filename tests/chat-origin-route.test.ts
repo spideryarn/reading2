@@ -333,12 +333,13 @@ describe("a lens origin on the way in", () => {
 });
 
 /**
- * **The item shapes: a glossary entry and a cited work**
- * (plan docs/plans/261006d-glossary-and-citations-ask-in-chat-with-origin.md, D1 and D3).
+ * **The item shapes: a glossary entry, a cited work and an idea**
+ * (plan docs/plans/261006d-glossary-and-citations-ask-in-chat-with-origin.md, D1 and D3;
+ * the idea is plan 261009k's stage 3).
  * An id and a snapshot of the name. The id is never dereferenced, so a made-up
  * one is accepted; only the shape is checked.
  */
-describe.each(["glossary", "citations"] as const)("a %s origin on the way in", (mode) => {
+describe.each(["glossary", "citations", "ideas"] as const)("a %s origin on the way in", (mode) => {
   const ITEM = "spya-ttm222";
   const item = (over: Record<string, unknown> = {}) => ({ mode, itemId: ITEM, quote: "qualia", ...over });
 
@@ -640,7 +641,7 @@ describe("the origin's columns", () => {
 
   /* Plan 261006d, D2: a glossary entry or a cited work is an id and a name,
      with no block and no lens. `summary` is still reserved and has no shape. */
-  describe.each(["glossary", "citations"])("a %s origin", (mode) => {
+  describe.each(["glossary", "citations", "ideas"])("a %s origin", (mode) => {
     const good = { originMode: mode, originItemId: "spya-ttm222", originQuote: "qualia" };
 
     it("accepts an id and a name", async () => {
@@ -665,6 +666,16 @@ describe("the origin's columns", () => {
 
   it("still accepts the reserved summary mode with no shape of its own", async () => {
     expect(await refusedBy({ originMode: "summary" })).toBeNull();
+  });
+
+  /* Plan 261009k, GPT Sol's F8: `summary` has no shape, so it may carry none
+     of the shape columns, and does not get one by accident before it is built. */
+  it("refuses a summary origin that carries an item id, a block or a quote", async () => {
+    expect(await refusedBy({ originMode: "summary", originItemId: "spya-aaaaaa" })).toMatch(
+      /chat_threads_origin_summary/,
+    );
+    expect(await refusedBy({ originMode: "summary", originBlockId: BLOCK })).toMatch(/chat_threads_origin_summary/);
+    expect(await refusedBy({ originMode: "summary", originQuote: "words" })).toMatch(/chat_threads_origin_summary/);
   });
 });
 

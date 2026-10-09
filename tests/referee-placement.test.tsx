@@ -419,7 +419,6 @@ function CommentHarness({ placing, comment }: { placing: boolean; comment: Comme
       pending: 0,
       onDelete: () => {},
       onRetry: () => {},
-      onDeepen: () => {},
       onDiscuss: () => {},
       onEdit: (body: string | null) => void comments.edit(comment.id, body),
       onPlace: (mark: { criterionId: string | null; valence: number | null }) =>

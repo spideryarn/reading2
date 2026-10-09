@@ -1275,7 +1275,6 @@ td.text.has-hit[data-hues="8"] {
    the order it is written. `auto` on this one is what does it — see the note
    further down about why the hover colour is a separate rule. */
 .cmt-delete { margin-left: auto; }
-.cmt-deepen { white-space: nowrap; }
 
 /* The fresh box (CommentDialog.tsx § The fresh box): the line that says the
    words are already highlighted, the Copy button, and what the copy came to.

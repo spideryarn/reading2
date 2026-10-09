@@ -69,7 +69,7 @@ import { StepTip } from "./StepTip.js";
 import { ReadError } from "./ReadError.js";
 import { RewriteWaiting } from "./RewriteWaiting.js";
 import { type CardTarget, cardIsEmpty, type StopCard } from "./stop-card.js";
-import { TermCard, type TermActions } from "./ProseHoverCard.js";
+import { type AskAboutTerm, TermCard, type TermActions } from "./ProseHoverCard.js";
 import type { GlossaryEntry } from "../types.js";
 import { sparkline, sparkWidth } from "./route-spark.js";
 import type { WhereRow } from "./where.js";
@@ -276,6 +276,15 @@ export function skimPromise(profiled: boolean): string {
     ? "The passages are the article's own words, chosen by Quotes. The order and the cues are the model's reading, shaped by your profile."
     : "The passages are the article's own words, chosen by Quotes. The order and the cues are the model's reading, for somebody reading the piece for the first time.";
 }
+
+/**
+ * **What the question above a quote is** (Greg, spya-qpgvq9, plan 261009j): in
+ * the band's (i), which a keyboard and a finger reach, and on the question's
+ * own card for a mouse. Since `skim/11` most stops have none, so it says why
+ * a stop has one.
+ */
+export const SKIM_CUE_EXPLAINED =
+  "The line above a quote is a question to read it with, written by AI. It is there only where it helps: to say what the quote refers to, what it settles, or why it matters.";
 
 /**
  * At Most, how much of the Quotes offered to this route the three passes walk
@@ -696,6 +705,7 @@ export function SkimPanel({ access, view, away }: Props) {
   const about = routed ? (
     <>
       <p>{promise}</p>
+      <p>{SKIM_CUE_EXPLAINED}</p>
       {pips && <p>{pipsLegend(pips)}</p>}
       {coverage && <p>{coverage}</p>}
       {made && (
@@ -816,7 +826,16 @@ export function SkimPanel({ access, view, away }: Props) {
                           )}
                           {/* The cue before the quote: it is the question to
                               read the passage with (Greg, SPIDERYARN-READING2-8J). */}
-                          {row.current && row.cue && <span className="skim-cue">{row.cue}</span>}
+                          {/* Its card says what it is, for a mouse; the band's
+                              (i) says the same for a keyboard and a finger,
+                              since the question sits inside the row's button
+                              and cannot take focus or a tap of its own
+                              (plan 261009j, Sol's plan review F5). */}
+                          {row.current && row.cue && (
+                            <Tooltip content={<p>{SKIM_CUE_EXPLAINED}</p>} placement="top">
+                              <span className="skim-cue">{row.cue}</span>
+                            </Tooltip>
+                          )}
                           {words && <span className="skim-words">“{words.shown}”</span>}
                         </span>
                       </button>
@@ -879,6 +898,7 @@ export function SkimPanel({ access, view, away }: Props) {
                             onToggle={toggle}
                             onCloseTerm={closeTerm}
                             termActions={view.termActions}
+                            onAskTerm={view.onAskTerm}
                             onHidden={focusCurrentRow}
                             onOpen={view.onOpen}
                             canOpen={view.canOpen}
@@ -914,6 +934,7 @@ function StopCardView({
   onToggle,
   onCloseTerm,
   termActions,
+  onAskTerm,
   onHidden,
   onOpen,
   canOpen,
@@ -924,6 +945,8 @@ function StopCardView({
   onCloseTerm(id: string): void;
   /** `null` for a visitor. */
   termActions: TermActions | null;
+  /** *Ask in chat* on a term's card; `null` for a visitor. */
+  onAskTerm: AskAboutTerm | null;
   /** A term was hidden from its card, and its chip is gone or going. */
   onHidden(from: Element | null): void;
   onOpen(target: CardTarget): void;
@@ -945,6 +968,7 @@ function StopCardView({
                 onPress={() => onToggle("term", entry.id)}
                 onUnpin={() => onCloseTerm(entry.id)}
                 actions={termActions}
+                onAsk={onAskTerm}
                 onHidden={onHidden}
                 onOpen={
                   canOpen({ kind: "term", id: entry.id })
@@ -1023,8 +1047,9 @@ function StopCardView({
  * goes when the pointer does (GPT Sol, plan review F2).
  *
  * `onOpen` is the way into Glossary, or `null` when this reader has no
- * Glossary control. Then the card has no *Open glossary*, and no *Dig deeper*
- * either, since that is where a dig's answer is drawn.
+ * Glossary control. Then the card has no *Open glossary*. Its *Ask in chat*
+ * (the owner's, since plan 261009k; *Dig deeper* until then) goes to Chat, so
+ * it is drawn either way.
  */
 function TermChip({
   entry,
@@ -1032,6 +1057,7 @@ function TermChip({
   onPress,
   onUnpin,
   actions,
+  onAsk,
   onHidden,
   onOpen,
 }: {
@@ -1040,6 +1066,7 @@ function TermChip({
   onPress(): void;
   onUnpin(): void;
   actions: TermActions | null;
+  onAsk: AskAboutTerm | null;
   onHidden(from: Element | null): void;
   onOpen: (() => void) | null;
 }) {
@@ -1054,9 +1081,6 @@ function TermChip({
   };
   /* Hide, and then put the keyboard somewhere: the chip is about to go. */
   const acts: TermActions | null = actions && {
-    look: actions.look,
-    looking: actions.looking,
-    stale: actions.stale,
     hiding: actions.hiding,
     setHidden: async (id, hidden) => {
       /* Keep our actual focus owner, not the whole cluster: another term can
@@ -1078,6 +1102,7 @@ function TermChip({
           <TermCard
             entry={entry}
             actions={acts}
+            onAsk={onAsk}
             onClose={close}
             onOpen={
               onOpen
@@ -1087,7 +1112,6 @@ function TermChip({
                   }
                 : undefined
             }
-            onOpenTerm={onOpen ?? undefined}
           />
         </div>
       }

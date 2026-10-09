@@ -134,6 +134,7 @@ const VIEW: SkimView = {
   position: 1,
   card: null,
   termActions: null,
+  onAskTerm: null,
   onDepth: () => {},
   onRow: () => {},
   onStep: () => {},

@@ -629,10 +629,13 @@ describe("Skim, which jumps on opening", () => {
 });
 
 
-/* Plan 261004b: a card can start another dig while its own mode is already
-   open but stepped aside. Changing the URL to the same mode must reveal it. */
-describe("the citation card brings its band back", () => {
-  it.each([PHONE, 600])("reveals a stepped-aside Citations band at %ipx", async (width) => {
+/* Plan 261004b: a card could start another dig while its own mode was already
+   open but stepped aside, and changing the URL to the same mode had to reveal
+   it. Since plan 261009k the card's button is *Ask in chat*, which goes to
+   Chat: what is pinned now is that it starts no dig, and that the band it
+   lands in is not left hidden. */
+describe("the citation card's Ask in chat lands in a band that is drawn", () => {
+  it.each([PHONE, 600])("goes to Chat from a stepped-aside Citations band at %ipx", async (width) => {
     const id = "spya-c2qmbg";
     const citation = {
       id, key: "work:plain", title: "The plain point", why: "Where the point comes from.",
@@ -668,17 +671,14 @@ describe("the citation card brings its band back", () => {
       Object.defineProperty(event, "pointerType", { value: "mouse" });
       mark?.dispatchEvent(event);
     });
-    await until(() => document.querySelector(".prose-card-cite-dig") !== null, "the citation card did not open");
-    const pushed = vi.spyOn(history, "pushState");
-    await act(async () => document.querySelector<HTMLButtonElement>(".prose-card-cite-dig")?.click());
+    await until(() => document.querySelector(".prose-card-cite-ask") !== null, "the citation card did not open");
+    expect(document.querySelector(".prose-card")?.textContent, "Dig deeper is gone (plan 261009k)").not.toMatch(/Dig deeper/);
+    await act(async () => document.querySelector<HTMLButtonElement>(".prose-card-cite-ask")?.click());
     await settle();
-    /* `nuqs` does not elide a same-value push: writing the mode already open
-       added a Back step that changed nothing (GPT Sol, plan review 261004g F2). */
-    expect(pushed, "bringing the band back is not a history step").not.toHaveBeenCalled();
-    expect(digs, "the card must start the same row verb").toBe(1);
+    expect(digs, "Ask in chat starts no dig").toBe(0);
     expect(document.querySelector(".prose-card")).toBeNull();
-    expect(param("mode")).toBe("citations");
-    expect(reader().classList.contains("band-away"), "Dig deeper left the answer in a hidden band").toBe(false);
+    expect(param("mode")).toBe("chat");
+    expect(reader().classList.contains("band-away"), "the chat landed in a hidden band").toBe(false);
   });
 });
 

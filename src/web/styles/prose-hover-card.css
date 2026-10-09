@@ -370,13 +370,14 @@
 .prose-card-quote-step:disabled:hover { color: var(--ink-faint); }
 .prose-card-quote-foot { justify-content: flex-start; gap: 0.2rem; }
 
-/* The owner's *Dig deeper* and *Hide*, in the term card's foot beside the way
+/* The owner's *Ask in chat* and *Hide*, in the term card's foot beside the way
    out — one row since 2026-10-03 (spya-za77hj); they were a row of their own
-   under it (plan 261002c § 3). The same quiet button as `.prose-card-open`,
+   under it (plan 261002c § 3). *Ask in chat* was *Dig deeper* until plan
+   261009k. The same quiet button as `.prose-card-open`,
    with the same padding-as-target reasoning above, minus the push to the right.
 
    **The term's foot wraps, and only the term's — and only in one place.** A
-   link, *Dig deeper again*, *Hide* and *Open glossary* can be wider than the
+   link, *Ask in chat*, *Hide* and *Open glossary* can be wider than the
    card, so the three buttons are one group that does not break
    (`.prose-card-term-acts`) and the foot wraps between the link and the group:
    the link on its line, the buttons together on the next. Every other card's
@@ -521,14 +522,15 @@
     padding: 0;
   }
 }
-/* *Dig deeper* makes the foot three things, wider than the card with a long
-   host, so this foot wraps as the term's does: the two facts on their line and
-   the button, pushed right, on the next when it has to be. Plan 261004b. */
+/* The owner's button (*Ask in chat*; *Dig deeper* from plan 261004b until plan
+   261009k) makes the foot three things, wider than the card with a long host,
+   so this foot wraps as the term's does: the two facts on their line and the
+   button, pushed right, on the next when it has to be. */
 .prose-card-cite-foot {
   flex-wrap: wrap;
   gap: 0 0.9rem;
 }
-.prose-card-cite-dig {
+.prose-card-cite-ask {
   margin-left: auto;
   white-space: nowrap;
 }

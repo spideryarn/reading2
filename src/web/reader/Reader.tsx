@@ -33,6 +33,8 @@ import {
   type CitedWork,
   type ClaimOrigin,
   type GlossaryEntry,
+  type Idea,
+  isLensOrigin,
   type ThreadOrigin,
 } from "../../types.js";
 import { marginaliaNotes, arcAt, headBlock, headPath } from "../marginalia/notes.js";
@@ -91,6 +93,7 @@ import {
   askAboutSummaryParagraph,
   askAboutCitedWork,
   askAboutGlossaryEntry,
+  askAboutIdea,
   askAboutBlock,
   askAboutTerm,
   itemOrigin,
@@ -118,8 +121,9 @@ import { mintId } from "../../ids.js";
 import { Masthead } from "../Masthead.js";
 import { Dock, useActivateMode, useActivateSubMode, visibleModes } from "../Dock.js";
 import { gateToReveal, PRIORITY_GATE } from "../GlossaryPanel.js";
-import { type CiteActions, ProseHoverCard, type QuoteCardSource } from "../ProseHoverCard.js";
+import { ProseHoverCard, type QuoteCardSource } from "../ProseHoverCard.js";
 import type { CiteFocus } from "../CitationsPanel.js";
+import { claimFocusKey, focusOn, focusTaken, type ItemFocus } from "../item-focus.js";
 import { shownEntries } from "../glossary-shown.js";
 import { editArticleTags } from "../article-tags.js";
 import { chatExecutor, type ModeCommand, modeDoor, readingExecutor, type TagsControl } from "../command-runners.js";
@@ -156,6 +160,8 @@ import {
   summaryParam,
   structureParam,
   debateParam,
+  bearsParam,
+  debateThreadParam,
   type BandMode,
   type Mode,
 } from "../params.js";
@@ -1104,8 +1110,8 @@ export function Reader({
   }, [setGuideParam, showBand]);
   const askInChat = useCallback((term: string) => handToChat(askAboutTerm(term), "send"), [handToChat]);
   /* **A fifth and a sixth since 2026-10-06: *Ask in chat* on a Glossary entry
-     and on a Citations row**, beside Dig deeper, which is unchanged. Each
-     travels twice, as a claim does: its name fenced in the question, and as
+     and on a Citations row**, and since 2026-10-09 on the prose hover card of
+     each, where Dig deeper was (plan 261009k). Each travels twice, as a claim does: its name fenced in the question, and as
      the `origin` the thread stores, which is the entry's durable id and a
      snapshot of its name cut to the route's cap (`itemOrigin`). Not
      `askInChat` above, which is for a word the article does not contain and
@@ -1119,6 +1125,14 @@ export function Reader({
   const askCitedWorkInChat = useCallback(
     (work: Pick<CitedWork, "id" | "title" | "authors" | "year">) =>
       handToChat(askAboutCitedWork(work), "send", itemOrigin("citations", work.id, work.title)),
+    [handToChat],
+  );
+  /* **A seventh since 2026-10-09: an idea's *Ask in chat*** (plan 261009k,
+     stage 3). The name and the statement go in the fence; the origin is the
+     idea's id and its name. */
+  const askIdeaInChat = useCallback(
+    (idea: Pick<Idea, "id" | "name" | "statement">) =>
+      handToChat(askAboutIdea(idea), "send", itemOrigin("ideas", idea.id, idea.name)),
     [handToChat],
   );
   /* The one sender that waits: the paragraph, quoted, and an empty line for
@@ -1430,44 +1444,17 @@ export function Reader({
   const works: readonly CitedWork[] = owner?.citations.citations?.citations ?? NO_WORKS;
 
   /**
-   * **Point at a citation in the prose and press *Dig deeper*** — Greg,
-   * 2026-10-03 (report `spya-c2qmbg`): *"What I was hoping is that it would
-   * have a button for dig deeper in the tooltip."* Plan 261004b.
-   *
-   * Starts the row's own *Dig deeper* and opens Citations on that row, where
-   * the answer streams — `openTermInGlossary`'s shape, one feature over. The
-   * verb and its state are on the citations read since the same plan, because
-   * the band that used to hold them is not mounted in the mode the reader
-   * pressed from. `citeFocus` is a one-shot the band hands back once the row is
-   * in view (CitationsPanel.tsx § `Props.focus`); it is state rather than a URL
-   * parameter because nothing about it should survive a reload.
-   *
-   * `null` for a visitor, whose arm has no read: no button is drawn.
+   * **Open Citations on one row** — a one-shot the band hands back once the
+   * row is in view (CitationsPanel.tsx § `Props.focus`); state rather than a
+   * URL parameter because nothing about it should survive a reload. The prose
+   * card's *Dig deeper* set it from plan 261004b until 2026-10-09, when that
+   * button became *Ask in chat* (plan 261009k), which goes to Chat instead.
+   * Since then a chat's way back to its item sets it (`openOrigin` below, plan
+   * 261009k stage 2); Glossary, Ideas and Debate have the same shape (item-focus.ts).
    */
   const [citeFocus, setCiteFocus] = useState<CiteFocus | null>(null);
   /* Only the request that was served: a second press may have replaced it. */
-  const citeFocusTaken = useCallback(
-    (taken: CiteFocus) => setCiteFocus((now) => (now?.n === taken.n ? null : now)),
-    [],
-  );
-  const investigateCitation = owner?.citations.investigate ?? null;
-  const citationDigging = owner?.citations.investigating ?? null;
-  const citeActions = useMemo<CiteActions | null>(
-    () =>
-      investigateCitation === null
-        ? null
-        : {
-            digging: citationDigging,
-            dig: (id) => {
-              void investigateCitation(id);
-              setCiteFocus((was) => ({ id, n: (was?.n ?? 0) + 1 }));
-              /* A passage jump can leave this very mode mounted but hidden
-                 on a narrow window: `showBand`. */
-              showBand("citations");
-            },
-          },
-    [investigateCitation, citationDigging, showBand],
-  );
+  const citeFocusTaken = useCallback((taken: CiteFocus) => setCiteFocus(focusTaken(taken)), []);
 
   const citeSelections = useMemo<CiteSelection[]>(
     () =>
@@ -1620,6 +1607,125 @@ export function Reader({
    */
   const [ideaFound, setIdeaFound] = useState<Found[]>([]);
   const [openOccurrence, setOpenOccurrence] = useState<string | null>(null);
+
+  /**
+   * **One row to bring into view in Glossary, Ideas and Debate's Claims**,
+   * once each — `citeFocus` above is Citations' (src/web/item-focus.ts). Only
+   * the way back from a chat sets them (`openOrigin` below). One piece of
+   * state per band, so a request for one band cannot be spent by another.
+   */
+  const [termFocus, setTermFocus] = useState<ItemFocus | null>(null);
+  const termFocusTaken = useCallback((taken: ItemFocus) => setTermFocus(focusTaken(taken)), []);
+  const [ideaFocus, setIdeaFocus] = useState<ItemFocus | null>(null);
+  const ideaFocusTaken = useCallback((taken: ItemFocus) => setIdeaFocus(focusTaken(taken)), []);
+  const [claimFocus, setClaimFocus] = useState<ItemFocus | null>(null);
+  const claimFocusTaken = useCallback((taken: ItemFocus) => setClaimFocus(focusTaken(taken)), []);
+  /**
+   * A focus belongs to one visit to its mode. If the reader leaves while the
+   * list is still loading (or while a filter is being lowered), its panel
+   * cannot hand the request back. Forget it here, or an ordinary later visit
+   * would unexpectedly jump to the old chat's item.
+   */
+  const focusModeWas = useRef(mode);
+  useEffect(() => {
+    const previous = focusModeWas.current;
+    focusModeWas.current = mode;
+    if (previous === mode) return;
+    switch (previous) {
+      case "glossary":
+        setTermFocus(null);
+        return;
+      case "citations":
+        setCiteFocus(null);
+        return;
+      case "ideas":
+        setIdeaFocus(null);
+        return;
+      case "debate":
+        setClaimFocus(null);
+        return;
+    }
+  }, [mode]);
+  /* **Mode and the parameters that could hide the item, in one pushed
+     entry**, so one Back returns to the chat (GPT Sol's F4 on plan 261009k).
+     Each closed on a line of its own: tests/last-view.test.ts reads them. */
+  const [, setDebateWay] = useQueryStates({
+    mode: modeParam,
+    debate: debateParam,
+    bears: bearsParam,
+    debatethread: debateThreadParam,
+    thread: threadParam,
+  });
+  const [, setIdeaWay] = useQueryStates({
+    mode: modeParam,
+    idea: ideaParam,
+    thread: threadParam,
+  });
+  /**
+   * **The way back from a chat to the item it was started from** — the line
+   * above the transcript in Chat's band (ChatPanel.tsx § `OriginBack`; plan
+   * docs/plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md,
+   * stage 2). Each arm opens the origin's mode and asks its band to bring the
+   * item's row into view; **none jumps the prose**: on a phone the band lies
+   * over it, so the flash would be held until the band moved and the reader
+   * would see nothing (F4). The row's own block link is the next press.
+   *
+   * An item the mode no longer has (renamed, hidden, re-run away) opens the
+   * mode on its list: each band hands an unknown focus back at once.
+   *
+   * **`?thread=` goes in the same write.** Left in place, the chat follows the
+   * reader into the mode as the floating card, and on a phone that card lies
+   * over the very row the press went back to (found in the browser pass). Back
+   * restores it with the rest of the address, and the item's own mark reopens
+   * it beside the mode.
+   *
+   * **Exhaustive**, so a new origin mode cannot be forgotten here: the
+   * `never` arm stops compiling.
+   */
+  const openOrigin = useCallback(
+    (origin: ThreadOrigin) => {
+      switch (origin.mode) {
+        case "glossary":
+          /* `?term=` and the gate lowered if it hides the entry. The thread is
+             cleared in the same tick, which nuqs sends as one entry. */
+          void setThread(null);
+          openTermInGlossary(origin.itemId);
+          setTermFocus(focusOn(origin.itemId));
+          return;
+        case "citations":
+          void setThread(null);
+          setCiteFocus(focusOn(origin.itemId));
+          showBand("citations");
+          return;
+        case "ideas":
+          /* Not Ideas' row press, which jumps the prose. The old occurrence
+             names another idea, so it goes, as a row press clears it. */
+          setOpenOccurrence(null);
+          setIdeaFocus(focusOn(origin.itemId));
+          setBandAway(false);
+          void setIdeaWay({ mode: "ideas", idea: origin.itemId, thread: null }, { history: "push" });
+          return;
+        case "debate":
+          setBandAway(false);
+          if (isLensOrigin(origin)) {
+            /* An angle is not in the article: the angles box is Reception's. */
+            void setDebateWay({ mode: "debate", debate: "reception", thread: null }, { history: "push" });
+            return;
+          }
+          setClaimFocus(focusOn(claimFocusKey(origin)));
+          void setDebateWay(
+            { mode: "debate", debate: "claims", bears: null, debatethread: null, thread: null },
+            { history: "push" },
+          );
+          return;
+        default: {
+          const never: never = origin;
+          return never;
+        }
+      }
+    },
+    [openTermInGlossary, showBand, setIdeaWay, setDebateWay, setThread],
+  );
   /**
    * **The quotes, and they are not a state at all** — since 2026-09-08.
    *
@@ -2534,6 +2640,11 @@ export function Reader({
     () => ({ summaries: chatSummaries, onAsk: askCitedWorkInChat, onOpen: openClaimChat }),
     [chatSummaries, askCitedWorkInChat, openClaimChat],
   );
+  /* And Ideas' rows (plan 261009k, stage 3), from the same raw summaries. */
+  const ideaChats = useMemo(
+    () => ({ summaries: chatSummaries, onAsk: askIdeaInChat, onOpen: openClaimChat }),
+    [chatSummaries, askIdeaInChat, openClaimChat],
+  );
 
   /**
    * **One press, one model call, and the reader keeps reading.**
@@ -3246,6 +3357,7 @@ export function Reader({
               onHandoffTaken={handoffTaken}
               onHandoffThread={handoffThread}
               onSettled={refreshChats}
+              onOrigin={openOrigin}
               articleTitle={article.meta.title}
             />
           </ChatCommands>
@@ -3296,6 +3408,8 @@ export function Reader({
               onSelected={setTerm}
               onAskChat={askInChat}
               chats={entryChats}
+              focus={termFocus}
+              onFocusTaken={termFocusTaken}
             />
           );
         return artefacts?.glossary ? (
@@ -3417,6 +3531,9 @@ export function Reader({
               onFound={setIdeaFound}
               openKey={openOccurrence}
               onOpenKey={setOpenOccurrence}
+              chats={ideaChats}
+              focus={ideaFocus}
+              onFocusTaken={ideaFocusTaken}
             />
           );
         return artefacts?.ideas ? (
@@ -3512,6 +3629,8 @@ export function Reader({
             publishedAt={publishedAt}
             articleTitle={article.meta.title}
             claimChats={claimChats}
+            focus={claimFocus}
+            onFocusTaken={claimFocusTaken}
           />
         );
       /* **The owner/visitor pair, since 2026-09-29.** It was the owner alone
@@ -3598,6 +3717,9 @@ export function Reader({
             onOpenKey={setOpenSkimKey}
             onControl={setSkimControl}
             glossary={owner.glossary}
+            /* *Ask in chat* on a term chip's card: the Glossary band's own
+               sender, as on the prose card (plan 261009k). */
+            onAskTerm={askGlossaryEntryInChat}
             onOpen={openFromStopCard}
             canOpen={canOpenFromStopCard}
             arrival={skimArrival.current}
@@ -4482,10 +4604,6 @@ export function Reader({
               copyOnlyProtected.current.add(openComment.id);
               owner.comments.retry(openComment.id);
             },
-            onDeepen: () => {
-              copyOnlyProtected.current.add(openComment.id);
-              owner.comments.deepen(openComment.id);
-            },
             onEdit: (body) => {
               copyOnlyProtected.current.add(openComment.id);
               void owner.comments.edit(openComment.id, body);
@@ -4618,13 +4736,17 @@ export function Reader({
         /* The citation half's "already an article here" line: owner-only,
            named here as the band names it (plan 261001i). */
         showInSpideryarn={owner !== null}
-        /* *Dig deeper* and *Hide* on a term: the owner's read, which carries
-           both verbs (plan 261002c § 3). Null for a visitor, whose arm has no
-           read to pass — the enforcement is that there is nothing here. */
+        /* *Hide* on a term: the owner's read, which carries the verb (plan
+           261002c § 3). Null for a visitor, whose arm has no read to pass —
+           the enforcement is that there is nothing here. */
         termActions={glossaryRead}
-        /* *Dig deeper* on a cited work: built over the owner's citations read
-           (plan 261004b). Null for a visitor, for `termActions`' reason. */
-        citeActions={citeActions}
+        /* **Ask in chat on a term's card and on a cited work's** — the
+           Glossary band's and the Citations rows' own senders, so a chat
+           started from a card records the same origin as one started in the
+           band. Each card had *Dig deeper* there until 2026-10-09 (plans
+           261002c, 261004b, 261009k). Null for a visitor, who has no chat. */
+        onAskTerm={owner ? askGlossaryEntryInChat : null}
+        onAskCitedWork={owner ? askCitedWorkInChat : null}
         quotes={quoteCard}
         blockText={blockText}
         notes={notes}

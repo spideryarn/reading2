@@ -41,6 +41,7 @@ export function originColumns(origin: ThreadOrigin | undefined): OriginColumns {
         : { ...NO_ORIGIN, originMode: "debate", originBlockId: origin.blockId, originQuote: origin.quote };
     case "glossary":
     case "citations":
+    case "ideas":
       /* An id and a snapshot of the name; no block, no lens. */
       return { ...NO_ORIGIN, originMode: origin.mode, originItemId: origin.itemId, originQuote: origin.quote };
     default:
@@ -63,7 +64,7 @@ export function originColumns(origin: ThreadOrigin | undefined): OriginColumns {
  */
 export function originFromColumns(row: OriginColumns): { origin?: ThreadOrigin } {
   const { originItemId: itemId, originBlockId: blockId, originQuote: quote, originLens: lens } = row;
-  if (row.originMode === "glossary" || row.originMode === "citations") {
+  if (row.originMode === "glossary" || row.originMode === "citations" || row.originMode === "ideas") {
     if (itemId === null || quote === null || blockId !== null || lens !== null) return {};
     return { origin: { mode: row.originMode, itemId, quote } };
   }

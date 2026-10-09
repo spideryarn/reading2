@@ -299,7 +299,7 @@ describe("validating the model's route", () => {
     expect(d.malformed).toBe(7);
   });
 
-  it("keeps a stop whose cue is bad, with the cue set to null and counted as badCue", () => {
+  it("keeps a stop whose cue is bad, with the cue set to null and counted as badCue; an empty one is noCue (skim/11)", () => {
     const d = emptyDrops();
     const long = "x".repeat(MAX_CUE_CHARS + 1);
     const exact = "y".repeat(MAX_CUE_CHARS);
@@ -319,7 +319,24 @@ describe("validating the model's route", () => {
     );
     expect(stops.map((s) => s.quoteId)).toHaveLength(8);
     expect(stops.map((s) => s.cue)).toEqual([null, null, null, null, null, exact, "Trimmed?", null]);
-    expect(d.badCue).toBe(6);
+    /* Over the cap, a number, missing, an array. `""` and `"   "` are the
+       model leaving the cue out, which skim/11 asks it to do whenever a cue
+       would only echo the quote: not a fault. */
+    expect(d.badCue).toBe(4);
+    expect(d.noCue).toBe(2);
+  });
+
+  it("asks for a cue only when it adds something, and says an empty one is a good answer (skim/11, plan 261009j)", () => {
+    const prompt = SKIM_SYSTEM;
+    expect(emptyDrops().noCue).toBe(0);
+    expect(prompt).toContain('"cue": ""');
+    expect(prompt).toContain("THE ECHO TEST");
+    expect(prompt).toContain("ASK ONLY WHAT THE QUOTE ANSWERS");
+    expect(prompt).toContain("IT SAYS WHY THIS PASSAGE");
+    expect(prompt).toMatch(/OUTPUT[\s\S]*"cue": ""[\s\S]*"cue": "" means that stop has no cue/);
+    expect(SKIM_OUTPUT_SCHEMA.properties.stops.items.required).toContain("cue");
+    expect(SKIM_OUTPUT_SCHEMA.properties.stops.items.properties.cue).toEqual({ type: "string" });
+    expect(prompt).not.toContain("MOST QUOTES STAND ON THEIR OWN, AND THEIR CUE ONLY POINTS");
   });
 
   it("keeps a 150-character cue and nulls a 201-character one: the cap is 200 since skim/10 (plan 261006e)", () => {
@@ -720,39 +737,34 @@ describe("what the prompt is given", () => {
   });
 
   it("asks for a context-free cue, not a role, under a new prompt version (Sol F18, F25)", () => {
-    expect(PROMPT_VERSION).toBe("skim/10");
+    expect(PROMPT_VERSION).toBe("skim/11");
     expect(MAX_CUE_CHARS).toBe(200);
     expect(SKIM_SYSTEM).toContain(`"cue": "..."`);
     expect(SKIM_SYSTEM).not.toContain(`"role"`);
-    expect(SKIM_SYSTEM).toContain(`at most ${MAX_CUE_CHARS} characters`);
+    expect(SKIM_SYSTEM).toContain(`most ${MAX_CUE_CHARS} characters`);
     /* No reference to another stop, because a reader arrives from anywhere. */
     expect(SKIM_SYSTEM).toMatch(/Never refer to another stop/);
   });
 
-  it("asks the cue to set the scene the quote assumes, then point, and never give the finding away (skim/10, plan 261006e)", () => {
+  it("a cue it does write sets the scene the quote assumes, then points, and never gives the finding away (skim/10, kept in skim/11)", () => {
     /* Greg's report spya-jghnva: a cue that leans on the quote's own
        unexplained "the latter interpretation" tells the reader to look for
-       something without saying what the choice is. */
-    expect(SKIM_SYSTEM).toMatch(/SET THE SCENE/);
-    expect(SKIM_SYSTEM).toMatch(/THEN POINT/);
-    expect(SKIM_SYSTEM).toMatch(/NEVER say what the passage found/);
-    /* The second wording (round two of the eval): a scene only where the quote
-       leans on something unsaid, as a question or a naming of the options;
-       otherwise the pointer alone; nothing added; whole sentences. */
-    expect(SKIM_SYSTEM).toMatch(/MOST QUOTES STAND ON THEIR OWN, AND THEIR CUE ONLY POINTS/);
-    expect(SKIM_SYSTEM).toMatch(/This is the common\s+case/);
-    expect(SKIM_SYSTEM).toMatch(/SET THE SCENE as a question,\s+or as a bare naming of the options/);
-    expect(SKIM_SYSTEM).toMatch(/never a statement\s+of what the passage says/);
+       something without saying what the choice is. skim/11 keeps that as the
+       first of the three ways a cue earns its place (plan 261009j). */
+    expect(SKIM_SYSTEM).toMatch(/IT SAYS WHAT "THIS" IS/);
+    expect(SKIM_SYSTEM).toMatch(/IT SETS THE QUESTION/);
+    expect(SKIM_SYSTEM).toMatch(/NEVER SAY WHAT THE PASSAGE FOUND/);
+    expect(SKIM_SYSTEM).toMatch(/never a statement of what the passage says/);
     expect(SKIM_SYSTEM).toMatch(/ONLY WHAT THE RECORDS SAY/);
     expect(SKIM_SYSTEM).toMatch(/WRITE WHOLE SENTENCES/);
     expect(SKIM_SYSTEM).toMatch(/one or two complete sentences/);
     /* Both kinds of BAD example: his own cue, and one that states the finding. */
-    expect(SKIM_SYSTEM).toMatch(/"Which interpretation\s+does their evidence favour\?"/);
+    expect(SKIM_SYSTEM).toMatch(/"Which\s+interpretation does their evidence favour\?"/);
     expect(SKIM_SYSTEM).toMatch(/BAD, it leans on the quote's own unexplained words/);
     expect(SKIM_SYSTEM).toMatch(/BAD, it gives the finding away/);
-    /* A referent the model cannot see is not to be guessed at. */
-    expect(SKIM_SYSTEM).toMatch(/do not\s+guess/);
-    expect(SKIM_SYSTEM).toMatch(/A wrong scene is worse than\s+none/);
+    /* A referent the model cannot see is not to be guessed at: no cue instead. */
+    expect(SKIM_SYSTEM).toMatch(/do not guess: write ""/);
+    expect(SKIM_SYSTEM).toMatch(/A wrong scene is worse\s+than none/);
     /* The shared "ask" paragraph says not to explain a term inside a question;
        the cue's own rule says which of the two wins, so they do not fight. */
     expect(SKIM_SYSTEM).toMatch(/Do not explain the term inside the question/);

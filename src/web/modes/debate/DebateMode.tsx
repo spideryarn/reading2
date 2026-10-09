@@ -44,6 +44,7 @@ import { useDebateClaims } from "../../useDebateClaims.js";
 import { useDebateChecks } from "../../useDebateChecks.js";
 import { useCiters } from "../../useCiters.js";
 import { type DebateClaimChats, DebatePanel } from "../../DebatePanel.js";
+import type { ItemFocus } from "../../item-focus.js";
 import { yearOf } from "../../debate-order.js";
 
 /**
@@ -77,6 +78,8 @@ export function DebateBand({
   publishedAt,
   articleTitle,
   claimChats,
+  focus,
+  onFocusTaken,
 }: {
   slug: string;
   onJump(id: BlockId): void;
@@ -96,6 +99,9 @@ export function DebateBand({
    * have neither the button nor the mark.
    */
   claimChats: DebateClaimChats;
+  /** One claim to scroll into view in Claims, once: a chat's way back (DebatePanel § Props). */
+  focus?: ItemFocus | null | undefined;
+  onFocusTaken?: ((focus: ItemFocus) => void) | undefined;
 }) {
   useRenderCount("DebateBand");
   const articleYear = yearOf(publishedAt);
@@ -137,6 +143,8 @@ export function DebateBand({
       thread={thread}
       onThread={setThread}
       articleTitle={articleTitle}
+      focus={focus}
+      onFocusTaken={onFocusTaken}
     />
   );
 }

@@ -557,7 +557,8 @@ export interface PublicTimeline {
  *
  * **The stops cross field by field** — `{ quoteId, depth, role, cue, again }`,
  * all of them about the article: a quote id the payload's `quotes` resolves, a
- * pass, the model's one line on what to look for there, and the deeper passes
+ * pass, the model's optional line to read the passage with (`null` where it
+ * gave none, which since `skim/11` is most stops), and the deeper passes
  * the stop is walked in again (`skim/9`, plan 261003l — without it a visitor
  * would walk a different pass from the owner).
  *

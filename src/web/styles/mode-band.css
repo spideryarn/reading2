@@ -442,6 +442,37 @@ svg.band-waiting-ghost { flex: none; }
   cursor: pointer;
 }
 .chat-back:hover { background: var(--surface-raised); color: var(--ink); }
+/* **The way back to the item a chat was started from** (ChatPanel.tsx §
+   `OriginBack`; plan 261009k, stage 2): one line above the transcript, the
+   mode's icon and *Back to "…" in Mode*, clipped with an ellipsis so a long
+   name never widens the band. */
+.chat-origin-back {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 100%;
+  min-width: 0;
+  margin: 0 0 0.35rem;
+  padding: 0.15rem 0.35rem;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  text-align: left;
+  cursor: pointer;
+}
+.chat-origin-back > svg { flex: none; }
+.chat-origin-back-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-origin-back:hover { background: var(--surface-raised); color: var(--ink); }
+.chat-origin-back:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 .chat-icon {
   display: inline-flex;
   align-items: center;
