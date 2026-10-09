@@ -91,6 +91,7 @@ describe("the reserved attribute namespace", () => {
     // the failure, and the scan above only sees string literals — so this pins
     // the two families by their exported constants.
     const used = [
+      RESERVED_ATTRS.hidden,
       RESERVED_ATTRS.note,
       RESERVED_ATTRS.noteRef,
       RESERVED_ATTRS.noteBack,

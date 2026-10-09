@@ -383,10 +383,10 @@ const findAffiliation = (have: Word[], want: string[], allowGluedMarker = true):
 
 /**
  * Whether `affiliation` is an exact run of `text`'s words. The PDF verifier's
- * glued-marker allowance is deliberately off here: this second check proves
- * which creator owns an already page-verified affiliation, and has no marker
- * evidence of its own. Letting any leading letter or up to three digits count
- * as a marker would turn `3M Company` into `M Company`.
+ * glued-marker allowance is deliberately off here: this second check, made by
+ * the web page's affiliations pass (src/front-matter-authors.ts), has no
+ * marker evidence of its own. Letting any leading letter or up to three digits
+ * count as a marker would turn `3M Company` into `M Company`.
  */
 export function affiliationPrintedIn(text: string, affiliation: string): boolean {
   const want = words(affiliation);

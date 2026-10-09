@@ -1,0 +1,189 @@
+
+## arxiv 1706.03762v7 (arxiv-html) — 24 records, 5827 chars
+  today ($0.0054):
+    Ashish Vaswani — Google Brain
+    Noam Shazeer — Google Brain
+    Niki Parmar — Google Research
+    Jakob Uszkoreit — Google Research
+    Llion Jones — Google Research
+    Aidan N. Gomez — University of Toronto
+    Łukasz Kaiser — Google Brain
+    Illia Polosukhin
+  haiku ($0.0007, 4485 ms, 3185 in / 820 out):
+    Ashish Vaswani — Google Brain
+    Noam Shazeer — Google Brain
+    Niki Parmar — Google Research
+    Jakob Uszkoreit — Google Research
+    Llion Jones — Google Research
+    Aidan N. Gomez — University of Toronto
+    Łukasz Kaiser — Google Brain
+    Illia Polosukhin
+
+## arxiv 2605.20355v1 (arxiv-html) — 23 records, 5679 chars
+  today ($0.0072):
+    Megha Srivastava — Stanford University, Stanford, CA, USA
+    Jonathan Ouyang — University of California Los Angeles, Los Angeles, CA, USA
+    Eric Zhou — University of California Los Angeles, Los Angeles, CA, USA
+    Andrew Silva — Toyota Research Institute, Los Altos, CA, USA
+    Emily Sumner — Toyota Research Institute, Los Altos, CA, USA
+    Dorsa Sadigh — Stanford University, Stanford, CA, USA
+    Yuchen Cui — University of California Los Angeles, Los Angeles, CA, USA
+    Deepak Gopinath — Toyota Research Institute, Los Altos, CA, USA
+    Guy Rosman — Toyota Research Institute, Los Altos, CA, USA
+  haiku ($0.0007, 3666 ms, 3183 in / 762 out):
+    refused: Kept the byline as printed: the front-matter pass's author list left out somebody printed before author 3.
+
+## arxiv 2608.13566 (arxiv-html) — 24 records, 5897 chars
+  today ($0.0100):
+    Egor Shibaev — Code Modelling Research, JetBrains Research, Munich, Germany | Constructor University, Bremen, Germany
+    Vera Kudrevskaia — Code Modelling Research, JetBrains Research, Munich, Germany | Constructor University, Bremen, Germany
+    Timur Galimzyanov — Code Modelling Research, JetBrains Research, Munich, Germany
+    Mikhail Evtikhiev — Code Modelling Research, JetBrains Research, Paphos, Cyprus
+    Ana Terna — Code Modelling Research, JetBrains Research, Amsterdam, The Netherlands
+    Rastislav Rabatin — Code Modelling Research, JetBrains Research, London, United Kingdom
+    Timur Kudashev — Code Modelling Research, JetBrains Research, Munich, Germany | Constructor University, Bremen, Germany
+    Timofey Bryksin — Code Modelling Research, JetBrains Research, Paphos, Cyprus
+    Arina Puchkova — Code Modelling Research, JetBrains Research, Munich, Germany
+    Patrik Bartak — Code Modelling Research, JetBrains Research, Amsterdam, The Netherlands
+    Egor Bogomolov — Code Modelling Research, JetBrains Research, Amsterdam, The Netherlands
+    Sergey Titov — Code Modelling Research, JetBrains Research, Amsterdam, The Netherlands
+  haiku ($0.0009, 5814 ms, 3377 in / 1035 out):
+    refused: Kept the byline as printed: the front-matter pass's author list left out somebody printed before author 2.
+
+## arxiv 2610.01658v1 (arxiv-html) — 40 records, 4938 chars
+  today ($0.0031):
+    Kais Hamza — School of Mathematics, Monash University, VIC 3800, Australia
+    Laurent Tournier — Université Sorbonne Paris Nord, LAGA, CNRS, UMR 7539, F-93430, Villetaneuse, France
+  haiku ($0.0006, 3036 ms, 4171 in / 394 out):
+    Kais Hamza — School of Mathematics, Monash University, VIC 3800, Australia
+    Laurent Tournier — Université Sorbonne Paris Nord, LAGA, CNRS, UMR 7539, F-93430, Villetaneuse, France
+
+## arxiv 2610.01988v1 (arxiv-html) — 11 records, 4704 chars
+  today ($0.0057):
+    Adamu Issifu — CFisUC, Department of Physics, University of Coimbra, 3004-516 Coimbra, Portugal | Departamento de Física, Instituto Tecnológico de Aeronáutica, DCTA, 12228-900, São José dos Campos, SP, Brazil | Laboratório de Computação Científica Avançada e Modelamento (Lab-CCAM), Brazil
+    Orlando Oliveira — CFisUC, Department of Physics, University of Coimbra, 3004-516 Coimbra, Portugal
+    Tobias Frederico — Departamento de Física, Instituto Tecnológico de Aeronáutica, DCTA, 12228-900, São José dos Campos, SP, Brazil | Laboratório de Computação Científica Avançada e Modelamento (Lab-CCAM), Brazil
+  haiku ($0.0005, 2289 ms, 2924 in / 353 out):
+    refused: Kept the byline as printed: the front-matter pass's author list left out somebody printed before author 2.
+
+## arxiv 2610.03261v1 (arxiv-html) — 20 records, 5510 chars
+  today ($0.0038):
+    Elena Morotti — Department of Computer Science and Engineerin University of Bologna Bologna, 40126, Italy
+    Davide Evangelista — Department of Computer Science and Engineering University of Bologna Bologna, 40126, Italy
+    Elena Loli Piccolomini — Department of Computer Science and Engineering University of Bologna Bologna, 40126, Italy
+  haiku ($0.0004, 1982 ms, 3388 in / 194 out):
+    Elena Morotti — Department of Computer Science and Engineerin University of Bologna Bologna, 40126, Italy
+    Davide Evangelista — Department of Computer Science and Engineering University of Bologna Bologna, 40126, Italy
+    Elena Loli Piccolomini — Department of Computer Science and Engineering University of Bologna Bologna, 40126, Italy
+
+## arxiv 2610.08392 (arxiv-html) — 17 records, 4704 chars
+  today ($0.0052):
+    Ilya Auslender — Department of Physics, University of Trento, Italy
+    Yasaman Heydari — Department of Physics, University of Trento, Italy
+    Asiye Malkoç — Department of Cellular, Computational and Integrative Biology, University of Trento, Italy
+    Clara Zaccaria — Department of Physics, University of Trento, Italy
+    Yuri Bozzi — Center for Mind/ Brain Sciences, University of Trento, Italy
+    Lorenzo Pavesi — Department of Physics, University of Trento, Italy
+  haiku ($0.0006, 3494 ms, 2827 in / 715 out):
+    refused: Kept the byline as printed: the front-matter pass's author list left out somebody printed before author 4.
+
+## arxiv 2610.08750 (arxiv-html) — 13 records, 3638 chars
+  today ($0.0035):
+    Jose Eduardo Escrig Molina
+    Daniel Probst
+  haiku ($0.0003, 1689 ms, 2518 in / 150 out):
+    Jose Eduardo Escrig Molina — Bioinformatics Group | Bioprocess Engineering Group Wageningen Unversity Wageningen, the Netherlands
+    Daniel Probst — Bioinformatics Group Wageningen Unversity Wageningen, the Netherlands
+
+## arxiv 2610.08781 (arxiv-html) — 9 records, 4782 chars
+  today:
+    (none)
+  haiku ($0.0007, 4165 ms, 3046 in / 694 out):
+    refused: Kept the byline as printed: the front-matter pass's author list left out somebody printed before author 2.
+
+## arxiv 2610.08785 (arxiv-html) — 22 records, 5595 chars
+  today ($0.0024):
+    Kevin Zhang — EECS, MIT, Cambridge MA, USA
+    Stephen Bates
+  haiku ($0.0006, 3320 ms, 3464 in / 488 out):
+    Kevin Zhang — EECS, MIT, Cambridge MA, USA
+    Stephen Bates — EECS, MIT, Cambridge MA, USA
+
+## arxiv 2610.08790 (arxiv-html) — 14 records, 5075 chars
+  today ($0.0041):
+    Jiraphon Yenphraphai
+    Fang Li
+    Tianshuo Xu
+    Depu Meng
+    Quentin Herau
+    Yihan Hu
+    Raymond A. Yeh
+    Wei Zhan
+  haiku ($0.0005, 2311 ms, 2973 in / 311 out):
+    Jiraphon Yenphraphai
+    Fang Li
+    Tianshuo Xu
+    Depu Meng
+    Quentin Herau
+    Yihan Hu
+    Raymond A. Yeh
+    Wei Zhan
+
+## arxiv 2610.10761 (arxiv-html) — 27 records, 5498 chars
+  today ($0.0049):
+    Mary Letey — Applied Mathematics, Harvard University | Kempner Institute, Harvard University
+    Arman Rysmakhanov — Williams College | Applied Mathematics, Harvard University
+    Yue M. Lu — Applied Mathematics, Harvard University
+    Cengiz Pehlevan — Applied Mathematics, Harvard University | Kempner Institute, Harvard University
+    Jacob A. Zavatone-Veth — Center for Brain Science, Harvard University | Society of Fellows, Harvard University
+  haiku ($0.0007, 5445 ms, 3584 in / 751 out):
+    Mary Letey — Applied Mathematics, Harvard University | Kempner Institute, Harvard University
+    Arman Rysmakhanov — Williams College | Applied Mathematics, Harvard University
+    Yue M. Lu — Applied Mathematics, Harvard University
+    Cengiz Pehlevan — Applied Mathematics, Harvard University | Kempner Institute, Harvard University
+    Jacob A. Zavatone-Veth — Center for Brain Science, Harvard University | Society of Fellows, Harvard University
+
+## arxiv 2610.10548 (arxiv-html) — 40 records, 3516 chars
+  today:
+    (none)
+  haiku ($0.0004, 2066 ms, 2742 in / 226 out):
+    refused: Kept the byline as printed: the front-matter pass's author list left unaccounted words after author 1.
+
+## pdf arxiv 1502 (pdf) — 16 records, 5770 chars
+  today:
+    Sergey Ioffe — Google Inc
+    Christian Szegedy — Google Inc
+  haiku ($0.0004, 2010 ms, 3494 in / 85 out):
+    Sergey Ioffe — Google Inc
+    Christian Szegedy — Google Inc
+
+## pdf arxiv 2010 (pdf) — 15 records, 5827 chars
+  today:
+    Alexey Dosovitskiy — Google Research, Brain Team
+    Lucas Beyer — Google Research, Brain Team
+    Alexander Kolesnikov — Google Research, Brain Team
+    Dirk Weissenborn — Google Research, Brain Team
+    Xiaohua Zhai — Google Research, Brain Team
+    Thomas Unterthiner — Google Research, Brain Team
+    Mostafa Dehghani — Google Research, Brain Team
+    Matthias Minderer — Google Research, Brain Team
+    Georg Heigold — Google Research, Brain Team
+    Sylvain Gelly — Google Research, Brain Team
+    Jakob Uszkoreit — Google Research, Brain Team
+    Neil Houlsby — Google Research, Brain Team
+  haiku ($0.0008, 4897 ms, 3381 in / 826 out):
+    Alexey Dosovitskiy — Google Research, Brain Team
+    Lucas Beyer — Google Research, Brain Team
+    Alexander Kolesnikov — Google Research, Brain Team
+    Dirk Weissenborn — Google Research, Brain Team
+    Xiaohua Zhai — Google Research, Brain Team
+    Thomas Unterthiner — Google Research, Brain Team
+    Mostafa Dehghani — Google Research, Brain Team
+    Matthias Minderer — Google Research, Brain Team
+    Georg Heigold — Google Research, Brain Team
+    Sylvain Gelly — Google Research, Brain Team
+    Jakob Uszkoreit — Google Research, Brain Team
+    Neil Houlsby — Google Research, Brain Team
+
+## totals
+  haiku: 15 calls, $0.0087, mean $0.0006

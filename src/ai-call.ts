@@ -936,6 +936,16 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
       allow_fallbacks: true,
     },
   },
+  /* **Any web page's authors and affiliations** (src/front-matter-authors.ts).
+     `pdf-frontmatter`'s route: the model is Anthropic's, and the answer is a
+     strict JSON schema an upstream that dropped `response_format` would not
+     honour. What it sends is the opening of a page a reader added, which the
+     capable tier already sends to the same upstream in full. */
+  "front-matter-authors": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { order: ["anthropic"], require_parameters: true },
+  },
   /* **A conversation's one-line gist** (src/chat-gist.ts). `title-tidy`'s
      route, copied for a sharper reason: what it sends is the reader's own
      conversation, so every endpoint is a zero-retention one. A refusal costs
@@ -1208,6 +1218,14 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
      the eval ran at:
      docs/investigations/261005b-title-tidying-rule-against-a-small-model.md. */
   "title-tidy": { effort: "none" },
+  /* Left at the default because the default is what the eval measured, on
+     `pdf-frontmatter`'s route: 50–1,600 output tokens, 1.6–6 s, about $0.0005
+     a page. Matching names to institutions by markers is where it thinks. */
+  "front-matter-authors": {
+    providerDefault:
+      "Measured 2026-10-09 by the eval that chose the model: 50–1,600 output tokens, 1.6–6 s, " +
+      "~$0.0005 a page (plan 261009u). Unmeasured at any named effort.",
+  },
   /* One line describing a conversation. Nobody waits on it, but thinking
      would spend the 300-token ceiling before the answer began. */
   "chat-gist": { effort: "none" },

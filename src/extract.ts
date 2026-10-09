@@ -32,7 +32,7 @@ import { ruleTitleTidier, type TitleTidier } from "./title-tidy.js";
 import { canonicaliseCallouts, type CalloutStats } from "./callouts.js";
 import { ChallengePage, challengeIn } from "./challenge-page.js";
 import { removePlatformFurniture } from "./furniture.js";
-import { latexmlTitleBlock, prepareLatexml } from "./latexml.js";
+import { latexmlAuthorNames, prepareLatexml } from "./latexml.js";
 import { READER_COMMENTS_KEY, removeReaderComments } from "./reader-comments.js";
 import { canonicaliseMaths } from "./maths-import.js";
 import { loadMathsRenderer } from "./maths-server.js";
@@ -53,7 +53,7 @@ import type { WorkId } from "./bibliographic.js";
 import { authorsForByline, chooseByline, metaAuthors } from "./meta-authors.js";
 import { RESERVED_ATTRS, scrubReserved } from "./reserved.js";
 import { sanitizeHtml } from "./sanitize.js";
-import type { AffiliationReader, TitleBlock } from "./arxiv-affiliations.js";
+import { type FrontMatterAuthorsReader, type OpeningRecord, markHidden, pageOpening } from "./front-matter-authors.js";
 import type { Author, Meta } from "./types.js";
 
 /**
@@ -420,11 +420,10 @@ export function readArticle(
    */
   authors: Author[] | null;
   /**
-   * A LaTeXML title block as read before it was rewritten, when `authors` is
-   * its names and nothing the page declared elsewhere; otherwise `null`. What
-   * an affiliations reader is handed (src/arxiv-affiliations.ts).
+   * The page's text from its main heading on, read before Readability, as
+   * records: what the general authors pass reads (src/front-matter-authors.ts).
    */
-  titleBlock: TitleBlock | null;
+  opening: OpeningRecord[];
   /** The identifiers the page declares for itself — src/article-registry.ts § `ownIdsOfDocument`. */
   ownIds: WorkId[];
   refusal: TooLittleTextToRead | ChallengePage | null;
@@ -444,7 +443,7 @@ export function readArticle(
   return {
     article: shipped.article,
     authors: shipped.authors,
-    titleBlock: shipped.titleBlock,
+    opening: shipped.opening,
     ownIds: shipped.ownIds,
     refusal: refusalFor(shipped),
     notes: shipped.notes,
@@ -472,7 +471,7 @@ function readingArm(
   /** What the source said it was, before anything rewrote it — `refusalFor`. */
   challenge: ChallengePage | null;
   authors: Author[] | null;
-  titleBlock: TitleBlock | null;
+  opening: OpeningRecord[];
   ownIds: WorkId[];
   notes: NoteStats;
   callouts: CalloutStats;
@@ -500,11 +499,13 @@ function readingArm(
      it and Readability deletes every `<script>`. `provenanceArm` has the same
      line in the same place. */
   const challenge = challengeIn(dom.window.document);
-  /* A LaTeXML title block's names, and each author's text for the affiliations
-     reader, before `prepareDocument` rewrites the block into one row per author
-     (src/latexml.ts § 6). `metaAuthors` still reads the `<meta>` tags where it
-     always has, below, and falls back to these names. */
-  const titleBlock = latexmlTitleBlock(dom.window.document);
+  /* A LaTeXML title block's names, before `prepareDocument` rewrites the block
+     into one row per author (src/latexml.ts § 6). `metaAuthors` still reads the
+     `<meta>` tags where it always has, below, and falls back to these names. */
+  const titleBlockNames = latexmlAuthorNames(dom.window.document);
+  /* And what the page hides from its reader, before `prepareDocument` un-hides
+     collapsed sections for Readability: the opening below leaves it out. */
+  markHidden(dom.window.document);
   const { notes, callouts, removed, kept } = prepareDocument(dom.window.document, protect);
   /* Before the parse, and it has to be: Readability mutates the document it is
      given, and `keepClasses: false` takes the `noprint` class off whatever
@@ -512,20 +513,18 @@ function readingArm(
   const notForPrint = notForPrintText(dom.window.document);
   /* Before the parse for the same reason: every author the page declares,
      which Readability collapses to one — src/meta-authors.ts. */
-  const authors = metaAuthors(dom.window.document, titleBlock?.names ?? null);
-  /* **Whether that list came from the title block**, asked now, while it can
-     be: a `citation_author` list of the same names is indistinguishable from it
-     afterwards, and a page that declares its authors has said what it has to
-     say (GPT Sol, plan review of 261009m). */
-  const fromTitleBlock = titleBlock !== null && authors !== null && metaAuthors(dom.window.document, null) === null;
+  const authors = metaAuthors(dom.window.document, titleBlockNames);
   /* And the same again: the page's own DOI or arXiv id, off its meta tags and its address. */
   const ownIds = ownIdsOfDocument(dom.window.document, url);
+  /* Before the parse, which drops a short author list as not prose and takes
+     the byline element out of the page: src/front-matter-authors.ts. */
+  const opening = pageOpening(dom.window.document);
   const article = new Readability(dom.window.document).parse();
   return {
     article,
     challenge,
     authors,
-    titleBlock: fromTitleBlock ? titleBlock : null,
+    opening,
     ownIds,
     notes,
     callouts,
@@ -1263,15 +1262,6 @@ export class TooLittleTextToRead extends Error {
  * derive it from, and every caller already knows the slug. The command line
  * that could pass an explicit filename is gone too.
  */
-/** Whether `authors` is exactly `names`, in order, with no affiliations yet: the title block's list. */
-function sameNames(authors: readonly Author[] | null, names: readonly string[]): boolean {
-  return (
-    authors !== null &&
-    authors.length === names.length &&
-    authors.every((a, i) => a.name === names[i] && a.affiliations.length === 0)
-  );
-}
-
 /** The cheap test before loading temml: a `<math>` or a MathJax script anywhere in the raw page. */
 const MIGHT_HOLD_MATHS = /<math[\s>]|math\/tex/iu;
 
@@ -1297,11 +1287,12 @@ export async function runExtract(opts: {
    */
   titleTidier?: TitleTidier;
   /**
-   * What reads an arXiv HTML paper's affiliations off its title block. Import
-   * hands in the PDF path's authors pass (src/arxiv-affiliations.ts, plan
-   * 261009m); absent, no call, and the names stay alone.
+   * What reads the declared authors' affiliations off the page's opening, on
+   * any site (src/front-matter-authors.ts, plan 261009u). Import hands in the
+   * cheap model's; absent, no call. Asked only when the page declares its
+   * authors and gives none of them an affiliation.
    */
-  affiliations?: AffiliationReader;
+  frontMatterAuthors?: FrontMatterAuthorsReader;
 }): Promise<ExtractResult> {
   const { slug } = opts;
   /* Before the DOM pass that asks whether each formula would draw: this is the
@@ -1326,7 +1317,7 @@ export async function runExtract(opts: {
      Found by a GPT Sol review that reproduced it, 2026-08-26 — the fourth round
      of the same class, and the first one where the leak was a dependency's
      rather than ours. See docs/project/logging.md. */
-  const { article, authors: declaredAuthors, titleBlock, ownIds, refusal, notes, callouts, removed, kept } = readArticle(
+  const { article, authors: declaredAuthors, opening, ownIds, refusal, notes, callouts, removed, kept } = readArticle(
     opts.html,
     opts.url,
   );
@@ -1362,13 +1353,17 @@ export async function runExtract(opts: {
      page's declared author list replaces it where it has dropped somebody,
      because Readability keeps only the last of a repeated tag —
      src/meta-authors.ts. */
-  /* **Affiliations for a LaTeXML title block's names**, and only when those
-     names are the whole list: a page that declares `citation_author` tags has
-     already said what it has to say. The reader returns the same names, in the
-     same order, or nothing (src/arxiv-affiliations.ts). Plan 261009m. */
+  /* **Affiliations for the declared names**, read off the page's opening by
+     one cheap call (src/front-matter-authors.ts, plan 261009u), on any site.
+     Only when the page declares its authors — `citation_author`, `dc.creator`
+     or an arXiv paper's LaTeXML markup — and gives none an affiliation: a page
+     that declares affiliations has said what it has to say, and a page that
+     declares nobody is not asked to have a model choose its authors. The
+     reader returns the same names, in the same order, or nothing. After every
+     refusal above, so a page refused as too short never pays. */
   const authors =
-    opts.affiliations && titleBlock && sameNames(declaredAuthors, titleBlock.names)
-      ? ((await opts.affiliations(titleBlock)) ?? declaredAuthors)
+    opts.frontMatterAuthors && declaredAuthors?.length && declaredAuthors.every((a) => a.affiliations.length === 0)
+      ? ((await opts.frontMatterAuthors(opening, declaredAuthors.map((a) => a.name))) ?? declaredAuthors)
       : declaredAuthors;
   const byline = chooseByline(authors?.map((a) => a.name) ?? null, tidyMetaText(article.byline));
   const declared = authorsForByline(authors, byline);

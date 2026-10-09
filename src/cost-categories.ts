@@ -274,6 +274,9 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   /* An imported title, tidied inside `extract` or the bulk import's
      `metadata` step. src/title-tidy-model.ts. */
   "title-tidy": "step-driven",
+  /* A web page's authors and affiliations, read inside `extract`.
+     src/front-matter-authors.ts. */
+  "front-matter-authors": "step-driven",
   /* A conversation's one-line gist, written after a chat answer is stored and
      its response sent — request scope, owner-attributed, triggered by the
      reader's question. src/chat-gist.ts. */
