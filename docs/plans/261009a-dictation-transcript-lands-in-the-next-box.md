@@ -101,3 +101,15 @@ Also from its notes: a wrong-box Try again is refused before any request, so it 
 8. B's left-behind tape is not recovered while A's words are on their way.
 
 Each was seen red with its guard disabled.
+
+## Browser check
+
+A Sonnet subagent, Playwright on the box with Chrome's fake microphone, Quiz on
+`fowler-phrenology`, at 1440, 820 and 390 wide. The fake microphone only beeps, so
+`/api/transcribe` was intercepted to return a fixed sentence 6 s late: the client side is what
+was exercised, not the model. The ordinary path landed in the same question's box. Dictating on
+question 4, stopping and pressing Next straight away left question 5's box empty and showed the
+`[mic-moved]` row with Try again, Save and Discard; back on question 4, Try again put the words
+there. Nothing overflowed. Not checked in the browser: `[mic-moved-held]`, and a comment's
+follow-up box (the tests cover both). Shots: `261009a-shot-1-desktop.png`,
+`261009a-shot-2-ipad.png`, `261009a-shot-3-phone.png`.
