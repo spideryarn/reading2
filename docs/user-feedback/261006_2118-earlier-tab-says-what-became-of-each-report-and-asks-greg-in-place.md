@@ -52,5 +52,9 @@ reviews and the browser pass are in
 **Not built, written up for Greg:** a question appears only after the next deploy, because making
 it instant needs an agent to write into production, either through a new endpoint with a secret
 (an edit to the sign-in gate, a listed defence) or by the Overseer copying questions in between
-deploys. That is question `q-f6ub8e`, recommending to keep the deploy for now. Multiple-choice
+deploys. That is question `q-f6ub8e`, recommending to keep the deploy for now. Greg answered on
+2026-10-08 (`spya-nhmghm`) that he pictures questions and replies both in the database, with a
+command agents run; planned as
+[261009f](../plans/261009f-agent-questions-and-replies-in-the-database.md), not built, and how
+an agent's command may write to production is asked as `q-rstqvz`. Multiple-choice
 options as buttons are queued as `qi-kwkv4pct`.
