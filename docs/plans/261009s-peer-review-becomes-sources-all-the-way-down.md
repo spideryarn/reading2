@@ -193,8 +193,8 @@ and is true; writes from either version are visible to both.
    constraints and index renamed with it), then `CREATE VIEW debate_claim_checks AS SELECT * FROM
    sources_claim_checks`. A one-table view is auto-updatable in Postgres, so the old code's
    insert, update and select keep working through it; a test proves the old store's statements
-   (including its `ON CONFLICT` against the partial unique index, if it uses one) work through the
-   view on the test database. Grants on the view match the table's.
+   work through the view on the test database. Grants on the view match the table's. The index and
+   constraint names stay as they are until the contract (§ After GPT Sol's plan review, F3).
 6. **The cost bucket CHECK** (`schema.ts`, the one naming `'debate-check'`) and any other CHECK that
    lists a renamed job: widened to both.
 
@@ -311,3 +311,69 @@ report's note, `feedback-endings.ts`), and messages to the two sessions if they 
   555 hits in 142 files). `SPIDERYARN_DEBATE_MODEL` and `SPIDERYARN_CITATIONS_FIND_MODEL` are set in
   no environment (Vercel production lists only `SPIDERYARN_OWNER_ID`; not in `.env.local`), so
   renaming them drops no override.
+
+## After GPT Sol's plan review
+
+[261009s-plan-review-sol.md](261009s-plan-review-sol.md): BUILD WITH CHANGES, F1 to F11. It found no
+lease failure in the step-run mirror, but showed the expand was only compatible in one direction in
+several places. What changed, each a decision taken now:
+
+- **F1 (P1), accepted: a stale tab must not be told an artefact is missing.** The old hooks read a
+  404 as "not made yet" and offer to run it again (`useCitations.ts`, `useDebate.ts`). So, **for one
+  deploy, removed by the contract**: the old GET and POST paths (`/api/citations/…`,
+  `/api/debate/…`, `/api/debate-claims/…` and `/checks`, the investigate POST) stay registered as
+  thin aliases that call the new handler and give back the **old envelope** (top-level keys
+  translated, nothing else); the public payload carries both key sets (`citations`/`debate`/
+  `debateClaims` beside the new ones); and job ingress and the chat-origin route accept the old step
+  names and origin shapes, read through the same aliases as the database (`RETIRED_STEPS`, the
+  origin mapper). Each alias names the contract queue item in its comment.
+- **F2 (P1), accepted: the claim-check allowance counts both bucket spellings.** New code writes
+  `sources-claim-check` and the limiter counts `bucket in (new, old)` for the hourly, daily,
+  concurrent and global limits, so the rename resets no safety limit. The contract rewrites or
+  deletes the old rows **before** narrowing the bucket CHECK.
+- **F3 (P1), accepted: the claim-check index and constraints keep their old names through the
+  expand.** The table is renamed (and the `debate_claim_checks` view made for the old code); the old
+  store recognises the violation by the literal index name, so that name stays until the contract,
+  and the new store recognises either name. (There is no `ON CONFLICT` in that store; the
+  plan's line saying so was wrong.)
+- **F4 (P1), accepted: the stored JSON inside a Bibliography keeps its `citations` key**
+  (`Bibliography.citations: CitedWork[]`, and `PublicBibliography.citations`): it is a list of
+  citations, so it is the right word, and changing it would need a dual-shape migration of every
+  stored list. On the keep-list. Inner keys of the other artefacts likewise stay as stored.
+- **F5 (P1), the invariant is stated more narrowly, on purpose.** Migration-before-code is safe in
+  both directions for every reader-facing read (columns, step runs, the claim-check table). New code
+  writes **new** job step names and origin values, which the pre-rename code cannot read; so **a
+  rollback to the pre-rename code after this deploy is not safe** for jobs queued and chats started
+  after it (a queued job's renamed step fails; a chat shows no way back). Persisting old spellings
+  for an extra deploy would buy rollback safety at the price of a third deploy and a write-side codec
+  in two stores; on this beta that is not worth it. Written into the contract item and the Overseer
+  message, so a rollback is a decision taken knowing it.
+- **F6 (P1), accepted:** the `legacy…` fields are excluded from the export bundle, under a test. The
+  export layout is corrected: `citations.json` → `bibliography.json`,
+  `debate-claims.json` → `sources-claims.json`, `debate-claim-checks.json` →
+  `sources-claim-checks.json`; Reception has no file and ships as its column's key in
+  `content/revision.json` (`debate` → `reception`).
+- **F7 (P1), accepted:** `peer-review` joins `NEVER_REMEMBERED` beside `debate` and `remember`, with
+  red-first tests for a lone `?peer-review=claims` and for a restored view.
+- **F8 (P2), accepted:** whole-row reads of `article_revisions` select only the active columns; the
+  revision carry policy classifies the legacy columns (not carried; the trigger fills them on insert).
+- **F9 (P2), overruled with evidence:** neither `SPIDERYARN_DEBATE_MODEL` nor
+  `SPIDERYARN_CITATIONS_FIND_MODEL` is set anywhere (Vercel lists only `SPIDERYARN_OWNER_ID`, all
+  targets; not in the box's `.env.local`), so there is no external configuration to carry across.
+- **F10 (P2), accepted:** one ledger-task canonicaliser for all five renames, used by cost
+  categories, the cost cube and the article's cost view (`currentStepName` covers steps only).
+- **F11 (P2), accepted:** `DebatePanel` → `ReceptionAndClaimsPanel`; an identifier is named after the
+  sub-mode it serves (the bears threshold is Claims': `SourcesClaimsBears`, not `ReceptionBears`);
+  frozen eval inputs (`evals/command-pick/catalogue-261002c.ts`, `evals/cost/audit-*/`) are history;
+  help images and scripts are swept by file name; `help-corpus.generated.json` regenerated;
+  `CACHEABLE` and `NONE_YET_AS_NULL` in `src/web/lib/api.ts` updated. The collision grep in § "Source"
+  already means other things is replaced by the forms list alone: an exact `"sources"` also finds
+  the Storage bucket, so the check is that each hit of the mode's forms is the mode, read by hand.
+- **Tests Sol asked for**, added to Done: the step-run mirror with both spellings present through a
+  draft copy, a sharing rebase, the `extraSteps()` delete and `beginStepRun`'s conditional upsert.
+
+**The contract queue item** therefore lists: drop the three legacy columns, their trigger and the
+`legacy…` declarations; delete old-named step runs and the mirror trigger, narrow the CHECK; rewrite
+`jobs.steps` / `jobs.reset` and the chat origins, narrow their CHECKs; rewrite or delete old bucket
+rows, then narrow the bucket CHECK; rename the claim-check index and constraints and drop the view;
+remove the old API route aliases and the public payload's old keys. The read-side aliases may stay.
