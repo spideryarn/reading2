@@ -54,6 +54,8 @@ export interface LatexmlStats {
   svgObjects: number;
   listings: number;
   boxedPassages: number;
+  /** LaTeXML's `ltx_ERROR` reports of a macro it could not expand, removed. */
+  undefinedMacros: number;
 }
 
 /** The element every rule here must find above what it rewrites. */
@@ -79,7 +81,7 @@ const SKIP = MATHS_SKIP_TAGS.join(",");
  * that pass converts nothing.
  */
 export function prepareLatexml(doc: Document): LatexmlStats {
-  const stats: LatexmlStats = { alignedEquations: 0, equationGroupsLeftAlone: 0, svgObjects: 0, listings: 0, boxedPassages: 0 };
+  const stats: LatexmlStats = { alignedEquations: 0, equationGroupsLeftAlone: 0, svgObjects: 0, listings: 0, boxedPassages: 0, undefinedMacros: 0 };
   if (!hasLatexmlSource(doc)) return stats;
   const roots = Array.from(doc.querySelectorAll(DOCUMENT));
   if (roots.length === 0) return stats;
@@ -100,6 +102,9 @@ export function prepareLatexml(doc: Document): LatexmlStats {
     }
     for (const listing of Array.from(root.querySelectorAll("div.ltx_listing"))) {
       if (listingToPre(listing, targets)) stats.listings += 1;
+    }
+    for (const marker of Array.from(root.querySelectorAll("span.ltx_ERROR.undefined"))) {
+      if (removeUndefinedMacro(marker, targets)) stats.undefinedMacros += 1;
     }
   }
   return stats;
@@ -607,6 +612,90 @@ function liftBoxedPassage(svg: Element, targets: ReadonlySet<string>): boolean {
   passage.append(...Array.from(content.childNodes));
   svg.replaceWith(passage);
   return true;
+}
+
+/* ------------------------------------------------------------------ *
+ * 8. A macro LaTeXML could not expand
+ * ------------------------------------------------------------------ */
+
+/** One TeX control sequence and nothing else: `\hohsettheme`, `\ucite`, `\\`. */
+const CONTROL_SEQUENCE = /^\\(?:[A-Za-z@]+\*?|[^A-Za-z@\s])$/u;
+
+/**
+ * A name from the TeX source, not a word: one token with an underscore or a
+ * lower-case letter straight before a capital — `hohRose`,
+ * `Biblio_paper_brillouin`. An ordinary word (`Funding`) and an acronym
+ * (`LP4FM`) have neither.
+ */
+const SOURCE_NAME = /^(?=[\w-]{1,64}$)[\w-]*(?:_|[a-z][A-Z])[\w-]*$/u;
+
+/** A citation key, or several joined by commas; a full stop or comma only between key characters. */
+const CITATION_KEY = /^[\w:\-/+]+(?:[.,][\w:\-/+]+)*/u;
+
+/** What a few measured macros stood for, where leaving nothing would join two phrases. */
+const STOOD_FOR: ReadonlyMap<string, string> = new Map([
+  /* elsarticle's and CEUR's keyword separator (2610.10541). */
+  ["\\sep", "; "],
+]);
+
+/**
+ * Remove LaTeXML's report of a macro it had no definition for, and the argument
+ * it orphaned where that is plainly a name from the source rather than prose.
+ * The report is the macro's name, set as text in
+ * `<span class="ltx_ERROR undefined">`; the argument follows as ordinary text,
+ * because LaTeXML did not know the macro took one.
+ *
+ * The report is never the author's words, so it always goes. What follows it
+ * usually is the author's (a funding statement after `\bmsection`, a workshop's
+ * name after `\workshoptitle`) and stays. Two shapes of argument are not, and
+ * go with it:
+ *
+ * - a `p.ltx_p` straight after it whose whole text is one `SOURCE_NAME` —
+ *   `\hohsettheme{hohRose}`, a colour theme (2609.01481v1), and
+ *   `\bibliographyfullrefs{Biblio_paper_brillouin}`, a .bib file (2610.11413);
+ * - a key with a digit in it straight after a macro whose name says `cite` —
+ *   `phases\ucite{dagotto2005}.` reads `phases.` (2610.11126, 104 of them).
+ *
+ * Where taking the report out would join two words, a space stands in its
+ * place; `STOOD_FOR` names the macros that stood for something more. Measured
+ * on 79 arXiv papers, 2026-10-09:
+ * docs/plans/261009e-latex-undefined-macros-leave-the-page.md.
+ */
+function removeUndefinedMacro(marker: Element, targets: ReadonlySet<string>): boolean {
+  if (marker.children.length > 0 || marker.parentElement?.closest(SKIP)) return false;
+  const name = (marker.textContent ?? "").trim();
+  if (!CONTROL_SEQUENCE.test(name)) return false;
+  const argument = sourceNameArgument(marker);
+  if (holdsALinkTarget(marker, targets) || (argument && holdsALinkTarget(argument, targets))) return false;
+
+  const after = marker.nextSibling;
+  if (/cite/iu.test(name) && after?.nodeType === 3) {
+    const text = after.textContent ?? "";
+    const key = CITATION_KEY.exec(text)?.[0];
+    if (key && /\d/u.test(key)) after.textContent = text.slice(key.length);
+  }
+  argument?.remove();
+  const before = marker.previousSibling;
+  const stoodFor = STOOD_FOR.get(name);
+  if (stoodFor !== undefined) {
+    if (before?.nodeType === 3) before.textContent = (before.textContent ?? "").trimEnd();
+    marker.replaceWith(stoodFor);
+  } else if (/\S$/u.test(before?.textContent ?? "") && /^[\p{L}\p{N}]/u.test(marker.nextSibling?.textContent ?? "")) {
+    marker.replaceWith(" ");
+  } else {
+    marker.remove();
+  }
+  return true;
+}
+
+/** The paragraph straight after `marker`, if its whole text is one name from the source. */
+function sourceNameArgument(marker: Element): Element | null {
+  let node = marker.nextSibling;
+  while (node && node.nodeType === 3 && (node.textContent ?? "").trim() === "") node = node.nextSibling;
+  if (!node || node.nodeType !== 1) return null;
+  const p = node as Element;
+  if (!p.matches("p.ltx_p") || p.children.length > 0) return null;
+  return SOURCE_NAME.test((p.textContent ?? "").trim()) ? p : null;
 }
 
 /* ------------------------------------------------------------------ *
