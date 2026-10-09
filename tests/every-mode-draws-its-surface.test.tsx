@@ -763,6 +763,8 @@ const EVERY_TARGET: Record<AutoRunTarget, true> = {
   quotes: true,
   timeline: true,
   debate: true,
+  /* Debate's Claims list — armed one level down, by a press that lands on Claims. */
+  "debate-claims": true,
   citations: true,
   faq: true,
   relations: true,
@@ -1225,7 +1227,7 @@ const SPENDS: Record<Mode, Spend> = {
   ideas: { kind: "posts", steps: ["ideas"] },
   quotes: { kind: "posts", steps: ["quotes"] },
   timeline: { kind: "posts", steps: ["timeline"] },
-  /* The dearest press in the app — two calls out to the open web. */
+  /* The dearest press in the app — one call out to the open web. */
   debate: { kind: "posts", steps: ["debate"] },
   /* One model call over the article, like the timeline. */
   citations: { kind: "posts", steps: ["citations"] },

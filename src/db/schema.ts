@@ -88,6 +88,7 @@ import type {
   Debate,
   Faq,
   Relations,
+  DebateClaimList,
   Crossrefs,
   SimpleSummary,
   Skim,
@@ -1249,6 +1250,19 @@ export const articleRevisions = spideryarn.table(
      * jump rather than take a delete with it or block one.
      */
     debate: jsonb("debate").$type<Debate>(),
+
+    /**
+     * The article's claims, listed for Debate's Claims sub-mode to pick from —
+     * `DebateClaimList`, src/types.ts, written by the `debate-claims` step.
+     * docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2.
+     *
+     * The WHOLE artefact, like its neighbours; `sourceHash` covers its rendered
+     * body and cited head. **Public**, read-only, through `PUBLIC_PROJECTIONS`: model
+     * output about the article, which mode.md makes a visitor's by default.
+     * A column of its own rather than a field inside `debate`, because the
+     * two are made by different presses and go stale on different clocks.
+     */
+    debateClaims: jsonb("debate_claims").$type<DebateClaimList>(),
 
     /**
      * Every work the piece cites — `Citations`, src/types.ts, written by the
@@ -3325,7 +3339,7 @@ export const revisionStepRuns = spideryarn.table(
          `tests/db-step-constraint.test.ts` compares the last `ADD CONSTRAINT`
          in the migrations against `STEP_ORDER` in both directions, which is
          what makes there not be a third drift. */
-      sql`${t.stepName} in ('fetch','metadata','extract','blocks','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','relations','sketch','illustrated','debate','citations','crossrefs','simple')`,
+      sql`${t.stepName} in ('fetch','metadata','extract','blocks','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','relations','sketch','illustrated','debate','debate-claims','citations','crossrefs','simple')`,
     ),
     check(
       "revision_step_runs_status",

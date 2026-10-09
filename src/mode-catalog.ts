@@ -478,8 +478,9 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        claim row prints the article's own `claimQuote` beside the response
        (DebatePanel.tsx). And "two searches" undercounts — they are two metered
        *passes*, one of which has run 36 searches on its own (src/debate.ts).
-       GPT Sol, 2026-09-07. */
-    how: "What it finds comes from two passes over the open web rather than from the article, and is stored once it lands. Every row links out, so you can check a source rather than take our word for it.",
+       GPT Sol, 2026-09-07. Since `debate/7` (2026-10-08) a press runs one pass,
+       for Reception; "a search" would still undercount it, so "a pass". */
+    how: "What it finds comes from a pass over the open web rather than from the article, and is stored once it lands. Every row links out, so you can check a source rather than take our word for it.",
     /* The two names refused for the mode and the one refused on the code, all
        three pointing here rather than nowhere. `reception` presumes the piece
        was noticed and `critiques` presumes the response was hostile — false

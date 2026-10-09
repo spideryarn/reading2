@@ -77,7 +77,7 @@ function publish(debate: Debate): PublicDebate {
     headingTitle: null, finalUrl: "https://example.org/piece",
     blocks: [], tree: { rootId: "spya-root", nodes: {} } as unknown as Tree,
     arc: null, assets: null, glossary: null, ideas: null, quotes: null, tweets: null,
-    timeline: null, skim: null, faq: null, simpleSummary: null, citations: null, debate,
+    timeline: null, skim: null, faq: null, simpleSummary: null, citations: null, debate, debateClaims: null,
     crossrefs: null, crossrefsFresh: false, comments: [], searches: [], sketch: null,
     navLabelStatus: "ready", sourceGuess: null,
     sharedBy: "public",
@@ -97,7 +97,7 @@ function Page() {
   if (route.kind !== "read") return createElement("p", null, "not found");
   if (mode !== "debate") return createElement("p", null, `band: ${mode}`);
   return createElement(VisitorDebateBand, {
-    debate, onJump: () => {}, blockOrder: new Map([[BLOCK, 0]]),
+    debate, claimList: null, onJump: () => {}, blockOrder: new Map([[BLOCK, 0]]),
     publishedAt: undefined, articleTitle: "The shared piece",
   });
 }
@@ -222,10 +222,10 @@ it("explains rows withheld by the real public boundary in each empty sub-mode", 
   debate = publish({
     ...STORED,
     direct: { ...STORED.direct, rows: STORED.direct.rows.map((row) => ({ ...row, url: "http://127.0.0.1/reply" })) },
-    claims: { ...STORED.claims, rows: STORED.claims.rows.map((row) => ({ ...row, url: "http://127.0.0.1/claim" })) },
+    claims: { counts, rows: STORED.claims.rows.map((row) => ({ ...row, url: "http://127.0.0.1/claim" })) },
   });
   expect(debate.direct.sourceNotPublishable).toBe(1);
-  expect(debate.claims.sourceNotPublishable).toBe(3);
+  expect(debate.claims).toMatchObject({ sourceNotPublishable: 3 });
   boot("?mode=debate");
   expect(host.querySelector(".dbt-empty")?.textContent).toBe(debateWithheldOnSharedLink("The search for replies to this piece", 1));
   press('[aria-label="Claims, 0 sources"]');

@@ -40,6 +40,8 @@ import type {
   Debate,
   DirectDebateRow,
   Faq,
+  DebateClaimList,
+  ListedClaim,
   SimpleSentence,
   SimpleSummary,
   Glossary,
@@ -73,6 +75,7 @@ const NO_ARTEFACTS = {
   simpleSummary: null,
   citations: null,
   debate: null,
+  debateClaims: null,
   /* Cross-references (plan 261001b): none built, and so nothing to be fresh. */
   crossrefs: null,
   crossrefsFresh: false,
@@ -1347,6 +1350,30 @@ describe("the artefacts a shared link carries", () => {
   };
 
   /**
+   * **Debate's claims list with every field set** — `dropped` above all, and a
+   * key on a claim the stored document should not have, so a projection that
+   * copied its argument would carry it out. Plan 261008i stage 2.
+   */
+  const CLAIM_LIST: DebateClaimList = {
+    version: "debate-claims/1",
+    generator: "some-model",
+    slug: "noema",
+    sourceHash: "abc123",
+    claims: [
+      {
+        id: "spya-cdm2a4",
+        blockId: "spya-bbbbbb" as BlockId,
+        quote: "the measurement",
+        statement: "A measurement has to carry its own meaning.",
+        ...({ ownerId: "owner id sentinel on a listed claim" } as object),
+      } as ListedClaim,
+    ],
+    dropped: { unknownIds: 1, unquoted: 2, tooLong: 0, duplicate: 0, overCap: 3, malformed: 0 },
+    generatedAt: "2026-10-08T10:00:00.000Z",
+    elapsedMs: 9_000,
+  };
+
+  /**
    * **A stored Simple with every field set** — the stamp above all: the
    * paragraphs cross, the pipeline's provenance does not. Plan 260930i.
    */
@@ -1634,6 +1661,7 @@ describe("the artefacts a shared link carries", () => {
     simpleSummary: SIMPLE,
     citations: CITATIONS,
     debate: null,
+    debateClaims: CLAIM_LIST,
     comments: [],
     searches: [],
     sketch: null,
@@ -2161,6 +2189,27 @@ describe("the artefacts a shared link carries", () => {
     expect(JSON.stringify(built.faq)).not.toContain("dropped");
   });
 
+  /** Each listed claim's id, place, quote and the AI's line, and nothing about our pipeline. Plan 261008i. */
+  it("carries Debate's listed claims, field by field, and not what checking dropped", () => {
+    expect(pathsUnder("debateClaims")).toEqual(
+      ["claims", "claims[].blockId", "claims[].id", "claims[].quote", "claims[].statement"].sort(),
+    );
+    expect(built.debateClaims).toEqual({
+      claims: [
+        {
+          id: "spya-cdm2a4",
+          blockId: "spya-bbbbbb",
+          quote: "the measurement",
+          statement: "A measurement has to carry its own meaning.",
+        },
+      ],
+    });
+    const json = JSON.stringify(built.debateClaims);
+    for (const gone of ["dropped", "sourceHash", "generator", "version", "owner id sentinel"]) {
+      expect(json, gone).not.toContain(gone);
+    }
+  });
+
   /** Both levels' paragraphs and ids, and not the stamp or the owner's profile hash. Plans 260930i, 261001b. */
   it("carries Simple's paragraphs and their ids at Brief and Fuller, and not the stamp or a stored middle level", () => {
     expect(pathsUnder("simpleSummary")).toEqual(
@@ -2501,6 +2550,7 @@ describe("the artefacts a shared link carries", () => {
       simpleSummary: null,
       citations: null,
       debate: null,
+      debateClaims: null,
       crossrefs: null,
       crossrefsFresh: false,
       comments: [],
@@ -2539,7 +2589,7 @@ describe("the artefacts a shared link carries", () => {
       assets: null,
       ...NO_ARTEFACTS,
     });
-    for (const key of ["glossary", "ideas", "tweets", "skim", "faq", "simpleSummary", "citations", "debate"]) {
+    for (const key of ["glossary", "ideas", "tweets", "skim", "faq", "simpleSummary", "citations", "debate", "debateClaims"]) {
       expect(key in bare, key).toBe(false);
     }
   });
@@ -2829,6 +2879,30 @@ describe("the debate a shared link carries", () => {
     };
   }
 
+  /** The claims group of a debate stored before `debate/7`, which did search — or a failed test. */
+  function searched<G extends { pass?: "not-run" | undefined }>(claims: G | undefined): Exclude<G, { pass: "not-run" }> {
+    if (claims === undefined || claims.pass === "not-run") throw new Error("expected a searched claims group");
+    return claims as Exclude<G, { pass: "not-run" }>;
+  }
+
+  /**
+   * **A debate searched at `debate/7` or later ran no claims search, and a
+   * visitor is told so** — `{pass: "not-run"}` crosses as it is, with no
+   * `sourceNotPublishable`, rather than as an empty group, which the panel
+   * would read as a search that kept nothing (plan 261008i, F4).
+   */
+  it("carries a claims search that did not run as not run, not as an empty group", () => {
+    const built = publish({ ...debateOf([directRow()], []), claims: { pass: "not-run", rows: [] } });
+    expect(built.debate?.claims).toEqual({ pass: "not-run", rows: [] });
+    expect(built.debate?.direct.rows.map((r) => r.id)).toEqual(["spya-dr0001"]);
+  });
+
+  it("carries a debate stored before the marker as a searched group, with no pass", () => {
+    const built = publish(debateOf([], [claimRow()]));
+    expect(built.debate?.claims).not.toHaveProperty("pass");
+    expect(searched(built.debate?.claims).sourceNotPublishable).toBe(0);
+  });
+
   function debateOf(direct: DirectDebateRow[], claims: ClaimDebateRow[]): Debate {
     return {
       version: "debate/9",
@@ -2933,7 +3007,7 @@ describe("the debate a shared link carries", () => {
     );
     expect(built.debate?.searchedAt).toBe("2026-09-20T10:00:00.000Z");
     expect(built.debate?.direct.sourceNotPublishable).toBe(0);
-    expect(built.debate?.claims.sourceNotPublishable).toBe(0);
+    expect(searched(built.debate?.claims).sourceNotPublishable).toBe(0);
     expect(JSON.stringify(built.debate)).not.toContain("debate registry extra must not cross");
     /* A clean article address on a linked signal crosses as itself. */
     expect(built.debate?.direct.rows[0]?.identifies[0]).toEqual({
@@ -2962,7 +3036,7 @@ describe("the debate a shared link carries", () => {
     expect(built.debate?.direct.rows.map((r) => r.id)).toEqual(["spya-dr0001"]);
     expect(built.debate?.direct.sourceNotPublishable).toBe(2);
     expect(built.debate?.claims.rows.map((r) => r.id)).toEqual(["spya-cr0001"]);
-    expect(built.debate?.claims.sourceNotPublishable).toBe(1);
+    expect(searched(built.debate?.claims).sourceNotPublishable).toBe(1);
     const json = JSON.stringify(built);
     for (const leak of ["swordfish", "192.168.0.7", "intranet/answer"]) expect(json, leak).not.toContain(leak);
     expect(debate, "the owner's artefact and its counts are untouched").toEqual(before);
@@ -3014,7 +3088,7 @@ describe("the debate a shared link carries", () => {
       { kind: "named", by: "title", witness: TITLE },
     ]);
     expect(built.debate?.claims.rows.map((r) => r.id)).toEqual(["spya-cr0001"]);
-    expect(built.debate?.claims.sourceNotPublishable).toBe(1);
+    expect(searched(built.debate?.claims).sourceNotPublishable).toBe(1);
     expect(JSON.stringify(built)).not.toContain(needle);
   });
 
@@ -3053,7 +3127,7 @@ describe("the debate a shared link carries", () => {
     expect(built.debate?.direct.rows).toEqual([]);
     expect(built.debate?.direct.sourceNotPublishable).toBe(1);
     expect(built.debate?.claims.rows).toEqual([]);
-    expect(built.debate?.claims.sourceNotPublishable).toBe(1);
+    expect(searched(built.debate?.claims).sourceNotPublishable).toBe(1);
     expect(JSON.stringify(built)).not.toContain("OWNERSECRET");
   });
 
@@ -3069,7 +3143,7 @@ describe("the debate a shared link carries", () => {
     expect(built.debate?.direct.rows).toEqual([]);
     expect(built.debate?.direct.sourceNotPublishable).toBe(1);
     expect(built.debate?.claims.rows).toEqual([]);
-    expect(built.debate?.claims.sourceNotPublishable).toBe(1);
+    expect(searched(built.debate?.claims).sourceNotPublishable).toBe(1);
     expect(JSON.stringify(built)).not.toContain("OWNERSECRET");
   });
 

@@ -201,7 +201,7 @@ import { MODE_LABEL } from "../title-text.js";
 import type { BlockId, Comment } from "../types.js";
 import { type AskedQuestion, type DrawerEntry, MARK_KIND_LABEL, commentKind, orderDrawer, passageOf } from "./comment-nav.js";
 import { HighlightDot } from "./HighlightSwatches.js";
-import { armActivationForMode, armActivationForSubMode } from "./activation.js";
+import { armActivationForMode, armActivationForSubMode, type PressContext } from "./activation.js";
 import { returnToSubMode, withSubMode, withSubModeParams, type SubMode } from "./sub-modes.js";
 /* **This direction only.** `CommandBar` deliberately imports nothing from this
    file — the visible list and the one activation callback go down as props —
@@ -235,6 +235,8 @@ import type { DiagramKind } from "./diagram.js";
 import {
   type BandMode,
   DEFAULT_MODE,
+  debateInSearch,
+  type DebateView,
   diagramInSearch,
   marginInSearch,
   type Mode,
@@ -385,6 +387,15 @@ interface Props {
    * tests/every-mode-draws-its-surface.test.tsx holds it.
    */
   diagram?: DiagramKind;
+  /**
+   * **Which of Debate's sub-modes is showing** (`?debate=`), as the reading
+   * view has parsed it — off the reading view the carried query string says
+   * (`debateInSearch`). Since 2026-10-08 a Debate press arms the search only
+   * when it lands on Reception (activation.ts § `activationForDebate`), so this
+   * is read for `summary`'s reason above: from the state, not the lagging
+   * address.
+   */
+  debate?: DebateView;
   /**
    * **Whether this reader sees the modes that are still being built** — and
    * therefore how many buttons the bar draws at all. `visibleModes` is the rule.
@@ -1771,14 +1782,18 @@ function useMetadataEscape(enabled: boolean, href: string): void {
 export function useActivateMode(
   slug: string,
   search: string,
-  diagram: DiagramKind,
-  summary: SummaryView,
+  /* What the press would land on, per mode that asks (activation.ts §
+     `PressContext`): the reading view's parsed state, never the address. */
+  press: PressContext,
   onMode: Props["onMode"],
   arms: boolean,
   current: BandMode | undefined,
   toggles: boolean,
   margin: boolean,
 ): (next: Mode) => void {
+  /* Taken apart so the callback depends on the three answers, not on an
+     object a caller rebuilds every render. */
+  const { diagram, summary, debate } = press;
   return useCallback(
     (next: Mode) => {
       if (onMode === undefined) {
@@ -1805,10 +1820,10 @@ export function useActivateMode(
          Only the press that turns the column on can ask from the browser for
          relation words missing after import (plans 261003f and 261005d). */
       const marginOn = next === "marginalia" && margin;
-      if (arms && !again && !marginOn) armActivationForMode(slug, next, { diagram, summary });
+      if (arms && !again && !marginOn) armActivationForMode(slug, next, { diagram, summary, debate });
       onMode(next, undefined, toggles);
     },
-    [slug, search, diagram, summary, onMode, arms, current, toggles, margin],
+    [slug, search, diagram, summary, debate, onMode, arms, current, toggles, margin],
   );
 }
 
@@ -1880,6 +1895,7 @@ export function Dock({
   margin: marginProp,
   summary: summaryProp,
   diagram: diagramProp,
+  debate: debateProp,
   marked,
   visitor,
   shelfRow,
@@ -2007,13 +2023,17 @@ export function Dock({
      own parsed state where there is one, and the carried address only off it,
      where a press is a link and arms nothing anyway. § Props `summary`. */
   const summary = summaryProp ?? summaryInSearch(search);
+  /* Which of Debate's sub-modes a Debate press would land on, the same way
+     round. § Props `debate`. */
+  const debate = debateProp ?? debateInSearch(search);
 
   /* **Opening a mode**, and it is one callback rather than two calls made
      twice — `useActivateMode` above holds the whole of the reasoning, which
      is the reason it is a named thing at all. */
-  const activateMode = useActivateMode(slug, search, diagram, summary, onMode, !isVisitor, mode, false, margin);
+  const press = { diagram, summary, debate };
+  const activateMode = useActivateMode(slug, search, press, onMode, !isVisitor, mode, false, margin);
   /* The bar's own buttons: the same door, but a second press closes. */
-  const pressMode = useActivateMode(slug, search, diagram, summary, onMode, !isVisitor, mode, true, margin);
+  const pressMode = useActivateMode(slug, search, press, onMode, !isVisitor, mode, true, margin);
   const activateSubMode = useActivateSubMode(slug, search, onMode, !isVisitor);
 
   /* **How much of itself the bar spells out is measured, not guessed** — the

@@ -558,7 +558,7 @@ describe("what the payload says it has", () => {
   });
 
   /**
-   * **The lift carries the four artefacts and nothing else.**
+   * **The lift carries the artefacts and nothing else.**
    *
    * `PublicArticle` extends `PublicArtefactSet`, so handing the whole payload
    * down would typecheck — and would leave the prose, the blocks and the tree
@@ -566,8 +566,18 @@ describe("what the payload says it has", () => {
    * construct-rather-than-spread rule the server DTOs follow.
    */
   it("lifts the artefacts out without the article coming with them", () => {
-    const full: PublicArticle = { ...BARE, glossary: { entries: [] } };
-    expect(Object.keys(artefactsOf(full))).toEqual(["glossary"]);
+    const debateClaims = {
+      claims: [
+        {
+          id: "spya-cdm2a4",
+          blockId: "spya-bbbbbb",
+          quote: "the measurement",
+          statement: "A measurement has to carry its own meaning.",
+        },
+      ],
+    };
+    const full: PublicArticle = { ...BARE, glossary: { entries: [] }, debateClaims };
+    expect(artefactsOf(full)).toEqual({ glossary: { entries: [] }, debateClaims });
     expect(artefactsOf(BARE)).toEqual({});
   });
 });

@@ -24,6 +24,36 @@ import {
 import { isDebateBears, readStoredBears } from "../src/types.js";
 import type { Block, SearchEvidence } from "../src/types.js";
 import { bearsLines, bearsProblems, bearsReport, completeBearsReport } from "../evals/debate/bears.js";
+import { costOf } from "../evals/debate/cost.js";
+import type { SpendRecord } from "../src/ai-spend.js";
+
+function spend(webSearches: number, priced = true): SpendRecord {
+  return {
+    job: "debate",
+    wire: "chat",
+    model: "test",
+    answeredBy: null,
+    cost: priced ? { source: "provider", costNanos: 1 } : { source: "none" },
+    upstreamCostNanos: null,
+    providerAccount: "openrouter",
+    generationId: "gen-test",
+    upstream: null,
+    credentialFingerprint: null,
+    isByok: false,
+    inputTokens: null,
+    outputTokens: null,
+    cacheReadTokens: null,
+    cacheWriteTokens: null,
+    cacheWrite5mTokens: null,
+    cacheWrite1hTokens: null,
+    reasoningTokens: null,
+    webSearches,
+    serviceTier: null,
+    inferenceGeo: null,
+    ms: 1,
+    outcome: "ok",
+  };
+}
 
 describe("the live reader", () => {
   it("keeps each of the three stops", () => {
@@ -170,6 +200,19 @@ describe("the eval's bears report", () => {
         { ok: true, pass: "claims", bears: claims },
       ]),
     ).toMatchObject({ rows: 2, keptRows: 2 });
+  });
+
+  it("measures a current Reception-only replay without mistaking legacy partial data for a run", () => {
+    const direct = bearsReport([{ bears: "directly" }], [{ bears: "directly" }]);
+    const replay = [{ ok: true as const, pass: "direct" as const, bears: direct }];
+    expect(completeBearsReport(replay)).toBeNull();
+    expect(completeBearsReport(replay, ["direct"])).toMatchObject({ rows: 1, keptRows: 1 });
+  });
+
+  it("accepts one search plus optional search-free synthesis, and refuses a second search", () => {
+    expect(costOf([spend(3)], { completed: true }).problems).toEqual([]);
+    expect(costOf([spend(3), spend(0)], { completed: true }).problems).toEqual([]);
+    expect(costOf([spend(3), spend(2)], { completed: true }).problems).not.toEqual([]);
   });
 });
 

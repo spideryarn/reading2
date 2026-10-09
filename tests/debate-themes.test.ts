@@ -1,5 +1,5 @@
 /**
- * **Debate's third call: the themes the sources share, and the key sources**
+ * **Debate's synthesis call: the themes the sources share, and the key sources**
  * (plan 260930j, SPIDERYARN-READING2-6M). The model is stubbed; nothing here
  * spends.
  *

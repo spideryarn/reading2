@@ -889,6 +889,12 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      inside it. Replace with a measurement once it has run on real articles.
      docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
   relations: 150_000,
+  /* **NOT MEASURED** — `faq`'s figure, taken because it is the same single
+     Messages call over the same bytes at the same effort, with a shorter
+     answer (at most eight claims, each a quote and a line). Replace with a
+     measurement once it has run on real articles.
+     docs/plans/261008i-debate-claims-picked-by-the-reader.md. */
+  "debate-claims": 150_000,
   /* **MEASURED 2026-09-30**, stage 1's real runs: 54 s on a 99-block paper and
      119 s on a 141-block essay, one Messages call each at `medium` — slower
      than `faq` at `high`, because the answer is longer and the reasoning ran
@@ -1000,17 +1006,17 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      the `ai_calls` ledger row as the alarm afterwards — and only the first of
      those is a ceiling on spend at all.
 
-     **Raised 120 s → 360 s on 2026-10-07, and still not a bound.** The step
-     makes up to three non-streamed calls in sequence — the direct pass, the claims
-     pass and the synthesis (src/debate.ts § `generateDebate`) — and none has a
+     **Raised 120 s → 360 s on 2026-10-07, and still not a bound.** Since
+     `debate/7` the step makes up to two non-streamed calls in sequence — the
+     Reception search and optional synthesis (src/debate.ts § `generateDebate`) — and neither has a
      clock: `openRouterJson` (src/ai-call.ts) fetches without a timeout, and a
      transient failure re-asks the whole call, up to `TRANSPORT_ATTEMPTS`.
-     What the code does state is each call's `max_tokens`: `ANSWER_TOKENS`
-     twice and `SYNTHESIS_ANSWER_TOKENS` once, 8,000 each, which `deadlineFor`
-     (src/token-budget.ts) turns into 106 s apiece, **318 s**. The searches run
-     inside the provider and add time no token count describes, so there is
-     no ceiling to derive; 360 s is a single-attempt token-time estimate with an unmeasured
-     42 s allowance for searches and backoffs. Non-streaming does not remove
+     What the code does state is each call's `max_tokens`: `ANSWER_TOKENS` and
+     `SYNTHESIS_ANSWER_TOKENS`, 8,000 each, which `deadlineFor`
+     (src/token-budget.ts) turns into 106 s apiece, **212 s**. The search runs
+     inside the provider and adds time no token count describes, so there is
+     no ceiling to derive; 360 s deliberately keeps the measured legacy headroom
+     until current runs have their own timing sample. Non-streaming does not remove
      token generation time, but the Sonnet rate does not bound searches, Opus
      or whole-call retries (up to three attempts per call). The synthesis is
      skipped when too few rows survive. The reservation is 380 s under the claim's 740 s.
@@ -1020,7 +1026,8 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      146.7 s, 5 runs), so the old 120 s row was below the observed maximum. Nothing in the
      app puts a step before `debate`, which
      is always queued alone; a hand-written `POST /api/jobs` can. Nothing above about
-     spend changes. tests/jobs-lease-budget.test.ts holds the token floor.
+     spend changes. tests/jobs-lease-budget.test.ts holds the token floor and
+     the current two-call topology.
      docs/plans/261007h-five-more-step-budgets-to-what-they-measure.md. */
   debate: 360_000,
   /* One Messages call over the whole article, notes and bibliography

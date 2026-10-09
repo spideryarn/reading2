@@ -28,10 +28,10 @@
  * the quotations were checked against, and **which** of the two empty answers
  * this is.
  *
- * ## Two sub-modes, one per search
+ * ## Two sub-modes; only Reception is searched now
  *
- * Two separately metered searches run — one for pages about this piece, one
- * for the argument around what it claims. Until 2026-09-06 the panel drew them
+ * Until `debate/7`, two separately metered searches ran — one for pages about
+ * this piece, one for the argument around what it claims. Until 2026-09-06 the panel drew them
  * as two headed groups stacked in one band, which on Cargo Cult Science put two
  * headings, two blurbs and two foot lines over *zero rows*. From then until
  * 2026-10-03 it drew them as **one list**, under up to four controls at once.
@@ -42,10 +42,11 @@
  * > study … But A, that's very specific. It's one claim. And B, it doesn't tell
  * > me anything about how the paper has been received more generally.
  *
- * So the two searches are two **sub-modes**, `?debate=`, on one segmented
+ * So the two groups became two **sub-modes**, `?debate=`, on one segmented
  * control (`DebateViews`): **Reception**, what others have written about the
- * piece itself, and **Claims**, what has been written about the claims it
- * makes. Each control then applies to everything on screen.
+ * piece itself, and **Claims**, what an earlier search found about the claims
+ * it makes. Since `debate/7` only Reception is searched; each control still
+ * applies to everything on screen.
  * docs/plans/261003o-debate-reception-and-claims-sub-modes-and-a-tidier-panel.md.
  *
  *  - **Reception** draws the rows that link or quote the piece, then the ones
@@ -57,6 +58,13 @@
  *  - **Claims** is always grouped by claim, in article order, most directly
  *    bearing first within a claim ([`debate-order.ts`](debate-order.ts)). The
  *    relevance bar (`?bears=`) is its one control.
+ *
+ * **Since `debate/7` (2026-10-08) the press searches for Reception only**, and
+ * a debate stored since says `claims: {pass: "not-run"}` (src/types.ts §
+ * `DebateClaims`): Claims then says no claims search ran, never that one found
+ * nothing. An older debate's claim rows are drawn as before, under *Claims the
+ * earlier search chose*. The reader picks the claims to check instead —
+ * docs/plans/261008i-debate-claims-picked-by-the-reader.md.
  *
  * ## Cited by, at the end of Reception, for the owner
  *
@@ -146,6 +154,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { armActivationForSubMode } from "./activation.js";
 import {
   CITERS_ABOUT,
   CITERS_HEADING,
@@ -158,7 +167,17 @@ import {
   citedTimes,
   citersLines,
   DEBATE_BEFORE_SEARCH,
+  DEBATE_CLAIMS_EARLIER,
   DEBATE_CLAIMS_NONE,
+  DEBATE_CLAIMS_LIST_AGAIN,
+  DEBATE_CLAIMS_LIST_AI,
+  DEBATE_CLAIMS_LIST_EMPTY,
+  DEBATE_CLAIMS_LIST_LOADING,
+  DEBATE_CLAIMS_LIST_NONE,
+  DEBATE_CLAIMS_LIST_NONE_SHARED,
+  DEBATE_CLAIMS_LIST_RUN,
+  DEBATE_CLAIMS_LIST_STALE,
+  DEBATE_CLAIMS_NOT_SEARCHED_SHARED,
   DEBATE_EXTRACTS_ONLY,
   DEBATE_RESPONSES_NONE,
   DEBATE_CLAIMS_NONE_SHARED,
@@ -181,10 +200,12 @@ import {
   type ClaimOrigin,
   type Debate,
   type DebateBears,
+  type DebateClaimsNotRun,
   type DebateCounts,
   type DebateKeySource,
   type DebateLean,
   type IdentificationLevel,
+  type ListedClaim,
   MAX_LENS_CHARS,
   type RegistrySource,
   type ThreadSummary,
@@ -243,11 +264,13 @@ import { lensThreads, threadForOrigin } from "./useChatAnchors.js";
 import { OriginChatMark } from "./OriginChat.js";
 import { useRenderCount } from "./perf.js";
 import type { UseDebate } from "./useDebate.js";
+import type { UseDebateClaims } from "./useDebateClaims.js";
 import type { UseCiters } from "./useCiters.js";
 import { dayOf } from "./relative-time.js";
 import type {
   PublicClaimDebateRow,
   PublicDebate,
+  PublicDebateClaimList,
   PublicDirectDebateRow,
   PublicIdentificationSignal,
 } from "../public-types.js";
@@ -538,14 +561,26 @@ export function sourcesNote(
  */
 function footLines(debate: {
   direct: { rows: readonly { url: string }[]; counts: DebateCounts };
-  claims: { rows: readonly { url: string }[]; counts: DebateCounts };
+  /* `null` when the claims search did not run (`debate/7` on): there are no
+     counts to say anything about, and the (i) says that instead. */
+  claims: { rows: readonly { url: string }[]; counts: DebateCounts } | null;
 }): string[] {
   return [
     keptNote(debate.direct.counts, "direct"),
     sourcesNote(debate.direct.counts, debate.direct.rows, "direct"),
-    keptNote(debate.claims.counts, "claims"),
-    sourcesNote(debate.claims.counts, debate.claims.rows, "claims"),
-  ].filter((line): line is string => line !== null);
+    debate.claims && keptNote(debate.claims.counts, "claims"),
+    debate.claims && sourcesNote(debate.claims.counts, debate.claims.rows, "claims"),
+  ].filter((line): line is string => typeof line === "string");
+}
+
+/**
+ * **Did this group's search not run?** Only the claims group can say so, and
+ * only on a debate searched at `debate/7` or later (src/types.ts §
+ * `DebateClaims`); absent `pass` is a search that ran. Generic so either arm's
+ * group, owner's or visitor's, narrows to the searched member afterwards.
+ */
+function notRun<G extends object>(group: G | DebateClaimsNotRun): group is DebateClaimsNotRun {
+  return (group as { pass?: unknown }).pass === "not-run";
 }
 
 /**
@@ -569,7 +604,10 @@ export function withheldLines(debate: PublicDebate): string[] {
 
 /** One search's withheld sentence, or nothing when the boundary withheld none. */
 function withheldNote(debate: PublicDebate, which: "direct" | "claims"): string | null {
-  const n = debate[which].sourceNotPublishable;
+  const group = debate[which];
+  /* A claims search that did not run withheld nothing. */
+  if (notRun(group)) return null;
+  const n = group.sourceNotPublishable;
   return n > 0 ? debateWithheldOnSharedLink(SEARCH_NAME[which], n) : null;
 }
 
@@ -598,7 +636,19 @@ function withheldNote(debate: PublicDebate, which: "direct" | "claims"): string 
  */
 export function emptyNote(debate: Debate | PublicDebate, which: "direct" | "claims"): string | null {
   if (debate[which].rows.length > 0) return null;
-  if (!isShared(debate)) return emptyGroupNote(debate[which].counts, which);
+  /* **No search ran, so none found nothing** — a debate searched at
+     `debate/7` or later, whose press looked for Reception only (src/types.ts §
+     `DebateClaims`). Asked first in each arm: the other sentences are about a
+     search. */
+  /* **Since the claims list (plan 261008i stage 2) a not-run group says
+     nothing here**: Claims draws the list, or the list's own empty state, and
+     the (i) says once that this search did not look into the claims
+     (`DEBATE_CLAIMS_NOT_SEARCHED_SHARED`). */
+  if (notRun(debate[which])) return null;
+  if (!isShared(debate)) {
+    const group = debate[which];
+    return notRun(group) ? null : emptyGroupNote(group.counts, which);
+  }
   return (
     withheldNote(debate, which) ??
     (which === "direct" ? DEBATE_RESPONSES_NONE_SHARED : DEBATE_CLAIMS_NONE_SHARED)
@@ -820,12 +870,28 @@ export type DebateAccess =
      their arm has no handler to be handed and the claims draw neither the
      button nor the mark. Required here, so `Reader` cannot leave it out and
      still type-check. */
-  | { kind: "owner"; owner: DebateOwner; citers: UseCiters; claimChats: DebateClaimChats }
+  /* `claimList` is the owner's third read, Claims' list of the article's
+     claims (src/web/useDebateClaims.ts, plan 261008i § 2). Its own hook, read,
+     job and press, independent of whether a Reception search is stored. */
+  | {
+      kind: "owner";
+      owner: DebateOwner;
+      claimList: UseDebateClaims;
+      citers: UseCiters;
+      claimChats: DebateClaimChats;
+    }
   /* **The visitor's arm, since 2026-09-29** (plan 260929c stage 4): the stored
      debate off the public payload and nothing else — no read status (it came
      with the page), no job, no verb, so nothing on a visitor's panel can start
-     a search. */
-  | { kind: "visitor"; debate: PublicDebate; owner?: never };
+     a search. **And the claims list since 2026-10-08**, read-only: either may
+     be absent, never both (Reader.tsx mounts this band only when one is
+     there). */
+  | {
+      kind: "visitor";
+      debate: PublicDebate | null;
+      claimList: PublicDebateClaimList | null;
+      owner?: never;
+    };
 
 /**
  * **A claim's chat: starting one, and the way back to one already started.**
@@ -1037,6 +1103,22 @@ export function DebatePanel({
   const claimsShown = useMemo(() => inThread(barredClaims.visible, claimThread), [barredClaims, claimThread]);
   const claimGroups = useMemo(() => groupByClaim(claimsShown, blockOrder), [claimsShown, blockOrder]);
 
+  /**
+   * **Claims' list of the article's claims** (plan 261008i § 2) — the owner's
+   * once its read is `ready`, a visitor's off the payload, else `null`. The
+   * segment's count is the list's length when there is one: the list is what
+   * Claims is now, and the legacy rows under it are an older search's. With no
+   * list, the count is those legacy rows, as before.
+   */
+  const listOwner = access.kind === "owner" ? access.claimList : null;
+  const listed: readonly ListedClaim[] | null =
+    access.kind === "owner"
+      ? access.claimList.status === "ready"
+        ? (access.claimList.claimList?.claims ?? null)
+        : null
+      : (access.claimList?.claims ?? null);
+  const claimsCount = listed !== null ? listed.length : claimsShown.length;
+
   /* **The rows on screen**: the sub-mode's own, through its bar and its thread.
      The head count in the (i) reads this. */
   const rows: readonly DebateRow[] = view === "reception" ? receptionShown : claimsShown;
@@ -1060,17 +1142,23 @@ export function DebatePanel({
        the stored counts behind the owner's four sentences do not cross
        (src/public-types.ts § `PublicDebateGroup`). */
     if (isShared(debate)) return withheldLines(debate);
+    const claims = debate.claims;
     return footLines({
       direct: { rows: receptionShown, counts: debate.direct.counts },
-      claims: { rows: claimsShown, counts: debate.claims.counts },
+      claims: notRun(claims) ? null : { rows: claimsShown, counts: claims.counts },
     });
   }, [debate, receptionShown, claimsShown]);
+  /* **This debate's press did not search for claims** (`debate/7` on). The
+     (i) says so for both arms, where the claims search's own sentences would
+     otherwise be; a debate stored before then shows its claim rows under
+     their own heading instead (`DEBATE_CLAIMS_EARLIER`). */
+  const claimsNotRun = debate !== null && notRun(debate.claims);
 
   /**
    * @param again beside a debate that is already there, so the run is forced.
    *   The empty state's button is not: it has to make the identical, unforced
    *   request the automatic run makes, or the two carry different `work_key`s
-   *   and the reader pays for two web searches. useDebate.ts § `ensure`.
+   *   and the reader pays for two Reception searches. useDebate.ts § `ensure`.
    */
   /* A forced run has finished and its result is not here yet: the forced
      button gives way to a read, never to a second paid run — IdeasPanel.tsx §
@@ -1122,6 +1210,7 @@ export function DebatePanel({
         {foot.map((line) => (
           <p key={line}>{line}</p>
         ))}
+        {claimsNotRun && <p>{DEBATE_CLAIMS_NOT_SEARCHED_SHARED}</p>}
         <p>{DEBATE_EXTRACTS_ONLY}</p>
         {aboutCiters}
         <AboutMade
@@ -1145,14 +1234,13 @@ export function DebatePanel({
   const scholar = articleTitle?.trim() ? scholarUrl(articleTitle.trim()) : null;
 
   /**
-   * **The owner's *Cited by***, or null. On screen with Reception — and, before
-   * any search is stored, whatever `?debate=` says: there is no sub-mode
-   * control to be in Claims with until there is a debate. Built once and placed
-   * in one of two spots below, at the end of Reception's list or under the
-   * not-searched-yet states, which cannot both be drawn.
+   * **The owner's *Cited by***, or null. On screen with Reception, whether or
+   * not a search is stored. Built once and placed in one of two spots below,
+   * at the end of Reception's list or under the not-searched-yet states, which
+   * cannot both be drawn.
    */
   const citedBy =
-    access.kind === "owner" && (view === "reception" || owner?.status === "none") ? (
+    access.kind === "owner" && view === "reception" ? (
       <CitedBy citers={access.citers} scholar={scholar} />
     ) : null;
 
@@ -1189,6 +1277,7 @@ export function DebatePanel({
       foot={
         debate &&
         owner !== null &&
+        (view === "reception" || !claimsNotRun) &&
         owner.status === "ready" &&
         !owner.stale &&
         (owner.job || owner.starting || owner.failed || (waiting && !owner.error)) ? (
@@ -1204,20 +1293,55 @@ export function DebatePanel({
           neither. */}
       {access.kind === "owner" && <Angles chats={access.claimChats} />}
 
-      {owner?.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
+      {/* **Reception | Claims, first, and whatever is stored** (plan 261008i
+          § 5, GPT Sol's F9): Claims has its own list and must be reachable
+          before any search is, while one loads and when one failed. Each
+          segment's count is its own list's — Reception's rows through its
+          thread, Claims' listed claims (or an older search's rows when no list
+          is made) — so the number and the list under it cannot disagree. */}
+      <div className="summ-controls dbt-controls">
+        <DebateViews
+          view={view}
+          counts={{ reception: receptionShown.length, claims: claimsCount }}
+          claimsUnit={listed !== null ? "claim" : "source"}
+          ownerSlug={owner?.slug ?? null}
+          onView={onView}
+        />
+      </div>
 
-      {owner?.status === "loading" && (
+      {view === "reception" && owner?.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
+
+      {view === "reception" && owner?.status === "loading" && (
         <BandWaiting className="gloss-quiet">Looking for what the web says…</BandWaiting>
       )}
 
-      {owner?.status === "none" && (
+      {view === "claims" &&
+        (listOwner !== null ? (
+          <OwnerListedClaims
+            list={listOwner}
+            onJump={onJump}
+            chats={access.kind === "owner" ? access.claimChats : null}
+          />
+        ) : (
+          <div className="dbt-listed-wrap">
+            {listed === null ? (
+              <p className="gloss-quiet dbt-listed-none">{DEBATE_CLAIMS_LIST_NONE_SHARED}</p>
+            ) : listed.length === 0 ? (
+              <p className="gloss-quiet dbt-listed-none">{DEBATE_CLAIMS_LIST_EMPTY}</p>
+            ) : (
+              <ListedClaims claims={listed} onJump={onJump} chats={null} />
+            )}
+          </div>
+        ))}
+
+      {view === "reception" && owner?.status === "none" && (
         <div className="gloss-empty">
           <p>Nobody has asked the web about this one yet.</p>
-          {/* The price, before the button rather than after it. Two model
-              calls that each go out to the open web is the dearest press in
-              this bar, and a reader is entitled to know that at the moment they
-              decide — and what the two searches are, in the words the two
-              sub-modes are then called by. docs/project/copy.md. */}
+          {/* The price, before the button rather than after it. A model call
+              that goes out to the open web is the dearest press in this bar,
+              and a reader is entitled to know that at the moment they decide —
+              and what it searches for: Reception only since `debate/7`, the
+              claims being the reader's to pick. docs/project/copy.md. */}
           <p className="gloss-hint">{DEBATE_BEFORE_SEARCH}</p>
           {run("Search the web")}
         </div>
@@ -1229,7 +1353,9 @@ export function DebatePanel({
           for a paid search, and it is not a control that starts one. */}
       {!(debate && ready) && citedBy && <div className="dbt-scroll">{citedBy}</div>}
 
-      {debate && ready && (
+      {/* **In Claims, only for an older search's rows**: a debate searched since
+          `debate/7` has none, and its stale banner is about Reception. */}
+      {debate && ready && (view === "reception" || !claimsNotRun) && (
         <>
           {/* Stale wins when both are true, for the reason every sibling panel
               gives: it is the one that can make a row false rather than merely
@@ -1254,18 +1380,6 @@ export function DebatePanel({
               Greg, 2026-09-29 (SPIDERYARN-READING2-55): *"it's not worth
               bugging the user about it."* Re-running is in Metadata. Plan
               260929c. */}
-
-          {/* **Reception | Claims, first**: which search's rows everything
-              below is about. Each segment's count is its own list's — the rows
-              that sub-mode draws, through its bar and its thread — so the
-              number and the list under it cannot disagree. */}
-          <div className="summ-controls dbt-controls">
-            <DebateViews
-              view={view}
-              counts={{ reception: receptionShown.length, claims: claimsShown.length }}
-              onView={onView}
-            />
-          </div>
 
           {/* **Reception's order bar**, where Glossary's is: a control on the
               list. Only when at least two orders would draw different lists
@@ -1346,12 +1460,23 @@ export function DebatePanel({
                   ))}
               </>
             ) : (
-              <ClaimsList
-                groups={claimGroups}
-                onJump={onJump}
-                keyRows={keyRows}
-                chats={access.kind === "owner" ? access.claimChats : null}
-              />
+              <>
+                {/* **An older search's claims, under their own heading** — a
+                    debate stored before `debate/7`, whose press picked three or
+                    four claims by itself. Asked of the stored rows, so the
+                    heading stays when the bar or a thread hides them all. A
+                    debate searched since has none, and its empty sentence is
+                    above. */}
+                {!claimsNotRun && claimRows.length > 0 && (
+                  <h3 className="dbt-group-head">{DEBATE_CLAIMS_EARLIER}</h3>
+                )}
+                <ClaimsList
+                  groups={claimGroups}
+                  onJump={onJump}
+                  keyRows={keyRows}
+                  chats={access.kind === "owner" ? access.claimChats : null}
+                />
+              </>
             )}
 
             {/* Both searches' numbers (`footLines`) and the extracts-only
@@ -1633,17 +1758,23 @@ function CiterRow({ citer }: { citer: Citer }) {
  * docs/project/mode.md bans a description line there (GPT Sol's F8). The words
  * are sub-modes.ts's, which the command bar's rows share.
  *
- * **A press arms nothing**, unlike Summary's: this control exists only once a
- * debate is stored, and both sub-modes draw that one stored search. Writing
- * the value already open would push a history entry that goes nowhere.
+ * The owner's Reception press arms the Reception search and Claims' press the
+ * claims list, the same contract as their command-bar rows
+ * (activation.ts § `activationForDebate`). A stored debate or list consumes
+ * its token without running. A visitor can never arm owner work.
  */
 function DebateViews({
   view,
   counts,
+  claimsUnit,
+  ownerSlug,
   onView,
 }: {
   view: DebateView;
   counts: Record<DebateView, number>;
+  /** What Claims' count counts: listed claims, or an older search's sources when no list is made. */
+  claimsUnit: "claim" | "source";
+  ownerSlug: string | null;
   onView(view: DebateView): void;
 }) {
   const group = useRef<HTMLDivElement>(null);
@@ -1672,10 +1803,15 @@ function DebateViews({
               aria-checked={v === view}
               /* The label and the count are two text nodes with no space
                  between them, which a screen reader may run together. */
-              aria-label={`${DEBATE_SUB_MODES[v].label}, ${counts[v]} ${counts[v] === 1 ? "source" : "sources"}`}
+              aria-label={`${DEBATE_SUB_MODES[v].label}, ${counts[v]} ${
+                v === "claims" && claimsUnit === "claim"
+                  ? counts[v] === 1 ? "claim" : "claims"
+                  : counts[v] === 1 ? "source" : "sources"
+              }`}
               tabIndex={0}
               className={`summ-view-btn${v === view ? " on" : ""}`}
               onClick={() => {
+                if (ownerSlug !== null) armActivationForSubMode(ownerSlug, { mode: "debate", view: v });
                 if (v !== view) onView(v);
               }}
             >
@@ -1694,7 +1830,7 @@ const VIEW_HOW: Record<DebateView, string> = {
   reception:
     "Found by a search of the open web, run once and kept. Each page has to link, quote or name this piece, and each quotation is checked against what the search returned.",
   claims:
-    "Found by a second search, run once and kept. Each source sits under the claim it answers, in the article's own words, and each quotation is checked against what the search returned.",
+    "Listed by one model call over the article, with no web search, and kept. Each claim is in the article's own words, checked against the paragraph it names, with a line in the AI's words under it.",
 };
 
 /**
@@ -2173,6 +2309,159 @@ function ClaimsList({
         );
       })}
     </>
+  );
+}
+
+/**
+ * **The owner's Claims list, in each of its states** — plan 261008i § 2 and
+ * § 5. The states are the read's and the job's, as every artefact panel's
+ * are (FaqPanel.tsx is the sibling):
+ *
+ *  - **loading** — the GET is in flight;
+ *  - **error** — the GET failed; `ReadError`'s *Try again* sends only a GET;
+ *  - **none** — nobody has pressed Claims here: *List its claims*, the same
+ *    unforced request a press makes (useDebateClaims.ts § `ensure`); while it
+ *    runs, `JobProgress` draws the progress, and a failed run its sentence and
+ *    *Retry*;
+ *  - **done** — the list; **done-empty** — a sentence;
+ *  - **stale** — the list, **read-only** (no chat button on a claim, and in
+ *    stage 3 no ticks or Check), under a banner with *List again*.
+ *
+ * **Laid out for a tick box in front of each claim** (stage 3): each claim is
+ * one `<li>` whose first column is free.
+ */
+function OwnerListedClaims({
+  list,
+  onJump,
+  chats,
+}: {
+  list: UseDebateClaims;
+  onJump(id: BlockId): void;
+  chats: DebateClaimChats | null;
+}) {
+  const waiting = list.rewriting && !list.job && !list.starting && !list.failed;
+  const run = (label: string, again = false) =>
+    again && waiting && !list.error ? (
+      <RewriteWaiting line="The new list hasn't loaded yet." onRead={list.refresh} className="tw:m-0" />
+    ) : (
+      <JobProgress
+        job={list.job}
+        starting={list.starting}
+        failed={list.failed}
+        stalled={list.stalled}
+        onRun={() => (again ? list.regenerate() : list.ensure())}
+        runDisabled={again && list.rewriting}
+        onCancel={list.cancel}
+        label={label}
+        step="debate-claims"
+        icon={<MessagesSquare size={13} />}
+        runningLabel="Listing…"
+      />
+    );
+  const claims = list.status === "ready" ? (list.claimList?.claims ?? []) : null;
+  /* A job started elsewhere — Metadata, another tab — on a current list. */
+  const showJob =
+    claims !== null && !list.stale && (list.job || list.starting || list.failed || (waiting && !list.error));
+  return (
+    <div className="dbt-listed-wrap">
+      {list.error && <ReadError error={list.error} onRetry={list.retryRead} />}
+      {list.status === "loading" && <BandWaiting className="gloss-quiet">{DEBATE_CLAIMS_LIST_LOADING}</BandWaiting>}
+      {list.status === "none" && (
+        <div className="gloss-empty">
+          <p className="gloss-hint">{DEBATE_CLAIMS_LIST_NONE}</p>
+          {run(DEBATE_CLAIMS_LIST_RUN)}
+        </div>
+      )}
+      {claims !== null && (
+        <>
+          {list.stale && (
+            <div className="gloss-stale">
+              <p>
+                <TriangleAlert size={13} />
+                {DEBATE_CLAIMS_LIST_STALE}
+              </p>
+              {run(DEBATE_CLAIMS_LIST_AGAIN, true)}
+            </div>
+          )}
+          {claims.length === 0 ? (
+            <p className="gloss-quiet dbt-listed-none">{DEBATE_CLAIMS_LIST_EMPTY}</p>
+          ) : (
+            <ListedClaims claims={claims} onJump={onJump} chats={list.stale ? null : chats} />
+          )}
+          {showJob && <div className="dbt-again">{run(DEBATE_CLAIMS_LIST_AGAIN, true)}</div>}
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * **The listed claims, owner's or visitor's**: the article's quote with a jump
+ * to its block, as an older search's claim headings have (`ClaimsList`), and
+ * under it the model's one line, labelled as the AI's words — the quote is
+ * the article's, checked against its block; the statement is not.
+ *
+ * `chats` is the owner's on a current list, and `null` for a visitor and on a
+ * stale list: *Check this claim in chat* takes the claim's block and quote,
+ * which a listed claim has (`ClaimOrigin`), so the same chat and the same mark
+ * serve both kinds of claim.
+ */
+function ListedClaims({
+  claims,
+  onJump,
+  chats,
+}: {
+  claims: readonly ListedClaim[];
+  onJump(id: BlockId): void;
+  chats: DebateClaimChats | null;
+}) {
+  return (
+    <ol className="dbt-listed">
+      {claims.map((claim) => {
+        const origin: ClaimOrigin = { mode: "debate", blockId: claim.blockId, quote: claim.quote };
+        const chat = chats ? threadForOrigin(chats.summaries, origin) : undefined;
+        return (
+          <li key={claim.id} className="dbt-listed-claim" data-claim={claim.id}>
+            {/* The first column, empty until stage 3 puts a tick box in it. */}
+            <span className="dbt-listed-pick" aria-hidden="true" />
+            <div className="dbt-listed-body">
+              <p className="dbt-group-claim dbt-listed-head">
+                <span className="dbt-group-quote">“{claim.quote}”</span>
+                <BlockRef id={claim.blockId} onJump={onJump} />
+                {chats && (
+                  <Tooltip placement="top" content={<TipNote>{DEBATE_CHECK_CLAIM}</TipNote>}>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      className="dbt-claim-check tw:pointer-coarse:size-10"
+                      aria-label={DEBATE_CHECK_CLAIM}
+                      onClick={() => chats.onCheck(origin)}
+                    >
+                      <MessagesSquare size={12} aria-hidden="true" />
+                    </Button>
+                  </Tooltip>
+                )}
+                {chats && chat && (
+                  <OriginChatMark
+                    chat={chat}
+                    label={DEBATE_OPEN_CLAIM_CHAT}
+                    className="dbt-claim-chat"
+                    onOpen={chats.onOpen}
+                  />
+                )}
+              </p>
+              {/* The model's words in the model's face (fonts.md, voices.css §
+                  `.voice-ai`), and the label in ours. */}
+              <p className="dbt-listed-statement">
+                <span className="voice-ai">{claim.statement}</span>
+                <span className="dbt-listed-ai"> · {DEBATE_CLAIMS_LIST_AI}</span>
+              </p>
+            </div>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 

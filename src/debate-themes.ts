@@ -1,5 +1,5 @@
 /**
- * **Debate's third call: the themes the sources share, and the key sources.**
+ * **Debate's optional synthesis call: the themes the sources share, and the key sources.**
  *
  * Greg, 2026-09-30 (SPIDERYARN-READING2-6M): *"In Debate mode, I wonder if
  * there's a way to somehow highlight key themes from other people and
@@ -9,7 +9,7 @@
  *
  * ## What this is, and what it is not
  *
- * **A reading of the rows the two searches already kept**, and nothing else. No
+ * **A reading of the rows the search already kept**, and nothing else. No
  * search runs here, so nothing here can introduce a source: every theme and
  * every key source is a pointer at a row id, and `readSynthesisAnswer` drops
  * any pointer at a row that is not in the list. The model's own words are
@@ -22,7 +22,7 @@
  * summary-shaped answer, and why there is no score anywhere in this file.
  *
  * Pure: no network, no store. The call itself is `synthesiseDebate` in
- * src/debate.ts, beside the other two, so the fence reader and the failure
+ * src/debate.ts, beside the search, so the fence reader and the failure
  * rules stay in one place.
  *
  * ## Security

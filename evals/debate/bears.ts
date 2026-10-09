@@ -85,7 +85,7 @@ export function bearsReport(reported: readonly unknown[], kept: readonly { bears
   return report;
 }
 
-/** Several passes summed — a run is two. */
+/** Several passes summed. */
 export function sumBearsReports(reports: readonly BearsReport[]): BearsReport {
   const total = emptyBearsReport();
   for (const r of reports) {
@@ -103,20 +103,25 @@ export function sumBearsReports(reports: readonly BearsReport[]): BearsReport {
 }
 
 /**
- * A whole Debate run is exactly two passes. Refuse to turn a replayable subset
- * into a run-level report: without both denominators, the aggregate would make
- * a claim about numbers the run did not produce.
+ * Refuse to turn a replayable subset into a run-level report. Current runs
+ * expect Reception alone; callers replaying a legacy run keep the old explicit
+ * direct-plus-claims inventory.
  */
 export function completeBearsReport(
   attempts: readonly (
     | { ok: true; pass: "direct" | "claims"; bears: BearsReport }
     | { ok: false; pass: "direct" | "claims" | null }
   )[],
+  expected: readonly ("direct" | "claims")[] = ["direct", "claims"],
 ): BearsReport | null {
-  if (attempts.length !== 2 || attempts.some((attempt) => !attempt.ok)) return null;
+  if (attempts.length !== expected.length || attempts.some((attempt) => !attempt.ok)) return null;
   const complete = attempts.filter((attempt): attempt is Extract<(typeof attempts)[number], { ok: true }> => attempt.ok);
-  if (complete.filter((attempt) => attempt.pass === "direct").length !== 1) return null;
-  if (complete.filter((attempt) => attempt.pass === "claims").length !== 1) return null;
+  for (const pass of ["direct", "claims"] as const) {
+    if (
+      complete.filter((attempt) => attempt.pass === pass).length !==
+      expected.filter((expectedPass) => expectedPass === pass).length
+    ) return null;
+  }
   return sumBearsReports(complete.map((attempt) => attempt.bears));
 }
 

@@ -172,7 +172,11 @@ export async function attachDebateRegistry(
     debate: {
       ...debate,
       direct: { ...debate.direct, rows: debate.direct.rows.map(withRegistry) },
-      claims: { ...debate.claims, rows: debate.claims.rows.map(withRegistry) },
+      /* A not-run claims group (`debate/7`) has no rows and stays as it is. */
+      claims:
+        debate.claims.pass === "not-run"
+          ? debate.claims
+          : { ...debate.claims, rows: debate.claims.rows.map(withRegistry) },
     },
     counts,
   };

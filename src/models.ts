@@ -705,6 +705,10 @@ export type Task =
      docs/plans/261003f-marginalia-relation-words-and-timeline-events.md.
      Article-reading like `ideas`, answering block ids, so `articleWithIds`. */
   | "relations"
+  /* The article's claims, listed for Debate's Claims to pick from —
+     docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2. Article-reading
+     like `faq`, naming block ids and quotes, so `articleWithIds`. No web search. */
+  | "debate-claims"
   /* Links between the article's own blocks —
      docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md.
      Article-reading like `ideas`, naming block ids, so `articleWithIds`. */
@@ -1142,6 +1146,7 @@ export const TASK_TIER: Record<Task, Tier> = {
   quiz: "capable",
   faq: "capable",
   relations: "capable",
+  "debate-claims": "capable",
   crossrefs: "capable",
   simple: "capable",
   skim: "capable",
@@ -1422,6 +1427,7 @@ export const TASK_WIRE: Record<Task, Wire> = {
   quiz: "messages",
   faq: "messages",
   relations: "messages",
+  "debate-claims": "messages",
   crossrefs: "messages",
   simple: "messages",
   skim: "messages",
@@ -1568,6 +1574,7 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   quiz: null,
   faq: null,
   relations: null,
+  "debate-claims": null,
   crossrefs: null,
   simple: null,
   skim: null,
@@ -1876,6 +1883,7 @@ export type ArticleStage =
   | "quiz"
   | "faq"
   | "relations"
+  | "debate-claims"
   | "crossrefs"
   | "simple";
 
@@ -2020,6 +2028,13 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      evals/results/effort-vs-quality.md; the plan names the quick tier as the
      next thing to measure. docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
   relations: "low",
+  /* `high`, `faq`'s: what it is paid for is reading the argument closely
+     enough to tell the claims it rests on from the ones it merely mentions,
+     and which of those an outsider could dispute. Its own schema, so it shares
+     no cached article. **NOT MEASURED**, like every effort choice not yet
+     through evals/results/effort-vs-quality.md.
+     docs/plans/261008i-debate-claims-picked-by-the-reader.md. */
+  "debate-claims": "high",
   /* `medium`, the plan's call: matching a claim to the paragraph that backs it
      is reading, not the multi-step inference `ideas` and `quiz` are paid `high`
      for. **It therefore shares a cached prefix with nothing** — the same bytes
@@ -2103,6 +2118,10 @@ export const ARTICLE_RENDERER: Record<ArticleStage, "text" | "ids"> = {
      body only, byte-identical to `ideas` and `faq`. `low` effort and its own
      schema, so no share. */
   relations: "ids",
+  /* Every claim names a block id and quotes it, so the ids have to be on the
+     page — and it sends the body only, byte-identical to `ideas` and `faq`.
+     Its own schema, so no share. */
+  "debate-claims": "ids",
   /* Two block ids a row, so the ids have to be on the page — and the body
      only, byte-identical to `ideas`. The effort differs, so no share. */
   crossrefs: "ids",

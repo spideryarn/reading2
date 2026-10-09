@@ -1395,20 +1395,23 @@ export function learnInSearch(search: string): LearnView {
 /* --------------------------------------------------------------- debate -- */
 
 /**
- * **Which of Debate's two searches the band draws** — `?debate=claims`, since
+ * **Which of Debate's two groups the band draws** — `?debate=claims`, since
  * 2026-10-03 (docs/plans/261003o-debate-reception-and-claims-sub-modes-and-a-tidier-panel.md).
  *
  * `reception` is what others have written about the piece itself; `claims` is
- * what has been written about the claims it makes. *Which thing, within this
+ * the list of the claims the piece rests on (since 2026-10-08, plan 261008i
+ * § 2), with an older search's claim sources under it. *Which thing, within this
  * mode*, so the shape of `?summary=` and `?referee=`: in the URL, because it
  * changes the whole band, and pushed, because switching is a deliberate act
  * Back should undo. **`reception` is the default** and is omitted from the
  * address; an unknown value reads as Reception.
  *
- * **Writing it never spends.** Debate searches when its owner presses — the
- * mode's button, or either sub-mode's command-bar row, which arm the one
- * `debate` run (activation.ts § `subModeTarget`). Back, a pasted link and a
- * last-view restore arrive here and buy nothing.
+ * **Writing it never spends.** Each sub-mode's work starts on its owner's
+ * press and only then — the mode's button, the sub-mode's command-bar row or
+ * its segment: a press landing on Reception arms the `debate` search, one
+ * landing on Claims the `debate-claims` list (activation.ts §
+ * `activationForDebate`). Back, a pasted link and a last-view restore arrive
+ * here and buy nothing.
  *
  * `?name=` stood here until the same day: the identification threshold
  * (`named`, `quoted`, `linked`), whose default hid the rows the search was
@@ -1424,6 +1427,18 @@ export const debateParam = createParser<DebateView>({
 })
   .withDefault("reception")
   .withOptions({ history: "push" });
+
+/**
+ * **Which sub-mode a carried `?debate=` names**, degraded as `debateParam`
+ * degrades it — `summaryInSearch`'s twin, for the bar off the reading view
+ * (Dock.tsx), which has no React state to read. On the reading view the bar is
+ * handed the parsed state, because the address lags a press (activation.ts §
+ * `PressContext`).
+ */
+export function debateInSearch(search: string): DebateView {
+  const asked = new URLSearchParams(search).get("debate");
+  return asked !== null && (DEBATE_VIEWS as readonly string[]).includes(asked) ? (asked as DebateView) : "reception";
+}
 
 /**
  * **How Reception's list is ordered** — `?debateby=`, since 2026-09-29

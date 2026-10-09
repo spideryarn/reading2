@@ -61,6 +61,7 @@ import {
   loadSketch,
   loadQuiz,
   loadFaq,
+  loadDebateClaims,
   loadRelations,
   loadCrossrefs,
   loadSimpleSummary,
@@ -10609,6 +10610,24 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          document without its `questions` as well as no document, and not an
          empty list. */
       const found = await orNullWhenNotMadeYet({ req, res }, () => loadFaq(slugPart(captures, 1)));
+      if (!found) return;
+      send(res, 200, found);
+    },
+  },
+
+  /* Debate's claims list — docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2.
+     GET only, and no DELETE, for `faq`'s reason: the step replaces, so asking
+     again is POST /api/jobs { slug, steps: ["debate-claims"] }. This route
+     never spends. A visitor reads the list off the public payload, without
+     the staleness verdict, so there is no anonymous twin. None yet is
+     `200 null` to a client that asks — `orNullWhenNotMadeYet`. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/debate-claims\/([\w.%-]+)$/,
+    article: "first-capture",
+    handler: async ({ request: { req, res } }, captures) => {
+      const found = await orNullWhenNotMadeYet({ req, res }, () => loadDebateClaims(slugPart(captures, 1)));
       if (!found) return;
       send(res, 200, found);
     },
