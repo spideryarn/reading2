@@ -192,8 +192,9 @@ asked for less motion gets the bar at once. Which mount plays it is
     out, ordered and thresholded the way the glossary is. Open it for the one safety property: every
     address a row shows was in the article, and a search says it is one.
   - **[debate.md](debate.md)** — Reception and Claims: what the rest of the web says about this
-    piece. **The only content in the band not in the article at all.** Open it for Greg's ask, which
-    plan holds which change, and the `src/debate*.ts` modules.
+    piece, and the claims it rests on (listed from the article; only a check the reader presses
+    searches the web). Reception is **the only content in the band not in the article at all.** Open
+    it for Greg's ask, which plan holds which change, and the `src/debate*.ts` modules.
 - **[faq.md](faq.md)** — the questions a careful reader would ask the piece while reading it, each
   answered by passages of the piece itself and never by a written answer. Open it for where the
   promise stops: the words are checked, which passage answers which question is not. Behind the

@@ -629,10 +629,10 @@ function OwnedReader({
    * *Find it on the web* on top of it — and those stay down there for the two
    * reasons the Quotes comment above gives, which apply here unchanged.
    *
-   * **Unconditional, and not behind the experimental switch** that Citations
-   * mode itself is behind. The saving is not real — the band has to read the
-   * list somehow — and gating it would make an existing `?mode=citations` URL
-   * half-work, which is not what that switch means. src/web/useCitations.ts
+   * **Unconditional.** Citations was behind the experimental switch until it
+   * became Peer review's Bibliography on 2026-10-09; even then, gating this
+   * read would only have made its old address half-work. The band has to read
+   * the same list, so the saving was never real. src/web/useCitations.ts
    * § CitationsRead.
    */
   const citations = useCitationsRead(slug);

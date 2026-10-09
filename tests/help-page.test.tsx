@@ -440,6 +440,20 @@ describe("a page", () => {
     }
   });
 
+  it("describes Peer review's article-bound Claims list separately from its optional web checks", () => {
+    mountAt("/help/ai-words");
+    expect(host.textContent).toContain("Claims list comes from the article");
+    expect(host.textContent).not.toContain("Reception and Claims are entirely about what the rest of the web says");
+
+    mountAt("/help/questions#faq-beyond-the-article");
+    expect(host.textContent).toContain("Claims list itself comes from the article");
+    expect(host.textContent).not.toContain("Reception and Claims are all about what the rest of the web says");
+
+    mountAt("/help/mode-peer-review");
+    expect(host.textContent).toContain("Bibliography is usually prepared in the background when the article is added");
+    expect(host.textContent).not.toContain("Each view is made the first time you choose it");
+  });
+
   it("marks itself, and only itself, in the contents beside it", () => {
     for (const a of ["spine", "mode-glossary", "for-students"] as const) {
       mountAt(helpHref(a));

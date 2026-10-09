@@ -409,7 +409,7 @@ something* is the vague version of the question. The card closes that in words �
 paragraphs*.
 
 **Every work, not only those above the bar.** This departs from quotes, where the bar doubles as the
-density control, and follows the glossary. `?citebar=` is reachable only inside Citations mode while
+density control, and follows the glossary. `?citebar=` is reachable only inside Bibliography while
 the marks are visible from every mode, so barring them would change a paragraph's appearance from a
 control the reader cannot see.
 
@@ -469,9 +469,9 @@ offered, passed over for the margin's density —
 > tooltip.
 
 From 2026-10-04 that button was *Dig deeper*: a press started the row's own dig, closed the card,
-and opened Citations with that row scrolled into view
+and opened the Citations mode with that row scrolled into view
 ([261004b](../plans/261004b-citation-hover-card-offers-dig-deeper.md)). **Since 2026-10-09 it is
-*Ask in chat*** (plan [261009k](../plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)): the Citations row's own sender (`askCitedWorkInChat`), so
+*Ask in chat*** (plan [261009k](../plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)): the Bibliography row's own sender (`askCitedWorkInChat`), so
 the chat records the same origin as one started from the row, and the card closes. It is the
 card's own `onAskCitedWork` prop, owner only. *search Scholar* stays beside it on a row with no
 link. The glossary card's is the same shape. The one-shot that opened Citations on a row
@@ -824,8 +824,8 @@ opens a fresh conversation in Chat with the work quoted (its title, then the aut
 the article gives them) and a question after it, and sends that as the first question: the press
 is the Send since 2026-10-06 ([261006j](../plans/261006j-ask-in-chat-sends-the-question.md)). Once a chat exists,
 a line under the row's controls shows how many questions were asked and how the latest answer
-begins, and pressing it opens that conversation beside Citations. Chat's list marks the
-conversation with Citations' icon. A visitor has neither the button nor the line.
+begins, and pressing it opens that conversation beside Peer review's Bibliography. Chat's list
+marks the conversation with Peer review's icon. A visitor has neither the button nor the line.
 
 It is the Glossary's button with a different origin, `{ mode: "citations", itemId, quote }`: the
 work's id, which a re-run inherits by its key, and a snapshot of its title. Matched by the mode and
@@ -901,9 +901,9 @@ work inside the fence, after filtering and caps; our words also say what the cou
 
 ## Making it again
 
-From the Metadata page: *AI processing* has a Citations row, since 2026-09-29, and it is the
-usual place to redo a list the article still matches — the panel says nothing when its list was made by an
-older prompt
+From the Metadata page: *AI processing* has a Bibliography row (Citations until 2026-10-09), and it
+is the usual place to redo a list the article still matches — the panel says nothing when its list
+was made by an older prompt
 ([260929c](../plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md)). When the
 article has changed under the list, the banner that says so has *Find them again*, which is held
 from the press until the new list has been read
@@ -912,9 +912,9 @@ After a refused start, the panel's foot also offers *Find them again* on a curre
 the same way.
 A press is one
 model call and no web search (that is *Look it up*, per row); the list is replaced only if the run
-succeeds, and a work found again keeps its id, so a link *Look it up* stored stays with it. The row is
-drawn with the experimental switch off too, as Timeline's and Debate's are. Why it is safe to offer
-is in [`src/rerun-steps.ts`](../../src/rerun-steps.ts).
+succeeds, and a work found again keeps its id, so a link *Look it up* stored stays with it. The
+Metadata row is drawn independently of the experimental switch; Peer review itself is outside it.
+Why it is safe to offer is in [`src/rerun-steps.ts`](../../src/rerun-steps.ts).
 
 ## Who sees it
 

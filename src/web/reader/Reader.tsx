@@ -1420,7 +1420,7 @@ export function Reader({
    *
    * **Every work, not only those above the threshold bar**, which departs from
    * what quotes mode does and follows what the glossary does. `?citebar=` is
-   * reachable only inside Citations mode while these marks are visible from
+   * reachable only inside Peer review's Bibliography while these marks are visible from
    * every mode, so barring them here would change a paragraph's appearance
    * from a control the reader has no way to see. Fable, 2026-09-16.
    *
@@ -1608,8 +1608,8 @@ export function Reader({
   const [openOccurrence, setOpenOccurrence] = useState<string | null>(null);
 
   /**
-   * **One row to bring into view in Glossary, Ideas and Debate's Claims**,
-   * once each — `citeFocus` above is Citations' (src/web/item-focus.ts). Only
+   * **One row to bring into view in Glossary, Ideas and Peer review's Claims**,
+   * once each — `citeFocus` above is Bibliography's (src/web/item-focus.ts). Only
    * the way back from a chat sets them (`openOrigin` below). One piece of
    * state per band, so a request for one band cannot be spent by another.
    */
@@ -2307,7 +2307,7 @@ export function Reader({
   );
 
   /**
-   * **Each block's position in the article** — Debate's Claims sub-mode puts
+   * **Each block's position in the article** — Peer review's Claims sub-mode puts
    * its claims in the order the piece makes them, and the artefact does not
    * carry that; the blocks do. Built once here and handed to both debate
    * bands. docs/plans/260929h-debate-mode-clearer-sources-and-orders.md F8.

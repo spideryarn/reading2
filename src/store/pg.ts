@@ -2764,7 +2764,7 @@ export function shareableArtefacts(revision: {
   simpleSummary: SimpleSummary | null;
   citations: Citations | null;
   debate: Debate | null;
-  /** Debate's claims list: on its own it still opens Debate to a visitor (plan 261008i § 2). */
+  /** Claims' list: on its own it opens Peer review to a visitor (plan 261009l § Visitors). */
   debateClaims: DebateClaimList | null;
 }): PublicArtefacts {
   const present: Record<keyof PublicArtefacts, object | null> = {

@@ -136,7 +136,9 @@ export function notBuiltGap(what: keyof PublicArtefacts): VisitorGap {
  *  - `artefact` carries the `PublicArtefacts` key, and nothing else: whether
  *    that flag is set is a fact about *this piece*, not about the mode.
  *  - `any-artefact` carries several, for a mode whose sub-modes show one
- *    each: any one stored opens it.
+ *    each: any one stored opens it. Its noun is the reader-facing names of
+ *    those sub-modes, not the storage keys — Peer review's keys deliberately
+ *    remain `citations` and `debate`.
  */
 type VisitorPolicy =
   | { kind: "available" }
@@ -148,7 +150,11 @@ type VisitorPolicy =
    * plan 261009l). The band says which sub-mode is short of its own; the gap,
    * when there is none of them, names them all.
    */
-  | { kind: "any-artefact"; keys: readonly [keyof PublicArtefacts, ...(keyof PublicArtefacts)[]] };
+  | {
+      kind: "any-artefact";
+      keys: readonly [keyof PublicArtefacts, ...(keyof PublicArtefacts)[]];
+      noun: string;
+    };
 
 /**
  * **Every mode's policy, and the record is total.**
@@ -325,14 +331,19 @@ const POLICY: Record<Mode, VisitorPolicy> = {
    * re-judged by `publicCitationUrl`, a refused one taking the link off a work
    * or dropping a debate row and counting it for the visitor's foot line. The
    * comments here said they spend, which is true of *making* them (one model
-   * pass; two metered web searches) and nothing to do with *showing* them.
+   * pass for Bibliography or Claims; one metered web search for Reception or
+   * a claim check) and nothing to do with *showing* them.
    * Greg, SPIDERYARN-READING2-56: a stored mode on a public article is shown.
    * The visitor gets `VisitorPeerReviewBand`, which mounts no `useCitations`,
    * `useDebate` or job, draws no *Find it* and starts no search.
    * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md,
    * docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md.
    */
-  "peer-review": { kind: "any-artefact", keys: ["citations", "debate"] },
+  "peer-review": {
+    kind: "any-artefact",
+    keys: ["citations", "debate"],
+    noun: "a Bibliography, a Reception search or a Claims list",
+  },
   /**
    * **An artefact mode since 2026-09-29**, for Citations' reason above: it was
    * `owners-only` for the cost of *asking* for an FAQ, which a visitor never
@@ -394,12 +405,12 @@ export function visitorGap(mode: Mode, available: PublicArtefacts): VisitorGap |
        that has a glossary shows its glossary. */
     case "artefact":
       return available[policy.key] ? null : notBuiltGap(policy.key);
-    /* Any one is enough; with none, the sentence names each thing the mode
-       could have shown, in the order the sub-modes are drawn. */
+    /* Any one is enough; with none, the sentence uses the sub-modes' current
+       reader-facing names rather than these deliberately old storage keys. */
     case "any-artefact":
       return policy.keys.some((key) => available[key])
         ? null
-        : { kind: "not-built", noun: policy.keys.map((key) => NOUN[key]).join(" or ") };
+        : { kind: "not-built", noun: policy.noun };
     default: {
       /* There is no fall-through policy any more, and this is not one: it is
          the compiler being made to say so. `POLICY` is total over `Mode`, so

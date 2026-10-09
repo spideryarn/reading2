@@ -125,7 +125,7 @@ so all three push, and all three land an unrecognised value on the default rathe
 page. [`src/web/params.ts`](../../src/web/params.ts) says why beside each parser.
 
 **A sub-mode parameter outlives its mode, deliberately.** `learn`, `diagram`, `referee`,
-`summary`, `structure` and `debate` each say *which thing, within one mode*, and the bar's mode
+`summary`, `structure` and `peer-review` each say *which thing, within one mode*, and the bar's mode
 buttons write `mode` alone. So `?mode=chat&learn=quiz` is not a leak: the parameter is read only
 by its own mode and does nothing under any other, and it is what makes pressing Learn again
 return the reader to the Quiz, or Diagram to the picture last chosen. One return writes a second

@@ -205,14 +205,14 @@ export interface UseCitations extends CitationDig {
  * finally settled — against `activation.ts`'s rule that a press belongs to the
  * band on screen.
  *
- * **The GET is unconditional, and the experimental switch does not gate it.**
- * Citations mode is behind that switch, so the tempting saving is to skip this
- * request for readers who cannot see the mode. It does not work: `PeerReviewBand`
+ * **The GET is unconditional.** Until 2026-10-09 Citations was behind the
+ * experimental switch, and the tempting saving was to skip this request for
+ * readers who could not see that mode. It did not work: `PeerReviewBand`
  * has to read the list somehow, so either it keeps a read of its own — two
  * states, two requests — or it refreshes this one and the prose marks appear
- * anyway. And it reads the contract backwards:
- * docs/project/experimental-features.md says the switch hides *controls*, not
- * that an existing `?mode=citations` URL half-works. GPT Sol, 2026-09-16.
+ * anyway. It also read the switch's contract backwards: the switch hid
+ * *controls*, not an existing address. Peer review is now outside the switch,
+ * but the one shared read is still the right ownership. GPT Sol, 2026-09-16.
  *
  * ## An always-mounted read is not an always-fresh read
  *

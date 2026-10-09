@@ -964,7 +964,10 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
      so on the default fixture, which has none, the one sentence names both.
      The drawn ones are "draws a stored citations list" and "draws a stored
      debate" below. */
-  "peer-review": { where: VISITOR_BAND, says: "Nobody has built a list of citations or a debate for this one yet" },
+  "peer-review": {
+    where: VISITOR_BAND,
+    says: "Nobody has built a Bibliography, a Reception search or a Claims list for this one yet",
+  },
   /* **Free since 2026-09-04, and it is the only one here that draws a real
      picture for a visitor.** Force is built from the tree in the payload; the
      panel's three fetching hooks are off and the picker is hidden. The string

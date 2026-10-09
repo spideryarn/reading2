@@ -382,7 +382,8 @@ describe("what a visitor is told, mode by mode", () => {
    * a Reception search and no bibliography opens Peer review, whose
    * Bibliography then says there is no list (tests/peer-review-band.test.tsx);
    * one with nothing of the three is the one not-built gap, naming what is
-   * missing.
+   * missing, in the current product words rather than the retired storage
+   * names (`citations` and `debate`).
    */
   it("opens Peer review on any one of its artefacts, and names them when there is none", () => {
     const withFlags = (citations: boolean, debate: boolean): PublicArtefacts => ({
@@ -396,8 +397,10 @@ describe("what a visitor is told, mode by mode", () => {
     expect(visitorGap("peer-review", withFlags(true, true)), "mixed").toBeNull();
     expect(visitorGap("peer-review", withFlags(false, false))).toEqual({
       kind: "not-built",
-      noun: "a list of citations or a debate",
+      noun: "a Bibliography, a Reception search or a Claims list",
     });
+    const sentence = visitorSentence(visitorGap("peer-review", withFlags(false, false)) as VisitorGap);
+    expect(sentence).not.toMatch(/Citations|Debate|citations|debate/);
   });
 
   it("answers for every mode there is, and gives away only what it should", () => {

@@ -179,8 +179,8 @@ taken because the name may change again. New identifiers are Peer-review-named.
 - [`src/web/peer-review-counts.ts`](../../src/web/peer-review-counts.ts) — the chips' numbers and the
   lists behind them, shared with the panels.
 - [`src/web/CitationsPanel.tsx`](../../src/web/CitationsPanel.tsx) and
-  [`src/web/DebatePanel.tsx`](../../src/web/DebatePanel.tsx) — the two panels, unchanged but for
-  taking the chip row as `head`.
+  [`src/web/DebatePanel.tsx`](../../src/web/DebatePanel.tsx) — the two panels; both take the chip row
+  as `head`, and DebatePanel draws C1's cited works under claims.
 - [`src/web/params.ts`](../../src/web/params.ts) § `peerReviewParam`; [`src/web/router.ts`](../../src/web/router.ts)
   § `liftLegacyPeerReview`; [`src/web/activation.ts`](../../src/web/activation.ts) §
   `activationForPeerReview`.

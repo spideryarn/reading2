@@ -531,7 +531,7 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
   "spya-bbe74w": "Needs a decision is now threads: a contents, one thread at a time with a reply box, Defer for now, the ids, your report shut, a shortcut beside the tabs. Check the reply box on your iPhone.",
   "spya-btjtbb": "Mostly Apple's: an iPhone home-screen app forgets the grant on every restart and 10 minutes after dictation. We fixed one extra prompt of ours. Try Safari's per-site Microphone: Allow; WebKit bug 280394 tracks the rest.",
   "spya-bzwzfw": "Needs a decision is now threads: a contents, one thread at a time with a reply box, Defer for now, the ids, your report shut, a shortcut beside the tabs. Check the reply box on your iPhone.",
-  "spya-c2qmbg": "Shipped: Dig deeper on the citation card. Still waiting on you: should Citations become a sub-mode of Debate, and should a cited work be listed beside the claim it is cited near?",
+  "spya-c2qmbg": "Shipped: Citations and Debate are one mode, Peer review (Bibliography, Reception, Claims), out of Experimental, with the works cited beside each claim. Still asking you: keep the name, given Referee?",
   "spya-caue42": "Shipped: Reception and Claims, and the claims picker you chose: Claims lists the claims, you tick some or type your own, and one search checks them. Visitors to a shared article see the claims, not your checks (your answer A).",
   "spya-cnbv8f": "Shipped: your Earlier tab now sorts reports into Open, Needs a decision, Set aside and Shipped, numbers each one, and lets you answer my questions in place.",
   "spya-ddpn5x": "Set aside: researched and planned, not built. It would take about 6 to 9 weeks and needs OpenAI to let us in first. You said it is out of scope for now (2026-10-01).",

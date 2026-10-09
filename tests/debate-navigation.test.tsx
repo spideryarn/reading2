@@ -12,7 +12,7 @@ import { useQueryState } from "nuqs";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { publicArticle } from "../src/public/dto.js";
-import type { PublicDebate } from "../src/public-types.js";
+import type { PublicCitations, PublicDebate, PublicDebateClaimList } from "../src/public-types.js";
 import type { BlockId, Debate, Tree } from "../src/types.js";
 import { VisitorPeerReviewBand } from "../src/web/modes/peer-review/PeerReviewMode.js";
 import { modeParam } from "../src/web/params.js";
@@ -93,6 +93,9 @@ function publish(debate: Debate): PublicDebate {
 }
 
 let debate: PublicDebate;
+let citations: PublicCitations | null;
+let claimList: PublicDebateClaimList | null;
+let openedWorks: string[];
 let host: HTMLDivElement;
 let root: Root;
 
@@ -103,8 +106,8 @@ function Page() {
   if (route.kind !== "read") return createElement("p", null, "not found");
   if (mode !== "peer-review") return createElement("p", null, `band: ${mode}`);
   return createElement(VisitorPeerReviewBand, {
-    citations: null, debate, claimList: null, onJump: () => {}, blockOrder: new Map([[BLOCK, 0]]),
-    publishedAt: undefined, articleTitle: "The shared piece", onOpenWork: () => {},
+    citations, debate, claimList, onJump: () => {}, blockOrder: new Map([[BLOCK, 0]]),
+    publishedAt: undefined, articleTitle: "The shared piece", onOpenWork: (workId) => openedWorks.push(workId),
   });
 }
 
@@ -135,6 +138,9 @@ function press(selector: string) {
 beforeEach(() => {
   window.localStorage.clear();
   debate = publish(STORED);
+  citations = null;
+  claimList = null;
+  openedWorks = [];
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -261,4 +267,33 @@ it("says Reception has nothing when the visitor's article has no search stored",
   debate = null as unknown as PublicDebate;
   boot("?mode=peer-review&peer-review=reception");
   expect(host.textContent).toContain("Nobody has asked the web about this one yet.");
+});
+
+it("wires a visitor's Bibliography through the real Peer review wrapper into Claims' C1 line", () => {
+  citations = {
+    citations: [
+      {
+        id: "work-1",
+        title: "A cited work",
+        authors: "Ada Smith",
+        year: "2024",
+        why: "The claim's evidence.",
+        mentions: [],
+        citedAt: [BLOCK],
+        firstCited: BLOCK,
+        citedInBody: true,
+        linkFrom: "article",
+      },
+    ],
+    capped: false,
+  };
+  claimList = {
+    claims: [{ id: "claim-1", blockId: BLOCK, quote: "The claim in the piece", statement: "The piece makes this claim." }],
+  };
+  boot("?mode=peer-review&peer-review=claims");
+
+  const line = host.querySelector(".dbt-cited-here");
+  expect(line?.textContent).toContain("Ada Smith 2024");
+  press(".dbt-cited-here button");
+  expect(openedWorks).toEqual(["work-1"]);
 });

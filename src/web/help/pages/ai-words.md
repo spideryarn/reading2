@@ -15,12 +15,13 @@ varies:
   Ideas, Learn and Chat link each claim to the paragraphs behind it, so you can check in one click.
 - **The model’s reading of the article.** The glossary defines terms from how this piece uses them.
   Ideas sorts what the piece assumes from what it adds, and Timeline puts events in order. The
-  article marks neither, so treat them as a careful reader’s interpretation.
+  article marks neither, so treat them as a careful reader’s interpretation. Peer review’s Claims
+  list comes from the article too: the model picks out claims for you to check.
 - **Reaching beyond the article.** Chat can search the web, your other articles, or a page this one
-  links to, and says so above any answer that did. Peer review’s Reception and Claims are entirely
-  about what the rest of the web says, and every row links out. Its Bibliography takes each work’s
-  address from the article, but how
-  influential a work is comes from the model’s general knowledge.
+  links to, and says so above any answer that did. Peer review’s Reception searches the web, as do
+  the claim checks you explicitly ask for; every outside source links out. Its Bibliography takes
+  each work’s address from the article, but how influential a work is comes from the model’s general
+  knowledge.
 
 The test is always the same: follow the link to the passage and read it. A claim with no passage
 behind it is the model’s opinion; weigh it as one.

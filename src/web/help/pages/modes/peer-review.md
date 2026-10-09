@@ -17,11 +17,13 @@ than take our word for it.
 
 For an academic paper or a report, where the questions are “what is this built on, and where do I
 find it?” and “what have others made of it?”. Three buttons at the top choose the view; the number
-on each is how much it has to show. Each view is made the first time you choose it, and kept.
-Reception’s is a search of the open web: it takes about a minute, and often finds nothing, which it
-says plainly, because many pieces have no reception at all. A link or Back to a view never starts
-anything; it shows a button instead, such as **Search the web**. Only whoever added the article can
-make these; visitors to a shared article see what has already been made.
+on each is how much it has to show. Bibliography is usually prepared in the background when the
+article is added; if it was not, pressing Bibliography makes it. Reception and Claims are made only
+when you press their view, and each view is kept. Reception’s is a search of the open web: it takes
+about a minute, and often finds nothing, which it says plainly, because many pieces have no
+reception at all. A link or Back to a view never starts anything; it shows a button instead, such as
+**Search the web**. Only whoever added the article can make these; visitors to a shared article see
+what has already been made.
 
 Peer review used to be two modes, Citations and Debate. Old links to either still open the right
 view. If you have been asked to review a paper yourself, [Referee](/help/mode-referee) is the mode

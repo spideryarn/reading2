@@ -234,6 +234,7 @@ interface Row {
 }
 
 const noop = () => {};
+const openedWorks: string[] = [];
 
 const { useQuiz, useQuizRead } = await import("../src/web/useQuiz.js");
 const { QuizPanel } = await import("../src/web/QuizPanel.js");
@@ -299,7 +300,7 @@ function PeerReviewOuter({ show }: { show: boolean }) {
         onCiteFocusTaken: noop,
         claimFocus: null,
         onClaimFocusTaken: noop,
-        onOpenWork: noop,
+        onOpenWork: (workId) => openedWorks.push(workId),
       })
     : null;
 }
@@ -729,6 +730,36 @@ const ROWS: Row[] = [
       stale,
       outdated: false,
     }),
+    /* The real owner wrapper keeps Bibliography's read mounted in Claims so
+       C1 can join the claim's paragraph to the work cited there. */
+    also: {
+      "/api/citations/": {
+        citations: {
+          ...stamp("old", false),
+          citations: [
+            {
+              id: "spya-c7t2wd",
+              key: "work:elements of episodic memory|tulving|1983",
+              title: "Elements of Episodic Memory",
+              authors: "Tulving",
+              year: "1983",
+              why: "The idea the piece tests.",
+              relevance: 0.9,
+              influence: 0.9,
+              mentions: [{ blockId: "spya-bbbbbb", quote: "The instrument was built", start: 0 }],
+              citedAt: ["spya-bbbbbb"],
+              firstCited: "spya-bbbbbb",
+              citedInBody: true,
+              url: "https://scholar.google.com/scholar?q=Elements",
+              linkFrom: "search",
+            },
+          ],
+          capped: false,
+        },
+        stale: false,
+        outdated: false,
+      },
+    },
     mount: (show) => createElement(PeerReviewOuter, { show }),
     verb: "List again",
     shape: ON_THE_BANNER,
@@ -957,6 +988,7 @@ beforeEach(() => {
   postGate = null;
   reads = 0;
   cache.clear();
+  openedWorks.length = 0;
   showBand = true;
   /* Sign-out's teardown, which is also what forgets a hold. */
   jobEngine.reset();
@@ -1003,6 +1035,20 @@ it("releases a refused press even if the start callback rejects", async () => {
     await expect(hold.run(async () => { throw new Error("start rejected"); })).rejects.toThrow("start rejected");
   });
   expect(hold.rewriting, "no posted job can ever settle a rejected start").toBe(false);
+});
+
+it("wires an owner's Bibliography through the real Peer review wrapper into Claims' C1 line", async () => {
+  const claims = ROWS.find((candidate) => candidate.step === "debate-claims");
+  expect(claims).toBeDefined();
+  start(claims!);
+  await paint();
+
+  const line = host.querySelector(".dbt-cited-here");
+  expect(line?.textContent).toContain("Tulving 1983");
+  const work = line?.querySelector<HTMLButtonElement>("button");
+  expect(work).not.toBeNull();
+  await act(async () => work?.click());
+  expect(openedWorks).toEqual(["spya-c7t2wd"]);
 });
 
 describe.each(ROWS)("$name", (mode) => {

@@ -951,7 +951,7 @@ export interface DebateClaimChats {
    * the press is what starts the web search.
    */
   onLens(lens: string): void;
-  /** Open a conversation already started from a claim or an angle, beside Debate. */
+  /** Open a conversation already started from a claim or an angle, beside Peer review. */
   onOpen(threadId: string): void;
 }
 
@@ -1605,7 +1605,7 @@ export function DebatePanel({
  *
  * **The list is the way back**, one line per chat started from an angle,
  * newest first, found in the reading view's thread summaries (`lensThreads`).
- * A line opens its chat beside Debate, as a claim's mark does. The newest
+ * A line opens its chat beside Peer review, as a claim's mark does. The newest
  * `DEBATE_ANGLES_SHOWN` and then *Show all*, so a reader with many does not
  * have to scroll past them to reach the debate on a phone.
  *
