@@ -11,8 +11,12 @@
  *   261009i (no box): why you are reading when no reason is stored, About you
  *   quoted back when it is there, *Ask the guide where to start* only when a
  *   reason is stored, nothing asked or offered when the reason could not be
- *   read; and *Keep this as why you're reading* under the reader's first
- *   answer, which never overwrites a reason stored meanwhile.
+ *   read;
+ * - **the guide's offer to save** (plan 261009q), a card under its answer
+ *   that writes only on a press, never over words changed since the guide
+ *   offered it, once per double press, with an Undo that puts back only over
+ *   its own write. It replaced *Keep this as why you're reading*, whose
+ *   invariants moved here.
  *
  * The real `ChatPanel`, handed props directly, as
  * tests/chat-list-sources.test.tsx does. What the band hands it is
@@ -21,7 +25,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ChatThread, ThreadKind } from "../src/types.js";
+import type { ChatThread, SaveOffer, ThreadKind } from "../src/types.js";
 import { forgetChatDrafts } from "../src/web/chat-draft.js";
 import type { LiveApi } from "../src/web/live/useLiveConversation.js";
 import type { ChatFrom } from "../src/web/params.js";
@@ -48,11 +52,12 @@ vi.mock("../src/web/lib/api.js", async () => {
     ...real,
     apiFetch: (url: string, init?: RequestInit) => {
       if ((init?.method ?? "GET") === "PATCH") {
-        const body = JSON.parse(String(init?.body ?? "{}")) as { purpose: string | null };
+        const body = JSON.parse(String(init?.body ?? "{}")) as { purpose?: string | null; profile?: string | null };
         patches.push(body);
-        reader = { ...reader, purpose: body.purpose };
+        if ("profile" in body) reader = { ...reader, profile: body.profile ?? null };
+        else reader = { ...reader, purpose: body.purpose ?? null };
         if (patchLosesReply) return Promise.resolve(new Response("{}", { status: 500 }));
-        return Promise.resolve(json({ purpose: body.purpose }));
+        return Promise.resolve(json("profile" in body ? { profile: body.profile ?? null } : { purpose: body.purpose }));
       }
       if (String(url).startsWith("/api/reader")) {
         beforeRead?.();
@@ -65,9 +70,8 @@ vi.mock("../src/web/lib/api.js", async () => {
 });
 
 const { ChatPanel } = await import("../src/web/ChatPanel.js");
-const { GUIDE_FIRST_QUESTION, GUIDE_START_LABEL, KEEP_REASON_LABEL, KEPT_REASON_LABEL } = await import(
-  "../src/web/GuideGreeting.js"
-);
+const { GUIDE_FIRST_QUESTION, GUIDE_START_LABEL } = await import("../src/web/GuideGreeting.js");
+const { OFFER_WORDS, UNDO_LABEL } = await import("../src/web/GuideSaveOffer.js");
 
 const AT = "2026-10-07T09:00:00.000Z";
 
@@ -217,17 +221,14 @@ describe("the guide's greeting", () => {
   const button = (label: string) =>
     [...host.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === label);
   const startButton = () => button(GUIDE_START_LABEL);
-  const keepButton = () => button(KEEP_REASON_LABEL);
+  /* What the greeting no longer draws under the first answer (plan 261009q). */
+  const keepButton = () => button("Keep this as why you're reading");
   /** The reader answers: the same mount, now with their first message in it. */
   const answer = async (text: string) => {
     const said = thread(EMPTY_GUIDE.id, "guide", {
       messages: [{ id: "spya-gdeq01", role: "user", text, createdAt: AT, status: "done" }],
     });
     paint([CHAT], { guide: said, threadId: said.id });
-    await settle();
-  };
-  const press = async (b: HTMLButtonElement | undefined) => {
-    await act(async () => b?.click());
     await settle();
   };
 
@@ -278,15 +279,12 @@ describe("the guide's greeting", () => {
     expect(keepButton()).toBeUndefined();
   });
 
-  it("stays above the reader's answer, and keeps their own words as the reason only on a press", async () => {
+  it("stays above the reader's answer, saves nothing, and offers no keep button under it", async () => {
     await greeting();
     await answer("For my journal club\r\n next week  ");
     expect(host.textContent).toContain("Why are you reading it?");
-    expect(patches, "nothing is saved before the press").toEqual([]);
-    await press(keepButton());
-    expect(patches).toEqual([{ purpose: "For my journal club\n next week" }]);
-    expect(host.textContent).toContain(KEPT_REASON_LABEL);
-    expect(sent, "keeping it sends nothing").toEqual([]);
+    expect(keepButton()).toBeUndefined();
+    expect(patches).toEqual([]);
   });
 
   it("does not turn a message sent before the purpose read into an answer to a greeting shown later", async () => {
@@ -346,54 +344,154 @@ describe("the guide's greeting", () => {
     expect(host.textContent).not.toContain("Why are you reading it?");
   });
 
-  it("never overwrites a reason saved elsewhere since the greeting read", async () => {
-    await greeting();
-    await answer("For my journal club");
-    beforeRead = () => {
-      reader = { ...reader, purpose: "Written on Metadata in another tab" };
-    };
-    await press(keepButton());
-    expect(patches).toEqual([]);
-    expect(host.textContent).toContain("You had already saved a reason for this one");
-  });
-
-  it("writes once for a double press", async () => {
-    await greeting();
-    await answer("For my journal club");
-    const keep = keepButton();
-    await act(async () => {
-      keep?.click();
-      keep?.click();
-    });
-    await settle();
-    expect(patches).toHaveLength(1);
-  });
-
-  it("calls a save whose reply was lost kept, when the server has it", async () => {
-    await greeting();
-    await answer("For my journal club");
-    patchLosesReply = true;
-    await press(keepButton());
-    expect(patches).toHaveLength(1);
-    expect(host.textContent).toContain(KEPT_REASON_LABEL);
-  });
-
-  it("offers Metadata instead of cutting a message too long to keep", async () => {
-    await greeting();
-    await answer("x".repeat(601));
-    expect(keepButton()).toBeUndefined();
-    expect(host.textContent).toContain("Too long to keep");
-    act(() => root.unmount());
-    root = createRoot(host);
-    await greeting();
-    await answer("x".repeat(600));
-    expect(keepButton()).toBeDefined();
-  });
-
   it("draws no greeting and no keep button on a guide that already had turns", async () => {
     paint([CHAT], { guide: thread("spya-gdeacc", "guide"), threadId: "spya-gdeacc" });
     await settle();
     expect(host.textContent).not.toContain("I'm your guide");
     expect(keepButton()).toBeUndefined();
+  });
+});
+
+describe("the guide's offer to save", () => {
+  type Offer = { field: "purpose" | "profile"; text: string; basis?: string | null };
+  /** A guide whose one answer ran `offer_to_save` once per offer given. */
+  const guideWith = (offers: Offer[], over: { status?: "done" | "pending"; name?: string } = {}) =>
+    thread("spya-gdeoff", "guide", {
+      messages: [
+        { id: "spya-gdeq02", role: "user", text: "For my journal club. I'm a historian.", createdAt: AT, status: "done" },
+        {
+          id: "spya-gdea02",
+          role: "assistant",
+          text: "Start with the abstract.",
+          createdAt: AT,
+          status: over.status ?? "done",
+          tools: offers.map((offer) => ({
+            name: over.name ?? "offer_to_save",
+            label: "offered to save why you're reading",
+            status: "done" as const,
+            /* Some cases below deliberately forge an invalid stored shape;
+               this is the JSON boundary the component is meant to reject. */
+            offer: offer as SaveOffer,
+          })),
+        },
+      ],
+    });
+  const draw = async (guide: ChatThread) => {
+    paint([CHAT], { guide, threadId: guide.id });
+    await settle();
+  };
+  const button = (label: string) =>
+    [...host.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === label);
+  const press = async (label: string) => {
+    await act(async () => button(label)?.click());
+    await settle();
+  };
+  const SAVE = OFFER_WORDS.purpose.save;
+  const REASON: Offer = { field: "purpose", text: "For my journal club.", basis: null };
+
+  it("shows the words under the answer and saves nothing until the press", async () => {
+    await draw(guideWith([REASON]));
+    expect(host.querySelector(".guide-offer-text")?.textContent).toBe("For my journal club.");
+    expect(host.querySelector(".guide-offer-text")?.classList.contains("voice-ai")).toBe(true);
+    expect(patches).toEqual([]);
+    await press(SAVE);
+    expect(patches).toEqual([{ purpose: "For my journal club." }]);
+    expect(host.textContent).toContain(OFFER_WORDS.purpose.saved);
+    expect(sent, "saving sends nothing to the guide").toEqual([]);
+  });
+
+  it("Undo puts back what the press replaced, and only over its own write", async () => {
+    reader = { ...reader, purpose: "Older reason" };
+    await draw(guideWith([{ ...REASON, basis: "Older reason" }]));
+    await press(SAVE);
+    expect(reader.purpose).toBe("For my journal club.");
+    await press(UNDO_LABEL);
+    expect(patches.at(-1)).toEqual({ purpose: "Older reason" });
+    expect(host.textContent).toContain("Undone");
+
+    /* Saved again, then changed elsewhere: Undo leaves the newer words. */
+    await press(SAVE);
+    reader = { ...reader, purpose: "Written on Metadata since" };
+    const before = patches.length;
+    await press(UNDO_LABEL);
+    expect(patches).toHaveLength(before);
+    expect(host.textContent).toContain("It has changed since");
+  });
+
+  it("does not save over words that changed since the guide offered it", async () => {
+    reader = { ...reader, purpose: "Saved from a later offer" };
+    await draw(guideWith([REASON]));
+    await press(SAVE);
+    expect(patches).toEqual([]);
+    expect(host.textContent).toContain("It has changed since I offered this");
+  });
+
+  it("writes nothing when what is saved now cannot be read", async () => {
+    reader = { ...reader, purposeFailed: true };
+    await draw(guideWith([REASON]));
+    await press(SAVE);
+    expect(patches).toEqual([]);
+    expect(host.textContent).toContain("Couldn't check what is saved now");
+  });
+
+  it("says it is already saved rather than writing it again", async () => {
+    reader = { ...reader, purpose: "For my journal club." };
+    await draw(guideWith([REASON]));
+    await press(SAVE);
+    expect(patches).toEqual([]);
+    expect(host.textContent).toContain("Already saved");
+  });
+
+  it("writes once for a double press", async () => {
+    await draw(guideWith([REASON]));
+    await act(async () => {
+      button(SAVE)?.click();
+      button(SAVE)?.click();
+    });
+    await settle();
+    expect(patches).toHaveLength(1);
+  });
+
+  it("calls a save whose reply was lost saved, when the server has it", async () => {
+    await draw(guideWith([REASON]));
+    patchLosesReply = true;
+    await press(SAVE);
+    expect(patches).toHaveLength(1);
+    expect(host.textContent).toContain(OFFER_WORDS.purpose.saved);
+  });
+
+  it("saves About you through the reader route, and an unreadable shelf does not hide it", async () => {
+    reader = { ...reader, profile: "A historian", purposeFailed: true };
+    await draw(guideWith([{ field: "profile", text: "A historian of science.", basis: "A historian" }]));
+    expect(host.textContent).toContain("Saving this replaces what About you says now.");
+    await press(OFFER_WORDS.profile.save);
+    expect(patches).toEqual([{ profile: "A historian of science." }]);
+    await press(UNDO_LABEL);
+    expect(patches.at(-1)).toEqual({ profile: "A historian" });
+  });
+
+  it("draws one card per field, the last offer's", async () => {
+    await draw(guideWith([REASON, { ...REASON, text: "For journal club next week." }]));
+    expect([...host.querySelectorAll(".guide-offer-text")].map((p) => p.textContent)).toEqual([
+      "For journal club next week.",
+    ]);
+  });
+
+  it.each([
+    ["an answer still arriving", guideWith([REASON], { status: "pending" })],
+    ["a run of another tool", guideWith([REASON], { name: "article_glossary" })],
+    ["an offer with no safe basis", guideWith([{ field: "purpose", text: "x" }])],
+    ["words over the cap", guideWith([{ field: "purpose", text: "x".repeat(601) }])],
+    ["an unknown field", guideWith([{ field: "password" as "purpose", text: "x" }])],
+  ])("draws no card for %s", async (_what, guide) => {
+    await draw(guide);
+    expect(host.querySelector(".guide-offer")).toBeNull();
+  });
+
+  it("draws no card in a chat, whatever its runs say", async () => {
+    const chat = { ...guideWith([REASON]), id: "spya-chtoff", kind: "chat" as const };
+    paint([chat], { threadId: chat.id });
+    await settle();
+    expect(host.querySelector(".guide-offer")).toBeNull();
   });
 });
