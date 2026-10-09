@@ -39,8 +39,9 @@
  * each to its key and prints, per comparison and judge: who was preferred,
  * overall, per article and by kind of pair; a two-sided sign test over the
  * untied pairs; and per arm the echo, giveaway, unlicensed and untrue counts
- * per cue judged, and how many of its empty sides were judged to need a
- * question (Sol F1).
+ * per cue judged. Its "left out — needed" count covers only pairs where that
+ * arm was empty and the other arm had a cue: pairs where both were empty are
+ * not sent to the judge (Sol F1).
  */
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname } from "node:path";
@@ -48,6 +49,7 @@ import { blindCoin } from "../../evals/plain-words/run.js";
 
 interface Stop {
   quoteId: string;
+  depth: 1 | 2 | 3;
   quoteFull: string;
   paragraph: string;
   before: string | null;
@@ -155,6 +157,38 @@ for (const name of ARM_NAMES) {
   screens.push(`| **${name}** | **all** | **${stops}** | **${cues}** | **${none}** | **${bad}** | **${median(lengths)}** | **$${(cost / 1e9).toFixed(4)}** |`);
 }
 
+const COMPARISONS: { id: string; x: ArmName; y: ArmName }[] = [
+  { id: "s1", x: "A1", y: "A2" },
+  { id: "s2", x: "A1", y: "B1" },
+  { id: "s3", x: "A2", y: "B2" },
+];
+
+screens.push("", "## Route shape (descriptive; not part of the cue judgment)", "");
+screens.push(
+  "| Comparison | article | stops | only first | only second | shared at a different depth | inverted shared-stop pairs |",
+);
+screens.push("|---|---|---|---|---|---|---|");
+for (const c of COMPARISONS) {
+  for (const slug of slugs) {
+    const xs = runOf(c.x, slug).stops;
+    const ys = runOf(c.y, slug).stops;
+    const xById = new Map(xs.map((s, i) => [s.quoteId, { stop: s, index: i }]));
+    const yById = new Map(ys.map((s, i) => [s.quoteId, { stop: s, index: i }]));
+    const shared = xs.filter((s) => yById.has(s.quoteId));
+    const depthChanges = shared.filter((s) => yById.get(s.quoteId)!.stop.depth !== s.depth).length;
+    let inversions = 0;
+    for (let i = 0; i < shared.length; i++) {
+      for (let j = i + 1; j < shared.length; j++) {
+        if (yById.get(shared[i]!.quoteId)!.index > yById.get(shared[j]!.quoteId)!.index) inversions++;
+      }
+    }
+    const possibleInversions = shared.length * (shared.length - 1) / 2;
+    screens.push(
+      `| ${c.x} v ${c.y} | ${slug} | ${xs.length} / ${ys.length} | ${xs.filter((s) => !yById.has(s.quoteId)).length} | ${ys.filter((s) => !xById.has(s.quoteId)).length} | ${depthChanges} / ${shared.length} | ${inversions} / ${possibleInversions} |`,
+    );
+  }
+}
+
 /** The quotes that are a stop in every arm: the one population judged. */
 const common = new Map<string, Set<string>>();
 screens.push("", "## Stops not in every arm (not judged; read by hand)", "");
@@ -189,11 +223,6 @@ console.log(`wrote ${base}-screens.md`);
 
 /* ----------------------------------------------------------------- pairs -- */
 
-const COMPARISONS: { id: string; x: ArmName; y: ArmName }[] = [
-  { id: "s1", x: "A1", y: "A2" },
-  { id: "s2", x: "A1", y: "B1" },
-  { id: "s3", x: "A2", y: "B2" },
-];
 interface KeyRow {
   pair: number;
   slug: string;
@@ -345,6 +374,24 @@ for (const c of COMPARISONS) {
     if (byPair.size !== key.length || key.some((k) => !byPair.has(k.pair))) {
       throw new Error(`${file}: ${byPair.size} judgments for ${key.length} pairs`);
     }
+    /* A malformed flag assignment would otherwise make the per-arm report
+       look plausible while counting `needed` on a cue, or cue faults on an
+       empty side. The brief forbids both; enforce it at the join. */
+    for (const k of key) {
+      const j = byPair.get(k.pair)!;
+      for (const [side, arm] of [["1", k.one], ["2", k.two]] as const) {
+        const hasCue = k.kind === "both" || k.kind === arm;
+        if (hasCue && j[`needed${side}`] === true) {
+          throw new Error(`${file}: pair ${k.pair} marks needed${side} on a cue`);
+        }
+        if (
+          !hasCue &&
+          ["echo", "give", "unlicensed", "untrue"].some((f) => j[`${f}${side}`] === true)
+        ) {
+          throw new Error(`${file}: pair ${k.pair} marks a cue fault on empty side ${side}`);
+        }
+      }
+    }
     const winner = (k: KeyRow): string => {
       const j = byPair.get(k.pair)!;
       return j.better === "tie" ? "tie" : j.better === "1" ? k.one : k.two;
@@ -357,7 +404,9 @@ for (const c of COMPARISONS) {
     const t: Record<string, number> = { [c.x]: 0, [c.y]: 0, tie: 0 };
     for (const k of key) t[winner(k)]!++;
     console.log(`\n${c.id} ${c.x} v ${c.y}, judge ${judge}: ${key.length} pairs`);
-    console.log(`  all:               ${tally(key)}   sign test p = ${signTest(t[c.x]!, t[c.y]!).toFixed(4)}`);
+    console.log(
+      `  all:               ${tally(key)}   pair-level sign test p = ${signTest(t[c.x]!, t[c.y]!).toFixed(4)}`,
+    );
     console.log(`  both have a cue:   ${tally(key.filter((k) => k.kind === "both"))}`);
     console.log(`  only ${c.x} has one:  ${tally(key.filter((k) => k.kind === c.x))}`);
     console.log(`  only ${c.y} has one:  ${tally(key.filter((k) => k.kind === c.y))}`);
@@ -374,7 +423,7 @@ for (const c of COMPARISONS) {
         for (const f of FLAGS) if (j[`${f}${side}`] === true) counts[f]++;
       }
       console.log(
-        `  ${arm}: ${cues} cues — echo ${counts.echo}, gives it away ${counts.give}, unlicensed ${counts.unlicensed}, untrue ${counts.untrue}; ${empties} left out — needed ${counts.needed}`,
+        `  ${arm}: ${cues} cues — echo ${counts.echo}, gives it away ${counts.give}, unlicensed ${counts.unlicensed}, untrue ${counts.untrue}; ${empties} left out while the other arm had a cue — needed ${counts.needed}`,
       );
     }
   }

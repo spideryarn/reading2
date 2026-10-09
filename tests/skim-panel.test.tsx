@@ -156,7 +156,7 @@ vi.mock("../src/web/flash.js", async (importOriginal) => {
   };
 });
 
-const { SkimPanel, SkimDoor, coverageNote, skimPromise } = await import(
+const { SkimPanel, SkimDoor, SKIM_CUE_EXPLAINED, coverageNote, skimPromise } = await import(
   "../src/web/SkimPanel.js"
 );
 const { armSkimOpening, firstSkimArrival, SkimBand } = await import(
@@ -476,6 +476,11 @@ async function draw(o: UseSkim, v: SkimView) {
   await act(async () => root.render(createElement(SkimPanel, { access: { kind: "owner", owner: o }, view: v, away: false })));
 }
 
+async function drawVisitor(v: SkimView) {
+  calls.length = 0;
+  await act(async () => root.render(createElement(SkimPanel, { access: { kind: "visitor", route: ROUTE }, view: v, away: false })));
+}
+
 const text = (sel: string) => host.querySelector(sel)?.textContent ?? null;
 
 describe("the panel", () => {
@@ -554,6 +559,27 @@ describe("the panel", () => {
       .map((el) => el.className)
       .filter((c) => c === "skim-place" || c === "skim-cue" || c === "skim-words");
     expect(order).toEqual(["skim-place", "skim-cue", "skim-words"]);
+  });
+
+  it("explains the current cue on its mouse card without nesting another control in the row button", async () => {
+    const posed = view();
+    await draw(owner(), {
+      ...posed,
+      rows: posed.rows.map((row) => row.current ? { ...row, words: "The current quote is already shown whole." } : row),
+    });
+    const cue = host.querySelector<HTMLElement>(".skim-row.current .skim-cue")!;
+    expect(cue.closest("button")?.classList.contains("skim-go")).toBe(true);
+    expect(cue.matches("button, [role='button'], [tabindex='0']")).toBe(false);
+
+    vi.useFakeTimers();
+    cue.dispatchEvent(new MouseEvent("mouseenter"));
+    await act(async () => {
+      vi.advanceTimersByTime(DELAY.open);
+    });
+    const card = document.querySelector<HTMLElement>('[role="tooltip"]');
+    expect(document.querySelectorAll('[role="tooltip"]')).toHaveLength(1);
+    expect(card?.textContent).toContain(SKIM_CUE_EXPLAINED);
+    expect(cue.getAttribute("aria-describedby")).toBe(card?.id);
   });
 
   it("draws a repeated section path for a screen reader only — no ditto mark beside a quote (260928e)", async () => {
@@ -776,6 +802,7 @@ describe("the panel", () => {
     /* A tap — a click, with no hover first — opens it: touch has no hover. */
     await act(async () => info().click());
     expect(tip()).toContain(skimPromise(false));
+    expect(tip()).toContain(SKIM_CUE_EXPLAINED);
     expect(info().getAttribute("aria-expanded")).toBe("true");
     await act(async () => info().click());
     expect(info().getAttribute("aria-expanded"), "a second tap closes it").toBe("false");
@@ -808,6 +835,15 @@ describe("the panel", () => {
     expect(tip()).toContain("4 of the 6 quotes offered to this route");
     await act(async () => info().click());
     expect(coverageNote(4, 0)).toBeNull();
+  });
+
+  it("puts the cue explanation in the visitor's band info card too", async () => {
+    await drawVisitor(view());
+    const info = host.querySelector<HTMLButtonElement>(".mode-band > .band-about")!;
+    await act(async () => info.click());
+    expect(document.querySelector('[role="tooltip"], [role="dialog"]')?.textContent).toContain(
+      SKIM_CUE_EXPLAINED,
+    );
   });
 
   it("does not blame the Quotes when the Ideas or outline may have made the route stale", async () => {

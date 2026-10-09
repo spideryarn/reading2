@@ -365,7 +365,6 @@
   font-family: var(--font-author);
   font-size: var(--reading-size);
 }
-.skim-door > * { font-family: var(--font-ui); }
 .skim-door-row {
   display: flex;
   justify-content: flex-end;
@@ -390,6 +389,11 @@
   color: var(--highlight-ink);
 }
 .skim-door-btn.quiet { font-weight: 400; color: var(--ink); }
+/* The author face on `.skim-door` is geometry only. Visible children return
+   to the UI face; voices.css's later, more-specific `.skim-door-cue-next`
+   deliberately wins for the model-written next cue, while the fixed “End of
+   pass” line stays UI (fonts.md § Putting a new element in its voice). */
+.skim-door > * { font-family: var(--font-ui); }
 
 /* -------------------------------------------------------------- the stop card --
    Under the current row only: what the other modes already wrote about this

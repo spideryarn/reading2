@@ -46,7 +46,10 @@ Three admin reports from Greg on 2026-10-09 07:50–07:53 UTC, all from Skim on
 ## Outcome (2026-10-09)
 
 Built, with these changes from the plan below. GPT Sol's plan review is
-[261009j-plan-review-sol.md](261009j-plan-review-sol.md); all ten findings were taken.
+[261009j-plan-review-sol.md](261009j-plan-review-sol.md). Its concrete product and implementation
+fixes were taken. F2's route-quality gate and F3's article-blocked confidence test were not built;
+the investigation now quantifies the route movement and treats its pair-level statistics as
+descriptive rather than claiming those two gates.
 
 - **The prompt took three wordings**, and the plan's ship rule was not met by any of them. The third
   was built on an Opus arbiter's call, and the reasons and the cost are written down:

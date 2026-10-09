@@ -328,10 +328,14 @@ describe("validating the model's route", () => {
 
   it("asks for a cue only when it adds something, and says an empty one is a good answer (skim/11, plan 261009j)", () => {
     const prompt = SKIM_SYSTEM;
+    expect(emptyDrops().noCue).toBe(0);
     expect(prompt).toContain('"cue": ""');
     expect(prompt).toContain("THE ECHO TEST");
     expect(prompt).toContain("ASK ONLY WHAT THE QUOTE ANSWERS");
     expect(prompt).toContain("IT SAYS WHY THIS PASSAGE");
+    expect(prompt).toMatch(/OUTPUT[\s\S]*"cue": ""[\s\S]*"cue": "" means that stop has no cue/);
+    expect(SKIM_OUTPUT_SCHEMA.properties.stops.items.required).toContain("cue");
+    expect(SKIM_OUTPUT_SCHEMA.properties.stops.items.properties.cue).toEqual({ type: "string" });
     expect(prompt).not.toContain("MOST QUOTES STAND ON THEIR OWN, AND THEIR CUE ONLY POINTS");
   });
 

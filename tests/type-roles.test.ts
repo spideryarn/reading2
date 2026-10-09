@@ -472,4 +472,14 @@ describe("the named exceptions", () => {
       );
     });
   }
+
+  it("uses the author's face only to measure the Skim door, then restores each child's voice", () => {
+    const fixed = witness(".skim-door > p.skim-door-cue");
+    expect(window.getComputedStyle(fixed.target).fontFamily).toBe("var(--font-ui)");
+    fixed.host.remove();
+
+    const generated = witness(".skim-door > p.skim-door-cue.skim-door-cue-next");
+    expect(window.getComputedStyle(generated.target).fontFamily).toBe("var(--font-ai)");
+    generated.host.remove();
+  });
 });

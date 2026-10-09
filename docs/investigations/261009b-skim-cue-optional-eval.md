@@ -8,18 +8,22 @@ previous measurement of the same field is
 
 **In one paragraph.** Greg asked for the question before each Skim quote (the *cue*) to be
 optional, and never an echo, meaning a question that turns the quote into a question and adds
-nothing. Both blind judges agree that most of `skim/10`'s cues are echoes: GPT Sol marked 85–98% of
-them, and a Claude judge 18–82% depending on what it was comparing them with. `skim/11` keeps about
-a third of the cues: 24–35 of 99 per run, and none of the six articles is left with none. Removing
-an echo is judged a tie, as the judge's brief says it should be. Only 3–10 omissions per run were
-judged to have needed a question. Where both prompts wrote a cue, the new one is usually preferred.
+nothing. In round 3, both blind judges marked a large majority of `skim/10`'s cues as echoes:
+Claude marked 76–77 of 96 and GPT Sol 84–94 of 96. Earlier rounds varied much more, so these are not
+stable estimates of the underlying rate. `skim/11` keeps about a third of the cues: 24–35 of 99 per
+run, and none of the six articles is left with none. Removing an echo is judged a tie, as the
+judge's brief says it should be. Models marked 3–10 omissions per run as needing a question. Where
+both prompts wrote a cue in the built round, Claude preferred the new cues and GPT Sol narrowly
+preferred the old ones.
 **The predeclared ship rule was not met, and it was overridden.** That rule was that both judges
 prefer the new prompt to both control runs by more than the control's own split. Overall pairwise
 preference swings between runs and judges, from 21–6 for the new prompt (round 2) to 19–13 against
-it (round 3, GPT Sol, in both runs), and is mostly not significant. Where only the old prompt wrote
-a cue, the old cue usually won the pairs that were not ties. The wording was revised twice inside
-the measurement, and the third wording is the one built, for the reasons under
-[§ Round 3](#round-3-the-built-wording). Spend $1.50 on routes (nine runs) plus the judges.
+it (round 3, GPT Sol, in both runs). Pair-level sign tests mostly did not reject equal wins, but the
+pairs cluster within six articles, so those p-values are descriptive rather than an article-level
+confidence test. Where only the old prompt wrote a cue, the old cue usually won the pairs that were
+not ties. The wording was revised twice inside the measurement, and the third wording is the one
+built, for the reasons under
+[§ Round 3](#round-3-the-built-wording). The routes (nine runs) cost $1.50, plus the judges.
 
 ## What was asked
 
@@ -66,6 +70,11 @@ with the fixes from GPT Sol's plan review
   - for each empty side: **needed** (Sol F1).
 - **Judges**: three fresh Claude subagents (one per comparison) and GPT Sol (all three files), each
   reading only the pairs files.
+- **Statistics.** The script prints an exact two-sided sign test over untied pairs. The arithmetic
+  is exact for those pairs, but the pairs are clustered within only six articles, so its p-value is
+  descriptive; this evaluation has no article-blocked confidence test or predeclared minimum
+  effect. That is why the conclusions below lean on direction, run-to-run spread and the manual
+  read, not a threshold crossing.
 
 ## Round 1: the first wording (exploratory)
 
@@ -121,9 +130,10 @@ back?"*). Cues kept: B1 32, B2 26.
 | A's cues, the same | 76–77, about 1/3–6/1 of 96 | 84–94, about 0/1–5/0–1 of 96 |
 | B's empty sides judged needed | 7 of 64; 5 of 70 | 5 of 64; 6 of 70 |
 
-Sol preferred the control in both runs (not significant). Claude was split. "Prefer a question"
-also pushed some cues back towards bare pointer questions, so Sol counts more of the kept cues as
-echoes than in round 2 (16–22, against 3–8). B1 was flagged on 7 of its 32 cues by Claude, about
+Sol preferred the control in both runs; the pair-level sign tests were inconclusive. Claude was
+split. "Prefer a question" also pushed some cues back towards bare pointer questions, so Sol counts
+more of the kept cues as echoes than in round 2 (11–22, against 3–8). B1 was flagged on 7 of its 32
+cues by Claude, about
 22%, against roughly 10% of A's. So the plan's third clause, no more give-aways or unsupported
 claims, holds only on raw counts, and B2's flags are near zero.
 
@@ -133,28 +143,29 @@ anyway, on an Opus arbiter's recommendation, for these reasons:
 - The rule's first clause tests overall pairwise preference, and the brief scores "echo against no
   question" as a tie. So most pairs tie, and the verdict rests on a remainder that moves as much
   between two control runs (10–17, then 20–25) as between the arms.
-- Both judges agree on what Greg asked for: most of the old cues are echoes, and two thirds of them
-  are gone.
+- In the built round, both judges marked most of the old cues as echoes, and two thirds of the old
+  prompt's cues are gone. The earlier rounds' echo rates varied, so the exact rate is uncertain.
 - Round 2 is ruled out by its regression on Greg's own reported quote.
 - Another round would not settle it, because the spread between runs is larger than the effect.
 
-**The cost** is the omissions that lost: where only the old prompt had a cue, the judges preferred
-it 10–2, 8–3 and 6–3. That is the trade-off Greg is told about.
+**The cost** is the omissions that lost: where only the old prompt had a cue, the four comparisons
+preferred it 10–2, 4–2, 8–3 and 6–3. That is the trade-off Greg is told about.
 
 ## What it shows, and what it does not
 
-- **The old cues were mostly echoes**, by both judges, and the new prompt drops about two thirds of
-  them. That is what Greg asked for, and removing an echo is not judged a loss.
-- **Where the new prompt keeps a cue, it is usually the better cue**, more clearly by the Claude
-  judge than by Sol.
-- **The omissions cost a little**: 3–10 per run of about 65–70 were judged to have needed a question.
+- **In round 3, both judges marked most old cues as echoes**, and the new prompt drops about two
+  thirds of the old prompt's cues. The earlier rounds varied; this does not establish a stable echo
+  rate. Removing an echo is not judged a loss under the brief.
+- **Where both prompts keep a cue, the result depends on the judge**: Claude preferred the new cue;
+  Sol narrowly preferred the old cue in both built-round comparisons.
+- **Some omissions lose**: 3–10 per run of about 65–70 common-population omissions were judged to
+  have needed a question. This excludes route stops that were not shared by all four arms.
 - **Overall preference is not established.** Across three rounds, two runs a round and two judges,
   the new prompt's overall lead ranges from clear (21–6) to a small loss (13–10), and it is inside
   the control's spread more often than not. The plan's rule was not met. It was built anyway, for
-  four reasons: the change is the one Greg asked for in so many words; nothing measured got
-  significantly worse, though some omissions lost to the old cue and B1's flag rate was higher; old
-  routes keep their cues (a prompt version makes a route outdated, not stale); and it is one
-  prompt section to revert.
+  four reasons: the change is the one Greg asked for in so many words; the overall comparisons were
+  inconclusive, while some omissions and B1's flag rate were worse; old routes keep their cues (a
+  prompt version makes a route outdated, not stale); and it is one prompt section to revert.
 - Six articles, of which two are Greg's, and the judges are models. Rare harms cannot be measured at
   this size, so every cue the built wording kept was also read by hand (below).
 
@@ -186,9 +197,16 @@ All 58 kept cues of round 3 (B1 32, B2 26) were read against their quotes.
 
 ## The route itself
 
-Not this change's question, and not judged. The Opus study that started the plan also saw
-near-duplicate stops (the abstract and the conclusion of the Attention paper both on one route) and
-one stop placed before the stop it depends on. Those come from section 2 of the prompt.
+Route quality was not judged, but selection, depth and order were compared so the common-population
+filter could not hide movement. Five articles selected the same stops in all four built-round arms.
+On `2608-13566v1-spya-yurten`, A1 and A2 each selected 31 stops but swapped one; B1 and B2 each
+selected 33, adding the same two stops to A's set. Across articles, common stops also changed depth
+and order between every pair of runs, including A1 versus A2; the candidate comparisons were not
+uniformly larger than that control variation. This is descriptive, not a route-quality gate.
+
+The Opus study that started the plan also saw near-duplicate stops (the abstract and the conclusion
+of the Attention paper both on one route) and one stop placed before the stop it depends on. Those
+come from section 2 of the prompt.
 
 ## Files
 
