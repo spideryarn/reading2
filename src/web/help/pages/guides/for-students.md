@@ -26,7 +26,7 @@ you, start with [Your first article](/help/first-article).
 - **See how the piece is built** with [Structure](/help/mode-structure) and [the
   spine](/help/spine): the same parts, drawn two ways.
 - **Walk a [Skim](/help/mode-skim) route** for the shape of a paper. Every stop is the author’s
-  sentence, in place, with a cue for what to look for.
+  sentence, in place, with a question to read it with where one helps.
 
 ## While you read
 

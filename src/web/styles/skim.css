@@ -145,7 +145,17 @@
 }
 .skim-what { display: flex; flex-direction: column; min-width: 0; gap: 0.15rem; }
 .skim-place { font-size: var(--type-item); line-height: 1.35; }
-.skim-cue { color: var(--ink-soft); font-size: var(--type-body); line-height: 1.35; }
+/* A named exception to the text roles (typography.md § Text roles in a band):
+   not --type-body, though it is a sentence under the row. It is the model's
+   optional question before the quote, and matters less than the quote (Greg,
+   spya-qpgvq9, plan 261009j); its monospace face reads larger than the quote's
+   serif at the same size, so it sits a clear step below --type-quote.
+   tests/type-roles.test.ts holds it at 0.78rem. */
+.skim-cue {
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
 /* The quote's own words (plan 260928e) — cut short on every row but the
    current one, whose row shows them whole. A touch smaller than the path,
    so the section still reads as the row's heading. */
@@ -162,10 +172,32 @@
   line-height: 1.4;
 }
 
-.skim-row.current .skim-go {
+/* **The current stop is one box with one bar** (plan 261009j, report
+   spya-x0rfs2). The `<li>` holds both the row and the stop card under it, so
+   it carries the ground, the corners and the bar, and neither child paints
+   any. Until 2026-10-09 each child painted its own ground and an inset
+   box-shadow bar, and the row's rounded bottom corner bent its bar away just
+   before the card's began: two bars with a notch between them. The bar is a
+   strip set in from the corners, not an inset shadow, because an inset shadow
+   follows any rounded corner it meets. */
+.skim-row.current {
+  position: relative;
+  border-radius: var(--radius);
   background: var(--surface-raised);
-  box-shadow: inset 3px 0 0 var(--highlight);
 }
+.skim-row.current::before {
+  content: "";
+  position: absolute;
+  top: var(--radius);
+  bottom: var(--radius);
+  left: 0;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--highlight);
+  pointer-events: none;
+}
+.skim-row.current .skim-go,
+.skim-row.current .skim-go:hover { background: none; }
 .skim-row.current .skim-place { font-weight: 600; color: var(--ink); }
 
 /* **Where the stop sits in the article** — a vertical hairline under the row's
@@ -312,15 +344,28 @@
 /* ------------------------------------------------------ the door in the prose --
    After the current stop's block, outside `.prose` (TableView.tsx §
    `afterBlock`). Right-aligned, where the eye lands at the end of a paragraph,
-   and in the UI face so it cannot be mistaken for the author's words. */
+   and in the UI face so it cannot be mistaken for the author's words.
+   **Inside the prose's measure, not the cell's** (plan 261009j): the cell is
+   wider than the centred `.prose` box, and until 2026-10-09 the door was
+   right-aligned to the cell, so the next stop's cue ran across the rule drawn
+   down the prose's right-hand side. It takes the same measure and centring as
+   `.prose` (and as Quiz's `.quiz-in-prose`), and the prose's face and size on
+   the box only, because the measure is in `ch` of that face; its contents are
+   back in the UI face. */
 .skim-door {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 0.25rem;
-  margin: 0.5rem 0 0.2rem;
-  font-family: var(--font-ui);
+  max-width: clamp(45ch, 90vw, var(--reading-measure));
+  margin: 0.5rem auto 0.2rem;
+  /* `.prose`'s own face, not `--font-reading`: that is Geist here, whose `ch`
+     is wider, and the door came out 160px wider than the text (browser check,
+     plan 261009j). The gutter learned the same (prose.css § the gutter). */
+  font-family: var(--font-author);
+  font-size: var(--reading-size);
 }
+.skim-door > * { font-family: var(--font-ui); }
 .skim-door-row {
   display: flex;
   justify-content: flex-end;
@@ -348,17 +393,15 @@
 
 /* -------------------------------------------------------------- the stop card --
    Under the current row only: what the other modes already wrote about this
-   paragraph (src/web/stop-card.ts). Indented to the row's text, under the
-   row's left bar, and quieter than the row so it reads as notes on it. */
+   paragraph (src/web/stop-card.ts). Indented to the row's text, inside the
+   current stop's one box (`.skim-row.current`, above), which paints its ground
+   and its bar, and quieter than the row so it reads as notes on it. */
 .skim-card {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
   margin: 0 0 0.4rem;
   padding: 0.35rem 0.5rem 0.45rem calc(0.4rem + 1.4em + 0.55rem);
-  border-radius: 0 0 var(--radius) var(--radius);
-  background: var(--surface-raised);
-  box-shadow: inset 3px 0 0 var(--highlight);
   font-size: 0.85rem;
   line-height: 1.4;
 }

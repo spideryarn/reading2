@@ -142,7 +142,7 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
             of the main modes". */}
         <Showcase shot={SHOTS.skim} title="Skim." mode="skim" offset under>
           Skim the paper in increasing depth: a route through its quotes, walked three times — the
-          gist, then more, then most — each stop with a line on what to look for.
+          gist, then more, then most — with a question to read a stop with where one helps.
         </Showcase>
         {/* Alone rather than in a Gallery: one portrait in a three-column grid
             sits in the left third with two empty cells beside it, which reads as

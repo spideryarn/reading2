@@ -278,6 +278,15 @@ export function skimPromise(profiled: boolean): string {
 }
 
 /**
+ * **What the question above a quote is** (Greg, spya-qpgvq9, plan 261009j): in
+ * the band's (i), which a keyboard and a finger reach, and on the question's
+ * own card for a mouse. Since `skim/11` most stops have none, so it says why
+ * a stop has one.
+ */
+export const SKIM_CUE_EXPLAINED =
+  "The line above a quote is a question to read it with, written by AI. It is there only where it helps: to say what the quote refers to, what it settles, or why it matters.";
+
+/**
  * At Most, how much of the Quotes offered to this route the three passes walk
  * between them — *"every one of the N quotes offered to this route"*, or *"M of
  * N"*. **All three, not Most alone**: since plan 260929e a pass does not
@@ -696,6 +705,7 @@ export function SkimPanel({ access, view, away }: Props) {
   const about = routed ? (
     <>
       <p>{promise}</p>
+      <p>{SKIM_CUE_EXPLAINED}</p>
       {pips && <p>{pipsLegend(pips)}</p>}
       {coverage && <p>{coverage}</p>}
       {made && (
@@ -816,7 +826,16 @@ export function SkimPanel({ access, view, away }: Props) {
                           )}
                           {/* The cue before the quote: it is the question to
                               read the passage with (Greg, SPIDERYARN-READING2-8J). */}
-                          {row.current && row.cue && <span className="skim-cue">{row.cue}</span>}
+                          {/* Its card says what it is, for a mouse; the band's
+                              (i) says the same for a keyboard and a finger,
+                              since the question sits inside the row's button
+                              and cannot take focus or a tap of its own
+                              (plan 261009j, Sol's plan review F5). */}
+                          {row.current && row.cue && (
+                            <Tooltip content={<p>{SKIM_CUE_EXPLAINED}</p>} placement="top">
+                              <span className="skim-cue">{row.cue}</span>
+                            </Tooltip>
+                          )}
                           {words && <span className="skim-words">“{words.shown}”</span>}
                         </span>
                       </button>

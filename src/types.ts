@@ -1422,11 +1422,19 @@ export interface SkimDrops {
    */
   badRole: number;
   /**
-   * A cue that was missing, empty, not a string or over the cap — set to
-   * `null`, the stop kept. **Absent on routes before `trajectory/5`**, which
-   * had no cue; read it as 0.
+   * A cue that was missing, not a string or over the cap — set to `null`, the
+   * stop kept. **Absent on routes before `trajectory/5`**, which had no cue;
+   * read it as 0. An empty cue counted here too until `skim/11`, when it
+   * became the model's way of saying "no cue" (`noCue`).
    */
   badCue?: number;
+  /**
+   * Stops the model gave no cue on purpose (`"cue": ""`, or only spaces) —
+   * `null`, the stop kept, and not a fault. Since `skim/11`
+   * (docs/plans/261009j-skim-question-optional-and-the-border.md); absent
+   * before, read it as 0.
+   */
+  noCue?: number;
   /**
    * `again` entries dropped: not 2 or 3, not deeper than the stop's own depth,
    * repeated, or naming a depth no stop is first placed at. The stop is kept.
