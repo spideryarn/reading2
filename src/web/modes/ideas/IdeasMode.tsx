@@ -22,6 +22,8 @@ import { usePassageLifecycle } from "../../passage-lifecycle.js";
 import { useRenderCount } from "../../perf.js";
 import { useIdeas } from "../../useIdeas.js";
 import { IdeasPanel } from "../../IdeasPanel.js";
+import type { ItemFocus } from "../../item-focus.js";
+import type { IdeaChats } from "../../OriginChat.js";
 
 /**
  * Ideas, and the fetch that belongs to it.
@@ -50,6 +52,9 @@ export function IdeasBand({
   onFound,
   openKey,
   onOpenKey,
+  chats,
+  focus,
+  onFocusTaken,
 }: {
   slug: string;
   blocks: Block[];
@@ -57,6 +62,16 @@ export function IdeasBand({
   onFound(found: Found[]): void;
   openKey: string | null;
   onOpenKey(key: string | null): void;
+  /**
+   * **A chat about one idea**: the thread summaries `Reader` holds, the
+   * sender behind an idea's *Ask in chat*, and the handler that reopens a chat
+   * already started from one (OriginChat.tsx § `ItemChats`; plan 261009k,
+   * stage 3). The owner's band only.
+   */
+  chats?: IdeaChats | undefined;
+  /** One idea to scroll into view, once: a chat's way back (IdeasPanel § Props). */
+  focus?: ItemFocus | null | undefined;
+  onFocusTaken?: ((focus: ItemFocus) => void) | undefined;
 }) {
   useRenderCount("IdeasBand");
   const ideas = useIdeas(slug);
@@ -73,11 +88,13 @@ export function IdeasBand({
   });
   return (
     <IdeasPanel
-      access={{ kind: "owner", owner: ideas, ideas: ideas.ideas }}
+      access={{ kind: "owner", owner: ideas, ideas: ideas.ideas, ...(chats ? { chats } : {}) }}
       {...band}
       openKey={openKey}
       onOpenKey={onOpenKey}
       onJump={onJump}
+      focus={focus}
+      onFocusTaken={onFocusTaken}
     />
   );
 }

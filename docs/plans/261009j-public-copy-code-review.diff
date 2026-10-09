@@ -1,0 +1,1385 @@
+diff --git a/docs/plans/261009j-a-public-copy-offered-at-import.md b/docs/plans/261009j-a-public-copy-offered-at-import.md
+new file mode 100644
+index 000000000..5e8ef4e6a
+--- /dev/null
++++ b/docs/plans/261009j-a-public-copy-offered-at-import.md
+@@ -0,0 +1,196 @@
++# A public copy offered at import
++
++Up: [plans.md](../project/plans.md) · the area is [ingest-queue.md](../project/ingest-queue.md),
++with [public-shelf.md](../project/public-shelf.md) and [billing.md](../project/billing.md)
++
++**Status: built, 2026-10-09.** On dev; not deployed.
++
++Report `spya-ahvk74` (an admin's; `feedback-reporter.ts` exit 0):
++
++> We should notice during the import process if a user tries to add an article that we already
++> have as public, and ask them if they'd rather use the public one for free or have their own
++> version which will use up one of their allotted slots.
++>
++> — Greg, 2026-10-09
++
++## What happens today
++
++`POST /api/jobs { url }` asks one question before it reserves a slot: *is this address already on
++this reader's own shelf?* (`slugForUrlKey`, [find-article.ts](../../src/store/find-article.ts)). If
++so it answers `200 { article, repeat: true }`, free
++([261007k](261007k-repeat-paste-is-free-and-says-so.md)). If not, it reserves a slot and imports.
++Nothing asks whether **somebody else** has already made the same address public, so a reader pays a
++slot (and we pay the models) for an article anybody can already read at `/read/<slug>`.
++
++## The change
++
++### Server: one more question, asked after the first and before the slot
++
++In the same place as the repeat check, a plain add (`url`, no `steps`, no `force`) that is not on
++the reader's own shelf asks: **is there a public article with this `urlKey`?** If so, and the
++request did not say `ownCopy: true`, the route answers
++
++```
++200 { publicCopy: { slug, title } }
++```
++
++with nothing reserved and no job. The reader then chooses. Choosing their own copy re-posts
++`{ url, ownCopy: true }`, which skips the public question and is the ordinary paid add.
++
++`ownCopy` is a boolean, accepted only beside `url` (`parseJobRequest` refuses it beside `slug`,
++`uploadId`, `steps` or `force`), so it cannot change what any other request does.
++
++**Which public articles count is not a new rule.** Citations already answers *"is this work an
++article here, public or yours?"* with an ownerless read whose whole defence is its `where`
++([pg-cited-in-spideryarn.ts](../../src/store/pg-cited-in-spideryarn.ts) § `citedCandidatesQuery`):
++public and not archived, openable (a tree and at least one block, so the link never opens a 404), a
++stranger's title only as extracted (never their rename), and a stranger's address only as
++`publicSourceUrl` passes it (never `requested_url`, never an upload's guessed source, never
++`asked_url`). The add reuses that read through the existing `citedCandidates` export and keeps the
++candidates that are not the reader's own, matching `urlKey(candidate url) === urlKey(asked url)`.
++That puts no new predicate in front of a stranger's row and edits nothing in it. The read is
++unbounded and loads one short row per eligible article, the same cost Citations pays on every load;
++both name the stored `url_key` column as the next step when that stops being cheap.
++
++What the asker learns is that a public, openable article exists at this address, its slug and its
++extracted title. No owner is named. **That is a lookup, not a listing**, and it reaches further back
++than `/read/public`, which is capped at 200 (GPT Sol's plan review, P2-1): a signed-in reader who
++knows an address can find an older public article the listing no longer shows. Citations already
++answers the same question for the same reader, uncapped and by more than the address (a DOI, an
++arXiv id, a title), so this adds no new class of exposure; it is written down here so nobody has to
++rediscover it. Every article it can find is one its owner made public, which since 260904b means
++*discoverable*, not only *reachable by link*.
++
++**arXiv, every version.** `urlKey` is versionless for arXiv since
++[261009d](261009d-every-version-of-an-arxiv-paper-is-one-article.md), so a paste of `…v2` finds a
++public `…v1`. The offer says it is the public copy of *this paper*; a reader who wants v2 exactly
++takes their own copy. Hugging Face and alphaXiv pages about an arXiv paper, and the other paper
++sources, match the same way because they share the key.
++
++**Misses are safe.** A public paper imported from a DOI link whose stored `final_url` is the arXiv
++abstract is found by the arXiv link but not by the DOI link, because `asked_url` is the owner's and
++is not read. A miss costs what it costs today: the reader pays for their own copy. That is the
++asymmetry [ingest-queue.md § Two URLs, one article](../project/ingest-queue.md#the-rule-it-is-written-to-which-is-an-asymmetry)
++is written to.
++
++**Order of the questions**: the reader's own shelf first (free, and *theirs*, so it beats a public
++one), then the public one, then the slot. Both lookups are reads outside the billing lock and reserve
++nothing, for the reason 261007k gives.
++
++### Add page: the choice
++
++`/add/<address>` gets a third kind of answer beside a job and a repeat. It stops, as a repeat does,
++and draws:
++
++```
++  ┌──────────────────────────────────────────────────────────────────┐
++  │ “The Title” is already public on Spideryarn.                     │
++  │ Anyone can read it there, with everything already made for it,   │
++  │ for free. Your own copy is yours to search, chat with and make   │
++  │ new modes for, and uses one article from your allowance.         │
++  │                                                                  │
++  │ [ Read the public copy (free) ]   [ Add my own copy ]            │
++  └──────────────────────────────────────────────────────────────────┘
++```
++
++- **Read the public copy** is a link to `readHref(slug)`, the public reading view.
++- **Add my own copy** re-posts with `ownCopy: true` (the posting effect's guard key gains it, the
++  way Retry bumps `attempt`), and the page carries on as an ordinary import.
++- Over the choice the page offers no import boxes (auto-modes, High-powered, purpose, the sharing
++  row) and no *"text has been sent to a third-party model provider"* line, as for a repeat: nothing
++  has been imported yet. A purpose already typed stays in the session draft (`purposeFor`), so it
++  is back in its box after *Add my own copy*.
++- A 402 after *Add my own copy* is the ordinary one, drawn by `QuotaNotice` as today. A reader at
++  their ceiling is offered the free read before they meet it, which is the point.
++
++### The two places that already send a reader to `/add/<address>` for a copy on purpose
++
++**The *Add a private copy to your shelf* line on a public article** (`PrivateCopy`,
++[PublicChrome.tsx](../../src/web/PublicChrome.tsx), plan 261007m) links to `/add/<address>`. With
++nothing else changed, a reader who presses it would be asked whether they would rather read the
++public copy they have just left. So the link records the intent before it navigates: a module-level
++one-shot (`markOwnCopy(address)` in a small client module, taken once by the add page for the same
++address), so that add posts `ownCopy: true` at once. The query string and fragment of an `/add/`
++address belong to the pasted URL ([router.ts](../../src/web/router.ts) § `addUrlFrom`), so the
++intent cannot ride there. A reader who opens the link in a new tab loses the one-shot and is shown
++the choice, which is a redundant question and not a wrong one.
++
++**The prose hover card's *add to Spideryarn*** ([ProseHoverCard.tsx](../../src/web/ProseHoverCard.tsx))
++posts the same `{ url }`. A `publicCopy` answer becomes a fifth `Asked` kind, `public`, drawn as
++*"already public here"* with **read it here (free)** (a link to the public copy) and **add my own
++copy** (re-posts with `ownCopy`). `useJobs.add` answers `Job | AlreadyAnArticle | PublicCopyFound |
++null`, so the compiler finds every caller.
++
++### MCP
++
++`import_article` gains an optional `own_copy: boolean`. Without it, a public match answers
++`{ publicCopy: { slug, title }, link }` and spends nothing; the description says so and says to call
++again with `own_copy: true` for the reader's own copy, which uses one of their articles. An agent
++acting for the reader gets the same choice the page gives.
++
++### Not in this change
++
++- **Uploads.** A file has no address to match. Matching an upload to a public article by its DOI or
++  bytes is a separate piece of work.
++- **Copying the public article's artefacts into the reader's copy** instead of importing it again.
++  The own copy is an ordinary import, as `PrivateCopy`'s already is.
++
++## The product question, for Greg
++
++**Can reading the public copy carry the reader's own notes?** Today a signed-in reader on somebody
++else's public article is treated exactly as a signed-out visitor: read-only, no comments, no chat
++([261006k](261006k-signed-in-reader-ai-on-someone-else-s-public-article.md)). So *read it free*
++means *read it without your own notes*. Letting them annotate it would be the third kind of request
++261006k describes (signed in, not the owner) and would touch the security map's defences, so it is
++not built here. Asked as a question file; the recommendation is to ship the offer as described and
++decide notes on a public copy separately.
++
++## Tests, red first
++
++1. Route (`tests/billing-admission.test.ts` or a sibling): another owner's public, openable article
++   at `HOST/pub`; the reader at their ceiling posts `{ url: HOST/pub }` → `200 { publicCopy }`,
++   ledger unchanged, no job. `{ url, ownCopy: true }` → reserves (402 at the ceiling, 202 below).
++   The reader's own article at the same address wins (`repeat`). A stranger's **private**, archived
++   or unopenable article at the address is not offered (202). An arXiv `…v2` paste finds a public
++   `…v1`. `ownCopy` beside `slug` is a 400.
++2. Add page: a `publicCopy` answer draws the choice and no boxes; *Add my own copy* posts
++   `ownCopy: true`; the one-shot from `PrivateCopy` posts `ownCopy: true` first time.
++3. Hover card: `describeAdd` / the `Asked` kind for a `publicCopy` answer.
++4. MCP: `import_article` passes `ownCopy` and adds the link on a `publicCopy` answer.
++
++## The simpler option passed over
++
++**Only the add page, with the private-copy link and the hover card left alone.** Fewer parts. Passed
++over because both would then be wrong rather than merely plain: the hover card would sit on *Adding*
++for ever over an answer it does not know (261007k found the same bug for the repeat), and the
++private-copy link would ask a reader who just chose their own copy whether they would rather not.
++
++**Telling the reader in the add box before they submit**, by asking as they type: a lookup per
++keystroke, and the add page starts its POST as it opens, so there is no "before" on that path.
++
++No defence in [security-map.md](../project/security-map.md) is edited: the ownerless read is
++Citations', reused unchanged.
++
++## What the plan review changed
++
++GPT Sol, read-only ([findings](261009j-public-copy-plan-review-sol.md)): ready with changes, no P1;
++billing judged sound (`ownCopy` still goes through `withIngestSlot`, and the own-shelf check stays
++first).
++
++1. *A new discovery surface beyond the capped listing* — true, and accepted for the reason above;
++   written into § The change rather than restricted.
++2. *The one-shot mark is set by a ⌘-click too*, because `Link` calls `onClick` before deciding the
++   click is its own, so a stale mark could skip a later paste's offer. The mark is now set only on a
++   plain left click, and lasts a minute. Sol's alternative, a separate `/add-own/` route, was passed
++   over: it is a new route through `addUrlFrom`, the visit guards and the reader-change fences, for a
++   case whose failure is one redundant question.
++3. *The public slug must not reach `Completion`*, or High-powered, sharing and the purpose would
++   write to somebody else's article. It never does: the answer is its own state (`publicAnswer`),
++   and a test asserts no PATCH, PUT or purpose read for the public slug, and that a High-powered tick
++   made before the answer is sent to the reader's own import instead.
++4. *A failed lookup*: the read throws before any reservation, so a failure is a refused add with
++   nothing spent, as any other store error on this route. Not turned into a miss, which could charge
++   a reader when a free copy exists.
++5. *Deterministic choice among several public copies*: slug order, title falling back to the slug.
++6. *Parser and docs*: `ownCopy` must be `true` and only beside a `url`; stripped before `enqueue`.
++   billing.md, ingest-queue.md, links.md, mcp.md and public-readable-sharing.md now say so.
+diff --git a/docs/plans/261009j-public-copy-plan-review-prompt.md b/docs/plans/261009j-public-copy-plan-review-prompt.md
+new file mode 100644
+index 000000000..d5c82562e
+--- /dev/null
++++ b/docs/plans/261009j-public-copy-plan-review-prompt.md
+@@ -0,0 +1,14 @@
++You are reviewing a plan (read-only) in the Spideryarn repo, before it is built.
++
++Plan: docs/plans/261009j-a-public-copy-offered-at-import.md — read it in full.
++
++Context to read: src/routes.ts around the `POST /api/jobs` handler (search "A repeat paste is free") and `parseJobRequest`; src/store/pg-cited-in-spideryarn.ts (the ownerless read the plan reuses); src/store/find-article.ts; src/ingest.ts `urlKey`; src/urls.ts `publicSourceUrl`; src/web/AddPage.tsx (posting effect, Phase, repeat handling); src/web/useJobs.ts; src/web/ProseHoverCard.tsx (Asked kinds, "have"); src/web/PublicChrome.tsx (`PrivateCopy`); src/mcp/tools.ts `import_article`; docs/project/security-map.md; docs/project/billing.md § Which requests spend a slot; docs/plans/261007k-repeat-paste-is-free-and-says-so.md; docs/plans/261007m-a-private-copy-of-a-public-article-on-your-own-shelf.md.
++
++Questions:
++1. Security: is reusing `citedCandidates` for this an information leak about any stranger's article beyond what /read/public and the public page already publish? Any private, link-shared, archived or unopenable article that could be revealed? Is matching via urlKey over publicSourceUrl(final_url) safe?
++2. Billing: can `ownCopy` or the new answer create a free import, a double charge, or bypass admission?
++3. Correctness of the Add page flow: re-posting with ownCopy, StrictMode/once-guards, purpose drafts, High-powered, upload-engine path. The one-shot intent from PrivateCopy — sound or should it be something else?
++4. Anything simpler that gets Greg's ask?
++5. Anything missed (other callers of POST /api/jobs {url}, docs that need updating, tests).
++
++Write findings as a numbered list, each with severity (P1/P2/P3), the file/line evidence, and a concrete fix. End with a one-line verdict: "ready", "ready with changes", or "not ready".
+diff --git a/docs/plans/261009j-public-copy-plan-review-sol.md b/docs/plans/261009j-public-copy-plan-review-sol.md
+new file mode 100644
+index 000000000..c8995e7a4
+--- /dev/null
++++ b/docs/plans/261009j-public-copy-plan-review-sol.md
+@@ -0,0 +1,30 @@
++No P1 findings. The billing path is sound, and the existing candidate predicate does not expose private, link-shared, archived, or unopenable articles. I found six changes needed before building.
++
++1. **P2 — This is a new discovery surface, even though it exposes only public articles.**  
++   Evidence: the plan says the result reveals nothing beyond `/read/public` and the public page ([plan](/var/tmp/spideryarn-worktrees/fbahvk74-import-public-offer/docs/plans/261009j-a-public-copy-offered-at-import.md:43)), but `/read/public` is capped at 200 articles ([public-library.ts](/var/tmp/spideryarn-worktrees/fbahvk74-import-public-offer/src/store/public-library.ts:88)), while `citedCandidates` is deliberately unbounded ([pg-cited-in-spideryarn.ts](/var/tmp/spideryarn-worktrees/fbahvk74-import-public-offer/src/store/pg-cited-in-spideryarn.ts:48)). The security map explicitly distinguishes knowing a public article’s unguessable slug from being able to discover it through a listing ([security-map.md](/var/tmp/spideryarn-worktrees/fbahvk74-import-public-offer/docs/project/security-map.md:193)). This endpoint lets an authenticated caller who knows or guesses a source URL discover an older public article’s slug and title; paper-source equivalence can also find it through a different public URL.  
++   The predicate itself is safe: it requires public, unarchived, tree plus blocks ([pg-cited-in-spideryarn.ts](/var/tmp/spideryarn-worktrees/fbahvk74-import-public-offer/src/store/pg-cited-in-spideryarn.ts:92)), strips stranger-only metadata ([pg-cited-in-spideryarn.ts](/var/tmp/spideryarn-worktrees/fbahvk74-import-public-offer/src/store/pg-cited-in-spideryarn.ts:103)), and link-shared articles remain private ([security-map.md](/var/tmp/spideryarn-worktrees/fbahvk74-import-public-offer/docs/project/security-map.md:304)).  
++   **Fix:** explicitly authorize and document this as a new authenticated source-URL lookup in the plan and security map, rather than claiming no new discoverability. Add canaries for link-shared/private, archived, unopenable, title override, `requested_url`/`asked_url`, and query- or credential-bearing `final_url`. If no new discoverability is acceptable, restrict candidates to the same rows visible in the capped public listing.
++
++2. **P2 — The module-level `PrivateCopy` one-shot is not a sound navigation intent.**  
++   Evidence: the proposed mark is set before navigation and deliberately disappears in a new tab ([plan](/var/tmp/spideryarn-worktrees/fbahvk74-import-public-offer/docs/plans/261009j-a-public-copy-offered-at-import.md:101)). `Link` invokes its supplied `onClick` before deciding whether the click is a Command/Ctrl/Shift click or targets another tab ([Link.tsx](/var/tmp/spideryarn-worktrees/fbahvk74-import-public-offer/src/web/Link.tsx:37)). Therefore a Command-click can set the mark in the original tab, open an unmarked new tab, and leave the stale mark to make a later ordinary paste skip the offer and attempt a paid import. A module-level mark can likewise survive an interrupted navigation or account change.  
++   **Fix:** encode the intent in a durable distinct route, such as `/add-own/<encoded-address>`, parsed into `{ kind: "add", url, ownCopy: true }`. Include the intent in `addAddress` so account-change and visit guards distinguish it. This works for plain clicks, new tabs, reloads, and copied links without mutable global state. Test modified clicks, cold loads, StrictMode, and reader changes.
++
++3. **P2 — A public-copy answer must not enter `Completion` or any slug-owning Add-page machinery.**  
++   Evidence: `Completion` means “the article this add became” ([AddPage.tsx](/var/tmp/spideryarn-worktrees/fbahvk74-import-public-offer/src/web/AddPage.tsx:134)). Its slug is immediately observed by High-powered AI ([AddPage.tsx](/var/tmp/spideryarn-worktrees/fbahvk74-import-public-offer/src/web/AddPage.tsx:1050)), sharing ([AddPage.tsx](/var/tmp/spideryarn-worktrees/fbahvk74-import-public-offer/src/web/AddPage.tsx:1094)), and the purpose session ([AddPage.tsx](/var/tmp/spideryarn-worktrees/fbahvk74-import-public-offer/src/web/AddPage.tsx:1130)). The public article belongs to somebody else; treating its slug like the repeat article could issue owner-only PUT/PATCH requests, produce 404/retry state, or attach the draft to the wrong target.  
++   **Fix:** add a separate phase such as `{ kind: "public-choice", publicCopy }`; do not put its slug in `articleAnswer`, `Completion`, `highPowerSlug`, `shareSlug`, or `purposeFor`. Keep the existing slugless purpose draft alive, then bind High-powered, sharing, and purpose only after the `ownCopy` POST returns the reader’s job/article slug. Test that the choice produces no article mutation requests, that purpose and High-powered intent survive into the own import, that StrictMode sends exactly one initial POST and one chosen POST, and that uploads remain unchanged.
++
++4. **P2 — The plan does not decide what happens when the new lookup fails.**  
++   Evidence: Citations treats `citedCandidates` as an optional enrichment and catches/logs its failure ([routes.ts](/var/tmp/spideryarn-worktrees/fbahvk74-import-public-offer/src/routes.ts:11425)). The proposed admission path does not state whether the same error becomes a 500 or is treated as a miss. Treating it as a miss may charge a slot even though a public copy exists; letting it escape can make every URL import unavailable because an optional lookup broke.  
++   **Fix:** choose this explicitly. The safer billing behavior is a 503 with no reservation or job, preserving the promise that a lookup failure cannot turn into an unexpected charge. Add a store-failure test asserting the ledger and job table remain unchanged.
++
++5. **P3 — Selection among duplicate public copies is unspecified.**  
++   Evidence: multiple readers can publish copies of the same source, while `citedCandidatesQuery` has no ordering ([pg-cited-in-spideryarn.ts](/var/tmp/spideryarn-worktrees/fbahvk74-import-public-offer/src/store/pg-cited-in-spideryarn.ts:69)); the plan merely says to keep matching candidates ([plan](/var/tmp/spideryarn-worktrees/fbahvk74-import-public-offer/docs/plans/261009j-a-public-copy-offered-at-import.md:49)). Taking the first row would make the offered slug/title planner-dependent. Citations already uses slug as its final deterministic tie-break ([cited-in-spideryarn.ts](/var/tmp/spideryarn-worktrees/fbahvk74-import-public-offer/src/cited-in-spideryarn.ts:181)).  
++   **Fix:** specify and test a deterministic choice—slug order is the simplest consistent rule—and define the title fallback as `displayTitle ?? matchTitle ?? slug`.
++
++6. **P3 — The parser, regression tests, and reference-doc updates are underspecified.**  
++   Evidence: `parseJobRequest` currently destructures only known fields and builds a shared `rest` ([routes.ts](/var/tmp/spideryarn-worktrees/fbahvk74-import-public-offer/src/routes.ts:6897)); the enqueue path removes only `useProfile` ([routes.ts](/var/tmp/spideryarn-worktrees/fbahvk74-import-public-offer/src/routes.ts:12641)). The test plan checks only `ownCopy` beside `slug` ([plan](/var/tmp/spideryarn-worktrees/fbahvk74-import-public-offer/docs/plans/261009j-a-public-copy-offered-at-import.md:143)). Several current docs would become false: billing says ordinary `{url}` reserves ([billing.md](/var/tmp/spideryarn-worktrees/fbahvk74-import-public-offer/docs/project/billing.md:938)); the route table says `{url}` always returns a 202 job ([ingest-queue.md](/var/tmp/spideryarn-worktrees/fbahvk74-import-public-offer/docs/project/ingest-queue.md:2347)); Links says one hover-card press spends a slot ([links.md](/var/tmp/spideryarn-worktrees/fbahvk74-import-public-offer/docs/project/links.md:516)); and the MCP table describes only repeats as free ([mcp.md](/var/tmp/spideryarn-worktrees/fbahvk74-import-public-offer/docs/project/mcp.md:67)).  
++   **Fix:** validate `ownCopy` as an actual boolean, reject it with `slug`, `uploadId`, `steps`, `force`, and `readThis`, and strip it before constructing `work`. Test false and wrong-type values, every forbidden combination, `ownCopy: true` when the reader already owns the article, concurrent/retried own-copy requests, and stale Add-page responses after changing address. Update billing, ingest-queue, links, MCP, public-readable-sharing, and security-map. The production callers are otherwise fully identified: AddPage, ProseHoverCard through `useJobs.add`, and MCP `import_article`.
++
++Billing conclusion: `ownCopy` is safe provided it skips only the public offer and still reaches `withIngestSlot`; duplicate live requests do not double-charge because reservations that acquire no job are released ([admission.ts](/var/tmp/spideryarn-worktrees/fbahvk74-import-public-offer/src/billing/admission.ts:265)). The reader’s own-copy lookup must remain first, including when `ownCopy: true`.
++
++ready with changes
+\ No newline at end of file
+diff --git a/docs/project/billing.md b/docs/project/billing.md
+index d3a837e98..e67a2d117 100644
+--- a/docs/project/billing.md
++++ b/docs/project/billing.md
+@@ -947,6 +947,8 @@ the route still knows what was asked for.
+ |---|---|
+ | `POST /api/jobs {url}` | reserves |
+ | `POST /api/jobs {url}` for an article the reader already has, with no `steps` or `force` | free: answers `{ article, repeat: true }` and queues nothing |
++| `POST /api/jobs {url}` for an address somebody else has made public, without `ownCopy` | free: answers `{ publicCopy: { slug, title } }` and queues nothing, so the reader can choose ([261009j](../plans/261009j-a-public-copy-offered-at-import.md)) |
++| `POST /api/jobs {url, ownCopy: true}` | reserves: the reader chose their own copy over the public one |
+ | `POST /api/jobs {uploadId}` | reserves |
+ | `POST /api/jobs/:id/retry`, when the old job carried a slot | reserves a **fresh** one |
+ | `POST /api/jobs {slug, steps}` — a glossary, ideas, a quiz | free |
+diff --git a/docs/project/ingest-queue.md b/docs/project/ingest-queue.md
+index c11d1689e..236adcc58 100644
+--- a/docs/project/ingest-queue.md
++++ b/docs/project/ingest-queue.md
+@@ -744,6 +744,22 @@ stand-in tree. Neither was ever how a reader was meant to do it — the reading
+ for a tree that never arrived, and step re-runs are free —
+ [261007k](../plans/261007k-repeat-paste-is-free-and-says-so.md).
+ 
++**An address somebody else has made public is offered, free, before it is charged** (since
++2026-10-09). Greg, 2026-10-09:
++
++> We should notice during the import process if a user tries to add an article that we already
++> have as public, and ask them if they'd rather use the public one for free or have their own
++> version which will use up one of their allotted slots.
++
++A plain add that is not on the reader's own shelf asks next whether a public article has the same
++`urlKey`, and if one does answers `200 { publicCopy: { slug, title } }`, with nothing reserved and
++no job. The add page stops on the choice: **Read the public copy (free)**, a link to it, or **Add my
++own copy**, which posts again with `ownCopy: true` and is the ordinary paid add. The link's hover
++card and the MCP tool offer the same two. *Add a private copy to your shelf* on a public article has
++already chosen, so it marks the address (`src/web/own-copy-intent.ts`) and the add page sends
++`ownCopy` at once. Which public articles count is Citations' ownerless read, reused unchanged —
++[261009j](../plans/261009j-a-public-copy-offered-at-import.md).
++
+ **The add box stopped being an `<input type="url">` for this.** The browser will not submit one
+ without a scheme, and `example.com/an-essay` is meant to work — so it is a plain text input whose
+ validation is `slugFromUrl`, the same function the server derives the slug with. The one check that
+@@ -2351,7 +2367,8 @@ derivation so the two agree by construction rather than by trust.
+   GET    /api/jobs             every job this server knows about, newest first
+   POST   /api/uploads          { filename, bytes, sha256 } → 201, where to PUT a PDF and for how long
+   GET    /api/uploads/:id      what became of one upload
+-  POST   /api/jobs             { url } | { uploadId } | { slug, steps?, force? }  → 202, the job
++  POST   /api/jobs             { url, ownCopy? } | { uploadId } | { slug, steps?, force? }  → 202, the job
++                               (a plain { url } may answer 200 { article, repeat } or 200 { publicCopy })
+   GET    /api/jobs/:id         one job — what the poll reads
+   DELETE /api/jobs/:id         hide a finished job from its reader (Dismiss); the row stays
+   POST   /api/jobs/:id/cancel
+diff --git a/docs/project/links.md b/docs/project/links.md
+index 668c3457f..61b040bcc 100644
+--- a/docs/project/links.md
++++ b/docs/project/links.md
+@@ -518,6 +518,9 @@ the quota notice for nothing. What survives from it is the wiring: this presses
+ which is the *same* `POST /api/jobs { url }` the shelf's Add box sends, so slot admission, the
+ deduplication and the 402 all arrive without a second implementation
+ ([ingest-queue.md](ingest-queue.md), [billing.md § Which requests spend a slot](billing.md#which-requests-spend-a-slot-and-why-the-wall-is-at-the-routes)).
++So do its two free answers: an article the reader already has (*read it here*), and one somebody
++else has made public (*read it free*, or *add my own copy*, which is the press that spends —
++[261009j](../plans/261009j-a-public-copy-offered-at-import.md)).
+ **One press spends a metered ingest slot**, and a free account has three for life, so this is a
+ genuinely new low-friction front door onto a metered action.
+ 
+diff --git a/docs/project/mcp.md b/docs/project/mcp.md
+index 0708fff95..94997af61 100644
+--- a/docs/project/mcp.md
++++ b/docs/project/mcp.md
+@@ -72,7 +72,7 @@ this one, not your browser) and deletes the file. A running server notices on it
+ | `list_articles` | your shelf (`archive`: active, archived or all), each with its link, tags and visibility |
+ | `search_library` | full-text search over your shelf |
+ | `list_tags`, `edit_tags` | your tags, and adding or removing them on an article |
+-| `import_article` | import a URL (uses a free article, as the web app does; one you already have answers that article, free — [261007k](../plans/261007k-repeat-paste-is-free-and-says-so.md)) |
++| `import_article` | import a URL (uses a free article, as the web app does; one you already have answers that article, free — [261007k](../plans/261007k-repeat-paste-is-free-and-says-so.md); one somebody else has made public answers that copy, free, and `own_copy: true` imports the reader's own — [261009j](../plans/261009j-a-public-copy-offered-at-import.md)) |
+ | `get_import_status`, `list_imports` | how an import is going |
+ | `set_auto_modes` | the "run the main modes after import" switch |
+ | `make_article_private`, `make_article_public` | visibility; **public asks you first** |
+diff --git a/docs/project/public-readable-sharing.md b/docs/project/public-readable-sharing.md
+index 39eb4b767..0977a85b9 100644
+--- a/docs/project/public-readable-sharing.md
++++ b/docs/project/public-readable-sharing.md
+@@ -156,6 +156,12 @@ defence: it is a link to a door the reader could already type. Greg chose it on
+ is [261007m](../plans/261007m-a-private-copy-of-a-public-article-on-your-own-shelf.md), the rule is
+ `privateCopyOffer` in `src/web/PublicChrome.tsx`.
+ 
++**And a reader who pastes the address of a public article is offered it, free, before they are
++charged for their own** (since 2026-10-09): the add page answers with the public copy and asks.
++Pressing *Add a private copy* above has already answered, so that press goes straight to the paid
++add. What the asker learns is the article's slug and extracted title, never who shared it —
++[261009j](../plans/261009j-a-public-copy-offered-at-import.md).
++
+ ## A private link: the same republishing, to fewer people
+ 
+ Since 2026-10-05 an owner can make a **private link**, `/read/<slug>?key=<key>`, instead of or as
+diff --git a/src/mcp/tools.ts b/src/mcp/tools.ts
+index 93934c9da..663ffe431 100644
+--- a/src/mcp/tools.ts
++++ b/src/mcp/tools.ts
+@@ -352,16 +352,25 @@ export const TOOLS: readonly Tool[] = [
+       "Adds the article at a web address to your shelf. It runs in the background: this answers the import job, " +
+       "and get_import_status says when it is done. On a free plan it uses one of your free articles; when they " +
+       "are gone Spideryarn refuses. An address you already have answers that article instead " +
+-      "({ article, repeat: true }), and costs nothing.",
+-    input: z.strictObject({ url: z.string().url() }),
++      "({ article, repeat: true }), and costs nothing. An address somebody else has already made public answers " +
++      "that public copy instead ({ publicCopy: { slug, title }, link }), costs nothing and imports nothing: it can " +
++      "be read free at the link, read-only. Ask the reader which they want; call again with own_copy: true to " +
++      "import their own copy, which uses one of their articles.",
++    input: z.strictObject({ url: z.string().url(), own_copy: z.boolean().optional() }),
+     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+     /* A job, or — for an address the reader already has — `{ article, repeat: true }`,
+-       free and with nothing queued (plan 261007k). The link is the article's in both. */
+-    handler: async (api, { url }) => {
+-      const answer = await api.call("POST", "/api/jobs", { url });
++       free and with nothing queued (plan 261007k), or somebody else's public
++       copy, also free, for the reader to choose (plan 261009j). The link is the
++       article's in each. */
++    handler: async (api, { url, own_copy }) => {
++      const answer = await api.call("POST", "/api/jobs", { url, ...(own_copy === true ? { ownCopy: true } : {}) });
+       if (answer && typeof answer === "object" && typeof (answer as { article?: unknown }).article === "string") {
+         return { ...answer, link: articleLink(api, (answer as { article: string }).article) };
+       }
++      const found = answer && typeof answer === "object" ? (answer as { publicCopy?: { slug?: unknown } }).publicCopy : undefined;
++      if (found && typeof found.slug === "string") {
++        return { ...(answer as object), link: articleLink(api, found.slug) };
++      }
+       return withLink(api, answer);
+     },
+   }),
+diff --git a/src/messages.ts b/src/messages.ts
+index 7950817a3..c063bc12f 100644
+--- a/src/messages.ts
++++ b/src/messages.ts
+@@ -4743,6 +4743,24 @@ export const REPEAT_PASTE_ON_THE_SHELF =
+ /** The same, on a link's hover card, in the card's own lower-case voice. */
+ export const REPEAT_PASTE_ON_THE_CARD = "already on your shelf, nothing spent";
+ 
++/**
++ * **Somebody else has already made this address public**, and nothing has been
++ * spent yet: the add asks which the reader wants. Greg, 2026-10-09: *"ask them
++ * if they'd rather use the public one for free or have their own version which
++ * will use up one of their allotted slots."* What each gives is said, because
++ * the free one is read-only: no notes, chat or search of the reader's own
++ * (plan 261006k). docs/plans/261009j-a-public-copy-offered-at-import.md.
++ */
++export const PUBLIC_COPY_FOUND = (title: string): string => `“${title}” is already public on Spideryarn.`;
++export const PUBLIC_COPY_EXPLAIN =
++  "You can read it there for free, with everything already made for it. Your own copy is yours to annotate, search, chat with and make new modes for, and uses one article from your allowance.";
++export const PUBLIC_COPY_READ = "Read the public copy (free)";
++export const PUBLIC_COPY_OWN = "Add my own copy";
++/** The same, on a link's hover card, in the card's own lower-case voice. */
++export const PUBLIC_COPY_ON_THE_CARD = "already public here, nothing spent";
++export const PUBLIC_COPY_READ_ON_THE_CARD = "read it free";
++export const PUBLIC_COPY_OWN_ON_THE_CARD = "add my own copy";
++
+ /** Confirmed, and not sent yet: the import has not made the article's row. */
+ export const SHARE_AT_ADD_WAITING = "Will be made public as soon as the import is ready for it.";
+ 
+diff --git a/src/public-copy.ts b/src/public-copy.ts
+new file mode 100644
+index 000000000..a0b06bc53
+--- /dev/null
++++ b/src/public-copy.ts
+@@ -0,0 +1,55 @@
++/**
++ * **Somebody else has already made this address public** — the add's second
++ * question, after *"is it on your own shelf?"* and before any slot is spent.
++ * Greg, 2026-10-09 (`spya-ahvk74`):
++ *
++ * > We should notice during the import process if a user tries to add an
++ * > article that we already have as public, and ask them if they'd rather use
++ * > the public one for free or have their own version which will use up one of
++ * > their allotted slots.
++ *
++ * docs/plans/261009j-a-public-copy-offered-at-import.md.
++ *
++ * **No new ownerless read.** The candidates are Citations'
++ * (src/store/pg-cited-in-spideryarn.ts § `citedCandidatesQuery`), whose `where`
++ * is the whole defence: public and not archived, openable, a stranger's title
++ * only as extracted, and a stranger's address only as `publicSourceUrl` passes
++ * it. This file only matches among them, by `urlKey` — the rule a repeat paste
++ * uses — and only among the ones that are not the reader's own.
++ */
++
++import { urlKey } from "./ingest.js";
++
++/**
++ * The part of a `CitedCandidate` (src/cited-in-spideryarn.ts) this reads,
++ * spelled out rather than imported, because this file is on the browser's side
++ * of the line too (`PublicCopyFound` is the wire) and that one is not.
++ */
++interface Candidate {
++  slug: string;
++  mine: boolean;
++  urls: readonly string[];
++  displayTitle: string | null;
++  matchTitle: string | null;
++}
++
++/** The answer to `POST /api/jobs { url }` when a public copy exists. Nothing was reserved. */
++export interface PublicCopyFound {
++  publicCopy: { slug: string; title: string };
++}
++
++/**
++ * The public article at this `urlKey`, if a stranger has one. Several: the
++ * first by slug, so the answer never depends on the order rows came back in.
++ */
++export function publicCopyAmong(
++  candidates: readonly Candidate[],
++  key: string,
++): PublicCopyFound["publicCopy"] | undefined {
++  if (key === "") return undefined;
++  const match = candidates
++    .filter((c) => !c.mine && c.urls.some((u) => urlKey(u) === key))
++    .sort((a, b) => (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0))[0];
++  if (match === undefined) return undefined;
++  return { slug: match.slug, title: match.displayTitle ?? match.matchTitle ?? match.slug };
++}
+diff --git a/src/routes.ts b/src/routes.ts
+index 61281ec6f..8a8652e27 100644
+--- a/src/routes.ts
++++ b/src/routes.ts
+@@ -272,6 +272,7 @@ import type { CitersResult } from "./types.js";
+ import { linkSummaryStream } from "./link-summary.js";
+ import { liveKeys } from "./live-keys.js";
+ import { isSlug, normaliseUrl, slugFromFilename, slugFromUrl, urlKey } from "./ingest.js";
++import { publicCopyAmong, type PublicCopyFound } from "./public-copy.js";
+ import { slugForUrlKey } from "./store/find-article.js";
+ import { isOwnReadingPage } from "./own-reading-page.js";
+ import {
+@@ -6893,9 +6894,22 @@ export function parseJobRequest(body: unknown): {
+    * docs/plans/261002j-illustrated-steering-note.md.
+    */
+   illustrationNote?: string;
++  /**
++   * With a plain `url` only: **the reader has chosen their own copy** over the
++   * public one somebody else already made of this address, so the add does not
++   * offer it again and is the ordinary paid one.
++   * docs/plans/261009j-a-public-copy-offered-at-import.md.
++   */
++  ownCopy?: true;
+ } {
+-  const { url, slug, steps, force, useProfile, uploadId, readThis, illustrationNote } = (body ??
++  const { url, slug, steps, force, useProfile, uploadId, readThis, illustrationNote, ownCopy } = (body ??
+     {}) as Record<string, unknown>;
++  if (ownCopy !== undefined) {
++    if (ownCopy !== true) throw httpError(400, "ownCopy must be true, or left out");
++    if (typeof url !== "string" || slug !== undefined || uploadId !== undefined || steps !== undefined || force !== undefined) {
++      throw httpError(400, "ownCopy goes with a url and nothing that asks for other work");
++    }
++  }
+   const level = parseUploadLevel(body);
+   if (level !== undefined && uploadId === undefined) {
+     throw httpError(400, "level goes with an uploadId");
+@@ -7000,6 +7014,7 @@ export function parseJobRequest(body: unknown): {
+       slug: derived,
+       url: source,
+       ...rest,
++      ...(ownCopy === true ? { ownCopy: true as const } : {}),
+     };
+   }
+ 
+@@ -12632,17 +12647,33 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
+          the article, and swallowing it here would drop that work and report
+          success. docs/plans/261007k-repeat-paste-is-free-and-says-so.md. */
+       if (request.url !== undefined && request.steps === undefined && request.force === undefined) {
+-        const have = await slugForUrlKey(urlKey(request.url));
++        const key = urlKey(request.url);
++        const have = await slugForUrlKey(key);
+         if (have !== undefined) {
+           send(res, 200, { article: have, repeat: true });
+           return;
+         }
++        /* **Or somebody else has already made it public**, and the reader is
++           asked before anything is spent — Greg, 2026-10-09: *"ask them if
++           they'd rather use the public one for free or have their own version
++           which will use up one of their allotted slots."* Their own article
++           is asked about first, because it is theirs and free. `ownCopy` is
++           the answer *"my own"*, and is the ordinary add below. Same lock
++           argument as the repeat: a read that reserves nothing.
++           docs/plans/261009j-a-public-copy-offered-at-import.md. */
++        if (request.ownCopy !== true) {
++          const found = publicCopyAmong(await citedCandidates(""), key);
++          if (found !== undefined) {
++            send(res, 200, { publicCopy: found } satisfies PublicCopyFound);
++            return;
++          }
++        }
+       }
+       const profile =
+         request.url !== undefined || request.useProfile === false
+           ? null
+           : await resolveProfile(request.slug);
+-      const { useProfile: _asked, ...work } = request;
++      const { useProfile: _asked, ownCopy: _own, ...work } = request;
+       /* `openEarly` on a pasted address only: the article opens on a stand-in
+          outline and a second job builds the structure. `enqueue` honours it
+          only for a new article. **Deleting it here and in `queueAnUpload` is the
+diff --git a/src/web/AddPage.tsx b/src/web/AddPage.tsx
+index 08db34dda..ab890ac3b 100644
+--- a/src/web/AddPage.tsx
++++ b/src/web/AddPage.tsx
+@@ -59,6 +59,10 @@ import {
+   DIRECT_ADD_SENT_TEXT_AWAY,
+   UPLOAD_STILL_ARRIVING,
+   ADD_IMPORT_LOST,
++  PUBLIC_COPY_EXPLAIN,
++  PUBLIC_COPY_FOUND,
++  PUBLIC_COPY_OWN,
++  PUBLIC_COPY_READ,
+   REPEAT_PASTE_ON_THE_SHELF,
+   worthRetrying,
+ } from "../messages.js";
+@@ -66,7 +70,8 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
+ import { QuotaNotice } from "./QuotaNotice.js";
+ import { LIBRARY_HREF, navigate, readHref } from "./router.js";
+ import type { Job } from "../types.js";
+-import { useJobs } from "./useJobs.js";
++import { type PublicCopyFound, useJobs } from "./useJobs.js";
++import { takeOwnCopyIntent } from "./own-copy-intent.js";
+ import { jobEngine } from "./jobEngine.js";
+ import { type Transfer, uploadEngine } from "./uploadEngine.js";
+ import { useUpload } from "./useUpload.js";
+@@ -656,6 +661,25 @@ export function AddPage({
+      remount, which state does not. */
+   const posted = useRef<string | null>(null);
+ 
++  /**
++   * **The reader's own copy, chosen over a public one** — for this address
++   * only. Set by *Add my own copy* below, or on arrival by the one-shot that
++   * `PrivateCopy` leaves when its link is pressed (own-copy-intent.ts), so a
++   * reader who has just chosen their own copy on the public article is not
++   * asked again. A ref keyed by the address, read once per address, because
++   * StrictMode runs the posting effect twice and the one-shot answers once.
++   * docs/plans/261009j-a-public-copy-offered-at-import.md.
++   */
++  const ownCopyRef = useRef<{ source: string; own: boolean } | null>(null);
++  if (ownCopyRef.current?.source !== source) {
++    ownCopyRef.current = { source, own: origin.kind === "url" && takeOwnCopyIntent(source) };
++  }
++  /* The public copy somebody else already made of this address, as the POST
++     answered it — nothing spent, nothing queued; the reader chooses. */
++  const [publicAnswer, setPublicAnswer] = useState<
++    (PublicCopyFound["publicCopy"] & { source: string }) | null
++  >(null);
++
+   /* Bumped by Retry. The effect's guard is on the URL, and after a failed POST
+      the URL is the same one — so without something that changes, pressing Retry
+      would do nothing at all. */
+@@ -807,12 +831,14 @@ export function AddPage({
+        one claim. The server survives that — `queueAnUpload` answers the loser
+        with the winner's job — but surviving a race is not a reason to run one. */
+     if (engineRef.current) return;
+-    const want = `${attempt}\u0000${wanted}`;
++    const own = ownCopyRef.current?.source === source && ownCopyRef.current.own;
++    const want = `${attempt}\u0000${wanted}\u0000${own ? "own" : ""}`;
+     if (posted.current === want) return;
+     posted.current = want;
+     setStarted(null);
+     setFailure(null);
+     setArticleAnswer(null);
++    setPublicAnswer(null);
+     setPhase({ kind: "running" });
+     claimed.current = null;
+     const reader = readerRef.current;
+@@ -821,7 +847,9 @@ export function AddPage({
+        `origin.kind === "upload"` does not do for a field read inside a
+        dependency list. */
+     const queueIt =
+-      uploadId !== undefined ? uploadRef.current(uploadId) : addRef.current(source);
++      uploadId !== undefined
++        ? uploadRef.current(uploadId)
++        : addRef.current(source, own ? { ownCopy: true } : undefined);
+     void queueIt.then((queued) => {
+       /* **Only if this is still the POST we are waiting for.** Two `/add/`
+          addresses in quick succession, or Retry, leave two requests in flight,
+@@ -852,6 +880,12 @@ export function AddPage({
+         setArticleAnswer({ slug: queued.article, source: wanted, repeat: queued.repeat === true });
+         return;
+       }
++      /* **Or somebody else has already made it public**, and nothing was
++         spent: the page stops and asks (`PublicChoice` below). */
++      if ("publicCopy" in queued) {
++        setPublicAnswer({ ...queued.publicCopy, source: wanted });
++        return;
++      }
+       /* The job itself is kept, and not only its id: it is what the page
+          draws until the polled list has it (`Started`). */
+       setStarted({ id: queued.id, source: wanted, reader, job: queued });
+@@ -1337,8 +1371,18 @@ export function AddPage({
+   /* A repeat offers no new import choices. A purpose already entered or a
+      High-powered choice made while awaiting the answer still needs its controls. */
+   const repeated = completionRepeat;
++  /* **Asking: the public copy, or your own?** Nothing has been imported or
++     sent, so, as over a repeat, no import choices and no "sent away" line. A
++     purpose already typed stays in the session draft and is back in its box
++     after *Add my own copy*. */
++  const choosing = publicAnswer !== null && publicAnswer.source === wanted;
++  const chooseOwnCopy = (): void => {
++    ownCopyRef.current = { source, own: true };
++    setPublicAnswer(null);
++    setAttempt((n) => n + 1);
++  };
+   const showAutoModes =
+-    !repeated && offerAutoModes(job, mine, alreadyArticle, ok, failed, stillArriving);
++    !repeated && !choosing && offerAutoModes(job, mine, alreadyArticle, ok, failed, stillArriving);
+   /* Waiting on the reader, with the add finished. The tick box stays up
+      through this too: it is the reader's setting and can still be changed. */
+   const deciding = phase.kind === "ready";
+@@ -1346,7 +1390,7 @@ export function AddPage({
+      false for a finished job and for an existing-article answer, which are
+      exactly when the box has to stay. While running it also stays over a failed
+      job, whose card has a Retry that may yet finish it (F3). */
+-  const showPurpose = deciding || (phase.kind === "running" && (showAutoModes || job !== null));
++  const showPurpose = deciding || (phase.kind === "running" && !choosing && (showAutoModes || job !== null));
+   /* A failed or stopped job is not on its way to making the article: its
+      card's Retry may yet, but "it saves once the article exists" would be a
+      promise. The 261001s browser check found that line under a failed import. */
+@@ -1446,7 +1490,7 @@ export function AddPage({
+ 
+           **Not over a repeat paste**, which sent nothing anywhere: the server
+           answered with the article already on the shelf (plan 261007k). */}
+-      {ok && !repeated && (
++      {ok && !repeated && !choosing && (
+         <p className="tw:mb-4 tw:mt-0 tw:text-sm tw:text-muted-foreground">
+           {textHasGone(mine, origin.kind === "upload", startedId !== null)
+             ? DIRECT_ADD_SENT_TEXT_AWAY
+@@ -1483,7 +1527,7 @@ export function AddPage({
+           for another two minutes. */}
+       {/* And not once the POST has answered with an article, which is a
+           completion with no job: the upload retention path, or a repeat. */}
+-      {ok && !job && !failed && !mine && !completion && (
++      {ok && !job && !failed && !mine && !completion && !choosing && (
+         <p className="tw:text-sm tw:text-muted-foreground">Queueing it…</p>
+       )}
+ 
+@@ -1700,6 +1744,8 @@ export function AddPage({
+         </div>
+       )}
+ 
++      {choosing && <PublicChoice found={publicAnswer} onOwnCopy={chooseOwnCopy} />}
++
+       {phase.kind === "repeat" && (
+         <div data-add-repeat className="tw:mt-3">
+           <p className="tw:mt-0 tw:mb-2 tw:text-sm tw:text-foreground">{REPEAT_PASTE_ON_THE_SHELF}</p>
+@@ -1720,6 +1766,30 @@ export function AddPage({
+   );
+ }
+ 
++/**
++ * **Somebody else has already made this address public: theirs, free, or your
++ * own, for a slot.** Nothing has been spent. The free one is a link to the
++ * public reading view; the other re-posts the add with `ownCopy`, which is the
++ * ordinary import. Greg, 2026-10-09 (`spya-ahvk74`);
++ * docs/plans/261009j-a-public-copy-offered-at-import.md.
++ */
++function PublicChoice({ found, onOwnCopy }: { found: PublicCopyFound["publicCopy"]; onOwnCopy: () => void }) {
++  return (
++    <div data-add-public className="tw:mt-3">
++      <p className="tw:mt-0 tw:mb-1 tw:text-sm tw:text-foreground">{PUBLIC_COPY_FOUND(found.title)}</p>
++      <p className="tw:mt-0 tw:mb-3 tw:text-sm tw:text-muted-foreground">{PUBLIC_COPY_EXPLAIN}</p>
++      <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
++        <Button asChild size="sm">
++          <Link href={readHref(found.slug)}>{PUBLIC_COPY_READ}</Link>
++        </Button>
++        <Button type="button" variant="outline" size="sm" onClick={onOwnCopy}>
++          {PUBLIC_COPY_OWN}
++        </Button>
++      </div>
++    </div>
++  );
++}
++
+ /**
+  * Whether the words in the box cannot be saved from here: the save was
+  * refused, or the read of the stored purpose gave up. What offers *Open
+diff --git a/src/web/ProseHoverCard.tsx b/src/web/ProseHoverCard.tsx
+index 39ef3ad09..13f4d4d83 100644
+--- a/src/web/ProseHoverCard.tsx
++++ b/src/web/ProseHoverCard.tsx
+@@ -112,7 +112,13 @@ import { HOVER_DELAY, useHoverCard } from "./useHoverCard.js";
+ export const QUOTE_OPEN_MS = 600;
+ import { TermJump } from "./TermJump.js";
+ import { describeLink, type ExternalPreview, type LinkPreview } from "./link-preview.js";
+-import { REPEAT_PASTE_ON_THE_CARD, worthRetrying } from "../messages.js";
++import {
++  PUBLIC_COPY_ON_THE_CARD,
++  PUBLIC_COPY_OWN_ON_THE_CARD,
++  PUBLIC_COPY_READ_ON_THE_CARD,
++  REPEAT_PASTE_ON_THE_CARD,
++  worthRetrying,
++} from "../messages.js";
+ import { blockOfLink, refreshShelf, useLinkFacts, type LinkFacts } from "./link-facts.js";
+ import { leavesTheApp } from "./external-links.js";
+ import { QuotaNotice } from "./QuotaNotice.js";
+@@ -953,6 +959,13 @@ type AddToShelf =
+    * asked for, an archived one) — waiting for it could wait for ever.
+    */
+   | { kind: "have"; slug: string }
++  /**
++   * **Somebody else has already made it public**, so nothing was added and
++   * nothing spent: the reader chooses between reading that, free, and their own
++   * copy, which `addOwn` asks for and which is the ordinary paid add.
++   * docs/plans/261009j-a-public-copy-offered-at-import.md.
++   */
++  | { kind: "public"; slug: string; addOwn(): void }
+   /**
+    * It went wrong and **another press would not help**, so this arm has no
+    * action in it at all. `message` is the server's own sentence and may be a
+@@ -1015,6 +1028,7 @@ type Asked =
+   | { kind: "sending"; wait: Promise<void> }
+   | { kind: "queued"; jobId: string }
+   | { kind: "have"; slug: string }
++  | { kind: "public"; slug: string }
+   | { kind: "refused"; message: string };
+ 
+ const asked = new Map<string, Asked>();
+@@ -1124,10 +1138,11 @@ function WithAddToShelf({
+     });
+   }, [finished]);
+ 
+-  const add = () => {
++  const add = (options?: { ownCopy?: true }) => {
+     const generation = askedGeneration;
+     const wait = (async () => {
+-      const started = await queue.add(url);
++      /* `options` is read for the one flag only: a plain press passes the click event here. */
++      const started = await queue.add(url, options?.ownCopy === true ? { ownCopy: true } : undefined);
+       /* An answer made for the previous reader must not refill the cleared map. */
+       if (generation !== askedGeneration) return;
+       /* **Read straight after the await.** `error` on the queue is engine state
+@@ -1136,6 +1151,7 @@ function WithAddToShelf({
+          before it existed. useJobs.ts § lastFailure. */
+       const why = started ? null : queue.lastFailure();
+       if (started && "article" in started) asked.set(key, { kind: "have", slug: started.article });
++      else if (started && "publicCopy" in started) asked.set(key, { kind: "public", slug: started.publicCopy.slug });
+       else if (started) asked.set(key, { kind: "queued", jobId: started.id });
+       else if (why) asked.set(key, { kind: "refused", message: why });
+       /* Refused with nothing to say — which should not happen, since every
+@@ -1157,13 +1173,19 @@ function WithAddToShelf({
+  * decision over two inputs that can disagree, and every wrong branch of it is a
+  * card that lies about a metered action.
+  */
+-export function describeAdd(state: Asked | undefined, job: Job | null, add: () => void): AddToShelf {
++export function describeAdd(
++  state: Asked | undefined,
++  job: Job | null,
++  add: (options?: { ownCopy?: true }) => void,
++): AddToShelf {
+   if (!state) return { kind: "offer", add, after: null };
+   switch (state.kind) {
+     case "sending":
+       return { kind: "working", line: ADDING };
+     case "have":
+       return { kind: "have", slug: state.slug };
++    case "public":
++      return { kind: "public", slug: state.slug, addOwn: () => add({ ownCopy: true }) };
+     case "refused":
+       /* **`worthRetrying` decides whether there is a button at all**, and it is
+          the same question `AddArticle.tsx` asks of a failed job. A `[pay-free]`
+@@ -1609,6 +1631,12 @@ function ExternalBody({
+           {REPEAT_PASTE_ON_THE_CARD}
+         </p>
+       )}
++      {adding.kind === "public" && (
++        <p className="prose-card-text prose-card-waiting">
++          <BookCheck size={11} />
++          {PUBLIC_COPY_ON_THE_CARD}
++        </p>
++      )}
+       {/* **Why it did not go through** — the refusal that ends it, and the one
+           the reader may press past, drawn identically because they read
+           identically to whoever is looking.
+@@ -1688,6 +1716,19 @@ function ExternalBody({
+             read it here
+           </Link>
+         )}
++        {/* Somebody else's public copy: theirs to read free, or your own. */}
++        {adding.kind === "public" && (
++          <>
++            <Link className="prose-card-open" href={readHref(adding.slug)}>
++              <BookOpen size={10} />
++              {PUBLIC_COPY_READ_ON_THE_CARD}
++            </Link>
++            <button type="button" className="prose-card-open" onClick={adding.addOwn}>
++              <Plus size={10} />
++              {PUBLIC_COPY_OWN_ON_THE_CARD}
++            </button>
++          </>
++        )}
+         {adding.kind === "offer" && (
+           <button type="button" className="prose-card-open" onClick={adding.add}>
+             <Plus size={10} />
+diff --git a/src/web/PublicChrome.tsx b/src/web/PublicChrome.tsx
+index 464d8870c..437a04043 100644
+--- a/src/web/PublicChrome.tsx
++++ b/src/web/PublicChrome.tsx
+@@ -80,6 +80,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
+ import { useRenderCount } from "./perf.js";
+ import { addressParts, GuessedSourceLink } from "./Masthead.js";
+ import { type ShelfLookup, useShelfEntry } from "./link-facts.js";
++import { markOwnCopy } from "./own-copy-intent.js";
+ import { addHref, LOGIN_HREF, PRIVACY_HREF, readHref, TAKEDOWN_HREF } from "./router.js";
+ import type { PublicSharedBy } from "../public-types.js";
+ import { CONTACT_EMAIL } from "../site-text.js";
+@@ -355,10 +356,24 @@ export function PrivateCopy({
+       </p>
+     );
+   }
++  const from = copyableFrom(props);
+   return (
+     <p data-private-copy="add" className={className}>
+       {PRIVATE_COPY_WHY}{" "}
+-      <Link href={offer.href} className={BANNER_LINK}>
++      <Link
++        href={offer.href}
++        className={BANNER_LINK}
++        /* **The press is the reader choosing their own copy**, so the add page
++           does not ask them whether they would rather read this public one
++           (plan 261009j, own-copy-intent.ts). Only a plain click, the one
++           `Link` keeps in this tab: a ⌘-click opens a tab the mark cannot
++           reach, and would leave it to answer a later paste. */
++        onClick={(event) => {
++          if (from === null || event.button !== 0) return;
++          if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
++          markOwnCopy(from);
++        }}
++      >
+         {PRIVATE_COPY_ADD}
+       </Link>
+       . {PRIVATE_COPY_COST}
+diff --git a/src/web/own-copy-intent.ts b/src/web/own-copy-intent.ts
+new file mode 100644
+index 000000000..9dc92d35a
+--- /dev/null
++++ b/src/web/own-copy-intent.ts
+@@ -0,0 +1,37 @@
++/**
++ * **"I want my own copy", carried from a public article's link to the add page.**
++ *
++ * The add page asks a reader whether they would rather read the public copy
++ * somebody already made of an address (plan 261009j). A reader who pressed
++ * *Add a private copy to your shelf* on that public article has already
++ * answered, so `PrivateCopy` (PublicChrome.tsx) marks the address here as its
++ * link is pressed, and the add page takes the mark once for that address and
++ * posts `ownCopy: true` straight away.
++ *
++ * **Module state, not the URL.** The query string and fragment of an `/add/`
++ * address belong to the pasted URL (router.ts § `addUrlFrom`), so the intent
++ * cannot ride there. A link opened in a new tab loses the mark, and that reader
++ * is asked: a redundant question, never a wrong charge.
++ *
++ * One address at a time, and only for a minute, so a mark nobody took does not
++ * answer a paste of the same address much later.
++ */
++
++import { normaliseUrl } from "../ingest.js";
++
++const FRESH_MS = 60_000;
++
++let marked: { url: string; at: number } | null = null;
++
++/** The address `addHref` was built from, compared as the add page normalises it. */
++export function markOwnCopy(url: string): void {
++  marked = { url: normaliseUrl(url), at: Date.now() };
++}
++
++/** Whether the add page at this address was asked for an own copy. Answers true once. */
++export function takeOwnCopyIntent(url: string): boolean {
++  const mark = marked;
++  if (mark === null || mark.url === "" || mark.url !== normaliseUrl(url) || Date.now() - mark.at > FRESH_MS) return false;
++  marked = null;
++  return true;
++}
+diff --git a/src/web/useJobs.ts b/src/web/useJobs.ts
+index f45468551..a79888968 100644
+--- a/src/web/useJobs.ts
++++ b/src/web/useJobs.ts
+@@ -22,6 +22,7 @@
+  */
+ import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+ import type { Job, ResetResponse, StepName } from "../types.js";
++import type { PublicCopyFound } from "../public-copy.js";
+ import { retireAddSharing } from "./add-sharing-session.js";
+ import { handOverAutoModesChoice } from "./auto-modes-setting.js";
+ import { jobEngine, send } from "./jobEngine.js";
+@@ -37,6 +38,8 @@ import { describeFetchFailure } from "./lib/describe-failure.js";
+  * the two answers arrive on the same wire — a key that only one of them can
+  * have is what makes `"article" in answer` a narrowing rather than a guess.
+  */
++export type { PublicCopyFound };
++
+ export interface AlreadyAnArticle {
+   article: string;
+   /**
+@@ -118,8 +121,13 @@ export interface UseJobs {
+    * **Or the article itself**, when the address is one the reader already
+    * has: a repeat paste is answered `{ article, repeat: true }`, free and with
+    * no job (`AlreadyAnArticle`).
++   *
++   * **Or the public copy somebody else already made of it** (`PublicCopyFound`),
++   * also free and with no job, so the reader can choose: read that, or call
++   * again with `ownCopy` for their own, which is the ordinary paid add.
++   * docs/plans/261009j-a-public-copy-offered-at-import.md.
+    */
+-  add(url: string): Promise<Job | AlreadyAnArticle | null>;
++  add(url: string, options?: { ownCopy?: true }): Promise<Job | AlreadyAnArticle | PublicCopyFound | null>;
+   /**
+    * Queue a file that has **already been sent to the object store**, by its
+    * upload id.
+@@ -432,7 +440,8 @@ export function useJobs(cadence: QueueCadence, onFinished?: (job: Job) => void):
+     error: snapshot.error,
+     driverFailures: snapshot.driverFailures,
+     lastFailure: () => lastFailure.current,
+-    add: (url) => act(() => post<Job | AlreadyAnArticle>({ url })),
++    add: (url, options) =>
++      act(() => post<Job | AlreadyAnArticle | PublicCopyFound>({ url, ...(options?.ownCopy ? { ownCopy: true } : {}) })),
+     addUpload: (uploadId) => act(() => post<Job | AlreadyAnArticle>({ uploadId })),
+     run: (request) => act(() => post(request)),
+     reset: (slug, regenerate) =>
+diff --git a/tests/add-page-purpose.test.tsx b/tests/add-page-purpose.test.tsx
+index 8dec07d7e..bfefa57d7 100644
+--- a/tests/add-page-purpose.test.tsx
++++ b/tests/add-page-purpose.test.tsx
+@@ -79,7 +79,9 @@ const leaves = () => events.filter((e) => e.startsWith("leave:"));
+ const patch = (purpose: string | null, slug = SLUG) => `patch:${slug}:${JSON.stringify({ purpose })}`;
+ 
+ let jobs: Job[] = [];
+-type AddAnswer = Job | { article: string; repeat?: true } | null;
++type AddAnswer = Job | { article: string; repeat?: true } | { publicCopy: { slug: string; title: string } } | null;
++/** Each `add` the page made, and whether it asked for the reader's own copy (plan 261009j). */
++const addCalls: ("plain" | "own")[] = [];
+ let addResult: AddAnswer | Promise<AddAnswer> = null;
+ let addUploadResult: Promise<Job | { article: string } | null> = Promise.resolve(null);
+ let retryResult: (() => Job | null) | null = null;
+@@ -91,7 +93,10 @@ const queue: UseJobs = {
+   error: null,
+   driverFailures: {},
+   lastFailure: () => null,
+-  add: async () => addResult,
++  add: async (_url, options) => {
++    addCalls.push(options?.ownCopy ? "own" : "plain");
++    return addResult;
++  },
+   addUpload: () => addUploadResult as ReturnType<UseJobs["addUpload"]>,
+   run: async (request) => {
+     events.push(`run:${request.steps.join(",")}`);
+@@ -1488,3 +1493,102 @@ describe("a repeat paste of an article already on the shelf", () => {
+     expect(runs()).toEqual(NO_RUNS);
+   });
+ });
++
++/**
++ * **Somebody else has already made this address public**, so the add stops and
++ * asks — Greg, 2026-10-09: *"ask them if they'd rather use the public one for
++ * free or have their own version which will use up one of their allotted
++ * slots."* Nothing was spent, nothing is opened by itself, and nothing of the
++ * import's (purpose, High-powered, sharing) is sent to somebody else's article.
++ * docs/plans/261009j-a-public-copy-offered-at-import.md.
++ */
++describe("an address somebody else has made public", () => {
++  const THEIRS = { slug: "their-public-copy", title: "Their Public Copy" };
++
++  beforeEach(() => {
++    addCalls.length = 0;
++  });
++
++  it("asks, under StrictMode, with one request and nothing sent anywhere", async () => {
++    const { DIRECT_ADD_SENT_TEXT_AWAY, PUBLIC_COPY_OWN, PUBLIC_COPY_READ } = await import("../src/messages.js");
++    strict = true;
++    addResult = { publicCopy: THEIRS };
++    render(URL_SOURCE);
++    await settle();
++
++    expect(addCalls).toEqual(["plain"]);
++    expect(host.querySelector("[data-add-public]")).not.toBeNull();
++    expect(host.textContent).toContain("Their Public Copy");
++    const read = [...host.querySelectorAll("a")].find((a) => a.textContent === PUBLIC_COPY_READ);
++    expect(read?.getAttribute("href")).toBe(`/read/${THEIRS.slug}`);
++    expect(button(PUBLIC_COPY_OWN)).toBeTruthy();
++    expect(navigations, "opened somebody else's article by itself").toEqual([]);
++    expect(host.textContent).not.toContain("Queueing it");
++    expect(host.textContent).not.toContain(DIRECT_ADD_SENT_TEXT_AWAY);
++    expect(host.querySelector("textarea"), "the purpose box over the choice").toBeNull();
++    expect(host.querySelector("input[type=checkbox]"), "a box to tick over the choice").toBeNull();
++    expect(patches()).toEqual([]);
++    expect(puts()).toEqual([]);
++    expect(reads.filter((slug) => slug === THEIRS.slug)).toEqual([]);
++  });
++
++  it("asks again for the reader's own copy, and carries on as an ordinary import", async () => {
++    const { PUBLIC_COPY_OWN } = await import("../src/messages.js");
++    strict = true;
++    addResult = { publicCopy: THEIRS };
++    render(URL_SOURCE);
++    await settle();
++
++    const job = makeJob("job-own", "running");
++    jobs = [job];
++    addResult = job;
++    press(PUBLIC_COPY_OWN);
++    await settle();
++
++    expect(addCalls).toEqual(["plain", "own"]);
++    expect(host.querySelector("[data-add-public]")).toBeNull();
++    expect(host.querySelector("textarea"), "the purpose box is back for the import").not.toBeNull();
++  });
++
++  it("keeps a High-powered choice made before the answer for the reader's own import, never theirs", async () => {
++    const { PUBLIC_COPY_OWN } = await import("../src/messages.js");
++    let answer!: (value: AddAnswer) => void;
++    addResult = new Promise((resolve) => { answer = resolve; });
++    render(URL_SOURCE);
++    await settle();
++    const tick = host.querySelector<HTMLInputElement>("[data-add-high-power] input")!;
++    act(() => tick.click());
++    answer({ publicCopy: THEIRS });
++    await settle();
++    expect(puts(), "High-powered sent to somebody else's article").toEqual([]);
++
++    const job = makeJob("job-own", "running");
++    jobs = [job];
++    addResult = job;
++    press(PUBLIC_COPY_OWN);
++    await settle();
++    expect(puts()).toEqual([`put:${SLUG}:true`]);
++  });
++
++  it("asks for the reader's own copy at once when they chose it on the public article", async () => {
++    const { markOwnCopy } = await import("../src/web/own-copy-intent.js");
++    strict = true;
++    markOwnCopy(URL_SOURCE.url);
++    addResult = makeJob("job-own", "running");
++    jobs = [addResult];
++    render(URL_SOURCE);
++    await settle();
++    expect(addCalls).toEqual(["own"]);
++    expect(host.querySelector("[data-add-public]")).toBeNull();
++  });
++
++  it("does not let a mark for one address answer another", async () => {
++    const { markOwnCopy } = await import("../src/web/own-copy-intent.js");
++    markOwnCopy("https://example.org/somewhere-else");
++    addResult = { publicCopy: THEIRS };
++    render(URL_SOURCE);
++    await settle();
++    expect(addCalls).toEqual(["plain"]);
++    expect(host.querySelector("[data-add-public]")).not.toBeNull();
++  });
++});
+diff --git a/tests/add-to-shelf-from-the-card.test.tsx b/tests/add-to-shelf-from-the-card.test.tsx
+index a6b8af80e..9030665bc 100644
+--- a/tests/add-to-shelf-from-the-card.test.tsx
++++ b/tests/add-to-shelf-from-the-card.test.tsx
+@@ -106,7 +106,7 @@ let useJobsCalls = 0;
+ /** The queue as the engine would report it — replaced by the test, not polled. */
+ let jobs: Job[] = [];
+ /** What the next `add()` resolves to. Null is a refusal, with `failure` its reason. */
+-let added: Job | { article: string; repeat?: true } | null = null;
++let added: Job | { article: string; repeat?: true } | { publicCopy: { slug: string; title: string } } | null = null;
+ let failure: string | null = null;
+ /** Every URL `add()` was asked for. Two entries is a second slot spent. */
+ const posted: string[] = [];
+@@ -123,8 +123,8 @@ vi.mock("../src/web/useJobs.js", () => ({
+       error: null,
+       driverFailures: {},
+       lastFailure: () => failure,
+-      add: async (url: string) => {
+-        posted.push(url);
++      add: async (url: string, options?: { ownCopy?: true }) => {
++        posted.push(options?.ownCopy ? `own:${url}` : url);
+         if (holdPost) await new Promise<void>((go) => (releasePost = go));
+         return added;
+       },
+@@ -432,6 +432,35 @@ describe("pressing it", () => {
+     expect(posted).toEqual([url]);
+   });
+ 
++  /**
++   * **Somebody else has already made it public** — nothing spent, and the card
++   * offers both: their copy, free, and the reader's own, which posts again
++   * with `ownCopy` (docs/plans/261009j-a-public-copy-offered-at-import.md).
++   */
++  it("offers the public copy free, or the reader's own, when somebody has made it public", async () => {
++    const { PUBLIC_COPY_ON_THE_CARD, PUBLIC_COPY_OWN_ON_THE_CARD, PUBLIC_COPY_READ_ON_THE_CARD } = await import(
++      "../src/messages.js"
++    );
++    const url = "https://example.org/public-elsewhere";
++    added = { publicCopy: { slug: "their-copy", title: "Theirs" } };
++    await render(url, true);
++    await hover();
++    await press();
++    await settle();
++
++    expect(posted).toEqual([url]);
++    expect(text()).toContain(PUBLIC_COPY_ON_THE_CARD);
++    const link = [...(card()?.querySelectorAll("a") ?? [])].find((a) => a.textContent?.includes(PUBLIC_COPY_READ_ON_THE_CARD));
++    expect(link?.getAttribute("href")).toBe("/read/their-copy");
++    const own = [...(card()?.querySelectorAll("button") ?? [])].find((b) => b.textContent?.includes(PUBLIC_COPY_OWN_ON_THE_CARD));
++    expect(own).toBeTruthy();
++
++    added = job("job-own", url);
++    await act(async () => own?.click());
++    await settle();
++    expect(posted).toEqual([url, `own:${url}`]);
++  });
++
+   it("posts the link's own address and shows the step that is running", async () => {
+     const url = "https://example.org/three";
+     added = job("job-3", url);
+diff --git a/tests/billing-admission.test.ts b/tests/billing-admission.test.ts
+index b7d6a4345..44f51be24 100644
+--- a/tests/billing-admission.test.ts
++++ b/tests/billing-admission.test.ts
+@@ -526,6 +526,148 @@ describe("a repeat paste of an article on the shelf", () => {
+   });
+ });
+ 
++/**
++ * **Somebody else has already made this address public**, so the add asks
++ * before it spends — Greg, 2026-10-09 (`spya-ahvk74`): *"ask them if they'd
++ * rather use the public one for free or have their own version which will use
++ * up one of their allotted slots."* The answer is `{ publicCopy }`, free and
++ * with nothing queued; `{ url, ownCopy: true }` is the ordinary paid add.
++ * docs/plans/261009j-a-public-copy-offered-at-import.md.
++ *
++ * Which public articles count is Citations' read (pg-cited-in-spideryarn.ts),
++ * so the absences below are the ones that matter: a stranger's private,
++ * archived or unopenable article at the same address is never offered.
++ */
++describe("an address somebody else has made public", () => {
++  const STRANGER = `${OWNER_STEM}${randomUUID().slice(-12)}` as OwnerId;
++  const BLOCK = "spya-c7ebq2";
++
++  beforeAll(async () => {
++    await seedAuthUser(pool, { id: STRANGER, email: `admission-${STRANGER}@example.invalid` });
++  });
++
++  /** A stranger's article fetched from `url`, as an import and a share leave it. */
++  async function strangers(
++    name: string,
++    url: string,
++    { visibility = "public", openable = true, archived = false } = {},
++  ): Promise<string> {
++    const slug = `test-admission-${name}`;
++    const { rows } = await pool.query<{ id: string }>(
++      `insert into spideryarn.articles (owner_id, slug, visibility, public_at, archived_at)
++       values ($1, $2, $3, case when $3 = 'public' then now() end, case when $4 then now() end)
++       returning id`,
++      [STRANGER, slug, visibility, archived],
++    );
++    const articleId = rows[0]?.id;
++    const tree = openable
++      ? JSON.stringify({
++          version: "1",
++          generator: "test",
++          slug,
++          rootId: "n0",
++          nodes: { n0: { id: "n0", depth: 0, parent: null, children: [], range: [BLOCK, BLOCK], title: "Root", gist: "x" } },
++        })
++      : null;
++    const revision = await pool.query<{ id: string }>(
++      `insert into spideryarn.article_revisions
++         (article_id, status, title, requested_url, final_url, fetched_at, tree)
++       values ($1, 'published', 'A public article', $2, $2, now(), $3::jsonb)
++       returning id`,
++      [articleId, url, tree],
++    );
++    const revisionId = revision.rows[0]?.id;
++    await pool.query("update spideryarn.articles set current_revision_id = $2 where id = $1", [articleId, revisionId]);
++    if (openable) {
++      await pool.query("insert into spideryarn.block_identities (article_id, block_id) values ($1, $2)", [articleId, BLOCK]);
++      await pool.query(
++        `insert into spideryarn.revision_blocks
++           (article_id, revision_id, block_id, ordinal, tag, kind, text, words, html, gistable)
++         values ($1, $2, $3, 0, 'p', 'text', 'A paragraph.', 2, '<p>A paragraph.</p>', true)`,
++        [articleId, revisionId, BLOCK],
++      );
++    }
++    return slug;
++  }
++
++  async function jobCount(): Promise<number> {
++    const { rows } = await pool.query<{ n: string }>(
++      "select count(*) as n from spideryarn.jobs where owner_id = $1",
++      [OWNER],
++    );
++    return Number(rows[0]?.n);
++  }
++
++  it("offers the public copy, spends nothing and queues nothing", async () => {
++    const slug = await strangers("pub", `${HOST}/pub`);
++    await alreadySpent(FREE_LIMIT);
++
++    /* Another spelling of the same address: the match is `urlKey`'s. */
++    const reply = await post("/api/jobs", { url: `http://www.${HOST.slice("https://".length)}/pub/` });
++    expect(reply.status, JSON.stringify(reply.body)).toBe(200);
++    expect(reply.body).toEqual({ publicCopy: { slug, title: "A public article" } });
++    expect(await ledger()).toEqual({ taken: FREE_LIMIT, inFlight: 0 });
++    expect(await jobCount()).toBe(0);
++  });
++
++  it("finds a public arXiv paper whatever version is pasted", async () => {
++    const slug = await strangers("pub-arxiv", "https://arxiv.org/abs/2601.99901v1");
++    const reply = await post("/api/jobs", { url: "https://arxiv.org/pdf/2601.99901v2" });
++    expect(reply.status, JSON.stringify(reply.body)).toBe(200);
++    expect(reply.body).toMatchObject({ publicCopy: { slug } });
++  });
++
++  it("is the ordinary paid add when the reader asks for their own copy", async () => {
++    await strangers("pub-own", `${HOST}/pub-own`);
++    const reply = await post("/api/jobs", { url: `${HOST}/pub-own`, ownCopy: true });
++    expect(reply.status, JSON.stringify(reply.body)).toBe(202);
++    expect(await ledger()).toEqual({ taken: 1, inFlight: 1 });
++  });
++
++  it("still refuses an own copy at the ceiling", async () => {
++    await strangers("pub-ceiling", `${HOST}/pub-ceiling`);
++    await alreadySpent(FREE_LIMIT);
++    const reply = await post("/api/jobs", { url: `${HOST}/pub-ceiling`, ownCopy: true });
++    expect(reply.status, JSON.stringify(reply.body)).toBe(402);
++  });
++
++  it("sends the reader to their own article first", async () => {
++    await strangers("pub-both", `${HOST}/both`);
++    const mine = "test-admission-mine-both";
++    const { rows } = await pool.query<{ id: string }>(
++      "insert into spideryarn.articles (owner_id, slug) values ($1, $2) returning id",
++      [OWNER, mine],
++    );
++    const revision = await pool.query<{ id: string }>(
++      `insert into spideryarn.article_revisions (article_id, status, title, requested_url, final_url, fetched_at)
++       values ($1, 'published', 'Mine', $2, $2, now()) returning id`,
++      [rows[0]?.id, `${HOST}/both`],
++    );
++    await pool.query("update spideryarn.articles set current_revision_id = $2 where id = $1", [
++      rows[0]?.id,
++      revision.rows[0]?.id,
++    ]);
++    const reply = await post("/api/jobs", { url: `${HOST}/both` });
++    expect(reply.body).toEqual({ article: mine, repeat: true });
++  });
++
++  it.each([
++    ["private", { visibility: "private" }],
++    ["archived", { archived: true }],
++    ["unopenable", { openable: false }],
++  ] as const)("never offers a stranger's %s article", async (name, how) => {
++    await strangers(`pub-${name}`, `${HOST}/pub-${name}`, how);
++    const reply = await post("/api/jobs", { url: `${HOST}/pub-${name}` });
++    expect(reply.status, JSON.stringify(reply.body)).toBe(202);
++    expect(reply.body).not.toHaveProperty("publicCopy");
++  });
++
++  it("refuses ownCopy anywhere but beside a url", async () => {
++    const reply = await post("/api/jobs", { slug: "test-admission-anything", ownCopy: true });
++    expect(reply.status).toBe(400);
++  });
++});
++
+ /**
+  * An upload whose bytes have landed, which is the only kind that may be queued.
+  *
+diff --git a/tests/mcp-tools.test.ts b/tests/mcp-tools.test.ts
+index 94ebb321d..db9a511df 100644
+--- a/tests/mcp-tools.test.ts
++++ b/tests/mcp-tools.test.ts
+@@ -174,6 +174,11 @@ describe("each tool calls the route it claims", () => {
+       args: { url: "https://example.com/p" },
+       expect: [{ method: "POST", path: "/api/jobs", body: { url: "https://example.com/p" } }],
+     },
++    {
++      tool: "import_article",
++      args: { url: "https://example.com/p", own_copy: true },
++      expect: [{ method: "POST", path: "/api/jobs", body: { url: "https://example.com/p", ownCopy: true } }],
++    },
+     { tool: "get_import_status", args: { id: "job-1" }, expect: [{ method: "GET", path: "/api/jobs/job-1" }] },
+     { tool: "list_imports", expect: [{ method: "GET", path: "/api/jobs" }] },
+     {
+@@ -229,6 +234,16 @@ describe("each tool calls the route it claims", () => {
+     expect(result.json()).toEqual({ article: "on-tools", repeat: true, link: `${SITE}/read/on-tools` });
+   });
+ 
++  /* Somebody else's public copy is answered, free and with nothing queued, so
++     the agent can ask the reader which they want (plan 261009j). */
++  it("import_article of an address somebody made public answers that copy, with its link", async () => {
++    const h = await harness({
++      "POST /api/jobs": { status: 200, body: { publicCopy: { slug: "theirs", title: "Theirs" } } },
++    });
++    const result = await h.call("import_article", { url: "https://example.com/p" });
++    expect(result.json()).toEqual({ publicCopy: { slug: "theirs", title: "Theirs" }, link: `${SITE}/read/theirs` });
++  });
++
+   /* list_users and create_private_link arrived with plan 261007o, once Greg said
+      yes; get_allowance is still out (it claims vouchers, so it is not a read). */
+   it("there is no get_allowance tool (Sol F17), and no tool turns a private link off or remakes it", () => {
+diff --git a/tests/private-copy-offer.test.tsx b/tests/private-copy-offer.test.tsx
+index 356d4211a..fa883757c 100644
+--- a/tests/private-copy-offer.test.tsx
++++ b/tests/private-copy-offer.test.tsx
+@@ -123,6 +123,24 @@ describe("the mounted offer, with a shelf that does not hold the article", () =>
+     expect(add()).toBe(addHref(ADDRESS));
+   });
+ 
++  /* **The press is the reader choosing their own copy**, so the add page does
++     not ask whether they would rather read this public one (plan 261009j). A
++     ⌘-click opens another tab the mark cannot reach, so it marks nothing. */
++  it("a plain press marks the address as the reader's own copy; a ⌘-press does not", async () => {
++    const { takeOwnCopyIntent } = await import("../src/web/own-copy-intent.js");
++    await act(async () => root.render(createElement(SharedNotice, FACTS)));
++    const link = host.querySelector<HTMLAnchorElement>('[data-private-copy="add"] a')!;
++    const click = (init: MouseEventInit) =>
++      act(() => {
++        link.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0, ...init }));
++      });
++    click({ metaKey: true });
++    expect(takeOwnCopyIntent(ADDRESS)).toBe(false);
++    click({});
++    expect(takeOwnCopyIntent(ADDRESS)).toBe(true);
++    expect(takeOwnCopyIntent(ADDRESS), "answered twice").toBe(false);
++  });
++
+   it("so does the visitor's band", async () => {
+     await act(async () =>
+       root.render(<VisitorBand gap={{ kind: "owners-only", feature: "Chat" }} copy={FACTS} />),

@@ -726,7 +726,7 @@ of [Help](help-page.md) (`BandAbout.tsx`, given `help` by `ModeSurface`). The pr
 implementation says why it is separate — and is not a customer.
 
 The second, since 2026-10-06, is **Skim's term chips**: each opens the glossary's own entry card
-(`TermCard`, the one the prose card draws) with its *Dig deeper · Hide · Open glossary* row
+(`TermCard`, the one the prose card draws) with its *Ask in chat · Hide · Open glossary* row (*Dig deeper* in the first place until plan 261009k)
 (`TermChip` in `SkimPanel.tsx`; [skim.md](skim.md)). It is the first to combine `interactive` with
 a controlled `open`, so that a finger's tap keeps it up. Its content scrolls inside a height tied to
 the window. That cap is on a wrapper inside the panel, not on `.tooltip`, where `overflow` would

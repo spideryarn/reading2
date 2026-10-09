@@ -31,11 +31,18 @@
  * 7. a visitor's band draws neither the button nor the mark.
  *
  * And for Glossary alone: a term the article never quotes still has the
- * button (Dig deeper is disabled there; a chat needs no passage), and a name
- * longer than the origin's cap is sent cut, not refused.
+ * button (a chat needs no passage), and a name longer than the origin's cap
+ * is sent cut, not refused.
  *
- * Dig deeper itself is not touched, and neither is the *Ask in chat* the
- * *Look up a term* box offers (tests/glossary-ask-in-chat.test.tsx).
+ * **Ideas joined them on 2026-10-09** (plan 261009k, stage 3), with the same
+ * seven claims, and so did **the way back from the chat** (stage 2): the line
+ * above an open chat's transcript that opens the item's mode on the item —
+ * for every origin, Debate's claim and angle included.
+ *
+ * **Since 2026-10-09 the button stands where Dig deeper was** (plan 261009k):
+ * no entry and no row offers Dig deeper, and that is pinned here in the
+ * rendered reader too. The *Ask in chat* the *Look up a term* box offers is
+ * not touched (tests/glossary-ask-in-chat.test.tsx).
  */
 import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -45,13 +52,15 @@ import {
   type Article,
   type ChatThread,
   type Citations,
+  type Debate,
   type Glossary,
+  type Ideas,
   MAX_ORIGIN_NAME_CHARS,
   type ThreadOrigin,
   type ThreadSummary,
 } from "../src/types.js";
 import type { PublicArticle } from "../src/public-types.js";
-import { askAboutCitedWork, askAboutGlossaryEntry } from "../src/web/chat-handoff.js";
+import { askAboutCitedWork, askAboutGlossaryEntry, askAboutIdea } from "../src/web/chat-handoff.js";
 import { forgetChatDrafts } from "../src/web/chat-draft.js";
 
 const who = vi.hoisted(() => {
@@ -253,6 +262,87 @@ const CITATIONS: Citations = {
   elapsedMs: 1,
 } as Citations;
 
+/* The id alphabet has no `i`, `l`, `o` or `1`, so `?idea=` would refuse an
+   id spelled with one. */
+const IDEA = "spya-dea222";
+const OTHER_IDEA = "spya-dea333";
+const IDEA_NAME = "Experience has a felt quality";
+const IDEA_STATEMENT = "There is something it is like to have an experience.";
+
+const IDEAS: Ideas = {
+  version: "test",
+  generator: "test",
+  slug: SLUG,
+  sourceHash: "hash",
+  ideas: [
+    {
+      id: IDEA,
+      name: IDEA_NAME,
+      provenance: "assumed",
+      statement: IDEA_STATEMENT,
+      occurrences: [
+        { blockId: "spya-bbbbbb", quote: "the felt quality of an experience", reasoning: "It names it.", start: 11 },
+      ],
+    },
+    {
+      id: OTHER_IDEA,
+      name: "Dennett disputes qualia",
+      provenance: "introduced",
+      statement: "The piece sets itself against Dennett.",
+      occurrences: [{ blockId: "spya-bbbbbb", quote: "as Dennett disputes", reasoning: "It says so.", start: 46 }],
+    },
+  ],
+  generatedAt: "2026-09-01T09:00:00.000Z",
+  elapsedMs: 1,
+} as Ideas;
+
+/* One of Debate's claims, from an older search's rows (the legacy list), and
+   the counts that search would have stored. */
+const CLAIM_QUOTE = "Qualia are the felt quality of an experience";
+const DEBATE_COUNTS = {
+  returnedSources: 1,
+  reportedRows: 1,
+  keptRows: 1,
+  omittedOverCap: 0,
+  webSearches: 1,
+  lost: {
+    uncited: 0,
+    selfSource: 0,
+    unverifiedSource: 0,
+    directnessUnverified: 0,
+    sourceIsCopy: 0,
+    claimNotInBlock: 0,
+    unknownBlockId: 0,
+    malformed: 0,
+  },
+};
+const DEBATE: Debate = {
+  version: "debate/3",
+  generator: "model",
+  slug: SLUG,
+  sourceHash: "hash",
+  elapsedMs: 1,
+  searchedAt: "2026-10-03T12:00:00.000Z",
+  direct: { rows: [], counts: DEBATE_COUNTS },
+  claims: {
+    rows: [
+      {
+        id: "spya-c7w2d2",
+        claimQuote: CLAIM_QUOTE,
+        blockId: "spya-bbbbbb",
+        title: "A reply",
+        url: "https://example.org/reply",
+        sourceQuote: "A response to the claim.",
+        relation: "qualifies",
+        lean: "neither",
+        applies: "It qualifies the claim.",
+        bears: "directly",
+      },
+    ],
+    counts: DEBATE_COUNTS,
+  },
+} as Debate;
+
 /** What a visitor is sent: the same lists, in the page's own payload. */
 const ARTICLE: PublicArticle = {
   meta: { slug: SLUG, title: "A piece with terms", byline: "Somebody" },
@@ -265,6 +355,7 @@ const ARTICLE: PublicArticle = {
   sharedBy: "public",
   glossary: { entries: GLOSSARY.entries },
   citations: { citations: CITATIONS.citations, capped: false },
+  ideas: { ideas: IDEAS.ideas },
 } as PublicArticle;
 
 const OWNED: Article = {
@@ -314,6 +405,7 @@ let server: ChatThread[] = [];
 let nextAnswer = "";
 let minted = 0;
 let refuseNextSend = false;
+let citationsMayReply: Promise<void> | null = null;
 /** Ids the fake mints; the id alphabet has no `i`, `l`, `o` or `1`. */
 const mint = (): string => `spya-srv${"abcdefgh"[minted++ % 8]}22`;
 
@@ -396,6 +488,9 @@ function reply(url: string, method: string, body: unknown): Response {
   if (url.startsWith("/api/glossary/"))
     return json({ glossary: GLOSSARY, stale: false, outdated: false, profileChanged: false });
   if (url.startsWith("/api/citations/")) return json({ citations: CITATIONS, stale: false, outdated: false });
+  if (url.startsWith("/api/ideas/"))
+    return json({ ideas: IDEAS, stale: false, outdated: false, profileChanged: false });
+  if (url === `/api/debate/${SLUG}`) return json({ debate: DEBATE, stale: false, outdated: false });
   if (url.startsWith("/api/comments/")) return json({ comments: [] });
   if (url === "/api/jobs") return json({ jobs: [] });
   return json({});
@@ -404,9 +499,8 @@ function reply(url: string, method: string, body: unknown): Response {
 const { App } = await import("../src/web/App.js");
 const { resetForTests: resetExperimental } = await import("../src/web/experimental-store.js");
 const activation = await import("../src/web/activation.js");
-const { ASK_ENTRY_IN_CHAT, ASK_WORK_IN_CHAT, OPEN_ENTRY_CHAT, OPEN_WORK_CHAT } = await import(
-  "../src/web/OriginChat.js"
-);
+const { ASK_ENTRY_IN_CHAT, ASK_IDEA_IN_CHAT, ASK_WORK_IN_CHAT, OPEN_ENTRY_CHAT, OPEN_IDEA_CHAT, OPEN_WORK_CHAT } =
+  await import("../src/web/OriginChat.js");
 
 let host: HTMLDivElement;
 let root: Root;
@@ -422,6 +516,7 @@ beforeEach(() => {
   nextAnswer = "";
   minted = 0;
   refuseNextSend = false;
+  citationsMayReply = null;
   who.set(null);
   activation.resetActivations();
   resetExperimental();
@@ -436,6 +531,9 @@ beforeEach(() => {
       body = String(init?.body);
     }
     trace.push({ url, method, body });
+    if (url.startsWith("/api/citations/") && citationsMayReply !== null) {
+      return citationsMayReply.then(() => reply(url, method, body));
+    }
     return Promise.resolve(reply(url, method, body));
   });
   host = document.createElement("div");
@@ -517,9 +615,10 @@ const term = (id: string): HTMLElement | null =>
 const nameOf = (id: string): string => GLOSSARY.entries.find((e) => e.id === id)?.name ?? "";
 const entryButton = (): HTMLButtonElement | null =>
   host.querySelector<HTMLButtonElement>(".mode-band .gloss-look button.gloss-ask-chat");
-const digDeeper = (): HTMLButtonElement | undefined =>
-  [...host.querySelectorAll<HTMLButtonElement>(".mode-band .gloss-look button.gloss-btn")].find((b) =>
-    (b.textContent ?? "").includes("Dig deeper"),
+/** Any Dig deeper left in the band — none since plan 261009k. */
+const digDeeper = (): HTMLButtonElement[] =>
+  [...host.querySelectorAll<HTMLButtonElement>(".mode-band button")].filter((b) =>
+    /Dig deeper|Digging deeper/.test(b.textContent ?? ""),
   );
 
 describe("Ask in chat on a Glossary entry", () => {
@@ -530,11 +629,9 @@ describe("Ask in chat on a Glossary entry", () => {
     const button = entryButton() as HTMLButtonElement;
     expect(button.textContent?.trim()).toBe("Ask in chat");
     expect(button.getAttribute("aria-label")).toBe(ASK_ENTRY_IN_CHAT);
-    expect(digDeeper(), "beside Dig deeper, which is still there").toBeDefined();
-    /* One size for the pair (plan 261007m S2): both the shared outline/sm
-       Button, so neither is a 28px button beside a 32px one. */
-    expect(button.dataset.size, "Ask in chat at Dig deeper's size").toBe(digDeeper()?.dataset.size);
-    expect(button.dataset.variant).toBe(digDeeper()?.dataset.variant);
+    expect(digDeeper(), "in Dig deeper's place, which is gone (plan 261009k)").toEqual([]);
+    /* The run buttons' size (plan 261007m S2): the shared outline/sm Button. */
+    expect(button.dataset.variant).toBe("outline");
     expect(button.dataset.size).toBe("sm");
     expect(marks(), "no chat was started from it yet").toHaveLength(0);
 
@@ -609,11 +706,11 @@ describe("Ask in chat on a Glossary entry", () => {
     expect(marks(), "the other entry has no chat of its own").toHaveLength(0);
   });
 
-  it("offers it on a term the article never quotes, where Dig deeper cannot run", async () => {
+  it("offers it on a term the article never quotes, which has no passage to anchor to", async () => {
     who.set(OWNER);
     await open(`?mode=glossary&term=${UNQUOTED}`);
     await until(() => entryButton() !== null, "the entry's Ask in chat");
-    expect(digDeeper()?.disabled, "Dig deeper needs a passage").toBe(true);
+    expect(digDeeper()).toEqual([]);
     expect(entryButton()?.disabled, "a chat does not").toBe(false);
     await act(async () => entryButton()?.click());
     await until(() => param("mode") === "chat" && composer() !== null, "Chat");
@@ -670,11 +767,10 @@ describe("Ask in chat on a cited work", () => {
     const button = workButton(WORK) as HTMLButtonElement;
     expect(button.textContent?.trim()).toBe("Ask in chat");
     expect(button.getAttribute("aria-label")).toBe(ASK_WORK_IN_CHAT);
-    expect(workRow(WORK)?.querySelector(".cite-investigate"), "beside Dig deeper, which is still there").not.toBeNull();
-    const dig = workRow(WORK)?.querySelector<HTMLButtonElement>(".cite-investigate");
-    /* The same pair, the same size as Glossary's (plan 261007m S2). */
-    expect(button.dataset.size, "Ask in chat at Dig deeper's size").toBe(dig?.dataset.size);
-    expect(button.dataset.variant).toBe(dig?.dataset.variant);
+    expect(workRow(WORK)?.querySelector(".cite-investigate"), "in Dig deeper's place, which is gone").toBeNull();
+    expect(digDeeper()).toEqual([]);
+    /* The same size as Glossary's (plan 261007m S2). */
+    expect(button.dataset.variant).toBe("outline");
     expect(button.dataset.size).toBe("sm");
     expect(marks()).toHaveLength(0);
 
@@ -762,14 +858,14 @@ describe("Ask in chat on a cited work", () => {
   });
 });
 
-describe.each(["glossary", "citations"] as const)("a %s entry's chat across visits", (mode) => {
-  const itemId = mode === "glossary" ? QUOTED : WORK;
-  const quote = mode === "glossary" ? "qualia" : WORK_TITLE;
+describe.each(["glossary", "citations", "ideas"] as const)("a %s entry's chat across visits", (mode) => {
+  const itemId = { glossary: QUOTED, citations: WORK, ideas: IDEA }[mode];
+  const quote = { glossary: "qualia", citations: WORK_TITLE, ideas: IDEA_NAME }[mode];
   const origin = { mode, itemId, quote };
-  const search = `?mode=${mode}${mode === "glossary" ? `&term=${QUOTED}` : ""}`;
-  const button = () => mode === "glossary" ? entryButton() : workButton(WORK);
+  const search = `?mode=${mode}${{ glossary: `&term=${QUOTED}`, citations: "", ideas: `&idea=${IDEA}` }[mode]}`;
+  const button = () => ({ glossary: entryButton, citations: () => workButton(WORK), ideas: ideaButton })[mode]();
 
-  async function visit(next: "chat" | "glossary" | "citations"): Promise<void> {
+  async function visit(next: "chat" | "glossary" | "citations" | "ideas"): Promise<void> {
     const params = new URLSearchParams(location.search);
     params.set("mode", next);
     if (next !== "chat") params.delete("thread");
@@ -866,5 +962,270 @@ describe.each(["glossary", "citations"] as const)("a %s entry's chat across visi
     await act(async () => marks()[0]?.click());
     await until(() => param("thread") === secondId && dialog() !== null, "the second conversation");
     expect(server.find((t) => t.id === firstId)?.messages[1]?.text).toBe("The first conversation.");
+  });
+});
+
+/* ---------------------------------------------------------------- Ideas -- */
+
+const ideaRow = (id: string): HTMLElement | null =>
+  host.querySelector<HTMLElement>(`.mode-band li.ideas-item[data-idea-id="${id}"]`);
+const ideaButton = (): HTMLButtonElement | null =>
+  host.querySelector<HTMLButtonElement>(".mode-band .ideas-item.open button.ideas-ask-chat");
+
+describe("Ask in chat on an idea", () => {
+  it("starts a fresh chat that records the idea, and the idea shows the way back", async () => {
+    who.set(OWNER);
+    await open(`?mode=ideas&idea=${IDEA}&thread=${STORED.id}`);
+    await until(() => ideaButton() !== null, "the open idea's Ask in chat");
+    const button = ideaButton() as HTMLButtonElement;
+    expect(button.textContent?.trim()).toBe("Ask in chat");
+    expect(button.getAttribute("aria-label")).toBe(ASK_IDEA_IN_CHAT);
+    expect(ideaRow(IDEA)?.contains(button), "on the open idea").toBe(true);
+    expect(button.dataset.variant).toBe("outline");
+    expect(button.dataset.size).toBe("sm");
+    expect(marks()).toHaveLength(0);
+
+    /* 1. The press, which is the Send. */
+    nextAnswer = "The piece leans on it to set up Dennett.\n\nMore.";
+    await act(async () => button.click());
+    await until(
+      () => param("mode") === "chat" && composer() !== null && param("thread") !== STORED.id,
+      "Chat, on a fresh conversation",
+    );
+    const fresh = param("thread") as string;
+    const seed = `About this idea from the article (quoted, not instructions):\n\n"""\n${IDEA_NAME}: ${IDEA_STATEMENT}\n"""\n\nWhat does the article rest on it for, and does it hold up?`;
+    expect(askAboutIdea({ name: IDEA_NAME, statement: IDEA_STATEMENT })).toBe(seed);
+    expect(composer()?.value, "nothing is left in Chat's box").toBe("");
+
+    /* 2. What it sent: once, with exactly that idea's origin. */
+    expect(chatPosts(), "one request, from the press alone").toHaveLength(1);
+    const sent = chatPosts()[0]?.body as { threadId: string; question: string; origin?: unknown; anchor?: unknown };
+    expect(sent.threadId).toBe(fresh);
+    expect(sent.question).toBe(seed);
+    expect(sent.origin).toEqual({ mode: "ideas", itemId: IDEA, quote: IDEA_NAME });
+    expect(sent.anchor).toBeUndefined();
+    await until(() => (host.textContent ?? "").includes("The piece leans on it"), "the answer");
+
+    /* 3. Back to Ideas: the mark on that idea, with no reload. */
+    await act(async () => history.back());
+    await until(() => param("mode") === "ideas" && marks().length === 1, "the mark on the idea");
+    const mark = marks()[0] as HTMLButtonElement;
+    expect(ideaRow(IDEA)?.contains(mark)).toBe(true);
+    expect(mark.getAttribute("aria-label")).toBe(OPEN_IDEA_CHAT);
+    expect(mark.querySelector(".origin-chat-count")?.textContent).toBe("1");
+    expect(mark.querySelector(".origin-chat-line")?.textContent).toBe("The piece leans on it to set up Dennett.");
+
+    /* 4. The mark opens the conversation beside Ideas. */
+    await act(async () => mark.click());
+    await until(() => param("thread") === fresh && dialog() !== null, "the conversation beside Ideas");
+    expect(param("mode")).toBe("ideas");
+
+    /* 5. Chat's list says where it was started. */
+    await act(async () => dialog()?.querySelector<HTMLButtonElement>(".chat-dialog-close")?.click());
+    await until(() => param("thread") === null, "the dialog to close");
+    expect(await sourcesInChatsList(2)).toEqual(["Started from an idea"]);
+  });
+
+  it("still marks an idea whose chat was started under an older name, and not the other idea", async () => {
+    who.set(OWNER);
+    server.push(
+      startedFrom("spya-srvz22", { mode: "ideas", itemId: IDEA, quote: "An older name" }, "An older answer."),
+      /* The same id under Glossary is a glossary entry's chat, not this idea's. */
+      startedFrom("spya-srvy22", { mode: "glossary", itemId: OTHER_IDEA, quote: "a term" }, "Not the idea's."),
+    );
+    await open(`?mode=ideas&idea=${IDEA}`);
+    await until(() => marks().length === 1, "the mark");
+    expect(marks()[0]?.querySelector(".origin-chat-line")?.textContent).toBe("An older answer.");
+
+    history.pushState(null, "", `/read/${SLUG}?mode=ideas&idea=${OTHER_IDEA}`);
+    await act(async () => window.dispatchEvent(new PopStateEvent("popstate")));
+    await until(() => ideaRow(OTHER_IDEA)?.querySelector(".ideas-ask-chat") != null, "the other idea");
+    expect(marks(), "the other idea has no chat of its own").toHaveLength(0);
+  });
+
+  it("draws neither the button nor the mark for a visitor", async () => {
+    await open(`?mode=ideas&idea=${IDEA}`);
+    await until(() => (host.querySelector(".mode-band")?.textContent ?? "").includes(IDEA_STATEMENT), "the visitor's open idea");
+    expect(host.querySelector(".ideas-ask-chat")).toBeNull();
+    expect(host.querySelector(".origin-chat")).toBeNull();
+    expect(chatPosts()).toHaveLength(0);
+  });
+});
+
+/* ------------------------------------------------------- the way back -- */
+
+/**
+ * **The way back from a chat to the item it was started from** (plan 261009k,
+ * stage 2): a line above the open chat's transcript, and a press on it that
+ * opens the item's mode and brings the item's row into view. jsdom has no
+ * `scrollIntoView`, so it is put on the prototype for each test and records
+ * the elements it was called on.
+ */
+describe("the way back from a chat to its item", () => {
+  let scrolled: Element[] = [];
+  beforeEach(() => {
+    scrolled = [];
+    (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView = function into(this: Element) {
+      scrolled.push(this);
+    };
+  });
+  afterEach(() => {
+    delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+  });
+  /** Only `row` was scrolled to: the same element, not a look-alike. Maybe
+      twice, since StrictMode runs a mount's effect twice in tests. */
+  function expectLandedOn(row: Element | null | undefined): void {
+    expect(row).toBeTruthy();
+    expect(scrolled.length).toBeGreaterThan(0);
+    for (const el of scrolled) expect(el === row, "scrolled to another element").toBe(true);
+  }
+
+  const backLine = (): HTMLButtonElement | null =>
+    host.querySelector<HTMLButtonElement>(".mode-band button.chat-origin-back");
+  const CHAT = "spya-srvz22";
+
+  /** Open Chat on a stored chat started from `origin`, and wait for its line. */
+  async function openChatFrom(origin: ThreadOrigin, extra = ""): Promise<HTMLButtonElement> {
+    who.set(OWNER);
+    server.push(startedFrom(CHAT, origin, "An answer."));
+    await open(`?mode=chat&thread=${CHAT}${extra}`);
+    await until(() => backLine() !== null, "the way back");
+    return backLine() as HTMLButtonElement;
+  }
+
+  it("is not drawn for a chat that was not started from an item", async () => {
+    who.set(OWNER);
+    await open(`?mode=chat&thread=${STORED.id}`);
+    await until(() => (host.textContent ?? "").includes("An earlier answer"), "the plain chat");
+    expect(backLine()).toBeNull();
+  });
+
+  it("goes back to a glossary entry: the entry selected and its row brought into view", async () => {
+    const line = await openChatFrom({ mode: "glossary", itemId: QUOTED, quote: "qualia" });
+    expect(line.textContent).toBe("Back to “qualia” in Glossary");
+    expect(line.getAttribute("aria-label")).toBe("Back to “qualia” in Glossary");
+    expect(line.querySelector("svg"), "wearing the mode's icon").not.toBeNull();
+    await act(async () => line.click());
+    await until(() => param("mode") === "glossary" && scrolled.length > 0, "Glossary, on the entry");
+    expect(param("term")).toBe(QUOTED);
+    expect(param("thread"), "the chat does not float over the item it went back to").toBeNull();
+    expectLandedOn(term(QUOTED));
+    expect(entryButton(), "the entry is open").not.toBeNull();
+    /* One Back returns to the chat. */
+    await act(async () => history.back());
+    await until(() => param("mode") === "chat" && param("thread") === CHAT, "the chat again");
+  });
+
+  it("goes back to a cited work: its row brought into view", async () => {
+    const line = await openChatFrom({ mode: "citations", itemId: WORK, quote: WORK_TITLE });
+    expect(line.textContent).toBe(`Back to “${WORK_TITLE}” in Citations`);
+    await act(async () => line.click());
+    await until(() => param("mode") === "citations" && scrolled.length > 0, "Citations, on the row");
+    expectLandedOn(workRow(WORK));
+    expect(param("thread"), "the chat does not float over the item it went back to").toBeNull();
+    await act(async () => history.back());
+    await until(() => param("mode") === "chat" && param("thread") === CHAT, "one Back to the chat");
+  });
+
+  it("does not replay an unfinished focus when Citations is visited later", async () => {
+    let letCitationsReply!: () => void;
+    citationsMayReply = new Promise<void>((resolve) => {
+      letCitationsReply = resolve;
+    });
+    const line = await openChatFrom({ mode: "citations", itemId: WORK, quote: WORK_TITLE });
+    await act(async () => line.click());
+    await until(() => param("mode") === "citations", "Citations, while its list is loading");
+    expect(scrolled, "there is no row to land on yet").toEqual([]);
+
+    /* Leave before the row exists, then let the opening read finish while the
+       band is unmounted. The abandoned request belongs to that first visit. */
+    await act(async () => history.back());
+    await until(() => param("mode") === "chat" && param("thread") === CHAT, "the chat again");
+    await act(async () => {
+      letCitationsReply();
+      await citationsMayReply;
+    });
+    await settle();
+
+    history.pushState(null, "", `/read/${SLUG}?mode=citations`);
+    await act(async () => window.dispatchEvent(new PopStateEvent("popstate")));
+    await until(() => workRow(WORK) !== null, "a later ordinary visit to Citations");
+    expect(scrolled, "the abandoned focus is not replayed on the later visit").toEqual([]);
+  });
+
+  it("goes back to an idea: selected, and its row brought into view", async () => {
+    const line = await openChatFrom({ mode: "ideas", itemId: IDEA, quote: IDEA_NAME });
+    expect(line.textContent).toBe(`Back to “${IDEA_NAME}” in Ideas`);
+    await act(async () => line.click());
+    await until(() => param("mode") === "ideas" && scrolled.length > 0, "Ideas, on the idea");
+    expect(param("idea")).toBe(IDEA);
+    expect(param("thread"), "the chat does not float over the item it went back to").toBeNull();
+    expectLandedOn(ideaRow(IDEA));
+    expect(ideaRow(IDEA)?.classList.contains("open"), "the idea is open").toBe(true);
+    await act(async () => history.back());
+    await until(() => param("mode") === "chat" && param("thread") === CHAT, "one Back to the chat");
+  });
+
+  it("goes back to one of Debate's claims: Claims open, its filters cleared, the claim in view and unfolded", async () => {
+    const line = await openChatFrom(
+      { mode: "debate", blockId: "spya-bbbbbb", quote: CLAIM_QUOTE },
+      "&bears=directly&debatethread=key",
+    );
+    expect(line.textContent).toBe(`Back to “${CLAIM_QUOTE}” in Debate`);
+    await act(async () => line.click());
+    await until(() => param("mode") === "debate" && scrolled.length > 0, "Claims, on the claim");
+    expect(param("debate")).toBe("claims");
+    expect(param("bears"), "a filter that could hide the claim is cleared").toBeNull();
+    expect(param("debatethread")).toBeNull();
+    expect(param("thread"), "the chat does not float over the item it went back to").toBeNull();
+    const claim = host.querySelector<HTMLDetailsElement>(".mode-band details.dbt-claim-group");
+    expectLandedOn(claim);
+    expect(claim?.open).toBe(true);
+    await act(async () => history.back());
+    await until(() => param("mode") === "chat" && param("thread") === CHAT, "one Back to the chat");
+    expect(param("bears"), "and Back puts the address back as it was").toBe("directly");
+  });
+
+  it("goes back to an angle in Debate: Reception, where the angles are", async () => {
+    const line = await openChatFrom({ mode: "debate", lens: "how it relates to Nagel" });
+    expect(line.textContent).toBe("Back to your angle in Debate");
+    await act(async () => line.click());
+    await until(() => param("mode") === "debate", "Debate");
+    expect(param("debate"), "Reception is the default, omitted").toBeNull();
+    expect(param("thread"), "the chat does not float over the item it went back to").toBeNull();
+    expect(scrolled).toEqual([]);
+  });
+
+  it("opens the mode on its list when the item is gone, and scrolls nothing", async () => {
+    const line = await openChatFrom({ mode: "ideas", itemId: "spya-dea999", quote: "A paraphrased idea" });
+    await act(async () => line.click());
+    await until(() => param("mode") === "ideas" && ideaRow(IDEA) !== null, "Ideas, on its list");
+    await settle();
+    expect(scrolled).toEqual([]);
+    expect(host.querySelector(".mode-band .ideas-item.open"), "nothing is open").toBeNull();
+    expect(ideaRow(OTHER_IDEA)).not.toBeNull();
+  });
+
+  it("opens Glossary on its list when the entry is gone", async () => {
+    const line = await openChatFrom({ mode: "glossary", itemId: "spya-ttm999", quote: "a renamed term" });
+    await act(async () => line.click());
+    await until(() => param("mode") === "glossary" && term(QUOTED) !== null, "Glossary, on its list");
+    await settle();
+    expect(scrolled).toEqual([]);
+  });
+
+  it("is there for a fresh chat whose origin the server has not stored yet", async () => {
+    who.set(OWNER);
+    await open(`?mode=ideas&idea=${IDEA}`);
+    await until(() => ideaButton() !== null, "the open idea's Ask in chat");
+    refuseNextSend = true;
+    await act(async () => ideaButton()?.click());
+    await until(() => (host.textContent ?? "").includes("Send refused for this test"), "the refusal");
+    expect(server.filter((t) => t.origin?.mode === "ideas"), "nothing stored").toHaveLength(0);
+    await until(() => backLine() !== null, "the way back, from the pending origin");
+    expect(backLine()?.textContent).toBe(`Back to “${IDEA_NAME}” in Ideas`);
+    await act(async () => backLine()?.click());
+    await until(() => param("mode") === "ideas" && scrolled.length > 0, "Ideas, on the idea");
+    expectLandedOn(ideaRow(IDEA));
   });
 });

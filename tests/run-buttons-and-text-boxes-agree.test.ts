@@ -35,14 +35,13 @@ const RUN_BUTTONS = [
   { file: "src/web/CandidatesPanel.tsx", hook: "cnd-start-btn", size: "sm" },
   { file: "src/web/CandidatesPanel.tsx", hook: "cnd-send", size: "sm" },
   { file: "src/web/SearchPanel.tsx", hook: "srch-go", size: "sm" },
-  /* Glossary's *Look up*, an entry's *Dig deeper*, and *Find terms* when it is
-     drawn without `JobProgress` (GPT Sol's R10). */
+  /* Glossary's *Look up*, and *Find terms* when it is drawn without
+     `JobProgress` (GPT Sol's R10). An entry's *Dig deeper* (`gloss-dig`) and
+     Citations' (`cite-investigate`) were here until plan 261009k removed both
+     buttons; *Ask in chat* in their place is `AskInChatButton`, the same `sm`
+     Button (OriginChat.tsx). */
   { file: "src/web/GlossaryPanel.tsx", hook: "gloss-ask-go", size: "sm" },
-  { file: "src/web/GlossaryPanel.tsx", hook: "gloss-dig", size: "sm" },
   { file: "src/web/GlossaryPanel.tsx", hook: "gloss-more-go", size: "sm" },
-  /* Citations' *Dig deeper* is the same `sm` button as *Ask in chat* beside it,
-     one size in Glossary and Citations (plan 261007m S2, qi-h2cneb4y). */
-  { file: "src/web/CitationInvestigation.tsx", hook: "cite-investigate", size: "sm" },
 ] as const;
 
 /** The whole opening tag that starts at `start`, braces and quotes respected. */

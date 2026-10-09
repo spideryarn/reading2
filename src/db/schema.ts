@@ -4407,7 +4407,7 @@ export const chatThreads = spideryarn.table(
        article's and the quote is not empty. */
     check(
       "chat_threads_origin_mode",
-      sql`${t.originMode} is null or ${t.originMode} in ('debate','summary','glossary','citations')`,
+      sql`${t.originMode} is null or ${t.originMode} in ('debate','summary','glossary','citations','ideas')`,
     ),
     /* No mode, no origin: the other four columns mean nothing without it. */
     check(
@@ -4422,15 +4422,24 @@ export const chatThreads = spideryarn.table(
       "chat_threads_origin_debate",
       sql`${t.originMode} is distinct from 'debate' or (${t.originItemId} is null and ((${t.originBlockId} is not null and ${t.originQuote} is not null and ${t.originLens} is null) or (${t.originBlockId} is null and ${t.originQuote} is null and ${t.originLens} is not null)))`,
     ),
-    /* A glossary entry or a cited work is an id and a snapshot of its name,
-       with no block and no lens (plan 261006d, D2). Spelled null-safe: a row
-       with no mode, or another mode, passes without the last arm being read. */
+    /* A glossary entry, a cited work or an idea is an id and a snapshot of
+       its name, with no block and no lens (plan 261006d, D2; the idea is plan
+       261009k). Spelled null-safe: a row with no mode, or another mode, passes
+       without the last arm being read. */
     check(
       "chat_threads_origin_item",
-      sql`${t.originMode} is null or ${t.originMode} not in ('glossary','citations') or (${t.originItemId} is not null and ${t.originQuote} is not null and ${t.originBlockId} is null and ${t.originLens} is null)`,
+      sql`${t.originMode} is null or ${t.originMode} not in ('glossary','citations','ideas') or (${t.originItemId} is not null and ${t.originQuote} is not null and ${t.originBlockId} is null and ${t.originLens} is null)`,
     ),
-    /* Only Debate takes a lens. `summary`, which the list above reserves, has
-       no shape of its own yet, and must not get one by accident. */
+    /* `summary`, which the list above reserves, has no shape of its own yet,
+       so it carries none of the shape columns and cannot get one by accident
+       before it is built (plan 261009k, GPT Sol's F8). Null-safe, like the
+       item check: any other mode, or none, passes without the last arm. The
+       lens is the next check's. */
+    check(
+      "chat_threads_origin_summary",
+      sql`${t.originMode} is distinct from 'summary' or (${t.originItemId} is null and ${t.originBlockId} is null and ${t.originQuote} is null)`,
+    ),
+    /* Only Debate takes a lens. */
     check(
       "chat_threads_origin_lens_debate_only",
       sql`${t.originLens} is null or ${t.originMode} = 'debate'`,

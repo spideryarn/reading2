@@ -1,14 +1,16 @@
 /**
  * **A chat started from an item in a mode: the button that starts one, and
- * the mark that reopens it.** Shared by Debate's claims, Glossary's entries
- * and Citations' rows, so the three are one design and not three copies.
+ * the mark that reopens it.** Shared by Debate's claims, Glossary's entries,
+ * Citations' rows and Ideas' rows (since plan 261009k), so they are one
+ * design and not four copies.
  *
  * - `OriginChatMark` is the way back: the chat's count of questions and how
  *   its latest answer begins. A press opens that chat beside the mode. It was
  *   drawn inline in DebatePanel.tsx § `ClaimsList` until 2026-10-06
  *   (plan docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md, D4).
  * - `AskInChatButton` is Glossary's and Citations' *Ask in chat*, beside Dig
- *   deeper (plan docs/plans/261006d-glossary-and-citations-ask-in-chat-with-origin.md, D5).
+ *   deeper (plan docs/plans/261006d-glossary-and-citations-ask-in-chat-with-origin.md, D5)
+ *   until 2026-10-09, and in its place since (plan 261009k).
  *   Debate's claim has its own icon-only button on the claim's heading.
  *
  * **Nothing is stored on the item's side.** A caller finds its chat by
@@ -24,7 +26,7 @@ import { MessagesSquare } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
-import type { CitedWork, GlossaryEntry, ThreadSummary } from "../types.js";
+import type { CitedWork, GlossaryEntry, Idea, ThreadSummary } from "../types.js";
 import { TipNote, Tooltip } from "./Tooltip.js";
 
 /**
@@ -44,15 +46,19 @@ export interface ItemChats<Item> {
 export type GlossaryEntryChats = ItemChats<Pick<GlossaryEntry, "id" | "name">>;
 /** What Citations' rows are handed: `onAsk` takes the work's id and what names it. */
 export type CitedWorkChats = ItemChats<Pick<CitedWork, "id" | "title" | "authors" | "year">>;
+/** What Ideas' rows are handed: `onAsk` takes the idea's id, its name and its statement (plan 261009k, stage 3). */
+export type IdeaChats = ItemChats<Pick<Idea, "id" | "name" | "statement">>;
 
-/** The words on Glossary's and Citations' button. */
+/** The words on Glossary's, Citations' and Ideas' button. */
 export const ASK_IN_CHAT = "Ask in chat";
 /** The button's accessible name on a Glossary entry, and on a cited work. */
 export const ASK_ENTRY_IN_CHAT = "Ask about this term in chat";
 export const ASK_WORK_IN_CHAT = "Ask about this work in chat";
+export const ASK_IDEA_IN_CHAT = "Ask about this idea in chat";
 /** The mark's accessible name on each. Debate's is `DEBATE_OPEN_CLAIM_CHAT`. */
 export const OPEN_ENTRY_CHAT = "Open the chat about this term";
 export const OPEN_WORK_CHAT = "Open the chat about this work";
+export const OPEN_IDEA_CHAT = "Open the chat about this idea";
 
 /** What the button's card says under its name: where the press goes, and that the press is the Send (since 2026-10-06, plan 261006j). */
 export const ASK_IN_CHAT_SAYS = "Opens a new chat and asks a question about it straight away.";
@@ -120,9 +126,10 @@ export function OriginChatMark({
 }
 
 /**
- * **Glossary's and Citations' *Ask in chat*.** The neighbour of Dig deeper,
- * and drawn as it is: the shared outline `Button` at `sm`, with the caller's
- * `.gloss-btn` hook, an icon and a label. Chat's icon from the bar, because
+ * **Glossary's and Citations' *Ask in chat*.** Where Dig deeper was (plan
+ * 261009k), and drawn as it was: the shared outline `Button` at `sm`, with the
+ * caller's `.gloss-btn` hook, an icon and a label. The prose hover cards draw
+ * their own smaller button with the same words (ProseHoverCard.tsx). Chat's icon from the bar, because
  * the press takes the reader into Chat.
  *
  * Never disabled: a chat needs no passage and no finished lookup. **The
@@ -145,9 +152,10 @@ export function AskInChatButton({
 }) {
   return (
     <Tooltip placement="bottom" content={<TipNote>{`${label}. ${ASK_IN_CHAT_SAYS}`}</TipNote>}>
-      {/* **The run buttons' Button, at their size** (plan 261007m S2): it sits
-          beside Dig deeper in both callers, which is `outline`/`sm`, and a
-          28px `.gloss-btn` beside a 32px Button read as two kinds of thing. */}
+      {/* **The run buttons' Button, at their size** (plan 261007m S2): it sat
+          beside Dig deeper in both callers until 2026-10-09, which is
+          `outline`/`sm`, and a 28px `.gloss-btn` beside a 32px Button read as
+          two kinds of thing. It is still the run buttons' size. */}
       <Button type="button" variant="outline" size="sm" className={className} aria-label={label} onClick={onAsk}>
         <MessagesSquare size={iconSize} aria-hidden="true" />
         {ASK_IN_CHAT}

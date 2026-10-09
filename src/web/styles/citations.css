@@ -193,21 +193,18 @@
   font-size: 0.72rem;
 }
 
-/* ---- *Investigate* ---------------------------------------------------------
-   Plan 260930a; CitationInvestigation.tsx. The button sits beside *Look it up*
-   and is the same quiet `.gloss-btn`. Under the row: the wait, the words as
-   they arrive (plain text, paragraphs by blank lines, as the glossary's lookup
-   draws its draft — `white-space: pre-wrap`), the failure in the band's error
-   colour, or the kept answer — folded to its first part, three lines, so the
-   list stays a list. Labels reuse `.cite-lookup-label`. Every long thing wraps
-   anywhere: a source's title or host at 288px must not push the band wide. */
-.cite-investigate { font-size: 0.74rem; }
-/* *Ask in chat*, beside it and the same size (OriginChat.tsx; plan 261006d). */
+/* ---- a kept *Dig deeper* (was *Investigate*) answer ------------------------
+   Plan 260930a; CitationInvestigation.tsx. The row's button, the wait, the
+   words arriving and the failure went with plan 261009k (2026-10-09); what is
+   left is the kept answer — folded to its first part, three lines, so the
+   list stays a list (plain text, paragraphs by blank lines —
+   `white-space: pre-wrap`). Labels reuse `.cite-lookup-label`. Every long
+   thing wraps anywhere: a source's title or host at 288px must not push the
+   band wide. */
+/* *Ask in chat*, where Dig deeper was (OriginChat.tsx; plans 261006d, 261009k). */
 .cite-ask-chat { font-size: 0.74rem; }
 
 .cite-inv { margin: 0.3rem 0 0; }
-.cite-inv-wait,
-.cite-inv-previous,
 .cite-inv-prov,
 .cite-inv-offer,
 .cite-inv-foot {
@@ -217,7 +214,6 @@
   font-size: 0.77rem;
   line-height: 1.35;
 }
-.cite-inv-draft,
 .cite-inv-text {
   margin: 0.1rem 0 0;
   color: var(--ink-soft);
@@ -244,17 +240,9 @@
   line-clamp: 3;
   overflow: hidden;
 }
-.cite-inv-error {
-  margin: 0.2rem 0 0;
-  color: var(--danger);
-  font-size: 0.8rem;
-  line-height: 1.4;
-}
-
-/* The two text buttons: *Read all* and *Investigate again*. Link-quiet, in
-   the line's ink, underlined so they read as pressable. */
-.cite-inv-toggle,
-.cite-inv-again {
+/* The text button: *Read all*. Link-quiet, in the line's ink, underlined so
+   it reads as pressable. (*Dig deeper again* shared it until plan 261009k.) */
+.cite-inv-toggle {
   display: inline-flex;
   align-items: center;
   gap: 0.2rem;
@@ -271,12 +259,8 @@
   cursor: pointer;
 }
 .cite-inv-toggle { margin-top: 0.2rem; }
-.cite-inv-toggle:hover,
-.cite-inv-again:hover { color: var(--ink); }
-.cite-inv-toggle:focus-visible,
-.cite-inv-again:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
-.cite-inv-again[aria-disabled="true"],
-.cite-investigate[aria-disabled="true"] { opacity: 0.45; cursor: default; }
+.cite-inv-toggle:hover { color: var(--ink); }
+.cite-inv-toggle:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 
 .cite-inv-sources {
   margin: 0.25rem 0 0;
@@ -296,12 +280,10 @@
 }
 .cite-inv-source-title { color: var(--ink-faint); }
 
-/* A finger gets the house control height on every *Investigate* control —
+/* A finger gets the house control height on a row's controls —
    docs/project/controls.md § The numbers; `pointer: coarse` for the reason
    narrow-window.css gives. */
 @media (pointer: coarse) {
-  .cite-investigate,
   .cite-ask-chat,
-  .cite-inv-toggle,
-  .cite-inv-again { min-height: var(--control-h); }
+  .cite-inv-toggle { min-height: var(--control-h); }
 }

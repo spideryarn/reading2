@@ -301,6 +301,7 @@ function SkimOuter({ show }: { show: boolean }) {
         tree: ARTICLE.tree,
         quotes,
         glossary,
+        onAskTerm: noop,
         onOpen: noop,
         canOpen: () => false,
         arrival: { stop: null, open: false },

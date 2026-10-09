@@ -12,7 +12,8 @@
  *    that is on shows it;
  *  - **an answer to the create that did not come back is never sent again by
  *    itself** (GPT Sol's stage 2 plan review): a second create rotates the
- *    key. The state is *unknown*, and what leaves it is a read;
+ *    key. The state is *unknown*, and only a read or the reader's idempotent
+ *    *Turn off* leaves it;
  *  - **a retired controller is dead** (F1): a reply that arrives for one
  *    changes nothing, and the key it held is gone.
  */
@@ -340,6 +341,174 @@ describe("an answer to the create that did not come back", () => {
     await reattach(link);
     expect(link.get()).toEqual({ kind: "on", link: { key: KEY, since: AT } });
     expect(made()).toBe(1);
+  });
+});
+
+/**
+ * Plan 261009l. A link that may be live must be possible to turn off from
+ * the page that made it, even while every read fails: the turn-off is
+ * idempotent on the server, so sending it from `unknown` is safe.
+ */
+describe("*Turn off* from not knowing", () => {
+  /** A create whose reply was lost, and reads that now fail too. */
+  async function lostCreate(...writes: Write[]) {
+    const s = scripted("none", "none", new TypeError("Failed to fetch"), ...writes);
+    const link = await offered(s.io);
+    confirm(link);
+    await vi.runAllTimersAsync();
+    expect(link.get()).toEqual({ kind: "unknown", because: "write", checking: false });
+    s.now.read = new Error("offline");
+    link.recheck();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(link.get()).toEqual({ kind: "unknown", because: "write", checking: false });
+    return { ...s, link };
+  }
+
+  it("sends one delete and is off, with no second create", async () => {
+    const { link, calls, made } = await lostCreate(OFF);
+    const before = calls.length;
+    link.turnOff();
+    expect(link.get()).toEqual({ kind: "saving", to: "off" });
+    await vi.runAllTimersAsync();
+    expect(link.get()).toEqual({ kind: "off" });
+    expect(calls.slice(before)).toEqual(["remove"]);
+    expect(made()).toBe(1);
+  });
+
+  it("works the same after a turn-off whose reply was lost", async () => {
+    const { io, calls } = scripted("none", ON, new TypeError("Failed to fetch"), OFF);
+    const link = await offered(io);
+    link.turnOff();
+    await vi.runAllTimersAsync();
+    expect(link.get()).toEqual({ kind: "unknown", because: "write", checking: false });
+    link.turnOff();
+    await vi.runAllTimersAsync();
+    expect(link.get()).toEqual({ kind: "off" });
+    expect(calls.filter((c) => c === "remove")).toHaveLength(2);
+  });
+
+  it("works after a failed read on coming back over a link that was on", async () => {
+    const { io, now } = scripted("none", ON, OFF);
+    const link = await offered(io);
+    now.read = new Error("offline");
+    await reattach(link);
+    expect(link.get()).toEqual({ kind: "unknown", because: "read", checking: false });
+    link.turnOff();
+    await vi.runAllTimersAsync();
+    expect(link.get()).toEqual({ kind: "off" });
+  });
+
+  it("a 404 is off: the reader owns no row here, and the key lives on the row", async () => {
+    const { link } = await lostCreate(refusal(404, "No article artefacts"));
+    link.turnOff();
+    await vi.runAllTimersAsync();
+    expect(link.get()).toEqual({ kind: "off" });
+  });
+
+  it("a 404 from a link drawn as on is off too: a key on screen that opens nothing is not shown", async () => {
+    const { io } = scripted("none", ON, refusal(404, "No article artefacts"));
+    const link = await offered(io);
+    link.turnOff();
+    await vi.runAllTimersAsync();
+    expect(link.get()).toEqual({ kind: "off" });
+  });
+
+  it.each([
+    ["no answer", new TypeError("Failed to fetch") as Write],
+    ["a server error", refusal(500, "boom") as Write],
+    ["a success that cannot be read", null as Write],
+    ["a refusal, which wrote nothing", refusal(403, "Not yours") as Write],
+    ["signed out", refusal(401, "Sign in") as Write],
+  ])("after %s it still does not know, and offers nothing to create", async (_name, answer) => {
+    const { link, calls, made } = await lostCreate(answer);
+    const before = calls.length;
+    link.turnOff();
+    expect(link.get()).toEqual({ kind: "saving", to: "off" });
+    await vi.runAllTimersAsync();
+    expect(link.get()).toEqual({ kind: "unknown", because: "write", checking: false });
+    expect(calls.slice(before)).toEqual(["remove"]);
+    link.open();
+    expect(link.get().kind).toBe("unknown");
+    expect(made()).toBe(1);
+  });
+
+  it("a refusal after a failed attachment read keeps that reason and does not offer a create", async () => {
+    const { io, now, calls, made } = scripted("none", ON, refusal(403, "Not yours"));
+    const link = await offered(io);
+    now.read = new Error("offline");
+    await reattach(link);
+    expect(link.get()).toEqual({ kind: "unknown", because: "read", checking: false });
+    const before = calls.length;
+    link.turnOff();
+    expect(link.get()).toEqual({ kind: "saving", to: "off" });
+    await vi.runAllTimersAsync();
+    expect(link.get()).toEqual({ kind: "unknown", because: "read", checking: false });
+    expect(calls.slice(before)).toEqual(["remove"]);
+    link.open();
+    expect(link.get()).toEqual({ kind: "unknown", because: "read", checking: false });
+    expect(made()).toBe(0);
+  });
+
+  it("pressed while *Check again*'s read is out, the read's late answer does not overwrite it", async () => {
+    let readBack: (read: ShareLinkState) => void = () => {};
+    const { link, io } = await lostCreate(OFF);
+    io.read = () => new Promise((resolve) => (readBack = resolve));
+    link.recheck();
+    expect(link.get()).toEqual({ kind: "unknown", because: "write", checking: true });
+    link.turnOff();
+    await vi.runAllTimersAsync();
+    expect(link.get()).toEqual({ kind: "off" });
+    readBack(ON);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(link.get()).toEqual({ kind: "off" });
+  });
+
+  it.each([
+    ["before", true],
+    ["after", false],
+  ])("a reattachment's read answering %s the turn-off does not overwrite it", async (_when, readFirst) => {
+    let readBack: (read: ShareLinkState) => void = () => {};
+    let removed: (state: ShareLinkState) => void = () => {};
+    const { link, io, made } = await lostCreate();
+    io.read = () => new Promise((resolve) => (readBack = resolve));
+    io.remove = () => new Promise((resolve) => (removed = resolve));
+    link.pause();
+    link.resume();
+    await vi.advanceTimersByTimeAsync(0);
+    link.turnOff();
+    if (readFirst) {
+      readBack(ON);
+      await vi.advanceTimersByTimeAsync(0);
+      removed(OFF);
+    } else {
+      removed(OFF);
+      await vi.advanceTimersByTimeAsync(0);
+      readBack(ON);
+    }
+    await vi.runAllTimersAsync();
+    expect(link.get()).toEqual({ kind: "off" });
+    expect(made()).toBe(1);
+  });
+
+  it("gives way if the reattachment finds the article published while the turn-off is out", async () => {
+    let removed: (state: ShareLinkState) => void = () => {};
+    let removes = 0;
+    const { link, io, now } = await lostCreate();
+    io.remove = () => {
+      removes += 1;
+      return new Promise((resolve) => (removed = resolve));
+    };
+    now.probe = "article";
+    link.turnOff();
+    expect(link.get()).toEqual({ kind: "saving", to: "off" });
+    link.pause();
+    link.resume();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(link.get()).toEqual({ kind: "adopted" });
+    expect(removes).toBe(1);
+    removed(OFF);
+    await vi.runAllTimersAsync();
+    expect(link.get()).toEqual({ kind: "adopted" });
   });
 });
 

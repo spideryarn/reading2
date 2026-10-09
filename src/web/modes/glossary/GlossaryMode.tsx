@@ -28,6 +28,7 @@ import {
   visibleEntries,
 } from "../../GlossaryPanel.js";
 import type { GlossaryEntryChats } from "../../OriginChat.js";
+import type { ItemFocus } from "../../item-focus.js";
 
 /**
  * The glossary's jobs and verbs. The read itself belongs to `Reader`.
@@ -64,6 +65,8 @@ export function GlossaryBand({
   onSelected,
   onAskChat,
   chats,
+  focus,
+  onFocusTaken,
 }: {
   slug: string;
   /**
@@ -98,6 +101,9 @@ export function GlossaryBand({
    * Plan 261006d.
    */
   chats?: GlossaryEntryChats;
+  /** One entry to scroll into view, once: a chat's way back (GlossaryPanel § Props). */
+  focus?: ItemFocus | null | undefined;
+  onFocusTaken?: ((focus: ItemFocus) => void) | undefined;
 }) {
   useRenderCount("GlossaryBand");
   const glossary = useGlossary(slug, read);
@@ -122,6 +128,8 @@ export function GlossaryBand({
       {...band}
       onJump={onJump}
       onAskChat={onAskChat}
+      focus={focus}
+      onFocusTaken={onFocusTaken}
     />
   );
 }

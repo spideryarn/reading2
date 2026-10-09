@@ -133,9 +133,10 @@ v2, the scrapbook, is built on top of that:
   - Hover or focus opens it for a mouse or a keyboard. A tap opens it for a finger and it stays
     until a tap elsewhere. A mouse click does not pin it. A tapped card is the panel's one open
     snippet, so opening an idea closes it and so does stepping to another stop.
-  - The owner's card has *Dig deeper*, *Hide* and *Open glossary*. A visitor's has *Open glossary*
-    alone. A reader whose Glossary control is hidden gets neither *Open glossary* nor *Dig deeper*,
-    because a dig's answer is drawn in Glossary.
+  - The owner's card has *Ask in chat*, *Hide* and *Open glossary* (*Dig deeper* where *Ask in chat*
+    is, until 2026-10-09, plan 261009k). A visitor's has *Open glossary* alone. A reader whose
+    Glossary control is hidden gets no *Open glossary* (and, until then, no *Dig deeper*, because
+    a dig's answer was drawn in Glossary); *Ask in chat* goes to Chat, so it stays.
   - The card scrolls inside half the window's height, so the buttons under a long entry can be
     reached on a short screen (`.skim-term-card` in
     [`skim.css`](../../src/web/styles/skim.css)).

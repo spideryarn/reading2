@@ -526,7 +526,6 @@ describe("the comment follow-up box", () => {
             pending: 0,
             onDelete: () => {},
             onRetry: () => {},
-            onDeepen: () => {},
             onDiscuss: (q: string) => asked.push(q),
             onEdit: () => {},
             placing: false,

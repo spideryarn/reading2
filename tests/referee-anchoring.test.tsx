@@ -234,7 +234,6 @@ function BothHarness({ dialog }: { dialog: "annotate" | "comment" }) {
                 pending: 0,
                 onDelete: () => {},
                 onRetry: () => {},
-                onDeepen: () => {},
                 onDiscuss: () => {},
                 onEdit: () => {},
                 onPlace: () => {},

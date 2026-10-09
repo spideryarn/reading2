@@ -21,6 +21,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
   "spya-abs6bj": "shipped",
   "spya-ac5msa": "shipped",
   "spya-af6hy8": "shipped",
+  "spya-ahvk74": "shipped",
   "spya-ar65p3": "shipped",
   "spya-ats9dk": "shipped",
   "spya-atv4nx": "shipped",
@@ -396,6 +397,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
   "spya-trkk64": "shipped",
   "spya-try2v7": "shipped",
   "spya-tsd470": "shipped",
+  "spya-tv6wn5": "shipped",
   "spya-tvhk2j": "shipped",
   "spya-tw6zxw": "shipped",
   "spya-u0vpys": "shipped",
@@ -524,6 +526,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
 /** One line about a report, from its note's `comment:`. An admin's Earlier tab only. */
 export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
   "spya-a5gzb9": "Shipped. Since 2026-10-08 a failed import's Report this also carries the address, file name and error, and every import is kept on record so we can debug it later.",
+  "spya-ahvk74": "Adding an article someone has already made public now stops and asks: read their copy free, or add your own, which uses one article. Whether the free copy can carry your own notes is a question (q-c75pj9).",
   "spya-ar65p3": "Shipped: a sideways iPhone no longer enlarges a band's text, and, on your answer, the kinds of line that recur across modes now share six named sizes (on /design, under Text roles).",
   "spya-bbe74w": "Needs a decision is now threads: a contents, one thread at a time with a reply box, Defer for now, the ids, your report shut, a shortcut beside the tabs. Check the reply box on your iPhone.",
   "spya-btjtbb": "Mostly Apple's: an iPhone home-screen app forgets the grant on every restart and 10 minutes after dictation. We fixed one extra prompt of ours. Try Safari's per-site Microphone: Allow; WebKit bug 280394 tracks the rest.",
@@ -560,6 +563,7 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
   "spya-t6nmxt": "Needs a decision is now threads: a contents, one thread at a time with a reply box, Defer for now, the ids, your report shut, a shortcut beside the tabs. Check the reply box on your iPhone.",
   "spya-thpsnd": "Shipped: Reception and Claims, and the claims picker you chose: Claims lists the claims, you tick some or type your own, and one search checks them. Visitors to a shared article see the claims, not your checks (your answer A).",
   "spya-tsd470": "Hovering a reference entry now lists every paragraph that cites it, each a jump. A work cited directly in the text more than three times is found only three times so far; that fix is queued.",
+  "spya-tv6wn5": "Dig deeper is gone and Ask in chat stands in its place, on the hover cards too, and now on Ideas. A chat started from an item has a \"Back to …\" line that opens the mode on that item.",
   "spya-u6h6q8": "Needs a decision is now threads: a contents, one thread at a time with a reply box, Defer for now, the ids, your report shut, a shortcut beside the tabs. Check the reply box on your iPhone.",
   "spya-uc0asn": "You chose B: a signed-in visitor can add a private copy of a public article to their own shelf and use AI there. AI in place on someone else's article (C, D, E) is not for now, as you said on 2026-10-07.",
   "spya-ucftjt": "All three parts shipped: Help in the bar and as pages, Ask about Spideryarn on the Help pages, and a guide in Chat. The Help chatbot stays signed-in only for now, as you chose.",

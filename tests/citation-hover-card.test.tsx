@@ -44,12 +44,9 @@ import {
   citeReadNotIdentified,
   verdictText,
 } from "../src/web/CitationsPanel.js";
-import {
-  CITED_AT_JUMPS_SHOWN,
-  type CiteActions,
-  ProseHoverCard,
-} from "../src/web/ProseHoverCard.js";
+import { CITED_AT_JUMPS_SHOWN, ProseHoverCard } from "../src/web/ProseHoverCard.js";
 import { annotateHtml, citeMarks, termMarks } from "../src/web/annotate.js";
+import { ASK_WORK_IN_CHAT } from "../src/web/OriginChat.js";
 import { buildNoteIndex } from "../src/web/notes-view.js";
 import {
   type Block,
@@ -159,6 +156,11 @@ const TERM: GlossaryEntry = {
   senseHere: "The psychologist whose account of episodic memory the piece leans on.",
 };
 
+/** The owner's *Ask in chat* on the card, as Reader hands it (`onAskCitedWork`). */
+interface CiteActions {
+  ask(work: CitedWork): void;
+}
+
 const jumped: BlockId[] = [];
 const aimed: { id: BlockId; aim: unknown }[] = [];
 const openedTerms: string[] = [];
@@ -220,7 +222,7 @@ function Harness({
         canAddToShelf={false}
         showInSpideryarn={owner}
         termActions={null}
-        citeActions={citeActions}
+        onAskCitedWork={citeActions ? (work) => citeActions.ask(work) : null}
         onOpenTerm={(id) => openedTerms.push(id)}
         onJump={(id, aim) => {
           jumped.push(id);
@@ -551,7 +553,7 @@ describe("what the card says after Look it up", () => {
   });
 
   /* Plan 260930a § UI: a kept *Dig deeper* answer lives in the band, not on the
-     hover card. The button is the card's since 261004b; see the next describe. */
+     hover card. The card's button is *Ask in chat* since 261009k; see below. */
   it("shows nothing of Investigate, even on a work that has a kept answer", () => {
     const investigated: CitedWork = {
       ...TULVING,
@@ -636,8 +638,10 @@ describe("the card says when the work is already an article here", () => {
 
 
 /* Report `spya-c2qmbg`, Greg, 2026-10-03: *"What I was hoping is that it would
-   have a button for dig deeper in the tooltip."* Plan 261004b. */
-describe("Dig deeper from the card", () => {
+   have a button for dig deeper in the tooltip."* Plan 261004b. The card had
+   Dig deeper from then until 2026-10-09, when *Ask in chat* took its place
+   (plan 261009k: *"we don't need the dig deeper button"*). */
+describe("Ask in chat from the card", () => {
   const INVESTIGATION: NonNullable<CitedWork["investigation"]> = {
     answer: "A kept answer.",
     sources: [{ url: "https://arxiv.org/abs/1" }],
@@ -652,22 +656,31 @@ describe("Dig deeper from the card", () => {
     promptVersion: "1",
   };
   const button = () =>
-    [...(card()?.querySelectorAll("button") ?? [])].find((b) => /dig/i.test(b.textContent ?? "")) as
+    [...(card()?.querySelectorAll("button") ?? [])].find((b) => /Ask in chat/.test(b.textContent ?? "")) as
       | HTMLButtonElement
       | undefined;
-  const actions = (over: Partial<CiteActions> = {}): CiteActions & { dug: string[] } => {
-    const dug: string[] = [];
-    return { dig: (id) => dug.push(id), digging: null, ...over, dug };
+  const actions = (): CiteActions & { asked: CitedWork[] } => {
+    const asked: CitedWork[] = [];
+    return { ask: (work) => void asked.push(work), asked };
   };
 
-  it("starts the dig for that work, and closes the card", () => {
+  it("asks the band's sender about that work, and closes the card", () => {
     const a = actions();
     paint(WORKS, [], true, a);
     hover(cite(0));
-    expect(button()?.textContent).toBe("Dig deeper");
+    expect(button()?.textContent?.trim()).toBe("Ask in chat");
+    expect(button()?.getAttribute("aria-label")).toBe(ASK_WORK_IN_CHAT);
     act(() => button()?.click());
-    expect(a.dug).toEqual([TULVING.id]);
+    expect(a.asked.map((w) => w.id)).toEqual([TULVING.id]);
     expect(card()).toBe(null);
+  });
+
+  it("draws no Dig deeper, on a work with a kept answer either", () => {
+    paint([{ ...TULVING, investigation: INVESTIGATION }, KAPLAN, BROADBENT], [], true, actions());
+    hover(cite(0));
+    expect(card()?.textContent).not.toMatch(/Dig deeper|Digging deeper/);
+    expect(card()?.querySelector(".prose-card-cite-dig")).toBeNull();
+    expect(button()).toBeDefined();
   });
 
   it("keeps the Scholar search beside it on a row the article gave no link for", () => {
@@ -675,25 +688,6 @@ describe("Dig deeper from the card", () => {
     hover(cite(1));
     expect(button()).toBeDefined();
     expect(card()?.querySelector('a[href*="scholar.google.com"]')?.textContent).toContain("search Scholar");
-  });
-
-  it("says again on a work that has a kept answer", () => {
-    paint([{ ...TULVING, investigation: INVESTIGATION }, KAPLAN, BROADBENT], [], true, actions());
-    hover(cite(0));
-    expect(button()?.textContent).toBe("Dig deeper again");
-  });
-
-  it("is disabled while any dig runs, and says so on the work being dug", () => {
-    const a = actions({ digging: KAPLAN.id });
-    paint(WORKS, [], true, a);
-    hover(cite(0));
-    expect(button()?.disabled).toBe(true);
-    expect(button()?.textContent).toBe("Dig deeper");
-    act(() => button()?.click());
-    expect(a.dug).toEqual([]);
-    paint(WORKS, [], true, actions({ digging: TULVING.id }));
-    expect(button()?.textContent).toBe("Digging deeper…");
-    expect(button()?.disabled).toBe(true);
   });
 
   it("is not drawn without the owner's actions", () => {

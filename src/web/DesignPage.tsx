@@ -1511,14 +1511,14 @@ function ControlsAcrossModes() {
         rule={
           <>
             the usual button for a model call: 32px, 8px corners, the orange wash on hover.
-            Citations' Dig deeper uses the same outline button at 24px (xs), matching its row.{" "}
+            Glossary's and Citations' Ask in chat use the same button at the same size.{" "}
             <code className="design-token">aria-disabled</code> looks as unavailable as{" "}
             <code className="design-token">disabled</code> and keeps its tooltip. Its running,
             slow, stopping and failed states are in § Job progress, above.
           </>
         }
         finger={<>32px drawn; the button's own box is the target.</>}
-        usedBy="every JobProgress (Glossary, Ideas, Timeline, Quotes, Citations, FAQ, Simple, Skim, Debate, Tweets, Learn, Structure, Sketch, Illustrated, Metadata), Referee's five, Search's find, Glossary's Look up, Find more and Dig deeper"
+        usedBy="every JobProgress (Glossary, Ideas, Timeline, Quotes, Citations, FAQ, Simple, Skim, Debate, Tweets, Learn, Structure, Sketch, Illustrated, Metadata), Referee's five, Search's find, Glossary's Look up and Find more, and Glossary's and Citations' Ask in chat"
       >
         <RunButton label="Find the terms" />
         <Button variant="outline" size="sm" aria-disabled="true">

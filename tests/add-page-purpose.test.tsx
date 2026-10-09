@@ -79,7 +79,9 @@ const leaves = () => events.filter((e) => e.startsWith("leave:"));
 const patch = (purpose: string | null, slug = SLUG) => `patch:${slug}:${JSON.stringify({ purpose })}`;
 
 let jobs: Job[] = [];
-type AddAnswer = Job | { article: string; repeat?: true } | null;
+type AddAnswer = Job | { article: string; repeat?: true } | { publicCopy: { slug: string; title: string } } | null;
+/** Each `add` the page made, and whether it asked for the reader's own copy (plan 261009j). */
+const addCalls: ("plain" | "own")[] = [];
 let addResult: AddAnswer | Promise<AddAnswer> = null;
 let addUploadResult: Promise<Job | { article: string } | null> = Promise.resolve(null);
 let retryResult: (() => Job | null) | null = null;
@@ -91,7 +93,10 @@ const queue: UseJobs = {
   error: null,
   driverFailures: {},
   lastFailure: () => null,
-  add: async () => addResult,
+  add: async (_url, options) => {
+    addCalls.push(options?.ownCopy ? "own" : "plain");
+    return addResult;
+  },
   addUpload: () => addUploadResult as ReturnType<UseJobs["addUpload"]>,
   run: async (request) => {
     events.push(`run:${request.steps.join(",")}`);
@@ -1486,5 +1491,104 @@ describe("a repeat paste of an article already on the shelf", () => {
     expect(navigations).toEqual([`/read/${SLUG}`]);
     expect(patches()).toEqual([]);
     expect(runs()).toEqual(NO_RUNS);
+  });
+});
+
+/**
+ * **Somebody else has already made this address public**, so the add stops and
+ * asks — Greg, 2026-10-09: *"ask them if they'd rather use the public one for
+ * free or have their own version which will use up one of their allotted
+ * slots."* Nothing was spent, nothing is opened by itself, and nothing of the
+ * import's (purpose, High-powered, sharing) is sent to somebody else's article.
+ * docs/plans/261009j-a-public-copy-offered-at-import.md.
+ */
+describe("an address somebody else has made public", () => {
+  const THEIRS = { slug: "their-public-copy", title: "Their Public Copy" };
+
+  beforeEach(() => {
+    addCalls.length = 0;
+  });
+
+  it("asks, under StrictMode, with one request and nothing sent anywhere", async () => {
+    const { DIRECT_ADD_SENT_TEXT_AWAY, PUBLIC_COPY_OWN, PUBLIC_COPY_READ } = await import("../src/messages.js");
+    strict = true;
+    addResult = { publicCopy: THEIRS };
+    render(URL_SOURCE);
+    await settle();
+
+    expect(addCalls).toEqual(["plain"]);
+    expect(host.querySelector("[data-add-public]")).not.toBeNull();
+    expect(host.textContent).toContain("Their Public Copy");
+    const read = [...host.querySelectorAll("a")].find((a) => a.textContent === PUBLIC_COPY_READ);
+    expect(read?.getAttribute("href")).toBe(`/read/${THEIRS.slug}`);
+    expect(button(PUBLIC_COPY_OWN)).toBeTruthy();
+    expect(navigations, "opened somebody else's article by itself").toEqual([]);
+    expect(host.textContent).not.toContain("Queueing it");
+    expect(host.textContent).not.toContain(DIRECT_ADD_SENT_TEXT_AWAY);
+    expect(host.querySelector("textarea"), "the purpose box over the choice").toBeNull();
+    expect(host.querySelector("input[type=checkbox]"), "a box to tick over the choice").toBeNull();
+    expect(patches()).toEqual([]);
+    expect(puts()).toEqual([]);
+    expect(reads.filter((slug) => slug === THEIRS.slug)).toEqual([]);
+  });
+
+  it("asks again for the reader's own copy, and carries on as an ordinary import", async () => {
+    const { PUBLIC_COPY_OWN } = await import("../src/messages.js");
+    strict = true;
+    addResult = { publicCopy: THEIRS };
+    render(URL_SOURCE);
+    await settle();
+
+    const job = makeJob("job-own", "running");
+    jobs = [job];
+    addResult = job;
+    press(PUBLIC_COPY_OWN);
+    await settle();
+
+    expect(addCalls).toEqual(["plain", "own"]);
+    expect(host.querySelector("[data-add-public]")).toBeNull();
+    expect(host.querySelector("textarea"), "the purpose box is back for the import").not.toBeNull();
+  });
+
+  it("keeps a High-powered choice made before the answer for the reader's own import, never theirs", async () => {
+    const { PUBLIC_COPY_OWN } = await import("../src/messages.js");
+    let answer!: (value: AddAnswer) => void;
+    addResult = new Promise((resolve) => { answer = resolve; });
+    render(URL_SOURCE);
+    await settle();
+    const tick = host.querySelector<HTMLInputElement>("[data-add-high-power] input")!;
+    act(() => tick.click());
+    answer({ publicCopy: THEIRS });
+    await settle();
+    expect(puts(), "High-powered sent to somebody else's article").toEqual([]);
+
+    const job = makeJob("job-own", "running");
+    jobs = [job];
+    addResult = job;
+    press(PUBLIC_COPY_OWN);
+    await settle();
+    expect(puts()).toEqual([`put:${SLUG}:true`]);
+  });
+
+  it("asks for the reader's own copy at once when they chose it on the public article", async () => {
+    const { markOwnCopy } = await import("../src/web/own-copy-intent.js");
+    strict = true;
+    markOwnCopy(URL_SOURCE.url);
+    addResult = makeJob("job-own", "running");
+    jobs = [addResult];
+    render(URL_SOURCE);
+    await settle();
+    expect(addCalls).toEqual(["own"]);
+    expect(host.querySelector("[data-add-public]")).toBeNull();
+  });
+
+  it("does not let a mark for one address answer another", async () => {
+    const { markOwnCopy } = await import("../src/web/own-copy-intent.js");
+    markOwnCopy("https://example.org/somewhere-else");
+    addResult = { publicCopy: THEIRS };
+    render(URL_SOURCE);
+    await settle();
+    expect(addCalls).toEqual(["plain"]);
+    expect(host.querySelector("[data-add-public]")).not.toBeNull();
   });
 });

@@ -4250,7 +4250,8 @@ export type ChatAnchor =
  * not built: `chat_threads_origin_mode` in src/db/schema.ts lists it, and the
  * route accepts only the modes that are built (`ORIGIN_MODES`).
  *
- * **A glossary entry and a cited work since 2026-10-06**
+ * **A glossary entry and a cited work since 2026-10-06, and an idea since
+ * 2026-10-09**
  * (plan docs/plans/261006d-glossary-and-citations-ask-in-chat-with-origin.md, D1):
  * each has a durable id, so the id is its identity and the name beside it is
  * a snapshot. See `GlossaryOrigin`.
@@ -4265,7 +4266,7 @@ export type ChatAnchor =
  * Set on the turn that creates the thread and never again, like `anchor`.
  * Written by conditional spread, never `origin: undefined`.
  */
-export type ThreadOrigin = ClaimOrigin | LensOrigin | GlossaryOrigin | CitationsOrigin;
+export type ThreadOrigin = ClaimOrigin | LensOrigin | GlossaryOrigin | CitationsOrigin | IdeasOrigin;
 
 /** One of Debate's claims: the block it sits in and its words when the chat started. */
 export type ClaimOrigin = { mode: "debate"; blockId: BlockId; quote: string };
@@ -4293,9 +4294,19 @@ export type GlossaryOrigin = { mode: "glossary"; itemId: string; quote: string }
 export type CitationsOrigin = { mode: "citations"; itemId: string; quote: string };
 
 /**
- * The most the name snapshot of a glossary or citations origin may be. The
- * route refuses a longer one, so **every sender cuts with `originName`**: a
- * glossary name has no length limit of its own (plan 261006d's review, F1).
+ * One of Ideas' propositions: its id, and its name when the chat started
+ * (plan docs/plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md).
+ * `GlossaryOrigin`'s rules, with one difference: an idea keeps its id across
+ * a re-run only while it keeps its normalised name (src/ideas.ts), so a
+ * paraphrased idea gets a new id and this origin then finds nothing. Best
+ * effort, said plainly (that plan's F6).
+ */
+export type IdeasOrigin = { mode: "ideas"; itemId: string; quote: string };
+
+/**
+ * The most the name snapshot of a glossary, citations or ideas origin may be.
+ * The route refuses a longer one, so **every sender cuts with `originName`**:
+ * a glossary name has no length limit of its own (plan 261006d's review, F1).
  */
 export const MAX_ORIGIN_NAME_CHARS = 300;
 
@@ -4331,7 +4342,7 @@ export function isClaimOrigin(origin: ThreadOrigin): origin is ClaimOrigin {
 }
 
 /** The origin modes that are built. The route refuses any other. */
-export const ORIGIN_MODES = ["debate", "glossary", "citations"] as const satisfies readonly ThreadOrigin["mode"][];
+export const ORIGIN_MODES = ["debate", "glossary", "citations", "ideas"] as const satisfies readonly ThreadOrigin["mode"][];
 
 /**
  * Are these the same anchor? What the route's 409 and `withTurn`'s refusal
@@ -4358,14 +4369,15 @@ export function sameAnchor(stored: ChatAnchor | undefined, wanted: ChatAnchor): 
  * a different claim. **A claim and a lens are never the same**, whatever their
  * words, so the shapes are compared before any field is.
  *
- * **A glossary entry or a cited work is its id**: the name is a snapshot and
- * is not compared, so a reworded entry is still the same origin (plan
- * 261006d, D1).
+ * **A glossary entry, a cited work or an idea is its id**: the name is a
+ * snapshot and is not compared, so a reworded item is still the same origin
+ * (plans 261006d D1 and 261009k stage 3).
  */
 export function sameOrigin(a: ThreadOrigin, b: ThreadOrigin): boolean {
   switch (a.mode) {
     case "glossary":
     case "citations":
+    case "ideas":
       return b.mode === a.mode && a.itemId === b.itemId;
     case "debate":
       if (b.mode !== "debate") return false;
@@ -8301,4 +8313,13 @@ export interface PublicShelfTopicsStatus {
   working: boolean;
   /** The cut-off, for the page's sentence. */
   autoMax: number;
+}
+
+/**
+ * The answer to `POST /api/jobs { url }` when somebody else has already made
+ * that address public: nothing was reserved and nothing queued, and the reader
+ * chooses (src/public-copy.ts, docs/plans/261009j-a-public-copy-offered-at-import.md).
+ */
+export interface PublicCopyFound {
+  publicCopy: { slug: string; title: string };
 }

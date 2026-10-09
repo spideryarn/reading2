@@ -86,9 +86,8 @@ export interface InvestigateDraft {
 
 /**
  * Why the last *Investigate* stopped, on the row it was pressed on, and what
- * was stored there when it was pressed — so the panel can tell "the previous
- * one is still shown" from "the new one was kept after all"
- * (src/web/CitationInvestigation.tsx § investigationViewOf).
+ * was stored there when it was pressed. No client surface reads this state
+ * since the button went in plan 261009k; it remains with the dormant verb.
  */
 export interface InvestigateFailure {
   id: string;
@@ -109,6 +108,11 @@ export interface InvestigateFailure {
  * the prose's hover card can start one in any mode and say when one is running
  * (report `spya-c2qmbg`, plan 261004b). `useGlossaryRead` carries `look` for
  * the same reason (plan 261002c). The band's hook passes all six through.
+ *
+ * **Nothing on the client calls `investigate` since 2026-10-09**: the row's and
+ * the card's buttons went with plan 261009k, and *Ask in chat* stands in their
+ * place; a kept answer is still drawn. It stays, with the route, until Greg
+ * decides whether he wants Dig deeper back (that plan's D5).
  */
 export interface CitationDig {
   /** What the last press's lookup said when it found no page — and on which row. */
@@ -455,9 +459,9 @@ export function useCitationsRead(slug: string): CitationsRead {
    *   puts an investigation on the row; the words before it are a draft.
    * - **An `error` does not prove nothing was kept**: a save can succeed and
    *   the frame after it be lost. So a failure after the stream opened reads
-   *   the list again, while this run still holds admission, and the panel
-   *   draws a stored answer newer than the one at the press instead of the
-   *   failure (CitationInvestigation.tsx § investigationViewOf).
+   *   the list again, while this run still holds admission. Before the button
+   *   went in plan 261009k, the panel used that newer stored answer instead of
+   *   the failure; the re-read still preserves the stored result now.
    * - **Leaving the article stops the reading, not the investigation.** The
    *   server does not pass the socket's close to the model call, so it
    *   finishes and stores anyway. Another article only aborts this fetch.

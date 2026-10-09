@@ -484,15 +484,12 @@
    because it is a different KIND of thing from either of them: not the article,
    not the model's memory, but a thing that was checked on a particular day. */
 .gloss-look { margin: 0.55rem 0 0; }
-/* *Ask in chat*, beside Dig deeper (OriginChat.tsx; plan 261006d). The two
-   are inline, so the gap is a margin and survives a wrap onto a second line. */
-.gloss-ask-chat { margin-left: 0.35rem; }
-/* The house control height for a finger, as Citations gives its own Dig
-   deeper and Ask in chat (citations.css § `pointer: coarse`), so the pair is
-   one height in both modes on a touch screen too (plan 261007m S2, GPT Sol's
-   M2). */
+/* *Ask in chat* (OriginChat.tsx), where Dig deeper was until plan 261009k;
+   it sat beside it with a left margin, which went with it. The house control
+   height for a finger, as Citations gives its own (citations.css §
+   `pointer: coarse`), so it is one height in both modes on a touch screen
+   too (plan 261007m S2, GPT Sol's M2). */
 @media (pointer: coarse) {
-  .gloss-dig,
   .gloss-ask-chat { min-height: var(--control-h); }
 }
 .gloss-look.on {

@@ -63,8 +63,6 @@ export type CommentAccess =
       pending: number;
       onDelete(): void;
       onRetry(): void;
-      /** Ask again and search properly — for an answer the reader has judged thin. */
-      onDeepen(): void;
       /**
        * The reader typed a follow-up.
        *
@@ -909,40 +907,13 @@ export function CommentDialog({
 
       <footer>
         {comment.status === "done" && <SearchBadge comment={comment} />}
-        {/* Not "Try again", which is what the error state offers and means
-            something else. This is the reader saying the answer was thin, and
-            the model is told exactly that. Hidden while one is running, because
-            two overlapping re-asks race to write the same row.
-
-            **And hidden on a FREE comment**, which `!== "pending"` alone let
-            through. `status: "none"` is every bookmark and every note written
-            without pressing Ask AI — and `beginAnswer` in
-            src/comments.ts refuses exactly that with a 409, *"was never a
-            question, so there is nothing to answer"*. So a reader who wrote
-            "what is the evidence for this?" as a plain comment was offered a
-            button saying **Search the web** and told, on pressing it, that they
-            had never asked anything. The refusal is right; the button was the
-            bug. Found while diagnosing report 1X, 2026-09-05;
-            tests/comment-dialog-search-the-web.test.tsx renders all four
-            statuses so that narrowing this too far goes red as well.
-
-            **Dig deeper since 2026-10-01** (plan 261001p): the same press as
-            the glossary's, so the same name — a forced web search, then the
-            answer from a stronger model. */}
-        {own && comment.status !== "pending" && comment.status !== "none" && (
-          <Tooltip
-            content={
-              <>
-                <strong>Dig deeper.</strong> Searches the web and asks a stronger model about this
-                one thing. It takes longer than the first answer, and replaces it.
-              </>
-            }
-          >
-            <button type="button" className="linky cmt-deepen" onClick={own.onDeepen}>
-              Dig deeper
-            </button>
-          </Tooltip>
-        )}
+        {/* **No *Dig deeper* here since 2026-10-09** (plan 261009k, D2). It
+            asked again with a forced web search and a stronger model, and
+            replaced this answer in place; Greg: *"we don't need the dig deeper
+            button"*. The follow-up box above, *Ask in chat*, is the way to go
+            further, in a conversation linked from this comment. Before it was
+            Dig deeper (plan 261001p) it was *Search the web*, hidden on a free
+            comment, which `beginAnswer` refuses (report 1X, 2026-09-05). */}
         {/* Said here rather than in the panel body, because the whole point of
             firing several at once is that you go on reading while they run. */}
         {own && own.pending > 0 && (
