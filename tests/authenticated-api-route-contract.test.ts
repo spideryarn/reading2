@@ -610,6 +610,11 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/faq/w1"],
   },
   {
+    match: { kind: "regex", source: "^\\/api\\/debate-claims\\/([\\w.%-]+)$", flags: "" },
+    methods: ["GET"],
+    witnesses: ["/api/debate-claims/w1"],
+  },
+  {
     match: { kind: "regex", source: "^\\/api\\/relations\\/([\\w.%-]+)$", flags: "" },
     methods: ["GET"],
     witnesses: ["/api/relations/w1"],
@@ -969,13 +974,15 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
    the command bar's suggestions (plan 261005k); 95 with an admin's own earlier
    feedback (plan 261007d); 96 with their replies to questions (its stage 2);
    97 with the Help pages' chatbot (plan 261007k); 98 with Hidden text's Opus
-   check (plan 261007l); 99 with an admin's deferral of a question (plan 261008i). */
-const EXPECTED_MATCHER_COUNT = 99;
+   check (plan 261007l); 99 with an admin's deferral of a question (plan 261008i);
+   100 with Debate's claims list (plan 261008i of the same day, a different 'i'
+   in another tree: docs/plans/261008i-debate-claims-picked-by-the-reader.md). */
+const EXPECTED_MATCHER_COUNT = 100;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
    with the admin's earlier feedback; 118 with their replies to questions; 119
    with the Help pages' chatbot; 120 with Hidden text's Opus check; 121 with the
-   deferral of a question. */
-const EXPECTED_GUARD_COUNT = 121;
+   deferral of a question; 122 with Debate's claims list. */
+const EXPECTED_GUARD_COUNT = 122;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2197,6 +2204,7 @@ describe("the authenticated API's route contract", () => {
         "GET regex /^\\/api\\/timeline\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/quiz\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/faq\\/([\\w.%-]+)$/",
+        "GET regex /^\\/api\\/debate-claims\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/relations\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/crossrefs\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/simple\\/([\\w.%-]+)$/",

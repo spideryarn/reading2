@@ -18,6 +18,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { claimListOwner } from "./helpers/debate-claims-owner.js";
 import type { BlockId, ClaimDebateRow, Debate, DebateCounts, ThreadOrigin, ThreadSummary } from "../src/types.js";
 import type { PublicDebate } from "../src/public-types.js";
 import type { UseDebate } from "../src/web/useDebate.js";
@@ -140,6 +141,7 @@ function paintOwner(summaries: ThreadSummary[] = []): void {
         access: {
           kind: "owner",
           owner: OWNER,
+          claimList: claimListOwner(),
           citers: { result: { kind: "no-doi" }, retry: () => {} },
           claimChats: {
             summaries,
@@ -161,7 +163,7 @@ function paintVisitor(): void {
     claims: { rows: ROWS, sourceNotPublishable: 0 },
   } as unknown as PublicDebate;
   act(() => {
-    root.render(createElement(DebatePanel, { ...shared, access: { kind: "visitor", debate } }));
+    root.render(createElement(DebatePanel, { ...shared, access: { kind: "visitor", debate, claimList: null } }));
   });
 }
 

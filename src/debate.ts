@@ -29,29 +29,37 @@
  *
  * The prompts are asked for things; a prompt is a wish. Every rule below is a
  * line of code that drops a row, and every drop is counted **per group**, so a
- * panel can say which of the two searches lost what. `src/referee-candidates.ts`
+ * panel can say what the Reception search lost. Legacy claim-search counts stay
+ * readable. `src/referee-candidates.ts`
  * is the closest existing shape and this file copies its discipline.
  *
- * ## Two groups, two passes, one atomic step
+ * ## One search on the press, and the claims are the reader's
  *
  * - **Pass A — direct reception.** The article's exact URL, title and byline,
- *   and nothing else to search for.
- * - **Pass B — the argument around the claims.** The article itself, with block
- *   ids on it. Runs only if pass A succeeded, so a failure costs one call
- *   rather than two.
+ *   and nothing else to search for. The only search a press on Debate runs.
+ * - **Pass B — the argument around the claims — no longer runs on the press**,
+ *   since `debate/7` (2026-10-08). It picked three or four claims by itself and
+ *   searched them; Greg asked for the reader to pick instead (q-sn37bt, plan
+ *   docs/plans/261008i-debate-claims-picked-by-the-reader.md). The stored
+ *   document says `claims: {pass: "not-run"}` rather than an empty group, which
+ *   would read as a claims search that found nothing (src/types.ts §
+ *   `DebateClaims`). Debates stored before then keep their claim rows.
+ *   `CLAIMS_SYSTEM`, `CLAIMS_PROMPT` and `readClaimGroup` stay, for those rows'
+ *   tests, the eval's replay, and the reader-picked claim checks the plan
+ *   builds on them.
  *
- * They are **two separately metered calls, not one call producing two lists**,
- * and that is the difference between a true sentence and a false one: OpenRouter
- * reports a search *count* and never the *queries*, so from one blended call we
- * could not tell *"nobody responded to this piece"* from *"the model only ever
- * searched for the topic"*. Group one being empty is this mode's most common
- * output; it must not be an inference.
+ * Pass B was always **a separately metered call, never folded into pass A**,
+ * and that is the difference between a true sentence and a false one:
+ * OpenRouter reports a search *count* and never the *queries*, so from one
+ * blended call we could not tell *"nobody responded to this piece"* from *"the
+ * model only ever searched for the topic"*. Group one being empty is this
+ * mode's most common output; it must not be an inference.
  *
- * And they are **one step**: a failure of either — zero or unreadable search
+ * And the search is **one atomic step**: a failure — zero or unreadable search
  * accounting, malformed JSON, `finish_reason: "length"`, a timeout, a refusal —
- * fails the whole thing and writes no artefact. The alternative left three bad
- * options for whoever built it (show the empty sentence over a failure, throw
- * pass B away silently, invent a half-artefact nobody designed).
+ * fails the whole thing and writes no artefact, rather than an empty sentence
+ * over a failure. Only the synthesis after it may fail softly
+ * (`synthesiseDebate`).
  *
  * ## The wire, and why it is not the one every other stage uses
  *
@@ -111,7 +119,6 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 
-import { articleWithIds } from "./article-prompt.js";
 import { isBodyEvidence } from "./block-policy.js";
 import { type JsonCall, openRouterJson, ProviderRefused } from "./ai-call.js";
 import {
@@ -219,8 +226,10 @@ export type {
  * `debate/6`, 2026-10-03: Pass B (`CLAIMS_SYSTEM`) only; the prompt gained the shared paperwork section,
  * `paperwork("pick")` from src/paperwork.ts (Greg, 2026-10-01, spya-k930hy;
  * docs/plans/261003d-paperwork-in-every-whole-piece-mode.md).
+ *
+ * `debate/7`, 2026-10-08: pass B no longer runs. A press searches for Reception only, the synthesis reads Reception's rows only, and `claims` is stored as `{pass: "not-run"}` (src/types.ts § `DebateClaims`); the reader picks the claims to check instead (Greg, 2026-10-08, q-sn37bt; docs/plans/261008i-debate-claims-picked-by-the-reader.md, stage 1). Pass A's prompt is unchanged. Older debates read as `outdated`, which the panel does not announce (docs/project/mode.md, Greg 2026-09-29).
  */
-export const PROMPT_VERSION = "debate/6";
+export const PROMPT_VERSION = "debate/7";
 
 /* ------------------------------------------------------------ the four caps --
    **Their scope is stated because it is otherwise ambiguous** (Sol's F22): one
@@ -231,7 +240,7 @@ export const PROMPT_VERSION = "debate/6";
 
 /** Provider results, pass A. `max_total_results` on the search tool. */
 export const MAX_DIRECT_SEARCH_RESULTS = 12;
-/** Provider results, pass B. */
+/** Provider results, pass B — which no press runs since `debate/7`; kept for the claim checks to come. */
 export const MAX_CLAIM_SEARCH_RESULTS = 12;
 /** Stored rows, group one. Rows past it are counted, never silently dropped. */
 export const MAX_DIRECT_ROWS = 12;
@@ -239,7 +248,7 @@ export const MAX_DIRECT_ROWS = 12;
 export const MAX_CLAIM_ROWS = 12;
 
 /**
- * Results per individual search, both passes — the same 5 `converse` uses.
+ * Results per individual search. The retired claims pass still shares this cap.
  *
  * A different axis from the two caps above: `max_total_results` bounds the whole
  * turn, this bounds one query, and neither bounds the number of *searches*,
@@ -290,11 +299,14 @@ export const DEBATE_FENCE = "debate";
  * head** — `articleWithIdsFingerprint`, the same question `ideas`, `sketch` and
  * `quiz` are judged on.
  *
- * The cited set rather than the plain one because pass B sends `articleWithIds`,
- * whose head prints a `URL:` line — and here that line is doing more than
- * printing: pass A asks the *web* about that address, and `admissible` below
- * compares every returned citation against it. An article that moved to a new
- * URL is a different search.
+ * The cited set rather than the plain one because the head's `URL:` line is
+ * doing more than printing: pass A asks the *web* about that address, and
+ * `admissible` below compares every returned citation against it. An article
+ * that moved to a new URL is a different search. (Pass B, which sent
+ * `articleWithIds` itself, stopped running at `debate/7`; the blocks still
+ * decide what pass A's rows are judged against — `isCopy`, the article's own
+ * words in a page — so the fingerprint is unchanged and no stored debate turns
+ * stale over it.)
  *
  * **Not the dated set.** Neither prompt carries the publication date, so hashing
  * it would spend up to $0.27 every time a publisher re-dated a post
@@ -1055,7 +1067,7 @@ export function readClaimGroup(
  *
  * There is deliberately **no `null` return and no "the answer had no rows"
  * state**. An answer with no fence, or a fence that will not parse, fails the
- * *pass* — see `parsePass` — because the two passes are one atomic step and a
+ * *pass* — see `parsePass` — because a search is one atomic step and a
  * half-read answer stored as an empty group would be indistinguishable from an
  * honest *"the search found nothing"*.
  */
@@ -1279,7 +1291,10 @@ An empty list is written \`[]\` inside the fence.`;
 /**
  * Pass B's instructions — the argument around the claims.
  *
- * It runs only if pass A succeeded, so a failure costs one call rather than two.
+ * **Sent by nothing in production since `debate/7`** (2026-10-08): the press
+ * searches for Reception only (§ One search on the press). Kept because the
+ * reader-picked claim checks of plan 261008i start from it, and the eval's
+ * replay and the prompt tests read it.
  */
 export const CLAIMS_SYSTEM = `You are looking for pages on the open web that ENGAGE WITH THE CLAIMS one
 article makes — whether or not their authors have ever read it.
@@ -1365,7 +1380,7 @@ Find work that cites this article and says something about it, or responds to
 it. Remember that an empty list is the usual and honest answer.`;
 }
 
-/** What pass B is asked, under the article itself. */
+/** What pass B was asked, under the article itself. Unsent since `debate/7`, as `CLAIMS_SYSTEM`. */
 export const CLAIMS_PROMPT = `Pick a few claims this article rests on, find what has been written about them,
 and report only rows where you can quote both the article's own words for the
 claim and the outside page's own words answering it.`;
@@ -1383,9 +1398,9 @@ interface PassAnswer {
    * reading the fence. The capture journal writes a terminal outcome for each
    * attempt, and with the parse outside it a pass whose fence was broken would
    * have been journalled `ok` and then failed the step — a record that says the
-   * opposite of what happened. The order of operations is unchanged: the parse
-   * still happens before pass B is dispatched, which is what makes a failed pass
-   * A cost one call rather than two.
+   * opposite of what happened. The parse happens before anything else is
+   * dispatched — pass B, until `debate/7`; the synthesis now — so a failed
+   * pass A costs one call.
    */
   rows: unknown[];
   /**
@@ -1826,13 +1841,14 @@ export function parsePass(
 export interface DebateRun {
   debate: Debate;
   model: string;
-  /** Total across both passes — the alarm the spend ceiling is actually made of. */
+  /** The search's own count (pass A's, since `debate/7`) — the alarm the spend ceiling is actually made of. */
   webSearches: number;
   elapsedMs: number;
 }
 
 /**
- * **Both passes, in order, as one step.**
+ * **The Reception search, then the synthesis over what it kept, as one step.**
+ * Pass B stopped running at `debate/7`; `claims` is stored `not-run`.
  *
  * The article is handed in rather than opened here, for the reason every stage
  * of this shape gives: a stage's `stamp` asks the *store* for blocks, tree and
@@ -1861,14 +1877,11 @@ export async function generateDebate(opts: {
 }): Promise<DebateRun> {
   const { blocks, tree, meta: articleMeta } = opts.article;
 
-  /* **Two values, and the difference is the one `generateTimeline` documents.**
-     `articleWithIds` needs a head, so an article with no metadata gets a stub —
-     and the stub is for the PROMPT and stops there. The fingerprint is handed
-     the real `articleMeta`, `null` and all, because the pipeline's `stamp` reads
-     the article and sees `null`: hash the stub instead and this stage writes a
-     fingerprint the stamp can never reproduce, so every article without
-     metadata reports stale for ever with nothing red. */
-  const meta: Meta = articleMeta ?? ({ title: fallbackHeadTitle(tree) } as Meta);
+  /* **The fingerprint is handed the real `articleMeta`, `null` and all**,
+     because the pipeline's `stamp` reads the article and sees `null`: hash a
+     stub head instead and this stage writes a fingerprint the stamp can never
+     reproduce, so every article without metadata reports stale for ever with
+     nothing red (`generateTimeline` documents the same trap). */
   const sourceHash = inputFingerprint(blocks, tree, articleMeta);
   const articleUrl = articleMeta?.url ?? null;
   /* **The title is the one pass A was asked about**, fallback and all — a
@@ -1887,8 +1900,8 @@ export async function generateDebate(opts: {
   const evidence = blocks.filter(isBodyEvidence);
 
   opts.onProgress?.("Looking for responses to this piece");
-  /* One value, built once, so the two attempts cannot disagree about which
-     article they were about — and so the fingerprint in the journal is the same
+  /* One value, built once, so no two journalled attempts can disagree about
+     which article they were about — and so the fingerprint in the journal is the same
      one the artefact is stamped with. */
   const journalled: DebateAttemptStarted["article"] = {
     slug: opts.article.slug,
@@ -1907,9 +1920,8 @@ export async function generateDebate(opts: {
     ...(opts.signal ? { signal: opts.signal } : {}),
     ...(opts.journal ? { journal: opts.journal, attempt: { pass: "direct" as const, article: journalled } } : {}),
   });
-  /* **The same blocks both passes are judged against**, built once: group two
-     resolves a `claimQuote` in the block the model named, and group one asks
-     whether the page's extract is made of these words. */
+  /* Group one asks whether the page's extract is made of these words — the
+     article's body blocks, the ones `isBodyEvidence` keeps. */
   const blockText = blockTextById(evidence);
   const directRows = readDirectGroup(
     direct.rows,
@@ -1917,35 +1929,19 @@ export async function generateDebate(opts: {
     direct.webSearches,
   );
 
-  /* **Pass B runs only now**, which is what makes a failed pass A cost one call
-     rather than two. */
-  opts.onProgress?.("Looking for the argument around its claims");
-  const claims = await runPass({
-    system: `${articleWithIds(meta, evidence)}\n\n---\n\n${CLAIMS_SYSTEM}`,
-    user: CLAIMS_PROMPT,
-    maxTotalResults: MAX_CLAIM_SEARCH_RESULTS,
-    articleUrl,
-    model,
-    ...(opts.signal ? { signal: opts.signal } : {}),
-    ...(opts.journal ? { journal: opts.journal, attempt: { pass: "claims" as const, article: journalled } } : {}),
-  });
-  const claimRows = readClaimGroup(
-    claims.rows,
-    {
-      admissible: claims.admissible,
-      article: identity,
-      blockText,
-    },
-    claims.webSearches,
-  );
+  /* **No pass B since `debate/7`** (2026-10-08, plan 261008i): the claims are
+     the reader's to pick, so this press searches for Reception only and says
+     so in the document — `{pass: "not-run"}`, never an empty group, which
+     would read as a claims search that found nothing (src/types.ts §
+     `DebateClaims`). */
 
-  /* **The third call, over what the two kept** — themes and key sources
+  /* **The second call, over what pass A kept** — themes and key sources
      (src/debate-themes.ts). An unusable answer or provider refusal keeps the
      rows with a named `failed` synthesis; operational errors still fail the
      step, as `synthesiseDebate` documents. */
   opts.onProgress?.("Finding the threads the sources share");
   const synthesis = await synthesiseDebate({
-    rows: [...directRows.rows, ...claimRows.rows],
+    rows: directRows.rows,
     model,
     ...(opts.signal ? { signal: opts.signal } : {}),
   });
@@ -1959,12 +1955,12 @@ export async function generateDebate(opts: {
       sourceHash,
       searchedAt: new Date().toISOString(),
       direct: directRows,
-      claims: claimRows,
+      claims: { pass: "not-run", rows: [] },
       elapsedMs,
       synthesis,
     },
     model,
-    webSearches: direct.webSearches + claims.webSearches,
+    webSearches: direct.webSearches,
     elapsedMs,
   };
 }
@@ -1979,11 +1975,11 @@ export async function generateDebate(opts: {
  * *"nobody replied"* over a pass that broke. Nothing like that is possible
  * here: the rows are complete and verified before this runs, and a missing
  * synthesis is stored as `{kind: "failed"}`, a state the panel names. Throwing
- * it all away would spend two web searches to protect a label.
+ * it all away would spend a web search to protect a label.
  *
  * **Only the provider's refusal is degraded to `failed`.** An abort (the
  * caller's cancel, or the step's 740 s clock) propagates, as it does from
- * either pass; so does anything else thrown — a transport error, a missing
+ * the search; so does anything else thrown — a transport error, a missing
  * key, a bug — because catching those would hide a broken deployment behind a
  * missing box (GPT Sol's plan review, F5). They fail the step, as they would
  * from a pass.

@@ -725,7 +725,7 @@
  {
   "id": "submode:debate:claims",
   "label": "Claims",
-  "description": "What has been written about the claims it makes, by people who may never have read it",
+  "description": "The claims it rests on that someone outside could argue with, listed for you to pick from",
   "aliases": [
    "Debate",
    "Claims Debate",
@@ -1696,7 +1696,7 @@
  {
   "id": "action:rerun-debate",
   "label": "Debate › Run again",
-  "description": "Up to two model calls, each of which searches the web",
+  "description": "One model call that searches the web, plus one search-free call to find themes when it keeps enough sources",
   "aliases": [
    "rerun debate",
    "re-run debate",

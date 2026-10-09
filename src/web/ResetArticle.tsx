@@ -75,6 +75,7 @@ export const RESET_EXTRA_NAME: Record<ExtraStep, string> = {
   sketch: "Sketch",
   illustrated: "Illustrated",
   debate: "Debate",
+  "debate-claims": "Debate's claims list",
   citations: "Citations",
   crossrefs: "Cross-references",
   simple: "Simple summary",
@@ -400,7 +401,9 @@ function ResetConfirm({
           long piece); a PDF also costs one small call to re-read. The article's arc costs another
           model call when you next open the reading view.
           {regenerate ? " Most extras cost roughly one model call each." : null}
-          {regenerate && extras.includes("debate") ? " Debate uses two." : null}
+          {regenerate && extras.includes("debate")
+            ? " Debate uses one model call that searches the web and may use one more model call for themes."
+            : null}
           {regenerate && extras.includes("sketch") ? ` Sketch takes ${SKETCH_WAIT}.` : null}
           {regenerate && extras.includes("illustrated")
             ? " Illustrated uses a brief plus one image call per plate."

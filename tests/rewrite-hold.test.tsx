@@ -696,6 +696,48 @@ const ROWS: Row[] = [
     waiting: "The new search hasn't loaded yet.",
     readAgain: "Try again",
   },
+  /* Claims' list (plan 261008i stage 2): the same band on `?debate=claims`,
+     whose stale banner's *List again* is the forced verb. */
+  {
+    name: "Debate's claims list",
+    hook: "useDebateClaims.ts",
+    step: "debate-claims",
+    path: "/api/debate-claims/",
+    search: "?debate=claims",
+    body: (which, { stale }) => ({
+      claimList: {
+        ...stamp(which, false),
+        claims: [
+          {
+            id: "spya-cdm2a4",
+            blockId: "spya-bbbbbb",
+            quote: "The instrument was built",
+            statement: `${SAYS[which]}: the rig came before its theory.`,
+          },
+        ],
+        dropped: { unknownIds: 0, unquoted: 0, tooLong: 0, duplicate: 0, overCap: 0, malformed: 0 },
+      },
+      stale,
+      outdated: false,
+    }),
+    mount: (show) =>
+      show
+        ? createElement(DebateBand, {
+            slug: SLUG,
+            onJump: noop,
+            blockOrder: new Map(BLOCKS.map((b, i) => [b.id, i])),
+            publishedAt: undefined,
+            articleTitle: "A piece",
+            claimChats: { summaries: [], onCheck: noop, onLens: noop, onOpen: noop },
+          })
+        : null,
+    verb: "List again",
+    shape: ON_THE_BANNER,
+    forced: ["List again"],
+    direct: [{ label: "List again", stale: true }],
+    waiting: "The new list hasn't loaded yet.",
+    readAgain: "Try again",
+  },
   {
     name: "Citations",
     hook: "useCitations.ts",

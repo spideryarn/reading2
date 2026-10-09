@@ -185,6 +185,39 @@
   margin: 0 0 0 1.2rem;
 }
 
+/* **Claims' list of the article's claims** (DebatePanel.tsx §
+   ListedClaims, plan 261008i stage 2). Each claim is a row of two columns:
+   the first is kept for the tick box stage 3 puts there, and is empty until
+   then; the second is the heading — the article's quote, set as an older
+   search's claim heading is, but not a disclosure, so no triangle and no
+   pointer — and under it the model's one line, quieter, with its label. */
+.dbt-listed {
+  list-style: none;
+  margin: 0.25rem 0 0.5rem;
+  padding: 0;
+}
+.dbt-listed-claim {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 0.25rem;
+  margin-top: 0.5rem;
+}
+.dbt-listed-pick { width: 0; }
+.dbt-listed-head.dbt-group-claim { margin-top: 0; cursor: auto; }
+.dbt-listed-head.dbt-group-claim::before { content: none; }
+.dbt-listed-statement {
+  margin: 0.15rem 0 0;
+  padding-left: calc(0.55rem + 2px);
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+.dbt-listed-ai {
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+}
+
 /* **Look at the debate from an angle** (DebatePanel.tsx § Angles, plan
    261005k): the owner's box at the top of the panel and *Your angles* under
    it.

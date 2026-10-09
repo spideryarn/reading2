@@ -158,6 +158,7 @@ const CASES: Partial<Record<StepName, readonly Field[]>> = {
   illustrated: ["inputHash", "promptVersion", "model"],
   skim: ["inputHash", "promptVersion", "model"],
   debate: ["inputHash", "promptVersion", "model"],
+  "debate-claims": ["inputHash", "promptVersion", "model"],
   citations: ["inputHash", "promptVersion", "model"],
   crossrefs: ["inputHash", "promptVersion", "model"],
 };
@@ -337,6 +338,8 @@ function minimal(step: StepName): Artefact {
       return { ...made, questions: [] };
     case "relations":
       return { ...made, relations: {} };
+    case "debate-claims":
+      return { ...made, claims: [] };
     case "citations":
       return { ...made, citations: [] };
     case "crossrefs":
@@ -833,6 +836,7 @@ describe("when the article itself moves, every step gets the same answer from bo
     "simple",
     "sketch",
     "debate",
+    "debate-claims",
     "citations",
     "crossrefs",
   ];
@@ -896,10 +900,12 @@ describe("when the article itself moves, every step gets the same answer from bo
       async () => {
         const { stale, disagree } = read(await askAll());
         expect(disagree).toEqual({});
-        /* `relations` and `simple` send the paragraphs without the section
-           titles; `skim` lays its route over them. `labels` and `assets` hash
-           the blocks alone. */
-        expect(stale).toEqual(inOrder([...without(READS_THE_HEAD, "relations", "simple"), "skim"]));
+        /* `relations`, `simple` and `debate-claims` send the paragraphs
+           without the section titles; `skim` lays its route over them.
+           `labels` and `assets` hash the blocks alone. */
+        expect(stale).toEqual(
+          inOrder([...without(READS_THE_HEAD, "relations", "simple", "debate-claims"), "skim"]),
+        );
       },
     );
   });

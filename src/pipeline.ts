@@ -102,6 +102,12 @@ import {
   PROMPT_VERSION as FAQ_PROMPT_VERSION,
 } from "./faq.js";
 import {
+  DEBATE_CLAIMS_OUTPUT_SCHEMA,
+  generateDebateClaims,
+  inputFingerprint as debateClaimsFingerprint,
+  PROMPT_VERSION as DEBATE_CLAIMS_PROMPT_VERSION,
+} from "./debate-claims.js";
+import {
   RELATIONS_OUTPUT_SCHEMA,
   generateRelations,
   inputFingerprint as relationsFingerprint,
@@ -384,6 +390,7 @@ export const ARTICLE_OUTPUT_FORMAT: Readonly<Record<ArticleStage, ArticleOutputF
   quiz: jsonSchemaFormat(QUIZ_OUTPUT_SCHEMA),
   faq: jsonSchemaFormat(FAQ_OUTPUT_SCHEMA),
   relations: jsonSchemaFormat(RELATIONS_OUTPUT_SCHEMA),
+  "debate-claims": jsonSchemaFormat(DEBATE_CLAIMS_OUTPUT_SCHEMA),
   crossrefs: jsonSchemaFormat(CROSSREFS_OUTPUT_SCHEMA),
   simple: jsonSchemaFormat(SIMPLE_SUMMARY_OUTPUT_SCHEMA),
 };
@@ -630,6 +637,11 @@ export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
      really has moved it re-runs without being forced. And it replaces rather
      than appends. */
   "debate",
+  /* It reads the body and metadata head (with the tree as a title fallback),
+     nothing in the pipeline reads what it writes, and it replaces rather than
+     appends. A positional cascade from a press one band along must not buy it.
+     docs/plans/261008i-debate-claims-picked-by-the-reader.md. */
+  "debate-claims",
   /* A model call over the whole article that nothing else reads, so the
      positional cascade would buy it for nothing; and it replaces rather than
      appends. docs/plans/260911g-citations-mode.md. */
@@ -5252,9 +5264,8 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       if (!article) return null;
       return {
         /* **`article.meta`, `null` and all — never a stub**, for the reason
-           `quiz` and `timeline` state above: `generateDebate` builds a stub for
-           the PROMPT and hands the fingerprint the real value, and hashing the
-           stub here would make every article without metadata report stale for
+           `quiz` and `timeline` state above: `generateDebate` hands the
+           fingerprint the real value, and hashing a stub head here would make every article without metadata report stale for
            ever with nothing red. */
         inputHash: debateFingerprint(article.blocks, article.tree, article.meta),
         promptVersion: DEBATE_PROMPT_VERSION,
@@ -5275,12 +5286,14 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       });
       /* Stage 6 of plan 261001a: a source whose address carries a DOI or arXiv
          id gets the registry's authors and year, when its title agrees.
-         After the searches and outside the stamp; it never fails the step. */
+         After the search and outside the stamp; it never fails the step. */
       const registryStarted = Date.now();
       const registered = await attachDebateRegistry(run.debate, debateRegistryDeps);
       const registryMs = Date.now() - registryStarted;
       run.debate = registered.debate;
-      const { direct, claims } = run.debate;
+      /* Reception only since `debate/7`: `claims` is stored `not-run`, so it
+         has no counts to log (src/types.ts § `DebateClaims`). */
+      const { direct } = run.debate;
       plog.info(
         {
           slug: ctx.slug,
@@ -5292,8 +5305,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              watched a cap of four results cost thirty-six searches. A run
              logging 36 is a prompt that has drifted toward thoroughness. */
           webSearches: run.webSearches,
-          /* Per group, never summed, or this line cannot say which of the two
-             searches lost rows. Counts and hostnames only — never a URL, never
+          /* Per group, never summed. Counts and hostnames only — never a URL, never
              an extract, never a quotation. docs/project/logging.md. */
           directReturned: direct.counts.returnedSources,
           directReported: direct.counts.reportedRows,
@@ -5305,12 +5317,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              zero and `directKept` is high on an obscure article is the rule
              failing open, not the web being kind. */
           directLost: direct.counts.lost,
-          claimsReturned: claims.counts.returnedSources,
-          claimsReported: claims.counts.reportedRows,
-          claimsKept: claims.counts.keptRows,
-          claimsOverCap: claims.counts.omittedOverCap,
-          claimsLost: claims.counts.lost,
-          /* The third call's outcome, so a `failed` is visible in the logs
+          /* The optional synthesis call's outcome, so a `failed` is visible in the logs
              rather than only as a missing box on screen (plan 260930j). */
           registryIdentified: registered.counts.identified,
           registryFound: registered.counts.found,
@@ -5323,13 +5330,70 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           themes: run.debate.synthesis?.kind === "made" ? run.debate.synthesis.themes.length : null,
           keySources: run.debate.synthesis?.kind === "made" ? run.debate.synthesis.key.length : null,
         },
-        `debate ${ctx.slug}: ${direct.counts.keptRows} direct, ${claims.counts.keptRows} on its claims`,
+        `debate ${ctx.slug}: ${direct.counts.keptRows} direct`,
       );
       return {
         parts: { debate: run.debate },
-        detail:
-          `${direct.counts.keptRows} about this piece, ` +
-          `${claims.counts.keptRows} about what it claims`,
+        detail: `${direct.counts.keptRows} about this piece`,
+      };
+    },
+  },
+  /* Debate's claims list: the claims the article rests on that someone outside
+     could argue with, for the Claims sub-mode to pick from. Off
+     DEFAULT_INGEST_STEPS and in FORCE_ONLY_WHEN_NAMED; made by a press on
+     Claims. docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2.
+
+     **No baseline read**, like `faq`: ids are minted per run. Nothing stored
+     names a listed claim's id yet; the checks of the plan's § 3 will, and
+     they are drawn only under the list they were made from. */
+  "debate-claims": {
+    name: "debate-claims",
+    label: "Listing its claims",
+    produces: ["debate-claims"],
+    /**
+     * Its exact rendered body and cited head, with the **real, nullable**
+     * metadata and the tree only as a fallback title. This is what
+     * `generateDebateClaims` hashes too. **No `profileHash`**.
+     */
+    stamp: async (ctx, store) => {
+      const article = await tryReadArticle(ctx.slug, store);
+      if (!article) return null;
+      return {
+        inputHash: debateClaimsFingerprint(article.blocks, article.tree, article.meta),
+        promptVersion: DEBATE_CLAIMS_PROMPT_VERSION,
+        model: CAPABLE_MODEL,
+      };
+    },
+    async run(ctx, store) {
+      const run = await generateDebateClaims({
+        article: await readArticle(ctx.slug, store),
+        onProgress: ctx.report,
+        signal: ctx.signal,
+        power: ctx.power,
+        cacheArticle: ctx.cacheArticle,
+      });
+      const claims = run.claimList.claims.length;
+      plog.info(
+        {
+          slug: ctx.slug,
+          step: "debate-claims",
+          model: run.model,
+          inputTokens: run.inputTokens,
+          outputTokens: run.outputTokens,
+          cacheReadTokens: run.cacheReadTokens,
+          cacheWriteTokens: run.cacheWriteTokens,
+          maxTokens: run.maxTokens,
+          ms: run.elapsedMs,
+          claims,
+          /* Counts only — never a claim or a quote. `unquoted` is the one to
+             watch: the model paraphrasing where it was told to copy. */
+          ...run.dropped,
+        },
+        `debate-claims ${ctx.slug}: ${claims} claims`,
+      );
+      return {
+        parts: { "debate-claims": run.claimList },
+        detail: `${claims} ${claims === 1 ? "claim" : "claims"}`,
       };
     },
   },

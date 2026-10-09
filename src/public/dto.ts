@@ -70,6 +70,8 @@ import type {
   DirectDebateRow,
   Faq,
   FaqQuestion,
+  DebateClaimList,
+  ListedClaim,
   SimpleParagraph,
   SimpleSummary,
   Glossary,
@@ -119,6 +121,7 @@ import type {
   PublicDebate,
   PublicDirectDebateRow,
   PublicFaq,
+  PublicDebateClaimList,
   PublicSimpleSummary,
   PublicIdentificationSignal,
   PublicGlossary,
@@ -589,6 +592,21 @@ function publicFaq(faq: Faq): PublicFaq {
 }
 
 /**
+ * **Debate's claims list, rebuilt claim by claim** — since 2026-10-08 (plan
+ * 261008i § 2). The article's quote and its place, the model's statement and
+ * the claim's id, and nothing else: `dropped` is our checking's tally and the
+ * rest is pipeline provenance. src/public-types.ts § `PublicDebateClaimList`
+ * is the argument.
+ */
+function publicDebateClaimList(list: DebateClaimList): PublicDebateClaimList {
+  return {
+    claims: list.claims.map(
+      (c): ListedClaim => ({ id: c.id, blockId: c.blockId, quote: c.quote, statement: c.statement }),
+    ),
+  };
+}
+
+/**
  * **Simple, rebuilt level by level and paragraph by paragraph** — each
  * `{ text, ids }`, plus `sentences` when they are usable (each with its `key`
  * when that is valid) and `list: true` when it draws as one, and nothing else;
@@ -814,7 +832,14 @@ function publicDebate(debate: Debate, finalUrl: string | null): PublicDebate {
   return {
     searchedAt: debate.searchedAt,
     direct: { rows: direct, sourceNotPublishable: directWithheld },
-    claims: { rows: claims, sourceNotPublishable: claimsWithheld },
+    /* A debate searched at `debate/7` or later ran no claims search, and says
+       so rather than crossing as an empty group, which a visitor's panel would
+       read as a search that kept nothing (src/types.ts § `DebateClaims`). It
+       has no rows, so there is nothing above for it to withhold. */
+    claims:
+      debate.claims.pass === "not-run"
+        ? { pass: "not-run", rows: [] }
+        : { rows: claims, sourceNotPublishable: claimsWithheld },
     ...(synthesis === undefined ? {} : { synthesis }),
   };
 }
@@ -1276,6 +1301,8 @@ export function publicArticle(row: {
   simpleSummary: SimpleSummary | null;
   citations: Citations | null;
   debate: Debate | null;
+  /** Debate's claims list, or `null` for none made. */
+  debateClaims: DebateClaimList | null;
   /** The stored cross-references, or `null` for none built. */
   crossrefs: Crossrefs | null;
   /**
@@ -1357,6 +1384,12 @@ export function publicArticle(row: {
        its witness and its `linked` signal, and it is judged there by the policy
        `publicMeta` above applies to it. */
     ...(row.debate !== null ? { debate: publicDebate(row.debate, row.finalUrl) } : {}),
+    /* `Array.isArray`, not only `!== null`: a document without its `claims`
+       is what the owner's read calls none, and a visitor is not sent a list
+       their panel could not draw. */
+    ...(row.debateClaims !== null && Array.isArray(row.debateClaims.claims)
+      ? { debateClaims: publicDebateClaimList(row.debateClaims) }
+      : {}),
     ...(row.sketch !== null ? { sketch: publicSketch(row.sketch) } : {}),
     ...(crossrefs === undefined ? {} : { crossrefs }),
     /* **A required key, so leaving this line out is a type error** — unlike the

@@ -4,9 +4,10 @@
  * for.
  *
  * The read half is `GET /api/debate/:slug`; the write half is a **job**, and
- * this one costs more than any of its neighbours — two separately metered
- * model calls that each go out to the open web, up to ~$0.27 a run and rising
- * with the length of the article (src/debate.ts § the spend ceiling).
+ * this one costs more than any of its neighbours — a metered call that goes
+ * out to the open web, and rises with the length of the article (src/debate.ts
+ * § the spend ceiling; two such calls until `debate/7`, when the claims search
+ * left the press). Claims' list is `useDebateClaims`, beside this one.
  *
  * ## Two verbs, like the timeline next door
  *
@@ -81,7 +82,7 @@ export interface UseDebate {
   /**
    * **Search the web if nobody has** — unforced, for the automatic run and for
    * the button beside the empty state. They have to be the same request, or
-   * their `work_key`s differ and the reader pays for two web searches instead
+   * their `work_key`s differ and the reader pays for two Reception searches instead
    * of one: useIdeas.ts § `ensure`.
    */
   ensure(): Promise<void>;
@@ -225,7 +226,7 @@ export function useDebateRead(slug: string): DebateRead {
   return { status, debate, stale, outdated, error, retryRead, reload, refresh, fresh };
 }
 
-export function useDebate(slug: string): UseDebate {
+export function useDebate(slug: string, reception = true): UseDebate {
   const read = useDebateRead(slug);
   const { status, reload, refresh } = read;
 
@@ -259,8 +260,9 @@ export function useDebate(slug: string): UseDebate {
      mount this hook with nobody having done anything, and this is the most
      expensive step in the app to start by accident. `reload` rather than `load`
      is the way out of a failed read — useAutoRun.ts § A failed read is not an
-     answer. */
-  const auto = useAutoRun(slug, "debate", status, ensure, reload);
+     answer. Claims keeps the same controller mounted, so `reception` also
+     retires a pending Reception press as soon as navigation lands there. */
+  const auto = useAutoRun(slug, "debate", status, ensure, reload, reception);
 
   return {
     status,

@@ -283,6 +283,13 @@ describe("the sweep over the modes", () => {
     expect(row?.detail).toContain("what the model");
   });
 
+  it("does not tell the owner that a new Debate searched around individual claims", () => {
+    const row = sharedInventory(EVERYTHING).shared.find((item) => item.key === "debate");
+    expect(row?.detail).toContain("Reception");
+    expect(row?.detail).toContain("earlier search");
+    expect(row?.detail).not.toContain("went looking for");
+  });
+
   /**
    * **And `search` crossed the same day, from the other list.**
    *
@@ -382,6 +389,9 @@ const WIRE_ROW = {
      refuses is withheld and counted (src/public/dto.ts § `publicDebate`),
      which is invisible to this table too. */
   debate: "debate",
+  /* Debate's claims list, from the day it was built (2026-10-08): what
+     Claims draws, so Debate's row (plan 261008i § 2). */
+  debateClaims: "debate",
   /* Not a mode: comments have no button in the bar and are swept by neither
      `MODES` nor `visitorGap`. Their row is the prose one that moved out of
      `NEVER_SHARED` on 2026-09-04.
@@ -517,11 +527,42 @@ describe("what counts as shareable", () => {
       simpleSummary: null,
       citations: null,
       debate: null,
+      debateClaims: null,
       glossary: STALE,
       ideas: null,
       quotes: null,
     });
     expect(available.glossary).toBe(true);
+  });
+
+  /* Plan 261008i stage 2: Claims' list on its own opens Debate to a
+     visitor, as the public reading view draws it (Reader.tsx § "debate"). */
+  it("counts Debate when only its claims list is stored", () => {
+    const listOnly = shareableArtefacts({
+      arc: null,
+      tweets: null,
+      timeline: null,
+      sketch: null,
+      skim: null,
+      faq: null,
+      simpleSummary: null,
+      citations: null,
+      debate: null,
+      debateClaims: {
+        version: "debate-claims/1",
+        generator: "a-model",
+        slug: "noema",
+        sourceHash: "0",
+        claims: [],
+        dropped: { unknownIds: 0, unquoted: 0, tooLong: 0, duplicate: 0, overCap: 0, malformed: 0 },
+        generatedAt: "2026-10-08T00:00:00.000Z",
+        elapsedMs: 1,
+      },
+      glossary: null,
+      ideas: null,
+      quotes: null,
+    });
+    expect(listOnly.debate).toBe(true);
   });
 
   it("counts an empty one, and does not count an absent one", () => {
@@ -539,6 +580,7 @@ describe("what counts as shareable", () => {
       simpleSummary: null,
       citations: null,
       debate: null,
+      debateClaims: null,
       glossary: { ...STALE, entries: [] },
       ideas: null,
       quotes: null,
@@ -554,6 +596,7 @@ describe("what counts as shareable", () => {
       simpleSummary: null,
       citations: null,
       debate: null,
+      debateClaims: null,
       glossary: null,
       ideas: null,
       quotes: null,
@@ -591,6 +634,7 @@ describe("what counts as shareable", () => {
       },
       citations: null,
       debate: null,
+      debateClaims: null,
       glossary: null,
       ideas: null,
       quotes: null,
@@ -633,6 +677,7 @@ describe("what counts as shareable", () => {
       } as unknown as SimpleSummary,
       citations: null,
       debate: null,
+      debateClaims: null,
       glossary: null,
       ideas: null,
       quotes: null,

@@ -3462,9 +3462,11 @@ export type StepName =
      in front of it. src/pipeline.ts § illustrated. */
   | "illustrated"
   /* **What the rest of the web says about this piece** — docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md.
-     The only step whose content is not in the article at all: it runs two
-     metered web searches and returns pages that answer the piece, or the claims
-     it makes.
+     The only step whose content is not in the article at all: it runs a
+     metered web search and returns pages that answer the piece. Until
+     `debate/7` (2026-10-08) a second search looked for the argument around
+     the claims it makes; the reader now picks those (plan 261008i), from
+     the list `debate-claims` below makes.
 
      **It is deliberately NOT an `ArticleStage`** (src/models.ts). That type is
      the subset of these names that send the article bare on the Messages wire,
@@ -3474,6 +3476,12 @@ export type StepName =
      among the ones the compiler asks for, and a reader will otherwise go
      looking for the missing rows. */
   | "debate"
+  /* **The article's own claims, listed for Debate's Claims to pick from** —
+     docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2. One
+     Messages-wire call over `articleWithIds` on the body, **no web search**,
+     made by a press on Claims. Ideas' article block at `high` effort, so an
+     `ArticleStage`. */
+  | "debate-claims"
   /* **Every work the piece cites, linked** — docs/plans/260911g-citations-mode.md.
      One Messages-wire call over the whole article, bibliography and notes
      included, and a link derived by code from the article's own hrefs.
@@ -6802,6 +6810,39 @@ export interface DebateGroup<Row> {
 }
 
 /**
+ * **Debate's second group, which since `debate/7` is not searched at all.**
+ *
+ * Until 2026-10-08 every search ran two passes, and pass B picked three or four
+ * of the article's claims by itself and searched them. Greg asked for the
+ * reader to pick the claims instead (q-sn37bt; plan
+ * docs/plans/261008i-debate-claims-picked-by-the-reader.md), so the press now
+ * searches for Reception only.
+ *
+ * **"Not searched" is a state, not an empty group** (GPT Sol's F4 on that
+ * plan). An empty group with zeroed counts already means *a search ran and
+ * kept nothing*, and the panel says exactly that — so a run that never asked
+ * would be told it found nothing. Hence two members:
+ *
+ * - **searched** — `pass` absent. Every debate stored before `debate/7`, rows,
+ *   counts and all; read and drawn as before.
+ * - **`not-run`** — the press did not search for claims. No counts, because
+ *   there was no search to count; `rows` is stored empty only so that every
+ *   reader of `claims.rows` (the marginalia, the public boundary, the registry)
+ *   reads nothing without asking, and `isDebateDocument` keeps its rule.
+ *
+ * `counts` is reachable only after narrowing on `pass`, so a sentence about
+ * what the search found cannot be written over a search that did not run
+ * without the compiler asking first.
+ */
+export type DebateClaims = (DebateGroup<ClaimDebateRow> & { pass?: undefined }) | DebateClaimsNotRun;
+
+/** Pass B did not run — § `DebateClaims`. The only value this build writes. */
+export interface DebateClaimsNotRun {
+  pass: "not-run";
+  rows: [];
+}
+
+/**
  * **Did this group lose anything at all?**
  *
  * Here rather than in src/debate.ts, where it started, for the reason the types
@@ -6894,13 +6935,13 @@ export function distinctSources(rows: readonly { url: string }[]): number {
  * the *queries*, so from one blended call we could not tell *"nobody responded
  * to this piece"* from *"the model only ever searched for the topic"*, and group
  * one being empty is this mode's most common output. It must not be an
- * inference.
+ * inference. **Since `debate/7` (2026-10-08) only the first call runs**, and
+ * `claims` says so (`DebateClaims`); debates stored before then carry both.
  *
- * **The two passes are one atomic step**: a failure of either — zero or
- * unreadable search accounting, malformed JSON, `finish_reason: "length"`,
- * timeout, provider refusal — fails the whole step and writes none of this.
- * Only a *successful* pass A that kept no direct rows may say the search found
- * nothing.
+ * **The search is one atomic step**: a failure — zero or unreadable search
+ * accounting, malformed JSON, `finish_reason: "length"`, timeout, provider
+ * refusal — fails the whole step and writes none of this. Only a *successful*
+ * pass A that kept no direct rows may say the search found nothing.
  */
 export interface Debate {
   version: string;
@@ -6924,12 +6965,15 @@ export interface Debate {
   searchedAt: string;
   /** About this piece. Empty is the commonest correct answer. */
   direct: DebateGroup<DirectDebateRow>;
-  /** About what it claims. */
-  claims: DebateGroup<ClaimDebateRow>;
+  /**
+   * About what it claims — or, since `debate/7`, `{pass: "not-run"}`: the press
+   * searches for Reception only (`DebateClaims`).
+   */
+  claims: DebateClaims;
   elapsedMs: number;
   /**
    * **What the sources keep coming back to, and which of them matter most** —
-   * a third, search-free call over the rows both passes *kept*
+   * an optional search-free call over the rows the search *kept*
    * (src/debate-themes.ts; SPIDERYARN-READING2-6M, plan 260930j).
    *
    * **Absent means the debate was searched before 2026-09-30**, not that the
@@ -7009,7 +7053,7 @@ export interface DebateKeySource {
  *   whose sources share no thread has no themes, and that is an answer.
  * - `too-few` — fewer kept rows than a theme needs, so nothing was asked.
  * - `failed` — the call ran and its answer was refused or unreadable. The rows
- *   are kept anyway: they cost two web searches, and nothing about them
+ *   are kept anyway: they cost a web search, and nothing about them
  *   depends on this call.
  */
 export type DebateSynthesis =
@@ -7100,8 +7144,15 @@ export function readStoredLean(row: { lean?: unknown; valence?: unknown }): Deba
 
 export function isDebateDocument(value: unknown): boolean {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
-  const doc = value as { direct?: { rows?: unknown }; claims?: { rows?: unknown } };
-  return Array.isArray(doc.direct?.rows) && Array.isArray(doc.claims?.rows);
+  const doc = value as { direct?: { rows?: unknown }; claims?: { rows?: unknown; pass?: unknown } };
+  if (!Array.isArray(doc.direct?.rows) || !Array.isArray(doc.claims?.rows)) return false;
+  /* **The claims marker, when there is one, is the one this build writes**
+     (`DebateClaims`) — and a not-run group with rows in it is a document
+     nobody designed: the marker says no search ran, the rows say one did.
+     Absent is a debate stored before `debate/7`, which did search. */
+  const pass = doc.claims.pass;
+  if (pass === undefined) return true;
+  return pass === "not-run" && doc.claims.rows.length === 0;
 }
 
 /**
@@ -7189,6 +7240,74 @@ export type CitersResult =
  * by shape.
  */
 export type DebateFound = DebateResponse;
+
+/* ---------------------------------------------------------- debate-claims --
+   The article's own claims, listed for the reader to pick from — the
+   `debate_claims` column on `article_revisions`, written by the
+   `debate-claims` step (src/debate-claims.ts) and drawn by Debate's Claims
+   sub-mode. No web search: one model call over the article.
+   docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2. */
+
+/**
+ * **One claim the article rests on that someone outside could argue with.**
+ * Anchored the house way (docs/project/block-ids.md): `blockId` + `quote`,
+ * the quote re-found in its block with `findQuote(…, "spaced")` and stored as
+ * the article's characters, never the model's.
+ */
+export interface ListedClaim {
+  /** Minted per run (src/ids.ts). What a check will name the claim by (plan § 3). */
+  id: string;
+  blockId: BlockId;
+  /** The article's own words for the claim, copied out of its block. */
+  quote: string;
+  /** One short line in plain words: **the model's wording**, and labelled so on screen. */
+  statement: string;
+}
+
+/** What validation threw away. Counts only — never a claim or a quote. */
+export interface DebateClaimListDropped {
+  /** A claim naming a block id that is not in the body evidence. */
+  unknownIds: number;
+  /** A claim whose quote `findQuote` (`"spaced"`) could not find in its block. */
+  unquoted: number;
+  /** A located quote over the cap — dropped, never cut. */
+  tooLong: number;
+  /** A second claim on the same words of the same block. */
+  duplicate: number;
+  /** Claims past `MAX_LISTED_CLAIMS`, cut in the model's order. */
+  overCap: number;
+  /** Items we could not read: a missing field, an overlong statement, a non-object. */
+  malformed: number;
+}
+
+/** The artefact. The `debate_claims` column on `article_revisions`. */
+export interface DebateClaimList {
+  version: string;
+  generator: string;
+  slug: string;
+  /** Fingerprint of the rendered body and cited head; the tree only supplies a fallback title. */
+  sourceHash: string;
+  /**
+   * **In document order**, never a ranking. **An empty list is a real answer**:
+   * the model found no claim someone outside could argue with.
+   */
+  claims: ListedClaim[];
+  dropped: DebateClaimListDropped;
+  generatedAt: string;
+  elapsedMs: number;
+}
+
+/** `GET /api/debate-claims/:slug`. Two staleness facts: no profile is in this stamp. */
+export interface DebateClaimListResponse {
+  claimList: DebateClaimList;
+  /** The rendered body or cited head moved underneath this. */
+  stale: boolean;
+  /** The article is the same and we would write this differently now. */
+  outdated: boolean;
+}
+
+/** As `FaqFound`: the same type, because there is no `profileChanged` to omit. */
+export type DebateClaimListFound = DebateClaimListResponse;
 
 /* ------------------------------------------------------------- feedback -- */
 

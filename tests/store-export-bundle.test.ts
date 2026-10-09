@@ -56,7 +56,7 @@ import {
   overBundleCap,
 } from "../src/store/export-bundle.js";
 import { exportArticle } from "../src/store/export.js";
-import type { Relations, SimpleSummary } from "../src/types.js";
+import type { DebateClaimList, Relations, SimpleSummary } from "../src/types.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
@@ -163,6 +163,18 @@ const RELATIONS_FIXTURE: Relations = {
   elapsedMs: 123,
 };
 
+/** Debate's claims list, a third whole artefact, on both paths (plan 261008i stage 2). */
+const DEBATE_CLAIMS_FIXTURE: DebateClaimList = {
+  version: "debate-claims/export-fixture",
+  generator: "fixture-model",
+  slug: SLUG,
+  sourceHash: "0123456789abcdef",
+  claims: [{ id: "spya-cdm2a4", blockId: BLOCKS[1], quote: "a quote", statement: "A claim, plainly." }],
+  dropped: { unknownIds: 0, unquoted: 1, tooLong: 0, duplicate: 0, overCap: 0, malformed: 0 },
+  generatedAt: "2026-10-08T12:00:00.000Z",
+  elapsedMs: 456,
+};
+
 /* A real source document, so the rollback's `readRawDocument` actually reaches
    for the bucket — which is what makes the control below bite. The hash has to
    match the bytes or it throws `CorruptRawObject` instead. */
@@ -248,6 +260,7 @@ await pgReady({
     { table: "spideryarn.chat_messages", column: "interrupted" },
     { table: "spideryarn.article_revisions", column: "simple_summary" },
     { table: "spideryarn.article_revisions", column: "relations" },
+    { table: "spideryarn.article_revisions", column: "debate_claims" },
   ],
 });
 
@@ -328,6 +341,7 @@ describe("the bundle is the faithful projection", () => {
         assets: ASSETS,
         simpleSummary: SIMPLE,
         relations: RELATIONS_FIXTURE,
+        debateClaims: DEBATE_CLAIMS_FIXTURE,
         rawSourceSha256: RAW_SHA256,
         rawSourceKind: "html",
       })
@@ -581,6 +595,14 @@ describe("the bundle is the faithful projection", () => {
       await readFile(path.join(out, SLUG, "relations.json"), "utf8"),
     ) as Relations;
     expect(rollback).toEqual(RELATIONS_FIXTURE);
+  });
+
+  it("carries Debate's claims list whole through the bundle and rollback exports", async () => {
+    expect(parsed("augmentations/debate-claims.json")).toEqual(DEBATE_CLAIMS_FIXTURE);
+    const rollback = JSON.parse(
+      await readFile(path.join(out, SLUG, "debate-claims.json"), "utf8"),
+    ) as DebateClaimList;
+    expect(rollback).toEqual(DEBATE_CLAIMS_FIXTURE);
   });
 
   /* Sol's plan review of 261001b, P2-7: the page counted `paragraphs`, which a

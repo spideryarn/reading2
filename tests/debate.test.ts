@@ -1164,6 +1164,25 @@ describe("what counts as a debate document", () => {
   it("accepts two empty groups", () => {
     expect(whyUnusable("debate", { direct: { rows: [] }, claims: { rows: [] } })).toBeNull();
   });
+
+  /**
+   * **`debate/7`'s marker: the claims search did not run** (plan 261008i, F4).
+   * A document carrying it is a debate; one without it is a debate stored
+   * before then, which did search, and still reads. A marker this build does
+   * not write, or a not-run group with rows in it, is a document nobody
+   * designed — the marker says no search ran and the rows say one did.
+   */
+  it("accepts a claims search marked not run, and a document from before the marker", () => {
+    expect(whyUnusable("debate", { direct: { rows: [] }, claims: { pass: "not-run", rows: [] } })).toBeNull();
+    expect(whyUnusable("debate", { direct: { rows: [] }, claims: { rows: [{}], counts: {} } })).toBeNull();
+  });
+
+  it("refuses a marker it does not know, and a not-run group with rows", () => {
+    expect(whyUnusable("debate", { direct: { rows: [] }, claims: { pass: "skipped", rows: [] } })).not.toBeNull();
+    expect(whyUnusable("debate", { direct: { rows: [] }, claims: { pass: "not-run", rows: [{}] } })).not.toBeNull();
+    /* Not run still needs its empty rows: every reader of `claims.rows` reads them. */
+    expect(whyUnusable("debate", { direct: { rows: [] }, claims: { pass: "not-run" } })).not.toBeNull();
+  });
 });
 
 /* ------------------------------------------------- the closed vocabularies -- */
@@ -1301,7 +1320,7 @@ describe("what the prompts insist on", () => {
 
 describe("the stamp and the failure copy", () => {
   it("has a prompt version that is one constant", () => {
-    expect(PROMPT_VERSION).toBe("debate/6");
+    expect(PROMPT_VERSION).toBe("debate/7");
   });
 
   /**
