@@ -958,8 +958,9 @@ prompt.
   (`modeGenerates` / `subModeGenerates`; `RISK` says `per-mode`), and the press is the Dock's own
   activator (`useActivateMode`), so it arms what the bar's row arms. Chat's prompt is shown the
   key's shape and a few examples; the guide's carries every ordinary mode with its token beside it
-  ([`src/guide.ts`](../../src/guide.ts) § `modeWordsSection`). There is no `purpose` button: the
-  guide's greeting holds the reader's own box instead (the plan's F5).
+  ([`src/guide.ts`](../../src/guide.ts) § `modeWordsSection`). There is no `purpose` button (the plan's F5): the
+  guide's greeting asks in the conversation, and since 261009i *Keep this as why you're reading*
+  under the reader's first answer saves their own words on their press.
 - **Asked twice.** `chipFor` runs at the draw and again at the press
   ([`CommandChip.tsx`](../../src/web/CommandChip.tsx)), so whether the page can run it is never
   remembered from the render. A press goes through `chatExecutor`
