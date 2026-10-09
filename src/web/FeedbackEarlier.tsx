@@ -1298,6 +1298,7 @@ function ReplyBox({
             disabled={sending}
             again={dictate.again}
             sendingAfter={dictate.sendingAfter}
+            doubleStop={dictate.doubleStop}
           />
         )}
         <button

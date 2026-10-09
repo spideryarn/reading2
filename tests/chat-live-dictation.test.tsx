@@ -39,6 +39,7 @@ vi.mock("../src/web/useDictationField.js", () => ({
     return {
       readOnly: false,
       sendingAfter: false,
+      doubleStop: false,
       busy: armed,
       toggle,
       dictation: {
@@ -95,7 +96,7 @@ function Harness({ kind }: { kind: "chat" | "learn" }) {
   });
   const focused = useRef(0);
   return createElement(Composer, {
-    slug: "a-piece", kind, onSend: () => {}, busy: false, focusNonce: 0,
+    slug: "a-piece", keepAs: "chat:a-piece:t1", kind, onSend: () => {}, busy: false, focusNonce: 0,
     focused, draft: "", onDraft: () => {}, live,
     onStartLive: () => live.start({ threadId: "spya-k3m9qt" }),
   });

@@ -461,14 +461,66 @@
 /* The two quiet facts in the foot. `.prose-card-cite-source` is where the
    address came from — "doi.org · DOI in the article" — and it is deliberately
    NOT a link: the title above is the link, and a second one to the same place
-   would be two ways to do one thing. `.prose-card-cite-where` is the count that
-   stands in for the marks we cannot draw past three mentions. */
+   would be two ways to do one thing. `.prose-card-cite-where` is "only in the
+   references" in the foot, and the count before the jumps below. */
 .prose-card-cite-source,
 .prose-card-cite-where {
   color: var(--ink-faint);
   font-size: 0.76rem;
 }
-.prose-card-cite-where { margin-left: auto; }
+.prose-card-cite-foot .prose-card-cite-where { margin-left: auto; }
+
+/* **Every citing paragraph, one numbered jump each** (ProseHoverCard.tsx §
+   CitedAtJumps, plan 261009e): the count, then 1 2 3 … in document order. Each
+   number is a `BlockRef`, so it keeps the block link's own card. Its ordinary
+   machine-id typography is reset because the numbers are UI. On a coarse
+   pointer each item grows to the project's 40px target rather than overlapping
+   its neighbour (touch.md § A bigger target). The current one stays unlinked
+   and quiet. */
+.prose-card-cite-jumps {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 0.1rem;
+  margin: 0.35rem 0 0;
+  font-family: var(--font-ui);
+}
+.prose-card-cite-jumps .prose-card-cite-where { margin-right: 0.3rem; }
+.prose-card-cite-jump {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.7rem;
+  padding: 0.4rem 0.25rem;
+  text-align: center;
+  font-family: var(--font-ui);
+  font-size: 0.76rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+/* `.block-ref` is half-opacity faint ink, which suits an id under a gist and
+   left these numbers fainter than the unlinked one beside them (browser pass,
+   plan 261009e). Here the number is the control, so it is drawn as one: soft
+   ink at full opacity, dotted underline, and the house hover. */
+.prose-card-cite-jumps a.prose-card-cite-jump {
+  opacity: 1;
+  color: var(--ink-soft);
+  text-decoration: underline dotted;
+  text-underline-offset: 0.18em;
+}
+.prose-card-cite-jumps a.prose-card-cite-jump:hover { color: var(--highlight-ink); }
+.prose-card-cite-jump.is-here {
+  color: var(--ink-faint);
+  opacity: 0.6;
+  text-decoration: none;
+}
+@media (any-pointer: coarse) {
+  .prose-card-cite-jump {
+    min-width: 40px;
+    min-height: 40px;
+    padding: 0;
+  }
+}
 /* *Dig deeper* makes the foot three things, wider than the card with a long
    host, so this foot wraps as the term's does: the two facts on their line and
    the button, pushed right, on the next when it has to be. Plan 261004b. */

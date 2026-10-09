@@ -38,6 +38,9 @@ const LOOKED_AT: Record<string, string> = {
   /* Beside the *Ask what you meant* button, and hidden under `pointer: coarse`
      — tests/command-bar-pick.test.tsx § the button that asks. */
   'CommandBar.tsx › "or press Enter"': "the button beside it",
+  /* The microphone's card in the command bar (plan 261009g): it is the app
+     that presses Enter, after a double press on Stop, which a finger makes. */
+  'DictationStrip.tsx › "Press Stop twice quickly to press Enter as soon as the words arrive."': "the microphone itself: the card names its own double press, which a finger can make",
   /* The three below are the command bar's microphone, around a double press on
      Stop (plan 261005a). In all three it is the app that presses Enter, on the
      reader's behalf, and none asks the reader for a key —

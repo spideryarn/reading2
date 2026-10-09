@@ -169,6 +169,7 @@ describe("the composer while an answer is arriving", () => {
       root.render(
         createElement(Composer, {
           slug: "a-piece",
+          keepAs: "chat:a-piece:t1",
           onSend: () => {},
           onStop: () => {
             stopped++;

@@ -618,6 +618,7 @@ function PanelBody({
       {editable ? (
         <ProfileBox
           id="panel-profile"
+          article={null}
           label="About you"
           hint="Every article."
           placeholder="e.g. Cognitive scientist. Rusty on transformer internals."
@@ -648,6 +649,7 @@ function PanelBody({
       {editable && !ready.value.purposeFailed ? (
         <ProfileBox
           id="panel-purpose"
+          article={slug}
           label="Why you're reading this one"
           hint="This article only."
           placeholder="e.g. I want the evidence, not the history"

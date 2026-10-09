@@ -333,6 +333,7 @@ function AskBox({ state }: { state: HelpAskState }) {
               disabled={arriving}
               again={dictate.again}
               sendingAfter={dictate.sendingAfter}
+              doubleStop={dictate.doubleStop}
             />
           )}
           {/* Two keys, so Stop and Ask are never one reused <button>. Reused,
