@@ -676,6 +676,13 @@ describe("fix 8 — a macro LaTeXML could not expand leaves the page", () => {
     expect(p).not.toMatch(/ucite|dagotto|basov|liuMulti|huang_terahertz/u);
   });
 
+  it("a key with no year in it goes too (two of the 104 in 2610.11126)", () => {
+    const { doc } = prepared(
+      latexml(`<p id="x" class="ltx_p">optical sidebands<span class="ltx_ERROR undefined">\\ucite</span>zaksExperimentalObservationElectronhole.</p>`),
+    );
+    expect(text(doc.getElementById("x"))).toBe("optical sidebands.");
+  });
+
   it("the back matter of 2610.11413: the marker goes and the funding statement stays, word for word", () => {
     const fixture = fx("undefined-macro-back-matter");
     const before = text(documentAt(latexml(fixture)).getElementById("p12.2"));

@@ -18,7 +18,9 @@
  * block and in no `<meta>` tag (`latexmlAuthorNames`, which src/meta-authors.ts
  * calls). And a sixth, that same title block drawn as one fused paragraph of
  * pop-up labels, with an author's details deleted by Readability's byline search:
- * `tidyTitleBlock` makes it one row per author.
+ * `tidyTitleBlock` makes it one row per author. And a seventh, its own error
+ * report: a macro it could not expand, written into the prose as `\name`
+ * (`removeUndefinedMacro`).
  *
  * ## The three rules every rewrite here follows
  *
@@ -36,7 +38,10 @@
  *
  * Nothing here deletes an author's words: what is removed is the publisher's
  * layout (padding cells, an SVG frame's paths, a duplicate download link, the
- * title block's pop-up labels and repeated marks).
+ * title block's pop-up labels and repeated marks) and LaTeXML's own error
+ * reports. The one exception is narrow and named: an undefined macro's argument
+ * when it is a name from the TeX source rather than prose — a colour theme, a
+ * .bib file, a citation key (`removeUndefinedMacro` says which shapes).
  *
  * docs/plans/261005l-an-arxiv-link-of-any-shape-imports-the-paper-and-a-source-resolver-other-sources-can-join.md
  * § *Stage: the HTML arm's faults*; tests/latexml.test.ts.
@@ -659,7 +664,9 @@ const STOOD_FOR: ReadonlyMap<string, string> = new Map([
  * - a `p.ltx_p` straight after it whose whole text is one `SOURCE_NAME` —
  *   `\hohsettheme{hohRose}`, a colour theme (2609.01481v1), and
  *   `\bibliographyfullrefs{Biblio_paper_brillouin}`, a .bib file (2610.11413);
- * - a key with a digit in it straight after a macro whose name says `cite` —
+ * - a key straight after a macro whose name says `cite`, when the key has a
+ *   digit, an underscore or a capital inside it (so `\excite electrons` keeps
+ *   its word) —
  *   `phases\ucite{dagotto2005}.` reads `phases.` (2610.11126, 104 of them).
  *
  * Where taking the report out would join two words, a space stands in its
@@ -678,7 +685,7 @@ function removeUndefinedMacro(marker: Element, targets: ReadonlySet<string>): bo
   if (/cite/iu.test(name) && after?.nodeType === 3) {
     const text = after.textContent ?? "";
     const key = CITATION_KEY.exec(text)?.[0];
-    if (key && /\d/u.test(key)) after.textContent = text.slice(key.length);
+    if (key && /\d|_|[a-z][A-Z]/u.test(key)) after.textContent = text.slice(key.length);
   }
   argument?.remove();
   const before = marker.previousSibling;
