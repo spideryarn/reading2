@@ -71,17 +71,33 @@ export interface LiveToolResult {
   detail: string;
 }
 
+/**
+ * The kinds of conversation that take a live conversation — `SpokenKind` in
+ * src/chat.ts, restated because the browser does not import the server's
+ * module; tests/live-guide-wiring.test.ts holds the two together.
+ */
+export type LiveThreadKind = "chat" | "learn" | "guide";
+
 /** What the browser sends to open a GPT-Live call. The server's half is `liveChatSession` in src/routes.ts. */
 export interface GptLiveOffer {
   /** The peer connection's SDP offer. Our server passes it to OpenAI and returns the answer. */
   sdp: string;
   placement?: MicPlacement;
   useProfile?: boolean;
+  /** `LiveOptions.kindOf`'s answer: which prompt and tools the session gets (plan 261009i). */
+  kind?: LiveThreadKind;
 }
 
 export interface LiveWiring extends MeterTransport {
   /** Mint a session for this conversation, and get its history with it. */
-  ticket(slug: string, threadId: string, placement: MicPlacement, signal?: AbortSignal): Promise<LiveTicket>;
+  ticket(
+    slug: string,
+    threadId: string,
+    placement: MicPlacement,
+    signal?: AbortSignal,
+    /** `LiveOptions.kindOf`'s answer: which prompt and tools the session gets (plan 261009i). */
+    kind?: LiveThreadKind,
+  ): Promise<LiveTicket>;
   /**
    * **GPT-Live's counterpart to `ticket`**: hand over this tab's SDP offer and
    * get the answer back, with our journal row's id and the conversation's tail.
@@ -109,6 +125,12 @@ export interface LiveWiring extends MeterTransport {
     name: string,
     args: Record<string, unknown>,
     signal?: AbortSignal,
+    /**
+     * The session's kind, so the server runs only that kind's tools
+     * (`toolsFor` via `runTool`): a guide's model naming a tool the guide is
+     * not offered is refused, as it is in a typed guide (plan 261009i).
+     */
+    kind?: LiveThreadKind,
   ): Promise<LiveToolResult>;
   /* The three accounting calls come from `MeterTransport` in ./meter.ts, which
      is where the queue that drives them lives. Extended rather than restated,
@@ -176,13 +198,13 @@ async function post(path: string, body: unknown, keepalive: boolean, madeFor: st
  */
 export function apiWiringFor(madeFor: string | null): LiveWiring {
   return {
-    async ticket(slug, threadId, placement, signal) {
+    async ticket(slug, threadId, placement, signal, kind) {
       const res = await apiFetch(
         `/api/chat/${encodeURIComponent(slug)}/${encodeURIComponent(threadId)}/live`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ placement }),
+          body: JSON.stringify(kind === undefined ? { placement } : { placement, kind }),
           ...(signal ? { signal } : {}),
         },
         madeFor,
@@ -241,11 +263,11 @@ export function apiWiringFor(madeFor: string | null): LiveWiring {
       };
     },
 
-    async runTool(slug, name, args, signal) {
+    async runTool(slug, name, args, signal, kind) {
       const res = await apiFetch(`/api/chat/${encodeURIComponent(slug)}/live-tool`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, args }),
+        body: JSON.stringify(kind === undefined ? { name, args } : { name, args, kind }),
         ...(signal ? { signal } : {}),
       }, madeFor);
       if (!res.ok) throw await failure(res);

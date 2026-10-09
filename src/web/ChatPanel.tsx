@@ -97,7 +97,9 @@ import type {
 } from "../types.js";
 import { isLearnKind } from "../types.js";
 import { CitedMarkdown } from "./Cited.js";
-import { GuideGreeting } from "./GuideGreeting.js";
+import { GuideGreeting, GuideKeepReason } from "./GuideGreeting.js";
+import { guideGreeting } from "./guide-greeting.js";
+import { usePurpose } from "./purpose.js";
 import { Button } from "./components/ui/button.js";
 import { useChatCommands } from "./CommandChip.js";
 import { chipFor } from "./chat-commands.js";
@@ -205,6 +207,8 @@ interface Props {
   onThread(id: string | null): void;
   /** The article, so dictation can be primed with this one's vocabulary. */
   slug: string;
+  /** The article's title, for the guide's greeting (plan 261009i). */
+  articleTitle?: string | undefined;
   /**
    * Whether the conversations have been asked for and answered.
    *
@@ -416,6 +420,7 @@ export const SUGGESTIONS: { label: string; ask: string }[] = [
 
 export function ChatPanel({
   slug,
+  articleTitle,
   loaded,
   loadFailed,
   threads,
@@ -737,6 +742,7 @@ export function ChatPanel({
           live={shownLive}
           onStartLive={onStartLive ? () => onStartLive(open.id) : undefined}
           guideAct={guideAct}
+          articleTitle={articleTitle}
         />
       ) : learn ? (
         /* **Learn never draws a list, not even for a frame.** The band
@@ -1401,9 +1407,12 @@ export function Conversation({
   onStartLive,
   onAnswered,
   guideAct,
+  articleTitle,
 }: {
   /** The article, so the composer's dictation can be primed with its vocabulary. */
   slug: string;
+  /** The article's title, for the guide's greeting (plan 261009i). */
+  articleTitle?: string | undefined;
   thread: ChatThread;
   /** See `onHintOpened` in Props. Absent where nothing records the press. */
   onHintOpened?: ((messageId: string, hint: string) => void) | undefined;
@@ -1458,6 +1467,14 @@ export function Conversation({
    * ran in is over, so nothing that mounts later can act on it.
    */
   const ownAct = useGuideAct(thread.id, kind, visible, onAnswered);
+  /* **The guide's greeting** (plan 261009i): read once, and drawn only by a
+     conversation that was empty when this mount first saw it, then kept above
+     the turns while it stays mounted. A guide opened with turns in it shows
+     none — GuideGreeting.tsx says why. */
+  const guideRead = usePurpose(kind === "guide" ? slug : null);
+  const greeting = kind === "guide" ? guideGreeting(guideRead, articleTitle) : null;
+  const greetsHere = useRef(thread.messages.length === 0);
+  const firstAsked = thread.messages.find((m) => m.role === "user");
   const act = guideAct ?? ownAct;
   /* **Offered, and spent, only once this conversation draws that answer as
      finished.** The `Answered` event can land before the store's notification
@@ -1902,10 +1919,11 @@ export function Conversation({
           measureSteps(el);
         }}
       >
+        {kind === "guide" && greetsHere.current && greeting !== null && (
+          <GuideGreeting greeting={greeting} onAsk={(q) => onSend(q)} />
+        )}
         {empty &&
-          (kind === "guide" ? (
-            <GuideGreeting slug={slug} onAsk={(q) => onSend(q)} />
-          ) : kind === "tutorial" ? (
+          (kind === "guide" ? null : kind === "tutorial" ? (
             <TutorialInvitation />
           ) : kind === "explore" ? (
             <ExploreInvitation onAsk={(q) => onSend(q)} />
@@ -1946,6 +1964,11 @@ export function Conversation({
                what is on screen. */
             discards={thread.messages.length - i - 1}
           />
+          {/* The reader's answer to the greeting's question, kept as their
+              reason only if they press (GuideGreeting.tsx § GuideKeepReason). */}
+          {greetsHere.current && greeting?.asksReason && m === firstAsked && (
+            <GuideKeepReason slug={slug} text={m.text} />
+          )}
           </GuideActContext.Provider>
         ))}
         {/* The spoken words still on their way to being saved, as the end of

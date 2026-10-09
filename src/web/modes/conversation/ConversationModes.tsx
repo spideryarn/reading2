@@ -484,6 +484,8 @@ type ConversationBandProps = {
   onHandoffThread?: ((handoff: ChatHandoff, threadId: string) => void) | undefined;
   /** An answer settled, including after this band has gone. */
   onSettled?: (() => void) | undefined;
+  /** The article's title, for the guide's greeting (plan 261009i). Chat's band only. */
+  articleTitle?: string | undefined;
   /**
    * **The Recall | Tutorial | Explore | Quiz control**, when this band is one of Learn's
    * conversation views. Absent in chat mode. Built by `LearnBand` above and passed straight
@@ -503,6 +505,7 @@ export function ConversationBand({
   onHandoffThread,
   onSettled,
   onScreen,
+  articleTitle,
 }: ConversationBandProps) {
   useRenderCount("ConversationBand");
   const {
@@ -750,6 +753,12 @@ export function ConversationBand({
     speak: speakAndMark,
     blocks,
     tailNow: (id) => threadsRef.current.find((t) => t.id === id)?.messages.at(-1)?.id ?? null,
+    /* The tab's own kind for a conversation it began and nobody has written
+       to yet — an empty guide's prompt and tools are the guide's (plan 261009i). */
+    kindOf: (id) => {
+      const kind = threadsRef.current.find((t) => t.id === id)?.kind;
+      return kind === "chat" || kind === "learn" || kind === "guide" ? kind : undefined;
+    },
     onThreadId: (id, startedThreadId) => {
       // A delayed spoken append may finish after the reader has left its thread.
       if (selectedThread.current === startedThreadId) void setThread(id);
@@ -1307,6 +1316,7 @@ export function ConversationBand({
   return (
     <ChatPanel
       slug={slug}
+      articleTitle={articleTitle}
       /* Not for display — the panel offers its "start a new one" box only once
          this is true. It went in because a conversation minted before the first
          fetch landed was wiped by it; that is fixed at source now
@@ -1351,19 +1361,19 @@ export function ConversationBand({
          alternating turns are ideal spoken, and Greg said so, but also that
          Live "doesn't work very well at the moment" — so both are typed or
          dictated first, and a spoken turn cannot create one (`SpokenKind` in
-         src/chat.ts stays chat | learn). Omitted here rather than refused
+         src/chat.ts is chat, learn and guide). Omitted here rather than refused
          by the server, so there is no button. */
       /* Nor on a conversation whose origin the server does not have yet
          (`awaitsOrigin` above): no button, and the callback is refused too. */
-      /* Nor in the guide, which is typed (plan 261007j). */
-      live={OFFERS_LIVE[kind] && openKind !== "guide" && !awaitsOrigin(current) ? live : undefined}
+      /* And in the guide since plan 261009i, with the guide's own spoken prompt
+         and tools (`liveKind` in src/routes.ts, `SPOKEN_GUIDE` in src/live.ts). */
+      live={OFFERS_LIVE[kind] && !awaitsOrigin(current) ? live : undefined}
       /* The guide's answers may press one of their own buttons; ChatPanel's
          conversation listens only when it is the guide (guide-acts.ts). */
       onAnswered={onAnswered}
       onStartLive={!OFFERS_LIVE[kind] ? undefined : (id) => {
         if (resettingNow.current) return;
         if (awaitsOrigin(id)) return;
-        if (id && threads.find((t) => t.id === id)?.kind === "guide") return;
         if (!id && kind !== "chat") return;
         const next = id ?? begin("chat");
         /* Begun here like `startNew`'s, and as unsent until its first spoken

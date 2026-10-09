@@ -317,6 +317,7 @@ export function readingExecutor({
   openQuickSearch,
   askThroughLens,
   askGuide,
+  openGuide,
   modes,
 }: {
   slug: string;
@@ -338,6 +339,8 @@ export function readingExecutor({
    * Reader.tsx § `askTheGuide` (plan 261007j F6).
    */
   askGuide?: ((sentence: string) => void) | undefined;
+  /** Open the guide, sending nothing, for the bar's *Guide* row — Reader.tsx § `openTheGuide` (plan 261009i). */
+  openGuide?: (() => void) | undefined;
   /** The modes a chip may open, and how — `modeDoor` (plan 261007j). */
   modes?: ModeDoor | undefined;
 }): CommandExecutor {
@@ -363,6 +366,14 @@ export function readingExecutor({
       : {
           askThroughLens: (lens: string): ActionOutcome => {
             askThroughLens(lens);
+            return CLOSE;
+          },
+        }),
+    ...(openGuide === undefined
+      ? {}
+      : {
+          openGuide: (): ActionOutcome => {
+            openGuide();
             return CLOSE;
           },
         }),

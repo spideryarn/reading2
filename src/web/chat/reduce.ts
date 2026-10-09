@@ -513,7 +513,7 @@ function startSpoken(state: ChatState, op: Registering<SpokenOperation>): Outcom
         ...(op.reply.tools ? { tools: op.reply.tools } : {}),
         ...(op.reply.interrupted ? { interrupted: true } : {}),
         ...(op.engine && op.engine !== "realtime" ? { engine: op.engine } : {}),
-        ...(kind === "chat" || kind === "learn" ? { kind } : {}),
+        ...(kind === "chat" || kind === "learn" || kind === "guide" ? { kind } : {}),
       },
     ],
   };

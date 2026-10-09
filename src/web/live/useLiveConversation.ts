@@ -94,7 +94,7 @@ import { useAudioLevel } from "../useAudioLevel.js";
 import { ExchangeLedger, type Exchange } from "./exchanges.js";
 import { LiveMeter, responseReport, transcriptionReport } from "./meter.js";
 import { resolvePlacement, type ResolvedPlacement } from "./mic-placement.js";
-import { apiWiringFor, type LiveWiring } from "./wiring.js";
+import { apiWiringFor, type LiveThreadKind, type LiveWiring } from "./wiring.js";
 import { useMadeFor } from "../lib/made-for.js";
 import { ToolResponses } from "./tool-responses.js";
 import { stallOf, type LiveStall } from "./stall.js";
@@ -271,6 +271,13 @@ export interface LiveOptions {
    * is connecting, which is exactly the case it is here to catch.
    */
   tailNow?: (threadId: string) => string | null;
+  /**
+   * The kind of the conversation as this tab has it, sent with the ticket so
+   * the server can pick the prompt and tools for one that exists only here (an
+   * empty guide: plan 261009i). The stored kind wins on the server; absent
+   * means a chat's.
+   */
+  kindOf?: (threadId: string) => LiveThreadKind | undefined;
   /** The URL's `?thread=` follows, when the server overrules the id. */
   onThreadId?: (id: string, startedThreadId: string) => void;
   /**
@@ -434,6 +441,9 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
   const lineState = useRef<LiveLine[]>([]);
   const handedOff = useRef(new Set<string>());
   const startedThread = useRef<string>("");
+  /* The kind this session was started for, read once at start: it chose the
+     prompt and the tools, so every tool call says it (plan 261009i). */
+  const sessionKind = useRef<LiveThreadKind | undefined>(undefined);
   /** Which start of this hook the lines being put now belong to. See `LiveLine.session`. */
   const sessionNo = useRef(0);
   const updateLines = useCallback((change: (previous: LiveLine[]) => LiveLine[]) => {
@@ -979,7 +989,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
       const timeout = setTimeout(() => request.abort(), TOOL_TIMEOUT_MS);
       try {
         const out = await Promise.race([
-          (wired.current.wiring ?? defaultWiring).runTool(slug, name, args, request.signal),
+          (wired.current.wiring ?? defaultWiring).runTool(slug, name, args, request.signal, sessionKind.current),
           new Promise<never>((_, reject) => {
             request.signal.addEventListener("abort", () => reject(new Error("The tool took too long. Try again.")), { once: true });
           }),
@@ -1585,6 +1595,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
       setHasUnsavedLines(preserveWords);
       handedOff.current.clear();
       startedThread.current = opts.threadId;
+      sessionKind.current = wired.current.kindOf?.(opts.threadId);
       setDeviceLabel(null);
       setNotice(null);
       setPlaybackBlocked(false);
@@ -1758,7 +1769,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
           placedAs.current = where.placement;
 
           const wiring = wired.current.wiring ?? defaultWiring;
-          const ticket = await wiring.ticket(slug, opts.threadId, where.placement, abort.signal);
+          const ticket = await wiring.ticket(slug, opts.threadId, where.placement, abort.signal, sessionKind.current);
           /* **The tail travels with the history it belongs to**, and the first
              exchange claims exactly this. Read separately they would be a claim
              about a conversation that never existed. */

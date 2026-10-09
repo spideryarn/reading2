@@ -565,6 +565,12 @@ export interface CommandExecutor {
    * Chat is the owner's.
    */
   readonly askGuide?: ((sentence: string) => ActionOutcome) | undefined;
+  /**
+   * Open this article's guide in Chat, sending nothing — the bar's *Guide* row
+   * (plan 261009i: *"there should be a command in the command bar for opening
+   * the guide chat"*). The owner's reading view only, as `askGuide` is.
+   */
+  readonly openGuide?: (() => ActionOutcome) | undefined;
 }
 
 /** One press per band that offers an append now; a band not named offers none. */

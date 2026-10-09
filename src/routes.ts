@@ -4355,6 +4355,26 @@ function parseSpokenTools(x: unknown): { tools: ToolRun[] } | undefined {
 }
 
 /**
+ * **Which kind of conversation a live session is for** — the stored thread's,
+ * or, for one that exists only in the tab (an empty guide, an empty Learn
+ * conversation), the kind the browser says it has. Checked against
+ * `SpokenKind`, never cast; the stored kind always wins, and the spoken append
+ * refuses a contradiction anyway (`withSpokenTurn`). It picks the prompt and
+ * the tools (a guide's are the guide's, plan 261009i), nothing else.
+ */
+function liveKind(thread: ChatThread | undefined, sent: unknown): ThreadKind | undefined {
+  if (sent !== undefined && !isSpokenKind(sent)) {
+    throw httpError(400, "kind must be a conversation that takes a live conversation");
+  }
+  /* Refused before anything is minted or billed, as the spoken append would
+     refuse it later (GPT Sol's F2 on the plan). */
+  if (thread && sent !== undefined && thread.kind !== sent) {
+    throw httpError(409, "That conversation is already a different kind.");
+  }
+  return thread?.kind ?? sent;
+}
+
+/**
  * **A ticket for one live conversation.** `POST /api/chat/:slug/:threadId/live`.
  *
  * Hands the browser three things and no more: an ephemeral `ek_…` secret, the
@@ -4389,7 +4409,7 @@ async function liveChatToken(
   threadId: string,
   body: unknown,
 ): Promise<LiveTicket> {
-  const { placement, useProfile } = (body ?? {}) as Record<string, unknown>;
+  const { placement, useProfile, kind } = (body ?? {}) as Record<string, unknown>;
   /* **Validated against the shared union, never cast.** The two ends declare
      `MicPlacement` once, in src/types.ts, and this is the gate that keeps a
      string off the wire from becoming a `Record` lookup that quietly answers
@@ -4406,6 +4426,7 @@ async function liveChatToken(
   const thread = (await chatStore.load(slug)).find((t) => t.id === threadId);
 
   const session = liveSession({
+    kind: liveKind(thread, kind),
     meta: article.meta,
     blocks: article.blocks,
     profile: useProfile === false ? null : await resolveProfile(slug),
@@ -4512,7 +4533,7 @@ async function liveChatSession(
   threadId: string,
   body: unknown,
 ): Promise<GptLiveTicket> {
-  const { sdp, placement, useProfile } = (body ?? {}) as Record<string, unknown>;
+  const { sdp, placement, useProfile, kind } = (body ?? {}) as Record<string, unknown>;
   if (typeof sdp !== "string" || sdp.trim() === "") {
     throw httpError(400, "Expected { sdp }, the browser's SDP offer");
   }
@@ -4540,7 +4561,7 @@ async function liveChatSession(
     tree: article.tree,
     profile: useProfile === false ? null : await resolveProfile(slug),
     history: thread?.messages ?? [],
-    kind: thread?.kind,
+    kind: liveKind(thread, kind),
   });
 
   /* **Journal first.** If this insert throws, OpenAI is never asked and nothing
@@ -4788,12 +4809,22 @@ async function liveClose(sessionId: string, body: unknown): Promise<{ ok: true }
  * that tool's list — docs/project/chat-tools.md § The reader's notes.
  */
 async function liveTool(slug: string, body: unknown): Promise<ToolOutcome> {
-  const { name, args } = (body ?? {}) as Record<string, unknown>;
+  const { name, args, kind } = (body ?? {}) as Record<string, unknown>;
   if (typeof name !== "string" || !LIVE_SERVER_TOOLS.has(name)) {
     throw httpError(400, "That is not a tool a live session may run");
   }
+  /* **The session's kind, so `runTool`'s own gate applies** (`toolsFor`): a
+     guide's model that names a tool the guide is not offered is answered as
+     an unknown tool, exactly as in a typed guide (plan 261009i). Said by the
+     reader's own page, which read it from the conversation it started; the
+     model chooses only the name. Absent is a chat's or Learn's session, which
+     run the shared eight as before. */
+  if (kind !== undefined && !isSpokenKind(kind)) {
+    throw httpError(400, "kind must be a conversation that takes a live conversation");
+  }
   const article = await loadArticle(slug);
   return runTool(name, (args ?? {}) as Record<string, unknown>, {
+    ...(kind === "guide" ? { kind } : {}),
     slug,
     meta: article.meta,
     blocks: article.blocks,

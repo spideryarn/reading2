@@ -89,7 +89,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 
 import { closeDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
-import { LIVE_MODEL } from "../src/live.js";
+import { LIVE_MODEL, SPOKEN_GUIDE } from "../src/live.js";
 import { acceptAny, asTestOwner, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
@@ -307,6 +307,23 @@ describe("the tool a live session may ask us to run", () => {
     expect(JSON.stringify(out.body)).not.toContain("search_article_words");
   });
 
+  /* Plan 261009i: a guide's session says its kind, and `runTool`'s own gate
+     (`toolsFor`) then refuses what the typed guide is not offered. The model
+     chooses only the name; the page says the kind. */
+  it("runs only the guide's tools for a guide's session", async () => {
+    const refused = await tool({ name: "search_library", args: { query: "rain" }, kind: "guide" });
+    expect(refused.status).toBe(200);
+    expect(refused.body.detail).toBe("no such tool");
+    const ran = await tool({ name: "search_library", args: { query: "rain" } });
+    expect(ran.body.detail).not.toBe("no such tool");
+    const own = await tool({ name: "search_article_words", args: { query: "the" }, kind: "guide" });
+    expect(own.body.detail).not.toBe("no such tool");
+  });
+
+  it("refuses a kind that takes no live conversation", async () => {
+    expect((await tool({ name: "search_article_words", args: { query: "the" }, kind: "explore" })).status).toBe(400);
+  });
+
   it("refuses a body with no name in it", async () => {
     expect((await tool({ args: {} })).status).toBe(400);
   });
@@ -361,6 +378,30 @@ describe("what the session is created with", () => {
     const again = (minted?.session as Record<string, Record<string, Record<string, unknown>>>)
       ?.audio;
     expect(again?.input?.noise_reduction).toEqual({ type: "far_field" });
+  });
+
+  /* Plan 261009i: an empty guide exists only in the tab, so the browser says
+     its kind; the stored kind wins over anything it says. */
+  it("gives an empty guide the guide's spoken prompt and tools", async () => {
+    await ticket("spya-vaaagd", { kind: "guide" });
+    const session = minted?.session as { instructions: string; tools: { name: string }[] };
+    expect(session.instructions).toContain(SPOKEN_GUIDE);
+    expect(session.tools.map((t) => t.name)).not.toContain("search_library");
+    expect(session.tools.map((t) => t.name)).not.toContain("read_web_page");
+  });
+
+  it("gives a chat the companion's prompt, and refuses a kind that takes no Live", async () => {
+    await ticket("spya-vaaagc", {});
+    expect((minted?.session as { instructions: string }).instructions).not.toContain(SPOKEN_GUIDE);
+    expect((await ticket("spya-vaaagx", { kind: "explore" })).status).toBe(400);
+  });
+
+  it("refuses a kind that contradicts the stored conversation, before minting", async () => {
+    await speak("spya-vaaagm", { question: "Q?", answer: "A.", expectedTailId: null });
+    minted = null;
+    const out = await ticket("spya-vaaagm", { kind: "guide" });
+    expect(out.status).toBe(409);
+    expect(minted).toBeNull();
   });
 
   it("refuses a placement that is not one of ours", async () => {

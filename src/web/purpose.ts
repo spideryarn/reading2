@@ -133,8 +133,8 @@ export type PurposeRead =
   | { state: "ready"; purpose: string | null; purposeFailed: boolean; profile: string | null }
   | { state: "failed" };
 
-/** Read the purpose for `slug`, once per slug. For Skim's line (stage 2). */
-export function usePurpose(slug: string): PurposeRead {
+/** Read the purpose for `slug`, once per slug; `null` reads nothing. For Skim's line (stage 2) and the guide's greeting. */
+export function usePurpose(slug: string | null): PurposeRead {
   const [read, setRead] = useState<PurposeRead>({ state: "loading" });
   /* A generation rather than a `live` boolean, for StrictMode — ProfilePanel's
      `generation` says why. */
@@ -142,6 +142,9 @@ export function usePurpose(slug: string): PurposeRead {
   useEffect(() => {
     const mine = ++generation.current;
     setRead({ state: "loading" });
+    /* `null`: nothing to read here (a conversation that is not the guide,
+       plan 261009i), and nothing is fetched. */
+    if (slug === null) return;
     apiFetch(`/api/reader?slug=${encodeURIComponent(slug)}`)
       .then((r) => readJson<{ purpose: string | null; purposeFailed?: boolean; profile?: string | null }>(r))
       .then(

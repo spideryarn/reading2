@@ -396,6 +396,7 @@ export function besideTheModes({
 }): readonly Command[] {
   return [
     ...(article === undefined ? [] : articleRows(article)),
+    ...guideRow(article),
     /* After the article's own page and before everything else: these are about
        this article too. Typed-only, so the list the bar opens on is unchanged
        (command-match.ts § `CommandWords.typedOnly`). The Metadata rows first —
@@ -497,6 +498,36 @@ function articleRows({ slug, search }: CommandBarArticle): readonly Command[] {
          runs nothing. */
       generates: false,
     },
+  ];
+}
+
+/**
+ * **The *Guide* row**: open this article's guide in Chat, sending nothing.
+ * Greg, 2026-10-09, `spya-s6qhzv`: *"there should be a command in the command
+ * bar for opening the guide chat"*. Plan 261009i.
+ *
+ * Only where the page hands over a way to open it (`executor.openGuide`), which
+ * is the owner's reading view: the guide is the owner's, and the Metadata page
+ * has no band. `guide` was already one of Help's aliases and stays there; a
+ * label prefix outranks an alias prefix (command-match.ts), so typing it puts
+ * this row first and Help still in the list.
+ */
+function guideRow(article: CommandBarArticle | undefined): readonly Command[] {
+  const open = article?.executor?.openGuide;
+  if (open === undefined) return [];
+  return [
+    {
+      kind: "action",
+      id: "guide",
+      label: "Guide",
+      description: "This article's guide, in Chat: why you are reading it, where to start, and which modes would help.",
+      aliases: ["tour", "where to start", "how to read", "welcome", "getting started"],
+      /* Opening the guide draws its greeting, which is ours; nothing is asked
+         of a model until the reader sends. */
+      generates: false,
+      opensOnly: true,
+      run: () => open(),
+    } as const,
   ];
 }
 

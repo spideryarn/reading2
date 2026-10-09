@@ -697,6 +697,22 @@ svg.band-waiting-ghost { flex: none; }
 }
 .chat-empty p { margin: 0 0 0.5rem; }
 .chat-empty-hint { font-size: 0.91rem; line-height: 1.45; }
+/* The guide's greeting, as its opening message (plan 261009i): set apart like
+   an answer, with the guide's own icon, and kept above the turns. */
+.guide-greeting-bubble {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+.guide-greeting-bubble p { margin: 0 0 0.45rem; }
+.guide-greeting-bubble p:last-child { margin-bottom: 0; }
+.guide-greeting-icon { flex: none; margin-top: 0.2rem; color: var(--ink-faint); }
+.guide-greeting-title { font-style: italic; }
+.guide-keep { margin: 0.35rem 0 0.6rem; }
 .chat-new {
   display: inline-flex;
   align-items: center;
