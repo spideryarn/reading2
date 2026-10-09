@@ -44,10 +44,21 @@ import {
   citeReadNotIdentified,
   verdictText,
 } from "../src/web/CitationsPanel.js";
-import { type CiteActions, ProseHoverCard } from "../src/web/ProseHoverCard.js";
+import {
+  CITED_AT_JUMPS_SHOWN,
+  type CiteActions,
+  ProseHoverCard,
+} from "../src/web/ProseHoverCard.js";
 import { annotateHtml, citeMarks, termMarks } from "../src/web/annotate.js";
 import { buildNoteIndex } from "../src/web/notes-view.js";
-import type { Block, BlockId, CitedWork, GlossaryEntry } from "../src/types.js";
+import {
+  type Block,
+  type BlockId,
+  type CitedWork,
+  type GlossaryEntry,
+  MAX_MENTIONS,
+} from "../src/types.js";
+import { HOVER_DELAY } from "../src/web/useHoverCard.js";
 
 /* Floating UI observes its reference element and jsdom has no ResizeObserver;
    without this the hook throws on the first open. */
@@ -149,6 +160,7 @@ const TERM: GlossaryEntry = {
 };
 
 const jumped: BlockId[] = [];
+const aimed: { id: BlockId; aim: unknown }[] = [];
 const openedTerms: string[] = [];
 
 function Harness({
@@ -210,7 +222,10 @@ function Harness({
         termActions={null}
         citeActions={citeActions}
         onOpenTerm={(id) => openedTerms.push(id)}
-        onJump={(id) => jumped.push(id)}
+        onJump={(id, aim) => {
+          jumped.push(id);
+          if (aim !== undefined) aimed.push({ id, aim });
+        }}
         onFollowNote={() => {}}
       />
     </>
@@ -281,6 +296,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.stubGlobal("ResizeObserver", FakeResizeObserver);
   jumped.length = 0;
+  aimed.length = 0;
   openedTerms.length = 0;
   host = document.createElement("div");
   document.body.append(host);
@@ -353,7 +369,13 @@ describe("resting on a citation", () => {
     hover(cite(1));
     /* Singular, because one is a real answer and "1 paragraphs" is the sort of
        thing a reader notices and we do not. */
-    expect(card()?.textContent).toMatch(/cited in 1 paragraph\b/i);
+    expect(card()?.querySelector(".prose-card-cite-jumps .prose-card-cite-where")?.textContent).toBe(
+      "cited in 1 paragraph",
+    );
+    /* And cited only in the paragraph the reader is in, there is nowhere to
+       jump: no lone unlinked "1", and no "and 1 more" (plan 261009e). */
+    expect(card()?.querySelectorAll(".prose-card-cite-jump")).toHaveLength(0);
+    expect(card()?.textContent).not.toMatch(/more/);
   });
 
   it("calls a bibliography-only work only in the references, not cited in zero paragraphs", () => {
@@ -361,6 +383,7 @@ describe("resting on a citation", () => {
     hover(cite(0));
     expect(card()?.textContent).toMatch(/only in the references/i);
     expect(card()?.textContent).not.toMatch(/cited in 0 paragraphs/i);
+    expect(card()?.querySelector(".prose-card-cite-jumps")).toBeNull();
   });
 
   it("keeps an internal article link's second-tap jump when its words are a citation", () => {
@@ -678,5 +701,154 @@ describe("Dig deeper from the card", () => {
     hover(cite(0));
     expect(card()).not.toBeNull();
     expect(button()).toBeUndefined();
+  });
+});
+
+/* Greg, 2026-10-09 (spya-tsd470): *"jump back from the list of references to
+   the places where it's cited."* Plan 261009e. */
+describe("from the card, back to every passage that cites the work", () => {
+  /** Tulving with its bibliography entry marked, cited in ONE, TWO and THREE. */
+  const TULVING_LISTED: CitedWork = {
+    ...TULVING,
+    reference: { blockId: REFS, quote: "Example, A. (2001)", start: 0 },
+  };
+  const jumps = () => [...(card()?.querySelectorAll<HTMLElement>(".prose-card-cite-jump") ?? [])];
+  const refMark = () => host.querySelector(`tr[data-block="${REFS}"] mark.cite`) as HTMLElement;
+
+  it("from the reference entry, links every citing paragraph in document order", () => {
+    paint([TULVING_LISTED]);
+    hover(refMark());
+    expect(card()?.textContent).toMatch(/cited in 3 paragraphs/i);
+    const links = jumps();
+    expect(links.map((a) => a.tagName)).toEqual(["A", "A", "A"]);
+    expect(links.map((a) => a.getAttribute("data-block-link"))).toEqual([ONE, TWO, THREE]);
+    expect(links.map((a) => a.querySelector(".prose-card-cite-jump-number")?.textContent)).toEqual([
+      "1",
+      "2",
+      "3",
+    ]);
+    expect(links.map((a) => a.textContent)).toEqual([
+      "1Citing paragraph 1 of 3",
+      "2Citing paragraph 2 of 3",
+      "3Citing paragraph 3 of 3",
+    ]);
+    /* A real address, so a modified click or a copied link still works. */
+    expect(links[1]?.getAttribute("href")).toContain(`at=${TWO}`);
+  });
+
+  it("a press jumps aimed at the work's own citing words, and closes the card", () => {
+    paint([TULVING_LISTED]);
+    hover(refMark());
+    const second = jumps()[1];
+    expect(second).toBeDefined();
+    act(() => {
+      second?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 }));
+    });
+    expect(jumped).toEqual([TWO]);
+    expect(aimed).toEqual([{ id: TWO, aim: `cite:${TULVING.id}` }]);
+    expect(card()).toBeNull();
+  });
+
+  it("a first touch opens the card and one touch on a number jumps once and closes it", () => {
+    paint([TULVING_LISTED]);
+    tap(refMark());
+    expect(card()).not.toBeNull();
+    expect(jumped).toEqual([]);
+
+    const second = jumps()[1];
+    expect(second).toBeDefined();
+    const click = tap(second!);
+    expect(click.defaultPrevented).toBe(true);
+    expect(jumped).toEqual([TWO]);
+    expect(aimed).toEqual([{ id: TWO, aim: `cite:${TULVING.id}` }]);
+    expect(card()).toBeNull();
+  });
+
+  it("from a body mention, leaves the paragraph you are in unlinked", () => {
+    paint([TULVING_LISTED]);
+    hover(cite(0)); // "(Tulving 1983)" in ONE
+    const [first, ...rest] = jumps();
+    expect(first?.tagName).toBe("SPAN");
+    expect(first?.getAttribute("aria-current")).toBe("location");
+    expect(first?.textContent).toMatch(/citing paragraph 1 of 3, this paragraph/i);
+    expect(rest.map((a) => a.getAttribute("data-block-link"))).toEqual([TWO, THREE]);
+  });
+
+  it(`lists at most ${CITED_AT_JUMPS_SHOWN} and says how many more, with the count exact`, () => {
+    const many = Array.from({ length: CITED_AT_JUMPS_SHOWN + 5 }, (_, i) => `spya-zz${String(i).padStart(4, "0")}` as BlockId);
+    paint([{ ...TULVING_LISTED, citedAt: many }]);
+    hover(refMark());
+    expect(card()?.textContent).toMatch(new RegExp(`cited in ${CITED_AT_JUMPS_SHOWN + 5} paragraphs`));
+    expect(jumps()).toHaveLength(CITED_AT_JUMPS_SHOWN);
+    expect(card()?.textContent).toMatch(/and 5 more/);
+  });
+
+  it("past the cap, the paragraph you are in is simply not listed, and every listed number links", () => {
+    const many = Array.from({ length: CITED_AT_JUMPS_SHOWN + 2 }, (_, i) => `spya-zz${String(i).padStart(4, "0")}` as BlockId);
+    paint([{ ...TULVING_LISTED, citedAt: [...many, ONE] }]);
+    hover(cite(0)); // in ONE, which is last
+    expect(jumps()).toHaveLength(CITED_AT_JUMPS_SHOWN);
+    expect(jumps().every((el) => el.tagName === "A")).toBe(true);
+    expect(card()?.textContent).toMatch(/and 3 more/);
+  });
+
+  it(`says "at least" when the work has the most direct mentions we keep (${MAX_MENTIONS})`, () => {
+    /* A work cited directly in the text keeps at most MAX_MENTIONS mentions,
+       so a fourth citing paragraph is not in citedAt (GPT Sol, plan review). */
+    const mentions = [ONE, TWO, THREE].map((blockId) => ({ blockId, quote: "x", start: 0 }));
+    paint([{ ...TULVING_LISTED, mentions: [TULVING.mentions[0]!, ...mentions.slice(1)] }]);
+    hover(refMark());
+    expect(card()?.querySelector(".prose-card-cite-jumps .prose-card-cite-where")?.textContent).toBe(
+      "cited in at least 3 paragraphs",
+    );
+  });
+
+  it("keeps an exact count for a note-expanded work with no direct mentions", () => {
+    paint([{ ...TULVING_LISTED, mentions: [], citedAt: [ONE, TWO, THREE] }]);
+    hover(refMark());
+    expect(card()?.querySelector(".prose-card-cite-jumps .prose-card-cite-where")?.textContent).toBe(
+      "cited in 3 paragraphs",
+    );
+  });
+
+  it("uses at least conservatively when the mention cap is reached within one paragraph", () => {
+    const mentions = Array.from({ length: MAX_MENTIONS }, (_, start) => ({
+      blockId: ONE,
+      quote: `citation ${start + 1}`,
+      start,
+    }));
+    paint([{ ...TULVING_LISTED, mentions, citedAt: [ONE] }]);
+    hover(refMark());
+    expect(card()?.querySelector(".prose-card-cite-jumps .prose-card-cite-where")?.textContent).toBe(
+      "cited in at least 1 paragraph",
+    );
+  });
+
+  it("keeps the card open while the keyboard moves into it, cancelling a pending pointer close", () => {
+    paint([TULVING_LISTED]);
+    hover(refMark());
+    const first = jumps()[0];
+    act(() => {
+      pointer("pointerover", host);
+      first?.focus();
+    });
+    act(() => {
+      vi.advanceTimersByTime(HOVER_DELAY.close * 2);
+    });
+    expect(card(), "focus entering the card closed it").not.toBeNull();
+  });
+
+  it("closes after focus leaves the card for browser chrome", () => {
+    paint([TULVING_LISTED]);
+    hover(refMark());
+    const first = jumps()[0];
+    act(() => {
+      first?.focus();
+      first?.dispatchEvent(new FocusEvent("focusout", { bubbles: true, relatedTarget: null }));
+    });
+    act(() => {
+      vi.advanceTimersByTime(HOVER_DELAY.close * 2);
+    });
+    expect(card(), "the card stayed open after focus left the document").toBeNull();
   });
 });

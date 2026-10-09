@@ -383,9 +383,9 @@ async function partsOf(
 }
 
 /**
- * The keeper for one box. `box` names it — `"feedback"`, `` `chat:${slug}` `` —
- * and is the only thing a caller decides. Cheap to call on every render: it
- * holds no state of its own.
+ * The keeper for one box. `box` names everything its words are about —
+ * `"feedback"`, `` `chat:${slug}:${threadId}` `` — and is the only thing a
+ * caller decides. Cheap to call on every render: it holds no state of its own.
  */
 export function keepDictation(box: string): DictationKeeper<DictationContext> {
   return {

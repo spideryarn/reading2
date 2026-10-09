@@ -108,6 +108,13 @@ export interface UseDictationField {
   again?: () => void;
   /** A double press was taken: the box will send when the words arrive. */
   sendingAfter: boolean;
+  /**
+   * **This box takes a double press on Stop at all** (it was given an
+   * `onDone`), so the button's card can say so before the reader needs it.
+   * `again` cannot: it exists only in the moment after Stop. Hand it to
+   * `DictationButton` as `doubleStop`.
+   */
+  doubleStop: boolean;
 }
 
 export function useDictationField<C>({
@@ -440,5 +447,6 @@ export function useDictationField<C>({
     toggle,
     ...(onDone && againOpen && readOnly ? { again } : {}),
     sendingAfter,
+    doubleStop: onDone !== undefined,
   };
 }

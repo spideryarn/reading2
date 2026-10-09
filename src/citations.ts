@@ -81,12 +81,16 @@ import {
   type Citations,
   type CitationScoreDrops,
   MAX_CITATIONS,
+  MAX_MENTIONS,
   type Meta,
   type Tree,
 } from "./types.js";
 
 export { MAX_CITATIONS };
 export type { CitedWork, CitationDrops, CitationPlace, Citations, CitationScoreDrops };
+/* Preserve the former module boundary while the constant itself lives with the
+   data contract the client reads. */
+export { MAX_MENTIONS };
 
 /**
  * Bumped whenever the prompt changes what a row *is*. Exported so tests assert
@@ -107,8 +111,6 @@ export type { CitedWork, CitationDrops, CitationPlace, Citations, CitationScoreD
  * docs/plans/261003m-citations-influence-unknown-unless-confident-and-dig-deeper-fills-it-in.md. */
 export const PROMPT_VERSION = "citations/6";
 
-/** Mentions kept per work. The first-cited jump needs one; three is room for the shorthand and the note. */
-export const MAX_MENTIONS = 3;
 /** Field caps the prompt states, and what code clips to. They are also what `PER_WORK_TOKENS` is sized on. */
 export const TITLE_CAP = 120;
 export const WHY_CAP = 160;

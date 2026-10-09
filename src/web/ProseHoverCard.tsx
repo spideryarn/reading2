@@ -54,11 +54,22 @@ import {
   Trash2,
 } from "lucide-react";
 import { FloatingArrow, FloatingPortal } from "@floating-ui/react";
-import type { BlockId, CitedWork, GlossaryEntry, Job, PagePreview, Quote } from "../types.js";
+import {
+  type BlockId,
+  type CitedWork,
+  type GlossaryEntry,
+  type Job,
+  MAX_MENTIONS,
+  type PagePreview,
+  type Quote,
+} from "../types.js";
 import { LABEL as QUOTE_SCORE_LABEL } from "./QuotesPanel.js";
 import { aiProvenance } from "./quote-band-rows.js";
 import { urlKey } from "../ingest.js";
 import { hostOf } from "../urls.js";
+import { BlockRef } from "./BlockRef.js";
+import type { JumpAim } from "./flash.js";
+import { citePassageKey } from "./rows.js";
 /* The same words-per-minute the masthead and the shelf card use. A second
    arithmetic here would be a card and a masthead disagreeing about one page,
    which is the drift src/reading-time.ts exists to make impossible. */
@@ -259,8 +270,12 @@ function HoverCard({
   notes: NoteIndex;
   /** Show this term in the glossary band — the card's one way out to the list. */
   onOpenTerm(id: string): void;
-  /** Go to the block an in-article anchor points at. */
-  onJump(id: BlockId): void;
+  /**
+   * Go to the block an in-article anchor points at — or, from a citation's
+   * card, to a passage that cites the work, aimed at its citing words
+   * (`citePassageKey`; plan 261009e).
+   */
+  onJump(id: BlockId, aim?: JumpAim): void;
   /**
    * Go to a note, remembering the passage it was cited from.
    *
@@ -715,6 +730,11 @@ function HoverCard({
               work={w}
               showInSpideryarn={showInSpideryarn}
               actions={citeActions}
+              here={shown.el.closest("tr[data-block]")?.getAttribute("data-block") ?? null}
+              onJump={(id) => {
+                close();
+                onJump(id, citePassageKey(w.id));
+              }}
               onClose={close}
             />
           ))}
@@ -2018,24 +2038,31 @@ function clip(text: string, max: number): string {
  * *which paragraph*, and marking a whole paragraph to mean "something in here
  * cites something" is the vague version of the question the mark exists to
  * answer. The honest close is words — *cited in 7 paragraphs* — which is Fable's
- * call and costs nothing.
+ * call and costs nothing. Since 2026-10-09 each of those paragraphs is also a
+ * numbered jump beside the count (`CitedAtJumps`, plan 261009e), so the card on
+ * a reference entry leads back to where the work is cited.
  */
 function CiteCard({
   work,
   showInSpideryarn,
   actions,
+  here,
+  onJump,
   onClose,
 }: {
   work: CitedWork;
   showInSpideryarn: boolean;
   /** `null` for a visitor: no Dig deeper. */
   actions: CiteActions | null;
+  /** The block the card was opened from, which is not a jump (plan 261009e). */
+  here: BlockId | null;
+  /** Go to one of the passages that cite the work. The caller closes the card. */
+  onJump(id: BlockId): void;
   onClose(): void;
 }) {
   const source = sourceOf(work);
   const by = byLineOf(work);
   const line = workByLine(work);
-  const where = work.citedAt.length;
 
   return (
     /* No `divided` prop, unlike `LinkCard` and `NoteCard`: the rule between
@@ -2107,6 +2134,14 @@ function CiteCard({
         <p className="prose-card-cite-read">{readNoteOf(work)}</p>
       </div>
       <CiteCardReading work={work} />
+      {work.citedInBody && (
+        <CitedAtJumps
+          citedAt={work.citedAt}
+          atLeast={work.mentions.length >= MAX_MENTIONS}
+          here={here}
+          onJump={onJump}
+        />
+      )}
 
       <p className="prose-card-foot prose-card-cite-foot">
         {source.kind === "address" ? (
@@ -2125,16 +2160,11 @@ function CiteCard({
             search Scholar
           </a>
         )}
-        {/* Where else it is cited. Words rather than marks — see the docstring
-            — and the singular is written out rather than pluralised with an
-            "(s)", because one is a real and common answer. A bibliography-only
-            work is not "cited in 0 paragraphs": the band already has the honest
-            phrase for that first-class state. */}
-        <span className="prose-card-cite-where">
-          {work.citedInBody
-            ? `cited in ${where} ${where === 1 ? "paragraph" : "paragraphs"}`
-            : "only in the references"}
-        </span>
+        {/* A bibliography-only work is not "cited in 0 paragraphs": the band
+            already has the honest phrase for that first-class state. Where it
+            is cited, the count and a jump to each place are their own line
+            above (`CitedAtJumps`). */}
+        {!work.citedInBody && <span className="prose-card-cite-where">only in the references</span>}
         {/* The owner's one verb, last and pushed right. The card closes on the
             press for `TermCard`'s reason: it is 18rem and goes when the pointer
             leaves, and the answer needs somewhere that stays put — the row,
@@ -2164,6 +2194,81 @@ function CiteCard({
         )}
       </p>
     </div>
+  );
+}
+
+/** Past this many the row ends in *and N more*; the count before it stays exact. */
+export const CITED_AT_JUMPS_SHOWN = 20;
+
+/**
+ * **Every passage that cites the work, one jump each** — Greg, 2026-10-09
+ * (report `spya-tsd470`): *"I often want to be able to jump back from the list
+ * of references to the places where it's cited."* The reference entry was
+ * already marked, and already opened this card; until then the card could only
+ * say how many paragraphs cite the work.
+ *
+ * Numbers rather than words, in document order, because `citedAt` holds the
+ * known citing blocks while `mentions` (the citing words) stops at three: a row
+ * mixing three phrases with seventeen bare paragraphs would say less than a
+ * row of positions. Each is a `BlockRef`, so its own card names the section and
+ * the paragraph before the reader commits. The jump is aimed at the work's
+ * marks (`citePassageKey`), so it flashes the citing words where the paragraph
+ * has them and the whole paragraph where it does not (flash.ts falls back to
+ * the cell). The singular is written out rather than "(s)", because one is a
+ * real and common answer.
+ *
+ * The paragraph the card was opened from is drawn but not linked: a jump to
+ * where you already are is a scroll that does nothing. From the reference
+ * entry, which is never in `citedAt`, every number is a link.
+ * docs/plans/261009e-citation-card-jumps-back-to-every-passage-that-cites-the-work.md.
+ */
+function CitedAtJumps({
+  citedAt,
+  atLeast,
+  here,
+  onJump,
+}: {
+  citedAt: readonly BlockId[];
+  /** The work has `MAX_MENTIONS` direct mentions, so there may be more paragraphs than `citedAt` holds. */
+  atLeast: boolean;
+  here: BlockId | null;
+  onJump(id: BlockId): void;
+}) {
+  const total = citedAt.length;
+  /* Cited only in the paragraph you are reading: there is nowhere to go, and a
+     lone unlinked "1" would be a number for its own sake. */
+  const listed = citedAt.some((id) => id !== here) ? citedAt.slice(0, CITED_AT_JUMPS_SHOWN) : [];
+  return (
+    <p className="prose-card-cite-jumps">
+      <span className="prose-card-cite-where">
+        cited in {atLeast ? "at least " : ""}
+        {total} {total === 1 ? "paragraph" : "paragraphs"}
+      </span>
+      {listed.map((id, i) =>
+        id === here ? (
+          <span key={id} className="prose-card-cite-jump is-here" aria-current="location">
+            <span className="prose-card-cite-jump-number" aria-hidden="true">
+              {i + 1}
+            </span>
+            <span className="sr-only">
+              Citing paragraph {i + 1} of {total}, this paragraph
+            </span>
+          </span>
+        ) : (
+          <BlockRef key={id} id={id} className="prose-card-cite-jump" onJump={onJump}>
+            <span className="prose-card-cite-jump-number" aria-hidden="true">
+              {i + 1}
+            </span>
+            <span className="sr-only">
+              Citing paragraph {i + 1} of {total}
+            </span>
+          </BlockRef>
+        ),
+      )}
+      {listed.length > 0 && total > listed.length && (
+        <span className="prose-card-cite-where">and {total - listed.length} more</span>
+      )}
+    </p>
   );
 }
 

@@ -309,6 +309,7 @@ export function ProfilePage() {
         <div className={`${CARD} tw:p-4`}>
           <ProfileBox
             id="reader-profile"
+            article={null}
             label="Your background, expertise and interests"
             placeholder="e.g. Cognitive scientist, twenty years. Rusty on transformer internals. I read for the argument rather than the news."
             hint="Used on every article — the glossary, the ideas, chat, explanations and threads. It changes what gets explained and how much, never what the article says."

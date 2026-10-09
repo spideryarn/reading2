@@ -1351,6 +1351,7 @@ export function ChatDialog({
         {sendsItself ? null : target.kind === "draft" ? (
           <Composer
             slug={slug}
+            keepAs={`chat:${slug}:${draftTarget}`}
             onSend={ask}
             busy={false}
             focusNonce={1}
