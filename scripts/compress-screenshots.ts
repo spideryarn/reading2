@@ -233,7 +233,7 @@ type Outcome = { readonly kind: "compressed"; readonly before: number; readonly 
 
 /** Compress one file in place, or mark it as tried. */
 export function compressOne(file: string, pngquant = "pngquant", repo = REPO,
-  options: { timeout?: number; onWritten?: (bytes: Buffer) => void } = {}): Outcome {
+  options: { timeout?: number; onWritten?: (bytes: Buffer, source: Buffer) => void } = {}): Outcome {
   const source = screenshotFile(file, repo);
   file = source.file;
   const before = readFileSync(file);
@@ -268,7 +268,7 @@ export function compressOne(file: string, pngquant = "pngquant", repo = REPO,
     chmodSync(temporary, current.stat.mode & 0o777);
     const written = options.onWritten === undefined ? undefined : readFileSync(temporary);
     renameSync(temporary, file);
-    if (written !== undefined) options.onWritten?.(written);
+    if (written !== undefined) options.onWritten?.(written, before);
     return outcome;
   } finally {
     rmSync(temporaryDir, { recursive: true, force: true });
@@ -315,10 +315,12 @@ export function main(argv: readonly string[]): number {
     if (bestEffort && Date.now() >= deadline) break;
     const outcome = attempt(file, () => compressOne(file, "pngquant", REPO, bestEffort ? {
       timeout: Math.min(8000, Math.max(1, deadline - Date.now())),
-      // The hook can re-stage these exact bytes without accidentally staging a later
-      // peer edit. Hash the output we renamed, never a fresh read of the working copy.
-      onWritten: (bytes) => console.log(`compression-result ${JSON.stringify({
-        file: path.relative(REPO, file), sha256: createHash("sha256").update(bytes).digest("hex"),
+      // The hook can re-stage these exact bytes without accidentally staging a peer edit.
+      // Bind the source read above to the output we renamed, never to a later fresh read.
+      onWritten: (bytes, source) => console.log(`compression-result ${JSON.stringify({
+        file: path.relative(REPO, file),
+        sourceSha256: createHash("sha256").update(source).digest("hex"),
+        sha256: createHash("sha256").update(bytes).digest("hex"),
       })}`),
     } : {}));
     if (outcome === undefined) continue;

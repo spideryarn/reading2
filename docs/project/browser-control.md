@@ -20,13 +20,16 @@ version of it that works on a headless server. That is the whole reason the seco
 
 **A screenshot you keep under `docs/` is compressed automatically for ordinary Claude Code commits.**
 A Claude Code hook, [`compress-commit-pngs.sh`](../../.claude/hooks/compress-commit-pngs.sh), sees a
-`git commit` and runs [the script](../../scripts/compress-screenshots.ts) over the PNGs under `docs/`
-named as literal commit paths, or unchanged staged PNGs in a bare commit, in place. Other staged
-files are left alone; a bare commit also leaves later working edits alone. It refuses symlinked paths,
-never blocks a commit and says in one line what it did. A new file must be named in an earlier
-`git add` in the same command. It misses a commit made outside Claude Code
-and skips folder paths, shell expansion, `git -C` and unfamiliar commit options;
-for those, run `npm run screenshots:compress -- <file>` by hand, on either machine.
+`git commit` and runs [the script](../../scripts/compress-screenshots.ts), in place, over the PNGs
+under `docs/` the commit carries: the literal commit paths, or the unchanged staged PNGs in a bare
+commit, when it can read the command for certain; and otherwise every changed PNG under `docs/` the
+command names, as a file, as its folder, or as a glob over its folder (which can include one the
+commit then leaves out). It refuses symlinked paths, never blocks a commit and says in one line what
+it did. It misses a commit made outside Claude Code, a name it cannot see literally in the text
+(`git commit -a`, a path assembled from a variable, a `--pathspec-from-file`); for those, run
+`npm run screenshots:compress -- <file>` by hand, on either machine. Until 2026-10-09 it skipped any
+command it could not parse, which was six commits in seven
+([261009j](../postmortems/261009j-a-hook-that-cannot-read-the-command-does-nothing-and-says-nothing.md)).
 Quantisation is lossy; the plan's sampled light and dark text
 showed no visible difference ([measurements and scope](../plans/261007j-box-followups-tmp-age-overseer-unit-png-compression.md#3-compressed-screenshots)).
 The `npm test` gate checks tracked and index-added PNGs, including nested folders, and stays as the

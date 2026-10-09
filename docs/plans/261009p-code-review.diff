@@ -1,0 +1,283 @@
+diff --git a/.claude/hooks/compress-commit-pngs.sh b/.claude/hooks/compress-commit-pngs.sh
+index 7b453ebbb..07bf237f0 100755
+--- a/.claude/hooks/compress-commit-pngs.sh
++++ b/.claude/hooks/compress-commit-pngs.sh
+@@ -8,11 +8,13 @@
+ # few hours, and a red suite blocks deploys. The test stays as the backstop; this makes it
+ # rare. Plan: docs/plans/261007m-compress-docs-screenshots-on-commit.md.
+ #
+-# Only literal PNG paths in one ordinary `git commit`, or unchanged staged PNGs in
+-# a bare commit. Uncertain shell syntax, repository switches and commit options are
+-# skipped. Never interpret a commit message or another command as a screenshot path.
+-# Re-staging uses a receipt for the bytes actually written, and checks the index has
+-# not changed since selection. Parent-directory symlinks are refused too.
++# When commit_command.parse can read the command: its literal PNG paths, or unchanged staged
++# PNGs in a bare commit. When it cannot (six commits in seven, as sessions write them), every
++# PNG under docs/ the command text names: the file, its folder as a whole word, or a glob over
++# its folder. That can compress a screenshot the commit leaves out, which is harmless; skipping
++# was not (plan 261009p). A file whose index copy was its exact bytes is re-staged, using a
++# receipt for the bytes actually written, and only if the index has not changed since
++# selection. Parent-directory symlinks are refused too.
+ #
+ # The same contract as push-doc-hint.sh: ALWAYS exit 0, quiet on any error. A hook that
+ # ever blocks a commit costs more than every screenshot it ever shrank. The registration
+@@ -61,21 +63,75 @@ command -v pngquant >/dev/null || quiet
+ # receipts. Bash 3.2 and BSD tools need no GNU utilities or newer array builtins.
+ HOOK_DIR=$(cd "$(dirname "$0")" && pwd) || quiet
+ PAYLOAD="$payload" HOOK_DIR="$HOOK_DIR" python3 - <<'PYTHON'
+-import hashlib, json, os, signal, subprocess, sys, time
++import fnmatch, hashlib, json, os, re, signal, subprocess, sys, time
+ sys.dont_write_bytecode = True  # no __pycache__ in .claude/hooks
+ sys.path.insert(0, os.environ["HOOK_DIR"])
+ import commit_command  # the shared reading of what a commit carries
+ 
++# In the command text, a path starts at the start or after one of these...
++BEFORE = r"(?:^|(?<=[\s'\"=;&|(<>]))"
++# ...and ends at the end or before one of these.
++AFTER = r"(?=$|[\s'\";&|)<>])"
++WORD = r"[^\s'\";&|)<>/]*"  # one path component, which may be a glob
++
++
++def leading_cd(cmd, cwd):
++    """Where a literal leading `cd <dir> &&` (or `;`) goes, or cwd; None if it goes nowhere."""
++    m = re.match(r"\s*cd\s+(?:'([^']*)'|\"([^\"$`\\]*)\"|([^\s;&|<>()$`'\"\\]+))\s*(?:&&|;|\n)", cmd)
++    if not m:
++        return os.path.realpath(cwd)
++    target = os.path.join(cwd, os.path.expanduser(next(g for g in m.groups() if g is not None)))
++    return os.path.realpath(target) if os.path.isdir(target) else None
++
++
++def docs_pngs(root):
++    """Every PNG on disk under docs/, repo-relative, symlinked directories not followed. From the
++    filesystem, not git status, which assume-unchanged and skip-worktree can blind."""
++    found = []
++    for directory, _, names in os.walk(os.path.join(root, "docs")):
++        found += [os.path.relpath(os.path.join(directory, n), root) for n in names if n.lower().endswith(".png")]
++    return found
++
++
++def named(cmd, name, root, cwd):
++    """Does the command text name this file: the file itself, its folder as a whole word, or its
++    folder as the base of a glob that matches it (`docs/plans/x-shots/*.png`)? Repo-relative,
++    cwd-relative or absolute. A further ancestor counts only as a whole word, so a command that
++    names `docs/plans/a.md` names no screenshot in docs/plans."""
++    def spellings(rel):
++        absolute = os.path.join(root, rel)
++        return {s for s in (rel, absolute, os.path.relpath(absolute, cwd)) if s not in ("", ".")}
++    if any(re.search(BEFORE + re.escape(s) + AFTER, cmd) for s in spellings(name)):
++        return True
++    parent, base = os.path.split(name)
++    for s in spellings(parent):
++        for m in re.finditer(BEFORE + re.escape(s) + "(?:/(" + WORD + "))?" + AFTER, cmd):
++            pattern = m.group(1)
++            if not pattern or (re.search(r"[*?\[]", pattern) and fnmatch.fnmatchcase(base, pattern)):
++                return True
++    parent = os.path.dirname(parent)
++    while parent:
++        if any(re.search(BEFORE + re.escape(s) + "/?" + AFTER, cmd) for s in spellings(parent)):
++            return True
++        parent = os.path.dirname(parent)
++    return False
++
+ def main():
+     d = json.loads(os.environ["PAYLOAD"])
+     cwd = d.get("cwd")
+     cmd = (d.get("tool_input") or {}).get("command", "")
+     if not isinstance(cwd, str) or not os.path.isdir(cwd) or not isinstance(cmd, str):
+         return
++    # The parser reads a commit for certain or not at all, and sessions here seldom write one it
++    # can read (131 of 908 commits, 261009p). When it cannot, fall back to the screenshots the
++    # command names: a parse failure must not mean "compress nothing".
+     commit = commit_command.parse(cmd, cwd)
+-    if commit is None:
+-        return
+-    cwd, paths = commit.cwd, commit.paths
++    if commit is not None:
++        cwd, paths = commit.cwd, commit.paths
++    else:
++        cwd, paths = leading_cd(cmd, cwd), None
++        if cwd is None:
++            return
+ 
+     deadline = time.monotonic() + 26
+     def run(argv, data=None, timeout=2, directory=None):
+@@ -110,32 +166,37 @@ def main():
+         return (name.startswith("docs/") and name.lower().endswith(".png") and "\n" not in name
+                 and os.path.isfile(file) and not os.path.islink(file) and os.path.realpath(file) == file)
+ 
++    def index_entry(name):
++        entry = git("ls-files", "--stage", "-z", "--", name).split(b"\t", 1)[0].split()
++        return entry if len(entry) == 3 and entry[0] in (b"100644", b"100755") and entry[2] == b"0" else None
++
++    def unchanged_in_index(name, entry):
++        # diff --quiet trusts assume-unchanged/skip-worktree; raw blob equality does not.
++        return entry is not None and git("hash-object", "--no-filters", "--", name).strip() == entry[1]
++
+     # Preserve literal spelling: resolving symlinks here would bypass the compressor's
+     # own refusal and could rewrite a different file from the path being committed.
+-    if paths:
+-        files = set()
++    files = set()
++    if paths is None:
++        files = {name for name in docs_pngs(root) if safe(name) and named(cmd, name, root, cwd)}
++    elif paths:
+         added = {os.path.relpath(a, root) for a in commit.added}
+         for name in paths:
+             relative = os.path.relpath(os.path.abspath(os.path.join(cwd, name)), root)
+             if safe(relative) and (relative in added or git("ls-files", "-z", "--", relative)):
+                 files.add(relative)
+-        restage = {}
+     else:
+         staged = git("diff", "--cached", "--no-renames", "--name-only", "-z", "--diff-filter=AM")
+-        files, restage = set(), {}
+         for raw in staged.split(b"\0"):
+-            if not raw:
+-                continue
+             name = os.fsdecode(raw)
+-            if not safe(name):
+-                continue
+-            entry = git("ls-files", "--stage", "-z", "--", name).split(b"\t", 1)[0].split()
+-            if len(entry) != 3 or entry[0] not in (b"100644", b"100755") or entry[2] != b"0":
+-                continue
+-            # diff --quiet trusts assume-unchanged/skip-worktree; raw blob equality does not.
+-            if git("hash-object", "--no-filters", "--", name).strip() != entry[1]:
+-                continue
+-            files.add(name)
++            if raw and safe(name) and unchanged_in_index(name, index_entry(name)):
++                files.add(name)
++    # However a file was chosen: if the index held exactly its bytes, the index gets the
++    # compressed bytes too, so a later commit of the index carries them.
++    restage = {}
++    for name in files:
++        entry = index_entry(name)
++        if unchanged_in_index(name, entry):
+             restage[name] = entry
+     if not files:
+         return
+diff --git a/.claude/hooks/compress-commit-pngs.test.sh b/.claude/hooks/compress-commit-pngs.test.sh
+index 60f76f064..fbefb654f 100755
+--- a/.claude/hooks/compress-commit-pngs.test.sh
++++ b/.claude/hooks/compress-commit-pngs.test.sh
+@@ -103,6 +103,27 @@ run 'cd /nonexistent && git add -- docs/plans/cd-missing.png && git commit -- do
+ check "a cd to nowhere: quiet"           exit0_quiet
+ check "a cd to nowhere: untouched"       is_truecolour docs/plans/cd-missing.png
+ 
++echo "--- the commands sessions actually write (261009p: the parser read one in seven) ---"
++# Each is the shape of a real commit that landed an uncompressed screenshot on 2026-10-09.
++png "$REPO/docs/plans/tail.png"; git -C "$REPO" add -- docs/plans/tail.png
++run 'git commit -q -F /tmp/x/msg.txt -- docs/plans/tail.png msg; git log --oneline -1 | cat; git status --short | cat'
++check "trailing commands and pipes (261009e)" is_palette docs/plans/tail.png
++check "trailing commands: staged copy follows" index_matches_file docs/plans/tail.png
++png "$REPO/docs/plans/var.png"
++run 'SP=/tmp/x; printf "m\n" > $SP/m.txt; npm run -s check:staged-revert && git add -- docs/plans/var.png && git commit -q -F $SP/m.txt -- docs/plans/var.png && git push -q origin HEAD:dev'
++check "a variable, a redirect and a push"      is_palette docs/plans/var.png
++mkdir -p "$REPO/docs/plans/x-shots"; png "$REPO/docs/plans/x-shots/a.png"; png "$REPO/docs/plans/x-shots/b.png" 4
++run 'git add -- docs/plans/x-shots && git commit -F msg -- docs/plans/x-shots/*.png'
++check "a glob over a shots folder (261009m): a" is_palette docs/plans/x-shots/a.png
++check "a glob over a shots folder (261009m): b" is_palette docs/plans/x-shots/b.png
++png "$REPO/docs/plans/heredoc.png"
++run "cat > /tmp/x/m.txt <<'EOF'
++it's a message naming nothing
++EOF
++git add -- docs/plans/heredoc.png && git commit -F /tmp/x/m.txt -- docs/plans/heredoc.png"
++check "a heredoc message (261009i)"            is_palette docs/plans/heredoc.png
++(cd "$REPO" && git add -- docs/plans && git commit -qm real-shapes)
++
+ echo "--- a bare commit takes the index ---"
+ png "$REPO/docs/plans/staged.png" 1
+ git -C "$REPO" add -- docs/plans/staged.png
+@@ -120,21 +141,60 @@ check "working copy left alone"          is_truecolour docs/plans/edited.png
+ check "index left as its owner staged it" test "$(git -C "$REPO" rev-parse :docs/plans/edited.png)" = "$staged_blob"
+ (cd "$REPO" && git commit -qm staged-ones)
+ 
+-echo "--- only paths the commit includes ---"
++echo "--- only paths the commit includes, when the parser can read it ---"
+ png "$REPO/docs/plans/peer.png"
+-for cmd in 'echo docs/plans/peer.png && git commit -- msg' \
+-  'git commit -m docs/plans/peer.png -- msg' \
++for cmd in 'git commit -m docs/plans/peer.png -- msg' \
+   'git add -- docs/plans/peer.png && git commit -- msg' \
+   'echo "git commit -- docs/plans/peer.png"' \
+-  'git -C other commit -- docs/plans/peer.png' \
+   'cd other && git commit -- docs/plans/peer.png' \
+-  'git commit --dry-run -- docs/plans/peer.png' \
+-  'git commit docs/plans/peer.png --dry-run' \
+   'git commit -- docs/plans/peer.png'; do
+   png "$REPO/docs/plans/peer.png"
+   run "$cmd"
+   check "$cmd: untouched" is_truecolour docs/plans/peer.png
+ done
++
++echo "--- when it cannot, a screenshot the command names is compressed, even if not committed ---"
++# The price of not missing one (261009p): a changed screenshot under docs/ has to be
++# compressed before it is committed anyway, and compressing twice is a no-op.
++for cmd in 'echo docs/plans/peer.png && git commit -- msg' \
++  'git -C other commit -- docs/plans/peer.png' \
++  'git commit --dry-run -- docs/plans/peer.png'; do
++  png "$REPO/docs/plans/peer.png"
++  run "$cmd"
++  check "$cmd: compressed" is_palette docs/plans/peer.png
++done
++rm -f "$REPO/docs/plans/peer.png"
++
++echo "--- ...but not one it does not name ---"
++mkdir -p "$REPO/docs/plans/peer-shots"; png "$REPO/docs/plans/peer-shots/a.png"; png "$REPO/docs/plans/sib.png"
++echo note > "$REPO/docs/plans/a.md"
++for cmd in 'git add -- docs/plans/a.md && git commit -F msg -- docs/plans/a.md; git log -1 | cat' \
++  'git commit -F $SP/m -- docs/plans/a.md docs/plans/peer-shots/b.png' \
++  'git commit -F msg -- docs/plans/peer-shots/*.jpg; true' \
++  'git commit -F msg -- docs/plans/sib.png.bak docs/plans/sib; true'; do
++  run "$cmd"
++  check "$cmd: folder sibling untouched" is_truecolour docs/plans/peer-shots/a.png
++  check "$cmd: sibling untouched"        is_truecolour docs/plans/sib.png
++done
++png "$REPO/docs/plans/staged-peer.png"; git -C "$REPO" add -- docs/plans/staged-peer.png
++staged_peer=$(git -C "$REPO" rev-parse :docs/plans/staged-peer.png)
++run 'git commit -F msg -- docs/plans/a.md; git status --short | cat'
++check "unnamed staged peer: untouched"     is_truecolour docs/plans/staged-peer.png
++check "unnamed staged peer: index unchanged" test "$(git -C "$REPO" rev-parse :docs/plans/staged-peer.png)" = "$staged_peer"
++
++echo "--- staged and named: the index follows only if it held the same bytes ---"
++png "$REPO/docs/plans/both.png" 6; git -C "$REPO" add -- docs/plans/both.png
++run 'git commit -q -F $SP/m -- docs/plans/both.png | cat'
++check "staged = disk: compressed"         is_palette docs/plans/both.png
++check "staged = disk: index follows"      index_matches_file docs/plans/both.png
++png "$REPO/docs/plans/differs.png" 6; git -C "$REPO" add -- docs/plans/differs.png
++png "$REPO/docs/plans/differs.png" 8
++differs_blob=$(git -C "$REPO" rev-parse :docs/plans/differs.png)
++run 'git commit -q -F $SP/m -- docs/plans/differs.png | cat'
++check "staged != disk: disk compressed"   is_palette docs/plans/differs.png
++check "staged != disk: index untouched"   test "$(git -C "$REPO" rev-parse :docs/plans/differs.png)" = "$differs_blob"
++git -C "$REPO" rm -q -f --cached -- docs/plans/staged-peer.png docs/plans/both.png docs/plans/differs.png
++rm -rf "$REPO/docs/plans/peer-shots" "$REPO/docs/plans/sib.png" "$REPO/docs/plans/a.md" "$REPO/docs/plans/"{staged-peer,both,differs}.png
+ png "$REPO/docs/plans/peer.png"
+ git -C "$REPO" add -- docs/plans/peer.png
+ peer_blob=$(git -C "$REPO" rev-parse :docs/plans/peer.png)
+diff --git a/docs/project/browser-control.md b/docs/project/browser-control.md
+index a1dc71c1f..128323d9a 100644
+--- a/docs/project/browser-control.md
++++ b/docs/project/browser-control.md
+@@ -20,13 +20,16 @@ version of it that works on a headless server. That is the whole reason the seco
+ 
+ **A screenshot you keep under `docs/` is compressed automatically for ordinary Claude Code commits.**
+ A Claude Code hook, [`compress-commit-pngs.sh`](../../.claude/hooks/compress-commit-pngs.sh), sees a
+-`git commit` and runs [the script](../../scripts/compress-screenshots.ts) over the PNGs under `docs/`
+-named as literal commit paths, or unchanged staged PNGs in a bare commit, in place. Other staged
+-files are left alone; a bare commit also leaves later working edits alone. It refuses symlinked paths,
+-never blocks a commit and says in one line what it did. A new file must be named in an earlier
+-`git add` in the same command. It misses a commit made outside Claude Code
+-and skips folder paths, shell expansion, `git -C` and unfamiliar commit options;
+-for those, run `npm run screenshots:compress -- <file>` by hand, on either machine.
++`git commit` and runs [the script](../../scripts/compress-screenshots.ts), in place, over the PNGs
++under `docs/` the commit carries: the literal commit paths, or the unchanged staged PNGs in a bare
++commit, when it can read the command for certain; and otherwise every PNG under `docs/` the command
++names, as a file, as its folder, or as a glob over its folder (which can include one the commit then
++leaves out). It refuses symlinked paths, never blocks a commit and says in one line what it did. It
++misses a commit made outside Claude Code, a name it cannot see in the text (`git commit -a`, a path
++held in a variable, a `--pathspec-from-file`); for those, run
++`npm run screenshots:compress -- <file>` by hand, on either machine. Until 2026-10-09 it skipped any
++command it could not parse, which was six commits in seven
++([261009j](../postmortems/261009j-a-hook-that-cannot-read-the-command-does-nothing-and-says-nothing.md)).
+ Quantisation is lossy; the plan's sampled light and dark text
+ showed no visible difference ([measurements and scope](../plans/261007j-box-followups-tmp-age-overseer-unit-png-compression.md#3-compressed-screenshots)).
+ The `npm test` gate checks tracked and index-added PNGs, including nested folders, and stays as the
