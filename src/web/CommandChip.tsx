@@ -22,6 +22,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactEleme
 import type { ActionOutcome } from "./command-match.js";
 import { chipFor, doneWords } from "./chat-commands.js";
 import type { Known } from "./citations.js";
+import type { ThreadKind } from "../types.js";
 import {
   type CommandExecutor,
   GENERATES_MARKER,
@@ -55,6 +56,18 @@ export function ChatCommands({
 
 export function useChatCommands(): CommandExecutor | null {
   return useContext(ChatCommandsContext);
+}
+
+/**
+ * **One thread's executor**: the guide's twin for a guide thread, where the
+ * reading view made one (`CommandExecutor.guide`, plan 261009u), and the one
+ * around it for every other kind — so a Referee chip that works in the guide
+ * stays plain text in ordinary Chat (GPT Sol's F1 on that plan).
+ */
+export function ChatCommandsFor({ kind, children }: { kind: ThreadKind; children: ReactNode }): ReactElement {
+  const around = useContext(ChatCommandsContext);
+  const value = kind === "guide" ? (around?.guide ?? around) : around;
+  return <ChatCommandsContext.Provider value={value}>{children}</ChatCommandsContext.Provider>;
 }
 
 /** What a run that threw says — an exception must not end up as a chip that sits busy. */

@@ -518,6 +518,15 @@ export interface CommandExecutor {
    */
   readonly openModeUnarmed?: ProposalRunners["mode"];
   /**
+   * **What a guide thread's chips press through instead**, where it differs:
+   * the same executor with the guide's mode door, which also holds the modes
+   * the guide may offer from behind the experimental switch (plan 261009u;
+   * src/web/chip-door.ts). Absent means the guide's chips use this one.
+   * ChatPanel.tsx § `Conversation` makes the swap (CommandChip.tsx §
+   * `ChatCommandsFor`).
+   */
+  readonly guide?: CommandExecutor | undefined;
+  /**
    * **The bands whose *Find more* the bar may press, each with its press** —
    * since 2026-10-04, plan 261004k. Not a proposal: it takes no argument, so
    * it is a row of the bar's own (find-more.ts § `findMoreCommand`) and chat's

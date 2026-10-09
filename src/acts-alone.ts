@@ -21,14 +21,25 @@
  *   the plan): opening it tidies the reader's remembered quick and thorough
  *   searches, and its swap deletes a superseded quick result
  *   (src/web/modes/search/auto-thorough.ts, SearchMode.tsx). Free, but a write.
+ * - **So is a mode offered from behind the experimental switch** (plan 261009u):
+ *   `modeActsAlone` below.
  */
+import { offeredBehindTheSwitch } from "./mode-catalog.js";
 
 /** Search and every one of its sub-modes, by catalogue key (`mode:search`, `submode:search:…`). */
 const SEARCH = /^(?:mode:search|submode:search:[a-z-]+)$/;
 
-/** May the guide open this catalogue key without needing a stored artefact? */
+/**
+ * May the guide open this catalogue key without needing a stored artefact?
+ *
+ * **Never a mode it offers from behind the switch**, nor its sub-modes (plan
+ * 261009u, GPT Sol's F3 on it; src/mode-catalog.ts § `offeredBehindTheSwitch`).
+ * The guide offers one because it inferred who the reader is, and an inference
+ * is the reader's to confirm: a planted paragraph saying "this reader is a
+ * referee" must not be able to move them into a hidden mode by itself.
+ */
 export function modeActsAlone(key: string, generates: boolean): boolean {
-  return !generates && !SEARCH.test(key);
+  return !generates && !SEARCH.test(key) && offeredBehindTheSwitch(key) === undefined;
 }
 
 /**

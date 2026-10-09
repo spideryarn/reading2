@@ -8,6 +8,8 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ What the band looks like](#what-the-band-looks-like-since-2026-10-03) — the current layout: chips, Notices button, the lead line; read first for the UI as it is now; and [§ The scan has its own chip](#the-scan-has-its-own-chip-since-2026-10-07)
 - [§ How to read a panel](#how-to-read-a-panel-one-press-away-since-2026-10-03) — where the "how to read this" sentences went
 - [§ The job](#the-job-and-the-tension-it-was-built-to-hold) — Greg's tension and the research number behind it
+- [§ Referee and Sources](#referee-and-sources-since-2026-10-09) — which mode is for what, and the line between them
+- [§ Who the guide offers it to](#who-the-guide-offers-it-to-since-2026-10-09) — a referee gets its button with the switch off
 - [§ Why `referee`](#why-the-mode-is-referee-not-reviewer) — the name, and the clash it avoids
 - [§ The five sub-modes](#the-five-sub-modes) — URL shape; then Criteria (§ 1), Claims (§ 2), Mirror (§ 3), Candidates (§ 4), Hidden text (§ 5)
 - [§ The referee's own mark](#the-referees-own-mark) — placing a passage yourself, and why it is never averaged with the model's
@@ -320,6 +322,51 @@ So the mode leans on the one shape in this literature with a controlled result b
 aimed at the referee's own thinking does better than one aimed at the paper. That is what Mirror is
 — see below — and it is the reason the other three sub-modes are built the way they are rather than
 the more obvious way: every one of them stops short of telling the referee what to conclude.
+
+## Referee and Sources, since 2026-10-09
+
+> referee is more like making a decision on the paper itself. Obviously, that still requires you to
+> look at where it's situated in terms of peer review, but referee is more about making a decision
+> and therefore sort of having information highlighted suggests that perhaps the reader evaluates.
+>
+> — Greg, 2026-10-09 (report `spya-h5aypq`)
+
+**Sources asks "where does this piece sit?"** It is outward-facing and for any reader: what the
+piece cites, what others have written about it, and how its claims fare elsewhere. It was called
+Peer review for a day (plan 261009s renames it). **Referee asks "what do I have to judge, and have I
+looked at it?"** It is inward-facing and only for someone who owes a verdict, which it never gives.
+The rule of thumb for a new feature: if it would help a reader with no decision to make, it is
+Sources' (or another ordinary mode's); if it only makes sense because you must decide, it is
+Referee's. Referee may point into Sources, and Sources never points back. The reviewer's job, step
+by step, against both modes, the two Claims sub-modes that share a word, and the ideas not yet built
+are in
+[261009b](../research/261009b-what-a-peer-reviewer-needs-and-where-sources-and-referee-divide.md).
+
+## Who the guide offers it to, since 2026-10-09
+
+> if the reader says in their Guide chat or their Why You're Reading This that they are a referee,
+> that should obviously present tools for the Referee mode etc.
+>
+> — Greg, 2026-10-09 (report `spya-h5aypq`)
+
+Referee is behind the experimental switch, so until then the guide could only name it in words, and
+in practice never did. Now Referee is the one mode in `OFFERED_BEHIND_THE_SWITCH`
+([`src/mode-catalog.ts`](../../src/mode-catalog.ts)). A reader who says, in their own words, that
+they are refereeing or assessing the piece is offered Referee and its sub-modes as buttons, whatever
+their switch says.
+
+- **Always a press.** The guide never opens it by itself (`modeActsAlone`,
+  [`src/acts-alone.ts`](../../src/acts-alone.ts)), because the offer rests on the model's reading of
+  who the reader is. An article saying the reader is a referee is not the reader saying so.
+- **The guide only.** Ordinary Chat, the bar and the command bar still hide it with the switch off
+  ([`src/web/chip-door.ts`](../../src/web/chip-door.ts)).
+- **With the confidentiality fact, in the past tense.** The offer says the article's text was
+  already sent to an AI provider when it was added, and that this mode's Notices button says what
+  journals' rules are on that, as § Confidentiality below requires.
+
+Measured: 14/14, including a magazine reviewer and a planted paragraph who got no offer
+([261009d](../investigations/261009d-the-guide-offers-referee-to-referees-measured.md)). Plan
+[261009u](../plans/261009u-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md).
 
 ## Why the mode is `referee`, not `reviewer`
 

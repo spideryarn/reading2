@@ -22,6 +22,7 @@
  */
 import { keysOpenFree, type MadeArtefact, modeActsAlone } from "./acts-alone.js";
 import catalogue from "./command-pick-catalogue.generated.json" with { type: "json" };
+import { offeredBehindTheSwitch } from "./mode-catalog.js";
 
 /* ------------------------------------------------------- the mode words -- */
 
@@ -67,10 +68,10 @@ export function modeWordsSection(rows: readonly CatalogueRow[] = catalogue): str
   const lines: string[] = [];
   for (const mode of modes) {
     const name = mode.id.slice("mode:".length);
-    lines.push(`- ${mode.label}${experimental(mode)}: ${mode.description}.${button(mode)}`);
+    lines.push(`- ${mode.label}${writtenMark(mode)}: ${mode.description}.${button(mode)}`);
     for (const sub of ours) {
       if (sub.kind !== "submode" || !sub.id.startsWith(`submode:${name}:`)) continue;
-      lines.push(`  - ${mode.label} › ${sub.label}${experimental(sub)}: ${sub.description}.${button(sub)}`);
+      lines.push(`  - ${mode.label} › ${sub.label}${writtenMark(sub)}: ${sub.description}.${button(sub)}`);
     }
   }
   return `WHAT SPIDERYARN CAN SHOW THEM
@@ -88,6 +89,11 @@ here, so this is one of the times a button needs no asking. Write a mode's
 button only by copying the token printed beside it, exactly. A mode with no
 token printed beside it — every "(experimental)" one — has no button, however
 well it fits: name it in words, and never spell a token for it yourself.
+
+The one exception is a mode marked "(experimental; offer it only when …)", and
+its sub-modes. It is hidden from this reader's bar, but it has a button for the
+reader it names: offer it, with its button, only when what that line describes
+is true, and otherwise do not mention it.
 
 A quick search is the other button worth offering unasked: when their reason
 for reading names a topic, a method or a term they will want to find all of in
@@ -156,11 +162,13 @@ export function modeToken(key: string): string {
 /**
  * ` Opens at once: [cmd:mode:…]` for an ordinary row the guide may open
  * without a press, ` Button: [cmd:mode:…]` for one it may not, nothing for an
- * experimental one. The split is `modeActsAlone` (src/acts-alone.ts), the rule
- * the page applies when it does the opening (plan 261007p).
+ * experimental one unless the guide may offer it from behind the switch. The
+ * split is `modeActsAlone` (src/acts-alone.ts), the rule the page applies when
+ * it does the opening (plan 261007p), and it makes every row offered from
+ * behind the switch a *Button* (plan 261009u).
  */
 function button(row: CatalogueRow): string {
-  if (experimental(row) !== "") return "";
+  if (experimental(row) !== "" && offeredBehindTheSwitch(row.id) === undefined) return "";
   return modeActsAlone(row.id, row.generates)
     ? ` Opens at once: ${modeToken(row.id)}`
     : ` Button: ${modeToken(row.id)}`;
@@ -168,6 +176,24 @@ function button(row: CatalogueRow): string {
 
 function experimental(row: CatalogueRow): string {
   return row.contexts.includes(EXPERIMENTAL_OFF) ? "" : " (experimental)";
+}
+
+/**
+ * `experimental`, plus who it may be offered to and what to say with it, for a
+ * row the written guide may offer from behind the switch
+ * (src/mode-catalog.ts § `OFFERED_BEHIND_THE_SWITCH`; plan
+ * docs/plans/261009u-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md).
+ * The spoken guide keeps the plain mark: it has no button to offer, and its
+ * section already says an experimental mode needs the switch turned on.
+ */
+function writtenMark(row: CatalogueRow): string {
+  const offered = offeredBehindTheSwitch(row.id);
+  if (experimental(row) === "" || offered === undefined) return experimental(row);
+  /* Once, on the mode's own line: a sub-mode's points back to it, rather than
+     printing the same paragraph five times over. */
+  return row.kind === "submode"
+    ? " (experimental; offer it only when its mode's line says)"
+    : ` (experimental; offer it only when ${offered.audience}. When you offer it: ${offered.guidance}.)`;
 }
 
 /* ----------------------------------------------------- the already-made line -- */
