@@ -3780,6 +3780,9 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     });
 
     const made = await guideMade(slug, thread);
+    /* Read once for the whole turn: the joined string for the prompt, and its
+       fields for a guide's offers (`saved` below). */
+    const profileParts = wantsProfile ? await resolveProfileParts(slug) : null;
     for await (const event of converse({
       power: powerOf(article),
       meta: article.meta,
@@ -3803,7 +3806,19 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
          call", which stopped being true the day chat grew a tool loop. The
          conclusion held; the reason had rotted. Found by a GPT Sol review,
          2026-08-26.) */
-      profile: wantsProfile ? await resolveProfile(slug) : null,
+      profile: profileParts === null ? null : renderProfile(profileParts),
+      /* **And the same read, field by field, on a guide turn**: what
+         `offer_to_save` records as an offer's basis, so a card pressed after
+         the words changed saves nothing (plan 261009q). A shelf that could
+         not be read leaves the reason out rather than calling it empty, and
+         the tool then refuses to make an offer for that field. */
+      saved:
+        thread.kind === "guide" && profileParts !== null
+          ? {
+              profile: normaliseProfileText(profileParts.profile),
+              ...(profileParts.purposeFailed ? {} : { purpose: normaliseProfileText(profileParts.purpose) }),
+            }
+          : null,
       /* **What the reader has marked and discussed, on every Explore turn** —
          send, retry and edit alike, because all three reach this one call. From
          the stored thread's kind and id, like `kind` below. `null` for every

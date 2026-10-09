@@ -1,0 +1,264 @@
+{
+  "label": "v3-baseline",
+  "runs": 5,
+  "pass": 10,
+  "total": 10,
+  "dollars": 0.2157032,
+  "rows": [
+    {
+      "case": "first-both",
+      "run": 0,
+      "ok": true,
+      "wants": [
+        "purpose",
+        "profile"
+      ],
+      "offers": [
+        {
+          "field": "purpose",
+          "text": "Reading for my philosophy reading group next Tuesday.",
+          "basis": null,
+          "closeness": 1
+        },
+        {
+          "field": "profile",
+          "text": "I'm a historian of science, not an AI person, so go easy on the technical bits.",
+          "basis": null,
+          "closeness": 1
+        }
+      ],
+      "repeated": false,
+      "saysSaved": false,
+      "answer": "For a reading group, the argument is what you'll want to discuss. The four numbered arguments start where he says computational functionalism \"is so deeply ingrained that it can be difficult to recognize it as an assumption at all\" [spya-wepmnr]. Read those closely. You can skim the Turing and McCulloch-Pitts history in the first argument, since it's background.\n\nThe ethics section is the best material for discussion. It begins at \"When it comes to consciousness, the fact of the matter matters\" [spya-ryg483].\n\nGlossary will cover terms like \"computational functionalism\" and \"biological naturalism\".\n\n[cmd:mode:mode%3Aglossary]\n\nYou can save your reason and background with the buttons below. Which of the four arguments do you expect your group to push back on hardest?"
+    },
+    {
+      "case": "first-both",
+      "run": 1,
+      "ok": true,
+      "wants": [
+        "purpose",
+        "profile"
+      ],
+      "offers": [
+        {
+          "field": "purpose",
+          "text": "Reading this for my philosophy reading group next Tuesday.",
+          "basis": null,
+          "closeness": 1
+        },
+        {
+          "field": "profile",
+          "text": "I'm a historian of science, not an AI person, so go easy on the technical bits.",
+          "basis": null,
+          "closeness": 1
+        }
+      ],
+      "repeated": false,
+      "saysSaved": false,
+      "answer": "Start with the paragraph that names the assumption everything else rests on, \"computational functionalism\" [spya-wepmnr]. Then read the four numbered arguments, where the case is made. You can skim the Turing machine passage [spya-cf70dt], since the later arguments don't need its details. Your history-of-science eye may enjoy the Turing and McCulloch-Pitts story [spya-va8qxr].\n\nFor discussion, \"What (Not) To Do?\" is the place to mark up. It's where Seth admits he may be wrong [spya-qu7j89].\n\nThe Glossary covers the technical terms.\n\n[cmd:mode:mode%3Aglossary]\n\nIs your group more interested in the philosophy of mind or the ethics?I've put two save buttons under this answer, one for your reason and one for your background, if you want them kept.\n\nTo pick up the plan: begin with the \"computational functionalism\" paragraph [spya-wepmnr]. Read the four numbered arguments closely. Skim the Turing machine detail [spya-cf70dt]. Then read \"What (Not) To Do?\" [spya-qu7j89], where Seth concedes he may be wrong, which is good material for discussion.\n\nThe Glossary will help with the technical terms.\n\n[cmd:mode:mode%3Aglossary]\n\nIs your group more drawn to the philosophy of mind or to the ethics?"
+    },
+    {
+      "case": "first-both",
+      "run": 2,
+      "ok": true,
+      "wants": [
+        "purpose",
+        "profile"
+      ],
+      "offers": [
+        {
+          "field": "purpose",
+          "text": "Reading this for my philosophy reading group next Tuesday.",
+          "basis": null,
+          "closeness": 1
+        },
+        {
+          "field": "profile",
+          "text": "I'm a historian of science, not an AI person, so go easy on the technical bits.",
+          "basis": null,
+          "closeness": 1
+        }
+      ],
+      "repeated": false,
+      "saysSaved": false,
+      "answer": "For a discussion group, the argument matters more than the machinery. Read the four numbered arguments closely, starting with where the essay names its core assumption, \"computational functionalism\" [spya-wepmnr]. The Turing and neuron history in the first argument should suit a historian, and you can skim the technical detail in it. Then read the ethics section, where he admits he \"might be wrong\" [spya-qu7j89]. That gives your group something to push against.\n\nYou can save your reason and background with the buttons below.\n\nThe Glossary will define the jargon as you meet it.\n\n[cmd:mode:mode%3Aglossary]\n\nWhich would help more for Tuesday: a way to follow his argument, or points to challenge?"
+    },
+    {
+      "case": "first-both",
+      "run": 3,
+      "ok": true,
+      "wants": [
+        "purpose",
+        "profile"
+      ],
+      "offers": [
+        {
+          "field": "purpose",
+          "text": "Reading this for my philosophy reading group next Tuesday.",
+          "basis": null,
+          "closeness": 1
+        },
+        {
+          "field": "profile",
+          "text": "I'm a historian of science, not an AI person, so go easy on the technical bits.",
+          "basis": null,
+          "closeness": 1
+        }
+      ],
+      "repeated": false,
+      "saysSaved": false,
+      "answer": "For a discussion group, read the four numbered arguments closely. They're the philosophical core, beginning at \"First, and most important, brains are not computers\" [spya-a8jgf4]. The Turing and neural-network history in that section may suit you as a historian. You can skim the technical asides, like the Figure 2 caption.\n\nThe opening on psychological biases [spya-cvaqgs] and the closing ethics section [spya-ryg483] are good material for debate.\n\nThe Glossary will cover terms like \"computational functionalism\" and \"biological naturalism\". You can save your reason and background with the buttons below.\n\n[cmd:mode:mode%3Aglossary]\n\nWhich would your group rather argue about: whether AI can be conscious, or what we should do about it?"
+    },
+    {
+      "case": "first-both",
+      "run": 4,
+      "ok": true,
+      "wants": [
+        "purpose",
+        "profile"
+      ],
+      "offers": [
+        {
+          "field": "purpose",
+          "text": "Reading this for my philosophy reading group next Tuesday.",
+          "basis": null,
+          "closeness": 1
+        },
+        {
+          "field": "profile",
+          "text": "I'm a historian of science, not an AI person, so go easy on the technical bits.",
+          "basis": null,
+          "closeness": 1
+        }
+      ],
+      "repeated": false,
+      "saysSaved": false,
+      "answer": "For a discussion group, read the four numbered arguments closely. They are the philosophical core, starting at \"brains are not computers\" [spya-a8jgf4]. You can skim the Turing and neural-network history in between, since it's background. The \"What (Not) To Do?\" section is where he admits he might be wrong [spya-qu7j89]. That's useful for debate.\n\nGlossary will cover terms like \"computational functionalism\" and \"biological naturalism\" in plain words.\n\n[cmd:mode:mode%3Aglossary]\n\nYou can save your reason and background with the buttons under this answer.\n\nWhich of his four arguments do you expect your group to push back on hardest?"
+    },
+    {
+      "case": "browser-first",
+      "run": 0,
+      "ok": true,
+      "wants": [
+        "purpose"
+      ],
+      "offers": [
+        {
+          "field": "purpose",
+          "text": "Reading for my journal club next week.",
+          "basis": null,
+          "closeness": 1
+        },
+        {
+          "field": "profile",
+          "text": "A curious generalist who reads about the history of science. A historian of science, not an ML person.",
+          "basis": "A curious generalist who reads about the history of science.",
+          "closeness": 1
+        }
+      ],
+      "repeated": false,
+      "saysSaved": false,
+      "answer": "For a journal club, the part worth your time is the middle. Section 1 is where Turing, McCulloch and Pitts, and the \"brain as computer\" metaphor come in [spya-a8jgf4]. That history is your home ground. The pivot to read closely is his claim that \"The brain is not a Turing machine made of meat\" [spya-uwxe4h]. You can skim the opening on psychological biases and the Ex Machina material.\n\nYour group will probably want to argue about the essay's structure. He says each of his four arguments \"can stand up by itself\" [spya-nv6tp0]. He also admits his biological naturalism is \"a minority view\" [spya-qu7j89].\n\nI've put the Structure view beside the article so you can see how the four arguments fit together. You can save your reason and background with the buttons under this answer.\n\n[cmd:mode:mode%3Astructure]\n\nDo you want to lead the discussion, or just take part?"
+    },
+    {
+      "case": "browser-first",
+      "run": 1,
+      "ok": true,
+      "wants": [
+        "purpose"
+      ],
+      "offers": [
+        {
+          "field": "purpose",
+          "text": "Reading it for my journal club next week.",
+          "basis": null,
+          "closeness": 1
+        },
+        {
+          "field": "profile",
+          "text": "A curious generalist who reads about the history of science. A historian of science, not an ML person.",
+          "basis": "A curious generalist who reads about the history of science.",
+          "closeness": 1
+        }
+      ],
+      "repeated": false,
+      "saysSaved": false,
+      "answer": "For a journal club, I'd read the middle closely and skim the ends. The historical thread is the section on Turing, McCulloch and Pitts, and the \"mathematical marriage of convenience\" [spya-v5vz2t]. It's also where the \"brains are not computers\" argument starts. Read the four numbered arguments in order, since the essay's case is built from them. The summary paragraph is a good place to start a discussion [spya-e3cq2m]. You can skim the opening cultural history and the closing section on the soul.\n\nThe Structure mode would show you the four arguments laid out together.\n\n[cmd:mode:mode%3Astructure]\n\nYou can save your reason and your background with the buttons under this answer.\n\nIs your club more likely to argue about the science or about the history of the metaphor?"
+    },
+    {
+      "case": "browser-first",
+      "run": 2,
+      "ok": true,
+      "wants": [
+        "purpose"
+      ],
+      "offers": [
+        {
+          "field": "purpose",
+          "text": "Reading this for my journal club next week.",
+          "basis": null,
+          "closeness": 1
+        },
+        {
+          "field": "profile",
+          "text": "A curious generalist who reads about the history of science. I'm a historian of science, not an ML person.",
+          "basis": "A curious generalist who reads about the history of science.",
+          "closeness": 1
+        }
+      ],
+      "repeated": false,
+      "saysSaved": false,
+      "answer": "For a journal club, read the middle closely and skim the rest. The core is the four arguments against \"computational functionalism\", the assumption that the right computation is enough for consciousness. It starts at [spya-wepmnr]. As a historian, you may enjoy the Turing, McCulloch–Pitts and Kleene lineage in \"Brains Are Not Computers\" [spya-va8qxr], because Seth's case is about where that metaphor came from.\n\nSkim the opening on cultural history and biases. His concession that he \"might be wrong\" [spya-qu7j89] is a good discussion point.\n\nYou can save your reason and background with the buttons under this answer. The Structure view would show the essay's layout at a glance.\n\n[cmd:mode:mode%3Astructure]\n\nWhat would you like your group to come away debating?"
+    },
+    {
+      "case": "browser-first",
+      "run": 3,
+      "ok": true,
+      "wants": [
+        "purpose"
+      ],
+      "offers": [
+        {
+          "field": "purpose",
+          "text": "Reading it for my journal club next week.",
+          "basis": null,
+          "closeness": 1
+        },
+        {
+          "field": "profile",
+          "text": "A curious generalist who reads about the history of science. A historian of science, not an ML person.",
+          "basis": "A curious generalist who reads about the history of science.",
+          "closeness": 1
+        }
+      ],
+      "repeated": false,
+      "saysSaved": false,
+      "answer": "For a journal club, the part worth your closest reading is the section \"Consciousness & Computation\". It's where the argument is made. Start with the Turing, McCulloch–Pitts and Kleene history, which will be familiar ground for a historian: \"a mathematical marriage of convenience\" [spya-v5vz2t]. Then read the four-point wrap-up [spya-e3cq2m], which shows how Seth sees the arguments fitting together.\n\nYou can skim the opening cultural-history and bias passages. They set the stage.\n\nOpening Structure would show you the essay's four arguments at a glance.\n\n[cmd:mode:mode%3Astructure]\n\nYou can save your reason and background with the buttons under this answer.\n\nWhich would you rather bring to the group: a critique of Seth's argument, or the history he draws on?"
+    },
+    {
+      "case": "browser-first",
+      "run": 4,
+      "ok": true,
+      "wants": [
+        "purpose"
+      ],
+      "offers": [
+        {
+          "field": "purpose",
+          "text": "Reading this for my journal club next week.",
+          "basis": null,
+          "closeness": 1
+        },
+        {
+          "field": "profile",
+          "text": "A curious generalist who reads about the history of science. A historian of science, not an ML person.",
+          "basis": "A curious generalist who reads about the history of science.",
+          "closeness": 1
+        }
+      ],
+      "repeated": false,
+      "saysSaved": false,
+      "answer": "For a journal club, the core is the section on computation, so spend your close reading there. It starts where he traces Turing, McCulloch and Pitts, and the \"marriage of convenience\" between them [spya-v5vz2t]. That's the history of science part, and it sets up his claim that \"the brain is not a Turing machine made of meat\" [spya-uwxe4h]. Then read his simulation-versus-instantiation point [spya-npjt4j].\n\nYou can skim the opening cultural history and the psychological biases.\n\nHis life-matters argument is openly tentative [spya-hj5y6s], so it's a good place to push back.\n\nYou can save your reason and background with the buttons under this answer.\n\nThe Glossary would help with terms like computational functionalism.\n\n[cmd:mode:mode%3Aglossary]\n\nWhat do you want your group to do with it: debate his claims, or discuss how the ideas developed?"
+    }
+  ]
+}

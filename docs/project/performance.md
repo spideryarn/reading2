@@ -119,6 +119,21 @@ percentage.
 
 ### Comparing a change against `main`
 
+**A cost you saw but cannot attribute is a reason to run this, not a note to leave.** 261009k's
+browser check recorded a 1–3 s freeze, wrote *"how much of that is this change is not known"*, and
+landed. The comparison afterwards found its own 1.0 s in it
+([261009l](../postmortems/261009l-a-freeze-measured-without-a-baseline-is-never-attributed.md)). A
+jsdom timing is no substitute: jsdom does no style, layout or MathML layout, and the Chrome
+profile put only about 130 ms of that 1.0 s in the excerpt code's own JavaScript.
+
+**The cheapest fair comparison is one tree with a temporary switch**, when the change is a draw you
+can choose at run time. Add a throwaway `window.__xv` check at the site that picks the old or new
+code, set it per run from Playwright's `addInitScript`, and alternate the variants. Both sides then
+share every other commit, every dependency and every asset. Two trees from two commits did not:
+they differed by 26 commits, and the older one failed to load its fonts.
+[261009r](../plans/261009r-excerpts-measured-in-chrome-search-list-stall.md) did it this way; take
+the switch out before you commit. Otherwise, use the two-tree recipe below.
+
 Do **not** edit source while a measurement is running, and do not measure a server another agent is
 also editing under: Vite hot-reloads the page, the metric counters reset, and the run reports
 *negative* CPU. Several hours went into learning that twice.

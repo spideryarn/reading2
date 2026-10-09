@@ -393,7 +393,7 @@ export async function exportArticle(
     publishedYear: revision.publishedYear,
     note: revision.note,
     /* The paper's own summary, and for a minimal paper the only prose it has.
-       Left out with nothing saying so until plan 261009q.
+       Left out with nothing saying so until plan 261009s.
 
        **`doi` and `journal` are left out on purpose, for now**: whether the
        rollback carries them is Greg's open question (plan 261004a), listed in

@@ -528,7 +528,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
 /** One line about a report, from its note's `comment:`. An admin's Earlier tab only. */
 export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
   "spya-a5gzb9": "Shipped. Since 2026-10-08 a failed import's Report this also carries the address, file name and error, and every import is kept on record so we can debug it later.",
-  "spya-ahvk74": "Adding an article someone has already made public now stops and asks: read their copy free, or add your own, which uses one article. Whether the free copy can carry your own notes is a question (q-c75pj9).",
+  "spya-ahvk74": "Adding an article someone has already made public now stops and asks: read their copy free, or add your own, which uses one article. You chose to keep the free copy read-only for now (q-c75pj9).",
   "spya-ar65p3": "Shipped: a sideways iPhone no longer enlarges a band's text, and, on your answer, the kinds of line that recur across modes now share six named sizes (on /design, under Text roles).",
   "spya-bbe74w": "Needs a decision is now threads: a contents, one thread at a time with a reply box, Defer for now, the ids, your report shut, a shortcut beside the tabs. Check the reply box on your iPhone.",
   "spya-btjtbb": "Mostly Apple's: an iPhone home-screen app forgets the grant on every restart and 10 minutes after dictation. We fixed one extra prompt of ours. Try Safari's per-site Microphone: Allow; WebKit bug 280394 tracks the rest.",
@@ -560,7 +560,7 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
   "spya-pqae7m": "Quotes in Skim, and the article's words wherever a mode shows them, now draw formulas as maths and keep italics, bold and sub/superscripts, as the paragraph does. Links show as plain words there.",
   "spya-qpgvq9": "spya-x0rfs2: the bar is fixed; the quieter open stop Greg chose in q-u04sye is on dev as an experiment",
   "spya-qxufp9": "Declined: one model call writes the article's tree and these summaries together, and Structure, the shelf and hover cards need the tree as soon as the article opens. Deferring them means splitting that stage.",
-  "spya-s6qhzv": "The guide now greets you in the chat and asks why you're reading (no box), takes Live, and has a Guide row in the command bar. Still waiting on you (q-w2740x): may it save your reason itself, and offer share, private link and archive?",
+  "spya-s6qhzv": "The guide greets you in the chat, takes Live, has a Guide row in the command bar, and offers to save your reason and About you in your words, on your press. Still to come: share, private link and archive from the guide (q-w2740x 2).",
   "spya-sshjd2": "Shipped: your Earlier tab now sorts reports into Open, Needs a decision, Set aside and Shipped, numbers each one, and lets you answer my questions in place.",
   "spya-t6nmxt": "Needs a decision is now threads: a contents, one thread at a time with a reply box, Defer for now, the ids, your report shut, a shortcut beside the tabs. Check the reply box on your iPhone.",
   "spya-thpsnd": "Shipped: Reception and Claims, and the claims picker you chose: Claims lists the claims, you tick some or type your own, and one search checks them. Visitors to a shared article see the claims, not your checks (your answer A).",
@@ -575,7 +575,7 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
   "spya-vzj8fc": "A recording left on one article is no longer offered on another; Chat, passage chat and the command bar had the same gap, all fixed. The microphone now has a card: why talk, the 15-minute limit, and press Stop twice.",
   "spya-wm5gu2": "Skim and More now sit in Structure and Summary's group, and Comments sits with Marginalia, after it. On a phone More is now almost on screen, but the bar still scrolls sideways.",
   "spya-x0rfs2": "spya-x0rfs2: the bar is fixed; the quieter open stop Greg chose in q-u04sye is on dev as an experiment",
-  "spya-x38nge": "The guide now greets you in the chat and asks why you're reading (no box), takes Live, and has a Guide row in the command bar. Still waiting on you (q-w2740x): may it save your reason itself, and offer share, private link and archive?",
+  "spya-x38nge": "The guide greets you in the chat, takes Live, has a Guide row in the command bar, and offers to save your reason and About you in your words, on your press. Still to come: share, private link and archive from the guide (q-w2740x 2).",
   "spya-xcmg2d": "Help's Ask box has the same microphone as every other box. Every mode's Help page now opens with a short \"why care, what for, how it works\", then a picture of it in use. Annotated pictures skipped, as you suggested.",
   "spya-xdvnrg": "A recording left on one article is no longer offered on another; Chat, passage chat and the command bar had the same gap, all fixed. The microphone now has a card: why talk, the 15-minute limit, and press Stop twice.",
   "spya-xg4jyr": "New arXiv imports show one tidy row per author, and each name's affiliation on hover. Your Attention import is re-imported after the next deploy, as you asked.",

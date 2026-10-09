@@ -1,7 +1,7 @@
 ---
 reports: spya-s6qhzv, spya-x38nge
 ending: shipped
-comment: The guide now greets you in the chat and asks why you're reading (no box), takes Live, and has a Guide row in the command bar. Still waiting on you (q-w2740x): may it save your reason itself, and offer share, private link and archive?
+comment: The guide greets you in the chat, takes Live, has a Guide row in the command bar, and offers to save your reason and About you in your words, on your press. Still to come: share, private link and archive from the guide (q-w2740x 2).
 ---
 # The guide greets you in the chat, takes Live, and has a row in the command bar
 
@@ -66,7 +66,13 @@ reviews and the browser check:
   is the guide's first real reply, which has the profile, the reason and the whole article — Opus's
   80/20, over a second model call for the greeting.
 - **Keep this as why you're reading**, under your first answer: saves your own words on your press,
-  and never over a reason saved elsewhere meanwhile.
+  and never over a reason saved elsewhere meanwhile. **Replaced the same day** by the guide's offer
+  (below).
+- **The guide offers to save your reason and About you** (since 2026-10-09, after Greg's answer to
+  `q-w2740x` part 1, reply `spya-ujstyz`, queue item `qi-x6hteva9`): a tool that puts your words,
+  quoted or very closely paraphrased, on a card under its answer; your press saves them, Undo puts
+  them back, and a card pressed after the words changed saves nothing.
+  [261009q](../plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md).
 - **Live in the guide**, on both engines, with the guide's own spoken instructions and its own
   tools (enforced on the server, not only offered).
 - **Guide in the command bar**, on your own article's reading view.
@@ -76,8 +82,9 @@ reviews and the browser check:
 
 ## Still to come
 
-- **Asked of Greg, `q-w2740x`**: may the guide save your reason (and About you) itself from what
-  you say, and how should it offer a private link, sharing and archive? Queue entries
-  `qi-bn7qs2r9` and `qi-rt49dwcd`.
+- **Asked of Greg, `q-w2740x`**, both parts answered: part 1 (save your reason and About you) is
+  built, above; part 2 (a private link, sharing and archive from the guide) is queued as its own
+  entry, `qi-rt49dwcd`. Two follow-ups on part 1 are in the question file for him (a save without a
+  press, not recommended; the security notes' line for the new card).
 - **Queued, `qi-bt4z2zaw`**: a spoken guide that opens modes itself; asking about the profile less
   often; a model-written greeting, if the fixed one reads flat in use.

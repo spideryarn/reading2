@@ -3246,6 +3246,34 @@ export interface ToolRun {
   status: "running" | "done" | "error";
   /** Milliseconds. Absent while running. */
   ms?: number;
+  /**
+   * **Words the guide offers to save for the reader**, drawn under its answer
+   * as a card with a button they press (`offer_to_save` in src/chat-tools.ts,
+   * src/web/GuideSaveOffer.tsx). Nothing is saved by the tool: the reader's
+   * press is the write. The guide's runs only. Plan
+   * docs/plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md.
+   */
+  offer?: SaveOffer;
+}
+
+/**
+ * **One offer to save**: which of the reader's two profile fields, and the
+ * words, already normalised (`normaliseProfileText`) and within that field's
+ * cap. `purpose` is "why you're reading this one", `profile` is About you, the
+ * store's own names for them.
+ */
+export interface SaveOffer {
+  field: "purpose" | "profile";
+  text: string;
+  /**
+   * What the field held when the guide made the offer (`null`: empty). The
+   * tool makes no offer when that turn could not read it: without a basis the
+   * card could not distinguish an empty field from one it was about to
+   * overwrite. The card saves only while the field still holds this, so a
+   * card pressed after the words changed — an older offer, another tab,
+   * Metadata — saves nothing and says so.
+   */
+  basis: string | null;
 }
 
 

@@ -73,11 +73,11 @@ that writer step-aware is a change to the whole PDF provenance block, and it is 
   `unverified`, `recall`, `pagesChecked`, and now `quality`) on an article `extract` already read,
   because both steps write through `metaColumns`. Only the administrator can run it alone
   (`src/jobs.ts`). Not changed here; fixed by
-  [261009q](261009q-metadata-rerun-keeps-what-it-does-not-make.md).
+  [261009s](261009s-metadata-rerun-keeps-what-it-does-not-make.md).
 - **The rollback export's `meta.json` leaves out `abstract`, `doi` and `journal`.** `doi` and
   `journal` are a recorded open question
   ([261004a](261004a-metadata-page-shows-publication-date-and-journal-from-crossref-at-import.md));
-  `abstract` is omitted with no comment saying so. Not changed here; 261009q exports `abstract` and
+  `abstract` is omitted with no comment saying so. Not changed here; 261009s exports `abstract` and
   writes down the other two.
 - Siblings found by the sweep: see the postmortem's follow-up.
 

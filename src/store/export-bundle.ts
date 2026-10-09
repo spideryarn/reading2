@@ -736,7 +736,9 @@ Each block also carries its \`ordinal\`, so you can sort the order back if you l
 - **Pipeline machinery** — caches, queue state, and which step is up to date. None of it is
   anything you wrote, and none of it means anything outside Spideryarn.
 - **Anything about you that isn't about this article** — your reader profile and settings are not
-  in here. This file is one article's data.
+  in here. This file is one article's data. What you said about yourself in this article's
+  conversations is part of them, and is here, including words the guide offered to save to your
+  profile.
 
 \`manifest.json\` repeats this list in machine-readable form under \`omitted\`, so an importer can
 check what it is missing rather than inferring it from absent files.

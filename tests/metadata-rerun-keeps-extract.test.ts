@@ -1,7 +1,7 @@
 /**
  * **A `metadata` run on an article `extract` already read keeps what `metadata`
  * does not make, and what it found nothing for.** Plan
- * docs/plans/261009q-metadata-rerun-keeps-what-it-does-not-make.md.
+ * docs/plans/261009s-metadata-rerun-keeps-what-it-does-not-make.md.
  *
  * The step's `meta` goes to the store through `metaColumns`, which writes every
  * column `?? null` — so a field the step leaves out is a column it clears. Run

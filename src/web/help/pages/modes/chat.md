@@ -71,8 +71,10 @@ take you to a passage, or open a mode that has nothing to write, such as Structu
 Glossary or Summary's Brief or Fuller once they have already been written for this article. It
 says so when it does, and **Back** undoes it. Anything that costs money or changes your things, such
 as a search, a mode that has to be written first, a tag or a bookmark, is still a button you press. Its
-greeting asks why you are reading the piece: answer in the box below as you would any message, and
-**Keep this as why you're reading** under your answer saves it, in your words. You can talk to the
+greeting asks why you are reading the piece: answer in the box below as you would any message. When
+you say why, or something about yourself, the guide offers to save it, as close to your own words
+as it can, under its answer: **Save as why you're reading** or **Save to About you**. Nothing is
+saved until you press, and **Undo** puts it back. You can talk to the
 guide out loud with **Live**, as in any chat, and type **Guide** in the command bar to get back to it.
 
 **Talking instead of typing.** The microphone turns your speech into text in the box, to edit before

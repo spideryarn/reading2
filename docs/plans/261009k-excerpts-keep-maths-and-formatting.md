@@ -147,6 +147,11 @@ security-map.md asks. It is parsed in an inert document, so nothing loads.
   text nodes, so it is already escaped). In jsdom, 600 excerpts from 60 blocks went from 765 ms to
   197 ms. Not re-measured in Chrome; if a common-word Search still stalls, the next step is drawing
   excerpts only for rows on screen.
+- **Measured afterwards, in Chrome** ([261009r](261009r-excerpts-measured-in-chrome-search-list-stall.md)):
+  this change added about 1.0 s to the longest freeze of that 588-hit Search, on top of about 1.8 s
+  that was already there. Search's rows now format only once near the screen, which brings it back
+  to within about 0.1 s of the strings. Three runs each for Quotes and Ideas did not show the
+  consistent slowdown seen in the 588-hit Search.
 - A stored quote whose words appear twice in a block draws the first, which is what the prose mark
   does; a hit, an idea, a timeline occurrence and a comment draw the one they were placed at.
 - Excerpts that sit inside elements with their own font rules keep them: the excerpt is a `<span>`.
