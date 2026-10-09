@@ -72,7 +72,7 @@ reviews and the browser check:
   `q-w2740x` part 1, reply `spya-ujstyz`, queue item `qi-x6hteva9`): a tool that puts your words,
   quoted or very closely paraphrased, on a card under its answer; your press saves them, Undo puts
   them back, and a card pressed after the words changed saves nothing.
-  [261009o](../plans/261009o-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md).
+  [261009q](../plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md).
 - **Live in the guide**, on both engines, with the guide's own spoken instructions and its own
   tools (enforced on the server, not only offered).
 - **Guide in the command bar**, on your own article's reading view.

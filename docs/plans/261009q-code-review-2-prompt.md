@@ -1,13 +1,13 @@
 A short second code review, in the Spideryarn repo (this checkout). You may fix what you find.
 
-Context: plan docs/plans/261009o-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md;
-your first code review is docs/plans/261009o-code-review-sol.md. After it, a browser pass found the
+Context: plan docs/plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md;
+your first code review is docs/plans/261009q-code-review-sol.md. After it, a browser pass found the
 guide's answer written twice: the model wrote its whole reply and called `offer_to_save` in the same
 round, then wrote the reply again after the tool result, and `converse` joins every round's text into
 one answer. Reproduced on the browser's article: 4 of 14 runs written twice before the change, 0 of 14
 after (evals/guide/offers.ts, results offers-v3-baseline-arxiv*.json and offers-v3-arxiv.json).
 
-The diff to review is docs/plans/261009o-code-review-2.diff (uncommitted in the working tree):
+The diff to review is docs/plans/261009q-code-review-2.diff (uncommitted in the working tree):
 
 1. src/chat-tools.ts: the tool's result now tells the model that what it wrote before the call is
    already on screen, not to write it again, and to stop if the reply was complete.

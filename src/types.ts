@@ -3251,7 +3251,7 @@ export interface ToolRun {
    * as a card with a button they press (`offer_to_save` in src/chat-tools.ts,
    * src/web/GuideSaveOffer.tsx). Nothing is saved by the tool: the reader's
    * press is the write. The guide's runs only. Plan
-   * docs/plans/261009o-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md.
+   * docs/plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md.
    */
   offer?: SaveOffer;
 }

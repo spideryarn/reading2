@@ -1,6 +1,6 @@
 /**
  * **The guide's offer reaches the stored run** — plan
- * docs/plans/261009o-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md.
+ * docs/plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md.
  *
  * Through `converse` itself, with `fetch` stubbed: the model asks for
  * `offer_to_save`, then answers. The finished `tool` frame and the `done`

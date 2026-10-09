@@ -1012,7 +1012,7 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   [privacy.md § The guide is told…](privacy.md#the-guide-is-told-how-many-other-articles-you-have-opened).
 - **Its tools** are `GUIDE_TOOLS` (§ The nine above), no web search, and one of its own since
   2026-10-09: **`offer_to_save`**, which saves nothing
-  ([261009o](../plans/261009o-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md);
+  ([261009q](../plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md);
   Greg, on q-w2740x: *"the guide should have a tool to enable it to save to why you're reading or
   your profile … stay fairly close to the user's input"*). The model gives a field (`reason` or
   `about_you`) and the words, as close to the reader's own as it can; the tool checks them as the

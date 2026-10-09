@@ -12,7 +12,7 @@
  *   quoted back when it is there, *Ask the guide where to start* only when a
  *   reason is stored, nothing asked or offered when the reason could not be
  *   read;
- * - **the guide's offer to save** (plan 261009o), a card under its answer
+ * - **the guide's offer to save** (plan 261009q), a card under its answer
  *   that writes only on a press, never over words changed since the guide
  *   offered it, once per double press, with an Undo that puts back only over
  *   its own write. It replaced *Keep this as why you're reading*, whose
@@ -220,7 +220,7 @@ describe("the guide's greeting", () => {
   const button = (label: string) =>
     [...host.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === label);
   const startButton = () => button(GUIDE_START_LABEL);
-  /* What the greeting no longer draws under the first answer (plan 261009o). */
+  /* What the greeting no longer draws under the first answer (plan 261009q). */
   const keepButton = () => button("Keep this as why you're reading");
   /** The reader answers: the same mount, now with their first message in it. */
   const answer = async (text: string) => {

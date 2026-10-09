@@ -1,7 +1,7 @@
 /**
  * **`offer_to_save`: the guide offers the reader's reason or About you as a
  * card they press, and saves nothing itself** — plan
- * docs/plans/261009o-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md.
+ * docs/plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md.
  *
  * The tool is the guide's alone (`toolsFor`), absent from Live (whose tool
  * route takes names from the browser and has nowhere to put a button), and

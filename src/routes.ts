@@ -3809,7 +3809,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
       profile: profileParts === null ? null : renderProfile(profileParts),
       /* **And the same read, field by field, on a guide turn**: what
          `offer_to_save` records as an offer's basis, so a card pressed after
-         the words changed saves nothing (plan 261009o). A shelf that could
+         the words changed saves nothing (plan 261009q). A shelf that could
          not be read leaves the reason out rather than calling it empty, and
          the tool then refuses to make an offer for that field. */
       saved:

@@ -1,4 +1,4 @@
-# 261009o — The guide offers to save your reason and About you, in your words
+# 261009q — The guide offers to save your reason and About you, in your words
 
 Owned by [plans.md](../project/plans.md). Overseer queue item `qi-x6hteva9`; question
 [q-w2740x](../user-feedback/questions/q-w2740x.md) part 1, report `spya-s6qhzv`
@@ -151,7 +151,7 @@ write path is added on the server: the press uses the two routes the boxes alrea
 
 ## After the plan review (overrides the design above where they differ)
 
-[GPT Sol](261009o-plan-review-sol.md): *build with changes*. Each finding checked here.
+[GPT Sol](261009q-plan-review-sol.md): *build with changes*. Each finding checked here.
 
 - **F1 (P1), Save and Undo can overwrite newer words.** Half taken. **Each offer now carries its
   basis**: the route reads the two fields once per guide turn (`resolveProfileParts`, the same
@@ -206,7 +206,7 @@ write path is added on the server: the press uses the two routes the boxes alrea
 
 ## Code review
 
-[GPT Sol](261009o-code-review-sol.md) on [the diff](261009o-code-review.diff): *land with fixes*.
+[GPT Sol](261009q-code-review-sol.md) on [the diff](261009q-code-review.diff): *land with fixes*.
 
 - **P1, fixed by the reviewer**: an offer with no basis (the turn could not read that field, or the
   reader had turned the profile off for the turn) skipped the card's staleness check, so its press
@@ -223,7 +223,7 @@ write path is added on the server: the press uses the two routes the boxes alrea
 ### Second round
 
 After the browser pass's written-twice answers were fixed (§ Log),
-[GPT Sol](261009o-code-review-2-sol.md) on [that diff](261009o-code-review-2.diff): *land with
+[GPT Sol](261009q-code-review-2-sol.md) on [that diff](261009q-code-review-2.diff): *land with
 fixes*, both fixed by the reviewer and checked here. **P2**: the paragraph break between rounds had
 gone into `roundText` too, so the round replayed to the model, and its character count, carried
 bytes the model never wrote; now only the answer gets it, with a three-round test. **P2**: the
@@ -271,9 +271,9 @@ offset now, and the saved runs were rescored (9/14 before the fix, 0/14 after).
   words, nothing saved before the press, Metadata showing it after, Undo putting it back; an About
   you card that kept the old text and added the new, saved and undone with /profile exact; the card
   fits at 390 with no horizontal scroll; the card still there after a reload; no console errors.
-  Shots: [offer](261009o-shot-1-offer.png), [saved](261009o-shot-2-saved.png),
-  [undone](261009o-shot-3-undone.png), [phone](261009o-shot-4-phone.png),
-  [About you saved](261009o-shot-5-about.png).
+  Shots: [offer](261009q-shot-1-offer.png), [saved](261009q-shot-2-saved.png),
+  [undone](261009q-shot-3-undone.png), [phone](261009q-shot-4-phone.png),
+  [About you saved](261009q-shot-5-about.png).
 - 2026-10-09: **the browser pass found both answers written twice**, the model having written its
   reply, called the tool, and written it again; and the two copies glued without a space. Fixed in
   the tool's result and in `converse`'s joining of rounds; reproduced and measured 9/14 → 0/14 on

@@ -743,7 +743,7 @@ svg.band-waiting-ghost { flex: none; }
 .guide-greeting-bubble p:last-child { margin-bottom: 0; }
 .guide-greeting-icon { flex: none; margin-top: 0.2rem; color: var(--ink-faint); }
 .guide-greeting-title { font-style: italic; }
-/* The guide's offer to save the reader's reason or About you (plan 261009o):
+/* The guide's offer to save the reader's reason or About you (plan 261009q):
    a card under its answer, the words in the model's face (`.voice-ai`), and a
    button only the reader presses. */
 .guide-offer {

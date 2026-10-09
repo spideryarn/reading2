@@ -3,7 +3,7 @@
  *
  * What the reader says in answer is saved only when the guide offers it and
  * they press (GuideSaveOffer.tsx, plan
- * docs/plans/261009o-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md).
+ * docs/plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md).
  * Before that plan, a button under their first message, *Keep this as why
  * you're reading*, saved that message verbatim; the offer replaced it.
  *

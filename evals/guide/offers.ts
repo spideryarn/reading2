@@ -2,7 +2,7 @@
  * **Does the guide offer to save the reader's reason and About you when it
  * should, in close to their words, and never when it should not?** — the paid
  * check behind plan
- * docs/plans/261009o-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md
+ * docs/plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md
  * (GPT Sol's F4 on that plan asked for a scored matrix, hostile articles
  * included).
  *

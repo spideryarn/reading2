@@ -2028,7 +2028,7 @@ export function Conversation({
             discards={thread.messages.length - i - 1}
           />
           {/* The guide's offers to save their reason or About you, each a
-              card they press (GuideSaveOffer.tsx, plan 261009o). */}
+              card they press (GuideSaveOffer.tsx, plan 261009q). */}
           {kind === "guide" && <GuideSaveOffers slug={slug} message={m} />}
           </GuideActContext.Provider>
         ))}

@@ -1,7 +1,7 @@
 /**
  * **The guide's offer to save, drawn under its answer, and saved only on the
  * reader's press** — plan
- * docs/plans/261009o-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md.
+ * docs/plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md.
  *
  * > the guide should have a tool to enable it to save to why you're reading or
  * > your profile … stay fairly close to the user's input, but it doesn't have

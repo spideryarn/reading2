@@ -3076,7 +3076,7 @@ export async function* converse({
         /* **A later round's first words start a new paragraph.** Every round's
            text is one answer, joined, and a round that ended on "…mattered?"
            met the next one's "You can save…" as "mattered?You can save…" (plan
-           261009o's browser pass). Only where neither side brings its own
+           261009q's browser pass). Only where neither side brings its own
            whitespace, and as a delta like any other, so the page and the
            stored answer agree. */
         if (typeof piece === "string" && piece.length > 0) {

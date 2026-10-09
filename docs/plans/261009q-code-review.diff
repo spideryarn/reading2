@@ -7,7 +7,7 @@ index 000000000..275897887
 +# The guide's offers to save, measured: does it offer when it should, in the reader's words?
 +
 +Written 2026-10-09 for
-+[plan 261009o](../plans/261009o-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md),
++[plan 261009q](../plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md),
 +the scored check GPT Sol's F4 on that plan asked for. The runner is
 +[`evals/guide/offers.ts`](../../evals/guide/offers.ts); both runs, every answer in full, are
 +`evals/guide/results/offers-v1.json` and `offers-v2.json`. Owned by
@@ -56,14 +56,14 @@ index 000000000..275897887
 +
 +The v2 prompt ships. Not measured: Live (offers are not offered there), a reader whose About you is
 +near the 1,500-character cap, and more than one article.
-diff --git a/docs/plans/261009o-plan-review-prompt.md b/docs/plans/261009o-plan-review-prompt.md
+diff --git a/docs/plans/261009q-plan-review-prompt.md b/docs/plans/261009q-plan-review-prompt.md
 new file mode 100644
 index 000000000..df6587f99
 --- /dev/null
-+++ b/docs/plans/261009o-plan-review-prompt.md
++++ b/docs/plans/261009q-plan-review-prompt.md
 @@ -0,0 +1,25 @@
 +You are reviewing a plan, read-only, for the Spideryarn repo (this checkout). Read the plan first:
-+docs/plans/261009o-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md
++docs/plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md
 +
 +Context to open as needed: src/chat-tools.ts (CHAT_TOOLS, GUIDE_TOOLS, toolsFor, runTool, ToolOutcome),
 +src/converse.ts (GUIDE_SYSTEM, the tool loop around `const finished: ToolRun`), src/types.ts (ToolRun,
@@ -87,13 +87,13 @@ index 000000000..df6587f99
 +
 +Answer with: a verdict (build / build with changes / rethink), then numbered findings each with
 +severity P1/P2/P3, the evidence (file:line), and the change you would make. Be concrete and brief.
-diff --git a/docs/plans/261009o-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md b/docs/plans/261009o-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md
+diff --git a/docs/plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md b/docs/plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md
 new file mode 100644
 index 000000000..d4553c9ea
 --- /dev/null
-+++ b/docs/plans/261009o-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md
++++ b/docs/plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md
 @@ -0,0 +1,234 @@
-+# 261009o — The guide offers to save your reason and About you, in your words
++# 261009q — The guide offers to save your reason and About you, in your words
 +
 +Owned by [plans.md](../project/plans.md). Overseer queue item `qi-x6hteva9`; question
 +[q-w2740x](../user-feedback/questions/q-w2740x.md) part 1, report `spya-s6qhzv`
@@ -246,7 +246,7 @@ index 000000000..d4553c9ea
 +
 +## After the plan review (overrides the design above where they differ)
 +
-+[GPT Sol](261009o-plan-review-sol.md): *build with changes*. Each finding checked here.
++[GPT Sol](261009q-plan-review-sol.md): *build with changes*. Each finding checked here.
 +
 +- **F1 (P1), Save and Undo can overwrite newer words.** Half taken. **Each offer now carries its
 +  basis**: the route reads the two fields once per guide turn (`resolveProfileParts`, the same
@@ -349,7 +349,7 @@ index 5896b953e..a65f6bb16 100644
 -- **Its tools** are `GUIDE_TOOLS` (§ The nine above), and no web search.
 +- **Its tools** are `GUIDE_TOOLS` (§ The nine above), no web search, and one of its own since
 +  2026-10-09: **`offer_to_save`**, which saves nothing
-+  ([261009o](../plans/261009o-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md);
++  ([261009q](../plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md);
 +  Greg, on q-w2740x: *"the guide should have a tool to enable it to save to why you're reading or
 +  your profile … stay fairly close to the user's input"*). The model gives a field (`reason` or
 +  `about_you`) and the words, as close to the reader's own as it can; the tool checks them as the
@@ -389,7 +389,7 @@ index d52b7dd15..461856f18 100644
 +- **The tools** are the typed guide's article tools (`GUIDE_TOOLS`) plus `show_passage`, without
 +  the typed guide's `offer_to_save` (a card with a button, which a voice has nowhere to put;
 +  `LIVE_SERVER_TOOLS` refuses it too, and a spoken turn's stored runs never carry an offer,
-+  [261009o](../plans/261009o-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md)). The page says the
++  [261009q](../plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md)). The page says the
    session's kind on every `/live-tool` call and the route hands it to `runTool`, so the guide's gate
    (`toolsFor`) applies to a spoken guide as it does to a typed one. The model chooses only a name.
  - **The kind** is the stored thread's; for a guide that exists only in the tab, the page sends it
@@ -405,7 +405,7 @@ index 37a6286a9..d9af96476 100644
 -[261009i](../plans/261009i-the-guide-greets-in-chat-takes-live-and-a-bar-row.md)), and there is no dialog; on a phone
 +no box: the reader answers below,
 +[261009i](../plans/261009i-the-guide-greets-in-chat-takes-live-and-a-bar-row.md), and since
-+[261009o](../plans/261009o-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md) the
++[261009q](../plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md) the
 +guide offers their reason, and anything new for *About you*, in close to their own words, as a card
 +they press to save, with an Undo), and there is no dialog; on a phone
  the dialog stays ([url-state.md § An article never opened here arrives at a default](url-state.md#an-article-never-opened-here-arrives-at-a-default),
@@ -421,7 +421,7 @@ index 000000000..f329019a1
 + * **Does the guide offer to save the reader's reason and About you when it
 + * should, in close to their words, and never when it should not?** — the paid
 + * check behind plan
-+ * docs/plans/261009o-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md
++ * docs/plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md
 + * (GPT Sol's F4 on that plan asked for a scored matrix, hostile articles
 + * included).
 + *
@@ -648,7 +648,7 @@ index 489160cbe..bc5362233 100644
  
 +/**
 + * **The guide's offer to save what the reader told it** — plan
-+ * docs/plans/261009o-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md,
++ * docs/plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md,
 + * after Greg's reply to q-w2740x: *"the guide should have a tool to enable it
 + * to save to why you're reading or your profile … stay very close to the
 + * user's wording"*.
@@ -903,7 +903,7 @@ index 67ad419e1..74971f8fa 100644
 +      profile: profileParts === null ? null : renderProfile(profileParts),
 +      /* **And the same read, field by field, on a guide turn**: what
 +         `offer_to_save` records as an offer's basis, so a card pressed after
-+         the words changed saves nothing (plan 261009o). A shelf that could
++         the words changed saves nothing (plan 261009q). A shelf that could
 +         not be read leaves the reason out rather than calling it empty. */
 +      saved:
 +        thread.kind === "guide" && profileParts !== null
@@ -943,7 +943,7 @@ index 0deddc960..eccb34405 100644
 +   * as a card with a button they press (`offer_to_save` in src/chat-tools.ts,
 +   * src/web/GuideSaveOffer.tsx). Nothing is saved by the tool: the reader's
 +   * press is the write. The guide's runs only. Plan
-+   * docs/plans/261009o-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md.
++   * docs/plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md.
 +   */
 +  offer?: SaveOffer;
 +}
@@ -1007,7 +1007,7 @@ index 88a90b760..df582724d 100644
 -            <GuideKeepReason slug={slug} text={m.text} />
 -          )}
 +          {/* The guide's offers to save their reason or About you, each a
-+              card they press (GuideSaveOffer.tsx, plan 261009o). */}
++              card they press (GuideSaveOffer.tsx, plan 261009q). */}
 +          {kind === "guide" && <GuideSaveOffers slug={slug} message={m} />}
            </GuideActContext.Provider>
          ))}
@@ -1024,7 +1024,7 @@ index 5fdbd5834..5b0a8de4e 100644
 + *
 + * What the reader says in answer is saved only when the guide offers it and
 + * they press (GuideSaveOffer.tsx, plan
-+ * docs/plans/261009o-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md).
++ * docs/plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md).
 + * Before that plan, a button under their first message, *Keep this as why
 + * you're reading*, saved that message verbatim; the offer replaced it.
   *
@@ -1183,7 +1183,7 @@ index 000000000..5c82958bb
 +/**
 + * **The guide's offer to save, drawn under its answer, and saved only on the
 + * reader's press** — plan
-+ * docs/plans/261009o-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md.
++ * docs/plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md.
 + *
 + * > the guide should have a tool to enable it to save to why you're reading or
 + * > your profile … stay fairly close to the user's input, but it doesn't have
@@ -1569,7 +1569,7 @@ index 8aa8cf3ff..c25cf5630 100644
  .guide-greeting-icon { flex: none; margin-top: 0.2rem; color: var(--ink-faint); }
  .guide-greeting-title { font-style: italic; }
 -.guide-keep { margin: 0.35rem 0 0.6rem; }
-+/* The guide's offer to save the reader's reason or About you (plan 261009o):
++/* The guide's offer to save the reader's reason or About you (plan 261009q):
 +   a card under its answer, the words in the model's face (`.voice-ai`), and a
 +   button only the reader presses. */
 +.guide-offer {
@@ -1649,7 +1649,7 @@ index 080527219..37a411add 100644
 - *   read; and *Keep this as why you're reading* under the reader's first
 - *   answer, which never overwrites a reason stored meanwhile.
 + *   read;
-+ * - **the guide's offer to save** (plan 261009o), a card under its answer
++ * - **the guide's offer to save** (plan 261009q), a card under its answer
 + *   that writes only on a press, never over words changed since the guide
 + *   offered it, once per double press, with an Undo that puts back only over
 + *   its own write. It replaced *Keep this as why you're reading*, whose
@@ -1690,7 +1690,7 @@ index 080527219..37a411add 100644
      [...host.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === label);
    const startButton = () => button(GUIDE_START_LABEL);
 -  const keepButton = () => button(KEEP_REASON_LABEL);
-+  /* What the greeting no longer draws under the first answer (plan 261009o). */
++  /* What the greeting no longer draws under the first answer (plan 261009q). */
 +  const keepButton = () => button("Keep this as why you're reading");
    /** The reader answers: the same mount, now with their first message in it. */
    const answer = async (text: string) => {
@@ -1954,7 +1954,7 @@ index 000000000..5fc308dae
 @@ -0,0 +1,92 @@
 +/**
 + * **The guide's offer reaches the stored run** — plan
-+ * docs/plans/261009o-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md.
++ * docs/plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md.
 + *
 + * Through `converse` itself, with `fetch` stubbed: the model asks for
 + * `offer_to_save`, then answers. The finished `tool` frame and the `done`
@@ -2053,7 +2053,7 @@ index 000000000..4bae72854
 +/**
 + * **`offer_to_save`: the guide offers the reader's reason or About you as a
 + * card they press, and saves nothing itself** — plan
-+ * docs/plans/261009o-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md.
++ * docs/plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md.
 + *
 + * The tool is the guide's alone (`toolsFor`), absent from Live (whose tool
 + * route takes names from the browser and has nowhere to put a button), and
@@ -2216,7 +2216,7 @@ index de378470d..374ed267a 100644
        "article_links",
        "article_glossary",
        "article_citations",
-+      /* Its own, and it saves nothing (plan 261009o). */
++      /* Its own, and it saves nothing (plan 261009q). */
 +      "offer_to_save",
      ]);
      expect(JSON.stringify(sent.at(-1)?.tools)).not.toContain("web_search");

@@ -562,7 +562,7 @@ export const GUIDE_TOOLS: FunctionTool[] = (() => {
 
 /**
  * **The guide's offer to save what the reader told it** — plan
- * docs/plans/261009o-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md,
+ * docs/plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md,
  * after Greg's reply to q-w2740x: *"the guide should have a tool to enable it
  * to save to why you're reading or your profile … stay very close to the
  * user's wording"*.
@@ -2169,7 +2169,7 @@ function offerToSave(args: Record<string, unknown>, ctx: ToolContext): ToolOutco
       "The reader now sees these words under your answer, with a button to save them. Nothing is saved " +
       "unless they press it, so do not say it is saved: say in a few words that they can save it with " +
       "the button under your answer. On a later turn, WHO IS READING THIS shows what is saved. " +
-      /* Measured (plan 261009o, browser pass): a model that wrote its whole
+      /* Measured (plan 261009q, browser pass): a model that wrote its whole
          reply and then called this wrote it all again after the result, and
          the reader's answer is every round's text joined. */
       "Everything you wrote before calling this tool is already on the reader's screen, as the start of " +

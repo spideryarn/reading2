@@ -1,8 +1,8 @@
 You are reviewing built code in the Spideryarn repo (this checkout), and you may fix what you find.
 
-Read first: docs/plans/261009o-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md
-(the plan, your own plan review in docs/plans/261009o-plan-review-sol.md, and § After the plan review,
-which says how each finding was handled). The diff of the stage is docs/plans/261009o-code-review.diff
+Read first: docs/plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md
+(the plan, your own plan review in docs/plans/261009q-plan-review-sol.md, and § After the plan review,
+which says how each finding was handled). The diff of the stage is docs/plans/261009q-code-review.diff
 (commit e14926aef on top of 56adcafa5). The measurement is
 docs/investigations/261009c-the-guide-s-offers-to-save-measured.md with evals/guide/offers.ts.
 

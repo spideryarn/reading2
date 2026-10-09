@@ -1,7 +1,7 @@
 # The guide's offers to save, measured: does it offer when it should, in the reader's words?
 
 Written 2026-10-09 for
-[plan 261009o](../plans/261009o-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md),
+[plan 261009q](../plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md),
 the scored check GPT Sol's F4 on that plan asked for. The runner is
 [`evals/guide/offers.ts`](../../evals/guide/offers.ts); both runs, every answer in full, are
 `evals/guide/results/offers-v1.json` and `offers-v2.json`. Owned by

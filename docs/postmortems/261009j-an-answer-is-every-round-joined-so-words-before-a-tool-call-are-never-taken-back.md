@@ -1,7 +1,7 @@
 # An answer is every round joined, so words before a tool call are never taken back
 
 Up: [postmortems.md](../project/postmortems.md) · plan:
-[261009o](../plans/261009o-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md) ·
+[261009q](../plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md) ·
 measured in [261009c](../investigations/261009c-the-guide-s-offers-to-save-measured.md)
 
 The guide's new `offer_to_save` tool made its answers come out twice. In the browser pass, both

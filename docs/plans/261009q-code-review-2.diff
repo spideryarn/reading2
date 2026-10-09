@@ -142,7 +142,7 @@ index bc5362233..338c3b31a 100644
 -      "the button under your answer. On a later turn, WHO IS READING THIS shows what is saved.",
 -    offer: { field, text, ...(basis === undefined ? {} : { basis }) },
 +      "the button under your answer. On a later turn, WHO IS READING THIS shows what is saved. " +
-+      /* Measured (plan 261009o, browser pass): a model that wrote its whole
++      /* Measured (plan 261009q, browser pass): a model that wrote its whole
 +         reply and then called this wrote it all again after the result, and
 +         the reader's answer is every round's text joined. */
 +      "Everything you wrote before calling this tool is already on the reader's screen, as the start of " +
@@ -165,7 +165,7 @@ index 077c0ffe3..2f855c3fc 100644
 +        /* **A later round's first words start a new paragraph.** Every round's
 +           text is one answer, joined, and a round that ended on "…mattered?"
 +           met the next one's "You can save…" as "mattered?You can save…" (plan
-+           261009o's browser pass). Only where neither side brings its own
++           261009q's browser pass). Only where neither side brings its own
 +           whitespace, and as a delta like any other, so the page and the
 +           stored answer agree. */
 +        if (typeof piece === "string" && piece.length > 0 && roundText === "" && /\S$/.test(text) && /^\S/.test(piece)) {
