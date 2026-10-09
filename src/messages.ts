@@ -290,6 +290,22 @@ export const PAID_STEP_NOT_REPEATED: ReaderFacingFailure = {
     "for. It was not started again by itself. Press Retry to run it. [jb-paid-once]",
 };
 
+/**
+ * **Illustrated's plates, which this job may already have begun, not painted
+ * again by themselves.** The twin of `PAID_STEP_NOT_REPEATED` for a purchase
+ * marked inside a step rather than at it (`StepContext.beginPaidWork`): the
+ * brief may have been banked and handed to this window on purpose, but the
+ * plates were sent by an earlier one, which stopped before they came back.
+ * Plan 261009o.
+ */
+export const PLATES_NOT_REPEATED: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "These pictures may already have started being painted when the job stopped, so they may " +
+    "already have been paid for. They were not painted again by themselves. Press Retry to paint " +
+    "them. [jb-plates-once]",
+};
+
 export const CODE_KINDS: Record<string, FailureKind> = {
   "ai-busy": "retry",
   "ai-no-credit": "ours",
@@ -391,6 +407,9 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      which is the only way this work is bought twice. See
      `PAID_STEP_NOT_REPEATED`. */
   "jb-paid-once": "retry",
+  /* The same refusal for Illustrated's plates, marked at the plate phase
+     rather than at the step. See `PLATES_NOT_REPEATED`. */
+  "jb-plates-once": "retry",
   /* **The two refusals *Dig deeper* on a glossary entry can give**, and the only `gl-` pair.
      Neither is a model call and neither is a fault: one says the article never
      quotes the term, the other that the glossary no longer fits the article.

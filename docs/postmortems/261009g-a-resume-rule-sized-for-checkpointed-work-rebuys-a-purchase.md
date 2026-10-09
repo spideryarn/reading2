@@ -77,10 +77,13 @@ What shipped is a per-job marker on the `jobs` row, written before the paid step
 by the next window, which fails the step with *"Press Retry to run it"*. That is the right shape for
 Debate, whose purchase is the whole step.
 
-It is not yet right for **`illustrated`**, the other dear un-checkpointed purchase (~$0.30 of
+It was not right for **`illustrated`**, the other dear un-checkpointed purchase (~$0.30 of
 plates): it hands itself to a second window *on purpose* after banking its brief, so marking the
-whole step would refuse its own design. It wants the marker at the plate phase, or a checkpoint per
-plate. Left open and named in `REQUEUE_BUDGET`'s comment.
+whole step would refuse its own design. Closed the same day by
+[261009o](../plans/261009o-a-requeued-job-does-not-buy-the-illustrated-plates-again.md): the same
+marker, put down at the plate phase through `StepContext.beginPaidWork`. A checkpoint per plate
+would let an interrupted set resume rather than fail, and is the upgrade if that turns out to be
+common.
 
 The upload source guess (src/source-guess-run.ts) also searches again without a press — on the next
 page open after a failed attempt, capped at two. Bounded and visible; left as it is.

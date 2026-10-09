@@ -143,7 +143,9 @@ WITH CHANGES*.
 6. *Illustrated's plates are the other dear un-checkpointed purchase, and whole-step `oncePerJob`
    would break its intended second window.* **Agreed, and left open**: it needs a marker at the
    plate phase or a checkpoint per plate, which is its own piece of work. Named in the
-   `REQUEUE_BUDGET` comment and the postmortem.
+   `REQUEUE_BUDGET` comment and the postmortem. Since closed by
+   [261009o](261009o-a-requeued-job-does-not-buy-the-illustrated-plates-again.md), a marker at the
+   plate phase.
 7. *Update the comment that calls `REQUEUE_BUDGET` the whole protection.* Taken (src/jobs.ts).
 8. *Tests: a broad catch, `s.job` on `settleExpired`'s answer, assert the intermediate state, drive
    the real deadline.* The first three taken; the fourth is above under *What the tests do not

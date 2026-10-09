@@ -1218,6 +1218,15 @@ export async function generateIllustrated(opts: {
   deadlineAt?: number;
   /** Where the brief waits between windows. `BriefBank`. */
   bank?: BriefBank;
+  /**
+   * **Awaited once, immediately before the first plate is sent**, and only
+   * when the brief has plates and they all fit — so never before a hand-back.
+   * The pipeline marks the job's plates with it and throws if an earlier
+   * window of the same job began them (`StepContext.beginPaidWork`); a throw
+   * here draws nothing. Absent: the eval and the command line, where nothing
+   * requeues. docs/plans/261009o-a-requeued-job-does-not-buy-the-illustrated-plates-again.md.
+   */
+  beginPlates?: () => Promise<void>;
   /** The clocks, overridable for tests only. Never set in the app. */
   briefCapMs?: number;
   plateCapMs?: number;
@@ -1391,6 +1400,11 @@ export async function generateIllustrated(opts: {
     }
     throw new NeedsAnotherWindow();
   }
+
+  /* **The plates are the purchase a later window must not make again.** The
+     brief is banked and the hand-back is behind us, so this is the last thing
+     before the first image call. */
+  if (plateCount > 0) await opts.beginPlates?.();
 
   const { draws, cancelled } = await drawPlates(illustrated, report, draw, {
     ...opts,

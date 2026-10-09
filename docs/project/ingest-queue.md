@@ -1873,7 +1873,12 @@ three covers a deploy landing during the second. **It said three requeues until 
 was four windows against a justification that counted three — the constant and its reasoning meant
 different things, and the reasoning was the half that was right (GPT Sol). Nothing requires *progress*
 before a window is granted, so an un-checkpointed paid call can be bought once per window; the two
-expensive fan-outs are checkpointed, which is why the number is the whole of the protection. The
+expensive fan-outs are checkpointed, which is why the number is the protection for most steps. The
+two dear purchases that cannot be checkpointed are marked once per job on the job row instead
+(`jobs.paid_step_begun`), and a later window refuses to buy them again: Debate's web search, at the
+step ([261009l](../plans/261009l-a-requeued-job-does-not-buy-the-debate-search-again.md)), and
+Illustrated's plates, at the plate phase, after the step's own deliberate hand-back
+([261009o](../plans/261009o-a-requeued-job-does-not-buy-the-illustrated-plates-again.md)). The
 budget is per *job*: pressing Retry makes a new job with a fresh two, so the reader is the outer loop,
 and the machine gives up before the person does. `jobs.requeues` is the counter on Postgres; the
 filesystem adapter (deleted 2026-09-05) kept it in memory, so a restart reset the cap there — weaker

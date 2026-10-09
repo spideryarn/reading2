@@ -131,6 +131,7 @@ import {
   type JobReset,
   type JobStep,
   type JobUpload,
+  type PaidPurchase,
   type StepName,
   type StepPreview,
 } from "./types.js";
@@ -421,7 +422,7 @@ class DeadlineReached extends CallDeadlineReached {
  * re-buying whatever is not checkpointed for a reader who is no longer watching.
  *
  * **And nothing here requires progress before granting a window**, which is what
- * makes the number the protection for every step but one kind. The requeue is decided by
+ * makes the number the protection for most steps. The requeue is decided by
  * `settleExpired` from the lease alone — it has no view of what the attempt got
  * done — so a step whose paid call is *not* checkpointed can be bought once per
  * window. Three windows is three of those. A progress test (say, "requeue only
@@ -430,14 +431,20 @@ class DeadlineReached extends CallDeadlineReached {
  * `assets` outline call and little else, at the price of a second concept in the
  * sweep. Worth revisiting if a third un-checkpointed paid step ever appears.
  *
- * **The one kind is a step marked `oncePerJob`** (src/pipeline.ts): `debate`,
+ * **A whole step can be marked `oncePerJob`** (src/pipeline.ts): `debate`,
  * whose web search costs 15–20 cents a call and cannot be fetched back from a
  * window that died with it in flight. The requeue still grants the window; the
  * next window refuses to begin that step again and fails it with
- * `PAID_STEP_NOT_REPEATED`, so only a reader's press buys it twice. `illustrated`'s
- * plates are the other dear un-checkpointed purchase and are not covered: the
- * step hands itself to a second window on purpose, so marking the whole step would
- * refuse that. docs/plans/261009l-a-requeued-job-does-not-buy-the-debate-search-again.md.
+ * `PAID_STEP_NOT_REPEATED`, so only a reader's press buys it twice.
+ * docs/plans/261009l-a-requeued-job-does-not-buy-the-debate-search-again.md.
+ *
+ * **And one purchase inside a step: `illustrated`'s plates**, the other dear
+ * un-checkpointed one (~$0.30). That step hands itself to a second window on
+ * purpose once its brief is banked, so marking the whole step would refuse its
+ * own design; the same marker goes down at the plate phase instead, through
+ * `StepContext.beginPaidWork`, and a later window that reaches the plates fails
+ * with `PLATES_NOT_REPEATED`.
+ * docs/plans/261009o-a-requeued-job-does-not-buy-the-illustrated-plates-again.md.
  *
  * **And the budget is per job, not per article, which is deliberate.** Pressing
  * Retry makes a *new* job with a fresh two — so the reader is the outer loop.
@@ -1307,8 +1314,9 @@ async function runStep(
   onStepSpend: AdvanceParts["onStepSpend"],
   /* `AdvanceParts.power` — which capable model this step's calls go to. */
   readPower: AdvanceParts["power"],
-  /* `JobStore.beginPaidStep` on this claim, for a `oncePerJob` step. */
-  beginPaidStep: (name: StepName) => Promise<"begun" | "begun-before">,
+  /* `JobStore.beginPaidStep` on this claim: for a `oncePerJob` step here, and
+     for a purchase inside a step through `StepContext.beginPaidWork`. */
+  beginPaidStep: (purchase: PaidPurchase) => Promise<"begun" | "begun-before">,
 ): Promise<{ outcome: StepOutcome; settlement?: JobSettlement }> {
   /* **The article's power, read once per step, when the step starts** (plan
      260930f decision 3): flipping High-powered AI mid-job moves the steps
@@ -1350,6 +1358,9 @@ async function runStep(
     /* Which job, for a step that banks work between this job's windows and must
        not hand it to another job's (Illustrated's brief). */
     jobId: job.id,
+    /* The same once-per-job marker as `oncePerJob` below, for a purchase a
+       step makes part-way through (Illustrated's plates). Plan 261009o. */
+    beginPaidWork: beginPaidStep,
     stepBudgetMs: STEP_BUDGET_MS[step.name],
     /* Which lease window this is, and whether `pauseForDeadline` would grant
        one more. `requeues` is absent at zero (src/store/pg-jobs.ts), so it is
