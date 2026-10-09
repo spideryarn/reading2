@@ -53,6 +53,7 @@
  */
 import type { Block, Citation, Meta } from "./types.js";
 import { type ModelPower, modelFor } from "./models.js";
+import { isHighPowerModel } from "./high-power-model.js";
 import { errorFields, log, since } from "./log.js";
 import { blockRefLeaks, rawIds } from "./block-ref-leak.js";
 import { providerFailedMidAnswer } from "./openrouter-stream.js";
@@ -516,8 +517,17 @@ export async function* explainStream({
   const request = {
     model,
     /* Not part of the cached prefix, so a dug call's larger ceiling costs no
-       cache — src/dig-deeper.ts § `DIG_ANSWER_TOKENS`. */
-    max_tokens: dig ? DIG_ANSWER_TOKENS : 1500,
+       cache — src/dig-deeper.ts § `DIG_ANSWER_TOKENS`.
+
+       **And any call on the high-power model gets it too**, dug or not: a
+       high-powered article puts explain on Opus, `wireEffort` sends it `high`,
+       and the probe behind `DIG_ANSWER_TOKENS` saw Opus stop on `length` at
+       1,500 before it had written much. A cut-off explain answer is stored as
+       a whole one — `Comment` has nowhere to say otherwise — so the ceiling is
+       the whole defence here for now. It fits `EXPLAIN_TIMEOUT_MS` and the
+       comment lease built on it, which already cover a dug answer at this
+       size. Keyed on the model, like `wireEffort`. Plan 261009h. */
+    max_tokens: dig || isHighPowerModel(model) ? DIG_ANSWER_TOKENS : 1500,
     tools: [
       {
         /* **Byte-identical on every call, including a dug one, and that is

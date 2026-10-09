@@ -327,6 +327,11 @@ export async function seedChatFromFiles(slug: string): Promise<{ threads: number
         effort: message.effort ?? null,
         error: message.error ?? null,
         stopped: message.stopped ?? false,
+        /* Named for the reason `effort` gives above; all three were missing
+           until 2026-10-09 (plan 261009h). */
+        truncated: message.truncated ?? false,
+        interrupted: message.interrupted ?? false,
+        passages: message.passages ?? null,
         editedAt: message.editedAt ? new Date(message.editedAt) : null,
         /* Without this a restore drops the stance from every review answer and
            says nothing — the failure src/store/export.ts records beside its own

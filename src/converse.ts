@@ -96,6 +96,7 @@ import {
   saidNothing,
 } from "./messages.js";
 import { type ModelPower, modelFor } from "./models.js";
+import { isHighPowerModel } from "./high-power-model.js";
 /* **Candidates' system prompt, and only that.** It is a hundred lines of
    instructions with no logic in it, and it lives in its own module for the
    reason that file's header gives: the *enforced* half of Candidates is
@@ -204,6 +205,39 @@ export const CANDIDATES_TIMEOUT_MS = 240_000;
  * seconds is comfortably longer than the gap a web search leaves.
  */
 export const CHAT_STALL_MS = 45_000;
+
+/**
+ * **The `max_tokens` one round is sent with** — thinking and answer together.
+ *
+ * Candidates first, at 12,000, whatever the model: the comment on the request
+ * in `converse` says why.
+ *
+ * **The high-power model gets 6,000, keyed on the model and not on `power`**,
+ * the way `wireEffort` (src/ai-call.ts) is: it is the model that is sent
+ * `effort: "high"`, and an explicit or environment override can put either
+ * power on either model. Measured on 2026-10-09, Opus at `high` used 1,195–1,825
+ * of the 4,000 on five whole chat answers, up to 1,117 of it thinking
+ * (docs/investigations/261009a-haiku-5-5-and-an-opus-digest-for-cheaper-models.md).
+ * 6,000 is over three times the largest of those. It is not more because
+ * **the turn's deadline is the other limit on the same stream**:
+ * `deadlineFor(6_000)` (src/token-budget.ts) is 79 s of a 120 s
+ * `CHAT_TIMEOUT_MS`, which leaves room for a tool round before it; at 9,000 a
+ * round using its allowance would need the whole deadline on its own (GPT Sol,
+ * plan 261009h F4). If a round still runs out, the reader is told —
+ * `truncated` — and `warnIfThinkingAteTheCeiling` logs it.
+ *
+ * Unused allowance costs nothing: output is billed as produced, and nothing
+ * reserves spend against this number.
+ * docs/plans/261009h-high-powered-chat-cut-off-at-its-ceiling.md.
+ */
+export const CHAT_ANSWER_TOKENS = 4_000;
+export const CHAT_HIGH_POWER_ANSWER_TOKENS = 6_000;
+export const CANDIDATES_ANSWER_TOKENS = 12_000;
+
+export function chatCeiling(kind: ThreadKind, model: string): number {
+  if (kind === "candidates") return CANDIDATES_ANSWER_TOKENS;
+  return isHighPowerModel(model) ? CHAT_HIGH_POWER_ANSWER_TOKENS : CHAT_ANSWER_TOKENS;
+}
 
 /**
  * How many times in one turn the model may ask for tools and be answered.
@@ -2925,7 +2959,9 @@ export async function* converse({
          turn and every turn paid a cold write. The breakpoint is now explicit
          and sits on the article, in `buildConverseMessages`, where the varying
          part begins. docs/postmortems/260826h-chat-cache-automatic-breakpoint.md. */
-      /* **Four thousand, not two, and the reason is reasoning tokens.**
+      /* **Four thousand on the standard model, not two, and the reason is
+         reasoning tokens.** The high-power model's 6,000 and the model-keyed
+         choice are documented by `chatCeiling` above.
 
          `max_tokens` bounds everything the model emits, and on Sonnet 5 that
          includes the thinking it does before it writes. Two thousand was
@@ -2938,15 +2974,14 @@ export async function* converse({
 
          It costs nothing when unused: output tokens are billed as produced.
 
-         **Candidates gets three times as much, and it is the same lesson again
-         rather than a preference.** Its first live run returned
+         **Candidates gets 12,000 on either model, and it is the same lesson
+         again rather than a preference.** Its first live run returned
          `finish_reason: "length"` with **not one character of text** after 4,550
          output tokens — the whole budget spent thinking, on a question whose
          honest answer is ten to twenty people with a source apiece and a JSON
-         block underneath. Four thousand is right for "one or two short
-         paragraphs", which is what chat's WHAT IT MUST NOT DO section asks for
-         and is not what this prompt asks for at all. */
-      max_tokens: kind === "candidates" ? 12_000 : 4000,
+         block underneath. Ordinary chat asks for "one or two short paragraphs";
+         Candidates does not. */
+      max_tokens: chatCeiling(kind, model),
       /* **Web search is on in every round; use of our own tools is not.**
 
          OpenRouter's is a *server* tool — it runs inside the provider and comes

@@ -3867,7 +3867,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
       /* A stopped answer is stored `done`, with a flag. It is not a failure —
          see the `stopped` field in src/types.ts — and `...(x ? {x} : {})` rather
          than `stopped: event.stopped` so an ordinary answer does not carry a
-         `false` into the file for every turn ever written. */
+         `false` onto the `done` frame for every turn ever written. */
       const finished = {
         text: event.text,
         status: "done" as const,
@@ -3879,8 +3879,9 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
            the next line: most answers use no tools, and a `"tools": []` on every
            one of them is noise in a file a person may well open. */
         ...(event.tools.length > 0 ? { tools: event.tools } : {}),
-        // Same rule again: a flag only when it is true, so an ordinary answer
-        // does not carry two `false`s into the file for the life of the thread.
+        /* Same rule again: a flag only when it is true. The store writes an
+           absent flag as its column's `false`, and a retry resets it there
+           (src/store/pg-chat.ts), so omitting it never leaves a stale `true`. */
         ...(event.truncated ? { truncated: true } : {}),
         ...(event.stopped ? { stopped: true } : {}),
       };

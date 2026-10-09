@@ -2874,6 +2874,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/chat-origin-route.test.ts": "private-postgres",
   "tests/chat-visible-route.test.ts": "private-postgres",
   "tests/chat-route.test.ts": "private-postgres",
+  /* Plan 261009 (high-powered chat ceiling). chat-route's harness: it reads the
+     thread back with `chatStore.load` and asserts on the answer it wrote. */
+  "tests/chat-truncated-stored.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04, and the lane follows from the read-backs
      rather than from the writes: three cases go and look in the store, and two
      of them assert a `load()` is **empty**. An emptiness assertion is the one

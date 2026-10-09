@@ -14,10 +14,11 @@
  * That pinning is the whole reason this file does no shaping of its own.
  * `tests/store-roundtrip.test.ts` compares the rollback's output against what
  * the filesystem store writes, so the legacy projection is deliberately lossy —
- * a `candidates` thread comes out as `chat`, `passages` and `interrupted` are
- * dropped, `extractedHtml` is never written — and **it cannot be enriched in
- * place**. Anything that "improves" a value on the way out of here changes the
- * rollback. Give the caller the row; let the caller lose what it must.
+ * `extractedHtml` is never written, among other legacy differences — and **it
+ * cannot be enriched in place**. (`candidates`, `passages` and `interrupted`
+ * were examples here until their rollback projection was corrected.) Anything
+ * that "improves" a value on the way out of here changes the rollback. Give the
+ * caller the row; let the caller lose what it must.
  * docs/plans/260901h-export-article-data.md § The design.
  */
 
