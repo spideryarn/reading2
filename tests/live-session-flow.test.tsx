@@ -1905,6 +1905,7 @@ describe("spoken repair through the actual chat controller", () => {
       },
       renameThread: async () => ({ ok: true }),
       deleteThread: async () => ({ ok: true }),
+      deleteFrom: async () => ({ ok: true }),
       runTurn: async () => {},
       settledAnswer: async () => null,
       stopAnswer: async () => ({ ok: true }),

@@ -60,12 +60,13 @@
 
 import { randomUUID } from "node:crypto";
 
-import { and, asc, eq, gt, isNull, lt, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, gte, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 
 import {
   CHAT_SWEPT,
   requireTail,
   titleFrom,
+  withDeleteFrom,
   withEdit,
   withRetry,
   withSpokenTurn,
@@ -111,6 +112,21 @@ const DB_NOW = sql`clock_timestamp()` as unknown as Date;
 
 type Db = ReturnType<typeof getDb>;
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
+/** Move the conversation clock only when this attempt actually stored its answer. */
+async function dateLandedFinish(
+  tx: Tx,
+  articleId: string,
+  threadId: string,
+  at: Date,
+  landed: boolean,
+): Promise<void> {
+  if (!landed) return;
+  await tx
+    .update(chatThreads)
+    .set({ updatedAt: at })
+    .where(and(eq(chatThreads.articleId, articleId), eq(chatThreads.id, threadId)));
+}
 
 /**
  * A message as the client sees it. Absent, not null — `exactOptionalPropertyTypes`.
@@ -495,16 +511,6 @@ const rawPgChatStore: ChatStore = {
 
     const landed = await db.transaction(async (tx) => {
       await lockArticleRow(tx, articleId);
-      /* **The thread's clock moves whether or not the message matched.**
-
-         The panel sorts threads by `updatedAt`, and a finish has always moved
-         that clock even when no message matches. Guarding this on the message
-         update's row count would change the order the reader sees. */
-      await tx
-        .update(chatThreads)
-        .set({ updatedAt: at })
-        .where(and(eq(chatThreads.articleId, articleId), eq(chatThreads.id, threadId)));
-
       /* `id` and `role` are deliberately not settable — src/chat.ts pins both
          back after its spread, so a patch can change what an answer says but
          never whose turn it was. */
@@ -546,6 +552,11 @@ const rawPgChatStore: ChatStore = {
           ),
         )
         .returning({ id: chatMessages.id });
+      /* `updated_at` means a message was stored (schema.ts), so the attempt
+         fence guards the thread clock too. A swept attempt or a duplicate
+         finish can no longer reorder a conversation after its answer was
+         pruned, nor jump ahead of the retry that replaced it (plan 261009m). */
+      await dateLandedFinish(tx, articleId, threadId, at, rows.length > 0);
       return rows.length > 0;
     }, READ_COMMITTED);
 
@@ -719,6 +730,43 @@ const rawPgChatStore: ChatStore = {
       },
       "chat question edited",
     );
+    return out;
+  },
+
+  async deleteFrom(slug, threadId, messageId, opts) {
+    const db = getDb();
+    const articleId = await articleIdForOwned(slug);
+    /* `edit`'s transaction without the insert: the same lock, the tail guard
+       read inside it, the same gist clear, and `>=` where edit has `>`
+       because here the question itself goes too. The list is read back inside
+       the transaction, for `rename`'s reason below: a refused read must take
+       the delete with it. */
+    const out = await db.transaction(async (tx) => {
+      await lockArticleRow(tx, articleId);
+      const threads = await threadsFor(articleId, tx);
+      /* Always, unlike `edit`'s optional guard: this has no old clients to
+         stay compatible with (GPT Sol, plan review F1). */
+      requireTail(threads, threadId, opts.expectedTailId, "deleting");
+      const { thread, index, deleted } = withDeleteFrom(threads, threadId, messageId);
+      await tx
+        .update(chatThreads)
+        /* `updated_at` back to the kept tail's (`withDeleteFrom`); the gist
+           goes, as an edit's does, so the list never summarises turns that are
+           not there. */
+        .set({ updatedAt: new Date(thread.updatedAt), gist: null, gistAt: null })
+        .where(and(eq(chatThreads.articleId, articleId), eq(chatThreads.id, threadId)));
+      await tx
+        .delete(chatMessages)
+        .where(
+          and(
+            eq(chatMessages.articleId, articleId),
+            eq(chatMessages.threadId, threadId),
+            gte(chatMessages.ordinal, index),
+          ),
+        );
+      return { threads: await threadsFor(articleId, tx), deleted };
+    }, READ_COMMITTED);
+    logger.info({ slug, threadId, messageId, deleted: out.deleted }, "chat messages deleted");
     return out;
   },
 

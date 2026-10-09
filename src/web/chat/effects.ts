@@ -574,3 +574,23 @@ export function renameThread(slug: string, threadId: string, title: string): Pro
 export function deleteThread(slug: string, threadId: string): Promise<WriteOutcome> {
   return writeThread(slug, threadId, { method: "DELETE" });
 }
+
+/**
+ * Delete one question and everything after it — `deleteChatFrom` in
+ * src/routes.ts. `expectedTailId` is the last row the reader could see; the
+ * server refuses with a 409 if the conversation has moved on since. The answer's
+ * list is not read: the reducer takes out exactly the rows it drew away
+ * (`prune.succeeded`), and a list would be a snapshot to merge.
+ */
+export function deleteFrom(
+  slug: string,
+  threadId: string,
+  messageId: string,
+  expectedTailId: string,
+): Promise<WriteOutcome> {
+  return writeThread(slug, threadId, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messageId, expectedTailId }),
+  }, "/delete-from");
+}

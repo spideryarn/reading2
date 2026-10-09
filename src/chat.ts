@@ -676,12 +676,14 @@ export function requireTail(
   threads: ChatThread[],
   threadId: string,
   expectedTailId: string,
+  /** What the refusal says the reader was about to do. */
+  doing: "editing" | "deleting" = "editing",
 ): void {
   const thread = threads.find((t) => t.id === threadId);
   const tail = thread?.messages.at(-1);
   if (tail?.id !== expectedTailId) {
     throw new ChatConflict(
-      "This conversation has moved on since you opened it. Reload before editing.",
+      `This conversation has moved on since you opened it. Reload before ${doing}.`,
     );
   }
 }
@@ -849,5 +851,55 @@ export function withEdit(
     user,
     reply,
     discarded: existing.messages.length - index - 1,
+  };
+}
+
+/**
+ * Delete one of the reader's questions, and everything after it.
+ *
+ * Report spya-mx423m, Greg, 2026-10-09: *"I accidentally said, 'Where should I
+ * start?' twice in this chat, and I want to remove the second one. I guess it
+ * would delete anything following."* The discard is the one `withEdit` already
+ * makes under an edited question, without a new question and answer after it.
+ *
+ * Refused rather than quietly adjusted in three cases
+ * (docs/plans/261009m-delete-a-chat-question-and-what-follows.md):
+ *
+ *  - **an answer.** Deleting one alone leaves a question with nothing under it,
+ *    which reads as a bug; the last answer has Answer again.
+ *  - **the first message.** That would leave an empty conversation, and the
+ *    conversation's own delete (Learn's Start over) is the way to do that.
+ *  - **a conversation with an answer still arriving.** The row being written
+ *    into may be among the ones deleted. The panel withdraws the button then;
+ *    this is for a second tab.
+ *
+ * Note the `index === 0` refusal is also what makes `kept.at(-1)` below defined.
+ */
+export function withDeleteFrom(
+  threads: ChatThread[],
+  threadId: string,
+  messageId: string,
+): { thread: ChatThread; index: number; deleted: number } {
+  const existing = threads.find((t) => t.id === threadId);
+  if (!existing) throw new ChatConflict("That conversation is not there any more.");
+  const index = existing.messages.findIndex((m) => m.id === messageId);
+  if (index < 0) throw new ChatConflict("That message is not in this conversation.");
+  if (existing.messages[index]?.role !== "user") {
+    throw new ChatConflict("Only your own questions can be deleted.");
+  }
+  if (index === 0) {
+    throw new ChatConflict("That is the first question: delete the conversation instead.");
+  }
+  if (existing.messages.some((m) => m.status === "pending")) {
+    throw new ChatConflict("An answer is still arriving in this conversation.");
+  }
+  const kept = existing.messages.slice(0, index);
+  return {
+    /* `updatedAt` goes back to when the kept tail's turn began — what it was
+       set to when that turn was asked (`withTurn`), so the list's "last
+       message" and its order describe a message that is still there. */
+    thread: { ...existing, updatedAt: kept.at(-1)?.createdAt ?? existing.createdAt, messages: kept },
+    index,
+    deleted: existing.messages.length - index,
   };
 }

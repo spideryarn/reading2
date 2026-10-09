@@ -236,7 +236,9 @@ right instead, beside a band or without one.
   Open it for the anchoring, the four store operations and why there are four, and the streaming.
 - **[chat-tools.md](chat-tools.md)** — the tools chat can reach for and the filter they passed:
   *does it send the reader somewhere they could not otherwise get to?* Chat itself is in the plans:
-  [260826a-chat-mode.md](../plans/260826a-chat-mode.md), [260826ab-chat-as-gateway.md](../plans/260826ab-chat-as-gateway.md).
+  [260826a-chat-mode.md](../plans/260826a-chat-mode.md), [260826ab-chat-as-gateway.md](../plans/260826ab-chat-as-gateway.md);
+  deleting a question and what follows it is
+  [261009m](../plans/261009m-delete-a-chat-question-and-what-follows.md).
 - **[chat-from-a-mode.md](chat-from-a-mode.md)** — an "Ask in chat" button on an item in a mode,
   and the chat that remembers where it began: which modes have one, and the checklist of every place
   a new one has to be told to, marked loud or silent. Open it before adding the button to a mode.

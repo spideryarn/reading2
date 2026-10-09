@@ -53,7 +53,7 @@
  * ordered list's `start`, which is a number; and a heading's element name,
  * clamped to h4–h6.
  */
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type RefObject, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   BookOpen,
@@ -281,6 +281,16 @@ interface Props {
   onRetry(messageId: string): void;
   /** Rewrite one of the reader's questions. Discards everything after it. */
   onEdit(messageId: string, question: string): void;
+  /**
+   * Delete one of the reader's questions and everything after it (report
+   * spya-mx423m). **Required, and undefined while the conversation is not
+   * settled** — `settled` in useChat.ts: named by the server and nothing of
+   * this tab's still out for it. A question the server has not named yet
+   * cannot be addressed, and a second press while one delete is out would
+   * name a tail the first is about to remove. Required so a new caller has
+   * to decide (GPT Sol, plan review F3 and F6).
+   */
+  onDeleteFrom: ((messageId: string) => void) | undefined;
   /** Stop an answer that is still arriving. What has appeared is kept. */
   onStop(messageId: string): void;
   /**
@@ -453,6 +463,7 @@ export function ChatPanel({
   startingOver = false,
   onRetry,
   onEdit,
+  onDeleteFrom,
   onStop,
   onHintOpened,
   onJump,
@@ -746,6 +757,7 @@ export function ChatPanel({
           onSubmitStarted={open.kind === "chat" ? () => drafts.submitted(open.id) : undefined}
           onRetry={onRetry}
           onEdit={onEdit}
+          onDeleteFrom={onDeleteFrom}
           onStop={onStop}
           onHintOpened={onHintOpened}
           focusNonce={focusNonce}
@@ -916,11 +928,17 @@ function ArmedDelete({
   onDelete,
   title = "Delete this conversation",
   armedTitle = "Press again to delete this conversation",
+  size = 14,
+  buttonRef,
 }: {
   onDelete(): void;
   /** What the button says at rest, and once armed. Learn calls it Start over. */
   title?: string;
   armedTitle?: string;
+  /** The bin's size: 14 in a header, 12 beside a question's pencil. */
+  size?: number;
+  /** Lets a row hand focus somewhere stable before this button disappears. */
+  buttonRef?: RefObject<HTMLButtonElement | null>;
 }) {
   const [armed, setArmed] = useState(false);
   useEffect(() => {
@@ -931,14 +949,39 @@ function ArmedDelete({
 
   return (
     <button
+      ref={buttonRef}
       type="button"
       className={`chat-icon danger${armed ? " armed" : ""}`}
       title={armed ? armedTitle : title}
+      aria-label={armed ? armedTitle : title}
+      aria-pressed={armed}
       onClick={() => (armed ? onDelete() : setArmed(true))}
     >
-      <Trash2 size={14} />
+      <Trash2 size={size} aria-hidden="true" />
     </button>
   );
+}
+
+/** The exact second-press warning: the answer is named separately from later rows. */
+function deleteFromArmedTitle(discards: number): string {
+  if (discards === 0) return "Press again to delete this question";
+  if (discards === 1) return "Press again to delete this question and its answer";
+  const trailing = discards - 1;
+  return `Press again to delete this question, its answer and the ${trailing} message${trailing === 1 ? "" : "s"} after it`;
+}
+
+/** Put focus on the retained question before the optimistic prune removes this row. */
+function focusBeforePrune(button: HTMLButtonElement | null): void {
+  const row = button?.closest(".chat-turn.you");
+  let previous = row?.previousElementSibling ?? null;
+  while (previous) {
+    const target = previous.querySelector<HTMLButtonElement>('button[title="Rewrite this question"]');
+    if (target) {
+      target.focus();
+      return;
+    }
+    previous = previous.previousElementSibling;
+  }
 }
 
 /** Where Learn's composer turns compact — see `short` in `Composer`. */
@@ -1449,6 +1492,7 @@ export function Conversation({
   onSubmitStarted,
   onRetry,
   onEdit,
+  onDeleteFrom,
   onStop,
   onHintOpened,
   focusNonce,
@@ -1480,6 +1524,8 @@ export function Conversation({
   onSubmitStarted?: (() => void) | undefined;
   onRetry(messageId: string): void;
   onEdit(messageId: string, question: string): void;
+  /** See `onDeleteFrom` in Props. */
+  onDeleteFrom: ((messageId: string) => void) | undefined;
   onStop(messageId: string): void;
   focusNonce: number;
   /** See `focused` in ChatPanel — it outlives this component on purpose. */
@@ -1550,6 +1596,8 @@ export function Conversation({
   const last = thread.messages.at(-1);
   const chars = last?.text.length ?? 0;
   const busy = last?.status === "pending";
+  /** A Live session is running in this conversation — the test `leave` uses. */
+  const speaking = live !== undefined && live.phase !== "idle" && live.phase !== "failed";
   /**
    * Which question the reader is rewriting, if any.
    *
@@ -2027,6 +2075,16 @@ export function Conversation({
                rendered list rather than passed down, so it cannot drift from
                what is on screen. */
             discards={thread.messages.length - i - 1}
+            /* Not on the first question: that would leave an empty
+               conversation, and the conversation's own delete is in the
+               header (`withDeleteFrom` in src/chat.ts refuses it too). Nor
+               while Live is talking here: its next exchange is appended
+               against the tail it last saw (GPT Sol, plan review F4). */
+            onDeleteFrom={i > 0 && !speaking ? onDeleteFrom : undefined}
+            /* The actionable callback disappears while a turn is out because
+               `settled()` becomes false. Keep the bin's place separately, as
+               the pencil does, so the row does not change width mid-answer. */
+            holdDeleteFrom={i > 0 && !speaking}
           />
           {/* The reader's answer to the greeting's question, kept as their
               reason only if they press (GuideGreeting.tsx § GuideKeepReason). */}
@@ -2301,6 +2359,8 @@ export function Turn({
   editing,
   onEditing,
   discards,
+  onDeleteFrom,
+  holdDeleteFrom = false,
 }: {
   message: ChatMessage;
   /**
@@ -2326,6 +2386,14 @@ export function Turn({
   onEditing(on: boolean): void;
   /** Turns an edit here would discard. */
   discards: number;
+  /**
+   * Delete this question and everything after it. Absent on the first
+   * question and wherever the caller offers no delete; withheld with the
+   * pencil while an answer is arriving.
+   */
+  onDeleteFrom?: ((messageId: string) => void) | undefined;
+  /** Reserve the bin's place in the held action row while it cannot be pressed. */
+  holdDeleteFrom?: boolean;
 }) {
   /**
    * Where the caret goes when an edit box closes.
@@ -2345,6 +2413,7 @@ export function Turn({
    * to be withdrawn would be worse.
    */
   const pencil = useRef<HTMLButtonElement>(null);
+  const remove = useRef<HTMLButtonElement>(null);
   const wasEditing = useRef(editing);
   const commands = useChatCommands() ?? undefined;
   useEffect(() => {
@@ -2434,6 +2503,11 @@ export function Turn({
             <span className="chat-icon">
               <Pencil size={12} />
             </span>
+            {holdDeleteFrom && (
+              <span className="chat-icon">
+                <Trash2 size={12} />
+              </span>
+            )}
           </div>
         )}
         {canEdit && (
@@ -2447,6 +2521,25 @@ export function Turn({
             >
               <Pencil size={12} />
             </button>
+            {/* Two presses, like the conversation's own delete: the bin is a
+                row away from the pencil, and a stray click would take the rest
+                of the conversation with it (report spya-mx423m). */}
+            {onDeleteFrom && (
+              <ArmedDelete
+                buttonRef={remove}
+                size={12}
+                title="Delete this question and everything after it"
+                armedTitle={deleteFromArmedTitle(discards)}
+                onDelete={() => {
+                  /* The optimistic prune unmounts this focused row. Put the
+                     caret on the preceding question's pencil first: that row
+                     is precisely the retained tail and survives both success
+                     and refusal. */
+                  focusBeforePrune(remove.current);
+                  onDeleteFrom(message.id);
+                }}
+              />
+            )}
           </div>
         )}
       </div>

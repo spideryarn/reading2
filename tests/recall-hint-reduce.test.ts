@@ -151,6 +151,7 @@ describe("the controller", () => {
       loadThreads: async () => ({ ok: true, threads: [thread()] }),
       renameThread: async () => ({ ok: true }),
       deleteThread: async () => ({ ok: true }),
+      deleteFrom: async () => ({ ok: true }),
       runTurn: async () => {},
       appendSpoken: () => new Promise(() => {}),
       settledAnswer: async () => null,

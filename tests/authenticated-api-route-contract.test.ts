@@ -874,6 +874,16 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/chat/w1/w2/hint-opened"],
   },
   {
+    /* The reader deleted a question and what follows it (plan 261009m). */
+    match: {
+      kind: "regex",
+      source: "^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/delete-from$",
+      flags: "",
+    },
+    methods: ["POST"],
+    witnesses: ["/api/chat/w1/w2/delete-from"],
+  },
+  {
     match: { kind: "regex", source: "^\\/api\\/live\\/([\\w-]+)\\/connected$", flags: "" },
     methods: ["POST"],
     witnesses: ["/api/live/w1/connected"],
@@ -1001,8 +1011,9 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
    in another tree: docs/plans/261008i-debate-claims-picked-by-the-reader.md);
    101 with that plan's claim checks (its stage 3); 103 with the public shelf
    topic pills' status and Rebuild (plan 261008j); 104 with Skim's profile
-   notice dismissal (plan 261009i). */
-const EXPECTED_MATCHER_COUNT = 104;
+   notice dismissal (plan 261009i); 105 with deleting a chat question and what
+   follows it (plan 261009m). */
+const EXPECTED_MATCHER_COUNT = 105;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
    with the admin's earlier feedback; 118 with their replies to questions; 119
    with the Help pages' chatbot; 120 with Hidden text's Opus check; 121 with the
@@ -1010,8 +1021,9 @@ const EXPECTED_MATCHER_COUNT = 104;
    Hidden text check's GET (plan 261009a); 125 with Debate's claim checks'
    GET and POST (plan 261008i); 127 with the public shelf topic pills' status
    and Rebuild (plan 261008j); 128 with Skim's profile notice dismissal (plan
-   261009i). */
-const EXPECTED_GUARD_COUNT = 128;
+   261009i); 129 with deleting a chat question and what follows it (plan
+   261009m). */
+const EXPECTED_GUARD_COUNT = 129;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2287,6 +2299,7 @@ describe("the authenticated API's route contract", () => {
         "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/spoken$/",
         "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/stop$/",
         "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/hint-opened$/",
+        "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/delete-from$/",
         "PATCH regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
         "DELETE regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
         // search, 260907b stage 5

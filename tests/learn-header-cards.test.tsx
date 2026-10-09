@@ -395,6 +395,7 @@ describe("Learn's (i)", () => {
       canStartOver: true,
       onRetry: () => {},
       onEdit: () => {},
+      onDeleteFrom: undefined,
       onStop: () => {},
       onJump: () => {},
       recovering: new Set<string>(),
