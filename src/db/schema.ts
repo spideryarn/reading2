@@ -73,6 +73,7 @@ import type { RefereeResult } from "../referee-criteria.js";
    shape and the validator that guarantees it live together in
    src/referee-claims.ts. */
 import type { Claim } from "../referee-claims.js";
+import type { HiddenJudgment } from "../referee-hidden-check-types.js";
 import type { Sketch } from "../sketch-scene.js";
 import type { Illustrated } from "../illustrated-plate.js";
 import type { LabelsFile } from "../labels.js";
@@ -85,6 +86,9 @@ import type {
   Arc,
   Citation,
   Debate,
+  DebateCheckCounts,
+  DebateCheckResult,
+  DebateCheckTarget,
   Faq,
   Relations,
   DebateClaimList,
@@ -2247,6 +2251,154 @@ export const refereeClaims = spideryarn.table(
       "referee_claims_empty_unless_done",
       sql`${t.status} = 'done' or jsonb_array_length(${t.claims}) = 0`,
     ),
+  ],
+);
+
+/* -------------------------------------------------- debate claim checks -- */
+
+/**
+ * **A reader's claim check in Debate's Claims** — the claims they ticked and
+ * the one they typed, searched on the open web in one call. `DebateClaimCheck`
+ * in src/types.ts is the shape; src/store/pg-debate-claim-checks.ts is the
+ * store; docs/plans/261008i-debate-claims-picked-by-the-reader.md § 3 is the
+ * design.
+ *
+ * ## Keyed `(article_id, id)`: a check is an event, not a slot
+ *
+ * Unlike `referee_claims`, a second check does not replace the first. Each
+ * press is one row, and the panel draws every finished check's rows under the
+ * claims they answered, so Dig further adds to a claim rather than overwriting
+ * it.
+ *
+ * ## One pending check per article, held by Postgres
+ *
+ * `debate_claim_checks_one_pending` is a **partial unique index** on
+ * `article_id` where `status = 'pending'`, and the route's reservation *is*
+ * the insert, before any allowance or model call. Two tabs pressing Check at
+ * once get one search and one 409 — a read-then-insert would let both through
+ * (GPT Sol's F2 on the plan).
+ *
+ * ## The attempt, and the lease
+ *
+ * `attempt_id` is written by the insert and presented by `finish`, which lands
+ * only on a `pending` row carrying it; the sweep clears it. `created_at` is
+ * the lease's clock: a `pending` row older than the call's deadline plus a
+ * margin is one whose process died, and the next GET marks it `error` so it
+ * cannot hold the index for ever (src/store/pg-debate-claim-checks.ts §
+ * `CHECK_ORPHAN_GRACE_MS`).
+ *
+ * ## `targets`, `results` and `counts` are JSONB, for `referee_claims`' reason
+ *
+ * One call's wholesale output, written together, read as a unit, never edited
+ * a row at a time, and never queried across: docs/project/sql.md's exception,
+ * argued the way `referee_claims.claims` argues it.
+ */
+export const debateClaimChecks = spideryarn.table(
+  "debate_claim_checks",
+  {
+    articleId: uuid("article_id")
+      .notNull()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    /** `mintId()`, unique within its article. */
+    id: text("id").notNull(),
+    /** `auth.users(id)`. FK in the migration by hand, like every other owner key. */
+    ownerId: uuid("owner_id").notNull(),
+    /** Written `pending` before the model is called, so a crash leaves a visible unfinished check. */
+    status: text("status").notNull(),
+    /** Which call may finish this row. Set while `pending`, null after. */
+    attemptId: text("attempt_id"),
+    /** `DebateClaimList.sourceHash` of the list it was pressed on. Checks are drawn under that list. */
+    listSourceHash: text("list_source_hash").notNull(),
+    /** `CHECK_PROMPT_VERSION` in src/debate.ts when it was asked. */
+    promptVersion: text("prompt_version").notNull(),
+    /** Dig further on one claim: the prompt carried the addresses it already had. */
+    digFurther: boolean("dig_further").notNull().default(false),
+    /** What was searched for — built by the server from stored ids. */
+    targets: jsonb("targets").$type<DebateCheckTarget[]>().notNull(),
+    /** One per target once `done`; `[]` otherwise. */
+    results: jsonb("results").$type<DebateCheckResult[]>().notNull().default([]),
+    /** What the reading dropped and why. Null until `done`. */
+    counts: jsonb("counts").$type<DebateCheckCounts>(),
+    /** The provider's own search count — the spend alarm. Null until `done`. */
+    webSearches: integer("web_searches"),
+    model: text("model"),
+    /** The reader's sentence for a failed check. **Never logged** — referee_claims' reason. */
+    error: text("error"),
+    /** When it was pressed, and the lease's clock. */
+    createdAt: createdAt(),
+    /** When the answer landed, the call failed, or the sweep gave up on it. */
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.articleId, t.id] }),
+    check("debate_claim_checks_id_format", sql`${t.id} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`),
+    check("debate_claim_checks_status", sql`${t.status} in ('pending','done','error')`),
+    /* A pending row is the one with an attempt; nothing else has one. */
+    check(
+      "debate_claim_checks_attempt_while_pending",
+      sql`(${t.status} = 'pending') = (${t.attemptId} is not null)`,
+    ),
+    /* Results only on a finished answer, as `referee_claims_empty_unless_done`. */
+    check(
+      "debate_claim_checks_results_only_done",
+      sql`${t.status} = 'done' or jsonb_array_length(${t.results}) = 0`,
+    ),
+    uniqueIndex("debate_claim_checks_one_pending")
+      .on(t.articleId)
+      .where(sql`${t.status} = 'pending'`),
+  ],
+);
+
+/**
+ * **Hidden text's Opus check: the last finished answer, one per article** —
+ * docs/plans/261009a-save-hidden-text-opinions.md. Until 2026-10-09 the answer
+ * was thrown away on reload and a second press paid again; Greg asked for it
+ * kept (report spya-gqq38u, and docs/project/database.md § AI output we paid
+ * for is kept).
+ *
+ * `referee_claims`' shape with less in it: **no status, no attempt, no error**,
+ * because only a finished, validated answer is ever written, as one upsert. A
+ * failed or abandoned run leaves the last good answer where it was.
+ *
+ * **No source hash either.** Each judgment carries the inputs it was made from
+ * (`CheckedInputs`, src/scan-groups.ts) and the panel shows it only beside a
+ * row equal to them, so an answer about an older scan reads *not checked*
+ * rather than as current.
+ */
+export const refereeHiddenChecks = spideryarn.table(
+  "referee_hidden_checks",
+  {
+    /** The key, on its own: one check per article, and a new one replaces it. */
+    articleId: uuid("article_id")
+      .primaryKey()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    /** `auth.users(id)`. FK in the migration by hand, like every other owner key. */
+    ownerId: uuid("owner_id").notNull(),
+    /**
+     * The accepted judgments, validated by `validateJudgments`
+     * (src/referee-hidden-check.ts) before they get here. JSONB for the reason
+     * `referee_claims.claims` is: one call's output, written and replaced whole,
+     * never queried across. **The reasons are model text that may quote a
+     * manuscript's hidden words: never logged.**
+     */
+    judgments: jsonb("judgments").$type<HiddenJudgment[]>().notNull(),
+    /** `HiddenCheckResult.unanswered`. */
+    unanswered: integer("unanswered").notNull(),
+    /** `HiddenCheckResult.notSent`, counted in `unanswered` too. */
+    notSent: integer("not_sent").notNull(),
+    /** The model that answered, as the gateway reported it. */
+    model: text("model").notNull(),
+    /** When the referee pressed the button. */
+    createdAt: createdAt(),
+    /** When the answer arrived and was validated. Shown as the check's date. */
+    finishedAt: timestamp("finished_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    check(
+      "referee_hidden_checks_counts",
+      sql`${t.unanswered} >= 0 and ${t.notSent} >= 0 and ${t.notSent} <= ${t.unanswered}`,
+    ),
+    check("referee_hidden_checks_judgments_array", sql`jsonb_typeof(${t.judgments}) = 'array'`),
   ],
 );
 

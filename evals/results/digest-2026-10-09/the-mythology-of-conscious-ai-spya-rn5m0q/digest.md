@@ -1,0 +1,121 @@
+# Notes on Anil Seth, "The Mythology Of Conscious AI"
+
+## 1. Thesis and main claims
+
+**Central claim:** Conscious AI is very unlikely to arrive just because AI gets smarter, and may be impossible for the digital silicon computers we know. This holds because consciousness probably depends on more than running the right computation, and perhaps on being alive. Seth hedges this: "very unlikely… may well be impossible… at least for" digital computers [spya-qekh87], and he says nothing rules out artificial consciousness entirely [spya-xapwmg].
+
+- **Our minds are biased toward seeing consciousness in machines.** Argued, through named biases [spya-pxsutv][spya-kq7usr][spya-x4n9kj], language [spya-qzwr7t], the feeling that change is exponential [spya-qwdxge], and techno-religious hopes [spya-pbjsny]. Committed, with explanation.
+- **Intelligence and consciousness are different things.** Asserted, with definitions [spya-xrqegw][spya-w5ya7j][spya-h58fmt].
+- **Conscious AI rests on "computational functionalism"** (the view that running the right computation is enough for consciousness), and that view is an assumption, possibly wrong. Asserted strongly [spya-vwn2u7].
+- **Brains are not computers.** Argued, and called "most important" [spya-r8t03u][spya-xb93uz][spya-ykna0s].
+- **Kinds of activity beyond step-by-step computation may matter for consciousness.** Argued as "at least plausible" [spya-vqtbs4][spya-pefebs].
+- **Life (probably) matters.** Explicitly hedged: "I don't have a knock-down argument" [spya-z6e85s]. The case is offered as "glimmers" [spya-tqm5tt] and "perhaps" [spya-hhphc6].
+- **Simulating something does not create it.** Argued as "obvious and uncontroversial" [spya-y3s0uc][spya-bufgby].
+- **No one should try to build conscious AI, and AI that only seems conscious is a separate, nearer danger.** Asserted as ethics [spya-tqm2r8][spya-yp07n0][spya-yt9pm9].
+
+## 2. How the argument is built
+
+- **Set-up and stakes** [spya-sbs06f]–[spya-tbnksw]. Cultural history, then the Lemoine episode and experts who expect machine consciousness [spya-xzfzar], then why the question matters for the AI, for us, and for how we see ourselves [spya-e3v6vu][spya-qrkt96][spya-tbnksw].
+- **Definitions and psychology** [spya-cypt9v]–[spya-agb7mk]. This section explains why people believe in conscious AI. It does not yet argue that the belief is false, and Seth says so: it is "just the first step" [spya-agb7mk].
+- **Naming the hidden assumption** [spya-vwn2u7][spya-v85aj0]. Everything after this targets computational functionalism.
+- **Four arguments:**
+  1. Brains are not computers [spya-r8t03u]–[spya-ykna0s]. This builds the Turing picture [spya-sd92qf][spya-fta690][spya-ywr0vh] and then attacks it [spya-k5c44w][spya-kmbkgj].
+  2. Other games in town [spya-e5kxct]–[spya-mexnx9]. This depends on argument 1: once brains are not computers, other ways of explaining them become live options.
+  3. Life matters [spya-z6e85s]–[spya-hhphc6]. This depends on predictive processing [spya-faupat] and on argument 2's claim that bodily regulation is "non-algorithmic" [spya-tqm5tt].
+  4. Simulation is not instantiation [spya-xn8vu7]–[spya-v8cpz8]. Its force depends on computational functionalism being false [spya-bufgby], so it leans on arguments 1–3.
+- **Recap and how the arguments fit together** [spya-czs8rz]–[spya-azb2sq]. Seth claims each argument stands alone but that they also strengthen each other [spya-v8e0gy].
+- **Ethics and policy** [spya-gdgtj5]–[spya-ce8ywb]. He admits he may be wrong [spya-pyy07g][spya-xth5uf], then gives the consequences for real versus conscious-seeming AI.
+- **Closing** [spya-nvj2jy]–[spya-k8r5wh]. Rhetorical and cultural: AI as mirror, and two ideas of the soul.
+
+## 3. Evidence and qualifications
+
+- **Biases.** The support is reasoning and examples, not data. No one calls AlphaFold (which predicts protein shapes) conscious, though it is "rather similar to an LLM" inside, so language must be what pulls us in [spya-qzwr7t]. The word "hallucinate" quietly suggests experience [spya-akrqfh]. Limit: biases explain belief, but cannot by themselves show the belief is false [spya-agb7mk].
+- **Brains vs computers.** Evidence:
+  - Brain activity runs across many scales at once and is tied up with metabolism (the chemistry that keeps cells alive) [spya-xdcepu].
+  - The Chintaluri and Vogels finding that some neurons fire partly to clear metabolic waste [spya-wwktbr].
+  - The contrast in timing: algorithms care only about order, brains about real time [spya-gnfs7p][spya-cs57q7].
+  - Phenomenology, the study of how experience feels from inside: experience "flows" [spya-q4z07n].
+
+  Qualifications: separating what brains do from what they are is "difficult, and likely impossible", not proven impossible [spya-xb93uz]. The claim that keeping software and hardware separate costs a lot of energy is backed only by the energy use of server farms [spya-dchvhe].
+- **Substrate.** Turing computation is "in principle" substrate independent: it does not depend on what it is made of. Seth's own correction is easy to drop: in practice it is only *substrate flexible*, meaning it works on many materials but not any ("cheese" won't do) [spya-fta690].
+- **Beyond step-by-step computation.** Turing showed some problems cannot be solved by any algorithm, such as the halting problem. Continuous and random processes "strictly speaking" lie outside Turing computation, although they can be approximated [spya-e5kxct]. The steam-engine governor shows something doing a job without computing [spya-ungpb9]. Qualification: these alternatives are still forms of *functionalism* [spya-g3z609]. So the question changes to "how brain-like" a system must be [spya-mexnx9]. It does not become "only brains."
+- **Life.** Evidence:
+  - Every thing most people agree is conscious is also alive [spya-z6e85s].
+  - A chain of ideas: predictive processing [spya-faupat], perception as "controlled hallucination" [spya-rnv09y], the self as perceptual best-guessing [spya-ju84kr], and prediction serving control of the body [spya-k74kqx], which reaches down into metabolism [spya-tm06bg].
+
+  Qualifications: life is necessary "though not necessarily sufficient" [spya-z6e85s]. Seth says this is "one way of thinking about it" and points elsewhere for the full case [spya-fa7f7s]. It is "one possibility" [spya-cenxdm].
+- **Simulation.** Evidence is analogy: a simulated digestive system does not digest, and a simulated rainstorm does not make anything wet [spya-y3s0uc]. Built-in exception: simulating X does create X if X is itself an algorithm [spya-y3s0uc]. So brain simulation fails only "unless computational functionalism happens anyway to be true" [spya-ksbt2g].
+- **Ethics.** Self-limits:
+  - "I might be wrong", and his view is a "minority view" [spya-pyy07g].
+  - No one can claim to know for sure [spya-xth5uf].
+  - Other technologies might succeed where silicon fails. Seth names cerebral organoids (brain-like tissue grown from stem cells) as a bigger worry than LLMs [spya-eufate].
+
+## 4. Weak points and criticisms
+
+- **The neural-replacement answer may miss the point** [spya-mdpqeh]. Chalmers's thought experiment imagines a part that works *exactly* like a neuron. Showing that real silicon parts can't do this today, or need a metabolism [spya-wwktbr], does not touch the in-principle question. Calling it an "impossibility" is asserted, not shown. One example of a neuron clearing waste is thin support for "the only way to seamlessly replace a biological neuron is with another biological neuron." Not acknowledged.
+- **The arguments are less independent than claimed.** Seth says each "can stand up by itself" [spya-v8e0gy]. Yet the simulation argument openly depends on computational functionalism being false [spya-bufgby][spya-ksbt2g], so on its own it only restates the disagreement. Partly acknowledged in the same passages.
+- **"Every conscious thing is alive" is a small, one-sided sample** [spya-z6e85s]. Everything we agree is conscious also has neurons, is carbon-based, and evolved. The fact alone cannot tell us which shared feature matters. Seth admits there is no knock-down argument, but does not raise this confound.
+- **"Non-computational" is asserted at a key step** [spya-tqm5tt]. Predictive processing is usually written in the mathematics of Bayesian inference, a way of updating guesses with evidence. Seth's own "mathematical line" from self-production to Bayesian guessing [spya-tm06bg] could be read as pointing toward something computable. He says "or at least non-algorithmic", which narrows the claim, but gives no argument that the process cannot be captured.
+- **The timing argument** [spya-gnfs7p][spya-cs57q7]. Physical computers do run in real time, and neural spikes are fairly all-or-nothing events. Whether *continuity* is needed for consciousness is assumed, not shown. Not acknowledged.
+- **The theories he sets aside.** He says rival computational theories "sidestep defending computational functionalism" [spya-pyy07g] but does not engage any of them in detail. Acknowledged only as general uncertainty [spya-xth5uf].
+- **The false-positive claim** [spya-ce8ywb]: "biases are more likely to lead to false positives than false negatives." Asserted. Given humanity's record of denying animals' minds, which he himself raises in [spya-yrs9au], this needs support.
+- **The Bostrom critique** [spya-v8cpz8]. Seth says Bostrom "just takes" the assumption that a computer could be conscious as given. Bostrom does state it openly as an assumption, so the complaint is about lack of defense, not concealment. Also, Seth's conclusion (we are conscious, so we are not in a simulation) only follows if his anti-functionalist view is right.
+- **The rights argument cuts both ways** [spya-tqm2r8][spya-yt9pm9]. Seth treats "we couldn't shut them down" as a cost. A critic might find it odd to count a being's moral protection mainly as a loss of control.
+- **Likely factual slip.** The Antikythera mechanism is dated "around 2,000 BCE" [spya-j8uzxp]. It is usually dated to roughly the 2nd–1st century BCE. Do not repeat the article's date as settled fact.
+- **Motive arguments.** The hint that stock prices and salaries drive the hype [spya-txe2yd] is labeled "more cynically" and does not bear on whether the claims are true.
+
+## 5. Passages a reader may find confusing
+
+- **"On an exponential curve, every point is an inflection point"** [spya-qwdxge]. Strictly, an exponential curve has no inflection point (a point where it changes from bending one way to the other). Seth means it *feels* like a turning point wherever you stand, because the past always looks flat and the future steep.
+- **"Substrate independent" vs "substrate flexible"** [spya-fta690]. The first means the material doesn't matter at all. The second means many materials work, but not just any.
+- **Watt governor** [spya-ungpb9]. Spinning weights swing out and close a steam valve. It regulates the engine by physics alone. Describing it as "sensing, calculating, signaling" would misdescribe it. This is the model for brain processes that do jobs without computing.
+- **"Functionalism" vs "computational functionalism"** [spya-g3z609]. Seth rejects only the narrower claim. A mind could depend on how a system is organized and works without that organization being an algorithm.
+- **"Controlled hallucination"** [spya-rnv09y]. Normal perception is the brain's guess, constantly checked against the senses. It does not mean seeing things that aren't there.
+- **"Mortal computation"** [spya-m838y6]. Hinton's idea: algorithms bound to one particular piece of hardware, which "die" (metaphorically) when that hardware fails. They trade portability for energy savings.
+- **"Breathes fire into the equations"** [spya-hhphc6]. A borrowed phrase meaning "what makes the abstract description real." Life, not information processing, is the candidate.
+- **The hailstorm line** [spya-dt6mk4]. If a very detailed brain model is needed, that suggests non-computational details matter. In that case, uploading your brain no more produces you than a weather model produces hail.
+- **The soul passages** [spya-ts52ue][spya-d8kf83][spya-k8r5wh]. Seth rejects the Cartesian soul: a mind fully separable from the body, as in Descartes. He sees mind-uploading as a return to that idea. He favors older ideas tied to breath (the Greek *psychē*) and bare awareness (the Hindu *Ātman*). This is a cultural point, not part of the argument.
+
+## 6. Key terms as this article uses them
+
+- **Intelligence**: "the ability to achieve complex goals by flexible means." It is about *doing* [spya-xrqegw].
+- **Consciousness**: Nagel's "something it is like to be" a thing. It is about *being*, the felt side of perception [spya-w5ya7j].
+- **Computational functionalism**: running the right computation is *sufficient* (enough) for consciousness [spya-vwn2u7][spya-gqry8p].
+- **Functionalism (general)**: mind depends on the functional organization of the embodied brain, meaning how its parts work together, which need not be computation [spya-g3z609].
+- **Turing machine / universal Turing machine**: an abstract device that follows rules for reading and writing symbols. The universal version can imitate any other such machine [spya-sd92qf].
+- **Algorithm**: a step-by-step mapping from input symbols to output symbols in which only the order of steps matters [spya-sd92qf][spya-gnfs7p].
+- **Autopoiesis**: "self-production." A living thing continually rebuilds the conditions and material of its own existence [spya-xdcepu].
+- **Generative entrenchment**: the brain's scales are so interwoven that you cannot swap out one part cleanly [spya-xpydj4].
+- **Predictive processing / prediction error**: the brain guesses the causes of its sensory signals. The signals report the gap between the guess and reality, and the brain keeps shrinking that gap [spya-faupat].
+- **Interoceptive inference**: the brain's best guesses about the body's inner state [spya-ju84kr].
+- **Valence**: whether things feel like they are going well or badly. It is central to emotion and mood [spya-uy7nmf].
+- **Biological naturalism**: Searle's term. Properties of life are *necessary* for consciousness, though not necessarily sufficient [spya-z6e85s].
+- **Simulation vs instantiation**: modeling X versus actually bringing X into being [spya-y3s0uc].
+- **Confabulation**: making things up without realizing it. Seth prefers this word to "hallucination" for LLM falsehoods [spya-akrqfh].
+- **Pareidolia**: seeing patterns such as faces where there are none. It is Becker's description of seeing consciousness in AI [spya-agb7mk].
+- **4E cognitive science**: approaches that see the mind as enactive, embodied, embedded and extended, meaning bound up with action, the body, and the world [spya-pefebs].
+- **Garland test**: a test of whether a *human* stays convinced a machine is conscious after being told it is a machine. It is not a test of the machine's consciousness [spya-mpawvu].
+
+## 7. Traps
+
+- **Do not overstate the conclusion.** Seth does not say conscious AI is impossible. He says it is very unlikely for digital silicon, nothing rules it out altogether, and other technologies might manage it [spya-qekh87][spya-xapwmg][spya-eufate].
+- **Do not flip necessary and sufficient.** Computational functionalism says computation is *sufficient*. Biological naturalism says life is *necessary* but *not necessarily sufficient*. Seth does not claim that anything alive is conscious.
+- **Seth does not deny AI is intelligent.** He grants it "arguably already" is, in some ways [spya-n7cbbw][spya-pej0nd].
+- **Seth is not against functionalism in general**, only the computational kind [spya-g3z609].
+- **Two senses of "hallucination."** The AI usage is criticized [spya-akrqfh]. The article's own "controlled hallucination" names normal human perception [spya-rnv09y]. Do not merge them.
+- **Reported views vs Seth's views.** Chalmers thinks conscious machines may come soon and is linked to neural replacement. Hinton thinks they exist already, yet also introduced mortal computation [spya-xzfzar][spya-mdpqeh][spya-m838y6]. Bostrom's simulation hypothesis is reported in order to attack it [spya-v8cpz8]. Becker's "pareidolia," Vallor's mirror and Turkle's line are borrowed from them [spya-agb7mk][spya-cmqq8p][spya-k8r5wh].
+- **Lemoine** was fired for breaking confidentiality, not for being wrong. Seth stresses that difference [spya-bxa7j8][spya-xzfzar].
+- **Two separate ethical risks.** Actually conscious AI (uncertain, and should not be built) and conscious-seeming AI (much closer, and dangerous even if not conscious) [spya-yp07n0][spya-yrzj3e]. The conscious-seeming risk has two sides: misplaced moral concern, or brutalizing ourselves by mistreating things that seem to feel [spya-yt9pm9].
+- **Illusions persist even when we know better.** Feeling that AI is conscious may survive knowing it isn't, like the Müller-Lyer illusion, where two equal lines always look unequal [spya-c0pwqt].
+- **Organoids worry Seth more than LLMs** [spya-eufate]. Easy to reverse.
+- **"Simulation is not instantiation" has an exception:** it does not hold if the thing being simulated is itself an algorithm [spya-y3s0uc].
+- **The simulation-hypothesis point is conditional.** *If* computational functionalism fails, our being conscious rules out our living in a simulation [spya-v8cpz8].
+- **Dates.**
+  - Turing defined computation in the 1930s ("more than a decade" before his 1950s work on machine intelligence) [spya-j4svwn][spya-akxf8e].
+  - Nagel wrote "half a century ago" [spya-w5ya7j].
+  - Van Gelder's governor example is from "three decades ago" [spya-ungpb9].
+  - Lemoine's interview was in 2022; the AI-welfare article was in late 2024 [spya-bxa7j8][spya-xzfzar].
+  - The Antikythera date as printed is likely wrong (see section 4).
+- **Pull quotes repeat lines from the body; they are not new claims.** Examples: [spya-me5fe5][spya-q6ekhr][spya-hjejqw]. One pull quote [spya-q6ekhr] sits in argument 2 but repeats a line from argument 1 [spya-kmbkgj].
+- **The Kant point appears twice** [spya-qrkt96][spya-yt9pm9]. It concerns treating conscious-*seeming* things as unfeeling, which is unhealthy for *us*.
+- **AlphaFold** is cited as *similar* to an LLM inside but not seen as conscious. The contrast is about our psychology, not about the systems [spya-qzwr7t].

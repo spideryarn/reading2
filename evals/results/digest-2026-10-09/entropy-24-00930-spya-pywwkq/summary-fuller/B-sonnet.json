@@ -1,0 +1,316 @@
+{
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "task": "summary-fuller",
+  "arm": "B-sonnet",
+  "model": "anthropic/claude-sonnet-5.5",
+  "answeredBy": "anthropic/claude-sonnet-5.5",
+  "effortSent": null,
+  "effortRan": "high",
+  "maxTokens": 48999,
+  "boundUsd": 0.6655175,
+  "ok": true,
+  "error": null,
+  "finishReason": "stop",
+  "raw": "{\"paragraphs\":[{\"ids\":[\"spya-xn9j9k\",\"spya-rxcze4\"],\"list\":false,\"sentences\":[{\"text\":\"This is a review article about how brains process information, meaning how neural circuits take in signals and turn them into something new.\",\"id\":\"spya-rxcze4\",\"key\":null},{\"text\":\"It explains a tool from information theory (the math of measuring how much one thing tells you about another) called partial information decomposition, or PID.\",\"id\":\"spya-xn9j9k\",\"key\":\"partial information decomposition\"},{\"text\":\"The authors then show what this tool has revealed in recordings of neurons.\",\"id\":\"spya-xn9j9k\",\"key\":null}]},{\"ids\":[\"spya-s9kmxa\",\"spya-s0db2g\"],\"list\":false,\"sentences\":[{\"text\":\"The authors say two things have long held this research back: too little data, and too few ways to make sense of it.\",\"id\":\"spya-s9kmxa\",\"key\":null},{\"text\":\"New recording methods now capture hundreds or thousands of neurons at very fine time resolution, which eases the first problem.\",\"id\":\"spya-s9kmxa\",\"key\":null},{\"text\":\"Simpler measures such as transfer entropy show how much information flows from one neuron to another, but they say little about how streams of information combine.\",\"id\":\"spya-s0db2g\",\"key\":null}]},{\"ids\":[\"spya-t02v4p\",\"spya-e94ury\",\"spya-h5jzvm\"],\"list\":true,\"sentences\":[{\"text\":\"PID splits the information that several source neurons give about a target neuron into separate parts. In the simplest case, two source neurons feed one target, and the parts are:\",\"id\":\"spya-h5jzvm\",\"key\":null},{\"text\":\"Redundant information is information that either source could provide on its own.\",\"id\":\"spya-h5jzvm\",\"key\":null},{\"text\":\"Unique information is information that only one particular source provides.\",\"id\":\"spya-h5jzvm\",\"key\":null},{\"text\":\"Synergistic information is information found only by looking at both sources together, so it cannot be traced to either one alone.\",\"id\":\"spya-e94ury\",\"key\":\"Synergistic information\"}]},{\"ids\":[\"spya-sw5ukx\",\"spya-kqkb58\",\"spya-fud8q3\"],\"list\":false,\"sentences\":[{\"text\":\"To test this, the team recorded hundreds of neurons from cultured slices of mouse cortex, then analyzed thousands of source-source-target groups of three neurons.\",\"id\":\"spya-sw5ukx\",\"key\":null},{\"text\":\"Synergy was strongly tied to how much information flowed from sources to target, at about a quarter of the transfer entropy in these recordings.\",\"id\":\"spya-kqkb58\",\"key\":null},{\"text\":\"Rich clubs, meaning densely interconnected groups of the best-connected neurons, had 2.7 times the synergy of other triads.\",\"id\":\"spya-fud8q3\",\"key\":\"2.7 times the synergy\"},{\"text\":\"Although under 40% of neurons were in rich clubs, their triads accounted for about 88% of the network's synergy.\",\"id\":\"spya-fud8q3\",\"key\":null}]},{\"ids\":[\"spya-sd9fzd\",\"spya-ybmve2\",\"spya-cs9fdy\"],\"list\":false,\"sentences\":[{\"text\":\"Wiring mattered too: triads with two connections between the source neurons had 50% more synergy than the simplest triads.\",\"id\":\"spya-sd9fzd\",\"key\":null},{\"text\":\"Connections running from the target back to the sources did not reliably relate to synergy.\",\"id\":\"spya-sd9fzd\",\"key\":null},{\"text\":\"Synergy also rose when the two sources were more alike in their firing, but only up to a point, peaking at about 7% of the maximum possible similarity.\",\"id\":\"spya-ybmve2\",\"key\":\"only up to a point\"},{\"text\":\"Beyond that, the shared information became redundant, which suppressed synergy.\",\"id\":\"spya-cs9fdy\",\"key\":null}]},{\"ids\":[\"spya-j4cy9j\",\"spya-wr7f6y\",\"spya-t8fayf\"],\"list\":false,\"sentences\":[{\"text\":\"The authors name limits of the culture work: the connection maps came from a method that can overstate connections, and cultured tissue is not a behaving animal.\",\"id\":\"spya-j4cy9j\",\"key\":null},{\"text\":\"A later study of three macaque monkeys doing a reach-and-grasp task replicated several findings, including rich clubs and more synergy in well-connected neurons.\",\"id\":\"spya-wr7f6y\",\"key\":null},{\"text\":\"Activity was mostly synergy-dominated, but redundancy rose sharply during movement, which the authors read as the brain duplicating the signal to send it reliably.\",\"id\":\"spya-t8fayf\",\"key\":null}]},{\"ids\":[\"spya-aby2dp\",\"spya-qa7gt2\",\"spya-sp50v3\"],\"list\":false,\"sentences\":[{\"text\":\"PID has limits. The number of information parts explodes as sources are added, reaching 7,828,354 for six, and estimates from limited data can be misleading.\",\"id\":\"spya-aby2dp\",\"key\":null},{\"text\":\"It also shows statistical patterns rather than explaining the biology behind them.\",\"id\":\"spya-spdx0y\",\"key\":null},{\"text\":\"The authors conclude that neurons do not simply add up their inputs: they respond to patterns of inputs, and these patterns depend on the neuron's surroundings and on the animal's behavior.\",\"id\":\"spya-sp50v3\",\"key\":\"neurons do not simply add up their inputs\"}]}]}",
+  "parsed": [
+    {
+      "text": "This is a review article about how brains process information, meaning how neural circuits take in signals and turn them into something new. It explains a tool from information theory (the math of measuring how much one thing tells you about another) called partial information decomposition, or PID. The authors then show what this tool has revealed in recordings of neurons.",
+      "ids": [
+        "spya-xn9j9k",
+        "spya-rxcze4"
+      ],
+      "sentences": [
+        {
+          "text": "This is a review article about how brains process information, meaning how neural circuits take in signals and turn them into something new.",
+          "id": "spya-rxcze4"
+        },
+        {
+          "text": "It explains a tool from information theory (the math of measuring how much one thing tells you about another) called partial information decomposition, or PID.",
+          "id": "spya-xn9j9k",
+          "key": "partial information decomposition"
+        },
+        {
+          "text": "The authors then show what this tool has revealed in recordings of neurons.",
+          "id": "spya-xn9j9k"
+        }
+      ]
+    },
+    {
+      "text": "The authors say two things have long held this research back: too little data, and too few ways to make sense of it. New recording methods now capture hundreds or thousands of neurons at very fine time resolution, which eases the first problem. Simpler measures such as transfer entropy show how much information flows from one neuron to another, but they say little about how streams of information combine.",
+      "ids": [
+        "spya-s9kmxa",
+        "spya-s0db2g"
+      ],
+      "sentences": [
+        {
+          "text": "The authors say two things have long held this research back: too little data, and too few ways to make sense of it.",
+          "id": "spya-s9kmxa"
+        },
+        {
+          "text": "New recording methods now capture hundreds or thousands of neurons at very fine time resolution, which eases the first problem.",
+          "id": "spya-s9kmxa"
+        },
+        {
+          "text": "Simpler measures such as transfer entropy show how much information flows from one neuron to another, but they say little about how streams of information combine.",
+          "id": "spya-s0db2g"
+        }
+      ]
+    },
+    {
+      "text": "PID splits the information that several source neurons give about a target neuron into separate parts. In the simplest case, two source neurons feed one target, and the parts are: Redundant information is information that either source could provide on its own. Unique information is information that only one particular source provides. Synergistic information is information found only by looking at both sources together, so it cannot be traced to either one alone.",
+      "ids": [
+        "spya-t02v4p",
+        "spya-e94ury",
+        "spya-h5jzvm"
+      ],
+      "sentences": [
+        {
+          "text": "PID splits the information that several source neurons give about a target neuron into separate parts. In the simplest case, two source neurons feed one target, and the parts are:",
+          "id": "spya-h5jzvm"
+        },
+        {
+          "text": "Redundant information is information that either source could provide on its own.",
+          "id": "spya-h5jzvm"
+        },
+        {
+          "text": "Unique information is information that only one particular source provides.",
+          "id": "spya-h5jzvm"
+        },
+        {
+          "text": "Synergistic information is information found only by looking at both sources together, so it cannot be traced to either one alone.",
+          "id": "spya-e94ury",
+          "key": "Synergistic information"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "To test this, the team recorded hundreds of neurons from cultured slices of mouse cortex, then analyzed thousands of source-source-target groups of three neurons. Synergy was strongly tied to how much information flowed from sources to target, at about a quarter of the transfer entropy in these recordings. Rich clubs, meaning densely interconnected groups of the best-connected neurons, had 2.7 times the synergy of other triads. Although under 40% of neurons were in rich clubs, their triads accounted for about 88% of the network's synergy.",
+      "ids": [
+        "spya-sw5ukx",
+        "spya-kqkb58",
+        "spya-fud8q3"
+      ],
+      "sentences": [
+        {
+          "text": "To test this, the team recorded hundreds of neurons from cultured slices of mouse cortex, then analyzed thousands of source-source-target groups of three neurons.",
+          "id": "spya-sw5ukx"
+        },
+        {
+          "text": "Synergy was strongly tied to how much information flowed from sources to target, at about a quarter of the transfer entropy in these recordings.",
+          "id": "spya-kqkb58"
+        },
+        {
+          "text": "Rich clubs, meaning densely interconnected groups of the best-connected neurons, had 2.7 times the synergy of other triads.",
+          "id": "spya-fud8q3",
+          "key": "2.7 times the synergy"
+        },
+        {
+          "text": "Although under 40% of neurons were in rich clubs, their triads accounted for about 88% of the network's synergy.",
+          "id": "spya-fud8q3"
+        }
+      ]
+    },
+    {
+      "text": "Wiring mattered too: triads with two connections between the source neurons had 50% more synergy than the simplest triads. Connections running from the target back to the sources did not reliably relate to synergy. Synergy also rose when the two sources were more alike in their firing, but only up to a point, peaking at about 7% of the maximum possible similarity. Beyond that, the shared information became redundant, which suppressed synergy.",
+      "ids": [
+        "spya-sd9fzd",
+        "spya-ybmve2",
+        "spya-cs9fdy"
+      ],
+      "sentences": [
+        {
+          "text": "Wiring mattered too: triads with two connections between the source neurons had 50% more synergy than the simplest triads.",
+          "id": "spya-sd9fzd"
+        },
+        {
+          "text": "Connections running from the target back to the sources did not reliably relate to synergy.",
+          "id": "spya-sd9fzd"
+        },
+        {
+          "text": "Synergy also rose when the two sources were more alike in their firing, but only up to a point, peaking at about 7% of the maximum possible similarity.",
+          "id": "spya-ybmve2",
+          "key": "only up to a point"
+        },
+        {
+          "text": "Beyond that, the shared information became redundant, which suppressed synergy.",
+          "id": "spya-cs9fdy"
+        }
+      ]
+    },
+    {
+      "text": "The authors name limits of the culture work: the connection maps came from a method that can overstate connections, and cultured tissue is not a behaving animal. A later study of three macaque monkeys doing a reach-and-grasp task replicated several findings, including rich clubs and more synergy in well-connected neurons. Activity was mostly synergy-dominated, but redundancy rose sharply during movement, which the authors read as the brain duplicating the signal to send it reliably.",
+      "ids": [
+        "spya-j4cy9j",
+        "spya-wr7f6y",
+        "spya-t8fayf"
+      ],
+      "sentences": [
+        {
+          "text": "The authors name limits of the culture work: the connection maps came from a method that can overstate connections, and cultured tissue is not a behaving animal.",
+          "id": "spya-j4cy9j"
+        },
+        {
+          "text": "A later study of three macaque monkeys doing a reach-and-grasp task replicated several findings, including rich clubs and more synergy in well-connected neurons.",
+          "id": "spya-wr7f6y"
+        },
+        {
+          "text": "Activity was mostly synergy-dominated, but redundancy rose sharply during movement, which the authors read as the brain duplicating the signal to send it reliably.",
+          "id": "spya-t8fayf"
+        }
+      ]
+    },
+    {
+      "text": "PID has limits. The number of information parts explodes as sources are added, reaching 7,828,354 for six, and estimates from limited data can be misleading. It also shows statistical patterns rather than explaining the biology behind them. The authors conclude that neurons do not simply add up their inputs: they respond to patterns of inputs, and these patterns depend on the neuron's surroundings and on the animal's behavior.",
+      "ids": [
+        "spya-aby2dp",
+        "spya-qa7gt2",
+        "spya-sp50v3"
+      ],
+      "sentences": [
+        {
+          "text": "PID has limits. The number of information parts explodes as sources are added, reaching 7,828,354 for six, and estimates from limited data can be misleading.",
+          "id": "spya-aby2dp"
+        },
+        {
+          "text": "It also shows statistical patterns rather than explaining the biology behind them.",
+          "id": null
+        },
+        {
+          "text": "The authors conclude that neurons do not simply add up their inputs: they respond to patterns of inputs, and these patterns depend on the neuron's surroundings and on the animal's behavior.",
+          "id": "spya-sp50v3",
+          "key": "neurons do not simply add up their inputs"
+        }
+      ]
+    }
+  ],
+  "validation": {
+    "paragraphs": 7,
+    "words": 502,
+    "dropped": {
+      "malformed": 0,
+      "empty": 0,
+      "emptySentences": 0,
+      "sentenceIds": 1,
+      "keys": 0,
+      "unknownIds": 0,
+      "duplicateIds": 0,
+      "overCap": 0,
+      "unanchored": 0
+    }
+  },
+  "usage": {
+    "inputTokens": 22283,
+    "outputTokens": 1821,
+    "reasoningTokens": 0,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 19003
+  },
+  "usd": 0.0722775,
+  "latencyMs": 14641,
+  "generationIds": [
+    "gen-1791504522-Kz64LVfmSFA9wfqbvKvy"
+  ],
+  "upstreams": [
+    "Azure"
+  ],
+  "calls": 1,
+  "request": {
+    "model": "anthropic/claude-sonnet-5.5",
+    "max_tokens": 48999,
+    "messages": [
+      {
+        "role": "system",
+        "content": [
+          {
+            "type": "text",
+            "text": "<article (articleWithIds, body evidence): 58535 chars, sha256 688b710ed398d233>",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          },
+          {
+            "type": "text",
+            "text": "You are helping a reader get their bearings before they read the article above.\n\nWHAT YOU WRITE\n\nAn orientation in plain words: what the piece is about, why it matters,\nand its key ideas. It is not a replacement for the article. It is what a reader\nwants to know first, so that the article itself makes sense when they read it.\n\nTHE READER\n\nA bright eighteen-year-old in their first year at university who has not studied this field. Everyday words and short sentences.\n\nYou may keep more of the piece's own terms than a beginner's version would (each\nstill said in plain words where it first appears).\n\nThis version has room to go into the piece. Use it for:\n\n- how the work was done: what was studied, measured or argued from;\n- the evidence and the numbers behind each main finding;\n- the limits the piece itself names;\n- how the steps of the argument connect: what each one leads to.\n\n- Use jargon sparingly. Where you do use a term, say what it means in the same\n  sentence, in everyday words. Never explain one hard word with another.\n- Keep the author's key term where the reader will meet it in the article; it\n  is their handhold. Say what it means.\n- If the request describes the reader, what they say they already know counts\n  as everyday words for them: use it without explaining it. Everything else\n  stays at this pitch.\n- A name the piece introduces is a term like any other, however plain it\n  looks: a term it coins or uses in its own sense, an abbreviation, its label\n  for a method, model, measure, group, condition or experiment. The first time\n  you use one, say what it is in the same sentence, in everyday words.\n- Do not refer to a part, result, model or label before this summary has\n  introduced it. \"The second experiment\" is fine after this summary has said\n  what the experiments were; otherwise say what it is.\n\nLENGTH\n\nFive to eight paragraphs, each two to five sentences. Every sentence under 30 words. About 500 words in\nall, and never more than 600. Shorter is fine for a short\npiece. This is still not a replacement for the article: spend the words on what\nthe piece did, found and admits, and never on saying one thing twice.\n\nTHE SHAPE\n\n- First: what the piece is about — its goal or question, or its subject, and\n  what kind of piece it is.\n- Then: why it matters — why THE PIECE says it matters, not why you think it\n  might.\n- Then: its key ideas or findings.\n- End on the takeaway: the piece's main conclusion, and any implication it\n  states itself. Never advice or a consequence it does not give.\n\nFAITHFUL, NOT JUST SIMPLE\n\n- Plainer means equally specific. Keep the numbers, the direction of a\n  finding, and the hedges (\"may\", \"in mice\", \"in this sample\"). Do not claim\n  more certainty than the piece does.\n- Only what the piece says. No outside knowledge presented as the piece's: no\n  background, history, or consequences the article does not state.\n\nWHERE EACH PARAGRAPH COMES FROM\n\nEvery paragraph lists the ids of the one to three blocks of the article above\nthat best support it. \"ids\" MUST be ids listed in the article; never invent one.\nA paragraph with no id that checks out is thrown away — so a paragraph about\nwhy it matters has to rest on where the piece says why it matters.\n\nThen write the paragraph as its sentences, in order, one sentence to each\n\"text\". Give each sentence the \"id\" of the one block, from that paragraph's own\n\"ids\", that the sentence most rests on. Use null when it rests on none of them\nin particular: a sentence that frames the piece, or a takeaway drawn from the\nwhole paragraph. A sentence never names an id its paragraph did not list.\n\nThe ids go only in \"ids\" and \"id\". Never write an id, or \"block …\", in a\nsentence's text.\n\nWHAT A SKIMMING READER CATCHES\n\nTwo more fields say how a paragraph is drawn. They are the only formatting\nthere is.\n\n\"key\" on a sentence: a few words copied exactly from that sentence's \"text\",\nwhich the reader sees in bold. Pick the finding, the number or the term that a\nreader skimming the page should catch. At most 8 words, and never the whole\nsentence. In a paragraph, at most two sentences have a \"key\". Most sentences\nhave none: write null.\n\n\"list\" on a paragraph: true when the reader should see it as a bulleted list,\nfalse for an ordinary paragraph. Use a list only where the piece itself gives\nparallel items: its findings, its steps, its reasons. At most two paragraphs\nare lists, and many summaries need none.\n\nIn a list paragraph the first sentence is the lead-in, and it must make sense\non its own. Each later sentence is one bullet, and there are at least two.\nEvery bullet is a full sentence with its own \"id\", like any other sentence.\n\nPLAIN WORDS\n\nWrite for a curious reader who has not studied this field. If these\ninstructions, or the reader's own description, say who the reader is, write\nfor them instead: a specialist does not need their own field's terms explained.\n\nUse the commonest word that loses nothing. This changes the words, never the\nmeaning: plainer means equally specific. Never drop a number, a direction, a\ncomparison, a condition or a hedge (\"may\", \"in mice\", \"in this sample\") that\nthe claim depends on; a sentence that is plainer and less exact is worse. It\nnever changes which field a fact belongs in, which source may support it, or\nthe shape and length these instructions set for each field: where those rules\nare more specific, they win. Text you are told to copy exactly stays exactly as written.\n\nIn what you write to explain — an answer, a summary, a definition, a\nreason, feedback, a caption: say what it means here, in everyday words, first.\nKeep the article's own term where the reader will meet it again in the prose;\nit is their handhold. But a handhold is not an explanation: if this reader\nwould not know the term, say what it means where it first appears, as part of\nthe sentence. Never explain one hard word with another. A word is not plain\nbecause the article uses it.\n\nFor example, explaining a line in a medical paper:\nBAD: \"The trial was underpowered, so its null result is uninformative.\"\nGOOD: \"The trial was underpowered: too small to reliably catch an effect of the\nsize it was looking for, so finding no effect tells us little either way.\"\n\nBefore you finish, look at each word you wrote that this reader might not know.\nEither it is the article's term and you have said what it means, or change it.\n\nPlainer than the article, never further from it: never less exact, and never beyond what it says.\n\nPAPERWORK IS NOT THE PIECE\n\nAround a piece's content there may be paperwork: the title block (the title,\nsubtitle, byline, dates, DOI, keywords and the journal's header), the list of\nauthors and where they work, contact and correspondence details,\nacknowledgements and thanks, funding and grants, conflict-of-interest and other\ndisclosures, ethics approval, author contributions, data-availability\nstatements, the publisher's notices, and, at the end, the reference list or\nbibliography and any lists of backlinks or related links. Where it only\nidentifies the piece or records how it was produced, published and sourced, it\nis paperwork.\nLeave it out: do not summarise it, spend a sentence on it, or present it as\none of the piece's caveats or limits. Name an author only to say who argues\nsomething.\n\nJudge it by what it does, not by its heading. If the piece uses any of these as\nevidence, reasoning, method or a limit on its findings — a funder's role that\nit says may bias the result, an ethics rule that shaped the study, an article\nABOUT research funding — it is content, and the usual rules apply.\n\nIF THE READER HAS DESCRIBED THEMSELVES\n\nSome requests carry a short description of who the reader is and what they are\nafter. When one is present:\n\n- It changes pitch and emphasis. It never changes what the article says.\n- Which things you spend words on is governed by it. Every sentence you write is\n  still about the article.\n- Assume the background they claim. Do not explain what they have told you they\n  already know — and do not perform explaining it in fewer words either.\n- Where the piece has nothing on what they are after, write what you would have\n  written anyway, and never say so out loud. A line spent telling the reader\n  this part is not for them is a line not spent on the part.\n- Never flatter them, never address them, and never mention the description.\n  They wrote it; they do not need it read back.\n- Never put any of it into a web search query, a tool argument, or anything else\n  that leaves this conversation. It is what a person told us about themselves.\n\nNEVER write anything of this shape:\n  \"As a cognitive scientist, you'll appreciate that…\"\n  \"Since you know your way around the literature, briefly: …\"\n  \"Given your background, I'll skip the basics.\"\nSkipping the basics is correct. Announcing that you are skipping them is not.\n\nFOR THIS VERSION, THE READER'S BACKGROUND DOES NOT COVER WHAT THIS PIECE INTRODUCES\n\nOrdinary, established terms from the background the reader claims may stay\nunexplained. A term, abbreviation, label or special meaning that this piece\nintroduces is different: it does not become known because it belongs to the\nsame field. Treat it as new unless the reader's description itself names it.\nWhere this differs from \"Assume the background they claim\" above, this\nparagraph wins.\n\nOUTPUT\n\nJSON only, no prose, no code fence:\n\n{\"paragraphs\": [\n  {\"ids\": [\"spya-k3m9qt\", \"spya-p7w2dn\"], \"list\": false,\n   \"sentences\": [\n     {\"text\": \"...\", \"id\": \"spya-k3m9qt\", \"key\": \"...\"},\n     {\"text\": \"...\", \"id\": null, \"key\": null},\n     {\"text\": \"...\", \"id\": \"spya-p7w2dn\", \"key\": null}]}\n]}\n\nPlain text in \"text\" and \"key\": no markdown, no asterisks, no bullet or list\ncharacters, no headings. Bold and lists are said only by \"key\" and \"list\".\nNever put a real line break inside a string, and escape any straight double\nquote as \\\"."
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": "Write the plain-words orientation for this article."
+      }
+    ],
+    "response_format": {
+      "type": "json_schema",
+      "json_schema": {
+        "name": "simple_summary_level",
+        "strict": true,
+        "schema": {
+          "type": "object",
+          "properties": {
+            "paragraphs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "list": {
+                    "type": "boolean"
+                  },
+                  "sentences": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "text": {
+                          "type": "string",
+                          "pattern": "\\S"
+                        },
+                        "id": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "key": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "\\S"
+                        }
+                      },
+                      "required": [
+                        "text",
+                        "id",
+                        "key"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "ids",
+                  "list",
+                  "sentences"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "paragraphs"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  "at": "2026-10-09T00:08:57.182Z"
+}

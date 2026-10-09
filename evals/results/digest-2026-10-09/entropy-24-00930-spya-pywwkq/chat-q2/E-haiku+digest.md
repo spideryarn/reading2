@@ -1,0 +1,11 @@
+# entropy-24-00930-spya-pywwkq — chat-q2 — E-haiku+digest
+
+> What exactly is 'synergy' in PID, and how far should I trust the finding that synergy concentrates in rich clubs and recurrent connections? What could the choice of redundancy measure, or the amount of data, do to that result?
+
+Synergy is the part of what two input neurons jointly tell you about a target neuron that neither input tells you alone. PID splits the total information into redundant, unique, and synergistic parts [spya-h5jzvm], and synergy is what remains when the whole exceeds the sum of the parts [spya-e94ury]. It is a statistical quantity, not a mechanism: PID shows dependencies, not why they arise [spya-spdx0y].
+
+The rich-club result needs caution. The 2.7-fold figure is a per-triad average, and the authors concede that the 88% network-wide share partly reflects rich clubs containing many triads [spya-fud8q3]. Rich clubs are defined by heavy information flow [spya-bftp48], and synergy was tied to transfer entropy [spya-kqkb58]. My inference is that synergy may rise with transfer entropy partly by construction, which would make that link weaker evidence than it looks. The recurrent-connection finding is also modest: feedforward connections explained most of the variance, and feedback was not significant [spya-sd9fzd]. The networks came from pairwise transfer entropy, which the authors say overestimates significance [spya-j4cy9j], and the data are cultured slices rather than behaving animals [spya-j4cy9j].
+
+The redundancy measure matters. The article notes close to a dozen competing measures with different trade-offs, and most results use Imin, which has been criticised for unintuitive behaviour [spya-rc76qn]. My inference is that because synergy is what is left after redundancy is subtracted, a different measure could shift the synergy values and possibly their ranking. The article reports no check that the rich-club or motif results hold under other measures.
+
+Data amount matters too. Undersampling and finite-size effects can badly compromise the estimates [spya-tz99zn]. The article says the naive estimator overstates mutual information, and that this is less of a worry for binary single-neuron recordings that run long [spya-qa7gt2]. My inference is that the triad results could still carry some of this bias, and the article reports no bias check for them.

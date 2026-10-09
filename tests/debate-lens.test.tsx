@@ -19,7 +19,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { claimListOwner } from "./helpers/debate-claims-owner.js";
+import { checksOwner, claimListOwner } from "./helpers/debate-claims-owner.js";
 import type { BlockId, ClaimDebateRow, Debate, DebateCounts, ThreadSummary } from "../src/types.js";
 import type { PublicDebate } from "../src/public-types.js";
 import type { UseDebate } from "../src/web/useDebate.js";
@@ -144,7 +144,7 @@ function paintOwner(summaries: ThreadSummary[] = [], over: Partial<UseDebate> = 
             },
             ...over,
           }),
-          claimList: claimListOwner(),
+          claimList: claimListOwner(), checks: checksOwner(),
           citers: { result: { kind: "no-doi" }, retry: () => {} },
           claimChats: {
             summaries,

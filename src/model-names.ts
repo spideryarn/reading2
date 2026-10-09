@@ -36,6 +36,10 @@
  * it. `tests/models.test.ts` checks the claim rather than repeating it.
  */
 export const DISPLAY_NAME: Record<string, string> = {
+  "claude-sonnet-5-5": "claude-sonnet-5-5",
+  "anthropic/claude-sonnet-5.5": "claude-sonnet-5-5",
+  /* Sonnet 5, the capable model until 2026-10-09: still named on what it
+     wrote, so its stamps keep a name rather than a raw id. */
   "claude-sonnet-5": "claude-sonnet-5",
   "anthropic/claude-sonnet-5": "claude-sonnet-5",
   /* The high-power model, plan 260930f — sent only for an article with

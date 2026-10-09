@@ -545,6 +545,10 @@ resolved after the parse — [prompting-guide.md § What the model writes back](
 
 ## Its cost
 
+**What it paid for is kept.** A model's answer is stored with when it happened, unless saving would
+add enormous complexity or the answer is certainly ephemeral or worthless —
+[database.md § AI output we paid for is kept](database.md#ai-output-we-paid-for-is-kept).
+
 **Nothing to add, if the mode spends through a pipeline step or an article route** —
 [cost-tracking.md](cost-tracking.md) is the three rules that make that true. A step's spend is
 attributed to the article by `runStep`, and its `(step, job)` pair becomes its own line in the
@@ -741,7 +745,8 @@ guard against the cheap wrong fix, quietly adding it to the `NO_FOUND` arm to ma
 stop.
 
 **Since 2026-10-02 Help asks too**, with two more `Record<Mode, …>` tables in `src/web/help/`: the
-mode's own page, a Markdown file under `pages/modes/` since 2026-10-07 (when to use it, how to read
-it), and its row in *Which mode when*. Write them for a reader, not a developer —
+mode's own page, a Markdown file under `pages/modes/` since 2026-10-07 (since 2026-10-09 a
+required `## In short` on why a reader would care, then when to use it and how to read it), and
+its row in *Which mode when*. Write them for a reader, not a developer —
 [help-page.md](help-page.md). Retiring a mode keeps its `/help/mode-…` link working on its own,
 through `RETIRED_MODES`.

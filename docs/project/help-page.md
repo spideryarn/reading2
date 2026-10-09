@@ -54,7 +54,9 @@ Greg asked for it, 2026-10-06 (`spya-ucftjt`):
 draws every file catches a slip. A topic or guide has `title`, `summary` (the line on the contents
 page) and `keywords` (words a reader brings that the title does not say); a question has `title` and
 `keywords`; a mode has `keywords` only. Any of them may have `related` (anchors, for *See also*). A
-mode's body is up to two sections, `## When to use it` and `## Reading it`. Links are site paths
+mode's body is `## In short`, required, then up to two more, `## When to use it` and `## Reading it`,
+in that order (`help-markdown.tsx` § `helpModeSections`, the one parser the page and the corpus
+share). Links are site paths
 (`/help/spine`, `/pricing`), so a file reads the same on GitHub and to a model handed it raw. The only
 HTML is `<kbd>`, and the only image is a picture alone in its paragraph (§ Pictures). Four tokens stand for facts kept in code — `{{experimental-modes}}`,
 `{{public-shelf-label}}`, `{{whats-new-label}}` and `{{modes-table}}` — and `help-markdown.tsx` §
@@ -78,10 +80,22 @@ already state**; it is a route through the pages for one kind of reader, with a 
 - [`HelpPage.tsx`](../../src/web/help/HelpPage.tsx) — what draws it: the contents page, a page,
   search, arrival.
 
-**A mode's page does not restate the mode.** Its heading is `MODE_LABEL`, and its first two
-paragraphs are `MODE_CATALOG`'s `description` and `how` — the same words as the dock's card and the
-band's (i). Its file adds only *when to use it* and *how to read it*. So fix a mode's description in the
-catalog, and Help follows.
+**A mode's page opens by saying why the mode is worth your time.** Greg, 2026-10-08
+(`spya-xcmg2d`):
+
+> So in other words, you know, motivate each mode. Why does it exist and what's it for, and roughly
+> how does it work? Start with that. And then maybe ideally a screenshot or an animated GIF showing
+> it in use would be good as well.
+
+So its file's `## In short` comes first, with no heading over it: two to four sentences on why a
+reader would care, what the mode is for and roughly how it works, then the mode's main picture.
+Plan [261009a](../plans/261009a-help-dictation-and-mode-tldrs.md). A new mode cannot ship without
+one: the parser throws, and the test that draws every page goes red.
+
+**After that, it does not restate the mode.** Its heading is `MODE_LABEL`, and under *How it works*
+come `MODE_CATALOG`'s `description` and `how` — the same words as the dock's card and the band's
+(i). Its file adds only the opening, *when to use it* and *how to read it*. So fix a mode's
+description in the catalog, and Help follows.
 
 ## Ask about Spideryarn <a id="ask-about-spideryarn"></a>
 
@@ -133,6 +147,13 @@ The plan, its review and its eval: [261007k](../plans/261007k-help-chatbot.md).
 - The box is [`HelpAsk.tsx`](../../src/web/help/HelpAsk.tsx); `HelpPage.tsx` holds its state, keyed
   to the signed-in reader, so an answer on `/help` survives following one of its links to a page but
   a reader switch clears it and aborts an answer still arriving.
+- **It has the microphone every box that sends has**, since 2026-10-09 (Greg, `spya-y5gfpf`: *"Add
+  a voice dictate button to the help chat."*), wired as
+  [dictation.md § Adding it to a box](dictation.md#adding-it-to-a-box) says: vocabulary place
+  `profile`, a double press on Stop sends, nothing sent while the microphone is on or the words are
+  on their way, and a transcript over the 1,000 characters is kept whole and refused, with the count
+  shown. The dictation hook is in `useHelpAsk` with the question, not in the box, so following a
+  link mid-sentence does not cut the recording off. Tests: `tests/help-ask-dictation.test.tsx`.
 
 ## Pictures
 

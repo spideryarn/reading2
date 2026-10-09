@@ -26,14 +26,16 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ This is not two-way voice](#this-is-not-two-way-voice) — Talk versus Live
 
 A microphone button beside a text box. Press it, talk, press it again, and your words are in the
-box. It is on ten boxes today — both profile boxes, the chat composer, the comment follow-up, the
+box. It is on eleven boxes today — both profile boxes, the chat composer, the comment follow-up, the
 annotate box, the quiz answer box ([quiz.md](quiz.md)), the Feedback dialog
 ([feedback.md](feedback.md)) and, for an admin, the box that replies to a question in its Earlier tab
 ([feedback.md § Questions for an admin](feedback.md#questions-for-an-admin-and-replies-to-them-since-2026-10-07)),
 the note under an Illustrated picture
 ([illustrated.md](illustrated.md#steering)) and the command bar's box
-([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)) — and adding
-it to an eleventh is three lines.
+([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)), and the
+*Ask about Spideryarn* box on every Help page
+([help-page.md § Ask about Spideryarn](help-page.md#ask-about-spideryarn)) — and adding it to a
+twelfth is three lines.
 
 This is **one-shot and one-way**. The other thing — a conversation, where you talk and it talks
 back and either of you can cut the other off — is a separate feature, not a setting on this one:

@@ -293,7 +293,7 @@ describe("streamMessage — the recording lifecycle", () => {
       )));
       /* And specifically: the prefixed spelling, never the artefact stamp. */
       for (const m of sent) {
-        expect(m).toBe("anthropic/claude-sonnet-5");
+        expect(m).toBe("anthropic/claude-sonnet-5.5");
         expect(m).not.toBe(CAPABLE_MODEL);
       }
     } finally {

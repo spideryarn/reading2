@@ -50,6 +50,7 @@ const ALL_TASKS = Object.keys(TASK_TIER) as Task[];
 
 afterEach(() => {
   delete process.env.SPIDERYARN_CHAT_MODEL;
+  delete process.env.SPIDERYARN_SIMPLE_CHECK_MODEL;
 });
 
 describe("which wire each task is on", () => {
@@ -83,6 +84,18 @@ describe("which wire each task is on", () => {
 });
 
 describe("the model id a task sends", () => {
+  it("reports the measured fidelity-guard pin at either power and lets a comparison override win", () => {
+    for (const power of ["standard", "high"] as const) {
+      expect(resolveModel("simple-check", power)).toEqual({
+        id: "openai/gpt-5.6-luna", provider: "openrouter", wire: "chat", source: "default",
+      });
+      expect(modelFor("link-summary", power)).toBe("openai/gpt-6-luna");
+    }
+    process.env.SPIDERYARN_SIMPLE_CHECK_MODEL = "openai/gpt-6-luna";
+    expect(resolveModel("simple-check", "high")).toEqual({
+      id: "openai/gpt-6-luna", provider: "openrouter", wire: "chat", source: "override",
+    });
+  });
   it("gives every task OpenRouter's spelling, pipeline stages included", () => {
     /* Both wires now address the model the same way: the Anthropic-compatible
        endpoint wants `anthropic/claude-sonnet-5` exactly as chat/completions

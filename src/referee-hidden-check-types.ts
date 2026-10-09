@@ -35,7 +35,7 @@ export interface HiddenJudgment {
   reason: string;
 }
 
-/** A finished check — the `done` frame of `POST /api/referee/hidden-check/:slug`. */
+/** A validated model result, before the route adds storage metadata to the `done` frame. */
 export interface HiddenCheckResult {
   judgments: HiddenJudgment[];
   /** Rows considered (sent, and not sent for the budget) minus rows with an accepted judgment. */
@@ -44,4 +44,21 @@ export interface HiddenCheckResult {
   notSent: number;
   /** The model that answered, as the gateway reported it. */
   model: string;
+}
+
+/**
+ * **A finished check on the wire** — the result and when it arrived. It is
+ * normally the kept row; `saved: false` is the one exception. Plan
+ * docs/plans/261009a-save-hidden-text-opinions.md: the `done` frame carries
+ * this, and `GET /api/referee/hidden-check/:slug` answers `{ check }` with it
+ * or `null`, so a reload shows the same lines without paying again.
+ */
+export interface StoredHiddenCheck extends HiddenCheckResult {
+  /** When the answer finished validation and, normally, was saved, as ISO. */
+  checkedAt: string;
+  /**
+   * Present and `false` only on a `done` frame whose save failed: the referee
+   * sees the answer, and a line saying a reload will not bring it back.
+   */
+  saved?: false;
 }

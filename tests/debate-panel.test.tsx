@@ -65,7 +65,7 @@ import type { DebateView } from "../src/web/params.js";
 import type { UseDebate } from "../src/web/useDebate.js";
 import type { PublicDebate, PublicDebateClaimList } from "../src/public-types.js";
 import type { UseDebateClaims } from "../src/web/useDebateClaims.js";
-import { claimListOf, claimListOwner } from "./helpers/debate-claims-owner.js";
+import { claimListOf, checksOwner, claimListOwner } from "./helpers/debate-claims-owner.js";
 import { pendingActivation, resetActivations } from "../src/web/activation.js";
 import { enclosing, readerCssNoComments } from "./helpers/stylesheets.js";
 import {
@@ -257,7 +257,7 @@ function paint(
         access: {
           kind: "owner",
           owner: o,
-          claimList: extra.claimList ?? claimListOwner(),
+          claimList: extra.claimList ?? claimListOwner(), checks: checksOwner(),
           citers: { result, retry: () => retried.push("retry") },
           claimChats: NO_CLAIM_CHATS,
         },

@@ -485,8 +485,8 @@ The per-token economics of a *search* pass, cold and warm, are a different measu
 
 ## Two spellings of one model, and why both survive
 
-[`src/models.ts`](../../src/models.ts) exports `CAPABLE_MODEL` (`claude-sonnet-5`) and
-`CAPABLE_MODEL_OPENROUTER` (`anthropic/claude-sonnet-5`). Nothing sends the first any more, and it is
+[`src/models.ts`](../../src/models.ts) exports `CAPABLE_MODEL` (`claude-sonnet-5-5`) and
+`CAPABLE_MODEL_OPENROUTER` (`anthropic/claude-sonnet-5.5`), both Sonnet 5 until 2026-10-09. Nothing sends the first any more, and it is
 still load-bearing.
 
 On the wire a model id is an **address**: it has to say which gateway, so it carries the prefix. In a

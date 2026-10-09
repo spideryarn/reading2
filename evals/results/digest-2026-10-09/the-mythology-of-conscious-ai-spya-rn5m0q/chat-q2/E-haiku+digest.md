@@ -1,0 +1,11 @@
+# the-mythology-of-conscious-ai-spya-rn5m0q — chat-q2 — E-haiku+digest
+
+> What does Seth mean when he says a simulation is not an instantiation? Is that convincing? What would a functionalist say back, and does the essay answer that reply or only assert its own view?
+
+Seth means that a computer model of a process is not the process. A simulated digestive system digests nothing, and a simulated rainstorm makes nothing wet [spya-y3s0uc]. The exception he builds in is that a simulation does bring something into being when the thing simulated is itself an algorithm [spya-y3s0uc]. So whether a simulated brain would be conscious depends on whether consciousness is computation. If it is not, simulating the brain will not produce consciousness [spya-bufgby][spya-ksbt2g].
+
+The analogy is persuasive for digestion and rain, since both are physical processes tied to their material. It does less work for mind. The essay grants that a simulated calculation really does calculate, so the real question is which side consciousness falls on, and the analogy cannot settle that. Seth calls the distinction "obvious and uncontroversial" [spya-bufgby], but the disagreement is about exactly that point, so the appeal to obviousness begs the question. My inference.
+
+A functionalist would reply that what matters is causal organization, not the stuff. A model that reproduces every causal relation among a brain's parts would have the same causal powers, and so the same mind. Wetness is not a functional property of a rainstorm, but experience might be. This is background argument, not from the article. Seth accepts functionalism in general [spya-g3z609], so he cannot simply deny the organization point. He denies that the relevant organization is computational.
+
+The essay answers this reply only partly. It attacks the premise that a faithful copy is possible: the brain's levels cannot be cleanly separated [spya-xpydj4], and a neuron's waste-clearing role resists silicon replacement [spya-mdpqeh]. Showing that a faithful simulation is hard or impossible is not the same as showing that a faithful one would not be conscious. The claim that a perfect causal copy would lack consciousness is asserted, not argued. My inference is that the reply is mostly left open, and the case rests on the prior that consciousness is tied to living matter.

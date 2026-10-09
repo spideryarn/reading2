@@ -1,0 +1,1477 @@
+{
+  "at": "2026-10-09T00:16:06.184Z",
+  "totalUsd": 5.0279535200000005,
+  "ledgerRows": 63,
+  "digestTotalUsd": 0.986137,
+  "digestPerArticle": {
+    "the-mythology-of-conscious-ai-spya-rn5m0q": {
+      "usd": 0.292546,
+      "ok": true,
+      "words": 2591,
+      "citedIds": 92,
+      "unknownIds": [],
+      "outputTokens": 9927,
+      "reasoningTokens": 2849,
+      "inputTokens": 19094,
+      "cacheWriteTokens": 17630,
+      "latencyMs": 105256,
+      "effortRan": "high"
+    },
+    "entropy-24-00930-spya-pywwkq": {
+      "usd": 0.325285,
+      "ok": true,
+      "words": 2442,
+      "citedIds": 65,
+      "unknownIds": [],
+      "outputTokens": 11349,
+      "reasoningTokens": 4594,
+      "inputTokens": 19954,
+      "cacheWriteTokens": 18489,
+      "latencyMs": 116637,
+      "effortRan": "high"
+    },
+    "scaling-hypothesis": {
+      "usd": 0.368306,
+      "ok": true,
+      "words": 2654,
+      "citedIds": 82,
+      "unknownIds": [],
+      "outputTokens": 11405,
+      "reasoningTokens": 3791,
+      "inputTokens": 28334,
+      "cacheWriteTokens": 26870,
+      "latencyMs": 115842,
+      "effortRan": "high"
+    }
+  },
+  "perArm": {
+    "A-opus": {
+      "model": "anthropic/claude-opus-5.5",
+      "effortRan": "high",
+      "effortSent": "high",
+      "calls": 12,
+      "failures": [
+        "entropy-24-00930-spya-pywwkq chat-q2: finish_reason length: the answer was cut off at max_tokens"
+      ],
+      "usd": 2.569258,
+      "usdWithDigest": 2.569258,
+      "listUsd": 2.266708,
+      "listUsdWithDigest": 2.266708,
+      "outputTokens": 48067,
+      "reasoningTokens": 19841,
+      "cacheReadTokens": 0,
+      "perTask": {
+        "chat-q1": 0.518174,
+        "chat-q2": 0.583242,
+        "ideas": 0.8853549999999999,
+        "summary-fuller": 0.582487
+      },
+      "perArticle": {
+        "the-mythology-of-conscious-ai-spya-rn5m0q": 0.737668,
+        "entropy-24-00930-spya-pywwkq": 0.765656,
+        "scaling-hypothesis": 1.065934
+      },
+      "perArticleWithDigest": {
+        "the-mythology-of-conscious-ai-spya-rn5m0q": 0.737668,
+        "entropy-24-00930-spya-pywwkq": 0.765656,
+        "scaling-hypothesis": 1.065934
+      }
+    },
+    "B-sonnet": {
+      "model": "anthropic/claude-sonnet-5.5",
+      "effortRan": "high",
+      "effortSent": null,
+      "calls": 12,
+      "failures": [
+        "scaling-hypothesis ideas: empty answer (finish_reason content_filter)"
+      ],
+      "usd": 0.8598798,
+      "usdWithDigest": 0.8598798,
+      "listUsd": 0.8628239999999999,
+      "listUsdWithDigest": 0.8628239999999999,
+      "outputTokens": 21014,
+      "reasoningTokens": 4766,
+      "cacheReadTokens": 64258,
+      "perTask": {
+        "chat-q1": 0.255747,
+        "chat-q2": 0.1011818,
+        "ideas": 0.2654075,
+        "summary-fuller": 0.2375435
+      },
+      "perArticle": {
+        "the-mythology-of-conscious-ai-spya-rn5m0q": 0.296234,
+        "entropy-24-00930-spya-pywwkq": 0.2525716,
+        "scaling-hypothesis": 0.31107419999999997
+      },
+      "perArticleWithDigest": {
+        "the-mythology-of-conscious-ai-spya-rn5m0q": 0.296234,
+        "entropy-24-00930-spya-pywwkq": 0.2525716,
+        "scaling-hypothesis": 0.31107419999999997
+      }
+    },
+    "C-sonnet+digest": {
+      "model": "anthropic/claude-sonnet-5.5",
+      "effortRan": "high",
+      "effortSent": null,
+      "calls": 12,
+      "failures": [
+        "scaling-hypothesis ideas: empty answer (finish_reason content_filter)"
+      ],
+      "usd": 0.5071658,
+      "usdWithDigest": 1.4933028,
+      "listUsd": 1.082026,
+      "listUsdWithDigest": 2.0051740000000002,
+      "outputTokens": 25413,
+      "reasoningTokens": 7083,
+      "cacheReadTokens": 302558,
+      "perTask": {
+        "chat-q1": 0.08952380000000001,
+        "chat-q2": 0.0998078,
+        "ideas": 0.1652371,
+        "summary-fuller": 0.15259709999999999
+      },
+      "perArticle": {
+        "the-mythology-of-conscious-ai-spya-rn5m0q": 0.171678,
+        "entropy-24-00930-spya-pywwkq": 0.1649976,
+        "scaling-hypothesis": 0.1704902
+      },
+      "perArticleWithDigest": {
+        "the-mythology-of-conscious-ai-spya-rn5m0q": 0.46422399999999997,
+        "entropy-24-00930-spya-pywwkq": 0.4902826,
+        "scaling-hypothesis": 0.5387962000000001
+      }
+    },
+    "D-haiku": {
+      "model": "anthropic/claude-haiku-5.5",
+      "effortRan": "medium",
+      "effortSent": null,
+      "calls": 12,
+      "failures": [],
+      "usd": 0.05767584,
+      "usdWithDigest": 0.05767584,
+      "listUsd": 0.060084200000000004,
+      "listUsdWithDigest": 0.060084200000000004,
+      "outputTokens": 54900,
+      "reasoningTokens": 38093,
+      "cacheReadTokens": 86714,
+      "perTask": {
+        "chat-q1": 0.01311835,
+        "chat-q2": 0.00406744,
+        "ideas": 0.014965375,
+        "summary-fuller": 0.025524674999999997
+      },
+      "perArticle": {
+        "the-mythology-of-conscious-ai-spya-rn5m0q": 0.018770759999999997,
+        "entropy-24-00930-spya-pywwkq": 0.018651135,
+        "scaling-hypothesis": 0.020253945
+      },
+      "perArticleWithDigest": {
+        "the-mythology-of-conscious-ai-spya-rn5m0q": 0.018770759999999997,
+        "entropy-24-00930-spya-pywwkq": 0.018651135,
+        "scaling-hypothesis": 0.020253945
+      }
+    },
+    "E-haiku+digest": {
+      "model": "anthropic/claude-haiku-5.5",
+      "effortRan": "medium",
+      "effortSent": null,
+      "calls": 12,
+      "failures": [],
+      "usd": 0.047837080000000004,
+      "usdWithDigest": 1.0339740800000001,
+      "listUsd": 0.0750673,
+      "listUsdWithDigest": 0.9982153,
+      "outputTokens": 67345,
+      "reasoningTokens": 50400,
+      "cacheReadTokens": 302558,
+      "perTask": {
+        "chat-q1": 0.00588028,
+        "chat-q2": 0.00712748,
+        "ideas": 0.01029481,
+        "summary-fuller": 0.02453451
+      },
+      "perArticle": {
+        "the-mythology-of-conscious-ai-spya-rn5m0q": 0.019195999999999998,
+        "entropy-24-00930-spya-pywwkq": 0.01238966,
+        "scaling-hypothesis": 0.01625142
+      },
+      "perArticleWithDigest": {
+        "the-mythology-of-conscious-ai-spya-rn5m0q": 0.31174199999999996,
+        "entropy-24-00930-spya-pywwkq": 0.33767466,
+        "scaling-hypothesis": 0.38455742000000004
+      }
+    }
+  },
+  "breakEvenTasksPerArticle": {
+    "billed": {
+      "C-sonnet+digest": 1.912886339417801,
+      "E-haiku+digest": 1.5644147189831359
+    },
+    "listPriceNoCache": {
+      "C-sonnet+digest": 3.1169478391669667,
+      "E-haiku+digest": 1.6848528136934127
+    }
+  },
+  "perCall": [
+    {
+      "slug": "the-mythology-of-conscious-ai-spya-rn5m0q",
+      "task": "digest",
+      "arm": "digest",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-opus-5.5",
+      "effortRan": "high",
+      "usd": 0.292546,
+      "inputTokens": 19094,
+      "outputTokens": 9927,
+      "reasoningTokens": 2849,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 17630,
+      "latencyMs": 105256,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504290-vyncqTiTGbQcPwftrNMn"
+      ]
+    },
+    {
+      "slug": "the-mythology-of-conscious-ai-spya-rn5m0q",
+      "task": "chat-q1",
+      "arm": "A-opus",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-opus-5.5",
+      "effortRan": "high",
+      "usd": 0.140564,
+      "inputTokens": 22712,
+      "outputTokens": 1363,
+      "reasoningTokens": 612,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 22456,
+      "latencyMs": 16212,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504407-QB4riAtt68djw3ngYPWs"
+      ]
+    },
+    {
+      "slug": "the-mythology-of-conscious-ai-spya-rn5m0q",
+      "task": "chat-q1",
+      "arm": "B-sonnet",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-sonnet-5.5",
+      "effortRan": "high",
+      "usd": 0.068712,
+      "inputTokens": 22712,
+      "outputTokens": 1206,
+      "reasoningTokens": 627,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 22456,
+      "latencyMs": 10358,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504490-VBpE3k8eSnWeFr6u1reX"
+      ]
+    },
+    {
+      "slug": "the-mythology-of-conscious-ai-spya-rn5m0q",
+      "task": "chat-q1",
+      "arm": "C-sonnet+digest",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-sonnet-5.5",
+      "effortRan": "high",
+      "usd": 0.0292156,
+      "inputTokens": 29941,
+      "outputTokens": 1200,
+      "reasoningTokens": 487,
+      "cacheReadTokens": 22456,
+      "cacheWriteTokens": 0,
+      "latencyMs": 9935,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504513-45fYgECPxyZ8qOsHbC0C"
+      ]
+    },
+    {
+      "slug": "the-mythology-of-conscious-ai-spya-rn5m0q",
+      "task": "chat-q1",
+      "arm": "D-haiku",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-haiku-5.5",
+      "effortRan": "medium",
+      "usd": 0.0035946,
+      "inputTokens": 22712,
+      "outputTokens": 1524,
+      "reasoningTokens": 1078,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 22456,
+      "latencyMs": 9194,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504589-eopc6VEpPw1E6CH2sZav"
+      ]
+    },
+    {
+      "slug": "the-mythology-of-conscious-ai-spya-rn5m0q",
+      "task": "chat-q1",
+      "arm": "E-haiku+digest",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-haiku-5.5",
+      "effortRan": "medium",
+      "usd": 0.00187706,
+      "inputTokens": 29941,
+      "outputTokens": 1808,
+      "reasoningTokens": 1250,
+      "cacheReadTokens": 22456,
+      "cacheWriteTokens": 0,
+      "latencyMs": 9543,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504610-fRX7XGA9coMIMgOYbCYt"
+      ]
+    },
+    {
+      "slug": "the-mythology-of-conscious-ai-spya-rn5m0q",
+      "task": "chat-q2",
+      "arm": "A-opus",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-opus-5.5",
+      "effortRan": "high",
+      "usd": 0.149732,
+      "inputTokens": 22694,
+      "outputTokens": 1825,
+      "reasoningTokens": 1117,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 22456,
+      "latencyMs": 22270,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504812-HaQP7W2L8hsZtRSjxjoO"
+      ]
+    },
+    {
+      "slug": "the-mythology-of-conscious-ai-spya-rn5m0q",
+      "task": "chat-q2",
+      "arm": "B-sonnet",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-sonnet-5.5",
+      "effortRan": "high",
+      "usd": 0.063396,
+      "inputTokens": 22694,
+      "outputTokens": 678,
+      "reasoningTokens": 593,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 22456,
+      "latencyMs": 29255,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504832-yfsgrtpMNxhJZqo8oEoF"
+      ]
+    },
+    {
+      "slug": "the-mythology-of-conscious-ai-spya-rn5m0q",
+      "task": "chat-q2",
+      "arm": "C-sonnet+digest",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-sonnet-5.5",
+      "effortRan": "high",
+      "usd": 0.0327096,
+      "inputTokens": 29923,
+      "outputTokens": 1553,
+      "reasoningTokens": 884,
+      "cacheReadTokens": 22456,
+      "cacheWriteTokens": 0,
+      "latencyMs": 46772,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504846-N6yMp9jaM46cF9APmnTc"
+      ]
+    },
+    {
+      "slug": "the-mythology-of-conscious-ai-spya-rn5m0q",
+      "task": "chat-q2",
+      "arm": "D-haiku",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-haiku-5.5",
+      "effortRan": "medium",
+      "usd": 0.00153886,
+      "inputTokens": 22694,
+      "outputTokens": 2581,
+      "reasoningTokens": 2131,
+      "cacheReadTokens": 22456,
+      "cacheWriteTokens": 0,
+      "latencyMs": 14253,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504843-71fp9kJOJ7vJ5V5gToLZ"
+      ]
+    },
+    {
+      "slug": "the-mythology-of-conscious-ai-spya-rn5m0q",
+      "task": "chat-q2",
+      "arm": "E-haiku+digest",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-haiku-5.5",
+      "effortRan": "medium",
+      "usd": 0.00233126,
+      "inputTokens": 29923,
+      "outputTokens": 2720,
+      "reasoningTokens": 2062,
+      "cacheReadTokens": 22456,
+      "cacheWriteTokens": 0,
+      "latencyMs": 15034,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504845-E6gMr1xJ9TfNvNYjq4rL"
+      ]
+    },
+    {
+      "slug": "the-mythology-of-conscious-ai-spya-rn5m0q",
+      "task": "ideas",
+      "arm": "A-opus",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-opus-5.5",
+      "effortRan": "high",
+      "usd": 0.284076,
+      "inputTokens": 22143,
+      "outputTokens": 8867,
+      "reasoningTokens": 3980,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 18164,
+      "latencyMs": 115096,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504407-0IXhp8zu9iwt7r23LiRY"
+      ]
+    },
+    {
+      "slug": "the-mythology-of-conscious-ai-spya-rn5m0q",
+      "task": "ideas",
+      "arm": "B-sonnet",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-sonnet-5.5",
+      "effortRan": "high",
+      "usd": 0.092468,
+      "inputTokens": 22143,
+      "outputTokens": 3910,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 18164,
+      "latencyMs": 25260,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504477-7NUUCRt9DKm44xaKerR3"
+      ]
+    },
+    {
+      "slug": "the-mythology-of-conscious-ai-spya-rn5m0q",
+      "task": "ideas",
+      "arm": "C-sonnet+digest",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-sonnet-5.5",
+      "effortRan": "high",
+      "usd": 0.0679824,
+      "inputTokens": 29372,
+      "outputTokens": 4375,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 18164,
+      "cacheWriteTokens": 0,
+      "latencyMs": 28760,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504502-rOaNI8DpavuZFhFYL6mF"
+      ]
+    },
+    {
+      "slug": "the-mythology-of-conscious-ai-spya-rn5m0q",
+      "task": "ideas",
+      "arm": "D-haiku",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-haiku-5.5",
+      "effortRan": "medium",
+      "usd": 0.0056439,
+      "inputTokens": 22143,
+      "outputTokens": 5951,
+      "reasoningTokens": 4283,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 18164,
+      "latencyMs": 27544,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504582-iLOMl2YOVmXOopCZ0Csf"
+      ]
+    },
+    {
+      "slug": "the-mythology-of-conscious-ai-spya-rn5m0q",
+      "task": "ideas",
+      "arm": "E-haiku+digest",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-haiku-5.5",
+      "effortRan": "medium",
+      "usd": 0.00359394,
+      "inputTokens": 29372,
+      "outputTokens": 4583,
+      "reasoningTokens": 3042,
+      "cacheReadTokens": 18164,
+      "cacheWriteTokens": 0,
+      "latencyMs": 21499,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504609-yLKrFb0tvCmMeYgXvzCN"
+      ]
+    },
+    {
+      "slug": "the-mythology-of-conscious-ai-spya-rn5m0q",
+      "task": "summary-fuller",
+      "arm": "A-opus",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-opus-5.5",
+      "effortRan": "high",
+      "usd": 0.163296,
+      "inputTokens": 21423,
+      "outputTokens": 2973,
+      "reasoningTokens": 1019,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 18144,
+      "latencyMs": 50920,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504407-Jh2G3Zf9p7dunTyqy2z2"
+      ]
+    },
+    {
+      "slug": "the-mythology-of-conscious-ai-spya-rn5m0q",
+      "task": "summary-fuller",
+      "arm": "B-sonnet",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-sonnet-5.5",
+      "effortRan": "high",
+      "usd": 0.071658,
+      "inputTokens": 21423,
+      "outputTokens": 1974,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 18144,
+      "latencyMs": 31598,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504458-z1Ci5MJyJCeCPNF6GYEv"
+      ]
+    },
+    {
+      "slug": "the-mythology-of-conscious-ai-spya-rn5m0q",
+      "task": "summary-fuller",
+      "arm": "C-sonnet+digest",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-sonnet-5.5",
+      "effortRan": "high",
+      "usd": 0.0417704,
+      "inputTokens": 28652,
+      "outputTokens": 1894,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 18144,
+      "cacheWriteTokens": 0,
+      "latencyMs": 13553,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504500-KENnCXChuyxUkKaGPdSY"
+      ]
+    },
+    {
+      "slug": "the-mythology-of-conscious-ai-spya-rn5m0q",
+      "task": "summary-fuller",
+      "arm": "D-haiku",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-haiku-5.5",
+      "effortRan": "medium",
+      "usd": 0.0079934,
+      "inputTokens": 21423,
+      "outputTokens": 10795,
+      "reasoningTokens": 8674,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 18144,
+      "latencyMs": 44684,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504577-sPwOAdsgPbZgt8TlxO5p"
+      ]
+    },
+    {
+      "slug": "the-mythology-of-conscious-ai-spya-rn5m0q",
+      "task": "summary-fuller",
+      "arm": "E-haiku+digest",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-haiku-5.5",
+      "effortRan": "medium",
+      "usd": 0.01139374,
+      "inputTokens": 28652,
+      "outputTokens": 20323,
+      "reasoningTokens": 18223,
+      "cacheReadTokens": 18144,
+      "cacheWriteTokens": 0,
+      "latencyMs": 94596,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504610-bU1kY8pn0kDak5TD9Ibz"
+      ]
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "task": "digest",
+      "arm": "digest",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-opus-5.5",
+      "effortRan": "high",
+      "usd": 0.325285,
+      "inputTokens": 19954,
+      "outputTokens": 11349,
+      "reasoningTokens": 4594,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 18489,
+      "latencyMs": 116637,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504290-qsx0b4kEAIj4jfw5sTAO"
+      ]
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "task": "chat-q1",
+      "arm": "A-opus",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-opus-5.5",
+      "effortRan": "high",
+      "usd": 0.141427,
+      "inputTokens": 23554,
+      "outputTokens": 1195,
+      "reasoningTokens": 502,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 23311,
+      "latencyMs": 16153,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504407-6yZFI8IRjzF2S62aC1F7"
+      ]
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "task": "chat-q1",
+      "arm": "B-sonnet",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-sonnet-5.5",
+      "effortRan": "high",
+      "usd": 0.0710535,
+      "inputTokens": 23554,
+      "outputTokens": 1229,
+      "reasoningTokens": 532,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 23311,
+      "latencyMs": 10080,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504531-Ay5wbX5dJPDUGZTy3hbb"
+      ]
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "task": "chat-q1",
+      "arm": "C-sonnet+digest",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-sonnet-5.5",
+      "effortRan": "high",
+      "usd": 0.0282495,
+      "inputTokens": 30464,
+      "outputTokens": 1162,
+      "reasoningTokens": 460,
+      "cacheReadTokens": 23315,
+      "cacheWriteTokens": 0,
+      "latencyMs": 9280,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504547-CxCfp7jVdGgnXct3zYwT"
+      ]
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "task": "chat-q1",
+      "arm": "D-haiku",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-haiku-5.5",
+      "effortRan": "medium",
+      "usd": 0.003627675,
+      "inputTokens": 23554,
+      "outputTokens": 1379,
+      "reasoningTokens": 821,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 23311,
+      "latencyMs": 7982,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504631-KiV9Tb7JFvdOA3riH2wH"
+      ]
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "task": "chat-q1",
+      "arm": "E-haiku+digest",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-haiku-5.5",
+      "effortRan": "medium",
+      "usd": 0.00157805,
+      "inputTokens": 30464,
+      "outputTokens": 1260,
+      "reasoningTokens": 753,
+      "cacheReadTokens": 23315,
+      "cacheWriteTokens": 0,
+      "latencyMs": 7305,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504651-XqnBg7kSQATPZdNGHLkS"
+      ]
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "task": "chat-q2",
+      "arm": "A-opus",
+      "ok": false,
+      "error": "finish_reason length: the answer was cut off at max_tokens",
+      "answeredBy": "anthropic/claude-opus-5.5",
+      "effortRan": "high",
+      "usd": 0.197567,
+      "inputTokens": 23564,
+      "outputTokens": 4000,
+      "reasoningTokens": 102,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 23311,
+      "latencyMs": 33201,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504812-ZD29i8IOHTCq23KJeZUy"
+      ]
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "task": "chat-q2",
+      "arm": "B-sonnet",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-sonnet-5.5",
+      "effortRan": "high",
+      "usd": 0.0199971,
+      "inputTokens": 23564,
+      "outputTokens": 1716,
+      "reasoningTokens": 993,
+      "cacheReadTokens": 23311,
+      "cacheWriteTokens": 0,
+      "latencyMs": 44159,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504842-5QV9Y2Ar4vAJ5uNnw4rJ"
+      ]
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "task": "chat-q2",
+      "arm": "C-sonnet+digest",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-sonnet-5.5",
+      "effortRan": "high",
+      "usd": 0.0327495,
+      "inputTokens": 30474,
+      "outputTokens": 1610,
+      "reasoningTokens": 796,
+      "cacheReadTokens": 23315,
+      "cacheWriteTokens": 0,
+      "latencyMs": 12958,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504830-nzGL6vNSXL5wTdf3O5Oy"
+      ]
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "task": "chat-q2",
+      "arm": "D-haiku",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-haiku-5.5",
+      "effortRan": "medium",
+      "usd": 0.00129591,
+      "inputTokens": 23564,
+      "outputTokens": 2075,
+      "reasoningTokens": 1339,
+      "cacheReadTokens": 23311,
+      "cacheWriteTokens": 0,
+      "latencyMs": 11736,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504847-CuNus816MVc3MbPz8rsk"
+      ]
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "task": "chat-q2",
+      "arm": "E-haiku+digest",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-haiku-5.5",
+      "effortRan": "medium",
+      "usd": 0.00246205,
+      "inputTokens": 30474,
+      "outputTokens": 3026,
+      "reasoningTokens": 2343,
+      "cacheReadTokens": 23315,
+      "cacheWriteTokens": 0,
+      "latencyMs": 15497,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504856-PWZY3WgA4GGMcvYgU0Yw"
+      ]
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "task": "ideas",
+      "arm": "A-opus",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-opus-5.5",
+      "effortRan": "high",
+      "usd": 0.263987,
+      "inputTokens": 23281,
+      "outputTokens": 7592,
+      "reasoningTokens": 3246,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 19023,
+      "latencyMs": 170041,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504455-naQhPQCQ2bXBjFV0m832"
+      ]
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "task": "ideas",
+      "arm": "B-sonnet",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-sonnet-5.5",
+      "effortRan": "high",
+      "usd": 0.0892435,
+      "inputTokens": 23281,
+      "outputTokens": 3317,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 19023,
+      "latencyMs": 23586,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504523-u7dqOqgpbwraR00vnTtP"
+      ]
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "task": "ideas",
+      "arm": "C-sonnet+digest",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-sonnet-5.5",
+      "effortRan": "high",
+      "usd": 0.0626483,
+      "inputTokens": 30186,
+      "outputTokens": 3842,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 19023,
+      "cacheWriteTokens": 0,
+      "latencyMs": 26478,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504541-ZF8rGlbDCffP46y10WuX"
+      ]
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "task": "ideas",
+      "arm": "D-haiku",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-haiku-5.5",
+      "effortRan": "medium",
+      "usd": 0.004130675,
+      "inputTokens": 23281,
+      "outputTokens": 2654,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 19023,
+      "latencyMs": 12290,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504622-VgDrQmCkinTxjmmeckNm"
+      ]
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "task": "ideas",
+      "arm": "E-haiku+digest",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-haiku-5.5",
+      "effortRan": "medium",
+      "usd": 0.00273103,
+      "inputTokens": 30186,
+      "outputTokens": 2849,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 19023,
+      "cacheWriteTokens": 0,
+      "latencyMs": 12383,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504639-hbJrcAhcH3vshdKYnF5t"
+      ]
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "task": "summary-fuller",
+      "arm": "A-opus",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-opus-5.5",
+      "effortRan": "high",
+      "usd": 0.162675,
+      "inputTokens": 22283,
+      "outputTokens": 2727,
+      "reasoningTokens": 735,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 19003,
+      "latencyMs": 47998,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504407-ZEpftzKgb3xIRk3Lzm5c"
+      ]
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "task": "summary-fuller",
+      "arm": "B-sonnet",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-sonnet-5.5",
+      "effortRan": "high",
+      "usd": 0.0722775,
+      "inputTokens": 22283,
+      "outputTokens": 1821,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 19003,
+      "latencyMs": 14641,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504522-Kz64LVfmSFA9wfqbvKvy"
+      ]
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "task": "summary-fuller",
+      "arm": "C-sonnet+digest",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-sonnet-5.5",
+      "effortRan": "high",
+      "usd": 0.0413503,
+      "inputTokens": 29188,
+      "outputTokens": 1908,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 19003,
+      "cacheWriteTokens": 0,
+      "latencyMs": 13198,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504537-x5vcw5qy07fboUZIFK2F"
+      ]
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "task": "summary-fuller",
+      "arm": "D-haiku",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-haiku-5.5",
+      "effortRan": "medium",
+      "usd": 0.009596875,
+      "inputTokens": 22283,
+      "outputTokens": 13787,
+      "reasoningTokens": 11351,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 19003,
+      "latencyMs": 56748,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504619-2dlMj8PjaPdQEx0zSc19"
+      ]
+    },
+    {
+      "slug": "entropy-24-00930-spya-pywwkq",
+      "task": "summary-fuller",
+      "arm": "E-haiku+digest",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-haiku-5.5",
+      "effortRan": "medium",
+      "usd": 0.00561853,
+      "inputTokens": 29188,
+      "outputTokens": 8820,
+      "reasoningTokens": 6445,
+      "cacheReadTokens": 19003,
+      "cacheWriteTokens": 0,
+      "latencyMs": 38432,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504634-n1rDcAARyYbuFTASnPGx"
+      ]
+    },
+    {
+      "slug": "scaling-hypothesis",
+      "task": "digest",
+      "arm": "digest",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-opus-5.5",
+      "effortRan": "high",
+      "usd": 0.368306,
+      "inputTokens": 28334,
+      "outputTokens": 11405,
+      "reasoningTokens": 3791,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 26870,
+      "latencyMs": 115842,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504290-IPbGpBCE0iXhGcq8pzsU"
+      ]
+    },
+    {
+      "slug": "scaling-hypothesis",
+      "task": "chat-q1",
+      "arm": "A-opus",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-opus-5.5",
+      "effortRan": "high",
+      "usd": 0.236183,
+      "inputTokens": 41189,
+      "outputTokens": 1524,
+      "reasoningTokens": 821,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 40947,
+      "latencyMs": 21819,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504455-b5KVX5c5MTqklZ21Uwze"
+      ]
+    },
+    {
+      "slug": "scaling-hypothesis",
+      "task": "chat-q1",
+      "arm": "B-sonnet",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-sonnet-5.5",
+      "effortRan": "high",
+      "usd": 0.1159815,
+      "inputTokens": 41189,
+      "outputTokens": 1313,
+      "reasoningTokens": 651,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 40947,
+      "latencyMs": 12007,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504564-7pYO3ZjmiFDcBqCXc5vx"
+      ]
+    },
+    {
+      "slug": "scaling-hypothesis",
+      "task": "chat-q1",
+      "arm": "C-sonnet+digest",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-sonnet-5.5",
+      "effortRan": "high",
+      "usd": 0.0320587,
+      "inputTokens": 48954,
+      "outputTokens": 1195,
+      "reasoningTokens": 517,
+      "cacheReadTokens": 40947,
+      "cacheWriteTokens": 0,
+      "latencyMs": 12988,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504577-rV46AzrhEZUpFFHIaL8F"
+      ]
+    },
+    {
+      "slug": "scaling-hypothesis",
+      "task": "chat-q1",
+      "arm": "D-haiku",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-haiku-5.5",
+      "effortRan": "medium",
+      "usd": 0.005896075,
+      "inputTokens": 41189,
+      "outputTokens": 1507,
+      "reasoningTokens": 1025,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 40947,
+      "latencyMs": 9749,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504676-4PTDlbMlmCRl32JhMleo"
+      ]
+    },
+    {
+      "slug": "scaling-hypothesis",
+      "task": "chat-q1",
+      "arm": "E-haiku+digest",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-haiku-5.5",
+      "effortRan": "medium",
+      "usd": 0.00242517,
+      "inputTokens": 48954,
+      "outputTokens": 2430,
+      "reasoningTokens": 1835,
+      "cacheReadTokens": 40947,
+      "cacheWriteTokens": 0,
+      "latencyMs": 13574,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504693-hCD5rg79awMlniB7iWxT"
+      ]
+    },
+    {
+      "slug": "scaling-hypothesis",
+      "task": "chat-q2",
+      "arm": "A-opus",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-opus-5.5",
+      "effortRan": "high",
+      "usd": 0.235943,
+      "inputTokens": 41179,
+      "outputTokens": 1514,
+      "reasoningTokens": 750,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 40947,
+      "latencyMs": 18236,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504812-lallEiKhat6aEGElcAor"
+      ]
+    },
+    {
+      "slug": "scaling-hypothesis",
+      "task": "chat-q2",
+      "arm": "B-sonnet",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-sonnet-5.5",
+      "effortRan": "high",
+      "usd": 0.0177887,
+      "inputTokens": 41179,
+      "outputTokens": 1323,
+      "reasoningTokens": 702,
+      "cacheReadTokens": 40947,
+      "cacheWriteTokens": 0,
+      "latencyMs": 12557,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504834-mcfren98uublY0gLWNGq"
+      ]
+    },
+    {
+      "slug": "scaling-hypothesis",
+      "task": "chat-q2",
+      "arm": "C-sonnet+digest",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-sonnet-5.5",
+      "effortRan": "high",
+      "usd": 0.0343487,
+      "inputTokens": 48944,
+      "outputTokens": 1426,
+      "reasoningTokens": 683,
+      "cacheReadTokens": 40947,
+      "cacheWriteTokens": 0,
+      "latencyMs": 28372,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504857-TdBaGdDhfLVzpbJblSJf"
+      ]
+    },
+    {
+      "slug": "scaling-hypothesis",
+      "task": "chat-q2",
+      "arm": "D-haiku",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-haiku-5.5",
+      "effortRan": "medium",
+      "usd": 0.00123267,
+      "inputTokens": 41179,
+      "outputTokens": 1600,
+      "reasoningTokens": 1024,
+      "cacheReadTokens": 40947,
+      "cacheWriteTokens": 0,
+      "latencyMs": 9104,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504857-Pr1F0GM7lRjlqTxnofYo"
+      ]
+    },
+    {
+      "slug": "scaling-hypothesis",
+      "task": "chat-q2",
+      "arm": "E-haiku+digest",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-haiku-5.5",
+      "effortRan": "medium",
+      "usd": 0.00233417,
+      "inputTokens": 48944,
+      "outputTokens": 2250,
+      "reasoningTokens": 1701,
+      "cacheReadTokens": 40947,
+      "cacheWriteTokens": 0,
+      "latencyMs": 13359,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504858-YcfdUmpx2EqvK6xro3aU"
+      ]
+    },
+    {
+      "slug": "scaling-hypothesis",
+      "task": "ideas",
+      "arm": "A-opus",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-opus-5.5",
+      "effortRan": "high",
+      "usd": 0.337292,
+      "inputTokens": 31657,
+      "outputTokens": 9163,
+      "reasoningTokens": 3810,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 27404,
+      "latencyMs": 276700,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504589-wH7d0NCrYrvthzbfaBJm"
+      ]
+    },
+    {
+      "slug": "scaling-hypothesis",
+      "task": "ideas",
+      "arm": "B-sonnet",
+      "ok": false,
+      "error": "empty answer (finish_reason content_filter)",
+      "answeredBy": "anthropic/claude-sonnet-5.5",
+      "effortRan": "high",
+      "usd": 0.083696,
+      "inputTokens": 31657,
+      "outputTokens": 668,
+      "reasoningTokens": 668,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 27404,
+      "latencyMs": 16563,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504564-vARumYgSBWryIf42ys7L"
+      ]
+    },
+    {
+      "slug": "scaling-hypothesis",
+      "task": "ideas",
+      "arm": "C-sonnet+digest",
+      "ok": false,
+      "error": "empty answer (finish_reason content_filter)",
+      "answeredBy": "anthropic/claude-sonnet-5.5",
+      "effortRan": "high",
+      "usd": 0.0346064,
+      "inputTokens": 39422,
+      "outputTokens": 783,
+      "reasoningTokens": 783,
+      "cacheReadTokens": 27404,
+      "cacheWriteTokens": 0,
+      "latencyMs": 9489,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504573-tsOAoASHu3waxbgsr7CW"
+      ]
+    },
+    {
+      "slug": "scaling-hypothesis",
+      "task": "ideas",
+      "arm": "D-haiku",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-haiku-5.5",
+      "effortRan": "medium",
+      "usd": 0.0051908,
+      "inputTokens": 31657,
+      "outputTokens": 2680,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 27404,
+      "latencyMs": 13196,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504673-5ikqZ8mdQHQk0mb5WcwE"
+      ]
+    },
+    {
+      "slug": "scaling-hypothesis",
+      "task": "ideas",
+      "arm": "E-haiku+digest",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-haiku-5.5",
+      "effortRan": "medium",
+      "usd": 0.00396984,
+      "inputTokens": 39422,
+      "outputTokens": 4988,
+      "reasoningTokens": 2885,
+      "cacheReadTokens": 27404,
+      "cacheWriteTokens": 0,
+      "latencyMs": 23678,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504686-k85lpD8FrAriFKZLJZRp"
+      ]
+    },
+    {
+      "slug": "scaling-hypothesis",
+      "task": "summary-fuller",
+      "arm": "A-opus",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-opus-5.5",
+      "effortRan": "high",
+      "usd": 0.256516,
+      "inputTokens": 30663,
+      "outputTokens": 5324,
+      "reasoningTokens": 3147,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 27384,
+      "latencyMs": 346200,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504701-ouySgEFexlLNOJ10QVIa"
+      ]
+    },
+    {
+      "slug": "scaling-hypothesis",
+      "task": "summary-fuller",
+      "arm": "B-sonnet",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-sonnet-5.5",
+      "effortRan": "high",
+      "usd": 0.093608,
+      "inputTokens": 30663,
+      "outputTokens": 1859,
+      "reasoningTokens": 0,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 27384,
+      "latencyMs": 14153,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504550-srdkyjov71c1KgWUCokX"
+      ]
+    },
+    {
+      "slug": "scaling-hypothesis",
+      "task": "summary-fuller",
+      "arm": "C-sonnet+digest",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-sonnet-5.5",
+      "effortRan": "high",
+      "usd": 0.0694764,
+      "inputTokens": 38428,
+      "outputTokens": 4465,
+      "reasoningTokens": 2473,
+      "cacheReadTokens": 27384,
+      "cacheWriteTokens": 0,
+      "latencyMs": 41790,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504578-cuyuVv8VZKcdh0nC76YH"
+      ]
+    },
+    {
+      "slug": "scaling-hypothesis",
+      "task": "summary-fuller",
+      "arm": "D-haiku",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-haiku-5.5",
+      "effortRan": "medium",
+      "usd": 0.0079344,
+      "inputTokens": 30663,
+      "outputTokens": 8367,
+      "reasoningTokens": 6367,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 27384,
+      "latencyMs": 37583,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504659-IWOpCVW6CVPQz4sGcDmO"
+      ]
+    },
+    {
+      "slug": "scaling-hypothesis",
+      "task": "summary-fuller",
+      "arm": "E-haiku+digest",
+      "ok": true,
+      "error": null,
+      "answeredBy": "anthropic/claude-haiku-5.5",
+      "effortRan": "medium",
+      "usd": 0.00752224,
+      "inputTokens": 38428,
+      "outputTokens": 12288,
+      "reasoningTokens": 9861,
+      "cacheReadTokens": 27384,
+      "cacheWriteTokens": 0,
+      "latencyMs": 54116,
+      "calls": 1,
+      "generationIds": [
+        "gen-1791504686-yQXH2JbQTMRBienfCTC2"
+      ]
+    }
+  ]
+}

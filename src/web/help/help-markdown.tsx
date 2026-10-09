@@ -389,10 +389,10 @@ function drawBlock(node: RootContent, key: number, ctx: Ctx): ReactNode {
       return <p key={key}>{drawInlines(node.children, ctx)}</p>;
     }
     case "heading":
-      /* One level, drawn as the small subheading a mode's two halves have
+      /* One level, drawn as the small subheading a mode's sections have
          always had. A page's own title is its front matter, never a `#`.
-         A mode's own two headings do not come this way: the page draws
-         those itself (§ renderHelpModeHalves). */
+         A mode's own headings do not come this way: the page draws
+         those itself (§ renderHelpModeSections). */
       if (node.depth !== 2) throw new Error(`Help page ${ctx.where}: only ## headings are drawn`);
       return <HelpSub key={key}>{drawInlines(node.children, ctx)}</HelpSub>;
     case "list":
@@ -411,45 +411,89 @@ export function renderHelpMarkdown(markdown: string, where: string): ReactNode {
   return drawBlocks(fromMarkdown(markdown).children, { where });
 }
 
-/** The two headings a mode's file may have, spelled exactly so. */
-const MODE_HEADINGS = { whenToUse: "When to use it", reading: "Reading it" } as const;
-type ModeHalf = keyof typeof MODE_HEADINGS;
+/**
+ * The three headings a mode's file has, spelled exactly so, in this order.
+ * `In short` is required: it is the page's opening (Greg, `spya-xcmg2d`,
+ * 2026-10-08 — *"motivate each mode. Why does it exist and what's it for, and
+ * roughly how does it work? Start with that."*). Plan 261009a.
+ */
+const MODE_HEADINGS = { inShort: "In short", whenToUse: "When to use it", reading: "Reading it" } as const;
+export type ModeSection = keyof typeof MODE_HEADINGS;
+const MODE_SECTIONS = Object.keys(MODE_HEADINGS) as ModeSection[];
+
+/** One section of a mode's file: its nodes, and its Markdown as written, heading included. */
+export interface ModeSectionSource {
+  readonly nodes: readonly RootContent[];
+  readonly markdown: string;
+}
+
+interface Open {
+  nodes: RootContent[];
+  from: number;
+  to: number;
+}
 
 /**
- * **A mode's file, as its two halves**, each null when the file leaves it out
- * (the page draws nothing for a null: help-content.tsx § helpBody). The
- * headings are not drawn here: the page puts its own above each half, as it
- * always has.
+ * **A mode's file, split into its sections** — the one definition of which
+ * headings a mode's file may have and in what order, used by the page
+ * (§ renderHelpModeSections) and by the corpus the Help chat reads
+ * (tests/help-corpus.test.ts), so the two cannot disagree.
  *
  * Strict about the shape, because a misspelt heading would otherwise file a
- * whole half under the wrong name or drop it: nothing before the first
- * heading, only these two headings, each at most once, in this order.
+ * whole section under the wrong name or drop it: nothing before the first
+ * heading, only these three headings, each at most once, in this order, and
+ * `In short` present and not empty.
  */
-export function renderHelpModeHalves(markdown: string, where: string): Record<ModeHalf, ReactNode | null> {
-  const halves: Record<ModeHalf, RootContent[] | null> = { whenToUse: null, reading: null };
-  let into: RootContent[] | null = null;
+export function helpModeSections(
+  markdown: string,
+  where: string,
+): { inShort: ModeSectionSource } & Record<Exclude<ModeSection, "inShort">, ModeSectionSource | null> {
+  const found: Partial<Record<ModeSection, Open>> = {};
+  let into: Open | null = null;
+  let last = -1;
   for (const node of fromMarkdown(markdown).children) {
     if (node.type !== "heading") {
       if (into === null) throw new Error(`Help page ${where}: a mode's file must start with a ## heading`);
-      into.push(node);
+      into.nodes.push(node);
+      into.to = node.position?.end.offset ?? into.to;
       continue;
     }
     const title = plainInlines(node.children, where);
-    const half = (Object.keys(MODE_HEADINGS) as ModeHalf[]).find((h) => MODE_HEADINGS[h] === title);
-    if (node.depth !== 2 || half === undefined) {
-      throw new Error(`Help page ${where}: a mode's headings are "## ${MODE_HEADINGS.whenToUse}" and "## ${MODE_HEADINGS.reading}", found "${title}"`);
+    const section = MODE_SECTIONS.find((h) => MODE_HEADINGS[h] === title);
+    if (node.depth !== 2 || section === undefined) {
+      const all = MODE_SECTIONS.map((h) => `"## ${MODE_HEADINGS[h]}"`).join(", ");
+      throw new Error(`Help page ${where}: a mode's headings are ${all}, found "${title}"`);
     }
-    if (halves[half] !== null || (half === "whenToUse" && halves.reading !== null)) {
-      throw new Error(`Help page ${where}: "## ${title}" is repeated or out of order`);
-    }
-    into = [];
-    halves[half] = into;
+    const at = MODE_SECTIONS.indexOf(section);
+    if (at <= last) throw new Error(`Help page ${where}: "## ${title}" is repeated or out of order`);
+    last = at;
+    const from = node.position?.start.offset ?? 0;
+    into = { nodes: [], from, to: node.position?.end.offset ?? from };
+    found[section] = into;
   }
+  const source = (s: Open | undefined): ModeSectionSource | null =>
+    s === undefined ? null : { nodes: s.nodes, markdown: markdown.slice(s.from, s.to) };
+  const inShort = source(found.inShort);
+  if (inShort === null || inShort.nodes.length === 0) {
+    throw new Error(`Help page ${where}: a mode's file must open with "## ${MODE_HEADINGS.inShort}" and something under it`);
+  }
+  return { inShort, whenToUse: source(found.whenToUse), reading: source(found.reading) };
+}
+
+/**
+ * **A mode's file, as its sections drawn**, each null when the file leaves it
+ * out (the page draws nothing for a null: help-content.tsx § helpBody). The
+ * headings are not drawn here: the page puts its own above each, and none
+ * above `In short`, which opens the page.
+ */
+export function renderHelpModeSections(
+  markdown: string,
+  where: string,
+): { inShort: ReactNode } & Record<Exclude<ModeSection, "inShort">, ReactNode | null> {
+  const sections = helpModeSections(markdown, where);
   const ctx: Ctx = { where };
-  return {
-    whenToUse: halves.whenToUse === null ? null : drawBlocks(halves.whenToUse, ctx),
-    reading: halves.reading === null ? null : drawBlocks(halves.reading, ctx),
-  };
+  const draw = (s: ModeSectionSource | null) => (s === null ? null : drawBlocks(s.nodes, ctx));
+  return { inShort: draw(sections.inShort), whenToUse: draw(sections.whenToUse), reading: draw(sections.reading) };
 }
 
 /* ───────────────────────────── as plain text ───────────────────────────── */
@@ -521,7 +565,7 @@ export function helpMarkdownText(markdown: string, where: string): string {
  * **The words of one section, by its anchor**: what the search box reads below
  * a title and its keywords, and what a test asserts a promise against.
  *
- * A mode's are its own two halves with their headings. Its label and its two
+ * A mode's are its own three sections with their headings. Its label and its two
  * catalog sentences are not here: they are `MODE_LABEL`'s and `MODE_CATALOG`'s
  * (help-content.tsx § The modes say only what the catalog does not).
  */
