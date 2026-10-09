@@ -525,19 +525,23 @@ describe("the cache floor", () => {
   });
 
   it("flips at the boundary the estimate implies", () => {
+    /* Sonnet 5's spelling, literally: the 1,024 floor, which is also the
+       default for a model the table does not list. */
     const under = "x".repeat((CACHE_FLOOR_TOKENS - 1) * 4);
     const over = "x".repeat((CACHE_FLOOR_TOKENS + 1) * 4);
-    expect(underCacheFloor(under, CAPABLE_MODEL_OPENROUTER)).toBe(true);
-    expect(underCacheFloor(over, CAPABLE_MODEL_OPENROUTER)).toBe(false);
+    expect(underCacheFloor(under, "anthropic/claude-sonnet-5")).toBe(true);
+    expect(underCacheFloor(over, "anthropic/claude-sonnet-5")).toBe(false);
+    expect(underCacheFloor(under, "some/unlisted-model")).toBe(true);
   });
 
-  it("uses the high-power model's own, lower floor for Opus (plan 260930f, measured)", () => {
-    /* 700 tokens: over Opus 5.5's 512, under Sonnet 5's 1,024. Asking with
-       Sonnet's floor would log a false "too short" on every such prefix a
-       high-powered article sends. */
+  it("uses the 512 floor for Opus 5.5 (plan 260930f, measured) and Sonnet 5.5 (plan 261009a)", () => {
+    /* 700 tokens: over 512, under Sonnet 5's 1,024. Asking with the old floor
+       would log a false "too short" on every such prefix. */
     const between = "x".repeat(700 * 4);
-    expect(underCacheFloor(between, CAPABLE_MODEL_OPENROUTER)).toBe(true);
+    expect(underCacheFloor(between, "anthropic/claude-sonnet-5")).toBe(true);
     expect(underCacheFloor(between, HIGH_POWER_MODEL_OPENROUTER)).toBe(false);
+    expect(underCacheFloor(between, CAPABLE_MODEL_OPENROUTER)).toBe(false);
+    expect(underCacheFloor(between, "claude-sonnet-5-5")).toBe(false);
     expect(underCacheFloor("x".repeat((HIGH_POWER_CACHE_FLOOR_TOKENS - 1) * 4), HIGH_POWER_MODEL_OPENROUTER)).toBe(
       true,
     );

@@ -1125,9 +1125,11 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
       "Not measured. A short mark against a whole-article prompt; a cut-off mark is refused " +
       "rather than shown (src/quiz-mark.ts § MARK_CUT_OFF).",
   },
-  "quiz-verdict": {
-    providerDefault: "Not measured. One word out, on the quick tier.",
-  },
+  /* One word out, under an 8-token ceiling (src/quiz-verdict.ts). The provider
+     default was fine on GPT-5.6 Luna; GPT-6 Luna reasons by default and spent
+     all 8 tokens thinking — `finish_reason: length`, no word, 2 of 3 live
+     verdicts lost (plan 261009a's smoke test). `none` returned the word. */
+  "quiz-verdict": { effort: "none" },
   /* Greg's choice for this job, 2026-09-05 — src/link-summary.ts § the request
      says why, and that the documented 1,024-token floor means even `low` buys
      a thousand tokens of thinking. Sent from here since 2026-09-28. */

@@ -320,13 +320,21 @@ tier each job is on. Change the model for a tier there and every job on that tie
 before 2026-08-25 the same constant was declared separately in four files and one of them had
 drifted a version behind.
 
+**Always the latest version of each model family.** Greg, 2026-10-08: *"we should always be using
+the latest versions of any of our models."* When a family we use ships a newer version — Sonnet,
+Opus, Luna, Gemini Flash, DeepSeek Flash — move to it, checking OpenRouter's list
+(`curl -s https://openrouter.ai/api/v1/models`) and smoke-testing each job's request shape; a job
+chosen by measurement gets a small re-measurement, not an exemption, and stays back only when that
+says the newer one is worse at the job, with the reason written beside its constant. The last sweep, and how it
+was checked, is [261009a](../plans/261009a-latest-model-versions-haiku-5-5-and-an-opus-digest-spike.md).
+
 | Tier | The model | Reached through |
 |---|---|---|
-| **capable** | Claude Sonnet 5 — `anthropic/claude-sonnet-5` on the wire, stamped `claude-sonnet-5` | OpenRouter, on both wires — see below |
-| **quick** | GPT-5.6 Luna — `openai/gpt-5.6-luna` | OpenRouter |
+| **capable** | Claude Sonnet 5.5 — `anthropic/claude-sonnet-5.5` on the wire, stamped `claude-sonnet-5-5` (Sonnet 5 until 2026-10-09; its stamps are the same generation, so nothing it wrote is stale) | OpenRouter, on both wires — see below |
+| **quick** | GPT-6 Luna — `openai/gpt-6-luna` (GPT-5.6 Luna until 2026-10-09) | OpenRouter. One job held back: `simple-check`, Summary's fidelity guard, stays on GPT-5.6 Luna — `PINNED_MODEL` in src/models.ts says why |
 | **embeddings** | Voyage 4 — `voyageai/voyage-4` | OpenRouter, and not a *tier* — see below |
-| **PDF reader** | GPT-5.6 Luna — `openai/gpt-5.6-luna` | OpenRouter, and not a *tier* either — `PDF_READER_MODEL` |
-| **PDF figure locator** | Gemini 3 Flash — `google/gemini-3-flash-preview` | OpenRouter, not a tier — `PDF_FIGURE_LOCATOR_MODEL`. Asked only about a figure the other routes refused ([260924e](../plans/260924e-a-pdf-figure-paired-to-the-wrong-caption.md) § Stage 2) |
+| **PDF reader** | GPT-6 Luna — `openai/gpt-6-luna` | OpenRouter, and not a *tier* either — `PDF_READER_MODEL` |
+| **PDF figure locator** | Gemini 3 Flash — `google/gemini-3-flash-preview` (kept on 2026-10-09: Gemini 3.8 Flash reasons, ~3× the cost and wait, no gain shown — plan 261009a) | OpenRouter, not a tier — `PDF_FIGURE_LOCATOR_MODEL`. Asked only about a figure the other routes refused ([260924e](../plans/260924e-a-pdf-figure-paired-to-the-wrong-caption.md) § Stage 2) |
 | **paper metadata** | DeepSeek V4.1 Flash — `deepseek/deepseek-v4.1-flash` | OpenRouter, restricted to three zero-data-retention providers and preferring Fireworks, not a tier — `PAPER_METADATA_MODEL`. Reads a batch-added PDF's title, authors, abstract and DOI off its first two pages (`src/paper-metadata.ts`; chosen against Luna in [evals/results/paper-metadata-2026-10-01.md](../../evals/results/paper-metadata-2026-10-01.md)) |
 | **reading difficulty** | DeepSeek V4.1 Flash — `deepseek/deepseek-v4.1-flash` | The same zero-data-retention route as paper metadata, not a tier — `READING_DIFFICULTY_MODEL`, job `reading-difficulty`. Rates an article's language and ideas from a sample at the end of the `blocks` step, for the reading-time estimate (`src/reading-difficulty.ts`; measured in [261005b](../investigations/261005b-reading-time-difficulty-multiplier-coefficients-and-where-the-rating-comes-from.md)) |
 | **shelf topics** | GPT-6 Luna — `openai/gpt-6-luna` | OpenRouter, not a tier — `SHELF_TOPICS_MODEL`, job `shelf-topics`. Scores the candidate topics shown above a shelf (`src/shelf-terms/model-scores.ts`; chosen by measurement in [260929c](../plans/260929c-shelf-topics-chosen-by-a-model.md)) |
@@ -334,9 +342,9 @@ drifted a version behind.
 | **chat gist** | DeepSeek V4.1 Flash — `deepseek/deepseek-v4.1-flash` | The same zero-data-retention route as paper metadata, on a copy of it, not a tier — `CHAT_GIST_MODEL`, job `chat-gist`. After each finished answer, one line on what the conversation covered, for the model in the reader's other conversations (`src/chat-gist.ts`; plan [261008e](../plans/261008e-chat-knows-the-reader-s-other-conversations.md)) |
 | **dictation** | GPT Transcribe — `openai/gpt-transcribe` | OpenRouter's `/v1/audio/transcriptions`, and not a tier — `DICTATION_MODEL`. Not on chat/completions; it takes a `keywords` vocabulary, which is why it is there ([260907c](../plans/260907c-dictation-onto-an-openai-transcriber.md)) |
 | **quick search** | Jev 1.13 — `typesafe/jev-1.13` | OpenRouter's alpha `/api/alpha/decisions`, and not a tier — `QUICK_SEARCH_MODEL`, job `search-quick`. Requests this versioned id; the stored model is the id the provider returned ([search.md § Quick search](search.md#quick-search-a-meaning-search-in-about-a-second)) |
-| **command bar, a sentence** | Jev 1.13 — `typesafe/jev-1.13`, then GPT-5.6 Luna for the words | The same decisions endpoint, asked one `choice` — `COMMAND_PICK_MODEL`, job `command-pick`. When the pick is a command that takes words, the quick tier's model copies them out on chat/completions with reasoning `none` — job `command-pick-words`. Chosen in [261003e](../investigations/261003e-which-fast-model-turns-a-sentence-into-a-command-and-its-argument.md); the run-at-once cut was measured on this Jev and means nothing on another ([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)) |
-| **command bar, a short list from why you are reading** | GPT-5.6 Luna — `openai/gpt-5.6-luna` | The quick tier's model on chat/completions, reasoning `none`, a strict JSON schema — `QUICK_MODEL_OPENROUTER`, job `command-suggest`. It is shown the reader's profile and our words for the modes, never the article. Measured in [261005b](../investigations/261005b-does-the-command-bar-suggest-useful-searches-from-why-you-are-reading.md) |
-| **Ask about Spideryarn** (Help) | GPT-5.6 Luna — `openai/gpt-5.6-luna` | The quick tier's model on chat/completions, streamed, no tools — `HELP_CHAT_MODEL`, job `help-chat`. It is shown the reader's one question and every Help page, never an article; chosen by the eval in [plan 261007k](../plans/261007k-help-chatbot.md) § Stages, 3 ([help-page.md § Ask about Spideryarn](help-page.md#ask-about-spideryarn)) |
+| **command bar, a sentence** | Jev 1.13 — `typesafe/jev-1.13`, then GPT-6 Luna for the words | The same decisions endpoint, asked one `choice` — `COMMAND_PICK_MODEL`, job `command-pick`. When the pick is a command that takes words, the quick tier's model copies them out on chat/completions with reasoning `none` — job `command-pick-words`. Chosen in [261003e](../investigations/261003e-which-fast-model-turns-a-sentence-into-a-command-and-its-argument.md); the run-at-once cut was measured on this Jev and means nothing on another ([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)) |
+| **command bar, a short list from why you are reading** | GPT-6 Luna — `openai/gpt-6-luna` | The quick tier's model on chat/completions, reasoning `none`, a strict JSON schema — `QUICK_MODEL_OPENROUTER`, job `command-suggest`. It is shown the reader's profile and our words for the modes, never the article. Measured in [261005b](../investigations/261005b-does-the-command-bar-suggest-useful-searches-from-why-you-are-reading.md) |
+| **Ask about Spideryarn** (Help) | GPT-6 Luna — `openai/gpt-6-luna` | The quick tier's model on chat/completions, streamed, no tools — `HELP_CHAT_MODEL`, job `help-chat`. It is shown the reader's one question and every Help page, never an article; chosen by the eval in [plan 261007k](../plans/261007k-help-chatbot.md) § Stages, 3 ([help-page.md § Ask about Spideryarn](help-page.md#ask-about-spideryarn)) |
 
 **This table names the models; it is not the inventory, and it has fallen behind before.** The
 lists that cannot drift are in [`src/models.ts`](../../src/models.ts): `TASK_TIER` for which job is
@@ -347,7 +355,7 @@ file: `IMAGE_MODEL` in [`src/illustrated.ts`](../../src/illustrated.ts) draws Il
 pictures, and `LIVE_MODEL` in [`src/live.ts`](../../src/live.ts) is live conversation's realtime
 model, the one call that does not go through OpenRouter ([ai-gateway.md](ai-gateway.md)).
 
-**One article can move up a tier.** High-powered AI swaps the capable tier's Sonnet 5 for Opus 5.5
+**One article can move up a tier.** High-powered AI swaps the capable tier's Sonnet 5.5 for Opus 5.5
 (`anthropic/claude-opus-5.5`, stamped `claude-opus-5-5`) for that article's capable-tier calls only —
 [high-powered-ai.md](high-powered-ai.md).
 
@@ -371,7 +379,7 @@ what* and it came back in two spellings depending on a transport detail the read
 **What those two spellings mean changed later the same day, and the pair survived the change.** They
 used to be *vendor A's address and vendor B's address* — one for the Anthropic SDK talking to
 `api.anthropic.com`, one for OpenRouter. Now everything is OpenRouter, every task sends
-`anthropic/claude-sonnet-5`, and `CAPABLE_MODEL` is on no request at all. It stayed because the
+`anthropic/claude-sonnet-5.5` (`anthropic/claude-sonnet-5` until 2026-10-09), and `CAPABLE_MODEL` is on no request at all. It stayed because the
 second job it was doing is the one that never moved: it is the **name stamped into stored
 artefacts**, and the pipeline compares recorded step stamps with the expected model through
 `sameStamp` in `src/store/artifacts.ts` (using `sameGenerator` in `src/models.ts`) to decide whether the work is stale. Moving the stamps to the prefixed spelling would have
@@ -537,7 +545,7 @@ shows the model you actually set and marks the row *set in the environment*. Rem
 | `SPIDERYARN_QUIZ_VERDICT_MODEL` | whether the reader got a quiz question right, judged from the finished mark and shown to nobody ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else)) — a quick-tier job. `evals/quiz.ts` prints the verdict beside a hand label on all eight marking cases, so this is the variable for asking the same question with evidence |
 | `SPIDERYARN_PDF_FRONTMATTER_MODEL` | the second look at an uploaded PDF's first pages, deciding which records are the article's title and authors and which are the publisher's (`src/pdf-frontmatter.ts`) — so `evals/pdf/titles.mts` can compare models on the shipped path |
 | `SPIDERYARN_DEBATE_MODEL` | Debate mode's step |
-| `SPIDERYARN_SIMPLE_CHECK_MODEL` | Simple's fidelity guard: each written level's paragraphs checked against the passages they cite ([summaries.md](summaries.md#simple-a-plain-words-orientation)). Its rates were measured on the quick tier's model, so another model is a new measurement |
+| `SPIDERYARN_SIMPLE_CHECK_MODEL` | Simple's fidelity guard: each written level's paragraphs checked against the passages they cite ([summaries.md](summaries.md#simple-a-plain-words-orientation)). Its rates were measured on GPT-5.6 Luna, where it stays (`PINNED_MODEL`), so another model is a new measurement |
 | `SPIDERYARN_DIG_DEEPER_SEARCH_MODEL` | *Dig deeper*'s forced web search, run before the answer: it keeps the search's results and writes a keyword query for the reader's library (`src/dig-deeper.ts`). A quick-tier job; the answer the reader reads is always the high-power model, which this does not change |
 | `SPIDERYARN_PIPELINE_EFFORT` | the article-reading stages' effort, all at once: `low`, `medium` or `high`. Empty counts as unset; anything else stops the run with an error naming the variable, so a typo cannot pass as a measurement (`pipelineEffortOverride` in `src/models.ts`) |
 

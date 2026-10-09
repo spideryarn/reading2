@@ -1,0 +1,66 @@
+{"judge": "opus", "slug": "the-mythology-of-conscious-ai-spya-rn5m0q", "lineups": {
+  "summary-fuller": {
+    "scores": {
+      "V": {"accuracy": 4, "coverage": 3, "nuance": 4, "usefulness": 3, "overall": 6,
+            "note": "Accurate but thin on the life argument (no predictive processing), and the four-arguments paragraph cites only spya-vwn2u7/xb93uz/e5kxct while summarising life and simulation too (spya-z6e85s, spya-y3s0uc uncited)."},
+      "W": {"accuracy": 4, "coverage": 4, "nuance": 5, "usefulness": 4, "overall": 8,
+            "note": "Keeps the hedges well (life necessary not sufficient, minority view, organoids, spya-pyy07g) and explains why simulation only works if functionalism is false (spya-bufgby); 'harder on machines that seem to feel' slightly loosens spya-qrkt96."},
+      "X": {"accuracy": 4, "coverage": 4, "nuance": 4, "usefulness": 4, "overall": 7,
+            "note": "Solid and clear, but the hallucinate/confabulate point is cited to spya-qzwr7t rather than spya-akrqfh, and the closing ethics (no deliberate building, organoids) is missing."},
+      "Y": {"accuracy": 4, "coverage": 5, "nuance": 4, "usefulness": 4, "overall": 8,
+            "note": "Best coverage of the evidence: waste-clearing neurons against neural replacement (spya-wwktbr, spya-mdpqeh), time, and controlled hallucination (spya-rnv09y); 'largely a myth' is a slight overstatement of a hedged case."},
+      "Z": {"accuracy": 5, "coverage": 5, "nuance": 5, "usefulness": 5, "overall": 9,
+            "note": "Explains the predictive-processing route to life (spya-faupat, spya-tm06bg), names biological naturalism as the minority view with no knock-down proof (spya-pyy07g), and covers organoids and the illusion point (spya-c0pwqt)."}
+    },
+    "rank": ["Z", ["Y", "W"], "X", "V"],
+    "separates": "Z is the only one that gets the mechanism behind 'life matters' and all the author's hedges and practical conclusions into a few readable paragraphs; V leaves out the life argument's substance and cites loosely."
+  },
+  "ideas": {
+    "scores": {
+      "V": {"accuracy": 4, "coverage": 3, "nuance": 3, "usefulness": 4, "overall": 5,
+            "note": "Two sharp 'assumed' premises (shared-feature inference at spya-z6e85s; wrongness of creating sufferers at spya-tqm2r8), but it omits life/predictive processing and seeming-conscious AI, and the introduced items have no explanation of why they are needed."},
+      "W": {"accuracy": 5, "coverage": 5, "nuance": 5, "usefulness": 5, "overall": 9,
+            "note": "Ten well-chosen ideas each with a 'why you need it', including the unargued moral-status premise (spya-gdgtj5) and the bias-toward-false-positives point (spya-ce8ywb)."},
+      "X": {"accuracy": 5, "coverage": 5, "nuance": 5, "usefulness": 4, "overall": 8,
+            "note": "The most insightful 'assumed' premises (rights versus off-switch; judging minds by relevant similarity, spya-ce8ywb) and the functionalism-in-general distinction (spya-g3z609), but most introduced items lack the why."},
+      "Y": {"accuracy": 5, "coverage": 5, "nuance": 4, "usefulness": 4, "overall": 7,
+            "note": "Covers the right ground accurately, but only the first item says why the reader needs it, and the assumed premise duplicates the obvious moral-status one."},
+      "Z": {"accuracy": 5, "coverage": 2, "nuance": 3, "usefulness": 3, "overall": 5,
+            "note": "Its assumed premise about input-output behaviour (spya-xpydj4) is sharp, but with five items it misses computational functionalism as the central assumption, the biases, and the life argument."}
+    },
+    "rank": ["W", "X", "Y", "V", "Z"],
+    "separates": "W pairs full coverage with a real explanation of why each idea is needed; X's assumed premises are the deepest, but it mostly skips the why, and V and Z leave out major parts of the argument."
+  },
+  "chat-q1": {
+    "scores": {
+      "V": {"accuracy": 4, "coverage": 4, "nuance": 4, "usefulness": 4, "overall": 7,
+            "note": "Right answer (the prohibition rests on stakes plus uncertainty, spya-xth5uf, spya-tqm2r8), but the quoted 'only' attributed to spya-bufgby is stitched together, and the life-needs-the-second link is cited to the life section itself."},
+      "W": {"accuracy": 5, "coverage": 4, "nuance": 5, "usefulness": 5, "overall": 8,
+            "note": "Uses the author's own stated links (spya-v8e0gy), separates 'very unlikely' from 'ruled out' (spya-qekh87, spya-xapwmg), and puts the policy weight on the stakes."},
+      "X": {"accuracy": 4, "coverage": 5, "nuance": 5, "usefulness": 5, "overall": 8,
+            "note": "Clear argument-by-argument account of the dependencies; it slightly over-reads 'as redundant as it may sound' (spya-tqm2r8) as evidence that the arguments might fail."},
+      "Y": {"accuracy": 3, "coverage": 3, "nuance": 4, "usefulness": 3, "overall": 6,
+            "note": "Says 'the article does not rank them', which is wrong: Seth calls 'brains are not computers' the 'most important' (spya-r8t03u), and that is the very ranking question the reader asked."},
+      "Z": {"accuracy": 5, "coverage": 5, "nuance": 5, "usefulness": 5, "overall": 9,
+            "note": "The fullest map of the dependencies (spya-brfbv0, spya-tqm5tt, spya-ksbt2g), and it adds that the conscious-seeming danger needs none of the four arguments (spya-yp07n0, spya-c0pwqt)."}
+    },
+    "rank": ["Z", ["W", "X"], "V", "Y"],
+    "separates": "Z traces each dependency in the text and separates what the arguments decide (where the danger lies) from what carries the prohibition (stakes under uncertainty); Y misstates that the article gives no ranking."
+  },
+  "chat-q2": {
+    "scores": {
+      "V": {"accuracy": 1, "coverage": 1, "nuance": 1, "usefulness": 1, "overall": 1,
+            "note": "No answer: only a leaked web_search tool call."},
+      "W": {"accuracy": 5, "coverage": 3, "nuance": 4, "usefulness": 4, "overall": 7,
+            "note": "Correct and fair (the analogy begs the question; the real case is earlier, at spya-xb93uz and spya-xpydj4), but the functionalist reply is generic and brief."},
+      "X": {"accuracy": 5, "coverage": 5, "nuance": 5, "usefulness": 5, "overall": 9,
+            "note": "A strong functionalist reply (organisational invariance, the calculator, simulated rain wetting simulated things), properly flagged as from outside the piece, and a clear verdict that the essay argues against a brain-computer equivalence but not for consciousness being like wetness."},
+      "Y": {"accuracy": 5, "coverage": 5, "nuance": 5, "usefulness": 5, "overall": 9,
+            "note": "Catches the overreach in 'obvious and uncontroversial' (spya-bufgby), the tension with 'can stand up by itself' (spya-v8e0gy), and the open question of whether approximation is good enough (spya-e5kxct)."},
+      "Z": {"accuracy": 4, "coverage": 5, "nuance": 5, "usefulness": 5, "overall": 9,
+            "note": "Sharpest point: Seth accepts functionalism in general (spya-g3z609), and showing a faithful copy is impossible is not showing one would lack consciousness; it cites the waste-clearing neuron to spya-mdpqeh rather than spya-wwktbr."}
+    },
+    "rank": ["Z", ["Y", "X"], "W", "V"],
+    "separates": "Z, Y and X all see that the principle relocates the dispute rather than settling it; Z goes further, noting that Seth's own broad functionalism (spya-g3z609) means the unanswered gap is whether a perfect causal copy would be conscious."
+  }
+}}

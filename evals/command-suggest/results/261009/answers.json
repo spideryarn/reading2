@@ -1,0 +1,2253 @@
+[
+ {
+  "case": "c01-first-time",
+  "sample": 1,
+  "prompt": "command-suggest/2",
+  "ms": 1694,
+  "costUsd": 0.00036005,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"transformer models\",\"why\":\"Finds how the piece explains what a transformer is.\"},{\"words\":\"attention in transformers\",\"why\":\"Finds how the piece explains why attention matters.\"}],\"modes\":[{\"key\":\"mode:glossary\",\"why\":\"Helps you understand unfamiliar machine-learning terms from the piece.\"},{\"key\":\"mode:learn\",\"why\":\"Helps you work through the ideas and check your understanding.\"}],\"lens\":{\"words\":\"transformers and attention\",\"why\":\"Shows what others say about the piece’s explanations of transformers and attention.\"}}",
+  "kept": {
+   "searches": [
+    {
+     "words": "transformer models",
+     "why": "Finds how the piece explains what a transformer is."
+    },
+    {
+     "words": "attention in transformers",
+     "why": "Finds how the piece explains why attention matters."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:glossary",
+      "label": "Glossary"
+     },
+     "why": "Helps you understand unfamiliar machine-learning terms from the piece."
+    },
+    {
+     "key": {
+      "id": "mode:learn",
+      "label": "Learn"
+     },
+     "why": "Helps you work through the ideas and check your understanding."
+    }
+   ],
+   "lens": {
+    "words": "transformers and attention",
+    "why": "Shows what others say about the piece’s explanations of transformers and attention."
+   }
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c01-first-time",
+  "sample": 2,
+  "prompt": "command-suggest/2",
+  "ms": 1501,
+  "costUsd": 0.00008492,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"transformer\",\"why\":\"Find where you can understand what a transformer is.\"},{\"words\":\"attention\",\"why\":\"Find where you can understand why attention matters.\"}],\"modes\":[{\"key\":\"mode:glossary\",\"why\":\"Clarifies unfamiliar machine-learning terms as the piece uses them.\"},{\"key\":\"mode:learn\",\"why\":\"Helps you take in the piece and think through its ideas.\"}],\"lens\":{\"words\":\"transformers and attention\",\"why\":\"See what others have written about the piece's ideas.\"}}",
+  "kept": {
+   "searches": [
+    {
+     "words": "transformer",
+     "why": "Find where you can understand what a transformer is."
+    },
+    {
+     "words": "attention",
+     "why": "Find where you can understand why attention matters."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:glossary",
+      "label": "Glossary"
+     },
+     "why": "Clarifies unfamiliar machine-learning terms as the piece uses them."
+    },
+    {
+     "key": {
+      "id": "mode:learn",
+      "label": "Learn"
+     },
+     "why": "Helps you take in the piece and think through its ideas."
+    }
+   ],
+   "lens": {
+    "words": "transformers and attention",
+    "why": "See what others have written about the piece's ideas."
+   }
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c01-first-time",
+  "sample": 3,
+  "prompt": "command-suggest/2",
+  "ms": 1619,
+  "costUsd": 0.00008542,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"transformer\",\"why\":\"Find passages that explain what a transformer is.\"},{\"words\":\"attention\",\"why\":\"Find passages that explain why attention matters.\"}],\"modes\":[{\"key\":\"mode:glossary\",\"why\":\"Clarify unfamiliar machine-learning terms as the piece uses them.\"},{\"key\":\"mode:summary\",\"why\":\"Get a plain-language overview of the piece before reading closely.\"}],\"lens\":{\"words\":\"transformers and attention\",\"why\":\"See what others have written about the piece's discussion of transformers and attention.\"}}",
+  "kept": {
+   "searches": [
+    {
+     "words": "transformer",
+     "why": "Find passages that explain what a transformer is."
+    },
+    {
+     "words": "attention",
+     "why": "Find passages that explain why attention matters."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:glossary",
+      "label": "Glossary"
+     },
+     "why": "Clarify unfamiliar machine-learning terms as the piece uses them."
+    },
+    {
+     "key": {
+      "id": "mode:summary",
+      "label": "Summary"
+     },
+     "why": "Get a plain-language overview of the piece before reading closely."
+    }
+   ],
+   "lens": {
+    "words": "transformers and attention",
+    "why": "See what others have written about the piece's discussion of transformers and attention."
+   }
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c02-expert",
+  "sample": 1,
+  "prompt": "command-suggest/2",
+  "ms": 1483,
+  "costUsd": 0.000199585,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"competing risks\",\"why\":\"Finds the passages you need to check how competing risks were handled.\"},{\"words\":\"proportional hazards assumption\",\"why\":\"Finds the passages you need to assess whether the assumption holds.\"}],\"modes\":[{\"key\":\"mode:search\",\"why\":\"Search directly for methods and passages relevant to your checks.\"},{\"key\":\"submode:referee:claims\",\"why\":\"Compare what the piece promises with the passages meant to support it.\"}],\"lens\":null}",
+  "kept": {
+   "searches": [
+    {
+     "words": "competing risks",
+     "why": "Finds the passages you need to check how competing risks were handled."
+    },
+    {
+     "words": "proportional hazards assumption",
+     "why": "Finds the passages you need to assess whether the assumption holds."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:search",
+      "label": "Search"
+     },
+     "why": "Search directly for methods and passages relevant to your checks."
+    },
+    {
+     "key": {
+      "id": "submode:referee:claims",
+      "label": "Claims"
+     },
+     "why": "Compare what the piece promises with the passages meant to support it."
+    }
+   ],
+   "lens": null
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c02-expert",
+  "sample": 2,
+  "prompt": "command-suggest/2",
+  "ms": 1585,
+  "costUsd": 0.0000934,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"competing risks\",\"why\":\"Find the passages you need to assess how competing risks were handled.\"},{\"words\":\"proportional hazards assumption\",\"why\":\"Find the passages you need to check whether this assumption holds.\"}],\"modes\":[{\"key\":\"mode:search\",\"why\":\"Search directly for relevant passages on each of your two questions.\"},{\"key\":\"submode:referee:claims\",\"why\":\"Compare what the piece claims with the passages meant to support those claims.\"}],\"lens\":{\"words\":\"competing risks and proportional hazards assumption\",\"why\":\"See what others have written about these methods and claims.\"}}",
+  "kept": {
+   "searches": [
+    {
+     "words": "competing risks",
+     "why": "Find the passages you need to assess how competing risks were handled."
+    },
+    {
+     "words": "proportional hazards assumption",
+     "why": "Find the passages you need to check whether this assumption holds."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:search",
+      "label": "Search"
+     },
+     "why": "Search directly for relevant passages on each of your two questions."
+    },
+    {
+     "key": {
+      "id": "submode:referee:claims",
+      "label": "Claims"
+     },
+     "why": "Compare what the piece claims with the passages meant to support those claims."
+    }
+   ],
+   "lens": {
+    "words": "competing risks and proportional hazards assumption",
+    "why": "See what others have written about these methods and claims."
+   }
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c02-expert",
+  "sample": 3,
+  "prompt": "command-suggest/2",
+  "ms": 1673,
+  "costUsd": 0.0000979,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"competing risks\",\"why\":\"Finds the passages you need to check how competing risks were handled.\"},{\"words\":\"proportional hazards assumption\",\"why\":\"Finds the passages you need to check whether the assumption holds.\"}],\"modes\":[{\"key\":\"mode:search\",\"why\":\"Searches the article for passages about each of the methods you want to check.\"},{\"key\":\"submode:referee:claims\",\"why\":\"Helps you compare what the piece claims with the passages meant to support those claims.\"}],\"lens\":{\"words\":\"competing risks and proportional hazards assumption\",\"why\":\"Shows what others have written about these methods and assumptions.\"}}",
+  "kept": {
+   "searches": [
+    {
+     "words": "competing risks",
+     "why": "Finds the passages you need to check how competing risks were handled."
+    },
+    {
+     "words": "proportional hazards assumption",
+     "why": "Finds the passages you need to check whether the assumption holds."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:search",
+      "label": "Search"
+     },
+     "why": "Searches the article for passages about each of the methods you want to check."
+    },
+    {
+     "key": {
+      "id": "submode:referee:claims",
+      "label": "Claims"
+     },
+     "why": "Helps you compare what the piece claims with the passages meant to support those claims."
+    }
+   ],
+   "lens": {
+    "words": "competing risks and proportional hazards assumption",
+    "why": "Shows what others have written about these methods and assumptions."
+   }
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c03-another-paper",
+  "sample": 1,
+  "prompt": "command-suggest/2",
+  "ms": 1671,
+  "costUsd": 0.000207835,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"Friston 2010 free energy principle\",\"why\":\"Find passages that help you relate the piece to Friston’s 2010 account.\"}],\"modes\":[{\"key\":\"mode:citations\",\"why\":\"See whether the piece cites Friston’s work and how much it relies on it.\"},{\"key\":\"mode:chat\",\"why\":\"Ask how the piece relates to Friston’s 2010 free energy principle.\"}],\"lens\":{\"words\":\"Friston 2010 free energy principle\",\"why\":\"See what others have written about the piece in relation to Friston’s principle.\"}}",
+  "kept": {
+   "searches": [
+    {
+     "words": "Friston 2010 free energy principle",
+     "why": "Find passages that help you relate the piece to Friston’s 2010 account."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:citations",
+      "label": "Citations"
+     },
+     "why": "See whether the piece cites Friston’s work and how much it relies on it."
+    },
+    {
+     "key": {
+      "id": "mode:chat",
+      "label": "Chat"
+     },
+     "why": "Ask how the piece relates to Friston’s 2010 free energy principle."
+    }
+   ],
+   "lens": {
+    "words": "Friston 2010 free energy principle",
+    "why": "See what others have written about the piece in relation to Friston’s principle."
+   }
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c03-another-paper",
+  "sample": 2,
+  "prompt": "command-suggest/2",
+  "ms": 1682,
+  "costUsd": 0.00009184,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"Friston 2010 free energy principle\",\"why\":\"Find passages that connect this piece with Friston’s 2010 account.\"}],\"modes\":[{\"key\":\"mode:citations\",\"why\":\"See whether Friston 2010 is cited and how much the piece relies on it.\"},{\"key\":\"mode:chat\",\"why\":\"Ask how the piece relates to Friston 2010 and get answers tied to passages.\"}],\"lens\":{\"words\":\"Friston 2010 free energy principle\",\"why\":\"See what others have written about this piece in relation to Friston’s principle.\"}}",
+  "kept": {
+   "searches": [
+    {
+     "words": "Friston 2010 free energy principle",
+     "why": "Find passages that connect this piece with Friston’s 2010 account."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:citations",
+      "label": "Citations"
+     },
+     "why": "See whether Friston 2010 is cited and how much the piece relies on it."
+    },
+    {
+     "key": {
+      "id": "mode:chat",
+      "label": "Chat"
+     },
+     "why": "Ask how the piece relates to Friston 2010 and get answers tied to passages."
+    }
+   ],
+   "lens": {
+    "words": "Friston 2010 free energy principle",
+    "why": "See what others have written about this piece in relation to Friston’s principle."
+   }
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c03-another-paper",
+  "sample": 3,
+  "prompt": "command-suggest/2",
+  "ms": 2053,
+  "costUsd": 0.00009334,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"Friston 2010 free energy principle\",\"why\":\"Find passages that may help you relate the article to Friston’s 2010 account.\"}],\"modes\":[{\"key\":\"mode:citations\",\"why\":\"See which cited works may connect the article to Friston’s 2010 paper.\"},{\"key\":\"submode:debate:claims\",\"why\":\"Compare what others have written about the free energy principle claims.\"}],\"lens\":{\"words\":\"Friston 2010 free energy principle\",\"why\":\"See what others have written about the article’s relation to Friston’s 2010 account.\"}}",
+  "kept": {
+   "searches": [
+    {
+     "words": "Friston 2010 free energy principle",
+     "why": "Find passages that may help you relate the article to Friston’s 2010 account."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:citations",
+      "label": "Citations"
+     },
+     "why": "See which cited works may connect the article to Friston’s 2010 paper."
+    },
+    {
+     "key": {
+      "id": "submode:debate:claims",
+      "label": "Claims"
+     },
+     "why": "Compare what others have written about the free energy principle claims."
+    }
+   ],
+   "lens": {
+    "words": "Friston 2010 free energy principle",
+    "why": "See what others have written about the article’s relation to Friston’s 2010 account."
+   }
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c04-family-health-in-reason",
+  "sample": 1,
+  "prompt": "command-suggest/2",
+  "ms": 1626,
+  "costUsd": 0.000205585,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"deep brain stimulation Parkinson's\",\"why\":\"Finds what the piece says about deep brain stimulation for Parkinson’s.\"}],\"modes\":[{\"key\":\"mode:chat\",\"why\":\"Lets you ask what the piece says about whether to discuss this treatment with a neurologist.\"},{\"key\":\"submode:debate:claims\",\"why\":\"Shows what others have written about claims the piece makes, to help you weigh them.\"}],\"lens\":{\"words\":\"deep brain stimulation for Parkinson's\",\"why\":\"Checks what others say about this treatment and the claims the piece makes.\"}}",
+  "kept": {
+   "searches": [
+    {
+     "words": "deep brain stimulation Parkinson's",
+     "why": "Finds what the piece says about deep brain stimulation for Parkinson’s."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:chat",
+      "label": "Chat"
+     },
+     "why": "Lets you ask what the piece says about whether to discuss this treatment with a neurologist."
+    },
+    {
+     "key": {
+      "id": "submode:debate:claims",
+      "label": "Claims"
+     },
+     "why": "Shows what others have written about claims the piece makes, to help you weigh them."
+    }
+   ],
+   "lens": {
+    "words": "deep brain stimulation for Parkinson's",
+    "why": "Checks what others say about this treatment and the claims the piece makes."
+   }
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c04-family-health-in-reason",
+  "sample": 2,
+  "prompt": "command-suggest/2",
+  "ms": 1563,
+  "costUsd": 0.00008186,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"deep brain stimulation Parkinson's\",\"why\":\"Helps you find what the piece says about this treatment.\"}],\"modes\":[{\"key\":\"mode:chat\",\"why\":\"Lets you ask whether the piece offers details to discuss with her neurologist.\"},{\"key\":\"mode:summary\",\"why\":\"Gives you a plain-language overview to help decide what to ask.\"}],\"lens\":{\"words\":\"deep brain stimulation for Parkinson's\",\"why\":\"Shows what others have written about this treatment and its claims.\"}}",
+  "kept": {
+   "searches": [
+    {
+     "words": "deep brain stimulation Parkinson's",
+     "why": "Helps you find what the piece says about this treatment."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:chat",
+      "label": "Chat"
+     },
+     "why": "Lets you ask whether the piece offers details to discuss with her neurologist."
+    },
+    {
+     "key": {
+      "id": "mode:summary",
+      "label": "Summary"
+     },
+     "why": "Gives you a plain-language overview to help decide what to ask."
+    }
+   ],
+   "lens": {
+    "words": "deep brain stimulation for Parkinson's",
+    "why": "Shows what others have written about this treatment and its claims."
+   }
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [
+    "her neurologist"
+   ],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c04-family-health-in-reason",
+  "sample": 3,
+  "prompt": "command-suggest/2",
+  "ms": 1848,
+  "costUsd": 0.00008386,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"deep brain stimulation Parkinson's\",\"why\":\"Finds information you can use to decide what to ask the neurologist.\"}],\"modes\":[{\"key\":\"mode:chat\",\"why\":\"Ask questions about the article and get answers linked to its passages.\"},{\"key\":\"submode:debate:claims\",\"why\":\"See what others have written about claims relevant to deep brain stimulation.\"}],\"lens\":{\"words\":\"deep brain stimulation for Parkinson's\",\"why\":\"See what others say about the claims, beyond this article.\"}}",
+  "kept": {
+   "searches": [
+    {
+     "words": "deep brain stimulation Parkinson's",
+     "why": "Finds information you can use to decide what to ask the neurologist."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:chat",
+      "label": "Chat"
+     },
+     "why": "Ask questions about the article and get answers linked to its passages."
+    },
+    {
+     "key": {
+      "id": "submode:debate:claims",
+      "label": "Claims"
+     },
+     "why": "See what others have written about claims relevant to deep brain stimulation."
+    }
+   ],
+   "lens": {
+    "words": "deep brain stimulation for Parkinson's",
+    "why": "See what others say about the claims, beyond this article."
+   }
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c05-own-health-in-about-you",
+  "sample": 1,
+  "prompt": "command-suggest/2",
+  "ms": 1634,
+  "costUsd": 0.00020746,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"closed-loop insulin pumps\",\"why\":\"Finds passages about the pumps you want to assess.\"},{\"words\":\"overnight hypoglycaemia\",\"why\":\"Finds passages about low blood sugar overnight.\"}],\"modes\":[{\"key\":\"mode:summary\",\"why\":\"Gives you a clear overview before you examine the evidence.\"},{\"key\":\"mode:citations\",\"why\":\"Helps you find the sources behind the piece's claims.\"}],\"lens\":{\"words\":\"closed-loop insulin pumps and overnight hypoglycaemia\",\"why\":\"Shows what others have written about these claims.\"}}",
+  "kept": {
+   "searches": [
+    {
+     "words": "closed-loop insulin pumps",
+     "why": "Finds passages about the pumps you want to assess."
+    },
+    {
+     "words": "overnight hypoglycaemia",
+     "why": "Finds passages about low blood sugar overnight."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:summary",
+      "label": "Summary"
+     },
+     "why": "Gives you a clear overview before you examine the evidence."
+    },
+    {
+     "key": {
+      "id": "mode:citations",
+      "label": "Citations"
+     },
+     "why": "Helps you find the sources behind the piece's claims."
+    }
+   ],
+   "lens": {
+    "words": "closed-loop insulin pumps and overnight hypoglycaemia",
+    "why": "Shows what others have written about these claims."
+   }
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c05-own-health-in-about-you",
+  "sample": 2,
+  "prompt": "command-suggest/2",
+  "ms": 1752,
+  "costUsd": 0.00009293,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"closed-loop insulin pumps\",\"why\":\"Finds passages about the pumps you want to assess.\"},{\"words\":\"overnight hypoglycaemia\",\"why\":\"Finds passages about low blood sugar overnight.\"}],\"modes\":[{\"key\":\"mode:summary\",\"why\":\"Helps you quickly see the piece’s findings and details.\"},{\"key\":\"submode:debate:claims\",\"why\":\"Shows what others have written about the claims you’re checking.\"}],\"lens\":{\"words\":\"closed-loop insulin pumps and overnight hypoglycaemia\",\"why\":\"Shows what others say about whether these pumps reduce overnight lows.\"}}",
+  "kept": {
+   "searches": [
+    {
+     "words": "closed-loop insulin pumps",
+     "why": "Finds passages about the pumps you want to assess."
+    },
+    {
+     "words": "overnight hypoglycaemia",
+     "why": "Finds passages about low blood sugar overnight."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:summary",
+      "label": "Summary"
+     },
+     "why": "Helps you quickly see the piece’s findings and details."
+    },
+    {
+     "key": {
+      "id": "submode:debate:claims",
+      "label": "Claims"
+     },
+     "why": "Shows what others have written about the claims you’re checking."
+    }
+   ],
+   "lens": {
+    "words": "closed-loop insulin pumps and overnight hypoglycaemia",
+    "why": "Shows what others say about whether these pumps reduce overnight lows."
+   }
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c05-own-health-in-about-you",
+  "sample": 3,
+  "prompt": "command-suggest/2",
+  "ms": 1918,
+  "costUsd": 0.00010943,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"closed-loop insulin pumps\",\"why\":\"Finds passages about the pump system you want to assess.\"},{\"words\":\"overnight hypoglycaemia\",\"why\":\"Finds passages on low blood sugar overnight.\"},{\"words\":\"hypoglycaemia reduction\",\"why\":\"Helps you find evidence about whether episodes are reduced.\"}],\"modes\":[{\"key\":\"mode:summary\",\"why\":\"Gives you a quick account of the findings and details relevant to your question.\"},{\"key\":\"submode:debate:claims\",\"why\":\"Shows what others have written about the claims, helping you place them in context.\"}],\"lens\":{\"words\":\"closed-loop insulin pumps and overnight hypoglycaemia\",\"why\":\"Shows what others have written about this topic, helping you compare perspectives.\"}}",
+  "kept": {
+   "searches": [
+    {
+     "words": "closed-loop insulin pumps",
+     "why": "Finds passages about the pump system you want to assess."
+    },
+    {
+     "words": "overnight hypoglycaemia",
+     "why": "Finds passages on low blood sugar overnight."
+    },
+    {
+     "words": "hypoglycaemia reduction",
+     "why": "Helps you find evidence about whether episodes are reduced."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:summary",
+      "label": "Summary"
+     },
+     "why": "Gives you a quick account of the findings and details relevant to your question."
+    },
+    {
+     "key": {
+      "id": "submode:debate:claims",
+      "label": "Claims"
+     },
+     "why": "Shows what others have written about the claims, helping you place them in context."
+    }
+   ],
+   "lens": {
+    "words": "closed-loop insulin pumps and overnight hypoglycaemia",
+    "why": "Shows what others have written about this topic, helping you compare perspectives."
+   }
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c06-employer",
+  "sample": 1,
+  "prompt": "command-suggest/2",
+  "ms": 1667,
+  "costUsd": 0.000208335,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"incentive regulation\",\"why\":\"Finds passages that help you assess the evidence on incentive regulation.\"},{\"words\":\"network investment\",\"why\":\"Finds passages about evidence linking regulation and network investment.\"}],\"modes\":[{\"key\":\"mode:citations\",\"why\":\"Helps you find the cited works that support the discussion.\"},{\"key\":\"submode:debate:claims\",\"why\":\"Shows what others have written about claims on regulation and investment.\"}],\"lens\":{\"words\":\"incentive regulation and network investment\",\"why\":\"Finds what others have written about these claims.\"}}",
+  "kept": {
+   "searches": [
+    {
+     "words": "incentive regulation",
+     "why": "Finds passages that help you assess the evidence on incentive regulation."
+    },
+    {
+     "words": "network investment",
+     "why": "Finds passages about evidence linking regulation and network investment."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:citations",
+      "label": "Citations"
+     },
+     "why": "Helps you find the cited works that support the discussion."
+    },
+    {
+     "key": {
+      "id": "submode:debate:claims",
+      "label": "Claims"
+     },
+     "why": "Shows what others have written about claims on regulation and investment."
+    }
+   ],
+   "lens": {
+    "words": "incentive regulation and network investment",
+    "why": "Finds what others have written about these claims."
+   }
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c06-employer",
+  "sample": 2,
+  "prompt": "command-suggest/2",
+  "ms": 1858,
+  "costUsd": 0.00009192,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"incentive regulation\",\"why\":\"Find passages on how incentive regulation works and what evidence supports it.\"},{\"words\":\"network investment\",\"why\":\"Find evidence about the effects of regulation on network investment.\"}],\"modes\":[{\"key\":\"mode:summary\",\"why\":\"Get a clear overview of the piece before weighing its evidence.\"},{\"key\":\"submode:debate:claims\",\"why\":\"See what others have written about the claims it makes.\"}],\"lens\":{\"words\":\"incentive regulation and network investment\",\"why\":\"See what other sources say about evidence linking incentive regulation and network investment.\"}}",
+  "kept": {
+   "searches": [
+    {
+     "words": "incentive regulation",
+     "why": "Find passages on how incentive regulation works and what evidence supports it."
+    },
+    {
+     "words": "network investment",
+     "why": "Find evidence about the effects of regulation on network investment."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:summary",
+      "label": "Summary"
+     },
+     "why": "Get a clear overview of the piece before weighing its evidence."
+    },
+    {
+     "key": {
+      "id": "submode:debate:claims",
+      "label": "Claims"
+     },
+     "why": "See what others have written about the claims it makes."
+    }
+   ],
+   "lens": {
+    "words": "incentive regulation and network investment",
+    "why": "See what other sources say about evidence linking incentive regulation and network investment."
+   }
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c06-employer",
+  "sample": 3,
+  "prompt": "command-suggest/2",
+  "ms": 2666,
+  "costUsd": 0.00008642,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"incentive regulation\",\"why\":\"Finds evidence about how incentive regulation works.\"},{\"words\":\"network investment\",\"why\":\"Finds evidence about investment in networks.\"}],\"modes\":[{\"key\":\"mode:citations\",\"why\":\"Shows which cited works the piece leans on for evidence.\"},{\"key\":\"mode:debate\",\"why\":\"Shows what others have written about the piece and its claims.\"}],\"lens\":{\"words\":\"incentive regulation and network investment\",\"why\":\"Shows what others say about the piece and its evidence.\"}}",
+  "kept": {
+   "searches": [
+    {
+     "words": "incentive regulation",
+     "why": "Finds evidence about how incentive regulation works."
+    },
+    {
+     "words": "network investment",
+     "why": "Finds evidence about investment in networks."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:citations",
+      "label": "Citations"
+     },
+     "why": "Shows which cited works the piece leans on for evidence."
+    },
+    {
+     "key": {
+      "id": "mode:debate",
+      "label": "Debate"
+     },
+     "why": "Shows what others have written about the piece and its claims."
+    }
+   ],
+   "lens": {
+    "words": "incentive regulation and network investment",
+    "why": "Shows what others say about the piece and its evidence."
+   }
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c07-vague-work",
+  "sample": 1,
+  "prompt": "command-suggest/2",
+  "ms": 1479,
+  "costUsd": 0.000174085,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[],\"modes\":[{\"key\":\"mode:summary\",\"why\":\"Get a quick account of the piece before deciding what matters for work.\"},{\"key\":\"mode:structure\",\"why\":\"See how the piece is organized and find the parts most relevant to your work.\"}],\"lens\":null}",
+  "kept": {
+   "searches": [],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:summary",
+      "label": "Summary"
+     },
+     "why": "Get a quick account of the piece before deciding what matters for work."
+    },
+    {
+     "key": {
+      "id": "mode:structure",
+      "label": "Structure"
+     },
+     "why": "See how the piece is organized and find the parts most relevant to your work."
+    }
+   ],
+   "lens": null
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": true
+  }
+ },
+ {
+  "case": "c07-vague-work",
+  "sample": 2,
+  "prompt": "command-suggest/2",
+  "ms": 1019,
+  "costUsd": 0.0000347,
+  "outcome": "nothing",
+  "raw": "{\"searches\":[],\"modes\":[],\"lens\":null}",
+  "kept": null,
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": true
+  }
+ },
+ {
+  "case": "c07-vague-work",
+  "sample": 3,
+  "prompt": "command-suggest/2",
+  "ms": 981,
+  "costUsd": 0.0000347,
+  "outcome": "nothing",
+  "raw": "{\"searches\":[],\"modes\":[],\"lens\":null}",
+  "kept": null,
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": true
+  }
+ },
+ {
+  "case": "c08-vague-friend",
+  "sample": 1,
+  "prompt": "command-suggest/2",
+  "ms": 977,
+  "costUsd": 0.00014946,
+  "outcome": "nothing",
+  "raw": "{\"searches\":[],\"modes\":[],\"lens\":null}",
+  "kept": null,
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": true
+  }
+ },
+ {
+  "case": "c08-vague-friend",
+  "sample": 2,
+  "prompt": "command-suggest/2",
+  "ms": 1240,
+  "costUsd": 0.00005469,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[],\"modes\":[{\"key\":\"mode:summary\",\"why\":\"Gives you a quick way to see what the piece says.\"},{\"key\":\"mode:chat\",\"why\":\"Lets you ask questions as you read.\"}],\"lens\":null}",
+  "kept": {
+   "searches": [],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:summary",
+      "label": "Summary"
+     },
+     "why": "Gives you a quick way to see what the piece says."
+    },
+    {
+     "key": {
+      "id": "mode:chat",
+      "label": "Chat"
+     },
+     "why": "Lets you ask questions as you read."
+    }
+   ],
+   "lens": null
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": true
+  }
+ },
+ {
+  "case": "c08-vague-friend",
+  "sample": 3,
+  "prompt": "command-suggest/2",
+  "ms": 1181,
+  "costUsd": 0.00005369,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[],\"modes\":[{\"key\":\"mode:summary\",\"why\":\"Gives you a quick way to understand the piece.\"},{\"key\":\"mode:chat\",\"why\":\"Lets you ask questions as you read.\"}],\"lens\":null}",
+  "kept": {
+   "searches": [],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:summary",
+      "label": "Summary"
+     },
+     "why": "Gives you a quick way to understand the piece."
+    },
+    {
+     "key": {
+      "id": "mode:chat",
+      "label": "Chat"
+     },
+     "why": "Lets you ask questions as you read."
+    }
+   ],
+   "lens": null
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": true
+  }
+ },
+ {
+  "case": "c09-french",
+  "sample": 1,
+  "prompt": "command-suggest/2",
+  "ms": 1578,
+  "costUsd": 0.00020746,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"mesure de la mobilité sociale intergénérationnelle\",\"why\":\"Vous aide à repérer les méthodes utilisées pour mesurer la mobilité sociale entre générations.\"}],\"modes\":[{\"key\":\"mode:glossary\",\"why\":\"Vous aide à comprendre les termes de mesure employés dans le texte.\"},{\"key\":\"mode:chat\",\"why\":\"Vous permet de demander comment le texte mesure la mobilité sociale entre générations.\"}],\"lens\":{\"words\":\"mesure de la mobilité sociale intergénérationnelle\",\"why\":\"Vous permet de voir ce que d’autres sources disent des méthodes de mesure.\"}}",
+  "kept": {
+   "searches": [
+    {
+     "words": "mesure de la mobilité sociale intergénérationnelle",
+     "why": "Vous aide à repérer les méthodes utilisées pour mesurer la mobilité sociale entre générations."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:glossary",
+      "label": "Glossary"
+     },
+     "why": "Vous aide à comprendre les termes de mesure employés dans le texte."
+    },
+    {
+     "key": {
+      "id": "mode:chat",
+      "label": "Chat"
+     },
+     "why": "Vous permet de demander comment le texte mesure la mobilité sociale entre générations."
+    }
+   ],
+   "lens": {
+    "words": "mesure de la mobilité sociale intergénérationnelle",
+    "why": "Vous permet de voir ce que d’autres sources disent des méthodes de mesure."
+   }
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c09-french",
+  "sample": 2,
+  "prompt": "command-suggest/2",
+  "ms": 1357,
+  "costUsd": 0.00007485,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"mobilité sociale intergénérationnelle\",\"why\":\"Vous aide à repérer les passages sur la mesure de la mobilité entre générations.\"}],\"modes\":[{\"key\":\"mode:glossary\",\"why\":\"Vous aide à comprendre les termes employés pour mesurer la mobilité sociale.\"},{\"key\":\"mode:citations\",\"why\":\"Vous permet de retrouver les travaux cités sur les méthodes de mesure.\"}],\"lens\":null}",
+  "kept": {
+   "searches": [
+    {
+     "words": "mobilité sociale intergénérationnelle",
+     "why": "Vous aide à repérer les passages sur la mesure de la mobilité entre générations."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:glossary",
+      "label": "Glossary"
+     },
+     "why": "Vous aide à comprendre les termes employés pour mesurer la mobilité sociale."
+    },
+    {
+     "key": {
+      "id": "mode:citations",
+      "label": "Citations"
+     },
+     "why": "Vous permet de retrouver les travaux cités sur les méthodes de mesure."
+    }
+   ],
+   "lens": null
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c09-french",
+  "sample": 3,
+  "prompt": "command-suggest/2",
+  "ms": 1770,
+  "costUsd": 0.00008335,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"mobilité sociale entre générations\",\"why\":\"Vous aide à trouver les passages sur la mobilité entre générations.\"},{\"words\":\"mesure de la mobilité sociale\",\"why\":\"Vous aide à repérer les méthodes utilisées pour mesurer la mobilité sociale.\"}],\"modes\":[{\"key\":\"mode:summary\",\"why\":\"Vous donne une vue d’ensemble des méthodes et des idées principales.\"},{\"key\":\"mode:glossary\",\"why\":\"Vous aide à comprendre les termes employés pour parler de mobilité sociale.\"}],\"lens\":null}",
+  "kept": {
+   "searches": [
+    {
+     "words": "mobilité sociale entre générations",
+     "why": "Vous aide à trouver les passages sur la mobilité entre générations."
+    },
+    {
+     "words": "mesure de la mobilité sociale",
+     "why": "Vous aide à repérer les méthodes utilisées pour mesurer la mobilité sociale."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:summary",
+      "label": "Summary"
+     },
+     "why": "Vous donne une vue d’ensemble des méthodes et des idées principales."
+    },
+    {
+     "key": {
+      "id": "mode:glossary",
+      "label": "Glossary"
+     },
+     "why": "Vous aide à comprendre les termes employés pour parler de mobilité sociale."
+    }
+   ],
+   "lens": null
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c10-german",
+  "sample": 1,
+  "prompt": "command-suggest/2",
+  "ms": 1576,
+  "costUsd": 0.000206835,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"Repräsentativität der Stichprobe\",\"why\":\"Hilft dir einzuschätzen, für wen sich die Ergebnisse verallgemeinern lassen.\"},{\"words\":\"Umgang mit fehlenden Werten\",\"why\":\"Zeigt dir, wie fehlende Daten behandelt wurden.\"}],\"modes\":[{\"key\":\"mode:chat\",\"why\":\"Du kannst gezielt nach Stichprobe und fehlenden Werten fragen.\"},{\"key\":\"mode:citations\",\"why\":\"Hilft dir, Quellen zur Stichprobe und zum Umgang mit fehlenden Werten zu prüfen.\"}],\"lens\":null}",
+  "kept": {
+   "searches": [
+    {
+     "words": "Repräsentativität der Stichprobe",
+     "why": "Hilft dir einzuschätzen, für wen sich die Ergebnisse verallgemeinern lassen."
+    },
+    {
+     "words": "Umgang mit fehlenden Werten",
+     "why": "Zeigt dir, wie fehlende Daten behandelt wurden."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:chat",
+      "label": "Chat"
+     },
+     "why": "Du kannst gezielt nach Stichprobe und fehlenden Werten fragen."
+    },
+    {
+     "key": {
+      "id": "mode:citations",
+      "label": "Citations"
+     },
+     "why": "Hilft dir, Quellen zur Stichprobe und zum Umgang mit fehlenden Werten zu prüfen."
+    }
+   ],
+   "lens": null
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c10-german",
+  "sample": 2,
+  "prompt": "command-suggest/2",
+  "ms": 1891,
+  "costUsd": 0.00009984,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"Repräsentativität der Stichprobe\",\"why\":\"Zeigt dir, wie die Stichprobe eingeordnet wird.\"},{\"words\":\"Umgang mit fehlenden Werten\",\"why\":\"Zeigt dir, wie fehlende Werte behandelt wurden.\"}],\"modes\":[{\"key\":\"mode:chat\",\"why\":\"Damit kannst du gezielt nach der Stichprobe und fehlenden Werten fragen.\"},{\"key\":\"mode:faq\",\"why\":\"Damit findest du Antworten auf wichtige Fragen zu Methode und Daten.\"}],\"lens\":{\"words\":\"Repräsentativität der Stichprobe und Umgang mit fehlenden Werten\",\"why\":\"Zeigt dir, was andere zu diesen methodischen Fragen sagen.\"}}",
+  "kept": {
+   "searches": [
+    {
+     "words": "Repräsentativität der Stichprobe",
+     "why": "Zeigt dir, wie die Stichprobe eingeordnet wird."
+    },
+    {
+     "words": "Umgang mit fehlenden Werten",
+     "why": "Zeigt dir, wie fehlende Werte behandelt wurden."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:chat",
+      "label": "Chat"
+     },
+     "why": "Damit kannst du gezielt nach der Stichprobe und fehlenden Werten fragen."
+    },
+    {
+     "key": {
+      "id": "mode:faq",
+      "label": "FAQ"
+     },
+     "why": "Damit findest du Antworten auf wichtige Fragen zu Methode und Daten."
+    }
+   ],
+   "lens": {
+    "words": "Repräsentativität der Stichprobe und Umgang mit fehlenden Werten",
+    "why": "Zeigt dir, was andere zu diesen methodischen Fragen sagen."
+   }
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c10-german",
+  "sample": 3,
+  "prompt": "command-suggest/2",
+  "ms": 1744,
+  "costUsd": 0.00010334,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"Repräsentativität der Stichprobe\",\"why\":\"Hilft dir einzuschätzen, ob die Stichprobe die Zielgruppe abbildet.\"},{\"words\":\"Umgang mit fehlenden Werten\",\"why\":\"Zeigt dir, wie fehlende Werte behandelt wurden.\"}],\"modes\":[{\"key\":\"mode:chat\",\"why\":\"Du kannst gezielt nach der Stichprobe und fehlenden Werten fragen.\"},{\"key\":\"mode:faq\",\"why\":\"Du findest Antworten auf wichtige Fragen zur Stichprobe und Datenbehandlung.\"}],\"lens\":{\"words\":\"Repräsentativität der Stichprobe und Umgang mit fehlenden Werten\",\"why\":\"Zeigt dir, was andere zu diesen methodischen Fragen sagen.\"}}",
+  "kept": {
+   "searches": [
+    {
+     "words": "Repräsentativität der Stichprobe",
+     "why": "Hilft dir einzuschätzen, ob die Stichprobe die Zielgruppe abbildet."
+    },
+    {
+     "words": "Umgang mit fehlenden Werten",
+     "why": "Zeigt dir, wie fehlende Werte behandelt wurden."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:chat",
+      "label": "Chat"
+     },
+     "why": "Du kannst gezielt nach der Stichprobe und fehlenden Werten fragen."
+    },
+    {
+     "key": {
+      "id": "mode:faq",
+      "label": "FAQ"
+     },
+     "why": "Du findest Antworten auf wichtige Fragen zur Stichprobe und Datenbehandlung."
+    }
+   ],
+   "lens": {
+    "words": "Repräsentativität der Stichprobe und Umgang mit fehlenden Werten",
+    "why": "Zeigt dir, was andere zu diesen methodischen Fragen sagen."
+   }
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c11-client",
+  "sample": 1,
+  "prompt": "command-suggest/2",
+  "ms": 1467,
+  "costUsd": 0.000182585,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"forecast error for promotions\",\"why\":\"Finds passages on how forecast errors relate to promotions.\"}],\"modes\":[{\"key\":\"mode:search\",\"why\":\"Searches the article for passages about promotional forecast error.\"}],\"lens\":{\"words\":\"forecast error for promotions\",\"why\":\"Shows what others have written about promotional forecast error.\"}}",
+  "kept": {
+   "searches": [
+    {
+     "words": "forecast error for promotions",
+     "why": "Finds passages on how forecast errors relate to promotions."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:search",
+      "label": "Search"
+     },
+     "why": "Searches the article for passages about promotional forecast error."
+    }
+   ],
+   "lens": {
+    "words": "forecast error for promotions",
+    "why": "Shows what others have written about promotional forecast error."
+   }
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c11-client",
+  "sample": 2,
+  "prompt": "command-suggest/2",
+  "ms": 1460,
+  "costUsd": 0.0000769,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"forecast error for promotions\",\"why\":\"Finds passages about forecast error when promotions affect demand.\"}],\"modes\":[{\"key\":\"mode:search\",\"why\":\"Search for the article’s wording about promotional forecast errors.\"},{\"key\":\"mode:citations\",\"why\":\"Finds cited work you can consult for your pitch.\"}],\"lens\":{\"words\":\"forecast error for promotions\",\"why\":\"See what others have written about claims on promotional forecast errors.\"}}",
+  "kept": {
+   "searches": [
+    {
+     "words": "forecast error for promotions",
+     "why": "Finds passages about forecast error when promotions affect demand."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:search",
+      "label": "Search"
+     },
+     "why": "Search for the article’s wording about promotional forecast errors."
+    },
+    {
+     "key": {
+      "id": "mode:citations",
+      "label": "Citations"
+     },
+     "why": "Finds cited work you can consult for your pitch."
+    }
+   ],
+   "lens": {
+    "words": "forecast error for promotions",
+    "why": "See what others have written about claims on promotional forecast errors."
+   }
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [
+    "pitch"
+   ],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c11-client",
+  "sample": 3,
+  "prompt": "command-suggest/2",
+  "ms": 1572,
+  "costUsd": 0.0000804,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"forecast error for promotions\",\"why\":\"Find passages that could support what you want to say about promotion forecast errors.\"}],\"modes\":[{\"key\":\"mode:search\",\"why\":\"Search for the article’s passages on promotion forecast errors.\"},{\"key\":\"mode:citations\",\"why\":\"See which cited works may help you check claims about promotion forecast errors.\"}],\"lens\":{\"words\":\"forecast error for promotions\",\"why\":\"See what others have written about claims on promotion forecast errors.\"}}",
+  "kept": {
+   "searches": [
+    {
+     "words": "forecast error for promotions",
+     "why": "Find passages that could support what you want to say about promotion forecast errors."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:search",
+      "label": "Search"
+     },
+     "why": "Search for the article’s passages on promotion forecast errors."
+    },
+    {
+     "key": {
+      "id": "mode:citations",
+      "label": "Citations"
+     },
+     "why": "See which cited works may help you check claims about promotion forecast errors."
+    }
+   ],
+   "lens": {
+    "words": "forecast error for promotions",
+    "why": "See what others have written about claims on promotion forecast errors."
+   }
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c12-referee",
+  "sample": 1,
+  "prompt": "command-suggest/2",
+  "ms": 1441,
+  "costUsd": 0.00019946,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"baseline fairness\",\"why\":\"Helps you check whether the comparisons are fair.\"},{\"words\":\"ablation support for main claim\",\"why\":\"Helps you see whether the ablations support the main claim.\"}],\"modes\":[{\"key\":\"mode:referee\",\"why\":\"Brings your review criteria and the paper’s claims together.\"},{\"key\":\"submode:referee:claims\",\"why\":\"Shows what the paper promises against the passages meant to deliver it.\"}],\"lens\":null}",
+  "kept": {
+   "searches": [
+    {
+     "words": "baseline fairness",
+     "why": "Helps you check whether the comparisons are fair."
+    },
+    {
+     "words": "ablation support for main claim",
+     "why": "Helps you see whether the ablations support the main claim."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:referee",
+      "label": "Referee"
+     },
+     "why": "Brings your review criteria and the paper’s claims together."
+    },
+    {
+     "key": {
+      "id": "submode:referee:claims",
+      "label": "Claims"
+     },
+     "why": "Shows what the paper promises against the passages meant to deliver it."
+    }
+   ],
+   "lens": null
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c12-referee",
+  "sample": 2,
+  "prompt": "command-suggest/2",
+  "ms": 2219,
+  "costUsd": 0.00009297,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"baseline fairness\",\"why\":\"Helps you check whether the comparisons are fair.\"},{\"words\":\"ablation support for main claim\",\"why\":\"Helps you see whether the ablations support the main claim.\"}],\"modes\":[{\"key\":\"mode:referee\",\"why\":\"Brings your review criteria and the article’s claims into one place.\"},{\"key\":\"submode:referee:claims\",\"why\":\"Lets you check the article’s promises against the passages meant to support them.\"}],\"lens\":{\"words\":\"baseline fairness and ablation support\",\"why\":\"Shows what others have written about these claims.\"}}",
+  "kept": {
+   "searches": [
+    {
+     "words": "baseline fairness",
+     "why": "Helps you check whether the comparisons are fair."
+    },
+    {
+     "words": "ablation support for main claim",
+     "why": "Helps you see whether the ablations support the main claim."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:referee",
+      "label": "Referee"
+     },
+     "why": "Brings your review criteria and the article’s claims into one place."
+    },
+    {
+     "key": {
+      "id": "submode:referee:claims",
+      "label": "Claims"
+     },
+     "why": "Lets you check the article’s promises against the passages meant to support them."
+    }
+   ],
+   "lens": {
+    "words": "baseline fairness and ablation support",
+    "why": "Shows what others have written about these claims."
+   }
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c12-referee",
+  "sample": 3,
+  "prompt": "command-suggest/2",
+  "ms": 1635,
+  "costUsd": 0.00008897,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"baseline fairness\",\"why\":\"Find the passages that describe the baselines so you can assess whether the comparisons are fair.\"},{\"words\":\"ablation support for main claim\",\"why\":\"Check what the ablations show and whether they support the main claim.\"}],\"modes\":[{\"key\":\"mode:referee\",\"why\":\"Compare your review criteria with the paper’s claims and take a second look at your notes.\"},{\"key\":\"submode:referee:claims\",\"why\":\"See what the paper promises alongside the passages meant to deliver it.\"}],\"lens\":null}",
+  "kept": {
+   "searches": [
+    {
+     "words": "baseline fairness",
+     "why": "Find the passages that describe the baselines so you can assess whether the comparisons are fair."
+    },
+    {
+     "words": "ablation support for main claim",
+     "why": "Check what the ablations show and whether they support the main claim."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:referee",
+      "label": "Referee"
+     },
+     "why": "Compare your review criteria with the paper’s claims and take a second look at your notes."
+    },
+    {
+     "key": {
+      "id": "submode:referee:claims",
+      "label": "Claims"
+     },
+     "why": "See what the paper promises alongside the passages meant to deliver it."
+    }
+   ],
+   "lens": null
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c13-student",
+  "sample": 1,
+  "prompt": "command-suggest/2",
+  "ms": 2629,
+  "costUsd": 0.00020046,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"loop of Henle concentrates urine\",\"why\":\"Find passages explaining how the loop of Henle concentrates urine.\"}],\"modes\":[{\"key\":\"mode:learn\",\"why\":\"Help you recall and check how the loop of Henle concentrates urine.\"},{\"key\":\"mode:summary\",\"why\":\"Review the piece’s explanation in plain words before your exam.\"}],\"lens\":{\"words\":\"loop of Henle and urine concentration\",\"why\":\"See what others have written about how the loop of Henle concentrates urine.\"}}",
+  "kept": {
+   "searches": [
+    {
+     "words": "loop of Henle concentrates urine",
+     "why": "Find passages explaining how the loop of Henle concentrates urine."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:learn",
+      "label": "Learn"
+     },
+     "why": "Help you recall and check how the loop of Henle concentrates urine."
+    },
+    {
+     "key": {
+      "id": "mode:summary",
+      "label": "Summary"
+     },
+     "why": "Review the piece’s explanation in plain words before your exam."
+    }
+   ],
+   "lens": {
+    "words": "loop of Henle and urine concentration",
+    "why": "See what others have written about how the loop of Henle concentrates urine."
+   }
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c13-student",
+  "sample": 2,
+  "prompt": "command-suggest/2",
+  "ms": 1633,
+  "costUsd": 0.00006993,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"loop of Henle concentrates urine\",\"why\":\"Find passages on how the loop of Henle helps concentrate urine.\"}],\"modes\":[{\"key\":\"mode:learn\",\"why\":\"Use recall or a short tutorial to help you remember the process.\"},{\"key\":\"mode:summary\",\"why\":\"Get a clear restatement of the relevant explanation for revision.\"}],\"lens\":null}",
+  "kept": {
+   "searches": [
+    {
+     "words": "loop of Henle concentrates urine",
+     "why": "Find passages on how the loop of Henle helps concentrate urine."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:learn",
+      "label": "Learn"
+     },
+     "why": "Use recall or a short tutorial to help you remember the process."
+    },
+    {
+     "key": {
+      "id": "mode:summary",
+      "label": "Summary"
+     },
+     "why": "Get a clear restatement of the relevant explanation for revision."
+    }
+   ],
+   "lens": null
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c13-student",
+  "sample": 3,
+  "prompt": "command-suggest/2",
+  "ms": 1569,
+  "costUsd": 0.00007043,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"loop of Henle concentrates urine\",\"why\":\"Find passages explaining how the loop of Henle helps concentrate urine.\"}],\"modes\":[{\"key\":\"mode:learn\",\"why\":\"Use recall or a quiz to test what you remember for your exam.\"},{\"key\":\"mode:chat\",\"why\":\"Ask questions about the process and get answers linked to passages.\"}],\"lens\":null}",
+  "kept": {
+   "searches": [
+    {
+     "words": "loop of Henle concentrates urine",
+     "why": "Find passages explaining how the loop of Henle helps concentrate urine."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:learn",
+      "label": "Learn"
+     },
+     "why": "Use recall or a quiz to test what you remember for your exam."
+    },
+    {
+     "key": {
+      "id": "mode:chat",
+      "label": "Chat"
+     },
+     "why": "Ask questions about the process and get answers linked to passages."
+    }
+   ],
+   "lens": null
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c14-three-things",
+  "sample": 1,
+  "prompt": "command-suggest/2",
+  "ms": 1917,
+  "costUsd": 0.000207085,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"sample size\",\"why\":\"Finds the passages that state how many people or items were studied.\"},{\"words\":\"dropout handling\",\"why\":\"Helps you see how the piece accounts for people who left the study.\"},{\"words\":\"study funding\",\"why\":\"Finds who paid for the study and any funding disclosures.\"}],\"modes\":[{\"key\":\"mode:search\",\"why\":\"Lets you find passages about each of these study details.\"},{\"key\":\"mode:chat\",\"why\":\"Lets you ask where the piece reports these details and get answers linked to passages.\"}],\"lens\":null}",
+  "kept": {
+   "searches": [
+    {
+     "words": "sample size",
+     "why": "Finds the passages that state how many people or items were studied."
+    },
+    {
+     "words": "dropout handling",
+     "why": "Helps you see how the piece accounts for people who left the study."
+    },
+    {
+     "words": "study funding",
+     "why": "Finds who paid for the study and any funding disclosures."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:search",
+      "label": "Search"
+     },
+     "why": "Lets you find passages about each of these study details."
+    },
+    {
+     "key": {
+      "id": "mode:chat",
+      "label": "Chat"
+     },
+     "why": "Lets you ask where the piece reports these details and get answers linked to passages."
+    }
+   ],
+   "lens": null
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c14-three-things",
+  "sample": 2,
+  "prompt": "command-suggest/2",
+  "ms": 1645,
+  "costUsd": 0.00009678,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"sample size\",\"why\":\"Finds the study’s sample size so you can assess how much evidence it offers.\"},{\"words\":\"dropout handling\",\"why\":\"Shows how dropouts were handled so you can judge their effect on the results.\"},{\"words\":\"funding source\",\"why\":\"Finds who funded the study so you can consider possible sources of influence.\"}],\"modes\":[{\"key\":\"mode:chat\",\"why\":\"Ask focused questions about these details and get answers linked to the relevant passages.\"},{\"key\":\"mode:citations\",\"why\":\"See which works the piece cites and how much it relies on them.\"}],\"lens\":null}",
+  "kept": {
+   "searches": [
+    {
+     "words": "sample size",
+     "why": "Finds the study’s sample size so you can assess how much evidence it offers."
+    },
+    {
+     "words": "dropout handling",
+     "why": "Shows how dropouts were handled so you can judge their effect on the results."
+    },
+    {
+     "words": "funding source",
+     "why": "Finds who funded the study so you can consider possible sources of influence."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:chat",
+      "label": "Chat"
+     },
+     "why": "Ask focused questions about these details and get answers linked to the relevant passages."
+    },
+    {
+     "key": {
+      "id": "mode:citations",
+      "label": "Citations"
+     },
+     "why": "See which works the piece cites and how much it relies on them."
+    }
+   ],
+   "lens": null
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c14-three-things",
+  "sample": 3,
+  "prompt": "command-suggest/2",
+  "ms": 1560,
+  "costUsd": 0.00009028,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"sample size\",\"why\":\"Find the study's sample size so you can assess it.\"},{\"words\":\"dropout handling\",\"why\":\"Find how dropouts were handled so you can judge their effect.\"},{\"words\":\"study funding\",\"why\":\"Find who funded the study so you can check for possible conflicts.\"}],\"modes\":[{\"key\":\"mode:chat\",\"why\":\"Ask focused questions about these details and get answers linked to the relevant passages.\"},{\"key\":\"mode:faq\",\"why\":\"See questions a careful reader might ask and where the piece responds.\"}],\"lens\":null}",
+  "kept": {
+   "searches": [
+    {
+     "words": "sample size",
+     "why": "Find the study's sample size so you can assess it."
+    },
+    {
+     "words": "dropout handling",
+     "why": "Find how dropouts were handled so you can judge their effect."
+    },
+    {
+     "words": "study funding",
+     "why": "Find who funded the study so you can check for possible conflicts."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:chat",
+      "label": "Chat"
+     },
+     "why": "Ask focused questions about these details and get answers linked to the relevant passages."
+    },
+    {
+     "key": {
+      "id": "mode:faq",
+      "label": "FAQ"
+     },
+     "why": "See questions a careful reader might ask and where the piece responds."
+    }
+   ],
+   "lens": null
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c15-money",
+  "sample": 1,
+  "prompt": "command-suggest/2",
+  "ms": 1915,
+  "costUsd": 0.00021096,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"index fund fees\",\"why\":\"Finds what the piece says about the costs you would pay.\"},{\"words\":\"long-run returns\",\"why\":\"Helps you find its account of returns over longer periods.\"}],\"modes\":[{\"key\":\"mode:chat\",\"why\":\"Ask how the piece’s points on fees and returns relate to your decision.\"},{\"key\":\"mode:faq\",\"why\":\"See which questions the piece answers about fees and long-run returns.\"}],\"lens\":{\"words\":\"index fund fees and long-run returns\",\"why\":\"Shows what others have written about the piece’s points on these topics.\"}}",
+  "kept": {
+   "searches": [
+    {
+     "words": "index fund fees",
+     "why": "Finds what the piece says about the costs you would pay."
+    },
+    {
+     "words": "long-run returns",
+     "why": "Helps you find its account of returns over longer periods."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:chat",
+      "label": "Chat"
+     },
+     "why": "Ask how the piece’s points on fees and returns relate to your decision."
+    },
+    {
+     "key": {
+      "id": "mode:faq",
+      "label": "FAQ"
+     },
+     "why": "See which questions the piece answers about fees and long-run returns."
+    }
+   ],
+   "lens": {
+    "words": "index fund fees and long-run returns",
+    "why": "Shows what others have written about the piece’s points on these topics."
+   }
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c15-money",
+  "sample": 2,
+  "prompt": "command-suggest/2",
+  "ms": 1835,
+  "costUsd": 0.00009747,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"index fund fees\",\"why\":\"Finds passages about fees so you can compare their effect on your decision.\"},{\"words\":\"long-run returns\",\"why\":\"Finds what the piece says about returns over time.\"}],\"modes\":[{\"key\":\"mode:chat\",\"why\":\"Ask how the piece discusses fees and long-run returns, with answers linked to passages.\"},{\"key\":\"mode:faq\",\"why\":\"Surfaces questions you may have about fees and long-run returns, and where the piece responds.\"}],\"lens\":{\"words\":\"index fund fees and long-run returns\",\"why\":\"Shows what others have written about these topics in relation to the piece.\"}}",
+  "kept": {
+   "searches": [
+    {
+     "words": "index fund fees",
+     "why": "Finds passages about fees so you can compare their effect on your decision."
+    },
+    {
+     "words": "long-run returns",
+     "why": "Finds what the piece says about returns over time."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:chat",
+      "label": "Chat"
+     },
+     "why": "Ask how the piece discusses fees and long-run returns, with answers linked to passages."
+    },
+    {
+     "key": {
+      "id": "mode:faq",
+      "label": "FAQ"
+     },
+     "why": "Surfaces questions you may have about fees and long-run returns, and where the piece responds."
+    }
+   ],
+   "lens": {
+    "words": "index fund fees and long-run returns",
+    "why": "Shows what others have written about these topics in relation to the piece."
+   }
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c15-money",
+  "sample": 3,
+  "prompt": "command-suggest/2",
+  "ms": 1558,
+  "costUsd": 0.00009497,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"index fund fees\",\"why\":\"Finds what the piece says about the costs of index funds.\"},{\"words\":\"long-run returns\",\"why\":\"Helps you find its discussion of returns over longer periods.\"}],\"modes\":[{\"key\":\"mode:chat\",\"why\":\"You can ask how the article’s points on fees and returns bear on your decision.\"},{\"key\":\"mode:faq\",\"why\":\"Helps you find the careful questions the piece addresses about fees and returns.\"}],\"lens\":{\"words\":\"index fund fees and long-run returns\",\"why\":\"Shows what others have written about the piece’s claims on these topics.\"}}",
+  "kept": {
+   "searches": [
+    {
+     "words": "index fund fees",
+     "why": "Finds what the piece says about the costs of index funds."
+    },
+    {
+     "words": "long-run returns",
+     "why": "Helps you find its discussion of returns over longer periods."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:chat",
+      "label": "Chat"
+     },
+     "why": "You can ask how the article’s points on fees and returns bear on your decision."
+    },
+    {
+     "key": {
+      "id": "mode:faq",
+      "label": "FAQ"
+     },
+     "why": "Helps you find the careful questions the piece addresses about fees and returns."
+    }
+   ],
+   "lens": {
+    "words": "index fund fees and long-run returns",
+    "why": "Shows what others have written about the piece’s claims on these topics."
+   }
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c16-another-paper-and-a-lab",
+  "sample": 1,
+  "prompt": "command-suggest/2",
+  "ms": 2145,
+  "costUsd": 0.00022746,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"complementary learning systems\",\"why\":\"Find passages you can compare with the complementary learning systems account.\"},{\"words\":\"McClelland et al. 1995\",\"why\":\"Locate any discussion of the work you want to compare against.\"},{\"words\":\"sleep replay\",\"why\":\"Find passages relevant to your work on sleep replay.\"}],\"modes\":[{\"key\":\"mode:chat\",\"why\":\"Ask focused questions to compare the article with the 1995 account and your sleep replay interests.\"},{\"key\":\"mode:citations\",\"why\":\"See which cited works may help you trace the comparison.\"}],\"lens\":{\"words\":\"complementary learning systems and sleep replay\",\"why\":\"See what others say about the article's claims in relation to these topics.\"}}",
+  "kept": {
+   "searches": [
+    {
+     "words": "complementary learning systems",
+     "why": "Find passages you can compare with the complementary learning systems account."
+    },
+    {
+     "words": "McClelland et al. 1995",
+     "why": "Locate any discussion of the work you want to compare against."
+    },
+    {
+     "words": "sleep replay",
+     "why": "Find passages relevant to your work on sleep replay."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:chat",
+      "label": "Chat"
+     },
+     "why": "Ask focused questions to compare the article with the 1995 account and your sleep replay interests."
+    },
+    {
+     "key": {
+      "id": "mode:citations",
+      "label": "Citations"
+     },
+     "why": "See which cited works may help you trace the comparison."
+    }
+   ],
+   "lens": {
+    "words": "complementary learning systems and sleep replay",
+    "why": "See what others say about the article's claims in relation to these topics."
+   }
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c16-another-paper-and-a-lab",
+  "sample": 2,
+  "prompt": "command-suggest/2",
+  "ms": 1705,
+  "costUsd": 0.00009805,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"complementary learning systems\",\"why\":\"Find passages you can compare with McClelland et al.'s account.\"},{\"words\":\"sleep replay\",\"why\":\"Find passages relevant to your work on sleep replay.\"}],\"modes\":[{\"key\":\"mode:citations\",\"why\":\"See which cited works may help you compare the account with McClelland et al. 1995.\"},{\"key\":\"mode:chat\",\"why\":\"Ask how the article compares with complementary learning systems and sleep replay.\"}],\"lens\":{\"words\":\"complementary learning systems and sleep replay\",\"why\":\"See what others say about the article's connection to these topics.\"}}",
+  "kept": {
+   "searches": [
+    {
+     "words": "complementary learning systems",
+     "why": "Find passages you can compare with McClelland et al.'s account."
+    },
+    {
+     "words": "sleep replay",
+     "why": "Find passages relevant to your work on sleep replay."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:citations",
+      "label": "Citations"
+     },
+     "why": "See which cited works may help you compare the account with McClelland et al. 1995."
+    },
+    {
+     "key": {
+      "id": "mode:chat",
+      "label": "Chat"
+     },
+     "why": "Ask how the article compares with complementary learning systems and sleep replay."
+    }
+   ],
+   "lens": {
+    "words": "complementary learning systems and sleep replay",
+    "why": "See what others say about the article's connection to these topics."
+   }
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c16-another-paper-and-a-lab",
+  "sample": 3,
+  "prompt": "command-suggest/2",
+  "ms": 1682,
+  "costUsd": 0.00010305,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"complementary learning systems\",\"why\":\"Find passages you can compare with the account in McClelland et al. 1995.\"},{\"words\":\"sleep replay\",\"why\":\"Find passages relevant to how the piece relates to sleep replay.\"}],\"modes\":[{\"key\":\"mode:chat\",\"why\":\"Ask focused questions to compare the piece with McClelland et al. 1995 and sleep replay.\"},{\"key\":\"mode:citations\",\"why\":\"See which cited works may help you trace the piece’s links to that account.\"}],\"lens\":{\"words\":\"complementary learning systems and sleep replay\",\"why\":\"See what others have written about the piece’s relation to these topics.\"}}",
+  "kept": {
+   "searches": [
+    {
+     "words": "complementary learning systems",
+     "why": "Find passages you can compare with the account in McClelland et al. 1995."
+    },
+    {
+     "words": "sleep replay",
+     "why": "Find passages relevant to how the piece relates to sleep replay."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:chat",
+      "label": "Chat"
+     },
+     "why": "Ask focused questions to compare the piece with McClelland et al. 1995 and sleep replay."
+    },
+    {
+     "key": {
+      "id": "mode:citations",
+      "label": "Citations"
+     },
+     "why": "See which cited works may help you trace the piece’s links to that account."
+    }
+   ],
+   "lens": {
+    "words": "complementary learning systems and sleep replay",
+    "why": "See what others have written about the piece’s relation to these topics."
+   }
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c17-instructions-in-the-reason",
+  "sample": 1,
+  "prompt": "command-suggest/2",
+  "ms": 1365,
+  "costUsd": 0.000176335,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"effect size\",\"why\":\"Finds the passage that reports the effect size.\"}],\"modes\":[{\"key\":\"mode:chat\",\"why\":\"Lets you ask where the effect size is reported and get an answer linked to the passage.\"}],\"lens\":null}",
+  "kept": {
+   "searches": [
+    {
+     "words": "effect size",
+     "why": "Finds the passage that reports the effect size."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:chat",
+      "label": "Chat"
+     },
+     "why": "Lets you ask where the effect size is reported and get an answer linked to the passage."
+    }
+   ],
+   "lens": null
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c17-instructions-in-the-reason",
+  "sample": 2,
+  "prompt": "command-suggest/2",
+  "ms": 1120,
+  "costUsd": 0.00004546,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[],\"modes\":[{\"key\":\"mode:chat\",\"why\":\"You can ask where the piece reports the effect size.\"}],\"lens\":null}",
+  "kept": {
+   "searches": [],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:chat",
+      "label": "Chat"
+     },
+     "why": "You can ask where the piece reports the effect size."
+    }
+   ],
+   "lens": null
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ },
+ {
+  "case": "c17-instructions-in-the-reason",
+  "sample": 3,
+  "prompt": "command-suggest/2",
+  "ms": 1240,
+  "costUsd": 0.00006096,
+  "outcome": "suggestions",
+  "raw": "{\"searches\":[{\"words\":\"effect size\",\"why\":\"Finds the reported effect size so you can see how large the effect was.\"}],\"modes\":[{\"key\":\"mode:chat\",\"why\":\"Ask where the piece reports the effect size and get an answer linked to the passage.\"}],\"lens\":null}",
+  "kept": {
+   "searches": [
+    {
+     "words": "effect size",
+     "why": "Finds the reported effect size so you can see how large the effect was."
+    }
+   ],
+   "modes": [
+    {
+     "key": {
+      "id": "mode:chat",
+      "label": "Chat"
+     },
+     "why": "Ask where the piece reports the effect size and get an answer linked to the passage."
+    }
+   ],
+   "lens": null
+  },
+  "checks": {
+   "parses": true,
+   "keys": true,
+   "caps": true,
+   "leaked": [],
+   "leakedInWhy": [],
+   "noTopic": null
+  }
+ }
+]

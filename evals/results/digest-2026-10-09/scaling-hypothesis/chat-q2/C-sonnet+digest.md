@@ -1,0 +1,11 @@
+# scaling-hypothesis — chat-q2 — C-sonnet+digest
+
+> What does Gwern mean when he says agency can come from data, and what is the weakest step in his argument that a model trained only to predict text can end up behaving as an agent?
+
+He means that a model trained only to predict text can pick up agent-like behavior because the text was written by agents. Training on human text is "offline imitation learning (behavioral cloning)," so the model learns generative models of many real and fictional agents, and a prompt can make it roleplay and plan toward goals [spya-cw7jg4]. His key move is that "a sufficiently accurate simulation of an agent just is an agent" [spya-nkzwpu]. He then widens this beyond human data. Agency is a continuum, and it is useful even for understanding "non-agentic" things [spya-ueb3d2], because treating a system as "wanting" to minimize something is a cheap shortcut a network would like [spya-ehe426 spya-agstbd].
+
+My inference is that the weakest step is the jump from "this framing is a useful shortcut" to "a network trained on non-agent data will actually learn it." Gwern concedes the problem himself. Such capabilities must "pay their way," and for a single system like Pluto's orbit a model would not bother [spya-dbrxu8]. He calls the question "an empirical matter" and says we can't predict when it happens [spya-nxp8hh]. The cases meant to show it could happen are hedged: "Maybe not" for a single Turing machine [spya-ufpyk0], "wouldn't want to bet too much" for Conway's Game of Life [spya-egwe0x], and "Maybe" for the Turing-machine meta-learning case [spya-usu3q6]. The closing claim that data filtering is no solution therefore rests on possibility, not on a demonstrated mechanism [spya-hjpau9].
+
+His claim that hidden agency can't be ruled out, because "sampling can show the presence of knowledge, but not the absence," also makes the thesis hard to test [spya-jrm0w9].
+
+The human-text case is stronger. Even there, the one concrete example is a "semi-coherent high-level plan" from a prompt [spya-nkzwpu], and real-world action needs effectors added on [spya-cw7jg4]. He answers Janus's objection that the agent framing is an unneeded "epicycle" [spya-e23u6n] mainly by analogy to heliocentrism [spya-g2v6ry], not with evidence.
