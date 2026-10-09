@@ -9,13 +9,15 @@
  * Every file lives in a temp directory of the test's own.
  */
 
+import { execFileSync } from "node:child_process";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { makeApi } from "../src/mcp/api.js";
-import { parseArgs } from "../scripts/spideryarn-mcp.js";
+import { clientConfig, parseArgs } from "../scripts/spideryarn-mcp.js";
 import {
   login,
   readSessionFile,
@@ -492,5 +494,65 @@ describe("command-line arguments", () => {
 
   it("rejects a duplicate option instead of silently replacing it", () => {
     expect(() => parseArgs(["serve", "--site", SITE, `--site=${SITE}`])).toThrow(/--site was given more than once/);
+  });
+});
+
+describe("the config an AI app is given", () => {
+  const made = clientConfig({ repo: "/r/sy", site: "https://www.spideryarn.com", nodeDir: "/opt/node/bin" });
+
+  it("names this checkout's tsx and script by absolute path, with node on PATH", () => {
+    const entry = made.desktop.mcpServers.spideryarn;
+    expect(entry.command).toBe("/r/sy/node_modules/.bin/tsx");
+    expect(entry.args).toEqual(["/r/sy/scripts/spideryarn-mcp.ts", "serve", "--site", "https://www.spideryarn.com"]);
+    /* Claude Desktop starts servers with a short PATH; tsx's shebang needs node on it. */
+    expect(entry.env.PATH.split(":")[0]).toBe("/opt/node/bin");
+  });
+
+  it("gives Claude Code the same command, at user scope", () => {
+    expect(made.claudeCode).toBe(
+      "claude mcp add --scope user spideryarn --env PATH=/opt/node/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin -- /r/sy/node_modules/.bin/tsx /r/sy/scripts/spideryarn-mcp.ts serve --site https://www.spideryarn.com",
+    );
+  });
+
+  it("quotes a path with a space, so the shell line still runs", () => {
+    const spaced = clientConfig({ repo: "/Users/a b/sy", site: "https://www.spideryarn.com", nodeDir: "/n" });
+    expect(spaced.claudeCode).toContain("'/Users/a b/sy/node_modules/.bin/tsx'");
+  });
+
+  it("round-trips shell metacharacters and gives Claude Code Desktop's PATH", () => {
+    const quoted = clientConfig({
+      repo: "/Users/a b/o'brien/$(printf injected);雪\\repo",
+      site: "https://www.spideryarn.com",
+      nodeDir: "/opt/a b/o'brien/bin",
+    });
+    const argv = execFileSync("/bin/sh", ["-c", `claude() { printf '%s\\0' "$@"; }; ${quoted.claudeCode}`], {
+      encoding: "utf8",
+    }).split("\0").slice(0, -1);
+    const entry = quoted.desktop.mcpServers.spideryarn;
+    expect(argv).toEqual([
+      "mcp", "add", "--scope", "user", "spideryarn", "--env", `PATH=${entry.env.PATH}`, "--", entry.command, ...entry.args,
+    ]);
+  });
+
+  it("finds an executable node on PATH and makes a relative directory absolute", async () => {
+    const cwd = path.dirname(home);
+    await fs.mkdir(path.join(cwd, "directory", "node"), { recursive: true });
+    await fs.mkdir(path.join(cwd, "blocked"));
+    await fs.mkdir(path.join(cwd, "bin"));
+    await fs.writeFile(path.join(cwd, "blocked", "node"), "not executable", { mode: 0o600 });
+    await fs.writeFile(path.join(cwd, "bin", "node"), "#!/bin/sh\nexit 0\n", { mode: 0o700 });
+    const stdout = execFileSync(process.execPath, [
+      "--import", import.meta.resolve("tsx"), fileURLToPath(new URL("../scripts/spideryarn-mcp.ts", import.meta.url)), "config", "--site", SITE,
+    ], {
+      cwd,
+      env: { ...process.env, PATH: "directory:blocked:bin" },
+      encoding: "utf8",
+    });
+    const config = JSON.parse(stdout.slice(stdout.indexOf("{"), stdout.lastIndexOf("}") + 1)) as typeof made.desktop;
+    expect(config.mcpServers.spideryarn.env.PATH.split(":")[0]).toBe(path.join(await fs.realpath(cwd), "bin"));
+  });
+
+  it("is a command the parser knows", () => {
+    expect(parseArgs(["config", "--site", SITE]).command).toBe("config");
   });
 });
