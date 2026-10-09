@@ -56,7 +56,6 @@ vi.mock("../src/ai-call.js", () => ({
 }));
 
 const { readArticle } = await import("../src/article-input.js");
-const { isBodyEvidence } = await import("../src/block-policy.js");
 const { CAPABLE_MODEL, modelFor } = await import("../src/models.js");
 const { STEPS, stepIsDone } = await import("../src/pipeline.js");
 const { BASELINE, STAMP_SOURCE } = await import("../src/store/artifacts.js");
@@ -110,13 +109,12 @@ function completion(rows: unknown[], page: { url: string; title: string; content
 }
 
 /**
- * What the stubbed searches answer: one direct row and one claim row, both
- * anchored to real prose out of the fixture rather than typed here.
+ * What the stubbed search answers: one direct row, naming the fixture's real
+ * title rather than one typed here. (A claim row anchored to the fixture's
+ * prose stood beside it until `debate/7`, when pass B left the press.)
  */
 async function script(): Promise<void> {
   const article = await readArticle(SLUG, store);
-  const block = article.blocks.filter(isBodyEvidence).find((b) => b.text.length > 160);
-  if (!block) throw new Error("the fixture has no block long enough to quote");
   const title = article.meta?.title ?? "";
   if (!title) throw new Error("the fixture has no title for a witness to name");
 
@@ -125,12 +123,6 @@ async function script(): Promise<void> {
     title: "A reply",
     content: `Writing about ${title}, one has to say the argument moves too fast in places.`,
   };
-  const survey = {
-    url: "https://example.invalid/on-the-topic",
-    title: "On the topic",
-    content: block.text.slice(0, 200),
-  };
-
   answers.length = 0;
   answers.push(
     completion(
@@ -146,20 +138,6 @@ async function script(): Promise<void> {
       ],
       review,
     ),
-    completion(
-      [
-        {
-          url: survey.url,
-          blockId: block.id,
-          claimQuote: block.text.slice(0, 60),
-          sourceQuote: block.text.slice(0, 60),
-          relation: "corroborates",
-          lean: "leans-for",
-          applies: "It says the same thing about the same claim.",
-        },
-      ],
-      survey,
-    ),
   );
 }
 
@@ -169,9 +147,9 @@ async function runAndWrite(): Promise<Debate> {
   const ctx = ctxFor();
   const result = await STEPS.debate.run(ctx, store, nullCheckpointStore());
   /* The stub ran short if anything is left — a silent way for the stage to have
-     taken a path this file did not intend. In particular, a stage that stopped
-     running pass B would leave one answer here and every assertion below would
-     still pass. */
+     taken a path this file did not intend. And the stub throws when asked for
+     more than it has, so a stage that went back to running pass B fails here
+     rather than buying a second search (`debate/7`, plan 261008i). */
   expect(answers).toEqual([]);
   const debate = result.parts?.debate as Debate;
   const stamp = await STEPS.debate.stamp?.(ctx, store);
@@ -277,27 +255,26 @@ describe("what the store records when the debate step has run", () => {
 /* ------------------------------------------------------------- the artefact -- */
 
 describe("the artefact the step writes", () => {
-  it("carries both groups, each with its own counts", async () => {
+  it("carries Reception's group with its counts, and the claims search as not run", async () => {
     const debate = await runAndWrite();
 
     expect(debate.direct.counts.keptRows).toBe(1);
-    expect(debate.claims.counts.keptRows).toBe(1);
-    /* Per group, never only summed — a foot line cannot otherwise say which of
-       the two searches lost rows. */
     expect(debate.direct.counts.webSearches).toBe(3);
-    expect(debate.claims.counts.webSearches).toBe(3);
+    /* **Not run, never an empty group** — the panel says *found nothing* over
+       an empty one (src/types.ts § `DebateClaims`). */
+    expect(debate.claims).toEqual({ pass: "not-run", rows: [] });
     expect(Date.parse(debate.searchedAt)).not.toBeNaN();
   });
 
   /**
-   * The step made **two** calls, and one of them was for the claims. A stage
-   * that quietly stopped running pass B would write a perfectly good artefact
-   * with an empty second group — which is a state the reader is meant to be able
-   * to see, so nothing else would look wrong.
+   * The step makes **one** search since `debate/7` (2026-10-08): pass B left
+   * the press, and the claims are the reader's to pick (plan 261008i). A
+   * stage that quietly went back to running it would spend a second search
+   * on every press.
    */
-  it("buys two searches, not one", async () => {
+  it("buys one search, not two", async () => {
     await runAndWrite();
-    expect(calls).toBe(2);
+    expect(calls).toBe(1);
   });
 });
 

@@ -445,8 +445,9 @@ describe("RESET_ROLE", () => {
     );
     /* Fourteen since `crossrefs`, 2026-09-30 (plan 260930f); fifteen since
        `simple` the same day (plan 260930i); sixteen since `relations`,
-       2026-10-03 (plan 261003f). */
-    expect(extraSteps()).toHaveLength(16);
+       2026-10-03 (plan 261003f); seventeen since `debate-claims`, 2026-10-08
+       (plan 261008i). */
+    expect(extraSteps()).toHaveLength(17);
   });
 
   it("finds every extra's column in STORAGE, one whole column each", () => {

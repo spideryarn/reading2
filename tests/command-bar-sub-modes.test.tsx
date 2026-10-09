@@ -593,21 +593,65 @@ describe("Debate's two sub-modes", () => {
     expect(rows().map(fullName)).toEqual(expect.arrayContaining(["Debate › Claims", "Referee › Claims"]));
   });
 
-  /* **One search, never a second.** Either row arms the one `debate` run — the
-     mode row's own target — under one key, and the band that mounts claims
-     that one token. Two keys, or a second arm, would be two metered searches. */
-  it("arms the one `debate` run for either sub-mode, as the mode row does", () => {
-    for (const sub of [RECEPTION, CLAIMS]) {
-      expect(subModeTarget(sub), sub.view).toBe("debate");
-      expect(subModeGenerates(sub), sub.view).toBe(true);
-    }
+  /* **Reception's row buys the search; Claims' buys the claims list** —
+     since `debate/7` (2026-10-08, plan 261008i, GPT Sol's F1) the press
+     searches for Reception only, so a Claims press arming it would spend on
+     Reception for a reader who asked for claims. Since stage 2 Claims has its
+     own target, the list of the article's claims: one call, no search. */
+  it("arms the `debate` search for Reception and the claims list for Claims", () => {
+    expect(subModeTarget(RECEPTION)).toBe("debate");
+    expect(subModeGenerates(RECEPTION)).toBe(true);
+    expect(subModeTarget(CLAIMS)).toBe("debate-claims");
+    expect(subModeGenerates(CLAIMS)).toBe(true);
+  });
+
+  it("opens Debate on Claims from the bar arming the list and never the Reception search", () => {
     const onMode = vi.fn();
     reading({ onMode });
     openBar();
     type("debate claims");
     press("Enter");
     expect(onMode).toHaveBeenCalledWith("debate", CLAIMS);
+    expect(pendingActivation("a-piece", "debate")).toBeNull();
+    expect(pendingActivation("a-piece", "debate-claims")).not.toBeNull();
+  });
+
+  /* **The mode row too**: it lands on whatever sub-mode the reading view says
+     is showing, so it arms by that, from the parsed state the Reader hands the
+     bar (`<Dock debate>`) — the address lags a press (activation.ts §
+     `PressContext`). */
+  it("arms the claims list, not the search, from Debate's mode row when Debate would open on Claims", () => {
+    const onMode = vi.fn();
+    reading({ onMode, debate: "claims" });
+    openBar();
+    type("debate");
+    expect(fullName(rows()[0] as HTMLElement)).toBe("Debate");
+    press("Enter");
+    expect(onMode).toHaveBeenCalledWith("debate", undefined, false);
+    expect(pendingActivation("a-piece", "debate")).toBeNull();
+    expect(pendingActivation("a-piece", "debate-claims")).not.toBeNull();
+  });
+
+  it("arms the search from Debate's mode row when Debate would open on Reception", () => {
+    const onMode = vi.fn();
+    reading({ onMode, debate: "reception" });
+    openBar();
+    type("debate");
+    press("Enter");
     expect(pendingActivation("a-piece", "debate")).not.toBeNull();
+    /* …and never Claims' list (plan 261008i stage 2). */
+    expect(pendingActivation("a-piece", "debate-claims")).toBeNull();
+  });
+
+  it("opens Debate on Reception from the bar and arms the search, as the mode row does", () => {
+    const onMode = vi.fn();
+    reading({ onMode });
+    openBar();
+    type("debate reception");
+    press("Enter");
+    expect(onMode).toHaveBeenCalledWith("debate", RECEPTION);
+    expect(pendingActivation("a-piece", "debate")).not.toBeNull();
+    expect(pendingActivation("a-piece", "debate-claims")).toBeNull();
   });
 
   it("opens Debate on Claims through the Reader's setter, in one pushed entry", async () => {
@@ -663,6 +707,7 @@ describe("the registry's two answers agree", () => {
     referee: "criteria",
     learn: "recall",
     summary: "brief",
+    debate: "reception",
   } as const;
 
   it("a sub-mode row arms exactly the target the band that mounts would claim", () => {

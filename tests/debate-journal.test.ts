@@ -151,8 +151,8 @@ beforeEach(() => {
 /* ------------------------------------------------------------- the happy path -- */
 
 describe("a successful run", () => {
-  it("writes three lines per pass, in order, the first of them before dispatch", async () => {
-    answers = [answer({ searches: 3 }), answer({ searches: 4, annotations: [BLOG] })];
+  it("writes three lines for the pass, in order, the first of them before dispatch", async () => {
+    answers = [answer({ searches: 3, annotations: [BLOG] })];
 
     await generateDebate({ power: "standard", article, journal });
 
@@ -160,25 +160,22 @@ describe("a successful run", () => {
       "attempt-started",
       "provider-response",
       "attempt-finished",
-      "attempt-started",
-      "provider-response",
-      "attempt-finished",
     ]);
     /* **`attempt-started` is before dispatch and not merely before the answer.**
-       F40 in one assertion: the first call went out with exactly one journal
-       line already down, and the second with four. A record written after the
-       provider answered would show 0 and 3. */
-    expect(journalDepthAtCall).toEqual([1, 4]);
+       F40 in one assertion: the call went out with exactly one journal line
+       already down. A record written after the provider answered would show 0. */
+    expect(journalDepthAtCall).toEqual([1]);
   });
 
-  it("names the two passes and matches each response to its own start", async () => {
-    answers = [answer({ searches: 3 }), answer({ searches: 4 })];
+  /* **One pass since `debate/7`** (2026-10-08): pass B left the press, so a
+     journal of a run has one attempt, Reception's (plan 261008i). */
+  it("names the one pass and matches its response to its own start", async () => {
+    answers = [answer({ searches: 3 })];
 
     await generateDebate({ power: "standard", article, journal });
 
     const starts = of("attempt-started");
-    expect(starts.map((s) => s.pass)).toEqual(["direct", "claims"]);
-    expect(new Set(starts.map((s) => s.attemptId)).size).toBe(2);
+    expect(starts.map((s) => s.pass)).toEqual(["direct"]);
     for (const start of starts) {
       const mine = written.filter((e) => e.attemptId === start.attemptId);
       expect(mine).toHaveLength(3);
@@ -236,30 +233,27 @@ describe("a successful run", () => {
   });
 
   it("keeps the raw annotations, which is the whole point of capturing at all", async () => {
-    answers = [answer({ searches: 3 }), answer({ searches: 4, annotations: [BLOG] })];
+    answers = [answer({ searches: 3, annotations: [BLOG] })];
 
     await generateDebate({ power: "standard", article, journal });
 
-    const [, claims] = of("provider-response");
-    expect(claims?.response.kind).toBe("body");
-    const body = claims?.response as { json: unknown };
+    const [direct] = of("provider-response");
+    expect(direct?.response.kind).toBe("body");
+    const body = direct?.response as { json: unknown };
     /* The extract survives verbatim. Only *kept* rows reach `debate.json`, so
        without this a refused row is unreplayable and the run bought nothing. */
     expect(JSON.stringify(body.json)).toContain(BLOG.content);
     expect(JSON.stringify(body.json)).toContain("web_search_requests");
   });
 
-  it("finishes both attempts ok, with no failure class", async () => {
-    answers = [answer({ searches: 3 }), answer({ searches: 4 })];
+  it("finishes its attempt ok, with no failure class", async () => {
+    answers = [answer({ searches: 3 })];
 
     await generateDebate({ power: "standard", article, journal });
 
-    expect(of("attempt-finished").map((e) => [e.outcome, e.failure])).toEqual([
-      ["ok", null],
-      ["ok", null],
-    ]);
+    expect(of("attempt-finished").map((e) => [e.outcome, e.failure])).toEqual([["ok", null]]);
     expect(reconcile(written).complete).toBe(true);
-    expect(reconcile(written).captured).toBe(2);
+    expect(reconcile(written).captured).toBe(1);
   });
 
   it("writes nothing at all when no journal is passed — which is production", async () => {

@@ -422,7 +422,7 @@ describe("the job lease and the platform's kill", () => {
    * **Admission estimates derived from the steps' token counts.**
    *
    * `ideas`, `tweets`, `sketch` and the `illustrated` brief are one streamed
-   * Messages call each, and `debate` up to three non-streamed ones; none has a wall
+   * Messages call each, and `debate` up to two non-streamed ones; none has a wall
    * clock of its own (`streamMessage` sets none, the SDK's timeout stops at
    * the response headers, `openRouterJson` fetches without one). What the code
    * does state is each call's `max_tokens`, and `deadlineFor` is this repo's
@@ -458,12 +458,12 @@ describe("the job lease and the platform's kill", () => {
     expect(STEP_BUDGET_MS.sketch).toBeLessThan(claimMs);
   });
 
-  it("reserves the token time of Debate's three calls, and less than a claim", () => {
-    /* Two search passes and one synthesis, in sequence (src/debate.ts §
-       `generateDebate`). The searches add time no token count bounds, so this
+  it("reserves the token time of Debate's two current calls, and less than a claim", () => {
+    /* One Reception search and one optional synthesis, in sequence
+       (src/debate.ts § `generateDebate`). The search adds time no token count bounds, so this
        is a floor and not a ceiling. */
-    const floor = 2 * deadlineFor(DEBATE_ANSWER_TOKENS) + deadlineFor(SYNTHESIS_ANSWER_TOKENS);
-    expect(STEP_BUDGET_MS.debate, `debate's three calls may run for ${floor} ms`).toBeGreaterThanOrEqual(floor);
+    const floor = deadlineFor(DEBATE_ANSWER_TOKENS) + deadlineFor(SYNTHESIS_ANSWER_TOKENS);
+    expect(STEP_BUDGET_MS.debate, `debate's two calls may run for ${floor} ms`).toBeGreaterThanOrEqual(floor);
     expect(STEP_BUDGET_MS.debate).toBeLessThan(claimMs);
   });
 

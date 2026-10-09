@@ -1302,6 +1302,8 @@ export type ChatJob = Exclude<
   | "faq"
   /* Generation, on the Messages wire like `faq`. src/relations.ts. */
   | "relations"
+  /* Generation, on the Messages wire like `faq`. src/debate-claims.ts. */
+  | "debate-claims"
   /* Generation, on the Messages wire like `faq`. src/skim.ts. */
   | "skim"
   /* Generation, on the Messages wire like `faq`. src/crossrefs.ts. */

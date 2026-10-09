@@ -1,6 +1,11 @@
 /**
- * **The two passes, and the fact that they are one step.** The model is stubbed;
+ * **The search, and the fact that it is one step.** The model is stubbed;
  * nothing here spends.
+ *
+ * **One search since `debate/7`** (2026-10-08): pass B, the claims search,
+ * left the press, and the document says `claims: {pass: "not-run"}` rather
+ * than an empty group (plan docs/plans/261008i-debate-claims-picked-by-the-reader.md,
+ * stage 1). The describe below named *two passes* until then.
  *
  * `tests/debate.test.ts` is the pure half — the refusals and the counts. This
  * file is about the half those cannot see: what goes out on the wire, and what
@@ -42,8 +47,7 @@ vi.mock("../src/ai-call.js", () => ({
   },
 }));
 
-const { generateDebate, MAX_CLAIM_SEARCH_RESULTS, MAX_DIRECT_SEARCH_RESULTS, PROMPT_VERSION } =
-  await import("../src/debate.js");
+const { generateDebate, MAX_DIRECT_SEARCH_RESULTS, PROMPT_VERSION } = await import("../src/debate.js");
 const { readerFailureOf } = await import("../src/job-failure.js");
 const { worthRetrying } = await import("../src/messages.js");
 import type { Article } from "../src/article-input.js";
@@ -137,6 +141,14 @@ const SECOND_REVIEW = {
     "finds that schedule excessive outside a cool kitchen.",
 };
 
+const THIRD_REVIEW = {
+  url: "https://third-baking-review.example/gregs-week-3",
+  title: "Week 3, reviewed",
+  content:
+    "In Notes on my sourdough starter, week 3 the feeding schedule is too frequent for a warm " +
+    "kitchen, this third review says.",
+};
+
 const BLOG = {
   url: "https://myeclecticbites.com/sourdough-starter-notes",
   title: "Sourdough starter notes",
@@ -166,6 +178,18 @@ const TWO_DIRECT_ROWS = JSON.stringify([
   },
 ]);
 
+const THREE_DIRECT_ROWS = JSON.stringify([
+  ...JSON.parse(TWO_DIRECT_ROWS),
+  {
+    url: THIRD_REVIEW.url,
+    sourceQuote: "the feeding schedule is too frequent for a warm kitchen",
+    articleReferenceQuote: "Notes on my sourdough starter, week 3",
+    relation: "disputes",
+    lean: "leans-against",
+    applies: "It says the schedule is too frequent in a warm kitchen.",
+  },
+]);
+
 const CLAIM_ROW = JSON.stringify([
   {
     url: BLOG.url,
@@ -185,17 +209,14 @@ beforeEach(() => {
 
 /* ------------------------------------------------------------ the happy path -- */
 
-describe("two passes, one artefact", () => {
-  it("writes both groups, stamped and dated", async () => {
-    answers = [
-      answer({ fenced: DIRECT_ROW, searches: 3, annotations: [REVIEW] }),
-      answer({ fenced: CLAIM_ROW, searches: 5, annotations: [BLOG] }),
-    ];
+describe("one search, one artefact", () => {
+  it("writes the Reception group, stamped and dated, and marks the claims search not run", async () => {
+    answers = [answer({ fenced: DIRECT_ROW, searches: 3, annotations: [REVIEW] })];
 
     const run = await generateDebate({ power: "standard", article });
 
-    expect(calls).toHaveLength(2);
-    expect(calls.every((c) => c.job === "debate")).toBe(true);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.job).toBe("debate");
     expect(run.debate.version).toBe(PROMPT_VERSION);
     expect(run.debate.slug).toBe("starter-week-3");
     expect(run.debate.sourceHash).toMatch(/\w/);
@@ -203,71 +224,83 @@ describe("two passes, one artefact", () => {
        a `generatedAt` as well, which here would be a second copy of one fact. */
     expect(Date.parse(run.debate.searchedAt)).not.toBeNaN();
     expect(run.debate.direct.counts.keptRows).toBe(1);
-    expect(run.debate.claims.counts.keptRows).toBe(1);
-    /* **Per group, never only summed** — a foot line cannot otherwise say which
-       of the two searches lost rows. */
     expect(run.debate.direct.counts.webSearches).toBe(3);
-    expect(run.debate.claims.counts.webSearches).toBe(5);
-    /* The total is the alarm the log line carries. */
-    expect(run.webSearches).toBe(8);
+    /* **Not run, not empty** (plan 261008i, F4): an empty group with zeroed
+       counts already means a claims search that found nothing. */
+    expect(run.debate.claims).toEqual({ pass: "not-run", rows: [] });
+    expect(run.debate.claims).not.toHaveProperty("counts");
+    /* The total is the alarm the log line carries: the one search's. */
+    expect(run.webSearches).toBe(3);
   });
 
-  it("runs the search-free synthesis as a third debate call over the kept rows", async () => {
+  /**
+   * **One search, never a second** — with an answer queued that a pass B
+   * would take, so a stage that still ran it would find one and pass every
+   * other assertion here.
+   */
+  it("never searches for the claims, even with an answer waiting for it", async () => {
     answers = [
-      answer({ fenced: TWO_DIRECT_ROWS, searches: 3, annotations: [REVIEW, SECOND_REVIEW] }),
+      answer({ fenced: DIRECT_ROW, searches: 3, annotations: [REVIEW] }),
       answer({ fenced: CLAIM_ROW, searches: 5, annotations: [BLOG] }),
+    ];
+
+    const run = await generateDebate({ power: "standard", article });
+
+    expect(calls).toHaveLength(1);
+    expect(answers).toHaveLength(1);
+    expect(run.debate.claims.rows).toEqual([]);
+  });
+
+  it("runs the search-free synthesis as a second debate call over Reception's rows", async () => {
+    answers = [
+      answer({
+        fenced: THREE_DIRECT_ROWS,
+        searches: 3,
+        annotations: [REVIEW, SECOND_REVIEW, THIRD_REVIEW],
+      }),
       answer({ content: JSON.stringify({ themes: [], key: [] }), searches: 0 }),
     ];
 
     const run = await generateDebate({ power: "standard", article });
 
-    expect(calls).toHaveLength(3);
+    expect(run.debate.direct.counts.keptRows).toBe(3);
+    expect(calls).toHaveLength(2);
     expect(calls.every((c) => c.job === "debate")).toBe(true);
-    expect(calls[2]?.body.model).toBe(calls[0]?.body.model);
-    expect(calls[2]?.body.tools).toBeUndefined();
+    expect(calls[1]?.body.model).toBe(calls[0]?.body.model);
+    expect(calls[1]?.body.tools).toBeUndefined();
     expect(run.debate.synthesis).toEqual({ kind: "made", themes: [], key: [] });
   });
 
   /**
-   * **The two passes are asked different questions, and only one of them sees
-   * the article.**
+   * **The search is asked about the piece, and is never handed the piece.**
    *
-   * Pass A is the article's identity and nothing else to search for; pass B
-   * carries the paragraphs with their ids on, because a `claimQuote` has to be
-   * locatable in a block the model was actually shown.
+   * Pass A is the article's identity and nothing else to search for. The
+   * paragraphs with their ids on went to pass B, which no press runs now.
    */
-  it("sends the identity to pass A and the article to pass B", async () => {
-    answers = [answer({ searches: 2 }), answer({ searches: 2 })];
+  it("sends the identity to the search and not the article", async () => {
+    answers = [answer({ searches: 2 })];
     await generateDebate({ power: "standard", article });
 
-    const [passA, passB] = calls.map((c) => JSON.stringify(c.body));
-    expect(passA).toContain("gregs-private-baking-notes.example");
-    expect(passA).not.toContain("spya-aaaaaa");
-    expect(passB).toContain("spya-aaaaaa");
-    expect(passB).toContain("Rye flour ferments faster");
+    expect(calls).toHaveLength(1);
+    const sent = JSON.stringify(calls[0]?.body);
+    expect(sent).toContain("gregs-private-baking-notes.example");
+    expect(sent).not.toContain("spya-aaaaaa");
+    expect(sent).not.toContain("Rye flour ferments faster");
   });
 
-  /**
-   * The search tool, and the two caps whose scope the plan states because it is
-   * otherwise ambiguous: one number read as covering both passes permits twice
-   * what it says.
-   */
-  it("asks for the web search on both passes, each with its own result cap", async () => {
-    answers = [answer({ searches: 2 }), answer({ searches: 2 })];
+  /** The search tool, and its result cap. */
+  it("asks for the web search with Reception's result cap", async () => {
+    answers = [answer({ searches: 2 })];
     await generateDebate({ power: "standard", article });
 
-    const tools = calls.map(
-      (c) => (c.body.tools as { type: string; parameters: Record<string, number | string> }[])[0]!,
-    );
-    for (const tool of tools) {
-      expect(tool.type).toBe("openrouter:web_search");
-      /* Exa on **cost** — $0.066 against $0.115 in one matched comparison — and
-         provisional. Not because the default engine returns no annotations,
-         which was a streaming measurement and is not what happens here. */
-      expect(tool.parameters.engine).toBe("exa");
-    }
-    expect(tools[0]!.parameters.max_total_results).toBe(MAX_DIRECT_SEARCH_RESULTS);
-    expect(tools[1]!.parameters.max_total_results).toBe(MAX_CLAIM_SEARCH_RESULTS);
+    expect(calls).toHaveLength(1);
+    const tool = (calls[0]!.body.tools as { type: string; parameters: Record<string, number | string> }[])[0]!;
+    expect(tool.type).toBe("openrouter:web_search");
+    /* Exa on **cost** — $0.066 against $0.115 in one matched comparison — and
+       provisional. Not because the default engine returns no annotations,
+       which was a streaming measurement and is not what happens here. */
+    expect(tool.parameters.engine).toBe("exa");
+    expect(tool.parameters.max_total_results).toBe(MAX_DIRECT_SEARCH_RESULTS);
   });
 
   /**
@@ -278,29 +311,22 @@ describe("two passes, one artefact", () => {
    */
   it("counts the pages the search returned, minus the article itself", async () => {
     const itself = { url: meta.url!, title: meta.title!, content: "A starter left at room" };
-    answers = [
-      answer({ fenced: DIRECT_ROW, searches: 3, annotations: [REVIEW, BLOG, itself] }),
-      answer({ fenced: "[]", searches: 2, annotations: [BLOG] }),
-    ];
+    answers = [answer({ fenced: DIRECT_ROW, searches: 3, annotations: [REVIEW, BLOG, itself] })];
 
     const run = await generateDebate({ power: "standard", article });
 
     expect(run.debate.direct.counts.returnedSources).toBe(2);
     expect(run.debate.direct.counts.reportedRows).toBe(1);
-    expect(run.debate.claims.counts.returnedSources).toBe(1);
   });
 
   /**
    * The commonest correct outcome, and the reason the artefact is written at all
    * rather than refused: an empty group one on a successful pass is a *fact*,
-   * and storing it is what stops the reader paying up to $0.27 for the same
-   * honest answer on every open.
+   * and storing it is what stops the reader paying for the same honest answer
+   * on every open.
    */
   it("stores an artefact when a successful pass A kept nothing", async () => {
-    answers = [
-      answer({ fenced: "[]", searches: 4, annotations: [BLOG] }),
-      answer({ fenced: CLAIM_ROW, searches: 4, annotations: [BLOG] }),
-    ];
+    answers = [answer({ fenced: "[]", searches: 4, annotations: [BLOG] })];
 
     const run = await generateDebate({ power: "standard", article });
 
@@ -330,25 +356,17 @@ describe("the fence the answer is read out of", () => {
   it("keeps a row whose prose contains a literal fence", async () => {
     const row = JSON.stringify([
       {
-        url: BLOG.url,
-        blockId: "spya-aaaaaa",
-        claimQuote: "fall apart within a week",
-        sourceQuote: "collapse in about a week",
-        relation: "corroborates",
-        lean: "leans-for",
+        ...JSON.parse(DIRECT_ROW)[0],
         /* The characters the old parser cut the document at. */
-        applies: "It sets the claim in a ``` block and reports the same collapse.",
+        applies: "It sets the schedule in a ``` block and accepts it only for cool kitchens.",
       },
     ]);
-    answers = [
-      answer({ fenced: "[]", searches: 3, annotations: [BLOG] }),
-      answer({ fenced: row, searches: 3, annotations: [BLOG] }),
-    ];
+    answers = [answer({ fenced: row, searches: 3, annotations: [REVIEW] })];
 
     const run = await generateDebate({ power: "standard", article });
 
-    expect(run.debate.claims.counts.keptRows).toBe(1);
-    expect(run.debate.claims.rows[0]?.applies).toContain("```");
+    expect(run.debate.direct.counts.keptRows).toBe(1);
+    expect(run.debate.direct.rows[0]?.applies).toContain("```");
   });
 
   /** The last closed fence still wins, which is what lets a model correct itself. */
@@ -359,7 +377,6 @@ describe("the fence the answer is read out of", () => {
         annotations: [REVIEW],
         content: "```debate\n[]\n```\n\nOn reflection:\n\n```debate\n" + DIRECT_ROW + "\n```",
       }),
-      answer({ fenced: "[]", searches: 3, annotations: [BLOG] }),
     ];
 
     const run = await generateDebate({ power: "standard", article });
@@ -370,7 +387,7 @@ describe("the fence the answer is read out of", () => {
 
 /* --------------------------------------------------------------- atomicity -- */
 
-describe("either pass failing fails the whole step", () => {
+describe("a failed search fails the whole step", () => {
   /** Every one of these is a way the panel would otherwise print a false sentence. */
   const passAFailures: [string, unknown][] = [
     ["the search reported zero searches", answer({ searches: 0 })],
@@ -414,26 +431,18 @@ describe("either pass failing fails the whole step", () => {
   ];
 
   for (const [name, bad] of passAFailures) {
-    it(`refuses when ${name}, without buying pass B`, async () => {
+    it(`refuses when ${name}, without buying another call`, async () => {
       answers = [bad, answer({ fenced: CLAIM_ROW, searches: 4, annotations: [BLOG] })];
 
       await expect(generateDebate({ power: "standard", article })).rejects.toThrow();
-      /* **One call, not two.** The sequencing is the mitigation the plan claims
-         for a failed pass A, and a sequencing that quietly became concurrent
-         would still satisfy every assertion about the artefact. */
+      /* **One call, not two.** Nothing runs after a failed pass A — not the
+         synthesis, and not pass B, which bought a second search on a failed
+         first until the sequencing was made the mitigation; a sequencing that
+         quietly became concurrent would still satisfy every assertion about
+         the artefact. */
       expect(calls).toHaveLength(1);
     });
   }
-
-  it("refuses when pass B fails, after pass A succeeded", async () => {
-    answers = [
-      answer({ fenced: DIRECT_ROW, searches: 3, annotations: [REVIEW] }),
-      answer({ searches: 0 }),
-    ];
-
-    await expect(generateDebate({ power: "standard", article })).rejects.toThrow();
-    expect(calls).toHaveLength(2);
-  });
 
   /**
    * **The reader gets a sentence, and it is not the empty-result one.**

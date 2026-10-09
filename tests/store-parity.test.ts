@@ -469,6 +469,8 @@ describe("the Postgres store, over the whole corpus", () => {
          — and, because the read runs its projection first, that the
          `relations` column is really there to select. */
       ["relations", (r: typeof pgArticleReader) => r.loadRelations(slug)],
+      /* And Debate's claims list (plan 261008i): the 404, and the column. */
+      ["debate-claims", (r: typeof pgArticleReader) => r.loadDebateClaims(slug)],
     ] as const) {
       it(`answers about ${name}, present or absent`, async () => {
         const fromPg = await read(pgArticleReader).catch((err: unknown) => err);
