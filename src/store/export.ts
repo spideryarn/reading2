@@ -486,7 +486,7 @@ export async function exportArticle(
     written.push(path.join(target.outputRoot, `${slug}.html`));
   }
 
-  /* shelf.json — what the reader did to the card, from the five columns on
+  /* shelf.json — what the reader did to the card, from the seven columns on
      `articles` rather than on the revision. Written only when there is
      something to say: an untouched article has no shelf file, and inventing an
      empty one would mean every round trip added a file the app never wrote —
@@ -502,7 +502,7 @@ export async function exportArticle(
      tests/store-roundtrip.test.ts compares against that corpus. This is the
      rollback tool, so the loss was permanent.
 
-     The condition is now "any of the five", written from the same object rather
+     The condition is now "any of the seven", written from the same object rather
      than as a second list that can fall behind it. `opens` is excluded from the
      `some` because it is always present and `0` is not something to say. */
   const shelf = compact({
@@ -514,6 +514,11 @@ export async function exportArticle(
     opens: article.opens,
     lastOpenedAt: article.lastOpenedAt?.toISOString() ?? null,
     purpose: article.purpose,
+    /* Skim's dismissed profile notice is reader state on this article, not an
+       artefact on its revision. Keep both halves: the key says which notice,
+       and the time is the history Greg asked to retain (plan 261009i). */
+    skimProfileNoticeDismissedFor: article.skimProfileNoticeDismissedFor,
+    skimProfileNoticeDismissedAt: article.skimProfileNoticeDismissedAt?.toISOString() ?? null,
   });
   if (article.opens > 0 || Object.keys(shelf).some((key) => key !== "opens")) {
     await put("articles", "shelf.json", shelf);

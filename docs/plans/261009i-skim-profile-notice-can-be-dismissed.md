@@ -101,3 +101,27 @@ exist, so its banner is a real fault, not a preference.
 - A component test that the × shows only for the profile reason and hides the banner.
 
 Seen in a browser at desktop and 390px width once built.
+
+## Built, and GPT Sol's code review
+
+Built as above ([review](261009i-skim-profile-notice-code-review-sol.md), verdict *land with
+fixes*). What came of its three findings:
+
+1. **A read already in flight could undo the × for a moment, and after moving to another article
+   the write's trailing read would have read the old one.** Both real. Sol fixed them with a ~70-line
+   state machine in `useSkim`; that was replaced with a smaller fix that keeps its tests: a ref for
+   the write in flight, which a read honours until the write's own trailing read lands, a count of
+   answered reads so the × can tell whether one landed after its write, and a slug check before the
+   trailing read. **One behaviour differs from Sol's on purpose**: when the write fails *and* the
+   read after it cannot answer either, the banner comes back with the reason, rather than staying
+   hidden on a dismissal nothing confirmed (`tests/use-skim-profile-notice-dismissal.test.tsx`).
+2. **The rollback export dropped the two columns** — `shelf.json` is a hand-written projection.
+   Sol added them, with a test. (The reader's own download, `export-bundle.ts`, already took every
+   column.)
+3. **`profileNoticeKey` had no direct test** — added in `tests/skim.test.ts`.
+
+The local migrate on the shared Supabase was blocked by another tree's
+`20261009053445_chat_messages_truncated`, applied from a draft whose hash no committed version has.
+Its postcondition (`chat_messages.truncated boolean not null default false`) was probed and the
+ledger row restamped, per [database.md § Rule 4 on a
+laptop](../project/database.md#rule-4-on-a-laptop-the-draft-that-ran-and-the-file-that-was-committed).
