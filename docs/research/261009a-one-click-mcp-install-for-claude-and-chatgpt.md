@@ -9,6 +9,11 @@ Claude connector and OpenAI authentication/setup docs on 2026-10-09; untested ap
 **medium confidence**. Expect these facts to age fast, because OpenAI in particular has renamed
 this feature several times.
 
+**Decision later on 2026-10-09:** Greg enabled production dynamic registration, accepting Sol F6
+while remote MCP remains administrator-only. The gate now accepts `MCP_OAUTH_CLIENT_ID=*`;
+[mcp.md](../project/mcp.md#from-chatgpt-claude-on-the-web-or-any-mcp-app-switching-on-2026-10-09)
+owns the current setup. The observations below record the earlier investigation, before that decision.
+
 > In my ideal world, it would be one click. I know that in the past it used to be one click to sort
 > of set up the configuration for Cursor. There were buttons, so I feel like it should be possible to
 > do that for Claude desktop app and ChatGPT desktop apps as well.
@@ -30,7 +35,7 @@ this feature several times.
 ```
 
 The existing hosted route would cover both apps without a local checkout. It is built and deployed
-but switched off ([mcp.md § From Claude on the web or a phone](../project/mcp.md#from-claude-on-the-web-or-a-phone-built-switched-off)).
+but switched off ([mcp.md § From ChatGPT, Claude on the web, or any MCP app](../project/mcp.md#from-chatgpt-claude-on-the-web-or-any-mcp-app-switching-on-2026-10-09)).
 It is not the only installation route: Desktop extensions and ChatGPT tunnels are alternatives,
 neither tested for Spideryarn.
 
@@ -127,20 +132,33 @@ in. Claude Code uses its own CIMD and a `localhost` callback on any port, so wit
 falls back to DCR or `--client-id`/`--client-secret`
 ([docs](https://code.claude.com/docs/en/mcp)).
 
-## The decision this leaves (Greg's)
+## The decision as it stood before Greg enabled dynamic registration
 
-For the hosted route, switching on is still Greg's decision after the real OAuth spike in
+At the time of this investigation, switching on was still Greg's decision after the real OAuth spike in
 [261007p § What landed](../plans/261007p-mcp-remote-sign-in-with-oauth.md#what-landed-stage-1).
 That plan deliberately chose one preregistered client and DCR off: Sol's **F6** concerned a client
 named "Claude" with an attacker's callback; **F1** concerned what any approved token can do at
 Supabase itself. Disabling DCR reduces phishing exposure; it does not narrow an approved token's
 Supabase powers or settle the remaining production decision.
 
-The current custom-connector setup requires credentials that Claude's prefill link does not carry.
+The then-current custom-connector setup required credentials that Claude's prefill link does not carry.
 Both Claude and ChatGPT support static clients, so supporting both does not require DCR. Separate
-static clients would need a revised allowlist: [`remote.ts`](../../src/mcp/remote.ts) compares
-`client_id` with exactly one `MCP_OAUTH_CLIENT_ID`. **Turning DCR on alone also cannot work**:
-new client ids would fail that comparison. Easier automatic registration would need a new client
+static clients needed a revised allowlist: the original [`remote.ts`](../../src/mcp/remote.ts) compared
+`client_id` with exactly one `MCP_OAUTH_CLIENT_ID`. **Turning DCR on alone could not work**:
+new client ids would fail that comparison. Easier automatic registration needed a new client
 trust policy and gate, not just a dashboard switch. Desktop packaging and ChatGPT tunnels are
 other untested options; none resolves the hosted route's admin-only gate or pending OAuth spike.
 The choice belongs in [mcp.md](../project/mcp.md).
+
+**Decided, 2026-10-09:** Greg turned dynamic registration on in production, and the gate now
+accepts `MCP_OAUTH_CLIENT_ID=*` (any app Supabase registered) alongside a list. The route stays
+administrator-only; [mcp.md](../project/mcp.md) is the current setup.
+
+**Token-boundary review, 2026-10-09:** Supabase's default access-token issuance sets top-level
+`client_id` from the OAuth-server client, not user metadata; refresh refuses adding a client to a
+non-OAuth session. Its ID tokens also carry `client_id`, but lack the `authenticated` role that
+Spideryarn's `personFrom` requires. Source: Supabase's
+[`GenerateAccessToken`, `GenerateIDToken` and refresh grant](https://github.com/supabase/auth/blob/master/internal/tokens/service.go).
+A trusted Custom Access Token Hook can change claims; it is disabled in local config, and production
+hook settings were not verified. `tests/mcp-remote.test.ts` covers the route's rejection of ID-token
+claims and nested metadata, including with `*` mixed into an explicit list.

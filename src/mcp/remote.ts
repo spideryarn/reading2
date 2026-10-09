@@ -18,11 +18,15 @@
  *    `https://chatgpt.com`; anything else, `null` included, is a 403 (Sol F7).
  *    Absent is fine: a server-side client sends none.
  * 2. **`MCP_OAUTH_CLIENT_ID` must be set**, or everyone is refused: the route
- *    ships dark, and Greg switches it on by registering a client per AI app by
- *    hand and setting this to their ids, comma-separated (261009a).
+ *    ships dark. Either a comma-separated list of hand-registered client ids,
+ *    or `*`: any app Supabase's dynamic registration let in, so any MCP client
+ *    works with just the URL (Greg turned that on, 2026-10-09; 261009a).
  * 3. **The token verifies as `requireUser`'s does** — the same
- *    `verifiedClaims` and `personFrom` — **and its `client_id` is one of those
- *    clients'.** A browser's token, another app's, or none: 401, with the
+ *    `verifiedClaims` and `personFrom` — **and it carries a `client_id`**, one
+ *    of those listed unless the list contains `*`. `personFrom` also requires
+ *    the authenticated role, which Supabase's OAuth ID tokens lack despite
+ *    carrying `client_id`. A browser's token, an unlisted
+ *    app's, or none: 401, with the
  *    `WWW-Authenticate` header that tells an MCP client where to sign in.
  * 4. **The administrator only** (`isAdmin`), else 403. Offering this to readers
  *    is a later decision, and the consent page's wording would change with it.
@@ -88,6 +92,9 @@ export const MCP_WELL_KNOWN_PATH = "/.well-known/oauth-protected-resource/api/mc
 
 /** The AI apps' own origins, the only others a browser may call `/api/mcp` from. Exact match. */
 const APP_ORIGINS: readonly string[] = ["https://claude.ai", "https://chatgpt.com"];
+
+/** In `MCP_OAUTH_CLIENT_ID`, admits any OAuth client Supabase issued a token to. */
+const ANY_CLIENT = "*";
 
 /** A JSON-RPC body is small; the transport's own default is 4 MiB, which a tool call never needs. */
 const MAX_BODY_BYTES = 1024 * 1024;
@@ -172,7 +179,8 @@ async function gate({ req, res, verify }: RemoteMcpRequest): Promise<{ claims: T
     if ((err as { status?: number }).status === 401) throw unauthorized(res, (err as Error).message);
     throw err;
   }
-  if (typeof claims.client_id !== "string" || !clients.includes(claims.client_id)) {
+  const anyApp = clients.includes(ANY_CLIENT);
+  if (typeof claims.client_id !== "string" || claims.client_id === "" || !(anyApp || clients.includes(claims.client_id))) {
     throw unauthorized(res, "That sign-in is not one this server accepts. [mcp-client]");
   }
   let user: ReturnType<typeof personFrom>;

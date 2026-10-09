@@ -12,7 +12,7 @@
  * The cases, and why each is here:
  *
  * - **The gate**: no token is a 401 that says where to sign in; a browser's
- *   token (no `client_id`), another app's token, and any token at all while
+ *   token (no `client_id`), an unlisted app's token without `*`, and any token while
  *   `MCP_OAUTH_CLIENT_ID` is unset are 401s; a reader who is not the
  *   administrator is a 403; a hostile or `null` `Origin` is a 403 and an absent
  *   one is fine (Sol F7). `GET` and `DELETE` are 405 (stateless, F5).
@@ -70,6 +70,11 @@ const TOKENS: Record<string, Record<string, unknown>> = {
   "admin-other-app": { ...person(ADMIN_USER_ID_LOCAL, ADMIN_EMAIL_LOCAL), client_id: OTHER_CLIENT },
   "admin-unlisted-app": { ...person(ADMIN_USER_ID_LOCAL, ADMIN_EMAIL_LOCAL), client_id: "unlisted-client" },
   "admin-odd-app": { ...person(ADMIN_USER_ID_LOCAL, ADMIN_EMAIL_LOCAL), client_id: 42 },
+  "admin-empty-app": { ...person(ADMIN_USER_ID_LOCAL, ADMIN_EMAIL_LOCAL), client_id: "" },
+  "admin-null-app": { ...person(ADMIN_USER_ID_LOCAL, ADMIN_EMAIL_LOCAL), client_id: null },
+  "admin-metadata-client": { ...person(ADMIN_USER_ID_LOCAL, ADMIN_EMAIL_LOCAL), user_metadata: { client_id: CLIENT } },
+  // Supabase's OAuth ID token has client_id, but no authenticated role.
+  "admin-id-token": { sub: ADMIN_USER_ID_LOCAL, email: ADMIN_EMAIL_LOCAL, client_id: CLIENT, aud: CLIENT },
   "reader-app": { ...person(READER, "reader@example.test"), client_id: CLIENT },
 };
 
@@ -242,6 +247,26 @@ describe("the gate on /api/mcp", () => {
       process.env.MCP_OAUTH_CLIENT_ID = OTHER_CLIENT;
       const r = await call("POST", "/api/mcp", { token: "admin-app", headers: MCP_HEADERS, body: INIT });
       expect(r.status).toBe(401);
+    } finally {
+      process.env.MCP_OAUTH_CLIENT_ID = CLIENT;
+    }
+  });
+
+  it.each(["*", ` ${CLIENT}, *, , ${OTHER_CLIENT} `])("%s admits any app, but still requires an OAuth access token and an admin", async (clients) => {
+    /* Dynamic registration on (Greg, 2026-10-09): any MCP client with just the URL. */
+    process.env.MCP_OAUTH_CLIENT_ID = clients;
+    try {
+      for (const token of ["admin-app", "admin-other-app", "admin-unlisted-app"]) {
+        const r = await call("POST", "/api/mcp", { token, headers: MCP_HEADERS, body: INIT });
+        expect(r.status, token).toBe(200);
+      }
+      for (const token of ["admin-browser", "admin-odd-app", "admin-empty-app", "admin-null-app", "admin-metadata-client", "admin-id-token", "nonsense"]) {
+        const r = await call("POST", "/api/mcp", { token, headers: MCP_HEADERS, body: INIT });
+        expect(r.status, token).toBe(401);
+        expect(r.headers["www-authenticate"], token).toBe(`Bearer resource_metadata="${metadataUrl()}"`);
+      }
+      const reader = await call("POST", "/api/mcp", { token: "reader-app", headers: MCP_HEADERS, body: INIT });
+      expect(reader.status).toBe(403);
     } finally {
       process.env.MCP_OAUTH_CLIENT_ID = CLIENT;
     }
