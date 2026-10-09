@@ -76,7 +76,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 import { TRUNK_BRANCH } from "./deploy-checks.js";
@@ -283,6 +283,8 @@ export function liveness(
   pid = process.pid,
   proc: ProcTable | null = procTable(),
   darwin: (() => DarwinSnapshot | { error: string }) | null = process.platform === "darwin" ? () => readDarwinSnapshot() : null,
+  /* Bulk scans cannot trust a filter's name as proof of pipeline membership. */
+  excludePipelineFilters = true,
 ): Liveness {
   const unmeasured = (why: string): Liveness => {
     const standing: OwnerStanding =
@@ -297,7 +299,7 @@ export function liveness(
        quiet fallback to the registered spelling (GPT Sol, 261009t F3). */
     const contains = containmentFor(worktreePath);
     if ("error" in contains) return unmeasured(contains.error);
-    const { standing, scan } = darwinInUse(snap, contains, lockReason, pid);
+    const { standing, scan } = darwinInUse(snap, contains, lockReason, pid, excludePipelineFilters);
     return { standing, inUse: composeInUse(standing, scan) };
   }
   const scope = classifyPidNamespace(proc.pidNamespace());
@@ -305,7 +307,7 @@ export function liveness(
 
   const chain = ancestry(proc, pid);
   const standing = ownerStanding(proc, lockReason, chain);
-  const scan = cwdUsersUnder(proc, worktreePath, new Set(chain.map((a) => a.pid)), pid);
+  const scan = cwdUsersUnder(proc, worktreePath, new Set(chain.map((a) => a.pid)), pid, excludePipelineFilters);
   return { standing, inUse: composeInUse(standing, scan) };
 }
 
@@ -690,6 +692,24 @@ export function removeWorktree(cwd: string, wanted: string | undefined, opts: Re
   if (reg.kind === "skip") return refuse(steps, `refused: ${reg.why}`);
   if (reg.kind === "unknown") return refuse(steps, `refused: ${reg.why}`, `  ${reg.fix}`);
 
+  /* A branch is not a stable tree address: after the sweep's classification
+     it may have moved onto the caller's tree. Re-earn caller protection here,
+     using filesystem identity so a path alias cannot bypass it. Named removal
+     still permits removing one's own tree. */
+  if (opts.bulk === true && reg.kind === "live") {
+    const here = currentToplevel(cwd);
+    if (here === null) return refuse(steps, "refused: could not identify the caller's worktree for bulk removal");
+    try {
+      const callerId = statSync(here);
+      const targetId = statSync(entry.path);
+      if (callerId.dev === targetId.dev && callerId.ino === targetId.ino) {
+        return refuse(steps, "refused: bulk removal never removes the worktree you are standing in");
+      }
+    } catch (err) {
+      return refuse(steps, `refused: could not compare the caller's and target's worktree identities — ${(err as Error).message}`);
+    }
+  }
+
   /* --- a fresh trunk, once, as a sha ----------------------------------- */
   const trunk = fetchTrunkSha(primary);
   if (trunk.kind === "failed") {
@@ -729,7 +749,7 @@ export function removeWorktree(cwd: string, wanted: string | undefined, opts: Re
      The same question for the owner and for anyone else. An unknown refuses
      for both: there is no longer a floor for it to fall back to, and "could not
      tell whether a session is in there" is not an answer to remove on. */
-  const readOnce = opts.liveness ?? ((p: string, r: string | undefined) => liveness(p, r, opts.pid ?? process.pid));
+  const readOnce = opts.liveness ?? ((p: string, r: string | undefined) => liveness(p, r, opts.pid ?? process.pid, undefined, undefined, opts.bulk !== true));
   const readLiveness = (p: string, r: string | undefined): Liveness => (opts.bulk === true ? inBulk(readOnce(p, r)) : readOnce(p, r));
   const live = readLiveness(entry.path, entry.lockReason);
   const notLive = livenessRefusal(live);

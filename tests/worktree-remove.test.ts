@@ -758,21 +758,53 @@ describe("the WorktreeCreate hook's lock", () => {
      between tool calls, so the lock naming the parent session is the only thing
      that says it is still wanted — and on the Mac the hook wrote none. Driven
      under a fake `claude` (bash, by that name), as Claude Code would run it. */
-  it("names the claude ancestor's pid, on this platform, and liveness then refuses a peer", () => {
+  it("names the claude ancestor's pid, on this platform, and liveness then refuses a peer", async () => {
     const fakeBin = path.join(root, "bin");
     mkdirSync(fakeBin);
     const claude = path.join(fakeBin, "claude");
     execFileSync("ln", ["-s", "/bin/bash", claude]);
     const hook = path.resolve(".claude/hooks/worktree-create.sh");
-    const r = spawnSync(claude, ["-c", `"${hook}" <<< '{"name":"hooked"}'; echo "claude-pid $$"`], {
+    const marker = path.join(root, "claude.pid");
+    const child = spawn(claude, ["-c", `"${hook}" <<< '{"name":"hooked"}' && echo "$$" > "${marker}"; read -r keep_alive`], {
       cwd: primary,
-      encoding: "utf8",
+      stdio: ["pipe", "ignore", "pipe"],
       env: { ...process.env, CLAUDE_PROJECT_DIR: primary, SPIDERYARN_WORKTREE_ROOT: path.join(root, "no-such-root") },
     });
-    expect(r.status, r.stderr).toBe(0);
-    const claudePid = /claude-pid (\d+)/.exec(r.stdout)?.[1];
+    if (child.pid === undefined) throw new Error("could not spawn fake claude");
+    spawned.push(child.pid);
+    let stderr = "";
+    child.stderr?.on("data", (chunk) => { stderr += String(chunk); });
+    const deadline = Date.now() + 5000;
+    while (!existsSync(marker) && Date.now() < deadline && child.exitCode === null) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    expect(existsSync(marker), stderr).toBe(true);
+    const claudePid = readFileSync(marker, "utf8").trim();
     const entry = listWorktrees(primary).find((e) => e.branch === "refs/heads/worktree-hooked");
     expect(entry?.lockReason).toMatch(new RegExp(`^claude session hooked \\(pid ${claudePid} start \\d+\\)$`));
+    expect(() => process.kill(Number(claudePid), 0)).not.toThrow();
+    expect(liveness(entry?.path ?? "", entry?.lockReason).inUse.kind).toBe("in-use");
+  });
+
+  it.skipIf(process.platform !== "darwin")("the Mac hook still creates a tree when ps or the start-time conversion fails", () => {
+    const fakeBin = path.join(root, "bin");
+    mkdirSync(fakeBin);
+    const claude = path.join(fakeBin, "claude");
+    execFileSync("ln", ["-s", "/bin/bash", claude]);
+    const hook = path.resolve(".claude/hooks/worktree-create.sh");
+    const env = { ...process.env, PATH: `${fakeBin}:${process.env.PATH}`, CLAUDE_PROJECT_DIR: primary, SPIDERYARN_WORKTREE_ROOT: path.join(root, "no-such-root") };
+
+    writeFileSync(path.join(fakeBin, "date"), "#!/bin/bash\nexit 1\n", { mode: 0o755 });
+    const noDate = spawnSync(claude, ["-c", `"${hook}" <<< '{"name":"no-date"}'`], { cwd: primary, encoding: "utf8", env });
+    expect(noDate.status, noDate.stderr).toBe(0);
+    expect(listWorktrees(primary).find((e) => e.branch === "refs/heads/worktree-no-date")?.lockReason).toMatch(/ start 0\)$/);
+
+    writeFileSync(path.join(fakeBin, "ps"), "#!/bin/bash\nexit 1\n", { mode: 0o755 });
+    const noPs = spawnSync(claude, ["-c", `"${hook}" <<< '{"name":"no-ps"}'`], { cwd: primary, encoding: "utf8", env });
+    expect(noPs.status, noPs.stderr).toBe(0);
+    const created = listWorktrees(primary).find((e) => e.branch === "refs/heads/worktree-no-ps");
+    expect(created?.present).toBe(true);
+    expect(created?.locked).toBe(false);
   });
 });
 

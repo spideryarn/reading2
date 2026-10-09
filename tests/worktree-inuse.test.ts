@@ -12,7 +12,9 @@
  * confirmed by making it refuse**, with a control beside it, because a check that
  * refuses everything passes the same assertions as a check that works.
  */
-import { readFileSync, realpathSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -252,6 +254,26 @@ describe("cwdUsersUnder", () => {
     });
     const chain = ancestry(proc, 90).map((a: ProcId) => a.pid);
     expect(cwdUsersUnder(proc, TREE, new Set(chain), 90)).toMatchObject({ kind: "checked", found: [] });
+  });
+
+  it("REFUSES over our detached child — the old process-group rule counted it", () => {
+    const proc = fakeProc({
+      90: { ppid: 80, pgrp: 90, start: 9, cwd: TREE },
+      93: { ppid: 90, pgrp: 93, start: 9, cwd: TREE, command: "node vite", comm: "node" },
+      80: { ppid: 1, pgrp: 80, start: 8, cwd: TREE },
+    });
+    const chain = ancestry(proc, 90).map((a: ProcId) => a.pid);
+    expect(cwdUsersUnder(proc, TREE, new Set(chain), 90)).toMatchObject({ kind: "checked", found: [{ pid: 93 }] });
+  });
+
+  it("bulk scans count independent same-group filters instead of trusting their names", () => {
+    const proc = fakeProc({
+      90: { ppid: 80, pgrp: 90, start: 9, cwd: "/primary" },
+      91: { ppid: 80, pgrp: 90, start: 9, cwd: TREE, command: "tail -f shared.txt", comm: "tail" },
+      80: { ppid: 1, pgrp: 80, start: 8, cwd: "/primary" },
+    });
+    const chain = ancestry(proc, 90).map((a: ProcId) => a.pid);
+    expect(cwdUsersUnder(proc, TREE, new Set(chain), 90, false)).toMatchObject({ kind: "checked", found: [{ pid: 91 }] });
   });
 
   it("REFUSES over a dev server that shares our process group — `npm run dev & npm run worktree:sweep`", () => {
@@ -528,6 +550,19 @@ describe("the macOS path", () => {
     expect(verdict(readDarwinSnapshot(runner([...base, esbuild], { ...baseCwds, 904: MAC_TREE }).run, ME)).kind).toBe("idle");
   });
 
+  it("REFUSES over a detached child of the asker on the Mac too", () => {
+    const dev = psLine(904, 900, 904, ME, "S", "node vite");
+    expect(verdict(readDarwinSnapshot(runner([...base, dev], { ...baseCwds, 904: MAC_TREE }).run, ME)).kind).toBe("in-use");
+  });
+
+  it("bulk scans on the Mac count an independent same-group tail -f too", () => {
+    const tail = psLine(901, 800, 900, ME, "S", "tail -f shared.txt");
+    const snap = readDarwinSnapshot(runner([...base, tail], { ...baseCwds, 901: MAC_TREE }).run, ME);
+    if ("error" in snap) throw new Error(snap.error);
+    const { standing, scan } = darwinInUse(snap, fakeContainment(), undefined, 900, false);
+    expect(composeInUse(standing, scan).kind).toBe("in-use");
+  });
+
   it("REFUSES over a dev server in the asker's own process group — a group is not a pipeline", () => {
     /* GPT Sol, 261009t F2, reproduced on the Mac: a shell without job control
        puts `npm run dev &` in the same group as the sweep that follows it. */
@@ -571,6 +606,45 @@ describe("the macOS path", () => {
     expect(decodeLsofName("/plain")).toBe("/plain");
   });
 
+  it("preserves an emoji beside an escaped newline when decoding a cwd", () => {
+    expect(decodeLsofName("/📚\\nnotes")).toBe("/📚\nnotes");
+    expect(fakeContainment("/📚\nnotes")("/📚\\nnotes/sub")).toBe("inside");
+  });
+
+  it("REFUSES an unresolved alias instead of guessing outside from its parent", () => {
+    const contains = containmentFor(MAC_TREE, (p) => p,
+      (p) => p === MAC_TREE ? ROOT_ID : p.startsWith("/alias") ? null : { dev: 1, ino: 7 });
+    if ("error" in contains) throw new Error(contains.error);
+    expect(contains("/alias/sub")).toBe("unknown");
+    expect(contains("/elsewhere/sub")).toBe("outside");
+    expect(contains(`${MAC_TREE}/deleted`)).toBe("inside");
+  });
+
+  it("does not let the raw spelling's outside verdict erase an unresolved decoded alias", () => {
+    const contains = containmentFor(MAC_TREE, (p) => p,
+      (p) => p === MAC_TREE ? ROOT_ID : p.includes("\n") ? null : { dev: 1, ino: 7 });
+    if ("error" in contains) throw new Error(contains.error);
+    expect(contains("/alias\\n/sub")).toBe("unknown");
+  });
+
+  it("still places an unrelated deleted physical cwd outside, but refuses mixed ambiguous escapes", () => {
+    const dir = realpathSync(mkdtempSync(path.join(tmpdir(), "worktree-placement-")));
+    try {
+      const tree = path.join(dir, "tree");
+      mkdirSync(tree);
+      const contains = containmentFor(tree);
+      if ("error" in contains) throw new Error(contains.error);
+      expect(contains(path.join(dir, "deleted", "cwd"))).toBe("outside");
+      const oddTree = path.join(dir, "literal\\n-tab\t");
+      mkdirSync(oddTree);
+      const oddContains = containmentFor(oddTree);
+      if ("error" in oddContains) throw new Error(oddContains.error);
+      expect(oddContains(path.join(dir, "literal\\n-tab\\t", "sub"))).toBe("unknown");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("does not count its own lsof, which started after the listing with our cwd — but does count a stranger who did", () => {
     /* Measured: run from inside a tree, the first version refused the tree over
        the lsof it had just spawned there. */
@@ -607,6 +681,22 @@ describe("the macOS path", () => {
     const zombie = psLine(68, 1, 68, ME, "Z", "<defunct>");
     const { run } = runner([...base, exited, zombie], baseCwds, { recheck: [] });
     expect(verdict(readDarwinSnapshot(run, ME)).kind).toBe("idle");
+  });
+
+  it("REFUSES a ps -p failure with partial output instead of treating omitted pids as gone", () => {
+    const hidden = psLine(66, 1, 66, ME, "S", "hidden");
+    const { run } = runner([...base, hidden], baseCwds);
+    const partial: Runner = (cmd, args) => args.includes("-p")
+      ? { status: 1, stdout: base[0] ?? "", stderr: "" } : run(cmd, args);
+    expect(verdict(readDarwinSnapshot(partial, ME)).kind).toBe("unknown");
+  });
+
+  it.each(["", base[0] ?? ""])("REFUSES inconsistent successful ps -p output: %j", (stdout) => {
+    const hidden = psLine(66, 1, 66, ME, "S", "hidden");
+    const { run } = runner([...base, hidden], baseCwds);
+    const inconsistent: Runner = (cmd, args) => args.includes("-p")
+      ? { status: 0, stdout, stderr: "" } : run(cmd, args);
+    expect(verdict(readDarwinSnapshot(inconsistent, ME)).kind).toBe("unknown");
   });
 
   it("REFUSES as unknown when lsof is missing, fails, or prints nothing", () => {

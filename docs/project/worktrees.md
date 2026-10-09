@@ -525,8 +525,11 @@ gone or a zombie is an absence, still there is an `unknown`. lsof missing or fai
 filesystem identity, walking the cwd's ancestors; a cwd that is not an absolute path is an `unknown`.
 The lock check there is **pid-only**: the `/proc` start time has no Mac equivalent, so a live pid
 not in the asker's ancestry refuses, which over-refuses on a recycled pid. Two exclusions apply on
-both platforms: the asker's own descendants (tsx's esbuild service inherits the cwd), and a pipeline
-filter (`tail`, `grep`, …) in the asker's process group. A process group alone is not enough —
+both platforms: the asker's descendants still in its process group (tsx's esbuild service inherits
+the cwd and group; a detached child still vetoes), and, for removal by name, a pipeline
+filter (`tail`, `grep`, …) in the asker's process group. The bulk sweep disables that filter
+exemption: an independent `tail -f` can share the group too, and the caller's tree is already kept.
+A process group alone is not enough —
 `npm run dev & npm run worktree:sweep` shares one (GPT Sol, 261009t). The design and its review:
 [261009t](../plans/261009t-worktree-removal-on-macos-and-an-automatic-sweep.md).
 

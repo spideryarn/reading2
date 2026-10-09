@@ -265,7 +265,10 @@ export function parseStat(line: string): { ppid: number; pgrp: number; start: nu
  * its tree refused over its own esbuild once the group stopped excluding it —
  * measured on the Mac. Descendants of the *asker* (never of its ancestors, which
  * would be every pane on the box) are excluded by walking each candidate's
- * parents, and only for a candidate already found inside the tree.
+ * parents, and only for a candidate already found inside the tree and still
+ * in the asker's group. A detached child is an independent job, not a helper.
+ * Bulk scans disable the filter-name exemption: they keep the caller's tree
+ * anyway, and an independent same-group `tail -f` must still veto elsewhere.
  */
 function pgrpOf(proc: ProcTable, pid: number): number | null {
   const line = proc.stat(pid);
@@ -441,6 +444,7 @@ export function cwdUsersUnder(
   root: string,
   excluded: ReadonlySet<number>,
   askingPid?: number,
+  excludePipelineFilters = true,
 ): CwdScan {
   /* This invocation's own job — see `pgrpOf`. `null` excludes nothing extra. */
   const myPgrp = askingPid === undefined ? null : pgrpOf(proc, askingPid);
@@ -459,7 +463,7 @@ export function cwdUsersUnder(
 
   for (const pid of pids) {
     if (excluded.has(pid)) continue;
-    if (myPgrp !== null && pgrpOf(proc, pid) === myPgrp && isPipelineFilter(proc.comm(pid))) continue;
+    if (excludePipelineFilters && myPgrp !== null && pgrpOf(proc, pid) === myPgrp && isPipelineFilter(proc.comm(pid))) continue;
     const uid = proc.uid(pid);
     /* A uid we cannot read is a process that has exited between the listing and
        here, or one we have no business inspecting. Neither is ours to block on. */
@@ -479,8 +483,9 @@ export function cwdUsersUnder(
       continue;
     }
     if (cwd.path !== root && !cwd.path.startsWith(prefix)) continue;
-    /* Our own child — tsx's esbuild service inherits the cwd — is ours. */
-    if (askingPid !== undefined && ancestry(proc, pid).some((a) => a.pid === askingPid)) continue;
+    /* tsx's esbuild service inherits both cwd and group. A detached child
+       would have vetoed the old group rule too, and must still veto. */
+    if (askingPid !== undefined && myPgrp !== null && pgrpOf(proc, pid) === myPgrp && ancestry(proc, pid).some((a) => a.pid === askingPid)) continue;
     found.push({ pid, command: proc.command(pid) });
   }
 
@@ -809,7 +814,11 @@ export function decodeLsofName(raw: string): string {
       bytes.push(next === "?" ? 127 : next.charCodeAt(0) - 64);
       i += 1;
     } else {
-      for (const b of Buffer.from(ch, "utf8")) bytes.push(b);
+      /* Iterating UTF-16 units separately corrupts literal emoji alongside
+         escapes, so copy one complete Unicode code point. */
+      const literal = String.fromCodePoint(raw.codePointAt(i) ?? 0);
+      for (const b of Buffer.from(literal, "utf8")) bytes.push(b);
+      i += literal.length - 1;
     }
   }
   return Buffer.from(bytes).toString("utf8");
@@ -824,12 +833,15 @@ export interface FsId {
   ino: number;
 }
 
-function realStatId(p: string): FsId | null {
+/** Missing physical paths can be deleted cwds; other read failures prove nothing. */
+type IdRead = FsId | "missing" | null;
+
+function realStatId(p: string): IdRead {
   try {
     const s = statSync(p);
     return { dev: s.dev, ino: s.ino };
-  } catch {
-    return null;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code === "ENOENT" ? "missing" : null;
   }
 }
 
@@ -846,9 +858,11 @@ function realStatId(p: string): FsId | null {
  *
  * When neither spelling matches, each ancestor of the cwd is `stat`ed and its
  * `(dev, ino)` compared with the tree's — which also catches a cwd reached
- * through any alias the spelling did not anticipate. A cwd that does not exist
- * any more (an orphan in a deleted directory) is walked up from its nearest
- * surviving ancestor. **A name that is not an absolute path is `unknown`**: the
+ * through any alias the spelling did not anticipate. An unreadable alias is
+ * `unknown`. For an unescaped physical lsof path, ENOENT alone can be a deleted
+ * cwd: walk its surviving ancestors, as before. An unresolved escaped spelling
+ * is ambiguous and cannot establish outside. Deleted directories under a known
+ * spelling still match above. **A name that is not an absolute path is `unknown`**: the
  * first version accepted lsof's `nunknown` as a place and called the tree idle.
  *
  * `null` from the root's own realpath or stat is an error for the caller, never
@@ -857,7 +871,7 @@ function realStatId(p: string): FsId | null {
 export function containmentFor(
   root: string,
   real: (p: string) => string = (p) => realpathSync(p),
-  statId: (p: string) => FsId | null = realStatId,
+  statId: (p: string) => IdRead = realStatId,
 ): Containment | { error: string } {
   let resolved: string;
   try {
@@ -866,22 +880,23 @@ export function containmentFor(
     return { error: `could not resolve ${root}: ${(err as Error).message}` };
   }
   const rootId = statId(resolved);
-  if (rootId === null) return { error: `could not stat ${resolved}` };
+  if (rootId === null || rootId === "missing") return { error: `could not stat ${resolved}` };
   const spellings = [...new Set([root, resolved].map((s) => s.replace(/\/+$/, "").toLowerCase()))];
-  const ids = new Map<string, FsId | null>();
-  const idOf = (p: string): FsId | null => {
+  const ids = new Map<string, IdRead>();
+  const idOf = (p: string): IdRead => {
     if (!ids.has(p)) ids.set(p, statId(p));
     return ids.get(p) ?? null;
   };
 
-  const placeOne = (cwd: string): Placement => {
+  const placeOne = (cwd: string, ambiguous: boolean): Placement => {
     if (!cwd.startsWith("/")) return "unknown";
     const lower = cwd.toLowerCase();
     if (spellings.some((s) => lower === s || lower.startsWith(`${s}/`))) return "inside";
     let p = path.normalize(cwd);
     for (let depth = 0; depth < 256; depth += 1) {
       const id = idOf(p);
-      if (id !== null && id.dev === rootId.dev && id.ino === rootId.ino) return "inside";
+      if (id === null || (id === "missing" && ambiguous)) return "unknown";
+      if (id !== "missing" && id.dev === rootId.dev && id.ino === rootId.ino) return "inside";
       if (p === "/") return "outside";
       p = path.dirname(p);
     }
@@ -889,8 +904,10 @@ export function containmentFor(
   };
 
   return (cwd) => {
-    const tries = [...new Set([cwd, decodeLsofName(cwd)])].map(placeOne);
+    const decoded = decodeLsofName(cwd);
+    const tries = [...new Set([cwd, decoded])].map((p) => placeOne(p, cwd !== decoded));
     if (tries.includes("inside")) return "inside";
+    if (tries.includes("unknown")) return "unknown";
     if (tries.includes("outside")) return "outside";
     return "unknown";
   };
@@ -907,13 +924,14 @@ export function darwinCwdUsersUnder(
   contains: Containment,
   excluded: ReadonlySet<number>,
   askingPid: number,
+  excludePipelineFilters = true,
 ): CwdScan {
   const byPid = new Map(snap.ps.map((r) => [r.pid, r]));
   const myPgid = byPid.get(askingPid)?.pgid ?? null;
   const ours = (pid: number): boolean => {
     if (excluded.has(pid) || snap.helpers.includes(pid)) return true;
     const row = byPid.get(pid);
-    return myPgid !== null && row?.pgid === myPgid && isPipelineFilter(row.command);
+    return excludePipelineFilters && myPgid !== null && row?.pgid === myPgid && isPipelineFilter(row.command);
   };
 
   const found: CwdUser[] = [];
@@ -922,8 +940,8 @@ export function darwinCwdUsersUnder(
     if (ours(pid)) continue;
     const where = contains(cwd);
     const command = byPid.get(pid)?.command ?? "a command that started after the process listing";
-    /* Our own child — tsx's esbuild service inherits the cwd — is ours. */
-    if (where === "inside" && darwinAncestry(snap.ps, pid).includes(askingPid)) continue;
+    /* Only children still in our job: a detached service is independent. */
+    if (where === "inside" && myPgid !== null && byPid.get(pid)?.pgid === myPgid && darwinAncestry(snap.ps, pid).includes(askingPid)) continue;
     if (where === "inside") found.push({ pid, command });
     else if (where === "unknown") unplaceable.push({ pid, comm: `${command}, whose working directory lsof gave as "${cwd}"` });
   }
@@ -942,10 +960,11 @@ export function darwinInUse(
   contains: Containment,
   lockReason: string | undefined,
   askingPid: number,
+  excludePipelineFilters = true,
 ): { standing: OwnerStanding; scan: CwdScan } {
   const chain = darwinAncestry(snap.ps, askingPid);
   const standing = darwinOwnerStanding(snap.ps, lockReason, chain);
-  const scan = darwinCwdUsersUnder(snap, contains, new Set(chain), askingPid);
+  const scan = darwinCwdUsersUnder(snap, contains, new Set(chain), askingPid, excludePipelineFilters);
   return { standing, scan };
 }
 
@@ -980,7 +999,7 @@ function failed(cmd: string, r: RunResult): string {
  *
  * Read 3 is the one exception to "non-zero is a failure". `ps -p <list>` exits 1
  * when *none* of the listed pids exist, which is the ordinary answer "they all
- * exited", so an exit of 1 with nothing on stderr and parseable output is
+ * exited", so an exit of 1 with nothing on stderr and empty output is
  * accepted. Anything on stderr is refused.
  */
 export function readDarwinSnapshot(run: Runner = spawnRunner, self: number = process.getuid?.() ?? -1): DarwinSnapshot | { error: string } {
@@ -1006,6 +1025,9 @@ export function readDarwinSnapshot(run: Runner = spawnRunner, self: number = pro
     if ((r.status !== 0 && r.status !== 1) || r.stderr.trim() !== "") return { error: failed("ps -p", r) };
     const parsed = parsePs(r.stdout);
     if (parsed === null) return { error: "ps -p printed something this could not read" };
+    if (r.status === 1 && parsed.length !== 0) return { error: "ps -p failed with partial output" };
+    if (r.status === 0 && parsed.length === 0) return { error: "ps -p reported success without any process rows" };
+    if (parsed.some((row) => !missing.includes(row.pid))) return { error: "ps -p printed a process that was not requested" };
     recheck = parsed;
   }
   return { ps, cwds, recheck, self, helpers };

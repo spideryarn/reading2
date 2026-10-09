@@ -1,6 +1,7 @@
 /**
  * The worktree suites' "somebody else is in this tree" fixture: a live `sleep`
- * with its cwd in `cwd`, that is **not this process's descendant**.
+ * (or an explicitly supplied command) with its cwd in `cwd`, that is **not
+ * this process's descendant**.
  *
  * Not a plain child, for two reasons that each cost a red test. The cwd scan
  * excludes the asker's own descendants (tsx's esbuild service inherits the cwd,
@@ -28,10 +29,10 @@ export function myLockStart(): number {
   return mine.start;
 }
 
-export function orphanProcessIn(cwd: string): { pid: number; start: number } {
-  const r = spawnSync("sh", ["-c", "sleep 120 >/dev/null 2>&1 </dev/null & echo $!"], { cwd, encoding: "utf8" });
+export function orphanProcessIn(cwd: string, command: readonly string[] = ["sleep", "120"]): { pid: number; start: number } {
+  const r = spawnSync("sh", ["-c", '"$@" >/dev/null 2>&1 </dev/null & echo $!', "worktree-fixture", ...command], { cwd, encoding: "utf8" });
   const pid = Number.parseInt(`${r.stdout ?? ""}`.trim(), 10);
-  if (r.status !== 0 || !Number.isFinite(pid)) throw new Error(`could not start sleep: ${r.stderr}`);
+  if (r.status !== 0 || !Number.isFinite(pid)) throw new Error(`could not start peer fixture: ${r.stderr}`);
 
   const want = realpathSync(cwd);
   const deadline = Date.now() + 5000;
@@ -52,5 +53,5 @@ export function orphanProcessIn(cwd: string): { pid: number; start: number } {
     }
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
   }
-  throw new Error("sleep never became a live process in the requested cwd");
+  throw new Error("peer fixture never became a live process in the requested cwd");
 }

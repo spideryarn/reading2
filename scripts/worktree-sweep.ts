@@ -229,8 +229,9 @@ export function gatherAll(
   trunk: TrunkSha,
   checkFor: (root: string, trunkSha: string) => CheckFacts = checkGather,
   /* `inBulk`: a tree whose lock names the session running the sweep is kept —
-     it may be a subagent of that session still at work. */
-  inUseFor: (entry: WorktreeEntry) => InUse = (e) => inBulk(liveness(e.path, e.lockReason)).inUse,
+     it may be a subagent of that session still at work. Disable filter-name
+     exemptions too: an independent same-group tail -f is not our pipeline. */
+  inUseFor: (entry: WorktreeEntry) => InUse = (e) => inBulk(liveness(e.path, e.lockReason, process.pid, undefined, undefined, false)).inUse,
 ): SweepFacts[] {
   const here = currentToplevel(cwd);
 

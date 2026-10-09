@@ -14,7 +14,7 @@
  * git's own refusal to remove a dirty tree, and a mocked git cannot refuse.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -414,6 +414,18 @@ describe("removeOne", () => {
 });
 
 describe("removeAll — `npm run worktree:sweep -- --remove`", () => {
+  it("keeps an independent same-group tail -f in bulk, in classification and fresh removal", () => {
+    const wt = freshWorktree("bulk-tail");
+    const peer = orphanProcessIn(wt, ["tail", "-f", "shared.txt"]);
+    spawned.push(peer.pid);
+    const rows = classifyAll(primary);
+    expect(rowFor(rows, "worktree-bulk-tail").facts.inUse?.kind).toBe("in-use");
+    expect(removeOne(primary, "worktree-bulk-tail", { bulk: true }).ok).toBe(false);
+    const out = removeAll(primary, rows);
+    expect(out.find((o) => o.name === "worktree-bulk-tail")?.kind).toBe("in-use");
+    expect(existsSync(wt)).toBe(true);
+  });
+
   it("removes every landed, idle tree and leaves the rest, each in its group", () => {
     const done = freshWorktree("bulk-done");
     const dirty = freshWorktree("bulk-dirty");
@@ -500,5 +512,22 @@ describe("removeAll — `npm run worktree:sweep -- --remove`", () => {
     expect(removeOne(primary, "worktree-bulk-mine", { bulk: true }).ok).toBe(false);
     expect(removeOne(primary, "worktree-bulk-mine").ok).toBe(true);
     expect(existsSync(wt)).toBe(false);
+  });
+
+  it.each([false, true])("re-checks the caller's tree when a candidate branch moves there after classification (alias: %s)", (alias) => {
+    const here = freshWorktree("bulk-moved-here");
+    const other = freshWorktree("bulk-moved-other");
+    const cwd = alias ? path.join(root, "caller-alias") : here;
+    if (alias) symlinkSync(here, cwd, "dir");
+    const rows = classifyAll(cwd);
+    expect(rowFor(rows, "worktree-bulk-moved-other").verdict.kind).toBe("removable");
+    git(["checkout", "--quiet", "--detach"], other);
+    git(["checkout", "--quiet", "worktree-bulk-moved-other"], here);
+
+    const out = removeAll(cwd, rows);
+
+    expect(out.find((o) => o.name === "worktree-bulk-moved-other")?.kind).toBe("refused");
+    expect(existsSync(here)).toBe(true);
+    expect(existsSync(other)).toBe(true);
   });
 });
