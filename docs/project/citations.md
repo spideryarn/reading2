@@ -889,8 +889,8 @@ Chat — typed, a passage question, and Live — can read the stored list throug
 `article_citations` tool, to answer a question about a work the piece leans on or to aim a web search
 at the right paper. It reads the list and never makes one: no list is an ordinary answer, a stale one
 shows no rows, and a capped one is counted as *the stored list*, never the article's total. The
-experimental switch governs this mode's screen, not the reader's own derived data, so the tool is not
-behind it. [chat-tools.md](chat-tools.md) has the tool. Each row's influence is the effective one
+experimental switch never governed the reader's own derived data (and since 2026-10-09 it no longer
+governs this mode's screen either), so the tool is not behind it. [chat-tools.md](chat-tools.md) has the tool. Each row's influence is the effective one
 (§ [A row](#a-row)): where *Dig deeper* found one on the web, the row gives that number and says it
 is *an AI estimate from the web, from a page on* that host, and our words outside the fence say
 what that means. The page's words and its address are not in the row. `loadCitations` attaches the

@@ -488,7 +488,7 @@ evaluation's scorer is [`debate-eval-score.test.ts`](../../tests/debate-eval-sco
 
 Related: [citations.md](citations.md) shares the bibliographic lookup
 ([`src/bibliographic.ts`](../../src/bibliographic.ts)) and names Debate's residual risk;
-[experimental-features.md](experimental-features.md) is the switch it sits behind; and
+[experimental-features.md](experimental-features.md) is the switch it sat behind until 2026-10-09; and
 [security.md § A third untrusted party](security.md#a-third-untrusted-party-what-the-model-returns)
 has the web-search evidence collector Debate added.
 

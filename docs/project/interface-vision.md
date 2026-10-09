@@ -240,7 +240,7 @@ What has happened and what is on the table:
   against, because a phone has no Marginalia column.
 - **Still open:** the other half of `qi-5ay85q7d`, a filter on which kinds of note Marginalia
   shows. Not built, and waiting on Greg.
-- **Related:** folding Citations into Debate as a sub-mode
+- **Related:** folding Citations into Debate as a sub-mode (done 2026-10-09, as Peer review)
   ([261004b](../plans/261004b-citation-hover-card-offers-dig-deeper.md) Part 2), and the command
   bar taking a sentence ([261003k](../plans/261003k-command-bar-takes-a-sentence-and-a-fast-model-picks-the-command.md)),
   which makes a mode reachable without a button.
