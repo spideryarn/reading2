@@ -97,9 +97,9 @@ export interface ModeCatalogEntry {
    * rename — if the line is ever shortened, the denial is the part to keep.
    * `debate`'s named the empty case, because most pieces have no reception at
    * all and a mode that is empty four times in five reads as broken unless the
-   * button said so first. Since 2026-10-09 Debate is Sources' Reception,
-   * which opens on Bibliography, so the button no longer promises the empty
-   * case; Reception's own empty state says it.
+   * button said so first. Since 2026-10-09 Debate is the Reception sub-mode of
+   * Sources. Sources opens on Bibliography, so the button no longer promises
+   * the empty case; Reception's own empty state says it.
    */
   description: string;
   /**

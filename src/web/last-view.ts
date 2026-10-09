@@ -460,8 +460,8 @@ export function restoredHref(
      docs/plans/260905d-declutter-the-reading-view-top-bars.md. */
   /* **And lifted, as an arrival is.** A browser that remembered
      `?mode=debate&debate=claims` before 2026-10-09 would otherwise restore it
-     after boot's `settleAddress` had run, and `RETIRED_MODES` would open Peer
-     review at Bibliography instead of Claims (GPT Sol's F1 on plan 261009l). */
+     after boot's `settleAddress` had run, and `RETIRED_MODES` would open Sources
+     at Bibliography instead of Claims (GPT Sol's F1 on plan 261009l). */
   const keep = rememberableSearch(liftedLegacySearch(remembered));
   if (keep === "") return null;
   const existing = pairs(search);
