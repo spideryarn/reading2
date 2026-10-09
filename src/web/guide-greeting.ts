@@ -30,8 +30,6 @@ export type GreetingRun =
 export interface Greeting {
   /** Paragraphs, each a list of runs. */
   readonly paragraphs: readonly (readonly GreetingRun[])[];
-  /** A reason is stored, so *Ask the guide where to start* is a complete request. */
-  readonly offersStart: boolean;
   /** About you is definitively empty, so the line pointing at the profile page is drawn. */
   readonly invitesProfile: boolean;
 }
@@ -67,7 +65,6 @@ export function guideGreeting(read: PurposeRead, title: string | undefined): Gre
       paragraphs: [
         [...hello, ours(" Ask me where to start, what to search for, or which of Spideryarn's modes would help you read it.")],
       ],
-      offersStart: false,
       invitesProfile: false,
     };
   }
@@ -79,7 +76,6 @@ export function guideGreeting(read: PurposeRead, title: string | undefined): Gre
         [...hello, ours(" You said you're reading it because "), quoted(read.purpose, PURPOSE_QUOTE_CHARS), ours(".")],
         [ours("I can suggest where to start, what to read closely, and which modes would help.")],
       ],
-      offersStart: true,
       invitesProfile: profile === null,
     };
   }
@@ -92,7 +88,6 @@ export function guideGreeting(read: PurposeRead, title: string | undefined): Gre
         [tell],
         [ours("If you like, tell me a little about yourself too: what you do, and how much you already know about this subject.")],
       ],
-      offersStart: false,
       invitesProfile: false,
     };
   }
@@ -102,7 +97,6 @@ export function guideGreeting(read: PurposeRead, title: string | undefined): Gre
       [ours("In About you, you wrote "), quoted(profile, PROFILE_QUOTE_CHARS), ours(". Is that still right?")],
       [ours("More importantly, why are you reading this one? "), tell],
     ],
-    offersStart: false,
     invitesProfile: false,
   };
 }

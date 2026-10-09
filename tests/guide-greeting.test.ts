@@ -19,7 +19,6 @@ describe("guideGreeting", () => {
       { state: "ready", purpose: null, purposeFailed: true, profile: null } as const,
     ]) {
       const g = guideGreeting(read, "A Piece");
-      expect(g?.offersStart).toBe(false);
       expect(g?.invitesProfile).toBe(false);
       expect(text(g)).not.toMatch(/why are you reading|you said/i);
     }
@@ -42,6 +41,5 @@ describe("guideGreeting", () => {
   it("falls back to 'this piece' with no title", () => {
     const g = guideGreeting({ state: "ready", purpose: "x", purposeFailed: false, profile: "y" }, undefined);
     expect(text(g)).toContain("Hi, I'm your guide to this piece.");
-    expect(g?.offersStart).toBe(true);
   });
 });

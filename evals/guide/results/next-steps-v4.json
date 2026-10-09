@@ -1,0 +1,125 @@
+{
+  "label": "v4",
+  "runs": 3,
+  "pass": 6,
+  "total": 6,
+  "dollars": 0.112353,
+  "rows": [
+    {
+      "case": "private-link",
+      "run": 0,
+      "ok": true,
+      "problems": [],
+      "steps": [
+        {
+          "kind": "share"
+        },
+        {
+          "kind": "mode",
+          "mode": "mode:ideas"
+        },
+        {
+          "kind": "ask",
+          "words": "Which claims here are weakest and worth challenging?"
+        }
+      ],
+      "requests": 1,
+      "lastCallWasSteps": true,
+      "answer": "I can't make the link from chat. Press \"Share this article…\" below. On the page it opens, turn on the private link, then send that to your club.\n\nFor a journal club, the philosophical weight sits in a few places. The essay names its target, computational functionalism, in [spya-wepmnr]. The argument that \"simulation is not instantiation\" is at [spya-npjt4j]. And Seth admits the biological naturalism claim has no knock-down argument [spya-hj5y6s]. The opening section on psychological biases is lighter and easy to skim.\n\nWhich of his four arguments do you expect your group to push back on most?"
+    },
+    {
+      "case": "private-link",
+      "run": 1,
+      "ok": true,
+      "problems": [],
+      "steps": [
+        {
+          "kind": "share"
+        },
+        {
+          "kind": "mode",
+          "mode": "submode:structure:expanded"
+        },
+        {
+          "kind": "ask",
+          "words": "Help me pick discussion questions for the group"
+        }
+      ],
+      "requests": 1,
+      "lastCallWasSteps": true,
+      "answer": "I can't make the link from chat. Press \"Share this article…\" below. On the page it opens, turn on the private link, then send it to your group.\n\nFor a philosophy journal club, the argument sits in the four numbered sections. The assumption they target is set out where he names computational functionalism [spya-wepmnr]. His admission that he has no knock-down argument for the life claim is worth reading closely [spya-hj5y6s]. The simulation-versus-instantiation section is also worth your time [spya-npjt4j]. You can skim the opening on cultural history.\n\nWhich of the four arguments do you expect your group to push back on hardest?"
+    },
+    {
+      "case": "private-link",
+      "run": 2,
+      "ok": true,
+      "problems": [],
+      "steps": [
+        {
+          "kind": "share"
+        },
+        {
+          "kind": "ask",
+          "words": "Help me pick discussion questions for the group"
+        },
+        {
+          "kind": "mode",
+          "mode": "submode:structure:expanded"
+        }
+      ],
+      "requests": 1,
+      "lastCallWasSteps": true,
+      "answer": "I can't make the link from chat. Press \"Share this article…\" below, and on the page it opens, turn on the private link.\n\nFor a journal club, the part to discuss closely is the essay's central assumption, computational functionalism: \"The very idea of conscious AI rests on the assumption that consciousness is a matter of computation\" [spya-wepmnr]. Then look at how the simulation-versus-instantiation argument depends on it [spya-pbcr03]. The \"life matters\" argument is one the author admits has no knock-down case [spya-hj5y6s], so it's a good place to push back.\n\nDo you want to focus on one of these arguments, or on the ethics section?"
+    },
+    {
+      "case": "archive",
+      "run": 0,
+      "ok": true,
+      "problems": [],
+      "steps": [
+        {
+          "kind": "archive"
+        },
+        {
+          "kind": "mode",
+          "mode": "mode:quotes"
+        }
+      ],
+      "requests": 1,
+      "lastCallWasSteps": true,
+      "answer": "I can't archive it from chat. Press \"Archive or put back…\" below, and on the page it opens, finish archiving.\n\nIf you want to keep something first, Quotes collects the essay's best lines, so you can save the ones you'll want for your philosophy work."
+    },
+    {
+      "case": "archive",
+      "run": 1,
+      "ok": true,
+      "problems": [],
+      "steps": [
+        {
+          "kind": "archive"
+        }
+      ],
+      "requests": 1,
+      "lastCallWasSteps": true,
+      "answer": "I can't archive it from chat, but you can. Press \"Archive or put back…\" below, and finish on the page it opens.\n\nIf you'd like to keep something from the piece first, the section on simulation versus instantiation [spya-npjt4j] is the part most worth a philosophy student's notes. You could bookmark it before you go."
+    },
+    {
+      "case": "archive",
+      "run": 2,
+      "ok": true,
+      "problems": [],
+      "steps": [
+        {
+          "kind": "archive"
+        },
+        {
+          "kind": "mode",
+          "mode": "mode:quotes"
+        }
+      ],
+      "requests": 1,
+      "lastCallWasSteps": true,
+      "answer": "I can't archive it from chat, but you can. Press \"Archive or put back…\" below, and finish on the page it opens.\n\nIf you want to keep something from it first, the Quotes mode collects the essay's best lines. The four arguments against computational functionalism are probably the part worth a philosophy student's notes. You could also bookmark one before you go."
+    }
+  ]
+}
