@@ -355,6 +355,17 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     methods: ["GET"],
     witnesses: ["/api/admin/users"],
   },
+  /* 261008j — the public shelf's topic pills: status, and an admin's Rebuild. */
+  {
+    match: { kind: "literal", path: "/api/admin/public-shelf-topics" },
+    methods: ["GET"],
+    witnesses: ["/api/admin/public-shelf-topics"],
+  },
+  {
+    match: { kind: "literal", path: "/api/admin/public-shelf-topics/rebuild" },
+    methods: ["POST"],
+    witnesses: ["/api/admin/public-shelf-topics/rebuild"],
+  },
   /* Gift vouchers, 261001m — the list and create share one literal. */
   {
     match: { kind: "literal", path: "/api/admin/vouchers" },
@@ -982,15 +993,17 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
    check (plan 261007l); 99 with an admin's deferral of a question (plan 261008i);
    100 with Debate's claims list (plan 261008i of the same day, a different 'i'
    in another tree: docs/plans/261008i-debate-claims-picked-by-the-reader.md);
-   101 with that plan's claim checks (its stage 3). */
-const EXPECTED_MATCHER_COUNT = 101;
+   101 with that plan's claim checks (its stage 3); 103 with the public shelf
+   topic pills' status and Rebuild (plan 261008j). */
+const EXPECTED_MATCHER_COUNT = 103;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
    with the admin's earlier feedback; 118 with their replies to questions; 119
    with the Help pages' chatbot; 120 with Hidden text's Opus check; 121 with the
    deferral of a question; 122 with Debate's claims list; 123 with the kept
    Hidden text check's GET (plan 261009a); 125 with Debate's claim checks'
-   GET and POST (plan 261008i). */
-const EXPECTED_GUARD_COUNT = 125;
+   GET and POST (plan 261008i); 127 with the public shelf topic pills' status
+   and Rebuild (plan 261008j). */
+const EXPECTED_GUARD_COUNT = 127;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2140,6 +2153,9 @@ describe("the authenticated API's route contract", () => {
       ).toEqual([
         // the top of the chain, from the admin routes to shelfOpen, 260911d
         "GET literal /api/admin/users",
+        // the public shelf's topic pills, 261008j — beside the users list
+        "GET literal /api/admin/public-shelf-topics",
+        "POST literal /api/admin/public-shelf-topics/rebuild",
         // gift vouchers, 261001m — beside the users list
         "GET literal /api/admin/vouchers",
         "POST literal /api/admin/vouchers",

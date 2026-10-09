@@ -209,6 +209,9 @@ describe("urlKey", () => {
       canonical,
     );
     expect(urlKey("https://example.com/why-trees?fbclid=abc123")).toBe(canonical);
+    expect(urlKey("https://example.com/why-trees?_gl=1*abc*_ga*MTIz&gclsrc=aw.ds&gbraid=x&wbraid=y")).toBe(canonical);
+    expect(urlKey("https://example.com/why-trees?mkt_tok=eyJ&oly_anon_id=a&oly_enc_id=b&_ga=2.1")).toBe(canonical);
+    expect(urlKey("https://example.com/why-trees?gad_source=1&gad_campaignid=9&srsltid=AfmB")).toBe(canonical);
     expect(urlKey("https://example.com/why-trees/?igshid=z&utm_campaign=q#top")).toBe(canonical);
   });
 
@@ -310,12 +313,15 @@ describe("an address a paper source recognises", () => {
     for (const shape of SHAPES) expect(urlKey(shape), shape).toBe("arxiv.org/abs/2608.13566");
   });
 
-  it("keeps a version apart from the latest, and from another version", () => {
+  /* Report spya-n50aft: the shelf held an article imported from a `…v1` link,
+     and pasting the plain abstract link imported the paper a second time.
+     docs/plans/261009d-every-version-of-an-arxiv-paper-is-one-article.md */
+  it("is one article whichever version, or none, the link names", () => {
     const latest = urlKey("https://arxiv.org/abs/2608.13566");
-    const v1 = urlKey("https://arxiv.org/pdf/2608.13566v1");
-    expect(v1).not.toBe(latest);
-    expect(urlKey("https://arxiv.org/html/2608.13566V1")).toBe(v1);
-    expect(urlKey("https://arxiv.org/abs/2608.13566v2")).not.toBe(v1);
+    expect(urlKey("https://arxiv.org/pdf/2608.13566v1")).toBe(latest);
+    expect(urlKey("https://arxiv.org/html/2608.13566V1")).toBe(latest);
+    expect(urlKey("https://arxiv.org/abs/2608.13566v2")).toBe(latest);
+    expect(urlKey("https://www.arxiv.org/html/2609.01481v1")).toBe(urlKey("https://arxiv.org/abs/2609.01481"));
   });
 
   it("is slugged by the whole id, not by the half before the dot", () => {

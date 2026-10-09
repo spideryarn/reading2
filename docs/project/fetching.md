@@ -473,7 +473,8 @@ Four things about it that are deliberate:
 
 **arXiv's candidates are its HTML rendering, then its PDF.** It recognises `abs`, `pdf`
 (with or without `.pdf`), `html` and `format` paths on `arxiv.org`, `www.`, `export.` and
-`browse.`, old-style ids, a version (kept: `v1` is a different article from the latest), and
+`browse.`, old-style ids, a version (fetched as given, so a `v1` link reads v1; but every version is one
+article on the shelf — [ingest-queue.md § Two URLs, one article](ingest-queue.md#two-urls-one-article)), and
 arXiv's own DOI at `doi.org/10.48550/arXiv.<id>`. It matches an origin, so a non-default port or
 credentials in the address is not arXiv.
 

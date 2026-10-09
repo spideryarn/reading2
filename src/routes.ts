@@ -10129,8 +10129,12 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     pattern: SHELF_ENTRY_PATTERN,
     article: "first-capture",
     handler: async ({ request: { req, res } }, captures) => {
+      /* The slug is decoded before the body is read, as it was before this
+         handler grew a second line: a malformed slug is the decode's 400, not
+         the body's (tests/authenticated-api-route-contract.test.ts). */
+      const slug = slugPart(captures, 1);
       const body = await readBody(req);
-      const answer = await patchShelf(slugPart(captures, 1), body);
+      const answer = await patchShelf(slug, body);
       /* Archiving or restoring moves a shared article off or onto the public
          shelf; a rename or a purpose does not touch it. */
       const listing = typeof body === "object" && body !== null && "archived" in body;

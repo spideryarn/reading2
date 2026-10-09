@@ -1,21 +1,21 @@
-Reviewed and fixed without running the paid eval.
+# GPT Sol, code review of plan 261008j (2026-10-09)
 
-Findings:
+Up: [the plan](261008j-public-shelf-topic-pills-automatic-billed-to-the-site.md). Its answer, verbatim; the prompt was `review/261008j-code-review-prompt.md` in the build worktree.
 
-- P0: None.
-- P1: The production sample omitted the listing’s `<h1>` title fallback and 200-card ceiling; rollback was not explicit on query failure; and the spend sink did not refuse a remote `DATABASE_URL`.
-- P1: Docs presented filing at any shelf size as measured, although JSON only measures filing into `wide-20`.
-- P2: Total eval spend was 2.82¢, not “about four cents.” The three filing samples used different newcomers, retry details are absent from JSON, and the newcomer index was off by one.
-- Spend capture is otherwise correct: async context reaches pooled workers, every worker is awaited, there are no nested collectors, and the sink does not double-count report totals.
-- Seeded sampling is deterministic; typing and ESM usage are valid.
+VERDICT: ship after fixes
 
-What changed:
+1. **P1 — [src/shelf-topic-sets.ts:533](/var/tmp/spideryarn-worktrees/public-shelf-topic-pills/src/shelf-topic-sets.ts:533): withdrawn wording could survive a rebuild.** Previous labels were supplied to the model after un-sharing, while rebuilt memberships removed the article’s ID and lifted withholding. **Fixed:** public rebuilds clear previous labels when an input disappears. Reader behavior is preserved. Regression observed red, then green.
 
-- Updated [public-shelf-cost.ts](/var/tmp/spideryarn-worktrees/fbmdp0em-public-shelf-pills-plan/evals/shelf-topic-clusters/public-shelf-cost.ts) to mirror the listing query, guarantee rollback, refuse non-local ledger targets, reject pending calls, and correct newcomer selection.
-- Corrected numerical and measured-versus-inferred claims in the investigation, plan, and question.
-- Documented that the saved `public-6` result predates the query fix and cannot prove whether the missing title fallback affected its inputs.
-- Regenerated the feedback question registry.
+2. **P2 — [src/public-shelf-topics.ts:138](/var/tmp/spideryarn-worktrees/public-shelf-topic-pills/src/public-shelf-topics.ts:138): an un-share during a rethink could leave topics hidden indefinitely.** Its trigger found the live claim; the running job wrote its stale snapshot and drained only arrivals. **Fixed:** one bounded reconciliation pass, within the same site scopes and request collector, using a separate allowance. The drain skips withdrawn-input trees. Removal and removal-plus-arrival regressions pass.
 
-Checks: TypeScript passed; Biome lint passed; feedback tests passed 53/53; doc-link tests passed 18/18. Full `npm test` could not start because local Postgres/Docker was unavailable. Direct ESLint was unavailable locally and its attempted download was blocked.
+3. **P2 — [scripts/share-local-articles.ts:80](/var/tmp/spideryarn-worktrees/public-shelf-topic-pills/scripts/share-local-articles.ts:80): the local sharing helper bypasses refresh triggers.** It calls the store directly, so topics wait for another trigger. **Left for you:** broader script integration. MCP uses the HTTP routes and gets the refresh.
 
-VERDICT: PASS WITH DOCUMENTED HISTORICAL CAVEAT — the cost conclusions match the JSON, but exact title parity for the already-run `public-6` sample cannot be reconstructed.
+Gates run:
+
+- Requested nine-suite Vitest command: **blocked by Docker access**. Postgres, owner-isolation, and billing-admin-plan suites remain unverified.
+- Six runnable requested suites: **112 tests passed**.
+- `npm run typecheck`: launcher blocked by sandbox IPC permissions. Node-loader fallback compiled all four projects successfully, then **failed coverage** on existing `review/local-public.ts` and `review/local-refresh.ts`.
+- Touched-file lint: passed, with one complexity advisory.
+- Documentation links: **18 tests passed**. Scoped whitespace check passed.
+
+Fixes are applied; rerun the blocked gates before shipping. No commit, push, deploy, or database write was made.
