@@ -385,7 +385,8 @@ describe("the AI processing section", () => {
         expect(button(step, "Run it again"), `no button for ${step}`).toBeTruthy();
       }
       expect(row("faq")?.textContent).toContain("FAQ");
-      expect(row("citations")?.textContent).toContain("Citations");
+      /* Peer review's Bibliography since 2026-10-09 (plan 261009l); the step keeps its name. */
+      expect(row("citations")?.textContent).toContain("Bibliography");
     },
   );
 

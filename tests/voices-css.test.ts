@@ -190,10 +190,18 @@ const VOICES_BY_MODE: Record<Mode, readonly string[] | { noModelText: string }> 
   learn: [".chat-turn.model", ".quiz-question"],
   quotes: [".quotes-why-card"],
   timeline: [".tl-label"],
-  debate: [".dbt-ai", ".dbt-title-ai", ".dbt-thread-gist"],
+  /* Citations' and Debate's classes until 2026-10-09: Bibliography's, then
+     Reception's and Claims'. */
+  "peer-review": [
+    ".cite-why",
+    ".cite-does",
+    ".prose-card-cite-does-text",
+    ".dbt-ai",
+    ".dbt-title-ai",
+    ".dbt-thread-gist",
+  ],
   /* `.voice-ai`: a title or navLabel the model wrote (tree.ts § nodeLabel). */
   structure: [".struct-gist", ".voice-ai", ".tip-gist"],
-  citations: [".cite-why", ".cite-does", ".prose-card-cite-does-text"],
   faq: [".faq-question"],
   skim: [".skim-cue", ".skim-door-cue-next", ".skim-sense-text", ".skim-chip-name"],
   marginalia: [

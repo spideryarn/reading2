@@ -76,7 +76,7 @@
  */
 import { useEffect, useLayoutEffect, useRef } from "react";
 
-import { type ArticleView, onAddressChange, parseRoute } from "./router.js";
+import { type ArticleView, liftedLegacySearch, onAddressChange, parseRoute } from "./router.js";
 import { type BandMode, isMarginaliaModeWord, modeFromParam } from "../modes.js";
 import { bandCoversProse } from "./layout.js";
 import { notesFit } from "./marginalia/press.js";
@@ -113,7 +113,7 @@ export const REMEMBERED = [
   "gate", // glossary threshold
   "rank", // quotes order
   "bar", // quotes threshold
-  "debate", // reception or claims — a restore draws what is stored; only a press searches
+  "peer-review", // bibliography, reception or claims — a restore draws what is stored; only a press makes anything
   "debateby", // reception's order
   "bears", // claims' relevance threshold
   "debatethread", // which of debate's threads narrows its list
@@ -201,6 +201,14 @@ export const NEVER_REMEMBERED = [
      address, and the stored view (or the first-open default) is put over a
      link somebody had just opened. GPT Sol's plan review of 261006a, PR-2. */
   "remember",
+  /* **Debate's sub-mode key until 2026-10-09**, when Debate became Peer
+     review's Reception and Claims and the key became `peer-review` above
+     (docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md).
+     An old `?mode=debate&debate=claims` is lifted to the new words before
+     anything reads it, on arrival and on restore (router.ts §
+     `liftLegacyPeerReview`); anywhere else the pair is read by nothing.
+     Listed for `deep`'s reason. */
+  "debate",
 ] as const;
 
 /** Every parameter this app puts on an article's address. */
@@ -442,7 +450,11 @@ export function restoredHref(
      to leave the list is safe without anybody remembering this happened.
      GPT Sol, reviewing stage 3 of
      docs/plans/260905d-declutter-the-reading-view-top-bars.md. */
-  const keep = rememberableSearch(remembered);
+  /* **And lifted, as an arrival is.** A browser that remembered
+     `?mode=debate&debate=claims` before 2026-10-09 would otherwise restore it
+     after boot's `settleAddress` had run, and `RETIRED_MODES` would open Peer
+     review at Bibliography instead of Claims (GPT Sol's F1 on plan 261009l). */
+  const keep = rememberableSearch(liftedLegacySearch(remembered));
   if (keep === "") return null;
   const existing = pairs(search);
   const restored = pairs(keep);

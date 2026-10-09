@@ -110,21 +110,32 @@ describe("rememberableSearch", () => {
     expect(hasArticleState("?summary=simple")).toBe(true);
   });
 
-  /* Debate's Reception | Claims, since 2026-10-03 (plan 261003o; GPT Sol's
-     F6). Left out of `REMEMBERED`, a reader who was reading Claims comes back
-     to Reception — on a paper with no reception, an empty band. Restoring it
-     spends nothing: Debate searches on a press, never on arrival. */
-  it("keeps Debate's sub-mode, so Claims is restored as Claims", () => {
-    expect(rememberableSearch("?mode=debate&debate=claims&bears=partly")).toBe(
-      "?mode=debate&debate=claims&bears=partly",
+  /* Peer review's Bibliography | Reception | Claims, Debate's Reception |
+     Claims before 2026-10-09 (plan 261003o; GPT Sol's F6). Left out of
+     `REMEMBERED`, a reader who was reading Claims comes back to Bibliography.
+     Restoring it spends nothing: each sub-mode makes its list on a press,
+     never on arrival. An old Debate view stored before the merge comes back
+     on the sub-mode it named (tests/peer-review-old-addresses.test.ts). */
+  it("keeps Peer review's sub-mode, so Claims is restored as Claims", () => {
+    expect(rememberableSearch("?mode=peer-review&peer-review=claims&bears=partly")).toBe(
+      "?mode=peer-review&peer-review=claims&bears=partly",
     );
-    expect(restoredHref("/read/x", "", "?mode=debate&debate=claims")).toBe("/read/x?mode=debate&debate=claims");
+    expect(restoredHref("/read/x", "", "?mode=peer-review&peer-review=claims")).toBe(
+      "/read/x?mode=peer-review&peer-review=claims",
+    );
+    expect(restoredHref("/read/x", "", "?mode=debate&debate=claims")).toBe(
+      "/read/x?mode=peer-review&peer-review=claims",
+    );
+    expect(hasArticleState("?peer-review=claims")).toBe(true);
+    /* The old key still marks an explicit old link, for `deep`'s reason. */
     expect(hasArticleState("?debate=claims")).toBe(true);
   });
 
   it("no longer stores the retired identification threshold, or puts an old one back", () => {
-    expect(rememberableSearch("?mode=debate&name=linked")).toBe("?mode=debate");
-    expect(restoredHref("/read/x", "", "?mode=debate&name=linked")).toBe("/read/x?mode=debate");
+    expect(rememberableSearch("?mode=peer-review&name=linked")).toBe("?mode=peer-review");
+    expect(restoredHref("/read/x", "", "?mode=debate&name=linked")).toBe(
+      "/read/x?mode=peer-review&peer-review=reception",
+    );
   });
 
   it("lets an old link carrying only `name` win over a remembered view", () => {

@@ -2,7 +2,7 @@
 title: Reading in your own field
 summary: For somebody who knows the area, a route to what is new in a piece, quickly, without swapping the text for a summary.
 keywords: expert researcher academic specialist professional familiar efficient fast triage new literature colleague guide
-related: mode-skim, mode-search, mode-citations, reader-profile, linking-to-a-passage, for-reviewers
+related: mode-skim, mode-search, mode-peer-review, reader-profile, linking-to-a-passage, for-reviewers
 ---
 
 This is for a piece in an area you already know. The aim, as [What Spideryarn is
@@ -40,13 +40,12 @@ parts you did not need and more on the parts you did.
 
 ## Place it in the literature
 
-Both of these are [experimental features](/help/experimental-features).
+[Peer review](/help/mode-peer-review) is what the piece cites, and what others say about it.
 
-- **[Citations](/help/mode-citations)** lists the works the piece cites, with **relevance** to this
-  piece and **influence** in its field. Influence is the model’s memory of the work, not a citation
-  count.
-- **[Debate](/help/mode-debate)** is what the rest of the web says about the piece. **Cited by**
-  lists the papers that cite it, when the piece has a DOI on record.
+- **Bibliography** lists the works the piece cites, with **relevance** to this piece and
+  **influence** in its field. Influence is the model’s memory of the work, not a citation count.
+- **Reception** is what the rest of the web says about the piece. **Cited by** lists the papers
+  that cite it, when the piece has a DOI on record.
 
 ## Keep and pass on
 

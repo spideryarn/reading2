@@ -1,10 +1,19 @@
-# Debate mode
+# Debate mode — Peer review's Reception and Claims
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
-What the rest of the web says about this piece: Reception now, plus claim sources preserved from an
-earlier search. **The only mode whose content is not in the article at all**, which is why nearly
-everything the panel draws that is not a row is a disclosure.
+**Since 2026-10-09 this is two of [Peer review](peer-review.md)'s three sub-modes**, Reception and
+Claims, after Bibliography (the Citations mode until then). The mode, its address
+(`?mode=peer-review&peer-review=reception` or `claims`; an old `?mode=debate` lands there) and its
+chip row are [peer-review.md](peer-review.md)'s; this page keeps the depth on what the two
+sub-modes draw. The stored names — the `debate` and `debate-claims` steps, columns and routes,
+`DebatePanel`, the `dbt-` CSS — keep the word until the name is confirmed (plan
+[261009l § Stage 3](../plans/261009l-peer-review-mode-merges-citations-and-debate.md#stage-3-held-for-greg-the-stored-names)).
+
+Reception is what the rest of the web says about this piece. Claims starts with claims extracted
+from the article, then shows sources from checks the reader asks for and claim sources preserved
+from an earlier search. The source rows are outside the article, which is why nearly everything
+the panel draws around them is a disclosure.
 
 ## What it is for
 
@@ -36,7 +45,8 @@ everything the panel draws that is not a row is a disclosure.
 
 ## What the reader sees
 
-Two sub-modes on a segmented control (`?debate=claims`; Reception is the default):
+Two of Peer review's three sub-modes on its segmented control
+(`?peer-review=reception` or `?peer-review=claims`; Bibliography is the default):
 
 - **Reception**: what others have written about the piece itself, including work that cites it and
   says something about it. Pages that link or quote the piece come first; pages that only name it
@@ -85,10 +95,10 @@ in its paragraph is dropped and counted. Each listed claim keeps *Check this cla
 a current list the owner can tick claims and check them on the web
 ([§ Checking the claims you pick](#checking-the-claims-you-pick)).
 
-**The press rule.** Pressing the Claims chip — the panel's segment, the command bar's *Debate:
-Claims*, or the Debate button when it lands on Claims — makes the list when there is none. A link,
-Back, a reload or a last-view restore that lands on Claims only reads, and shows *List its claims*.
-The two sub-modes arm two different targets (`activationForDebate`, `src/web/activation.ts`), and
+**The press rule.** Pressing the Claims chip, the command bar's *Peer review › Claims*, or the Peer
+review button when it lands on Claims makes the list when there is none. A link, Back, a reload or
+a last-view restore that lands on Claims only reads, and shows *List its claims*. Peer review's
+sub-modes arm different targets (`activationForPeerReview`, `src/web/activation.ts`), and
 each hook spends only its own while its own sub-mode is showing, so a Claims press can never buy
 the Reception search, nor a Reception press the list.
 
@@ -98,7 +108,7 @@ article has changed since — when the list is drawn read-only under a banner wi
 
 **Who sees it.** The owner, with the controls. A visitor to a shared article sees the list
 read-only — each claim's id, paragraph, quote and statement, through the public projection — and
-nothing to press; the list alone, with no search stored, is enough to open Debate to them.
+nothing to press; the list alone, with no search stored, is enough to open Peer review to them.
 
 The Claims segment's count is the number of listed claims when there is a list and no check has
 found anything yet; once checks have put sources on screen, it is those sources (each claim's,
@@ -187,16 +197,16 @@ What the reader gets:
 - **A button on each claim's heading**, *Check this claim in chat*. It goes to Chat and opens a
   fresh conversation with the claim quoted and sends its first question. The press is the Send
   since 2026-10-06 ([261006j](../plans/261006j-ask-in-chat-sends-the-question.md)), and Back returns
-  to Debate. It is the glossary's *Ask in chat* route
+  to Peer review's Claims. It is the glossary's *Ask in chat* route
   ([glossary.md](glossary.md)), with one thing added: the conversation records the claim it was
   started from.
 - **A mark under the claim once a chat exists**: how many questions were asked, and how the chat's
   latest answer begins. No model writes that line; it is the answer's first readable line, in plain
   words (`answerOpening` in `src/answer-opening.ts` removes markdown formatting and prose citations).
-  Pressing the mark opens the conversation beside Debate (`?thread=`, the mode unchanged), in the
+  Pressing the mark opens the conversation beside Peer review (`?thread=`, the mode unchanged), in the
   floating chat panel, which docks in the right-hand column only when Marginalia is open and the
   window is wide.
-- **In Chat's list** the conversation has Debate's icon, with a card that quotes the claim.
+- **In Chat's list** the conversation has Peer review's icon, with a card that quotes the claim.
 - **A visitor has neither** the button nor the mark. Chat is the owner's.
 
 How it works, and what to know before changing it:
@@ -281,15 +291,16 @@ What the reader gets:
   question: the angle, quoted, and a fixed question after it: *What do others say about the
   article from this angle? Search the web, and say so plainly if you find little.* The press is
   the Send since 2026-10-06 ([261006j](../plans/261006j-ask-in-chat-sends-the-question.md)); until
-  then the question waited in the box. Back returns to Debate.
+  then the question waited in the box. Back returns to Peer review's Reception.
 - **Your angles**, under the box: one line per chat started this way, newest first, three and then
   all. A chat appears once its first question is sent.
-  A line opens its conversation beside Debate, as a claim's mark does.
+  A line opens its conversation beside Peer review, as a claim's mark does.
 - **Both are there before any search has run**, while one is loading and on a stale one. An angle
   needs no stored debate.
-- **In Chat's list** the conversation has Debate's icon, with a card that quotes the angle.
-- **A visitor has neither.** With the [Experimental switch](experimental-features.md) off, Debate
-  is hidden and so is *Your angles*; the conversations are still in Chat's list.
+- **In Chat's list** the conversation has Peer review's icon, with a card that quotes the angle.
+- **A visitor has neither.** Peer review is outside the
+  [Experimental switch](experimental-features.md), but *Your angles* remains owner-only; the
+  conversations are still in Chat's list.
 
 **Why the angle is a chat and not a steered search.** Telling the stored search to check one named
 claim was tried and worked, at about 20 cents and a minute and a half a run
@@ -378,7 +389,7 @@ self-citations; an API key.
 The plan is the reference:
 [260905f](../plans/260905f-debate-mode-what-the-web-says-about-this-piece.md), and for how a row
 is laid out, the four orders and the relevance bar,
-[260929h](../plans/260929h-debate-mode-clearer-sources-and-orders.md). Behind the switch for now; since 2026-09-29 a visitor to a public article sees a stored one, every row's address
+[260929h](../plans/260929h-debate-mode-clearer-sources-and-orders.md). Behind the switch until 2026-10-09, when it came out as Peer review; since 2026-09-29 a visitor to a public article sees a stored one, every row's address
 re-judged at the boundary and a refused row withheld and counted — only running a search is the
 owner's ([260929c](../plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md)).
 Since 2026-09-30 a search also finds the themes its sources share and picks out the key ones,
@@ -409,23 +420,27 @@ How the mode was evaluated, and what that found:
 spike that showed a web search never comes back empty in
 [260905f-debate-mode-stage-0-spike-results.md](../plans/260905f-debate-mode-stage-0-spike-results.md).
 
-## Not decided: folding Citations into Debate
+## Decided: Citations folded into Debate, as Peer review
 
 Greg suggested it (spya-c2qmbg): the works a paper cites and what others say about it are two halves
 of one question, and from one cited work he would like to see where it sits in the wider debate. On
-2026-10-04 he deferred it:
+2026-10-04 he deferred it (*"needs more thought. Write up somewhere, and we'll come back to it"*),
+with the options in [261004b § Part 2](../plans/261004b-citation-hover-card-offers-dig-deeper.md).
+On 2026-10-09 he chose the second of them, one mode with three sub-modes, then the third, each
+claim listing the works cited in its paragraph, and took the merged mode out of the experimental
+switch:
 
-> needs more thought. Write up somewhere, and we'll come back to it
+> I'm inclined to go with B and then C1 to begin with. … For question two, I guess let's move this
+> out of experimental, this combined mode. I am hesitating what to call it. Debate doesn't feel
+> quite right. Maybe peer review …
+>
+> — Greg, 2026-10-09 (spya-vcvxu5, to q-xf2xvb)
 
-The options, with a diagram, are in
-[261004b § Part 2](../plans/261004b-citation-hover-card-offers-dig-deeper.md): keep two modes
-linked by buttons; one mode with Reception, Claims and Cited works; list beside each claim the works
-cited in its paragraph (no model call); or a model filing each cited work under a debate thread. The
-Overseer recommended the second then the third. Open with it: the merged mode's name, and whether it
-comes out from behind the experimental switch, which Debate is behind and Citations is not. The
-first small step, a Dig deeper button on a citation's card, shipped (and became *Ask in chat* with
-plan 261009k). It is part of the wider wish to
-declutter the bottom bar ([interface-vision.md](interface-vision.md#decluttering-the-bottom-bar)).
+What was built, and what is held until the name is confirmed, is
+[peer-review.md](peer-review.md) and plan
+[261009l](../plans/261009l-peer-review-mode-merges-citations-and-debate.md). It is part of the
+wider wish to declutter the bottom bar
+([interface-vision.md](interface-vision.md#decluttering-the-bottom-bar)).
 
 ## Where the code is
 
@@ -449,8 +464,8 @@ Each module's header comment says what it owns and why; start with `src/debate.t
 - [`src/debate-journal.ts`](../../src/debate-journal.ts) — the capture journal the evaluation
   replays.
 - [`src/web/DebatePanel.tsx`](../../src/web/DebatePanel.tsx) — the panel, and
-  [`src/web/modes/debate/`](../../src/web/modes/debate/DebateMode.tsx) the mode controller that
-  mounts it.
+  [`PeerReviewMode.tsx`](../../src/web/modes/peer-review/PeerReviewMode.tsx) the mode controller
+  that mounts it (`DebateMode.tsx` until 2026-10-09).
 - [`src/web/debate-levels.ts`](../../src/web/debate-levels.ts) — Reception's two groups, and why the
   slider that used to hide the title-only one is gone.
   [`src/web/debate-order.ts`](../../src/web/debate-order.ts) — Reception's orders, Claims' grouping
@@ -473,7 +488,7 @@ evaluation's scorer is [`debate-eval-score.test.ts`](../../tests/debate-eval-sco
 
 Related: [citations.md](citations.md) shares the bibliographic lookup
 ([`src/bibliographic.ts`](../../src/bibliographic.ts)) and names Debate's residual risk;
-[experimental-features.md](experimental-features.md) is the switch it sits behind; and
+[experimental-features.md](experimental-features.md) is the switch it sat behind until 2026-10-09; and
 [security.md § A third untrusted party](security.md#a-third-untrusted-party-what-the-model-returns)
 has the web-search evidence collector Debate added.
 

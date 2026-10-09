@@ -55,14 +55,14 @@
   padding: 0 0.7rem 0.7rem;
 }
 
-/* ---- Reception | Claims ----
-   Debate's two sub-modes (DebatePanel.tsx § DebateViews), drawn with Summary's
-   own row (`.summ-controls`, summary.css) and the part-switcher every mode
-   shares (`.summ-views`, `.summ-view-btn`, mode-band.css § the
-   part-switcher), so the segmented controls cannot drift apart. What is here is only what differs: this row sits *under* the band's
-   head rather than being its top row, so it does not need the room Summary's
-   leaves for the (i) in the corner; and each segment carries a count. */
-.mode-band.has-about > .dbt-controls { padding-right: 0.6rem; }
+/* ---- Bibliography | Reception | Claims ----
+   Peer review's three sub-modes (PeerReviewMode.tsx § PeerReviewViews; Debate's
+   Reception | Claims until 2026-10-09), drawn with the part-switcher every mode
+   shares (`.summ-views`, `.summ-view-btn`, mode-band.css § the part-switcher),
+   so the segmented controls cannot drift apart. The row is the band's head
+   (`.band-head`), which already keeps the (i)'s corner clear, in both panels.
+   What is here is only what differs: each chip carries a count. Its own row
+   under the head, `.dbt-controls`, went with that move. */
 /* Spaced from its label by the part-switcher's own gap. */
 .dbt-view-count {
   color: var(--ink-faint);
@@ -228,6 +228,33 @@
   color: var(--ink-faint);
   font-family: var(--font-ui);
   font-size: 0.72rem;
+}
+
+/* **Cited in this paragraph** (DebatePanel.tsx § CitedHere, plan 261009l §
+   C1): under the claim's statement, at its indent, the works the paragraph
+   cites, each a quiet link-like button to its Bibliography row. */
+.dbt-cited-here {
+  margin: 0.2rem 0 0;
+  padding-left: calc(0.55rem + 2px);
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+.dbt-cited-work {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--rule-strong);
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.dbt-cited-work:hover { color: var(--ink); text-decoration-color: currentColor; }
+@media (pointer: coarse) {
+  .dbt-cited-work { padding: 0.35rem 0; }
 }
 
 /* **Checking the claims** (DebatePanel.tsx § OwnerListedClaims, plan 261008i

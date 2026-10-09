@@ -93,9 +93,11 @@ import type { StepName } from "./types.js";
  * empties throws and writes nothing (`buildFaq`, `buildCitations`); only the
  * model's own empty list is kept, as a real answer. A work found again keeps
  * its id (`keysOf` in src/citations.ts), and with it any link *Find it* stored.
- * Both modes are behind the experimental switch and their rows are not, like
- * Timeline's, Quiz's and Debate's — the switch hides a bar's clutter, never a
- * way to redo something already made (docs/project/experimental-features.md).
+ * Both modes were behind the experimental switch when these rows arrived;
+ * Bibliography is now inside Peer review and outside it. Metadata's rows remain
+ * independent of that switch, as Timeline's, Quiz's and Reception's are — the
+ * switch hides bar clutter, never a way to redo something already made
+ * (docs/project/experimental-features.md).
  *
  * `satisfies` rather than a `StepName[]` annotation, so the members stay
  * literal and `MetadataRerunStep` below is these rather than every `StepName` —

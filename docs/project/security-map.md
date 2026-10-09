@@ -67,6 +67,9 @@ A shallow path-traversal probe that lands on the fixture article looks exactly l
   is: one route, one path prefix, one address. Which of its three refusals is a gate and which two
   are courtesies, why the check is on the prefix rather than the route, and what the page
   deliberately does not show.
+- **[security-risks.md](security-risks.md)** — the register: every risk we know of, levelled High,
+  Medium or Low, with whether Greg has accepted it and what would fix it. Open it to see what is
+  carried on purpose before reporting it again, or to work through the proposals.
 - **[billing.md](billing.md)** — money, and the two things it is really about here. Card details
   never reach this server at all (hosted Checkout and Portal, opaque ids only), and the ingest
   quota is an **abuse boundary against model spend** rather than an invoice — so the interesting

@@ -817,7 +817,7 @@ export type PublicDebateClaims =
  * **The Debate, as a visitor gets it** — since 2026-09-29, the fourth mode plan
  * 260929c moved off `owners-only` (SPIDERYARN-READING2-56), by the contract its
  * own plan set (260905f § Security, § Stage 4). Showing a stored search costs
- * nothing; only running one spends (two metered web searches, ~$0.27).
+ * nothing; only running Reception spends its metered web-search call.
  *
  * `searchedAt` crosses **deliberately** — a shared link outlives a search, and
  * a visitor must be able to see how old it is (260905f § `searchedAt`). The

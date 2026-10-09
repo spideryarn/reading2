@@ -362,13 +362,13 @@ const findName = (
   return null;
 };
 
-/** An affiliation: every word exact but the first, which may carry a glued marker before it. */
-const findAffiliation = (have: Word[], want: string[]): FoundSpan | null => {
+/** An affiliation: every word exact; the PDF verifier may also allow a glued marker before the first. */
+const findAffiliation = (have: Word[], want: string[], allowGluedMarker = true): FoundSpan | null => {
   for (let s = 0; s + want.length <= have.length; s++) {
     const ok = want.every((w, i) => {
       const h = have[s + i]!.folded;
       if (h === w) return true;
-      return i === 0 && h.endsWith(w) && MARKER.test(h.slice(0, h.length - w.length));
+      return allowGluedMarker && i === 0 && h.endsWith(w) && MARKER.test(h.slice(0, h.length - w.length));
     });
     if (ok) {
       const first = have[s]!;
@@ -380,6 +380,18 @@ const findAffiliation = (have: Word[], want: string[]): FoundSpan | null => {
   }
   return null;
 };
+
+/**
+ * Whether `affiliation` is an exact run of `text`'s words. The PDF verifier's
+ * glued-marker allowance is deliberately off here: this second check proves
+ * which creator owns an already page-verified affiliation, and has no marker
+ * evidence of its own. Letting any leading letter or up to three digits count
+ * as a marker would turn `3M Company` into `M Company`.
+ */
+export function affiliationPrintedIn(text: string, affiliation: string): boolean {
+  const want = words(affiliation);
+  return want.length > 0 && findAffiliation(wordsOf(text), want, false) !== null;
+}
 
 const oneLine = (s: string) => s.replace(/\s+/gu, " ").trim();
 

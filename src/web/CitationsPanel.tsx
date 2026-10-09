@@ -76,6 +76,7 @@ import { threadForOrigin } from "./useChatAnchors.js";
 import { KeptInvestigation } from "./CitationInvestigation.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
+import { MODE_LABEL } from "../title-text.js";
 import { ReadError } from "./ReadError.js";
 import { RewriteWaiting } from "./RewriteWaiting.js";
 import { useRenderCount } from "./perf.js";
@@ -815,6 +816,9 @@ export function assessedOf(work: Pick<ShownWork, "lookup">): AssessedLookup | nu
   return work.lookup?.state === "assessed" ? work.lookup : null;
 }
 
+/** Bibliography's line for a visitor when no list is stored: the owner's empty state, without the button. */
+export const CITATIONS_NONE_SHARED = "Nobody has listed the works this one cites yet.";
+
 /* -------------------------------------------------------------- the panel -- */
 
 /** A module constant, so an empty list is the same array every render. */
@@ -843,10 +847,20 @@ export type CitationsAccess =
        */
       chats?: CitedWorkChats;
     }
-  | { kind: "visitor"; citations: PublicCitations; owner?: never; chats?: never };
+  /* `null` since 2026-10-09: Peer review opens for a visitor on any of its
+     three artefacts (visitor.ts § POLICY), so Bibliography can be open with
+     no list stored, and says so (GPT Sol's F3 on plan 261009l). */
+  | { kind: "visitor"; citations: PublicCitations | null; owner?: never; chats?: never };
 
 interface Props {
   access: CitationsAccess;
+  /**
+   * **Peer review's chip row**, drawn as this band's header (PeerReviewMode.tsx
+   * § `PeerReviewViews`) — the same row the Debate panel draws for Reception
+   * and Claims, so switching sub-mode does not move it. Since 2026-10-09; the
+   * band had no head row while its order row was drawn before then.
+   */
+  head: ReactNode;
   /** `?citeby=` — the order the reader asked for. `effectiveOrder` decides the one in force. */
   order: CiteOrder;
   onOrder(order: CiteOrder): void;
@@ -878,6 +892,7 @@ export type CiteFocus = ItemFocus;
 
 export function CitationsPanel({
   access,
+  head,
   order: chosenOrder,
   onOrder,
   bar: chosenBar,
@@ -982,23 +997,19 @@ export function CitationsPanel({
 
   return (
     <ModeSurface
-      label="Citations"
-      feature="gloss citations"
-      mode="citations"
+      label={MODE_LABEL["peer-review"]}
+      feature="gloss citations peer-review"
+      mode="peer-review"
       about={about}
-      /* **No head row while the order row is drawn**, since 2026-10-01 — the
-          move Glossary made (plan 260929a), for Greg's *"it says at the top how
-          many works there are. I feel like that's maybe there's a more
-          space-efficient way to say that"* (`spya-nca765`). The count went to
-          the order row's end, and since 2026-10-01 into the band's (i) with
-          Glossary's and Quotes' (spya-ucu35y, plan 261001m); *prioritised*'s
-          threshold row still says "8 of 24". With one work, or one order on
-          offer, there is no order row, so an empty head row stays.
-
-          Otherwise a fragment, not a conditional, so the row stays put while
-          the list loads — the choice Timeline and Glossary make. Plan 261001l. */
-      // biome-ignore lint/complexity/noUselessFragments: an empty fragment is the point — a head that is not null keeps its row, and the note above says why
-      head={orders.length > 0 ? null : <></>}
+      /* **Peer review's chip row**, since 2026-10-09: Bibliography | Reception
+          | Claims, each with its count, Bibliography's being every work cited
+          (peer-review-counts.ts). Until then this band had no head row while
+          its order row was drawn — the move Glossary made (plan 260929a), for
+          Greg's *"it says at the top how many works there are. I feel like
+          that's maybe there's a more space-efficient way to say that"*
+          (`spya-nca765`) — and the count went into the band's (i)
+          (spya-ucu35y, plan 261001m), where it still is. */
+      head={head}
       /* Pinned under the scroller, and **only a job's status now**. The two
          sentences about the whole list that were here went behind the (i) on
          2026-10-01 — Greg: *"at the bottom, there's an explanation of what
@@ -1029,6 +1040,11 @@ export function CitationsPanel({
       {owner?.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
 
       {owner?.status === "loading" && <BandWaiting className="gloss-quiet">Looking for the citations…</BandWaiting>}
+
+      {/* **A visitor with no list stored**: Peer review opened on Reception's
+          or Claims' artefact (visitor.ts § POLICY, `any-artefact`), so
+          Bibliography says it has nothing rather than drawing a blank band. */}
+      {access.kind === "visitor" && citations === null && <p className="gloss-quiet">{CITATIONS_NONE_SHARED}</p>}
 
       {owner?.status === "none" && (
         <div className="gloss-empty">

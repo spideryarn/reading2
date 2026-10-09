@@ -386,7 +386,7 @@ describe("the gutter's bookmark button", () => {
      it. `enableHistorySync()` above is what makes nuqs hear a `pushState`. */
   const chooseClaims = async () => {
     await act(async () => {
-      history.pushState(null, "", `/read/${SLUG}?mode=debate&debate=claims`);
+      history.pushState(null, "", `/read/${SLUG}?mode=peer-review&peer-review=claims`);
     });
     await settle();
   };
@@ -398,7 +398,7 @@ describe("the gutter's bookmark button", () => {
     held = new Promise<void>((go) => {
       release = go;
     });
-    await open("?mode=debate");
+    await open("?mode=peer-review&peer-review=reception");
     expect(host.querySelector(".mode-band"), "Debate's band is open").not.toBeNull();
     await pressBookmark();
     expect(commentPosts()).toHaveLength(1);
@@ -415,20 +415,20 @@ describe("the gutter's bookmark button", () => {
     held = new Promise<void>((go) => {
       release = go;
     });
-    await open("?mode=debate");
+    await open("?mode=peer-review&peer-review=reception");
     await pressBookmark();
     expect(commentPosts()).toHaveLength(1);
 
     await chooseClaims();
-    expect(param("debate")).toBe("claims");
-    expect(param("mode"), "the mode itself did not change").toBe("debate");
+    expect(param("peer-review")).toBe("claims");
+    expect(param("mode"), "the mode itself did not change").toBe("peer-review");
     expect(host.querySelector(".mode-band"), "and its band is still open").not.toBeNull();
 
     await act(async () => release());
     await settle(12);
     expect(param("note")).toBeNull();
     expect(host.querySelector(".cmt-dialog")).toBeNull();
-    expect(param("debate"), "the chosen view is still open").toBe("claims");
+    expect(param("peer-review"), "the chosen view is still open").toBe("claims");
   });
 
   it("does not open behind the Comments drawer chosen while the store was answering", async () => {
