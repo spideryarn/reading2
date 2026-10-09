@@ -14,7 +14,7 @@
  */
 import { Check, ChevronDown, LoaderCircle, PhoneOff, Radio, X } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { LiveEngine } from "../../types.js";
 import { MENU_ITEM, MENU_SURFACE, useFingerPressMenu } from "../menu.js";
@@ -95,10 +95,20 @@ export function LiveButton({ live, disabled, onStart, labelled, continues }: {
  */
 function EngineArrow({ engine, busy }: { engine: LiveEngine; busy: boolean }) {
   const [open, setOpen] = useState(false);
-  const finger = useFingerPressMenu(open, setOpen);
+  const changeOpen = (next: boolean) => {
+    if (!busy) setOpen(next);
+  };
+  const finger = useFingerPressMenu(open, changeOpen);
+  /* A call can begin somewhere other than this trigger while its non-modal menu
+     is open. Busy means the choice is closed as well as the button disabled. */
+  useEffect(() => {
+    if (busy) setOpen(false);
+  }, [busy]);
+  /** Keyboard picks return here; pointer picks leave the reading keys to the page. */
+  const pickedByPointer = useRef(false);
   const stopKeys = (e: { stopPropagation(): void }) => e.stopPropagation();
   return (
-    <DropdownMenu.Root open={open} onOpenChange={setOpen} modal={false}>
+    <DropdownMenu.Root open={open} onOpenChange={changeOpen} modal={false}>
       <Tooltip placement="top" keepSide className="tip-soon" enabled={!open} content={
         <ControlTip head="Voice engine"
           what={`${ENGINE_COPY["gpt-live"].label}: ${ENGINE_COPY["gpt-live"].tip.toLowerCase()}.`}
@@ -118,6 +128,11 @@ function EngineArrow({ engine, busy }: { engine: LiveEngine; busy: boolean }) {
       <DropdownMenu.Portal>
         <DropdownMenu.Content side="top" align="end" sideOffset={6} collisionPadding={10}
           onKeyDown={stopKeys}
+          onCloseAutoFocus={(e) => {
+            if (!pickedByPointer.current) return;
+            pickedByPointer.current = false;
+            e.preventDefault();
+          }}
           className={`chat-live-engine-menu ${MENU_SURFACE} tw:min-w-[13rem] tw:max-w-[min(20rem,calc(100vw-1.75rem))]`}
         >
           <DropdownMenu.RadioGroup value={engine}
@@ -127,7 +142,11 @@ function EngineArrow({ engine, busy }: { engine: LiveEngine; busy: boolean }) {
             }}
           >
             {ENGINE_ORDER.map((name) => (
-              <DropdownMenu.RadioItem key={name} value={name} className={MENU_ITEM}>
+              <DropdownMenu.RadioItem key={name} value={name} className={MENU_ITEM}
+                onClick={(e) => {
+                  pickedByPointer.current = e.detail > 0;
+                }}
+              >
                 <span className="tw:flex tw:min-w-0 tw:flex-1 tw:flex-col">
                   <span>{ENGINE_COPY[name].label}</span>
                   <span className="tw:text-xs tw:text-muted-foreground">{ENGINE_COPY[name].tip}</span>

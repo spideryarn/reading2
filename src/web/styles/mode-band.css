@@ -1491,8 +1491,14 @@ svg.band-waiting-ghost { flex: none; }
    Height is the composer's `--control-h` below. */
 @media (any-pointer: coarse) { .chat-live-arrow { width: 2.5rem; } }
 /* Lit with the call, so the split reads as one control rather than an orange
-   button with a grey stub beside it. Still disabled: the engine is pinned. */
-.chat-live:has(.chat-live-btn.on) .chat-live-arrow { border-color: var(--highlight); }
+   button with a grey stub beside it. Still disabled: the engine is pinned, but
+   disabled does not dim this half of one active control. */
+.chat-live:has(.chat-live-btn.on) .chat-live-arrow {
+  opacity: 1;
+  border-color: var(--highlight);
+  background: var(--highlight);
+  color: var(--highlight-foreground);
+}
 /* **Send's height for every control in the composer's row** (plan 261007m S5;
    Greg, 2026-10-07: *"controls that do the same job should look the same in
    every mode"*). The microphone and Live were 26px beside a 36px Send, in

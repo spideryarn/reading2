@@ -72,9 +72,14 @@ export function useLive(slug: string, opts: LiveOptions = {}): LiveApi {
   /** A cross-engine reconnect waiting for its hang-up, by token; 0 when none is. */
   const restarting = useRef(0);
   const restartSeq = useRef(0);
+  /** The rendered half of `restarting`, so LiveStatus can offer Cancel reconnect. */
+  const [crossReconnectPending, setCrossReconnectPending] = useState(false);
 
   const start = useCallback((o: StartOptions) => {
-    restarting.current = 0;
+    if (restarting.current !== 0) {
+      restarting.current = 0;
+      setCrossReconnectPending(false);
+    }
     if (now.current.owner) return;
     const engine = now.current.effective;
     started.current = engine;
@@ -85,7 +90,10 @@ export function useLive(slug: string, opts: LiveOptions = {}): LiveApi {
   }, []);
 
   const stop = useCallback((): Promise<void> => {
-    restarting.current = 0;
+    if (restarting.current !== 0) {
+      restarting.current = 0;
+      setCrossReconnectPending(false);
+    }
     const engine = now.current.owner ?? started.current ?? now.current.shown;
     return now.current.apis[engine].stop();
   }, []);
@@ -105,6 +113,8 @@ export function useLive(slug: string, opts: LiveOptions = {}): LiveApi {
     restartSeq.current += 1;
     const mine = restartSeq.current;
     const microphone = lastStart.current?.microphone;
+    restarting.current = mine;
+    setCrossReconnectPending(true);
     void api
       .stop()
       /* One task, so the hang-up's last state has rendered and `now` is true. */
@@ -112,10 +122,10 @@ export function useLive(slug: string, opts: LiveOptions = {}): LiveApi {
       .then(() => {
         if (restarting.current !== mine) return;
         restarting.current = 0;
+        setCrossReconnectPending(false);
         if (now.current.apis[engine].phase === "failed") return;
         start({ threadId: thread, ...(microphone === undefined ? {} : { microphone }) });
       });
-    restarting.current = mine;
   }, [start]);
 
   /* Experimental switched off under a call on the engine only it offers.
@@ -125,10 +135,17 @@ export function useLive(slug: string, opts: LiveOptions = {}): LiveApi {
   useEffect(() => {
     if (!experimentalOwner || !experimental.loaded || experimental.on) return;
     restarting.current = 0;
+    setCrossReconnectPending(false);
     void now.current.apis[experimentalOwner].stop();
   }, [experimentalOwner, experimental.loaded, experimental.on]);
 
-  const api = { ...apis[shown], start, stop, reconnect };
+  const api = {
+    ...apis[shown],
+    start,
+    stop,
+    reconnect,
+    reconnecting: apis[shown].reconnecting || crossReconnectPending,
+  };
   const seam = devSeam();
   if (seam) seam.api = api;
   return api;

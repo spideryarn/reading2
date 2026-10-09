@@ -61,6 +61,7 @@ async function fakeHook(name: "realtime" | "gpt-live") {
       error: null,
       hasUnsavedLines: false,
       threadId: null,
+      reconnecting: false,
     });
     h.fakes[name].set = (patch) => setState((s) => ({ ...s, ...patch }));
     const start = useCallback((o: { threadId: string; microphone?: boolean }) => {
@@ -401,11 +402,13 @@ describe("Reconnect asks again", () => {
     expect(tagOf(live())).toBe("gpt-live");
 
     act(() => live().reconnect());
+    expect(live().reconnecting, "the status panel cannot offer Cancel reconnect").toBe(true);
     await tick();
     expect(h.fakes["gpt-live"].reconnects).toBe(0);
     expect(h.fakes["gpt-live"].stops).toBe(1);
     expect(h.fakes.realtime.starts).toEqual([{ threadId: "t1", microphone: false }]);
     expect(tagOf(live())).toBe("realtime");
+    expect(live().reconnecting).toBe(false);
   });
 
   it("does not restart if the reader hangs up in between", async () => {
@@ -421,6 +424,7 @@ describe("Reconnect asks again", () => {
     });
     await tick();
     expect(h.fakes.realtime.starts).toEqual([]);
+    expect(live().reconnecting).toBe(false);
   });
 
   it("does not restart after a hang-up that failed", async () => {
@@ -454,6 +458,12 @@ describe("the arrow on the Live button", () => {
     const ev = new MouseEvent("pointerdown", { bubbles: true, cancelable: true, button: 0 });
     Object.defineProperty(ev, "pointerType", { value: "mouse" });
     act(() => { el.dispatchEvent(ev); });
+  }
+
+  function key(el: Element, value: string) {
+    act(() => {
+      el.dispatchEvent(new KeyboardEvent("keydown", { key: value, bubbles: true, cancelable: true }));
+    });
   }
 
   const menu = () => document.querySelector<HTMLElement>('[role="menu"]');
@@ -493,6 +503,49 @@ describe("the arrow on the Live button", () => {
     expect(arrow()?.getAttribute("aria-label")).toBe("Voice engine: Realtime");
   });
 
+  it.each(["Enter", " ", "ArrowDown"])("opens on %s without sending the key to the reading view", (value) => {
+    h.experimental.set({ on: true });
+    const arrow = mountButton();
+    const el = arrow();
+    if (!el) throw new Error("no arrow rendered");
+    const heard: string[] = [];
+    const listen = (e: KeyboardEvent) => heard.push(e.key);
+    document.addEventListener("keydown", listen);
+    try {
+      key(el, value);
+    } finally {
+      document.removeEventListener("keydown", listen);
+    }
+    expect(menu(), `Radix did not open the menu on ${JSON.stringify(value)}`).not.toBeNull();
+    expect(heard).toEqual([]);
+  });
+
+  it("returns focus after a keyboard choice, but not after a pointer choice", async () => {
+    h.experimental.set({ on: true });
+    const arrow = mountButton();
+    const el = arrow();
+    if (!el) throw new Error("no arrow rendered");
+
+    el.focus();
+    key(el, "Enter");
+    const realtime = items()[1];
+    if (!realtime) throw new Error("no Realtime item");
+    act(() => {
+      realtime.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 0 }));
+    });
+    await tick();
+    expect(document.activeElement, "a keyboard reader lost the menu trigger").toBe(el);
+
+    press(el);
+    const gptLive = items()[0];
+    if (!gptLive) throw new Error("no GPT-Live item");
+    act(() => {
+      gptLive.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 }));
+    });
+    await tick();
+    expect(document.activeElement, "a pointer choice left the reading shortcuts trapped on the arrow").not.toBe(el);
+  });
+
   it("keeps its keys from the reading view's shortcuts", () => {
     h.experimental.set({ on: true });
     const arrow = mountButton();
@@ -516,7 +569,10 @@ describe("the arrow on the Live button", () => {
   it.each(["connecting", "live", "closing"] as const)("cannot be opened while a call is %s", (phase) => {
     h.experimental.set({ on: true });
     const arrow = mountButton(phase);
-    expect(arrow()?.disabled).toBe(true);
+    const el = arrow();
+    expect(el?.disabled).toBe(true);
+    if (el) press(el);
+    expect(menu()).toBeNull();
   });
 
   it("appears and disappears with the switch, without a reload", async () => {

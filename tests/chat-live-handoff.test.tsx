@@ -440,6 +440,20 @@ describe("the live session in the shipping chat composer", () => {
     expect(advanced?.textContent).toContain("Changing the microphone during a call");
   });
 
+  it("waits for Realtime's placement to resolve before offering its noise reduction setting", () => {
+    /* Realtime begins `connecting` with null, then resolves placement before it
+       asks for a ticket. The setting is disabled throughout that short window,
+       so hiding it is not hiding an available action. */
+    const { api } = fakeLive("connecting");
+    paint(api);
+    expect(host.querySelector('select[aria-label="Noise reduction"]')).toBeNull();
+
+    paint({ ...api, placement: REALTIME_PLACEMENT });
+    const noise = host.querySelector<HTMLSelectElement>('select[aria-label="Noise reduction"]');
+    expect(noise).not.toBeNull();
+    expect(noise?.disabled).toBe(true);
+  });
+
   it("shows the live words in the thread itself, as chat turns, with no separate transcript", () => {
     const { api } = fakeLive("live");
     api.lines = [

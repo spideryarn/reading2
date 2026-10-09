@@ -110,19 +110,25 @@ describe("the privacy page", () => {
     /* Both engines' models: Realtime's `LIVE_MODEL` and `LIVE_TRANSCRIBER`, and
        GPT-Live's voice and the backend behind it, which is every reader's
        engine since 2026-10-10 (plan 261010a). */
-    const ids = [
-      ...live.matchAll(/export const (?:GPT_)?LIVE_(?:MODEL|TRANSCRIBER|BACKEND_MODEL) = "([^"]+)"/g),
-    ].map((m) => m[1] as string);
+    const declarations = [
+      ...live.matchAll(/^export const ((?:GPT_)?LIVE_(?:MODEL|TRANSCRIBER|BACKEND_MODEL)) = "([^"]+)";$/gm),
+    ].map((m) => [m[1] as string, m[2] as string] as const);
     /* A positive control on the extraction itself: if the shape of those four
-       declarations ever changes, `ids` goes short and the assertion below
-       passes over less than it should — silent success, and the page would stop
-       being checked without a test going red. docs/reusable/silent-success.md. */
-    expect(ids).toHaveLength(4);
+       declarations ever changes, the names differ and the assertion below
+       fails rather than checking fewer ids silently. docs/reusable/silent-success.md. */
+    expect(declarations.map(([name]) => name).sort()).toEqual([
+      "GPT_LIVE_BACKEND_MODEL",
+      "GPT_LIVE_MODEL",
+      "LIVE_MODEL",
+      "LIVE_TRANSCRIBER",
+    ]);
+    const ids = declarations.map(([, id]) => id);
     expect(ids.filter((id) => !PAGE.includes(id))).toEqual([]);
-    /* `gpt-6-luna` is on the page for other jobs too, so its presence alone
-       says nothing about live conversation: the live sentence must name it. */
-    expect(PAGE.replace(/\s+/g, " ")).toContain(
-      "<code>gpt-live-1</code> for the live voice mode, with <code>gpt-6-luna</code> behind it",
+    /* `gpt-6-luna` is on the page for other jobs too, so presence alone says
+       nothing about live conversation. Hold both pairs and the Experimental
+       qualification together, rather than accepting four names anywhere. */
+    expect(PAGE.replace(/\{" "\}/g, " ").replace(/\s+/g, " ")).toContain(
+      "<code>gpt-live-1</code> for the live voice mode, with <code>gpt-6-luna</code> behind it, which is shown the article and looks things up in it while you talk; or, if you choose it under Experimental features, <code>gpt-realtime-2.1</code> with <code>gpt-live-transcribe</code> instead.",
     );
   });
 
