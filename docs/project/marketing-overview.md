@@ -74,9 +74,25 @@ Status: **idea** (not started), **trying** (running now) or **done** (with what 
 | Give an author a Spideryarn version of their own piece, privately, and ask what it gets wrong. Plus the admin tool that makes it cheap. | tool being built | [marketing-author-gifts.md](marketing-author-gifts.md) |
 | Talks: product conferences, meetups, and AI / HCI / human-augmentation venues near London. Best first: Feeling of Computing London. | venues found, none booked | [marketing-talks.md](marketing-talks.md) |
 | Podcasts: tools for thought, learning, AI and cognition. Best first: Every, Cortex, Brain Inspired; and Ness Labs (not a podcast, but London and the closest stance). | shows found, none pitched | [marketing-podcasts.md](marketing-podcasts.md) |
-| Bloggers and newsletter writers who would take a Zoom call. | researching | not yet written |
+| Bloggers and newsletter writers who would take a Zoom call, each sent a Spideryarn version of their own recent piece. | writers found, none contacted | [marketing-bloggers.md](marketing-bloggers.md); names in `outreach-private/` |
 | Follow up the one or two people who signed up after talking to Greg and did not come back. | idea | here |
 | Evidence pages: the research behind the product, as blog posts or pages ([positioning.md § Evidence](positioning.md#evidence-and-where-it-goes)). Also marketing, especially for academics. | idea | here |
+
+## Outreach lists are private
+
+**Lists of named people to contact live in `outreach-private/` at the top of the repo, which is
+gitignored.** This repo is public, and a list of who we plan to approach, with frank notes on each
+("very likely to say yes", "too big") and their contact details, is not something those people
+should find before Greg has written to them. Greg, 2026-10-09: *"put all this outreach stuff in
+Gitignore"*.
+
+- **What goes there:** any list naming individuals as people to approach, and notes on how each
+  conversation went. Right now that is `outreach-private/bloggers.md`.
+- **What stays in these docs:** the approach, the reasoning, venues and shows (which are public
+  organisations), and the communities where readers gather.
+- **The catch:** gitignored means it exists only on the machine that wrote it. It is on Greg's Mac,
+  not on the remote box, and no commit or push saves it. Back it up some other way, and do not
+  delete a worktree or checkout that holds it without copying it out first.
 
 ## Waiting on
 
@@ -92,3 +108,5 @@ Each is also listed under [vision.md](vision.md), which owns every doc in this a
 - **[marketing-talks.md](marketing-talks.md)** — where Greg could give a talk, and what kind.
 - **[marketing-podcasts.md](marketing-podcasts.md)** — shows Greg could go on as a guest, and
   what has replaced the tools-for-thought podcasts that stopped.
+- **[marketing-bloggers.md](marketing-bloggers.md)** — writers who might take a call: the approach
+  and the communities. The names are in `outreach-private/`.

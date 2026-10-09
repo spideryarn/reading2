@@ -278,6 +278,8 @@ under it, and then the five folders that hold the project's memory.
     Spideryarn, and the admin tool that makes it cheap.
   - **[marketing-talks.md](marketing-talks.md)** — where Greg could give a talk, and what kind.
   - **[marketing-podcasts.md](marketing-podcasts.md)** — shows Greg could go on as a guest.
+  - **[marketing-bloggers.md](marketing-bloggers.md)** — writers who might take a call; the names
+    themselves are kept out of the public repo.
 - **[open-questions.md](open-questions.md)** — the calls nobody has made yet, each with a
   recommendation so nobody is blocked. It should shrink: when a question gets decided, the answer
   goes into the doc that owns it and the question is deleted.

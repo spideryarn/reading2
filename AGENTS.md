@@ -29,6 +29,7 @@ listed here; the names under each are files in `docs/project/`.
   <br>↳ `open-questions.md` · `positioning.md` (the website, the name, who it speaks to first) ·
   `marketing-overview.md` (how people come to hear about it; the hub for the docs after it) ·
   `marketing-author-gifts.md` · `marketing-talks.md` · `marketing-podcasts.md` ·
+  `marketing-bloggers.md` ·
   `original-version/` (the larger app this is an offshoot of) · and the five folders that hold the
   project's memory: `plans.md` · `research.md` · `investigations.md` · `postmortems.md` ·
   `tutorials.md`
