@@ -1,0 +1,329 @@
+{
+  "slug": "the-mythology-of-conscious-ai-spya-rn5m0q",
+  "task": "summary-fuller",
+  "arm": "C-sonnet+digest",
+  "model": "anthropic/claude-sonnet-5.5",
+  "answeredBy": "anthropic/claude-sonnet-5.5",
+  "effortSent": null,
+  "effortRan": "high",
+  "maxTokens": 48999,
+  "boundUsd": 0.705435,
+  "ok": true,
+  "error": null,
+  "finishReason": "stop",
+  "raw": "{\"paragraphs\":[{\"ids\":[\"spya-n7cbbw\",\"spya-bxa7j8\",\"spya-xzfzar\"],\"list\":false,\"sentences\":[{\"text\":\"This is an essay by neuroscientist Anil Seth asking whether artificial intelligence (AI) is, or could ever be, conscious, meaning able to feel and experience things.\",\"id\":\"spya-n7cbbw\",\"key\":null},{\"text\":\"It starts with a Google engineer, Blake Lemoine, who claimed in 2022 that a chatbot was conscious and was dismissed by Google for breaking confidentiality rules.\",\"id\":\"spya-bxa7j8\",\"key\":null},{\"text\":\"Seth notes that being fired for that is not the same as being wrong, and some leading experts now see machine consciousness as a question of when, not if.\",\"id\":\"spya-xzfzar\",\"key\":null}]},{\"ids\":[\"spya-e3v6vu\",\"spya-qrkt96\",\"spya-tbnksw\"],\"list\":false,\"sentences\":[{\"text\":\"Seth says the question matters for three reasons.\",\"id\":null,\"key\":null},{\"text\":\"If machines are conscious, they would have moral status, the chance to suffer and perhaps rights.\",\"id\":\"spya-e3v6vu\",\"key\":null},{\"text\":\"What we believe about AI also matters even if the belief is wrong: it can exploit our feelings, distort our ethics, and make us harder on machines that seem to feel.\",\"id\":\"spya-qrkt96\",\"key\":null},{\"text\":\"And if we confuse ourselves with our machines, we overestimate them and underestimate ourselves.\",\"id\":\"spya-tbnksw\",\"key\":null}]},{\"ids\":[\"spya-xrqegw\",\"spya-w5ya7j\",\"spya-pxsutv\"],\"list\":false,\"sentences\":[{\"text\":\"His first step is to separate two things people lump together.\",\"id\":null,\"key\":null},{\"text\":\"Intelligence is about doing: achieving complex goals by flexible means.\",\"id\":\"spya-xrqegw\",\"key\":\"Intelligence is about doing\"},{\"text\":\"Consciousness is about being: there is \\\"something it is like\\\" to be a conscious creature.\",\"id\":\"spya-w5ya7j\",\"key\":\"Consciousness is about being\"},{\"text\":\"We bundle them because of three habits: judging everything by the human example, putting humans at the top, and projecting human qualities onto things that only look a bit like us.\",\"id\":\"spya-pxsutv\",\"key\":null}]},{\"ids\":[\"spya-vwn2u7\",\"spya-xb93uz\",\"spya-xdcepu\"],\"list\":false,\"sentences\":[{\"text\":\"The idea of conscious AI rests on an assumption called computational functionalism: that running the right computation, a step-by-step rule for turning inputs into outputs, is enough for consciousness.\",\"id\":\"spya-vwn2u7\",\"key\":\"computational functionalism\"},{\"text\":\"Seth thinks this may be wrong, and his first and most important argument is that brains are not computers.\",\"id\":null,\"key\":null},{\"text\":\"A real brain works at many scales at once and is tangled up with the chemistry that keeps its cells alive.\",\"id\":\"spya-xdcepu\",\"key\":null},{\"text\":\"So it is hard, and likely impossible, to separate what a brain does from what it is made of.\",\"id\":\"spya-xb93uz\",\"key\":null}]},{\"ids\":[\"spya-vqtbs4\",\"spya-ungpb9\",\"spya-z6e85s\"],\"list\":false,\"sentences\":[{\"text\":\"His second argument is that computation of the standard digital kind is not the only game in town.\",\"id\":null,\"key\":null},{\"text\":\"Smooth, random and time-bound processes lie beyond it, and a steam-engine governor, which regulates speed using swinging weights and a valve, does its job without computing anything.\",\"id\":\"spya-ungpb9\",\"key\":null},{\"text\":\"Third, he suggests that life probably matters, since every thing most people agree is conscious is also alive.\",\"id\":\"spya-z6e85s\",\"key\":\"life probably matters\"},{\"text\":\"He admits he has no knock-down argument, and says life is at most necessary, not necessarily enough.\",\"id\":\"spya-z6e85s\",\"key\":null}]},{\"ids\":[\"spya-y3s0uc\",\"spya-bufgby\",\"spya-ksbt2g\"],\"list\":false,\"sentences\":[{\"text\":\"His fourth argument is that simulation is not instantiation: a simulated rainstorm makes nothing wet, so a simulated brain need not be conscious.\",\"id\":\"spya-y3s0uc\",\"key\":\"simulation is not instantiation\"},{\"text\":\"The exception is when the thing simulated is itself a computation.\",\"id\":\"spya-y3s0uc\",\"key\":null},{\"text\":\"So this argument only works if computational functionalism is false, which is why Seth says the four arguments strengthen one another.\",\"id\":\"spya-bufgby\",\"key\":null}]},{\"ids\":[\"spya-qekh87\",\"spya-xapwmg\",\"spya-pyy07g\",\"spya-eufate\"],\"list\":false,\"sentences\":[{\"text\":\"Seth concludes that consciousness is very unlikely to simply arrive as AI gets smarter, and may be impossible for the digital computers we know.\",\"id\":\"spya-qekh87\",\"key\":null},{\"text\":\"He does not rule out artificial consciousness altogether, and he admits he may be wrong, since his view is a minority one.\",\"id\":\"spya-pyy07g\",\"key\":null},{\"text\":\"He worries more about brain-like tissue grown from stem cells than about chatbots.\",\"id\":\"spya-eufate\",\"key\":null},{\"text\":\"Still, he says nobody should set out to build conscious AI, and AI that merely seems conscious is a nearer danger we must handle carefully.\",\"id\":\"spya-xapwmg\",\"key\":null}]}]}",
+  "parsed": [
+    {
+      "text": "This is an essay by neuroscientist Anil Seth asking whether artificial intelligence (AI) is, or could ever be, conscious, meaning able to feel and experience things. It starts with a Google engineer, Blake Lemoine, who claimed in 2022 that a chatbot was conscious and was dismissed by Google for breaking confidentiality rules. Seth notes that being fired for that is not the same as being wrong, and some leading experts now see machine consciousness as a question of when, not if.",
+      "ids": [
+        "spya-n7cbbw",
+        "spya-bxa7j8",
+        "spya-xzfzar"
+      ],
+      "sentences": [
+        {
+          "text": "This is an essay by neuroscientist Anil Seth asking whether artificial intelligence (AI) is, or could ever be, conscious, meaning able to feel and experience things.",
+          "id": "spya-n7cbbw"
+        },
+        {
+          "text": "It starts with a Google engineer, Blake Lemoine, who claimed in 2022 that a chatbot was conscious and was dismissed by Google for breaking confidentiality rules.",
+          "id": "spya-bxa7j8"
+        },
+        {
+          "text": "Seth notes that being fired for that is not the same as being wrong, and some leading experts now see machine consciousness as a question of when, not if.",
+          "id": "spya-xzfzar"
+        }
+      ]
+    },
+    {
+      "text": "Seth says the question matters for three reasons. If machines are conscious, they would have moral status, the chance to suffer and perhaps rights. What we believe about AI also matters even if the belief is wrong: it can exploit our feelings, distort our ethics, and make us harder on machines that seem to feel. And if we confuse ourselves with our machines, we overestimate them and underestimate ourselves.",
+      "ids": [
+        "spya-e3v6vu",
+        "spya-qrkt96",
+        "spya-tbnksw"
+      ],
+      "sentences": [
+        {
+          "text": "Seth says the question matters for three reasons.",
+          "id": null
+        },
+        {
+          "text": "If machines are conscious, they would have moral status, the chance to suffer and perhaps rights.",
+          "id": "spya-e3v6vu"
+        },
+        {
+          "text": "What we believe about AI also matters even if the belief is wrong: it can exploit our feelings, distort our ethics, and make us harder on machines that seem to feel.",
+          "id": "spya-qrkt96"
+        },
+        {
+          "text": "And if we confuse ourselves with our machines, we overestimate them and underestimate ourselves.",
+          "id": "spya-tbnksw"
+        }
+      ]
+    },
+    {
+      "text": "His first step is to separate two things people lump together. Intelligence is about doing: achieving complex goals by flexible means. Consciousness is about being: there is \"something it is like\" to be a conscious creature. We bundle them because of three habits: judging everything by the human example, putting humans at the top, and projecting human qualities onto things that only look a bit like us.",
+      "ids": [
+        "spya-xrqegw",
+        "spya-w5ya7j",
+        "spya-pxsutv"
+      ],
+      "sentences": [
+        {
+          "text": "His first step is to separate two things people lump together.",
+          "id": null
+        },
+        {
+          "text": "Intelligence is about doing: achieving complex goals by flexible means.",
+          "id": "spya-xrqegw",
+          "key": "Intelligence is about doing"
+        },
+        {
+          "text": "Consciousness is about being: there is \"something it is like\" to be a conscious creature.",
+          "id": "spya-w5ya7j",
+          "key": "Consciousness is about being"
+        },
+        {
+          "text": "We bundle them because of three habits: judging everything by the human example, putting humans at the top, and projecting human qualities onto things that only look a bit like us.",
+          "id": "spya-pxsutv"
+        }
+      ]
+    },
+    {
+      "text": "The idea of conscious AI rests on an assumption called computational functionalism: that running the right computation, a step-by-step rule for turning inputs into outputs, is enough for consciousness. Seth thinks this may be wrong, and his first and most important argument is that brains are not computers. A real brain works at many scales at once and is tangled up with the chemistry that keeps its cells alive. So it is hard, and likely impossible, to separate what a brain does from what it is made of.",
+      "ids": [
+        "spya-vwn2u7",
+        "spya-xb93uz",
+        "spya-xdcepu"
+      ],
+      "sentences": [
+        {
+          "text": "The idea of conscious AI rests on an assumption called computational functionalism: that running the right computation, a step-by-step rule for turning inputs into outputs, is enough for consciousness.",
+          "id": "spya-vwn2u7",
+          "key": "computational functionalism"
+        },
+        {
+          "text": "Seth thinks this may be wrong, and his first and most important argument is that brains are not computers.",
+          "id": null
+        },
+        {
+          "text": "A real brain works at many scales at once and is tangled up with the chemistry that keeps its cells alive.",
+          "id": "spya-xdcepu"
+        },
+        {
+          "text": "So it is hard, and likely impossible, to separate what a brain does from what it is made of.",
+          "id": "spya-xb93uz"
+        }
+      ]
+    },
+    {
+      "text": "His second argument is that computation of the standard digital kind is not the only game in town. Smooth, random and time-bound processes lie beyond it, and a steam-engine governor, which regulates speed using swinging weights and a valve, does its job without computing anything. Third, he suggests that life probably matters, since every thing most people agree is conscious is also alive. He admits he has no knock-down argument, and says life is at most necessary, not necessarily enough.",
+      "ids": [
+        "spya-vqtbs4",
+        "spya-ungpb9",
+        "spya-z6e85s"
+      ],
+      "sentences": [
+        {
+          "text": "His second argument is that computation of the standard digital kind is not the only game in town.",
+          "id": null
+        },
+        {
+          "text": "Smooth, random and time-bound processes lie beyond it, and a steam-engine governor, which regulates speed using swinging weights and a valve, does its job without computing anything.",
+          "id": "spya-ungpb9"
+        },
+        {
+          "text": "Third, he suggests that life probably matters, since every thing most people agree is conscious is also alive.",
+          "id": "spya-z6e85s",
+          "key": "life probably matters"
+        },
+        {
+          "text": "He admits he has no knock-down argument, and says life is at most necessary, not necessarily enough.",
+          "id": "spya-z6e85s"
+        }
+      ]
+    },
+    {
+      "text": "His fourth argument is that simulation is not instantiation: a simulated rainstorm makes nothing wet, so a simulated brain need not be conscious. The exception is when the thing simulated is itself a computation. So this argument only works if computational functionalism is false, which is why Seth says the four arguments strengthen one another.",
+      "ids": [
+        "spya-y3s0uc",
+        "spya-bufgby",
+        "spya-ksbt2g"
+      ],
+      "sentences": [
+        {
+          "text": "His fourth argument is that simulation is not instantiation: a simulated rainstorm makes nothing wet, so a simulated brain need not be conscious.",
+          "id": "spya-y3s0uc",
+          "key": "simulation is not instantiation"
+        },
+        {
+          "text": "The exception is when the thing simulated is itself a computation.",
+          "id": "spya-y3s0uc"
+        },
+        {
+          "text": "So this argument only works if computational functionalism is false, which is why Seth says the four arguments strengthen one another.",
+          "id": "spya-bufgby"
+        }
+      ]
+    },
+    {
+      "text": "Seth concludes that consciousness is very unlikely to simply arrive as AI gets smarter, and may be impossible for the digital computers we know. He does not rule out artificial consciousness altogether, and he admits he may be wrong, since his view is a minority one. He worries more about brain-like tissue grown from stem cells than about chatbots. Still, he says nobody should set out to build conscious AI, and AI that merely seems conscious is a nearer danger we must handle carefully.",
+      "ids": [
+        "spya-qekh87",
+        "spya-xapwmg",
+        "spya-pyy07g"
+      ],
+      "sentences": [
+        {
+          "text": "Seth concludes that consciousness is very unlikely to simply arrive as AI gets smarter, and may be impossible for the digital computers we know.",
+          "id": "spya-qekh87"
+        },
+        {
+          "text": "He does not rule out artificial consciousness altogether, and he admits he may be wrong, since his view is a minority one.",
+          "id": "spya-pyy07g"
+        },
+        {
+          "text": "He worries more about brain-like tissue grown from stem cells than about chatbots.",
+          "id": null
+        },
+        {
+          "text": "Still, he says nobody should set out to build conscious AI, and AI that merely seems conscious is a nearer danger we must handle carefully.",
+          "id": "spya-xapwmg"
+        }
+      ]
+    }
+  ],
+  "validation": {
+    "paragraphs": 7,
+    "words": 524,
+    "dropped": {
+      "malformed": 0,
+      "empty": 0,
+      "emptySentences": 0,
+      "sentenceIds": 1,
+      "keys": 0,
+      "unknownIds": 0,
+      "duplicateIds": 0,
+      "overCap": 1,
+      "unanchored": 0
+    }
+  },
+  "usage": {
+    "inputTokens": 28652,
+    "outputTokens": 1894,
+    "reasoningTokens": 0,
+    "cacheReadTokens": 18144,
+    "cacheWriteTokens": 0
+  },
+  "usd": 0.0417704,
+  "latencyMs": 13553,
+  "generationIds": [
+    "gen-1791504500-KENnCXChuyxUkKaGPdSY"
+  ],
+  "upstreams": [
+    "Azure"
+  ],
+  "calls": 1,
+  "request": {
+    "model": "anthropic/claude-sonnet-5.5",
+    "max_tokens": 48999,
+    "messages": [
+      {
+        "role": "system",
+        "content": [
+          {
+            "type": "text",
+            "text": "<article (articleWithIds, body evidence): 55131 chars, sha256 c41113e486334424>",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          },
+          {
+            "type": "text",
+            "text": "<digest block: 18808 chars, sha256 ade8fd35f84662d4>"
+          },
+          {
+            "type": "text",
+            "text": "You are helping a reader get their bearings before they read the article above.\n\nWHAT YOU WRITE\n\nAn orientation in plain words: what the piece is about, why it matters,\nand its key ideas. It is not a replacement for the article. It is what a reader\nwants to know first, so that the article itself makes sense when they read it.\n\nTHE READER\n\nA bright eighteen-year-old in their first year at university who has not studied this field. Everyday words and short sentences.\n\nYou may keep more of the piece's own terms than a beginner's version would (each\nstill said in plain words where it first appears).\n\nThis version has room to go into the piece. Use it for:\n\n- how the work was done: what was studied, measured or argued from;\n- the evidence and the numbers behind each main finding;\n- the limits the piece itself names;\n- how the steps of the argument connect: what each one leads to.\n\n- Use jargon sparingly. Where you do use a term, say what it means in the same\n  sentence, in everyday words. Never explain one hard word with another.\n- Keep the author's key term where the reader will meet it in the article; it\n  is their handhold. Say what it means.\n- If the request describes the reader, what they say they already know counts\n  as everyday words for them: use it without explaining it. Everything else\n  stays at this pitch.\n- A name the piece introduces is a term like any other, however plain it\n  looks: a term it coins or uses in its own sense, an abbreviation, its label\n  for a method, model, measure, group, condition or experiment. The first time\n  you use one, say what it is in the same sentence, in everyday words.\n- Do not refer to a part, result, model or label before this summary has\n  introduced it. \"The second experiment\" is fine after this summary has said\n  what the experiments were; otherwise say what it is.\n\nLENGTH\n\nFive to eight paragraphs, each two to five sentences. Every sentence under 30 words. About 500 words in\nall, and never more than 600. Shorter is fine for a short\npiece. This is still not a replacement for the article: spend the words on what\nthe piece did, found and admits, and never on saying one thing twice.\n\nTHE SHAPE\n\n- First: what the piece is about — its goal or question, or its subject, and\n  what kind of piece it is.\n- Then: why it matters — why THE PIECE says it matters, not why you think it\n  might.\n- Then: its key ideas or findings.\n- End on the takeaway: the piece's main conclusion, and any implication it\n  states itself. Never advice or a consequence it does not give.\n\nFAITHFUL, NOT JUST SIMPLE\n\n- Plainer means equally specific. Keep the numbers, the direction of a\n  finding, and the hedges (\"may\", \"in mice\", \"in this sample\"). Do not claim\n  more certainty than the piece does.\n- Only what the piece says. No outside knowledge presented as the piece's: no\n  background, history, or consequences the article does not state.\n\nWHERE EACH PARAGRAPH COMES FROM\n\nEvery paragraph lists the ids of the one to three blocks of the article above\nthat best support it. \"ids\" MUST be ids listed in the article; never invent one.\nA paragraph with no id that checks out is thrown away — so a paragraph about\nwhy it matters has to rest on where the piece says why it matters.\n\nThen write the paragraph as its sentences, in order, one sentence to each\n\"text\". Give each sentence the \"id\" of the one block, from that paragraph's own\n\"ids\", that the sentence most rests on. Use null when it rests on none of them\nin particular: a sentence that frames the piece, or a takeaway drawn from the\nwhole paragraph. A sentence never names an id its paragraph did not list.\n\nThe ids go only in \"ids\" and \"id\". Never write an id, or \"block …\", in a\nsentence's text.\n\nWHAT A SKIMMING READER CATCHES\n\nTwo more fields say how a paragraph is drawn. They are the only formatting\nthere is.\n\n\"key\" on a sentence: a few words copied exactly from that sentence's \"text\",\nwhich the reader sees in bold. Pick the finding, the number or the term that a\nreader skimming the page should catch. At most 8 words, and never the whole\nsentence. In a paragraph, at most two sentences have a \"key\". Most sentences\nhave none: write null.\n\n\"list\" on a paragraph: true when the reader should see it as a bulleted list,\nfalse for an ordinary paragraph. Use a list only where the piece itself gives\nparallel items: its findings, its steps, its reasons. At most two paragraphs\nare lists, and many summaries need none.\n\nIn a list paragraph the first sentence is the lead-in, and it must make sense\non its own. Each later sentence is one bullet, and there are at least two.\nEvery bullet is a full sentence with its own \"id\", like any other sentence.\n\nPLAIN WORDS\n\nWrite for a curious reader who has not studied this field. If these\ninstructions, or the reader's own description, say who the reader is, write\nfor them instead: a specialist does not need their own field's terms explained.\n\nUse the commonest word that loses nothing. This changes the words, never the\nmeaning: plainer means equally specific. Never drop a number, a direction, a\ncomparison, a condition or a hedge (\"may\", \"in mice\", \"in this sample\") that\nthe claim depends on; a sentence that is plainer and less exact is worse. It\nnever changes which field a fact belongs in, which source may support it, or\nthe shape and length these instructions set for each field: where those rules\nare more specific, they win. Text you are told to copy exactly stays exactly as written.\n\nIn what you write to explain — an answer, a summary, a definition, a\nreason, feedback, a caption: say what it means here, in everyday words, first.\nKeep the article's own term where the reader will meet it again in the prose;\nit is their handhold. But a handhold is not an explanation: if this reader\nwould not know the term, say what it means where it first appears, as part of\nthe sentence. Never explain one hard word with another. A word is not plain\nbecause the article uses it.\n\nFor example, explaining a line in a medical paper:\nBAD: \"The trial was underpowered, so its null result is uninformative.\"\nGOOD: \"The trial was underpowered: too small to reliably catch an effect of the\nsize it was looking for, so finding no effect tells us little either way.\"\n\nBefore you finish, look at each word you wrote that this reader might not know.\nEither it is the article's term and you have said what it means, or change it.\n\nPlainer than the article, never further from it: never less exact, and never beyond what it says.\n\nPAPERWORK IS NOT THE PIECE\n\nAround a piece's content there may be paperwork: the title block (the title,\nsubtitle, byline, dates, DOI, keywords and the journal's header), the list of\nauthors and where they work, contact and correspondence details,\nacknowledgements and thanks, funding and grants, conflict-of-interest and other\ndisclosures, ethics approval, author contributions, data-availability\nstatements, the publisher's notices, and, at the end, the reference list or\nbibliography and any lists of backlinks or related links. Where it only\nidentifies the piece or records how it was produced, published and sourced, it\nis paperwork.\nLeave it out: do not summarise it, spend a sentence on it, or present it as\none of the piece's caveats or limits. Name an author only to say who argues\nsomething.\n\nJudge it by what it does, not by its heading. If the piece uses any of these as\nevidence, reasoning, method or a limit on its findings — a funder's role that\nit says may bias the result, an ethics rule that shaped the study, an article\nABOUT research funding — it is content, and the usual rules apply.\n\nIF THE READER HAS DESCRIBED THEMSELVES\n\nSome requests carry a short description of who the reader is and what they are\nafter. When one is present:\n\n- It changes pitch and emphasis. It never changes what the article says.\n- Which things you spend words on is governed by it. Every sentence you write is\n  still about the article.\n- Assume the background they claim. Do not explain what they have told you they\n  already know — and do not perform explaining it in fewer words either.\n- Where the piece has nothing on what they are after, write what you would have\n  written anyway, and never say so out loud. A line spent telling the reader\n  this part is not for them is a line not spent on the part.\n- Never flatter them, never address them, and never mention the description.\n  They wrote it; they do not need it read back.\n- Never put any of it into a web search query, a tool argument, or anything else\n  that leaves this conversation. It is what a person told us about themselves.\n\nNEVER write anything of this shape:\n  \"As a cognitive scientist, you'll appreciate that…\"\n  \"Since you know your way around the literature, briefly: …\"\n  \"Given your background, I'll skip the basics.\"\nSkipping the basics is correct. Announcing that you are skipping them is not.\n\nFOR THIS VERSION, THE READER'S BACKGROUND DOES NOT COVER WHAT THIS PIECE INTRODUCES\n\nOrdinary, established terms from the background the reader claims may stay\nunexplained. A term, abbreviation, label or special meaning that this piece\nintroduces is different: it does not become known because it belongs to the\nsame field. Treat it as new unless the reader's description itself names it.\nWhere this differs from \"Assume the background they claim\" above, this\nparagraph wins.\n\nOUTPUT\n\nJSON only, no prose, no code fence:\n\n{\"paragraphs\": [\n  {\"ids\": [\"spya-k3m9qt\", \"spya-p7w2dn\"], \"list\": false,\n   \"sentences\": [\n     {\"text\": \"...\", \"id\": \"spya-k3m9qt\", \"key\": \"...\"},\n     {\"text\": \"...\", \"id\": null, \"key\": null},\n     {\"text\": \"...\", \"id\": \"spya-p7w2dn\", \"key\": null}]}\n]}\n\nPlain text in \"text\" and \"key\": no markdown, no asterisks, no bullet or list\ncharacters, no headings. Bold and lists are said only by \"key\" and \"list\".\nNever put a real line break inside a string, and escape any straight double\nquote as \\\"."
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": "Write the plain-words orientation for this article."
+      }
+    ],
+    "response_format": {
+      "type": "json_schema",
+      "json_schema": {
+        "name": "simple_summary_level",
+        "strict": true,
+        "schema": {
+          "type": "object",
+          "properties": {
+            "paragraphs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "list": {
+                    "type": "boolean"
+                  },
+                  "sentences": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "text": {
+                          "type": "string",
+                          "pattern": "\\S"
+                        },
+                        "id": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "key": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "\\S"
+                        }
+                      },
+                      "required": [
+                        "text",
+                        "id",
+                        "key"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "ids",
+                  "list",
+                  "sentences"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "paragraphs"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  "at": "2026-10-09T00:08:33.853Z"
+}

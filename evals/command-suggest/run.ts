@@ -56,7 +56,7 @@ import { CASES, type SuggestCase } from "./cases.js";
 loadEnvLocal();
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const RUN = "261005";
+const RUN = (() => { const i = process.argv.indexOf("--run"); return i >= 0 ? (process.argv[i + 1] ?? "261005") : "261005"; })();
 const RESULTS_DIR = path.join(HERE, "results", RUN);
 const ANSWERS = path.join(RESULTS_DIR, "answers.json");
 /** Each case is asked this many times: one sample of a prompt says little about the next. */

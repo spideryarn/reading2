@@ -226,6 +226,15 @@ describe("priceAt — the price is a property of when the call happened", () => 
 });
 
 describe("the price table itself", () => {
+  it("prices Sonnet 5.5 cache reads at five percent while retaining Sonnet 5's rate", () => {
+    const p = priceAt("claude-sonnet-5-5", new Date("2026-10-09T00:00:00Z"))!;
+    expect(p.cacheRead).toBe(0.10);
+    expect(priceAt("claude-sonnet-5", AT)!.cacheRead).toBe(0.20);
+    expect(crossCheckOpenRouter(p, {
+      prompt_tokens: 1_000_000, completion_tokens: 0,
+      prompt_tokens_details: { cached_tokens: 1_000_000, cache_write_tokens: 0 },
+    })?.totalNanos).toBe(100_000_000);
+  });
   const rows = Object.entries(ANTHROPIC_PRICES).flatMap(([model, list]) =>
     list.map((r) => [`${model}@${r.from}`, r.price] as const),
   );
@@ -234,7 +243,9 @@ describe("the price table itself", () => {
     for (const [label, p] of rows) {
       expect(p.cacheWrite5m / p.input, `${label} 5m write`).toBeCloseTo(1.25, 10);
       expect(p.cacheWrite1h / p.input, `${label} 1h write`).toBeCloseTo(2.0, 10);
-      expect(p.cacheRead / p.input, `${label} cache read`).toBeCloseTo(0.1, 10);
+      expect(p.cacheRead / p.input, `${label} cache read`).toBeCloseTo(
+        label.startsWith("claude-sonnet-5-5@") ? 0.05 : 0.1, 10,
+      );
     }
   });
 

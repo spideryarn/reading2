@@ -87,9 +87,17 @@ const GATEWAY_HOST = PROVIDER_HOSTS[0] ?? "";
 
 /** The last streamed OpenRouter response, read off a clone. Watching, not bypassing. */
 let pending: Promise<Seen> | null = null;
-function watchTheModel(): void {
+function watchTheModel(providerOrder?: string): void {
   const real = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    /* `--provider-order X`, eval only: the route table's own provider policy
+       (order openai) is what production sends, so to put an Anthropic model on
+       Anthropic's endpoint the outgoing body's `provider.order` is swapped. */
+    if (providerOrder !== undefined && typeof init?.body === "string") {
+      const body = JSON.parse(init.body) as { provider?: Record<string, unknown> };
+      body.provider = { ...(body.provider ?? {}), order: [providerOrder] };
+      init = { ...init, body: JSON.stringify(body) };
+    }
     const res = await real(input, init);
     /* Which provider's reply to read, from the shared list rather than a host
        spelled here: this file only watches the gateway's own fetch. */
@@ -131,6 +139,7 @@ async function ask(
   systemSha: string,
   retention: string | undefined,
   nonce: string | undefined,
+  cacheControl = false,
 ): Promise<Row> {
   pending = null;
   /* `--retention 24h` adds OpenAI's \`prompt_cache_retention\` to this eval's
@@ -142,9 +151,16 @@ async function ask(
     nonce === undefined
       ? base.messages
       : (base.messages as { role: string; content: string }[]).map((m, i) => (i === 0 ? { ...m, content: `Cache probe ${nonce}.\n\n${String(m.content)}` } : m));
+  /* `--cache-control`, eval only: Anthropic's explicit breakpoint on the system
+     message (the Help pages), which production does not send. */
+  const marked = cacheControl
+    ? (messages as { role: string; content: string }[]).map((m, i) =>
+        i === 0 ? { ...m, content: [{ type: "text", text: String(m.content), cache_control: { type: "ephemeral" } }] } : m,
+      )
+    : messages;
   const request = {
     ...base,
-    messages,
+    messages: marked,
     model,
     ...(retention === undefined ? {} : { prompt_cache_retention: retention }),
   } as ReturnType<typeof helpChatRequest>;
@@ -216,17 +232,19 @@ async function main(): Promise<void> {
   const only = flag("--only")?.split(",") ?? null;
   const retention = flag("--retention");
   const nonce = flag("--nonce");
+  const cacheControl = argv.includes("--cache-control");
+  const providerOrder = flag("--provider-order");
   const questions = QUESTIONS.filter((q) => only === null || only.some((o) => q.id.startsWith(o)));
   const systemSha = createHash("sha256").update(HELP_CHAT_SYSTEM).digest("hex").slice(0, 12);
 
   mkdirSync(RESULTS_DIR, { recursive: true });
   const file = path.join(RESULTS_DIR, `${arm}.json`);
   const rows: Row[] = existsSync(file) ? (JSON.parse(readFileSync(file, "utf8")) as Row[]) : [];
-  watchTheModel();
+  watchTheModel(providerOrder);
   let spent = 0;
   for (const q of questions) {
     if (spent > BUDGET_USD) throw new Error(`Stopped: spent $${spent.toFixed(4)}, over the $${BUDGET_USD} budget.`);
-    const row = await ask(arm, model, q, systemSha, retention, nonce);
+    const row = await ask(arm, model, q, systemSha, retention, nonce, cacheControl);
     spent += row.costUsd ?? 0;
     rows.push(row);
     writeFileSync(file, `${JSON.stringify(rows, null, 1)}\n`);
