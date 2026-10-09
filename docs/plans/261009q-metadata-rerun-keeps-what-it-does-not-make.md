@@ -85,14 +85,14 @@ Seen red: the abstract was `undefined` in `meta.json`.
 
 ## GPT Sol's plan review
 
-[261009p-plan-review-sol.md](261009p-plan-review-sol.md), APPROVE WITH CHANGES, after a first
+[261009q-plan-review-sol.md](261009q-plan-review-sol.md), APPROVE WITH CHANGES, after a first
 draft was already in the tree. **F1 taken** (fill rather than clear, above). **F2 taken** (the
 Postgres job test, and the impossible fixture with both a day and a year is gone). F3 and F4
 found nothing to change. **F5 taken** (wording: the round trip is semantic, not byte-for-byte).
 
 ## GPT Sol's code review
 
-[261009p-code-review-sol.md](261009p-code-review-sol.md), APPROVE WITH CHANGES. One finding,
+[261009q-code-review-sol.md](261009q-code-review-sol.md), APPROVE WITH CHANGES. One finding,
 fixed by the reviewer: the DOI comparison was case-sensitive, so the same DOI in other capitals
 dropped the journal. It now compares case-insensitively, with a test case. It found the
 `Record<keyof Meta, …>` exhaustive and the casts harmless. It could not reach the database from its

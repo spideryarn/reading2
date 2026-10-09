@@ -2119,7 +2119,7 @@ export const metadataReaders = {
  * there; run alone by the administrator on an article `extract` already read,
  * it was how the PDF was read (`recall`, `pagesChecked`, `quality` and the
  * rest), the page's `siteName`, `lang`, `excerpt` and `note`, and any byline,
- * date or DOI this run did not find again. Plan 261009p.
+ * date or DOI this run did not find again. Plan 261009q.
  *
  * - **`made`**: the step always says it. The title pair (`stepTitleTidier`
  *   already holds a pair steady when the raw title repeats) and `source`.

@@ -147,7 +147,7 @@ store dropping a field a producer sets. What it did find, none of it changed her
   read — `source`, `method`, `pages`, `unverified`, `recall`, `pagesChecked`, and now `quality` —
   because both steps write through `metaColumns`. Only the administrator can run it alone.
   Raised by GPT Sol's plan review of 261009n. **Fixed by
-  [261009p](../plans/261009p-metadata-rerun-keeps-what-it-does-not-make.md)**: it cleared the page's
+  [261009q](../plans/261009q-metadata-rerun-keeps-what-it-does-not-make.md)**: it cleared the page's
   `siteName`, `lang`, `excerpt` and `note`, and any byline, date or DOI it did not find again, as
   well; the step now keeps or fills each by a `Record<keyof Meta, …>`. The same plan put `abstract`
   in the rollback's `meta.json` and wrote down why `doi` and `journal` are still out.

@@ -1,6 +1,6 @@
 /**
  * **The administrator's standalone `metadata` run, through Postgres and a real
- * job, keeps what `extract` wrote.** Plan 261009p, GPT Sol's plan review F2.
+ * job, keeps what `extract` wrote.** Plan 261009q, GPT Sol's plan review F2.
  *
  * tests/metadata-rerun-keeps-extract.test.ts holds the rules over a fake
  * store. This is the part a fake cannot show: that the draft the job writes

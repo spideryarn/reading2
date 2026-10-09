@@ -1,6 +1,6 @@
 /**
  * **The rollback's `meta.json` carries the abstract**, and still leaves out the
- * DOI and the journal. Plan 261009p.
+ * DOI and the journal. Plan 261009q.
  *
  * `src/store/export.ts` builds `meta.json` field by field, so a field it does
  * not name is a field the rollback loses with nothing saying so — the class in
