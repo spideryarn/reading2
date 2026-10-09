@@ -465,7 +465,7 @@ describe("removeAll — `npm run worktree:sweep -- --remove`", () => {
   });
 
   it("never passes a missing branch to the removal — a detached tree is a look, not a target", () => {
-    /* GPT Sol, 261009t F4: with no branch, the removal means "the tree I am
+    /* GPT Sol, 261009v F4: with no branch, the removal means "the tree I am
        standing in", so `undefined` from a detached candidate would aim it at the
        caller's own tree. */
     const wt = freshWorktree("bulk-detached");
@@ -495,7 +495,7 @@ describe("removeAll — `npm run worktree:sweep -- --remove`", () => {
   });
 
   it("keeps a tree whose lock names the session running the sweep — its subagent may still be at work", () => {
-    /* GPT Sol, 261009t F1. The WorktreeCreate hook locks an `Agent` subagent's
+    /* GPT Sol, 261009v F1. The WorktreeCreate hook locks an `Agent` subagent's
        tree with the PARENT session's pid, and that tree has no process of its
        own between tool calls. Removing your own tree by name still works. */
     const wt = freshWorktree("bulk-mine");

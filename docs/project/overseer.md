@@ -737,6 +737,17 @@ four sessions' tests for hours, and killing 17 finished sessions took available 
 and swap from 31 to 21 GB. Gate 3 still picks which: only a session that has debriefed, with no
 worktree holding uncommitted or unpushed work. A session's old Playwright Chrome goes with it.
 
+**A process still running does not keep a finished session alive.** Greg, 2026-10-09, relayed from
+his Mac: *"if you are sure that the worktrees have been successfully finished and merged into dev,
+then you have my permission now and going forwards to remove them"* and *"if there are sessions
+either on this laptop or on remote that are still running and have finished and successfully
+finished and pushed and we definitely dont need them anymore and youre confident, then its okay to
+kill them even if they still have a process running as long as youre pretty sure that its not
+something valuable."* So a session that has debriefed, with its work on `origin/dev`, goes even with
+a test run or a subagent still going under it — on 2026-10-09 one had a subagent four hours into
+rerunning tests whose result its debrief already reported. What stays is anything whose output
+nothing else has: a deploy, an eval, a migration, or a run the debrief says it is waiting for.
+
 ## Things that will catch you
 
 Each of these has cost somebody real time on this box.

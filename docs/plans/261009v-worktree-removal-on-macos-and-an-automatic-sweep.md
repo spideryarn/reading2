@@ -125,7 +125,7 @@ HEAD reflog or index changed in the last N minutes — a proxy of the kind 26091
 
 ## After GPT Sol's plan review (NOT READY → these changes)
 
-The review is [261009t-plan-review-sol.md](261009t-plan-review-sol.md). Each finding, and what I did:
+The review is [261009v-worktree-removal-plan-review-sol.md](261009v-worktree-removal-plan-review-sol.md). Each finding, and what I did:
 
 - **F1 (P1) — the in-process subagent residual is not acceptable for an automatic run.** Agreed, and
   there is a cooperative ownership record already, on Linux only: `.claude/hooks/worktree-create.sh`

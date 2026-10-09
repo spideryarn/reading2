@@ -336,7 +336,7 @@ function nameOf(facts: SweepFacts): string {
  * **A tree with no branch is never removed here.** `removeWorktree` takes a
  * branch, and with none it means "the tree I am standing in" — so `undefined`
  * from a detached tree would aim the removal at the caller's own tree (GPT Sol,
- * 261009t F4). Such a tree is reported under `needs-a-look`.
+ * 261009v F4). Such a tree is reported under `needs-a-look`.
  */
 export function removeAll(
   cwd: string,

@@ -70,4 +70,4 @@ for removal by name remains an implementation heuristic, not proof of pipeline m
    entry and alias changes, rejected for this commit: it changes the cooperative
    protocol and exceeds a narrow reviewer fix.
 
-Up: [Postmortems](../project/postmortems.md). Context: [261009t plan](../plans/261009t-worktree-removal-on-macos-and-an-automatic-sweep.md).
+Up: [Postmortems](../project/postmortems.md). Context: [261009v plan](../plans/261009v-worktree-removal-on-macos-and-an-automatic-sweep.md).

@@ -754,7 +754,7 @@ describe("liveness is read again after the unlock, not only once", () => {
 });
 
 describe("the WorktreeCreate hook's lock", () => {
-  /* GPT Sol, 261009t F1: an `Agent` subagent's tree has no process of its own
+  /* GPT Sol, 261009v F1: an `Agent` subagent's tree has no process of its own
      between tool calls, so the lock naming the parent session is the only thing
      that says it is still wanted — and on the Mac the hook wrote none. Driven
      under a fake `claude` (bash, by that name), as Claude Code would run it. */

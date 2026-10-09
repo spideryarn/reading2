@@ -73,7 +73,7 @@ fi
 #
 # The Mac has no /proc, and until 2026-10-09 got no lock at all — so an `Agent`
 # subagent's tree there, which has no process of its own between tool calls, read as
-# idle to `worktree:remove` while the agent was still working (GPT Sol, 261009t F1). It
+# idle to `worktree:remove` while the agent was still working (GPT Sol, 261009v F1). It
 # walks the same chain with `ps`. Its start time is the process's start in epoch seconds,
 # written for the record only: the Mac's check in scripts/worktree-inuse.ts is pid-only.
 pid=$PPID

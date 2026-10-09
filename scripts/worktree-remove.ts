@@ -296,7 +296,7 @@ export function liveness(
     const snap = darwin();
     if ("error" in snap) return unmeasured(`could not list processes on this Mac — ${snap.error}`);
     /* A tree whose realpath or identity cannot be read is an unknown, never a
-       quiet fallback to the registered spelling (GPT Sol, 261009t F3). */
+       quiet fallback to the registered spelling (GPT Sol, 261009v F3). */
     const contains = containmentFor(worktreePath);
     if ("error" in contains) return unmeasured(contains.error);
     const { standing, scan } = darwinInUse(snap, contains, lockReason, pid, excludePipelineFilters);
@@ -338,8 +338,8 @@ export interface RemoveOptions {
  * `Agent` subagent's tree with the *parent* session's pid, so a session sweeping
  * would read `asking` for every tree its still-working subagents hold, and those
  * trees have no process of their own between tool calls. So in bulk `asking` is
- * `in-use`. GPT Sol, 261009t F1; the plan is
- * docs/plans/261009t-worktree-removal-on-macos-and-an-automatic-sweep.md.
+ * `in-use`. GPT Sol, 261009v F1; the plan is
+ * docs/plans/261009v-worktree-removal-on-macos-and-an-automatic-sweep.md.
  */
 export function inBulk(live: Liveness): Liveness {
   if (live.standing.kind !== "asking") return live;

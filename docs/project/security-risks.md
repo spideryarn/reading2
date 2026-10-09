@@ -294,8 +294,9 @@ scheduled sweep. One to three days.
 ### R14
 
 **If remote MCP is enabled, its token can change the account's password at Supabase.** Medium. The
-route is switched off while `MCP_OAUTH_CLIENT_ID` is unset, so there is no current remote-token
-exposure. Before it is enabled, an AI app's OAuth token is an ordinary sign-in at Supabase, so
+route is switched off while `MCP_OAUTH_CLIENT_ID` has no nonempty client ids. The comma-separated
+list permits multiple hand-registered apps; it does not narrow a token's authority at Supabase.
+Once issued, an AI app's OAuth token is an ordinary sign-in at Supabase, so
 whoever holds it could change the password unless *secure password change* is on
 ([security-map.md § An AI app's token](security-map.md#and-since-2026-10-07-an-ai-apps-token-which-opens-one-route),
 [261007p § Questions for Greg](../plans/261007p-mcp-remote-sign-in-with-oauth.md#questions-for-greg-not-blocking)).

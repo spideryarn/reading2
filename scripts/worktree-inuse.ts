@@ -256,7 +256,7 @@ export function parseStat(line: string): { ppid: number; pgrp: number; start: nu
  * A process group is the right unit for *which* job, and not enough on its own:
  * a non-interactive shell has no job control, so `npm run dev & npm run
  * worktree:sweep` puts the dev server in the sweep's group too. GPT Sol
- * reproduced the Mac version of that on 261009t (F2). So a same-group process is
+ * reproduced the Mac version of that on 261009v (F2). So a same-group process is
  * excluded only when it is also a **pipeline filter** — `isPipelineFilter` — which
  * is the case this exclusion was written for, and which a server never is.
  *
@@ -635,7 +635,7 @@ export function procTable(): ProcTable | null {
  * **The same two signals on the Mac, which has no `/proc`.** Added 2026-10-09:
  * until then every live tree on the Mac read `unknown`, and `worktree:remove`
  * refused all of them.
- * docs/plans/261009t-worktree-removal-on-macos-and-an-automatic-sweep.md.
+ * docs/plans/261009v-worktree-removal-on-macos-and-an-automatic-sweep.md.
  *
  * Three reads, in this order, and the order is what lets "gone" be told from
  * "hidden":
@@ -847,7 +847,7 @@ function realStatId(p: string): IdRead {
 
 /**
  * Is a cwd inside the tree? **Spelling first, then filesystem identity**, and
- * spelling alone was not enough — GPT Sol's F3 on 261009t, both reproduced on
+ * spelling alone was not enough — GPT Sol's F3 on 261009v, both reproduced on
  * the Mac:
  *
  * - The default Mac volume is case-insensitive. A shell that `cd`s to

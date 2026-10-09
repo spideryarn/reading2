@@ -530,8 +530,8 @@ the cwd and group; a detached child still vetoes), and, for removal by name, a p
 filter (`tail`, `grep`, …) in the asker's process group. The bulk sweep disables that filter
 exemption: an independent `tail -f` can share the group too, and the caller's tree is already kept.
 A process group alone is not enough —
-`npm run dev & npm run worktree:sweep` shares one (GPT Sol, 261009t). The design and its review:
-[261009t](../plans/261009t-worktree-removal-on-macos-and-an-automatic-sweep.md).
+`npm run dev & npm run worktree:sweep` shares one (GPT Sol, 261009v). The design and its review:
+[261009v](../plans/261009v-worktree-removal-on-macos-and-an-automatic-sweep.md).
 
 **An `Agent` subagent's tree is protected by its parent session's lock.** It has no process of its
 own between tool calls — measured on the Mac, nothing has its cwd there while the agent thinks — so
@@ -729,7 +729,7 @@ It prints key names and hashes, never a value. Read it line by line:
 - **`#` lines** — a comment that differs is somebody's note; read it in the file before deciding.
 
 Nothing printed by `diff` and the check still says DIFFERS means whitespace or line endings. GPT Sol
-(261009t F5) caught the version of this recipe that compared key names only and concluded "stale copy"
+(261009v F5) caught the version of this recipe that compared key names only and concluded "stale copy"
 from silence: a changed value, a deleted key, a reordered duplicate and a comment all print nothing
 there.
 

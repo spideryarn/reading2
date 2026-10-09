@@ -277,7 +277,7 @@ describe("cwdUsersUnder", () => {
   });
 
   it("REFUSES over a dev server that shares our process group — `npm run dev & npm run worktree:sweep`", () => {
-    /* GPT Sol, 261009t F2: a shell without job control puts a backgrounded job in
+    /* GPT Sol, 261009v F2: a shell without job control puts a backgrounded job in
        the same group as the sweep. The group alone is not "our pipeline". */
     const proc = fakeProc({
       90: { ppid: 80, pgrp: 90, start: 9, cwd: TREE },
@@ -564,14 +564,14 @@ describe("the macOS path", () => {
   });
 
   it("REFUSES over a dev server in the asker's own process group — a group is not a pipeline", () => {
-    /* GPT Sol, 261009t F2, reproduced on the Mac: a shell without job control
+    /* GPT Sol, 261009v F2, reproduced on the Mac: a shell without job control
        puts `npm run dev &` in the same group as the sweep that follows it. */
     const dev = psLine(903, 800, 900, ME, "S", "node node_modules/.bin/vite");
     expect(verdict(readDarwinSnapshot(runner([...base, dev], { ...baseCwds, 903: MAC_TREE }).run, ME)).kind).toBe("in-use");
   });
 
   it("matches a cwd spelled in a different case — the Mac's volume is case-insensitive", () => {
-    /* GPT Sol, 261009t F3: lsof printed the directory's own spelling, realpath
+    /* GPT Sol, 261009v F3: lsof printed the directory's own spelling, realpath
        kept the spelling the shell had used, and neither matched. */
     const ps = [...base, psLine(57, 1, 57, ME, "S", "sleep 120")];
     const snap = readDarwinSnapshot(runner(ps, { ...baseCwds, 57: `${MAC_TREE.toUpperCase()}/src` }).run, ME);

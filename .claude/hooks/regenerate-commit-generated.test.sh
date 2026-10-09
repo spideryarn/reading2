@@ -146,29 +146,127 @@ check "adds nothing"                             unchanged_input
 check "and says so"                              says "generator failed"
 reset_repo
 
-echo "--- left alone ---"
+echo "--- left alone, and silent: nothing of a generator's is named ---"
 echo y > "$REPO/other/x.ts"
 run "git commit -F msg -- other/x.ts";                                   check "an unrelated commit"         nothing
+run "git commit -F msg -- other/x.ts && git push";                       check "an unrelated declined commit" nothing
+run 'git commit -m "$X: src/web/help/pages/b.md" -- other/x.ts';         check "an unchanged source named in a message" nothing
 echo LATER-EDIT > "$REPO/src/web/help/pages/a.md"
 run "git commit -F msg";                                                 check "a bare commit"               nothing
-run "git add -A && git commit -F msg -- src/web/help/pages/a.md";        check "git add -A before it"        nothing
-run "git add -- src/web/help && git commit -F msg -- src/web/help/pages/a.md"; check "git add of a directory" nothing
-run "git commit -F msg -- src/web/help/pages/a.md && git push";          check "a push after it"             nothing
-run "git commit -F msg src/web/help/pages/a.md";                         check "paths without --"            nothing
-run "git commit -F msg -- src/web/help/pages/a.md # note";               check "a trailing comment"          nothing
-run 'git commit -m "$X" -- src/web/help/pages/a.md';                    check "shell expansion"             nothing
-run "git commit -a -F msg -- src/web/help/pages/a.md";                   check "an unknown option"           nothing
-run "git log --grep commit";                                             check "not a commit"                nothing
-run "git commit -F msg -- src/web/help/pages/a.md;";                      check "a trailing semicolon"        nothing
-run "git commit -F msg -- src/web/help/pages/a.md &&";                    check "a trailing and operator"     nothing
-run "git add -- :/ && git commit -F msg -- src/web/help/pages/a.md";      check "git add pathspec magic"      nothing
-run "git add -- : && git commit -F msg -- src/web/help/pages/a.md";       check "git add empty pathspec"      nothing
-run "git commit --amend -F msg -- src/web/help/pages/a.md";               check "history rewriting needs its own approval" nothing
-run "git commit --no-verify -F msg -- src/web/help/pages/a.md";            check "bypassing hooks needs its own approval" nothing
-ln -s "$REPO/docs" "$REPO/other/alias"
-run "cd other/alias/.. && git commit -F msg -- src/web/help/pages/a.md";  check "cd through a symlink and .. is uncertain" nothing
+run "git log --grep commit -- src/web/help/pages/a.md";                  check "not a commit"                nothing
+run "echo 'instructions: git commit -- src/web/help/pages/a.md'";         check "a quoted commit is not a command" nothing
+run "echo done # git commit -- src/web/help/pages/a.md";                  check "a commented commit is not a command" nothing
+run "cat <<'EOF'
+git commit -- src/web/help/pages/a.md
+EOF";                                                                    check "a commit in a heredoc is not a command" nothing
+run "git -C other commit -- src/web/help/pages/a.md";                     check "git -C does not inspect the payload repo" nothing
+run "echo first && cd other && git commit -- src/web/help/pages/a.md";    check "a non-leading cd does not inspect the wrong directory" nothing
+run "pushd other >/dev/null && git commit -- src/web/help/pages/a.md";     check "pushd does not inspect the wrong directory" nothing
+run "GIT_DIR=other/.git GIT_WORK_TREE=other git commit -- src/web/help/pages/a.md"; check "Git directory variables stay silent" nothing
+run "export GIT_DIR=other/.git && git commit -- src/web/help/pages/a.md";   check "exported Git directory variables stay silent" nothing
 check "and nothing was regenerated"              lacks src/help-corpus.generated.json LATER-EDIT
 reset_repo
+
+echo "--- declined, and says so: the commit names a changed source (261009t) ---"
+# The hook approves only the house recipe, which it reads for certain. On anything else that names
+# a changed source it must still say which generator to run, or a stale file goes in unremarked.
+hints_help() { unchanged_input && says "WRITE_HELP_CORPUS=1 npx vitest run tests/help-corpus.test.ts" && says "src/web/help/pages/a.md"; }
+hints_feedback() { unchanged_input && says "npx tsx scripts/feedback-endings.ts" && says "docs/user-feedback/n1.md"; }
+echo LATER-EDIT > "$REPO/src/web/help/pages/a.md"
+run "git add -A && git commit -F msg -- src/web/help/pages/a.md";        check "git add -A before it"        hints_help
+run "git add -- src/web/help && git commit -F msg -- src/web/help/pages/a.md"; check "git add of a directory" hints_help
+run "git commit -F msg -- src/web/help/pages/a.md && git push";          check "a push after it"             hints_help
+run "git commit -F msg src/web/help/pages/a.md";                         check "paths without --"            hints_help
+run "git commit -F msg -- src/web/help/pages/a.md # note";               check "a trailing comment"          hints_help
+run 'git commit -m "$X" -- src/web/help/pages/a.md';                    check "shell expansion"             hints_help
+run "git commit -a -F msg -- src/web/help/pages/a.md";                   check "an unknown option"           hints_help
+run "git commit -F msg -- src/web/help/pages/a.md;";                     check "a trailing semicolon"        hints_help
+run "git commit -F msg -- src/web/help/pages/a.md &&";                   check "a trailing and operator"     hints_help
+run "git add -- :/ && git commit -F msg -- src/web/help/pages/a.md";     check "git add pathspec magic"      hints_help
+run "git add -- : && git commit -F msg -- src/web/help/pages/a.md";      check "git add empty pathspec"      hints_help
+run "git commit --amend -F msg -- src/web/help/pages/a.md";              check "history rewriting needs its own approval" hints_help
+run "git commit --no-verify -F msg -- src/web/help/pages/a.md";          check "bypassing hooks needs its own approval" hints_help
+# Shapes measured in session transcripts, 2026-10-06 to 09:
+run 'git commit -q -F $SP/msg.txt -- src/web/help/pages/a.md';          check "a \$SP message file"         hints_help
+run "git commit -F msg -- src/web/help/pages/a.md; git log -1 | cat";    check "a trailing log piped to cat" hints_help
+run "git commit -F msg -- src/web/help/pages/*.md";                      check "a glob over the folder"      hints_help
+run "git commit -F msg -- src/web/help && git log -1";                   check "an ancestor folder"          hints_help
+run "cd src && git commit -F msg -- web/help/pages/a.md && git push";    check "relative to a leading cd"    hints_help
+ln -s "$REPO/docs" "$REPO/other/alias"
+run "cd other/alias/.. && git commit -F msg -- src/web/help/pages/a.md"; check "cd through a symlink and .. is uncertain, and silent" nothing
+ln -s "$REPO/docs" "$REPO/other/my alias"
+run "cd 'other/my alias/..' && git commit -F msg -- src/web/help/pages/a.md"; check "quoted cd through a symlink and .. is silent" nothing
+run 'git log -1 && git commit -m "$X" -- src/web/help/pages/b.md';      check "a named source that is unchanged" nothing
+check "and nothing was regenerated"              lacks src/help-corpus.generated.json LATER-EDIT
+reset_repo
+(cd "$REPO" && git update-index --assume-unchanged src/web/help/pages/a.md)
+echo HIDDEN-EDIT > "$REPO/src/web/help/pages/a.md"
+run 'git commit -m "$X" -- src/web/help/pages/a.md';                    check "assume-unchanged cannot hide a named source" hints_help
+(cd "$REPO" && git update-index --no-assume-unchanged src/web/help/pages/a.md && git update-index --skip-worktree src/web/help/pages/a.md)
+run 'git commit -m "$X" -- src/web/help/pages/a.md';                    check "nor can skip-worktree"       hints_help
+(cd "$REPO" && git update-index --no-skip-worktree src/web/help/pages/a.md)
+reset_repo
+rm "$REPO/src/web/help/pages/a.md"
+run 'git commit -m "$X" -- src/web/help/pages/a.md';                    check "a deleted source counts"     hints_help
+reset_repo
+echo edited > "$REPO/docs/user-feedback/n1.md"
+run "git commit -F - -- docs/user-feedback/n1.md <<'EOF'
+a heredoc message
+EOF"
+check "a heredoc message names the feedback generator" hints_feedback
+run "cat > msg <<'EOF'
+a message written first
+EOF
+git commit -F msg -- docs/user-feedback/n1.md && git push"
+check "a message written by a heredoc before the commit" hints_feedback
+run "cat > msg <<'EOF'
+no end, so the commit below is data
+git commit -F msg -- docs/user-feedback/n1.md"
+check "an unterminated heredoc is all data"     nothing
+check "and nothing was regenerated"              lacks src/feedback-endings.generated.ts edited
+reset_repo
+
+echo "--- raw hashes cover unusual source names and symlinks ---"
+ln -s a.md "$REPO/src/web/help/pages/link.md"
+(cd "$REPO" && WRITE_HELP_CORPUS=1 node node_modules/vitest/vitest.mjs run tests/help-corpus.test.ts >/dev/null 2>&1 \
+  && git add -- src/web/help/pages/link.md src/help-corpus.generated.json && git commit -qm symlink-source)
+run 'git commit -m "$X" -- src/web/help/pages/link.md';                 check "an unchanged symlink source is silent" nothing
+rm "$REPO/src/web/help/pages/link.md" && ln -s b.md "$REPO/src/web/help/pages/link.md"
+run 'git commit -m "$X" -- src/web/help/pages/link.md'
+check "a retargeted symlink source is named"       unchanged_input
+check "a retargeted symlink source is changed"     says "src/web/help/pages/link.md"
+reset_repo
+rm "$REPO/src/web/help/pages/link.md" && printf 'a.md' > "$REPO/src/web/help/pages/link.md"
+run 'git commit -m "$X" -- src/web/help/pages/link.md'
+check "a symlink replaced by equal blob bytes is changed" says "src/web/help/pages/link.md"
+reset_repo
+rm "$REPO/src/web/help/pages/link.md"
+(cd "$REPO" && WRITE_HELP_CORPUS=1 node node_modules/vitest/vitest.mjs run tests/help-corpus.test.ts >/dev/null 2>&1 \
+  && git add -- src/web/help/pages/link.md src/help-corpus.generated.json && git commit -qm remove-symlink-source)
+ln -s "$REPO/other" "$REPO/src/web/help/pages/new-dir"
+run 'git commit -m "$X" -- src/web/help/pages/new-dir'
+check "a new symlink directory source is named"    unchanged_input
+check "a new symlink directory source gets a hint" says "src/web/help/pages/new-dir"
+rm "$REPO/src/web/help/pages/new-dir"
+odd_name=$'docs/user-feedback/odd\nname.md'
+printf 'base\n' > "$REPO/$odd_name"
+(cd "$REPO" && node --import ./node_modules/tsx/dist/loader.mjs scripts/feedback-endings.ts \
+  && git add -- "$odd_name" src/feedback-endings.generated.ts && git commit -qm odd-source)
+printf 'edited\n' > "$REPO/$odd_name"
+run $'git commit -m "$X" -- \'docs/user-feedback/odd\nname.md\''
+check "a changed newline source is named"          unchanged_input
+check "a changed newline source gets a hint"       says "docs/user-feedback/odd"
+reset_repo
+
+UNBORN="$SCRATCH/unborn"
+mkdir -p "$UNBORN/src/web/help/pages" "$UNBORN/other"
+(cd "$UNBORN" && git init -q)
+printf 'new\n' > "$UNBORN/src/web/help/pages/a.md"
+run 'git commit -m "$X" -- src/web/help/pages/a.md' "$UNBORN"
+check "an unborn HEAD treats a regular source as new" hints_help
+ln -s "$UNBORN/other" "$UNBORN/src/web/help/pages/new-dir"
+run 'git commit -m "$X" -- src/web/help/pages/new-dir' "$UNBORN"
+check "an unborn HEAD treats a symlink source as new" says "src/web/help/pages/new-dir"
 
 echo "--- directory coverage is not Git membership ---"
 echo mine > "$REPO/docs/user-feedback/n1.md"
@@ -254,6 +352,18 @@ check "the generator timeout returns quietly with no approval" unchanged_input
 check "the internal deadline fits inside registration" [ "$elapsed" -le 27 ]
 pid=$(cat "$REPO/generator.pid")
 check "the timed-out generator does not survive" bash -c '! kill -0 "$1" 2>/dev/null' _ "$pid"
+reset_repo
+
+echo "--- a hung git while deciding what to say is bounded too ---"
+mkdir -p "$SCRATCH/hung-bin"
+printf '#!/bin/sh\nsleep 60\n' > "$SCRATCH/hung-bin/git" && chmod +x "$SCRATCH/hung-bin/git"
+echo LATER-EDIT > "$REPO/src/web/help/pages/a.md"
+started=$(date +%s)
+out=$(printf '%s' "$(CWD="$REPO" python3 -c 'import json, os; print(json.dumps({"cwd":os.environ["CWD"],"tool_input":{"command":"git commit -m \"$X\" -- src/web/help/pages/a.md"}}))')" \
+  | PATH="$SCRATCH/hung-bin:$PATH" "$HOOK" 2>"$SCRATCH/stderr"); code=$?
+elapsed=$(( $(date +%s) - started ))
+check "returns quietly"                          nothing
+check "well inside the registered timeout"       [ "$elapsed" -le 10 ]
 reset_repo
 
 echo "--- registration ---"
