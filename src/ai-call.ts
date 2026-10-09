@@ -582,6 +582,13 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
+  /* A reader's claim check is pass B's call on the claims they picked
+     (src/debate.ts § `generateClaimCheck`), so `debate`'s route exactly. */
+  "debate-check": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { order: ["anthropic"], require_parameters: true },
+  },
   /* The same policy as `explain` and for the same two reasons. The upstream is
      pinned so that a reader working through a batch of questions keeps hitting
      the cached article rather than paying for it once per answer; and
@@ -1118,6 +1125,11 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
   debate: {
     providerDefault:
       "Not measured. Weighs web search results against the article, where thinking is the job; " +
+      "its answer ceiling is src/debate.ts § ANSWER_TOKENS.",
+  },
+  "debate-check": {
+    providerDefault:
+      "Not measured. `debate`'s call on the claims a reader picked; " +
       "its answer ceiling is src/debate.ts § ANSWER_TOKENS.",
   },
   "quiz-mark": {

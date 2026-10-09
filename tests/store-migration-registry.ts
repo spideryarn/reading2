@@ -2912,6 +2912,12 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      row back after a refused Dig deeper to show it was left alone — a read
      a neighbour answering the same slug could falsify. No model is called. */
   "tests/dig-deeper-comment.test.ts": "private-postgres",
+  /* Plan 261008i stage 3. Debate's claim checks through the routes and the
+     store: seeds its own scratch articles, writes the list onto the revision
+     in SQL, and races two reservations on two connections, so it needs a
+     database of its own. The allowance and the search are stubbed; no model
+     is called. */
+  "tests/debate-claim-checks-routes.test.ts": "private-postgres",
   "tests/comment-sweep.test.ts": "private-postgres",
   "tests/corpus-lock.test.ts": "private-postgres",
   /* 2026-09-05. Its second block drives a collector whose sink is `costStore`,

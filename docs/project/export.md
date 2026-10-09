@@ -40,7 +40,9 @@ file-by-file list, and the thing to edit when the layout changes.
                       tags (your own, since 261003d), quiz-attempts (your answers and the
                       mark each was given, since 261005b — every one, including answers to
                       questions that have since been rewritten; each row carries its
-                      question's words for that reason)
+                      question's words for that reason), debate-claim-checks (Debate's
+                      checks of the claims you picked or typed, and what each search found,
+                      since 261008i)
 
 **Every file is optional and absent when there is nothing in it** — an article nobody chatted about
 has no `chat.json` — except `index.html`, `manifest.json`, `article.json`, `README.md`,

@@ -42,6 +42,7 @@ import {
   readerStore,
   refereeClaimsStore,
   refereeCriteriaStore,
+  debateClaimChecksStore,
   searchStore,
   shelfStore,
   tagStore,
@@ -217,7 +218,7 @@ import { withOldClientBands } from "./quiz.js";
 import { similarBlocks } from "./similar.js";
 import { projectArticle } from "./projection.js";
 import { EmbeddingFailure } from "./embeddings.js";
-import { isSpideryarnId, isUuid } from "./ids.js";
+import { isSpideryarnId, isUuid, mintId } from "./ids.js";
 import { prefixWithinBytes } from "./json-budget.js";
 /* **The one exception to "every paid call goes through OpenRouter"**, and it is
    Greg's, weighed rather than slipped past: OpenRouter has no realtime API at
@@ -284,6 +285,7 @@ import {
 } from "./store/ai-calls-spend-pg.js";
 import { ownedArticleIdentity } from "./store/pg.js";
 import type {
+  ClaimCheckFinish,
   ClaimsFinish,
   CriterionFinish,
   NewFeedback,
@@ -305,6 +307,16 @@ import { noteArrival } from "./arrivals.js";
 import { afterResponse, withAfterResponseTasks } from "./after-response.js";
 import { stageFailure } from "./job-failure.js";
 import {
+  DEBATE_CHECK_BUSY,
+  DEBATE_CHECK_LIMITED,
+  DEBATE_CHECK_LIST_CHANGED,
+  DEBATE_CHECK_LIST_STALE,
+  DEBATE_CHECK_NO_LIST,
+  DEBATE_CHECK_RESTING,
+  DEBATE_DIG_FURTHER_FIRST,
+  DIG_DEEPER_BUSY,
+  DIG_DEEPER_LIMITED,
+  DIG_DEEPER_RESTING,
   LIVE_UPSTREAM,
   NOT_READ_YET,
   NOT_READ_YET_HIGH_POWER,
@@ -509,6 +521,17 @@ import {
      413 cannot drift apart. */
   MAX_QUIZ_ANSWER_CHARS,
 } from "./types.js";
+/* Debate's reader claim checks — plan 261008i § 3. The two caps the panel's
+   button and this route must agree on, and the shapes the route builds. */
+import {
+  type DebateCheckTarget,
+  type DebateClaimCheck,
+  type DebateClaimList,
+  MAX_CHECK_TARGETS,
+  MAX_OWN_CLAIM_CHARS,
+} from "./types.js";
+import { DEBATE_CHECK_TIMEOUT_MS, generateClaimCheck } from "./debate.js";
+import { inputFingerprint as debateClaimsFingerprint } from "./debate-claims.js";
 /* A value, not a type — the one list a legacy stance is validated against
    (`streamChat` says why one is still accepted at all).
    src/types.ts § LEARN_STANCES. */
@@ -5749,6 +5772,248 @@ async function runRefereeClaims(slug: string, res: ServerResponse): Promise<void
   }
 }
 
+/* ------------------------------------------ debate's reader claim checks --
+   The reader ticks claims in Debate's Claims, or types one, and presses Check:
+   one web search over them all, stored as a check. Plan
+   docs/plans/261008i-debate-claims-picked-by-the-reader.md § 3;
+   src/store/pg-debate-claim-checks.ts; src/debate.ts § `generateClaimCheck`. */
+
+/** The checks this process is running, keyed `slug/id`, so its own GET never sweeps one. */
+const checkingClaims = liveKeys();
+
+/** A check request's three fields, their shapes checked and nothing else yet. */
+interface CheckAsked {
+  claimIds: string[];
+  /** The typed claim, trimmed and within bounds, or `null`. */
+  own: string | null;
+  digFurther: string | null;
+}
+
+/**
+ * **The body's shape, refused for free.** Ids and the typed words, nothing
+ * else is read: an anchor, a quote or an address in the body is ignored,
+ * because every one of those is the server's to derive.
+ *
+ * **The typed claim is never echoed** into an error, and is trimmed and
+ * refused rather than cut: 400 empty, 413 over `MAX_OWN_CLAIM_CHARS`, the
+ * angle box's limit and status.
+ */
+function readCheckRequest(body: unknown): CheckAsked {
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    throw httpError(400, "A check needs a JSON object");
+  }
+  const b = body as Record<string, unknown>;
+  const ids = b.claimIds ?? [];
+  if (!Array.isArray(ids) || !ids.every((id): id is string => typeof id === "string" && id !== "")) {
+    throw httpError(400, "claimIds must be a list of claim ids");
+  }
+  if (new Set(ids).size !== ids.length) throw httpError(400, "claimIds names a claim twice");
+  let own: string | null = null;
+  if (b.own !== undefined) {
+    if (typeof b.own !== "string") throw httpError(400, "own must be text");
+    own = b.own.trim();
+    if (own === "") throw httpError(400, "A claim of your own cannot be empty");
+    if (own.length > MAX_OWN_CLAIM_CHARS) {
+      throw httpError(413, `A claim of your own may be at most ${MAX_OWN_CLAIM_CHARS} characters`);
+    }
+  }
+  let digFurther: string | null = null;
+  if (b.digFurther !== undefined) {
+    if (typeof b.digFurther !== "string" || b.digFurther === "") {
+      throw httpError(400, "digFurther must be one claim id");
+    }
+    if (ids.length > 0 || own !== null) throw httpError(400, "Dig further checks one claim, alone");
+    digFurther = b.digFurther;
+  }
+  const count = ids.length + (own === null ? 0 : 1) + (digFurther === null ? 0 : 1);
+  if (count === 0) throw httpError(400, "Pick a claim to check");
+  if (count > MAX_CHECK_TARGETS) {
+    throw httpError(400, `One check may cover at most ${MAX_CHECK_TARGETS} claims`);
+  }
+  return { claimIds: ids, own, digFurther };
+}
+
+/**
+ * **What one check searches for, built from stored state only** — the
+ * current list for a ticked claim, an earlier check's target for a typed
+ * claim being dug into, and for Dig further the addresses that claim already
+ * has. Every refusal here is free.
+ */
+function checkTargets(
+  asked: CheckAsked,
+  list: DebateClaimList,
+  checks: readonly DebateClaimCheck[],
+): { targets: DebateCheckTarget[]; alreadyFound: string[] } {
+  const listed = new Map(list.claims.map((c) => [c.id, c]));
+  const fromList = (claimId: string): DebateCheckTarget | null => {
+    const c = listed.get(claimId);
+    return c ? { kind: "listed", claimId, blockId: c.blockId, quote: c.quote, statement: c.statement } : null;
+  };
+
+  if (asked.digFurther !== null) {
+    const claimId = asked.digFurther;
+    /* Only checks drawn under this list: an older list's are not on screen. */
+    const mine = checks.filter((c) => c.listSourceHash === list.sourceHash);
+    const target =
+      fromList(claimId) ??
+      mine.flatMap((c) => c.targets).find((t) => t.kind === "own" && t.claimId === claimId) ??
+      null;
+    if (target === null) throw httpError(409, DEBATE_CHECK_LIST_CHANGED);
+    const done = mine.filter((c) => c.status === "done" && c.targets.some((t) => t.claimId === claimId));
+    if (done.length === 0) throw httpError(409, DEBATE_DIG_FURTHER_FIRST);
+    const alreadyFound = [
+      ...new Set(
+        done.flatMap((c) =>
+          c.results.flatMap((r) => (r.claimId === claimId && r.outcome === "answered" ? r.rows.map((row) => row.url) : [])),
+        ),
+      ),
+    ];
+    return { targets: [target], alreadyFound };
+  }
+
+  const targets: DebateCheckTarget[] = [];
+  for (const claimId of asked.claimIds) {
+    const target = fromList(claimId);
+    /* An id from a list made again since this tab loaded it. */
+    if (target === null) throw httpError(409, DEBATE_CHECK_LIST_CHANGED);
+    targets.push(target);
+  }
+  if (asked.own !== null) targets.push({ kind: "own", claimId: mintId(), text: asked.own });
+  return { targets, alreadyFound: [] };
+}
+
+/** The shared allowance's refusals, said of a check rather than of Dig deeper. */
+function checkRefusal(err: unknown): unknown {
+  const message = (err as { message?: unknown } | null)?.message;
+  if (message === DIG_DEEPER_BUSY) return httpError(429, DEBATE_CHECK_BUSY);
+  if (message === DIG_DEEPER_LIMITED) return httpError(429, DEBATE_CHECK_LIMITED);
+  if (message === DIG_DEEPER_RESTING.message) return httpError(503, DEBATE_CHECK_RESTING);
+  return err;
+}
+
+/**
+ * **Check the claims a reader picked** — `POST /api/debate-claims/:slug/checks`,
+ * a JSON body in, SSE out. `runRefereeClaims`' shape: the refusals before a
+ * header, the `pending` row before the call, an attempt-fenced finish, and the
+ * stream ends only after the answer is stored.
+ *
+ * ## The order of the refusals, which is the point
+ *
+ * Every refusal that costs nothing comes before the one that spends:
+ *
+ *  1. the body's shape (400, 413 for a typed claim over the limit);
+ *  2. the article — owner-scoped, so somebody else's is a 404;
+ *  3. no list (409);
+ *  4. **the list is stale** against the article just loaded (409) — before
+ *     the allowance, so a stale tab spends nothing (GPT Sol's F6);
+ *  5. ids not in the current list, or a Dig further with nothing to dig (409);
+ *  6. **a check already pending** (409) — the reservation insert, held by the
+ *     partial unique index, so two tabs at once get one search;
+ *  7. **the `dig-deeper` allowance** (429, 503), its limits unchanged — and a
+ *     refusal there takes the reservation back, so nothing is left pending;
+ *  8. then the stream and the model.
+ *
+ * ## A dropped client does not cancel the call
+ *
+ * The call runs on its own deadline (`DEBATE_CHECK_TIMEOUT_MS`), never on
+ * `sse().gone`: the answer is paid for either way, and a reader who closed the
+ * tab finds it stored on the next GET.
+ *
+ * ## The allowance's lease is shorter than the call
+ *
+ * `DIG_DEEPER_RATE_POLICY.leaseMs` is 170 s and a check can run longer, so a
+ * slow check may stop holding its concurrency slot before it ends. The hourly
+ * and daily counts still hold, and so does the one-pending-per-article index.
+ * The policy is not changed here (plan § 3).
+ */
+async function runDebateClaimCheck(slug: string, body: unknown, res: ServerResponse): Promise<void> {
+  const asked = readCheckRequest(body);
+  const article = await loadArticle(slug);
+
+  let list: DebateClaimList;
+  try {
+    list = (await loadDebateClaims(slug)).claimList;
+  } catch (err) {
+    if (err instanceof ArtefactNotMadeYet) throw httpError(409, DEBATE_CHECK_NO_LIST);
+    throw err;
+  }
+  /* Against the article just loaded — the one the model will be shown — not a
+     stale flag read beside the list. */
+  if (list.sourceHash !== debateClaimsFingerprint(article.blocks, article.tree, article.meta)) {
+    throw httpError(409, DEBATE_CHECK_LIST_STALE);
+  }
+
+  const earlier = asked.digFurther === null ? [] : await debateClaimChecksStore.list(slug);
+  const { targets, alreadyFound } = checkTargets(asked, list, earlier);
+
+  const { check, attempt } = await debateClaimChecksStore.begin(slug, {
+    listSourceHash: list.sourceHash,
+    targets,
+    digFurther: asked.digFurther !== null,
+  });
+
+  let free: () => Promise<void>;
+  try {
+    free = await admitDig(fetchAllowanceStore);
+  } catch (err) {
+    /* Nothing was spent, so the reservation goes: a row left `pending` would
+       hold the article's one check until the sweep. If the delete itself
+       fails, the sweep is what frees it, and the reader still gets the
+       refusal. */
+    try {
+      await debateClaimChecksStore.abandon(slug, check.id, attempt);
+    } catch (abandonErr) {
+      log("store").error({ ...errorFields(abandonErr), slug }, `could not take back a claim check for ${slug}`);
+    }
+    throw checkRefusal(err);
+  }
+
+  const release = checkingClaims.hold(`${slug}/${check.id}`);
+  try {
+    const { frame } = sse(res);
+    frame("begin", check);
+
+    let patch: ClaimCheckFinish;
+    try {
+      const run = await generateClaimCheck({
+        article,
+        targets,
+        alreadyFound,
+        power: powerOf(article),
+        signal: AbortSignal.timeout(DEBATE_CHECK_TIMEOUT_MS),
+      });
+      patch = {
+        status: "done",
+        results: run.results,
+        counts: run.counts,
+        webSearches: run.webSearches,
+        model: run.model,
+      };
+    } catch (err) {
+      captureFailure(err, { route: "debate-claim-check", slug });
+      patch = { status: "error", error: sayToReader(err, { route: "debate-claim-check", slug }) };
+    }
+
+    try {
+      /* `null` is a check the sweep ended under us: send what is stored, so the
+         panel draws the same row a reload would. */
+      const stored =
+        (await debateClaimChecksStore.finish(slug, check.id, patch, attempt)) ??
+        (await debateClaimChecksStore.list(slug)).find((c) => c.id === check.id) ??
+        null;
+      if (stored) frame("done", stored);
+    } catch (storeErr) {
+      log("store").error({ ...errorFields(storeErr), slug }, `could not record a claim check for ${slug}`);
+      captureFailure(storeErr, { route: "debate-claim-check", phase: "record-result", slug });
+    } finally {
+      res.end();
+    }
+  } finally {
+    release();
+    await free();
+  }
+}
+
 /* ----------------------------------------------- referee mirror (stage 5b) --
    The model reads the referee's own comments and remarks on them. It is never
    given the article, so "it says nothing about the paper" is true of the input
@@ -8953,6 +9218,9 @@ const JOB_PATTERN = /^\/api\/jobs\/([\w.%-]+)$/;
 const CRITERIA_PATTERN = /^\/api\/referee\/criteria\/([\w.%-]+)$/;
 const ONE_CRITERION_PATTERN = /^\/api\/referee\/criteria\/([\w.%-]+)\/([\w.%-]+)$/;
 const REFEREE_CLAIMS_PATTERN = /^\/api\/referee\/claims\/([\w.%-]+)$/;
+/* Debate's reader claim checks (plan 261008i § 3): GET lists them, POST makes
+   one. One pattern for both rows, as Claims above. */
+const DEBATE_CHECKS_PATTERN = /^\/api\/debate-claims\/([\w.%-]+)\/checks$/;
 /* Search: the runs of one article, and one run of one article. Two rows apiece,
    so both are named here rather than spelled into the rows twice. */
 const SEARCHES_PATTERN = /^\/api\/search\/([\w.%-]+)$/;
@@ -10599,6 +10867,37 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       const found = await orNullWhenNotMadeYet({ req, res }, () => loadDebateClaims(slugPart(captures, 1)));
       if (!found) return;
       send(res, 200, found);
+    },
+  },
+
+  /* Debate's reader claim checks — plan 261008i § 3, `runDebateClaimCheck`.
+     **Owner-only, both of them**: every store read is owner-scoped, so somebody
+     else's article is a 404, and there is no public twin — a check may hold
+     the reader's own typed claim. The GET never spends; it sweeps a `pending`
+     check whose process died, so an orphan cannot hold the article's one
+     check for ever. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: DEBATE_CHECKS_PATTERN,
+    article: "first-capture",
+    handler: async ({ request: { res } }, captures) => {
+      const slug = slugPart(captures, 1);
+      const checks = await debateClaimChecksStore.sweep(slug, (id) => checkingClaims.has(`${slug}/${id}`));
+      send(res, 200, { checks });
+    },
+  },
+
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: DEBATE_CHECKS_PATTERN,
+    article: "first-capture",
+    handler: async ({ request: { req, res } }, captures) => {
+      /* SSE on success; every refusal is JSON, before a header is written.
+         `article: "first-capture"` because the call inside pays, and the
+         ledger row must say which article. */
+      await runDebateClaimCheck(slugPart(captures, 1), await readBody(req), res);
     },
   },
 

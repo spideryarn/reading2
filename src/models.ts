@@ -839,6 +839,14 @@ export type Task =
    */
   | "debate"
   /**
+   * **A reader's claim check in Debate's Claims** — the ticked claims and the
+   * typed one, searched on the open web in one call (src/debate.ts §
+   * `generateClaimCheck`; plan docs/plans/261008i-debate-claims-picked-by-the-reader.md
+   * § 3). `debate`'s wire and model, its own job so the ledger files it as
+   * interactive request work rather than a pipeline step.
+   */
+  | "debate-check"
+  /**
    * **How the page on the far end of a hyperlink stands to the piece the reader
    * is holding** —
    * docs/plans/260905f-external-link-panel-add-to-spideryarn-and-server-side-preview.md
@@ -1187,6 +1195,8 @@ export const TASK_TIER: Record<Task, Tier> = {
      reception — the exact thing Stage 0 got back, and the thing every rule in
      src/debate.ts exists to refuse. */
   debate: "capable",
+  /* The same weighing as `debate`, for the claims a reader picked. */
+  "debate-check": "capable",
   citations: "capable",
   /* Capable, for `debate`'s reason: the whole job is weighing a handful of
      search results against one cited work and saying which, if any, is its
@@ -1450,6 +1460,8 @@ export const TASK_WIRE: Record<Task, Wire> = {
      shape. Every other artefact-producing step is `"messages"`. See `Task`
      above, and src/pdf-read.ts for the precedent. */
   debate: "chat",
+  /* `debate`'s reason: the web search is a chat/completions tool. */
+  "debate-check": "chat",
   citations: "messages",
   /* Chat, because `openrouter:web_search` is a server tool on chat/completions
      and does not exist on the Messages shape — `debate`'s reason. */
@@ -1626,6 +1638,10 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
      until there is a rate to compare. A code change to run an arm would make
      the arm and the shipped path different things. */
   debate: "SPIDERYARN_DEBATE_MODEL",
+  /* Shares Debate's override rather than adding a name: a check is pass B's
+     call on the reader's claims, and a comparison run of one should move
+     both. */
+  "debate-check": "SPIDERYARN_DEBATE_MODEL",
   /* It has one because "is the cheap model good enough for this" is a question
      somebody will want to answer by running the real feature against a capable
      model for an evening rather than by editing the tier table and rebuilding.

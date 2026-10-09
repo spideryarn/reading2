@@ -1,5 +1,5 @@
 ---
-keywords: critiques reception responses reviews criticism replies web what others say reaction sources supportive critical claims cited citing citations cited by openalex scholar angle angles lens steer
+keywords: critiques reception responses reviews criticism replies web what others say reaction sources supportive critical claims cited citing citations cited by openalex scholar angle angles lens steer check tick dig further own claim
 related: mode-citations, faq-beyond-the-article
 ---
 
@@ -18,15 +18,26 @@ found.
 - Two views. **Reception** is what others have written about this piece itself: replies, reviews,
   and work that cites it and says something about it. **Claims** lists the claims the piece rests
   on that someone outside could argue with. The number on Reception is how many sources it is
-  showing; on Claims, how many claims are listed.
+  showing; on Claims, how many claims are listed, or, once you have checked some, how many sources
+  the checks found.
 - **Search the web** searches for Reception only. It used to pick three or four of the piece's
   claims by itself and search those too; it no longer does. A search made before that change still
   shows the claims it chose, under **Claims the earlier search chose**.
 - Opening **Claims** makes the list the first time, with one AI call over the piece and no web
   search; a link or Back to Claims only shows **List its claims**. Each claim is quoted in the
   piece's own words, with a link to that passage, and under it a short line in the AI's words. If
-  the piece changes afterwards, the list is shown with **List again**. Choosing claims to check on
-  the web is coming. Visitors to a shared article see the list but cannot make one.
+  the piece changes afterwards, the list is shown with **List again**. Visitors to a shared article
+  see the list but cannot make one.
+- To check claims on the web, tick up to four in the list, or type one of your own in **Check a
+  claim of your own**, and press **Check**. That is one web search over all of them together,
+  takes about a minute and a half, and costs real money; nothing is searched until you press. The
+  sources it finds appear under each claim, with your own claim after the list. **This search found
+  nothing it could quote on this claim** is a real answer. If the search did not answer for a claim
+  at all, it says so in different words, and you can check it again. **Dig further**, beside a
+  claim that has been checked, runs one more search for that claim alone and looks for sources it
+  has not found yet. One check runs at a time per article, and there is a limit on how many web
+  searches you can ask for in an hour and in a day. Only whoever added the article can check
+  claims; visitors see the list, not the checks or anything you typed.
 - In Reception, pages that link to the piece or quote it come first. Pages that only mention its
   title follow under **Names this piece by its title only**: often a paper citing it, sometimes a
   page about something else with the same title, so check before you rely on one.

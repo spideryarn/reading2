@@ -99,6 +99,10 @@ import type {
   QuizQuestionId,
   FaqFound,
   DebateClaimListFound,
+  DebateCheckCounts,
+  DebateCheckResult,
+  DebateCheckTarget,
+  DebateClaimCheck,
   RelationsResponse,
   CrossrefsFound,
   SimpleSummaryFound,
@@ -1598,6 +1602,66 @@ export interface RefereeClaimsStore {
    * src/store/pg-referee-claims.ts).
    */
   sweep(slug: string, live: boolean): Promise<ClaimsRun | null>;
+}
+
+/**
+ * **How a reader's claim check ends**: the answer, or the reader's sentence for
+ * why there is none. Two arms, so an `error` cannot carry results — the
+ * database refuses that row too (`debate_claim_checks_results_only_done`).
+ */
+export type ClaimCheckFinish =
+  | {
+      status: "done";
+      results: DebateCheckResult[];
+      counts: DebateCheckCounts;
+      webSearches: number;
+      model: string;
+    }
+  | { status: "error"; error: string };
+
+/** What a check is when it is pressed — everything but the outcome. */
+export interface ClaimCheckBegin {
+  listSourceHash: string;
+  targets: DebateCheckTarget[];
+  digFurther: boolean;
+}
+
+/**
+ * **Debate's reader-picked claim checks** — src/store/pg-debate-claim-checks.ts,
+ * plan docs/plans/261008i-debate-claims-picked-by-the-reader.md § 3.
+ *
+ * Owner-scoped like every reader-state store: each method takes a slug and
+ * refuses one this reader does not own with the reader's 404.
+ */
+export interface DebateClaimChecksStore {
+  /** Every check on the article, oldest first. */
+  list(slug: string): Promise<DebateClaimCheck[]>;
+
+  /**
+   * **The reservation**: insert a `pending` check, or throw a 409
+   * (`CheckInFlight`) when the article already has one — the partial unique
+   * index decides, so two presses at once cannot both get through.
+   */
+  begin(slug: string, check: ClaimCheckBegin): Promise<{ check: DebateClaimCheck; attempt: string }>;
+
+  /**
+   * **Take back a reservation nothing was spent on** — the allowance refused
+   * the press after `begin`. Deletes the row only while it is still this
+   * attempt's `pending` one.
+   */
+  abandon(slug: string, id: string, attempt: string): Promise<void>;
+
+  /**
+   * Write the outcome over the `pending` check **this attempt began**. `null`
+   * when it is not there to write to: the sweep ended it, or the article went.
+   */
+  finish(slug: string, id: string, patch: ClaimCheckFinish, attempt: string): Promise<DebateClaimCheck | null>;
+
+  /**
+   * End abandoned `pending` checks — older than the call's deadline and its
+   * margin, and not one `live` says this process is running — then list.
+   */
+  sweep(slug: string, live: (id: string) => boolean): Promise<DebateClaimCheck[]>;
 }
 
 /**

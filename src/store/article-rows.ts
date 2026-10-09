@@ -40,6 +40,7 @@ import {
   quizAttempts,
   refereeClaims,
   refereeCriteria,
+  debateClaimChecks,
   revisionBlocks,
   searchRuns,
 } from "../db/schema.js";
@@ -175,6 +176,14 @@ export const ARTICLE_TABLE_COVERAGE = {
   referee_claims: {
     rollback: { exported: true, into: "referee-claims.json" },
     bundle: { exported: true, into: "augmentations/referee-claims.json" },
+  },
+  /* Debate's checks of the claims the reader picked — reader state: their
+     presses, the claims they typed in their own words, and what each search
+     found. Exported for `reading_time`'s reason, it is the reader's own.
+     docs/plans/261008i-debate-claims-picked-by-the-reader.md § 3. */
+  debate_claim_checks: {
+    rollback: { exported: true, into: "debate-claim-checks.json" },
+    bundle: { exported: true, into: "augmentations/debate-claim-checks.json" },
   },
   glossary_lookups: {
     rollback: { exported: true, into: "glossary-lookups.json" },
@@ -650,6 +659,8 @@ export interface ArticleRows {
    * `[0]` says what the shape is at the point it matters.
    */
   readonly refereeClaims: readonly (typeof refereeClaims.$inferSelect)[];
+  /** Every claim check, oldest first. Plan 261008i § 3. */
+  readonly debateClaimChecks: readonly (typeof debateClaimChecks.$inferSelect)[];
   readonly glossaryLookups: readonly (typeof glossaryLookups.$inferSelect)[];
   readonly citationFinds: readonly (typeof citationFinds.$inferSelect)[];
   readonly citationInvestigations: readonly (typeof citationInvestigations.$inferSelect)[];
@@ -850,6 +861,11 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     .from(refereeClaims)
     .where(eq(refereeClaims.articleId, article.id))
     .limit(1);
+  const checks = await tx
+    .select()
+    .from(debateClaimChecks)
+    .where(eq(debateClaimChecks.articleId, article.id))
+    .orderBy(asc(debateClaimChecks.createdAt), asc(debateClaimChecks.id));
   const lookups = await tx
     .select()
     .from(glossaryLookups)
@@ -897,6 +913,7 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     searchRuns: runs,
     refereeCriteria: criteria,
     refereeClaims: claims,
+    debateClaimChecks: checks,
     glossaryLookups: lookups,
     citationFinds: finds,
     citationInvestigations: investigations,

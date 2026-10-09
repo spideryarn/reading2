@@ -478,6 +478,44 @@ function fixtures(): Record<RollbackTable | BundledTable, Fixture> {
         model: sentinel("referee_claims"),
       });
     },
+    /* A finished check whose search failed, so `error` carries the sentinel;
+       every other column is set, so the bundle's every-column check sees it.
+       The typed claim is the reader's words — the thing a reader keeps. */
+    debate_claim_checks: async () => {
+      await db.insert(schema.debateClaimChecks).values({
+        articleId: ARTICLE_ID,
+        id: "spya-cvd234",
+        ownerId: owner(),
+        status: "error",
+        listSourceHash: "a-list-hash",
+        promptVersion: "debate-check/1",
+        digFurther: false,
+        targets: [{ kind: "own", claimId: "spya-cvd345", text: "a claim the reader typed" }],
+        results: [],
+        counts: {
+          returnedSources: 0,
+          reportedRows: 0,
+          keptRows: 0,
+          omittedOverCap: 0,
+          lost: {
+            uncited: 0,
+            selfSource: 0,
+            unverifiedSource: 0,
+            directnessUnverified: 0,
+            sourceIsCopy: 0,
+            claimNotInBlock: 0,
+            unknownBlockId: 0,
+            malformed: 0,
+          },
+          webSearches: 1,
+          groups: { missing: 0, duplicate: 0, unknown: 0, malformed: 0, rowsSetAside: 0 },
+        },
+        webSearches: 1,
+        model: "test",
+        error: sentinel("debate_claim_checks"),
+        finishedAt: new Date(),
+      });
+    },
     /* An id the article used to have. `beforeAll` already inserts the identity
        row for the block that is still there — this is the other kind, the one
        only the bundle carries. */
@@ -715,6 +753,7 @@ const COLUMNS_LEFT_OUT: Record<BundledTable, Readonly<Record<string, string>>> =
   search_runs: {},
   referee_criteria: {},
   referee_claims: {},
+  debate_claim_checks: {},
   glossary_lookups: {},
   citation_finds: {},
   citation_investigations: {},
@@ -756,6 +795,7 @@ const ROWS_IN: Record<BundledTable, (parsed: unknown) => unknown[]> = {
   search_runs: (parsed) => listAt(parsed, "runs"),
   referee_criteria: (parsed) => listAt(parsed, "criteria"),
   referee_claims: (parsed) => [at(parsed, "run")],
+  debate_claim_checks: (parsed) => listAt(parsed, "checks"),
   glossary_lookups: (parsed) => listAt(parsed, "lookups"),
   citation_finds: (parsed) => listAt(parsed, "finds"),
   citation_investigations: (parsed) => listAt(parsed, "investigations"),
@@ -799,6 +839,7 @@ await pgReady({
   tables: [
     "spideryarn.referee_criteria",
     "spideryarn.referee_claims",
+    "spideryarn.debate_claim_checks",
     "spideryarn.glossary_lookups",
     "spideryarn.citation_finds",
     "spideryarn.citation_investigations",
@@ -867,6 +908,9 @@ describe("what the record calls exported, both exports were watched writing", ()
       .delete(schema.refereeCriteria)
       .where(eq(schema.refereeCriteria.articleId, ARTICLE_ID));
     await db.delete(schema.refereeClaims).where(eq(schema.refereeClaims.articleId, ARTICLE_ID));
+    await db
+      .delete(schema.debateClaimChecks)
+      .where(eq(schema.debateClaimChecks.articleId, ARTICLE_ID));
     await db.delete(schema.chatMessages).where(eq(schema.chatMessages.articleId, ARTICLE_ID));
     await db.delete(schema.chatThreads).where(eq(schema.chatThreads.articleId, ARTICLE_ID));
     await db.delete(schema.searchRuns).where(eq(schema.searchRuns.articleId, ARTICLE_ID));

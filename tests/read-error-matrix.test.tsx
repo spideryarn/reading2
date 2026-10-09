@@ -514,6 +514,8 @@ async function reply(url: string, method: string, body: string | null): Promise<
      DOI. A 404 here would be its `unavailable`, which draws a second *Try
      again* in Debate's band beside the one this file counts (plan 261004h). */
   if (url.startsWith("/api/citers/")) return json({ kind: "no-doi" });
+  /* Debate's claim checks (plan 261008i stage 3): a second read beside the list, never the row under test. */
+  if (/^\/api\/debate-claims\/[^/]+\/checks$/.test(url)) return json({ checks: [] });
   /* `debate-claims` by name: a general `[a-z-]+` would turn reading-time and the like from `{}` into a 404. */
   const other = /^\/api\/(debate-claims|[a-z]+)\/([^/]+)$/.exec(url);
   const there = other?.[2] === undefined ? undefined : elsewhere[other[2]];

@@ -27,6 +27,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ Feedback to the admin](#the-admin-is-emailed-each-readers-feedback) — their words in our inbox
 - [§ DOI lookups](#crossref-datacite-and-openalex-are-sent-a-doi) — Crossref, DataCite, OpenAlex
 - [§ Quiz answers](#quiz-answers) — stored since 2026-10-05
+- [§ A claim typed into Debate](#a-claim-typed-into-debate) — the reader's words to the search, kept with the check
 - [§ A private link](#a-private-link) — the four places the page names it
 - [§ An administrator's AI assistant](#an-administrators-ai-assistant-can-look-up-accounts) — account details through the admin's own assistant
 - [§ What is pinned by a test](#what-is-pinned-by-a-test-and-what-is-not) — what to re-read when X moves; the checklist
@@ -665,6 +666,18 @@ all three, links each, and says what is and is not sent. `LAST_UPDATED` moved to
 **Pinned by a test from the code's own list**: `tests/privacy-page.test.ts` reads
 `BIBLIOGRAPHIC_HOSTS` in [`src/fetch.ts`](../../src/fetch.ts), the only hosts that fetcher will
 dial, and requires the page to name each. A fourth index turns it red until the page names it.
+
+## A claim typed into Debate
+
+**Added 2026-10-09**, with [debate.md § Checking the claims you pick](debate.md#checking-the-claims-you-pick)
+([261008i § 3](../plans/261008i-debate-claims-picked-by-the-reader.md)): the owner of an article can
+type a claim of their own into Debate's Claims and press Check. Their words go, with the article,
+to the model doing the web search, through OpenRouter, as a chat message's words already do — so
+**no new flow and no new party**, and the page needed no change; `LAST_UPDATED` did not move. The
+words are stored with the check (`debate_claim_checks.targets`), are in the article's export, go
+when the article is deleted, and are never shown to a visitor of a shared article: checks are not
+in the public payload. [`src/store/pg-debate-claim-checks.ts`](../../src/store/pg-debate-claim-checks.ts)
+and the route log counts and ids, never the words.
 
 ## Quiz answers
 
