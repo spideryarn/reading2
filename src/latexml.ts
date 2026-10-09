@@ -74,7 +74,7 @@ const LATEXML_SOURCES: ReadonlyMap<string, string> = new Map([
 const SKIP = MATHS_SKIP_TAGS.join(",");
 
 /**
- * Rewrite the four shapes in a supported LaTeXML document in `doc`, and say
+ * Rewrite the five shapes in a supported LaTeXML document in `doc`, and say
  * how many of each. An unrecognised source address, or a page with no
  * `article.ltx_document`, is not touched.
  *
@@ -791,6 +791,23 @@ function oneName(person: Element): string | null {
 /** A note's own furniture: the mark printed twice, the `thanks:` label, the repeated number. */
 const NOTE_FURNITURE = ".ltx_note_mark, .ltx_note_type, .ltx_tag_note";
 
+/** The exact labels measured in title-block contacts. Anything more may be the author's words. */
+const CONTACT_LABELS = new Set([
+  "Address:",
+  "Affiliation:",
+  "Correspondence to:",
+  "E-mail",
+  "Email address:",
+  "Email:",
+]);
+
+/** Elements that HTML parsing cannot leave inside the `<p>` this rewrite promises to make. */
+const NOT_IN_AN_AUTHOR_ROW =
+  "address, article, aside, blockquote, div, dl, fieldset, footer, form, h1, h2, h3, h4, h5, h6, header, hgroup, hr, main, nav, ol, p, pre, section, table, ul";
+
+/** Readability 0.6.0's byline name test; a matching short node is deleted during extraction. */
+const READABILITY_BYLINE = /byline|author|dateline|writtenby|p-author/iu;
+
 /** Everything the rewrite may leave behind. Every other word in the block must come out again. */
 const LEFT_BEHIND = `${NOTE_FURNITURE}, .ltx_contact_name, .ltx_author_before`;
 
@@ -854,7 +871,7 @@ function tidyTitleBlock(doc: Document, targets: ReadonlySet<string>): boolean {
   /* The notes. A thanks before the block (on the title) still counts towards a repeat's N. */
   const notes = Array.from(block.querySelectorAll(".ltx_note"));
   const thanks = notes.filter((n) => n.matches(".ltx_role_thanks"));
-  const earlier = Array.from(root.querySelectorAll(".ltx_note.ltx_role_thanks")).filter(
+  const earlier = Array.from(root.querySelectorAll(".ltx_note.ltx_role_thanks, .ltx_pubnote.ltx_role_thanks")).filter(
     (n) => !original.contains(n) && (n.compareDocumentPosition(original) & FOLLOWING) !== 0,
   ).length;
   const contentOf = new Map<Element, Node[]>();
@@ -925,6 +942,7 @@ function tidyTitleBlock(doc: Document, targets: ReadonlySet<string>): boolean {
   /* An empty `mailto:` link goes nowhere: LaTeXML writes the address as its text only. */
   for (const a of Array.from(out.querySelectorAll('a[href="mailto:"]'))) a.replaceWith(...Array.from(a.childNodes));
 
+  if (hasReadabilityBylineCandidate(out)) return false;
   if (wordsIn(out, `[${OUR_MARK}]`).join(" ") !== wordsIn(original, LEFT_BEHIND).join(" ")) return false;
   const kept = new Set([out, ...Array.from(out.querySelectorAll("[id], [name]"))].flatMap((el) => [el.getAttribute("id"), el.getAttribute("name")]));
   for (const el of [original, ...Array.from(original.querySelectorAll("[id], [name]"))]) {
@@ -944,7 +962,33 @@ function noteContent(note: Element): Node[] | null {
   const inner = Array.from(outer.children);
   const content = inner[0];
   if (inner.length !== 1 || !content?.matches("span.ltx_note_content") || !noOwnText(outer)) return null;
-  return Array.from(content.childNodes).filter((n) => !isElement(n, NOTE_FURNITURE));
+  const kind = note.matches(".ltx_role_thanks")
+    ? "thanks:"
+    : note.matches(".ltx_role_footnotemark")
+      ? "footnotemark:"
+      : null;
+  if (kind === null) return null;
+  const marks = Array.from(note.querySelectorAll(".ltx_note_mark"));
+  const types = Array.from(note.querySelectorAll(".ltx_note_type"));
+  const tags = Array.from(note.querySelectorAll(".ltx_tag_note"));
+  const text = (el: Element) => (el.textContent ?? "").replace(/\s+/gu, " ").trim();
+  if (
+    marks.length !== 2 ||
+    marks.some((el) => el.children.length > 0 || !/^(?:\d+|[*∗†‡§¶‖]+)$/u.test(text(el))) ||
+    text(marks[0]!) !== text(marks[1]!) ||
+    types.length !== 1 ||
+    types[0]!.children.length > 0 ||
+    text(types[0]!).toLowerCase() !== kind ||
+    (kind === "thanks:"
+      ? tags.length !== 0
+      : tags.length !== 1 || tags[0]!.children.length > 0 || !/^\d+$/u.test(text(tags[0]!)))
+  ) {
+    return null;
+  }
+  const kept = Array.from(content.childNodes).filter((n) => !isElement(n, NOTE_FURNITURE));
+  if (kind === "footnotemark:" && kept.some((n) => n.nodeType === 1 || (n.textContent ?? "").trim() !== "")) return null;
+  if (hasParagraphBreakingContent(kept)) return null;
+  return kept;
 }
 
 /** Each contact's nodes, its label left out, one line each — or `null` if the notes hold anything else. */
@@ -955,10 +999,44 @@ function contactLines(notes: Element): Node[][] | null {
   const lines: Node[][] = [];
   for (const contact of Array.from(content.children)) {
     if (!contact.matches("span.ltx_contact")) return null;
-    const line = trimmed(Array.from(contact.childNodes).filter((n) => !isElement(n, ".ltx_contact_name")));
-    if (line.some((n) => (n.textContent ?? "").trim() !== "")) lines.push(line);
+    const labels = Array.from(contact.children).filter((n) => n.matches(".ltx_contact_name"));
+    const label = labels[0];
+    if (
+      labels.length !== 1 ||
+      label !== contact.firstElementChild ||
+      label.children.length > 0 ||
+      !CONTACT_LABELS.has((label.textContent ?? "").replace(/\s+/gu, " ").trim())
+    ) {
+      return null;
+    }
+    const line = trimmed(Array.from(contact.childNodes).filter((n) => n !== label));
+    if (hasParagraphBreakingContent(line)) return null;
+    if (line.length > 0) lines.push(line);
   }
   return lines;
+}
+
+/** Whether moving these nodes into a `<p>` would make invalid paragraph content. */
+function hasParagraphBreakingContent(nodes: readonly Node[]): boolean {
+  return nodes.some((node) => {
+    if (node.nodeType !== 1) return false;
+    const el = node as Element;
+    return el.matches(NOT_IN_AN_AUTHOR_ROW) || el.querySelector(NOT_IN_AN_AUTHOR_ROW) !== null;
+  });
+}
+
+/** Whether Readability would take and delete any part of the rewritten block as its byline. */
+function hasReadabilityBylineCandidate(root: Element): boolean {
+  return [root, ...Array.from(root.querySelectorAll("*"))].some((el) => {
+    const rel = el.getAttribute("rel");
+    const itemprop = el.getAttribute("itemprop");
+    const named =
+      rel === "author" ||
+      itemprop?.includes("author") ||
+      READABILITY_BYLINE.test(`${el.getAttribute("class") ?? ""} ${el.getAttribute("id") ?? ""}`);
+    const length = (el.textContent ?? "").trim().length;
+    return !!named && length > 0 && length < 100;
+  });
 }
 
 /** Without the whitespace-only text at either end, and the ends' own whitespace trimmed. */

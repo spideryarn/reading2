@@ -234,8 +234,30 @@ verdict *revise before build*. No P0. Each finding checked against the code and 
 
 Sol also agreed the model call is not what fixes the prose (§ Not built).
 
+## The code review
+
+GPT Sol, write-capable, 2026-10-09
+([the review](261009d-arxiv-title-block-code-review-sol.md)), verdict *ready to push*. No P0. It
+fixed each of these itself, red first, and the author read the diff:
+
+| | Sev | Finding | Fix |
+|---|---|---|---|
+| 1 | P1 | A `\thanks` on the title is `.ltx_pubnote` in LaTeXML, which the count of earlier notes missed, so a later `\footnotemark` could point at the wrong note | counted; a refusing and a resolving test |
+| 2 | P1 | The word check excused any words inside a contact label or a note label | the labels must be exactly the measured ones (`Affiliation:`, `Email:` …), the marks and number the measured shape, or the block is refused |
+| 3 | P1 | A moved element with its own author-ish class (`author-email`) would still be taken and deleted by Readability | the rewrite refuses if anything in its output is a Readability byline candidate |
+| 4 | P2 | A block element inside a contact or note cannot sit in a `<p>`; an image-only contact was dropped | refused; kept |
+| 5 | P2 | Two comments still counted four rewrites | corrected |
+
+The twenty-page measurement after its fixes: unchanged, 16 of 20.
+
 ## Ledger
 
 - 2026-10-09: prior-work check; production read-only (both imports of the paper, the stored rows);
   visitor-view screenshots by a Sonnet subagent; plan written.
 - 2026-10-09: GPT Sol's plan review, *revise before build*; stage 1 revised (§ The plan review).
+- 2026-10-09: built red first; measured on 20 live pages; a local import of 1706.03762v7
+  screenshotted by a Sonnet subagent (`261009d-shot-1-desktop.png`, `-2-desktop-authors`,
+  `-3-phone`): one row per author, the three notes numbered, no labels.
+- 2026-10-09: GPT Sol's code review, *ready to push*, five fixes of its own (§ The code review);
+  the gates; queue entries `qi-d7g2qmze` (body footnotes) and `qi-yhkw2ej6` (Readability's
+  deletion elsewhere); question `q-qjbb9a` to Greg.

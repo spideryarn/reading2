@@ -817,7 +817,8 @@ function prepareDocument(
   /* **A LaTeXML page's own shapes (arXiv's HTML, ar5iv), put into the shapes
      the rest of the pipeline already reads**: an aligned equation into one
      display formula, an SVG plot in an `<object>` into an `<img>`, a code
-     listing into a `<pre>`, a boxed passage out of the SVG that frames it.
+     listing into a `<pre>`, a boxed passage out of the SVG that frames it, and
+     a title block into one row per author.
      Before `canonicaliseMaths`, and it has to be: the aligned equation is
      joined from each cell's TeX annotation, which that pass consumes, and a
      boxed passage's formulas sit under an `<svg>`, where that pass converts

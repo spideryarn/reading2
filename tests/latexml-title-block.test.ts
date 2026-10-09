@@ -90,6 +90,9 @@ describe("the reported paper: eight author rows and three numbered notes", () =>
 });
 
 describe("marks, kept and made consistent", () => {
+  const titleThanks =
+    '<h1 class="ltx_title ltx_title_document">A Paper<span class="ltx_pubnotes"><span class="ltx_pubnotes_content"><span class="ltx_pubnote ltx_role_thanks"><span class="ltx_note_name">Thanks: </span>Funded by somebody.</span></span></span></h1>';
+
   it("a \\footnotemark shares the note it repeats (2610.08785: both authors at MIT)", () => {
     const { doc, unchanged } = prepared(fx("authors-2610-08785"));
     expect(unchanged).toBe(false);
@@ -101,8 +104,16 @@ describe("marks, kept and made consistent", () => {
   });
 
   it("a \\thanks on the title counts towards N, so a mark after it is not proved and refuses", () => {
-    const titled = `<h1 class="ltx_title ltx_title_document">A Paper<span class="ltx_note ltx_role_thanks"><sup class="ltx_note_mark">†</sup><span class="ltx_note_outer"><span class="ltx_note_content"><sup class="ltx_note_mark">†</sup><span class="ltx_note_type">thanks: </span>Funded by somebody.</span></span></span></h1>`;
-    expect(prepared(titled + fx("authors-2610-08785")).unchanged).toBe(true);
+    /* LaTeXML renders a title's \\thanks as a pubnote, not the ltx_note shape
+       used beside an author (2610.10724). It still advances LaTeX's footnote
+       counter, so mark 1 below points here, not at Kevin Zhang's MIT note. */
+    expect(prepared(titleThanks + fx("authors-2610-08785")).unchanged).toBe(true);
+  });
+
+  it("subtracts a title \\thanks before resolving a later mark", () => {
+    const { doc, unchanged } = prepared(titleThanks + fx("authors-2610-08392"));
+    expect(unchanged).toBe(false);
+    expect(rows(doc).slice(0, 2).map((row) => row[0])).toEqual(["Ilya Auslender1", "Yasaman Heydari1"]);
   });
 });
 
@@ -120,6 +131,19 @@ describe("the page's nodes are moved, not retyped", () => {
     const real = fx("authors-2610-01658v1");
     const kept = prepared(real).doc.querySelectorAll('article a[href^="mailto:"]').length;
     expect(kept).toBe(new JSDOM(real).window.document.querySelectorAll('a[href^="mailto:"]:not([href="mailto:"])').length);
+  });
+
+  it("accepts the measured E-mail label without a colon (2610.10642)", () => {
+    const html = ATTENTION.replace("Email: ", "E-mail ");
+    expect(html).not.toBe(ATTENTION);
+    expect(prepared(html).unchanged).toBe(false);
+  });
+
+  it("keeps an image-only contact rather than letting the word check hide its loss", () => {
+    const html = ATTENTION.replace("Google Brain\n", '<img src="logo.svg" alt="Laboratory logo">\n');
+    const { doc, unchanged } = prepared(html);
+    expect(unchanged).toBe(false);
+    expect(doc.querySelector('article img[src="logo.svg"]')?.getAttribute("alt")).toBe("Laboratory logo");
   });
 
   it("bare names are one line, not a row each (2610.08790)", () => {
@@ -193,6 +217,38 @@ describe("left exactly as the page had it", () => {
     expect(html).not.toBe(ATTENTION);
     expect(prepared(html).unchanged).toBe(true);
   });
+  it("a \\footnotemark with non-text content in it", () => {
+    const html = ATTENTION.replace(
+      '<span class="ltx_note_type">footnotemark: </span>',
+      '<span class="ltx_note_type">footnotemark: </span><img alt="an unexplained mark">',
+    );
+    expect(html).not.toBe(ATTENTION);
+    expect(prepared(html).unchanged).toBe(true);
+  });
+  it("words hidden inside a furniture label do not pass the word check", () => {
+    const contact = ATTENTION.replace("Affiliation: ", "Affiliation: Also at the zoo. ");
+    const note = ATTENTION.replace(
+      "thanks: </span>Equal contribution.",
+      "thanks: Also at the zoo. </span>Equal contribution.",
+    );
+    expect(contact).not.toBe(ATTENTION);
+    expect(note).not.toBe(ATTENTION);
+    expect(prepared(contact).unchanged).toBe(true);
+    expect(prepared(note).unchanged).toBe(true);
+  });
+  it("block content that cannot remain inside an author paragraph refuses", () => {
+    const html = ATTENTION.replace("Google Brain\n", "<p>Google Brain</p>\n");
+    expect(html).not.toBe(ATTENTION);
+    expect(prepared(html).unchanged).toBe(true);
+  });
+  it("a byline-shaped descendant that Readability would delete refuses", () => {
+    const html = ATTENTION.replace(
+      "Google Brain\n",
+      '<span class="author-email">Google Brain</span>\n',
+    );
+    expect(html).not.toBe(ATTENTION);
+    expect(prepared(html).unchanged).toBe(true);
+  });
   it("a note of another kind beside a name", () => {
     const html = ATTENTION.replace("ltx_role_thanks", "ltx_role_footnote");
     expect(prepared(html).unchanged).toBe(true);
@@ -202,7 +258,7 @@ describe("left exactly as the page had it", () => {
     expect(prepared(html).unchanged).toBe(true);
   });
   it("but a link to an id inside a moved node keeps it, and the block keeps its own", () => {
-    const html = ATTENTION.replace('<div class="ltx_authors">', '<div class="ltx_authors" id="authors">') + '<p><a href="#id2">mail</a><a href="#authors">up</a></p>';
+    const html = `${ATTENTION.replace('<div class="ltx_authors">', '<div class="ltx_authors" id="authors">')}<p><a href="#id2">mail</a><a href="#authors">up</a></p>`;
     const { doc, unchanged } = prepared(html);
     expect(unchanged).toBe(false);
     expect(doc.getElementById("id2")?.textContent).toMatch(/@example\.org$/u);
@@ -231,6 +287,8 @@ describe("what a reader gets: stage 2 and stage 3", () => {
     const authorRows = blocks.filter((b) => /@example\.org/u.test(b.text));
     expect(authorRows).toHaveLength(8);
     for (const row of authorRows) expect(row.html).toContain("<br>");
+    expect(authorRows[0]!.html).toContain("<sup>1</sup>");
+    expect(authorRows.every((row) => row.role === undefined && row.noteId === undefined)).toBe(true);
     expect(authorRows[0]!.text).toMatch(/^Ashish Vaswani ?1 Google Brain author\d+@example\.org$/u);
     expect(blocks.some((b) => b.text.startsWith("1 Equal contribution."))).toBe(true);
     expect(blocks.map((b) => b.text).join(" ")).not.toMatch(/thanks:|footnotemark:|Affiliation:/u);
