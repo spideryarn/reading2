@@ -6,6 +6,7 @@ import { recordRefusal } from "./admission-journal.js";
 import { TEST_OUTCOME_FILE_ENV } from "./scripts/vitest-outcome-reporter.js";
 import { TEST_LANES, type TestLane } from "./tests/store-migration-registry.js";
 import { ACCOUNT_ROUTING_VARIABLES } from "./tests/helpers/account-neutral-env.js";
+import { makeRunTempRoot } from "./tests/setup/run-temp-root.js";
 import {
   ADMISSION_POLICY_VERSION,
   decideAdmission,
@@ -160,6 +161,12 @@ function workersForThisRun(): number {
  *    not this class, but not absent either.
  */
 for (const name of ACCOUNT_ROUTING_VARIABLES) delete process.env[name];
+
+/* **Every temp file a test makes goes into one directory, removed when the run ends.** Tests
+   mkdtemp under os.tmpdir() in 243 files and mostly never clean up — 50,000 directories a day on
+   the box. Same mechanism as the line above: set before any worker exists, so they and their
+   children inherit it. tests/run-temp-root.test.ts checks from inside a worker. Plan 261009a. */
+makeRunTempRoot();
 
 const PARALLEL_WORKERS = workersForThisRun();
 

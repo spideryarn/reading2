@@ -833,11 +833,15 @@ describe("the prompt reaches codex", () => {
 });
 
 describe("runCodex", () => {
+  /* Each test's -o file in a directory of its own, not a fixed name under /tmp: a literal /tmp path
+     escapes the run's temp root (plan 261009a) and collides with a concurrent suite. */
+  const outIn = (name: string): string => join(mkdtempSync(join(tmpdir(), "run-codex-out-")), name);
+
   it("captures the activity log instead of streaming it", async () => {
     // 2000 fat lines stands in for a high-effort review dumping file contents and grep hits.
     const bin = fakeCodex(`${noiseGenerator("[")}\nprintf 'ANSWER\\n' > "$out"`);
     const r = await runCodex({ argv: buildCodexArgs({
-      model: "m", effort: "low", sandbox: "read-only", repoDir: ".", outFile: "/tmp/unused",
+      model: "m", effort: "low", sandbox: "read-only", repoDir: ".", outFile: outIn("unused"),
     }), timeoutMs: 30_000, stream: false, bin });
     expect(r.status).toBe(0);
     // The point: it is large, and it is in our hands rather than on the caller's stdout. Asserting
@@ -851,7 +855,7 @@ describe("runCodex", () => {
     // An inherited open pipe on stdin is what a bare `codex exec` wedges on, with no --no-stdin
     // flag to save you. If this regresses the test does not fail — it never returns.
     const bin = fakeCodex(`timeout 5 cat < /dev/stdin > /dev/null && echo EOF-IMMEDIATELY || echo BLOCKED\nprintf 'a\\n' > "$out"`);
-    const r = await runCodex({ argv: ["-o", "/tmp/unused-stdin"], timeoutMs: 20_000, stream: false, bin });
+    const r = await runCodex({ argv: ["-o", outIn("unused-stdin")], timeoutMs: 20_000, stream: false, bin });
     expect(r.stdout).toContain("EOF-IMMEDIATELY");
   }, 25_000);
 
@@ -867,10 +871,11 @@ describe("runCodex", () => {
     // outlive the kill and reparent to init.
     const bin = fakeCodex(`trap '' TERM\n( while true; do sleep 1; done ) &\necho "grandchild=$!" > "$out"\nwait`);
     const started = Date.now();
-    const r = await runCodex({ argv: ["-o", "/tmp/run-codex-gc.txt"], timeoutMs: 500, stream: false, bin });
+    const gcFile = outIn("gc.txt");
+    const r = await runCodex({ argv: ["-o", gcFile], timeoutMs: 500, stream: false, bin });
     expect(r.timedOut).toBe(true);
     expect(Date.now() - started).toBeLessThan(20_000);
-    const pid = Number(readFileSync("/tmp/run-codex-gc.txt", "utf8").split("=")[1]);
+    const pid = Number(readFileSync(gcFile, "utf8").split("=")[1]);
     expect(Number.isInteger(pid)).toBe(true);   // else process.kill throws for the wrong reason
     // Poll rather than sleeping a fixed 500ms. The child ignores SIGTERM, so it only dies at the
     // SIGKILL after the 5s grace, and under a loaded parallel suite the group teardown lands a
