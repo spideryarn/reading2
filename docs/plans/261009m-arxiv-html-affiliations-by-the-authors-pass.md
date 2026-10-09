@@ -95,7 +95,7 @@ ledger. Sonnet 5.5, standard power, 2026-10-09, on the final code (after the pla
 | | |
 |---|---|
 | cost per import | **$0.002 – $0.010**, median about **$0.005** (820–1,700 tokens in, 44–660 out); 13 calls, $0.060 |
-| every name given its affiliations, right | 10 of 13 called |
+| accepted, and right | 11 of 13 called (two of them rightly give one author nothing: below) |
 | refused, names stay plain | 2: 2610.08790 prints no affiliation in its title block; 2610.08750, where the model gave the first author "Bioinformatics Group … Wageningen" assembled partly from the second author's record — refused by the per-author check, rightly |
 | some authors given none, rightly | Polosukhin in Attention (the page prints only his email), Bates in 2610.08785 (nothing beside his name) |
 | no call | 3: 2610.08781, .10548, .10690 (no names read today either: several people in one `personname`, or institutions as creators) |
@@ -137,6 +137,20 @@ by the reviewer and then pinned by a test that was red against the spike.
 | 3 | P2 | Equal names do not prove the list came from the title block | Accepted: provenance asked in `readingArm`; the test uses the same eight names |
 | 4 | P2 | Tests for the adversarial and placement cases | Accepted, bar one: a test that the prose-retention fallback calls once. The call is in `runExtract`, which runs once whatever `readingArm` does; building a page that rolls back was not worth it for that |
 
+## The code review
+
+GPT Sol, write-capable, 2026-10-09 ([the review](261009m-code-review-sol.md), on
+[the scoped diff](261009m-code-review.diff)), verdict *ready to push after two fixes*, which it made
+itself, each red first; the author read the diff. No findings on placement, degradation, logging,
+cost attribution or the other readers of `meta.authors`.
+
+| | Sev | Finding | Fix |
+|---|---|---|---|
+| 1 | P1 | `NOTE_FURNITURE` is a selector, not proof: a hostile page could mark arbitrary words as note marks, and taking them out made the words either side consecutive | note furniture is taken out only of a note the tidy rewrite's `noteContent` validates; otherwise its words stay as evidence |
+| 2 | P1 | The glued-marker allowance let the per-author check accept `M Company` from a printed `3M Company` | `affiliationPrintedIn` matches exact words only; the PDF verifier keeps its allowance |
+
+The measurement re-run after both: the same 13 results.
+
 ## Ledger
 
 - 2026-10-09: prior-work check (plans 260929d, 261007d, 261009d; the note and q-qjbb9a; origin/dev;
@@ -146,3 +160,5 @@ by the reviewer and then pinned by a test that was red against the spike.
   Built red first: `tests/arxiv-affiliations.test.ts`, 20 tests on the real fixtures, stub reader.
   Five mutants (labels kept, names check off, per-author check off, provenance off, the gate off),
   each killed. Re-measured on the final code; a local stage-2 run stored the affiliations.
+- 2026-10-09: GPT Sol's code review, two P1 fixes of its own (§ The code review); the gates; the
+  measurement unchanged; q-qjbb9a answered and the report's note updated.

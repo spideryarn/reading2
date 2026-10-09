@@ -576,7 +576,7 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
   "spya-x38nge": "The guide now greets you in the chat and asks why you're reading (no box), takes Live, and has a Guide row in the command bar. Still waiting on you (q-w2740x): may it save your reason itself, and offer share, private link and archive?",
   "spya-xcmg2d": "Help's Ask box has the same microphone as every other box. Every mode's Help page now opens with a short \"why care, what for, how it works\", then a picture of it in use. Annotated pictures skipped, as you suggested.",
   "spya-xdvnrg": "A recording left on one article is no longer offered on another; Chat, passage chat and the command bar had the same gap, all fixed. The microphone now has a card: why talk, the 15-minute limit, and press Stop twice.",
-  "spya-xg4jyr": "New arXiv imports now show one tidy row per author, with footnotes numbered underneath. Two follow-ups are asked separately: affiliations by the small model, and re-importing this paper.",
+  "spya-xg4jyr": "New arXiv imports show one tidy row per author, and each name's affiliation on hover. Your Attention import is re-imported after the next deploy, as you asked.",
   "spya-y5gfpf": "Help's Ask box has the same microphone as every other box. Every mode's Help page now opens with a short \"why care, what for, how it works\", then a picture of it in use. Annotated pictures skipped, as you suggested.",
   "spya-za2tse": "Needs a decision is now threads: a contents, one thread at a time with a reply box, Defer for now, the ids, your report shut, a shortcut beside the tabs. Check the reply box on your iPhone.",
   "spya-zdkqx4": "spya-x0rfs2: the bar is fixed; the wider layout is put to Greg as q-u04sye",

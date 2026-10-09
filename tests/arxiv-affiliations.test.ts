@@ -100,6 +100,23 @@ describe("readArxivAffiliations", () => {
     expect(await readArxivAffiliations(block, stub(answer))).toMatchObject({ authors: null });
   });
 
+  it("refuses an affiliation made by dropping a real prefix as though it were a glued marker", async () => {
+    const prefixed: TitleBlock = { names: ["Jane Doe"], creators: ["Jane Doe 3M Company"] };
+    expect(await readArxivAffiliations(prefixed, stub([{ name: "Jane Doe", affiliations: ["M Company"] }]))).toMatchObject({
+      authors: null,
+    });
+  });
+
+  it("does not make an affiliation by deleting malformed note furniture between its words", async () => {
+    const malformed = `<div class="ltx_authors"><span class="ltx_creator ltx_role_author"><span class="ltx_personname">Jane Doe</span><span class="ltx_note ltx_role_thanks"><sup class="ltx_note_mark">†</sup><span class="ltx_note_outer"><span class="ltx_note_content">Department <sup class="ltx_note_mark">INJECTED WORDS</sup> University</span></span></span></span></div>`;
+    const projected = latexmlTitleBlock(
+      new JSDOM(page(malformed), { url: "https://arxiv.org/html/2610.00001" }).window.document,
+    )!;
+    expect(
+      await readArxivAffiliations(projected, stub([{ name: "Jane Doe", affiliations: ["Department University"] }])),
+    ).toMatchObject({ authors: null });
+  });
+
   it("refuses a list with somebody left out", async () => {
     const answer = attentionAnswer().filter((a) => a.name !== "Llion Jones");
     expect(await readArxivAffiliations(block, stub(answer))).toMatchObject({ authors: null });

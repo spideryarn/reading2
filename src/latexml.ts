@@ -891,9 +891,10 @@ export function latexmlAuthorNames(doc: Document): string[] | null {
  * exactly when `latexmlAuthorNames` is.
  *
  * **One projection of the page, defined here**: LaTeXML's furniture — a note's
- * repeated marks and number, and a contact's label when it is exactly one of
- * the measured `CONTACT_LABELS` — is **replaced by a space**, never just
- * deleted. Replaced, because deleting fuses the words either side:
+ * repeated marks and number (only in a note whose measured shape validates),
+ * and a contact's label when it is exactly one of the measured
+ * `CONTACT_LABELS` — is **replaced by a space**, never just deleted. Replaced,
+ * because deleting fuses the words either side:
  * `Affiliation:Department` `Affiliation:University` became `DepartmentUniversity`,
  * a word the page never printed (GPT Sol, plan review of 261009m). Taken out at
  * all, because LaTeXML splits one institution over several contacts
@@ -909,8 +910,17 @@ export function latexmlTitleBlock(doc: Document): { names: string[]; creators: s
     names: creators.map((c) => c.name),
     creators: creators.map((c) => {
       const copy = c.creator.cloneNode(true) as Element;
+      /* `NOTE_FURNITURE` is a selector, not proof. A stranger can put those
+         classes on arbitrary words; deleting them would make the words on
+         either side newly consecutive and let the model store a phrase the
+         page never printed. `noteContent` is the tidy rewrite's structural and
+         textual validation of the measured note shape. Malformed furniture
+         stays as evidence, so the verifier has to account for its words. */
+      const noteFurniture = Array.from(copy.querySelectorAll(".ltx_note")).flatMap((note) =>
+        noteContent(note) === null ? [] : Array.from(note.querySelectorAll(NOTE_FURNITURE)),
+      );
       const furniture = [
-        ...Array.from(copy.querySelectorAll(NOTE_FURNITURE)),
+        ...noteFurniture,
         ...Array.from(copy.querySelectorAll(".ltx_contact_name")).filter(
           (label) => label.children.length === 0 && CONTACT_LABELS.has((label.textContent ?? "").trim()),
         ),
