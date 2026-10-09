@@ -92,6 +92,11 @@ A press calls `openOrigin` in [`Reader.tsx`](../../src/web/reader/Reader.tsx), o
 prose: on a phone the band lies over it, and the flash would be held until the band moved (GPT
 Sol's F4 on the plan). The row's own block link does that, with the phone handling it already has.
 
+**Every arm clears `?thread=` in the same entry.** Left in place, the chat followed the reader into
+the mode as the floating card, and on a phone it covered the row the press had gone back to (seen
+in the browser pass). Back restores the chat with the rest of the address, and the item's own mark
+reopens it beside the mode.
+
 **A focus** is the one-shot that Citations had first (`CiteFocus`), now
 [`item-focus.ts`](../../src/web/item-focus.ts) § `ItemFocus` and `useLandOnItem`, one piece of
 state per band in `Reader`. The band scrolls the row (`data-term-id`, `data-citation-id`,

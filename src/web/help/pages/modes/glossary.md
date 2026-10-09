@@ -11,7 +11,7 @@ and keeps what the piece tells you about them separate from background supplied 
 made, the terms are underlined in the text in every mode, so an explanation is a moment away while
 you read.
 
-![A glossary card for Robert Millikan over the article: a background definition, and buttons for Dig deeper, Hide and Open glossary](../images/glossary-card.png "Point at an underlined term for its card. This one is background: what the AI knows, not what the article says.")
+![A glossary card for Robert Millikan over the article: a background definition, and buttons for Ask in chat, Hide and Open glossary](../images/glossary-card.png "Point at an underlined term for its card. This one is background: what the AI knows, not what the article says.")
 
 ## When to use it
 

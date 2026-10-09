@@ -6,7 +6,7 @@ queue item `qi-bvypm9bn` · builds on [261005i](261005i-chats-started-from-a-mod
 [261006j](261006j-ask-in-chat-sends-the-question.md) · the checklist is
 [chat-from-a-mode.md](../project/chat-from-a-mode.md)
 
-**Status: plan, revised after GPT Sol's review (build after fixes; all nine taken). Building.**
+**Status: built and on `dev` (2026-10-09); not deployed. Follow-ups: `qi-ccxkybft` (Dig deeper's server half, Greg's call), `qi-bd6h2fnd` (Timeline, Quotes, FAQ).**
 
 ## What Greg asked for
 
@@ -280,3 +280,48 @@ tests fail.
 Not done here: the Help page for Ideas (`src/web/help/pages/modes/ideas.md`) does not mention Ask in
 chat yet, and the browser check at 390 and 1440 is the end-of-plan pass.
 
+(Both since done: the Ideas Help page has a paragraph, and the browser pass is below.)
+
+### GPT Sol's code review — [261009i-code-review-sol.md](261009i-code-review-sol.md)
+
+Verdict *do not ship*, on F4 alone (two Help screenshots still showed Dig deeper), which the browser
+pass then reshot. Fixed by the reviewer: **F1**, a focus left pending when the reader left a mode
+before its list loaded made a later ordinary visit jump to the old item. It is now cleared when its
+mode is left, and the regression test was watched red first. **F2**: Citations' landing goes through
+`useLandOnItem` (it keeps its bar step), and the hook takes a focus only on an exact row or an
+unknown item. **F3**: stale comments.
+
+### Browser pass (Sonnet, Playwright, this worktree's dev server, 1440 and 390)
+
+- No Dig deeper on a Glossary entry, a Citations row, either hover card or Ideas. Not opened: a
+  comment's dialog, which the unit tests cover.
+- Glossary: Ask in chat lands in Chat with the question sent. *Back to "Robert Millikan" in Glossary*
+  sits above the transcript, one line at 390, with the composer on screen. The press opens Glossary
+  with the row selected and in view, and Back returns to the chat.
+- Citations: the same from a row, and from the cited-work card. A work far down the list was
+  scrolled into view.
+- Ideas: an open idea has Ask in chat. Not pressed, because the local database lacks this branch's
+  migration (below).
+- Debate: not pressed in the browser, to keep the model calls to four. The unit tests cover it.
+- Shots: [1](261009i-shot-1-glossary-ask-chat-back-line-1440.png),
+  [2](261009i-shot-2-glossary-chat-390.png), [3](261009i-shot-3-glossary-back-to-row-390.png),
+  [4](261009i-shot-4-citations-back-to-row-1440.png), [5](261009i-shot-5-cited-work-card-ask-in-chat.png),
+  [6](261009i-shot-6-ideas-open-idea-ask-in-chat.png).
+- Help images `glossary-card.png` and `mode-citations.png` reshot, with their alt text and the Help
+  corpus updated.
+
+**Found by it, and fixed: the chat followed the reader back.** `openOrigin` changed the mode but
+left `?thread=`, so the chat opened again as the floating card over the mode, and at 390 it covered
+the row the press had gone back to. Every arm now clears `?thread=` in the same entry. A
+`thread is null` assertion in each of the five way-back tests went red before the fix and green
+after. Back still restores the chat, which those tests press.
+
+Not a bug: a Citations row shows no "selected" state after the way back, because it has none (F5).
+It is scrolled into view.
+
+**The migration is not applied to the shared local database.** `db:migrate` (Target: local,
+`127.0.0.1:54362`) refused, because the ledger holds the unlanded migration of a peer worktree
+(`fbud2w92-dismiss-profile-notice`), and database.md leaves that for the peer to resolve. Until then,
+an Ideas Ask in chat on the local dev server hits the old CHECK. The test suite builds its own
+database from this tree's migrations, where the new CHECKs are tested. Production gets the
+migration with the deploy.

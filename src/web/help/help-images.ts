@@ -244,7 +244,7 @@ export const HELP_IMAGES: Readonly<Record<string, HelpImage>> = {
     shows: "Pointing at an underlined term (Millikan) until its card shows, over pure prose.",
     article: "Cargo Cult Science (cargocult-spya-rz663q)",
     window: "1440×900 at 2×",
-    taken: "2026-10-07",
+    taken: "2026-10-09",
   },
   "mode-glossary.png": {
     src: modeGlossaryPng,
@@ -276,11 +276,11 @@ export const HELP_IMAGES: Readonly<Record<string, HelpImage>> = {
   "mode-citations.png": {
     src: modeCitationsPng,
     w: 1088,
-    h: 752,
+    h: 768,
     shows: "?mode=citations, prioritised, the band alone; cropped after the second work.",
     article: "The Scaling Hypothesis (scaling-hypothesis)",
     window: "1440×900 at 2×",
-    taken: "2026-10-07",
+    taken: "2026-10-09",
   },
   "mode-skim.png": {
     src: modeSkimPng,

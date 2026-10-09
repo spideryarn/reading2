@@ -1108,6 +1108,7 @@ describe("the way back from a chat to its item", () => {
     await act(async () => line.click());
     await until(() => param("mode") === "glossary" && scrolled.length > 0, "Glossary, on the entry");
     expect(param("term")).toBe(QUOTED);
+    expect(param("thread"), "the chat does not float over the item it went back to").toBeNull();
     expectLandedOn(term(QUOTED));
     expect(entryButton(), "the entry is open").not.toBeNull();
     /* One Back returns to the chat. */
@@ -1121,6 +1122,7 @@ describe("the way back from a chat to its item", () => {
     await act(async () => line.click());
     await until(() => param("mode") === "citations" && scrolled.length > 0, "Citations, on the row");
     expectLandedOn(workRow(WORK));
+    expect(param("thread"), "the chat does not float over the item it went back to").toBeNull();
     await act(async () => history.back());
     await until(() => param("mode") === "chat" && param("thread") === CHAT, "one Back to the chat");
   });
@@ -1157,6 +1159,7 @@ describe("the way back from a chat to its item", () => {
     await act(async () => line.click());
     await until(() => param("mode") === "ideas" && scrolled.length > 0, "Ideas, on the idea");
     expect(param("idea")).toBe(IDEA);
+    expect(param("thread"), "the chat does not float over the item it went back to").toBeNull();
     expectLandedOn(ideaRow(IDEA));
     expect(ideaRow(IDEA)?.classList.contains("open"), "the idea is open").toBe(true);
     await act(async () => history.back());
@@ -1174,6 +1177,7 @@ describe("the way back from a chat to its item", () => {
     expect(param("debate")).toBe("claims");
     expect(param("bears"), "a filter that could hide the claim is cleared").toBeNull();
     expect(param("debatethread")).toBeNull();
+    expect(param("thread"), "the chat does not float over the item it went back to").toBeNull();
     const claim = host.querySelector<HTMLDetailsElement>(".mode-band details.dbt-claim-group");
     expectLandedOn(claim);
     expect(claim?.open).toBe(true);
@@ -1188,6 +1192,7 @@ describe("the way back from a chat to its item", () => {
     await act(async () => line.click());
     await until(() => param("mode") === "debate", "Debate");
     expect(param("debate"), "Reception is the default, omitted").toBeNull();
+    expect(param("thread"), "the chat does not float over the item it went back to").toBeNull();
     expect(scrolled).toEqual([]);
   });
 

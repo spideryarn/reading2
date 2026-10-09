@@ -1644,10 +1644,12 @@ export function Reader({
     debate: debateParam,
     bears: bearsParam,
     debatethread: debateThreadParam,
+    thread: threadParam,
   });
   const [, setIdeaWay] = useQueryStates({
     mode: modeParam,
     idea: ideaParam,
+    thread: threadParam,
   });
   /**
    * **The way back from a chat to the item it was started from** — the line
@@ -1661,6 +1663,12 @@ export function Reader({
    * An item the mode no longer has (renamed, hidden, re-run away) opens the
    * mode on its list: each band hands an unknown focus back at once.
    *
+   * **`?thread=` goes in the same write.** Left in place, the chat follows the
+   * reader into the mode as the floating card, and on a phone that card lies
+   * over the very row the press went back to (found in the browser pass). Back
+   * restores it with the rest of the address, and the item's own mark reopens
+   * it beside the mode.
+   *
    * **Exhaustive**, so a new origin mode cannot be forgotten here: the
    * `never` arm stops compiling.
    */
@@ -1668,11 +1676,14 @@ export function Reader({
     (origin: ThreadOrigin) => {
       switch (origin.mode) {
         case "glossary":
-          /* `?term=` and the gate lowered if it hides the entry. */
+          /* `?term=` and the gate lowered if it hides the entry. The thread is
+             cleared in the same tick, which nuqs sends as one entry. */
+          void setThread(null);
           openTermInGlossary(origin.itemId);
           setTermFocus(focusOn(origin.itemId));
           return;
         case "citations":
+          void setThread(null);
           setCiteFocus(focusOn(origin.itemId));
           showBand("citations");
           return;
@@ -1682,18 +1693,18 @@ export function Reader({
           setOpenOccurrence(null);
           setIdeaFocus(focusOn(origin.itemId));
           setBandAway(false);
-          void setIdeaWay({ mode: "ideas", idea: origin.itemId }, { history: "push" });
+          void setIdeaWay({ mode: "ideas", idea: origin.itemId, thread: null }, { history: "push" });
           return;
         case "debate":
           setBandAway(false);
           if (isLensOrigin(origin)) {
             /* An angle is not in the article: the angles box is Reception's. */
-            void setDebateWay({ mode: "debate", debate: "reception" }, { history: "push" });
+            void setDebateWay({ mode: "debate", debate: "reception", thread: null }, { history: "push" });
             return;
           }
           setClaimFocus(focusOn(claimFocusKey(origin)));
           void setDebateWay(
-            { mode: "debate", debate: "claims", bears: null, debatethread: null },
+            { mode: "debate", debate: "claims", bears: null, debatethread: null, thread: null },
             { history: "push" },
           );
           return;
@@ -1703,7 +1714,7 @@ export function Reader({
         }
       }
     },
-    [openTermInGlossary, showBand, setIdeaWay, setDebateWay],
+    [openTermInGlossary, showBand, setIdeaWay, setDebateWay, setThread],
   );
   /**
    * **The quotes, and they are not a state at all** — since 2026-09-08.

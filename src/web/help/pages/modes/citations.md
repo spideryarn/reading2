@@ -11,7 +11,7 @@ AI’s estimates of how much the piece relies on them and how influential they a
 article’s own link where it gave one, and a Scholar search or a matching link found later for the
 rest.
 
-![The Citations panel: a threshold slider hiding 7 of 58 citations, then two works, each with its bars, Dig deeper and Ask in chat](../images/mode-citations.png "Citations, prioritised: each work with what we have read of it, its two bars, and where the piece first cites it.")
+![The Citations panel: a threshold slider hiding 7 of 58 citations, then two works, each with its bars and an Ask in chat button](../images/mode-citations.png "Citations, prioritised: each work with what we have read of it, its two bars, and where the piece first cites it.")
 
 ## When to use it
 
