@@ -2144,10 +2144,12 @@ export const DEBATE_CHECK_TIMEOUT_MS = 360_000;
  * fuse is 100 × $0.20 ≈ $20 a day for everybody together. The numbers are a
  * first guess and **Greg's to move**.
  *
- * The lease is the model deadline plus a minute. That bounds a dead process's
- * slot, but it is not yet a hard bound on the whole route: admission/setup
- * before the model and result-store retries afterwards have no shared
- * deadline (stage-3 review E1).
+ * The lease is the model deadline plus a minute, and the deadline starts at
+ * the reservation, just before this is taken: the setup, the call and the
+ * finish retries (14 s) all fit inside it (GPT Sol's E1). The one thing it
+ * does not bound is a single store write hanging for over a minute, since
+ * Postgres has no statement timeout here; then a third check could start
+ * while the hourly, daily and global counts still hold.
  */
 export const DEBATE_CHECK_RATE_POLICY: RatePolicy = {
   fills: 10,

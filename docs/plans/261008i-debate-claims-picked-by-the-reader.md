@@ -317,3 +317,40 @@ verdict *land with the fixes made*. Accepted:
 D2 moved one expectation in `tests/freshness-deciders-agree.test.ts` (a renamed section no longer
 stales the list; both deciders still agree), which I updated. Gates as run by me: typecheck green;
 48 files, 1895 passed, 18 skipped, then the freshness file 152/152.
+
+### Stage 3 (2026-10-09): landed
+
+Built by an Opus subagent (`570156267`): `debate_claim_checks` (migration
+`20261009020028_debate_claim_checks`), `generateClaimCheck` and `readCheckedClaimGroup` in
+`src/debate.ts`, `src/store/pg-debate-claim-checks.ts`, `GET`/`POST /api/debate-claims/:slug/checks`,
+`src/web/useDebateChecks.ts`, `src/web/debate-checks.ts` and the ticks, box, Check and Dig further in
+`DebatePanel.tsx`. It was pushed to dev before its review (`c5f0f9b47`), only because its migration
+was applied to the shared local database and was blocking every other worktree's `db:migrate`; the
+Overseer was asked to hold deploys until the review's fixes landed.
+
+Three review rounds, GPT Sol:
+[round 1](261008i-debate-claims-stage3-code-review-sol.md) (*do not land*),
+[round 2](261008i-debate-claims-stage3-code-review-r2-sol.md) (*do not land*),
+[a narrow check of the last fix](261008i-debate-claims-stage3-code-review-r3-sol.md) (*do not land*,
+on E7 alone).
+
+| | Finding | Outcome |
+|---|---|---|
+| E1 | P0: the allowance's lease (Dig deeper's, 170 s) was shorter than the call (720 s) | its own bucket, `debate-check` (migration `20261009024756`), lease = deadline + 60 s; deadline 360 s and started at the reservation. Closed |
+| E2 | P0, reasoned, gateway-wide: a transport retry can resend a paid request | queued as `qi-2gaxfaaj` |
+| E3 | P1: a broken stream re-enabled the press | the press stays held until its own row is read. Fixed |
+| E4 | P1: copies of the article at another address counted | one shared copy predicate. Fixed |
+| E5 | P1: a re-made list hid paid results | checks drawn from their stored targets; an earlier-version group. Fixed |
+| E6 | P1: the sweep could end a live check | one clock from the reservation; grace = deadline + 120 s. Closed |
+| E7 | P1: a paid answer lost when storing it fails | retried four times over 14 s; **Sol still objects** (below) |
+| E8 | P1: Dig further's addresses read before the reservation | read after it, before the allowance. Fixed |
+| E9–E11 | another tab's check unseen; a free read shown as a search; an older read over a newer one | fixed |
+| G1–G4 | round 2: guarded-store inventory; a failed read consuming quota; recovery picking another tab's row; a late `begin` frame | fixed |
+
+**Sol still objects to E7; overruled because** the write is attempt-fenced and retried for 14 s, the
+loss is one answer of about 20 cents during a database outage with no second spend, the failure goes
+to the log and Sentry, and a durable outbox would be a second place answers live, which is more than
+this beta warrants. Opus arbitrated and agreed (accept, with two stale comments fixed and the
+limits written into debate.md § Checking, which they are). The other accepted limit: a single store
+write hanging for over a minute is unbounded (no statement timeout), so a third concurrent check
+could then start, under the hourly, daily and global counts.

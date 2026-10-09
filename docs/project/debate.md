@@ -130,8 +130,17 @@ for everybody; the numbers are Greg's to move. It is its own bucket, not Dig dee
 Dig deeper's lease (170 s) is shorter than a check may run, and a check that outlives its lease
 stops holding its concurrency slot; the check's lease is its deadline (360 s) plus a minute. The
 button is held from the press until the stored answer has been read, and while another tab's check
-is out. A closed tab does not cancel a check: its answer is stored and the next read finds it. If
-storing the answer fails, the write is tried twice more before it is given up.
+is out. A closed tab does not cancel a check: its answer is stored and the next read finds it.
+
+**Its limits, accepted** (GPT Sol's review, three rounds, and Opus's arbitration, in the plan). The
+deadline starts at the reservation, so the setup, the call and storing the answer all fit inside
+the lease. If storing the answer fails, the write is tried three more times over 14 s and then
+given up: the answer (about 20 cents) is lost, the failure goes to the log and Sentry, and the row
+stays pending until the sweep ends it, so a press on that article is a 409 for up to about eight
+minutes. Nothing bounds a single store write that hangs for over a minute (Postgres has no
+statement timeout here); then a third check could start while the hourly, daily and global counts
+still hold. And the gateway's retry after a dropped connection could resend a paid request, which
+is true of every web-search call and is queued on its own (`qi-2gaxfaaj`).
 
 **Where a check is drawn comes from what it stored**, not only from the current list's ids, so
 nothing paid for is hidden. A list made again mints new ids, so a check's claim is drawn under the
