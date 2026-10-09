@@ -240,6 +240,23 @@
   padding-right: calc(0.7rem + var(--band-about-room));
 }
 
+/* **The profile notice's ×** (plan 261009i), at the end of the banner's line.
+   Its size is close.css's; only the look is here, Marginalia's narrow
+   line's (`.marg-narrow-close`), so the two crosses that send a notice away
+   look alike. `margin-left: auto` keeps it at the right edge however the
+   sentence wraps. */
+.skim-notice-close {
+  flex: none;
+  margin-left: auto;
+  border: 0;
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.skim-notice-close:hover { color: var(--ink); }
+.skim-notice-close:focus-visible { outline: 1px solid var(--highlight-text); outline-offset: 1px; }
+.skim-notice-failed { color: var(--ink-soft); font-size: 0.85rem; }
+
 /* A rule above it, so the foot reads as being about the route rather than
    the last row's — citations.css's `.cite-foot`. */
 .skim-foot { padding: 0.4rem 0.7rem 0; border-top: 1px solid var(--rule); }

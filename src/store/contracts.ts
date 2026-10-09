@@ -1854,6 +1854,21 @@ export interface GlossaryHiddenStore {
 }
 
 /**
+ * The Skim profile-changed notice the owner sent away on one article —
+ * docs/plans/261009i-skim-profile-notice-can-be-dismissed.md. Owner-scoped (a
+ * stranger's slug is a 404). The read is `loadSkim`, which returns the stored
+ * key; there is no second GET.
+ */
+export interface SkimNoticeStore {
+  /**
+   * Store `key` (src/skim.ts § `profileNoticeKey`) and the time, **only if the
+   * article's current route is still the one stamped `generatedAt`**. `false`
+   * when it is not — a re-plan landed in between — and nothing is written.
+   */
+  dismissProfileNotice(slug: string, generatedAt: string, key: string): Promise<boolean>;
+}
+
+/**
  * The reader's global profile — "about you", true on every article rather
  * than on one. docs/plans/260826t-reader-profile.md is the design; src/profile.ts
  * is where the two boxes (this one and `ShelfState.purpose`) become one string

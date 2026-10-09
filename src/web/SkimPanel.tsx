@@ -50,6 +50,7 @@ import {
   Lightbulb,
   Route,
   TriangleAlert,
+  X,
 } from "lucide-react";
 import type { UseSkim } from "./useSkim.js";
 import type { PublicSkim } from "../public-types.js";
@@ -338,7 +339,9 @@ export function emptyHint(owner: Pick<UseSkim, "quotesFirst" | "ideasFirst">): s
  * `outdated` itself is still read — the stop card treats outdated sources as
  * usable. docs/plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md.
  */
-export function bannerReason(owner: Pick<UseSkim, "stale" | "profileChanged">): string | null {
+export function bannerReason(
+  owner: Pick<UseSkim, "stale" | "profileChanged" | "profileNoticeDismissed">,
+): string | null {
   if (owner.stale) {
     /* One input hash covers all three, so this read cannot honestly attribute
        the mismatch to Quotes. `notOnRoute` is also only a present-day count: a
@@ -346,8 +349,56 @@ export function bannerReason(owner: Pick<UseSkim, "stale" | "profileChanged">): 
        arrived later. */
     return "The Quotes, Ideas, or outline have changed since this route was planned.";
   }
-  if (owner.profileChanged) return "This route was planned before your profile said what it says now.";
+  /* **Dismissible, and only this one** — Greg, 2026-10-09 (`spya-ud2w92`):
+     *"there should be a way to dismiss it if I decide that I actually don't
+     care and I don't want to plan it again."* The stale reason above is not:
+     a route over Quotes that have moved can stop where nothing is. The
+     dismissal holds for this route under this profile (src/skim.ts §
+     `profileNoticeKey`). docs/plans/261009i-skim-profile-notice-can-be-dismissed.md. */
+  if (owner.profileChanged && !owner.profileNoticeDismissed) return PROFILE_NOTICE;
   return null;
+}
+
+const PROFILE_NOTICE = "This route was planned before your profile said what it says now.";
+
+/**
+ * **The one banner over a route** (`bannerReason` says which), with *Plan it
+ * again* — and, on the profile notice only, the × that sends it away (plan
+ * 261009i). A failed × is said here, inside the banner, which is back by
+ * then; if the read shows the dismissal landed after all, there is no banner
+ * and nothing is said.
+ */
+function RouteBanner({ owner, again }: { owner: UseSkim; again: ReactNode }) {
+  const reason = bannerReason(owner);
+  if (reason === null) return null;
+  const dismissible = reason === PROFILE_NOTICE;
+  return (
+    <div className="gloss-stale">
+      <p>
+        <TriangleAlert size={13} />
+        {reason}
+        {dismissible && (
+          <Tooltip
+            content={<p>Keep this route, and stop saying so until your profile changes again.</p>}
+            placement="bottom"
+          >
+            <button
+              type="button"
+              className="skim-notice-close close-x"
+              aria-label="Dismiss: keep this route"
+              onClick={() => void owner.dismissProfileNotice()}
+            >
+              <X aria-hidden="true" />
+            </button>
+          </Tooltip>
+        )}
+      </p>
+      {dismissible && owner.dismissFailed && (
+        <p className="skim-notice-failed">Could not hide this: {owner.dismissFailed}</p>
+      )}
+      {again}
+    </div>
+  );
 }
 
 /** The sparkline's drawing — src/web/route-spark.ts has the geometry. */
@@ -682,8 +733,9 @@ export function SkimPanel({ access, view, away }: Props) {
            docs/plans/260929b-one-place-to-re-run-ai-processing.md. */
         owner &&
         ready &&
-        !owner.stale &&
-        !owner.profileChanged &&
+        /* No banner — not "no reason for one": a dismissed profile notice
+           has no button left, so a job from Metadata shows here (plan 261009i). */
+        bannerReason(owner) === null &&
         (owner.job || owner.starting || owner.failed || (waiting && !owner.error)) ? (
           <div className="skim-foot">
             <div className="skim-again">{run("Plan it again", true)}</div>
@@ -705,15 +757,7 @@ export function SkimPanel({ access, view, away }: Props) {
 
       {ready && (
         <>
-          {owner && bannerReason(owner) && (
-            <div className="gloss-stale">
-              <p>
-                <TriangleAlert size={13} />
-                {bannerReason(owner)}
-              </p>
-              {run("Plan it again", true)}
-            </div>
-          )}
+          {owner && <RouteBanner owner={owner} again={run("Plan it again", true)} />}
 
           {/* What the route was planned for, or the question — owner only,
               and only over a ready route (Sol F6: the empty state's automatic

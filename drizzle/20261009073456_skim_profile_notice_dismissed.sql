@@ -1,0 +1,2 @@
+ALTER TABLE "spideryarn"."articles" ADD COLUMN "skim_profile_notice_dismissed_for" text;--> statement-breakpoint
+ALTER TABLE "spideryarn"."articles" ADD COLUMN "skim_profile_notice_dismissed_at" timestamp with time zone;

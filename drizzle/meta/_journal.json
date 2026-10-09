@@ -1268,6 +1268,13 @@
       "when": 1791524085133,
       "tag": "20261009053445_chat_messages_truncated",
       "breakpoints": true
+    },
+    {
+      "idx": 181,
+      "version": "7",
+      "when": 1791531297004,
+      "tag": "20261009073456_skim_profile_notice_dismissed",
+      "breakpoints": true
     }
   ]
 }

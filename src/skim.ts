@@ -509,6 +509,24 @@ export function routeProfileIsStale(
 }
 
 /**
+ * **Which profile-changed notice the reader sent away** — the key stored in
+ * `articles.skim_profile_notice_dismissed_for` when they press its ×, and
+ * compared on every read. Greg, 2026-10-09 (`spya-ud2w92`).
+ *
+ * The route's `generatedAt` and the reader's profile hash now, so the
+ * dismissal holds for that route under that profile and nothing else: a
+ * re-plan re-stamps `generatedAt`, and a further profile change moves the
+ * hash, and either brings the notice back. **Not the route's `profileHash`**:
+ * planned for A, profile B, dismissed, back to A, re-planned (still A), B
+ * again — keyed on the stamp, the old dismissal would hide the new route's
+ * notice (GPT Sol's plan review, finding 1). `none` is no profile; a hash
+ * never contains a space. docs/plans/261009i-skim-profile-notice-can-be-dismissed.md.
+ */
+export function profileNoticeKey(routeGeneratedAt: string, profileHashNow: string | null): string {
+  return `${routeGeneratedAt} ${profileHashNow ?? "none"}`;
+}
+
+/**
  * **The abstract is not on the route.** Greg, 2026-09-28: *"prefer not to
  * include the Abstract as part of a trajectory, since that's kinda obviously
  * already a good place to get the gist, and it's dense."*

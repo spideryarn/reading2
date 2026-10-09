@@ -372,6 +372,9 @@ function owner(over: Partial<UseSkim> = {}): UseSkim {
     stale: false,
     outdated: false,
     profileChanged: false,
+    profileNoticeDismissed: false,
+    dismissFailed: null,
+    dismissProfileNotice: async () => {},
     notOnRoute: 0,
     slug: "a-route",
     error: null,
@@ -1149,7 +1152,44 @@ describe("the panel", () => {
     expect(host.textContent).not.toContain("older version of the prompt");
     await draw(owner({ outdated: true, profileChanged: true }), view());
     expect(text(".gloss-stale")).toContain("before your profile said what it says now");
-    expect(host.querySelector(".gloss-stale button")?.textContent).toBe("Plan it again");
+    /* Beside the ×, plan 261009i. */
+    expect(
+      [...host.querySelectorAll(".gloss-stale button:not(.skim-notice-close)")].map((b) => b.textContent),
+    ).toEqual(["Plan it again"]);
+  });
+
+  /* Greg, 2026-10-09 (spya-ud2w92): the profile notice can be sent away;
+     plan 261009i. */
+  describe("the profile notice's ×", () => {
+    it("is on the profile notice, and pressing it asks the owner to dismiss", async () => {
+      let dismissed = 0;
+      await draw(owner({ profileChanged: true, dismissProfileNotice: async () => void dismissed++ }), view());
+      const close = host.querySelector<HTMLButtonElement>(".gloss-stale .skim-notice-close");
+      expect(close, "no × on the profile notice").toBeTruthy();
+      expect(close?.getAttribute("aria-label")).toContain("Dismiss");
+      await act(async () => close?.click());
+      expect(dismissed).toBe(1);
+    });
+
+    it("hides the banner once dismissed, and a job then shows in the foot", async () => {
+      await draw(owner({ profileChanged: true, profileNoticeDismissed: true }), view());
+      expect(host.querySelector(".gloss-stale")).toBeNull();
+      await draw(owner({ profileChanged: true, profileNoticeDismissed: true, job: RUNNING_SKIM_JOB }), view());
+      expect(host.querySelector(".skim-again")?.textContent, "a job after a dismissal shows nowhere").toContain("Stop");
+    });
+
+    it("is not on the stale banner, which a dismissal does not hide", async () => {
+      await draw(owner({ stale: true, profileChanged: true, profileNoticeDismissed: true }), view());
+      expect(text(".gloss-stale")).toContain("have changed since this route was planned");
+      expect(host.querySelector(".skim-notice-close")).toBeNull();
+      await draw(owner({ stale: true, profileChanged: true }), view());
+      expect(host.querySelector(".skim-notice-close")).toBeNull();
+    });
+
+    it("says why when a dismissal did not stick", async () => {
+      await draw(owner({ profileChanged: true, dismissFailed: "The server could not be reached." }), view());
+      expect(text(".skim-notice-failed")).toContain("The server could not be reached.");
+    });
   });
 
   it("shows a running job in the foot on an outdated route", async () => {

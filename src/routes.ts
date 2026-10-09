@@ -49,6 +49,7 @@ import {
   tagStore,
   readingTimeStore,
   glossaryHiddenStore,
+  skimNoticeStore,
   quizAttemptStore,
   loadArticle,
   loadGlossary,
@@ -412,7 +413,7 @@ import { hashProfile, normaliseProfileText, profileIsStale, renderProfile } from
 import { keysOpenFree, type MadeArtefact } from "./acts-alone.js";
 import { type GuideExperience, experienceOf } from "./guide.js";
 import { panelRunKind } from "./glossary.js";
-import { routeProfileIsStale } from "./skim.js";
+import { profileNoticeKey, routeProfileIsStale } from "./skim.js";
 import {
   type ArticleStage,
   articlePower,
@@ -1228,6 +1229,23 @@ function readingTimeBatch(body: unknown): Record<string, number> {
     out[id] = value;
   }
   return out;
+}
+
+/**
+ * `POST /api/skim/:slug/profile-notice-dismissal`'s body: `{ generatedAt }`,
+ * the route the reader was looking at, and nothing else
+ * (`SkimProfileNoticeDismissalRequest`).
+ */
+function skimDismissalGeneratedAt(body: unknown): string {
+  const sent = objectBody(body);
+  for (const key of Object.keys(sent)) {
+    if (key !== "generatedAt") throw httpError(400, "That request has a field this endpoint does not take");
+  }
+  const { generatedAt } = sent;
+  if (typeof generatedAt !== "string" || generatedAt.length === 0 || generatedAt.length > 64) {
+    throw httpError(400, "Expected { generatedAt: <the route's generatedAt> }");
+  }
+  return generatedAt;
 }
 
 /**
@@ -11204,14 +11222,49 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       const found = await orNullWhenNotMadeYet({ req, res }, () => loadSkim(at));
       if (found === null) return;
       const now = await profile;
+      const nowHash = now ? hashProfile(now) : null;
+      const { profileNoticeDismissedFor, ...rest } = found;
+      const profileChanged = routeProfileIsStale(found.skim.profileHash, nowHash);
       const body: SkimResponse = {
-        ...found,
-        profileChanged: routeProfileIsStale(
-          found.skim.profileHash,
-          now ? hashProfile(now) : null,
-        ),
+        ...rest,
+        profileChanged,
+        /* The stored key is never sent: it carries the profile's hash. */
+        profileNoticeDismissed:
+          profileChanged &&
+          profileNoticeDismissedFor === profileNoticeKey(found.skim.generatedAt, nowHash),
       };
       send(res, 200, body);
+    },
+  },
+
+  /* **Send the profile-changed notice away**, for this route under the profile
+     the reader has now — docs/plans/261009i-skim-profile-notice-can-be-dismissed.md
+     (Greg, 2026-10-09, `spya-ud2w92`). Body `{ generatedAt }`: the route the
+     reader was looking at. Owner-only through the store. The server works out
+     the profile hash itself. No route → 404; another route than the one named,
+     before or during the write → 409, and the client reads again; route and
+     profile agree → 204 and nothing written, since there is no notice to
+     dismiss. Never spends. */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/skim\/([\w.%-]+)\/profile-notice-dismissal$/,
+    article: "first-capture",
+    handler: async ({ request: { req, res } }, captures) => {
+      const at = slugPart(captures, 1);
+      const generatedAt = skimDismissalGeneratedAt(await readBody(req));
+      const profile = resolveProfile(at);
+      void profile.catch(() => {});
+      const found = await loadSkim(at);
+      const nowHash = await profile.then((now) => (now ? hashProfile(now) : null));
+      const replanned = () => httpError(409, "This route has been planned again since. Read it again.");
+      if (found.skim.generatedAt !== generatedAt) throw replanned();
+      if (routeProfileIsStale(found.skim.profileHash, nowHash)) {
+        const key = profileNoticeKey(generatedAt, nowHash);
+        if (!(await skimNoticeStore.dismissProfileNotice(at, generatedAt, key))) throw replanned();
+      }
+      res.statusCode = 204;
+      res.end();
     },
   },
 

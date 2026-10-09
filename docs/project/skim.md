@@ -173,6 +173,21 @@ Stage 5, asked for by Greg on 2026-09-28 (his words are in the
   >
   > — Greg, 2026-09-29
 
+  **The profile-changed banner has an ×** (since 2026-10-09,
+  [261009i](../plans/261009i-skim-profile-notice-can-be-dismissed.md)), and the stale one does not:
+
+  > I think that's helpful, but there should be a way to dismiss it if I decide that I actually
+  > don't care and I don't want to plan it again.
+  >
+  > — Greg, 2026-10-09 (`spya-ud2w92`)
+
+  The dismissal is stored on `articles` with its time, keyed on the route's `generatedAt` and the
+  reader's profile hash now (`profileNoticeKey` in [`src/skim.ts`](../../src/skim.ts)), so a
+  re-plan or a further profile change brings the notice back. Once it is gone, a job started from
+  Metadata shows in the foot, as it does on a route with no banner. The other personalised modes say
+  the same thing with the profile icon rather than a banner, so there is nothing of theirs to
+  dismiss; Illustrated's one grey sentence was looked at and left, for the plan's reasons.
+
   **Stale Quotes are chosen again first**, on the automatic run and on the banner's button, as missing
   ones always were — unforced, so current Quotes cost nothing — and the empty state says when they
   will be. The Metadata row names only `skim`, so it never buys Quotes or Ideas, and refuses
