@@ -4890,8 +4890,14 @@ export const LINK_AT_ADD_GAVE_UP =
  * review). *Check again* reads the state, which changes nothing.
  */
 export const LINK_AT_ADD_UNKNOWN =
-  "That did not come back, so we cannot say whether it took effect. Check again before making " +
-  "another link: a new link replaces the one before it.";
+  "That did not come back, so we cannot say whether it took effect. Check again to see, or turn " +
+  "it off. A new link replaces the one before it.";
+
+/** *Turn off* while a write's outcome is unknown: name the lost-create race rather than promising the result. */
+export const LINK_AT_ADD_UNKNOWN_STOP_TIP =
+  "Turns off any private link this article has. If the link you asked for is still being made, " +
+  "it can appear just afterwards, so check again in a moment. What somebody has already read or " +
+  "copied stays with them.";
 
 /** The read of the link's state failed on coming back to this page. Nothing was changed, and no link is drawn from memory. */
 export const LINK_AT_ADD_UNREAD =

@@ -26,6 +26,7 @@ import {
   LINK_AT_ADD_LABEL,
   LINK_AT_ADD_ON,
   LINK_AT_ADD_UNKNOWN,
+  LINK_AT_ADD_UNKNOWN_STOP_TIP,
   LINK_AT_ADD_UNREAD,
   LINK_AT_ADD_WAITING,
   LINK_AT_ADD_WHAT,
@@ -146,17 +147,27 @@ export function AddShareLink({
         </Button>
       )}
 
+      {/* There may be a link, and nothing could read it back. *Turn off* is
+          safe whatever the truth is (plan 261009l), so a turn-off can be sent
+          even while the reads fail. Its tooltip names the lost-create race. */}
       {state.kind === "unknown" && (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="tw:mt-2"
-          disabled={state.checking}
-          onClick={() => link.recheck()}
-        >
-          {state.checking ? "Checking…" : "Check again"}
-        </Button>
+        <div className="tw:mt-2 tw:flex tw:flex-wrap tw:items-center tw:gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={state.checking}
+            onClick={() => link.recheck()}
+          >
+            {state.checking ? "Checking…" : "Check again"}
+          </Button>
+          <Tooltip placement="bottom" content={<TipNote>{LINK_AT_ADD_UNKNOWN_STOP_TIP}</TipNote>}>
+            <Button type="button" variant="outline" size="sm" onClick={() => link.turnOff()}>
+              <Link2Off size={14} />
+              Turn off
+            </Button>
+          </Tooltip>
+        </div>
       )}
 
       {on && (
