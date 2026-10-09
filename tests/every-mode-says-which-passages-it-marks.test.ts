@@ -53,7 +53,9 @@ function passage(name: string): Found {
     valence: null,
     reasoning: null,
     short: name,
+    shortStart: 0,
     long: name,
+    longStart: 0,
     at: 0,
     whole: false,
     /* Not a quote. See `Found.quoteStroke`. */

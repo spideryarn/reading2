@@ -67,6 +67,7 @@ import { chatDraftsFor } from "./chat-draft.js";
 import { answerOpening } from "../answer-opening.js";
 import { askAboutBlock, HELP_QUESTION } from "./chat-handoff.js";
 import { shortBlockId } from "./BlockRef.js";
+import { Excerpt } from "./Excerpt.js"; // quotes drawn from the block's markup (plan 261009k)
 /* **The client's own creation window, imported rather than restated.** This
    rule's whole claim is "longer than a send may legitimately take to open a
    conversation", so a second copy of that number is a way for the claim to
@@ -1245,9 +1246,9 @@ export function ChatDialog({
         ) : target.kind === "draft" ? (
           <>
             {"quote" in target.anchor ? (
-              <blockquote className="chat-dialog-quote">{target.anchor.quote}</blockquote>
+              <blockquote className="chat-dialog-quote"><Excerpt blockId={target.anchor.blockId} words={target.anchor.quote} near={target.anchor.start} /></blockquote>
             ) : (
-              <p className="chat-dialog-opening">{target.opening}</p>
+              <p className="chat-dialog-opening"><Excerpt blockId={target.anchor.blockId} words={target.opening} /></p>
             )}
             {/* Said out loud, because the previous behaviour spent a model call
                 here without being asked and a reader who knew that needs telling

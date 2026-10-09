@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * **Every word a mode answers to, typed into the bar as production ranks it** —
  * Stage 1 of

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * **‹ › and ← → between quotes** — `stepQuote` in src/web/QuotesPanel.tsx is
  * the rule the band's stepper and the keys share; the prose card walks the

@@ -435,7 +435,15 @@ export function quoteAppears(text: string, quote: string): boolean {
  * something was actually cut, so a short paragraph does not pretend to be an
  * extract.
  */
-export function snippet(text: string, span: Span, budget: number): string {
+export interface Snippet {
+  /** The visible words, with an ellipsis at either edge that was cut. */
+  text: string;
+  /** Where the first visible word sits in `text`. */
+  start: number;
+}
+
+/** `snippet`, plus the offset a caller needs to choose between repeated passages. */
+export function snippetAt(text: string, span: Span, budget: number): Snippet {
   const want = Math.max(0, budget - (span.end - span.start));
   const before = Math.floor(want / 2);
   let from = Math.max(0, span.start - before);
@@ -444,6 +452,15 @@ export function snippet(text: string, span: Span, budget: number): string {
   // near the cut should be cut rather than swallowed whole.
   for (let i = 0; i < 15 && from > 0 && !isSpace(text[from - 1] ?? " "); i++) from--;
   for (let i = 0; i < 15 && to < text.length && !isSpace(text[to] ?? " "); i++) to++;
-  const body = text.slice(from, to).trim();
-  return `${from > 0 ? "…" : ""}${body}${to < text.length ? "…" : ""}`;
+  const raw = text.slice(from, to);
+  const lead = raw.length - raw.trimStart().length;
+  const body = raw.trim();
+  return {
+    text: `${from > 0 ? "…" : ""}${body}${to < text.length ? "…" : ""}`,
+    start: from + lead,
+  };
+}
+
+export function snippet(text: string, span: Span, budget: number): string {
+  return snippetAt(text, span, budget).text;
 }

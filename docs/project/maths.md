@@ -45,8 +45,9 @@ line below. The shared TeX rules are [`src/maths-tex.ts`](../../src/maths-tex.ts
   formula carrying `id`, `name`, `href` or `xlink:href` is refused whole. Cross-references between
   separately drawn formulas could not work anyway.
 - **A span over the size limits** — see below.
-- **Undelimited TeX**, and **TeX in the side panels** — quotes, ideas, glossary cards and search
-  snippets show `block.text` or model-written strings, not block html.
+- **Undelimited TeX.**
+- **TeX in a model's own words** — a gist, a summary, a glossary sense. Only the article's own words
+  are drawn from its markup ([§ Excerpts outside the prose](#excerpts-outside-the-prose)).
 
 **A PDF imported since 2026-09-24 has TeX to draw.** The transcriber writes maths between `\(…\)`
 and `\[…\]`, and the PDF checks read it as what it prints —
@@ -54,6 +55,28 @@ and `\[…\]`, and the PDF checks read it as what it prints —
 [260924b](../plans/260924b-pdf-transcriber-writes-maths-as-tex.md). A PDF imported before then
 mostly has its equations flattened into lines of symbols, which there is nothing to draw from; a
 re-import fixes it.
+
+## Excerpts outside the prose
+
+> I saw a quote in skim mode that referred to some LaTeX formulae that was just showing the
+> unrendered LaTeX. It should be obviously showing the rendered LaTeX. … Perhaps do this with some
+> kind of reusable excerpt machinery?
+>
+> — Greg, 2026-10-09 (spya-pqae7m)
+
+**The article's words, wherever a mode shows them, are drawn from the block's own markup** — a
+quote in Skim or Quotes, a passage in FAQ or Claims, a reader's selection in a dialog, a snippet
+around a search hit. A stored quote is a slice of `block.text`, which holds a formula as its TeX
+source and has lost every `<em>`, so drawn as a string it showed `\(d_k\)` beside a paragraph that
+showed *d*<sub>k</sub>. `src/web/Excerpt.tsx` § `Excerpt` finds the words in the block **as it was
+before its maths was drawn** (then, failing that, as drawn — a selection's formulas are already
+symbols), widens the cut to whole formulas, keeps only inline formatting with nothing that can carry
+an id or a link, draws the maths with the block's own renderer, inline, and puts the result back
+through the article policy (`src/web/excerpt-html.ts`). The block's pre-maths html and its renderer
+ride on the provenance symbol (`maths-provenance.ts` § `mathsSource`). Links become their words,
+because an excerpt usually sits inside a button that goes to the passage. The sites, and the few
+left as strings on purpose, are in
+[261009k](../plans/261009k-excerpts-keep-maths-and-formatting.md).
 
 ## Where it sits
 

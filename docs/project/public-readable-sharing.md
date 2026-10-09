@@ -285,8 +285,11 @@ Greg's answers to the three questions stage 1 ended on, in his words, are in the
   own requests behind its own confirmation. Unlike the public switch **it can read its state
   before publication**: `GET /api/article/:slug/share-link` needs only the owner's row. So it
   reads on every attachment and keeps no mark. **A create that did not come back is never sent
-  again by itself**, because a second create replaces the first link: it shows *unknown* and a
-  *Check again* button. An older read that answers after a newer write is dropped
+  again by itself**, because a second create replaces the first link: it shows *unknown*, with *Check
+  again* and *Turn off*. The turn-off is idempotent on the server, so it is safe to send without
+  knowing whether there is a link
+  ([261009l](../plans/261009l-add-page-private-link-lost-reply-cannot-be-turned-off.md), which
+  also names the race that remains). An older read that answers after a newer write is dropped
   ([postmortem 261006b](../postmortems/261006b-a-read-completion-does-not-prove-it-followed-a-write.md)).
 - **Controllers belong to one reader.** The registry is keyed by reader and slug and is emptied
   when the session changes, where the upload engine is fenced
