@@ -78,7 +78,7 @@ export function AdminPublicTopics() {
         rebuild while there are {status?.autoMax ?? 20} public articles or fewer. Past that a rebuild
         waits for this button. Billed to the site.
       </p>
-      {error && <p className="tw:mb-3 tw:text-sm tw:text-destructive">{error}</p>}
+      {error && <p className="tw:mb-3 tw:text-sm tw:text-danger">{error}</p>}
       {status && (
         <p className="tw:mb-3 tw:text-sm tw:text-foreground" title={status.rethoughtAt ? exactly(status.rethoughtAt) : undefined}>
           {statusSentence(status, ago ?? null)}

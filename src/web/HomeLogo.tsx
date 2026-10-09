@@ -34,9 +34,9 @@
  * **Their top spacing is each page's own business and there is no shared
  * number**, which is worth saying because an earlier draft of this paragraph
  * claimed one. `ProfilePage`, `PrivacyPage` and `ContactPage` happen to start
- * their `<main>` at `calc(3.5rem + var(--safe-top))`; the shelf, the landing
- * pages, the 404 and the four `ArticlePage` branches that draw no `Dock` each
- * lay themselves out differently. The 3.5rem is also not `2.5rem + --bar-h` —
+ * their `<main>` at `calc(3.5rem + var(--safe-top))`; the component's other
+ * callers each lay themselves out differently. The 3.5rem is also not
+ * `2.5rem + --bar-h` —
  * `--bar-h` is 2.75rem, and the extra over the ordinary 2.5 is 1rem. It is a
  * page's chosen clearance, not a derived quantity. GPT Sol, T3.
  *
@@ -78,11 +78,13 @@
  * docs/plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md.
  *
  * **The pages that keep this component** are the shelf-adjacent ones (`/add`,
- * `/profile`, `/contact`, `/privacy`, the 404 and the admin pages) and the four branches of `ArticlePage` that draw
- * no `Dock` — loading, error, not-shared and reauth-required. None of them has
- * a masthead or a controls bar; that is why the paragraph above had to be
- * rewritten rather than merely narrowed. `ArticlePage`'s final branch is where
- * it stopped being drawn.
+ * `/profile`, `/contact`, `/privacy`, the 404 and the admin pages). `ArticlePage`
+ * also keeps it on its error page and delegates it to its no-`Dock` stand-ins:
+ * `OwnerNotShared`, `StillBeingAddedVisitor`, `ReauthRequiredPage` and
+ * `UnreadPaperPage`. Loading dropped it on 2026-10-09, because its spinner is
+ * the wordmark (plan 261009b). None of them has a masthead or a controls bar;
+ * that is why the paragraph above had to be rewritten rather than merely
+ * narrowed. `ArticlePage`'s final branch is where it stopped being drawn.
  *
  * **Nor, since 2026-09-29, the four pages that draw the marketing top bar**
  * (`SiteNav`) signed in — `/features`, `/features/public-readable-sharing`,

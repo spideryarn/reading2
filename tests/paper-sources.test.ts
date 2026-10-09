@@ -117,13 +117,13 @@ describe("resolvePaperSource — arXiv", () => {
     expect(resolvePaperSource(url)).toEqual(resolvePaperSource("https://arxiv.org/abs/2608.13566"));
   });
 
-  it.each(VERSIONED)("keeps the version of %s everywhere but the work id", (url) => {
+  it.each(VERSIONED)("keeps the version of %s everywhere but the work id and the key", (url) => {
     expect(resolvePaperSource(url)).toEqual({
       source: "arxiv",
       versionedId: "2608.13566v1",
       workId: "2608.13566",
       canonicalUrl: "https://arxiv.org/abs/2608.13566v1",
-      key: "arxiv.org/abs/2608.13566v1",
+      key: "arxiv.org/abs/2608.13566",
       slug: "arxiv-2608-13566v1",
       candidates: [
         { url: "https://arxiv.org/html/2608.13566v1", expect: "html", marker: "ltx_document" },
@@ -132,11 +132,14 @@ describe("resolvePaperSource — arXiv", () => {
     });
   });
 
-  it("gives a versioned link a different key from the unversioned one, and the same work", () => {
+  /* The version decides what is fetched and the slug, but not "do we already
+     have this?": report spya-n50aft, plan 261009d. */
+  it("gives every version, and none, one key, and keeps them apart everywhere else", () => {
     const bare = resolvePaperSource("https://arxiv.org/abs/2608.13566");
     const v1 = resolvePaperSource("https://arxiv.org/abs/2608.13566v1");
     const v2 = resolvePaperSource("https://arxiv.org/abs/2608.13566v2");
-    expect(new Set([bare?.key, v1?.key, v2?.key]).size).toBe(3);
+    expect(new Set([bare?.key, v1?.key, v2?.key])).toEqual(new Set(["arxiv.org/abs/2608.13566"]));
+    expect(new Set([bare?.canonicalUrl, v1?.canonicalUrl, v2?.canonicalUrl]).size).toBe(3);
     expect(new Set([bare?.slug, v1?.slug, v2?.slug]).size).toBe(3);
     expect(new Set([bare?.workId, v1?.workId, v2?.workId])).toEqual(new Set(["2608.13566"]));
   });
@@ -189,9 +192,11 @@ describe("resolvePaperSource — arXiv", () => {
     }
   });
 
-  /* The abs link is what every article imported before this was keyed by. */
+  /* The abs link is what every article imported before this was keyed by.
+     A versioned one's key lost its version on 2026-10-09 (plan 261009d), which
+     is the point: it now matches the article an unversioned link imported. */
   it("does not change the key an abstract link already has", () => {
-    for (const url of ["https://arxiv.org/abs/2608.13566", "https://arxiv.org/abs/2608.13566v1", PASTED]) {
+    for (const url of ["https://arxiv.org/abs/2608.13566", PASTED]) {
       expect(resolvePaperSource(url)?.key).toBe(urlKey(url));
     }
   });

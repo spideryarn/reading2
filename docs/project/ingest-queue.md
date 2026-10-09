@@ -781,14 +781,20 @@ happily slugged as `x` one function later.
 
 `urlKey` is where `http` and `https` become one article. On top of the above it drops the scheme
 entirely, a leading `www.`, one trailing slash, and the tracking parameters a share button staples on
-(`utm_*`, `fbclid`, `igshid` and a dozen more).
+(`utm_*`, `fbclid`, `igshid` and about twenty more — the list is `TRACKING` in `src/ingest.ts`).
 
 **And a paper a source recognises has one key whatever shape its link takes**, since 2026-10-05.
 arXiv serves one paper at `abs/`, `pdf/`, `html/` and its own DOI, and the fetch step reads the
 same document whichever was pasted ([fetching.md § A paper source](fetching.md#a-paper-source-one-paper-several-addresses)),
 so `urlKey` answers `arxiv.org/abs/<id>` for all of them, and `slugFromUrl` answers the source's
 slug (`arxiv-2608-13566`; it used to be `arxiv-2608`, because `.13566` read as a file extension).
-A version is part of the key: `2608.13566` and `2608.13566v1` are two articles.
+**Every version is one article**, since 2026-10-09. The 2026-10-05 version kept the version in the
+key, so `2608.13566` and `2608.13566v1` were two articles, and a reader who had imported a `…v1`
+link and then pasted the plain abstract link got the paper twice (report `spya-n50aft`). The key is
+now the versionless id; the version still decides what is fetched and the slug. The cost: a reader
+holding v1 who pastes v2 is told they already have it, and Refresh re-reads v1, so reading v2 means
+deleting v1 first. Telling versions apart was weighed and not built —
+[261009d](../plans/261009d-every-version-of-an-arxiv-paper-is-one-article.md).
 
 The same holds for the sources added on 2026-10-06. A Hugging Face or alphaXiv page about an arXiv
 paper has the arXiv paper's key. An ACL Anthology, PMLR, NeurIPS, CVF or JMLR paper has the key

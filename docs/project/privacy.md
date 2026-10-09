@@ -538,7 +538,7 @@ criterion or a passage.
 [reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar): a sentence
 the bar cannot match, sent on Enter by a signed-in reader, goes to TypeSafe's `jev-1.13` with our
 own words for the bar's commands, and, when the command picked takes words (a search, a term, a
-tag), to `gpt-5.6-luna` as well, which copies them out. Neither is shown the article. **A new flow
+tag), to `gpt-6-luna` as well (`gpt-5.6-luna` until 9 October 2026), which copies them out. Neither is shown the article. **A new flow
 of the reader's own words to two models already on the page**, not a new subprocessor, so the
 `jev-1.13` clause in the models paragraph says so and `LAST_UPDATED` moved to 3 October 2026. The
 sentence is not stored, and [`src/command-pick-call.ts`](../../src/command-pick-call.ts) logs the
@@ -548,9 +548,10 @@ outcome's kind, counts and timings, never the sentence or the words.
 
 **Added 2026-10-07**, with [help-page.md § Ask about Spideryarn](help-page.md#ask-about-spideryarn)
 and [plan 261007k](../plans/261007k-help-chatbot.md): a signed-in reader's question in Help's *Ask
-about Spideryarn* box goes to `gpt-5.6-luna` (OpenAI's, through OpenRouter, job `help-chat`), with
-every Help page and nothing of the reader's besides — no article, no profile. **A new flow of the
-reader's own words to a model already on the page**, so the `gpt-5.6-luna` clause in the models
+about Spideryarn* box goes to `gpt-6-luna` (`gpt-5.6-luna` until 9 October 2026; OpenAI's, through
+OpenRouter, job `help-chat`), with every Help page and nothing of the reader's besides — no
+article, no profile. **A new flow of the
+reader's own words to a model already on the page**, so the `gpt-6-luna` clause in the models
 paragraph says so; `LAST_UPDATED` already read 7 October 2026. The question and the answer are not
 stored, and [`src/help-chat-call.ts`](../../src/help-chat-call.ts) logs the outcome, timings, token
 counts and model, never the question or the answer. What is kept is the allowance's row (who asked,
@@ -564,9 +565,10 @@ plan's option B keeps a keyed hash of their address, and the page gains a line f
 [reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar) and
 [plan 261005k](../plans/261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md):
 when the owner of an article presses *Suggest what to do here*, the reader's profile and their
-reason for reading that article go to `gpt-5.6-luna`, with our own words for the bar's modes. It is
+reason for reading that article go to `gpt-6-luna` (`gpt-5.6-luna` until 9 October 2026), with our
+own words for the bar's modes. It is
 not shown the article. **A new flow of the profile to a model already on the page**, so the
-`gpt-5.6-luna` clause in the models paragraph says so. `LAST_UPDATED` already reads 5 October 2026.
+`gpt-6-luna` clause in the models paragraph says so. `LAST_UPDATED` already reads 5 October 2026.
 
 **The page also says what follows, because that is the part a reader could not guess.** The model
 writes up to three searches and one question for chat, and words them from what it was shown. One
