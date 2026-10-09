@@ -135,11 +135,26 @@ export function notBuiltGap(what: keyof PublicArtefacts): VisitorGap {
  *    what six labels repeated here would have done.
  *  - `artefact` carries the `PublicArtefacts` key, and nothing else: whether
  *    that flag is set is a fact about *this piece*, not about the mode.
+ *  - `any-artefact` carries several, for a mode whose sub-modes show one
+ *    each: any one stored opens it. Its noun is the reader-facing names of
+ *    those sub-modes, not the storage keys — Peer review's keys deliberately
+ *    remain `citations` and `debate`.
  */
 type VisitorPolicy =
   | { kind: "available" }
   | { kind: "owners-only" }
-  | { kind: "artefact"; key: keyof PublicArtefacts };
+  | { kind: "artefact"; key: keyof PublicArtefacts }
+  /**
+   * **Open when any of these is stored**, for a mode whose sub-modes each
+   * show their own artefact — Peer review, since 2026-10-09 (GPT Sol's F3 on
+   * plan 261009l). The band says which sub-mode is short of its own; the gap,
+   * when there is none of them, names them all.
+   */
+  | {
+      kind: "any-artefact";
+      keys: readonly [keyof PublicArtefacts, ...(keyof PublicArtefacts)[]];
+      noun: string;
+    };
 
 /**
  * **Every mode's policy, and the record is total.**
@@ -302,42 +317,33 @@ const POLICY: Record<Mode, VisitorPolicy> = {
    */
   referee: { kind: "owners-only" },
   /**
-   * **An artefact mode since 2026-09-29** (SPIDERYARN-READING2-56, plan
-   * 260929c stage 4). It was `owners-only` from Stage 3 as a staging decision:
-   * Debate is meant to be shared — it is the artefact whose whole value is that
-   * somebody else can check it — but the boundary a visitor's row must not
-   * bypass was not built, and writing the visitor branch first is what a GPT
-   * Sol review (F23) refused. The comment here also said it spends, and it
-   * does — two metered web searches, ~$0.27 a run — but that is the cost of
-   * *running* a search, which a visitor never pays, not of *showing* one.
+   * **Peer review, since 2026-10-09: open when any one of its artefacts is
+   * stored** — Citations' list, Debate's Reception search or Claims' list
+   * (`debate` is set by either of the last two, public-artefacts.ts §
+   * `artefactsIn`). GPT Sol's F3 on plan 261009l: one key could not say it,
+   * so the policy shape is `any-artefact`. A sub-mode whose own artefact is
+   * missing says so inside the open band (PeerReviewMode.tsx), rather than
+   * closing the whole mode on a visitor who could read the other two.
    *
-   * The boundary is built now (src/public/dto.ts § `publicDebate`): every
-   * row's address re-judged by `publicCitationUrl`, a refusal dropping the row
-   * and counting it for the visitor's foot line; a `linked` signal's address —
-   * the article's own — judged by `publicSourceUrl`, as the masthead's is; and
-   * a row whose words carry a refused address dropped too. The visitor gets
-   * `VisitorDebateBand`, which mounts no `useDebate` and draws no search.
-   * docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md § Stage 4,
-   * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md.
+   * Each half's history: both were `owners-only` as staging decisions until
+   * the public projections their rows' URLs must pass through were built —
+   * `publicCitedWork` and `publicDebate` in src/public/dto.ts, every address
+   * re-judged by `publicCitationUrl`, a refused one taking the link off a work
+   * or dropping a debate row and counting it for the visitor's foot line. The
+   * comments here said they spend, which is true of *making* them (one model
+   * pass for Bibliography or Claims; one metered web search for Reception or
+   * a claim check) and nothing to do with *showing* them.
+   * Greg, SPIDERYARN-READING2-56: a stored mode on a public article is shown.
+   * The visitor gets `VisitorPeerReviewBand`, which mounts no `useCitations`,
+   * `useDebate` or job, draws no *Find it* and starts no search.
+   * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md,
+   * docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md.
    */
-  debate: { kind: "artefact", key: "debate" },
-  /**
-   * **An artefact mode since 2026-09-29.** It was `owners-only` as a staging
-   * decision — the public projection its rows' URLs had to pass through was
-   * not built — and a comment here that said *"It spends: one model pass over
-   * the whole article"*, true of *making* the list and nothing to do with
-   * *showing* one. Greg, SPIDERYARN-READING2-56, on the Trajectory: *"It's a
-   * public article, and the Trajectory has already been generated, so it
-   * should show it"* — and the rule he gave was for every mode.
-   *
-   * The projection is built now: every address re-judged by
-   * `publicCitationUrl`, a refused one taking the link off the row, the dedupe
-   * `key` left behind (src/public/dto.ts § `publicCitedWork`). The visitor gets
-   * `VisitorCitationsBand`, which mounts no `useCitations` and draws no *Find
-   * it*, whose results stay the owner's.
-   * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md.
-   */
-  citations: { kind: "artefact", key: "citations" },
+  "peer-review": {
+    kind: "any-artefact",
+    keys: ["citations", "debate"],
+    noun: "a Bibliography, a Reception search or a Claims list",
+  },
   /**
    * **An artefact mode since 2026-09-29**, for Citations' reason above: it was
    * `owners-only` for the cost of *asking* for an FAQ, which a visitor never
@@ -399,6 +405,12 @@ export function visitorGap(mode: Mode, available: PublicArtefacts): VisitorGap |
        that has a glossary shows its glossary. */
     case "artefact":
       return available[policy.key] ? null : notBuiltGap(policy.key);
+    /* Any one is enough; with none, the sentence uses the sub-modes' current
+       reader-facing names rather than these deliberately old storage keys. */
+    case "any-artefact":
+      return policy.keys.some((key) => available[key])
+        ? null
+        : { kind: "not-built", noun: policy.noun };
     default: {
       /* There is no fall-through policy any more, and this is not one: it is
          the compiler being made to say so. `POLICY` is total over `Mode`, so

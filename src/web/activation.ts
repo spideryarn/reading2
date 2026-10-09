@@ -142,7 +142,7 @@
 import type { Mode } from "../modes.js";
 import type { AutoRunTarget } from "./auto-run-targets.js";
 import type { DiagramKind } from "./diagram.js";
-import type { DebateView, LearnView, SummaryView } from "./params.js";
+import type { LearnView, PeerReviewView, SummaryView } from "./params.js";
 import type { RefereeView } from "./referee-views.js";
 import type { SubMode } from "./sub-modes.js";
 import type { StepName } from "../types.js";
@@ -193,14 +193,17 @@ export type { AutoRunTarget };
  *  - **`none`** — nothing to arm, with the reason written out. The reasons were
  *    prose in this docblock until the type asked for them by name.
  *
- * **`debate` is the dearest mode press in the app** — a metered call that
- * goes out to the open web, up to ~$0.14 and rising with the length of the
- * article (two such calls until `debate/7`, 2026-10-08, when the claims
- * search left the press). **Delegated since that day**: a press landing on
- * Reception arms the search, one landing on Claims arms the claims list —
- * one call and no search (§ `activationForDebate`). What keeps the price honest is that the mode is behind the
- * experimental-features switch, so the button is not in front of every reader,
- * and that the blurb on it says so.
+ * **`debate` is the dearest press in the app** — a metered call that goes
+ * out to the open web, up to ~$0.14 and rising with the length of the article
+ * (two such calls until `debate/7`, 2026-10-08, when the claims search left
+ * the press). **Delegated since that day**: a press landing on Reception arms
+ * the search, one landing on Claims arms the claims list — one call and no
+ * search. Since 2026-10-09 it is one of Peer review's three sub-modes, out of
+ * the experimental switch, and **the mode opens on Bibliography**, so a press
+ * on the Peer review button buys the search only when the address already
+ * names Reception (§ `activationForPeerReview`). No navigation buys it; a
+ * deliberate press can, again and again, as every paid step can (plan
+ * 261009l § Reception's spend).
  *
  * A fourth answer, **`arrival`**, stood here from 2026-09-29 to 2026-10-03 for
  * the one mode whose band starts its own work when it mounts: Tweets. The
@@ -242,11 +245,12 @@ export interface PressContext {
    */
   summary: SummaryView;
   /**
-   * Which of Debate's sub-modes a Debate press is about to land on — the
-   * reading view's parsed `?debate=`, for `summary`'s reason above. Only
-   * Reception's press buys the search (§ `activationForDebate`).
+   * Which of Peer review's sub-modes a Peer review press is about to land on
+   * — the reading view's parsed `?peer-review=`, for `summary`'s reason
+   * above. Each sub-mode's press buys only its own work (§
+   * `activationForPeerReview`).
    */
-  debate: DebateView;
+  peerReview: PeerReviewView;
 }
 
 const MODE_TARGET: Record<Mode, ModeActivation> = {
@@ -254,15 +258,15 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
   ideas: { kind: "fixed", target: "ideas" },
   quotes: { kind: "fixed", target: "quotes" },
   timeline: { kind: "fixed", target: "timeline" },
-  /* **Delegated since 2026-10-08** (plan 261008i, GPT Sol's F1): the press
-     searches for Reception only, so a press that lands on Claims must not buy
-     it. § `activationForDebate`. */
-  debate: {
+  /* **Delegated**, as Debate's row was since 2026-10-08 (plan 261008i, GPT
+     Sol's F1): each sub-mode has its own work, and a press that lands on one
+     must not buy another's. Citations' and Debate's rows until 2026-10-09
+     (plan 261009l). § `activationForPeerReview`. */
+  "peer-review": {
     kind: "delegated",
-    target: (ctx) => activationForDebate(ctx.debate),
-    why: "the sub-mode a press lands on is whatever `?debate=` says: Reception arms the search, Claims the claims list",
+    target: (ctx) => activationForPeerReview(ctx.peerReview),
+    why: "the sub-mode a press lands on is whatever `?peer-review=` says: Bibliography arms the citations, Reception the search, Claims the claims list",
   },
-  citations: { kind: "fixed", target: "citations" },
   faq: { kind: "fixed", target: "faq" },
   /* The target is the route even when the job it starts writes the Quotes
      first (`precededBy`, src/web/useSkim.ts): the press is for this
@@ -579,14 +583,16 @@ export function activationForSummary(view: SummaryView): AutoRunTarget | null {
 }
 
 /**
- * **What a press that lands on one of Debate's sub-modes arms**: the `debate`
- * search for Reception, and the `debate-claims` list for Claims.
+ * **What a press that lands on one of Peer review's sub-modes arms**: the
+ * `citations` list for Bibliography, the `debate` search for Reception, and
+ * the `debate-claims` list for Claims.
  *
  * One answer for the three places that must agree, as `activationForSummary`
  * is: the bar's delegated row, the command bar's sub-mode rows
  * (`subModeTarget`), and the token the boundary retires (`bandTarget`). The
- * panel's own segments arm through `subModeTarget` too (DebatePanel.tsx §
- * `DebateViews`).
+ * band's own chips arm through `subModeTarget` too (PeerReviewMode.tsx §
+ * `PeerReviewViews`). Bibliography's arm was Citations' fixed row until
+ * 2026-10-09 (plan 261009l).
  *
  * **Two targets, never one** (2026-10-08). Until `debate/7` both sub-modes
  * armed the one `debate` run, which searched for both; the press now searches
@@ -598,8 +604,20 @@ export function activationForSummary(view: SummaryView): AutoRunTarget | null {
  * is showing (useDebate.ts, useDebateClaims.ts), so neither press can buy the
  * other's work.
  */
-export function activationForDebate(view: DebateView): AutoRunTarget {
-  return view === "reception" ? "debate" : "debate-claims";
+export function activationForPeerReview(view: PeerReviewView): AutoRunTarget {
+  switch (view) {
+    /* Citations' fixed target until 2026-10-09: the list of works cited. */
+    case "bibliography":
+      return "citations";
+    case "reception":
+      return "debate";
+    case "claims":
+      return "debate-claims";
+    default: {
+      const unhandled: never = view;
+      throw new Error(`unhandled Peer review view: ${String(unhandled)}`);
+    }
+  }
 }
 
 /**
@@ -700,8 +718,9 @@ export function armActivationForRefereeView(slug: string, view: RefereeView): vo
  *  - Summary: `activationForSummary` of the view **the row names** — `simple`
  *    for Brief and Fuller, nothing for Thread (SummaryMode.tsx §
  *    `SummaryControls`, and `bandTarget` below);
- *  - Debate: `activationForDebate` of the sub-mode **the row names** —
- *    `debate` for Reception, `debate-claims` for Claims.
+ *  - Peer review: `activationForPeerReview` of the sub-mode **the row
+ *    names** — `citations` for Bibliography, `debate` for Reception,
+ *    `debate-claims` for Claims.
  *
  * `bandTarget` below gives the same answer for the band that mounts, which is
  * what lets a token armed here be claimed — tests/command-bar-sub-modes.test.tsx holds
@@ -720,13 +739,12 @@ export function subModeTarget(sub: SubMode): AutoRunTarget | null {
     /* Nothing to generate in either view: the tree is in the page's payload. */
     case "structure":
       return null;
-    /* **Reception's row arms the `debate` search; Claims' arms the claims
-       list** — the mode row's own answer (`activationForDebate`), since the
-       press searches for Reception only (`debate/7`, plan 261008i). The
-       panel's own segments arm through here too (DebatePanel.tsx §
-       `DebateViews`). */
-    case "debate":
-      return activationForDebate(sub.view);
+    /* **Bibliography's row arms the citations, Reception's the `debate`
+       search, Claims' the claims list** — the mode row's own answer
+       (`activationForPeerReview`). The band's own chips arm through here too
+       (PeerReviewMode.tsx § `PeerReviewViews`). */
+    case "peer-review":
+      return activationForPeerReview(sub.view);
     default: {
       const unhandled: never = sub;
       throw new Error(`unhandled sub-mode: ${JSON.stringify(unhandled)}`);
@@ -776,7 +794,13 @@ export function subModeGenerates(sub: SubMode): boolean {
  */
 export function bandTarget(
   mode: Mode,
-  sub: { diagram: DiagramKind; referee: RefereeView; learn: LearnView; summary: SummaryView; debate: DebateView },
+  sub: {
+    diagram: DiagramKind;
+    referee: RefereeView;
+    learn: LearnView;
+    summary: SummaryView;
+    "peer-review": PeerReviewView;
+  },
 ): AutoRunTarget | null {
   if (mode === "referee") return REFEREE_TARGET[sub.referee];
   if (mode === "learn") return sub.learn === "quiz" ? "quiz" : null;
@@ -785,7 +809,7 @@ export function bandTarget(
     case "fixed":
       return decision.target;
     case "delegated":
-      return decision.target({ diagram: sub.diagram, summary: sub.summary, debate: sub.debate });
+      return decision.target({ diagram: sub.diagram, summary: sub.summary, peerReview: sub["peer-review"] });
     /* No press was armed, so there is none to retire. */
     case "none":
       return null;

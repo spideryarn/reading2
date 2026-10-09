@@ -141,6 +141,7 @@ function paint(
         onSend: () => {},
         onRetry: () => {},
         onEdit: () => {},
+        onDeleteFrom: undefined,
         onStop: () => {},
         focusNonce: 0,
         focused: { current: 0 },

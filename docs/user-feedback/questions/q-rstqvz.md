@@ -4,7 +4,8 @@ report: none
 status: open
 asked: 2026-10-09
 title: Which way should agents write their questions and replies into the database?
-refs: follows q-f6ub8e (reply spya-nhmghm) · qi-mmqzr385 · docs/plans/261009f-agent-questions-and-replies-in-the-database.md · docs/plans/261009f-agent-questions-plan-review-sol.md · docs/user-feedback/261006_2118-earlier-tab-says-what-became-of-each-report-and-asks-greg-in-place.md
+acted: spya-qnak8d
+refs: follows q-f6ub8e (reply spya-nhmghm) · qi-mmqzr385 · docs/plans/261009f-agent-questions-and-replies-in-the-database.md · docs/plans/261009f-agent-questions-plan-review-sol.md · docs/user-feedback/261006_2118-earlier-tab-says-what-became-of-each-report-and-asks-greg-in-place.md · qi-32rmtndv · docs/plans/261009o-security-risks-register-and-a-security-review.md
 ---
 You asked for these questions and replies to live in the database, with a command an agent runs to ask and to reply. I have planned it; nothing is built. The design is the same whichever you pick: the questions and the agents' replies go into new tables, an agent runs one command to ask, reply or close, and this dialog reads the tables, so both sides appear at once. The one real choice is what lets the agent's command write to the live database. Which?
 
@@ -35,3 +36,9 @@ Why your replies get their own table. Agents treat your replies as your own word
 The thing GPT Sol caught in review. I first wrote that B would stop a tricked agent. It does not on its own: the box also holds the live site's own login, which can write everything, and an agent determined to misuse it could simply use that one. B protects against mistakes, and stops this new channel from becoming a way in. Protecting against a tricked agent needs B+.
 
 What would decide it. If you are content to rely on agents keeping to the rule, A is the least work. If you would rather the database enforced it, B. After you choose, it is about a day of work in three reviewed stages, then the Overseer deploys as usual.
+
+## Greg's answer, 2026-10-09 (in the Feedback dialog, reply `spya-qnak8d`)
+
+> A although I accept it's a bit of a security risk, so if you haven't already, can you create a doc for security risks and add this as a medium risk or whatever level you think it is? I don't have access to my computer network right now, I don't want to deal with it, but I also don't want to block the work from happening. And so at some point in the future we might switch it over to a separate database login. And then maybe can you kick off, and then maybe can you kick off another agent whose job it is just to do a security review and update that security risks doc with anything else, and then we can work through their proposals in it.
+
+So A, with the risk written down. The register is docs/project/security-risks.md (plan 261009o), where A is entry R1 and the later fix (B, then B+) is recorded; the security review's findings are in the same doc for Greg to work through. A itself is still to be built, under qi-mmqzr385 (plan 261009f), and that build is held for Greg because it relaxes a listed defence. This question stays open until A is built.

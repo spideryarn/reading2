@@ -31,9 +31,9 @@ const t = (kind: ThreadKind, over: { origin?: ThreadOrigin; anchor?: ChatAnchor 
 describe("threadSource", () => {
   it("names a stored origin first, even on a conversation that also has an anchor", () => {
     expect(threadSource(t("chat", { origin: CLAIM, anchor: BLOCK }))).toEqual({
-      from: "debate",
-      mode: "debate",
-      label: "Started from a claim in Debate",
+      from: "peer-review",
+      mode: "peer-review",
+      label: "Started from a claim in Peer review › Claims",
       quote: "RNA can transfer a memory",
     });
   });
@@ -72,6 +72,9 @@ describe("threadSource", () => {
     });
   });
 
+  /* A stored origin keeps its old mode word as data (`citations`, `debate`)
+     until the deep rename; what it shows is Peer review's icon and filter,
+     with the sub-mode in the tooltip (GPT Sol's F5 on plan 261009l). */
   it("names a glossary entry and a cited work, each under its own mode's icon and word", () => {
     expect(threadSource(t("chat", { origin: { mode: "glossary", itemId: "spya-ttm222", quote: "qualia" } }))).toEqual({
       from: "glossary",
@@ -82,9 +85,9 @@ describe("threadSource", () => {
     expect(
       threadSource(t("chat", { origin: { mode: "citations", itemId: "spya-ttm333", quote: "Consciousness Explained" } })),
     ).toEqual({
-      from: "citations",
-      mode: "citations",
-      label: "Started from a cited work",
+      from: "peer-review",
+      mode: "peer-review",
+      label: "Started from a cited work in Peer review › Bibliography",
       quote: "Consciousness Explained",
     });
   });
@@ -122,32 +125,34 @@ describe("the filter", () => {
   ];
 
   it("puts each conversation under one word, and Learn's three kinds under the same one", () => {
-    expect(all.map(chatFrom)).toEqual(["chats", "learn", "debate", "learn", "passage"]);
+    expect(all.map(chatFrom)).toEqual(["chats", "learn", "peer-review", "learn", "passage"]);
     expect(chatFrom(t("explore"))).toBe("learn");
   });
 
   it("offers the sources that are present, once each, in a fixed order", () => {
-    expect(sourcesIn(all)).toEqual(["chats", "debate", "learn", "passage"]);
+    expect(sourcesIn(all)).toEqual(["chats", "peer-review", "learn", "passage"]);
     expect(sourcesIn([all[1], all[3]].filter((x) => x !== undefined))).toEqual(["learn"]);
     expect(sourcesIn([])).toEqual([]);
   });
 
-  it("puts a glossary chat and a cited-work chat under their own words", () => {
+  it("puts a glossary chat under its word, and a cited-work chat under Peer review's with the claims", () => {
     const g = { id: "g", ...t("chat", { origin: { mode: "glossary", itemId: "spya-ttm222", quote: "qualia" } }) };
     const c = { id: "c2", ...t("chat", { origin: { mode: "citations", itemId: "spya-ttm333", quote: "A work" } }) };
     const i = { id: "i", ...t("chat", { origin: { mode: "ideas", itemId: "spya-idd222", quote: "An idea" } }) };
-    expect(sourcesIn([...all, c, g])).toEqual(["chats", "debate", "glossary", "citations", "learn", "passage"]);
-    expect(sourcesIn([...all, i, c, g])).toEqual(["chats", "debate", "glossary", "citations", "ideas", "learn", "passage"]);
+    expect(sourcesIn([...all, c, g])).toEqual(["chats", "peer-review", "glossary", "learn", "passage"]);
+    expect(sourcesIn([...all, i, c, g])).toEqual(["chats", "peer-review", "glossary", "ideas", "learn", "passage"]);
     expect(narrowed([...all, i, c, g], "ideas").map((x) => x.id)).toEqual(["i"]);
     expect(narrowed([...all, c, g], "glossary").map((x) => x.id)).toEqual(["g"]);
-    expect(narrowed([...all, c, g], "citations").map((x) => x.id)).toEqual(["c2"]);
+    expect(narrowed([...all, c, g], "peer-review").map((x) => x.id)).toEqual(["c", "c2"]);
+    const lens = { id: "l", ...t("chat", { origin: { mode: "debate", lens: "how it relates to Nagel" } }) };
+    expect(narrowed([...all, c, lens], "peer-review").map((x) => x.id)).toEqual(["c", "c2", "l"]);
   });
 
   it("narrows to one source, and to everything when there is no choice", () => {
     expect(narrowed(all, null).map((x) => x.id)).toEqual(["a", "b", "c", "d", "e"]);
     expect(narrowed(all, "chats").map((x) => x.id)).toEqual(["a"]);
     expect(narrowed(all, "learn").map((x) => x.id)).toEqual(["b", "d"]);
-    expect(narrowed(all, "debate").map((x) => x.id)).toEqual(["c"]);
+    expect(narrowed(all, "peer-review").map((x) => x.id)).toEqual(["c"]);
     expect(narrowed(all, "passage").map((x) => x.id)).toEqual(["e"]);
   });
 
@@ -155,11 +160,10 @@ describe("the filter", () => {
     expect(Object.keys(CHAT_FROM_LABEL).sort()).toEqual([...CHAT_FROM_WORDS].sort());
     expect(CHAT_FROM_LABEL.chats).toBe("Chats");
     expect(CHAT_FROM_LABEL.learn).toBe("Learn");
-    expect(CHAT_FROM_LABEL.debate).toBe("Debate");
+    expect(CHAT_FROM_LABEL["peer-review"]).toBe("Peer review");
     expect(CHAT_FROM_LABEL.glossary).toBe("Glossary");
-    expect(CHAT_FROM_LABEL.citations).toBe("Citations");
     expect(CHAT_FROM_LABEL.ideas).toBe("Ideas");
-    expect([...CHAT_FROM_WORDS]).toEqual(["chats", "debate", "glossary", "citations", "ideas", "learn", "passage"]);
+    expect([...CHAT_FROM_WORDS]).toEqual(["chats", "peer-review", "glossary", "ideas", "learn", "passage"]);
   });
 
   it("reads `?chatfrom=` as one of those words, and anything else as All", () => {
@@ -167,6 +171,9 @@ describe("the filter", () => {
     expect(chatFromParam.parse("all")).toBeNull();
     expect(chatFromParam.parse("recall")).toBeNull();
     expect(chatFromParam.parse("")).toBeNull();
+    /* The old words are lifted on arrival (router.ts § `liftLegacyPeerReview`),
+       so the parser itself need not know them. */
+    expect(chatFromParam.parse("debate")).toBeNull();
   });
 });
 
@@ -177,17 +184,20 @@ describe("the filter", () => {
 describe("originBack", () => {
   it("names the item and its mode, for every item origin", () => {
     expect(originBack(CLAIM)).toEqual({
-      mode: "debate",
-      modeLabel: "Debate",
+      mode: "peer-review",
+      view: "claims",
+      modeLabel: "Claims",
       quote: "RNA can transfer a memory",
-      text: "Back to “RNA can transfer a memory” in Debate",
+      text: "Back to “RNA can transfer a memory” in Claims",
     });
     expect(originBack({ mode: "glossary", itemId: "spya-ttm222", quote: "qualia" }).text).toBe(
       "Back to “qualia” in Glossary",
     );
-    expect(originBack({ mode: "citations", itemId: "spya-ttm333", quote: "A work" }).text).toBe(
-      "Back to “A work” in Citations",
-    );
+    expect(originBack({ mode: "citations", itemId: "spya-ttm333", quote: "A work" })).toMatchObject({
+      mode: "peer-review",
+      view: "bibliography",
+      text: "Back to “A work” in Bibliography",
+    });
     expect(originBack({ mode: "ideas", itemId: "spya-dea222", quote: "An idea" })).toMatchObject({
       mode: "ideas",
       text: "Back to “An idea” in Ideas",
@@ -196,10 +206,11 @@ describe("originBack", () => {
 
   it("calls an angle the reader's, with no quote: it is not an item in the article", () => {
     expect(originBack({ mode: "debate", lens: "how it relates to Nagel" })).toEqual({
-      mode: "debate",
-      modeLabel: "Debate",
+      mode: "peer-review",
+      view: "reception",
+      modeLabel: "Reception",
       quote: null,
-      text: "Back to your angle in Debate",
+      text: "Back to your angle in Reception",
     });
   });
 });

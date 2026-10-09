@@ -1203,8 +1203,8 @@ export interface ChatStore {
 
   /**
    * Patch one message in place. **Never appends**, and bumps the thread's
-   * `updatedAt` whenever the *thread* matches — even if the message does not.
-   * The panel's ordering depends on that clock.
+   * `updatedAt` only when the fenced message update lands. A stale attempt is
+   * not stored activity and must not reorder the conversation.
    *
    * **Pass the `attempt` this answer belongs to.** A retry keeps the message
    * id, so identity cannot say which call is reporting: without the attempt, a
@@ -1259,6 +1259,21 @@ export interface ChatStore {
    * turn twice. See `SpokenTurn` in src/chat.ts.
    */
   appendSpoken(slug: string, spoken: SpokenTurn, now?: () => string): Promise<StoredExchange>;
+
+  /**
+   * **Delete one of the reader's questions and every message after it.** Not
+   * the first question, not an answer, and not while an answer is arriving —
+   * `withDeleteFrom` in src/chat.ts refuses each with a `ChatConflict`.
+   * `expectedTailId` is edit's guard, and required here: a stale tab is
+   * refused rather than deleting turns it never saw. Answers with the whole
+   * list, read back inside the transaction, and how many messages went.
+   */
+  deleteFrom(
+    slug: string,
+    threadId: string,
+    messageId: string,
+    opts: { expectedTailId: string },
+  ): Promise<{ threads: ChatThread[]; deleted: number }>;
 
   rename(slug: string, threadId: string, title: string): Promise<ChatThread[]>;
   remove(slug: string, threadId: string): Promise<ChatThread[]>;

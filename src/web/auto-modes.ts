@@ -34,9 +34,10 @@
  * `AUTO_MODE_STEPS`, so a mode moved in or out of the switch fails a test until
  * the written list follows.
  *
- * **One mode's steps are named here rather than derived**: Summary, whose press
- * is delegated since 2026-10-03, so `modeStep` cannot answer for it —
- * `DELEGATED_MODE_STEPS` below.
+ * **Two modes' steps are named here rather than derived**: Summary, whose press
+ * is delegated since 2026-10-03, and Peer review, delegated by sub-mode since
+ * 2026-10-09, so `modeStep` cannot answer for either — `DELEGATED_MODE_STEPS`
+ * below.
  */
 import { MODE_CATALOG } from "../mode-catalog.js";
 import { type Mode, MODES } from "../modes.js";
@@ -44,6 +45,7 @@ import { STEP_ORDER } from "../step-order.js";
 import { MODE_LABEL } from "../title-text.js";
 import type { StepName } from "../types.js";
 import { modeStep } from "./activation.js";
+import { PEER_REVIEW_SUB_MODES } from "./sub-modes.js";
 
 /**
  * **The steps of a main mode whose press is delegated**, which `modeStep`
@@ -68,6 +70,15 @@ import { modeStep } from "./activation.js";
  */
 const DELEGATED_MODE_STEPS: Partial<Record<Mode, readonly StepName[]>> = {
   summary: ["simple", "tweets"],
+  /* **Peer review, since 2026-10-09: Bibliography's list, and only that.**
+     Its press is delegated by sub-mode (activation.ts §
+     `activationForPeerReview`). `citations` is the default sub-mode's, and
+     Claims' line of works (plan 261009l § Stage 2) reads it. Not `debate`,
+     Reception's web search, the dearest press in the app and often empty; not
+     `debate-claims`, which serves a sub-mode many readers will not open. Each
+     runs on the press of its chip. One model call per import that was not
+     paid before (plan 261009l § On import). */
+  "peer-review": ["citations"],
 };
 
 /**
@@ -118,8 +129,16 @@ export const AUTO_MODES_LABEL = "Generate the main modes as soon as it opens";
  * rule `MODE_CATALOG`'s `how` keeps for the bar.
  */
 export function autoModesDetail(): string {
-  /* A mode with two steps (Summary: its lengths and its thread) is named once. */
-  const names = [...new Set(autoModes().map(({ mode }) => MODE_LABEL[mode]))];
+  /* A mode with two steps (Summary: its lengths and its thread) is named once.
+     Peer review is named by the one sub-mode it prepares, so the line does
+     not promise its Reception search. */
+  const names = [
+    ...new Set(
+      autoModes().map(({ mode }) =>
+        mode === "peer-review" ? `${MODE_LABEL[mode]}’s ${PEER_REVIEW_SUB_MODES.bibliography.label}` : MODE_LABEL[mode],
+      ),
+    ),
+  ];
   const list =
     names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : (names[0] ?? "");
   return `${list} are prepared in the background, with Skim after Quotes and Ideas, and so are the links from one passage of the article to another. This uses paid model calls.`;

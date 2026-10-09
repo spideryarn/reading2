@@ -1,14 +1,20 @@
 // @vitest-environment jsdom
-/** Real router, nuqs and visitor band, with rows produced by the public DTO. */
+/**
+ * Real router, nuqs and visitor band, with rows produced by the public DTO.
+ *
+ * Debate's band until 2026-10-09; Peer review's since, with Debate's old
+ * addresses lifted to its Reception and Claims on boot, on `navigate()`, on
+ * Back and from a remembered last view (plan 261009l, GPT Sol's F1).
+ */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { useQueryState } from "nuqs";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { publicArticle } from "../src/public/dto.js";
-import type { PublicDebate } from "../src/public-types.js";
+import type { PublicCitations, PublicDebate, PublicDebateClaimList } from "../src/public-types.js";
 import type { BlockId, Debate, Tree } from "../src/types.js";
-import { VisitorDebateBand } from "../src/web/modes/debate/DebateMode.js";
+import { VisitorPeerReviewBand } from "../src/web/modes/peer-review/PeerReviewMode.js";
 import { modeParam } from "../src/web/params.js";
 import { navigate, settleAddress, useRoute } from "../src/web/router.js";
 import { lastViewKey, useLastView } from "../src/web/last-view.js";
@@ -87,6 +93,9 @@ function publish(debate: Debate): PublicDebate {
 }
 
 let debate: PublicDebate;
+let citations: PublicCitations | null;
+let claimList: PublicDebateClaimList | null;
+let openedWorks: string[];
 let host: HTMLDivElement;
 let root: Root;
 
@@ -95,10 +104,10 @@ function Page() {
   useLastView(SLUG, "article", null);
   const [mode] = useQueryState("mode", modeParam);
   if (route.kind !== "read") return createElement("p", null, "not found");
-  if (mode !== "debate") return createElement("p", null, `band: ${mode}`);
-  return createElement(VisitorDebateBand, {
-    debate, claimList: null, onJump: () => {}, blockOrder: new Map([[BLOCK, 0]]),
-    publishedAt: undefined, articleTitle: "The shared piece",
+  if (mode !== "peer-review") return createElement("p", null, `band: ${mode}`);
+  return createElement(VisitorPeerReviewBand, {
+    citations, debate, claimList, onJump: () => {}, blockOrder: new Map([[BLOCK, 0]]),
+    publishedAt: undefined, articleTitle: "The shared piece", onOpenWork: (workId) => openedWorks.push(workId),
   });
 }
 
@@ -129,6 +138,9 @@ function press(selector: string) {
 beforeEach(() => {
   window.localStorage.clear();
   debate = publish(STORED);
+  citations = null;
+  claimList = null;
+  openedWorks = [];
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -142,8 +154,10 @@ it("lifts a cold legacy link, and Reception then stays selected", async () => {
   boot("?mode=debate&debateby=claim&name=linked");
   expect(inClaims()).toBe(true);
   expect(params().has("debateby")).toBe(false);
+  expect(params().get("mode")).toBe("peer-review");
   press('[aria-label="Reception, 1 source"]');
-  await until(() => !params().has("debate"));
+  await until(() => params().get("peer-review") === "reception");
+  expect(params().has("debate")).toBe(false);
   expect(titles()).toEqual(["A reply"]);
   expect(host.querySelector(".dbt-title-only h3")?.textContent).toBe("Names this piece by its title only");
 });
@@ -184,7 +198,9 @@ it.each(["?mode=debate&debate=claims", "?mode=debate&debateby=claim"])(
     window.localStorage.setItem(lastViewKey(SLUG, null), remembered);
     boot("");
     await until(inClaims);
-    expect(params().get("debate")).toBe("claims");
+    expect(params().get("mode")).toBe("peer-review");
+    expect(params().get("peer-review")).toBe("claims");
+    expect(params().has("debate")).toBe(false);
     expect(params().has("debateby")).toBe(false);
   },
 );
@@ -200,7 +216,7 @@ it("the public DTO keeps relevance judgments, and a normal segment press keeps f
   expect(debate.direct.rows[0]?.identifies[0]?.kind).toBe("named");
   boot("?mode=debate&bears=directly&debatethread=key");
   press('[aria-label="Claims, 0 sources"]');
-  await until(() => params().get("debate") === "claims");
+  await until(() => params().get("peer-review") === "claims");
   expect(titles()).toEqual([]);
   expect(params().get("bears")).toBe("directly");
   expect(params().get("debatethread")).toBe("key");
@@ -229,6 +245,55 @@ it("explains rows withheld by the real public boundary in each empty sub-mode", 
   boot("?mode=debate");
   expect(host.querySelector(".dbt-empty")?.textContent).toBe(debateWithheldOnSharedLink("The search for replies to this piece", 1));
   press('[aria-label="Claims, 0 sources"]');
-  await until(() => params().get("debate") === "claims");
+  await until(() => params().get("peer-review") === "claims");
   expect(host.querySelector(".dbt-empty")?.textContent).toBe(debateWithheldOnSharedLink("The search for answers to what it claims", 3));
+});
+
+/* **The other half of the merge: Citations' old link, and a Bibliography with
+   nothing stored.** A visitor whose article has a Reception search and no
+   bibliography still gets Peer review open (visitor.ts § POLICY,
+   `any-artefact`), and Bibliography says it has no list rather than drawing a
+   blank band (GPT Sol's F3 on plan 261009l). */
+it("lifts an old Citations link to Bibliography, which says it has no list", () => {
+  boot("?mode=citations&citeby=document");
+  expect(params().get("mode")).toBe("peer-review");
+  expect(params().has("peer-review")).toBe(false);
+  expect(params().get("citeby")).toBe("document");
+  expect(host.querySelector('[aria-label="Bibliography"]')?.getAttribute("aria-checked")).toBe("true");
+  expect(host.textContent).toContain("Nobody has listed the works this one cites yet.");
+});
+
+it("says Reception has nothing when the visitor's article has no search stored", () => {
+  debate = null as unknown as PublicDebate;
+  boot("?mode=peer-review&peer-review=reception");
+  expect(host.textContent).toContain("Nobody has asked the web about this one yet.");
+});
+
+it("wires a visitor's Bibliography through the real Peer review wrapper into Claims' C1 line", () => {
+  citations = {
+    citations: [
+      {
+        id: "work-1",
+        title: "A cited work",
+        authors: "Ada Smith",
+        year: "2024",
+        why: "The claim's evidence.",
+        mentions: [],
+        citedAt: [BLOCK],
+        firstCited: BLOCK,
+        citedInBody: true,
+        linkFrom: "article",
+      },
+    ],
+    capped: false,
+  };
+  claimList = {
+    claims: [{ id: "claim-1", blockId: BLOCK, quote: "The claim in the piece", statement: "The piece makes this claim." }],
+  };
+  boot("?mode=peer-review&peer-review=claims");
+
+  const line = host.querySelector(".dbt-cited-here");
+  expect(line?.textContent).toContain("Ada Smith 2024");
+  press(".dbt-cited-here button");
+  expect(openedWorks).toEqual(["work-1"]);
 });

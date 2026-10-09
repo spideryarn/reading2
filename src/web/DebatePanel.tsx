@@ -43,11 +43,19 @@
  * > me anything about how the paper has been received more generally.
  *
  * So the two groups became two **sub-modes**, `?debate=`, on one segmented
- * control (`DebateViews`): **Reception**, what others have written about the
- * piece itself, and **Claims**, what an earlier search found about the claims
- * it makes. Since `debate/7` only Reception is searched; each control still
- * applies to everything on screen.
+ * control: **Reception**, what others have written about the piece itself,
+ * and **Claims**, what an earlier search found about the claims it makes.
+ * Since `debate/7` only Reception is searched; each control still applies to
+ * everything on screen.
  * docs/plans/261003o-debate-reception-and-claims-sub-modes-and-a-tidier-panel.md.
+ *
+ * **Since 2026-10-09 they are two of Peer review's three sub-modes**
+ * (`?peer-review=`), after Bibliography, which is the Citations panel. This
+ * panel draws Reception or Claims under the chip row the mode hands it as
+ * `head` (PeerReviewMode.tsx § `PeerReviewViews`), and the chips' numbers and
+ * this panel's lists come out of the same selectors (peer-review-counts.ts).
+ * The panel keeps its stored name until the deep rename
+ * (docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md § Stage 3).
  *
  *  - **Reception** draws the rows that link or quote the piece, then the ones
  *    that only name it under a heading saying so ([`debate-levels.ts`](debate-levels.ts)
@@ -137,7 +145,7 @@
  * `publicDebate`, plan 260929c), and a visitor's panel draws the stored rows
  * with no job, no verb and no read: nothing on it can start a search.
  */
-import { useId, useMemo, useRef, useState } from "react";
+import { type ReactNode, useId, useMemo, useRef, useState } from "react";
 import {
   ChevronDown,
   CircleHelp,
@@ -154,7 +162,6 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { armActivationForSubMode } from "./activation.js";
 import {
   CITERS_ABOUT,
   CITERS_HEADING,
@@ -245,24 +252,16 @@ import {
   readRowRegistry,
   readWorkTitle,
   receptionOrderOptions,
-  visibleClaims,
 } from "./debate-order.js";
 import { registryAuthorName } from "../registry-work.js";
 import { scholarUrl } from "../scholar-search.js";
 import { citerUrl } from "../citer-link.js";
-import {
-  inThread,
-  KEY_ROLE_LABEL,
-  keyByRow,
-  selectedThread,
-  shownInThread,
-  type Thread,
-  threadsOf,
-  threadsWithin,
-} from "./debate-threads.js";
+import { KEY_ROLE_LABEL, keyByRow, shownInThread, type Thread, threadsOf } from "./debate-threads.js";
 import { readStoredSynthesis } from "../debate-synthesis.js";
-import { DEBATE_VIEWS, type DebateView } from "./params.js";
-import { DEBATE_SUB_MODES } from "./sub-modes.js";
+import type { DebateView } from "./params.js";
+import { PEER_REVIEW_SUB_MODES } from "./sub-modes.js";
+import { claimsSelection, listedClaims, receptionSelection } from "./peer-review-counts.js";
+import { MODE_LABEL } from "../title-text.js";
 import { hiddenNote, type ThresholdNoun, type ThresholdResult } from "./threshold.js";
 import { JobProgress } from "./JobProgress.js";
 import { AboutMade } from "./BandAbout.js";
@@ -270,8 +269,8 @@ import { OrderGroup } from "./OrderGroup.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { ReadError } from "./ReadError.js";
 import { RewriteWaiting } from "./RewriteWaiting.js";
-import { ControlTip, TipNote, Tooltip, TooltipGroup } from "./Tooltip.js";
-import { useRevealChosen } from "./useRevealChosen.js";
+import { TipNote, Tooltip } from "./Tooltip.js";
+import { type CitedInParagraph, workShortName, worksCitedIn } from "./cited-in-paragraph.js";
 import { lensThreads, threadForOrigin } from "./useChatAnchors.js";
 import { OriginChatMark } from "./OriginChat.js";
 import { claimFocusKey, type ItemFocus, useLandOnItem } from "./item-focus.js";
@@ -279,7 +278,7 @@ import { useRenderCount } from "./perf.js";
 import type { UseDebate } from "./useDebate.js";
 import type { UseDebateClaims } from "./useDebateClaims.js";
 import type { UseDebateChecks } from "./useDebateChecks.js";
-import { anyPending, type CheckGroup, checkedRowCount, type ClaimFindings, drawChecks } from "./debate-checks.js";
+import { anyPending, type CheckGroup, type ClaimFindings, drawChecks } from "./debate-checks.js";
 import type { UseCiters } from "./useCiters.js";
 import { dayOf } from "./relative-time.js";
 import type {
@@ -323,6 +322,12 @@ const SEARCH_NAME: Record<"direct" | "claims", string> = {
   direct: "The search for replies to this piece",
   claims: "The search for answers to what it claims",
 };
+
+/** Reception's line for a visitor when no search is stored: the owner's empty state, without the button. */
+export const DEBATE_NONE_SHARED = "Nobody has asked the web about this one yet.";
+
+/** The two of Peer review's sub-modes this panel draws, in chip order. */
+const DEBATE_PANEL_VIEWS: readonly DebateView[] = ["reception", "claims"];
 
 /** The search behind each sub-mode — the artefact's own key for its group. */
 const SEARCH_OF: Record<DebateView, "direct" | "claims"> = { reception: "direct", claims: "claims" };
@@ -946,7 +951,7 @@ export interface DebateClaimChats {
    * the press is what starts the web search.
    */
   onLens(lens: string): void;
-  /** Open a conversation already started from a claim or an angle, beside Debate. */
+  /** Open a conversation already started from a claim or an angle, beside Peer review. */
   onOpen(threadId: string): void;
 }
 
@@ -972,6 +977,12 @@ export const DEBATE_ANGLES_SHOWN = 3;
 interface Props {
   access: DebateAccess;
   /**
+   * **Peer review's chip row**, drawn as this band's header (PeerReviewMode.tsx
+   * § `PeerReviewViews`). The mode's, not this panel's, so Bibliography's panel
+   * draws the same row and switching sub-mode does not move it.
+   */
+  head: ReactNode;
+  /**
    * Go to the block a claim's passage is in.
    *
    * **Marks in the prose are deliberately not in v1** — they are the first
@@ -982,10 +993,11 @@ interface Props {
    */
   onJump(id: BlockId): void;
   /**
-   * Which search's rows the band draws — `?debate=`, whose parser defaults to
-   * `reception`.
+   * Which of Peer review's sub-modes this panel draws — Reception or Claims,
+   * from `?peer-review=` (Bibliography is the other panel's).
    */
   view: DebateView;
+  /** Move to the other sub-mode: the empty Reception's way on to Claims. */
   onView(view: DebateView): void;
   /**
    * The order the reader asked for in Reception — `?debateby=`, whose parser
@@ -1043,10 +1055,18 @@ interface Props {
    */
   focus?: ItemFocus | null | undefined;
   onFocusTaken?: ((focus: ItemFocus) => void) | undefined;
+  /**
+   * **Bibliography's works, for Claims' *Cited in this paragraph*** (plan
+   * 261009l § C1; src/web/cited-in-paragraph.ts): under each listed claim, the
+   * works the article cites in that claim's paragraph, each opening its
+   * Bibliography row. `null` with no Bibliography, and then there is no line.
+   */
+  citedIn?: CitedInParagraph | null | undefined;
 }
 
 export function DebatePanel({
   access,
+  head,
   onJump,
   view,
   onView,
@@ -1061,6 +1081,7 @@ export function DebatePanel({
   articleTitle,
   focus = null,
   onFocusTaken,
+  citedIn = null,
 }: Props) {
   useRenderCount("DebatePanel");
   /* `null` for a visitor, and every owner-only thing below is behind it. */
@@ -1080,14 +1101,18 @@ export function DebatePanel({
    *
    * **Each sub-mode is asked separately which of them it offers and which one
    * the address selects** (`threadsWithin`): a thread with no stored row in a
-   * sub-mode is not offered there and narrows nothing there. Both sub-modes'
-   * lists are worked out whichever is on screen, because each segment of the
-   * control shows the count of its own.
+   * sub-mode is not offered there and narrows nothing there.
+   *
+   * **The selections are peer-review-counts.ts's**, the same functions the
+   * chip row counts with, so the number on a chip and the list under it are
+   * one derivation (GPT Sol's F4 on plan 261009l).
    */
   const synthesis = useMemo(
     () => (debate !== null ? readStoredSynthesis(debate) : null),
     [debate],
   );
+  /* `threadsOf(readStoredSynthesis(…))` is `debateThreads`, which the chip
+     row counts with (peer-review-counts.ts). */
   const threads = useMemo(() => threadsOf(synthesis), [synthesis]);
   const keyRows = useMemo(() => keyByRow(synthesis), [synthesis]);
 
@@ -1101,9 +1126,13 @@ export function DebatePanel({
    * **thread left on screen**: an order whose distinction depended on rows
    * outside the thread would be an inert button over this list.
    */
-  const receptionThreads = useMemo(() => threadsWithin(threads, directRows), [threads, directRows]);
-  const receptionThread = selectedThread(receptionThreads, threadParam);
-  const receptionShown = useMemo(() => inThread(directRows, receptionThread), [directRows, receptionThread]);
+  const reception = useMemo(
+    () => receptionSelection(debate, threads, threadParam),
+    [debate, threads, threadParam],
+  );
+  const receptionThreads = reception.threads;
+  const receptionThread = reception.thread;
+  const receptionShown = reception.shown;
   const sections = useMemo(() => receptionSections(receptionShown), [receptionShown]);
   const shownSections = useMemo(() => [sections.confirmed, sections.titleOnly], [sections]);
   const order = useMemo(
@@ -1125,7 +1154,7 @@ export function DebatePanel({
 
   /**
    * **Claims: the relevance bar, applied once, then the thread, then the
-   * grouping.** The list, the bar's *N of M*, each claim's count, the segment's
+   * grouping.** The list, the bar's *N of M*, each claim's count, the chip's
    * count and the foot's page count are all read out of this one pass —
    * `threshold.ts`'s whole argument, and why there is no second filter below.
    *
@@ -1138,40 +1167,30 @@ export function DebatePanel({
    */
   const relevance = chosenRelevance ?? RELEVANCE_DEFAULT;
   const judged = useMemo(() => claimRows.some((row) => readBears(row) !== null), [claimRows]);
-  const barredClaims = useMemo(() => visibleClaims(claimRows, relevance), [claimRows, relevance]);
-  const claimThreads = useMemo(() => threadsWithin(threads, claimRows), [threads, claimRows]);
-  const claimThread = selectedThread(claimThreads, threadParam);
-  const claimsShown = useMemo(() => inThread(barredClaims.visible, claimThread), [barredClaims, claimThread]);
+  const claimSelection = useMemo(
+    () => claimsSelection(debate, threads, chosenRelevance, threadParam),
+    [debate, threads, chosenRelevance, threadParam],
+  );
+  const barredClaims = claimSelection.barred;
+  const claimThreads = claimSelection.threads;
+  const claimThread = claimSelection.thread;
+  const claimsShown = claimSelection.shown;
   const claimGroups = useMemo(() => groupByClaim(claimsShown, blockOrder), [claimsShown, blockOrder]);
 
   /**
    * **Claims' list of the article's claims** (plan 261008i § 2) — the owner's
    * once its read is `ready`, a visitor's off the payload, else `null`. The
-   * segment's count is the list's length when there is one: the list is what
+   * chip's count is the list's length when there is one: the list is what
    * Claims is now, and the legacy rows under it are an older search's. With no
-   * list, the count is those legacy rows, as before.
+   * list, the count is those legacy rows, as before (`claimsCount`,
+   * peer-review-counts.ts).
    */
   const listOwner = access.kind === "owner" ? access.claimList : null;
-  const listed: readonly ListedClaim[] | null =
+  const listed: readonly ListedClaim[] | null = listedClaims(
     access.kind === "owner"
-      ? access.claimList.status === "ready"
-        ? (access.claimList.claimList?.claims ?? null)
-        : null
-      : (access.claimList?.claims ?? null);
-  /* **Once the reader's checks have put sources on screen, the count is
-     those sources** (plan § 5): each claim's rows, an address once, plus an
-     older search's rows still drawn below. Before then it is the listed
-     claims, which is what there is to pick from. A visitor has no checks. */
-  const checkedRows = useMemo(
-    () =>
-      access.kind === "owner" && access.claimList.status === "ready"
-        ? checkedRowCount(drawChecks(access.checks.checks, access.claimList.claimList))
-        : 0,
-    [access],
+      ? { kind: "owner", status: access.claimList.status, claimList: access.claimList.claimList }
+      : { kind: "visitor", claimList: access.claimList },
   );
-  const claimsCount =
-    checkedRows > 0 ? checkedRows + claimsShown.length : listed !== null ? listed.length : claimsShown.length;
-  const claimsUnit = checkedRows === 0 && listed !== null ? "claim" : "source";
 
   /* **Land on the focused claim** (src/web/item-focus.ts), in either of
      Claims' lists: the listed claims, and an older search's claim groups.
@@ -1282,9 +1301,9 @@ export function DebatePanel({
     debate && ready ? (
       <>
         <p>{headCount(rows)} on screen.</p>
-        {DEBATE_VIEWS.map((v) => (
+        {DEBATE_PANEL_VIEWS.map((v) => (
           <p key={v}>
-            {DEBATE_SUB_MODES[v].label}: {DEBATE_SUB_MODES[v].description}.
+            {PEER_REVIEW_SUB_MODES[v].label}: {PEER_REVIEW_SUB_MODES[v].description}.
           </p>
         ))}
         {foot.map((line) => (
@@ -1327,21 +1346,19 @@ export function DebatePanel({
   return (
     <ModeSurface
       ref={surface}
-      label="Debate"
-      feature="gloss dbt"
-      mode="debate"
+      label={MODE_LABEL["peer-review"]}
+      feature="gloss dbt peer-review"
+      mode="peer-review"
       about={about}
-      /* **The one header that cannot come out empty** — the globe and the
-          `<h2>` are unconditional, which is what makes Debate the control for
-          the five bands whose headers do empty out. A fragment all the same,
-          so the shape here reads the same as theirs rather than looking like a
-          second pattern. Its count went into the (i) on 2026-10-01. */
-      head={
-        <>
-          <Globe size={14} className="band-head-icon" />
-          <h2>Debate</h2>
-        </>
-      }
+      /* **Peer review's chip row, the one header that cannot come out
+          empty** (plan 261008i § 5, GPT Sol's F9): Claims has its own list
+          and must be reachable before any search is, while one loads and when
+          one failed. Each chip's count is its own list's
+          (peer-review-counts.ts), so the number and the list under it cannot
+          disagree. It was the globe and an `<h2>Debate</h2>` until
+          2026-10-09, with Reception | Claims as the body's first row; the
+          mode's name is the Dock's to say (docs/project/mode.md § The client). */
+      head={head}
       /* No standing redo button under the list any more. Greg, 2026-09-29
           (SPIDERYARN-READING2-53): *"Same goes for any other modes that still
           have a "redo this processing" button - let's just rely on the
@@ -1374,22 +1391,6 @@ export function DebatePanel({
           neither. */}
       {access.kind === "owner" && <Angles chats={access.claimChats} />}
 
-      {/* **Reception | Claims, first, and whatever is stored** (plan 261008i
-          § 5, GPT Sol's F9): Claims has its own list and must be reachable
-          before any search is, while one loads and when one failed. Each
-          segment's count is its own list's — Reception's rows through its
-          thread, Claims' listed claims (or an older search's rows when no list
-          is made) — so the number and the list under it cannot disagree. */}
-      <div className="summ-controls dbt-controls">
-        <DebateViews
-          view={view}
-          counts={{ reception: receptionShown.length, claims: claimsCount }}
-          claimsUnit={claimsUnit}
-          ownerSlug={owner?.slug ?? null}
-          onView={onView}
-        />
-      </div>
-
       {view === "reception" && owner?.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
 
       {view === "reception" && owner?.status === "loading" && (
@@ -1403,6 +1404,7 @@ export function DebatePanel({
             checks={access.kind === "owner" ? access.checks : null}
             onJump={onJump}
             chats={access.kind === "owner" ? access.claimChats : null}
+            citedIn={citedIn}
           />
         ) : (
           <div className="dbt-listed-wrap">
@@ -1411,7 +1413,7 @@ export function DebatePanel({
             ) : listed.length === 0 ? (
               <p className="gloss-quiet dbt-listed-none">{DEBATE_CLAIMS_LIST_EMPTY}</p>
             ) : (
-              <ListedClaims claims={listed} onJump={onJump} chats={null} />
+              <ListedClaims claims={listed} onJump={onJump} chats={null} citedIn={citedIn} />
             )}
           </div>
         ))}
@@ -1427,6 +1429,14 @@ export function DebatePanel({
           <p className="gloss-hint">{DEBATE_BEFORE_SEARCH}</p>
           {run("Search the web")}
         </div>
+      )}
+
+      {/* **A visitor on Reception with no search stored**: Peer review opened
+          on another sub-mode's artefact (visitor.ts § POLICY, `any-artefact`),
+          so this one says it has nothing rather than drawing a blank band.
+          GPT Sol's F3 on plan 261009l. */}
+      {view === "reception" && access.kind === "visitor" && debate === null && (
+        <p className="gloss-quiet dbt-none-shared">{DEBATE_NONE_SHARED}</p>
       )}
 
       {/* **Before a search is stored: Cited by, on its own.** Outside the
@@ -1557,6 +1567,7 @@ export function DebatePanel({
                   onJump={onJump}
                   keyRows={keyRows}
                   chats={access.kind === "owner" ? access.claimChats : null}
+                  citedIn={citedIn}
                 />
               </>
             )}
@@ -1594,7 +1605,7 @@ export function DebatePanel({
  *
  * **The list is the way back**, one line per chat started from an angle,
  * newest first, found in the reading view's thread summaries (`lensThreads`).
- * A line opens its chat beside Debate, as a claim's mark does. The newest
+ * A line opens its chat beside Peer review, as a claim's mark does. The newest
  * `DEBATE_ANGLES_SHOWN` and then *Show all*, so a reader with many does not
  * have to scroll past them to reach the debate on a phone.
  *
@@ -1820,100 +1831,6 @@ function CiterRow({ citer }: { citer: Citer }) {
     </li>
   );
 }
-
-/**
- * **Reception | Claims** — Debate's two sub-modes, a two-way segmented control
- * built the way Summary's Brief | Fuller | Thread is (SummaryMode.tsx §
- * `SummaryControls`, and its classes): a radiogroup of buttons, each its own
- * tab stop, drawn joined so the two read as one choice.
- *
- * ```
- *  [ Reception 2 | Claims 5 ]
- * ```
- *
- * **Each segment carries the count of rows its list draws**, so a reader in
- * Reception can see there are five sources a press away — Greg read one
- * claim's two sources as the whole debate because nothing told him there were
- * others.
- *
- * **What each one is goes in its card, never in a sentence under the row**:
- * docs/project/mode.md bans a description line there (GPT Sol's F8). The words
- * are sub-modes.ts's, which the command bar's rows share.
- *
- * The owner's Reception press arms the Reception search and Claims' press the
- * claims list, the same contract as their command-bar rows
- * (activation.ts § `activationForDebate`). A stored debate or list consumes
- * its token without running. A visitor can never arm owner work.
- */
-function DebateViews({
-  view,
-  counts,
-  claimsUnit,
-  ownerSlug,
-  onView,
-}: {
-  view: DebateView;
-  counts: Record<DebateView, number>;
-  /** What Claims' count counts: listed claims, or an older search's sources when no list is made. */
-  claimsUnit: "claim" | "source";
-  ownerSlug: string | null;
-  onView(view: DebateView): void;
-}) {
-  const group = useRef<HTMLDivElement>(null);
-  useRevealChosen(group, view);
-  return (
-    <div ref={group} className="summ-views dbt-views" role="radiogroup" aria-label="Debate view">
-      <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
-        {DEBATE_VIEWS.map((v) => (
-          <Tooltip
-            key={v}
-            placement="bottom"
-            keepSide
-            className="tip-soon"
-            content={
-              <ControlTip
-                head={DEBATE_SUB_MODES[v].label}
-                what={`${DEBATE_SUB_MODES[v].description}.`}
-                how={VIEW_HOW[v]}
-              />
-            }
-          >
-            {/* biome-ignore lint/a11y/useSemanticElements: a radiogroup of <button>s, the call SummaryMode.tsx, StructureMode.tsx and RefereeMode.tsx already make */}
-            <button
-              type="button"
-              role="radio"
-              aria-checked={v === view}
-              /* The label and the count are two text nodes with no space
-                 between them, which a screen reader may run together. */
-              aria-label={`${DEBATE_SUB_MODES[v].label}, ${counts[v]} ${
-                v === "claims" && claimsUnit === "claim"
-                  ? counts[v] === 1 ? "claim" : "claims"
-                  : counts[v] === 1 ? "source" : "sources"
-              }`}
-              tabIndex={0}
-              className={`summ-view-btn${v === view ? " on" : ""}`}
-              onClick={() => {
-                if (ownerSlug !== null) armActivationForSubMode(ownerSlug, { mode: "debate", view: v });
-                if (v !== view) onView(v);
-              }}
-            >
-              {DEBATE_SUB_MODES[v].label}
-              <span className="dbt-view-count">{counts[v]}</span>
-            </button>
-          </Tooltip>
-        ))}
-      </TooltipGroup>
-    </div>
-  );
-}
-
-/** The second paragraph of each segment's card: how its rows were got, and what was checked. */
-const VIEW_HOW: Record<DebateView, string> = {
-  reception:
-    "Found by a search of the open web, run once and kept. Each page has to link, quote or name this piece, and each quotation is checked against what the search returned.",
-  claims:
-    "Listed by one model call over the article, with no web search, and kept. Each claim is in the article's own words, checked against the paragraph it names, with a line in the AI's words under it.",
-};
 
 /**
  * **Debate's categorical threshold** — the relevance bar (`?bears=`), over
@@ -2332,11 +2249,13 @@ function ClaimsList({
   onJump,
   keyRows,
   chats,
+  citedIn,
 }: {
   groups: readonly ClaimGroup<ClaimRow>[];
   onJump(id: BlockId): void;
   keyRows: ReadonlyMap<string, DebateKeySource>;
   chats: DebateClaimChats | null;
+  citedIn: CitedInParagraph | null;
 }) {
   return (
     <>
@@ -2391,6 +2310,7 @@ function ClaimsList({
                 />
               )}
             </summary>
+            <CitedHere blockId={group.blockId} citedIn={citedIn} />
             <Rows rows={group.rows} keyRows={keyRows} />
           </details>
         );
@@ -2442,12 +2362,14 @@ function OwnerListedClaims({
   checks,
   onJump,
   chats,
+  citedIn,
 }: {
   list: UseDebateClaims;
   /** The owner's checks; `null` only where the type cannot see the owner. */
   checks: UseDebateChecks | null;
   onJump(id: BlockId): void;
   chats: DebateClaimChats | null;
+  citedIn: CitedInParagraph | null;
 }) {
   const [ticked, setTicked] = useState<ReadonlySet<string>>(() => new Set());
   const [own, setOwn] = useState("");
@@ -2553,6 +2475,7 @@ function OwnerListedClaims({
               }
               findings={findings}
               onDig={onDig}
+              citedIn={citedIn}
             />
           )}
           {/* Checked claims the list no longer names: their own groups, from
@@ -2757,6 +2680,7 @@ function ListedClaims({
   pick = null,
   findings = () => null,
   onDig = null,
+  citedIn = null,
 }: {
   claims: readonly ListedClaim[];
   onJump(id: BlockId): void;
@@ -2764,6 +2688,7 @@ function ListedClaims({
   pick?: ClaimPick | null;
   findings?: (claimId: string) => ClaimFindings | null;
   onDig?: ((claimId: string) => void) | null;
+  citedIn?: CitedInParagraph | null;
 }) {
   return (
     <ol className="dbt-listed">
@@ -2822,12 +2747,45 @@ function ListedClaims({
                 <span className="voice-ai">{claim.statement}</span>
                 <span className="dbt-listed-ai"> · {DEBATE_CLAIMS_LIST_AI}</span>
               </p>
+              <CitedHere blockId={claim.blockId} citedIn={citedIn} />
               <CheckFindings findings={found} />
             </div>
           </li>
         );
       })}
     </ol>
+  );
+}
+
+/** The heading of C1's line. It says the works share a paragraph, and nothing about support. */
+export const CITED_IN_PARAGRAPH = "Cited in this paragraph";
+
+/**
+ * **Cited in this paragraph** — the works the article cites in a claim's
+ * paragraph, under the claim (plan 261009l § C1; the join and its limits are
+ * src/web/cited-in-paragraph.ts). Each name opens the work's Bibliography row,
+ * where its link and any reading are. Nothing is drawn when the paragraph
+ * cites nothing, or when there is no Bibliography: a heading over nothing
+ * would read as a finding.
+ */
+function CitedHere({ blockId, citedIn }: { blockId: BlockId; citedIn: CitedInParagraph | null }) {
+  if (citedIn === null) return null;
+  const works = worksCitedIn(blockId, citedIn.works);
+  if (works.length === 0) return null;
+  return (
+    <p className="dbt-cited-here">
+      <span className="dbt-cited-here-head">{CITED_IN_PARAGRAPH}: </span>
+      {works.map((work, i) => (
+        <span key={work.id}>
+          {i > 0 && <span className="dbt-cited-here-sep" aria-hidden="true"> · </span>}
+          <Tooltip placement="top" content={<TipNote>{`${work.title}. Open it in Bibliography.`}</TipNote>}>
+            <button type="button" className="dbt-cited-work" onClick={() => citedIn.onOpen(work.id)}>
+              {workShortName(work)}
+            </button>
+          </Tooltip>
+        </span>
+      ))}
+    </p>
   );
 }
 

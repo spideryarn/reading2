@@ -651,9 +651,9 @@ red by themselves. These do not all, and `debate` is the specimen each was check
   [`src/feedback-payload.ts`](../../src/feedback-payload.ts); stored reports are not rewritten.
 - [`src/models.ts`](../../src/models.ts) § `MODEL_ENV_VAR` — the key is checked, the value
   (`SPIDERYARN_DEBATE_MODEL`) is a string, and so is wherever it is set. *Silent.*
-- [`src/web/params.ts`](../../src/web/params.ts) — the mode's own URL words (`?debate=`,
-  `?debateby=`, `?debatethread=`) and `CHAT_FROM_WORDS`; the literal query keys are in
-  [`DebateMode.tsx`](../../src/web/modes/debate/DebateMode.tsx). *Silent:* an old link loses the parameter.
+- [`src/web/params.ts`](../../src/web/params.ts) — the mode's own URL words (`?debate=` until
+  2026-10-09, `?debateby=`, `?debatethread=`) and `CHAT_FROM_WORDS`; the literal query keys are in
+  [`PeerReviewMode.tsx`](../../src/web/modes/peer-review/PeerReviewMode.tsx) (`DebateMode.tsx` then). *Silent:* an old link loses the parameter.
 - [`src/web/last-view.ts`](../../src/web/last-view.ts) § `REMEMBERED`, `lastViewKey` — localStorage
   keeps `mode=debate` and the mode's query keys in the saved search. Decide which old words restore;
   the Learn precedent also moves a retired query key to `NEVER_REMEMBERED` so an old link still wins.
@@ -686,6 +686,13 @@ red by themselves. These do not all, and `debate` is the specimen each was check
   template for a name stored as a value under a CHECK (`chat_threads.kind`, plus the partial unique
   index rebuilt with the new kind in its predicate), for which old URL words
   get an alias and which are let go, and for the list of what keeps the old word on purpose.
+- **Citations + Debate → Peer review**
+  ([261009l](../plans/261009l-peer-review-mode-merges-citations-and-debate.md),
+  [peer-review.md](peer-review.md)) is the template for **two modes merged into one as its
+  sub-modes**: both words in `RETIRED_MODES`, one lift from each old address to the sub-mode it
+  meant (boot, navigation, Back *and* a restored last view), the old words as the sub-mode rows'
+  aliases, one wrapper drawing the two panels under one chip row — and the stored names held, on
+  purpose, until the provisional name is confirmed.
 
 **Two cautions.** An ordinary English word ("debate") also matches prose, comments and Greg's
 quotes, none of which is renamed. And dated plans, postmortems and applied migrations are history:

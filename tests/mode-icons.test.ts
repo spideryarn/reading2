@@ -13,7 +13,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   AlignLeft, BadgeQuestionMark, BookA, BookText, Brain, ClipboardCheck, Clock,
-  Columns2, Globe, Layers, Lightbulb, MessagesSquare, Network, PanelRight,
+  Columns2, Layers, Lightbulb, MessagesSquare, Network, PanelRight,
   Quote, Route, Search,
 } from "lucide-react";
 
@@ -27,8 +27,10 @@ describe("the icon each mode wears", () => {
     expect(MODE_ICON).toEqual({
       plain: AlignLeft, structure: Columns2, summary: Layers, diagram: Network,
       skim: Route, quotes: Quote, glossary: BookA, faq: BadgeQuestionMark,
-      ideas: Lightbulb, timeline: Clock, citations: BookText, referee: ClipboardCheck,
-      debate: Globe, search: Search, chat: MessagesSquare, learn: Brain,
+      /* Citations' book, Peer review's since 2026-10-09 (plan 261009l); Debate's
+         globe stays on Reception's search button. */
+      ideas: Lightbulb, timeline: Clock, "peer-review": BookText, referee: ClipboardCheck,
+      search: Search, chat: MessagesSquare, learn: Brain,
       marginalia: PanelRight,
     });
   });

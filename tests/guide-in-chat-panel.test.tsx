@@ -135,6 +135,7 @@ function paint(
         canStartOver: false,
         onRetry: () => {},
         onEdit: () => {},
+        onDeleteFrom: undefined,
         onStop: () => {},
         onJump: () => {},
         recovering: new Set<string>(),
@@ -178,7 +179,7 @@ afterEach(() => {
 const guideRow = (): HTMLElement | null => host.querySelector<HTMLElement>(".chat-guide");
 
 describe("the guide's pinned row", () => {
-  it.each([null, "chats", "debate", "learn"] as const)("is above the list whatever the filter says (%s)", (from) => {
+  it.each([null, "chats", "peer-review", "learn"] as const)("is above the list whatever the filter says (%s)", (from) => {
     paint([CHAT, CLAIM, LEARN], { from });
     const row = guideRow();
     expect(row).not.toBeNull();

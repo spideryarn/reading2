@@ -43,6 +43,7 @@ async function opened(
     loadThreads: () => new Promise(() => {}),
     renameThread: async () => ({ ok: true }),
     deleteThread: async () => ({ ok: true }),
+    deleteFrom: async () => ({ ok: true }),
     runTurn: (_slug, _thread, _payload, s) => {
       sink = s;
       return new Promise(() => {});

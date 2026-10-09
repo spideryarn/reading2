@@ -427,7 +427,9 @@ function DebateNote({ items }: { items: readonly MarginClaim[] }) {
   return (
     <ShutNote
       kind="debate"
-      stamp={only ? relationWord(only.relation) : "Debate"}
+      /* "Debate" until 2026-10-09, when Debate became Peer review's Reception
+         and Claims: the stamp says what the line is (tips.ts § debate). */
+      stamp={only ? relationWord(only.relation) : "Others say"}
       tip="debate"
       line={only ? rowWork(only).headline : plural(items.length, "page on the web", "pages on the web")}
       lineVoice={only ? headlineVoice(only) : "ui"}

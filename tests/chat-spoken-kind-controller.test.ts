@@ -46,6 +46,7 @@ it("sends the begun thread's kind on the first append, and again after the serve
     loadThreads: () => new Promise(() => {}),
     renameThread: async () => ({ ok: true }),
     deleteThread: async () => ({ ok: true }),
+    deleteFrom: async () => ({ ok: true }),
     runTurn: () => new Promise(() => {}),
     appendSpoken: async (_slug, threadId, body) => {
       bodies.push({ threadId, body });

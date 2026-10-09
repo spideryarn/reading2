@@ -505,12 +505,19 @@ describe("lifting the old Tweets addresses", () => {
    * nothing downstream reads it: a legacy fallback inside the panel would
    * bounce a reader who pressed Reception straight back to Claims, since
    * Reception is the absent parameter.
+   *
+   * **And since 2026-10-09 the Debate mode word goes on to Peer review**
+   * (router.ts § `liftLegacyPeerReview`, plan 261009l), so an old by-claim
+   * link with `mode=debate` lands on `?mode=peer-review&peer-review=claims`.
+   * tests/peer-review-old-addresses.test.ts has that lift on its own.
    */
   describe("lifting Debate's old by-claim order", () => {
     it("sends `debateby=claim` to the Claims sub-mode, and removes it", () => {
-      expect(settleAddress("/read/x", "?mode=debate&debateby=claim", "")).toBe("/read/x?mode=debate&debate=claims");
+      expect(settleAddress("/read/x", "?mode=debate&debateby=claim", "")).toBe(
+        "/read/x?mode=peer-review&peer-review=claims",
+      );
       expect(settleAddress("/read/x", "?mode=debate&%64ebateby=claim&at=spya-k3m9qt", "")).toBe(
-        "/read/x?mode=debate&at=spya-k3m9qt&debate=claims",
+        "/read/x?mode=peer-review&at=spya-k3m9qt&peer-review=claims",
       );
       expect(settleAddress("/read/x/metadata", "?debateby=claim", "")).toBe("/read/x/metadata?debate=claims");
     });
@@ -521,8 +528,8 @@ describe("lifting the old Tweets addresses", () => {
     });
 
     it("leaves Reception's own orders alone, and Claims with one of them carried", () => {
-      expect(settleAddress("/read/x", "?mode=debate&debateby=stance", "")).toBeNull();
-      expect(settleAddress("/read/x", "?mode=debate&debateby=date", "")).toBeNull();
+      expect(settleAddress("/read/x", "?mode=peer-review&peer-review=reception&debateby=stance", "")).toBeNull();
+      expect(settleAddress("/read/x", "?mode=peer-review&peer-review=reception&debateby=date", "")).toBeNull();
       /* `debate=claims&debateby=date` is Claims; `debateby` is Reception's and
          waits there. Nothing to rewrite. */
       expect(settleAddress("/read/x", "?debate=claims&debateby=date", "")).toBeNull();
@@ -536,12 +543,14 @@ describe("lifting the old Tweets addresses", () => {
       const lifted = settleAddress("/read/x", "?mode=debate&debateby=claim", "") ?? "";
       const at = lifted.indexOf("?");
       expect(settleAddress(lifted.slice(0, at), lifted.slice(at), "")).toBeNull();
-      expect(settleAddress("/read/x", "?mode=debate", "")).toBeNull();
+      expect(settleAddress("/read/x", "?mode=peer-review&peer-review=reception", "")).toBeNull();
     });
 
     it("is lifted on Back and on `navigate()` too, through `liftedLegacyHref`", () => {
-      expect(liftedLegacyHref("/read/x?mode=debate&debateby=claim#h")).toBe("/read/x?mode=debate&debate=claims#h");
-      expect(liftedLegacyHref("/read/x?mode=debate&debateby=stance")).toBeNull();
+      expect(liftedLegacyHref("/read/x?mode=debate&debateby=claim#h")).toBe(
+        "/read/x?mode=peer-review&peer-review=claims#h",
+      );
+      expect(liftedLegacyHref("/read/x?mode=peer-review&debateby=stance")).toBeNull();
       /* Both old spellings on one link. */
       expect(liftedLegacyHref("/read/x/tweets?debateby=claim")).toBe(`/read/x?${THREAD}&debate=claims`);
       expect(liftedLegacyHref("/read/x/tweets")).toBe(`/read/x?${THREAD}`);

@@ -87,7 +87,7 @@ describe("the reading view's frames", () => {
     reading();
     expect(frames()).toEqual([
       [L.plain],
-      [L.structure, L.summary, L.skim, "More", L.search, L.chat, L.learn],
+      [L.structure, L.summary, L.skim, "More", L["peer-review"], L.search, L.chat, L.learn],
       [L.marginalia, "Comments"],
     ]);
   });
@@ -99,7 +99,7 @@ describe("the reading view's frames", () => {
 
   it("a gathered mode drawn while open stands after More, as a run of its own", () => {
     reading({ mode: "glossary" });
-    expect(frames()[1]).toEqual([L.structure, L.summary, L.skim, "More", L.glossary, L.search, L.chat, L.learn]);
+    expect(frames()[1]).toEqual([L.structure, L.summary, L.skim, "More", L.glossary, L["peer-review"], L.search, L.chat, L.learn]);
     const glossary = host.querySelector(`[aria-label="${L.glossary}"]`) as HTMLElement;
     expect(glossary.classList.contains("dock-group-start")).toBe(true);
   });
@@ -152,8 +152,8 @@ describe("the reading view's frames", () => {
   it("counts Comments in the shares a coarse pointer spreads the segment by", () => {
     reading();
     const modes = host.querySelector<HTMLElement>(".dock-modes") as HTMLElement;
-    /* 7 radios + More + Marginalia + Comments. */
-    expect(modes.style.getPropertyValue("--dock-mode-count")).toBe("10");
+    /* 8 radios (Peer review since 2026-10-09) + More + Marginalia + Comments. */
+    expect(modes.style.getPropertyValue("--dock-mode-count")).toBe("11");
     const last = [...host.querySelectorAll<HTMLElement>(".dock-modes .dock-frame")].at(-1) as HTMLElement;
     expect(last.style.getPropertyValue("--dock-frame-count")).toBe("2");
   });
@@ -164,7 +164,7 @@ describe("off the reading view, the same frames as links", () => {
     loose();
     expect(frames()).toEqual([
       [L.plain],
-      [L.structure, L.summary, L.skim, "More", L.search, L.chat, L.learn],
+      [L.structure, L.summary, L.skim, "More", L["peer-review"], L.search, L.chat, L.learn],
       [L.marginalia, "Comments"],
     ]);
     const comments = host.querySelector<HTMLElement>('[aria-label="Comments"]') as HTMLElement;

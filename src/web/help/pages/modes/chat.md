@@ -46,13 +46,15 @@ Each article keeps its own list of conversations; **‹ Chats**, at the top left
 takes you back to it. That list holds every
 conversation you have had about the article, not only the ones started in Chat. A row from somewhere
 else has a small icon in front of it: point at it, or tap it, to see where it came from, for example
-a claim in Debate, a passage, or Learn. Pressing a Learn row takes you to Learn, where that
+a claim in Peer review, a passage, or Learn. Pressing a Learn row takes you to Learn, where that
 conversation lives; it cannot be renamed or deleted from Chat. When the list has conversations from
 more than one place, the buttons above it (**All**, **Chats** and one for each other place) narrow
 it.
 
 <kbd>Enter</kbd> sends and <kbd>Shift Enter</kbd> starts a new line; <kbd>Esc</kbd> stops an answer
 still arriving. **Answer again** gets a fresh answer, and the pencil lets you rewrite your question.
+The bin beside the pencil deletes that question, its answer and everything after it: press it, then
+press it again to confirm. The first question has no bin; to delete it, delete the conversation.
 When a conversation is longer than the panel, the arrows under it step to the previous or next
 message, or back to the first, and **Latest** jumps to the end. The (i) in the corner of a
 conversation says which AI model answered it, and how hard it was asked to think.

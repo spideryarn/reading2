@@ -232,18 +232,20 @@ vi.mock("../src/web/IdeasPanel.js", async (importOriginal) => {
  * is what shows the boundary encloses the controller's work and not only the
  * visible panel. docs/plans/260908f-prioritised-spideryarn-codebase-improvements.md § B.
  */
-vi.mock("../src/web/modes/debate/DebateMode.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../src/web/modes/debate/DebateMode.js")>();
+vi.mock("../src/web/modes/peer-review/PeerReviewMode.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/web/modes/peer-review/PeerReviewMode.js")>();
   const { createElement: h } = await import("react");
   return {
     ...actual,
-    DebateBand(props: Parameters<typeof actual.DebateBand>[0]) {
+    /* Peer review's band since 2026-10-09, which holds Debate's reads; the
+       cases below open it on Reception, Debate's view (plan 261009l). */
+    PeerReviewBand(props: Parameters<typeof actual.PeerReviewBand>[0]) {
       probe.debateRenders += 1;
       if (probe.throwDebate) {
         probe.debateThrows += 1;
         throw new Error(BOOM);
       }
-      return h(actual.DebateBand, props);
+      return h(actual.PeerReviewBand, props);
     },
   };
 });
@@ -1130,7 +1132,7 @@ describe("the boundary will not retire a token newer than the one its render was
 
 const { navigate } = await import("../src/web/router.js");
 
-const DEBATE_FALLBACK = '[aria-label="Debate is not working"]';
+const DEBATE_FALLBACK = '[aria-label="Peer review is not working"]';
 /** The article's spine (src/web/Spine.tsx), drawn in every mode, outside every band. */
 const SPINE = ".spine";
 
@@ -1158,11 +1160,11 @@ describe("Debate that throws is replaced by a band, not by an empty page", () =>
   it("contains a throw from the controller's own render", async () => {
     debateOn();
     probe.throwDebate = true;
-    await open("?mode=debate");
+    await open("?mode=peer-review&peer-review=reception");
 
     containedInsideDebate();
     expect(probe.debateThrows, "the controller mock never threw").toBeGreaterThan(0);
-    reportedOnce("Debate");
+    reportedOnce("Peer review");
 
     await press(MODE_LABEL.plain);
     expect(modeInUrl()).toBe("plain");
@@ -1173,26 +1175,26 @@ describe("Debate that throws is replaced by a band, not by an empty page", () =>
   it("contains a throw from DebatePanel while the real controller's hooks run", async () => {
     debateOn();
     probe.throwDebatePanel = true;
-    await open("?mode=debate");
+    await open("?mode=peer-review&peer-review=reception");
 
     containedInsideDebate();
     expect(probe.debatePanelThrows, "the panel mock never ran").toBeGreaterThan(0);
     expect(probe.debateRenders, "the real controller never rendered").toBeGreaterThan(0);
-    reportedOnce("Debate");
+    reportedOnce("Peer review");
   });
 
   it("settles back to the same actionable fallback when retry fails again", async () => {
     debateOn();
     probe.throwDebate = true;
-    await open("?mode=debate");
+    await open("?mode=peer-review&peer-review=reception");
     const first = probe.debateThrows;
 
-    await act(async () => buttonNamed("Try Debate again").click());
+    await act(async () => buttonNamed("Try Peer review again").click());
     await settle();
 
     expect(probe.debateThrows, "retry did not re-render the feature").toBeGreaterThan(first);
     containedInsideDebate();
-    buttonNamed("Try Debate again");
+    buttonNamed("Try Peer review again");
     buttonNamed("Back to the article");
     expect(jobPosts(), "a retry is not a fresh intent to spend").toEqual([]);
   });
@@ -1200,12 +1202,12 @@ describe("Debate that throws is replaced by a band, not by an empty page", () =>
   it("comes back to a working Debate from retry, and buys nothing doing it", async () => {
     debateOn();
     probe.throwDebate = true;
-    await open("?mode=debate");
+    await open("?mode=peer-review&peer-review=reception");
     containedInsideDebate();
 
     probe.throwDebate = false;
     trace.length = 0;
-    await act(async () => buttonNamed("Try Debate again").click());
+    await act(async () => buttonNamed("Try Peer review again").click());
     await settle();
 
     expect(text(), "the fallback outlived a successful retry").not.toContain("[mode-render]");
@@ -1218,7 +1220,7 @@ describe("Debate that throws is replaced by a band, not by an empty page", () =>
   it("returns to Plain from the fallback's own button", async () => {
     debateOn();
     probe.throwDebate = true;
-    await open("?mode=debate");
+    await open("?mode=peer-review&peer-review=reception");
 
     await act(async () => buttonNamed("Back to the article").click());
     await modeAfterPress("debate");
@@ -1243,12 +1245,12 @@ describe("Debate that throws is replaced by a band, not by an empty page", () =>
   it("does not carry its fallback to a different article", async () => {
     debateOn();
     probe.throwDebate = true;
-    await open("?mode=debate");
+    await open("?mode=peer-review&peer-review=reception");
     containedInsideDebate();
 
     probe.throwDebate = false;
     trace.length = 0;
-    await act(async () => navigate(`/read/${OTHER_SLUG}?mode=debate`));
+    await act(async () => navigate(`/read/${OTHER_SLUG}?mode=peer-review&peer-review=reception`));
     await settle();
 
     expect(location.pathname).toBe(`/read/${OTHER_SLUG}`);
@@ -1270,7 +1272,7 @@ describe("Debate that throws is replaced by a band, not by an empty page", () =>
   it("leaves nothing behind when the owner signs out underneath it", async () => {
     debateOn();
     probe.throwDebate = true;
-    await open("?mode=debate");
+    await open("?mode=peer-review&peer-review=reception");
     containedInsideDebate();
     const rendered = probe.debateRenders;
 
@@ -1282,9 +1284,9 @@ describe("Debate that throws is replaced by a band, not by an empty page", () =>
     /* Signing out is a change of reader, so the owner's view is taken off the
        address (last-view.ts § A change of reader). The visitor then asks for
        Debate themselves, and gets the owners-only band rather than the panel. */
-    expect(modeInUrl(), "the visitor was left in the owner's mode").not.toBe("debate");
-    await open("?mode=debate");
-    expect(modeInUrl()).toBe("debate");
+    expect(modeInUrl(), "the visitor was left in the owner's mode").not.toBe("peer-review");
+    await open("?mode=peer-review&peer-review=reception");
+    expect(modeInUrl()).toBe("peer-review");
     expect(
       host.querySelector('.mode-band[aria-label="Not available on a shared link"]'),
       "the visitor's owners-only band never replaced Debate",
@@ -1296,27 +1298,31 @@ describe("Debate that throws is replaced by a band, not by an empty page", () =>
   });
 });
 
+/* Peer review's Reception since 2026-10-09: each case opens the article with
+   `?peer-review=reception` already in the address (a sub-mode parameter
+   outlives its mode), so the press on Peer review lands on Reception and
+   arms the search, as a press on Debate did (plan 261009l). */
 describe("a Debate press that met a broken band cannot be spent later", () => {
   /** The positive control for every zero below: a press that works buys one search. */
   it("gives exactly one job for an ordinary press on a working Debate", async () => {
     debateOn();
-    await open();
+    await open("?peer-review=reception");
     trace.length = 0;
 
-    await press(MODE_LABEL.debate);
+    await press(MODE_LABEL["peer-review"]);
 
-    expect(modeInUrl()).toBe("debate");
+    expect(modeInUrl()).toBe("peer-review");
     expect(text()).not.toContain("[mode-render]");
     expect(jobPosts(), "one job, under React's double-invoked effects").toHaveLength(1);
   });
 
   it("gives no job at all when the press throws and the reader comes back", async () => {
     debateOn();
-    await open();
+    await open("?peer-review=reception");
     trace.length = 0;
 
     probe.throwDebate = true;
-    await press(MODE_LABEL.debate);
+    await press(MODE_LABEL["peer-review"]);
     containedInsideDebate();
     expect(
       activation.pendingActivation(SLUG, "debate"),
@@ -1330,26 +1336,26 @@ describe("a Debate press that met a broken band cannot be spent later", () => {
     await modeAfterPress("plain");
     await settle();
 
-    expect(modeInUrl(), "Back did not return to Debate").toBe("debate");
+    expect(modeInUrl(), "Back did not return to Debate").toBe("peer-review");
     expect(trace.some((r) => r.url === `/api/debate/${SLUG}`), "the GET settled").toBe(true);
     expect(jobPosts(), "Back spent the retired press").toEqual([]);
   });
 
   it("gives no job when the press made at the fallback throws too", async () => {
     debateOn();
-    await open();
+    await open("?peer-review=reception");
     trace.length = 0;
 
     probe.throwDebate = true;
-    await press(MODE_LABEL.debate);
+    await press(MODE_LABEL["peer-review"]);
     const afterFirst = probe.debateThrows;
 
     /* Since 2026-10-02 a press on the mode you are in closes it (261002g), so
        a press at the fallback is close, then reopen: a fresh press on a fresh
        mount. The closing press must arm nothing. */
-    await press(MODE_LABEL.debate);
+    await press(MODE_LABEL["peer-review"]);
     expect(jobPosts(), "the closing press spent").toEqual([]);
-    await press(MODE_LABEL.debate);
+    await press(MODE_LABEL["peer-review"]);
     expect(probe.debateThrows, "the fresh press never reset the boundary").toBeGreaterThan(
       afterFirst,
     );
@@ -1362,16 +1368,16 @@ describe("a Debate press that met a broken band cannot be spent later", () => {
     await modeAfterPress("plain");
     await settle();
 
-    expect(modeInUrl()).toBe("debate");
+    expect(modeInUrl()).toBe("peer-review");
     expect(jobPosts(), "the second press was spent on Back").toEqual([]);
   });
 
   it("gives exactly one job when the press made at the fallback succeeds", async () => {
     debateOn();
-    await open();
+    await open("?peer-review=reception");
 
     probe.throwDebate = true;
-    await press(MODE_LABEL.debate);
+    await press(MODE_LABEL["peer-review"]);
     containedInsideDebate();
     trace.length = 0;
 
@@ -1379,9 +1385,9 @@ describe("a Debate press that met a broken band cannot be spent later", () => {
     /* Since 2026-10-02 a press on the mode you are in closes it (261002g), so
        a press at the fallback is close, then reopen: a fresh press on a fresh
        mount. The closing press must arm nothing. */
-    await press(MODE_LABEL.debate);
+    await press(MODE_LABEL["peer-review"]);
     expect(jobPosts(), "the closing press spent").toEqual([]);
-    await press(MODE_LABEL.debate);
+    await press(MODE_LABEL["peer-review"]);
 
     expect(text(), "Debate did not come back").not.toContain("[mode-render]");
     expect(jobPosts(), "one job, attributable to that click").toHaveLength(1);
@@ -1478,12 +1484,13 @@ const WITNESS: Partial<Record<AnyMode, Witness[]>> = {
     { label: "TimelineBand", as: "owner" },
     { label: "VisitorBand", as: "visitor" },
   ],
-  debate: [
-    { label: "DebateBand", as: "owner" },
-    { label: "VisitorBand", as: "visitor" },
-  ],
-  citations: [
-    { label: "CitationsBand", as: "owner" },
+  /* One band for all three sub-modes since 2026-10-09, and a witness on each
+     view, since the sub-mode decides which panel is drawn under it (GPT Sol's
+     F4 on plan 261009l). */
+  "peer-review": [
+    { label: "PeerReviewBand", as: "owner" },
+    { label: "PeerReviewBand", as: "owner", extra: "&peer-review=reception" },
+    { label: "PeerReviewBand", as: "owner", extra: "&peer-review=claims" },
     { label: "VisitorBand", as: "visitor" },
   ],
   skim: [
@@ -1901,15 +1908,15 @@ describe("a press that met any broken band is retired", () => {
    `Record<ModeWithSubModes, …>` in ModeBoundary.tsx now, so a seventh mode
    with sub-modes does not compile until it has been decided. */
 describe("a broken Debate view does not follow the reader to the other one", () => {
-  const debateView = () => new URLSearchParams(location.search).get("debate");
+  const debateView = () => new URLSearchParams(location.search).get("peer-review");
 
   it("owner: Back from a broken Claims to Reception is a fresh band", async () => {
     debateOn();
-    await open("?mode=debate");
+    await open("?mode=peer-review&peer-review=reception");
     expect(text(), "Reception opened working").not.toContain("[mode-render]");
 
     probe.throwDebate = true;
-    await act(async () => history.pushState(null, "", "?mode=debate&debate=claims"));
+    await act(async () => history.pushState(null, "", "?mode=peer-review&peer-review=claims"));
     await settle();
     containedInsideDebate();
 
@@ -1917,31 +1924,31 @@ describe("a broken Debate view does not follow the reader to the other one", () 
     probe.throwDebate = false;
     const renders = probe.debateRenders;
     await act(async () => history.back());
-    for (let i = 0; i < 40 && debateView() !== null; i++) {
+    for (let i = 0; i < 40 && debateView() !== "reception"; i++) {
       await act(async () => {
         await new Promise((go) => setTimeout(go, 10));
       });
     }
     await settle();
 
-    expect(modeInUrl()).toBe("debate");
-    expect(debateView(), "Back did not leave Claims").toBeNull();
+    expect(modeInUrl()).toBe("peer-review");
+    expect(debateView(), "Back did not leave Claims").toBe("reception");
     expect(text(), "the broken Claims followed the reader to Reception").not.toContain("[mode-render]");
     expect(probe.debateRenders, "the band was never tried again").toBeGreaterThan(renders);
-    expect(host.querySelector('.mode-band[aria-label="Debate"]'), "no Debate band").not.toBeNull();
+    expect(host.querySelector('.mode-band[aria-label="Peer review"]'), "no Debate band").not.toBeNull();
   });
 
   it("visitor: the other view is a fresh band too", async () => {
     experimentalSince = "2026-09-01T09:00:00.000Z";
     probe.throwAt = "VisitorBand";
-    await open("?mode=debate&debate=claims");
-    containedInside("debate");
+    await open("?mode=peer-review&peer-review=claims");
+    containedInside("peer-review");
 
     probe.throwAt = null;
-    await act(async () => history.pushState(null, "", "?mode=debate"));
+    await act(async () => history.pushState(null, "", "?mode=peer-review&peer-review=reception"));
     await settle();
 
-    expect(modeInUrl()).toBe("debate");
+    expect(modeInUrl()).toBe("peer-review");
     expect(text(), "the broken view followed the visitor").not.toContain("[mode-render]");
     expect(text()).toContain(PARAGRAPH);
   });

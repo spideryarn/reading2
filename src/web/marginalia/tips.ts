@@ -53,9 +53,12 @@ export const MARG_TIPS: Record<MargTipKey, MargTip> = {
     how: "From Timeline mode. The short description was written by AI; the date comes from the article's words. A missing year can come from its publication date, or be assumed from a year stated elsewhere in it and marked 'year assumed'. A phrase in quotation marks is the article's own. A dated event sits beside the passage that dates it; the article's own relative wording sits beside its first surviving mention.",
   },
   debate: {
-    head: "Debate",
+    /* "Debate" until 2026-10-09, when Debate became Peer review's Reception
+       and Claims (plan 261009l): the stamp says what the line is, in the
+       mode's frame, rather than a mode name that has gone. */
+    head: "Others say",
     what: "A page elsewhere on the web that responds to a claim made in this passage, and how it bears on it.",
-    how: "From Debate mode. AI searched the web and judged how the page bears on the claim. The quote is the page's own words; where the page had no usable title, AI wrote the headline, in the AI's typeface.",
+    how: "From Peer review's Claims. AI searched the web and judged how the page bears on the claim. The quote is the page's own words; where the page had no usable title, AI wrote the headline, in the AI's typeface.",
   },
   citation: {
     head: "Cites",
@@ -63,7 +66,7 @@ export const MARG_TIPS: Record<MargTipKey, MargTip> = {
        anything to press"*): the line is the button. And only what opens — the
        by-line and the reference entry, never the model's reason (261003j). */
     what: "A work the article cites, at the first place it does. Press this line to open it and see what the article gives for the work: who wrote it, and its entry in the reference list.",
-    how: "From Citations mode, where AI read the article's references and matched each to the places it is cited. The title, the authors and the entry are the article's own words.",
+    how: "From Peer review's Bibliography, where AI read the article's references and matched each to the places it is cited. The title, the authors and the entry are the article's own words.",
   },
   "comment-own": {
     head: "Yours",

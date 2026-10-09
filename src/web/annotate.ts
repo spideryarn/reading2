@@ -1027,7 +1027,7 @@ export interface CiteSelection {
  *
  * **Every work, and not only those above the threshold bar.** That departs from
  * the quotes rule, where the bar doubles as the highlight-density control, and
- * the reason is that `?citebar=` is reachable only from Citations mode while
+ * the reason is that `?citebar=` is reachable only from Peer review's Bibliography while
  * these marks are visible from every mode. A bar the reader cannot see is not a
  * setting, it is a paragraph changing appearance for no stated reason. This
  * follows the glossary instead, whose prose marks come from the whole list

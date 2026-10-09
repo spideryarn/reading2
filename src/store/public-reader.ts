@@ -424,7 +424,7 @@ const PUBLIC_PROJECTIONS = {
        docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
     simpleSummary: articleRevisions.simpleSummary,
     /* **The eleventh, 2026-09-29: the Debate** — withheld until then for the
-       cost of *running* a search (two metered web searches), which a visitor
+       cost of *running* its metered web-search call, which a visitor
        never pays, and because the boundary its rows must pass was not built.
        It is now: every row's address re-judged by `publicCitationUrl`, a
        refusal dropping the row and counting it, and the article's own address
