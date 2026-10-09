@@ -197,6 +197,14 @@ describe("the privacy page", () => {
     expect(PAGE).toContain('const LAST_UPDATED = "9 October 2026"');
   });
 
+  it("says the public shelf's topics are named from shared titles and summaries only", () => {
+    /* Plan 261008j, approved as "q-p5h2a7 A": the one privacy line it asked for. */
+    const prose = PAGE.replace(/\s+/g, " ");
+    expect(prose).toContain(
+      "to name the topics on the public shelf, for which it is shown the titles and one-line summaries of the articles shared there and nothing else",
+    );
+  });
+
   it("says a reader is emailed when their feedback ships, without their words", () => {
     /* Plan 261002f: scripts/feedback-shipped-emails.ts, run by `npm run deploy`. */
     const prose = PAGE.replace(/\s+/g, " ");

@@ -1074,8 +1074,13 @@ describe("the one query that lists articles for nobody in particular", () => {
     return items;
   };
 
-  it("selects exactly the eight columns a card needs, and nothing else", () => {
+  it("selects exactly the eight columns a card needs, the server-only id, and nothing else", () => {
     expect(selectItems()).toEqual([
+      /* **Server-only, added 2026-10-09** (plan 261008j, approved as
+         "q-p5h2a7 A"): what the public topic tree is keyed by, and what the
+         withholding rule compares against. It never reaches the wire, which
+         the live test below checks on the JSON. */
+      '"spideryarn"."articles"."id"',
       '"spideryarn"."articles"."slug"',
       '"spideryarn"."articles"."public_at"',
       `left("spideryarn"."article_revisions"."title", ${PUBLIC_CARD_CHARS.title}) as "title"`,
@@ -1116,6 +1121,7 @@ describe("the one query that lists articles for nobody in particular", () => {
    */
   it("and caps every text column it hands out", () => {
     const BOUNDED_ALREADY = [
+      '"spideryarn"."articles"."id"',
       '"spideryarn"."articles"."slug"',
       '"spideryarn"."articles"."public_at"',
       '"spideryarn"."article_revisions"."word_count"',
@@ -2065,7 +2071,7 @@ describe("the shelf of public articles, asked for by nobody", { timeout: 30_000 
    * left the route, which is the only place a key added by a DTO rather than by
    * a `select` would show up.
    */
-  it("and a card is seven values, none of them about the owner", async () => {
+  it("and a card is eight values, none of them about the owner, and never the article's id", async () => {
     const card = (await shelfNow()).find((e) => e.slug === listSlug("theirs-public"));
     expect(card).toBeDefined();
     expect(Object.keys(card ?? {}).sort()).toEqual([
@@ -2077,9 +2083,15 @@ describe("the shelf of public articles, asked for by nobody", { timeout: 30_000 
       "siteName",
       "slug",
       "title",
+      /* The keys of its public topic pills, plan 261008j. */
+      "topics",
       "words",
     ]);
     expect(JSON.stringify(card)).not.toContain(LIST_OWNER_B);
+    /* The listing selects `articles.id` for the topic tree; it stays on the server. */
+    const [row] = await getDb().select({ id: articles.id }).from(articles).where(eq(articles.slug, listSlug("theirs-public")));
+    expect(row?.id).toBeTruthy();
+    expect(JSON.stringify(card)).not.toContain(row?.id ?? "no id");
   });
 
   /**

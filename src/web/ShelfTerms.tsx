@@ -35,7 +35,7 @@ import type { LibraryEntry, LibraryTermsResponse } from "../types.js";
 import type { ArticleTopics } from "./article-topics.js";
 import { libraryTopicsViewParam } from "./params.js";
 import { availableTopics, isModelNamed, topicDepth, withinChosenFirst } from "./shelf-narrow.js";
-import { TermChip, type TermTipScope } from "./ShelfTermChip.js";
+import { TermChip, type TermTipScope, QUIET_BUTTON, TERMS_ROW } from "./ShelfTermChip.js";
 import { type PaperScope, ShelfTermsDetail } from "./ShelfTermsDetail.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 
@@ -56,9 +56,6 @@ export function mightHaveTopics(articleCount: number): boolean {
   return articleCount >= MIN_WORKS;
 }
 
-const QUIET_BUTTON =
-  "tw:inline-flex tw:h-7 tw:items-center tw:gap-1 tw:rounded-md tw:bg-transparent tw:px-2 tw:text-xs tw:text-muted-foreground tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground";
-const TERMS_ROW = "tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-2";
 
 /**
  * Widths for the placeholder's outline pills, in rem: a spread like a real

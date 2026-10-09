@@ -8224,3 +8224,25 @@ export type LinkSummaryEvent =
    * generating this very summary. Ask again shortly; it is not an answer.
    */
   | { kind: "pending" };
+
+/**
+ * **What /admin shows about the public shelf's topic pills**, from
+ * `GET /api/admin/public-shelf-topics` and its Rebuild. src/public-shelf-topics.ts;
+ * plan 261008j.
+ */
+export interface PublicShelfTopicsStatus {
+  /** Listed cards. */
+  cards: number;
+  /** When the tree was last re-thought, ISO, or null for never. */
+  rethoughtAt: string | null;
+  /** Cards the tree was made from or filed. */
+  filed: number;
+  /** An article the tree holds is no longer listed, so the page shows no topics. */
+  withheld: boolean;
+  /** A re-think is due that will not run by itself; the Rebuild button runs it. */
+  rebuildDue: boolean;
+  /** Somebody is working on it now. */
+  working: boolean;
+  /** The cut-off, for the page's sentence. */
+  autoMax: number;
+}
