@@ -776,7 +776,7 @@ function EventDetail({
                 }}
               >
                 <span className={`tl-quote${f.whole ? " tl-quote-moved" : ""}`}>
-                  {f.whole ? "whole paragraph — the exact words have moved" : <Excerpt blockId={f.blockId} words={f.short} near={f.start} />}
+                  {f.whole ? "whole paragraph — the exact words have moved" : <Excerpt blockId={f.blockId} words={f.short} near={f.shortStart ?? f.start} />}
                 </span>
               </button>
               <BlockRef id={f.blockId} onJump={onJump} />

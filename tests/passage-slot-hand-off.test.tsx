@@ -81,7 +81,9 @@ function passage(key: string, blockId: BlockId): Found {
     valence: null,
     reasoning: null,
     short: "some",
+    shortStart: 0,
     long: "some words",
+    longStart: 0,
     at: 0,
     whole: false,
     /* Not a quote. See `Found.quoteStroke`. */

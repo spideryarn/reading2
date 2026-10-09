@@ -499,7 +499,7 @@ function IdeaRow({
                     }}
                   >
                     <span className={`ideas-quote${f.whole ? " ideas-quote-moved" : ""}`}>
-                      {f.whole ? "whole paragraph — the exact words have moved" : <Excerpt blockId={f.blockId} words={f.short} near={f.start} />}
+                      {f.whole ? "whole paragraph — the exact words have moved" : <Excerpt blockId={f.blockId} words={f.short} near={f.shortStart ?? f.start} />}
                     </span>
                     {f.reasoning && <span className="ideas-reason">{f.reasoning}</span>}
                   </button>

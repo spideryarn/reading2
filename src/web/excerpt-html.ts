@@ -41,7 +41,7 @@
  * (`excerptFallbackHtml`).
  */
 
-import { findMathSpans, MATHS_SKIP_TAGS } from "../maths-tex.js";
+import { findMathSpans, MATHS_SKIP_TAGS, type RenderTex } from "../maths-tex.js";
 import { quoteFinder, type Span } from "../quote-match.js";
 import type { Block } from "../types.js";
 import { renderBlockMaths } from "./maths.js";
@@ -80,7 +80,13 @@ const DROP_SELECTOR = [...DROP].join(", ");
  * `data-spya-*` (Sol, plan review F2; docs/project/block-ids.md). Every
  * `data-*` goes too.
  */
-const ADDRESSING = new Set(["id", "name", "href", "xlink:href", "tabindex", "autofocus"]);
+const ADDRESSING = new Set([
+  "id", "name", "href", "xlink:href", "tabindex", "autofocus",
+  "aria-activedescendant", "aria-controls", "aria-describedby", "aria-details",
+  "aria-errormessage", "aria-flowto", "aria-labelledby", "aria-owns",
+  "commandfor", "for", "form", "headers", "itemref", "list", "popovertarget",
+  "usemap", "xref",
+]);
 
 /**
  * Where a nested block starts inside a block — a space, as `extractText`
@@ -115,8 +121,16 @@ export interface ExcerptAt {
   near?: number;
 }
 
+interface CachedExcerpt {
+  /** The two forms whose identities make the cached answer current. */
+  drawnHtml: string;
+  sourceHtml: string | undefined;
+  render: RenderTex | undefined;
+  value: string | null;
+}
+
 /** Each block's excerpts, by words and position — a list draws the same ones on every render (F6). */
-const cache = new WeakMap<Block, Map<string, string | null>>();
+const cache = new WeakMap<Block, Map<string, CachedExcerpt>>();
 
 /**
  * **`words` from `block`, as html** — or `null` when they are not in it.
@@ -126,19 +140,30 @@ const cache = new WeakMap<Block, Map<string, string | null>>();
  */
 export function excerptHtml(block: Block, words: string, at: ExcerptAt = {}): string | null {
   const key = `${at.near ?? ""}\u0000${words}`;
+  const source = mathsSource(block);
   let mine = cache.get(block);
   if (!mine) {
     mine = new Map();
     cache.set(block, mine);
   }
-  if (mine.has(key)) return mine.get(key) ?? null;
-  const html = draw(block, words, at);
-  mine.set(key, html);
+  const had = mine.get(key);
+  if (
+    had &&
+    had.drawnHtml === block.html &&
+    had.sourceHtml === source?.html &&
+    had.render === source?.render
+  ) return had.value;
+  const html = draw(block, words, at, source);
+  mine.set(key, {
+    drawnHtml: block.html,
+    sourceHtml: source?.html,
+    render: source?.render,
+    value: html,
+  });
   return html;
 }
 
-function draw(block: Block, words: string, at: ExcerptAt): string | null {
-  const source = mathsSource(block);
+function draw(block: Block, words: string, at: ExcerptAt, source: ReturnType<typeof mathsSource>): string | null {
   /* Twice for a block that had maths drawn: first in the words the model saw,
      TeX and all, which is where a stored quote came from; then in the block
      as drawn, which is where a reader's selection and a snippet cut from the
@@ -175,11 +200,11 @@ function finish(html: string): string {
 /** `words` cut out of `html` with only inline formatting left, or `null` when they are not in it. */
 function cutFrom(block: Block, html: string, words: string, near?: number): string | null {
   const doc = inertDoc();
-  const { root, nodes, find } = parsed(block, html);
-  /* `near` is measured in the drawn text, which counts a dropped element's
-     text and this does not — a diagram's labels before the words move it by
-     their length. Only a tie-break between repeats, so close is enough. */
-  const span = find(words, near);
+  const { root, nodes, find, projectNear } = parsed(block, html);
+  /* `near` is measured in the whole drawn text. Matching deliberately leaves
+     out diagrams and controls, so translate past their text before using it to
+     choose between repeats. */
+  const span = find(words, near === undefined ? undefined : projectNear(near));
   if (span === null) return null;
 
   const range = doc.createRange();
@@ -200,6 +225,8 @@ interface Parsed {
   root: Element;
   nodes: Text[];
   find: (words: string, near?: number) => Span | null;
+  /** A drawn-text offset with `DROP` descendants taken out, as `nodes` has. */
+  projectNear: (near: number) => number;
 }
 
 /**
@@ -221,8 +248,8 @@ function parsed(block: Block, html: string): Parsed {
   if (had) return had;
   const root = inertDoc().createElement("div");
   root.innerHTML = html;
-  const nodes = textNodes(root);
-  const made = { root, nodes, find: quoteFinder(nodes.map((n) => n.data).join("")) };
+  const { nodes, projectNear } = textProjection(root);
+  const made = { root, nodes, find: quoteFinder(nodes.map((n) => n.data).join("")), projectNear };
   mine.set(html, made);
   return made;
 }
@@ -264,14 +291,49 @@ export function excerptFallbackHtml(block: Block | undefined, words: string): st
   return drawn === escaped ? null : finish(drawn);
 }
 
-/** The text nodes an excerpt can show: everything but what `DROP` leaves out. */
-function textNodes(root: Element): Text[] {
+interface TextSegment {
+  rawStart: number;
+  rawEnd: number;
+  shownStart: number;
+  shown: boolean;
+}
+
+/** The text an excerpt can show, and the map into it from the full drawn text. */
+function textProjection(root: Element): { nodes: Text[]; projectNear: (near: number) => number } {
   const walker = root.ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  const out: Text[] = [];
+  const nodes: Text[] = [];
+  const segments: TextSegment[] = [];
+  let raw = 0;
+  let shown = 0;
   for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-    if (!n.parentElement?.closest(DROP_SELECTOR)) out.push(n as Text);
+    const text = n as Text;
+    const kept = !text.parentElement?.closest(DROP_SELECTOR);
+    const rawEnd = raw + text.data.length;
+    if (text.data.length > 0) segments.push({ rawStart: raw, rawEnd, shownStart: shown, shown: kept });
+    if (kept) {
+      nodes.push(text);
+      shown += text.data.length;
+    }
+    raw = rawEnd;
   }
-  return out;
+  return {
+    nodes,
+    projectNear: (near) => {
+      const wanted = Math.max(0, Math.min(raw, near));
+      let lo = 0;
+      let hi = segments.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >>> 1;
+        if (segments[mid]!.rawEnd < wanted) lo = mid + 1;
+        else hi = mid;
+      }
+      const segment = segments[lo];
+      if (!segment) return shown;
+      return segment.shown
+        ? segment.shownStart + Math.max(0, wanted - segment.rawStart)
+        : segment.shownStart;
+    },
+  };
 }
 
 /**

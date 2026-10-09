@@ -115,12 +115,12 @@ describe("excerptHtml", () => {
 
   it("carries no address out of the article's own MathML — F2", () => {
     const b = block(
-      '<p>See <math id="spya-aaaaaa" data-spya-pdf-figure="forged"><mtext><a href="https://evil.test/x" name="n">target</a></mtext></math> now.</p>',
+      '<p>See <math id="spya-aaaaaa" aria-labelledby="spya-aaaaaa" data-spya-pdf-figure="forged" style="position:fixed" onclick="alert(1)"><mtext><span><a href="https://evil.test/x" name="n">target</a></span></mtext></math> now.</p>',
     );
     const html = excerptHtml(b, "See target now")!;
     const el = parse(html);
     expect(el.querySelector("math")).not.toBeNull();
-    expect(el.querySelector("[id], [name], [href], a")).toBeNull();
+    expect(el.querySelector('[id], [name], [href], [aria-labelledby], [style], [onclick], a, span')).toBeNull();
     expect(html).not.toContain("data-spya");
     expect(el.textContent).toBe("See target now");
   });
@@ -137,6 +137,14 @@ describe("excerptHtml", () => {
     expect(excerptHtml(b, "before label after")).toBeNull();
   });
 
+  it("translates a drawn-text position past dropped content before choosing a repeat", () => {
+    const label = "x".repeat(120);
+    const gap = " gap".repeat(20);
+    const b = block(`<p><svg><text>${label}</text></svg><em>same words</em>${gap}<strong>same words</strong></p>`);
+    const first = renderedText(b.html).indexOf("same words");
+    expect(parse(excerptHtml(b, "same words", { near: first })!).querySelector("em")).not.toBeNull();
+  });
+
   it("unwraps the article's own <q>: the caller already quotes the excerpt — F7", () => {
     const el = parse(excerptHtml(block("<p>He said <q>no more</q> twice.</p>"), "said no more twice")!);
     expect(el.querySelector("q")).toBeNull();
@@ -148,6 +156,25 @@ describe("excerptHtml", () => {
     const el = parse(excerptHtml(block("<p>It cost $5 and $10.</p>"), "cost $5 and $10")!);
     expect(el.textContent).toBe("cost $5 and $10");
     expect(el.querySelector("math")).toBeNull();
+  });
+
+  it("keeps the cached parse immutable and invalidates a cached result if the block changes", () => {
+    const b = block("<p><em>first words</em> and <strong>second words</strong>.</p>");
+    const first = excerptHtml(b, "first words")!;
+    expect(parse(excerptHtml(b, "second words")!).querySelector("strong")?.textContent).toBe("second words");
+    expect(excerptHtml(b, "first words")).toBe(first);
+
+    b.html = "<p><strong>first words</strong> after an update.</p>";
+    expect(parse(excerptHtml(b, "first words")!).querySelector("strong")?.textContent).toBe("first words");
+  });
+
+  it("leaves text-only output escaped when the policy fast path is taken", () => {
+    const words = '<img src=x onerror="alert(1)"> & already words';
+    const html = excerptHtml(block(`<p>${words.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")}</p>`), words)!;
+    const el = parse(html);
+    expect(el.querySelector("img")).toBeNull();
+    expect(el.textContent).toBe(words);
+    expect(html).toContain("&lt;img");
   });
 });
 

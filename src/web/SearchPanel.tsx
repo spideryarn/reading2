@@ -1991,7 +1991,7 @@ function HitCard({
     <>
       <p className="tip-hit-quote">
         {/* The article's own words, drawn from the block's markup (Excerpt.tsx, plan 261009k). */}
-        <Excerpt blockId={found.blockId} words={found.long} near={found.start} />
+        <Excerpt blockId={found.blockId} words={found.long} near={found.longStart ?? found.start} />
       </p>
       <p className="tip-hit-meta">
         {/* Which question found it, in words. The dot on the row is the glance
@@ -2177,7 +2177,7 @@ function Hit({
       >
         <span className="srch-hit-body">
           <span className="srch-hit-quote">
-            <Excerpt blockId={found.blockId} words={found.short} near={found.start} />
+            <Excerpt blockId={found.blockId} words={found.short} near={found.shortStart ?? found.start} />
           </span>
           {found.reasoning && <span className="srch-hit-why">{found.reasoning}</span>}
           {/* Said out loud rather than left to look like a styling bug. A

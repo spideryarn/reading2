@@ -664,7 +664,7 @@ export function CommentDialog({
                 <em className="passage-whole">Whole paragraph</em> — <Excerpt blockId={comment.blockId} words={passage.text} />
               </>
             ) : (
-              <Excerpt blockId={comment.blockId} words={passage.text} />
+              <Excerpt blockId={comment.blockId} words={passage.text} near={comment.start} />
             )}
           </blockquote>
         );

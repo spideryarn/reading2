@@ -29,7 +29,7 @@
  * between positions in a shorter rendered string (F13).
  */
 import { renderedText, type Mark } from "./annotate.js";
-import { findOnlyQuote, findQuote, snippet } from "../quote-match.js";
+import { findOnlyQuote, findQuote, snippetAt } from "../quote-match.js";
 import { rendersMaths } from "./maths-provenance.js";
 import type { ClaimPassage } from "../referee-claims.js";
 import type { DivergingScale, RefereeResult } from "../referee-criteria.js";
@@ -132,8 +132,12 @@ export interface Found {
   readonly reasoning: string | null;
   /** What the list shows. */
   readonly short: string;
+  /** Where `short`, without its own ellipsis, begins in the rendered text. */
+  readonly shortStart: number;
   /** What the hover card shows. */
   readonly long: string;
+  /** Where `long`, without its own ellipsis, begins in the rendered text. */
+  readonly longStart: number;
   /**
    * How far through the article this match falls, 0 at the first word and 1 at
    * the last.
@@ -351,6 +355,8 @@ export function findLiteral(blocks: Block[], find: string | null): Found[] {
     const text = texts[index] ?? "";
     const fold = folded[index] ?? { folded: "", map: [0] };
     for (const span of literalSpans(text, needle, fold)) {
+      const short = snippetAt(text, span, SHORT_SNIPPET);
+      const long = snippetAt(text, span, LONG_SNIPPET);
       found.push({
         key: `${block.id}:${span.start}`,
         blockId: block.id,
@@ -367,8 +373,10 @@ export function findLiteral(blocks: Block[], find: string | null): Found[] {
            *about*, which is what `null` says here. */
         valence: null,
         reasoning: null,
-        short: snippet(text, span, SHORT_SNIPPET),
-        long: snippet(text, span, LONG_SNIPPET),
+        short: short.text,
+        shortStart: short.start,
+        long: long.text,
+        longStart: long.start,
         at: placeOf(scale, index, span.start),
         whole: false,
         /* Not a quote. See `Found.quoteStroke`. */
@@ -586,6 +594,8 @@ function resolveOne(
      fallback is the top of the block. */
   const around =
     whole || spec.preview === "from-start" ? { start: span.start, end: span.start } : span;
+  const short = snippetAt(text, around, SHORT_SNIPPET);
+  const long = snippetAt(text, around, LONG_SNIPPET);
   return {
     key: spec.key,
     blockId: spec.blockId,
@@ -596,8 +606,10 @@ function resolveOne(
     confidence: spec.confidence,
     valence: spec.valence,
     reasoning: spec.reasoning,
-    short: snippet(text, around, SHORT_SNIPPET),
-    long: snippet(text, around, LONG_SNIPPET),
+    short: short.text,
+    shortStart: short.start,
+    long: long.text,
+    longStart: long.start,
     /* `span.start`, which for a fallback is 0 — the top of the block. That is
        the honest answer: the whole paragraph is marked, so where in it the
        source meant is exactly what we do not know. */

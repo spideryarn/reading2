@@ -4806,7 +4806,7 @@ function Questions({
                     <em className="passage-whole">Whole paragraph</em> — <Excerpt blockId={entry.item.blockId} words={p.text} />
                   </>
                 ) : (
-                  <Excerpt blockId={entry.item.blockId} words={p.text} />
+                  <Excerpt blockId={entry.item.blockId} words={p.text} near={entry.item.start} />
                 );
               })()}
             </span>

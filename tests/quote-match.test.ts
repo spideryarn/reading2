@@ -15,7 +15,7 @@
  * arithmetic in it.
  */
 import { describe, expect, it } from "vitest";
-import { findQuote, quoteAppears, quoteFinder, snippet } from "../src/quote-match.js";
+import { findQuote, quoteAppears, quoteFinder, snippet, snippetAt } from "../src/quote-match.js";
 
 describe("findQuote", () => {
   it("finds an exact quote and reports its real offsets", () => {
@@ -240,6 +240,14 @@ describe("snippet", () => {
     expect(out.startsWith("…")).toBe(true);
     expect(out.endsWith("…")).toBe(true);
     expect(out).toContain("theta");
+  });
+
+  it("reports where the visible words begin, not where the hit inside them begins", () => {
+    const hit = text.indexOf("theta");
+    const out = snippetAt(text, { start: hit, end: hit + 5 }, 20);
+    const words = out.text.replace(/^…|…$/gu, "");
+    expect(out.start).toBeLessThan(hit);
+    expect(text.slice(out.start, out.start + words.length)).toBe(words);
   });
 
   it("does not put an opening ellipsis on a slice that starts at the start", () => {

@@ -198,6 +198,27 @@ dropping the final policy pass would remove the second line the safety argument 
 maths-provenance.ts was split out on 2026-09-12 for this same reason, for a module (`search-hits.ts`)
 that is pure; a React panel already needs a DOM to be drawn.
 
+## Code review
+
+GPT Sol, fixing inside the stage —
+[261009k-…-code-review-sol.md](261009k-excerpts-keep-maths-and-formatting-code-review-sol.md),
+verdict *ship after my fixes*. What it changed, each read and kept:
+
+- `Found.start` is the match, not the snippet's start, so a repeated passage could take the wrong
+  occurrence's formatting. `quote-match.ts` § `snippetAt` returns the snippet's offset too
+  (`snippet` is unchanged for the server), and `Found` carries `shortStart`/`longStart`, which
+  Search, Ideas and Timeline pass as `near`.
+- The comment dialog and the Dock pass their anchor's `start`.
+- `near` is translated past dropped elements' text (`textProjection`), rather than "close enough".
+- The result cache checks the block's html, source and renderer, not only the block's identity.
+- More attributes come off kept MathML: every ARIA and HTML id-reference (`aria-labelledby`, `for`,
+  `headers`, …), with a hostile-MathML test.
+- It agreed with the twelve suites moving to jsdom, and found the text-only `finish` shortcut sound
+  (now pinned by a test).
+
+After it: `npm run typecheck` clean; the full `npm test` 1,900 files passed, the one failure the
+three screenshots here being uncompressed, since compressed.
+
 ## Questions and assumptions (unattended run)
 
 - **Assumed: links become plain words** inside excerpts (see above).
