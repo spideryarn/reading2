@@ -13,17 +13,17 @@
  * The removal tests run against real git, because the guard that matters most is
  * git's own refusal to remove a dirty tree, and a mocked git cannot refuse.
  */
-import { execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { blockers, type CheckFacts } from "../scripts/worktree-check.js";
-import { parseStat } from "../scripts/worktree-inuse.js";
-import { classifyAll, classifyOne, gatherAll, removeOne, type SweepFacts, type Verdict } from "../scripts/worktree-sweep.js";
+import { classifyAll, classifyOne, gatherAll, removeAll, removeOne, type SweepFacts, type Verdict } from "../scripts/worktree-sweep.js";
 import { listWorktrees } from "../scripts/worktree-admin.js";
+import { myLockStart, orphanProcessIn } from "./helpers/live-process.js";
 
 let root: string;
 let origin: string;
@@ -42,32 +42,14 @@ function commit(cwd: string, file: string, body: string, message: string): void 
 const spawned: number[] = [];
 
 /**
- * A live process that is not this one's ancestor, standing in `cwd` — a peer's
- * session, as far as `/proc` can tell. Detached, so it has a process group of its
- * own: the cwd scan excludes the asker's group, and a plain child would be
- * excluded along with it.
+ * A live process that is not this one's descendant, standing in `cwd` — a peer's
+ * session, as far as the cwd scan can tell. tests/helpers/live-process.ts says
+ * why it is not a plain child.
  */
 function liveProcess(cwd: string): { pid: number; start: number } {
-  const child = spawn("sleep", ["120"], { cwd, detached: true, stdio: "ignore" });
-  if (child.pid === undefined) throw new Error("could not spawn sleep");
-  spawned.push(child.pid);
-  const mine = parseStat(readFileSync(`/proc/${process.pid}/stat`, "utf8"));
-  if (mine === null) throw new Error("could not read this process's group");
-
-  const deadline = Date.now() + 5000;
-  while (Date.now() < deadline) {
-    try {
-      const stat = parseStat(readFileSync(`/proc/${child.pid}/stat`, "utf8"));
-      const childCwd = readlinkSync(`/proc/${child.pid}/cwd`);
-      if (stat !== null && childCwd === path.resolve(cwd) && stat.pgrp !== mine.pgrp) {
-        return { pid: child.pid, start: stat.start };
-      }
-    } catch {
-      /* Still starting, or exited; the deadline turns either into a hard fail. */
-    }
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
-  }
-  throw new Error("sleep never became a detached process in the requested cwd");
+  const p = orphanProcessIn(cwd);
+  spawned.push(p.pid);
+  return p;
 }
 
 afterEach(() => {
@@ -81,7 +63,8 @@ afterEach(() => {
 });
 
 beforeEach(() => {
-  root = mkdtempSync(path.join(tmpdir(), "spideryarn-sweep-"));
+  /* Resolved: on the Mac tmpdir() is under /var, a symlink to /private/var. */
+  root = realpathSync(mkdtempSync(path.join(tmpdir(), "spideryarn-sweep-")));
   origin = path.join(root, "origin");
   primary = path.join(root, "primary");
 
@@ -427,5 +410,95 @@ describe("removeOne", () => {
     const out = removeOne(primary, "worktree-imaginary");
     expect(out.ok).toBe(false);
     expect(out.steps.join(" ")).toContain("no worktree is on branch");
+  });
+});
+
+describe("removeAll — `npm run worktree:sweep -- --remove`", () => {
+  it("removes every landed, idle tree and leaves the rest, each in its group", () => {
+    const done = freshWorktree("bulk-done");
+    const dirty = freshWorktree("bulk-dirty");
+    writeFileSync(path.join(dirty, "notes.md"), "half an idea\n");
+    const busy = freshWorktree("bulk-busy");
+    liveProcess(busy);
+
+    const out = removeAll(primary, classifyAll(primary));
+
+    const by = (name: string) => out.find((o) => o.name === name)?.kind;
+    expect(by("worktree-bulk-done")).toBe("removed");
+    expect(by("worktree-bulk-dirty")).toBe("needs-a-look");
+    expect(by("worktree-bulk-busy")).toBe("in-use");
+    expect(existsSync(done)).toBe(false);
+    expect(existsSync(dirty)).toBe(true);
+    expect(existsSync(busy)).toBe(true);
+    expect(git(["branch", "--list", "worktree-bulk-done"], primary)).toBe("");
+  });
+
+  it("each removal re-checks: a tree dirtied after the classification is refused, not removed", () => {
+    const wt = freshWorktree("bulk-changed");
+    const rows = classifyAll(primary);
+    expect(rowFor(rows, "worktree-bulk-changed").verdict.kind).toBe("removable");
+    writeFileSync(path.join(wt, "in-progress.ts"), "half a change\n");
+
+    const out = removeAll(primary, rows);
+
+    expect(out.find((o) => o.name === "worktree-bulk-changed")?.kind).toBe("refused");
+    expect(existsSync(wt)).toBe(true);
+  });
+
+  it("--dry-run touches nothing", () => {
+    const wt = freshWorktree("bulk-dry");
+    const out = removeAll(primary, classifyAll(primary), { dryRun: true });
+    expect(out.find((o) => o.name === "worktree-bulk-dry")?.kind).toBe("removed");
+    expect(existsSync(wt)).toBe(true);
+  });
+
+  it("never passes a missing branch to the removal — a detached tree is a look, not a target", () => {
+    /* GPT Sol, 261009t F4: with no branch, the removal means "the tree I am
+       standing in", so `undefined` from a detached candidate would aim it at the
+       caller's own tree. */
+    const wt = freshWorktree("bulk-detached");
+    git(["checkout", "--quiet", "--detach"], wt);
+    const asked: string[] = [];
+
+    const out = removeAll(primary, classifyAll(primary), {}, (_cwd, branch) => {
+      asked.push(branch);
+      return { ok: true, steps: [] };
+    });
+
+    expect(asked.every((b) => typeof b === "string" && b !== "")).toBe(true);
+    expect(out.find((o) => o.name.includes("bulk-detached"))?.kind).toBe("needs-a-look");
+    expect(existsSync(wt)).toBe(true);
+  });
+
+  it("run from inside a secondary worktree, removes the others and keeps its own", () => {
+    const here = freshWorktree("bulk-here");
+    const other = freshWorktree("bulk-other");
+
+    const out = removeAll(here, classifyAll(here));
+
+    expect(out.find((o) => o.name === "worktree-bulk-other")?.kind).toBe("removed");
+    expect(out.find((o) => o.name === "worktree-bulk-here")?.kind).toBe("needs-a-look");
+    expect(existsSync(other)).toBe(false);
+    expect(existsSync(here)).toBe(true);
+  });
+
+  it("keeps a tree whose lock names the session running the sweep — its subagent may still be at work", () => {
+    /* GPT Sol, 261009t F1. The WorktreeCreate hook locks an `Agent` subagent's
+       tree with the PARENT session's pid, and that tree has no process of its
+       own between tool calls. Removing your own tree by name still works. */
+    const wt = freshWorktree("bulk-mine");
+    git(["worktree", "lock", "--reason", `claude session mine (pid ${process.pid} start ${myLockStart()})`, wt], primary);
+
+    const out = removeAll(primary, classifyAll(primary));
+
+    const mine = out.find((o) => o.name === "worktree-bulk-mine");
+    expect(mine?.kind).toBe("in-use");
+    if (mine?.kind === "in-use") expect(mine.reasons.join(" ")).toContain("never in bulk");
+    expect(existsSync(wt)).toBe(true);
+
+    /* And the removal itself refuses in bulk, not only the classification. */
+    expect(removeOne(primary, "worktree-bulk-mine", { bulk: true }).ok).toBe(false);
+    expect(removeOne(primary, "worktree-bulk-mine").ok).toBe(true);
+    expect(existsSync(wt)).toBe(false);
   });
 });

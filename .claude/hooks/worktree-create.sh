@@ -68,21 +68,44 @@ fi
 # safe against a recycled pid. `/proc/<pid>/stat` is "pid (comm) state ppid …" and comm
 # may itself hold spaces and brackets, so everything up to the LAST ") " is cut away:
 # ppid is then field 2 and the start time (field 22 of the whole line) is field 20. The
-# walk is bounded, so a misread costs a lock and never a hang. No /proc (the Mac) or no
-# `claude` ancestor (run by hand): no lock.
+# walk is bounded, so a misread costs a lock and never a hang. No `claude` ancestor (run
+# by hand): no lock.
+#
+# The Mac has no /proc, and until 2026-10-09 got no lock at all — so an `Agent`
+# subagent's tree there, which has no process of its own between tool calls, read as
+# idle to `worktree:remove` while the agent was still working (GPT Sol, 261009t F1). It
+# walks the same chain with `ps`. Its start time is the process's start in epoch seconds,
+# written for the record only: the Mac's check in scripts/worktree-inuse.ts is pid-only.
 pid=$PPID
 reason=""
-for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do
-  case "$pid" in "" | 0 | 1 | *[!0-9]*) break ;; esac
-  stat=$(cat "/proc/$pid/stat" 2>/dev/null) || break
-  fields="${stat##*) }"
-  if [ "$(cat "/proc/$pid/comm" 2>/dev/null)" = "claude" ]; then
-    started=$(printf '%s\n' "$fields" | awk '{print $20}')
-    case "$started" in "" | *[!0-9]*) ;; *) reason="claude session $name (pid $pid start $started)" ;; esac
-    break
-  fi
-  pid=$(printf '%s\n' "$fields" | awk '{print $2}')
-done
+if [ -r /proc/self/stat ]; then
+  for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do
+    case "$pid" in "" | 0 | 1 | *[!0-9]*) break ;; esac
+    stat=$(cat "/proc/$pid/stat" 2>/dev/null) || break
+    fields="${stat##*) }"
+    if [ "$(cat "/proc/$pid/comm" 2>/dev/null)" = "claude" ]; then
+      started=$(printf '%s\n' "$fields" | awk '{print $20}')
+      case "$started" in "" | *[!0-9]*) ;; *) reason="claude session $name (pid $pid start $started)" ;; esac
+      break
+    fi
+    pid=$(printf '%s\n' "$fields" | awk '{print $2}')
+  done
+elif [ "$(uname -s)" = "Darwin" ]; then
+  for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do
+    case "$pid" in "" | 0 | 1 | *[!0-9]*) break ;; esac
+    comm=$(ps -o comm= -p "$pid" 2>/dev/null) || break
+    if [ "$(basename -- "$comm")" = "claude" ]; then
+      lstart=$(LC_ALL=C ps -o lstart= -p "$pid" 2>/dev/null)
+      # Unquoted on purpose: collapses `Oct  9` and drops the trailing padding.
+      # shellcheck disable=SC2086
+      started=$(date -j -f "%a %b %e %T %Y" "$(echo $lstart)" +%s 2>/dev/null)
+      case "$started" in "" | *[!0-9]*) started=0 ;; esac
+      reason="claude session $name (pid $pid start $started)"
+      break
+    fi
+    pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ') || break
+  done
+fi
 
 # `.worktreeinclude`, which Claude Code stops reading once this hook exists. Only plain
 # root-level names are understood — all the file has ever held — and a line this cannot

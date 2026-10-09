@@ -477,6 +477,24 @@ Node rather than through a shell, so it is out of the hook's reach without needi
 simply gone, and no amount of care reconstructs it. What the command actually checks is the tip and
 the reflogs it can read, and it says which — a failed read is a refusal, not an empty history.
 
+**Finished trees are removed without asking, and the script does it.** Greg, 2026-10-09, standing
+permission:
+
+> Okay, if you're sure that the worktrees have been successfully finished and merged into dev, then
+> you have my permission now and going forwards to remove them, and we should update the script to
+> do that automatically.
+>
+> And if there are sessions either on this laptop or on remote that are still running and have
+> finished and successfully finished and pushed and we definitely don't need them anymore and
+> you're confident, then it's okay to kill them even if they still have a process running as long
+> as you're pretty sure that it's not something valuable.
+
+The first half is `npm run worktree:sweep -- --remove` ([Sweeping them up](#sweeping-them-up)). The
+second is for an agent's judgement and **not for a script**: nothing here kills a process. A tree
+held by a leftover process — an orphaned `npm run dev`, a weeks-old tsx job — is reported as *in
+use*, with the pid and command; an agent that is confident the session finished and pushed may kill
+it, and then remove the tree.
+
 **A finished tree may be removed at once, by anybody.** Greg, 2026-09-12:
 
 > Get rid of the 24h worktree-removal floor. If they are finished successfully and safe to remove,
@@ -498,6 +516,26 @@ of the box, so the live pid in a peer's lock is simply absent — it read as *st
 `/proc/self/ns/pid` must name the host's initial PID namespace, whose inode the kernel fixes at
 `4026531836`; any other namespace, or a link that cannot be read, is an `unknown`, and an unknown
 refuses. Run from a sandbox, `worktree:remove` now says so instead of agreeing.
+
+**On the Mac, the same two questions are asked through `ps` and `lsof`** — since 2026-10-09; until
+then every live tree there read `unknown` and was refused. `ps` lists the machine, `lsof -d cwd`
+gives every cwd it can read, and a same-uid process lsof did not list is re-checked with `ps -p`:
+gone or a zombie is an absence, still there is an `unknown`. lsof missing or failing is an
+`unknown`. Containment is by spelling — case-insensitively, since the Mac's volume is — and then by
+filesystem identity, walking the cwd's ancestors; a cwd that is not an absolute path is an `unknown`.
+The lock check there is **pid-only**: the `/proc` start time has no Mac equivalent, so a live pid
+not in the asker's ancestry refuses, which over-refuses on a recycled pid. Two exclusions apply on
+both platforms: the asker's own descendants (tsx's esbuild service inherits the cwd), and a pipeline
+filter (`tail`, `grep`, …) in the asker's process group. A process group alone is not enough —
+`npm run dev & npm run worktree:sweep` shares one (GPT Sol, 261009t). The design and its review:
+[261009t](../plans/261009t-worktree-removal-on-macos-and-an-automatic-sweep.md).
+
+**An `Agent` subagent's tree is protected by its parent session's lock.** It has no process of its
+own between tool calls — measured on the Mac, nothing has its cwd there while the agent thinks — so
+the cwd scan alone would call it idle. `.claude/hooks/worktree-create.sh` locks every tree it makes
+with the nearest `claude` ancestor's pid, which for a subagent is the parent session, and on the Mac
+too since 2026-10-09. A tree made on the Mac before that has no lock, and is protected only by the
+cwd scan.
 
 **And it is read twice, because one read is not a lease.** Sol's review of that fix found the next
 hole: a peer resuming a clean, landed tree with a stale lock *after* the liveness read had its tree
@@ -562,6 +600,9 @@ limits are unwritten gets trusted past them.
   a boundary. Nothing readable in `/proc` is beyond the process's own control.
 - **The hook is not a shell parser.** `git branch -\D x` and `git branch --de"lete" x` are real
   deletions that pass it. It catches the shapes people actually type.
+- **The process reads are ordered observations, not a snapshot.** On the Mac, a process born after
+  the `ps` listing and gone from `lsof`'s view, or one that `cd`s into the tree after lsof passes
+  it, is not seen — the same last-observation race the Linux scan has.
 - **`ExitWorktree` bypasses all of it**, as below.
 
 None of these is a reason to type the git out by hand instead: the hand-typed sequence has every one
@@ -664,13 +705,30 @@ names and value hashes instead, and decide from that:
 ```bash
 # run inside the worktree; the primary is wherever the shared .git lives
 P=$(dirname "$(git rev-parse --git-common-dir)")
-comm -23 <(grep -oE '^[A-Za-z_][A-Za-z0-9_]*' .env.local     | sort -u) \
-         <(grep -oE '^[A-Za-z_][A-Za-z0-9_]*' "$P/.env.local" | sort -u)
+# each line as its key name (or "#" for a comment, "-" for anything else) and a short hash
+h() { while IFS= read -r l || [ -n "$l" ]; do
+        k=$(printf '%s' "$l" | grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' | tr -d =)
+        case "$l" in \#*) k="#";; esac
+        printf '%s %s\n' "${k:--}" "$(printf '%s' "$l" | shasum -a 256 | cut -c1-10)"
+      done < "$1"; }
+diff <(h "$P/.env.local") <(h .env.local)
 ```
 
-Anything that prints is a key **only here**, and that is the real version of this blocker — copy it
-out before removing anything. Nothing printed means the worktree is a stale copy of a file the
-primary has moved on from, and the usual cause is a rotated value.
+It prints key names and hashes, never a value. Read it line by line:
+
+- **`>` with a key nobody else has** — a key **only here**. That is the real version of this
+  blocker: copy it out before removing anything.
+- **`>` and `<` with the same key, different hashes** — the value differs. Either side may have
+  moved, and only you can say which: if you know the primary's value was rotated since this tree
+  was made, the worktree's is the stale one. If you cannot say, treat it as only here.
+- **`<` alone** — a key or comment the primary has and this copy does not: either the primary gained
+  it, or this tree *deleted* it. A deletion is a change made here.
+- **`#` lines** — a comment that differs is somebody's note; read it in the file before deciding.
+
+Nothing printed by `diff` and the check still says DIFFERS means whitespace or line endings. GPT Sol
+(261009t F5) caught the version of this recipe that compared key names only and concluded "stale copy"
+from silence: a changed value, a deleted key, a reordered duplicate and a comment all print nothing
+there.
 
 **Why the check does not conclude that for you.** A line-subset test — *if every line here is also in
 the primary's copy, nothing here is only here* — was written, measured, and reverted on 2026-09-08.
@@ -723,12 +781,27 @@ is still the one to run, because it prints its reasons where you will read them.
 
 ```bash
 npm run worktree:sweep                                    # read-only. Deletes nothing.
+npm run worktree:sweep -- --remove --dry-run              # what the next line would do
+npm run worktree:sweep -- --remove                        # remove every removable tree
 ```
 
 **The removal itself is [`npm run worktree:remove`](#removing-one).** `worktree:sweep -- remove
 --branch <name>` still works and forwards to it — there is one removal implementation, not two,
 because a cheaper copy of a safety judgement is one whose disagreements with the real one are
 invisible by construction.
+
+**`--remove` is a loop over that removal, one tree at a time** — since 2026-10-09, on Greg's standing
+permission in [Removing one](#removing-one). Until then the rule was "no bulk form", so that nobody
+could cascade ten deletions off one stale classification. The loop keeps the point of that rule: the
+classification only picks the candidates, and each removal re-fetches, re-checks, re-proves and
+re-reads liveness for itself. What it prints is four groups — **removed**; **refused** by the removal
+re-checking (something changed since the classification); **in use**, with the pid and command,
+never killed; and **needs a look** — every other keep, `.env.local — DIFFERS` included (settle it
+[as above](#envlocal-differs-and-how-to-settle-it-without-printing-a-secret)), and any tree with no
+branch to name, because with no branch the removal means "the tree I am standing in". It exits 1
+only if a removal was refused. And in bulk, **a tree whose lock names the session running the sweep
+is in use**: that session's own subagents may still be working in it, so it removes its own trees by
+name.
 
 **`REMOVABLE` means the removal command would accept it**, so the sweep asks the removal's liveness
 question for every tree rather than leaving the removal to refuse. A peer's fresh tree is clean and

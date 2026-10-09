@@ -3,8 +3,16 @@
  *
  * ```
  * npm run worktree:sweep                              # classify. Reads. Deletes nothing.
+ * npm run worktree:sweep -- --remove [--dry-run]      # remove every removable tree, each re-checked
  * npm run worktree:remove -- --branch <name>          # and this removes one
  * ```
+ *
+ * **`--remove` since 2026-10-09**, on Greg's word: *"if you're sure that the
+ * worktrees have been successfully finished and merged into dev, then you have
+ * my permission now and going forwards to remove them, and we should update the
+ * script to do that automatically."* It is a loop over the single-target
+ * removal, not a second removal — `removeAll` says why that keeps the rule
+ * below's point.
  *
  * **The removal is `scripts/worktree-remove.ts` since 2026-09-09**, and
  * `removeOne` below is a thin forward to it. There were two implementations, and
@@ -18,10 +26,10 @@
  * the way we run a dozen. Two of its choices are load-bearing and would look
  * like over-engineering without the story:
  *
- * **`remove` takes one branch and has no bulk flag**, and re-runs the whole
- * classification — including a fresh fetch — before each deletion. So an agent
- * that classified ten minutes ago cannot cascade ten removals off one stale
- * answer; each one re-earns its verdict.
+ * **`remove` takes one branch**, and re-runs the whole classification —
+ * including a fresh fetch — before each deletion. So an agent that classified
+ * ten minutes ago cannot cascade ten removals off one stale answer; each one
+ * re-earns its verdict. `--remove` keeps that by calling it once per tree.
  *
  * **A tree somebody is still in is never removable**, however merged it looks.
  * Their version without such a guard was retired for removing live worktrees: a
@@ -102,7 +110,8 @@ import type { InUse } from "./worktree-inuse.js";
 /* The liveness question and the removal itself live in worktree-remove.ts. This
    file classifies; that one removes. `RemoveOutcome` is re-exported so the
    sweep's own tests and callers keep their import site. */
-import { classifyRegistration, liveness, removeWorktree, type RemoveOutcome } from "./worktree-remove.js";
+import { classifyRegistration, inBulk, liveness, removeWorktree, type RemoveOutcome } from "./worktree-remove.js";
+import { GIT_LOCATION_ENV } from "../tools/fleet/readiness-git.js";
 
 export type { RemoveOutcome };
 
@@ -219,7 +228,9 @@ export function gatherAll(
   entries: readonly WorktreeEntry[],
   trunk: TrunkSha,
   checkFor: (root: string, trunkSha: string) => CheckFacts = checkGather,
-  inUseFor: (entry: WorktreeEntry) => InUse = (e) => liveness(e.path, e.lockReason).inUse,
+  /* `inBulk`: a tree whose lock names the session running the sweep is kept —
+     it may be a subagent of that session still at work. */
+  inUseFor: (entry: WorktreeEntry) => InUse = (e) => inBulk(liveness(e.path, e.lockReason)).inUse,
 ): SweepFacts[] {
   const here = currentToplevel(cwd);
 
@@ -273,8 +284,121 @@ export function classifyAll(cwd: string): Classified[] {
  * construction, which is the same argument the header already makes for why this
  * file has no `dirty` or `merged` check of its own.
  */
-export function removeOne(cwd: string, branch: string, opts?: { dryRun?: boolean }): RemoveOutcome {
-  return removeWorktree(cwd, branch, opts?.dryRun === undefined ? {} : { dryRun: opts.dryRun });
+export function removeOne(cwd: string, branch: string, opts?: { dryRun?: boolean; bulk?: boolean }): RemoveOutcome {
+  return removeWorktree(cwd, branch, {
+    ...(opts?.dryRun === undefined ? {} : { dryRun: opts.dryRun }),
+    ...(opts?.bulk === undefined ? {} : { bulk: opts.bulk }),
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Removing every removable tree                                       */
+/* ------------------------------------------------------------------ */
+
+/**
+ * What `--remove` did with one tree. Four groups, because they ask four
+ * different things of whoever reads the report:
+ *
+ * - `removed` — nothing to do.
+ * - `refused` — the classification said removable and the removal, re-checking
+ *   for itself, disagreed. Something changed in between; its steps say what.
+ * - `in-use` — a live session or process. **Never killed by this script.** Greg's
+ *   permission to kill a finished session's processes (2026-10-09) is for an
+ *   agent's judgement, read from the reasons printed here.
+ * - `needs-a-look` — every other keep: unlanded work, untracked or gitignored
+ *   files, `.env.local — DIFFERS`, a tree it could not judge, one with no branch
+ *   to name.
+ */
+export type SweepOutcome =
+  | { kind: "removed"; name: string; steps: string[] }
+  | { kind: "refused"; name: string; steps: string[] }
+  | { kind: "in-use"; name: string; reasons: string[] }
+  | { kind: "needs-a-look"; name: string; reasons: string[] };
+
+function nameOf(facts: SweepFacts): string {
+  return facts.branch ?? `${facts.entry.path} (detached)`;
+}
+
+/**
+ * `npm run worktree:sweep -- --remove`: remove every tree the classification
+ * calls removable, and every ghost, **one at a time through `removeOne`** —
+ * Greg, 2026-10-09: *"we should update the script to do that automatically"*.
+ *
+ * **The classification only picks the candidates; it decides nothing.** Each
+ * removal re-fetches the trunk, re-runs `worktree:check`, re-proves the landed
+ * commits and re-reads liveness, twice, exactly as a removal by name does. That
+ * is the property the old "no bulk form" rule (until 2026-10-09) protected — a verdict carried from
+ * an earlier decision into a later deletion — and a loop over the single-target
+ * removal keeps it. What the loop adds is `bulk: true` (`inBulk`), so the session
+ * running it never removes a tree its own lock names.
+ *
+ * **A tree with no branch is never removed here.** `removeWorktree` takes a
+ * branch, and with none it means "the tree I am standing in" — so `undefined`
+ * from a detached tree would aim the removal at the caller's own tree (GPT Sol,
+ * 261009t F4). Such a tree is reported under `needs-a-look`.
+ */
+export function removeAll(
+  cwd: string,
+  rows: readonly Classified[],
+  opts: { dryRun?: boolean } = {},
+  remove: (cwd: string, branch: string, opts: { dryRun?: boolean; bulk?: boolean }) => RemoveOutcome = removeOne,
+): SweepOutcome[] {
+  const out: SweepOutcome[] = [];
+  for (const { facts, verdict } of rows) {
+    const name = nameOf(facts);
+    switch (verdict.kind) {
+      case "skip":
+        break;
+      case "keep": {
+        const live = facts.inUse?.kind === "in-use";
+        out.push({ kind: live ? "in-use" : "needs-a-look", name, reasons: verdict.reasons });
+        break;
+      }
+      case "unjudgeable":
+        out.push({ kind: "needs-a-look", name, reasons: [`could not be judged: ${verdict.why}`] });
+        break;
+      case "removable":
+      case "ghost": {
+        if (facts.branch === undefined) {
+          out.push({
+            kind: "needs-a-look",
+            name,
+            reasons: ["no branch to name, so the bulk run will not remove it — from inside it, `npm run worktree:remove`"],
+          });
+          break;
+        }
+        const r = remove(cwd, facts.branch, { ...(opts.dryRun === undefined ? {} : { dryRun: opts.dryRun }), bulk: true });
+        out.push({ kind: r.ok ? "removed" : "refused", name, steps: r.steps });
+        break;
+      }
+      default: {
+        const unreachable: never = verdict;
+        throw new Error(`unhandled verdict ${JSON.stringify(unreachable)}`);
+      }
+    }
+  }
+  return out;
+}
+
+export function renderRemoval(outcomes: readonly SweepOutcome[], dryRun: boolean): string {
+  const lines: string[] = [];
+  const group = (kind: SweepOutcome["kind"], title: string): void => {
+    const these = outcomes.filter((o) => o.kind === kind);
+    if (these.length === 0) return;
+    lines.push(`  ${title} (${these.length})`);
+    for (const o of these) {
+      lines.push(`    ${o.name}`);
+      const detail = "steps" in o ? (o.kind === "removed" ? [] : o.steps) : o.reasons;
+      for (const d of detail) lines.push(`        ${d}`);
+    }
+    lines.push("");
+  };
+  group("removed", dryRun ? "would remove (dry run — each re-checked, nothing touched)" : "removed");
+  group("refused", "refused by the removal itself, re-checking — something changed since the classification");
+  group("in-use", "in use — left alone; nothing here kills a process");
+  group("needs-a-look", "needs a look — kept");
+  if (lines.length === 0) lines.push("  nothing to do.", "");
+  return lines.join("\n");
 }
 
 /* ------------------------------------------------------------------ */
@@ -316,15 +440,27 @@ function isMain(): boolean {
 }
 
 if (isMain()) {
+  /* As in worktree-remove.ts: an inherited GIT_DIR/GIT_WORK_TREE makes git answer
+     about a different tree from the one asked about. */
+  for (const name of GIT_LOCATION_ENV) delete process.env[name];
   const argv = process.argv.slice(2);
   const cwd = process.cwd();
+
+  if (argv.includes("--remove")) {
+    const dryRun = argv.includes("--dry-run");
+    const rows = classifyAll(cwd);
+    console.log(`\nworktree:sweep --remove${dryRun ? " --dry-run" : ""} — every removable tree, one at a time, each re-checked\n`);
+    const outcomes = removeAll(cwd, rows, { dryRun });
+    console.log(renderRemoval(outcomes, dryRun));
+    process.exit(outcomes.some((o) => o.kind === "refused") ? 1 : 0);
+  }
 
   if (argv[0] === "remove") {
     const at = argv.indexOf("--branch");
     const branch = at === -1 ? undefined : argv[at + 1];
     if (branch === undefined || branch.startsWith("--")) {
       console.log("\nusage: npm run worktree:sweep -- remove --branch <name> [--dry-run]");
-      console.log("one branch at a time, on purpose — there is no bulk form.\n");
+      console.log("for every removable tree at once: npm run worktree:sweep -- --remove [--dry-run]\n");
       process.exit(1);
     }
     const out = removeOne(cwd, branch, { dryRun: argv.includes("--dry-run") });
@@ -344,9 +480,11 @@ if (isMain()) {
     console.log("");
     if (removable.length === 0) console.log("  nothing to remove.\n");
     else {
-      console.log(`  remove one at a time, each re-checked as it goes:`);
+      console.log(`  remove them all, each re-checked as it goes:`);
+      console.log(`    npm run worktree:sweep -- --remove        (add --dry-run to see first)`);
+      console.log(`  or one:`);
       for (const r of removable) {
-        console.log(`    npm run worktree:sweep -- remove --branch ${r.facts.branch ?? "<no branch>"}`);
+        console.log(`    npm run worktree:remove -- --branch ${r.facts.branch ?? "<no branch>"}`);
       }
       console.log("");
     }

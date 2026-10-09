@@ -18,14 +18,15 @@
  * everything passes the same assertions as one that works.
  */
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { listWorktrees } from "../scripts/worktree-admin.js";
-import { classifyPidNamespace, parseStat, type ProcTable, procTable } from "../scripts/worktree-inuse.js";
+import { myLockStart, orphanProcessIn } from "./helpers/live-process.js";
+import { classifyPidNamespace, type ProcTable, procTable } from "../scripts/worktree-inuse.js";
 import {
   classifyRegistration,
   deleteRefIfUnmoved,
@@ -74,39 +75,19 @@ function landedWorktree(name: string): string {
 const spawned: number[] = [];
 
 /**
- * A live process that is not this one's ancestor, standing in `cwd`.
- *
- * **Detached, so it is in a process group of its own** — the cwd scan excludes
- * the asker's own group, so a plain child would be invisible to it and a test
- * of "a process is running inside it" would pass by excluding the very process
- * it arranged. The helper waits for that state below; `spawn()` returning alone
- * does not prove it.
+ * A live process that is not this one's descendant, standing in `cwd` — a peer's
+ * session, as far as the cwd scan can tell. tests/helpers/live-process.ts says
+ * why it is not a plain child.
  */
 function liveProcess(cwd: string): { pid: number; start: number } {
-  const child = spawn("sleep", ["120"], { cwd, detached: true, stdio: "ignore" });
-  if (child.pid === undefined) throw new Error("could not spawn sleep");
-  spawned.push(child.pid);
-  const mine = parseStat(readFileSync(`/proc/${process.pid}/stat`, "utf8"));
-  if (mine === null) throw new Error("could not read this process's group");
-
-  /* `spawn()` returning only means the child has a pid. Wait for the two facts
-     this fixture promises, rather than racing the child's cwd/process-group
-     setup and letting the test pass on some unrelated process. */
-  const deadline = Date.now() + 5000;
-  while (Date.now() < deadline) {
-    try {
-      const stat = parseStat(readFileSync(`/proc/${child.pid}/stat`, "utf8"));
-      const childCwd = readlinkSync(`/proc/${child.pid}/cwd`);
-      if (stat !== null && childCwd === path.resolve(cwd) && stat.pgrp !== mine.pgrp) {
-        return { pid: child.pid, start: stat.start };
-      }
-    } catch {
-      /* Still starting, or exited; the deadline turns either into a hard fail. */
-    }
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
-  }
-  throw new Error("sleep never became a detached process in the requested cwd");
+  const p = orphanProcessIn(cwd);
+  spawned.push(p.pid);
+  return p;
 }
+
+const myStart = myLockStart;
+
+const linuxOnly = process.platform !== "linux";
 
 /**
  * A live process in `cwd` whose cwd **we cannot read** — `prctl(PR_SET_DUMPABLE,
@@ -160,7 +141,10 @@ afterEach(() => {
 });
 
 beforeEach(() => {
-  root = mkdtempSync(path.join(tmpdir(), "spideryarn-wtremove-"));
+  /* Resolved: on the Mac tmpdir() is under /var, a symlink to /private/var, and
+     git reports the resolved path — so a fixture comparing paths by string saw
+     two spellings of one tree. */
+  root = realpathSync(mkdtempSync(path.join(tmpdir(), "spideryarn-wtremove-")));
   origin = path.join(root, "origin.git");
   primary = path.join(root, "primary");
 
@@ -567,8 +551,7 @@ describe("removeWorktree", () => {
        refuses on for anybody else. `ancestry` finds it, so it reads as the owner
        asking rather than as a live session in the way. */
     const wt = landedWorktree("worktree-owned");
-    const mine = parseStat(readFileSync(`/proc/${process.pid}/stat`, "utf8"));
-    if (mine === null) throw new Error("could not read this process's start time");
+    const mine = { start: myStart() };
     git(["worktree", "lock", "--reason", `claude session owned (pid ${process.pid} start ${mine.start})`, wt], primary);
 
     const out = removeWorktree(primary, "worktree-owned", { pid: process.pid });
@@ -582,8 +565,7 @@ describe("removeWorktree", () => {
     /* `pid: 1` has no ancestors, so the live pid in the lock is somebody else's
        session — the case that stops a peer's fresh tree being taken. */
     const wt = landedWorktree("worktree-owned-elsewhere");
-    const mine = parseStat(readFileSync(`/proc/${process.pid}/stat`, "utf8"));
-    if (mine === null) throw new Error("could not read this process's start time");
+    const mine = { start: myStart() };
     git(["worktree", "lock", "--reason", `claude session owned (pid ${process.pid} start ${mine.start})`, wt], primary);
 
     const out = removeWorktree(primary, "worktree-owned-elsewhere", { pid: 1 });
@@ -604,14 +586,13 @@ describe("removeWorktree", () => {
     expect(existsSync(wt)).toBe(false);
   });
 
-  it("REFUSES the OWNER too when something could not be checked", () => {
+  it.skipIf(linuxOnly)("REFUSES the OWNER too when something could not be checked", () => {
     /* GPT Sol's fifth finding on 260908k, kept: an owner beside a same-uid
        process whose cwd will not be read is an unknown, and the owner's own
        authority must not swallow it. Arranged for real — a python process in the
        tree that has made itself non-dumpable, which hides its cwd from us. */
     const wt = landedWorktree("worktree-owner-beside-a-hole");
-    const mine = parseStat(readFileSync(`/proc/${process.pid}/stat`, "utf8"));
-    if (mine === null) throw new Error("could not read this process's start time");
+    const mine = { start: myStart() };
     git(["worktree", "lock", "--reason", `claude session owned (pid ${process.pid} start ${mine.start})`, wt], primary);
     const hidden = hiddenProcess(wt);
 
@@ -625,7 +606,7 @@ describe("removeWorktree", () => {
 });
 
 describe("liveness, from inside a private PID namespace", () => {
-  it("REFUSES: a live owner outside the namespace would look dead, and the tree idle", () => {
+  it.skipIf(linuxOnly)("REFUSES: a live owner outside the namespace would look dead, and the tree idle", () => {
     /* GPT Sol's first finding on 260912a, reproduced in its Codex sandbox: that
        /proc omitted the live host pid named in the lock and every host process
        in the tree, so the lock read as stale and the tree as idle — a tidy,
@@ -644,7 +625,7 @@ describe("liveness, from inside a private PID namespace", () => {
     if (live.inUse.kind === "unknown") expect(live.inUse.why.join(" ")).toContain("PID namespace");
   });
 
-  it("control: from the host's namespace, the gate does not fire", () => {
+  it.skipIf(linuxOnly)("control: from the host's namespace, the gate does not fire", () => {
     /* Asserted on the gate, not on `idle`: the real /proc is the whole box, and
        any process of ours anywhere that hides its cwd — a peer's, or this very
        suite's hidden-process fixture running in parallel — makes an honest
@@ -769,6 +750,29 @@ describe("liveness is read again after the unlock, not only once", () => {
     expect(out.ok).toBe(true);
     expect(calls).toBe(2);
     expect(existsSync(wt)).toBe(false);
+  });
+});
+
+describe("the WorktreeCreate hook's lock", () => {
+  /* GPT Sol, 261009t F1: an `Agent` subagent's tree has no process of its own
+     between tool calls, so the lock naming the parent session is the only thing
+     that says it is still wanted — and on the Mac the hook wrote none. Driven
+     under a fake `claude` (bash, by that name), as Claude Code would run it. */
+  it("names the claude ancestor's pid, on this platform, and liveness then refuses a peer", () => {
+    const fakeBin = path.join(root, "bin");
+    mkdirSync(fakeBin);
+    const claude = path.join(fakeBin, "claude");
+    execFileSync("ln", ["-s", "/bin/bash", claude]);
+    const hook = path.resolve(".claude/hooks/worktree-create.sh");
+    const r = spawnSync(claude, ["-c", `"${hook}" <<< '{"name":"hooked"}'; echo "claude-pid $$"`], {
+      cwd: primary,
+      encoding: "utf8",
+      env: { ...process.env, CLAUDE_PROJECT_DIR: primary, SPIDERYARN_WORKTREE_ROOT: path.join(root, "no-such-root") },
+    });
+    expect(r.status, r.stderr).toBe(0);
+    const claudePid = /claude-pid (\d+)/.exec(r.stdout)?.[1];
+    const entry = listWorktrees(primary).find((e) => e.branch === "refs/heads/worktree-hooked");
+    expect(entry?.lockReason).toMatch(new RegExp(`^claude session hooked \\(pid ${claudePid} start \\d+\\)$`));
   });
 });
 

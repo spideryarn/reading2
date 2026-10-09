@@ -12,13 +12,23 @@
  * confirmed by making it refuse**, with a control beside it, because a check that
  * refuses everything passes the same assertions as a check that works.
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
 import {
   ancestry,
   composeInUse,
+  type Containment,
+  containmentFor,
+  type DarwinSnapshot,
+  darwinInUse,
+  decodeLsofName,
+  parseLsofCwds,
+  parsePs,
+  readDarwinSnapshot,
+  type Runner,
+  type RunResult,
   cwdUsersUnder,
   type CwdScan,
   type OwnerStanding,
@@ -124,7 +134,7 @@ describe("parseStat", () => {
     expect(parseStat(line)).toEqual({ ppid: 1, pgrp: 7, start: 99 });
   });
 
-  it("agrees with the real /proc on this very process", () => {
+  it.skipIf(process.platform !== "linux")("agrees with the real /proc on this very process", () => {
     const mine = parseStat(readFileSync(`/proc/${process.pid}/stat`, "utf8"));
     expect(mine).not.toBeNull();
     expect(mine?.ppid).toBe(process.ppid);
@@ -226,12 +236,35 @@ describe("cwdUsersUnder", () => {
        read. The process group is exactly "the job the shell started". */
     const proc = fakeProc({
       90: { ppid: 80, pgrp: 90, start: 9, cwd: TREE },
-      91: { ppid: 80, pgrp: 90, start: 9, cwd: TREE, command: "tail -20" },
+      91: { ppid: 80, pgrp: 90, start: 9, cwd: TREE, command: "tail -20", comm: "tail" },
       80: { ppid: 1, pgrp: 80, start: 8, cwd: TREE },
     });
     const chain = ancestry(proc, 90).map((a: ProcId) => a.pid);
     const scan = cwdUsersUnder(proc, TREE, new Set(chain), 90);
-    if (scan.kind === "checked") expect(scan.found).toEqual([]);
+    expect(scan).toMatchObject({ kind: "checked", found: [] });
+  });
+
+  it("does not count our own child — tsx's esbuild service inherits the cwd", () => {
+    const proc = fakeProc({
+      90: { ppid: 80, pgrp: 90, start: 9, cwd: TREE },
+      93: { ppid: 90, pgrp: 90, start: 9, cwd: TREE, command: "esbuild --service", comm: "esbuild" },
+      80: { ppid: 1, pgrp: 80, start: 8, cwd: TREE },
+    });
+    const chain = ancestry(proc, 90).map((a: ProcId) => a.pid);
+    expect(cwdUsersUnder(proc, TREE, new Set(chain), 90)).toMatchObject({ kind: "checked", found: [] });
+  });
+
+  it("REFUSES over a dev server that shares our process group — `npm run dev & npm run worktree:sweep`", () => {
+    /* GPT Sol, 261009t F2: a shell without job control puts a backgrounded job in
+       the same group as the sweep. The group alone is not "our pipeline". */
+    const proc = fakeProc({
+      90: { ppid: 80, pgrp: 90, start: 9, cwd: TREE },
+      92: { ppid: 80, pgrp: 90, start: 9, cwd: TREE, command: "node vite", comm: "node" },
+      80: { ppid: 1, pgrp: 80, start: 8, cwd: TREE },
+    });
+    const chain = ancestry(proc, 90).map((a: ProcId) => a.pid);
+    const scan = cwdUsersUnder(proc, TREE, new Set(chain), 90);
+    expect(scan).toMatchObject({ kind: "checked", found: [{ pid: 92 }] });
   });
 
   it("control: a peer in its OWN process group is still seen", () => {
@@ -385,5 +418,236 @@ describe("composeInUse", () => {
     if (verdict.kind !== "in-use") throw new Error("expected in-use");
     expect(verdict.reasons.join(" ")).toContain("pid 7");
     expect(verdict.reasons.join(" ")).toContain("npm run dev");
+  });
+});
+
+/* ---------------------------------------------------------------- macOS -- */
+
+/**
+ * The Mac's path: `ps`, then `lsof -d cwd`, then `ps -p` on the pids lsof did
+ * not list. Every case arranged from text through an injected runner, because a
+ * hidden same-uid process or a missing lsof cannot be arranged on demand. The
+ * real reader is exercised once, at the bottom, on darwin only.
+ */
+describe("the macOS path", () => {
+  const ME = 501;
+  const MAC_TREE = "/Users/greg/dev/spideryarn/reading2/.claude/worktrees/demo";
+
+  function psLine(pid: number, ppid: number, pgid: number, uid: number, stat: string, command: string): string {
+    return `${String(pid).padStart(5)} ${String(ppid).padStart(5)} ${String(pgid).padStart(5)} ${String(uid).padStart(5)} ${stat.padEnd(4)} ${command}`;
+  }
+
+  function lsofOut(cwds: Record<number, string>): string {
+    return Object.entries(cwds)
+      .map(([pid, cwd]) => `p${pid}\nfcwd\nn${cwd}\n`)
+      .join("");
+  }
+
+  /** A runner answering the three reads from a table, or failing one of them. */
+  function runner(
+    ps: string[],
+    cwds: Record<number, string>,
+    opts: { recheck?: string[]; lsof?: RunResult; ps?: RunResult } = {},
+  ): { run: Runner; calls: string[][] } {
+    const calls: string[][] = [];
+    const run: Runner = (cmd, args) => {
+      calls.push([cmd, ...args]);
+      if (cmd === "lsof") return opts.lsof ?? { status: 0, stdout: lsofOut(cwds), stderr: "", pid: 950 };
+      if (args.includes("-A")) return opts.ps ?? { status: 0, stdout: `${ps.join("\n")}\n`, stderr: "" };
+      const rows = opts.recheck ?? [];
+      return { status: rows.length === 0 ? 1 : 0, stdout: rows.join("\n"), stderr: "" };
+    };
+    return { run, calls };
+  }
+
+  /* The asker: pid 900 (this node) ← 800 (its shell) ← 1. Its job is pgid 900. */
+  const base = [psLine(1, 0, 1, 0, "Ss", "/sbin/launchd"), psLine(800, 1, 800, ME, "Ss", "-zsh"), psLine(900, 800, 900, ME, "S+", "node worktree-remove.ts")];
+  const baseCwds = { 1: "/", 800: MAC_TREE, 900: MAC_TREE };
+
+  const ROOT_ID = { dev: 1, ino: 42 };
+
+  /**
+   * A containment over a fake filesystem: `real` is the tree's realpath, and
+   * `aliases` are other paths that stat to the tree itself. Every other path
+   * "exists" as some other directory.
+   */
+  function fakeContainment(root = MAC_TREE, real = root, aliases: string[] = []): Containment {
+    const c = containmentFor(
+      root,
+      () => real,
+      (p) => (p === real || aliases.includes(p) ? ROOT_ID : { dev: 1, ino: 7 }),
+    );
+    if ("error" in c) throw new Error(c.error);
+    return c;
+  }
+
+  function verdict(snap: DarwinSnapshot | { error: string }, lock?: string, contains: Containment = fakeContainment()) {
+    if ("error" in snap) return composeInUse(lock === undefined ? { kind: "unlocked" } : { kind: "unrecognised", reason: lock }, { kind: "cannot-tell", why: snap.error });
+    const { standing, scan } = darwinInUse(snap, contains, lock, 900);
+    return composeInUse(standing, scan);
+  }
+
+  it("parses ps and lsof -F output, and refuses shapes it did not ask for", () => {
+    expect(parsePs(base.join("\n"))?.[2]).toEqual({ pid: 900, ppid: 800, pgid: 900, uid: ME, stat: "S+", command: "node worktree-remove.ts" });
+    expect(parsePs("not a ps line")).toBeNull();
+    /* `nobody` is uid -2 on macOS; the first real run refused the whole table on it. */
+    expect(parsePs("16271     1 16271    -2 Ss   /usr/libexec/dhcp6d")?.[0]?.uid).toBe(-2);
+    expect(parseLsofCwds("p12\nfcwd\nn/a b/c\n")?.get(12)).toBe("/a b/c");
+    expect(parseLsofCwds("p12\nf3\nn/etc/passwd\n")).toBeNull();
+    expect(parseLsofCwds("n/orphan\n")).toBeNull();
+  });
+
+  it("control: the asker, its ancestors and nothing else in the tree — idle", () => {
+    const { run } = runner(base, baseCwds);
+    expect(verdict(readDarwinSnapshot(run, ME)).kind).toBe("idle");
+  });
+
+  it("REFUSES: an orphaned vite with its cwd in the tree, five weeks old", () => {
+    const ps = [...base, psLine(4242, 1, 4242, ME, "S", "node node_modules/.bin/vite")];
+    const { run } = runner(ps, { ...baseCwds, 4242: `${MAC_TREE}/src/web` });
+    const v = verdict(readDarwinSnapshot(run, ME));
+    expect(v.kind).toBe("in-use");
+    if (v.kind === "in-use") expect(v.reasons.join(" ")).toContain("pid 4242 (node node_modules/.bin/vite)");
+  });
+
+  it("REFUSES a process in the tree whatever its uid — lsof showed it, so it is believed", () => {
+    const ps = [...base, psLine(77, 1, 77, 0, "Ss", "root-thing")];
+    const { run } = runner(ps, { ...baseCwds, 77: MAC_TREE });
+    expect(verdict(readDarwinSnapshot(run, ME)).kind).toBe("in-use");
+  });
+
+  it("excludes the asker's own job — the `tail` in `… | tail` — but not a sibling job", () => {
+    const tail = psLine(901, 800, 900, ME, "S+", "tail -20");
+    const peer = psLine(902, 800, 902, ME, "S", "sleep 120");
+    expect(verdict(readDarwinSnapshot(runner([...base, tail], { ...baseCwds, 901: MAC_TREE }).run, ME)).kind).toBe("idle");
+    expect(verdict(readDarwinSnapshot(runner([...base, peer], { ...baseCwds, 902: MAC_TREE }).run, ME)).kind).toBe("in-use");
+  });
+
+  it("does not count our own child — measured: tsx's esbuild service, cwd inherited", () => {
+    const esbuild = psLine(904, 900, 900, ME, "S", "/x/node_modules/@esbuild/darwin-arm64/bin/esbuild --service=0.28.2 --ping");
+    expect(verdict(readDarwinSnapshot(runner([...base, esbuild], { ...baseCwds, 904: MAC_TREE }).run, ME)).kind).toBe("idle");
+  });
+
+  it("REFUSES over a dev server in the asker's own process group — a group is not a pipeline", () => {
+    /* GPT Sol, 261009t F2, reproduced on the Mac: a shell without job control
+       puts `npm run dev &` in the same group as the sweep that follows it. */
+    const dev = psLine(903, 800, 900, ME, "S", "node node_modules/.bin/vite");
+    expect(verdict(readDarwinSnapshot(runner([...base, dev], { ...baseCwds, 903: MAC_TREE }).run, ME)).kind).toBe("in-use");
+  });
+
+  it("matches a cwd spelled in a different case — the Mac's volume is case-insensitive", () => {
+    /* GPT Sol, 261009t F3: lsof printed the directory's own spelling, realpath
+       kept the spelling the shell had used, and neither matched. */
+    const ps = [...base, psLine(57, 1, 57, ME, "S", "sleep 120")];
+    const snap = readDarwinSnapshot(runner(ps, { ...baseCwds, 57: `${MAC_TREE.toUpperCase()}/src` }).run, ME);
+    expect(verdict(snap).kind).toBe("in-use");
+  });
+
+  it("matches a cwd lsof escaped, and one reached by an alias the spelling does not show", () => {
+    const ps = [...base, psLine(58, 1, 58, ME, "S", "sleep 120")];
+    const escaped = readDarwinSnapshot(runner(ps, { ...baseCwds, 58: "/Users/greg/odd\\x20na\\nme/sub" }).run, ME);
+    expect(verdict(escaped, undefined, fakeContainment("/Users/greg/odd na\nme")).kind).toBe("in-use");
+    const alias = readDarwinSnapshot(runner(ps, { ...baseCwds, 58: "/Volumes/other/spelling/deep" }).run, ME);
+    expect(verdict(alias, undefined, fakeContainment(MAC_TREE, MAC_TREE, ["/Volumes/other/spelling"])).kind).toBe("in-use");
+  });
+
+  it("REFUSES as unknown a cwd that is not an absolute path — lsof's `nunknown` is not a place", () => {
+    const ps = [...base, psLine(59, 1, 59, ME, "S", "sleep 120")];
+    const v = verdict(readDarwinSnapshot(runner(ps, { ...baseCwds, 59: "unknown" }).run, ME));
+    expect(v.kind).toBe("unknown");
+  });
+
+  it("an error, never a fallback, when the tree's own realpath or stat cannot be read", () => {
+    const noReal = containmentFor(MAC_TREE, () => {
+      throw new Error("ENOENT");
+    });
+    expect("error" in noReal).toBe(true);
+    expect("error" in containmentFor(MAC_TREE, (p) => p, () => null)).toBe(true);
+  });
+
+  it("decodes lsof's escapes", () => {
+    expect(decodeLsofName("/a\\x20b\\tc^Ad")).toBe("/a b\tc\u0001d");
+    expect(decodeLsofName("/caf\\xc3\\xa9")).toBe("/café");
+    expect(decodeLsofName("/plain")).toBe("/plain");
+  });
+
+  it("does not count its own lsof, which started after the listing with our cwd — but does count a stranger who did", () => {
+    /* Measured: run from inside a tree, the first version refused the tree over
+       the lsof it had just spawned there. */
+    expect(verdict(readDarwinSnapshot(runner(base, { ...baseCwds, 950: MAC_TREE }).run, ME)).kind).toBe("idle");
+    const v = verdict(readDarwinSnapshot(runner(base, { ...baseCwds, 951: MAC_TREE }).run, ME));
+    expect(v.kind).toBe("in-use");
+    if (v.kind === "in-use") expect(v.reasons.join(" ")).toContain("pid 951 (a command that started after the process listing)");
+  });
+
+  it("matches the tree's realpath too: lsof prints /private/tmp for /tmp", () => {
+    const ps = [...base, psLine(55, 1, 55, ME, "S", "sleep 120")];
+    const snap = readDarwinSnapshot(runner(ps, { ...baseCwds, 55: "/private/tmp/wt/sub" }).run, ME);
+    expect(verdict(snap, undefined, fakeContainment("/tmp/wt", "/private/tmp/wt")).kind).toBe("in-use");
+    /* Control: a tree that really is at /tmp/wt, with /private/tmp/wt something else. */
+    expect(verdict(snap, undefined, fakeContainment("/tmp/wt")).kind).toBe("idle");
+  });
+
+  it("does not take a sibling directory with the same prefix for the tree", () => {
+    const ps = [...base, psLine(56, 1, 56, ME, "S", "sleep 120")];
+    expect(verdict(readDarwinSnapshot(runner(ps, { ...baseCwds, 56: `${MAC_TREE}-other` }).run, ME)).kind).toBe("idle");
+  });
+
+  it("REFUSES as unknown a same-uid process lsof did not list and that is still there", () => {
+    const hidden = psLine(66, 1, 66, ME, "S", "python3 hidden.py");
+    const { run, calls } = runner([...base, hidden], baseCwds, { recheck: [hidden] });
+    const v = verdict(readDarwinSnapshot(run, ME));
+    expect(calls.some((c) => c.includes("-p") && c.includes("66"))).toBe(true);
+    expect(v.kind).toBe("unknown");
+    if (v.kind === "unknown") expect(v.why.join(" ")).toContain("pid 66");
+  });
+
+  it("control: one lsof missed because it exited, or a zombie, is an absence", () => {
+    const exited = psLine(67, 1, 67, ME, "S", "short-lived");
+    const zombie = psLine(68, 1, 68, ME, "Z", "<defunct>");
+    const { run } = runner([...base, exited, zombie], baseCwds, { recheck: [] });
+    expect(verdict(readDarwinSnapshot(run, ME)).kind).toBe("idle");
+  });
+
+  it("REFUSES as unknown when lsof is missing, fails, or prints nothing", () => {
+    const missing = runner(base, baseCwds, { lsof: { status: null, stdout: "", stderr: "spawnSync lsof ENOENT" } }).run;
+    const failing = runner(base, baseCwds, { lsof: { status: 1, stdout: lsofOut(baseCwds), stderr: "" } }).run;
+    const empty = runner(base, baseCwds, { lsof: { status: 0, stdout: "", stderr: "" } }).run;
+    for (const run of [missing, failing, empty]) expect(verdict(readDarwinSnapshot(run, ME)).kind).toBe("unknown");
+  });
+
+  it("REFUSES as unknown when ps fails", () => {
+    const run = runner(base, baseCwds, { ps: { status: 1, stdout: "", stderr: "ps: nope" } }).run;
+    expect(verdict(readDarwinSnapshot(run, ME)).kind).toBe("unknown");
+  });
+
+  it("a lock naming a pid that is gone is stale; a zombie owner is gone too", () => {
+    const { run } = runner([...base, psLine(70, 1, 70, ME, "Z", "<defunct>")], baseCwds);
+    const snap = readDarwinSnapshot(run, ME);
+    expect(verdict(snap, "claude session x (pid 4444 start 1)").kind).toBe("idle");
+    expect(verdict(snap, "claude session x (pid 70 start 1)").kind).toBe("idle");
+  });
+
+  it("REFUSES a lock naming a live pid that is not the asker's ancestor, whatever the start says", () => {
+    const peer = psLine(3000, 1, 3000, ME, "S", "claude");
+    const v = verdict(readDarwinSnapshot(runner([...base, peer], baseCwds).run, ME), "claude session peer (pid 3000 start 1)");
+    expect(v.kind).toBe("in-use");
+  });
+
+  it("the owner asking — the lock's pid is in the asker's ancestor chain — is not vetoed by itself", () => {
+    const v = verdict(readDarwinSnapshot(runner(base, baseCwds).run, ME), "claude session me (pid 800 start 1)");
+    expect(v.kind).toBe("idle");
+    if (v.kind === "idle") expect(v.notes.join(" ")).toContain("its own session is asking");
+  });
+
+  it("an unrecognised lock is still an unknown", () => {
+    expect(verdict(readDarwinSnapshot(runner(base, baseCwds).run, ME), "do not touch").kind).toBe("unknown");
+  });
+
+  it.skipIf(process.platform !== "darwin")("the real reader, on this Mac: reads the table and finds this process's cwd", () => {
+    const snap = readDarwinSnapshot();
+    if ("error" in snap) throw new Error(snap.error);
+    expect(snap.ps.some((r) => r.pid === process.pid)).toBe(true);
+    expect(snap.cwds.get(process.pid)).toBe(realpathSync(process.cwd()));
   });
 });
