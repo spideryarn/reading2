@@ -132,6 +132,7 @@ export function useUnsavedWarning(unsaved: boolean): void {
 
 export function ProfileBox({
   id,
+  article,
   label,
   hint,
   placeholder,
@@ -146,6 +147,14 @@ export function ProfileBox({
   onBusyChange,
 }: {
   id: string;
+  /**
+   * **The article this box's words are about, or `null` for About you**, which
+   * is one field for every article. Required rather than optional because it
+   * names the box's dictation keeper: a per-article box keeping under a name
+   * without the slug offered one article's recording back on the next
+   * (Greg, 2026-10-09, spya-vzj8fc; plan 261009e).
+   */
+  article: string | null;
   label: string;
   /** One line under the box saying what this changes. Not a tooltip: it is the promise. */
   hint: string;
@@ -194,7 +203,7 @@ export function ProfileBox({
     box,
     context: { kind: "profile" },
     transcribe,
-    keep: keepDictation(`profile:${id}`),
+    keep: keepDictation(article === null ? `profile:${id}` : `profile:${id}:${article}`),
   });
   const dictation = dictate.dictation;
 

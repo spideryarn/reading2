@@ -845,6 +845,7 @@ export function ChatPanel({
           {loaded && (
             <Composer
               slug={slug}
+              keepAs={`chat:${slug}:new:${kind}`}
               onSend={onSendNew}
               busy={false}
               focusNonce={0}
@@ -2030,6 +2031,7 @@ export function Conversation({
       </p>
       <Composer
         slug={slug}
+        keepAs={`chat:${slug}:${thread.id}`}
         onSend={onSend}
         onSubmitStarted={onSubmitStarted}
         busy={busy}
@@ -2904,6 +2906,7 @@ function Answer({
  */
 export function Composer({
   slug,
+  keepAs,
   onSend,
   onSubmitStarted,
   busy,
@@ -2921,6 +2924,15 @@ export function Composer({
   onJump,
 }: {
   slug: string;
+  /**
+   * **The name this box keeps a dictation under** — what its words are about,
+   * so a recording left behind is offered back only there: a conversation's
+   * box `chat:<slug>:<thread id>`, the new-conversation box
+   * `chat:<slug>:new:<kind>`, a passage draft `chat:<slug>:draft:<block>`.
+   * Per article alone, a tape left in one conversation came back in another
+   * (Overseer, 2026-10-09; plan 261009e).
+   */
+  keepAs: string;
   onSend(question: string): void;
   /** The reader has submitted, even if Live must finish before `onSend`. */
   onSubmitStarted?: (() => void) | undefined;
@@ -3044,7 +3056,7 @@ export function Composer({
     box,
     context: { kind: "article", slug },
     transcribe,
-    keep: keepDictation(`chat:${slug}`),
+    keep: keepDictation(keepAs),
     /* A double press on Stop also sends (dictation.md § A double press). */
     onDone: () => void submit(),
   });
@@ -3267,14 +3279,14 @@ export function Composer({
              phases, the disabled-while-transcribing rule and the article's own
              glossary priming all come along unchanged. Only the label is new. */
           <span className="chat-talk">
-            <DictationButton dictation={dictate.dictation} toggle={toggleDictation} disabled={busy} again={dictate.again} sendingAfter={dictate.sendingAfter} />
+            <DictationButton dictation={dictate.dictation} toggle={toggleDictation} disabled={busy} again={dictate.again} sendingAfter={dictate.sendingAfter} doubleStop={dictate.doubleStop} />
             {/* Holds its width across Stop: in this wrapping row a wider word
                 could push Live onto a line of its own and move the microphone
                 in a bottom-pinned composer. `TalkLabel`. */}
             <TalkLabel field={dictate} className="chat-talk-label" hidden />
           </span>
         ) : (
-          <DictationButton dictation={dictate.dictation} toggle={toggleDictation} disabled={busy} again={dictate.again} sendingAfter={dictate.sendingAfter} />
+          <DictationButton dictation={dictate.dictation} toggle={toggleDictation} disabled={busy} again={dictate.again} sendingAfter={dictate.sendingAfter} doubleStop={dictate.doubleStop} />
         ))}
       {/* **Beside the microphone, not instead of it.** They are different
           things: one turns speech into text in this box, the other holds a

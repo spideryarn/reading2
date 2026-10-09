@@ -1305,6 +1305,7 @@ export function Metadata({
           <div className={`${CARD} tw:mb-3 tw:p-4`}>
             <ProfileBox
               id="article-purpose"
+              article={slug}
               label="Why you're reading this one"
               placeholder="e.g. I want the evidence, not the history"
               hint="Changes what the glossary, the ideas, chat and explanations put first — for this article only. Never what the article says."

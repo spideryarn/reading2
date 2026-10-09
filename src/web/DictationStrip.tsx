@@ -49,7 +49,8 @@ import { Download, Loader2, Mic, RotateCcw, Square, TriangleAlert, X } from "luc
 import { useEffect, useState } from "react";
 import { MicLevel } from "./MicLevel.js";
 import { type MicDevice, listInputs } from "./mic-devices.js";
-import { CAP_WARNING_MS, type MicRecording, formatDuration, recordingFilename } from "./mic-recording.js";
+import { CAP_WARNING_MS, MAX_MS, type MicRecording, formatDuration, recordingFilename } from "./mic-recording.js";
+import { ControlTip, Tooltip } from "./Tooltip.js";
 import type { DictationRecording, UseDictation } from "./useDictation.js";
 import { useNow } from "./useNow.js";
 import { useOnline } from "./useOnline.js";
@@ -67,8 +68,10 @@ export function deviceUnavailableWords(wanted: string | null, using: string | nu
  * means posting into a conversation — and its done action is whatever Enter
  * does with the phrase: run the row it names, or ask what it meant. So it says
  * Enter, which is true of both (Greg's yes to the bar, 2026-10-05, plan 261005a).
+ * The annotate box neither sends nor presses Enter: its done action is Save
+ * (GPT Sol's review of 261009e, F1, after its card said "send").
  */
-export type DoneAction = "send" | "enter";
+export type DoneAction = "send" | "enter" | "save";
 const DONE_WORDS: Record<DoneAction, { again: string; button: string; strip: string }> = {
   send: {
     again: "Send when the words arrive",
@@ -79,6 +82,11 @@ const DONE_WORDS: Record<DoneAction, { again: string; button: string; strip: str
     again: "Press Enter when the words arrive",
     button: "Turning your words into text, then pressing Enter",
     strip: "Turning that into text, then pressing Enter…",
+  },
+  save: {
+    again: "Save when the words arrive",
+    button: "Turning your words into text, then saving",
+    strip: "Turning that into text, then saving…",
   },
 };
 
@@ -183,6 +191,39 @@ const DICTATION_PROMISE =
 const DICTATION_OFFLINE =
   "Dictation needs an internet connection, and your browser says there isn't one.";
 
+/**
+ * **The button's card: what it is worth, its limit, and the trick nobody would
+ * guess.** Greg, 2026-10-09 (spya-xdvnrg):
+ *
+ * > I feel like the voice dictation button should have a tooltip … there's a
+ * > 15 minute limit … And just to encourage people to use it because … they
+ * > talk more and provide more context to the agents.
+ *
+ * and, on the double press: *"any time there's a keyboard shortcut or a
+ * hard-to-discover trick like double-clicking, it should be in the tooltip"*
+ * (docs/project/tooltips.md § A shortcut is named on its card).
+ *
+ * Not the privacy sentence ({@link DICTATION_PROMISE}): it is already the
+ * button's description, and the card's text joins that description, so a
+ * screen reader would hear it twice (GPT Sol, 261009e F2). There is no keyboard
+ * shortcut for the microphone; if one is ever added, it is named here.
+ *
+ * A hover and focus card, so a finger does not see it: a tap on the
+ * microphone starts it. Help's Chat page says the same things.
+ */
+export const DICTATION_TIP = {
+  head: "Dictate",
+  what: "Talk instead of typing, and your words appear in the box for you to edit. Most people say more out loud than they would type, and that extra context helps the AI help you.",
+  how: `A recording can run for ${MAX_MS / 60_000} minutes, and says so a minute before it stops.`,
+} as const;
+
+/** The `press` line, where the box takes a double press on Stop. */
+export const DICTATION_DOUBLE_STOP: Record<DoneAction, string> = {
+  send: "Press Stop twice quickly to send as soon as the words arrive.",
+  enter: "Press Stop twice quickly to press Enter as soon as the words arrive.",
+  save: "Press Stop twice quickly to save as soon as the words arrive.",
+};
+
 /** Ids have to be unique on a page with four of these. */
 let promiseSeq = 0;
 
@@ -193,10 +234,16 @@ export function DictationButton({
   again,
   sendingAfter,
   done = "send",
+  doubleStop = false,
 }: {
   dictation: UseDictation;
   toggle(): void;
   disabled?: boolean | undefined;
+  /**
+   * `useDictationField().doubleStop`: this box takes a double press on Stop,
+   * so the card says how. A box that does not take one leaves it out.
+   */
+  doubleStop?: boolean | undefined;
   /** What the double press does here, for the button's name. `DoneAction`. */
   done?: DoneAction | undefined;
   /**
@@ -238,6 +285,25 @@ export function DictationButton({
       <span id={describedBy} className="prof-mic-note">
         <span className="sr-only">{offline ? DICTATION_OFFLINE : DICTATION_PROMISE}</span>
       </span>
+    {/* **A card only while idle.** It describes starting; over Stop it would be
+        the wrong words, and a card opening under the pointer mid-way through a
+        double press would be in the way of the second. Offline, the `title`
+        below says why the button is dead and the card stands aside; a button
+        the box has switched off is natively disabled, which is no reliable
+        trigger (tooltips.md), so it has none either. */}
+    <Tooltip
+      enabled={!offline && !dictation.armed && !busy && !disabled}
+      placement="top"
+      className="tip-soon"
+      content={
+        <ControlTip
+          head={DICTATION_TIP.head}
+          what={DICTATION_TIP.what}
+          how={DICTATION_TIP.how}
+          press={doubleStop ? DICTATION_DOUBLE_STOP[done] : undefined}
+        />
+      }
+    >
     <button
       type="button"
       /* Four phases, three appearances. `.on` — the orange — is worn only once
@@ -295,6 +361,7 @@ export function DictationButton({
         <Mic size={14} />
       )}
       </button>
+    </Tooltip>
     </>
   );
 }

@@ -1240,6 +1240,7 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
                 disabled={stage.kind === "sending"}
                 again={dictate.again}
                 sendingAfter={dictate.sendingAfter}
+                doubleStop={dictate.doubleStop}
               />
             )}
             {/* **"Not sure what to write?" used to open here**, and it is gone —

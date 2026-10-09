@@ -351,15 +351,17 @@ the stop button, then it should automatically send that message after it's finis
 A box hands `useDictationField` its own done action as **`onDone`**, and passes the field's `again`
 and `sendingAfter` on to `DictationButton` and `DictationStrip`. Six boxes send: Feedback (Send),
 Feedback's reply to a question (Send reply), chat (Send), the comment follow-up (Ask in chat), the
-quiz answer (Answer) and the annotate box (Save, never Ask AI). A sixth, the command bar, presses Enter (below). The plan, with what was deferred and why, is
+quiz answer (Answer) and Help's Ask box (Ask). The annotate box saves (Save, never Ask AI), so its
+button and strip take `done="save"`; the command bar presses Enter (below). The plan, with what was deferred and why, is
 [261005a](../plans/261005a-dictation-double-press-on-stop-also-sends.md).
 
 - **The second press has to be able to land.** A `disabled` button is sent no click. So on a box
   with `onDone`, **for 600 ms after Stop** (`DOUBLE_PRESS_MS`), the button stays enabled and is
-  named "Send when the words arrive"; its only press there is `again()`, and it never starts a
-  dictation. After that, or once the press is taken, it is `disabled` as it always was. The field
-  returns `again` only while a second press would count, which is the whole of how the button
-  knows. Not `aria-disabled`: that says "cannot be used" at the one moment it can (GPT Sol).
+  named for the box's action — "Send", "Save" or "Press Enter" when the words arrive; its only
+  press there is `again()`, and it never starts a dictation. After that, or once the press is taken,
+  it is `disabled` as it always was. The field returns `again` only while a second press would
+  count, which is the whole of how the button knows. Not `aria-disabled`: that says "cannot be
+  used" at the one moment it can (GPT Sol).
 - **The button has to be where the first press left it.** Nothing that positions it may change
   size at Stop. In Chat the composer grows upwards from a pinned bottom edge, so a line leaving the
   strip *under* the button moves the button down; the "Microphone: … Change" line did exactly that
@@ -370,7 +372,13 @@ quiz answer (Answer) and the annotate box (Save, never Ask AI). A sixth, the com
   same rule: drawn from listening through transcribing, or not at all.
   [261008d](../plans/261008d-dictation-button-holds-still-and-why-the-iphone-asks-again.md),
   `tests/dictation-strip-holds-still.test.tsx`.
-- **Once taken, the strip says** *"Turning that into text, then sending…"*.
+- **The button's card says so beforehand**, on a box that takes it (`doubleStop` from the field),
+  because a double press is a trick nobody would find
+  ([tooltips.md § A shortcut is named on its card](tooltips.md#a-shortcut-is-named-on-its-card)).
+  The same card says why talking is worth it and the fifteen-minute limit (Greg, 2026-10-09,
+  `spya-xdvnrg`); it is shown only while the microphone is idle.
+- **Once taken, the strip names the same action**: *"Turning that into text, then sending…"*,
+  *"…then saving…"* or *"…then pressing Enter…"*.
 - **It sends only where it was said.** A box that is reused across things — one comment dialog for
   every comment, one quiz box for every question — passes **`doneKey`**, and a wish made on one is
   not honoured on another. Feedback's key is whether it is open.
@@ -433,7 +441,7 @@ const dictate = useDictationField({
   value, onChange, box,
   context: { kind: "article", slug },
   transcribe,
-  keep: keepDictation(`chat:${slug}`), // names this box; § A closed tab
+  keep: keepDictation(`comment:${comment.id}`), // everything these words are about; § A closed tab
 });
 
 <textarea ref={box} readOnly={dictate.readOnly} … />
@@ -711,8 +719,15 @@ passed over, and GPT Sol's review.
   [`transcriber.ts`](../../src/web/transcriber.ts) is types only; the product passes
   `keep: keepDictation("<box>")` from [`dictation-keep.ts`](../../src/web/dictation-keep.ts), and
   the fleet dashboard passes nothing and is unchanged. **A new box adds that one line**, naming
-  itself: `feedback`, `feedback-reply`, `chat:<slug>`, `comment:<id>`, `annotate:<block>:<start>`,
-  `quiz:<slug>:<question>`, `profile:<field>`. A recording is offered back only in the box it was
+  itself: `feedback`, `feedback-reply:<question>`, `chat:<slug>:<thread>` (and `:new:<kind>`,
+  `:draft:<block>`), `comment:<id>`, `annotate:<slug>:<block>:<start>:<quote>`,
+  `quiz:<slug>:<question>`, `commands:<slug>`, `profile:<field>` for About you and
+  `profile:<field>:<slug>` for *Why you're reading this one*. **The name is the partition, so it
+  names everything the words are about**: a per-article box keeping under a name without the slug
+  offered one article's recording back on the next, and Try again put it there (Greg, 2026-10-09,
+  `spya-vzj8fc`; [261009e](../plans/261009e-dictation-stays-with-its-article-and-the-button-says-its-tricks.md)
+  has every box's verdict). `ProfileBox`'s `article` and `Composer`'s `keepAs` are required for
+  that reason. A recording is offered back only in the box it was
   made in, to the reader who made it, and is transcribed against the `where` it was recorded with.
 - **Web Locks decide which tab may offer it.** The page holding a tape holds a lock named for it,
   and a recovery takes the lock with `ifAvailable`, so a tape being recorded in one tab is never

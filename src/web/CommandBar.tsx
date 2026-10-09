@@ -2071,7 +2071,10 @@ export function CommandBar({
     box: inputRef,
     context: article === undefined ? { kind: "profile" } : { kind: "article", slug: article.slug },
     transcribe,
-    ...(open ? { keep: keepDictation("commands") } : {}),
+    /* Per article, because a command is about the page it was said on: one
+       name for the whole site offered a phrase said on one article back on the
+       next, transcribed against the first and run on the second (plan 261009e). */
+    ...(open ? { keep: keepDictation(`commands:${article?.slug ?? ""}`) } : {}),
     /* **A double press on Stop presses Enter when the words arrive** — Greg,
        2026-10-05: *"yes for the command bar"* (plan 261005a; dictation.md § A
        double press on Stop also sends). `enter` below, the key's own function,
@@ -2482,6 +2485,7 @@ export function CommandBar({
             toggle={dictate.toggle}
             again={dictate.again}
             sendingAfter={dictate.sendingAfter}
+            doubleStop={dictate.doubleStop}
             done="enter"
           />
         )}
