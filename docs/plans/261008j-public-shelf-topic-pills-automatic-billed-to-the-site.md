@@ -262,33 +262,20 @@ Fixed two defects reproduced red first in `tests/shelf-topic-sets.test.ts`:
 - A public rebuild passed previous labels into the naming prompt even after an article was
   withdrawn. It now clears all previous labels in that case, including when the removed article
   was unplaced; reader label continuity remains unchanged.
-  [The provenance failure](../postmortems/261009a-rebuilt-labels-can-retain-withdrawn-input.md).
+  [The provenance failure](../postmortems/261009c-rebuilt-labels-can-retain-withdrawn-input.md).
 - An un-share during a live rethink could leave the just-written tree stale indefinitely.
   The public wrapper now reconciles once after work completes, within the same site scopes and
   request collector and with a separate allowance. The drain skips a public tree with withdrawn
   input. Further changes during that bounded follow-up, backoff or allowance refusal still wait
-  for another trigger. [The lost trigger](../postmortems/261009b-a-live-claim-can-lose-a-removal-trigger.md).
+  for another trigger. [The lost trigger](../postmortems/261009d-a-live-claim-can-lose-a-removal-trigger.md).
 
-The unit subset of the requested gates passes. The Postgres gates could not start in the review
-sandbox because Docker access is denied. The typecheck launcher also cannot create its IPC pipe;
-running the same script with `node --import tsx` checked all four projects successfully, then
-reported existing `review/local-public.ts` and `review/local-refresh.ts` outside every project's
-coverage. These gates still need a run in an environment with Docker and those scratch files
-covered or outside the source tree. No commit, push, deploy or database write was made in review.
+GPT Sol (high), verdict *ship after fixes*. Its sandbox could not reach Docker, so the Postgres
+suites were run afterwards, outside it, on its fixes: `tests/public-shelf-topics-pg.test.ts`,
+`tests/owner-isolation.test.ts`, `tests/shelf-topics-route.test.ts` and
+`tests/shelf-topic-sets-pg.test.ts`, 94 passed. One finding left as it is:
 
-**The code review** (GPT Sol, high, 2026-10-09; verdict *ship after fixes*), which fixed two things
-itself, each with a regression test watched red and a postmortem:
-
-1. **P1 — an un-shared title's wording could survive the rebuild.** A re-think is shown the previous
-   labels to keep them stable; the public rebuild that removes an article was being shown labels
-   that article may have worded, while its new memberships lifted the withholding. Now a public
-   re-think after a removal starts from no previous labels (`src/shelf-topic-sets.ts`).
-2. **P2 — an un-share during a running re-think could leave the pills hidden.** The un-share found
-   the claim taken; the running job wrote its older snapshot. Now each refresh reconciles once more
-   after its work, inside the same site scopes (`src/public-shelf-topics.ts`), and the drain does
-   not file into a tree with withdrawn input.
-3. **P2, left: `scripts/share-local-articles.ts`** calls the store directly, so a share made by that
-   local helper waits for the next trigger. Local only; MCP goes through the routes.
+- **`scripts/share-local-articles.ts`** calls the store directly, so a share made by that
+  local helper waits for the next trigger. Local only; MCP goes through the routes.
 
 The browser check (a Sonnet subagent, Playwright, signed out, 1280 and 390 wide) passed: one
 request, pills narrow by AND and Clear restores, no horizontal scroll, no console errors. It found
