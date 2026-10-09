@@ -417,6 +417,7 @@ describe("the panel, rendered", () => {
   it("marks an assumed year in the margin, where there is no panel header", () => {
     const e = event({ dating: { kind: "dated", when: when({ yearFrom: "piece" }) } });
     act(() => root.render(createElement(MarginNotesSlot, {
+      blockId: "spya-aaaaaa",
       notes: [{ kind: "timeline", items: [{ event: e, quote: "The article's words." }] }],
       viewer: "owner",
     })));

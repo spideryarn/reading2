@@ -124,6 +124,7 @@ import { isImeComposing } from "./key-chord.js";
 import { media } from "./media.js";
 import { createSearchDraft, type SearchDraft, useDraftText } from "./search-draft.js";
 import { PrivateCopy, type PrivateCopyFacts } from "./PublicChrome.js";
+import { Excerpt } from "./Excerpt.js";
 
 /**
  * **Whose searches these are, and therefore what may be done to them.**
@@ -1988,7 +1989,10 @@ function HitCard({
   const pct = Math.round(Math.min(1, Math.max(0, found.at)) * 100);
   return (
     <>
-      <p className="tip-hit-quote">{found.long}</p>
+      <p className="tip-hit-quote">
+        {/* The article's own words, drawn from the block's markup (Excerpt.tsx, plan 261009k). */}
+        <Excerpt blockId={found.blockId} words={found.long} near={found.longStart ?? found.start} />
+      </p>
       <p className="tip-hit-meta">
         {/* Which question found it, in words. The dot on the row is the glance
             version and this is the one that actually answers it — a hue is a
@@ -2172,7 +2176,9 @@ function Hit({
         aria-current={open ? "true" : undefined}
       >
         <span className="srch-hit-body">
-          <span className="srch-hit-quote">{found.short}</span>
+          <span className="srch-hit-quote">
+            <Excerpt blockId={found.blockId} words={found.short} near={found.shortStart ?? found.start} />
+          </span>
           {found.reasoning && <span className="srch-hit-why">{found.reasoning}</span>}
           {/* Said out loud rather than left to look like a styling bug. A
               result whose quote could not be found on the page marks the

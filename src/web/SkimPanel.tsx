@@ -54,7 +54,7 @@ import {
 } from "lucide-react";
 import type { UseSkim } from "./useSkim.js";
 import type { PublicSkim } from "../public-types.js";
-import type { SkimDepth } from "../types.js";
+import type { BlockId, SkimDepth } from "../types.js";
 import type { DoorView, SkimView } from "./modes/skim/SkimMode.js";
 import { FOLLOW_ATTR, useFollow } from "./follow.js";
 import { JobProgress } from "./JobProgress.js";
@@ -63,6 +63,7 @@ import { ModeSurface } from "./ModeSurface.js";
 import { PurposeLine } from "./SkimPurpose.js";
 import { useRenderCount } from "./perf.js";
 import { snippet } from "./citations.js";
+import { Excerpt } from "./Excerpt.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useRevealChosen } from "./useRevealChosen.js";
 import { StepTip } from "./StepTip.js";
@@ -127,6 +128,12 @@ export interface SkimRow {
    * the current one, the whole of it in a tooltip (plan 260928e).
    */
   words: string | null;
+  /**
+   * The block the quote is in, so `words` are drawn from its markup — a
+   * formula as maths, an italic as italic (Excerpt.tsx, plan 261009k). `null`
+   * when the quote has gone, and then the words are drawn as a string.
+   */
+  blockId: BlockId | null;
   /** Where it sits in the article's outline, for its position mark's card — `[]` for none (260929f § 3). */
   where: readonly WhereRow[];
   /**
@@ -836,7 +843,7 @@ export function SkimPanel({ access, view, away }: Props) {
                               <span className="skim-cue">{row.cue}</span>
                             </Tooltip>
                           )}
-                          {words && <span className="skim-words">“{words.shown}”</span>}
+                          {words && <span className="skim-words">“<Excerpt blockId={row.blockId} words={words.shown} />”</span>}
                         </span>
                       </button>
                     );
@@ -857,7 +864,7 @@ export function SkimPanel({ access, view, away }: Props) {
                             Controlled, which makes it mouse-only: a tap's
                             synthetic hover must not flash it (Sol, plan review). */}
                         <Tooltip
-                          content={words?.whole ? <p>“{words.whole}”</p> : null}
+                          content={words?.whole ? <p>“<Excerpt blockId={row.blockId} words={words.whole} />”</p> : null}
                           enabled={Boolean(words?.whole)}
                           open={tipFor === row.quoteId}
                           onOpenChange={(open) =>

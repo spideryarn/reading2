@@ -91,6 +91,7 @@ import {
 } from "./threshold.js";
 import { ThresholdSlider } from "./ThresholdSlider.js";
 import { BandWaiting } from "./BandWaiting.js";
+import { Excerpt } from "./Excerpt.js";
 
 /**
  * **A row as this panel draws it** — the owner's `CitedWork` and a visitor's
@@ -304,7 +305,11 @@ export const CITE_ENTRY_NOTE =
  */
 export function quotedCitingWords(quote: string): string {
   const words = citingWordsOf(quote);
-  return /^…?["“‘']/.test(words) && /["”’']$/.test(words) ? words : `“${words}”`;
+  return alreadyQuoted(words) ? words : `“${words}”`;
+}
+
+function alreadyQuoted(words: string): boolean {
+  return /^…?["“‘']/.test(words) && /["”’']$/.test(words);
 }
 
 /**
@@ -1307,7 +1312,10 @@ function WorkRow({
               preview={false}
               className="cite-at"
             >
-              {quotedCitingWords(cited.quote)}
+              {/* The same words and marks as `quotedCitingWords`, the words drawn from the block's markup (Excerpt.tsx, plan 261009k). */}
+              {alreadyQuoted(citingWordsOf(cited.quote)) ? null : "“"}
+              <Excerpt blockId={work.firstCited} words={citingWordsOf(cited.quote)} />
+              {alreadyQuoted(citingWordsOf(cited.quote)) ? null : "”"}
             </BlockRef>
           )}
         </span>

@@ -78,7 +78,7 @@ import { RELOAD_GRACE_MS, reloadIfStale } from "./stale-shell.js";
    the one question anybody else asks of it — in a module of their own, so a
    reader of the mark does not load the sanitiser (maths-provenance.ts says
    why). Re-exported so the renderer's tests keep one import. */
-import { RENDERED_MATHS } from "./maths-provenance.js";
+import { RENDERED_MATHS, type MathsSource } from "./maths-provenance.js";
 export { rendersMaths } from "./maths-provenance.js";
 
 /**
@@ -282,7 +282,7 @@ export async function renderArticleMaths(
     return {
       ...b,
       html: openExternalLinksInNewTab(sanitizeBlockHtml(rendered)),
-      [RENDERED_MATHS]: true,
+      [RENDERED_MATHS]: { html: b.html, render } satisfies MathsSource,
     };
   });
   return changed ? { ...article, blocks } : article;

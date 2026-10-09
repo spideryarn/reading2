@@ -1,6 +1,6 @@
 {
-  "id": "c572ce11-4b7a-4d5b-b956-3465dc6069c1",
-  "prevId": "516055af-e827-4f9e-9b54-f60e5dba8218",
+  "id": "f4f75bce-b103-4624-8f0e-76231950f48d",
+  "prevId": "d8fa963f-734c-416d-b4fa-6e5a59813a27",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -5454,6 +5454,18 @@
           "primaryKey": false,
           "notNull": true,
           "default": 0
+        },
+        "paid_step_begun": {
+          "name": "paid_step_begun",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "paid_step_begun_at": {
+          "name": "paid_step_begun_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         },
         "url_key": {
           "name": "url_key",

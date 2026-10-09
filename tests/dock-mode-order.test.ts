@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * **The bar's order is Greg's, and so are the runs.** Written out whole here,
  * by hand, and never derived from `MODES_UI` (src/web/Dock.tsx) — a test that

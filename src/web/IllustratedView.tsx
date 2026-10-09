@@ -79,6 +79,7 @@ import { RewriteWaiting } from "./RewriteWaiting.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { type UseIllustrated, useIllustrated } from "./useIllustrated.js";
 import { type UseDictationField, useDictationField } from "./useDictationField.js";
+import { Excerpt } from "./Excerpt.js";
 
 /**
  * **What a press buys, in one phrase, in exactly one place** — the work and
@@ -762,7 +763,10 @@ export function IllustratedView({ slug, blocks, onJump }: Props) {
                     {/* Not clamped. This is how the reader reads the picture
                         back against the piece, so a quote cut to an ellipsis
                         would take away the whole point of the row. */}
-                    <q className="ill-quote">{v.quote}</q>
+                    <q className="ill-quote">
+                      {/* The article's own words, drawn from the block's markup (Excerpt.tsx, plan 261009k). */}
+                      <Excerpt blockId={v.block} words={v.quote} />
+                    </q>
                   </button>
                 </li>
               ))}

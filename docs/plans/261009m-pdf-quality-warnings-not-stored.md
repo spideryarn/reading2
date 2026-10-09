@@ -33,7 +33,7 @@ fixture, fails — the field is absent on the way back.
 
 | # | What | Where |
 |---|---|---|
-| 1 | `article_revisions.quality text[]`, nullable; null means **no complaints stored** — the checker found nothing (the common case), or the revision predates the column. A CHECK (`article_revisions_quality_nonempty`) refuses `{}` and a null element, so "none" has one spelling. Additive migration `20261009142511_revision_pdf_quality`. | `src/db/schema.ts`, `drizzle/` |
+| 1 | `article_revisions.quality text[]`, nullable; null means **no complaints stored** — the checker found nothing (the common case), or the revision predates the column. A CHECK (`article_revisions_quality_nonempty`) refuses `{}` and a null element, so "none" has one spelling. Additive migration `20261009155141_revision_pdf_quality`. | `src/db/schema.ts`, `drizzle/` |
 | 2 | Written by `metaColumns` as `meta.quality?.length ? [...meta.quality] : null` (`?? null` semantics, so a re-extraction that finds nothing clears the last one's complaints), and listed in its `META_COLUMNS`. | `src/store/artifacts-pg.ts` |
 | 3 | Read back by `readMeta` and by `metaFrom` (and its `META_COLUMNS` projection). Projection policy: owner reads only, like `recall`; the public reader does not get it (`src/public-types.ts` already withholds the PDF provenance block — add `quality` to that list). | `src/store/artifacts-pg.ts`, `src/store/pg.ts`, `src/public-types.ts` |
 | 4 | Carried to a new revision like `recall` (`"carry"`), and named in the rollback export beside `recall`. | `src/store/pg-revisions.ts`, `src/store/export.ts` |
