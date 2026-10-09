@@ -45,7 +45,7 @@ function prepared(html: string, url = "https://arxiv.org/html/2605.20355v1") {
   return { doc, stats, unchanged: doc.body.innerHTML === before };
 }
 
-const NOTHING = { alignedEquations: 0, equationGroupsLeftAlone: 0, svgObjects: 0, listings: 0, boxedPassages: 0 };
+const NOTHING = { alignedEquations: 0, equationGroupsLeftAlone: 0, svgObjects: 0, listings: 0, boxedPassages: 0, titleBlocks: 0, undefinedMacros: 0 };
 
 it("does not treat an ordinary page as LaTeXML from article.ltx_document alone", () => {
   const { unchanged, stats } = prepared(latexml(fx("listing")), "https://example.test/an-ordinary-page");
@@ -632,6 +632,218 @@ describe("fix 7 — a boxed passage keeps its words", () => {
     });
     it("the same markup outside article.ltx_document", () => {
       expect(prepared(notLatexml(fixture))).toMatchObject({ unchanged: true, stats: NOTHING });
+    });
+  });
+});
+
+describe("fix 8 — a macro LaTeXML could not expand leaves the page", () => {
+  const text = (el: Element | null) => (el?.textContent ?? "").replace(/\s+/gu, " ").trim();
+
+  it("the preamble of 2609.01481v1: the marker and its one-word argument go, the title stays", () => {
+    const { doc, stats } = prepared(latexml(fx("undefined-macro-preamble")));
+    expect(stats).toEqual({ ...NOTHING, undefinedMacros: 1 });
+    const article = doc.querySelector("article");
+    expect(article?.textContent).not.toContain("hohsettheme");
+    expect(article?.textContent).not.toContain("hohRose");
+    expect(text(doc.getElementById("p1"))).toBe("");
+    expect(text(doc.querySelector("h1"))).toMatch(/^Harness-of-Harness/u);
+  });
+
+  it("a reader gets no block holding the macro or its argument", async () => {
+    /* arXiv's own wrappers round the article: without them Readability picks
+       the section alone and the preamble is lost anyway, which hid the fault. */
+    const out = await runExtract({
+      html: `<!doctype html><html lang="en"><head><title>A Paper</title></head><body><div class="ltx_page_main"><div class="ltx_page_content"><article class="ltx_document ltx_authors_1line">${fx("undefined-macro-preamble")}<section class="ltx_section">${prose}</section></article></div></div></body></html>`,
+      url: "https://arxiv.org/html/2609.01481v1",
+      slug: "latexml-test",
+    });
+    const blocks = splitIntoBlocks(out.extractedHtml).blocks;
+    expect(blocks.length).toBeGreaterThan(0);
+    for (const b of blocks) {
+      expect(b.text).not.toContain("hohsettheme");
+      expect(b.text).not.toContain("hohRose");
+    }
+  });
+
+  it("a citation key after \\ucite goes, the sentence's own full stop stays (2610.11126)", () => {
+    const { doc, stats } = prepared(latexml(fx("undefined-macro-cite")));
+    expect(stats).toEqual({ ...NOTHING, undefinedMacros: 4 });
+    const p = text(doc.getElementById("S1.p1.1"));
+    expect(p).toContain("complex ordered phases. A broad range");
+    expect(p).toContain("in the THz and MIR range. Linear spectroscopy");
+    expect(p).toContain("in a one-dimensional spectrum. Nonlinear");
+    expect(p).toMatch(/symmetry constraints\.$/u);
+    expect(p).not.toMatch(/ucite|dagotto|basov|liuMulti|huang_terahertz/u);
+  });
+
+  it("a key with no year in it goes too (two of the 104 in 2610.11126)", () => {
+    const { doc } = prepared(
+      latexml(`<p id="x" class="ltx_p">optical sidebands<span class="ltx_ERROR undefined">\\ucite</span>zaksExperimentalObservationElectronhole.</p>`),
+    );
+    expect(text(doc.getElementById("x"))).toBe("optical sidebands.");
+  });
+
+  it("the back matter of 2610.11413: the marker goes and the funding statement stays, word for word", () => {
+    const fixture = fx("undefined-macro-back-matter");
+    const before = text(documentAt(latexml(fixture)).getElementById("p12.2"));
+    const { doc, stats } = prepared(latexml(fixture));
+    expect(stats).toEqual({ ...NOTHING, undefinedMacros: 1 });
+    expect(doc.querySelector(".ltx_ERROR")).toBeNull();
+    expect(text(doc.getElementById("p12.2"))).toBe(before);
+    expect(before).toMatch(/^Funding This project has received funding/u);
+  });
+
+  it("a paragraph of markers and nothing else is left with no text (2610.10724)", () => {
+    const html = latexml(
+      `<div id="p1" class="ltx_para"><span id="p1.1" class="ltx_ERROR undefined">\\DeclareSortingNamekeyTemplate</span><span id="p1.2" class="ltx_ERROR undefined">\\keypart</span>\n</div><h1 class="ltx_title ltx_title_document">A Paper</h1>`,
+    );
+    const { doc, stats } = prepared(html);
+    expect(stats).toEqual({ ...NOTHING, undefinedMacros: 2 });
+    expect(text(doc.getElementById("p1"))).toBe("");
+  });
+
+  it("a marker between two words leaves a space, not a join (\\conference, 2610.10541)", () => {
+    const { doc } = prepared(
+      latexml(
+        `<div id="p1" class="ltx_para"><p id="p1.2" class="ltx_p">Use permitted under CC BY 4.0.<span id="p1.2.1" class="ltx_ERROR undefined">\\conference</span>Workshop on Quality of Knowledge Graphs</p></div>`,
+      ),
+    );
+    expect(text(doc.getElementById("p1.2"))).toBe("Use permitted under CC BY 4.0. Workshop on Quality of Knowledge Graphs");
+  });
+
+  it("a marker at either edge of an inline element does not join words", () => {
+    const marker = '<span class="ltx_ERROR undefined">\\conference</span>';
+    const { doc, stats } = prepared(
+      latexml(`<p id="x" class="ltx_p"><em>alpha${marker}</em><strong>beta</strong> <em>gamma</em><strong>${marker}delta</strong></p>`),
+    );
+    expect(stats.undefinedMacros).toBe(2);
+    expect(text(doc.getElementById("x"))).toBe("alpha beta gamma delta");
+  });
+
+  it("\\sep between keywords becomes a semicolon (2610.10541)", () => {
+    const { doc } = prepared(
+      latexml(
+        `<div class="ltx_classification"><h6 class="ltx_title ltx_title_classification">keywords: </h6>
+Semantic table interpretation <span id="id1.id1" class="ltx_ERROR undefined">\\sep</span>column type annotation <span id="id2.id2" class="ltx_ERROR undefined">\\sep</span>knowledge graphs</div>`,
+      ),
+    );
+    expect(text(doc.querySelector(".ltx_classification"))).toBe("keywords: Semantic table interpretation; column type annotation; knowledge graphs");
+  });
+
+  it("\\sep reads across inline-element edges but leaves no separator at a block edge", () => {
+    const marker = '<span class="ltx_ERROR undefined">\\sep</span>';
+    const { doc, stats } = prepared(
+      latexml(
+        `<p id="nested" class="ltx_p"><em>alpha </em><strong>${marker}</strong><i>beta</i></p>
+<p id="first" class="ltx_p">${marker}alpha</p><p id="last" class="ltx_p">omega${marker}</p>`,
+      ),
+    );
+    expect(stats.undefinedMacros).toBe(3);
+    expect(text(doc.getElementById("nested"))).toBe("alpha; beta");
+    expect(text(doc.getElementById("first"))).toBe("alpha");
+    expect(text(doc.getElementById("last"))).toBe("omega");
+  });
+
+  it("citation removal does not strand source whitespace before sentence punctuation", () => {
+    const marker = '<span class="ltx_ERROR undefined">\\ucite</span>';
+    const { doc, stats } = prepared(
+      latexml(`<p id="x" class="ltx_p"><em>lattice structure </em>${marker}mankowsky2014; and scattering ${marker}zhang2024.</p>`),
+    );
+    expect(stats.undefinedMacros).toBe(2);
+    expect(text(doc.getElementById("x"))).toBe("lattice structure; and scattering.");
+  });
+
+  it("a marker in a heading, a caption and a table cell goes too", () => {
+    const marker = '<span class="ltx_ERROR undefined">\\mymacro</span>';
+    const { doc, stats } = prepared(
+      latexml(
+        `<h2 class="ltx_title">${marker} Results</h2><figure class="ltx_table"><figcaption>Table 1: ${marker} scores</figcaption><table><tr><td>${marker} 4.2</td></tr></table></figure>`,
+      ),
+    );
+    expect(stats.undefinedMacros).toBe(3);
+    expect(doc.querySelector("article")?.textContent).not.toContain("mymacro");
+  });
+
+  describe("left as the page had it", () => {
+    const preamble = fx("undefined-macro-preamble");
+    it("at an address that is not arXiv's", () => {
+      expect(prepared(latexml(preamble), "https://example.test/a-paper")).toMatchObject({ unchanged: true, stats: NOTHING });
+    });
+    it("outside article.ltx_document", () => {
+      expect(prepared(notLatexml(preamble))).toMatchObject({ unchanged: true, stats: NOTHING });
+    });
+    it("an ltx_ERROR that holds more than one control sequence", () => {
+      for (const inner of ["\\foo bar", "\\foo\\bar", "<em>\\foo</em>", "not a macro"]) {
+        const html = preamble.replace(">\\hohsettheme<", `>${inner}<`);
+        expect(html, inner).not.toBe(preamble);
+        expect(prepared(latexml(html)).unchanged, inner).toBe(true);
+      }
+    });
+    it("an ltx_ERROR that is not an undefined macro, or not a span", () => {
+      for (const changed of [
+        preamble.replace('class="ltx_ERROR undefined"', 'class="ltx_ERROR"'),
+        preamble.replace('<span id="p1.1" class="ltx_ERROR undefined">\\hohsettheme</span>', '<div id="p1.1" class="ltx_ERROR undefined">\\hohsettheme</div>'),
+      ]) {
+        expect(changed).not.toBe(preamble);
+        expect(prepared(latexml(changed)).unchanged).toBe(true);
+      }
+    });
+    it("a marker inside maths or code, where the next pass reads it as TeX or source", () => {
+      for (const host of ["math", "code", "svg"]) {
+        /* Built by hand: the HTML parser will not leave a <span> inside <math>. */
+        const doc = documentAt(latexml('<p id="x" class="ltx_p">words</p>'));
+        const ns = host === "math" ? "http://www.w3.org/1998/Math/MathML" : host === "svg" ? "http://www.w3.org/2000/svg" : "http://www.w3.org/1999/xhtml";
+        const container = doc.createElementNS(ns, host);
+        const marker = doc.createElement("span");
+        marker.className = "ltx_ERROR undefined";
+        marker.textContent = "\\foo";
+        container.append(marker);
+        doc.getElementById("x")?.append(container);
+        expect(prepareLatexml(doc).undefinedMacros, host).toBe(0);
+        expect(doc.querySelector(".ltx_ERROR"), host).not.toBeNull();
+      }
+    });
+    it("one real word or an acronym after a marker: only the marker goes", () => {
+      for (const [macro, word] of [
+        ["\\workshoptitle", "LP4FM"],
+        ["\\bmsection", "Funding"],
+        ["\\bmsection", "None."],
+        ["\\bmsection", "Acknowledgments"],
+      ] as const) {
+        const html = preamble.replace(">\\hohsettheme<", `>${macro}<`).replace(">hohRose<", `>${word}<`);
+        const { doc, stats } = prepared(latexml(html));
+        expect(stats.undefinedMacros, word).toBe(1);
+        expect(text(doc.getElementById("p1.2")), word).toBe(word);
+      }
+    });
+    it("a word after a macro whose name holds 'cite' but whose text is not a key", () => {
+      for (const [macro, after, expected] of [
+        ["\\excite", "electrons in the sample", "We electrons in the sample"],
+        ["\\citeauthor", "Smith argues", "We Smith argues"],
+      ] as const) {
+        const { doc } = prepared(latexml(`<p id="x" class="ltx_p">We <span class="ltx_ERROR undefined">${macro}</span>${after}</p>`));
+        expect(text(doc.getElementById("x")), macro).toBe(expected);
+      }
+    });
+    it("an argument paragraph with a space in it: only the marker goes", () => {
+      const { doc } = prepared(latexml(preamble.replace(">hohRose<", ">Linguistic Principles<")));
+      expect(text(doc.getElementById("p1.2"))).toBe("Linguistic Principles");
+      expect(doc.querySelector(".ltx_ERROR")).toBeNull();
+    });
+    it("text after a macro that is not a citation: only the marker goes", () => {
+      const { doc } = prepared(
+        latexml(`<div class="ltx_classification">Semantic table interpretation <span id="id1.id1" class="ltx_ERROR undefined">\\kwd</span>column type annotation</div>`),
+      );
+      expect(text(doc.querySelector(".ltx_classification"))).toBe("Semantic table interpretation column type annotation");
+    });
+    it("a marker or argument a link points at", () => {
+      expect(prepared(latexml(`<p><a href="#p1.1">here</a></p>${preamble}`)).unchanged).toBe(true);
+      expect(prepared(latexml(`<p><a href="#p1.2">here</a></p>${preamble}`)).unchanged).toBe(true);
+    });
+    it("the paragraph round them, which a link may point at, stays", () => {
+      const { doc, stats } = prepared(latexml(`<p><a href="#p1">here</a></p>${preamble}`));
+      expect(stats.undefinedMacros).toBe(1);
+      expect(doc.getElementById("p1")).not.toBeNull();
     });
   });
 });
