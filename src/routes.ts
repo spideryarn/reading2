@@ -5926,13 +5926,16 @@ function alreadyFoundFor(
 }
 
 /**
- * **The waits before a failed finish write is tried again** — two more tries.
+ * **The waits before a failed finish write is tried again** — three more
+ * tries, 14 s in all, inside the minute the allowance's lease and the sweep's
+ * grace keep past the call's deadline (`DEBATE_CHECK_RATE_POLICY`,
+ * `CHECK_ORPHAN_GRACE_MS`).
  * Safe to repeat, because `finish` is attempt-fenced: it lands only on this
  * attempt's own pending row, so a retry can never overwrite another check.
  * What it saves is a paid answer lost to one dropped connection (GPT Sol's
  * E7).
  */
-const CHECK_FINISH_RETRY_MS = [250, 1_000] as const;
+const CHECK_FINISH_RETRY_MS = [1_000, 3_000, 10_000] as const;
 
 /** `finish`, tried again after each of `CHECK_FINISH_RETRY_MS`; the last failure is thrown. */
 async function finishCheck(
@@ -5974,11 +5977,11 @@ async function finishCheck(
  *  5. ids not in the current list, or a Dig further with nothing to dig (409);
  *  6. **a check already pending** (409) — the reservation insert, held by the
  *     partial unique index, so two tabs at once get one search;
- *  7. **the `debate-check` allowance** (429, 503), the check's own bucket
+ *  7. for Dig further, the addresses already found — a read, not a spend,
+ *     after the reservation so nothing can finish in between unseen;
+ *  8. **the `debate-check` allowance** (429, 503), the check's own bucket
  *     (src/debate.ts § `DEBATE_CHECK_RATE_POLICY`) — and a refusal there takes
  *     the reservation back, so nothing is left pending;
- *  8. for Dig further, the addresses already found — a read, not a spend,
- *     after the reservation so nothing can finish in between unseen;
  *  9. then the stream and the model.
  *
  * ## A dropped client does not cancel the call
@@ -5987,14 +5990,21 @@ async function finishCheck(
  * `sse().gone`: the answer is paid for either way, and a reader who closed the
  * tab finds it stored on the next GET.
  *
- * The allowance's lease is the call's deadline plus a minute, so the slot is
- * held for the whole call (GPT Sol's E1).
+ * **That deadline starts at the reservation**, not at the call, so the setup
+ * between them (the Dig further read, the allowance) comes out of the model's
+ * time. The allowance's lease (the deadline plus a minute, taken just after the
+ * reservation) and the sweep's grace (the deadline plus two minutes, from the
+ * row's `created_at`) therefore both cover the call and the finish retries
+ * below (GPT Sol's E1 and E6). What none of them bounds is a single store
+ * write that hangs for longer than that minute; Postgres has no statement
+ * timeout here, and a store that slow is an outage, not a check.
  *
  * ## A failed finish write is tried again
  *
  * The answer is paid for by then, so `finishCheck` tries the attempt-fenced
- * write three times before giving up (GPT Sol's E7). Given up, the row stays
- * `pending` until the sweep ends it.
+ * write four times over 14 s before giving up (GPT Sol's E7). Given up, the
+ * row stays `pending` until the sweep ends it, and the answer is lost: the
+ * failure is logged and sent to Sentry, without the answer.
  */
 async function runDebateClaimCheck(slug: string, body: unknown, res: ServerResponse): Promise<void> {
   const asked = readCheckRequest(body);
@@ -6021,9 +6031,31 @@ async function runDebateClaimCheck(slug: string, body: unknown, res: ServerRespo
     targets,
     digFurther: asked.digFurther !== null,
   });
+  /* **One clock, started at the reservation** (GPT Sol's E1 and E6, round 2).
+     The sweep's grace and the allowance's lease are both measured from about
+     here, so the call's deadline is too: whatever the setup below takes comes
+     out of the model's time, never on top of it. A deadline that has passed
+     before the call starts fails it at once, as an ordinary error. */
+  const deadline = AbortSignal.timeout(DEBATE_CHECK_TIMEOUT_MS);
+
+  let alreadyFound: string[] = [];
+  /* After the reservation: no other check is pending now, so the finished
+     ones are final (GPT Sol's E8). This still comes before the allowance: a
+     failed store read must not consume a reader's hourly or daily check. */
+  if (asked.digFurther !== null) {
+    try {
+      alreadyFound = alreadyFoundFor(targets[0]!, list.sourceHash, await debateClaimChecksStore.list(slug));
+    } catch (err) {
+      try {
+        await debateClaimChecksStore.abandon(slug, check.id, attempt);
+      } catch (abandonErr) {
+        log("store").error({ ...errorFields(abandonErr), slug }, `could not take back a claim check for ${slug}`);
+      }
+      throw err;
+    }
+  }
 
   let free: () => Promise<void>;
-  let alreadyFound: string[] = [];
   try {
     free = await admitDebateCheck(fetchAllowanceStore);
   } catch (err) {
@@ -6039,23 +6071,6 @@ async function runDebateClaimCheck(slug: string, body: unknown, res: ServerRespo
     throw err;
   }
 
-  /* After the reservation: no other check is pending now, so the finished
-     ones are final (GPT Sol's E8). A failed read spent nothing, so it gives
-     the reservation and the allowance back, as a refusal would. */
-  if (asked.digFurther !== null) {
-    try {
-      alreadyFound = alreadyFoundFor(targets[0]!, list.sourceHash, await debateClaimChecksStore.list(slug));
-    } catch (err) {
-      try {
-        await debateClaimChecksStore.abandon(slug, check.id, attempt);
-      } catch (abandonErr) {
-        log("store").error({ ...errorFields(abandonErr), slug }, `could not take back a claim check for ${slug}`);
-      }
-      await free();
-      throw err;
-    }
-  }
-
   const release = checkingClaims.hold(`${slug}/${check.id}`);
   try {
     const { frame } = sse(res);
@@ -6068,7 +6083,7 @@ async function runDebateClaimCheck(slug: string, body: unknown, res: ServerRespo
         targets,
         alreadyFound,
         power: powerOf(article),
-        signal: AbortSignal.timeout(DEBATE_CHECK_TIMEOUT_MS),
+        signal: deadline,
       });
       patch = {
         status: "done",

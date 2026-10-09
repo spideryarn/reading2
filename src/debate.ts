@@ -2144,8 +2144,10 @@ export const DEBATE_CHECK_TIMEOUT_MS = 360_000;
  * fuse is 100 × $0.20 ≈ $20 a day for everybody together. The numbers are a
  * first guess and **Greg's to move**.
  *
- * The lease is the check's deadline plus a minute, so a slot is held for the
- * whole call, and a process that dies mid-check frees it soon after.
+ * The lease is the model deadline plus a minute. That bounds a dead process's
+ * slot, but it is not yet a hard bound on the whole route: admission/setup
+ * before the model and result-store retries afterwards have no shared
+ * deadline (stage-3 review E1).
  */
 export const DEBATE_CHECK_RATE_POLICY: RatePolicy = {
   fills: 10,

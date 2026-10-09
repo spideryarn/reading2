@@ -60,6 +60,9 @@ const seen = vi.hoisted(() => ({
   finishCalls: 0,
   /** Run just before the reservation insert: a peer acting in that gap. */
   beforeBegin: null as (() => Promise<void>) | null,
+  /** Make the first list after the next successful reservation lose its connection. */
+  failListAfterNextBegin: false,
+  failNextList: false,
 }));
 
 vi.mock("../src/store/index.js", async (importOriginal) => {
@@ -68,14 +71,25 @@ vi.mock("../src/store/index.js", async (importOriginal) => {
   return {
   ...real,
   debateClaimChecksStore: {
-    list: (...a: Parameters<typeof checks.list>) => checks.list(...a),
+    async list(...a: Parameters<typeof checks.list>) {
+      if (seen.failNextList) {
+        seen.failNextList = false;
+        throw new Error("connection reset during final list");
+      }
+      return checks.list(...a);
+    },
     abandon: (...a: Parameters<typeof checks.abandon>) => checks.abandon(...a),
     sweep: (...a: Parameters<typeof checks.sweep>) => checks.sweep(...a),
     async begin(...a: Parameters<typeof checks.begin>) {
       const hook = seen.beforeBegin;
       seen.beforeBegin = null;
       if (hook) await hook();
-      return checks.begin(...a);
+      const begun = await checks.begin(...a);
+      if (seen.failListAfterNextBegin) {
+        seen.failListAfterNextBegin = false;
+        seen.failNextList = true;
+      }
+      return begun;
     },
     async finish(...a: Parameters<typeof checks.finish>) {
       seen.finishCalls++;
@@ -270,6 +284,8 @@ beforeEach(async () => {
   seen.finishThrows = 0;
   seen.finishCalls = 0;
   seen.beforeBegin = null;
+  seen.failListAfterNextBegin = false;
+  seen.failNextList = false;
   await getDb().delete(debateClaimChecks).where(eq(debateClaimChecks.articleId, article.articleId));
   await storeList(hash);
 });
@@ -434,16 +450,17 @@ describe("a check, when something goes wrong around it", () => {
     const [row] = await rows();
     expect(row?.status).toBe("done");
     expect(row?.model).toBe("stub-model");
-  });
+  }, 30_000);
 
-  it("gives up after three tries, and the allowance is still given back", async () => {
+  /* Real time: the waits are 1 s, 3 s and 10 s (`CHECK_FINISH_RETRY_MS`). */
+  it("gives up after four tries, and the allowance is still given back", async () => {
     seen.finishThrows = 5;
     const r = await call("POST", URL, { claimIds: [claims[0]!.id] });
-    expect(seen.finishCalls).toBe(3);
+    expect(seen.finishCalls).toBe(4);
     expect(r.written).not.toContain("event: done");
     expect(seen.finished).toEqual(["lease"]);
     expect((await rows())[0]?.status).toBe("pending");
-  });
+  }, 30_000);
 
   it("tells Dig further the addresses a check stored just before its reservation (GPT Sol's E8)", async () => {
     const r1 = await call("POST", URL, { claimIds: [claims[0]!.id] });
@@ -521,6 +538,22 @@ describe("a check, when something goes wrong around it", () => {
     expect(r2.status).toBe(200);
     expect(seen.searches[1]?.alreadyFound).toContain("https://late.example/peer");
     expect(seen.searches[1]?.alreadyFound).toContain("https://found.example/1/0");
+  });
+
+  it("spends no allowance when Dig further's post-reservation read fails", async () => {
+    const first = await call("POST", URL, { claimIds: [claims[0]!.id] });
+    expect(first.status).toBe(200);
+    seen.taken.length = 0;
+    seen.finished.length = 0;
+    seen.failListAfterNextBegin = true;
+
+    const failed = await call("POST", URL, { digFurther: claims[0]!.id });
+
+    expect(failed.status).toBe(500);
+    expect(seen.taken).toEqual([]);
+    expect(seen.finished).toEqual([]);
+    expect(seen.searches).toHaveLength(1);
+    expect((await rows()).map((row) => row.status)).toEqual(["done"]);
   });
 
   it("digs further on a claim whose list was made again with new ids, from the stored check (E5)", async () => {

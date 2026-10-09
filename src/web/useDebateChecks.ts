@@ -71,10 +71,11 @@ function isCheck(value: unknown): value is DebateClaimCheck {
   );
 }
 
-/** One check in, replacing any with its id, keeping creation order. */
+/** One check in, replacing any with its id, keeping creation order and never regressing a terminal row. */
 function withCheck(checks: readonly DebateClaimCheck[], check: DebateClaimCheck): DebateClaimCheck[] {
   const at = checks.findIndex((c) => c.id === check.id);
   if (at === -1) return [...checks, check];
+  if (checks[at]!.status !== "pending" && check.status === "pending") return [...checks];
   const next = [...checks];
   next[at] = check;
   return next;
@@ -107,11 +108,22 @@ async function waitForStoredCheck(
   current: { readonly current: string },
   before: ReadonlySet<string>,
   request: DebateCheckRequest,
+  begunId: string | null,
   refresh: () => Promise<readonly DebateClaimCheck[] | null>,
 ): Promise<boolean> {
+  let checkId = begunId;
   while (current.current === mine) {
     const stored = await refresh();
-    const ours = stored?.find((candidate) => !before.has(candidate.id) && answersRequest(candidate, request));
+    if (checkId === null) {
+      const candidates = stored?.filter(
+        (candidate) => !before.has(candidate.id) && answersRequest(candidate, request),
+      );
+      /* The store is oldest first. If the stream broke before `begin`, this
+         press is the newest matching row, not an earlier identical press from
+         another tab that this tab's stale first read had not seen. */
+      checkId = candidates?.[candidates.length - 1]?.id ?? null;
+    }
+    const ours = checkId === null ? undefined : stored?.find((candidate) => candidate.id === checkId);
     if (ours && ours.status !== "pending") return true;
     await later();
   }
@@ -208,6 +220,7 @@ export function useDebateChecks(slug: string): UseDebateChecks {
       const mine = slug;
       const before = new Set(checksNow.current.map((stored) => stored.id));
       let accepted = false;
+      let begunId: string | null = null;
       setSending(true);
       setPressError(null);
       try {
@@ -222,7 +235,10 @@ export function useDebateChecks(slug: string): UseDebateChecks {
         accepted = true;
         const done = await readAnswerStream<DebateClaimCheck>(res.body, {
           begin(data) {
-            if (current.current === mine && isCheck(data)) applyFrame(data);
+            if (current.current === mine && isCheck(data)) {
+              begunId = data.id;
+              applyFrame(data);
+            }
           },
           delta() {},
           done(data) {
@@ -238,7 +254,7 @@ export function useDebateChecks(slug: string): UseDebateChecks {
              held, and reconcile the row until its stored terminal state is
              visible; returning true clears the picks just as a `done` frame
              would. This never POSTs. */
-          const recovered = await waitForStoredCheck(mine, current, before, request, refreshChecks);
+          const recovered = await waitForStoredCheck(mine, current, before, request, begunId, refreshChecks);
           return recovered;
         }
         setPressError(describeFetchFailure(err as Error));

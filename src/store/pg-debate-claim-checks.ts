@@ -39,8 +39,7 @@ const logger = log("store");
 
 /**
  * **How long another process's `pending` check is left alone** — the call's
- * own deadline and a margin, derived rather than written down beside it, so a
- * sweep can never fire on a check whose model has not yet given up.
+ * own deadline and a margin, derived rather than written down beside it.
  * `CLAIMS_ORPHAN_GRACE_MS` in pg-referee-claims.ts is the sibling.
  *
  * **Two minutes of margin, not thirty seconds**, because the clocks start at
@@ -48,6 +47,8 @@ const logger = log("store");
  * deadline only after the allowance is taken, the earlier checks read and the
  * stream opened. Thirty seconds of slow admission let another process sweep a
  * live check and lose its paid answer to the attempt fence (GPT Sol's E6).
+ * This margin covers that measured case, but setup has no hard deadline or
+ * durable heartbeat, so it does not prove that every live check is safe.
  */
 export const CHECK_ORPHAN_GRACE_MS = DEBATE_CHECK_TIMEOUT_MS + 120_000;
 

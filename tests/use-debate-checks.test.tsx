@@ -29,7 +29,7 @@ vi.mock("../src/web/lib/sse.js", async (importOriginal) => ({
   readAnswerStream: wire.readAnswerStream,
 }));
 
-const { useDebateChecks } = await import("../src/web/useDebateChecks.js");
+const { PENDING_POLL_MS, useDebateChecks } = await import("../src/web/useDebateChecks.js");
 type ChecksHook = ReturnType<typeof useDebateChecks>;
 
 const TARGET = {
@@ -51,6 +51,10 @@ function stored(status: DebateClaimCheck["status"]): DebateClaimCheck {
     results: status === "done" ? [{ claimId: TARGET.claimId, outcome: "answered", rows: [] }] : [],
     createdAt: "2026-10-09T10:00:00.000Z",
   };
+}
+
+function storedAs(id: string, status: DebateClaimCheck["status"]): DebateClaimCheck {
+  return { ...stored(status), id };
 }
 
 let host: HTMLDivElement;
@@ -132,6 +136,56 @@ describe("a broken answer stream", () => {
     expect(hook.sending).toBe(false);
     expect(hook.checks).toEqual([stored("done")]);
   });
+
+  it("recovers the row named by begin, not another tab's identical check", async () => {
+    vi.useFakeTimers();
+    try {
+      wire.getBodies.push({ checks: [] });
+      await act(async () => root.render(createElement(Harness)));
+      await settle();
+
+      const other = storedAs("spya-other", "done");
+      const ownPending = storedAs("spya-own", "pending");
+      const ownDone = storedAs("spya-own", "done");
+      wire.apiFetch.mockImplementationOnce(async () => ({ ok: true, body: {} }));
+      wire.apiFetch.mockImplementationOnce(async () => ({
+        ok: true,
+        body: {},
+        jsonBody: { checks: [other, ownPending] },
+      }));
+      wire.apiFetch.mockImplementationOnce(async () => ({
+        ok: true,
+        body: {},
+        jsonBody: { checks: [other, ownDone] },
+      }));
+      wire.readAnswerStream.mockImplementationOnce(
+        async (_body: unknown, handlers: { begin(data: unknown): void }) => {
+          handlers.begin(ownPending);
+          throw new Error("stream stopped after begin");
+        },
+      );
+
+      let settled = false;
+      let outcome!: Promise<boolean>;
+      act(() => {
+        outcome = hook.check({ claimIds: [TARGET.claimId] }).then((value) => {
+          settled = true;
+          return value;
+        });
+      });
+      await settle();
+
+      expect(settled).toBe(false);
+      expect(hook.sending).toBe(true);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(PENDING_POLL_MS);
+        expect(await outcome).toBe(true);
+      });
+      expect(hook.checks).toEqual([other, ownDone]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe("overlapping reads (GPT Sol's E11)", () => {
@@ -188,5 +242,45 @@ describe("overlapping reads (GPT Sol's E11)", () => {
       await stale;
     });
     expect(hook.checks).toEqual([stored("done")]);
+  });
+
+  it("never lets a delayed begin frame regress a stored answer to pending", async () => {
+    wire.getBodies.push({ checks: [] });
+    await act(async () => root.render(createElement(Harness)));
+    await settle();
+
+    let begin!: (data: unknown) => void;
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    wire.apiFetch.mockImplementationOnce(async () => ({ ok: true, body: {} }));
+    wire.readAnswerStream.mockImplementationOnce(
+      async (_body: unknown, handlers: { begin(data: unknown): void }) => {
+        begin = handlers.begin;
+        await held;
+        return stored("done");
+      },
+    );
+
+    let outcome!: Promise<boolean>;
+    act(() => {
+      outcome = hook.check({ claimIds: [TARGET.claimId] });
+    });
+    await settle();
+
+    wire.apiFetch.mockImplementationOnce(async () => ({
+      ok: true,
+      body: {},
+      jsonBody: { checks: [stored("done")] },
+    }));
+    await act(async () => hook.refresh());
+    expect(hook.checks).toEqual([stored("done")]);
+
+    act(() => begin(stored("pending")));
+    expect(hook.checks).toEqual([stored("done")]);
+
+    await act(async () => {
+      release();
+      expect(await outcome).toBe(true);
+    });
   });
 });
