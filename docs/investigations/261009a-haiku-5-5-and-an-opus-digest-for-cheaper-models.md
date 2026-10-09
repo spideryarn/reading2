@@ -198,8 +198,11 @@ for reversing the direction of a measure effect.
 - Sonnet alone's critical chat answer on Seth wrote a web-search call out as text, because chat's
   prompt names tools the eval did not send. A harness artefact.
 - **Opus's critical chat answer on *Entropy* was cut off at production's 4,000-token chat ceiling**,
-  thinking included. That one is a real risk: High-powered chat runs Opus at `high` against the same
-  ceiling. Worth raising the ceiling for high power, or watching `finish_reason: length` on chat.
+  but mostly by the same harness artefact as the Seth one: it thought for 102 tokens and spent the
+  rest writing twenty-odd web-search calls out as text. Opus's other chat answers used 1,195–1,825
+  of the 4,000. The ceiling was still thin for Opus at `high`, so High-powered chat now gets 6,000,
+  and a cut-off chat answer now stays marked as cut off after a reload —
+  [261009e](../plans/261009e-high-powered-chat-cut-off-at-its-ceiling.md).
 
 **Cost.** The digest cost **$0.29, $0.33 and $0.37** (Opus 5.5 at `high`, ~2,500 words, 105–117 s).
 That is inside Greg's 20–50 cents, at the top of it; `medium` might be cheaper and was not tested

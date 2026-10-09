@@ -5,20 +5,15 @@
  * `src/store/export.ts` and `src/store/export-bundle.ts` are two projections of
  * one article and they share only the query walk. The first is the rollback, and
  * its output is pinned byte for byte by `tests/store-roundtrip.test.ts` against
- * what the filesystem store writes — so it is *deliberately* lossy in three ways
- * that nothing can fix in place:
+ * what the filesystem store writes — so it retains legacy losses that cannot
+ * all be fixed in place:
  *
- * - a `candidates` chat thread is written as `chat`;
- * - `passages` and `interrupted` are dropped from every message;
  * - `extractedHtml` is never written at all.
  *
- * Each of those is a whole feature quietly missing from a file somebody
- * downloaded to keep, and each looks fine: the zip opens, the JSON parses, the
- * thread is there. So every one gets a test here, and each is written as a
- * **contrast** — the bundle keeps it, the rollback does not — because the claim
- * that matters is that the two differ on purpose. If you deliberately fix the
- * rollback (which means changing what `store-roundtrip` compares), delete the
- * rollback half of the pair rather than the whole test.
+ * A lost field looks fine: the zip opens, the JSON parses and the thread is
+ * there. The tests below began as contrasts with the rollback; `kind`,
+ * `passages` and `interrupted` have since been fixed there, so those cases now
+ * assert both projections keep them. `truncated` joins them under plan 261009e.
  *
  * ## And it never reads the bucket
  *
@@ -258,6 +253,7 @@ await pgReady({
   columns: [
     { table: "spideryarn.chat_messages", column: "passages" },
     { table: "spideryarn.chat_messages", column: "interrupted" },
+    { table: "spideryarn.chat_messages", column: "truncated" },
     { table: "spideryarn.article_revisions", column: "simple_summary" },
     { table: "spideryarn.article_revisions", column: "relations" },
     { table: "spideryarn.article_revisions", column: "debate_claims" },
@@ -378,13 +374,11 @@ describe("the bundle is the faithful projection", () => {
       });
     }
 
-    /* A Candidates thread, which the rollback writes out as an ordinary chat. */
+    /* A Candidates thread, historically flattened by the rollback. */
     await db.insert(schema.chatThreads).values({
       articleId: ARTICLE_ID,
       id: THREAD_ID,
       ownerId: owner(),
-      /* Not "candidate passages": the rollback keeps thread titles, and the
-         test below asserts the word `passages` appears nowhere in its file. */
       title: "the shortlist",
       kind: "candidates",
     });
@@ -398,6 +392,7 @@ describe("the bundle is the faithful projection", () => {
       status: "done",
       passages: PASSAGES,
       interrupted: true,
+      truncated: true,
     });
     /* Anchored to a block that is no longer in the revision. */
     await db.insert(schema.comments).values({
@@ -683,7 +678,7 @@ describe("the bundle is the faithful projection", () => {
     expect(page).toContain("<code>image-bytes</code>");
   });
 
-  /* ------------------------------------------------- the three known losses -- */
+  /* ------------------------------------------ losses the rollback has met -- */
 
   it("keeps a Candidates thread's kind, and so does the rollback now", async () => {
     const threads = parsed("augmentations/chat.json").threads as { kind: string }[];
@@ -701,17 +696,25 @@ describe("the bundle is the faithful projection", () => {
     expect(rollback.threads[0]?.kind).toBe("candidates");
   });
 
-  it("keeps passages and interrupted on a message, which the rollback drops", async () => {
+  /* This used to assert the rollback **dropped** both — a known gap pinned as
+     a difference between the two exports. Plan 261009e names them in
+     src/store/export.ts, so the two now agree. */
+  it("keeps passages, interrupted and truncated on both exports", async () => {
     const threads = parsed("augmentations/chat.json").threads as {
       messages: Record<string, unknown>[];
     }[];
     const message = threads[0]?.messages[0];
     expect(message?.passages).toEqual(PASSAGES);
     expect(message?.interrupted).toBe(true);
+    expect(message?.truncated).toBe(true);
 
-    const rollbackText = await readFile(path.join(out, SLUG, "chat.json"), "utf8");
-    expect(rollbackText).not.toContain("passages");
-    expect(rollbackText).not.toContain("interrupted");
+    const rollback = JSON.parse(await readFile(path.join(out, SLUG, "chat.json"), "utf8")) as {
+      threads: { messages: Record<string, unknown>[] }[];
+    };
+    const rolled = rollback.threads[0]?.messages[0];
+    expect(rolled?.passages).toEqual(PASSAGES);
+    expect(rolled?.interrupted).toBe(true);
+    expect(rolled?.truncated).toBe(true);
   });
 
   it("writes content/extracted.html, which the rollback never writes at all", async () => {

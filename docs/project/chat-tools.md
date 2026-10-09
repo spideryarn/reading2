@@ -864,7 +864,9 @@ in 8 seconds with four cited blocks.
 
 The other half of that afternoon: `max_tokens` went from 2,000 to 4,000, because on Sonnet 5 the
 reasoning tokens come out of the same budget and a tool result to digest can consume all of it before
-a word is written.
+a word is written. That remains the standard-model ceiling. Since 2026-10-09 the high-power model
+gets 6,000; Candidates keeps 12,000 on either model. A turn that still reaches its ceiling is marked
+as cut off both live and after reload ([261009e](../plans/261009e-high-powered-chat-cut-off-at-its-ceiling.md)).
 
 ## What chat is told is on screen
 

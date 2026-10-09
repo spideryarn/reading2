@@ -115,14 +115,16 @@
  * only costs more; see docs/project/prompt-caching.md.
  *
  * **The completion ceilings, and this is the one that would bite first.**
- * explain sends `max_tokens: 1500`, chat 4,000, search 4,000, and those were
- * sized for a model whose thinking is not billed against them the same way.
+ * On the standard model explain sends `max_tokens: 1500`, chat 4,000 and search
+ * 4,000. Explain sends 4,000 and chat 6,000 on the high-power model since plan
+ * 261009e (`chatCeiling` in src/converse.ts and the `max_tokens` line in
+ * src/explain.ts). The original figures were sized for a model whose thinking
+ * is not billed against them the same way.
  * Luna reasons by default and OpenRouter documents a 1,024-token floor for that
  * allocation, so explain could be left with a few hundred tokens of visible
- * answer. And all three treat `finish_reason` only as evidence that *something*
- * arrived — `length` is not an error anywhere — so the failure is a truncated
- * answer written to disk as a finished one. Raise the ceilings before flipping a
- * row, not after. (Luna also advertises `max_completion_tokens` rather than the
+ * answer. Explain and search can still store a `length` ending as finished;
+ * chat marks it `truncated` and persists that warning. Size the ceilings before
+ * flipping a row, not after. (Luna also advertises `max_completion_tokens` rather than the
  * deprecated `max_tokens` all three send; OpenRouter lets a provider ignore a
  * parameter it does not take, silently.)
  *

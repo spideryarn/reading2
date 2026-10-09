@@ -138,11 +138,16 @@ Simple is not part of the default ingest and already uses Opus whenever it is re
 | Which model | The model's two spellings, the stored name and the wire address, are `HIGH_POWER_MODEL` and `HIGH_POWER_MODEL_OPENROUTER` in [`src/high-power-model.ts`](../../src/high-power-model.ts), a leaf so `src/ai-call.ts` can use `isHighPowerModel` without an import cycle; `src/models.ts` re-exports and explains them. `powerFor(task, articlePower)` selects the effective power where a task has a policy exception; `modelFor(task, power)` / `resolveModel(task, power)` resolve that selection. `power` is a **required** argument all the way down (`StepContext.power`, `streamMessage`'s options, every request-path stream), so a call that forgets to decide does not compile. Chosen over an `AsyncLocalStorage` scope because its failure is silent and it loses context across a streamed response |
 | Freshness | `generationKey` / `sameGenerator`: the stamp comparison and the two citation fingerprints treat Sonnet and Opus as one generation. Checkpoint keys (labels batches, the whole-document call, deepening) stay exact, because there the question is *which model paid for this answer* |
 
-## Three things that move with the model
+## Four things that move with the model
 
 - **Effort.** Opus 5.5's default effort is `medium`; Sonnet 5's (and 5.5's) is `high`. A call that takes the
   provider default sends `high` explicitly on Opus, so switching up never means thinking less. Calls
   that already choose their effort keep it.
+- **The completion ceiling.** Chat sends 6,000 tokens on the high-power model instead of the standard
+  model's 4,000; explain sends 4,000 instead of 1,500. Both key this choice on the model actually sent,
+  not the article setting, so a deliberate model override carries the matching ceiling. `max_tokens`
+  is outside the cached prompt and unused allowance is not billed
+  ([261009e](../plans/261009e-high-powered-chat-cut-off-at-its-ceiling.md)).
 - **The cache floor.** Opus 5.5 caches a prefix from **512** tokens, and so does Sonnet 5.5; Sonnet 5 needed 1,024 (until
   2026-10-09) — Opus measured live on 2026-09-30 (the plan's § Measurements). `underCacheFloor` takes the model.
 - **The run is read per step.** The job runner reads the article's setting as each step starts, so

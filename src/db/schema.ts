@@ -4556,6 +4556,17 @@ export const chatMessages = spideryarn.table(
      */
     stopped: boolean("stopped").notNull().default(false),
     /**
+     * **The model's token ceiling cut this answer off.** `stopped`'s opposite:
+     * nobody asked for it to end here, so the panel says so as a failure and
+     * offers the retry (`ChatMessage.truncated`, src/types.ts).
+     *
+     * A column because the flag outlived only the tab that watched it arrive
+     * until 2026-10-09: the route sent it and `finish` dropped it, so a reload
+     * showed a cut-off answer as a whole one.
+     * docs/postmortems/261009e-a-flag-the-store-did-not-keep.md.
+     */
+    truncated: boolean("truncated").notNull().default(false),
+    /**
      * **Passages a spoken answer pointed at instead of citing in words.**
      *
      * `jsonb` and nullable, for exactly the reasons `tools` above gives at

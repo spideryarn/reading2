@@ -6,10 +6,11 @@
  * it is the whole design: `exportArticle` is the *rollback*, its output is
  * pinned byte for byte by `tests/store-roundtrip.test.ts` against what the
  * filesystem store writes, and it is therefore lossy in ways that cannot be
- * fixed in place — a `candidates` thread comes out as `chat`, `passages` and
- * `interrupted` are dropped from every message, `extractedHtml` is never written
- * at all. **The rollback's data model is not "my article data", and must not
- * become its definition.** docs/plans/260901h-export-article-data.md.
+ * fixed in place — `extractedHtml` is never written at all, and other legacy
+ * differences remain. (`candidates`, `passages` and `interrupted` were examples
+ * here until their rollback projection was corrected.) **The rollback's data
+ * model is not "my article data", and must not become its definition.**
+ * docs/plans/260901h-export-article-data.md.
  *
  * ## Rows out, not fields out
  *
@@ -524,12 +525,10 @@ function augmentationFiles(rows: ArticleRows): Map<string, string> {
        rollback shape it — a flat list keyed by `threadId` would be closer to the
        tables and further from anything an importer wants.
 
-       **`kind` is written as it is stored.** The rollback flattens `candidates`
-       to `chat` because the round-trip test compares its bytes against a file
-       the filesystem store wrote; a reader's Candidates thread coming back as an
-       ordinary chat is precisely the loss this file exists not to repeat, and
-       `passages` and `interrupted` on each message are the other half of it.
-       Nothing below names a field, so all three survive by construction. */
+       **`kind` is written as it is stored**, as are `passages`, `interrupted`
+       and `truncated` on each message. The rollback names those fields too now;
+       this projection's stronger guarantee is that nothing below names a field,
+       so the next column survives without another edit. */
     const threads = rows.chatThreads.map((thread) => ({
       ...rowJson(thread),
       messages: messagesOfThread(rows, thread.id).map((row) => rowJson(row, ["threadId"])),
