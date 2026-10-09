@@ -45,7 +45,7 @@ const CITATION_INSTITUTION = new Set(["citation_author_institution", "citation_a
  * for each, in document order and natural order — or `null`.
  * docs/plans/260929d-authors-and-affiliations-at-import-shown-and-linked.md § 2.
  */
-export function metaAuthors(doc: Document): Author[] | null {
+export function metaAuthors(doc: Document, titleBlockNames: readonly string[] | null = latexmlAuthorNames(doc)): Author[] | null {
   const citation: Author[] = [];
   const dc: Author[] = [];
   for (const el of Array.from(doc.querySelectorAll("meta[name][content]"))) {
@@ -66,7 +66,7 @@ export function metaAuthors(doc: Document): Author[] | null {
   /* A LaTeXML page (arXiv's HTML, ar5iv) declares nobody in its metadata and
      everybody in its title block. Names only, in the page's order and as
      written: they are already given-name first. src/latexml.ts. */
-  const fromLatexml = cleaned((latexmlAuthorNames(doc) ?? []).map((name) => ({ name, affiliations: [] })));
+  const fromLatexml = cleaned((titleBlockNames ?? []).map((name) => ({ name, affiliations: [] })));
   return fromLatexml.length > 0 ? fromLatexml : null;
 }
 

@@ -45,7 +45,7 @@ function prepared(html: string, url = "https://arxiv.org/html/2605.20355v1") {
   return { doc, stats, unchanged: doc.body.innerHTML === before };
 }
 
-const NOTHING = { alignedEquations: 0, equationGroupsLeftAlone: 0, svgObjects: 0, listings: 0, boxedPassages: 0 };
+const NOTHING = { alignedEquations: 0, equationGroupsLeftAlone: 0, svgObjects: 0, listings: 0, boxedPassages: 0, titleBlocks: 0 };
 
 it("does not treat an ordinary page as LaTeXML from article.ltx_document alone", () => {
   const { unchanged, stats } = prepared(latexml(fx("listing")), "https://example.test/an-ordinary-page");
