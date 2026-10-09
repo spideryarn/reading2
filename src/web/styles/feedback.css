@@ -412,6 +412,11 @@ details.fb-threads-group > summary { cursor: pointer; }
 .fb-thread { display: flex; flex-direction: column; gap: 0.5rem; }
 .fb-thread-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
 .fb-thread-place { margin-inline: auto; font-size: 0.76rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+/* Said when an end is pressed anyway: a phone has no hover to show the title. */
+.fb-thread-end { flex-basis: 100%; margin: 0; text-align: end; font-size: 0.76rem; color: var(--ink-soft); }
+/* Empty, it is out of the flow rather than hidden: the row's gap would otherwise
+   open under it, and `display: none` would take the live region away. */
+.fb-thread-end:empty { position: absolute; }
 /* The ids Greg reads off to a terminal (spya-krvuc9): selectable whole. */
 .fb-question-id { font-size: 0.72rem; user-select: all; overflow-wrap: anywhere; }
 /* Details, and his own report: shut until opened. */
@@ -668,6 +673,11 @@ details.fb-threads-group > summary { cursor: pointer; }
   cursor: pointer;
 }
 .fb-copy:hover { color: var(--highlight-text); border-color: var(--rule-strong); }
+/* Unavailable, such as an end of the Needs-a-decision pager: `aria-disabled` so
+   its `title` still shows (261009m § 4), drawn as unavailable as `disabled`
+   would be, as button.tsx's third edit does. */
+.fb-copy[aria-disabled="true"] { opacity: 0.5; cursor: default; }
+.fb-copy[aria-disabled="true"]:hover { color: var(--ink); }
 
 /* **The hairline says the buttons are a foot, not the end of the content.**
    Once the middle scrolls under them — a phone with the keyboard up, where

@@ -100,7 +100,9 @@ The differences that matter to a reader:
 
   **The saying-so is the half that is not built.** The *score* is shown — the masthead's source note
   and the metadata page's `Missed` row both report recall and pages checked. The specific complaints
-  go to `meta.quality`, and **nothing renders it**, so the sentence in
+  go to `meta.quality` — stored in `article_revisions.quality` since
+  [261009n](../plans/261009n-pdf-quality-warnings-not-stored.md); before that every one was computed
+  and lost — and **nothing renders it**, so the sentence in
   [`src/pdf-read.ts`](../../src/pdf-read.ts) § `runPdfExtract` therefore remains reader-invisible.
   Structural defects are separate: malformed responses, impossible or descending page labels, and
   absent substantive records on a text-bearing page trigger context-free single-page recovery. For
