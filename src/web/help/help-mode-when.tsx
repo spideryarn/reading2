@@ -36,7 +36,7 @@ export const MODE_WHEN: Record<Mode, string> = {
   learn: "you have finished and want to test what you took from it",
   quotes: "you want the lines worth keeping, in the piece’s own words",
   timeline: "the piece tells a story in time and you have lost track of the order",
-  "peer-review": "you want what the piece leans on, with links, or what other people have said about it",
+  sources: "you want what the piece leans on, with links, or what other people have said about it",
   structure: "you want to see how the piece is built, and where you are in it",
   faq: "you want the questions a careful reader would ask, and where the piece answers them",
   skim: "you want to go round a paper more than once, a little deeper each time",

@@ -824,7 +824,7 @@ function artefact(url: string): Response | null {
     return has ? json({ debate: DEBATE, stale: false, outdated: false }) : GONE();
   if (url.startsWith("/api/citations/"))
     return has ? json({ citations: CITATIONS, stale: false, outdated: false }) : GONE();
-  /* Peer review's Claims: the reader's checks (none), and the list. Before
+  /* Sources' Claims: the reader's checks (none), and the list. Before
      2026-10-09 nothing here opened Claims, so neither was served. */
   if (url.startsWith("/api/debate-claims/") && url.endsWith("/checks")) return json({ checks: [] });
   if (url.startsWith("/api/debate-claims/"))
@@ -1254,17 +1254,17 @@ const SPENDS: Record<Mode, Spend> = {
   quotes: { kind: "posts", steps: ["quotes"] },
   timeline: { kind: "posts", steps: ["timeline"] },
   /* **Three presses since 2026-10-09**, one per sub-mode, as Diagram's are
-     one per picture: Peer review opens on whichever `?peer-review=` names
+     one per picture: Sources opens on whichever `?sources=` names
      (plan 261009l). Bibliography, the default, is one model call over the
      article (Citations' row until then); Reception is the dearest press in the
      app, one call out to the open web (Debate's); Claims is its own list. Each
      press buys only its own sub-mode's work. */
-  "peer-review": {
+  sources: {
     kind: "delegated",
     presses: [
       { search: "", steps: ["citations"], spends: [] },
-      { search: "?peer-review=reception", steps: ["debate"], spends: [] },
-      { search: "?peer-review=claims", steps: ["debate-claims"], spends: [] },
+      { search: "?sources=reception", steps: ["debate"], spends: [] },
+      { search: "?sources=claims", steps: ["debate-claims"], spends: [] },
     ],
   },
   /* One model call over the article, like Ideas. */
@@ -1540,12 +1540,12 @@ const DRAWS: Record<Mode, Draws> = {
   /* The event's label. The dating phrase beside it is drawn too, but a label is
      the row's own content where a phrase could come from a formatter. */
   timeline: { kind: "band", where: ".mode-band.timeline", says: TIMELINE_LABEL, about: "corner" },
-  /* Peer review opens on Bibliography: a work's title — the row's own
+  /* Sources opens on Bibliography: a work's title — the row's own
      content, not the order buttons or the foot's sentences, which are
      constants a panel with no rows still draws. Reception's row is
-     `PEER_REVIEW_VIEWS_DRAW` below, since this table asks of the default
+     `SOURCES_VIEWS_DRAW` below, since this table asks of the default
      view only (GPT Sol's F4 on plan 261009l). */
-  "peer-review": { kind: "band", where: ".mode-band.peer-review", says: CITATION_TITLE, about: "corner" },
+  sources: { kind: "band", where: ".mode-band.sources", says: CITATION_TITLE, about: "corner" },
   faq: { kind: "band", where: ".mode-band.faq", says: FAQ_QUESTION, about: "corner" },
   skim: { kind: "band", where: ".mode-band.skim", says: SKIM_ROLE, about: "corner" },
   /* A node **inside** the drawing, not the drawing's title: a title is drawn
@@ -1570,20 +1570,20 @@ const DRAWS: Record<Mode, Draws> = {
 };
 
 /**
- * **Peer review's other two sub-modes**, each drawn by its real controller —
+ * **Sources' other two sub-modes**, each drawn by its real controller —
  * `DRAWS` asks of the default view only, Bibliography, so Reception and Claims
  * get a row each here (GPT Sol's F4 on plan 261009l). One band in every view,
  * with one (i), the panel's: the chip row is that band's header, never a
  * surface of its own.
  */
-const PEER_REVIEW_VIEWS_DRAW: readonly { search: string; where: string; says: string }[] = [
-  { search: "?mode=peer-review", where: ".mode-band.peer-review.citations", says: CITATION_TITLE },
-  { search: "?mode=peer-review&peer-review=reception", where: ".mode-band.peer-review.dbt", says: DEBATE_TITLE },
-  { search: "?mode=peer-review&peer-review=claims", where: ".mode-band.peer-review.dbt", says: CLAIM_STATEMENT },
+const SOURCES_VIEWS_DRAW: readonly { search: string; where: string; says: string }[] = [
+  { search: "?mode=sources", where: ".mode-band.sources.citations", says: CITATION_TITLE },
+  { search: "?mode=sources&sources=reception", where: ".mode-band.sources.dbt", says: DEBATE_TITLE },
+  { search: "?mode=sources&sources=claims", where: ".mode-band.sources.dbt", says: CLAIM_STATEMENT },
 ];
 
-describe("phase B — Peer review's three sub-modes", () => {
-  for (const view of PEER_REVIEW_VIEWS_DRAW) {
+describe("phase B — Sources' three sub-modes", () => {
+  for (const view of SOURCES_VIEWS_DRAW) {
     it(
       `${view.search}: one band, its own body, the chip row as its head and one (i)`,
       async () => {

@@ -1,12 +1,12 @@
 ---
-keywords: citations references bibliography sources works cited papers links doi arxiv scholar footnotes influence relevance debate critiques reception responses reviews criticism replies web what others say reaction supportive critical claims cited citing cited by openalex angle angles lens steer check tick dig further own claim
+keywords: peer review citations references bibliography sources works cited papers links doi arxiv scholar footnotes influence relevance debate critiques reception responses reviews criticism replies web what others say reaction supportive critical claims cited citing cited by openalex angle angles lens steer check tick dig further own claim
 related: mode-referee, faq-beyond-the-article
 ---
 
 ## In short
 
 A piece sits among other people’s work: the works it builds on, and what others have said about it
-since. Peer review shows both. **Bibliography** lists what this piece cites, with a link for each;
+since. Sources shows both. **Bibliography** lists what this piece cites, with a link for each;
 **Reception** is what others say about the piece itself; and **Claims** lists the claims it rests on,
 so you can check what others say about each one. Every source links out, so you can check it rather
 than take our word for it.
@@ -26,8 +26,8 @@ reception at all. A link or Back to a view never starts anything; it shows a but
 **Search the web**. Only whoever added the article can make these; visitors to a shared article see
 what has already been made.
 
-Peer review used to be two modes, Citations and Debate. Old links to either still open the right
-view. If you have been asked to review a paper yourself, [Referee](/help/mode-referee) is the mode
+Sources used to be two modes, Citations and Debate, and was briefly called Peer review. Old links
+to any of them still open the right view. If you have been asked to review a paper yourself, [Referee](/help/mode-referee) is the mode
 for that.
 
 ## Reading it
@@ -61,7 +61,7 @@ for that.
   citation in the text. A longer reading kept on a row from before (once made by a button called
   **Dig deeper**, which has gone) is still shown there. Once you have asked, a line under the row
   shows how the chat’s latest answer begins; press it to open that conversation again beside
-  Bibliography. The conversation is also in Chat’s list, marked with Peer review’s icon. Only
+  Bibliography. The conversation is also in Chat’s list, marked with Sources’ icon. Only
   whoever added the article has this.
 - **first cited** jumps to where the article first cites it. *only in the references* means the
   article lists it but never cites it in the text.

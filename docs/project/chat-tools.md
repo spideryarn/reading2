@@ -547,7 +547,7 @@ From 2026-10-01 it showed chats only.
   (stage 3) targets the guide.
 - **Where a row came from** is one pure function, `threadSource` in
   [`thread-source.ts`](../../src/web/thread-source.ts), in this order: a stored origin (*Started
-  from a claim in Peer review › Claims*), one of Learn's conversation kinds (`learn`, `tutorial` or `explore`,
+  from a claim in Sources › Claims*), one of Learn's conversation kinds (`learn`, `tutorial` or `explore`,
   rendered as *From Learn › Recall* and its siblings), an anchor (*About a
   passage*: the "?" and a comment's question), and otherwise a plain chat. A row from elsewhere has
   an icon at its head, the source mode's own from the bar
@@ -568,7 +568,7 @@ From 2026-10-01 it showed chats only.
   origin; see `ConversationBand`'s arrival rule and `tests/chat-draft-survives-a-mode-change.test.tsx`.
 - **The filter** above the list is All, Chats, then one choice per other source present, with
   Learn's three sub-modes as one. It is drawn only when there is more than one source. The
-  choice is `?chatfrom=` ([url-state.md](url-state.md)). The sources are Peer review (its Reception and Claims, and its Bibliography, which
+  choice is `?chatfrom=` ([url-state.md](url-state.md)). The places are Sources (its Reception and Claims, and its Bibliography, which
   were Debate and Citations until 2026-10-09), Glossary and Ideas (a chat started from a claim or an angle, an entry, a cited work, an idea),
   Learn, and a passage.
 - **An open chat with an origin has a way back** to its item, one line above the transcript:
@@ -1027,6 +1027,22 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   carries both under WHO IS READING THIS, read fresh. Not offered in Live (`GUIDE_TOOLS` is what
   Live reads, and a voice has nowhere for the button). It replaced 261009i's *Keep this as why
   you're reading*.
+- **Its next steps**, since 2026-10-09: a second tool of its own, **`offer_next_steps`**, which runs
+  nothing ([261009u](../plans/261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md);
+  Greg, `spya-pqaftb`: *"maybe three would be about right. Probably the LLM should suggest them as
+  the language"*). At the end of an answer the model gives up to three steps, each `ask` (words the
+  reader can send next), `mode` (an ordinary mode's catalogue key), `search` (words for a quick
+  search), `share` or `archive`; [`src/next-steps.ts`](../../src/next-steps.ts) checks them on the
+  server and again on the page, and they ride on the run (`ToolRun.steps`). The page draws the
+  latest settled answer's as a row of buttons
+  ([`GuideNextSteps.tsx`](../../src/web/GuideNextSteps.tsx)), **never pressed by the guide**: an ask
+  sends exactly the words on it; a mode is the chip `chipFor` would make; a search is a box the
+  reader can edit and the quick-search chip for its words; *Share this article…* goes to
+  Metadata's *Access & sharing* card and *Archive or put back…* to Metadata, the one place each is
+  done. No ⚙ line is drawn for it. **It ends the turn** (`ENDS_THE_TURN` in
+  [`src/converse.ts`](../../src/converse.ts)) when it is all a round asked for, that round wrote
+  prose, and the offer was accepted: the model needs nothing back, so no second request. Typed
+  only, like `offer_to_save`.
 - **Its greeting is ours**, not a model's ([`GuideGreeting.tsx`](../../src/web/GuideGreeting.tsx),
   words chosen in [`guide-greeting.ts`](../../src/web/guide-greeting.ts)): free, and since
   2026-10-09 it asks in the conversation rather than in a box
@@ -1035,8 +1051,9 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   the reader to the piece by title, asks why they are reading it when no reason is stored, quotes
   the start of *About you* back and asks if it is still right, and stays above the turns while the
   conversation is mounted. What the reader answers is saved only through the guide's offer and
-  their press (above). *Ask the guide where to start* sends a fixed first question once a reason
-  is stored. `GUIDE_SYSTEM` is told the greeting exists, since it is not in the transcript.
+  their press (above). While the conversation is empty it offers three ways in, each sent as the
+  reader's first message (*Where should I start?*, *Help me work out what I want from this*, *How
+  could I read this well?*; plan 261009u); after that, the guide's own next steps (above). `GUIDE_SYSTEM` is told the greeting exists, since it is not in the transcript.
 - **A row in the command bar**, *Guide*, on the owner's reading view (`guideRow` in
   [`CommandBar.tsx`](../../src/web/CommandBar.tsx)), which opens it as `?guide=1` does; and since
   261007j the bar's *Ask the guide: "…"* for a sentence the fast pick could not place.

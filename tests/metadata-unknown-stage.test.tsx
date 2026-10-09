@@ -166,7 +166,7 @@ describe("a stage row on the Metadata page", () => {
   it("draws a stage this copy knows (the control)", async () => {
     const page = await pageWithStage("fetch");
     expect(page.caught).toBeNull();
-    // Named as the reader meets it, not by the server's label (plan 261009u).
+    // Named as the reader meets it, not by the server's label (plan 261009x).
     expect(page.text).toContain(stepName("fetch"));
     expect(page.text).not.toContain("Some stage");
     expect(host.querySelector(".lucide-download")).not.toBeNull();

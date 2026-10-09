@@ -63,8 +63,8 @@ const RUNS = [
   ["structure", "summary", "diagram", "skim"],
   ["quotes", "glossary", "faq", "ideas", "timeline"],
   /* Citations, Referee, Debate until 2026-10-09, when Citations and Debate
-     became Peer review, in Debate's place (plan 261009l). */
-  ["referee", "peer-review"],
+     became Sources, in Debate's place (plan 261009l). */
+  ["referee", "sources"],
   ["search", "chat", "learn"],
   /* Marginalia's toggle, since 2026-10-01 a switch beside the band rather than
      one of the bands, at the right-hand end like its column
@@ -108,10 +108,10 @@ describe("the mode bar's order", () => {
   });
 
   it("with the switch off, draws lines only where two surviving runs meet", () => {
-    /* Structure, Summary, Skim | Quotes, Glossary, Ideas | Peer review |
+    /* Structure, Summary, Skim | Quotes, Glossary, Ideas | Sources |
        Search, Chat, Learn: the critical run was hidden whole from 2026-10-05
-       (spya-cnqcjf) until Peer review came out of the switch on 2026-10-09
-       (plan 261009l); Referee, still behind it, leaves Peer review alone in
+       (spya-cnqcjf) until Sources came out of the switch on 2026-10-09
+       (plan 261009l); Referee, still behind it, leaves Sources alone in
        the run. Marginalia's toggle is last, in a frame of its own, since it
        left the switch on 2026-10-05 (spya-vv54j2). */
     const offered = visibleModes(false, undefined);
@@ -123,13 +123,13 @@ describe("the mode bar's order", () => {
       "quotes",
       "glossary",
       "ideas",
-      "peer-review",
+      "sources",
       "search",
       "chat",
       "learn",
       "marginalia",
     ]);
-    /* Of those the bar draws Structure, Summary, Skim | Peer review | Search,
+    /* Of those the bar draws Structure, Summary, Skim | Sources | Search,
        Chat, Learn — More since 2026-10-07, with Quotes, Glossary and Ideas
        under it, and Skim in Structure's run since 2026-10-08. */
     expect(drawnBands(false).map((m) => m.mode)).toEqual([
@@ -137,14 +137,14 @@ describe("the mode bar's order", () => {
       "structure",
       "summary",
       "skim",
-      "peer-review",
+      "sources",
       "search",
       "chat",
       "learn",
     ]);
     /* The bar asks about the bands only: the toggle's frame is its own edge
        (Dock.tsx § the three frames). */
-    expect([...groupStarts(drawnBands(false))].sort()).toEqual(["structure", "peer-review", "search"].sort());
+    expect([...groupStarts(drawnBands(false))].sort()).toEqual(["structure", "sources", "search"].sort());
   });
 
   it("a gathered mode drawn while it is open is a run of its own, after Skim, with its line", () => {
@@ -156,24 +156,24 @@ describe("the mode bar's order", () => {
         "summary",
         "skim",
         current,
-        "peer-review",
+        "sources",
         "search",
         "chat",
         "learn",
       ]);
-      expect([...groupStarts(drawn)].sort(), current).toEqual(["structure", current, "peer-review", "search"].sort());
+      expect([...groupStarts(drawn)].sort(), current).toEqual(["structure", current, "sources", "search"].sort());
     }
   });
 
   it("puts a retained experimental mode in its run, and the run's line before it", () => {
     /* A reader with the switch off, sitting in Referee by URL: the bar draws
-       Referee beside Peer review, and the critical run's line moves to
+       Referee beside Sources, and the critical run's line moves to
        Referee, its first. It was Debate alone in its run until 2026-10-09,
-       when Debate became Peer review and left the switch (plan 261009l). */
+       when Debate became Sources and left the switch (plan 261009l). */
     const drawn = drawnBands(false, "referee");
     expect(drawn.map((m) => m.mode)).toContain("referee");
     expect([...groupStarts(drawn)]).toContain("referee");
-    expect([...groupStarts(drawn)]).not.toContain("peer-review");
+    expect([...groupStarts(drawn)]).not.toContain("sources");
     expect([...groupStarts(drawn)]).toContain("search");
   });
 });

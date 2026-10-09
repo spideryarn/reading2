@@ -2085,7 +2085,7 @@ function RerunRow({
       <span className="tw:text-foreground">{RERUN_LABEL[step]}</span>
       {/* **What it is**, under its name, so a row that is not a mode — the
           arc, the relation words — says what pressing it remakes. Greg,
-          2026-10-09 (`spya-u62q09`), plan 261009u. The same faint line as the
+          2026-10-09 (`spya-u62q09`), plan 261009x. The same faint line as the
           note below, and placed by the same rule. */}
       <span className="tw:order-last tw:-mt-1 tw:basis-full tw:pl-9 tw:text-xs tw:text-ink-faint">
         {stepWhat(step)}
@@ -3795,7 +3795,7 @@ function StageRow({
             was the pipeline's present-tense label (*Writing the thread*), which
             matched neither the re-run row above nor the button that shows it;
             it is now the mode's (*Summary › Thread*), and the line under it
-            says what it is — plan 261009u. A step this copy has never heard of
+            says what it is — plan 261009x. A step this copy has never heard of
             keeps the server's label. The key still earns its place: it is what
             `npx tsx scripts/stage.ts <step> <slug>` takes, and this is the page
             you have open when you are about to type that. */}

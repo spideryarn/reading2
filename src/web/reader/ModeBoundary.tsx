@@ -55,7 +55,7 @@ import { FeatureBoundary } from "../FeatureBoundary.js";
 import {
   diagramParam,
   type Mode,
-  peerReviewParam,
+  sourcesParam,
   refereeParam,
   learnParam,
   structureParam,
@@ -93,7 +93,7 @@ export const MODE_CONTAINMENT: Record<Mode, Containment> = {
   learn: BAND,
   quotes: BAND,
   timeline: BAND,
-  "peer-review": BAND,
+  sources: BAND,
   structure: BAND,
   faq: BAND,
   skim: BAND,
@@ -105,7 +105,7 @@ export const MODE_CONTAINMENT: Record<Mode, Containment> = {
 
 /**
  * **Each sub-mode's parameter, under its mode's own name** — `?diagram=`,
- * `?peer-review=` and so on, which is what lets `sub[mode]` below be the view that
+ * `?sources=` and so on, which is what lets `sub[mode]` below be the view that
  * mode is showing. `satisfies` and not an annotation, so nuqs still sees each
  * parser's own type and a seventh mode with sub-modes fails to compile here.
  */
@@ -115,7 +115,7 @@ const SUB_MODE_PARAMS = {
   learn: learnParam,
   summary: summaryParam,
   structure: structureParam,
-  "peer-review": peerReviewParam,
+  sources: sourcesParam,
 } satisfies Record<ModeWithSubModes, unknown>;
 
 /**
@@ -131,8 +131,8 @@ const SUB_MODE_PARAMS = {
  * - **`anyone`**: Summary (a visitor gets the plain-words lengths and the
  *   thread too, off the payload — SummaryMode.tsx § `VisitorSummaryBand`),
  *   Structure (Fisheye and Expanded are two bands for anyone, off the payload)
- *   and Peer review (Bibliography, Reception and Claims, read by both
- *   `PeerReviewBand` and `VisitorPeerReviewBand` — PeerReviewMode.tsx).
+ *   and Sources (Bibliography, Reception and Claims, read by both
+ *   `SourcesBand` and `VisitorSourcesBand` — SourcesMode.tsx).
  *
  * A `Record`, so a new mode with sub-modes is a compile error until somebody
  * has said which. tests/a-broken-mode-leaves-the-article-readable.test.tsx.
@@ -143,7 +143,7 @@ const SUB_MODE_SELECTS_A_BAND_FOR: Record<ModeWithSubModes, "anyone" | "owner"> 
   learn: "owner",
   summary: "anyone",
   structure: "anyone",
-  "peer-review": "anyone",
+  sources: "anyone",
 };
 
 function hasSubModes(mode: Mode): mode is ModeWithSubModes {

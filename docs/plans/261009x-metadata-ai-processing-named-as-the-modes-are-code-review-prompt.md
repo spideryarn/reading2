@@ -1,7 +1,7 @@
 You are reviewing code in this worktree, and you may fix what you find (workspace-write). Do not commit, do not run git commands that change history or the index, do not touch .env.local, the production database, or anything under infra/.
 
-The plan, with your own earlier plan review folded in at the bottom: docs/plans/261009u-metadata-ai-processing-named-as-the-modes-are.md.
-The scoped diff: docs/plans/261009u-metadata-ai-processing-named-as-the-modes-are-code-review.diff (plus the regenerated src/command-pick-catalogue.generated.json).
+The plan, with your own earlier plan review folded in at the bottom: docs/plans/261009x-metadata-ai-processing-named-as-the-modes-are.md.
+The scoped diff: docs/plans/261009x-metadata-ai-processing-named-as-the-modes-are-code-review.diff (plus the regenerated src/command-pick-catalogue.generated.json).
 
 Look for:
 1. Correctness: any place a step name or label is now wrong, blank, or looked up unsafely (unknown steps from a newer server, prototype keys); any place that still has its own copy of these names (grep src/web for hard-coded "Thread", "Reception", "Bibliography", "Simple summary", "Relation words" used as a step's name).

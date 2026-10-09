@@ -1,4 +1,4 @@
-You are reviewing a plan, read-only. Plan: docs/plans/261009u-metadata-ai-processing-named-as-the-modes-are.md.
+You are reviewing a plan, read-only. Plan: docs/plans/261009x-metadata-ai-processing-named-as-the-modes-are.md.
 
 Read it, then the code it touches: src/web/Metadata.tsx (RerunSection, RerunRow, StageRecord, StageRow), src/web/rerun-commands.ts, src/rerun-steps.ts, src/web/sub-modes.ts, src/mode-catalog.ts, src/title-text.ts (MODE_LABEL), src/web/command-runners.ts, src/pipeline.ts (STEPS labels), src/types.ts (StepName), and the tests that pin re-run labels (grep tests/ for RERUN_LABEL and "Run again").
 

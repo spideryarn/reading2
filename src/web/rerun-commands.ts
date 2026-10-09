@@ -33,7 +33,7 @@ import { METADATA_RERUN_STEPS, type MetadataRerunStep } from "../rerun-steps.js"
 import { MODE_LABEL } from "../title-text.js";
 import { SKETCH_WAIT } from "./sketch-cost.js";
 import { stepName } from "./step-names.js";
-import { PEER_REVIEW_SUB_MODES, SUMMARY_SUB_MODES } from "./sub-modes.js";
+import { SOURCES_SUB_MODES, SUMMARY_SUB_MODES } from "./sub-modes.js";
 
 export { METADATA_RERUN_STEPS, type MetadataRerunStep };
 
@@ -42,7 +42,7 @@ export { METADATA_RERUN_STEPS, type MetadataRerunStep };
  * makes, as step-names.ts § `stepName` writes it (`Glossary`,
  * `Summary › Thread`), and never a second list of names for the same steps.
  * Until 2026-10-09 this was that second list, and it said *Thread* where the
- * button says *Summary › Thread* — plan 261009u.
+ * button says *Summary › Thread* — plan 261009x.
  */
 export const RERUN_LABEL: Readonly<Record<MetadataRerunStep, string>> = Object.fromEntries(
   METADATA_RERUN_STEPS.map((step) => [step, stepName(step)]),
@@ -86,9 +86,9 @@ export const RERUN_COST_NOTE: Partial<Record<MetadataRerunStep, string>> = {
  * either step would make `rerun summarise` a guess — and for the thread it
  * would make `rerun summary` force a thread (GPT Sol, F5 of the 261003l
  * review). Each is named by hand in `RERUN_ALSO_CALLED` instead. **And both
- * of Peer review's**, since 2026-10-09, for the same reason: borrowing its name
- * for the citations and the Reception search would make `rerun peer review` a
- * guess between two paid runs (GPT Sol's F8 on plan 261009l). A `Partial`
+ * of Sources'**, since 2026-10-09, for the same reason: borrowing its name
+ * for the citations and the Reception search would make `rerun sources` (or
+ * `rerun peer review`, its old name) a guess between two paid runs (GPT Sol's F8 on plan 261009l). A `Partial`
  * on purpose: a mode borrowed wrongly would teach the bar a word that runs
  * something the reader did not name.
  */
@@ -124,13 +124,13 @@ const RERUN_ALSO_CALLED: Partial<Record<MetadataRerunStep, readonly string[]>> =
      a later rename reaches this one too. Not `x`: `rerun x` is too little to
      hang a paid run on. */
   tweets: (SUMMARY_SUB_MODES.thread.aliases ?? []).filter((alias) => alias !== "x"),
-  /* **Each of Peer review's re-runs answers to its own sub-mode's words** —
+  /* **Each of Sources' re-runs answers to its own sub-mode's words** —
      the retired mode word first (`citations`, `debate`), then the nicknames the
      two modes had, which are the sub-mode rows' own aliases now
-     (sub-modes.ts § `PEER_REVIEW_SUB_MODES`). Never `peer review`: plan
-     261009l, GPT Sol's F8. */
-  citations: PEER_REVIEW_SUB_MODES.bibliography.aliases ?? [],
-  debate: PEER_REVIEW_SUB_MODES.reception.aliases ?? [],
+     (sub-modes.ts § `SOURCES_SUB_MODES`). Never `sources` or `peer review`:
+     plan 261009l, GPT Sol's F8. */
+  citations: SOURCES_SUB_MODES.bibliography.aliases ?? [],
+  debate: SOURCES_SUB_MODES.reception.aliases ?? [],
 };
 
 /**
@@ -161,7 +161,7 @@ function rerunNames(step: MetadataRerunStep): readonly string[] {
        Nobody types the arrow, and the whole path would put the parent's name
        at the front of a phrase: `rerun peer review › bibliography` answers
        `rerun peer review`, which must pick neither paid run (GPT Sol's F8 on
-       plan 261009l). Plan 261009u. */
+       plan 261009l). Plan 261009x. */
     label.split(" › ").at(-1) ?? label,
     ...(mode === undefined ? [] : [MODE_LABEL[mode], ...MODE_CATALOG[mode].aliases]),
     ...(RERUN_ALSO_CALLED[step] ?? []),

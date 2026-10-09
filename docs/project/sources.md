@@ -1,4 +1,4 @@
-# Peer review — what this piece cites, and what others say about it
+# Sources — what this piece cites, and what others say about it
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
@@ -19,20 +19,22 @@ the experimental switch, in every reader's bar, since the day it was made.
 >
 > — Greg, 2026-10-09 (spya-vcvxu5, to q-xf2xvb)
 
-The plan, its review and what is left to build are
-[261009l](../plans/261009l-peer-review-mode-merges-citations-and-debate.md). The depth on each list
+It was called **Peer review** for its first day; § The name says why it is Sources now. The plan,
+its review and what is left to build are
+[261009l](../plans/261009l-peer-review-mode-merges-citations-and-debate.md), and the rename is
+[261009w](../plans/261009w-peer-review-becomes-sources-all-the-way-down.md). The depth on each list
 stays where it was: **[citations.md](citations.md)** for Bibliography, **[debate.md](debate.md)**
 for Reception and Claims. This page owns the merge.
 
 ## In this doc
 
 - [§ The band](#the-band) — one chip row, two panels, one surface
-- [§ The address, and old links](#the-address-and-old-links) — `?peer-review=`, and where `?mode=citations` and `?mode=debate` land
+- [§ The address, and old links](#the-address-and-old-links) — `?sources=`, and where `?mode=citations`, `?mode=debate` and `?mode=peer-review` land
 - [§ What a press buys](#what-a-press-buys) — each sub-mode's own work, and what is made on import
 - [§ Visitors](#visitors) — open on any one of its three artefacts
 - [§ Cited in this paragraph](#cited-in-this-paragraph) — the works a claim's paragraph cites, under the claim
 - [§ Chats started from it](#chats-started-from-it) — one filter, three tooltips, three ways back
-- [§ The name, and what still says Citations and Debate](#the-name-and-what-still-says-citations-and-debate)
+- [§ The name, and what still says Citations and Debate](#the-name-and-what-still-says-citations-and-debate) — Peer review, then Sources
 - [§ Where the code is](#where-the-code-is)
 
 ## The band
@@ -43,31 +45,31 @@ for Reception and Claims. This page owns the merge.
  │ DebatePanel, as the Debate mode drew it         ← Reception, Claims
 ```
 
-**A wrapper, not a rewrite.** `PeerReviewBand` reads the sub-mode and hands one chip row to
+**A wrapper, not a rewrite.** `SourcesBand` reads the sub-mode and hands one chip row to
 whichever panel it names, as that panel's `head`, so there is exactly one `ModeSurface` on screen,
-the panel's, with `mode="peer-review"`: the band's (i) opens with this mode's card, then what the
+the panel's, with `mode="sources"`: the band's (i) opens with this mode's card, then what the
 panel adds (its counts and who made it). The chip row is the band's header in every sub-mode, so
 switching does not move it; it replaced Debate's globe-and-title head and the Reception | Claims row
 under it.
 
 **Each chip's number is its own list's**, worked out by the pure selectors in
-[`peer-review-counts.ts`](../../src/web/peer-review-counts.ts) that the panels draw their lists
+[`sources-counts.ts`](../../src/web/sources-counts.ts) that the panels draw their lists
 with, so a number and the list under it cannot disagree (GPT Sol's F4): every work cited for
 Bibliography (no number while there is no list), Reception's rows through its thread, Claims' listed
 claims or, once checked, the sources the checks found.
 
 **The description is the frame Greg gave**, *"What this piece cites, and what others say about
-it"*, and each chip's card leads with one half of it (sub-modes.ts § `PEER_REVIEW_SUB_MODES`).
+it"*, and each chip's card leads with one half of it (sub-modes.ts § `SOURCES_SUB_MODES`).
 There is no description line in the band ([mode.md § The client](mode.md#the-client)).
 
 ## The address, and old links
 
-`?mode=peer-review`, and `?peer-review=reception` or `claims`; Bibliography is the default and is
+`?mode=sources`, and `?sources=reception` or `claims`; Bibliography is the default and is
 left off. Each sub-mode keeps its own parameters, unchanged: `?citeby=` and `?citebar=` for
 Bibliography, `?debateby=`, `?bears=` and `?debatethread=` for Reception and Claims.
 
 **Every old address lands on the sub-mode it meant**, through one function,
-`liftLegacyPeerReview` in [`router.ts`](../../src/web/router.ts), run on boot (`settleAddress`), on
+`liftLegacySources` in [`router.ts`](../../src/web/router.ts), run on boot (`settleAddress`), on
 a client navigation and on Back (`liftedLegacyHref`), and on a remembered last view
 (`liftedLegacySearch`, asked by [`last-view.ts`](../../src/web/last-view.ts) § `restoredHref`),
 which is put on the address after boot and would otherwise have opened Bibliography (GPT Sol's
@@ -78,24 +80,31 @@ F1):
 | `?mode=citations` | Bibliography |
 | `?mode=debate` | Reception |
 | `?mode=debate&debate=claims`, or the older `?debateby=claim` | Claims |
-| `?chatfrom=citations`, `?chatfrom=debate` | `?chatfrom=peer-review` |
+| `?mode=peer-review`, with `?peer-review=X` if any | the same, as `?mode=sources&sources=X` |
+| `?peer-review=X` on any address | `?sources=X` |
+| `?chatfrom=citations`, `?chatfrom=debate`, `?chatfrom=peer-review` | `?chatfrom=sources` |
 
-An explicit `?peer-review=` wins over the old words. `RETIRED_MODES` in
-[`src/modes.ts`](../../src/modes.ts) maps both old words to `peer-review` for everything that reads
-only the mode: the tab title, `/help/mode-citations` and `/help/mode-debate`, a feedback report.
-*tests/peer-review-old-addresses.test.ts* and *tests/debate-navigation.test.tsx*.
+The newest explicit word wins: `?sources=` over `?peer-review=` over Debate's `?debate=`.
+`RETIRED_MODES` in [`src/modes.ts`](../../src/modes.ts) maps all three old words to `sources` for
+everything that reads only the mode: the tab title, `/help/mode-citations`, `/help/mode-debate` and
+`/help/mode-peer-review`, a feedback report. `peer-review` is in last-view's `NEVER_REMEMBERED`
+beside `debate`, so a lone old `?peer-review=claims` link wins over a remembered view.
+*tests/sources-old-addresses.test.ts*, *tests/last-view.test.ts* and
+*tests/debate-navigation.test.tsx*.
 
 **In the command bar the old words find the sub-mode they meant**, as Tweets' did Summary's Thread:
 *citations* and the bibliography words (*references*, *works cited*) find Bibliography, *debate* and
-Debate's words (*critiques*, *reception*) find Reception, and *debate claims* finds Claims. "Peer review" left Referee's aliases, since it is this
-mode's name; Referee keeps *peer reviewer* and *referee report*, and ranks after Peer review for
-*peer review*.
+Debate's words (*critiques*, *reception*) find Reception, and *debate claims* finds Claims. *peer
+review* left Referee's aliases when this mode took the name, and stays this mode's alias now that
+the name has gone. Referee keeps *referee report*, and has the person as *for peer reviewers*
+rather than *peer reviewer*, which would start with this mode's nickname and, Referee being first in
+the bar, take it (mode-catalog.ts § `aliases`, rule 5); it ranks after Sources for *peer review*.
 
 ## What a press buys
 
-**Each sub-mode buys its own work and only on a press of its own**: a press on the Peer review
+**Each sub-mode buys its own work and only on a press of its own**: a press on the Sources
 button, a chip, or a command-bar row arms the work of the sub-mode it lands on (activation.ts §
-`activationForPeerReview`): the `citations` list for Bibliography, the `debate` web search for
+`activationForSources`): the `citations` list for Bibliography, the `debate` web search for
 Reception, the `debate-claims` list for Claims. Every read stays mounted in all three sub-modes, so
 the chips can count, and each auto-run is gated on its own sub-mode, so a press armed for one that
 lands on another is retired unspent. A link, Back, popstate or a last-view restore never buys
@@ -109,7 +118,7 @@ waits for its chip.
 **An owner can buy Reception's search again and again**, as every completed step can be re-run:
 Metadata offers each step, and the command bar's *Run again* rows post a forced run. This is
 accepted as it stands (plan 261009l § Reception's spend). Those rows are labelled *Bibliography ›
-Run again* and *Reception › Run again*, and a bare *rerun peer review* picks neither (GPT Sol's F8,
+Run again* and *Reception › Run again*, and a bare *rerun sources* (or *rerun peer review*) picks neither (GPT Sol's F8,
 [`rerun-commands.ts`](../../src/web/rerun-commands.ts)).
 
 ## Visitors
@@ -119,7 +128,7 @@ Run again* and *Reception › Run again*, and a bare *rerun peer review* picks n
 not stored says so inside the open band — *Nobody has listed the works this one cites yet*, *Nobody
 has asked the web about this one yet* — rather than closing the mode on a visitor who could read the
 other two. With none of the three, the band is the usual not-built gap, naming both. The visitor
-band, `VisitorPeerReviewBand`, mounts none of the owner's reads, so it can neither read the owner's
+band, `VisitorSourcesBand`, mounts none of the owner's reads, so it can neither read the owner's
 lists nor start anything.
 
 ## Cited in this paragraph
@@ -148,40 +157,52 @@ line, from the same two lists in the public payload.
 ## Chats started from it
 
 A chat started from a cited work, a claim or an angle keeps its stored origin, `citations` or
-`debate`, as data. Chat's list shows all three under Peer review's icon and one `peer-review` filter;
-the tooltip names the sub-mode (*Started from a claim in Peer review › Claims*), and the way back
+`debate`, as data. Chat's list shows all three under Sources' icon and one `sources` filter;
+the tooltip names the sub-mode (*Started from a claim in Sources › Claims*), and the way back
 opens that sub-mode: a work on Bibliography with its row in view, an angle on Reception, a claim on
 Claims with its row in view ([`thread-source.ts`](../../src/web/thread-source.ts) § `originBack`,
 Reader.tsx § `openOrigin`, GPT Sol's F5).
 
 **A focus belongs to one visit to its list**: Bibliography's focused work is forgotten on leaving
-Bibliography, and Claims' focused claim on leaving Claims, even when the mode stays Peer review
+Bibliography, and Claims' focused claim on leaving Claims, even when the mode stays Sources
 (item-focus.ts § `focusesLeft`, GPT Sol's F7). One Reader-owned `openBibliographyWork` sets the
 focus and moves to Bibliography together.
 
 ## The name, and what still says Citations and Debate
 
-"Peer review" is provisional, and **it shares a phrase with [Referee](referee-mode.md)**, the mode
-for somebody *doing* a peer review; the question is in
-[q-xf2xvb](../user-feedback/questions/q-xf2xvb.md). So the rename stops at what a reader sees and
-the mode's own word: the label, the catalogue, `?mode=peer-review`, `?peer-review=`, the help page,
-the remembered view, the chat filter. **The stored names keep the old words** until Greg confirms
-the name: the `citations`, `debate` and `debate-claims` steps, columns and routes, a chat's stored
-origin, `CitationsPanel` and `DebatePanel`, and the `cite-` and `dbt-` CSS. That is plan 261009l §
-Stage 3, held, and an exception to
-[rename-or-move.md § A rename on screen is a rename all the way down](../reusable/rename-or-move.md#a-rename-on-screen-is-a-rename-all-the-way-down)
-taken because the name may change again. New identifiers are Peer-review-named.
+**It was called Peer review** on the day it was made, and that name **shared a phrase with
+[Referee](referee-mode.md)**, the mode for somebody *doing* a peer review. Asked whether to keep
+it, rename it to a word with no clash, or rename Referee
+([q-xf2xvb](../user-feedback/questions/q-xf2xvb.md)), Greg answered:
+
+> B Sources.
+>
+> Rename comprehensively, eg including docs, code, database etc
+>
+> — Greg, 2026-10-09 (reply `spya-egmn6r` to q-xf2xvb)
+
+So the mode is Sources all the way down
+([261009w](../plans/261009w-peer-review-becomes-sources-all-the-way-down.md)), in stages. The mode's
+own word went first: the label, the catalogue, `?mode=sources`, `?sources=`, the help page, the
+remembered view, the chat filter and every `Sources…` identifier. **The stored names still keep the
+old words until that plan's later stages**: the `citations`, `debate` and `debate-claims` steps,
+columns and routes, a chat's stored origin, `CitationsPanel` and `DebatePanel`, and the `dbt-` CSS.
+They become Bibliography, Reception and `sources-claims`, after the sub-modes they now are.
+
+"Source" already means several other things here (`sourceHash`, the imported article's raw source,
+chat's web sources, Reception's key sources, the Storage bucket), so the mode appears only in the
+forms that plan lists, and nobody renames by a blanket replace on the word.
 
 ## Where the code is
 
-- [`src/web/modes/peer-review/PeerReviewMode.tsx`](../../src/web/modes/peer-review/PeerReviewMode.tsx)
-  — the owner's band, the visitor's, and the chip row (`PeerReviewViews`).
-- [`src/web/peer-review-counts.ts`](../../src/web/peer-review-counts.ts) — the chips' numbers and the
+- [`src/web/modes/sources/SourcesMode.tsx`](../../src/web/modes/sources/SourcesMode.tsx)
+  — the owner's band, the visitor's, and the chip row (`SourcesViews`).
+- [`src/web/sources-counts.ts`](../../src/web/sources-counts.ts) — the chips' numbers and the
   lists behind them, shared with the panels.
 - [`src/web/CitationsPanel.tsx`](../../src/web/CitationsPanel.tsx) and
   [`src/web/DebatePanel.tsx`](../../src/web/DebatePanel.tsx) — the two panels; both take the chip row
   as `head`, and DebatePanel draws C1's cited works under claims.
-- [`src/web/params.ts`](../../src/web/params.ts) § `peerReviewParam`; [`src/web/router.ts`](../../src/web/router.ts)
-  § `liftLegacyPeerReview`; [`src/web/activation.ts`](../../src/web/activation.ts) §
-  `activationForPeerReview`.
-- The help page, `src/web/help/pages/modes/peer-review.md`, written for a reader.
+- [`src/web/params.ts`](../../src/web/params.ts) § `sourcesParam`; [`src/web/router.ts`](../../src/web/router.ts)
+  § `liftLegacySources`; [`src/web/activation.ts`](../../src/web/activation.ts) §
+  `activationForSources`.
+- The help page, `src/web/help/pages/modes/sources.md`, written for a reader.

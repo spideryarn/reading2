@@ -50,7 +50,7 @@ of several, not the reason the app exists; [vision.md](vision.md) has the rest.
 - **Never substitute generated text for the prose,** and render model output as text, not HTML.
 - **One payload, no network on zoom** — meta, blocks and tree arrive together.
 - **Pressing a mode with nothing in it runs it; arriving at one does not.** The artefact-backed
-  surfaces are Glossary, Ideas, Quotes, Timeline, Peer review's three sub-modes, FAQ, Skim, and the Sketch
+  surfaces are Glossary, Ideas, Quotes, Timeline, Sources' three sub-modes, FAQ, Skim, and the Sketch
   or Illustrated picture inside Diagram —
   and since 2026-09-02 a press on the bar's button starts the job with no second click. A pasted link, a
   Back step and a link in from the metadata page all show the empty state and its button, and spend
@@ -184,10 +184,11 @@ asked for less motion gets the bar at once. Which mount plays it is
     Open it for the scene format, what it costs, and what each shape claims.
   - **[illustrated.md](illustrated.md)** — the Sketch painted by an image model. Open it for the
     lettering, the paper's own figures, and why it is the one picture that cannot be checked.
-- **[peer-review.md](peer-review.md)** — what this piece cites, and what others say about it:
-  Citations and Debate as one mode since 2026-10-09, with three sub-modes, out of the switch. Open
-  it for the merge: the chip row, where old `?mode=citations` and `?mode=debate` links land, what
-  each press buys, and which stored names still say the old words.
+- **[sources.md](sources.md)** — what this piece cites, and what others say about it:
+  Citations and Debate as one mode since 2026-10-09, with three sub-modes, out of the switch; called
+  Peer review for its first day. Open it for the merge: the chip row, where old `?mode=citations`,
+  `?mode=debate` and `?mode=peer-review` links land, what each press buys, and which stored names
+  still say the old words.
   - **[citations.md](citations.md)** — Bibliography: every work the piece cites, each with a link
     out, ordered and thresholded the way the glossary is. Open it for the one safety property: every
     address a row shows was in the article, and a search says it is one.
@@ -221,7 +222,7 @@ asked for less motion gets the bar at once. Which mount plays it is
   stay hidden — [261001i](../plans/261001i-annotations-column-beside-a-band-mode.md),
   [261001k](../plans/261001k-annotations-head-path-wraps-and-the-notes-swap-in-on-a-narrow-window.md). Greg's layout from SPIDERYARN-READING2-7K: left for what is not anchored
   to the text, the middle for the text, the right for what is. Since 261002b it also carries, shut,
-  the FAQ, Peer review's claims and cited works, and comments other modes have stored.
+  the FAQ, Sources' claims and cited works, and comments other modes have stored.
   **[marginalia.md](marginalia.md)** is its doc: what it shows, and the rule to keep an eye out for
   new kinds of item that belong there. The plans before it:
   [261001d](../plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md), then 261001i,

@@ -48,6 +48,14 @@ authorization code with PKCE, tokens and refresh. We write three things: the con
 
 ## Revised after Sol's plan review (`rethink`), before any code
 
+**Amendment, 2026-10-09:** Greg approved a hand-registered client per AI app, so Claude and
+ChatGPT can both connect. `MCP_OAUTH_CLIENT_ID` now accepts a comma-separated list, ignoring
+spaces and empty entries; no entries still means off. Dynamic registration remains off.
+F7's explicit origin allowlist now also admits exactly `https://chatgpt.com`: this extends trust
+to that approved provider, while hostile suffixes, `null`, configured resource addresses and
+the verified client-id/admin checks keep the same boundary. The single-client wording below
+records the original design; [mcp.md](../project/mcp.md) is the current setup.
+
 [261007p-mcp-plan-review-sol.md](261007p-mcp-plan-review-sol.md) found ten things; the first changes the
 shape, and a research pass confirmed it from Supabase's source:
 
@@ -238,6 +246,25 @@ client by hand, run authorize (with `resource=`) → consent → token, and chec
 `client_id` and `/api/mcp` serves it, (b) the same token on `/api/library` is a 401, (c) what
 `PUT /auth/v1/user` does with it with *secure password change* on and off. (c) is the fact Greg's
 decision rests on.
+
+**Run on 2026-10-09** with [`scripts/mcp-oauth-spike.ts`](../../scripts/mcp-oauth-spike.ts),
+against the local stack restarted with this `config.toml` (Supabase CLI 2.115.0), as the local
+administrator, with no browser: it makes the consent page's own supabase-js calls.
+
+| | Result |
+|---|---|
+| authorize (with `resource=`) → consent → token | works; a refresh token is issued |
+| (a) token claims | `client_id` present; **`aud` is `"authenticated"`**: Supabase ignores `resource` |
+| (a) `/api/mcp` with it | `initialize` and `tools/call` both 200 |
+| (b) the same token on `/api/library` | 401 |
+| (c) `PUT /auth/v1/user` with a harmless `data` field | **200**: the token can edit the account at Supabase (F1 confirmed; undone after). Password change not tried |
+| authorization-server metadata | S256 PKCE; `none`, `client_secret_basic` and `client_secret_post`; no `registration_endpoint` (DCR off); no CIMD; no `authorization_response_iss_parameter_supported`, so ChatGPT will use a per-connector callback |
+
+Two gaps that are **local only**: the local gateway does not route RFC 8414's path-inserted
+discovery address (`/.well-known/oauth-authorization-server/auth/v1` is a 404, though production
+answers it), and the dev server does not apply `vercel.json`'s rewrite of
+`/.well-known/oauth-protected-resource/api/mcp`. So a real AI app cannot be pointed at a local
+stack as-is; the spike falls back to the addresses that do answer.
 
 ## Review
 

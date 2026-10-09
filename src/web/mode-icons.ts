@@ -50,7 +50,7 @@ export const MODE_ICON: Readonly<Record<Mode, LucideIcon>> = {
   /* Citations' book until 2026-10-09: the mode opens on Bibliography, so the
      button shows what a press lands on. Debate's globe stays Reception's
      job-progress icon (DebatePanel.tsx). */
-  "peer-review": BookText,
+  sources: BookText,
   search: Search,
   chat: MessagesSquare,
   learn: Brain,

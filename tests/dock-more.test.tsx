@@ -52,7 +52,7 @@ describe("splitForMore: what the bar draws and what the menu holds", () => {
       "structure",
       "summary",
       "skim",
-      "peer-review",
+      "sources",
       "search",
       "chat",
       "learn",
@@ -70,7 +70,7 @@ describe("splitForMore: what the bar draws and what the menu holds", () => {
       "diagram",
       "skim",
       "referee",
-      "peer-review",
+      "sources",
       "search",
       "chat",
       "learn",
@@ -88,7 +88,7 @@ describe("splitForMore: what the bar draws and what the menu holds", () => {
       "summary",
       "skim",
       "glossary",
-      "peer-review",
+      "sources",
       "search",
       "chat",
       "learn",
@@ -191,7 +191,7 @@ describe("the More button on the reading view", () => {
     for (const mode of ["quotes", "glossary", "ideas"] as const) {
       expect(radioLabels()).not.toContain(MODE_LABEL[mode]);
     }
-    expect(radioLabels()).toEqual(labelsOf(["plain", "structure", "summary", "skim", "peer-review", "search", "chat", "learn"]));
+    expect(radioLabels()).toEqual(labelsOf(["plain", "structure", "summary", "skim", "sources", "search", "chat", "learn"]));
   });
 
   it("is a menu button named More, with the word and an icon", () => {
@@ -222,7 +222,7 @@ describe("the More button on the reading view", () => {
     const buttons = [...frame.querySelectorAll<HTMLElement>(".dock-btn")];
     const at = buttons.indexOf(more);
     expect(buttons[at - 1]?.getAttribute("aria-label")).toBe(MODE_LABEL.skim);
-    expect(buttons[at + 1]?.getAttribute("aria-label")).toBe(MODE_LABEL["peer-review"]);
+    expect(buttons[at + 1]?.getAttribute("aria-label")).toBe(MODE_LABEL.sources);
   });
 
   it("opens a menu of exactly the gathered modes this reader has, in order", () => {
@@ -265,7 +265,7 @@ describe("the More button on the reading view", () => {
   it("draws the open gathered mode in the bar, checked, and marks it in an unshuffled menu", () => {
     reading({ mode: "glossary" });
     expect(radioLabels()).toEqual(
-      labelsOf(["plain", "structure", "summary", "skim", "glossary", "peer-review", "search", "chat", "learn"]),
+      labelsOf(["plain", "structure", "summary", "skim", "glossary", "sources", "search", "chat", "learn"]),
     );
     const checked = [...host.querySelectorAll('.dock-modes [aria-checked="true"]')];
     expect(checked.map((b) => b.getAttribute("aria-label"))).toEqual([MODE_LABEL.glossary]);
@@ -295,7 +295,7 @@ describe("the More button on the reading view", () => {
   it("counts More as a button in the shares a coarse pointer spreads the row by", () => {
     reading();
     const modes = host.querySelector<HTMLElement>(".dock-modes") as HTMLElement;
-    /* 8 radios (Peer review since 2026-10-09) + More + Marginalia + Comments (in Marginalia's frame since
+    /* 8 radios (Sources since 2026-10-09) + More + Marginalia + Comments (in Marginalia's frame since
        2026-10-08). It was the reachable count, 11, before 2026-10-07. */
     expect(modes.style.getPropertyValue("--dock-mode-count")).toBe("11");
     /* More is inside the radiogroup and the bands' frame since 2026-10-08. */
@@ -303,7 +303,7 @@ describe("the More button on the reading view", () => {
       (host.querySelector(".dock-modes-radios") as HTMLElement).style.getPropertyValue("--dock-radio-count"),
     ).toBe("9");
     const frame = (moreTrigger(host) as HTMLElement).closest(".dock-frame") as HTMLElement;
-    /* Structure, Summary, Skim, More, Peer review, Search, Chat, Learn. */
+    /* Structure, Summary, Skim, More, Sources, Search, Chat, Learn. */
     expect(frame.style.getPropertyValue("--dock-frame-count")).toBe("8");
   });
 });
@@ -314,7 +314,7 @@ describe("fitSignature reads the drawn list", () => {
 
   it("names the drawn modes and More, not the gathered ones", () => {
     const modes = sig("plain").split("|")[0];
-    expect(modes).toBe("plain,structure,summary,skim,peer-review,search,chat,learn,marginalia,+more");
+    expect(modes).toBe("plain,structure,summary,skim,sources,search,chat,learn,marginalia,+more");
   });
 
   it("moves when a gathered mode opens and takes a place in the bar", () => {
@@ -338,7 +338,7 @@ describe("the More button off the reading view", () => {
     expect(more.getAttribute("aria-haspopup")).toBe("menu");
     const links = [...host.querySelectorAll(".dock-modes a[data-mode]")].map((a) => a.getAttribute("aria-label"));
     expect(links).toEqual(
-      labelsOf(["plain", "structure", "summary", "skim", "peer-review", "search", "chat", "learn", "marginalia"]),
+      labelsOf(["plain", "structure", "summary", "skim", "sources", "search", "chat", "learn", "marginalia"]),
     );
     /* In the bands' frame, straight after Skim, as on the reading view. */
     const frame = more.closest(".dock-frame") as HTMLElement;

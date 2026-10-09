@@ -1,14 +1,14 @@
 /**
  * src/web/step-names.ts — every step named as the reader meets it, and the
  * names read from the tables that own them rather than copied
- * (docs/plans/261009u-metadata-ai-processing-named-as-the-modes-are.md).
+ * (docs/plans/261009x-metadata-ai-processing-named-as-the-modes-are.md).
  */
 import { describe, expect, it } from "vitest";
 import { MODE_CATALOG } from "../src/mode-catalog.js";
 import { STEP_ORDER } from "../src/step-order.js";
 import { MODE_LABEL } from "../src/title-text.js";
 import { stepName, stepWhat } from "../src/web/step-names.js";
-import { DIAGRAM_SUB_MODES, LEARN_SUB_MODES, PEER_REVIEW_SUB_MODES, SUMMARY_SUB_MODES } from "../src/web/sub-modes.js";
+import { DIAGRAM_SUB_MODES, LEARN_SUB_MODES, SOURCES_SUB_MODES, SUMMARY_SUB_MODES } from "../src/web/sub-modes.js";
 
 describe("stepName and stepWhat", () => {
   it("give every step a name and a line", () => {
@@ -23,10 +23,10 @@ describe("stepName and stepWhat", () => {
     expect(stepName("quiz")).toBe(`${MODE_LABEL.learn} › ${LEARN_SUB_MODES.quiz.label}`);
     expect(stepName("sketch")).toBe(`${MODE_LABEL.diagram} › ${DIAGRAM_SUB_MODES.sketch.label}`);
     expect(stepName("debate")).toBe(
-      `${MODE_LABEL["peer-review"]} › ${PEER_REVIEW_SUB_MODES.reception.label}`,
+      `${MODE_LABEL.sources} › ${SOURCES_SUB_MODES.reception.label}`,
     );
     expect(stepName("citations")).toBe(
-      `${MODE_LABEL["peer-review"]} › ${PEER_REVIEW_SUB_MODES.bibliography.label}`,
+      `${MODE_LABEL.sources} › ${SOURCES_SUB_MODES.bibliography.label}`,
     );
     expect(stepWhat("tweets")).toBe(SUMMARY_SUB_MODES.thread.description);
   });

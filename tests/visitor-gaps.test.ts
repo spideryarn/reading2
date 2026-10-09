@@ -368,8 +368,8 @@ describe("what a visitor is told, mode by mode", () => {
       ["chat", "referee", "learn"].sort(),
     );
     /* And one at a time, so a mode reading the wrong flag shows up. Citations'
-       and Debate's flags both open Peer review since 2026-10-09. */
-    const MODE_OF = { citations: "peer-review", debate: "peer-review" } as const;
+       and Debate's flags both open Sources since 2026-10-09. */
+    const MODE_OF = { citations: "sources", debate: "sources" } as const;
     for (const built of ["glossary", "ideas", "quotes", "timeline", "skim", "faq", "citations", "debate"] as const) {
       const mode: Mode = built === "citations" || built === "debate" ? MODE_OF[built] : built;
       expect([...markedModes(only(built)).keys()], built).not.toContain(mode);
@@ -377,29 +377,29 @@ describe("what a visitor is told, mode by mode", () => {
   });
 
   /**
-   * **Peer review opens for a visitor with any one of its artefacts** — the
+   * **Sources opens for a visitor with any one of its artefacts** — the
    * `any-artefact` policy, GPT Sol's F3 on plan 261009l. A shared article with
-   * a Reception search and no bibliography opens Peer review, whose
-   * Bibliography then says there is no list (tests/peer-review-band.test.tsx);
+   * a Reception search and no bibliography opens Sources, whose
+   * Bibliography then says there is no list (tests/sources-band.test.tsx);
    * one with nothing of the three is the one not-built gap, naming what is
    * missing, in the current product words rather than the retired storage
    * names (`citations` and `debate`).
    */
-  it("opens Peer review on any one of its artefacts, and names them when there is none", () => {
+  it("opens Sources on any one of its artefacts, and names them when there is none", () => {
     const withFlags = (citations: boolean, debate: boolean): PublicArtefacts => ({
       ...NOTHING_BUILT,
       citations,
       debate,
     });
-    expect(visitorGap("peer-review", withFlags(true, false)), "citations only").toBeNull();
+    expect(visitorGap("sources", withFlags(true, false)), "citations only").toBeNull();
     /* `debate` is set by the search or by Claims' list alone (public-artefacts.ts § artefactsIn). */
-    expect(visitorGap("peer-review", withFlags(false, true)), "reception or claims only").toBeNull();
-    expect(visitorGap("peer-review", withFlags(true, true)), "mixed").toBeNull();
-    expect(visitorGap("peer-review", withFlags(false, false))).toEqual({
+    expect(visitorGap("sources", withFlags(false, true)), "reception or claims only").toBeNull();
+    expect(visitorGap("sources", withFlags(true, true)), "mixed").toBeNull();
+    expect(visitorGap("sources", withFlags(false, false))).toEqual({
       kind: "not-built",
       noun: "a Bibliography, a Reception search or a Claims list",
     });
-    const sentence = visitorSentence(visitorGap("peer-review", withFlags(false, false)) as VisitorGap);
+    const sentence = visitorSentence(visitorGap("sources", withFlags(false, false)) as VisitorGap);
     expect(sentence).not.toMatch(/Citations|Debate|citations|debate/);
   });
 
@@ -427,8 +427,8 @@ describe("what a visitor is told, mode by mode", () => {
            (plan 260929c stages 2 and 3). */
         mode === "faq" ||
         /* And Citations and Debate the same day (plan 260929c stages 3 and
-           4), which are Peer review since 2026-10-09. */
-        mode === "peer-review" ||
+           4), which are Sources since 2026-10-09. */
+        mode === "sources" ||
         /* Free since 2026-09-04: the picture is drawn from the tree in the
            payload, and the panel's visitor arm buys nothing.
            docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 2. */

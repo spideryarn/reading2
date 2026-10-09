@@ -416,7 +416,7 @@ function ResetOnlyRegeneration({
 }) {
   const step = job.steps[0]?.name;
   if (!step || !isExtra(step)) return null;
-  /* Named as everywhere else on the page — step-names.ts, plan 261009u. */
+  /* Named as everywhere else on the page — step-names.ts, plan 261009x. */
   const name = stepName(step);
 
   if (job.status === "error" || job.status === "cancelled") {

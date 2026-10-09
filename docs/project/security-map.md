@@ -139,15 +139,16 @@ The tests are the specification: `tests/sanitize.test.ts`, `tests/sanitize-clien
 
 ([261007p](../plans/261007p-mcp-remote-sign-in-with-oauth.md); Greg approved changing the sign-in
 gate for it.) Supabase's OAuth server issues tokens to an AI app the owner approves on
-`/oauth/consent`, so that Claude on the web or a phone can use the MCP tools
+`/oauth/consent`, so that Claude on the web or a phone and ChatGPT Desktop can use the MCP tools
 ([mcp.md](mcp.md)). Such a token carries a `client_id` claim and a browser session's never does.
 
 - **`requireUser` refuses it**, 401 `[auth-oauth-token]`, so a connector's token cannot reach a
   route that is not a tool.
-- **`POST /api/mcp` accepts only it**, and only when `client_id` is exactly `MCP_OAUTH_CLIENT_ID`:
-  one app, registered by hand in Supabase for Claude's callback, with **dynamic registration off**.
-  Unset, the route refuses everyone, which is how it shipped. Then the administrator only (`isAdmin`),
-  and an `Origin`, if sent, must be ours or `https://claude.ai`.
+- **`POST /api/mcp` accepts only it**, and only when `client_id` is an entry in the comma-separated
+  `MCP_OAUTH_CLIENT_ID` list: each app registered by hand in Supabase for its exact callback,
+  with **dynamic registration off**. No nonempty ids, the route refuses everyone, which is how
+  it shipped. Then the administrator only (`isAdmin`), and an `Origin`, if sent, must be exactly
+  ours, `https://claude.ai` or `https://chatgpt.com`.
 - **The tools run through `handleApi`** with a verifier that accepts one random per-request token
   and nothing else, so every route's own owner scoping and admin gate applies as it does to the local
   server. No OAuth token is forwarded anywhere.
@@ -157,10 +158,11 @@ gate for it.) Supabase's OAuth server issues tokens to an AI app the owner appro
 **What this cannot stop, and needs Greg's decision before switching on:** at Supabase itself the token is an
 ordinary sign-in to the account. Supabase's Auth API (`PUT /auth/v1/user`, the MFA endpoints) does
 not look at `client_id`, so whoever holds the token could, while it is valid, change the account's
-password unless *secure password change* is on. Anthropic's connector service holds it; the model
+password unless *secure password change* is on. The approved AI app's connector service holds it; the model
 never sees it. Switching this on in production is Greg's decision with that written in front of him
 ([261007p § Questions](../plans/261007p-mcp-remote-sign-in-with-oauth.md#questions-for-greg-not-blocking)).
-Revoking: unsetting `MCP_OAUTH_CLIENT_ID` refuses every token at `/api/mcp` at once; removing the app
+Revoking: removing an id from `MCP_OAUTH_CLIENT_ID` refuses that app's tokens at `/api/mcp` at once;
+unsetting it refuses every app. Removing the app
 in Supabase stops new ones, while an issued access token stays valid at Supabase until it expires
 (an hour). `tests/mcp-remote.test.ts` and `tests/auth.test.ts` hold the gate.
 

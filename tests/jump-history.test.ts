@@ -570,7 +570,7 @@ describe("which entries carry a stamp", () => {
     push(`/read/x?at=${B}`);
     push("/read/x?cols=0,2");
     expect(readStamp(history.state)).toEqual(stamp(at(A)));
-    push("/read/x?cols=0,2&mode=peer-review");
+    push("/read/x?cols=0,2&mode=sources");
     expect(readStamp(history.state)).toEqual(stamp(at(A)));
   });
 

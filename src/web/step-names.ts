@@ -8,7 +8,7 @@
  * or have a clear explanation of what they are?"* Until then that section named
  * one step three ways — `RERUN_LABEL`'s *Thread*, the pipeline's *Writing the
  * thread*, the key `tweets` — and none of them was *Summary › Thread*, the name
- * on the button. docs/plans/261009u-metadata-ai-processing-named-as-the-modes-are.md.
+ * on the button. docs/plans/261009x-metadata-ai-processing-named-as-the-modes-are.md.
  *
  * **Read from the tables that own the names, never copied.** A mode's name is
  * `MODE_LABEL`'s and its line the mode catalogue's; a sub-mode's are
@@ -76,9 +76,9 @@ const STEP_PLACE: Record<StepName, StepPlace> = {
   },
   sketch: { sub: { mode: "diagram", view: "sketch" } },
   illustrated: { sub: { mode: "diagram", view: "illustrated" } },
-  debate: { sub: { mode: "peer-review", view: "reception" } },
-  "debate-claims": { sub: { mode: "peer-review", view: "claims" } },
-  citations: { sub: { mode: "peer-review", view: "bibliography" } },
+  debate: { sub: { mode: "sources", view: "reception" } },
+  "debate-claims": { sub: { mode: "sources", view: "claims" } },
+  citations: { sub: { mode: "sources", view: "bibliography" } },
   crossrefs: {
     name: "Cross-references",
     what: "Links in the prose from a claim to the passage it rests on",

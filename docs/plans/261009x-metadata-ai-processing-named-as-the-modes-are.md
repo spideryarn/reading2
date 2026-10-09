@@ -1,5 +1,9 @@
 # Metadata's AI processing, named as the modes are
 
+(Was `261009u` until the merge with dev on 2026-10-09, when another plan turned out to have that
+letter first. Peer review became Sources in the same merge, so this plan's *Peer review ›* names
+read *Sources ›* in the code.)
+
 Report `spya-u62q09` (SPIDERYARN-READING2-FW), Greg, 2026-10-09, on the Attention paper's Metadata
 page; queue item `qi-yckkzqah`.
 
@@ -95,7 +99,7 @@ question file rather than an edit.
 
 ## GPT Sol's plan review, and what changed
 
-[The review](261009u-metadata-ai-processing-named-as-the-modes-are-plan-review-sol.md), five
+[The review](261009x-metadata-ai-processing-named-as-the-modes-are-plan-review-sol.md), five
 findings, all taken except where said:
 
 1. **The Sources rename renames the step keys and `peer-review` too** (P2). Taken in part: the

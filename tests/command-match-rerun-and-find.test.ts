@@ -80,7 +80,7 @@ describe("the Run again rows", () => {
 
   /* Since 2026-10-09 a sub-mode's row is labelled `Mode › Sub`, and nobody
      types the arrow: the sub-mode's own name has to find it alone (plan
-     261009u, GPT Sol's P2 on its review). */
+     261009x, GPT Sol's P2 on its review). */
   it("finds a `Mode › Sub` row by the sub-mode's name alone", () => {
     const cases = {
       "rerun quiz": "rerun-quiz",
@@ -114,15 +114,15 @@ describe("the Run again rows", () => {
     }
   });
 
-  /* **Peer review shows three artefacts, and each re-run answers only to its
+  /* **Sources shows three artefacts, and each re-run answers only to its
      own words** — GPT Sol's F8 on plan 261009l, the same shape as Summary's
      above. Citations' and Debate's rows borrowed their modes' names until
-     those modes became Peer review's sub-modes on 2026-10-09; borrowing Peer
-     review's for both would make `rerun peer review` pick one paid run at
-     random. */
+     those modes became Sources' sub-modes on 2026-10-09; borrowing Sources'
+     name (or Peer review, its old one) for both would make `rerun sources`
+     pick one paid run at random. */
   it("labels Citations' and Debate's re-runs by their sub-modes, and keeps the old words", () => {
-    expect(rerunWords("citations").label).toBe("Peer review › Bibliography › Run again");
-    expect(rerunWords("debate").label).toBe("Peer review › Reception › Run again");
+    expect(rerunWords("citations").label).toBe("Sources › Bibliography › Run again");
+    expect(rerunWords("debate").label).toBe("Sources › Reception › Run again");
     for (const query of ["rerun bibliography", "rerun citations", "regenerate references", "citations again"]) {
       const ranked = rankCommands(query, LIST);
       expect(ranked[0], query).toMatchObject({ kind: "action", id: "rerun-citations" });
@@ -135,8 +135,8 @@ describe("the Run again rows", () => {
     }
   });
 
-  it("`rerun peer review` picks neither of its paid runs", () => {
-    for (const query of ["rerun peer review", "regenerate peer review", "peer review again"]) {
+  it("`rerun sources` and `rerun peer review` pick neither of its paid runs", () => {
+    for (const query of ["rerun sources", "rerun peer review", "regenerate peer review", "peer review again"]) {
       const ids = rankCommands(query, LIST).map((c) => (c.kind === "action" ? c.id : ""));
       expect(ids, query).not.toContain("rerun-citations");
       expect(ids, query).not.toContain("rerun-debate");

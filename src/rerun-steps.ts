@@ -94,7 +94,7 @@ import type { StepName } from "./types.js";
  * model's own empty list is kept, as a real answer. A work found again keeps
  * its id (`keysOf` in src/citations.ts), and with it any link *Find it* stored.
  * Both modes were behind the experimental switch when these rows arrived;
- * Bibliography is now inside Peer review and outside it. Metadata's rows remain
+ * Bibliography is now inside Sources and outside it. Metadata's rows remain
  * independent of that switch, as Timeline's, Quiz's and Reception's are — the
  * switch hides bar clutter, never a way to redo something already made
  * (docs/project/experimental-features.md).

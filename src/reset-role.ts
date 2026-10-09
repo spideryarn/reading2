@@ -80,7 +80,7 @@ export const RESET_ROLE = {
   sketch: "extra",
   illustrated: "extra",
   debate: "extra",
-  /* Made by a press on Peer review's Claims, off DEFAULT_INGEST_STEPS, a whole
+  /* Made by a press on Sources' Claims, off DEFAULT_INGEST_STEPS, a whole
      column: the modes' shape, though it is a sub-mode's list rather than a
      mode of its own. */
   "debate-claims": "extra",
