@@ -711,6 +711,15 @@ describe("fix 8 — a macro LaTeXML could not expand leaves the page", () => {
     expect(text(doc.getElementById("p1.2"))).toBe("Use permitted under CC BY 4.0. Workshop on Quality of Knowledge Graphs");
   });
 
+  it("a marker at either edge of an inline element does not join words", () => {
+    const marker = '<span class="ltx_ERROR undefined">\\conference</span>';
+    const { doc, stats } = prepared(
+      latexml(`<p id="x" class="ltx_p"><em>alpha${marker}</em><strong>beta</strong> <em>gamma</em><strong>${marker}delta</strong></p>`),
+    );
+    expect(stats.undefinedMacros).toBe(2);
+    expect(text(doc.getElementById("x"))).toBe("alpha beta gamma delta");
+  });
+
   it("\\sep between keywords becomes a semicolon (2610.10541)", () => {
     const { doc } = prepared(
       latexml(
@@ -719,6 +728,29 @@ Semantic table interpretation <span id="id1.id1" class="ltx_ERROR undefined">\\s
       ),
     );
     expect(text(doc.querySelector(".ltx_classification"))).toBe("keywords: Semantic table interpretation; column type annotation; knowledge graphs");
+  });
+
+  it("\\sep reads across inline-element edges but leaves no separator at a block edge", () => {
+    const marker = '<span class="ltx_ERROR undefined">\\sep</span>';
+    const { doc, stats } = prepared(
+      latexml(
+        `<p id="nested" class="ltx_p"><em>alpha </em><strong>${marker}</strong><i>beta</i></p>
+<p id="first" class="ltx_p">${marker}alpha</p><p id="last" class="ltx_p">omega${marker}</p>`,
+      ),
+    );
+    expect(stats.undefinedMacros).toBe(3);
+    expect(text(doc.getElementById("nested"))).toBe("alpha; beta");
+    expect(text(doc.getElementById("first"))).toBe("alpha");
+    expect(text(doc.getElementById("last"))).toBe("omega");
+  });
+
+  it("citation removal does not strand source whitespace before sentence punctuation", () => {
+    const marker = '<span class="ltx_ERROR undefined">\\ucite</span>';
+    const { doc, stats } = prepared(
+      latexml(`<p id="x" class="ltx_p"><em>lattice structure </em>${marker}mankowsky2014; and scattering ${marker}zhang2024.</p>`),
+    );
+    expect(stats.undefinedMacros).toBe(2);
+    expect(text(doc.getElementById("x"))).toBe("lattice structure; and scattering.");
   });
 
   it("a marker in a heading, a caption and a table cell goes too", () => {

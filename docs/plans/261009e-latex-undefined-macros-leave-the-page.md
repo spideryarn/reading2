@@ -167,3 +167,15 @@ a `\ucite` paragraph, a `\bmsection` funding paragraph), each seen red before th
 has a row in its table, and § The one thing this pipeline deletes names this as a deletion by a
 producer's class name. The module header of `src/latexml.ts` names the one exception to *nothing
 here deletes an author's words*: an argument that is a name from the source.
+
+## Code review
+
+GPT Sol's code review ([its answer](261009e-latex-undefined-macros-code-review-sol.md)) found and
+fixed three bugs, each red-first in `tests/latexml.test.ts`, all one class: the text repair after a
+removal looked only at the marker's DOM siblings, not at the rendered text either side of it. A
+marker at the edge of an `<em>` joined two words; a citation key removed after a source space left
+`structure ;` (three of them in 2610.11126, which the survey above had not checked for); `\sep`
+inside a wrapper left `alpha ; beta`. One helper now reads the inline run on each side and stops at
+a block. Write-up:
+[postmortems/261009e](../postmortems/261009e-dom-siblings-are-not-rendered-text-boundaries.md).
+Re-run on four of the ten pages afterwards: no report, key or stray space before punctuation left.

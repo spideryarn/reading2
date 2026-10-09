@@ -649,6 +649,38 @@ const STOOD_FOR: ReadonlyMap<string, string> = new Map([
   ["\\sep", "; "],
 ]);
 
+/** Inline elements whose text belongs to the same run on either side of a marker. */
+const INLINE_TEXT_ELEMENTS: ReadonlySet<string> = new Set([
+  "A",
+  "ABBR",
+  "B",
+  "BDI",
+  "BDO",
+  "CITE",
+  "CODE",
+  "DATA",
+  "DEL",
+  "DFN",
+  "EM",
+  "I",
+  "INS",
+  "KBD",
+  "LABEL",
+  "MARK",
+  "Q",
+  "RUBY",
+  "S",
+  "SAMP",
+  "SMALL",
+  "SPAN",
+  "STRONG",
+  "SUB",
+  "SUP",
+  "TIME",
+  "U",
+  "VAR",
+]);
+
 /**
  * Remove LaTeXML's report of a macro it had no definition for, and the argument
  * it orphaned where that is plainly a name from the source rather than prose.
@@ -670,8 +702,9 @@ const STOOD_FOR: ReadonlyMap<string, string> = new Map([
  *   `phases\ucite{dagotto2005}.` reads `phases.` (2610.11126, 104 of them).
  *
  * Where taking the report out would join two words, a space stands in its
- * place; `STOOD_FOR` names the macros that stood for something more. Measured
- * on 79 arXiv papers, 2026-10-09:
+ * place; `STOOD_FOR` names the macros that stood for something more, only when
+ * their phrase is present on both sides. Measured on 79 arXiv papers,
+ * 2026-10-09:
  * docs/plans/261009e-latex-undefined-macros-leave-the-page.md.
  */
 function removeUndefinedMacro(marker: Element, targets: ReadonlySet<string>): boolean {
@@ -685,15 +718,24 @@ function removeUndefinedMacro(marker: Element, targets: ReadonlySet<string>): bo
   if (/cite/iu.test(name) && after?.nodeType === 3) {
     const text = after.textContent ?? "";
     const key = CITATION_KEY.exec(text)?.[0];
-    if (key && /\d|_|[a-z][A-Z]/u.test(key)) after.textContent = text.slice(key.length);
+    if (key && /\d|_|[a-z][A-Z]/u.test(key)) {
+      after.textContent = text.slice(key.length);
+      /* TeX source commonly puts a space before a citation command. Once the
+         unusable citation is gone, sentence punctuation belongs to the word. */
+      if (/^[,.;:!?)}\]]/u.test(after.textContent ?? "")) trimInlineWhitespaceBefore(marker);
+    }
   }
   argument?.remove();
-  const before = marker.previousSibling;
+  const before = inlineTextBeside(marker, "before");
+  const next = inlineTextBeside(marker, "after");
   const stoodFor = STOOD_FOR.get(name);
-  if (stoodFor !== undefined) {
-    if (before?.nodeType === 3) before.textContent = (before.textContent ?? "").trimEnd();
+  if (stoodFor !== undefined && /\S/u.test(before) && /\S/u.test(next)) {
+    trimInlineWhitespaceBefore(marker);
     marker.replaceWith(stoodFor);
-  } else if (/\S$/u.test(before?.textContent ?? "") && /^[\p{L}\p{N}]/u.test(marker.nextSibling?.textContent ?? "")) {
+  } else if (stoodFor !== undefined) {
+    /* A separator without a phrase on both sides is only another report. */
+    marker.remove();
+  } else if (/\S$/u.test(before) && /^[\p{L}\p{N}]/u.test(next)) {
     marker.replaceWith(" ");
   } else {
     marker.remove();
@@ -709,6 +751,71 @@ function sourceNameArgument(marker: Element): Element | null {
   const p = node as Element;
   if (!p.matches("p.ltx_p") || p.children.length > 0) return null;
   return SOURCE_NAME.test((p.textContent ?? "").trim()) ? p : null;
+}
+
+/**
+ * Text on one side in the same inline run. A marker may be the first or last
+ * child of a `<span>` or `<em>` even though words touch that wrapper outside;
+ * stop at the first block-like element rather than joining separate blocks.
+ */
+function inlineTextBeside(marker: Element, side: "before" | "after"): string {
+  const parts: string[] = [];
+  const siblingOf = side === "before" ? (node: Node) => node.previousSibling : (node: Node) => node.nextSibling;
+  const add = side === "before" ? (text: string) => parts.unshift(text) : (text: string) => parts.push(text);
+  let edge: Node = marker;
+  while (true) {
+    let sibling = siblingOf(edge);
+    while (sibling) {
+      const part = inlineSiblingText(sibling);
+      if (part === null) return parts.join("");
+      add(part);
+      sibling = siblingOf(sibling);
+    }
+    const parent = edge.parentElement;
+    if (!parent || !INLINE_TEXT_ELEMENTS.has(parent.tagName)) return parts.join("");
+    edge = parent;
+  }
+}
+
+/** Text contributed by one sibling; `null` means that sibling ends the inline run. */
+function inlineSiblingText(node: Node): string | null {
+  if (node.nodeType === 3) return node.textContent ?? "";
+  if (node.nodeType !== 1) return "";
+  const element = node as Element;
+  return INLINE_TEXT_ELEMENTS.has(element.tagName) ? (element.textContent ?? "") : null;
+}
+
+/** Remove whitespace immediately before `marker`, through inline wrappers. */
+function trimInlineWhitespaceBefore(marker: Element): void {
+  let edge: Node = marker;
+  while (true) {
+    let sibling = edge.previousSibling;
+    while (sibling) {
+      const result = trimInlineEnd(sibling);
+      if (result === "content" || result === "boundary") return;
+      sibling = sibling.previousSibling;
+    }
+    const parent = edge.parentElement;
+    if (!parent || !INLINE_TEXT_ELEMENTS.has(parent.tagName)) return;
+    edge = parent;
+  }
+}
+
+/** Trim an inline subtree's end; say whether content or a flow boundary stopped us. */
+function trimInlineEnd(node: Node): "content" | "empty" | "boundary" {
+  if (node.nodeType === 3) {
+    const text = node.textContent ?? "";
+    node.textContent = text.trimEnd();
+    return (node.textContent ?? "") === "" ? "empty" : "content";
+  }
+  if (node.nodeType !== 1) return "empty";
+  const element = node as Element;
+  if (!INLINE_TEXT_ELEMENTS.has(element.tagName)) return "boundary";
+  for (const child of Array.from(element.childNodes).reverse()) {
+    const result = trimInlineEnd(child);
+    if (result !== "empty") return result;
+  }
+  return "empty";
 }
 
 /* ------------------------------------------------------------------ *
