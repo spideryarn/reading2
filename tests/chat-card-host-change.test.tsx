@@ -42,7 +42,8 @@ vi.mock("../src/web/useChat.js", () => ({
   useChat: () => ({
     threads, loaded: true, loadFailed: false, recovering: new Set<string>(),
     send: () => "", speak: () => "", cancelAndDiscard: () => {}, retry: () => {}, edit: () => {},
-    stop: () => {}, begin: () => {}, discard: () => {}, rename: () => {}, remove: () => {}, error: null,
+    stop: () => {}, begin: () => {}, discard: () => {}, rename: () => {}, remove: () => {},
+    deleteFrom: () => {}, settled: () => true, error: null,
   }),
 }));
 

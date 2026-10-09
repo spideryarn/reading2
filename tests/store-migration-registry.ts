@@ -562,7 +562,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "copy step.",
   },
   /**
-   * **Written 2026-10-09 (plan 261009m), after the witness ran**, so
+   * **Written 2026-10-09 (plan 261009o), after the witness ran**, so
    * `static-only`, like its sibling above. No model call; the seeder's copy step
    * is the one door.
    */

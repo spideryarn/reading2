@@ -1,7 +1,7 @@
 /**
  * **Deleting a question and what follows it — the browser's half.**
  *
- * Report spya-mx423m; docs/plans/261009m-delete-a-chat-question-and-what-follows.md.
+ * Report spya-mx423m; docs/plans/261009o-delete-a-chat-question-and-what-follows.md.
  * The server's half is tests/chat-delete-from-route.test.ts. This one asks the
  * reducer what a press draws, what its answer writes down, and — over every
  * order, because the bugs this machine was built to remove were orderings —

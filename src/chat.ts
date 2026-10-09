@@ -863,7 +863,7 @@ export function withEdit(
  * makes under an edited question, without a new question and answer after it.
  *
  * Refused rather than quietly adjusted in three cases
- * (docs/plans/261009m-delete-a-chat-question-and-what-follows.md):
+ * (docs/plans/261009o-delete-a-chat-question-and-what-follows.md):
  *
  *  - **an answer.** Deleting one alone leaves a question with nothing under it,
  *    which reads as a bug; the last answer has Answer again.

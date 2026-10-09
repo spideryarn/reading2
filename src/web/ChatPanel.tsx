@@ -953,8 +953,6 @@ function ArmedDelete({
       type="button"
       className={`chat-icon danger${armed ? " armed" : ""}`}
       title={armed ? armedTitle : title}
-      aria-label={armed ? armedTitle : title}
-      aria-pressed={armed}
       onClick={() => (armed ? onDelete() : setArmed(true))}
     >
       <Trash2 size={size} aria-hidden="true" />

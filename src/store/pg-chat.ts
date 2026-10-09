@@ -555,7 +555,7 @@ const rawPgChatStore: ChatStore = {
       /* `updated_at` means a message was stored (schema.ts), so the attempt
          fence guards the thread clock too. A swept attempt or a duplicate
          finish can no longer reorder a conversation after its answer was
-         pruned, nor jump ahead of the retry that replaced it (plan 261009m). */
+         pruned, nor jump ahead of the retry that replaced it (plan 261009o). */
       await dateLandedFinish(tx, articleId, threadId, at, rows.length > 0);
       return rows.length > 0;
     }, READ_COMMITTED);

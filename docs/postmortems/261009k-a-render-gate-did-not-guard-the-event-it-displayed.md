@@ -16,7 +16,7 @@ may already contain a new turn, rename, recovery, spoken append or prune.
 
 The destructive callback read the current rows but never asked whether the current state still
 permitted deletion, and `prune.started` registered unconditionally. The defect was introduced only
-in the uncommitted implementation reviewed under plan 261009m, so there is no introducing commit.
+in the uncommitted implementation reviewed under plan 261009o, so there is no introducing commit.
 
 ## A render gate did not guard the event it displayed
 

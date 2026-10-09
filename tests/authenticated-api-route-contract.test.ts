@@ -874,7 +874,7 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/chat/w1/w2/hint-opened"],
   },
   {
-    /* The reader deleted a question and what follows it (plan 261009m). */
+    /* The reader deleted a question and what follows it (plan 261009o). */
     match: {
       kind: "regex",
       source: "^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/delete-from$",
@@ -1012,7 +1012,7 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
    101 with that plan's claim checks (its stage 3); 103 with the public shelf
    topic pills' status and Rebuild (plan 261008j); 104 with Skim's profile
    notice dismissal (plan 261009i); 105 with deleting a chat question and what
-   follows it (plan 261009m). */
+   follows it (plan 261009o). */
 const EXPECTED_MATCHER_COUNT = 105;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
    with the admin's earlier feedback; 118 with their replies to questions; 119
@@ -1022,7 +1022,7 @@ const EXPECTED_MATCHER_COUNT = 105;
    GET and POST (plan 261008i); 127 with the public shelf topic pills' status
    and Rebuild (plan 261008j); 128 with Skim's profile notice dismissal (plan
    261009i); 129 with deleting a chat question and what follows it (plan
-   261009m). */
+   261009o). */
 const EXPECTED_GUARD_COUNT = 129;
 
 /* ------------------------------------------------------------- the source read */

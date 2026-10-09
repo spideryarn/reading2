@@ -19,5 +19,5 @@ after it are deleted. It is in every conversation that shows the pencil (Chat, t
 Tutorial, Learn, and the chat dialog), and it is withheld while an answer is arriving or Live is
 talking. The first question has none: deleting it would empty the conversation, and the
 conversation's own delete does that. The reasoning, the review and the tests are in
-[261009m](../plans/261009m-delete-a-chat-question-and-what-follows.md). Overseer queue item
+[261009o](../plans/261009o-delete-a-chat-question-and-what-follows.md). Overseer queue item
 `qi-j4vfcasm`.

@@ -1,4 +1,4 @@
-Review the plan at docs/plans/261009m-delete-a-chat-question-and-what-follows.md before it is built. Read-only.
+Review the plan at docs/plans/261009o-delete-a-chat-question-and-what-follows.md before it is built. Read-only.
 
 Context: Spideryarn, a reading app. Chat conversations are stored in Postgres (`chat_threads`, `chat_messages`, src/db/schema.ts). An existing "edit a question" feature already hard-deletes every turn under an edited question (`edit` in src/store/pg-chat.ts, `withEdit` and `requireTail` in src/chat.ts, the route in src/routes.ts around `chatStore.edit`). The client chat state is an operation/projection machine in src/web/chat/ (model.ts, reduce.ts, effects.ts, controller.ts, project.ts) driven from src/web/useChat.ts; the panel is src/web/ChatPanel.tsx (`Turn`, `ArmedDelete`).
 

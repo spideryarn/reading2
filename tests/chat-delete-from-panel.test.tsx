@@ -6,7 +6,7 @@
  * go, the second deletes; absent while an answer is arriving and wherever the
  * caller offers none (an unsettled conversation — `onDeleteFrom` in
  * ChatPanel.tsx). What the press then does is tests/chat-prune-reduce.test.ts.
- * docs/plans/261009m-delete-a-chat-question-and-what-follows.md
+ * docs/plans/261009o-delete-a-chat-question-and-what-follows.md
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -129,13 +129,12 @@ describe("the bin beside a question", () => {
     press(last);
     expect(document.activeElement).toBe(last);
     expect(last?.classList.contains("armed")).toBe(true);
-    expect(last?.getAttribute("aria-label")).toBe("Press again to delete this question and its answer");
-    expect(last?.getAttribute("aria-pressed")).toBe("true");
+    // The title is the accessible name, so it is what a screen reader announces when it arms.
+    expect(last?.title).toBe("Press again to delete this question and its answer");
 
     act(() => vi.advanceTimersByTime(4_001));
     expect(last?.title).toBe("Delete this question and everything after it");
     expect(last?.classList.contains("armed")).toBe(false);
-    expect(last?.getAttribute("aria-pressed")).toBe("false");
   });
 
   it("is not there while an answer is arriving", () => {

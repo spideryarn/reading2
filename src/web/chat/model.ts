@@ -472,7 +472,7 @@ export interface HintOperation extends Registered {
 
 /**
  * **The reader deleted one of their questions, and everything after it.**
- * Report spya-mx423m; plan 261009m.
+ * Report spya-mx423m; plan 261009o.
  *
  * It **draws** — the rows taken off the conversation on screen — because it can
  * be withdrawn: a refused delete puts them back by this entry leaving the map,

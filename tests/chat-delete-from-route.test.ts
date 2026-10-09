@@ -6,7 +6,7 @@
  * wanted gone. The rules are `withDeleteFrom` in src/chat.ts; this checks them
  * where they bite, at the route and the rows. Every read-back goes to the store,
  * not the response, because only the rows say what was deleted.
- * docs/plans/261009m-delete-a-chat-question-and-what-follows.md
+ * docs/plans/261009o-delete-a-chat-question-and-what-follows.md
  */
 import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";

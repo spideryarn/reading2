@@ -133,9 +133,9 @@ refused with "Reload before deleting.", and the reload is the right fix: those r
 
 ## Reviews
 
-- Plan: GPT Sol, [261009m-plan-review-sol.md](261009m-plan-review-sol.md) — seven findings, all
+- Plan: GPT Sol, [261009o-plan-review-sol.md](261009o-plan-review-sol.md) — seven findings, all
   taken (F2 in a simpler form, above).
-- Code: GPT Sol, [261009m-code-review-sol.md](261009m-code-review-sol.md), which fixed what it
+- Code: GPT Sol, [261009o-code-review-sol.md](261009o-code-review-sol.md), which fixed what it
   found; each fix read and kept. The two worth knowing:
   - **`finish` now moves `updated_at` only when its fenced update lands.** It used to move the
     clock even for a stale attempt — a choice made for parity with the filesystem store, which is
@@ -147,4 +147,6 @@ refused with "Reload before deleting.", and the reload is the right fix: those r
     [261009k](../postmortems/261009k-a-render-gate-did-not-guard-the-event-it-displayed.md).
   - Smaller: focus moves to the previous question's pencil before the row goes; the armed wording
     names the answer separately ("this question and its answer"); the held row keeps the bin's
-    place; `aria-pressed` on the armed state.
+    place. (Its `aria-label` and `aria-pressed` were taken back out: `title` is already the
+    accessible name and changes when armed, a delete is not a toggle, and the header's bin has a
+    recorded DOM baseline in tests/mode-surface-changes-no-markup.test.tsx.)
