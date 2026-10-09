@@ -1,7 +1,7 @@
 # The Overseer's standing scheduled jobs
 
 The Overseer session's recurring prompts: the queue pacer, the 3-hourly check and the renewal
-that keeps both alive. They are Claude Code scheduled jobs (`CronCreate`), so they are **session
+that keeps both alive (and runs the daily worktree sweep). They are Claude Code scheduled jobs (`CronCreate`), so they are **session
 memory only**. They vanish when the session exits, and **a recurring job is deleted 7 days after it
 was created**. That second fact is what stopped them on the night of 2026-10-07/08: the pacer made
 on 2026-09-30 expired at 23:15 UTC, and production went 17 hours without a deploy. Greg,
@@ -33,5 +33,7 @@ Overseer 3-hourly check. A) FEEDBACK: new Feedback reports since the last check 
 ## 3. Renewal, cron `43 6 * * *`
 
 ```
-Overseer renewal of the standing scheduled jobs (recurring jobs expire after 7 days). Read scripts/overseer-tools/standing-jobs.md. CronList; CronDelete every job whose prompt starts "Queue pacer", "Overseer 3-hourly check" or "Overseer renewal"; then CronCreate the three from that file, exactly as written, with $SP filled in. CronList again and confirm three. One line.
+Overseer renewal of the standing scheduled jobs (recurring jobs expire after 7 days). Read scripts/overseer-tools/standing-jobs.md. CronList; CronDelete every job whose prompt starts "Queue pacer", "Overseer 3-hourly check" or "Overseer renewal"; then CronCreate the three from that file, exactly as written, with $SP filled in. CronList again and confirm three. Then the daily worktree sweep: in the primary checkout run `npm run worktree:sweep -- --remove`, which removes every landed tree itself and lists the rest. For each tree it lists as in use or needing a look that no live session (`gjd-remote ls`) or deploy/readiness job owns, run worktree:check and either remove it under Greg's standing permission (worktrees.md) or delegate one agent to resolve it. One line, naming what was removed and anything left for Greg.
 ```
+
+The sweep rides on the renewal rather than being a fourth job because both are once a day, and a fourth job is one more thing a restart has to recreate. Greg, 2026-10-09, relayed from his Mac: *"Can we ask the Overseer whether we have anything scheduled to run this like every day, to do a worktree sweep as part of its existing daemon service cron loops? If not, I think we should, that way then those scripts remind or handle it for, that way those scripts handle it and then they nudge the Overseer if they need its input. It can delegate to other agents to resolve individual worktrees."*
