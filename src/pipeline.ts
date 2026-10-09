@@ -953,6 +953,20 @@ export interface PipelineStep<N extends StepName = StepName> {
    */
   isDone?(ctx: StepContext, store: ArtifactReads): Promise<boolean>;
   /**
+   * **This step's paid work must not be bought twice by one job.** A later
+   * lease window of the same job — after a lapse (`settleExpired`) or the
+   * claimant's own deadline (`pauseForDeadline`) — refuses to begin it again
+   * and fails it with `PAID_STEP_NOT_REPEATED`, rather than re-running it from
+   * the start. A reader's Retry is a new job, and runs it.
+   *
+   * For work that is dear, cannot be checkpointed and cannot be fetched back
+   * once its process has died: `debate`'s web search, 15–20 cents a call. The
+   * marker is the job row's `paid_step_begun` (`JobStore.beginPaidStep`), and
+   * `runStep` (src/jobs.ts) is the one reader.
+   * docs/plans/261009l-a-requeued-job-does-not-buy-the-debate-search-again.md.
+   */
+  oncePerJob?: true;
+  /**
    * Do the work, and hand back what was done — see `StepProduct`.
    *
    * **It returned the one-line summary as a bare `string` until 2026-08-29.**
@@ -5253,6 +5267,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
     name: "debate",
     label: "Asking the web",
     produces: ["debate"],
+    /* The Reception search is bought from the provider and cannot be fetched
+       back if this window dies with it in flight, so a requeue does not buy it
+       again: plan 261009l. */
+    oncePerJob: true,
     /**
      * `articleWithIdsFingerprint`, the one `ideas`, `sketch` and `quiz` use —
      * the blocks, the tree and a metadata head that carries `URL:`.

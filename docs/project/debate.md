@@ -56,6 +56,10 @@ Two sub-modes on a segmented control (`?debate=claims`; Reception is the default
 When the article has changed since the search ran, a banner says so and offers *Search again*.
 That button is held from the press until the new search has been read, so one press cannot buy two
 searches: [reader-profile.md § Regenerate waits for its own result](reader-profile.md#regenerate-waits-for-its-own-result).
+Nor can the server: a search whose processing stopped part-way (a deploy, or the job's own
+deadline) is not started again by the job's next window, which fails it with *Press Retry to run
+it* instead (`oncePerJob`,
+[261009l](../plans/261009l-a-requeued-job-does-not-buy-the-debate-search-again.md)).
 
 Threads and key sources narrow whichever sub-mode is on screen. **The stored search cannot be
 steered**: its Reception search chooses its own queries, and what it keeps is one result per article,
@@ -139,8 +143,9 @@ given up: the answer (about 20 cents) is lost, the failure goes to the log and S
 stays pending until the sweep ends it, so a press on that article is a 409 for up to about eight
 minutes. Nothing bounds a single store write that hangs for over a minute (Postgres has no
 statement timeout here); then a third check could start while the hourly, daily and global counts
-still hold. And the gateway's retry after a dropped connection could resend a paid request, which
-is true of every web-search call and is queued on its own (`qi-2gaxfaaj`).
+still hold. The gateway no longer resends a web-search request after a dropped connection unless
+nothing can have left
+([261009e](../plans/261009e-paid-web-search-not-retried-after-it-was-sent.md)).
 
 **Where a check is drawn comes from what it stored**, not only from the current list's ids, so
 nothing paid for is hidden. A list made again mints new ids, so a check's claim is drawn under the
