@@ -50,7 +50,6 @@ import {
   type CitedInSpideryarn,
   type CitedMatchedBy,
   type CitedWork,
-  type InvestigateStage,
   type RegistryCitedBy,
   type RegistrySource,
 } from "../types.js";
@@ -60,7 +59,7 @@ import { Link } from "./Link.js";
 import { readHref } from "./router.js";
 import type { PublicCitations, PublicCitedWork } from "../public-types.js";
 import type { CiteOrder } from "./params.js";
-import type { FindNote, UseCitations } from "./useCitations.js";
+import type { UseCitations } from "./useCitations.js";
 import { AboutMade } from "./BandAbout.js";
 import { BlockRef } from "./BlockRef.js";
 import { Tooltip } from "./Tooltip.js";
@@ -73,13 +72,7 @@ import {
   OriginChatMark,
 } from "./OriginChat.js";
 import { threadForOrigin } from "./useChatAnchors.js";
-import {
-  InvestigateButton,
-  type InvestigateFailureHere,
-  InvestigationBlock,
-  investigationViewOf,
-  type InvestigationView,
-} from "./CitationInvestigation.js";
+import { KeptInvestigation } from "./CitationInvestigation.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { ReadError } from "./ReadError.js";
@@ -426,8 +419,9 @@ function descending(a: number | undefined, b: number | undefined): number {
 /**
  * **The bar that puts a hidden work back**, or null when nothing is hiding it —
  * `gateToReveal` (GlossaryPanel.tsx) over this list's score, for the same
- * press: the prose card's *Dig deeper* opens the band on a row, and a row the
- * prioritised order is hiding cannot be opened. **Lowered, never cleared**, so
+ * press: something outside the band opens it on a row (the prose card's *Dig
+ * deeper* until 2026-10-09; a chat's way back to its item from plan 261009i
+ * stage 2), and a row the prioritised order is hiding cannot be opened. **Lowered, never cleared**, so
  * the slider visibly moves; null in any other order, where the bar is dormant
  * and must not be moved behind the reader's back; and floored to the step, so
  * the value the URL prints is not above the work it was set to reveal. Plan
@@ -602,17 +596,19 @@ export const INFLUENCE_NOTE =
 
 /**
  * The owner's (i) adds this after `INFLUENCE_NOTE` (plan 261003m stage 2). Not
- * a visitor's: they have no *Dig deeper*, and their rows never carry what it found.
+ * a visitor's: their rows never carry what a web search found. It began "Dig
+ * deeper also looks for a work's influence on the web" until 2026-10-09, when
+ * that button went (plan 261009i); rows it filled in keep their estimate.
  */
 export const INFLUENCE_WEB_NOTE =
-  "Dig deeper also looks for a work's influence on the web. A row marked “from the web” shows an AI estimate read from one page the search found, in place of the model's memory, and its card shows that page's words.";
+  "A row marked “from the web” shows an AI estimate of the work's influence, read from one page an earlier web search found, in place of the model's memory, and its card shows that page's words.";
 
-/** Beside the influence bar when the number came from *Dig deeper*'s web search. */
+/** Beside the influence bar when the number came from *Dig deeper*'s web search, kept from before 2026-10-09. */
 const INFLUENCE_FROM_WEB = "from the web";
 
 /** The card on those words: our sentence, with the host and the day in it. The page's own words follow, marked as the page's. */
 function influenceFromWebNote(host: string, day: string): string {
-  return `This influence is an AI estimate from web evidence, not a citation count: Dig deeper read it from a page on ${host} on ${day}. The estimate may be wrong, and the words may be about something else on that page. The page says:`;
+  return `This influence is an AI estimate from web evidence, not a citation count: it was read from a page on ${host} on ${day}. The estimate may be wrong, and the words may be about something else on that page. The page says:`;
 }
 
 /** The words on a row with no influence, in place of a bar. Never a bar at zero. */
@@ -646,17 +642,14 @@ export function citedByNote(readAt: string): string {
 /** In the band's (i), after the influence sentences, for owner and visitor alike. */
 export const CITED_BY_NOTE = `A row that says “cited 357 times · ${REGISTRY_NAME.crossref}” shows ${REGISTRY_NAME.crossref}’s own count for a work the article gives a DOI for, as it stood on the day in its card. It is a real count, separate from influence, and it does not change the order or what the threshold hides.`;
 
-/** The card on those words, as a visitor reads it: they have no *Dig deeper*. */
-const INFLUENCE_UNKNOWN_NOTE_SHARED =
-  "No usable influence score for this work: the model was not confident it knows it, or its score was missing. In prioritised order the bar goes by this row's relevance alone.";
-
 /**
- * The card on those words, for the owner. It says only what is built: since
- * plan 261003m stage 2 *Dig deeper* looks for the work's standing on the pages
- * its web search returns. A look, not a promise: a press that finds no page
- * about the work saying how well known it is leaves the row unknown.
+ * The card on those words, for owner and visitor alike. The owner's added
+ * "Dig deeper looks on the web for a page that says how well known the work
+ * is" from plan 261003m stage 2 until 2026-10-09, when that button went (plan
+ * 261009i): nothing on the row looks for it now.
  */
-export const INFLUENCE_UNKNOWN_NOTE = `${INFLUENCE_UNKNOWN_NOTE_SHARED} Dig deeper looks on the web for a page that says how well known the work is. Most searches find none.`;
+export const INFLUENCE_UNKNOWN_NOTE =
+  "No usable influence score for this work: the model was not confident it knows it, or its score was missing. In prioritised order the bar goes by this row's relevance alone.";
 
 /**
  * **A piece that cites nothing is a real answer**, not an error, and no retry is
@@ -684,13 +677,12 @@ export const CITE_WHY_LABEL = "what the article uses it for";
    about a paper beyond what's available in the bibliography"*. The sentence can
    only restate the citing paragraph, and on a row nothing has looked up it
    still reads as what the paper says, label or no label. Once a quick check
-   has a verdict (*supports what the article uses it for*) or *Dig deeper* has
-   an answer, it is the claim under test, and the reader needs it to read
-   either. Each surface asks about what IT draws: the card shows no *Dig
-   deeper* answer, so it passes only the lookup. */
-export function showsWhy(work: Pick<ShownWork, "lookup">, view?: InvestigationView): boolean {
-  return assessedOf(work) !== null || view?.kind === "arriving" || view?.kind === "kept" ||
-    (view?.kind === "failed" && view.previous !== null);
+   has a verdict (*supports what the article uses it for*) or a kept *Dig
+   deeper* answer is drawn, it is the claim under test, and the reader needs it
+   to read either. Each surface asks about what IT draws: the card shows no
+   *Dig deeper* answer, so it passes only the lookup. */
+export function showsWhy(work: Pick<ShownWork, "lookup">, keptAnswerShown = false): boolean {
+  return assessedOf(work) !== null || keptAnswerShown;
 }
 
 /** Every row, until something has read the work: nothing has. */
@@ -715,10 +707,14 @@ export const CITE_PAGE_FOUND = "We found a web page matching its title, but have
 export function citeReadAssessed(words: number, host: string): string {
   return `We have not read the work itself, only a search engine's extract of a page matching it (${words} ${words === 1 ? "word" : "words"}, from ${host}).`;
 }
-/** *Dig deeper* (was *Investigate*) read the paper's own text (plan 261001a): a PDF code confirmed is this work. */
+/**
+ * *Dig deeper* (was *Investigate*) read the paper's own text (plan 261001a): a
+ * PDF code confirmed is this work. It ended "(Dig deeper)" until 2026-10-09,
+ * when that button went (plan 261009i); the kept reading still says this.
+ */
 export function citeReadPaper(words: number, host: string, readAt: string): string {
   const day = new Date(readAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
-  return `We read the paper itself on ${day}: a PDF from ${host}, ${words.toLocaleString("en-GB")} ${words === 1 ? "word" : "words"}, confirmed by code to be this work (Dig deeper).`;
+  return `We read the paper itself on ${day}: a PDF from ${host}, ${words.toLocaleString("en-GB")} ${words === 1 ? "word" : "words"}, confirmed by code to be this work.`;
 }
 /** `no-extract`: a page, and nothing of it to read. Never drawn as `not-in-extract`. */
 export function citeReadNoExtract(host: string): string {
@@ -854,8 +850,9 @@ interface Props {
   /** `passage` is `citePassageKey(work.id)` when the row names the citing words (rows.ts). */
   onJump(id: BlockId, passage?: string): void;
   /**
-   * **One work to bring into view, once** — the prose card's *Dig deeper* has
-   * just opened this band for it (plan 261004b). Not a selection: the row has
+   * **One work to bring into view, once** — something outside the band has
+   * just opened it for this work: the prose card's *Dig deeper* from plan
+   * 261004b until 2026-10-09, and from plan 261009i stage 2 a chat's way back. Not a selection: the row has
    * no selected state and there is no `?cite=`. `n` tells two presses on the
    * same work apart. The panel lowers the bar if it is hiding the row
    * (`barToReveal`), scrolls to the row once it is drawn, and calls
@@ -937,28 +934,6 @@ export function CitationsPanel({
     onFocusTaken?.(focus);
   }, [focus, ready, all, chosenOrder, bar, focusDrawn, onBar, onFocusTaken]);
 
-  /* **A row being dug stays drawn, and so does its answer.** A dig changes the
-     row's priority under the reader: the `finding` step detaches the kept
-     answer, and with it a web influence that may have been what held the row
-     above the bar; the new answer can score lower too. Without this the row,
-     its stage line and its stream vanish mid-press (GPT Sol, plan review of
-     261004b, F1 — true of a press on the row itself before the card had one).
-     So whenever the priority of the last work dug here changes, the bar is
-     lowered to it if it would hide it. **Keyed on that priority and not on the
-     bar**, so a reader who drags the bar above the row afterwards is not
-     fought. */
-  const digging = owner?.investigating ?? null;
-  const lastDug = useRef<string | null>(null);
-  if (digging !== null) lastDug.current = digging;
-  const keptId = lastDug.current;
-  const kept = keptId === null ? undefined : all.find((w) => w.id === keptId);
-  const keptPriority = kept ? priorityOf(kept) : undefined;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the work's priority is the trigger; the bar and the order are read, not watched
-  useEffect(() => {
-    if (keptId === null || !ready) return;
-    const lowered = barToReveal(all, keptId, chosenOrder, bar);
-    if (lowered !== null) onBar(lowered);
-  }, [keptId, keptPriority, ready]);
   /* What the band's (i) adds after the mode's own words: the two sentences
      about the whole list (plan 261001l moved them off the foot), the count, and
      who made it — only once the list is ready and has something in it, which
@@ -1095,24 +1070,11 @@ export function CitationsPanel({
                     key={work.id}
                     work={work}
                     unscored={order === "prioritised" && priorityOf(work) === undefined}
-                    showInSpideryarn={owner !== null}
+                    owned={owner !== null}
                     onJump={onJump}
                     /* The owner's alone: a visitor's row draws neither the
                        button nor the mark. */
                     chats={access.kind === "owner" ? (access.chats ?? null) : null}
-                    /* The owner's alone, and never on the hover card. */
-                    investigate={
-                      owner === null
-                        ? null
-                        : {
-                            running: owner.investigating,
-                            stage: owner.investigating === work.id ? owner.investigateStage : null,
-                            note: owner.findNote?.id === work.id ? owner.findNote : null,
-                            draft: owner.investigateDraft?.id === work.id ? owner.investigateDraft.text : null,
-                            failed: owner.investigateFailed?.id === work.id ? owner.investigateFailed : null,
-                            onInvestigate: (id) => void owner.investigate(id),
-                          }
-                    }
                   />
                 ))}
               </ol>
@@ -1161,7 +1123,7 @@ function orderOptions(works: readonly ShownWork[]): { key: CiteOrder; label: str
             key: "influence" as const,
             label: "influence",
             title:
-              "How influential each work is in its field — the model's memory, or an AI estimate from the web where Dig deeper found one; not a citation count. Works with unknown influence come after, by relevance",
+              "How influential each work is in its field — the model's memory, or an AI estimate from the web where an earlier search found one; not a citation count. Works with unknown influence come after, by relevance",
           },
         ]
       : []),
@@ -1243,39 +1205,22 @@ function BarSlider({
 
 /* ------------------------------------------------------------------ a row -- */
 
-/**
- * A row's *Investigate* — the owner's alone, so `null` on a visitor's row.
- * Plan 260930a; since plan 260930d the one button, with *Look it up* (was
- * *Find it*) as its first step.
- */
-interface RowInvestigate {
-  /** The work whose *Investigate* is running anywhere in the list, or null. */
-  running: string | null;
-  /** This row's step while its press is out — `finding` the work, then `reading`. */
-  stage: InvestigateStage | null;
-  /** What this row's last press's lookup said when it found no page. */
-  note: FindNote | null;
-  /** This row's words so far, while its run is out. */
-  draft: string | null;
-  /** This row's last run, when it did not end in a stored answer. */
-  failed: InvestigateFailureHere | null;
-  onInvestigate(id: string): void;
-}
-
 function WorkRow({
   work,
   unscored,
-  showInSpideryarn,
+  owned,
   onJump,
-  investigate,
   chats,
 }: {
   work: ShownWork;
   unscored: boolean;
-  /** Owner-only even if malformed visitor JSON carries the optional field. */
-  showInSpideryarn: boolean;
+  /**
+   * The owner's row: *already an article here* and a kept *Dig deeper* answer
+   * are drawn. Owner-only even if malformed visitor JSON carries the optional
+   * fields.
+   */
+  owned: boolean;
   onJump(id: BlockId, passage?: string): void;
-  investigate: RowInvestigate | null;
   /** `null` for a visitor: no *Ask in chat*, and no mark. */
   chats: CitedWorkChats | null;
 }) {
@@ -1291,7 +1236,6 @@ function WorkRow({
      stays, drawn as a citation with no link, and says nothing about why: the
      `publicMeta` rule, since there is nothing a visitor could do differently. */
   const source = work.url === undefined ? null : sourceOf({ url: work.url, linkFrom: work.linkFrom });
-  const note = investigate?.note ?? null;
   const scores = scoresOf(work);
   const web = webInfluenceOf(work);
   const citedBy = citedByOf(work);
@@ -1300,13 +1244,10 @@ function WorkRow({
   /* The found page's own title, in the tooltip: the search result's words,
      never the model's (src/citation-find.ts). */
   const foundAs = work.found?.title ? ` — “${work.found.title}”` : "";
-  const view = investigate === null ? undefined : investigationViewOf(work.investigation, {
-    running: investigate.running === work.id,
-    stage: investigate.stage,
-    draft: investigate.draft,
-    failed: investigate.failed,
-    lookupAt: work.lookup?.at ?? null,
-  });
+  /* **A kept *Dig deeper* answer is still drawn**, the owner's, with no *Dig
+     deeper again*: the button went on 2026-10-09 (plan 261009i), and what it
+     found stays on the row. Nothing new is written to it. */
+  const kept = owned ? work.investigation : undefined;
 
   return (
     <li
@@ -1315,11 +1256,11 @@ function WorkRow({
       {...(unscored && { title: "Not scored for prioritising — shown regardless of the threshold" })}
     >
       <CiteTitle work={work} source={source} foundAs={foundAs} by={by} />
-      {showInSpideryarn && work.inSpideryarn && <InSpideryarn match={work.inSpideryarn} />}
+      {owned && work.inSpideryarn && <InSpideryarn match={work.inSpideryarn} />}
       {by && !byLineFolds(work, by) && <ByLine work={work} by={by} />}
       {line.conflict && <p className="cite-find-note cite-registry-conflict">{registryConflictNote(line.conflict)}</p>}
       {/* The claim accompanies exactly the verdict or answer drawn below. */}
-      {showsWhy(work, view) && (
+      {showsWhy(work, kept !== undefined) && (
         <p className="cite-why">
           <span className="cite-why-label">{CITE_WHY_LABEL}:</span> {work.why}
         </p>
@@ -1329,9 +1270,7 @@ function WorkRow({
       <p className="cite-meta">
         {scores.length > 0 && <ScoreBars className="cite-scores" scores={scores} />}
         {web !== undefined && <WebInfluence influence={web} />}
-        {influenceIsUnknown(work) && (
-          <UnknownInfluence canDig={investigate !== null} />
-        )}
+        {influenceIsUnknown(work) && <UnknownInfluence />}
         {citedBy !== null && <CitedBy citedBy={citedBy} />}
         {source === null ? null : source.kind === "address" ? (
           <span className="cite-source">
@@ -1348,18 +1287,9 @@ function WorkRow({
             search Scholar ↗
           </a>
         )}
-        {investigate !== null && (
-          <InvestigateButton
-            id={work.id}
-            again={work.investigation !== undefined}
-            running={investigate.running === work.id}
-            busy={investigate.running !== null}
-            onInvestigate={investigate.onInvestigate}
-          />
-        )}
-        {/* Beside Dig deeper and drawn as it is (plan 261006d, D5). The press
-            sends the question (plan 261006j). It stays once a
-            chat exists: a second one can be started. */}
+        {/* **Where Dig deeper was** (plan 261009i; beside it from plan
+            261006d until then). The press sends the question (plan 261006j).
+            It stays once a chat exists: a second one can be started. */}
         {chats && (
           <AskInChatButton
             label={ASK_WORK_IN_CHAT}
@@ -1391,22 +1321,7 @@ function WorkRow({
       {/* The way back to the chat started from this row, on a line of its
           own under the controls. */}
       {chats && chat && <OriginChatMark chat={chat} label={OPEN_WORK_CHAT} onOpen={chats.onOpen} />}
-      {/* The press's first step found no page: said quietly, and the
-          reading below goes on unconfirmed (plan 260930d P-5). */}
-      {note && (
-        <p className="cite-find-note" role="status">
-          {note.message}
-        </p>
-      )}
-      {investigate !== null && view !== undefined && (
-        <InvestigationBlock
-          id={work.id}
-          view={view}
-          busy={investigate.running !== null}
-          lookup={work.lookup}
-          onInvestigate={investigate.onInvestigate}
-        />
-      )}
+      {kept && <KeptInvestigation investigation={kept} lookup={work.lookup} />}
     </li>
   );
 }
@@ -1421,8 +1336,8 @@ function dayOf(iso: string): string {
 
 /**
  * ***from the web*, beside the influence bar** (plan 261003m stage 2): the
- * number came from one page of *Dig deeper*'s web search, not from the model's
- * memory. The card says so in our words, names the host and the day, and then
+ * number came from one page of *Dig deeper*'s web search (kept from before the
+ * button went on 2026-10-09, plan 261009i), not from the model's memory. The card says so in our words, names the host and the day, and then
  * shows the page's own words, in a `<q>` so they read as the page's and not
  * ours. The quote stays in the app's face: third-party text is left UI
  * (docs/project/fonts.md § Whose voice is it). No link: the address is in the
@@ -1461,11 +1376,11 @@ function WebInfluence({ influence }: { influence: Extract<EffectiveInfluence, { 
 }
 
 /** The explanation opens on hover, focus or tap; a finger's card closes on scroll. */
-function UnknownInfluence({ canDig }: { canDig: boolean }) {
+function UnknownInfluence() {
   const reveal = useTapReveal(false);
   return (
     <Tooltip
-      content={canDig ? INFLUENCE_UNKNOWN_NOTE : INFLUENCE_UNKNOWN_NOTE_SHARED}
+      content={INFLUENCE_UNKNOWN_NOTE}
       placement="left"
       className="score-bars-card"
       open={reveal.open}

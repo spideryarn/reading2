@@ -603,9 +603,9 @@ the model a search tool and lets it choose. The encouragement is a paragraph of 
 The count reports what it actually did, and the dialog prints it — "3 web searches" or "no web
 search needed". A claim about research that nobody can check is worth nothing.
 
-That decision is still the first answer's. **Dig deeper** is the reader overruling it for one
-comment: the search is run by code before the answer is asked for
-([§ pushing back](#pushing-back)).
+That decision is still the first answer's. **Dig deeper** was the reader overruling it for one
+comment, until its button went on 2026-10-09: the search was run by code before the answer was
+asked for ([§ pushing back](#pushing-back)).
 
 > [!WARNING]
 > **Prefer the server tool over the `plugins` form — but be precise about why.** This was written
@@ -924,8 +924,14 @@ the value, since the bug all of this came from was a panel that said "thinking�
 
 Both from Greg, 2026-08-26, on the same weak answer.
 
+> **The button is gone from the dialog, since 2026-10-09** (plan [261009i](../plans/261009i-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md), D2): Greg,
+> *"we don't need the dig deeper button"*. The dialog's *Ask in chat* follow-up box is the way to go
+> further, in a separate conversation linked from the comment, where Dig deeper replaced the answer
+> in place. An answer a dig already wrote stays, and the server half below (`{ deep: true }`, the
+> allowance) is untouched until Greg decides (the plan's D5).
+
 **Dig deeper** (*"Search the web"* until 2026-10-01) — *"maybe add the 'Web search' button to do a
-deeper web search"*. Since 2026-10-01 it is the glossary's and Citations' action too, under one
+deeper web search"*. From 2026-10-01 it was the glossary's and Citations' action too, under one
 name, and does what that name promises: a web search forced by code, the reader's other articles
 searched beside it, and the answer written by the high-power model whatever the article's switch
 says. What a press does, why, and Greg's words are in
@@ -1290,7 +1296,7 @@ reload rather than leaving a permanent unanswered mark. Nothing to clean up.
 
 **What a visitor gets:** the passage, the reader's own words, the model's answer, and its citations.
 **What they may do with it:** read it, step through the list, and nothing else — no edit box, no
-delete, no retry, no *Dig deeper*, and no follow-up composer. Absent, not disabled: a greyed-out
+delete, no retry, and no follow-up composer (and no *Dig deeper*, which since 2026-10-09 nobody has). Absent, not disabled: a greyed-out
 box that says "ask a follow-up" is an invitation to press it, and the press would spend the owner's
 money.
 
@@ -1508,8 +1514,8 @@ actually argue for. Chat is the one that had to earn its place; the argument is 
 
 ### And since 2026-08-26, a third caller of this same call
 
-The glossary's **Dig deeper** button ([glossary.md § Digging deeper into a
-term](glossary.md#digging-deeper-into-a-term)) calls `explainStream` directly, with the first
+The glossary's **Dig deeper** (its button gone since 2026-10-09; the route remains —
+[glossary.md § Digging deeper into a term](glossary.md#digging-deeper-into-a-term)) calls `explainStream` directly, with the first
 matching glossary form — the name or an alias — as the quote, the first block it matches as the
 anchor, and the dig's findings. Not a copy of it — the function. Its *Look up* box calls the same
 stream without a dig, quoting the exact characters it matched.

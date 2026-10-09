@@ -431,19 +431,17 @@ function view(over: Partial<SkimView> = {}): SkimView {
     onOpen: (target) => void calls.push(`open ${target.kind}${"id" in target ? ` ${target.id}` : ""}`),
     canOpen: () => true,
     termActions: null,
+    onAskTerm: null,
     ...over,
   };
 }
 
-/** The owner's two verbs on a term, as the Skim band hands them to the card. */
+/** The owner's *Ask in chat* on a term, as the Skim band hands it to the card (plan 261009i). */
+const ask = (entry: { id: string }) => void calls.push(`ask ${entry.id}`);
+
+/** The owner's *Hide* on a term, as the Skim band hands it to the card. */
 function termActions(over: Partial<TermActions> = {}): TermActions {
   return {
-    look: async (id) => {
-      calls.push(`look ${id}`);
-      return true;
-    },
-    looking: null,
-    stale: false,
     setHidden: async (id) => void calls.push(`hide ${id}`),
     hiding: new Set<string>(),
     ...over,
@@ -456,7 +454,6 @@ const TERM: GlossaryEntry = {
   kind: "concept",
   aliases: [],
   senseHere: "How much a source's past says about a target's future.",
-  /* A recorded passage, so Dig deeper has something to anchor to (`unquoted`). */
   blocks: [B[0]!],
 };
 const CARD: StopCard = {
@@ -845,13 +842,13 @@ describe("the panel", () => {
   const termChip = () => host.querySelector<HTMLButtonElement>(".skim-chip")!;
 
   it("opens a term chip to the glossary's own card on focus, with the owner's three actions (261006e)", async () => {
-    await draw(owner(), view({ card: CARD, termActions: termActions() }));
+    await draw(owner(), view({ card: CARD, termActions: termActions(), onAskTerm: ask }));
     expect(termCard()).toBeNull();
     expect(termChip().getAttribute("aria-expanded")).toBe("false");
     await act(async () => termChip().focus());
     expect(termChip().getAttribute("aria-expanded")).toBe("true");
     expect(termCard()?.textContent).toContain(TERM.senseHere!);
-    expect(cardButtons()).toEqual(["Dig deeper", "Hide", "Open glossary"]);
+    expect(cardButtons()).toEqual(["Ask in chat", "Hide", "Open glossary"]);
     /* The sense is in the card and nowhere in the band: one surface, not two. */
     expect(host.querySelector(".skim-sense")).toBeNull();
     expect(host.querySelector('[aria-label="Open in Glossary"]')).toBeNull();
@@ -860,15 +857,17 @@ describe("the panel", () => {
     expect(termChip().getAttribute("aria-expanded"), "leaving for Glossary closes it").toBe("false");
   });
 
-  it("digs deeper from the card: starts the look and opens Glossary on the term", async () => {
-    await draw(owner(), view({ card: CARD, termActions: termActions() }));
+  it("asks in chat from the card, with the Glossary band's sender, and closes the card (261009i)", async () => {
+    await draw(owner(), view({ card: CARD, termActions: termActions(), onAskTerm: ask }));
     await act(async () => termChip().focus());
-    await act(async () => cardButton("Dig deeper").click());
-    expect(calls).toEqual([`look ${TERM.id}`, `open term ${TERM.id}`]);
+    expect(cardButtons(), "Dig deeper is gone").not.toContain("Dig deeper");
+    await act(async () => cardButton("Ask in chat").click());
+    expect(calls).toEqual([`ask ${TERM.id}`]);
+    expect(termChip().getAttribute("aria-expanded")).toBe("false");
   });
 
   it("opens a term's card on a tap and keeps it until a tap elsewhere", async () => {
-    await draw(owner(), view({ card: CARD, termActions: termActions() }));
+    await draw(owner(), view({ card: CARD, termActions: termActions(), onAskTerm: ask }));
     /* The click-only activation also works without a preceding focus. The
        pointerdown/focus/click ordering is exercised separately below. */
     await act(async () => termChip().click());
@@ -941,7 +940,7 @@ describe("the panel", () => {
 
   it("preserves unrelated keyboard focus when Hide is pressed from a hovered card", async () => {
     vi.useFakeTimers();
-    await draw(owner(), view({ card: CARD, termActions: termActions() }));
+    await draw(owner(), view({ card: CARD, termActions: termActions(), onAskTerm: ask }));
     const input = document.createElement("input");
     host.append(input);
     await act(async () => input.focus());
@@ -960,7 +959,7 @@ describe("the panel", () => {
     const settle = async () => {
       for (const _ of [0, 1, 2]) await act(async () => { vi.advanceTimersByTime(500); });
     };
-    await draw(owner(), view({ card: CARD, termActions: termActions() }));
+    await draw(owner(), view({ card: CARD, termActions: termActions(), onAskTerm: ask }));
     await act(async () => termChip().focus());
     await settle();
     /* jsdom does not implement Tab's default action; use the same portal
@@ -969,7 +968,7 @@ describe("the panel", () => {
     expect(guard.getAttribute("data-type")).toBe("outside");
     await act(async () => guard.focus());
     await settle();
-    expect(document.activeElement).toBe(cardButton("Dig deeper"));
+    expect(document.activeElement).toBe(cardButton("Ask in chat"));
     await act(async () => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
     await settle();
     expect(termCard()).toBeNull();
@@ -983,13 +982,24 @@ describe("the panel", () => {
     expect(cardButtons()).toContain("Open glossary");
   });
 
-  it("draws a card with no way out when Glossary cannot be opened: no Open glossary, and no Dig deeper", async () => {
+  it("draws a card with no Open glossary when Glossary cannot be opened, and keeps Ask in chat and Hide", async () => {
     const closed = (target: CardTarget) => target.kind !== "term";
-    await draw(owner(), view({ card: CARD, canOpen: closed, termActions: termActions() }));
+    await draw(owner(), view({ card: CARD, canOpen: closed, termActions: termActions(), onAskTerm: ask }));
     await act(async () => termChip().focus());
     expect(termCard()?.textContent).toContain(TERM.senseHere!);
-    /* Dig deeper lands in Glossary, so it goes with the way there. Hide does not. */
-    expect(cardButtons()).toEqual(["Hide"]);
+    /* Dig deeper landed in Glossary, so it went with the way there, until
+       2026-10-09. Ask in chat goes to Chat, and Hide stays put (plan 261009i). */
+    expect(cardButtons()).toEqual(["Ask in chat", "Hide"]);
+  });
+
+  it("keeps Hide and Ask in chat independent: either can be drawn without the other (261009i, Sol F1)", async () => {
+    await draw(owner(), view({ card: CARD, termActions: termActions(), onAskTerm: null }));
+    await act(async () => termChip().focus());
+    expect(cardButtons()).toEqual(["Hide", "Open glossary"]);
+    await act(async () => termChip().blur());
+    await draw(owner(), view({ card: CARD, termActions: null, onAskTerm: ask }));
+    await act(async () => termChip().focus());
+    expect(cardButtons()).toEqual(["Ask in chat", "Open glossary"]);
   });
 
   it("draws a visitor's card with no button at all when Glossary cannot be opened", async () => {
@@ -1492,6 +1502,7 @@ function Harness({ covers = false, stepped = false, arrival }: { covers?: boolea
       onOpenKey: setOpenKey,
       onControl,
       glossary: glossaryRead,
+      onAskTerm: () => {},
       onOpen: (target: CardTarget) => void opened.push(`${target.kind}${"id" in target ? ` ${target.id}` : ""}`),
       canOpen: () => true,
       arrival: arrival ?? ownArrival.current,

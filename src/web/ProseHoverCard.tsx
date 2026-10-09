@@ -42,7 +42,7 @@ import {
   ExternalLink,
   FileText,
   Globe,
-  Microscope,
+  MessagesSquare,
   LoaderCircle,
   Plus,
   Quote as QuoteIcon,
@@ -74,7 +74,8 @@ import { citePassageKey } from "./rows.js";
    arithmetic here would be a card and a masthead disagreeing about one page,
    which is the drift src/reading-time.ts exists to make impossible. */
 import { readingMinutes } from "../reading-time.js";
-import { DIG_DEEPER_SAYS, DIG_DEEPER_UNQUOTED, entryProse } from "./GlossaryPanel.js";
+import { entryProse } from "./GlossaryPanel.js";
+import { ASK_ENTRY_IN_CHAT, ASK_IN_CHAT, ASK_IN_CHAT_SAYS, ASK_WORK_IN_CHAT } from "./OriginChat.js";
 /* **The band's own provenance function, not a second opinion.** `sourceOf`
    decides whether a row has an address or only a search, and it is total over
    `linkFrom` — so importing it is what stops this card and the band teaching a
@@ -208,7 +209,8 @@ function HoverCard({
   canAddToShelf,
   showInSpideryarn,
   termActions,
-  citeActions = null,
+  onAskTerm = null,
+  onAskCitedWork = null,
   quotes = null,
 }: {
   entries: GlossaryEntry[];
@@ -335,28 +337,35 @@ function HoverCard({
    */
   showInSpideryarn: boolean;
   /**
-   * **What an owner may do to a term from the card** — *Dig deeper* and
-   * *Hide*, plan 261002c § 3. Greg, 2026-10-02: *"We have a 'Dig deeper' in
-   * Glossary mode. Add that to the in-text glossary tooltip."* (spya-p09u4s),
-   * and *"it would be great if the new clickable Glossary hover-card also
-   * includes a 'Hide' action"*.
+   * **What an owner may do to a term's place in their glossary from the
+   * card** — *Hide*. Greg, 2026-10-02: *"it would be great if the new
+   * clickable Glossary hover-card also includes a 'Hide' action"* (plan
+   * 261002c § 3).
    *
-   * `null` for a visitor, and then neither button is drawn: a dig is a model
-   * call the owner pays for, and a hide is the owner's own view of their own
-   * article. Reader passes its `GlossaryRead`, which is only on the owner's arm
-   * of the capability (reader-capability.ts), so a visitor has nothing to pass.
+   * `null` for a visitor, and then no *Hide* is drawn: a hide is the owner's
+   * own view of their own article. Reader passes its `GlossaryRead`, which is
+   * only on the owner's arm of the capability (reader-capability.ts), so a
+   * visitor has nothing to pass.
    */
   termActions: TermActions | null;
   /**
-   * **What an owner may do to a cited work from the card** — *Dig deeper*.
-   * Greg, 2026-10-03 (report `spya-c2qmbg`): *"What I was hoping is that it
-   * would have a button for dig deeper in the tooltip."* Plan 261004b.
-   *
-   * `null` or absent for a visitor, and then no button is drawn: a dig is a
-   * model call the owner pays for. Reader builds it from the owner's citations
-   * read, which a visitor's arm does not have (reader-capability.ts).
+   * ***Ask in chat* on a term's card** — the Glossary band's own sender. Greg,
+   * 2026-10-02: *"We have a 'Dig deeper' in Glossary mode. Add that to the
+   * in-text glossary tooltip."* (spya-p09u4s); the card's Dig deeper became
+   * this on 2026-10-09, as the band's did (plan 261009i). Its own capability,
+   * not part of `termActions`, so Hide and the chat do not hang off each other
+   * (GPT Sol's plan review of 261009i, F1). `null` or absent for a visitor,
+   * who has no chat.
    */
-  citeActions?: CiteActions | null;
+  onAskTerm?: AskAboutTerm | null;
+  /**
+   * ***Ask in chat* on a cited work's card** — the Citations rows' own sender.
+   * Greg, 2026-10-03 (report `spya-c2qmbg`): *"What I was hoping is that it
+   * would have a button for dig deeper in the tooltip."* Plan 261004b; it
+   * became *Ask in chat* on 2026-10-09 (plan 261009i). `null` or absent for a
+   * visitor, who has no chat.
+   */
+  onAskCitedWork?: ((work: CitedWork) => void) | null;
   /**
    * **The quotes the prose fills, and what the card's buttons do with one**
    * — `QuoteCard`. `null` where there are none to point at; then `read` never
@@ -710,8 +719,8 @@ function HoverCard({
               entry={entry}
               onOpen={() => { close(); onOpenTerm(entry.id); }}
               actions={termActions}
+              onAsk={onAskTerm}
               onClose={close}
-              onOpenTerm={onOpenTerm}
             />
           ))}
           {/* The citation half, under the term half and above the link half.
@@ -729,7 +738,7 @@ function HoverCard({
               key={w.id}
               work={w}
               showInSpideryarn={showInSpideryarn}
-              actions={citeActions}
+              onAsk={onAskCitedWork}
               here={shown.el.closest("tr[data-block]")?.getAttribute("data-block") ?? null}
               onJump={(id) => {
                 close();
@@ -2020,17 +2029,17 @@ function clip(text: string, max: number): string {
  *   number with nothing to compare it against.
  * - **A kept *Dig deeper* answer.** The verdict's short version is here
  *   (`CiteCardReading`); the long reading stays on the row, which has the room.
- * - **A selected row in Citations mode.** There is no `?cite=`; the card's
- *   button scrolls the row into view once and that is all (plan 261004b).
+ * - **A selected row in Citations mode.** There is no `?cite=`.
  *
- * ## And one thing that was not here until 2026-10-04: *Dig deeper*
+ * ## And one thing that was not here until 2026-10-04: a button
  *
  * This list used to say a card that opens because a pointer rested somewhere is
- * the wrong place for a press that spends money. Greg asked for it by name
- * (report `spya-c2qmbg`), the glossary's card has had the same button since
+ * the wrong place for a press that spends money. Greg asked for one by name
+ * (report `spya-c2qmbg`), the glossary's card had the same button since
  * 261002c, and the press is a deliberate one on a labelled button, not the
- * hover. It starts the row's own *Dig deeper* and opens Citations on that row,
- * where the answer streams: `CiteActions`.
+ * hover. It was *Dig deeper*, which started the row's own dig and opened
+ * Citations on that row, until 2026-10-09; since plan 261009i it is *Ask in
+ * chat*, the band's own sender: `CiteActions`.
  *
  * ## And a count instead of more marks
  *
@@ -2045,15 +2054,15 @@ function clip(text: string, max: number): string {
 function CiteCard({
   work,
   showInSpideryarn,
-  actions,
+  onAsk,
   here,
   onJump,
   onClose,
 }: {
   work: CitedWork;
   showInSpideryarn: boolean;
-  /** `null` for a visitor: no Dig deeper. */
-  actions: CiteActions | null;
+  /** `null` for a visitor: no Ask in chat. */
+  onAsk: ((work: CitedWork) => void) | null;
   /** The block the card was opened from, which is not a jump (plan 261009e). */
   here: BlockId | null;
   /** Go to one of the passages that cite the work. The caller closes the card. */
@@ -2165,31 +2174,23 @@ function CiteCard({
             is cited, the count and a jump to each place are their own line
             above (`CitedAtJumps`). */}
         {!work.citedInBody && <span className="prose-card-cite-where">only in the references</span>}
-        {/* The owner's one verb, last and pushed right. The card closes on the
-            press for `TermCard`'s reason: it is 18rem and goes when the pointer
-            leaves, and the answer needs somewhere that stays put — the row,
-            which `actions.dig` opens. One at a time, as on the rows. */}
-        {actions && (
+        {/* The owner's one verb, last and pushed right: *Ask in chat*, where
+            *Dig deeper* was until 2026-10-09 (plan 261009i). The band's own
+            sender, so the chat records the same origin as a press on the row
+            would. The card closes on the press: the answer is in Chat. */}
+        {onAsk && (
           <button
             type="button"
-            className="prose-card-act prose-card-cite-dig"
-            disabled={actions.digging !== null}
-            title={CITE_CARD_DIG_SAYS}
+            className="prose-card-act prose-card-cite-ask"
+            aria-label={ASK_WORK_IN_CHAT}
+            title={`${ASK_WORK_IN_CHAT}. ${ASK_IN_CHAT_SAYS}`}
             onClick={() => {
-              actions.dig(work.id);
+              onAsk(work);
               onClose();
             }}
           >
-            {actions.digging === work.id ? (
-              <LoaderCircle size={10} className="cmt-spinner" />
-            ) : (
-              <Microscope size={10} />
-            )}
-            {actions.digging === work.id
-              ? "Digging deeper…"
-              : work.investigation
-                ? "Dig deeper again"
-                : "Dig deeper"}
+            <MessagesSquare size={10} aria-hidden="true" />
+            {ASK_IN_CHAT}
           </button>
         )}
       </p>
@@ -2272,21 +2273,6 @@ function CitedAtJumps({
   );
 }
 
-/**
- * **The owner's one verb on a cited work**, as the card needs it. Reader builds
- * it over the citations read, where *Dig deeper*'s state has lived since
- * 2026-10-04 so that a card in any mode can start one (plan 261004b).
- */
-export interface CiteActions {
-  /** Start *Dig deeper* for this work and open Citations on its row. */
-  dig(id: string): void;
-  /** The work a dig is running for, or null — one at a time, across the band and the card. */
-  digging: string | null;
-}
-
-/** The card button's `title`. Each clause is something the row's own press does (CitationInvestigation.tsx § InvestigateButton). */
-export const CITE_CARD_DIG_SAYS =
-  "Searches the web for this work and asks a stronger model how it bears on this article. It costs money. The answer appears on its row in Citations.";
 
 /**
  * **After *Look it up*, the short version of the band's reading** — plan
@@ -2327,18 +2313,21 @@ function CiteCardReading({ work }: { work: CitedWork }) {
 }
 
 /**
- * **The owner's two verbs on a term**, as the card needs them — a structural
- * slice of `GlossaryRead` (src/web/useGlossary.ts), which Reader passes whole.
- * Both live on the read rather than the band so the card can use them in any
- * mode: plan 261002c, GPT Sol's plan review finding 1.
+ * **Start a fresh chat about this entry and send its first question** — the
+ * Glossary band's sender (`askGlossaryEntryInChat` in Reader.tsx), so a chat
+ * started from a card records the same origin as one started from the entry.
+ */
+export type AskAboutTerm = (entry: Pick<GlossaryEntry, "id" | "name">) => void;
+
+/**
+ * **The owner's verb on a term's place in their glossary**, as the card needs
+ * it — a structural slice of `GlossaryRead` (src/web/useGlossary.ts), which
+ * Reader passes whole. On the read rather than the band so the card can use it
+ * in any mode: plan 261002c, GPT Sol's plan review finding 1. It carried
+ * *Dig deeper*'s `look` too until 2026-10-09; *Ask in chat* is its own prop
+ * (`AskAboutTerm`), plan 261009i.
  */
 export interface TermActions {
-  /** Starts a dig; `false` if another one already holds the slot. */
-  look(id: string): Promise<boolean>;
-  /** The term a dig is running for, or null — one at a time, across the band and the card. */
-  looking: string | null;
-  /** The list describes an older article, so an empty `blocks` proves nothing (`occurrencesFitTheArticle`). */
-  stale: boolean;
   /** Pessimistic: resolves once the server has it and the list is re-read; throws a sentence. */
   setHidden(id: string, hidden: boolean): Promise<void>;
   hiding: ReadonlySet<string>;
@@ -2346,7 +2335,7 @@ export interface TermActions {
 
 /**
  * **A glossary entry as a card**: what it means here, in general, what the web
- * said, and one row of *Dig deeper · Hide · Open glossary*.
+ * said, and one row of *Ask in chat · Hide · Open glossary*.
  *
  * Exported since 2026-10-06 for Skim's term chips (SkimPanel.tsx § `TermChip`,
  * plan 261006e), which draw it inside the shared `Tooltip` rather than this
@@ -2356,8 +2345,8 @@ export function TermCard({
   entry,
   onOpen,
   actions,
+  onAsk = null,
   onClose,
-  onOpenTerm,
 }: {
   entry: GlossaryEntry;
   /**
@@ -2366,14 +2355,11 @@ export function TermCard({
    * prose always passes it.
    */
   onOpen?: (() => void) | undefined;
-  /** `null` for a visitor: no Dig deeper, no Hide. */
+  /** `null` for a visitor: no Hide. */
   actions: TermActions | null;
+  /** *Ask in chat*: `null` or absent for a visitor, who has no chat. */
+  onAsk?: AskAboutTerm | null | undefined;
   onClose(): void;
-  /**
-   * Where *Dig deeper* lands. **Absent, no *Dig deeper* is drawn**, for the
-   * same reader: the answer streams into the Glossary band and nowhere else.
-   */
-  onOpenTerm?: ((id: string) => void) | undefined;
 }) {
   const prose = entryProse(entry);
   /* Why the Hide pressed here did not go through. The card's own line, because
@@ -2381,28 +2367,20 @@ export function TermCard({
      finding 5: a failed card hide must say so where the press was. */
   const [hideFailed, setHideFailed] = useState<string | null>(null);
 
-  /* The band's rule, for the band's reason (`Term` § `unquoted` in
-     GlossaryPanel.tsx): no recorded passage on a list we know fits the article
-     means there is nothing to anchor a dig to. */
-  const unquoted = actions !== null && entry.blocks.length === 0 && !actions.stale;
-  const digging = actions?.looking === entry.id;
-  const digBusy = (actions?.looking ?? null) !== null;
   const hiding = actions?.hiding.has(entry.id) ?? false;
 
   /**
-   * **Start the dig, then open the band on the term**, where the answer streams
-   * into the row with everything the band already does about it — the wait
-   * sentence, the draft, a failure, *Dig deeper again*. The card closes: it is
-   * 18rem and closes when the pointer leaves, and a minute-long answer needs
-   * somewhere that stays put. `onOpenTerm` is `openTermInGlossary`, which lowers
-   * the threshold if it would hide the row. The plan's other option — the answer
-   * streaming inside the card — is passed over in its § 3.
+   * **Ask in chat, then close the card** — the press is the Send, and the
+   * answer is in Chat, so the 18rem card that goes when the pointer leaves has
+   * nothing left to show. Never disabled: a chat needs no passage, so a term
+   * the article never quotes can be asked about too. Until 2026-10-09 this was
+   * *Dig deeper*, which started a lookup and opened the Glossary band on the
+   * term (plan 261009i).
    */
-  const dig = () => {
-    if (!actions || !onOpenTerm) return;
-    void actions.look(entry.id);
+  const ask = () => {
+    if (!onAsk) return;
+    onAsk(entry);
     onClose();
-    onOpenTerm(entry.id);
   };
 
   const hide = async () => {
@@ -2468,11 +2446,11 @@ export function TermCard({
           tooltip with dig deeper, hide, and in the glossary. They should all
           be on the same row to minimize vertical space"*. Until then the
           owner's two verbs were a second row under this one (plan 261002c § 3).
-          The row wraps rather than overflowing: an entry with a link and a
-          *Dig deeper again* is wider than the card. */}
+          The row wraps rather than overflowing: an entry with a link and all
+          three buttons is wider than the card. */}
       {/* No foot at all with nothing to put in it: a visitor in Skim with no
           Glossary to open, on a term with no link. */}
-      {(entry.url || actions || onOpen) && (
+      {(entry.url || actions || onAsk || onOpen) && (
       <p className="prose-card-foot prose-card-term-foot">
         {entry.url && (
           /* `noreferrer` as well as `noopener`, as in the panel: the article's
@@ -2485,27 +2463,31 @@ export function TermCard({
         )}
         {/* **The three buttons are one group that never breaks**, pushed right.
             When a link beside them leaves no room, the group moves to a line
-            of its own whole, rather than *Hide* parting from *Dig deeper* or
+            of its own whole, rather than *Hide* parting from *Ask in chat* or
             *Open glossary* landing alone (GPT Sol, plan review of 261003h). */}
         <span className="prose-card-term-acts">
         {/* The owner's two verbs, beside the way out. Plain buttons, like
             that one: a tap inside the card is left entirely alone by the touch
             path (useHoverCard.ts § "Inside the card"), so they work on a
             finger as it does. */}
+        {/* Chat's two bubbles (icons.md § A chat is two bubbles), in the
+            card's own button rather than the band's `AskInChatButton`: the
+            row's other two are `.prose-card-act`, and a 32px outline Button
+            among them would be a second kind of thing. */}
+        {onAsk && (
+          <button
+            type="button"
+            className="prose-card-act prose-card-term-ask"
+            aria-label={ASK_ENTRY_IN_CHAT}
+            title={`${ASK_ENTRY_IN_CHAT}. ${ASK_IN_CHAT_SAYS}`}
+            onClick={ask}
+          >
+            <MessagesSquare size={10} aria-hidden="true" />
+            {ASK_IN_CHAT}
+          </button>
+        )}
         {actions && (
           <>
-            {onOpenTerm && (
-            <button
-              type="button"
-              className="prose-card-act"
-              disabled={digBusy || unquoted}
-              title={unquoted ? DIG_DEEPER_UNQUOTED : DIG_DEEPER_SAYS}
-              onClick={dig}
-            >
-              {digging ? <LoaderCircle size={10} className="cmt-spinner" /> : <Globe size={10} />}
-              {digging ? "Digging deeper…" : entry.lookup ? "Dig deeper again" : "Dig deeper"}
-            </button>
-            )}
             <button
               type="button"
               className="prose-card-act"

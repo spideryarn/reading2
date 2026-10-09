@@ -62,7 +62,7 @@ export function CitationsBand({
    */
   read: CitationsRead;
   onJump(id: BlockId, passage?: string): void;
-  /** The work the prose card's *Dig deeper* opened this band for — CitationsPanel.tsx § `Props.focus`. */
+  /** The work something outside the band opened it for (the prose card's *Dig deeper* until plan 261009i) — CitationsPanel.tsx § `Props.focus`. */
   focus: CiteFocus | null;
   onFocusTaken(focus: CiteFocus): void;
   /**

@@ -88,7 +88,6 @@ function Harness() {
             pending: 0,
             onDelete: () => {},
             onRetry: () => {},
-            onDeepen: () => {},
             onDiscuss: () => {},
             onEdit: () => {},
             onPlace: () => {},
@@ -272,7 +271,6 @@ function GutterHarness({ initial }: { initial: ClientComment[] }) {
               setOpenId(null);
             },
             onRetry: () => {},
-            onDeepen: () => {},
             onDiscuss: () => {},
             onEdit: () => {},
             onPlace: () => {},

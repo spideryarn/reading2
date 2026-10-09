@@ -1,26 +1,17 @@
 // @vitest-environment jsdom
 /**
- * **"Search the web" is offered on comments the server refuses to answer.**
+ * **A comment's footer offers no *Dig deeper*; its *Ask in chat* box is the
+ * way to go further** (plan 261009i, D2: Greg, 2026-10-09, *"we don't need the
+ * dig deeper button"*).
  *
- * `CommentDialog`'s footer renders `cmt-deepen` whenever `own && comment.status
- * !== "pending"`. That reads as *"not busy"*, and it is not: `status: "none"` is
- * every **free** comment — a bookmark, or a note the reader wrote without
- * ticking "Also ask the AI" — and it passes the test. So a reader who writes
- * *"what is the evidence for this?"* as a plain comment is shown a button
- * labelled **Search the web**, presses it, and is told by `beginAnswer` in
- * src/comments.ts that their comment
+ * The button was *Search the web*, then *Dig deeper* (plan 261001p). Its
+ * history here: it was once offered on a **free** comment (`status: "none"`),
+ * which `beginAnswer` in src/comments.ts refuses with a 409 — report 1X,
+ * 2026-09-05. The button is gone on every status now, and the follow-up box
+ * is drawn on every status but `pending`.
  *
- * > was never a question, so there is nothing to answer
- *
- * — a 409, `NotAnExplanation(id, "free")`. The refusal is right; the button is
- * the bug. Found while diagnosing report 1X (a comment asking for evidence did
- * not search the web); not what bit Greg that morning, but the same reader
- * pressing the same expectation against a different wall.
- *
- * Three statuses rather than one, because a one-case test here would pin the
- * fix and not the rule: `none` must not offer it, and `done` and `error` must
- * go on offering it. Narrowing the condition too far is the obvious way to
- * "fix" this and would take the reader's only way to ask again with them.
+ * Four statuses rather than one, so that a Dig deeper coming back on any one
+ * of them goes red.
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -58,8 +49,8 @@ afterEach(async () => {
   container.remove();
 });
 
-/** Render one comment as its owner, and say whether the button is drawn. */
-async function deepenOffered(status: ClientComment["status"]): Promise<boolean> {
+/** Render one comment as its owner. */
+async function drawOwned(status: ClientComment["status"]): Promise<void> {
   await act(async () => {
     root.render(
       createElement(CommentDialog, {
@@ -77,7 +68,6 @@ async function deepenOffered(status: ClientComment["status"]): Promise<boolean> 
           pending: 0,
           onDelete: () => {},
           onRetry: () => {},
-          onDeepen: () => {},
           onDiscuss: () => {},
           onEdit: () => {},
           onPlace: () => {},
@@ -87,35 +77,25 @@ async function deepenOffered(status: ClientComment["status"]): Promise<boolean> 
       }),
     );
   });
-  return container.querySelector(".cmt-deepen") !== null;
 }
 
-describe("the Dig deeper button (was Search the web)", () => {
-  it("is NOT offered on a free comment, which the server refuses with a 409", async () => {
-    expect(
-      await deepenOffered("none"),
-      'A free comment (status "none") was never a question. Pressing this gets ' +
-        "`NotAnExplanation(id, \"free\")` — src/comments.ts § beginAnswer.",
-    ).toBe(false);
+const digDeeper = () =>
+  [...container.querySelectorAll("button")].filter((b) => /Dig deeper|Search the web/.test(b.textContent ?? ""));
+
+describe("no Dig deeper on a comment (261009i)", () => {
+  it.each(["none", "pending", "done", "error"] as const)("is not offered on a %s comment", async (status) => {
+    await drawOwned(status);
+    expect(container.querySelector(".cmt-deepen")).toBeNull();
+    expect(digDeeper()).toEqual([]);
   });
 
-  it("is still offered on an answered comment, which is what it is for", async () => {
-    expect(await deepenOffered("done")).toBe(true);
-  });
-
-  it("is still offered on one whose answer failed", async () => {
-    expect(await deepenOffered("error")).toBe(true);
-  });
-
-  it("is still hidden while an answer is arriving", async () => {
-    /* Two overlapping re-asks race to write the same row — the reason the
-       original condition existed at all. */
-    expect(await deepenOffered("pending")).toBe(false);
-  });
-
-  it("is called Dig deeper, the glossary's name for the same press (plan 261001p)", async () => {
-    await deepenOffered("done");
-    expect(container.querySelector(".cmt-deepen")?.textContent).toBe("Dig deeper");
+  it.each(["none", "done", "error"] as const)("leaves Ask in chat as the way further on a %s comment", async (status) => {
+    await drawOwned(status);
+    const ask = container.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+      '[aria-label="Ask a follow-up question about this passage"]',
+    );
+    expect(ask).not.toBeNull();
+    expect([...container.querySelectorAll("button[type=submit]")].map((b) => b.textContent)).toContain("Ask in chat");
   });
 });
 

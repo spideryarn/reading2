@@ -118,7 +118,7 @@ import { mintId } from "../../ids.js";
 import { Masthead } from "../Masthead.js";
 import { Dock, useActivateMode, useActivateSubMode, visibleModes } from "../Dock.js";
 import { gateToReveal, PRIORITY_GATE } from "../GlossaryPanel.js";
-import { type CiteActions, ProseHoverCard, type QuoteCardSource } from "../ProseHoverCard.js";
+import { ProseHoverCard, type QuoteCardSource } from "../ProseHoverCard.js";
 import type { CiteFocus } from "../CitationsPanel.js";
 import { shownEntries } from "../glossary-shown.js";
 import { editArticleTags } from "../article-tags.js";
@@ -1094,8 +1094,8 @@ export function Reader({
   );
   const askInChat = useCallback((term: string) => handToChat(askAboutTerm(term), "send"), [handToChat]);
   /* **A fifth and a sixth since 2026-10-06: *Ask in chat* on a Glossary entry
-     and on a Citations row**, beside Dig deeper, which is unchanged. Each
-     travels twice, as a claim does: its name fenced in the question, and as
+     and on a Citations row**, and since 2026-10-09 on the prose hover card of
+     each, where Dig deeper was (plan 261009i). Each travels twice, as a claim does: its name fenced in the question, and as
      the `origin` the thread stores, which is the entry's durable id and a
      snapshot of its name cut to the route's cap (`itemOrigin`). Not
      `askInChat` above, which is for a word the article does not contain and
@@ -1420,43 +1420,19 @@ export function Reader({
   const works: readonly CitedWork[] = owner?.citations.citations?.citations ?? NO_WORKS;
 
   /**
-   * **Point at a citation in the prose and press *Dig deeper*** — Greg,
-   * 2026-10-03 (report `spya-c2qmbg`): *"What I was hoping is that it would
-   * have a button for dig deeper in the tooltip."* Plan 261004b.
-   *
-   * Starts the row's own *Dig deeper* and opens Citations on that row, where
-   * the answer streams — `openTermInGlossary`'s shape, one feature over. The
-   * verb and its state are on the citations read since the same plan, because
-   * the band that used to hold them is not mounted in the mode the reader
-   * pressed from. `citeFocus` is a one-shot the band hands back once the row is
-   * in view (CitationsPanel.tsx § `Props.focus`); it is state rather than a URL
-   * parameter because nothing about it should survive a reload.
-   *
-   * `null` for a visitor, whose arm has no read: no button is drawn.
+   * **Open Citations on one row** — a one-shot the band hands back once the
+   * row is in view (CitationsPanel.tsx § `Props.focus`); state rather than a
+   * URL parameter because nothing about it should survive a reload. The prose
+   * card's *Dig deeper* set it from plan 261004b until 2026-10-09, when that
+   * button became *Ask in chat* (plan 261009i), which goes to Chat instead.
+   * Nothing sets it for now: Stage 2 (plan 261009i) opens Citations on a row
+   * with this, from a chat's way back to its item.
    */
   const [citeFocus, setCiteFocus] = useState<CiteFocus | null>(null);
   /* Only the request that was served: a second press may have replaced it. */
   const citeFocusTaken = useCallback(
     (taken: CiteFocus) => setCiteFocus((now) => (now?.n === taken.n ? null : now)),
     [],
-  );
-  const investigateCitation = owner?.citations.investigate ?? null;
-  const citationDigging = owner?.citations.investigating ?? null;
-  const citeActions = useMemo<CiteActions | null>(
-    () =>
-      investigateCitation === null
-        ? null
-        : {
-            digging: citationDigging,
-            dig: (id) => {
-              void investigateCitation(id);
-              setCiteFocus((was) => ({ id, n: (was?.n ?? 0) + 1 }));
-              /* A passage jump can leave this very mode mounted but hidden
-                 on a narrow window: `showBand`. */
-              showBand("citations");
-            },
-          },
-    [investigateCitation, citationDigging, showBand],
   );
 
   const citeSelections = useMemo<CiteSelection[]>(
@@ -3584,6 +3560,9 @@ export function Reader({
             onOpenKey={setOpenSkimKey}
             onControl={setSkimControl}
             glossary={owner.glossary}
+            /* *Ask in chat* on a term chip's card: the Glossary band's own
+               sender, as on the prose card (plan 261009i). */
+            onAskTerm={askGlossaryEntryInChat}
             onOpen={openFromStopCard}
             canOpen={canOpenFromStopCard}
             arrival={skimArrival.current}
@@ -4468,10 +4447,6 @@ export function Reader({
               copyOnlyProtected.current.add(openComment.id);
               owner.comments.retry(openComment.id);
             },
-            onDeepen: () => {
-              copyOnlyProtected.current.add(openComment.id);
-              owner.comments.deepen(openComment.id);
-            },
             onEdit: (body) => {
               copyOnlyProtected.current.add(openComment.id);
               void owner.comments.edit(openComment.id, body);
@@ -4604,13 +4579,17 @@ export function Reader({
         /* The citation half's "already an article here" line: owner-only,
            named here as the band names it (plan 261001i). */
         showInSpideryarn={owner !== null}
-        /* *Dig deeper* and *Hide* on a term: the owner's read, which carries
-           both verbs (plan 261002c § 3). Null for a visitor, whose arm has no
-           read to pass — the enforcement is that there is nothing here. */
+        /* *Hide* on a term: the owner's read, which carries the verb (plan
+           261002c § 3). Null for a visitor, whose arm has no read to pass —
+           the enforcement is that there is nothing here. */
         termActions={glossaryRead}
-        /* *Dig deeper* on a cited work: built over the owner's citations read
-           (plan 261004b). Null for a visitor, for `termActions`' reason. */
-        citeActions={citeActions}
+        /* **Ask in chat on a term's card and on a cited work's** — the
+           Glossary band's and the Citations rows' own senders, so a chat
+           started from a card records the same origin as one started in the
+           band. Each card had *Dig deeper* there until 2026-10-09 (plans
+           261002c, 261004b, 261009i). Null for a visitor, who has no chat. */
+        onAskTerm={owner ? askGlossaryEntryInChat : null}
+        onAskCitedWork={owner ? askCitedWorkInChat : null}
         quotes={quoteCard}
         blockText={blockText}
         notes={notes}

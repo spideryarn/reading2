@@ -68,7 +68,7 @@ import { StepTip } from "./StepTip.js";
 import { ReadError } from "./ReadError.js";
 import { RewriteWaiting } from "./RewriteWaiting.js";
 import { type CardTarget, cardIsEmpty, type StopCard } from "./stop-card.js";
-import { TermCard, type TermActions } from "./ProseHoverCard.js";
+import { type AskAboutTerm, TermCard, type TermActions } from "./ProseHoverCard.js";
 import type { GlossaryEntry } from "../types.js";
 import { sparkline, sparkWidth } from "./route-spark.js";
 import type { WhereRow } from "./where.js";
@@ -835,6 +835,7 @@ export function SkimPanel({ access, view, away }: Props) {
                             onToggle={toggle}
                             onCloseTerm={closeTerm}
                             termActions={view.termActions}
+                            onAskTerm={view.onAskTerm}
                             onHidden={focusCurrentRow}
                             onOpen={view.onOpen}
                             canOpen={view.canOpen}
@@ -870,6 +871,7 @@ function StopCardView({
   onToggle,
   onCloseTerm,
   termActions,
+  onAskTerm,
   onHidden,
   onOpen,
   canOpen,
@@ -880,6 +882,8 @@ function StopCardView({
   onCloseTerm(id: string): void;
   /** `null` for a visitor. */
   termActions: TermActions | null;
+  /** *Ask in chat* on a term's card; `null` for a visitor. */
+  onAskTerm: AskAboutTerm | null;
   /** A term was hidden from its card, and its chip is gone or going. */
   onHidden(from: Element | null): void;
   onOpen(target: CardTarget): void;
@@ -901,6 +905,7 @@ function StopCardView({
                 onPress={() => onToggle("term", entry.id)}
                 onUnpin={() => onCloseTerm(entry.id)}
                 actions={termActions}
+                onAsk={onAskTerm}
                 onHidden={onHidden}
                 onOpen={
                   canOpen({ kind: "term", id: entry.id })
@@ -979,8 +984,9 @@ function StopCardView({
  * goes when the pointer does (GPT Sol, plan review F2).
  *
  * `onOpen` is the way into Glossary, or `null` when this reader has no
- * Glossary control. Then the card has no *Open glossary*, and no *Dig deeper*
- * either, since that is where a dig's answer is drawn.
+ * Glossary control. Then the card has no *Open glossary*. Its *Ask in chat*
+ * (the owner's, since plan 261009i; *Dig deeper* until then) goes to Chat, so
+ * it is drawn either way.
  */
 function TermChip({
   entry,
@@ -988,6 +994,7 @@ function TermChip({
   onPress,
   onUnpin,
   actions,
+  onAsk,
   onHidden,
   onOpen,
 }: {
@@ -996,6 +1003,7 @@ function TermChip({
   onPress(): void;
   onUnpin(): void;
   actions: TermActions | null;
+  onAsk: AskAboutTerm | null;
   onHidden(from: Element | null): void;
   onOpen: (() => void) | null;
 }) {
@@ -1010,9 +1018,6 @@ function TermChip({
   };
   /* Hide, and then put the keyboard somewhere: the chip is about to go. */
   const acts: TermActions | null = actions && {
-    look: actions.look,
-    looking: actions.looking,
-    stale: actions.stale,
     hiding: actions.hiding,
     setHidden: async (id, hidden) => {
       /* Keep our actual focus owner, not the whole cluster: another term can
@@ -1034,6 +1039,7 @@ function TermChip({
           <TermCard
             entry={entry}
             actions={acts}
+            onAsk={onAsk}
             onClose={close}
             onOpen={
               onOpen
@@ -1043,7 +1049,6 @@ function TermChip({
                   }
                 : undefined
             }
-            onOpenTerm={onOpen ?? undefined}
           />
         </div>
       }

@@ -537,9 +537,13 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        The sentence is about the mode, not the press: *Investigate* is on a
        row, owner-only, and the sentence says whose it is. No
        price — mode.md § The card on the button.
+       **Since 2026-10-09 (plan 261009i) the row's button is *Ask in chat*,
+       not Dig deeper**, so the sentence says that, and that a reading kept
+       from before still shows; the clauses above describe what kept readings
+       were made by.
        docs/plans/260911g-citations-mode.md,
        docs/plans/260929g-check-a-cited-paper-supports-the-claim.md. */
-    how: "One model call over the article, written once and then stored. Every address shown for a work is one the article itself gave — a DOI, an arXiv id or its own link, found by code rather than typed by the model — and where it gave none the row offers a Scholar search, marked as a search. Whoever owns the article can Dig deeper into any row, which first searches the web for the work: a result that plainly matches can become the link of a row that had only a search, never of one the article linked, and its search extract — usually the abstract, never the full work — is read against what the article uses the work for, quoting only words found in that extract. Then a stronger model writes a longer reading, from search extracts, of how the work bears on the article. How influential a work is comes from the model's memory, not from a citation count.",
+    how: "One model call over the article, written once and then stored. Every address shown for a work is one the article itself gave — a DOI, an arXiv id or its own link, found by code rather than typed by the model — and where it gave none the row offers a Scholar search, marked as a search. Whoever owns the article can Ask in chat about any row, which starts a conversation about that work. A reading of a work kept from before — its search extract, usually the abstract and never the full work, read against what the article uses the work for — still shows on its row. How influential a work is comes from the model's memory, not from a citation count.",
     /* `works cited` is two words on purpose: `canonical` collapses whitespace
        and lower-cases, so it is stored already in the form a reader types. */
     aliases: [

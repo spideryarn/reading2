@@ -56,7 +56,7 @@ import { type WhereRow, whereForBlock } from "../../where.js";
 import { useSkim } from "../../useSkim.js";
 import { SkimPanel, type SkimPass, type SkimRow } from "../../SkimPanel.js";
 import { type CardSources, type CardTarget, gatherStopCard, type StopCard } from "../../stop-card.js";
-import type { TermActions } from "../../ProseHoverCard.js";
+import type { AskAboutTerm, TermActions } from "../../ProseHoverCard.js";
 import type { GlossaryRead } from "../../useGlossary.js";
 import { useIdeasRead } from "../../useIdeas.js";
 import { useTimelineRead } from "../../useTimeline.js";
@@ -196,6 +196,7 @@ export function SkimBand({
   onOpenKey,
   onControl,
   glossary,
+  onAskTerm,
   onOpen,
   canOpen,
   arrival,
@@ -207,6 +208,12 @@ export function SkimBand({
   quotes: QuotesRead;
   /** The glossary read `Reader` already holds for the underlines — the card's terms. */
   glossary: GlossaryRead;
+  /**
+   * *Ask in chat* on a term chip's card: the Glossary band's sender, the one
+   * the prose card gets (plan 261009i). Separate from *Hide*, which is the
+   * glossary read's.
+   */
+  onAskTerm: AskAboutTerm;
   /** A card link: open that mode on that selection. */
   onOpen(target: CardTarget): void;
   /** Whether that target mode's control is available to this reader. */
@@ -264,8 +271,9 @@ export function SkimBand({
   );
   const view = useSkimMode({
     sources,
-    /* The read is the owner's two verbs on a term, as it is for the prose card. */
+    /* The read is the owner's *Hide* on a term, as it is for the prose card. */
     termActions: glossary,
+    onAskTerm,
     onOpen,
     canOpen,
     stops: owner.skim?.stops ?? NO_STOPS,
@@ -341,8 +349,9 @@ export function VisitorSkimBand({
     [glossary, ideas, timeline],
   );
   const { away, ...rest } = walk;
-  /* `termActions: null`: a visitor may read a term's card and change nothing. */
-  const view = useSkimMode({ ...rest, sources, termActions: null, stops: route.stops, quotes });
+  /* `termActions` and `onAskTerm` null: a visitor may read a term's card and
+     change nothing, and has no chat. */
+  const view = useSkimMode({ ...rest, sources, termActions: null, onAskTerm: null, stops: route.stops, quotes });
   return <SkimPanel access={{ kind: "visitor", route }} view={view} away={away} />;
 }
 
@@ -357,11 +366,10 @@ export interface SkimView {
   position: number;
   /** What sits under the current stop — src/web/stop-card.ts. `null` without a current stop. */
   card: StopCard | null;
-  /**
-   * *Dig deeper* and *Hide* on a term chip's card, or `null` for a visitor
-   * (SkimPanel.tsx § `TermChip`, plan 261006e).
-   */
+  /** *Hide* on a term chip's card, or `null` for a visitor (SkimPanel.tsx § `TermChip`, plan 261006e). */
   termActions: TermActions | null;
+  /** *Ask in chat* on a term chip's card, or `null` for a visitor (plan 261009i). */
+  onAskTerm: AskAboutTerm | null;
   onDepth(depth: SkimDepth): void;
   onRow(quoteId: string): void;
   onStep(dir: -1 | 1): void;
@@ -374,6 +382,7 @@ export interface SkimView {
 function useSkimMode({
   sources,
   termActions,
+  onAskTerm,
   onOpen,
   canOpen,
   stops,
@@ -392,6 +401,7 @@ function useSkimMode({
 }: {
   sources: CardSources;
   termActions: TermActions | null;
+  onAskTerm: AskAboutTerm | null;
   onOpen(target: CardTarget): void;
   canOpen(target: CardTarget): boolean;
   stops: SkimStop[];
@@ -753,6 +763,7 @@ function useSkimMode({
     position: current ? route.indexOf(current) + 1 : 0,
     card,
     termActions,
+    onAskTerm,
     onDepth: changeDepth,
     onRow,
     onStep,

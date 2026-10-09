@@ -31,11 +31,13 @@
  * 7. a visitor's band draws neither the button nor the mark.
  *
  * And for Glossary alone: a term the article never quotes still has the
- * button (Dig deeper is disabled there; a chat needs no passage), and a name
- * longer than the origin's cap is sent cut, not refused.
+ * button (a chat needs no passage), and a name longer than the origin's cap
+ * is sent cut, not refused.
  *
- * Dig deeper itself is not touched, and neither is the *Ask in chat* the
- * *Look up a term* box offers (tests/glossary-ask-in-chat.test.tsx).
+ * **Since 2026-10-09 the button stands where Dig deeper was** (plan 261009i):
+ * no entry and no row offers Dig deeper, and that is pinned here in the
+ * rendered reader too. The *Ask in chat* the *Look up a term* box offers is
+ * not touched (tests/glossary-ask-in-chat.test.tsx).
  */
 import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -517,9 +519,10 @@ const term = (id: string): HTMLElement | null =>
 const nameOf = (id: string): string => GLOSSARY.entries.find((e) => e.id === id)?.name ?? "";
 const entryButton = (): HTMLButtonElement | null =>
   host.querySelector<HTMLButtonElement>(".mode-band .gloss-look button.gloss-ask-chat");
-const digDeeper = (): HTMLButtonElement | undefined =>
-  [...host.querySelectorAll<HTMLButtonElement>(".mode-band .gloss-look button.gloss-btn")].find((b) =>
-    (b.textContent ?? "").includes("Dig deeper"),
+/** Any Dig deeper left in the band — none since plan 261009i. */
+const digDeeper = (): HTMLButtonElement[] =>
+  [...host.querySelectorAll<HTMLButtonElement>(".mode-band button")].filter((b) =>
+    /Dig deeper|Digging deeper/.test(b.textContent ?? ""),
   );
 
 describe("Ask in chat on a Glossary entry", () => {
@@ -530,11 +533,9 @@ describe("Ask in chat on a Glossary entry", () => {
     const button = entryButton() as HTMLButtonElement;
     expect(button.textContent?.trim()).toBe("Ask in chat");
     expect(button.getAttribute("aria-label")).toBe(ASK_ENTRY_IN_CHAT);
-    expect(digDeeper(), "beside Dig deeper, which is still there").toBeDefined();
-    /* One size for the pair (plan 261007m S2): both the shared outline/sm
-       Button, so neither is a 28px button beside a 32px one. */
-    expect(button.dataset.size, "Ask in chat at Dig deeper's size").toBe(digDeeper()?.dataset.size);
-    expect(button.dataset.variant).toBe(digDeeper()?.dataset.variant);
+    expect(digDeeper(), "in Dig deeper's place, which is gone (plan 261009i)").toEqual([]);
+    /* The run buttons' size (plan 261007m S2): the shared outline/sm Button. */
+    expect(button.dataset.variant).toBe("outline");
     expect(button.dataset.size).toBe("sm");
     expect(marks(), "no chat was started from it yet").toHaveLength(0);
 
@@ -609,11 +610,11 @@ describe("Ask in chat on a Glossary entry", () => {
     expect(marks(), "the other entry has no chat of its own").toHaveLength(0);
   });
 
-  it("offers it on a term the article never quotes, where Dig deeper cannot run", async () => {
+  it("offers it on a term the article never quotes, which has no passage to anchor to", async () => {
     who.set(OWNER);
     await open(`?mode=glossary&term=${UNQUOTED}`);
     await until(() => entryButton() !== null, "the entry's Ask in chat");
-    expect(digDeeper()?.disabled, "Dig deeper needs a passage").toBe(true);
+    expect(digDeeper()).toEqual([]);
     expect(entryButton()?.disabled, "a chat does not").toBe(false);
     await act(async () => entryButton()?.click());
     await until(() => param("mode") === "chat" && composer() !== null, "Chat");
@@ -670,11 +671,10 @@ describe("Ask in chat on a cited work", () => {
     const button = workButton(WORK) as HTMLButtonElement;
     expect(button.textContent?.trim()).toBe("Ask in chat");
     expect(button.getAttribute("aria-label")).toBe(ASK_WORK_IN_CHAT);
-    expect(workRow(WORK)?.querySelector(".cite-investigate"), "beside Dig deeper, which is still there").not.toBeNull();
-    const dig = workRow(WORK)?.querySelector<HTMLButtonElement>(".cite-investigate");
-    /* The same pair, the same size as Glossary's (plan 261007m S2). */
-    expect(button.dataset.size, "Ask in chat at Dig deeper's size").toBe(dig?.dataset.size);
-    expect(button.dataset.variant).toBe(dig?.dataset.variant);
+    expect(workRow(WORK)?.querySelector(".cite-investigate"), "in Dig deeper's place, which is gone").toBeNull();
+    expect(digDeeper()).toEqual([]);
+    /* The same size as Glossary's (plan 261007m S2). */
+    expect(button.dataset.variant).toBe("outline");
     expect(button.dataset.size).toBe("sm");
     expect(marks()).toHaveLength(0);
 

@@ -109,6 +109,11 @@ export interface InvestigateFailure {
  * the prose's hover card can start one in any mode and say when one is running
  * (report `spya-c2qmbg`, plan 261004b). `useGlossaryRead` carries `look` for
  * the same reason (plan 261002c). The band's hook passes all six through.
+ *
+ * **Nothing on the client calls `investigate` since 2026-10-09**: the row's and
+ * the card's buttons went with plan 261009i, and *Ask in chat* stands in their
+ * place; a kept answer is still drawn. It stays, with the route, until Greg
+ * decides whether he wants Dig deeper back (that plan's D5).
  */
 export interface CitationDig {
   /** What the last press's lookup said when it found no page — and on which row. */

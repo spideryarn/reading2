@@ -165,7 +165,6 @@ const FAILURES = [
   ".chat-dialog-error",
   ".cmt-write-error",
   ".cmt-error p",
-  ".cite-inv-error",
   ".prof-box-error",
   ".prof-save.is-error",
   ".srch-error",

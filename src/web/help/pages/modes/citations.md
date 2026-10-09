@@ -16,7 +16,7 @@ rest.
 ## When to use it
 
 For an academic paper or a report, where the question is “what is this built on, and where do I find
-it?” Making the list and **Dig deeper** are for whoever added the article; visitors to a shared
+it?” Making the list and **Ask in chat** are for whoever added the article; visitors to a shared
 article see the stored list.
 
 ## Reading it
@@ -29,11 +29,10 @@ article see the stored list.
   relevance was scored but influence has no usable score, the row says *influence unknown*. Older
   lists keep their numbers, including low scores that could mean the model did not know the work,
   until regenerated from Metadata.
-- **Dig deeper** also looks for a work’s influence on the web. When one of the pages its search
-  finds is about the work and says how well known it is, the row’s influence bar is drawn from that
-  and marked *from the web*; point at those words, or tap them, to see the site, the day and the
-  page’s own words. It is an AI estimate from web evidence, not a citation count, and the page’s
-  words may be about something else on that page. Often no page says, and the row stays as it was.
+- A row’s influence bar marked *from the web* was read from a web page about the work by an
+  earlier web search on that row; point at those words, or tap them, to see the site, the day and
+  the page’s own words. It is an AI estimate from web evidence, not a citation count, and the page’s
+  words may be about something else on that page.
 - Some rows also say something like *cited 357 times · Crossref*. That one is a real count, not the
   model’s view: Crossref is the registry that issues most DOIs, and where the article gives a DOI
   that Crossref holds, this is its own number for the work. Point at the words, or tap them, for the
@@ -43,10 +42,11 @@ article see the stored list.
   citations recorded* means Crossref has none on file, not that nobody has cited the work. Most rows
   have no count, because most works are cited without a DOI. It sits beside influence and does not
   change the order or what the slider hides.
-- **Ask in chat**, beside **Dig deeper**, opens a new conversation in [Chat](/help/mode-chat) and
-  asks a question about the work straight away, with the work named. Use it to go back and forth
-  about a work; **Dig deeper** gives one researched reading and keeps it on the row. Once you have
-  asked, a line under the row shows how the chat’s latest answer begins; press it to open that
+- **Ask in chat** opens a new conversation in [Chat](/help/mode-chat) and asks a question about
+  the work straight away, with the work named. Chat can search the web and your library to answer,
+  and you can go back and forth. It is on the row, and on the card you get by pointing at a
+  citation in the text. A longer reading kept on a row from before (once made by a button called
+  **Dig deeper**, which has gone) is still shown there. Once you have asked, a line under the row shows how the chat’s latest answer begins; press it to open that
   conversation again beside Citations. The conversation is also in Chat’s list, marked with
   Citations’ icon. Only whoever added the article has this.
 - **first cited** jumps to where the article first cites it. *only in the references* means the

@@ -19,11 +19,15 @@ with the mode's icon. It is an ordinary chat in every other way: same prompt, sa
 >
 > — Greg, 2026-10-04 (spya-hyfqkq), same plan
 
-Both are quoted in full at the top of that plan. Two later answers shape what is built. On Glossary
-and Citations, Dig deeper stays and the chat is a second button: *"let's start with adding the "Ask
-in chat" button"* (Greg, 2026-10-06, [261006d](../plans/261006d-glossary-and-citations-ask-in-chat-with-origin.md)).
-And the press is the Send: *"When I click "ask in Chat" anywhere, automatically submit the input"*
-(Greg, 2026-10-06, [261006j](../plans/261006j-ask-in-chat-sends-the-question.md)).
+Both are quoted in full at the top of that plan. Three later answers shape what is built. On
+Glossary and Citations the chat came first as a second button beside Dig deeper: *"let's start with
+adding the "Ask in chat" button"* (Greg, 2026-10-06, [261006d](../plans/261006d-glossary-and-citations-ask-in-chat-with-origin.md)).
+The press is the Send: *"When I click "ask in Chat" anywhere, automatically submit the input"*
+(Greg, 2026-10-06, [261006j](../plans/261006j-ask-in-chat-sends-the-question.md)). And then Dig
+deeper went, and the chat stands in its place: *"I'm tempted to get rid of the dig deeper button and
+just replace it with the ask in chat button"* (Greg, 2026-10-09, [261009i](../plans/261009i-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)). Until 2026-10-09
+(plan 261009i) Dig deeper was beside it; kept Dig deeper answers still show, and its server half
+remains.
 
 ## Which modes have it
 
@@ -31,11 +35,16 @@ And the press is the Send: *"When I click "ask in Chat" anywhere, automatically 
 |---|---|---|---|
 | Debate | each claim's heading (icon only) | [`DebatePanel.tsx`](../../src/web/DebatePanel.tsx) § `ClaimsList` | [debate.md § Check a claim in chat](debate.md#check-a-claim-in-chat) |
 | Debate | the angle box (a *lens*: the reader's words, no item) | [`DebatePanel.tsx`](../../src/web/DebatePanel.tsx) § `Angles` | [debate.md § Look at the debate from an angle](debate.md#look-at-the-debate-from-an-angle) |
-| Glossary | the open entry, beside Dig deeper | [`OriginChat.tsx`](../../src/web/OriginChat.tsx) § `AskInChatButton` | [glossary.md § Asking about an entry in chat](glossary.md#asking-about-an-entry-in-chat) |
-| Citations | the open row, beside Dig deeper | the same | [citations.md § Ask in chat](citations.md#ask-in-chat-a-conversation-about-one-work) |
+| Glossary | the open entry, in Dig deeper's place | [`OriginChat.tsx`](../../src/web/OriginChat.tsx) § `AskInChatButton` | [glossary.md § Asking about an entry in chat](glossary.md#asking-about-an-entry-in-chat) |
+| Glossary | a term's hover card in the prose, and Skim's term chip (which draws the same card), in Dig deeper's place | [`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx) § `TermCard` (`onAskTerm`) | [glossary.md § The hover card](glossary.md#the-hover-card) |
+| Citations | the open row, in Dig deeper's place | [`OriginChat.tsx`](../../src/web/OriginChat.tsx) § `AskInChatButton` | [citations.md § Ask in chat](citations.md#ask-in-chat-a-conversation-about-one-work) |
+| Citations | a cited work's hover card in the prose, in Dig deeper's place | [`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx) § `CiteCard` (`onAskCitedWork`) | [citations.md § Marked in the prose](citations.md#marked-in-the-prose-in-every-mode) |
 
-All three draw the way back with `OriginChatMark` from the same file. Owner only: a visitor has no
-chat.
+The rows and the angle box draw the way back with `OriginChatMark` from the same file; a hover card
+draws no mark (it has no room, and the entry or row it opens has one). **A hover card's button is
+the band's own sender** (`askGlossaryEntryInChat`, `askCitedWorkInChat` in `Reader.tsx`), so a chat
+started from a card records the same origin as one started in the band, and finds the same mark.
+Owner only: a visitor has no chat.
 
 Timeline, Ideas, Quotes, FAQ and Skim have no such button (checked 2026-10-07: none of their panels
 imports `OriginChat.tsx` or `chat-handoff.ts`). Nobody has asked for one there.

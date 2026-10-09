@@ -26,8 +26,9 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ The orders, and the bar](#the-orders-and-the-bar) — the five orders, the threshold, `?citeby=` / `?citebar=`
 - [§ Marked in the prose](#marked-in-the-prose-in-every-mode) — the marks on the article's own text, and the hover card on one
 - [§ Look it up on the web](#look-it-up-on-the-web) — finding a work that has no link (now a step of Dig deeper)
-- [§ Dig deeper](#dig-deeper-a-closer-look-at-one-work-on-demand) — the one press that reads a work and judges its influence
-- [§ Ask in chat](#ask-in-chat-a-conversation-about-one-work) — opening Chat anchored on one work
+- [§ Dig deeper](#dig-deeper-a-closer-look-at-one-work-on-demand) — the one press that read a work and judged its influence:
+  its button went on 2026-10-09; kept answers still show, the server half remains
+- [§ Ask in chat](#ask-in-chat-a-conversation-about-one-work) — opening Chat anchored on one work; the row's button, and the hover card's
 - [§ Already an article here](#already-an-article-here) — a cited work that is already on the shelf
 - [§ Chat can read it](#chat-can-read-it) — the `article_citations` tool
 - [§ Making it again](#making-it-again) — the Metadata redo
@@ -78,8 +79,9 @@ by itself.
 work's standing on the pages its web search returned, and kept a number (§ [Dig
 deeper](#dig-deeper-a-closer-look-at-one-work-on-demand), *It looks for the work's influence*). The words open a
 card, on hover, focus or tap, saying it is *an AI estimate from web evidence*, the site, the day,
-and the page's own words. The owner's card on *influence unknown* says Dig deeper looks for it; a
-visitor's does not, because a visitor has no Dig deeper and never sees what it found.
+and the page's own words. Since 2026-10-09 nothing on the client asks for a new one (plan
+[261009i](../plans/261009i-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)): a kept number still shows, and the card on *influence unknown* no longer says Dig
+deeper looks for it, for the owner or a visitor.
 
 **Every reader of a row's influence goes through one function**, `effectiveInfluence` in
 [`citation-effective-influence.ts`](../../src/citation-effective-influence.ts): the web number when
@@ -453,20 +455,21 @@ greyed and unlinked; a work cited only there gets no numbers. Past 20 it says *a
 offered, passed over for the margin's density —
 [261009e](../plans/261009e-citation-card-jumps-back-to-every-passage-that-cites-the-work.md).
 
-**The owner's card has *Dig deeper* in its foot**, since 2026-10-04. Greg, 2026-10-03 (report
-`spya-c2qmbg`):
+**The owner's card has *Ask in chat* in its foot.** Greg, 2026-10-03 (report `spya-c2qmbg`):
 
 > I clicked search Scholar and it took me to another page. It's just a Google Scholar search. That
 > wasn't that interesting. What I was hoping is that it would have a button for dig deeper in the
 > tooltip.
 
-One press starts the row's own *Dig deeper*
-(§ [Dig deeper](#dig-deeper-a-closer-look-at-one-work-on-demand)), closes the card, and opens
-Citations with that row scrolled into view, where the answer streams. If the prioritised order's bar
-was hiding the row, the bar is lowered to it, visibly, as *Open glossary* does for a term. The button
-is disabled while any dig runs. *search Scholar* stays beside it on a row with no link. The glossary
-card's *Dig deeper* is the same shape
-([261004b](../plans/261004b-citation-hover-card-offers-dig-deeper.md)).
+From 2026-10-04 that button was *Dig deeper*: a press started the row's own dig, closed the card,
+and opened Citations with that row scrolled into view
+([261004b](../plans/261004b-citation-hover-card-offers-dig-deeper.md)). **Since 2026-10-09 it is
+*Ask in chat*** (plan [261009i](../plans/261009i-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)): the Citations row's own sender (`askCitedWorkInChat`), so
+the chat records the same origin as one started from the row, and the card closes. It is the
+card's own `onAskCitedWork` prop, owner only. *search Scholar* stays beside it on a row with no
+link. The glossary card's is the same shape. The one-shot that opened Citations on a row
+(`citeFocus`, `CitationsPanel` § `Props.focus`, which lowers the bar if it hides the row) stays in
+`Reader` for the way back from a chat to its row (that plan's stage 2).
 
 **A finger gets the card on the first tap.** `mark.cite` is in `tapSelector` and in
 `NOT_A_BLOCK_SELECTION` — both, and the pair is the point: the second alone would take the tap away
@@ -593,6 +596,16 @@ which brings its own job id and allowance and judges the page more strictly than
 <a id="investigate-a-closer-look-at-one-work-on-demand"></a>
 
 ## Dig deeper: a closer look at one work, on demand
+
+> **The button is gone, since 2026-10-09** (plan [261009i](../plans/261009i-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)):
+> Greg, *"we don't need the dig deeper button"*. *Ask in chat* stands where it was
+> (§ [Ask in chat](#ask-in-chat-a-conversation-about-one-work)), and *Dig deeper again* went from a
+> kept answer's foot. **A kept answer is still drawn on its row**, folded, read-only
+> (`KeptInvestigation` in [`CitationInvestigation.tsx`](../../src/web/CitationInvestigation.tsx)),
+> and so are a kept link and a kept *from the web* influence. Nothing new fills those fields: what
+> is lost, said plainly, is in that plan's D1. The route, `src/citation-investigate.ts`,
+> `useCitations`' `investigate` and the allowance are untouched until Greg decides (the plan's
+> D5). The rest of this section is how it worked and how kept answers were made.
 
 Asked for through the Feedback button on 2026-09-30 (SPIDERYARN-READING2-5Q), following 5G:
 
@@ -798,7 +811,8 @@ picked, `citation-influence` when a page of the search is about the work, and
 
 ## Ask in chat: a conversation about one work
 
-Since 2026-10-06 every owner row has **Ask in chat** beside Dig deeper, which is unchanged. It
+Since 2026-10-06 every owner row has **Ask in chat**; it sat beside Dig deeper until 2026-10-09,
+and stands in its place since (plan [261009i](../plans/261009i-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)). It
 opens a fresh conversation in Chat with the work quoted (its title, then the authors and year where
 the article gives them) and a question after it, and sends that as the first question: the press
 is the Send since 2026-10-06 ([261006j](../plans/261006j-ask-in-chat-sends-the-question.md)). Once a chat exists,
@@ -812,7 +826,7 @@ the id alone, so a reworded title keeps the line. Everything else, and Greg's wo
 [glossary.md § Asking about an entry in chat](glossary.md#asking-about-an-entry-in-chat); the
 machinery under both is
 [debate.md § Check a claim in chat](debate.md#check-a-claim-in-chat). The hover card in the prose
-has no *Ask in chat*.
+has it too since 2026-10-09, in Dig deeper's old place (§ [Marked in the prose](#marked-in-the-prose-in-every-mode)).
 
 ## Already an article here
 
@@ -919,7 +933,7 @@ the cap; a citation count for a row Crossref does not hold (DataCite's `citation
 [`useCitations.ts`](../../src/web/useCitations.ts) (`useCitationsRead` is the half `OwnedReader`
 mounts) ·
 [`CitationsPanel.tsx`](../../src/web/CitationsPanel.tsx) ·
-[`CitationInvestigation.tsx`](../../src/web/CitationInvestigation.tsx) (Dig deeper's row) ·
+[`CitationInvestigation.tsx`](../../src/web/CitationInvestigation.tsx) (a kept Dig deeper answer on its row) ·
 [`citation-influence.ts`](../../src/citation-influence.ts) (Dig deeper's influence call and what
 code keeps of it) ·
 [`citation-effective-influence.ts`](../../src/citation-effective-influence.ts) (the one read path) ·

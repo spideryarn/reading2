@@ -11,7 +11,8 @@ This doc is long, and a read stops about line 860. **Jump with these.**
   the buttons, what the server does not check. Line ~941.
 - [§ Looking a term up](#looking-a-term-up) — the box for a word the article does not contain (a
   different *Ask in chat*, with no origin)
-- [§ Digging deeper into a term](#digging-deeper-into-a-term) — Dig deeper, the web-search answer
+- [§ Digging deeper into a term](#digging-deeper-into-a-term) — Dig deeper, the web-search answer:
+  its button went on 2026-10-09 (plan 261009i); kept answers still show, the server half remains
 - [§ Where it lives, and why that cost nothing](#where-it-lives-and-why-that-cost-nothing) — the
   band's place in the page
 - [§ What is generated, and when](#what-is-generated-and-when) — the stage, Find more, regeneration
@@ -72,11 +73,12 @@ until you know what they are for.
  │             │ ┊philosophy of mind… │                         │
  │             │ ┊ ↗ en.wikipedia.org │                         │
  │             │ ┌───────────────────┐│                         │
- │             │ │FROM A WEB SEARCH🌐 ││   ← or, before anybody  │
- │             │ │Seth uses it in the││     pressed it:         │
- │             │ │sense Chalmers…    ││   [🌐 Dig deeper]       │
+ │             │ │FROM A WEB SEARCH🌐 ││   ← a kept answer, from │
+ │             │ │Seth uses it in the││     before 2026-10-09   │
+ │             │ │sense Chalmers…    ││                         │
  │             │ │ ↗ plato.stanford  ││                         │
  │             │ └───────────────────┘│                         │
+ │             │ [💬 Ask in chat]    │                         │
  │             │ ▸ also: nonredu…     │                         │
  │             │ ▸ used in 3 places   │                         │
  │             │   k3m9qt qw82nf      │                         │
@@ -505,17 +507,19 @@ Three details worth knowing before changing it:
 - **A mark carrying two terms commits to neither.** Where two entries overlap the same phrase the
   card draws both, because which matched the longer phrase is not something the mark records. A
   second tap there does nothing and leaves the reader the two named buttons.
-- **An owner's card has *Dig deeper* and *Hide*** too, since 2026-10-02, in the foot beside *Open glossary* (one row since 2026-10-03; they were a row under it).
+- **An owner's card has *Ask in chat* and *Hide*** too, in the foot beside *Open glossary*: one
+  row, *Ask in chat · Hide · Open glossary* (one row since 2026-10-03; they were a row under it).
   Greg: *"We have a 'Dig deeper' in Glossary mode. Add that to the in-text glossary tooltip."*
-  (spya-p09u4s). *Dig deeper* starts the same lookup the band's button does, opens the band on that
-  term (through `openTermInGlossary`, which lowers the threshold if it would hide the row) and
-  closes the card, so the answer streams into the row where the wait, the draft and a failure are
-  already drawn; it is disabled, with the band's sentence, while any dig runs or on an unquoted
-  term. That works because the lookup's state lives on `useGlossaryRead`, not the band — closing
-  the band no longer disowns a running dig. *Hide* is [below](#hiding-an-entry); the card closes
-  only once the write has landed, and says a refusal on a line of its own. A visitor gets neither:
-  `termActions` is the owner's read and a visitor has none. Both are plain buttons, so a finger
-  reaches them the way it reaches *Open glossary* — a tap inside the card is left alone.
+  (spya-p09u4s), and the card had *Dig deeper* from 2026-10-02 **until 2026-10-09**, when *Ask in
+  chat* took its place there as in the band (plan
+  [261009i](../plans/261009i-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)).
+  *Ask in chat* calls the band's own sender (`askGlossaryEntryInChat`), so the chat records the
+  same origin as one started from the entry, and closes the card; it is never disabled. It is its
+  own prop, `onAskTerm`, not part of `termActions`, so Hide and the chat do not hang off each
+  other, and Skim's term chips get it the same way (`SkimBand`'s `onAskTerm`). *Hide* is
+  [below](#hiding-an-entry); the card closes only once the write has landed, and says a refusal on
+  a line of its own. A visitor gets neither. Both are plain buttons, so a finger reaches them the
+  way it reaches *Open glossary* — a tap inside the card is left alone.
 
 ## Hiding an entry
 
@@ -731,6 +735,15 @@ A list written before `glossary/9` keeps its citation entries until its step nex
 
 ### Digging deeper into a term
 
+> **The button is gone, since 2026-10-09** (plan
+> [261009i](../plans/261009i-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)):
+> Greg, *"we don't need the dig deeper button"*. *Ask in chat* stands where it was
+> ([§ Asking about an entry in chat](#asking-about-an-entry-in-chat)), on the entry and on the
+> hover card. **A lookup an entry already has is still drawn** (`LookupAnswer`), and the server half
+> below — the route, `src/dig-deeper.ts`, the allowance — is untouched until Greg decides whether he
+> wants it back (the plan's D5). The rest of this section is how it worked and how kept answers were
+> made.
+
 `background` is the model's memory. **Nothing in the batch call is checked against anything**, and
 the `url` it sometimes offers is a guess at a canonical page rather than a page it visited. So the
 open entry carries a **Dig deeper** button (*Check the web* until 2026-10-01), and pressing it adds
@@ -941,20 +954,30 @@ alludes to — is a real option and nobody has decided it.
 
 ### Asking about an entry in chat
 
-Since 2026-10-06 the open entry has a second button beside Dig deeper, **Ask in chat**. Dig deeper
-is unchanged. Asked what should happen to Dig deeper once a chat can remember the entry it was
-started from:
+Since 2026-10-06 the open entry has **Ask in chat**. It sat beside Dig deeper at first. Asked what
+should happen to Dig deeper once a chat can remember the entry it was started from:
 
 > let's start with adding the "Ask in chat" button
 >
 > — Greg, 2026-10-06
+
+and three days later:
+
+> I'm tempted to get rid of the dig deeper button and just replace it with the ask in chat button.
+>
+> — Greg, 2026-10-09 (spya-tv6wn5)
+
+**Since 2026-10-09 it stands where Dig deeper was**, on the entry and on the hover card in the
+prose (plan
+[261009i](../plans/261009i-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)).
+A lookup answer kept from before is still drawn above it.
 
 What the owner gets:
 
 - **The button** goes to Chat and opens a fresh conversation with the term quoted and a question
   after it, then sends that question. The press is the Send since 2026-10-06
   ([261006j](../plans/261006j-ask-in-chat-sends-the-question.md)), and Back returns to the Glossary.
-- **A line under the buttons once a chat exists**: how many questions were asked, and how the
+- **A line under the button once a chat exists**: how many questions were asked, and how the
   chat's latest answer begins. Pressing it opens that conversation beside the Glossary
   (`?thread=`, the mode unchanged). The button stays, so a second chat can be started.
 - **In Chat's list** the conversation has the Glossary's icon, with a card that names the term, and
@@ -979,12 +1002,13 @@ is this mode's own:
   with a visible ellipsis for very long names so it still fits Chat's question limit.
 - **The server never looks the id up.** It checks the shape and nothing else, so a chat about an
   entry that has since been hidden or regenerated away is still a chat.
-- **It is offered on a term the article never quotes**, where Dig deeper is disabled: Dig deeper
-  needs a passage to anchor to, and a chat does not.
+- **It is offered on a term the article never quotes**, where Dig deeper was disabled: Dig deeper
+  needed a passage to anchor to, and a chat does not.
 - **It is not the *Ask in chat* the *Look up a term* box offers** for a word the article does not
   contain ([§ Looking a term up](#looking-a-term-up)). That one has no entry to remember, records
   no origin, and is unchanged.
-- **The hover card in the prose has no *Ask in chat*.** Its Dig deeper is as it was.
+- **The hover card in the prose has it too**, since 2026-10-09, in Dig deeper's old place
+  ([§ The hover card](#the-hover-card)): the same sender, so the same origin.
 
 The button and the line are shared with Debate and Citations:
 [`OriginChat.tsx`](../../src/web/OriginChat.tsx) and

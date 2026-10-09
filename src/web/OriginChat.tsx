@@ -8,7 +8,8 @@
  *   drawn inline in DebatePanel.tsx § `ClaimsList` until 2026-10-06
  *   (plan docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md, D4).
  * - `AskInChatButton` is Glossary's and Citations' *Ask in chat*, beside Dig
- *   deeper (plan docs/plans/261006d-glossary-and-citations-ask-in-chat-with-origin.md, D5).
+ *   deeper (plan docs/plans/261006d-glossary-and-citations-ask-in-chat-with-origin.md, D5)
+ *   until 2026-10-09, and in its place since (plan 261009i).
  *   Debate's claim has its own icon-only button on the claim's heading.
  *
  * **Nothing is stored on the item's side.** A caller finds its chat by
@@ -120,9 +121,10 @@ export function OriginChatMark({
 }
 
 /**
- * **Glossary's and Citations' *Ask in chat*.** The neighbour of Dig deeper,
- * and drawn as it is: the shared outline `Button` at `sm`, with the caller's
- * `.gloss-btn` hook, an icon and a label. Chat's icon from the bar, because
+ * **Glossary's and Citations' *Ask in chat*.** Where Dig deeper was (plan
+ * 261009i), and drawn as it was: the shared outline `Button` at `sm`, with the
+ * caller's `.gloss-btn` hook, an icon and a label. The prose hover cards draw
+ * their own smaller button with the same words (ProseHoverCard.tsx). Chat's icon from the bar, because
  * the press takes the reader into Chat.
  *
  * Never disabled: a chat needs no passage and no finished lookup. **The
@@ -145,9 +147,10 @@ export function AskInChatButton({
 }) {
   return (
     <Tooltip placement="bottom" content={<TipNote>{`${label}. ${ASK_IN_CHAT_SAYS}`}</TipNote>}>
-      {/* **The run buttons' Button, at their size** (plan 261007m S2): it sits
-          beside Dig deeper in both callers, which is `outline`/`sm`, and a
-          28px `.gloss-btn` beside a 32px Button read as two kinds of thing. */}
+      {/* **The run buttons' Button, at their size** (plan 261007m S2): it sat
+          beside Dig deeper in both callers until 2026-10-09, which is
+          `outline`/`sm`, and a 28px `.gloss-btn` beside a 32px Button read as
+          two kinds of thing. It is still the run buttons' size. */}
       <Button type="button" variant="outline" size="sm" className={className} aria-label={label} onClick={onAsk}>
         <MessagesSquare size={iconSize} aria-hidden="true" />
         {ASK_IN_CHAT}

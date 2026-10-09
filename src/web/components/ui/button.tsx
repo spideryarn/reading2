@@ -29,8 +29,8 @@
  * THREE — `aria-disabled="true"` looks unavailable, as `disabled` does: half
  * opacity, a default cursor, and no enabled hover in any variant. Upstream styles the
  * native `disabled` only. A button that must keep its tooltip reachable while
- * it cannot act (Referee's *Run this criterion*, Citations' *Dig deeper*, the
- * command bar's *Ask*) uses `aria-disabled`, keeps its own guard against the
+ * it cannot act (Referee's *Run this criterion*, Citations' *Dig deeper* until
+ * plan 261009i, the command bar's *Ask*) uses `aria-disabled`, keeps its own guard against the
  * press, and needs no class of its own to look dead. Plan 261007h § F3, GPT
  * Sol's R9.
  *

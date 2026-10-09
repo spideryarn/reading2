@@ -1,14 +1,20 @@
 /**
- * **Citations' *Dig deeper* (was *Investigate*), on the client** — the button, the answer as it
- * streams, the kept answer, and the sentence that says what was read.
+ * **Citations' kept *Dig deeper* (was *Investigate*) answer, on the client** —
+ * the answer and the sentence that says what was read.
  * docs/plans/260930a-citations-investigate-one-work-on-demand.md § UI; the
  * server is src/citation-investigate.ts and the hook half is
  * src/web/useCitations.ts § `investigate`.
  *
+ * **Kept answers only, since 2026-10-09.** The row's *Dig deeper* button, the
+ * wait, the words arriving and the failure went with plan 261009i (Greg: *"we
+ * don't need the dig deeper button"*); *Ask in chat* stands in its place. An
+ * answer a reader already has is still drawn, with no *Dig deeper again*. The
+ * server half and the hook's `investigate` stay until Greg decides about them
+ * (the plan's D5).
+ *
  * Its own file rather than more of CitationsPanel.tsx because it is one
- * self-contained thing on a row: the panel passes it the row and the hook's
- * state for that row, and draws nothing of it itself. Owner-only, and not on
- * the hover card (ProseHoverCard.tsx § CiteCard draws `readNoteOf` and stops).
+ * self-contained thing on a row. Owner-only, and not on the hover card
+ * (ProseHoverCard.tsx § CiteCard draws `readNoteOf` and stops).
  *
  * ## What was read is said by code, never by the model (5G's rule)
  *
@@ -26,22 +32,18 @@
  * them and that each one's bearing is the AI's reading. An answer with no
  * `paper` is from before that stage and is drawn exactly as it was then.
  */
-import { ChevronDown, ChevronUp, ExternalLink, Microscope } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
+import { useState } from "react";
 import { paperUnreadableSentence } from "../messages.js";
 import type {
   CitationInvestigation,
   CitationLookup,
   InvestigatedPaper,
-  InvestigateStage,
   PaperMatchedBy,
   PaperPassage,
   PaperPassageBears,
 } from "../types.js";
 import { hostOf, isWebUrl } from "../urls.js";
-import { ControlTip, Tooltip } from "./Tooltip.js";
-import { Button } from "@/components/ui/button";
-import { useTapReveal } from "./useTapReveal.js";
 
 /* ------------------------------------------------------------- the copy -- */
 
@@ -57,25 +59,6 @@ export const INVESTIGATION_LABEL_PAPER_ONLY = "the AI's reading of parts of the 
 /** Over the paper's passages: whose words, found how, and whose reading `bears` is. */
 export const PAPER_PASSAGES_LABEL =
   "The paper's own words, found by code in the text we read; each one's bearing is the AI's reading";
-
-/** While *Dig deeper*'s forced web search runs, before anything else (plan 261001p stage 2). */
-export const INVESTIGATE_SEARCHING = "Searching the web…";
-
-/** While the press looks for the work's own page (plan 260930d). */
-export const INVESTIGATE_FINDING = "Finding the work…";
-
-/** While the press reads the paper itself and picks its passages (plan 261001a stage 3) and, beside that, looks on the search's pages for the work's influence (plan 261003m stage 2). */
-export const INVESTIGATE_READING_PAPER = "Reading the paper itself, if we can get it, and looking for how well known it is…";
-
-/** Under the button until the first words land. The words are the progress after that. */
-export const INVESTIGATE_WAIT =
-  "It searches the web, tries to read the paper, and then writes, which can take a minute or two. If it finishes, the answer is kept on this row even if you leave.";
-
-/** Sol Q-4: a failed *Dig deeper again* replaced nothing, and says so. */
-export const INVESTIGATE_PREVIOUS_KEPT = "The new investigation was not kept; the previous one is still shown.";
-
-/** Plan 260930d P-4: the first step found and kept a page, and the reading after it failed. */
-export const INVESTIGATE_LOOKUP_KEPT = "The longer investigation failed; the quick check was kept.";
 
 /* ------------------------------------------------ what was read, in words -- */
 
@@ -303,298 +286,43 @@ export function investigationParts(answer: string): InvestigationPart[] {
   return parts;
 }
 
-/* ------------------------------------------------- which state a row is in -- */
-
-/** A failed run, as the hook keeps it: its sentence, and what was stored when it was pressed. */
-export interface InvestigateFailureHere {
-  message: string;
-  /** The stored investigation's `at` when the press was made, or null for none. */
-  previousAt: string | null;
-  /** The attached lookup's `at` when the press was made, or null for none. */
-  previousLookupAt: string | null;
-  /** The press's first step stored a page before the failure (plan 260930d P-4). */
-  lookupKept: boolean;
-}
+/* ------------------------------------------------------- the kept answer -- */
 
 /**
- * **What the row draws**, decided in one place so no two of these can be on
- * screen together — in particular, never a cut-off answer beside an error.
+ * **What a row draws under it when *Dig deeper* kept an answer** — before
+ * 2026-10-09, when the button went (plan 261009i). Starts folded; the reader
+ * opens it.
  */
-export type InvestigationView =
-  | { kind: "none" }
-  /** Pressed, and the forced web search is running (plan 261001p stage 2). */
-  | { kind: "searching" }
-  /** Pressed, and the press is looking for the work's own page (plan 260930d). */
-  | { kind: "finding" }
-  /** Pressed, and the press is reading the paper itself (plan 261001a stage 3). */
-  | { kind: "reading-paper" }
-  /** Pressed, and no words yet. */
-  | { kind: "waiting" }
-  /** Words arriving: the stream so far, never drawn as kept. */
-  | { kind: "arriving"; text: string }
-  /**
-   * The error sentence **in place of** whatever had streamed; `previous` is
-   * what is still stored and attached after the re-read, and `lookupKept`
-   * says the first step's page was kept (P-4).
-   */
-  | { kind: "failed"; message: string; previous: CitationInvestigation | null; lookupKept: boolean }
-  | { kind: "kept"; investigation: CitationInvestigation };
-
-export function investigationViewOf(
-  stored: CitationInvestigation | undefined,
-  here: {
-    running: boolean;
-    stage?: InvestigateStage | null;
-    draft: string | null;
-    failed: InvestigateFailureHere | null;
-    /** The lookup still attached after the failure re-read, or null for none. */
-    lookupAt: string | null;
-  },
-): InvestigationView {
-  if (here.running) {
-    if (here.draft) return { kind: "arriving", text: here.draft };
-    if (here.stage === "searching") return { kind: "searching" };
-    if (here.stage === "finding") return { kind: "finding" };
-    if (here.stage === "reading-paper") return { kind: "reading-paper" };
-    return { kind: "waiting" };
-  }
-  if (here.failed !== null) {
-    /* The error does not prove nothing was kept (a save can succeed and the
-       frame after it be lost), and the hook re-reads the list after a failure.
-       A stored answer newer than the one there at the press is that answer:
-       draw it, not the failure. */
-    if (stored !== undefined && stored.at !== here.failed.previousAt) return { kind: "kept", investigation: stored };
-    const lookupKept =
-      here.failed.lookupKept || (here.lookupAt !== null && here.lookupAt !== here.failed.previousLookupAt);
-    return { kind: "failed", message: here.failed.message, previous: stored ?? null, lookupKept };
-  }
-  return stored === undefined ? { kind: "none" } : { kind: "kept", investigation: stored };
-}
-
-/* ------------------------------------------------------------ the button -- */
-
-/**
- * ***Dig deeper*** (*Investigate* until plan 261001p stage 2; the internal
- * names stay), on every owner row — the one button since plan 260930d,
- * which merged *Look it up* into it as its first step. `aria-disabled` and a
- * guard in the handler, not `disabled`: the card saying what a press costs
- * must stay readable in the state where the button will not go (a `disabled`
- * button emits no pointer or focus events, so Floating UI never opens it —
- * CriteriaPanel.tsx § Run this criterion made the same call).
- */
-export function InvestigateButton({
-  id,
-  again,
-  running,
-  busy,
-  onInvestigate,
-}: {
-  id: string;
-  /** The row has a kept answer, so a press replaces it (if it finishes). */
-  again: boolean;
-  /** This row's run is out. */
-  running: boolean;
-  /** Any row's run is out — one at a time, as the server's allowance is. */
-  busy: boolean;
-  onInvestigate(id: string): void;
-}) {
-  const label = again ? "Dig deeper again" : "Dig deeper";
-  /* A finger's first tap opens the card, its second presses — a press costs
-     money, and the card is what says so (useTapReveal.ts). */
-  const reveal = useTapReveal(!busy);
-  return (
-    <Tooltip
-      placement="bottom"
-      keepSide
-      className="tip-soon"
-      open={reveal.open}
-      onOpenChange={reveal.onOpenChange}
-      content={
-        <ControlTip
-          head={label}
-          /* Each clause bounded by what the code does. Plan 261001p stage 2:
-             the opening sentence is Dig deeper's promise, the glossary's
-             tooltip in other words — a forced search (src/dig-deeper.ts §
-             `searchFirst`) and Opus for every call the reader reads; "a
-             stronger model" rather than its name, which moves. Plan 260930d:
-             then *Look it up* (src/citation-find.ts), skipped only
-             for a current assessed lookup — "a current checked reading";
-             "passages code found" is `verifyQuote`; no search count is
-             promised (the provider's); what is read is extracts, and — plan
-             261001a stage 3 — the paper's PDF only when src/paper-evidence.ts
-             confirms it, its passages only via `verifyPassage`; the profile part is the prompt's *For you*,
-             only with a profile; both are stored per row. */
-          what="It searches the web for this work and asks a stronger model about it. First it looks for the work's own page, unless it already has a current checked reading, and checks that page's search extract against what the article uses it for, quoting only passages code found in it. Next it tries to read the paper itself. Then the stronger model writes a longer reading of how the work bears on this article — and on you, if you have written a profile or why you're reading this one."
-          how="It costs money. It reads search results' extracts, which may be an abstract or part of a paper. It also tries to fetch the paper's PDF: the AI is shown it only when code has checked it is this work, and then only its opening and the parts closest to what the article cites it for. Passages of it are shown here only where code found them in that text. On a row with only a Scholar search, the page it finds becomes the link; a link the article gave never changes. When the quick check finds a matching page, its result is kept on this row. The longer reading is kept on this row when it finishes; a new one replaces the old one only then."
-          tap={reveal.tap}
-        />
-      }
-    >
-      {/* The run button every mode shares (plan 261007h § F3, GPT Sol's R10),
-          at its house size, `sm`, as in Glossary. It was `xs` for a day to
-          match a 25px *Ask in chat*; that button became this same `sm` Button
-          instead, so the pair is one size in both modes (plan 261007m S2).
-          `aria-disabled` looks unavailable through `Button`'s own classes
-          (components/ui/button.tsx § THREE); the guard is the `busy` check in
-          the handler. `.gloss-btn` stays as a hook. */}
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="gloss-btn cite-investigate"
-        aria-disabled={busy}
-        onPointerDown={reveal.onPointerDown}
-        onPointerCancel={reveal.onPointerCancel}
-        onClick={(e) => {
-          if (!reveal.commit(e)) return;
-          if (busy) return;
-          onInvestigate(id);
-        }}
-      >
-        <Microscope size={11} aria-hidden="true" />
-        {running ? "Digging deeper…" : label}
-      </Button>
-    </Tooltip>
-  );
-}
-
-/* ------------------------------------------------------------- the block -- */
-
-/**
- * Everything *Dig deeper* draws under a row: the wait, the words arriving,
- * the failure, or the kept answer. Nothing for `none`.
- */
-export function InvestigationBlock({
-  id,
-  view,
-  busy,
+export function KeptInvestigation({
+  investigation,
   lookup,
-  onInvestigate,
 }: {
-  id: string;
-  view: InvestigationView;
-  busy: boolean;
+  investigation: CitationInvestigation;
   /** The row's current lookup, drawn by the row itself — here only for the identity line. */
   lookup: CitationLookup | undefined;
-  onInvestigate(id: string): void;
 }) {
-  /* Open a fresh answer that has just streamed in, rather than folding away
-     what the reader was reading; a stored one on arrival starts folded. */
   const [open, setOpen] = useState(false);
-  const was = useRef(view.kind);
-  useEffect(() => {
-    if (view.kind === "kept" && was.current === "arriving") setOpen(true);
-    was.current = view.kind;
-  }, [view.kind]);
-
-  const again = (
-    <button
-      type="button"
-      className="cite-inv-again"
-      aria-disabled={busy}
-      onClick={() => {
-        if (busy) return;
-        onInvestigate(id);
-      }}
-    >
-      Dig deeper again
-    </button>
+  return (
+    <div className="cite-inv">
+      <Kept investigation={investigation} open={open} onToggle={() => setOpen((o) => !o)} lookup={lookup} />
+    </div>
   );
-
-  switch (view.kind) {
-    case "none":
-      return null;
-    case "searching":
-      return (
-        <p className="cite-inv-wait" role="status">
-          {INVESTIGATE_SEARCHING}
-        </p>
-      );
-    case "finding":
-      return (
-        <p className="cite-inv-wait" role="status">
-          {INVESTIGATE_FINDING}
-        </p>
-      );
-    case "reading-paper":
-      return (
-        <p className="cite-inv-wait" role="status">
-          {INVESTIGATE_READING_PAPER}
-        </p>
-      );
-    case "waiting":
-      return (
-        <p className="cite-inv-wait" role="status">
-          {INVESTIGATE_WAIT}
-        </p>
-      );
-    case "arriving":
-      return (
-        <div className="cite-inv" aria-live="polite">
-          <p className="cite-lookup-label">arriving…</p>
-          <p className="cite-inv-draft">{view.text}</p>
-        </div>
-      );
-    case "failed":
-      return (
-        <div className="cite-inv">
-          <p className="cite-inv-error" role="status">
-            {view.message} {again}
-          </p>
-          {/* P-4: the quick check landed before the failure; the row above
-              already shows it, from the re-read. */}
-          {view.lookupKept && <p className="cite-inv-previous">{INVESTIGATE_LOOKUP_KEPT}</p>}
-          {/* Only an investigation that still attaches after the re-read —
-              the first step's new match can detach the earlier one. */}
-          {view.previous && (
-            <>
-              <p className="cite-inv-previous">{INVESTIGATE_PREVIOUS_KEPT}</p>
-              <Kept
-                investigation={view.previous}
-                open={open}
-                onToggle={() => setOpen((o) => !o)}
-                again={again}
-                lookup={lookup}
-              />
-            </>
-          )}
-        </div>
-      );
-    case "kept":
-      return (
-        <div className="cite-inv">
-          <Kept
-            investigation={view.investigation}
-            open={open}
-            onToggle={() => setOpen((o) => !o)}
-            again={again}
-            lookup={lookup}
-          />
-        </div>
-      );
-    default: {
-      const unhandled: never = view;
-      return unhandled;
-    }
-  }
 }
 
 /**
  * **A kept answer.** Folded: the label and the first part, with a toggle, so
- * the list stays a list. Open: every part, what was read, the sources, the
- * date and *Dig deeper again*.
+ * the list stays a list. Open: every part, what was read, the sources and the
+ * date. *Dig deeper again* sat after the date until 2026-10-09 (plan 261009i).
  */
 function Kept({
   investigation,
   open,
   onToggle,
-  again,
   lookup,
 }: {
   investigation: CitationInvestigation;
   open: boolean;
   onToggle(): void;
-  again: React.ReactNode;
   lookup: CitationLookup | undefined;
 }) {
   const parts = investigationParts(investigation.answer);
@@ -635,9 +363,7 @@ function Kept({
               ))}
             </ul>
           )}
-          <p className="cite-inv-foot">
-            Researched {new Date(investigation.at).toLocaleDateString()} · {again}
-          </p>
+          <p className="cite-inv-foot">Researched {new Date(investigation.at).toLocaleDateString()}</p>
         </>
       )}
     </>

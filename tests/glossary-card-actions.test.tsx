@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * **The in-text glossary card's *Dig deeper* and *Hide*, owner only** — plan
+ * **The in-text glossary card's *Ask in chat* and *Hide*, owner only** — plan
  * 261002c § 3, and the one visible list it shares with the band (§ 2).
  *
  * > We have a "Dig deeper" in Glossary mode. Add that to the in-text glossary
@@ -8,14 +8,18 @@
  * >
  * > — Greg, 2026-10-02 (spya-p09u4s)
  *
+ * The card had *Dig deeper* from then until 2026-10-09, when *Ask in chat*
+ * took its place, as it did in the band (plan 261009i: Greg, *"we don't need
+ * the dig deeper button"*).
+ *
  * The claims:
  *
  * 1. `shownEntries` leaves the hidden out, and hands back the same array when
  *    nothing is hidden (the memos downstream key on its identity).
- * 2. An owner's card draws both buttons; a visitor's draws neither.
- * 3. *Dig deeper* calls `look` with the entry's id, opens the band on that term
- *    and closes the card. It is disabled while any dig runs, and with the
- *    band's sentence on a term the article never quotes.
+ * 2. An owner's card draws both buttons; a visitor's draws neither. No card
+ *    draws *Dig deeper*.
+ * 3. *Ask in chat* calls the band's sender with the entry, and closes the
+ *    card. It is never disabled: a chat needs no passage.
  * 4. *Hide* awaits the write and closes the card only on success; a refusal is
  *    a line inside the card, and the card stays.
  * 5. Both are ordinary buttons a finger reaches: a touch tap inside the card is
@@ -28,7 +32,7 @@ import { ProseHoverCard, type TermActions } from "../src/web/ProseHoverCard.js";
 import { annotateHtml, termMarks } from "../src/web/annotate.js";
 import { buildNoteIndex } from "../src/web/notes-view.js";
 import { shownEntries } from "../src/web/glossary-shown.js";
-import { DIG_DEEPER_UNQUOTED } from "../src/web/GlossaryPanel.js";
+import { ASK_ENTRY_IN_CHAT } from "../src/web/OriginChat.js";
 import type { Block, BlockId, GlossaryEntry } from "../src/types.js";
 import { readerCssNoComments } from "./helpers/stylesheets.js";
 
@@ -63,7 +67,10 @@ const TERM: GlossaryEntry = {
 
 const opened: string[] = [];
 
-function Harness({ entries, actions }: { entries: GlossaryEntry[]; actions: TermActions | null }) {
+/** The owner's two capabilities, as Reader hands them: *Hide* (`termActions`) and *Ask in chat* (`onAskTerm`). */
+type Owner = TermActions & { ask(entry: Pick<GlossaryEntry, "id" | "name">): void };
+
+function Harness({ entries, actions }: { entries: GlossaryEntry[]; actions: Owner | null }) {
   const terms = termMarks(
     BLOCKS,
     entries.map((e) => ({ id: e.id, forms: [e.name, ...e.aliases], blocks: e.blocks.length ? e.blocks : [ONE] })),
@@ -95,7 +102,8 @@ function Harness({ entries, actions }: { entries: GlossaryEntry[]; actions: Term
         lookUpLinks={false}
         canAddToShelf={false}
         showInSpideryarn={false}
-        termActions={actions}
+        termActions={actions && { setHidden: actions.setHidden, hiding: actions.hiding }}
+        onAskTerm={actions ? (entry) => actions.ask(entry) : null}
         onOpenTerm={(id) => opened.push(id)}
         onJump={() => {}}
         onFollowNote={() => {}}
@@ -104,24 +112,22 @@ function Harness({ entries, actions }: { entries: GlossaryEntry[]; actions: Term
   );
 }
 
-function actionsWith(over: Partial<TermActions> = {}): TermActions & {
-  look: ReturnType<typeof vi.fn>;
+function actionsWith(over: Partial<Owner> = {}): Owner & {
+  ask: ReturnType<typeof vi.fn>;
   setHidden: ReturnType<typeof vi.fn>;
 } {
   return {
-    look: vi.fn(async () => true),
-    looking: null,
-    stale: false,
+    ask: vi.fn(),
     setHidden: vi.fn(async () => {}),
     hiding: new Set<string>(),
     ...over,
-  } as TermActions & { look: ReturnType<typeof vi.fn>; setHidden: ReturnType<typeof vi.fn> };
+  } as Owner & { ask: ReturnType<typeof vi.fn>; setHidden: ReturnType<typeof vi.fn> };
 }
 
 let host: HTMLDivElement;
 let root: Root;
 
-function paint(entries: GlossaryEntry[], actions: TermActions | null): void {
+function paint(entries: GlossaryEntry[], actions: Owner | null): void {
   act(() => root.render(<Harness entries={entries} actions={actions} />));
 }
 
@@ -205,18 +211,23 @@ describe("the card's owner actions", () => {
     expect(open, "the group, rather than its last button, owns the right alignment").toMatch(/margin-left:\s*0\s*;/);
   });
 
-  it("draws Dig deeper and Hide for an owner, and neither for a visitor", () => {
+  it("draws Ask in chat and Hide for an owner, neither for a visitor, and Dig deeper for nobody", () => {
     paint([TERM], actionsWith());
     hover(mark());
-    expect(button("Dig deeper")).toBeTruthy();
+    const ask = button("Ask in chat");
+    expect(ask).toBeTruthy();
+    expect(ask?.getAttribute("aria-label")).toBe(ASK_ENTRY_IN_CHAT);
+    expect(ask?.querySelector("svg"), "Chat's two bubbles").not.toBeNull();
     expect(button("Hide")).toBeTruthy();
+    expect(card()?.textContent, "Dig deeper is gone (plan 261009i)").not.toMatch(/Dig deeper|Digging deeper/);
     /* One row, since 2026-10-03 (spya-za77hj): Greg, *"They should all be on
        the same row to minimize vertical space"*. The owner's two verbs sit in
        the foot beside the way out, which is now named for what it does. */
     const foot = card()?.querySelector(".prose-card-foot");
     const group = foot?.querySelector(".prose-card-term-acts");
-    expect(button("Dig deeper")?.parentElement).toBe(group);
+    expect(ask?.parentElement).toBe(group);
     expect(button("Hide")?.parentElement).toBe(group);
+    expect(group?.firstElementChild, "Ask in chat · Hide · Open glossary").toBe(ask);
     expect(group?.lastElementChild?.textContent).toBe("Open glossary");
     expect(foot?.querySelector(".prose-card-open")?.textContent).toBe("Open glossary");
     expect(card()?.querySelectorAll("p.prose-card-foot, p.prose-card-acts")).toHaveLength(1);
@@ -228,16 +239,18 @@ describe("the card's owner actions", () => {
     hover(mark());
     expect(card(), "the visitor's card did not open").not.toBeNull();
     expect(card()?.querySelector(".prose-card-act")).toBeNull();
+    expect(card()?.textContent).not.toMatch(/Dig deeper|Ask in chat/);
     expect(card()?.querySelector(".prose-card-open")?.textContent).toBe("Open glossary");
   });
 
-  it("Dig deeper starts the dig, opens the band on the term, and closes the card", () => {
+  it("Ask in chat asks the band's sender about this entry, and closes the card", () => {
     const actions = actionsWith();
     paint([TERM], actions);
     hover(mark());
-    act(() => button("Dig deeper")?.click());
-    expect(actions.look).toHaveBeenCalledWith(TERM.id);
-    expect(opened).toEqual([TERM.id]);
+    act(() => button("Ask in chat")?.click());
+    expect(actions.ask).toHaveBeenCalledTimes(1);
+    expect(actions.ask).toHaveBeenCalledWith(expect.objectContaining({ id: TERM.id, name: TERM.name }));
+    expect(opened, "it does not open the Glossary band: Chat is where it goes").toEqual([]);
     expect(card()).toBeNull();
   });
 
@@ -245,33 +258,14 @@ describe("the card's owner actions", () => {
     const actions = actionsWith();
     paint([TERM], actions);
     hover(mark());
-    touchPress(button("Dig deeper") as HTMLButtonElement);
-    expect(actions.look).toHaveBeenCalledWith(TERM.id);
-    expect(opened).toEqual([TERM.id]);
+    touchPress(button("Ask in chat") as HTMLButtonElement);
+    expect(actions.ask).toHaveBeenCalledWith(expect.objectContaining({ id: TERM.id }));
   });
 
-  it("waits while any dig runs, saying so on the one that is this term's", () => {
-    paint([TERM], actionsWith({ looking: "spya-hdqazz" }));
+  it("is not disabled on a term the article never quotes: a chat needs no passage", () => {
+    paint([{ ...TERM, blocks: [] }], actionsWith());
     hover(mark());
-    expect(button("Dig deeper")?.disabled).toBe(true);
-
-    act(() => root.render(<Harness entries={[TERM]} actions={actionsWith({ looking: TERM.id })} />));
-    expect(button("Digging deeper…")?.disabled).toBe(true);
-  });
-
-  it("is disabled, with the band's sentence, on a term the article never quotes", () => {
-    const unquoted = { ...TERM, blocks: [] };
-    paint([unquoted], actionsWith());
-    hover(mark());
-    const dig = button("Dig deeper");
-    expect(dig?.disabled).toBe(true);
-    expect(dig?.title).toBe(DIG_DEEPER_UNQUOTED);
-  });
-
-  it("but not on a stale list, where an empty block list says nothing", () => {
-    paint([{ ...TERM, blocks: [] }], actionsWith({ stale: true }));
-    hover(mark());
-    expect(button("Dig deeper")?.disabled).toBe(false);
+    expect(button("Ask in chat")?.disabled).toBe(false);
   });
 
   it("Hide awaits the write and closes the card on success", async () => {
