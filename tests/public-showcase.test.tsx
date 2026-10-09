@@ -94,7 +94,7 @@ let root: Root;
 beforeEach(() => {
   vi.unstubAllGlobals();
   asked = [];
-  answer = () => json({ entries: [], truncated: false });
+  answer = () => json({ entries: [], topics: [], truncated: false });
   vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === "string" ? input : String(input);
     asked.push(url);
@@ -217,7 +217,7 @@ describe.each(PAGES)("the showcase on %s", (path, page) => {
   });
 
   it("links only to articles the listing is currently returning", async () => {
-    answer = () => json({ entries: [entry("alpha"), entry("beta")], truncated: false });
+    answer = () => json({ entries: [entry("alpha"), entry("beta")], topics: [], truncated: false });
     const first = await show(page());
     /* The positive control. Without it every assertion below is green on a page
        that draws no showcase at all. */
@@ -230,7 +230,7 @@ describe.each(PAGES)("the showcase on %s", (path, page) => {
        first render, because the question is what the page does with a *changed*
        answer — a hard-coded link would survive this and nothing else here would
        notice. */
-    answer = () => json({ entries: [entry("beta")], truncated: false });
+    answer = () => json({ entries: [entry("beta")], topics: [], truncated: false });
     const second = await show(page());
     expect(articlesLinked(second)).toEqual(["beta"]);
     expect(second.textContent).not.toContain("The alpha essay");
@@ -238,7 +238,7 @@ describe.each(PAGES)("the showcase on %s", (path, page) => {
 
   it("shows a few rather than the whole shelf, and always the way to the rest", async () => {
     const many = ["a", "b", "c", "d", "e", "f"].map((s) => entry(s));
-    answer = () => json({ entries: many, truncated: false });
+    answer = () => json({ entries: many, topics: [], truncated: false });
     const shown = await show(page());
     expect(articlesLinked(shown)).toHaveLength(PUBLIC_SHOWCASE_MAX);
     /* The order is the listing's — most recently shared first — and the block
@@ -264,14 +264,14 @@ describe.each(PAGES)("the showcase on %s", (path, page) => {
   });
 
   it("survives a shelf with nothing on it", async () => {
-    answer = () => json({ entries: [], truncated: false });
+    answer = () => json({ entries: [], topics: [], truncated: false });
     const shown = await show(page());
     expect(articlesLinked(shown)).toEqual([]);
     expect(shelfLink(shown)).toBeTruthy();
   });
 
   it("asks the anonymous listing route once, and asks for nothing else of ours", async () => {
-    answer = () => json({ entries: [entry("alpha")], truncated: false });
+    answer = () => json({ entries: [entry("alpha")], topics: [], truncated: false });
     await show(page());
     /* Not `toEqual(["/api/public/library"])`: these pages may legitimately ask
        for their own assets, and the property that matters is that the *only*

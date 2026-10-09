@@ -221,6 +221,8 @@ const ALLOWED: Readonly<Record<string, string>> = {
     "Presence check only; the call goes through openRouterJson in src/shelf-terms/model-scores.ts.",
   "src/shelf-topic-sets.ts":
     "Presence check only; the calls go through openRouterJson in src/shelf-terms/model-topics.ts.",
+  "src/public-shelf-topics.ts":
+    "Presence check only; the public shelf's topics use shelf-topic-sets.ts and its calls in src/shelf-terms/model-topics.ts (plan 261008j).",
   "src/embeddings.ts":
     "Presence check, plus a settings URL in a help message. The call goes through openRouterJson.",
 
