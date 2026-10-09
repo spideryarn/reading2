@@ -215,9 +215,11 @@ describe("one line per row, and a summary", () => {
     expect(text()).toContain("Asked on 8 October 2026; not saved, so a reload will lose it.");
   });
 
-  it("keeps the last answer's lines beside a failed retry", () => {
+  it("keeps the last answer's lines during a retry and beside its failure", () => {
     const findings = [HIDDEN];
     const kept = done([judgment(findings, 0, { reason: "A hidden menu label." })], 1);
+    paint(examined(findings), { ...kept, status: "running" });
+    expect(opinions()[0]?.textContent).toBe("Opus: probably harmless — A hidden menu label.");
     paint(examined(findings), { ...kept, status: "failed", error: "The AI service is busy." });
     expect(text()).toContain("The AI service is busy.");
     expect(opinions()[0]?.textContent).toBe("Opus: probably harmless — A hidden menu label.");

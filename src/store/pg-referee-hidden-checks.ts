@@ -7,10 +7,10 @@
  * src/store/pg-referee-claims.ts with most of it taken out. Only a validated
  * answer is written, as one upsert, so there is no `pending` row, no attempt
  * token and no sweep: a failed or abandoned run leaves the last good answer
- * where it was, and two tabs racing leave whichever finished last — both were
- * about the same rows. Freshness is not this file's business either: each
- * judgment carries the inputs it was made from, and the panel shows it only
- * beside a row equal to them (`sameInputs`, src/scan-groups.ts).
+ * where it was, and two tabs racing leave the answer from the newer press even
+ * when the older call finishes last. Each judgment carries the inputs it was
+ * made from, and the panel shows it only beside a row equal to them
+ * (`sameInputs`, src/scan-groups.ts).
  *
  * Ownership first, through `articleIdForOwned`, so another owner's slug is a
  * 404 here as everywhere.

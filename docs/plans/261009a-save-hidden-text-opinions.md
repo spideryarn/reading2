@@ -146,3 +146,20 @@ investigations, link summaries, the quiz's marks, shelf topics and the upload's 
 
 1. Migration, store, routes, client, tests, docs, rule. One commit. GPT Sol code review
    (write-capable). Gates. Push to `dev`.
+
+## Code review (GPT Sol, write-capable, after building)
+
+[261009a-save-hidden-text-opinions-code-review-sol.md](261009a-save-hidden-text-opinions-code-review-sol.md),
+*land after fixes*, four findings, all fixed by the reviewer and checked here (typecheck and the
+client suites re-run):
+
+- **C1** (P2): the press time was taken after the ownership and scan reads, so two presses could be
+  ordered by whichever preflight finished first. It is now the route's first line. Drizzle's SQL
+  for the newer-press guard was read and is as intended.
+- **C2** (P2): no test that `done` waits for the save, or that a failed save still gives the
+  answer with `saved: false`. Both added (tests/referee-stream-lifetime.test.ts). The save failure
+  is reported to Sentry with counts and the model only.
+- **C3** (P3): two registries missed the table: event times (tests/event-times.test.ts, including
+  the newer-press clock) and the rollback manifest (tests/store-artefact-manifest.test.ts).
+- **C4** (P3): hook and panel cases for `saved: false` and for the last answer staying visible
+  during a retry. It also corrected stale statement counts in export.md and article-rows.ts.

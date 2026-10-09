@@ -1605,7 +1605,9 @@ export interface RefereeHiddenCheckStore {
   read(slug: string): Promise<StoredHiddenCheck | null>;
   /**
    * Keep `result`, replacing whatever was there. `startedAt` is when the
-   * referee pressed; the store stamps the finish. Returns what was stored.
+   * referee pressed; the store stamps the finish. Returns the row kept after
+   * the attempt, which may be a newer check when this write loses the freshness
+   * fence.
    */
   save(slug: string, result: HiddenCheckResult, startedAt: Date): Promise<StoredHiddenCheck>;
 }

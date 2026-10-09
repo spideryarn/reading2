@@ -234,7 +234,7 @@ await pgReady({
 });
 
 const { handleApi, CRITERION_ORPHAN_GRACE_MS } = await import("../src/routes.js");
-const { refereeClaimsStore, refereeCriteriaStore } = await import("../src/store/index.js");
+const { refereeClaimsStore, refereeCriteriaStore, refereeHiddenCheckStore } = await import("../src/store/index.js");
 const { CLAIMS_ORPHAN_GRACE_MS } = await import("../src/store/pg-referee-claims.js");
 
 /**
@@ -417,6 +417,7 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
     gates.criterion.reset();
     gates.claims.reset();
     gates.mirror.reset();
+    gates.hidden.reset();
     await asTestOwner(async () => {
       for (const row of await refereeCriteriaStore.load(SLUG)) {
         await refereeCriteriaStore.remove(SLUG, row.id);
@@ -431,6 +432,7 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
     gates.criterion.release();
     gates.claims.release();
     gates.mirror.release();
+    gates.hidden.release();
     await article?.remove();
   });
 
@@ -941,6 +943,58 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
       /* Saved: the frame carries the stored check's date and no `saved: false`. */
       expect(call.written()).toContain('"checkedAt"');
       expect(call.written()).not.toContain('"saved":false');
+    });
+
+    it("does not send done until the answer is saved", async () => {
+      const real = refereeHiddenCheckStore.save.bind(refereeHiddenCheckStore);
+      let reachedSave!: () => void;
+      const saving = new Promise<void>((resolve) => {
+        reachedSave = resolve;
+      });
+      let releaseSave!: () => void;
+      const held = new Promise<void>((resolve) => {
+        releaseSave = resolve;
+      });
+      const save = vi.spyOn(refereeHiddenCheckStore, "save").mockImplementationOnce(async (...args) => {
+        reachedSave();
+        await held;
+        return real(...args);
+      });
+
+      try {
+        const call = begin("POST", `/api/referee/hidden-check/${SLUG}`);
+        await reachedOrSettled(gates.hidden, call, "POST /api/referee/hidden-check/:slug");
+        gates.hidden.release();
+        await saving;
+        expect(call.written()).not.toContain("event: done");
+        expect(call.settled()).toBe(false);
+
+        releaseSave();
+        await call.promise;
+        expect(call.written()).toContain("event: done");
+      } finally {
+        releaseSave?.();
+        save.mockRestore();
+      }
+    });
+
+    it("still sends the paid answer as not saved when keeping it fails", async () => {
+      const saveError = "a save failure containing words that must not reach the wire";
+      const save = vi.spyOn(refereeHiddenCheckStore, "save").mockRejectedValueOnce(new Error(saveError));
+
+      try {
+        const call = begin("POST", `/api/referee/hidden-check/${SLUG}`);
+        await reachedOrSettled(gates.hidden, call, "POST /api/referee/hidden-check/:slug");
+        gates.hidden.release();
+        await call.promise;
+
+        expect(call.written()).toContain("event: done");
+        expect(call.written()).toContain('"saved":false');
+        expect(call.written()).not.toContain("event: error");
+        expect(call.written()).not.toContain(saveError);
+      } finally {
+        save.mockRestore();
+      }
     });
   });
 

@@ -167,6 +167,19 @@ describe("the terminal contract", () => {
     expect(latest?.status).toBe("failed");
   });
 
+  it("accepts a paid answer whose save failed, including its not-saved marker", async () => {
+    const notSaved = { ...DONE, saved: false as const };
+    runBody = () => new ReadableStream<Uint8Array>({
+      start(c) {
+        c.enqueue(frame("done", notSaved));
+        c.close();
+      },
+    });
+    await ask();
+    expect(latest?.status).toBe("done");
+    expect(latest?.result).toEqual(notSaved);
+  });
+
   it("refuses a done frame it cannot read", async () => {
     runBody = () =>
       new ReadableStream<Uint8Array>({
@@ -262,6 +275,15 @@ describe("the kept answer (plan 261009a)", () => {
     await render("a-retried-paper");
     await ask();
     expect(latest?.status).toBe("failed");
+    expect(latest?.result).toEqual(DONE);
+  });
+
+  it("stays on screen while a later run is still arriving", async () => {
+    keptCheck = DONE;
+    await render("a-running-retry");
+    runBody = () => new ReadableStream<Uint8Array>({ start() {} });
+    await ask();
+    expect(latest?.status).toBe("running");
     expect(latest?.result).toEqual(DONE);
   });
 });

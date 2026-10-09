@@ -5891,6 +5891,10 @@ async function runMirror(slug: string, res: ServerResponse): Promise<void> {
  * in those states, so only a stale tab gets here.
  */
 async function runHiddenCheck(slug: string, res: ServerResponse): Promise<void> {
+  /* Captured before any awaited preflight work: this is request order, not
+     whichever scan/article read happened to finish first. The store uses it
+     to stop an older press that finishes late replacing a newer answer. */
+  const startedAt = new Date();
   /* Ownership first, before a byte of the manuscript is read — the scan
      route's order, and `sendSource`'s. */
   await shelfStore.read(slug);
@@ -5910,7 +5914,6 @@ async function runHiddenCheck(slug: string, res: ServerResponse): Promise<void> 
      for them on their next visit rather than paid for twice. Until 2026-10-09
      nothing was stored and leaving stopped the call, Mirror's way. */
   const { frame } = sse(res);
-  const startedAt = new Date();
   let chars = 0;
   try {
     for await (const event of hiddenCheckStream({ groups, power: powerOf(article), slug })) {
@@ -5927,7 +5930,18 @@ async function runHiddenCheck(slug: string, res: ServerResponse): Promise<void> 
       try {
         stored = await refereeHiddenCheckStore.save(slug, result, startedAt);
       } catch (err) {
-        captureFailure(err, { route: "referee-hidden-check-save", slug });
+        /* Content-free diagnostics only. A reason may quote an unpublished
+           manuscript, so neither it nor the judgments object crosses into
+           monitoring. The guarded store has already scrubbed failed query
+           parameters before the error reaches this catch. */
+        captureFailure(err, {
+          route: "referee-hidden-check-save",
+          slug,
+          judgments: result.judgments.length,
+          unanswered: result.unanswered,
+          notSent: result.notSent,
+          model: result.model,
+        });
         stored = { ...result, checkedAt: new Date().toISOString(), saved: false };
       }
       frame("done", stored);
