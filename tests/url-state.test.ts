@@ -40,9 +40,9 @@ import {
   TERM_SORTS,
   sortParam,
   DEBATE_ORDERS,
-  PEER_REVIEW_VIEWS,
+  SOURCES_VIEWS,
   debateOrderParam,
-  peerReviewParam,
+  sourcesParam,
 } from "../src/web/params.js";
 import { NEVER_REMEMBERED, REMEMBERED } from "../src/web/last-view.js";
 
@@ -286,26 +286,26 @@ describe("referee mode parameters", () => {
   });
 });
 
-describe("peer review's sub-mode, and Reception's order", () => {
+describe("Sources' sub-mode, and Reception's order", () => {
   /**
-   * **`?peer-review=` is which list the band draws** — Bibliography (the
+   * **`?sources=` is which list the band draws** — Bibliography (the
    * default, and absent from the address), Reception or Claims. It replaced
    * Debate's `?debate=` on 2026-10-09 (plan 261009l); an old one is lifted
-   * before anything parses it (tests/peer-review-old-addresses.test.ts).
+   * before anything parses it (tests/sources-old-addresses.test.ts).
    */
   it("reads the three sub-modes, and anything else as Bibliography", () => {
-    expect([...PEER_REVIEW_VIEWS]).toEqual(["bibliography", "reception", "claims"]);
-    expect(peerReviewParam.parse("claims")).toBe("claims");
-    expect(peerReviewParam.parse("reception")).toBe("reception");
-    expect(peerReviewParam.parse("bibliography")).toBe("bibliography");
+    expect([...SOURCES_VIEWS]).toEqual(["bibliography", "reception", "claims"]);
+    expect(sourcesParam.parse("claims")).toBe("claims");
+    expect(sourcesParam.parse("reception")).toBe("reception");
+    expect(sourcesParam.parse("bibliography")).toBe("bibliography");
     for (const junk of ["Claims", "claim", "", "cited", "1", "citations", "debate"]) {
-      expect(peerReviewParam.parse(junk), `?peer-review=${junk}`).toBeNull();
+      expect(sourcesParam.parse(junk), `?sources=${junk}`).toBeNull();
     }
-    expect(peerReviewParam.defaultValue).toBe("bibliography");
+    expect(sourcesParam.defaultValue).toBe("bibliography");
   });
 
   it("pushes, because switching sub-mode is an act Back should undo", () => {
-    expect(peerReviewParam.history).toBe("push");
+    expect(sourcesParam.history).toBe("push");
   });
 
   /* `claim` left the order vocabulary on 2026-10-03: by claim is the Claims
@@ -323,8 +323,8 @@ describe("peer review's sub-mode, and Reception's order", () => {
        view and asks nothing of the server — the test that guards the two lists
        is tests/last-view.test.ts. `?name=` was the identification slider's,
        which went with the slider. */
-    expect(REMEMBERED).toContain("peer-review");
-    expect(NEVER_REMEMBERED).not.toContain("peer-review");
+    expect(REMEMBERED).toContain("sources");
+    expect(NEVER_REMEMBERED).not.toContain("sources");
     /* Debate's key until 2026-10-09: an old link still wins over a restore. */
     expect(NEVER_REMEMBERED).toContain("debate");
     expect(REMEMBERED).not.toContain("name");

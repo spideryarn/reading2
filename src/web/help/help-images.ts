@@ -277,7 +277,7 @@ export const HELP_IMAGES: Readonly<Record<string, HelpImage>> = {
     src: modeCitationsPng,
     w: 1088,
     h: 860,
-    shows: "?mode=peer-review (Bibliography, prioritised), the chip row and the band alone; clip x12 y44 w544 h430 CSS, cropped after the second work.",
+    shows: "?mode=sources (Bibliography, prioritised), the chip row and the band alone; clip x12 y44 w544 h430 CSS, cropped after the second work.",
     article: "The Scaling Hypothesis (scaling-hypothesis)",
     window: "1440×900 at 2×",
     taken: "2026-10-09",
@@ -353,7 +353,7 @@ export const HELP_IMAGES: Readonly<Record<string, HelpImage>> = {
     w: 1088,
     h: 896,
     shows:
-      "?mode=peer-review&peer-review=claims on a listed claims list, the chip row and the band alone, two claims each with its Cited in this paragraph line; clip x12 y44 w544 h448 CSS.",
+      "?mode=sources&sources=claims on a listed claims list, the chip row and the band alone, two claims each with its Cited in this paragraph line; clip x12 y44 w544 h448 CSS.",
     article: "The Scaling Hypothesis (scaling-hypothesis)",
     window: "1440×900 at 2×",
     taken: "2026-10-09",

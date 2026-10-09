@@ -1,7 +1,7 @@
 /**
- * **The numbers on Peer review's three chips, and the rows behind them** —
- * pure selectors, used by the chip row (PeerReviewMode.tsx §
- * `PeerReviewViews`) and by the panels that draw the lists (CitationsPanel,
+ * **The numbers on Sources' three chips, and the rows behind them** —
+ * pure selectors, used by the chip row (SourcesMode.tsx §
+ * `SourcesViews`) and by the panels that draw the lists (CitationsPanel,
  * DebatePanel), so a chip's number and the list under it are one derivation
  * and cannot disagree. GPT Sol's F4 on
  * docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md: the
@@ -115,13 +115,13 @@ export function claimsCount(
 }
 
 /** **The three chips' numbers.** Bibliography's is `null` while there is no list to count. */
-export interface PeerReviewCounts {
+export interface SourcesCounts {
   bibliography: number | null;
   reception: number;
   claims: ClaimsCount;
 }
 
-export interface PeerReviewCountsInput {
+export interface SourcesCountsInput {
   /** The works cited, or `null` while there is no list (not made, or still loading). */
   works: readonly unknown[] | null;
   debate: AnyDebate | null;
@@ -135,7 +135,7 @@ export interface PeerReviewCountsInput {
   thread: string | null;
 }
 
-export function peerReviewCounts(input: PeerReviewCountsInput): PeerReviewCounts {
+export function sourcesCounts(input: SourcesCountsInput): SourcesCounts {
   const threads = debateThreads(input.debate);
   const reception = receptionSelection(input.debate, threads, input.thread);
   const claims = claimsSelection(input.debate, threads, input.relevance, input.thread);

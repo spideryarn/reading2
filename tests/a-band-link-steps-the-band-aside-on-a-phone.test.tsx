@@ -657,7 +657,7 @@ describe("the citation card's Ask in chat lands in a band that is drawn", () => 
       }
       return Promise.resolve(reply(url, init?.method ?? "GET"));
     });
-    await open(width, "?mode=peer-review");
+    await open(width, "?mode=sources");
     expect(reader().classList.contains("band-covers")).toBe(true);
     const link = host.querySelector<HTMLAnchorElement>(`.cite-item a.block-ref[data-block-link="${FIRST}"]`);
     expect(link, "the citation row must provide its passage jump").not.toBeNull();

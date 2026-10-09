@@ -18,8 +18,8 @@
 import type { Mode } from "../modes.js";
 import { MODE_LABEL } from "../title-text.js";
 import { type ChatThread, isLensOrigin, type LearnKind, type ThreadKind, type ThreadOrigin } from "../types.js";
-import { CHAT_FROM_WORDS, type ChatFrom, type LearnView, type PeerReviewView } from "./params.js";
-import { LEARN_SUB_MODES, PEER_REVIEW_SUB_MODES } from "./sub-modes.js";
+import { CHAT_FROM_WORDS, type ChatFrom, type LearnView, type SourcesView } from "./params.js";
+import { LEARN_SUB_MODES, SOURCES_SUB_MODES } from "./sub-modes.js";
 
 /** The parts of Learn that are a conversation: every part but Quiz. */
 export type LearnConversationView = Exclude<LearnView, "quiz">;
@@ -51,23 +51,23 @@ export interface ThreadSource {
 export type SourcedThread = Pick<ChatThread, "kind"> & Partial<Pick<ChatThread, "origin" | "anchor">>;
 
 /**
- * **Peer review's three origins**, each under the mode's icon and its
- * `peer-review` filter, and each tooltip naming the sub-mode it came from
+ * **Sources' three origins**, each under the mode's icon and its
+ * `sources` filter, and each tooltip naming the sub-mode it came from
  * (GPT Sol's F5 on plan 261009l). A stored origin keeps its old mode word as
  * data — `citations` for a cited work, `debate` for a claim or an angle —
  * until the deep rename (that plan § Stage 3); this file is where it is read
  * as the new mode.
  */
-const PEER_REVIEW_IN = `${MODE_LABEL["peer-review"]} ›`;
+const SOURCES_IN = `${MODE_LABEL.sources} ›`;
 /** What the tooltip says for a chat started from one of Claims' claims. */
-export const SOURCE_DEBATE_CLAIM = `Started from a claim in ${PEER_REVIEW_IN} ${PEER_REVIEW_SUB_MODES.claims.label}`;
+export const SOURCE_DEBATE_CLAIM = `Started from a claim in ${SOURCES_IN} ${SOURCES_SUB_MODES.claims.label}`;
 /** And for one started from an angle the reader typed into Reception's box (plan 261005k, A). */
-export const SOURCE_DEBATE_LENS = `Started from an angle in ${PEER_REVIEW_IN} ${PEER_REVIEW_SUB_MODES.reception.label}`;
+export const SOURCE_DEBATE_LENS = `Started from an angle in ${SOURCES_IN} ${SOURCES_SUB_MODES.reception.label}`;
 
 /** And for one started from a Glossary entry's *Ask in chat* (plan 261006d, D6). */
 export const SOURCE_GLOSSARY_ENTRY = "Started from a glossary entry";
 /** And for one started from a cited work's *Ask in chat*. */
-export const SOURCE_CITED_WORK = `Started from a cited work in ${PEER_REVIEW_IN} ${PEER_REVIEW_SUB_MODES.bibliography.label}`;
+export const SOURCE_CITED_WORK = `Started from a cited work in ${SOURCES_IN} ${SOURCES_SUB_MODES.bibliography.label}`;
 /** And for one started from an idea's *Ask in chat* (plan 261009k, stage 3). */
 export const SOURCE_IDEA = "Started from an idea";
 
@@ -121,13 +121,13 @@ export function threadSource(thread: SourcedThread): ThreadSource | null {
       case "debate":
         /* Two shapes under one stored word, so the word does not say which. */
         return isLensOrigin(origin)
-          ? { from: "peer-review", mode: "peer-review", label: SOURCE_DEBATE_LENS, quote: origin.lens, voice: "reader" }
-          : { from: "peer-review", mode: "peer-review", label: SOURCE_DEBATE_CLAIM, quote: origin.quote };
+          ? { from: "sources", mode: "sources", label: SOURCE_DEBATE_LENS, quote: origin.lens, voice: "reader" }
+          : { from: "sources", mode: "sources", label: SOURCE_DEBATE_CLAIM, quote: origin.quote };
       /* The quote is the entry's name as it was when the chat started. */
       case "glossary":
         return { from: "glossary", mode: "glossary", label: SOURCE_GLOSSARY_ENTRY, quote: origin.quote };
       case "citations":
-        return { from: "peer-review", mode: "peer-review", label: SOURCE_CITED_WORK, quote: origin.quote };
+        return { from: "sources", mode: "sources", label: SOURCE_CITED_WORK, quote: origin.quote };
       case "ideas":
         return { from: "ideas", mode: "ideas", label: SOURCE_IDEA, quote: origin.quote };
       default:
@@ -175,7 +175,7 @@ export function chatFrom(thread: SourcedThread): ChatFrom {
  */
 export const CHAT_FROM_LABEL: Readonly<Record<ChatFrom, string>> = {
   chats: "Chats",
-  "peer-review": MODE_LABEL["peer-review"],
+  sources: MODE_LABEL.sources,
   glossary: MODE_LABEL.glossary,
   ideas: MODE_LABEL.ideas,
   learn: MODE_LABEL.learn,
@@ -208,11 +208,11 @@ export function narrowed<T extends SourcedThread>(threads: readonly T[], from: C
  */
 export interface OriginBackWords {
   mode: Mode;
-  /** Peer review's sub-mode the press opens, on a Peer review origin and no other. */
-  view?: PeerReviewView;
+  /** Sources' sub-mode the press opens, on a Sources origin and no other. */
+  view?: SourcesView;
   /**
    * The word on the button the press lands on: the mode's (*Glossary*), or
-   * for Peer review its sub-mode's (*Bibliography*, *Reception*, *Claims*),
+   * for Sources its sub-mode's (*Bibliography*, *Reception*, *Claims*),
    * the more exact of the two, under the mode's icon.
    */
   modeLabel: string;
@@ -234,8 +234,8 @@ export function originBack(origin: ThreadOrigin): OriginBackWords {
     case "citations":
     case "debate": {
       const view = origin.mode === "citations" ? "bibliography" : isLensOrigin(origin) ? "reception" : "claims";
-      const modeLabel = PEER_REVIEW_SUB_MODES[view].label;
-      return { mode: "peer-review", view, modeLabel, quote, text: `Back to ${what} in ${modeLabel}` };
+      const modeLabel = SOURCES_SUB_MODES[view].label;
+      return { mode: "sources", view, modeLabel, quote, text: `Back to ${what} in ${modeLabel}` };
     }
     default:
       return origin satisfies never;

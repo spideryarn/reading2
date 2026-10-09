@@ -183,7 +183,7 @@ describe("the score orders", () => {
   });
 
   it("Help distinguishes new confident scores from older lists and treats absence as no usable score", () => {
-    const modes = helpModeReadingWords("peer-review");
+    const modes = helpModeReadingWords("sources");
     expect(modes).toMatch(/new lists/i);
     expect(modes).toMatch(/older lists/i);
     expect(modes).toMatch(/relevance was scored/i);
@@ -193,7 +193,7 @@ describe("the score orders", () => {
 
   it("Help says whose count a row's citation count is, what it leaves out, and that it is not influence", () => {
     /* Plan 261005i. The row's own words, so a reader can match the sentence to what they see. */
-    const modes = helpModeReadingWords("peer-review");
+    const modes = helpModeReadingWords("sources");
     expect(modes).toContain("cited 357 times · Crossref");
     expect(modes).toMatch(/DOI/);
     expect(modes).toMatch(/lower than Google Scholar/);
@@ -585,7 +585,7 @@ describe("CitationsPanel", () => {
     await draw(owner({ citations: artefact([searched, PASSING, { ...CENTRAL, investigation: INVESTIGATION }]) }));
     expect(host.querySelector(".cite-investigate, .cite-inv-again")).toBeNull();
     expect(host.querySelector(".mode-band, .cite-list")?.textContent ?? "").not.toMatch(/Dig deeper|Digging deeper/);
-    expect(MODE_CATALOG["peer-review"].how).not.toMatch(/Dig deeper/);
+    expect(MODE_CATALOG.sources.how).not.toMatch(/Dig deeper/);
   });
 
   it("starts the bar at the default, hides what is under it, and says how many", async () => {

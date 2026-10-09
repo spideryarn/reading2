@@ -144,7 +144,7 @@ const ALSO_A_CHIP: Readonly<Record<string, string>> = {
   recall: "submode:learn:recall",
   sketch: "submode:diagram:sketch",
   /* `reception` was Debate's nickname and its default chip until 2026-10-09;
-     it is Peer review's Reception chip's own label now, not a nickname. */
+     it is Sources' Reception chip's own label now, not a nickname. */
 };
 
 describe("every nickname, typed in full", () => {
@@ -173,11 +173,10 @@ describe("every nickname, typed in full", () => {
  * reordered bar, changes this table in a diff somebody reads.
  */
 const SHARED_STARTS: Readonly<Record<string, readonly Mode[]>> = {
-  s: ["structure", "summary", "skim", "search"],
-  /* Peer review shares Plain's first letter since 2026-10-09; `d` and `c`,
-     which Debate and Citations shared with Diagram and Chat, name one mode
-     each now. */
-  p: ["plain", "peer-review"],
+  /* Sources joined `s` on 2026-10-09, when Peer review (which shared Plain's
+     `p` for that day) was renamed; `d` and `c`, which Debate and Citations
+     shared with Diagram and Chat, name one mode each now. */
+  s: ["structure", "summary", "skim", "sources", "search"],
   /* `r` and `re` were shared by Referee and Remember until 2026-10-05, when
      Remember became Learn: each now names Referee alone, and the test below
      that asks for "the one mode it names first" covers them. */
@@ -224,11 +223,10 @@ const A_MODE_COMES_FIRST: Readonly<Record<string, Mode>> = {
      that took its place (mode.md § Retiring a mode). The Comments row lists it
      too and comes second. Both were so before 2026-10-04. */
   annotations: "marginalia",
-  /* The Metadata row's `source` — where the piece came from — is the start of
-     Peer review's `sources` (Citations' until 2026-10-09), and the mode comes
-     first. Also older than this file; found by it, and left for Greg to call:
-     either word is a fair claim. */
-  source: "peer-review",
+  /* The Metadata row's `source` — where the piece came from — was listed here
+     until 2026-10-09, when it was the start of Citations' (then Peer review's)
+     nickname `sources`. It is the start of the Sources mode's own label now,
+     which the walk below allows, so it is no longer an exception. */
 };
 
 describe("a word that is another row's own", () => {

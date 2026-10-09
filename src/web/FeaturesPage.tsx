@@ -234,9 +234,9 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
               address (src/public/dto.ts § `publicCitationUrl`, and the
               80-work cap in docs/project/citations.md). The orders are
               `orderOptions` in src/web/CitationsPanel.tsx: prioritised, first
-              cited, relevance, influence. Peer review's Bibliography since
+              cited, relevance, influence. Sources' Bibliography since
               2026-10-09, titled with the sub-mode's name (plan 261009l). */}
-          <Tile name="Bibliography." span="wide" mode="peer-review">
+          <Tile name="Bibliography." span="wide" mode="sources">
             The works the piece cites — in its bibliography, its footnotes or the text itself — with a
             link out where there is one, in the order it first cites them, by how relevant or
             influential each is, or prioritised.
@@ -296,9 +296,9 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
               authoritative sources)", with "citation/linking"; and 2026-09-30
               (SPIDERYARN-READING2-6M), "key themes" and "key nodes". Both in
               docs/project/debate.md; the themes and key sources are
-              src/debate-themes.ts. Peer review's Reception since 2026-10-09,
+              src/debate-themes.ts. Sources' Reception since 2026-10-09,
               titled with the sub-mode's name (plan 261009l). */}
-          <Tile name="Reception." span="wide" mode="peer-review">
+          <Tile name="Reception." span="wide" mode="sources">
             What the wider web says about the piece — reviews and critiques, ideally from
             authoritative sources, each linked — with the key themes and the key sources drawn out.
           </Tile>

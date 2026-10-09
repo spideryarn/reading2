@@ -16,7 +16,7 @@ import type { BlockId, Citations, CitedWork, Quote, Quotes } from "../src/types.
 import type { QuoteRank, CiteOrder } from "../src/web/params.js";
 import type { QuotesOwner } from "../src/web/QuotesPanel.js";
 import type { UseCitations } from "../src/web/useCitations.js";
-import { peerReviewHead } from "./helpers/peer-review-head.js";
+import { sourcesHead } from "./helpers/sources-head.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -256,8 +256,8 @@ async function mountCitations(o: UseCitations, order: CiteOrder): Promise<void> 
   await act(async () =>
     root.render(
       createElement(CitationsPanel, {
-        /* Peer review's chip row, the band's head since 2026-10-09. */
-        head: peerReviewHead({ view: "bibliography", onView: noop, ownerSlug: null, works: o.citations?.citations ?? null }),
+        /* Sources' chip row, the band's head since 2026-10-09. */
+        head: sourcesHead({ view: "bibliography", onView: noop, ownerSlug: null, works: o.citations?.citations ?? null }),
         access: { kind: "owner", owner: o },
         order,
         onOrder: noop,
@@ -282,7 +282,7 @@ async function citeCard(): Promise<string> {
 }
 
 describe("the Citations band's top and foot", () => {
-  /* Since 2026-10-09 the head row is Peer review's chip row, whatever the
+  /* Since 2026-10-09 the head row is Sources' chip row, whatever the
      order row does (plan 261009l); what this held before — no row of its own
      for the count — still holds: the number is on Bibliography's chip and in
      the (i), never a line on the band. */
