@@ -973,11 +973,36 @@ export function useHoverCard<T>({
       // A finger is on the screen, or was a moment ago: this focus is the tap's,
       // not a reader tabbing through the prose. See `lastTouchAt`.
       if (down || event.timeStamp - lastTouchAt < TOUCH_FOCUS_MS) return;
+      /* Focus moving into the open card is the reader reaching its controls —
+         the keyboard's counterpart of the pointer resting on the card, which
+         `leave` above already keeps open. Closing here unmounted the very link
+         or button being focused (GPT Sol, plan 261009e). */
+      if ((event.target as Element | null)?.closest?.(`.${CARD_CLASS}`)) {
+        disarm();
+        clearTimeout(closeTimer);
+        return;
+      }
       const hit = (event.target as Element | null)?.closest?.(selector) as HTMLElement | null;
       if (hit) arm(hit, 0);
       else close();
     };
-    if (focusable) document.addEventListener("focusin", focusIn);
+    /* Tabbing out through the card's last control can move focus into browser
+       chrome, which sends `focusout` with no later document `focusin`. Without
+       this half the card stays open over a place the keyboard has left. */
+    const focusOut = (event: FocusEvent) => {
+      const card = (event.target as Element | null)?.closest?.(`.${CARD_CLASS}`);
+      if (!card) return;
+      if ((event.relatedTarget as Element | null)?.closest?.(`.${CARD_CLASS}`)) return;
+      /* A pointer still resting on the card keeps it, as `leave` does: a click
+         on the card's plain text after focusing one of its buttons sends focus
+         to the body, and that is not the reader leaving. */
+      if (card.matches(":hover")) return;
+      close();
+    };
+    if (focusable) {
+      document.addEventListener("focusin", focusIn);
+      document.addEventListener("focusout", focusOut);
+    }
 
     return () => {
       disarm();
@@ -996,7 +1021,10 @@ export function useHoverCard<T>({
         document.removeEventListener("scroll", dismiss, true);
         window.removeEventListener("resize", dismiss);
       }
-      if (focusable) document.removeEventListener("focusin", focusIn);
+      if (focusable) {
+        document.removeEventListener("focusin", focusIn);
+        document.removeEventListener("focusout", focusOut);
+      }
       /* And close, because this cleanup runs when `selector`, `focusable` or
          `tapSelector` changes as well as on unmount. `currentRef` has to be
          cleared with it: leaving it set meant the next tap on that same mark

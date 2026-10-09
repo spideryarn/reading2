@@ -92,6 +92,7 @@ const VANISHED = "spya-zzzzzz";
 await pgReady({
   suite: "tests/helpers-seed-reader-state.test.ts",
   tables: ["spideryarn.revision_blocks", "spideryarn.glossary_lookups"],
+  columns: [{ table: "spideryarn.chat_messages", column: "truncated" }],
 });
 
 /**
@@ -236,7 +237,7 @@ describe("the reader-state seeder", () => {
     }
   });
 
-  it("does not drop a chat answer's recorded thinking effort", async () => {
+  it("does not drop the chat fields the rollback only recently learned", async () => {
     const slug = "test-seed-chat-effort";
     await forget(slug);
     await makeFixture(slug, []);
@@ -247,6 +248,9 @@ describe("the reader-state seeder", () => {
     const answer = chat.threads[0]?.messages.find((message) => message.id === "spya-fxb204");
     if (!answer) throw new Error("the fixture has no ordinary chat answer");
     answer.effort = "high";
+    answer.passages = [{ blockIds: [VANISHED], why: "the spoken answer pointed here" }];
+    answer.interrupted = true;
+    answer.truncated = true;
     await writeFile(chatAt, JSON.stringify(chat, null, 2));
 
     try {
@@ -258,10 +262,18 @@ describe("the reader-state seeder", () => {
         .where(eq(articles.slug, slug));
       if (!article) throw new Error("the load created no article row");
       const [stored] = await getDb()
-        .select({ effort: chatMessages.effort })
+        .select({
+          effort: chatMessages.effort,
+          passages: chatMessages.passages,
+          interrupted: chatMessages.interrupted,
+          truncated: chatMessages.truncated,
+        })
         .from(chatMessages)
         .where(and(eq(chatMessages.articleId, article.id), eq(chatMessages.id, "spya-fxb204")));
       expect(stored?.effort).toBe("high");
+      expect(stored?.passages).toEqual([{ blockIds: [VANISHED], why: "the spoken answer pointed here" }]);
+      expect(stored?.interrupted).toBe(true);
+      expect(stored?.truncated).toBe(true);
     } finally {
       await forget(slug);
     }

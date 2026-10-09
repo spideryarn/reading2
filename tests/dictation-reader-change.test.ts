@@ -71,7 +71,7 @@ function mountBox(reader: string): void {
   const root = createRoot(document.createElement("div"));
   roots.push(root);
   act(() => root.render(createElement(SignedInReader.Provider, { value: reader }, createElement(ProfileBox, {
-    id: "about-you", label: "About you", hint: "", placeholder: "", value: "", onChange() {}, onCommit() {},
+    id: "about-you", article: null, label: "About you", hint: "", placeholder: "", value: "", onChange() {}, onCommit() {},
     max: 4000, save: { kind: "clean" },
   }))));
 }

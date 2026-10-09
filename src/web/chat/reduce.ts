@@ -1083,11 +1083,11 @@ function applyTurn(state: ChatState, event: ChatResult, op: TurnOperation): Outc
       return moved(state, op, { ...op.reply, tools });
     }
     case "turn.done": {
-      /* `stopped` and `tools` are both defaulted *before* the spread, for one
-         reason: the server omits each of them when there is nothing to say, so
-         a spread alone cannot clear a stale one. This row may be a retry of one
-         that *was* stopped, and a complete answer wearing "Stopped" underneath
-         it is what leaving the field off looks like. */
+      /* `stopped`, `truncated` and `tools` are defaulted *before* the spread,
+         for one reason: the server omits each of them when there is nothing to
+         say, so a spread alone cannot clear a stale one. This row may be a retry
+         of one that was stopped or cut off, and a complete answer wearing either
+         warning underneath it is what leaving the field off looks like. */
       /* `opensFree` is the guide's, for this moment (`Answered`), and not a
          field of the message. */
       const { opensFree: _opensFree, ...done } = event.done;

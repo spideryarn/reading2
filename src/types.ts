@@ -4826,6 +4826,10 @@ export interface CitedWork {
    * plus every body block carrying a `data-spya-note-ref` marker for a note the
    * work was found in. Footnote expansion is code's, because the model is shown
    * plain text and cannot see which paragraph a note hangs off.
+   *
+   * **Note expansion is complete for each recognised note; direct citations
+   * are capped.** A work cited directly in the text has at most `MAX_MENTIONS`
+   * mentions, so later directly citing blocks may be absent (plan 261009e).
    */
   citedAt: BlockId[];
   /**
@@ -5289,6 +5293,15 @@ export interface CitationScoreDrops {
  * the number.
  */
 export const MAX_CITATIONS = 80;
+
+/**
+ * Direct mentions kept per work — occurrences, not distinct paragraphs. The
+ * first-cited jump needs one; the prompt and verifier both stop at three. Here
+ * rather than in src/citations.ts for `MAX_CITATIONS`' reason: the hover card
+ * says *at least* when a work has hit it, since later directly citing paragraphs
+ * may not be in `citedAt`.
+ */
+export const MAX_MENTIONS = 3;
 
 /** The artefact. The `citations` column on `article_revisions`. */
 export interface Citations {

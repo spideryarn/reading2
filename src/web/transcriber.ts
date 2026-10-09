@@ -103,9 +103,9 @@ export type Transcriber<C> = (
  */
 export interface DictationKeeper<C> {
   /**
-   * Which box this keeper is for — `"feedback"`, `"chat:<slug>"`. A recording
-   * is only ever offered back to the box it was made in, and the hook re-runs
-   * its recovery when this changes.
+   * Which box this keeper is for — `"feedback"`, `"chat:<slug>:<thread>"`. A
+   * recording is only ever offered back to the box it was made in, and the hook
+   * re-runs its recovery when this changes.
    */
   readonly box: string;
   /**

@@ -71,9 +71,11 @@ says so when it does, and **Back** undoes it. Anything that costs money or chang
 as a search, a mode that has to be written first, a tag or a bookmark, is still a button you press.
 
 **Talking instead of typing.** The microphone turns your speech into text in the box, to edit before
-you send; a recording stops after fifteen minutes, and says so a minute before. Press Stop twice
-quickly and it sends by itself once the words arrive; this works here, in Feedback, in a comment
-follow-up, in a quiz answer and when you annotate a passage. In the command bar it presses Enter for
-you instead. **Live**, beside it, is a spoken conversation you can interrupt. Your audio goes
+you send. It is worth trying even if you type quickly: most people say more out loud than they would
+type, and the more you say about what you want, the better the answer can fit it. A recording stops
+after fifteen minutes, and says so a minute before. Press Stop twice quickly and the box finishes its
+action once the words arrive: it sends here, in Feedback, in a comment follow-up and in a quiz answer;
+it saves when you annotate a passage; and in the command bar it presses Enter. **Live**, beside it,
+is a spoken conversation you can interrupt. Your audio goes
 directly to OpenAI. What is said joins the same conversation, so you can hang up, type for a while,
 and press **Live** again. A call ends after five minutes of quiet, or twenty minutes in all.

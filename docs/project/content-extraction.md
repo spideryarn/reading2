@@ -301,6 +301,7 @@ everything it makes is sanitised afterwards like the rest of the page.
 | a boxed passage as an SVG frame round a `foreignObject` | an empty block | the passage's own blocks |
 | authors in the title block, none in the metadata | Readability's guess: a cited author, or "and" | the paper's authors, names only, through `metaAuthors` ([`src/meta-authors.ts`](../../src/meta-authors.ts)); right on 12 of 19 live pages and refused on the rest, 2026-10-07 ([261007d](../plans/261007d-front-matter-folded-by-default-and-arxiv-html-authors.md) § Stage 2 says why affiliations are not read) |
 | the title block itself: each author's affiliation, email and `\thanks` note in a pop-up CSS hides | one paragraph of every author fused, with `thanks:`, `footnotemark: 1` and `Affiliation:` as text; and Readability **deleting** the first short author element it took for the byline | one row per author (name, then each contact on its own line), each note once, numbered, and a name carrying the numbers of the notes it shares; one line of names when nobody has details. The page's nodes are moved, a word check and the link targets checked before the swap, and an unproved `\footnotemark` refuses. 16 of 20 live pages, 2026-10-09 ([261009d](../plans/261009d-arxiv-html-title-block-tidied-at-import.md)) |
+| a macro it could not expand, as its name in `<span class="ltx_ERROR undefined">`, and the macro's argument as ordinary text | `\hohsettheme` then `hohRose` above the title; `phases\ucitedagotto2005.` mid-sentence; `\bmsection` before a funding statement. 9 of 79 papers, 2026-10-09 | the report gone, a space where it would join two words, `\sep` a semicolon between keyword phrases. The argument stays, unless it is a name from the TeX source (`hohRose`, a .bib file's name) or a citation key after a `…cite` macro, which go too ([261009f](../plans/261009f-latex-undefined-macros-leave-the-page.md)) |
 
 **Every rewrite is narrow, and declines rather than guesses.** It applies only on a page fetched
 from arXiv's or ar5iv's `/html/` and beneath `article.ltx_document`: a stranger's page cannot opt
@@ -500,7 +501,10 @@ page. Other things here remove elements too — the note pass, Readability, the 
 [`src/furniture.ts`](../../src/furniture.ts) is the only place that deletes something **because of
 what the publisher called it**, as furniture. (A blog's comment thread is also deleted by the name of
 its container, under a different licence —
-[§ Readers' comments](#readers-comments-left-out-on-every-pass).) The class is narrow on purpose — **platform-generated controls beside content, recognised by the
+[§ Readers' comments](#readers-comments-left-out-on-every-pass). And on an arXiv HTML page,
+LaTeXML's own report of a macro it could not expand, `span.ltx_ERROR.undefined`, is deleted by
+its class too, along with an argument that is a name from the TeX source rather than prose —
+[§ A LaTeXML page](#a-latexml-page-arxivs-html).) The class is narrow on purpose — **platform-generated controls beside content, recognised by the
 platform's own selector, that contain no block-level descendants** — and there are five of them:
 MediaWiki's `span.mw-editsection` and `.mw-empty-elt`, Sphinx's `a.headerlink`, PLOS's
 `ul.reflinks`, and Springer Nature's *Full size image* button, `div.c-article-section__figure-link`.

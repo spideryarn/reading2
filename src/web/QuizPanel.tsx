@@ -1784,7 +1784,7 @@ function Mic({ dictate, disabled }: { dictate: UseDictationField; disabled: bool
   if (!dictate.dictation.supported) return null;
   return (
     <span className="quiz-mic">
-      <DictationButton dictation={dictate.dictation} toggle={dictate.toggle} disabled={disabled} again={dictate.again} sendingAfter={dictate.sendingAfter} />
+      <DictationButton dictation={dictate.dictation} toggle={dictate.toggle} disabled={disabled} again={dictate.again} sendingAfter={dictate.sendingAfter} doubleStop={dictate.doubleStop} />
       <TalkLabel field={dictate} className="quiz-mic-label" />
     </span>
   );

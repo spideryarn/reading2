@@ -889,7 +889,7 @@ export function CommentDialog({
             aria-label="Ask a follow-up question about this passage"
           />
           {dictate.dictation.supported && (
-            <DictationButton dictation={dictate.dictation} toggle={dictate.toggle} again={dictate.again} sendingAfter={dictate.sendingAfter} />
+            <DictationButton dictation={dictate.dictation} toggle={dictate.toggle} again={dictate.again} sendingAfter={dictate.sendingAfter} doubleStop={dictate.doubleStop} />
           )}
           <button
             type="submit"

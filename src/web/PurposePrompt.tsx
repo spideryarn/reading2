@@ -180,6 +180,7 @@ function Ask({ slug }: { slug: string }) {
         </h2>
         <ProfileBox
           id="prompt-purpose"
+          article={slug}
           label="In a sentence, for this article"
           placeholder="e.g. I want to know how they handled missing data"
           hint="Shapes the quotes, ideas, glossary and the reading route — for this article only. Never what the article says. You can change it later on Metadata."

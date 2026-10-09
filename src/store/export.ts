@@ -458,6 +458,9 @@ export async function exportArticle(
   if (revision.quiz) await put("article_revisions", "quiz.json", revision.quiz);
   if (revision.faq) await put("article_revisions", "faq.json", revision.faq);
   if (revision.relations) await put("article_revisions", "relations.json", revision.relations);
+  /* Missing until 2026-10-09 (qi-mv7wk6ap): the bundle carried a stored debate
+     inside content/revision.json all along, and this rollback silently didn't. */
+  if (revision.debate) await put("article_revisions", "debate.json", revision.debate);
   if (revision.debateClaims)
     await put("article_revisions", "debate-claims.json", revision.debateClaims);
   if (revision.crossrefs)
@@ -676,6 +679,12 @@ export async function exportArticle(
             error: row.error,
             // `false` is the default and the file simply had no key.
             stopped: row.stopped ? true : null,
+            /* Three more named for `stance`'s reason below: a column not named
+               here is not exported, and nothing says so. All three were missing
+               until 2026-10-09 (plan 261009h). */
+            truncated: row.truncated ? true : null,
+            interrupted: row.interrupted ? true : null,
+            passages: row.passages,
             /* **The field this file's own comment warned about**, four lines
                up: `tools` went missing from an export exactly this way once
                already, because the row is built from named fields and a new one

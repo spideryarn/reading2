@@ -112,8 +112,14 @@ const DB_NOW = sql`clock_timestamp()` as unknown as Date;
 type Db = ReturnType<typeof getDb>;
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
-/** A message as the client sees it. Absent, not null — `exactOptionalPropertyTypes`. */
-function toMessage(row: typeof chatMessages.$inferSelect): ChatMessage {
+/**
+ * A message as the client sees it. Absent, not null — `exactOptionalPropertyTypes`.
+ *
+ * Exported, with `messageRow`, for tests/pg-chat-row-roundtrip.test.ts: every
+ * `ChatMessage` field through both halves, so a field one of them does not
+ * name fails there rather than vanishing in production.
+ */
+export function toMessage(row: typeof chatMessages.$inferSelect): ChatMessage {
   return {
     id: row.id,
     role: row.role as ChatMessage["role"],
@@ -127,6 +133,7 @@ function toMessage(row: typeof chatMessages.$inferSelect): ChatMessage {
     ...(row.effort === null ? {} : { effort: row.effort }),
     ...(row.error === null ? {} : { error: row.error }),
     ...(row.stopped ? { stopped: true } : {}),
+    ...(row.truncated ? { truncated: true } : {}),
     /* **Both of these must be named here or they do not exist.** This mapping
        enumerates fields, so a column the reader half of the store does not
        mention is written, stored, and then silently dropped on the way out —
@@ -263,7 +270,7 @@ export async function threadsFor(articleId: string, db: Db | Tx = getDb()): Prom
  * position can disagree, and the unique index on `(article_id, thread_id,
  * ordinal)` then rejects a perfectly legitimate write.
  */
-function messageRow(
+export function messageRow(
   articleId: string,
   threadId: string,
   message: ChatMessage,
@@ -285,6 +292,7 @@ function messageRow(
     effort: message.effort ?? null,
     error: message.error ?? null,
     stopped: message.stopped ?? false,
+    truncated: message.truncated ?? false,
     /* **The write half of the mapping, and it has to be listed here too.**
        `toMessage` above names these on the way out; without them here they are
        never written in the first place, and nothing complains — both are
@@ -512,6 +520,10 @@ const rawPgChatStore: ChatStore = {
           ...(patch.effort === undefined ? {} : { effort: patch.effort }),
           ...(patch.error === undefined ? {} : { error: patch.error }),
           ...(patch.stopped === undefined ? {} : { stopped: patch.stopped }),
+          /* Named here or it never reaches the row: the route has always sent it
+             and this patch used to drop it on the floor —
+             docs/postmortems/261009h-a-flag-the-store-did-not-keep.md. */
+          ...(patch.truncated === undefined ? {} : { truncated: patch.truncated }),
           ...(patch.editedAt === undefined ? {} : { editedAt: new Date(patch.editedAt) }),
           // The attempt is over. Both columns or neither — the CHECK says so.
           attemptId: null,
@@ -585,6 +597,10 @@ const rawPgChatStore: ChatStore = {
           effort: null,
           error: null,
           stopped: false,
+          /* A finish that was not cut off omits the flag rather than sending
+             `false`, so the last attempt's `true` must go here or it outlives
+             the answer it was about (GPT Sol, plan 261009h F2). */
+          truncated: false,
           /* Retrying is a new one-voice attempt. The row id survives, but the
              legacy instruction on an old answer does not; omitting this field
              would leave the database carrying a stance that the in-memory
@@ -595,6 +611,10 @@ const rawPgChatStore: ChatStore = {
              carried over would label an answer nobody has interrupted yet. */
           passages: null,
           interrupted: false,
+          /* `finish` accepts this field even though today's route never sends
+             it for an assistant row. Keep the row-reuse rule complete: anything
+             the old attempt could have written is removed before the new one. */
+          editedAt: null,
           /* The reader opened the LAST answer's hint. The row is about to hold
              a different answer with a different hint, and that one is closed. */
           hintOpenedAt: null,

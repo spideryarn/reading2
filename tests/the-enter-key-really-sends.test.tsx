@@ -160,6 +160,7 @@ describe("the chat composer", () => {
       root.render(
         createElement(Composer, {
           slug: "a-piece",
+          keepAs: "chat:a-piece:t1",
           onSend: (question: string) => sent.push(question),
           busy,
           focusNonce: 0,
