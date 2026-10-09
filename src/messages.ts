@@ -5573,6 +5573,12 @@ export const DEBATE_DIG_FURTHER_TIP =
 /** The heading over a typed claim's checks. The words after it are the reader's. */
 export const DEBATE_CHECK_YOUR_CLAIM = "Your claim";
 
+/**
+ * Above the checks made against an earlier version of the article — kept,
+ * because they were paid for, but read-only (GPT Sol's E5).
+ */
+export const DEBATE_CHECK_EARLIER = "Checked against an earlier version of this article";
+
 /** A check pressed while another is out — from the partial unique index. */
 export const DEBATE_CHECK_IN_FLIGHT =
   "A check is already running on this article. Its answer will appear here when it lands.";
@@ -5587,7 +5593,7 @@ export const DEBATE_CHECK_NO_LIST = "List this piece's claims before checking an
 /** A check still running when the server stopped. What the sweep writes. */
 export const DEBATE_CHECK_SWEPT = "The server stopped before this check finished.";
 
-/** The shared allowance's three refusals (src/dig-deeper.ts § `admitDig`), said of a check. */
+/** The check's allowance's three refusals (src/debate.ts § `admitDebateCheck`). Dig deeper keeps its own. */
 export const DEBATE_CHECK_BUSY =
   "Another web search you asked for is still running. Wait for it to finish, then check again.";
 export const DEBATE_CHECK_LIMITED =

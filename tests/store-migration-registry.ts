@@ -3042,6 +3042,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      stubbed `fetch` with a fake key. */
   "tests/shelf-topics-route.test.ts": "private-postgres",
   "tests/public-shelf-topics-pg.test.ts": "private-postgres",
+  "tests/site-account-pg.test.ts": "private-postgres",
   /* The model's topic set, 261003f. Seeds two owners and a handful of bare
      articles by hand, and reads and writes `shelf_topic_sets` through the
      store. No model is called. */
@@ -3687,8 +3688,8 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
      Its rows here — the topic set, allowance and ai_calls — are deleted by the
      file. Plan 261008j. */
   "tests/public-shelf-topics-pg.test.ts": {
-    "00000000-0000-4000-8000-0000000a7a11": { kind: "seeded" },
-    "00000000-0000-4000-8000-0000000a7b22": { kind: "seeded" },
+    "00000000-0000-4000-8000-0000000a7a11": { kind: "seeded", why: "seedAuthUser in beforeAll, over a [id, email] list the scan cannot read" },
+    "00000000-0000-4000-8000-0000000a7b22": { kind: "seeded", why: "seedAuthUser in beforeAll, over a [id, email] list the scan cannot read" },
   },
   /* Two readers: `shelf_topic_sets.owner_id` references `auth.users`, both
      own articles, and one's claim id is tried in the other's hands. 261003f. */

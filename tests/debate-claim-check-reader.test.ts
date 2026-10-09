@@ -14,7 +14,23 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { blockTextById, checkPrompt, readCheckedClaimGroup } from "../src/debate.js";
+import { DIG_DEEPER_RATE_POLICY } from "../src/dig-deeper.js";
+import {
+  admitDebateCheck,
+  blockTextById,
+  checkPrompt,
+  DEBATE_CHECK_RATE_POLICY,
+  DEBATE_CHECK_TIMEOUT_MS,
+  readCheckedClaimGroup,
+} from "../src/debate.js";
+import {
+  DEBATE_CHECK_BUSY,
+  DEBATE_CHECK_LIMITED,
+  DEBATE_CHECK_RESTING,
+  DIG_DEEPER_BUSY,
+  DIG_DEEPER_LIMITED,
+  DIG_DEEPER_RESTING,
+} from "../src/messages.js";
 import type { Block, DebateCheckTarget, SearchEvidence } from "../src/types.js";
 
 const block = (id: string, text: string): Block => ({
@@ -212,6 +228,33 @@ describe("pass B's refusals still fire", () => {
     expect(read.counts.keptRows).toBe(0);
   });
 
+  it("refuses a different-address copy of the article as outside evidence", () => {
+    const copiedWords = [
+      "alpha bravo charlie delta echo foxtrot golf hotel india juliett kilo lima",
+      "mango nectarine orange papaya quince raspberry strawberry tangerine vanilla watermelon xigua yellowfruit",
+      "acorn butternut cucumber daikon eggplant fennel garlic habanero iceberg jalapeno kohlrabi leek",
+    ].join(" ");
+    const copied = block("spya-copy01", copiedWords);
+    const mirrorUrl = "https://archive.example/a-copy";
+    const read = readCheckedClaimGroup(
+      [
+        {
+          claimId: LISTED.claimId,
+          rows: [goodRow({ url: mirrorUrl, sourceQuote: "alpha bravo charlie delta echo foxtrot golf hotel" })],
+        },
+      ],
+      [LISTED],
+      {
+        ...input,
+        admissible: new Map([[mirrorUrl, { url: mirrorUrl, title: "A copy", excerpt: copiedWords }]]),
+        blockText: blockTextById([copied]),
+      },
+      1,
+    );
+    expect(read.counts.keptRows).toBe(0);
+    expect(read.counts.lost.sourceIsCopy).toBe(1);
+  });
+
   it("sums the kept and reported rows over every claim, and the pages once", () => {
     const read = readCheckedClaimGroup(
       [
@@ -246,5 +289,59 @@ describe("the check's user message", () => {
     expect(prompt).toContain("<<<UNTRUSTED ADDRESSES ALREADY FOUND");
     expect(prompt).toContain("https://a.example/one");
     expect(checkPrompt([LISTED])).not.toContain("LOOK ELSEWHERE");
+  });
+});
+
+describe("the check's own allowance (GPT Sol's E1)", () => {
+  it("holds its concurrency slot for longer than a check may run", () => {
+    expect(DEBATE_CHECK_TIMEOUT_MS).toBe(360_000);
+    expect(DEBATE_CHECK_RATE_POLICY.leaseMs).toBeGreaterThanOrEqual(DEBATE_CHECK_TIMEOUT_MS + 60_000);
+  });
+
+  it("is the numbers Greg was shown, pinned so a change is a decision", () => {
+    expect(DEBATE_CHECK_RATE_POLICY).toMatchObject({ fills: 10, windowMs: 60 * 60 * 1000, concurrency: 2 });
+    expect(DEBATE_CHECK_RATE_POLICY.daily).toEqual({ fills: 30, globalFills: 100, windowMs: 24 * 60 * 60 * 1000 });
+  });
+
+  it("leaves Dig deeper's policy alone", () => {
+    expect(DIG_DEEPER_RATE_POLICY).toMatchObject({ fills: 20, concurrency: 2 });
+    expect(DIG_DEEPER_RATE_POLICY).not.toBe(DEBATE_CHECK_RATE_POLICY);
+  });
+
+  it("takes its own bucket, and refuses in a check's words, not Dig deeper's", async () => {
+    const taken: string[] = [];
+    for (const [kind, status, message] of [
+      ["concurrency", 429, DEBATE_CHECK_BUSY],
+      ["rate", 429, DEBATE_CHECK_LIMITED],
+      ["global", 503, DEBATE_CHECK_RESTING],
+    ] as const) {
+      const refused = await admitDebateCheck({
+        async take(bucket) {
+          taken.push(bucket);
+          return { kind };
+        },
+        async finish() {},
+      }).catch((err: unknown) => err as { status: number; message: string });
+      expect(refused).toMatchObject({ status, message });
+    }
+    expect(taken).toEqual(["debate-check", "debate-check", "debate-check"]);
+    expect([DEBATE_CHECK_BUSY, DEBATE_CHECK_LIMITED, DEBATE_CHECK_RESTING]).not.toContain(DIG_DEEPER_BUSY);
+    expect([DEBATE_CHECK_BUSY, DEBATE_CHECK_LIMITED, DEBATE_CHECK_RESTING]).not.toContain(DIG_DEEPER_LIMITED);
+    expect([DEBATE_CHECK_BUSY, DEBATE_CHECK_LIMITED, DEBATE_CHECK_RESTING]).not.toContain(DIG_DEEPER_RESTING.message);
+  });
+
+  it("frees its lease once, however often it is told to", async () => {
+    const finished: string[] = [];
+    const free = await admitDebateCheck({
+      async take() {
+        return { kind: "allowed", id: "lease-1" };
+      },
+      async finish(id) {
+        finished.push(id);
+      },
+    });
+    await free();
+    await free();
+    expect(finished).toEqual(["lease-1"]);
   });
 });

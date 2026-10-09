@@ -5,7 +5,7 @@
 -- It has to be a real auth.users row, because ai_calls, shelf_topic_sets and
 -- rate_limit_events all have a foreign key to one, and keeping those keys is
 -- better than weakening them. The id is SITE_OWNER_ID in src/site-account.ts;
--- tests/public-shelf-topics-pg.test.ts checks the two agree and that the row cannot
+-- tests/site-account-pg.test.ts checks the two agree and that the row cannot
 -- sign in.
 --
 -- How it is kept from signing in, each on its own enough:

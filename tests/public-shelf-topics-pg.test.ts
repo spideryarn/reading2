@@ -7,8 +7,7 @@
  * The provider is `globalThis.fetch`, stubbed, with a fake key: nothing spends.
  * **The tests run in order and share one public shelf.**
  *
- * 1. **The site account** exists as the migration made it, and cannot sign in:
- *    no password, no identity, `.invalid`, banned.
+ * 1. (The site account itself is tests/site-account-pg.test.ts.)
  * 2. **Sharing eight articles** brings the first re-think, inside the sharing
  *    request: the stored row, the allowance row and every `ai_calls` row are the
  *    site's, the calls carry no article, and the sharing reader's own tree is
@@ -24,7 +23,7 @@
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 
-import { and, eq, inArray, like, sql } from "drizzle-orm";
+import { and, eq, inArray, like } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import type { Verifier } from "../src/auth.js";
@@ -300,15 +299,6 @@ beforeEach(async () => {
 });
 
 describe("the public shelf's topic pills", () => {
-  it("has a site account nobody can sign in as", async () => {
-    const rows = await db().execute(
-      sql`select email, encrypted_password, banned_until > now() + interval '100 years' as banned,
-                 (select count(*) from auth.identities i where i.user_id = u.id)::int as identities
-          from auth.users u where id = ${SITE_OWNER_ID}`,
-    );
-    expect(rows.rows).toEqual([{ email: "site@spideryarn.invalid", encrypted_password: "", banned: true, identities: 0 }]);
-  });
-
   it("re-thinks inside the eighth share, as the site, and a stranger then sees the topics", async () => {
     const before = await publicShelf();
     expect(before.topics).toEqual([]);

@@ -29,9 +29,11 @@ import type { UseDebate } from "../src/web/useDebate.js";
 import type { UseDebateChecks } from "../src/web/useDebateChecks.js";
 import type { UseDebateClaims } from "../src/web/useDebateClaims.js";
 import {
+  DEBATE_CHECK_EARLIER,
   DEBATE_CHECK_FOUND_NOTHING,
   DEBATE_CHECK_NOT_ANSWERED,
   DEBATE_CHECK_OWN_LABEL,
+  DEBATE_CHECK_PENDING,
   DEBATE_CHECK_YOUR_CLAIM,
 } from "../src/messages.js";
 
@@ -238,6 +240,19 @@ describe("Check", () => {
     expect(checkButton()?.disabled).toBe(false);
   });
 
+  it("holds while check history loads or fails without saying a paid search is running", () => {
+    paint({ status: "loading" });
+    expect(checkButton()?.disabled).toBe(true);
+    expect(host.textContent).not.toContain(DEBATE_CHECK_PENDING);
+    expect(checkButton()?.querySelector(".spin")).toBeNull();
+
+    paint({ status: "error", error: "The checks could not be read." });
+    expect(checkButton()?.disabled).toBe(true);
+    expect(host.textContent).toContain("The checks could not be read.");
+    expect(host.textContent).not.toContain(DEBATE_CHECK_PENDING);
+    expect(checkButton()?.querySelector(".spin")).toBeNull();
+  });
+
   it("is not offered on a stale list: no boxes, no Check", () => {
     paint({}, { stale: true });
     expect(ticks()).toHaveLength(0);
@@ -279,16 +294,91 @@ describe("what the checks found", () => {
     expect(claimItem(B.id)?.textContent).not.toContain(DEBATE_CHECK_FOUND_NOTHING);
   });
 
-  it("does not draw a check made from an older list", () => {
+  it("draws a check made from an earlier version of the article apart, read-only, never under the claim", () => {
     const old = check(
       "spya-chk234",
       [listedTarget(A)],
       [{ claimId: A.id, outcome: "answered", rows: [row("https://a.example/one")] }],
       { listSourceHash: "an-older-list" },
     );
-    paint({ checks: [old] });
+    const again = check(
+      "spya-chk345",
+      [listedTarget(A)],
+      [{ claimId: A.id, outcome: "answered", rows: [row("https://a.example/one"), row("https://a.example/two")] }],
+      { listSourceHash: "an-older-list", digFurther: true, createdAt: "2026-10-09T11:00:00.000Z" },
+    );
+    paint({ checks: [old, again] });
     expect(claimItem(A.id)?.querySelector(".dbt-item")).toBeNull();
+    const earlier = host.querySelector(".dbt-check-earlier");
+    expect(earlier?.textContent).toContain(DEBATE_CHECK_EARLIER);
+    /* One group for the one target, headed by its stored quote and statement, a page once. */
+    const groups = earlier?.querySelectorAll(".dbt-checked-claim") ?? [];
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.textContent).toContain(A.quote);
+    expect(groups[0]?.textContent).toContain(A.statement);
+    expect(groups[0]?.querySelectorAll(".dbt-item")).toHaveLength(2);
+    /* Read-only: no Dig further, no box. */
+    expect(earlier?.querySelectorAll("button.dbt-dig")).toHaveLength(0);
+    expect(earlier?.querySelectorAll("input[type='checkbox']")).toHaveLength(0);
     expect(digButtons()).toHaveLength(0);
+  });
+
+  it("draws a typed claim from an earlier version in that group too, as your claim", () => {
+    const own: DebateCheckTarget = { kind: "own", claimId: "spya-own234", text: "Rye is easier" };
+    paint({
+      checks: [
+        check("spya-chk234", [own], [{ claimId: own.claimId, outcome: "answered", rows: [row("https://b.example/x")] }], {
+          listSourceHash: "an-older-list",
+        }),
+      ],
+    });
+    const earlier = host.querySelector(".dbt-check-earlier");
+    expect(earlier?.textContent).toContain(`${DEBATE_CHECK_YOUR_CLAIM}: `);
+    expect(earlier?.textContent).toContain("Rye is easier");
+    expect(earlier?.querySelectorAll(".dbt-item")).toHaveLength(1);
+    expect(earlier?.querySelectorAll("button.dbt-dig")).toHaveLength(0);
+  });
+
+  it("draws a check under the claim with the same quote when the list was made again with new ids (E5)", async () => {
+    const before = check(
+      "spya-chk234",
+      [{ ...listedTarget(A), claimId: "spya-old111" }],
+      [{ claimId: "spya-old111", outcome: "answered", rows: [row("https://a.example/one")] }],
+    );
+    paint({ checks: [before] });
+    expect(claimItem(A.id)?.querySelectorAll(".dbt-item")).toHaveLength(1);
+    expect(host.querySelector(".dbt-checked-claim")).toBeNull();
+    await act(async () => {
+      claimItem(A.id)?.querySelector<HTMLButtonElement>("button.dbt-dig")?.click();
+    });
+    expect(sent).toEqual([{ digFurther: A.id }]);
+  });
+
+  it("draws a checked claim the new list does not name as its own group, with its jump, rows and Dig further (E5)", async () => {
+    const gone: DebateCheckTarget = {
+      kind: "listed",
+      claimId: "spya-gone11",
+      blockId: BLOCK,
+      quote: "a line no longer listed",
+      statement: "A claim the new list dropped.",
+    };
+    paint({
+      checks: [
+        check("spya-chk234", [gone], [
+          { claimId: gone.claimId, outcome: "answered", rows: [row("https://g.example/1"), row("https://g.example/1")] },
+        ]),
+      ],
+    });
+    const group = host.querySelector(".dbt-checked-claim");
+    expect(group?.textContent).toContain("a line no longer listed");
+    expect(group?.textContent).toContain("A claim the new list dropped.");
+    expect(group?.querySelector(".block-ref")).not.toBeNull();
+    expect(group?.querySelectorAll(".dbt-item")).toHaveLength(1);
+    expect(group?.closest(".dbt-check-earlier")).toBeNull();
+    await act(async () => {
+      group?.querySelector<HTMLButtonElement>("button.dbt-dig")?.click();
+    });
+    expect(sent).toEqual([{ digFurther: "spya-gone11" }]);
   });
 
   it("draws a typed claim as your claim, with its rows", () => {

@@ -316,16 +316,10 @@ import { noteArrival } from "./arrivals.js";
 import { afterResponse, withAfterResponseTasks } from "./after-response.js";
 import { stageFailure } from "./job-failure.js";
 import {
-  DEBATE_CHECK_BUSY,
-  DEBATE_CHECK_LIMITED,
   DEBATE_CHECK_LIST_CHANGED,
   DEBATE_CHECK_LIST_STALE,
   DEBATE_CHECK_NO_LIST,
-  DEBATE_CHECK_RESTING,
   DEBATE_DIG_FURTHER_FIRST,
-  DIG_DEEPER_BUSY,
-  DIG_DEEPER_LIMITED,
-  DIG_DEEPER_RESTING,
   LIVE_UPSTREAM,
   NOT_READ_YET,
   NOT_READ_YET_HIGH_POWER,
@@ -540,7 +534,7 @@ import {
   MAX_CHECK_TARGETS,
   MAX_OWN_CLAIM_CHARS,
 } from "./types.js";
-import { DEBATE_CHECK_TIMEOUT_MS, generateClaimCheck } from "./debate.js";
+import { admitDebateCheck, DEBATE_CHECK_TIMEOUT_MS, generateClaimCheck } from "./debate.js";
 import { inputFingerprint as debateClaimsFingerprint } from "./debate-claims.js";
 /* A value, not a type — the one list a legacy stance is validated against
    (`streamChat` says why one is still accepted at all).
@@ -5846,15 +5840,20 @@ function readCheckRequest(body: unknown): CheckAsked {
 
 /**
  * **What one check searches for, built from stored state only** — the
- * current list for a ticked claim, an earlier check's target for a typed
- * claim being dug into, and for Dig further the addresses that claim already
- * has. Every refusal here is free.
+ * current list for a ticked claim, and for Dig further the target an earlier
+ * finished check stored (a listed claim's words survive the list being made
+ * again with new ids, GPT Sol's E5). Every refusal here is free.
+ *
+ * The addresses Dig further is told to avoid are **not** read here: they are
+ * read after the reservation (`alreadyFoundFor`), so a check that finished
+ * in between is included (GPT Sol's E8). A target is safe to take now,
+ * because a stored check's targets never change after its `begin`.
  */
 function checkTargets(
   asked: CheckAsked,
   list: DebateClaimList,
   checks: readonly DebateClaimCheck[],
-): { targets: DebateCheckTarget[]; alreadyFound: string[] } {
+): DebateCheckTarget[] {
   const listed = new Map(list.claims.map((c) => [c.id, c]));
   const fromList = (claimId: string): DebateCheckTarget | null => {
     const c = listed.get(claimId);
@@ -5863,23 +5862,26 @@ function checkTargets(
 
   if (asked.digFurther !== null) {
     const claimId = asked.digFurther;
-    /* Only checks drawn under this list: an older list's are not on screen. */
+    /* Only checks under this list's article: an older article's anchors may
+       not be in this one. */
     const mine = checks.filter((c) => c.listSourceHash === list.sourceHash);
     const target =
       fromList(claimId) ??
-      mine.flatMap((c) => c.targets).find((t) => t.kind === "own" && t.claimId === claimId) ??
+      mine
+        .filter((c) => c.status === "done")
+        .flatMap((c) => c.targets)
+        .find((t) => t.claimId === claimId) ??
       null;
-    if (target === null) throw httpError(409, DEBATE_CHECK_LIST_CHANGED);
-    const done = mine.filter((c) => c.status === "done" && c.targets.some((t) => t.claimId === claimId));
-    if (done.length === 0) throw httpError(409, DEBATE_DIG_FURTHER_FIRST);
-    const alreadyFound = [
-      ...new Set(
-        done.flatMap((c) =>
-          c.results.flatMap((r) => (r.claimId === claimId && r.outcome === "answered" ? r.rows.map((row) => row.url) : [])),
-        ),
-      ),
-    ];
-    return { targets: [target], alreadyFound };
+    if (target === null) {
+      /* Named by no list and no finished check: either nothing has looked at
+         it yet, or the id is from somewhere else entirely. */
+      const pendingOnly = mine.some((c) => c.targets.some((t) => t.claimId === claimId));
+      throw httpError(409, pendingOnly ? DEBATE_DIG_FURTHER_FIRST : DEBATE_CHECK_LIST_CHANGED);
+    }
+    if (!mine.some((c) => c.status === "done" && c.targets.some((t) => sameClaim(t, target)))) {
+      throw httpError(409, DEBATE_DIG_FURTHER_FIRST);
+    }
+    return [target];
   }
 
   const targets: DebateCheckTarget[] = [];
@@ -5890,16 +5892,79 @@ function checkTargets(
     targets.push(target);
   }
   if (asked.own !== null) targets.push({ kind: "own", claimId: mintId(), text: asked.own });
-  return { targets, alreadyFound: [] };
+  return targets;
 }
 
-/** The shared allowance's refusals, said of a check rather than of Dig deeper. */
-function checkRefusal(err: unknown): unknown {
-  const message = (err as { message?: unknown } | null)?.message;
-  if (message === DIG_DEEPER_BUSY) return httpError(429, DEBATE_CHECK_BUSY);
-  if (message === DIG_DEEPER_LIMITED) return httpError(429, DEBATE_CHECK_LIMITED);
-  if (message === DIG_DEEPER_RESTING.message) return httpError(503, DEBATE_CHECK_RESTING);
-  return err;
+/**
+ * **Is a stored target the same claim?** By id, or — for a listed claim — by
+ * block and quote, which survive a list made again with new ids (GPT Sol's
+ * E5). The panel draws them together by the same rule
+ * (src/web/debate-checks.ts § `drawChecks`), so what Dig further is offered on
+ * and what it is told to look past agree.
+ */
+function sameClaim(a: DebateCheckTarget, b: DebateCheckTarget): boolean {
+  if (a.claimId === b.claimId) return true;
+  return a.kind === "listed" && b.kind === "listed" && a.blockId === b.blockId && a.quote === b.quote;
+}
+
+/**
+ * **The addresses a claim already has**, for Dig further to look past — every
+ * finished check's answered rows for that claim (`sameClaim`), under this
+ * list's article.
+ * Read after the reservation: the partial unique index means no other check
+ * is pending on the article then, so the finished ones are final.
+ */
+function alreadyFoundFor(
+  target: DebateCheckTarget,
+  listSourceHash: string,
+  checks: readonly DebateClaimCheck[],
+): string[] {
+  return [
+    ...new Set(
+      checks
+        .filter((c) => c.listSourceHash === listSourceHash && c.status === "done")
+        .flatMap((c) =>
+          c.results.flatMap((r) => {
+            const asked = c.targets.find((t) => t.claimId === r.claimId);
+            return asked && sameClaim(asked, target) && r.outcome === "answered" ? r.rows.map((row) => row.url) : [];
+          }),
+        ),
+    ),
+  ];
+}
+
+/**
+ * **The waits before a failed finish write is tried again** — three more
+ * tries, 14 s in all, inside the minute the allowance's lease and the sweep's
+ * grace keep past the call's deadline (`DEBATE_CHECK_RATE_POLICY`,
+ * `CHECK_ORPHAN_GRACE_MS`).
+ * Safe to repeat, because `finish` is attempt-fenced: it lands only on this
+ * attempt's own pending row, so a retry can never overwrite another check.
+ * What it saves is a paid answer lost to one dropped connection (GPT Sol's
+ * E7).
+ */
+const CHECK_FINISH_RETRY_MS = [1_000, 3_000, 10_000] as const;
+
+/** `finish`, tried again after each of `CHECK_FINISH_RETRY_MS`; the last failure is thrown. */
+async function finishCheck(
+  slug: string,
+  id: string,
+  patch: ClaimCheckFinish,
+  attempt: string,
+): Promise<DebateClaimCheck | null> {
+  for (let tried = 0; ; tried++) {
+    try {
+      return await debateClaimChecksStore.finish(slug, id, patch, attempt);
+    } catch (err) {
+      const wait = CHECK_FINISH_RETRY_MS[tried];
+      if (wait === undefined) throw err;
+      log("store").warn(
+        { ...errorFields(err), slug, check: id, tried: tried + 1 },
+        `retrying a claim check's finish for ${slug}`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, wait));
+    }
+  }
 }
 
 /**
@@ -5920,9 +5985,12 @@ function checkRefusal(err: unknown): unknown {
  *  5. ids not in the current list, or a Dig further with nothing to dig (409);
  *  6. **a check already pending** (409) — the reservation insert, held by the
  *     partial unique index, so two tabs at once get one search;
- *  7. **the `dig-deeper` allowance** (429, 503), its limits unchanged — and a
- *     refusal there takes the reservation back, so nothing is left pending;
- *  8. then the stream and the model.
+ *  7. for Dig further, the addresses already found — a read, not a spend,
+ *     after the reservation so nothing can finish in between unseen;
+ *  8. **the `debate-check` allowance** (429, 503), the check's own bucket
+ *     (src/debate.ts § `DEBATE_CHECK_RATE_POLICY`) — and a refusal there takes
+ *     the reservation back, so nothing is left pending;
+ *  9. then the stream and the model.
  *
  * ## A dropped client does not cancel the call
  *
@@ -5930,12 +5998,21 @@ function checkRefusal(err: unknown): unknown {
  * `sse().gone`: the answer is paid for either way, and a reader who closed the
  * tab finds it stored on the next GET.
  *
- * ## The allowance's lease is shorter than the call
+ * **That deadline starts at the reservation**, not at the call, so the setup
+ * between them (the Dig further read, the allowance) comes out of the model's
+ * time. The allowance's lease (the deadline plus a minute, taken just after the
+ * reservation) and the sweep's grace (the deadline plus two minutes, from the
+ * row's `created_at`) therefore both cover the call and the finish retries
+ * below (GPT Sol's E1 and E6). What none of them bounds is a single store
+ * write that hangs for longer than that minute; Postgres has no statement
+ * timeout here, and a store that slow is an outage, not a check.
  *
- * `DIG_DEEPER_RATE_POLICY.leaseMs` is 170 s and a check can run longer, so a
- * slow check may stop holding its concurrency slot before it ends. The hourly
- * and daily counts still hold, and so does the one-pending-per-article index.
- * The policy is not changed here (plan § 3).
+ * ## A failed finish write is tried again
+ *
+ * The answer is paid for by then, so `finishCheck` tries the attempt-fenced
+ * write four times over 14 s before giving up (GPT Sol's E7). Given up, the
+ * row stays `pending` until the sweep ends it, and the answer is lost: the
+ * failure is logged and sent to Sentry, without the answer.
  */
 async function runDebateClaimCheck(slug: string, body: unknown, res: ServerResponse): Promise<void> {
   const asked = readCheckRequest(body);
@@ -5955,17 +6032,40 @@ async function runDebateClaimCheck(slug: string, body: unknown, res: ServerRespo
   }
 
   const earlier = asked.digFurther === null ? [] : await debateClaimChecksStore.list(slug);
-  const { targets, alreadyFound } = checkTargets(asked, list, earlier);
+  const targets = checkTargets(asked, list, earlier);
 
   const { check, attempt } = await debateClaimChecksStore.begin(slug, {
     listSourceHash: list.sourceHash,
     targets,
     digFurther: asked.digFurther !== null,
   });
+  /* **One clock, started at the reservation** (GPT Sol's E1 and E6, round 2).
+     The sweep's grace and the allowance's lease are both measured from about
+     here, so the call's deadline is too: whatever the setup below takes comes
+     out of the model's time, never on top of it. A deadline that has passed
+     before the call starts fails it at once, as an ordinary error. */
+  const deadline = AbortSignal.timeout(DEBATE_CHECK_TIMEOUT_MS);
+
+  let alreadyFound: string[] = [];
+  /* After the reservation: no other check is pending now, so the finished
+     ones are final (GPT Sol's E8). This still comes before the allowance: a
+     failed store read must not consume a reader's hourly or daily check. */
+  if (asked.digFurther !== null) {
+    try {
+      alreadyFound = alreadyFoundFor(targets[0]!, list.sourceHash, await debateClaimChecksStore.list(slug));
+    } catch (err) {
+      try {
+        await debateClaimChecksStore.abandon(slug, check.id, attempt);
+      } catch (abandonErr) {
+        log("store").error({ ...errorFields(abandonErr), slug }, `could not take back a claim check for ${slug}`);
+      }
+      throw err;
+    }
+  }
 
   let free: () => Promise<void>;
   try {
-    free = await admitDig(fetchAllowanceStore);
+    free = await admitDebateCheck(fetchAllowanceStore);
   } catch (err) {
     /* Nothing was spent, so the reservation goes: a row left `pending` would
        hold the article's one check until the sweep. If the delete itself
@@ -5976,7 +6076,7 @@ async function runDebateClaimCheck(slug: string, body: unknown, res: ServerRespo
     } catch (abandonErr) {
       log("store").error({ ...errorFields(abandonErr), slug }, `could not take back a claim check for ${slug}`);
     }
-    throw checkRefusal(err);
+    throw err;
   }
 
   const release = checkingClaims.hold(`${slug}/${check.id}`);
@@ -5991,7 +6091,7 @@ async function runDebateClaimCheck(slug: string, body: unknown, res: ServerRespo
         targets,
         alreadyFound,
         power: powerOf(article),
-        signal: AbortSignal.timeout(DEBATE_CHECK_TIMEOUT_MS),
+        signal: deadline,
       });
       patch = {
         status: "done",
@@ -6009,7 +6109,7 @@ async function runDebateClaimCheck(slug: string, body: unknown, res: ServerRespo
       /* `null` is a check the sweep ended under us: send what is stored, so the
          panel draws the same row a reload would. */
       const stored =
-        (await debateClaimChecksStore.finish(slug, check.id, patch, attempt)) ??
+        (await finishCheck(slug, check.id, patch, attempt)) ??
         (await debateClaimChecksStore.list(slug)).find((c) => c.id === check.id) ??
         null;
       if (stored) frame("done", stored);

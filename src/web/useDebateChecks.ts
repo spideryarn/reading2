@@ -20,6 +20,14 @@
  *
  * **Nothing here ever spends on arrival.** Only `check()` POSTs, and only a
  * press calls it.
+ *
+ * ## Newest wins
+ *
+ * Focus, a retry and the pending poll can each send a read, and the replies
+ * can arrive in any order. Every read is numbered when it is sent, and a reply
+ * older than the newest one applied is dropped — and so is any read sent
+ * before a frame from this tab's own stream was applied, since the frame is
+ * newer than what that read will say (GPT Sol's E11).
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DebateCheckRequest, DebateClaimCheck, DebateClaimChecksResponse } from "../types.js";
@@ -63,13 +71,63 @@ function isCheck(value: unknown): value is DebateClaimCheck {
   );
 }
 
-/** One check in, replacing any with its id, keeping creation order. */
+/** One check in, replacing any with its id, keeping creation order and never regressing a terminal row. */
 function withCheck(checks: readonly DebateClaimCheck[], check: DebateClaimCheck): DebateClaimCheck[] {
   const at = checks.findIndex((c) => c.id === check.id);
   if (at === -1) return [...checks, check];
+  if (checks[at]!.status !== "pending" && check.status === "pending") return [...checks];
   const next = [...checks];
   next[at] = check;
   return next;
+}
+
+/** Does a stored check belong to this press? Own-claim ids are minted by the server. */
+function answersRequest(check: DebateClaimCheck, request: DebateCheckRequest): boolean {
+  if (request.digFurther !== undefined) {
+    return check.digFurther && check.targets.length === 1 && check.targets[0]?.claimId === request.digFurther;
+  }
+  if (check.digFurther) return false;
+
+  const listed = check.targets.filter((target) => target.kind === "listed").map((target) => target.claimId);
+  const asked = request.claimIds ?? [];
+  if (listed.length !== asked.length || listed.some((claimId, at) => claimId !== asked[at])) return false;
+
+  const own = check.targets.filter((target) => target.kind === "own");
+  return request.own === undefined
+    ? own.length === 0
+    : own.length === 1 && own[0]?.text === request.own.trim();
+}
+
+function later(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, PENDING_POLL_MS));
+}
+
+/** Reconcile an accepted POST whose answer stream broke, using free reads only. */
+async function waitForStoredCheck(
+  mine: string,
+  current: { readonly current: string },
+  before: ReadonlySet<string>,
+  request: DebateCheckRequest,
+  begunId: string | null,
+  refresh: () => Promise<readonly DebateClaimCheck[] | null>,
+): Promise<boolean> {
+  let checkId = begunId;
+  while (current.current === mine) {
+    const stored = await refresh();
+    if (checkId === null) {
+      const candidates = stored?.filter(
+        (candidate) => !before.has(candidate.id) && answersRequest(candidate, request),
+      );
+      /* The store is oldest first. If the stream broke before `begin`, this
+         press is the newest matching row, not an earlier identical press from
+         another tab that this tab's stale first read had not seen. */
+      checkId = candidates?.[candidates.length - 1]?.id ?? null;
+    }
+    const ours = checkId === null ? undefined : stored?.find((candidate) => candidate.id === checkId);
+    if (ours && ours.status !== "pending") return true;
+    await later();
+  }
+  return false;
 }
 
 export function useDebateChecks(slug: string): UseDebateChecks {
@@ -81,27 +139,48 @@ export function useDebateChecks(slug: string): UseDebateChecks {
   /** The article on screen, so an answer for another one is never drawn here. */
   const current = useRef(slug);
   current.current = slug;
+  const checksNow = useRef(checks);
+  checksNow.current = checks;
   const url = `/api/debate-claims/${encodeURIComponent(slug)}/checks`;
+  /** The number of the last read sent, and of the newest state applied (a read's, or a frame's). */
+  const sent = useRef(0);
+  const applied = useRef(0);
+  /** A stream frame is newer than every read already out. */
+  const applyFrame = useCallback((check: DebateClaimCheck) => {
+    applied.current = sent.current;
+    setChecks((was) => withCheck(was, check));
+  }, []);
 
-  const refresh = useCallback(async () => {
+  const refreshChecks = useCallback(async (): Promise<readonly DebateClaimCheck[] | null> => {
     const mine = slug;
+    const number = ++sent.current;
     try {
       const res = await apiFetch(url);
       const body = await readJson<DebateClaimChecksResponse>(res);
-      if (current.current !== mine) return;
+      if (current.current !== mine) return null;
       if (!Array.isArray(body?.checks) || !body.checks.every(isCheck)) {
         throw new MalformedReply("the checks reply has no list of checks");
       }
+      /* Overtaken: a newer read, or a frame of this tab's own, is on screen. */
+      if (number <= applied.current) return null;
+      applied.current = number;
       setChecks(body.checks);
       setError(null);
       setStatus("ready");
+      return body.checks;
     } catch (err) {
-      if (current.current !== mine) return;
+      /* An overtaken read's failure says nothing about what is on screen. */
+      if (current.current !== mine || number <= applied.current) return null;
       setError(describeFetchFailure(err as Error));
       /* A failed re-read keeps what is on screen. */
       setStatus((was) => (was === "ready" ? was : "error"));
+      return null;
     }
   }, [slug, url]);
+
+  const refresh = useCallback(async (): Promise<void> => {
+    await refreshChecks();
+  }, [refreshChecks]);
 
   useEffect(() => {
     setStatus("loading");
@@ -109,6 +188,22 @@ export function useDebateChecks(slug: string): UseDebateChecks {
     setSending(false);
     setPressError(null);
     void refresh();
+  }, [refresh]);
+
+  /* A tab with no pending row would otherwise never learn that another tab
+     started a check after this one's first read. Coming back to it is a free
+     occasion to reconcile. */
+  useEffect(() => {
+    const onFocus = () => void refresh();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [refresh]);
 
   /* Another tab's check is out: read again until it lands. Not while this
@@ -123,6 +218,9 @@ export function useDebateChecks(slug: string): UseDebateChecks {
   const check = useCallback(
     async (request: DebateCheckRequest): Promise<boolean> => {
       const mine = slug;
+      const before = new Set(checksNow.current.map((stored) => stored.id));
+      let accepted = false;
+      let begunId: string | null = null;
       setSending(true);
       setPressError(null);
       try {
@@ -134,29 +232,41 @@ export function useDebateChecks(slug: string): UseDebateChecks {
         /* A refusal is JSON, before any header: a stale list, a check already
            out, the allowance. Its sentence is the reader's. */
         if (!res.ok || !res.body) throw await failure(res);
+        accepted = true;
         const done = await readAnswerStream<DebateClaimCheck>(res.body, {
           begin(data) {
-            if (current.current === mine && isCheck(data)) setChecks((was) => withCheck(was, data));
+            if (current.current === mine && isCheck(data)) {
+              begunId = data.id;
+              applyFrame(data);
+            }
           },
           delta() {},
           done(data) {
             return isCheck(data) ? data : undefined;
           },
         });
-        if (current.current === mine) setChecks((was) => withCheck(was, done));
+        if (current.current === mine) applyFrame(done);
         return true;
       } catch (err) {
         if (current.current !== mine) return false;
+        if (accepted) {
+          /* The server keeps going after a dropped stream. Keep this press
+             held, and reconcile the row until its stored terminal state is
+             visible; returning true clears the picks just as a `done` frame
+             would. This never POSTs. */
+          const recovered = await waitForStoredCheck(mine, current, before, request, begunId, refreshChecks);
+          return recovered;
+        }
         setPressError(describeFetchFailure(err as Error));
-        /* The check may well be stored — a dropped stream does not cancel the
-           search on the server — so read what is there. */
+        /* A refusal happened before an answer stream existed. Read once in
+           case another tab's pending check was the reason. */
         void refresh();
         return false;
       } finally {
         if (current.current === mine) setSending(false);
       }
     },
-    [slug, url, refresh],
+    [slug, url, refresh, refreshChecks, applyFrame],
   );
 
   return { status, checks, error, sending, pressError, check, refresh };

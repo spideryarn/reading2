@@ -172,6 +172,7 @@ import {
   DEBATE_CHECK_OWN_LABEL,
   DEBATE_CHECK_PENDING,
   DEBATE_CHECK_TIP,
+  DEBATE_CHECK_EARLIER,
   DEBATE_CHECK_YOUR_CLAIM,
   DEBATE_DIG_FURTHER_TIP,
   DEBATE_CLAIMS_EARLIER,
@@ -276,7 +277,7 @@ import { useRenderCount } from "./perf.js";
 import type { UseDebate } from "./useDebate.js";
 import type { UseDebateClaims } from "./useDebateClaims.js";
 import type { UseDebateChecks } from "./useDebateChecks.js";
-import { anyPending, checkedRowCount, checksUnder, claimFindings, type ClaimFindings, ownClaims } from "./debate-checks.js";
+import { anyPending, type CheckGroup, checkedRowCount, type ClaimFindings, drawChecks } from "./debate-checks.js";
 import type { UseCiters } from "./useCiters.js";
 import { dayOf } from "./relative-time.js";
 import type {
@@ -1148,7 +1149,7 @@ export function DebatePanel({
   const checkedRows = useMemo(
     () =>
       access.kind === "owner" && access.claimList.status === "ready"
-        ? checkedRowCount(checksUnder(access.checks.checks, access.claimList.claimList))
+        ? checkedRowCount(drawChecks(access.checks.checks, access.claimList.claimList))
         : 0,
     [access],
   );
@@ -2426,22 +2427,22 @@ function OwnerListedClaims({
   const showJob =
     claims !== null && !list.stale && (list.job || list.starting || list.failed || (waiting && !list.error));
 
-  /* The checks drawn under this list, and whether one is out anywhere. */
-  const under = useMemo(
-    () => (checks === null ? [] : checksUnder(checks.checks, list.claimList)),
-    [checks, list.claimList],
-  );
+  /* Where each check is drawn — from its stored targets, so a list made
+     again, or a changed article, hides nothing that was paid for (E5). */
+  const drawn = useMemo(() => drawChecks(checks === null ? [] : checks.checks, list.claimList), [checks, list.claimList]);
   /* Until the checks have been read, nobody knows whether one is out, so
      Check waits: the server would refuse a second one anyway, but only after
      the reader had pressed. */
-  const busy = checks !== null && (checks.sending || checks.status !== "ready" || anyPending(checks.checks));
+  const searching = checks !== null && (checks.sending || anyPending(checks.checks));
+  /* A history read holds the controls too, but it is free and must not wear the
+     spinner or sentence that say a paid web search is running. */
+  const busy = checks !== null && (searching || checks.status !== "ready");
   const picking = checks !== null && claims !== null && !list.stale;
   /* Only ticks on claims still in the list count: a list made again has new ids. */
   const ids = claims === null ? [] : claims.filter((c) => ticked.has(c.id)).map((c) => c.id);
   const words = own.trim();
   const picked = ids.length + (words === "" ? 0 : 1);
   const canCheck = picking && !busy && picked > 0 && picked <= MAX_CHECK_TARGETS && words.length <= MAX_OWN_CLAIM_CHARS;
-  const typed = useMemo(() => ownClaims(under), [under]);
 
   const press = async () => {
     if (checks === null || !canCheck) return;
@@ -2456,7 +2457,8 @@ function OwnerListedClaims({
     if (checks === null || busy) return;
     void checks.check({ digFurther: claimId });
   };
-  const findings = (claimId: string) => (checks === null ? null : claimFindings(under, claimId));
+  const findings = (claimId: string) => drawn.listed.get(claimId) ?? null;
+  const onDig = picking && !busy ? dig : null;
 
   return (
     <div className="dbt-listed-wrap">
@@ -2502,9 +2504,14 @@ function OwnerListedClaims({
                   : null
               }
               findings={findings}
-              onDig={picking && !busy ? dig : null}
+              onDig={onDig}
             />
           )}
+          {/* Checked claims the list no longer names: their own groups, from
+              what each check stored, still dug into. */}
+          {drawn.unlisted.map((group) => (
+            <CheckedClaim key={group.key} group={group} onJump={onJump} onDig={onDig} />
+          ))}
           {picking && (
             <form
               className="gloss-ask dbt-check"
@@ -2531,11 +2538,11 @@ function OwnerListedClaims({
                   }}
                 />
                 <button type="submit" className="gloss-btn dbt-check-send" disabled={!canCheck} title={DEBATE_CHECK_TIP}>
-                  {busy ? <LoaderCircle size={12} className="spin" aria-hidden="true" /> : <Globe size={12} aria-hidden="true" />}
+                  {searching ? <LoaderCircle size={12} className="spin" aria-hidden="true" /> : <Globe size={12} aria-hidden="true" />}
                   {checkLabel(picked)}
                 </button>
               </div>
-              {busy && <p className="gloss-quiet dbt-check-pending">{DEBATE_CHECK_PENDING}</p>}
+              {searching && <p className="gloss-quiet dbt-check-pending">{DEBATE_CHECK_PENDING}</p>}
               {checks?.pressError && <p className="dbt-check-error">{checks.pressError}</p>}
               {/* The checks' own read failed. Quieter than the list's
                   `ReadError`: the list above is still right, only what was
@@ -2550,19 +2557,20 @@ function OwnerListedClaims({
               )}
             </form>
           )}
-          {typed.map(({ claimId, text }) => (
-            <section key={claimId} className="dbt-group dbt-own-claim" data-claim={claimId}>
-              <p className="dbt-group-claim dbt-listed-head">
-                <span className="dbt-own-label">{DEBATE_CHECK_YOUR_CLAIM}: </span>
-                {/* The reader's words in the reader's face (docs/project/fonts.md). */}
-                <span className="dbt-group-quote">
-                  “<span className="voice-reader">{text}</span>”
-                </span>
-                <DigFurther claimId={claimId} findings={findings(claimId)} onDig={picking && !busy ? dig : null} />
-              </p>
-              <CheckFindings findings={findings(claimId)} />
-            </section>
+          {drawn.own.map((group) => (
+            <CheckedClaim key={group.key} group={group} onJump={onJump} onDig={onDig} />
           ))}
+          {/* Checks against an earlier version of the article: kept, because
+              they were paid for, but read-only — their anchors were that
+              version's, so no Dig further and no box. */}
+          {drawn.earlier.length > 0 && (
+            <section className="dbt-check-earlier">
+              <p className="gloss-quiet dbt-check-earlier-head">{DEBATE_CHECK_EARLIER}</p>
+              {drawn.earlier.map((group) => (
+                <CheckedClaim key={group.key} group={group} onJump={onJump} />
+              ))}
+            </section>
+          )}
           {showJob && <div className="dbt-again">{run(DEBATE_CLAIMS_LIST_AGAIN, true)}</div>}
         </>
       )}
@@ -2609,6 +2617,56 @@ function DigFurther({
     >
       Dig further
     </button>
+  );
+}
+
+/**
+ * **One checked claim drawn as its own group** — a typed claim as *Your
+ * claim*, or a listed claim the current list no longer names, headed by the
+ * quote and statement its check stored, with the jump to its block. Without
+ * `onDig` it is read-only: the earlier-version group.
+ */
+function CheckedClaim({
+  group,
+  onJump,
+  onDig,
+}: {
+  group: CheckGroup;
+  onJump(id: BlockId): void;
+  /** `undefined` for a read-only group; `null` while Dig further is held. */
+  onDig?: ((claimId: string) => void) | null;
+}) {
+  const { head } = group;
+  return (
+    <section
+      className={`dbt-group ${head.kind === "own" ? "dbt-own-claim" : "dbt-checked-claim"}`}
+      data-claim={group.claimId}
+    >
+      <p className="dbt-group-claim dbt-listed-head">
+        {head.kind === "own" ? (
+          <>
+            <span className="dbt-own-label">{DEBATE_CHECK_YOUR_CLAIM}: </span>
+            {/* The reader's words in the reader's face (docs/project/fonts.md). */}
+            <span className="dbt-group-quote">
+              “<span className="voice-reader">{head.text}</span>”
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="dbt-group-quote">“{head.quote}”</span>
+            <BlockRef id={head.blockId} onJump={onJump} />
+          </>
+        )}
+        {onDig !== undefined && <DigFurther claimId={group.claimId} findings={group.findings} onDig={onDig} />}
+      </p>
+      {head.kind === "listed" && (
+        <p className="dbt-listed-statement">
+          <span className="voice-ai">{head.statement}</span>
+          <span className="dbt-listed-ai"> · {DEBATE_CLAIMS_LIST_AI}</span>
+        </p>
+      )}
+      <CheckFindings findings={group.findings} />
+    </section>
   );
 }
 

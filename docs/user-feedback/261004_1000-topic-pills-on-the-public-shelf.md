@@ -11,7 +11,7 @@ from the report's production row.
 
 > Show the topic-pills on the page for filtering public/shared articles as well.
 
-**Ending: Awaiting Greg.** Nothing built. Mark BX ignored, with this reason; the next feedback sweep
+**First ending, 2026-10-04: waiting on a decision.** Nothing built. Mark BX ignored, with this reason; the next feedback sweep
 does the Sentry status write.
 
 Two things stopped it. Every way of showing pills on `/read/public` edits a listed security defence

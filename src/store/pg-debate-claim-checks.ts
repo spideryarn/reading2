@@ -39,11 +39,20 @@ const logger = log("store");
 
 /**
  * **How long another process's `pending` check is left alone** — the call's
- * own deadline and a margin, derived rather than written down beside it, so a
- * sweep can never fire on a check whose model has not yet given up.
+ * own deadline and a margin, derived rather than written down beside it.
  * `CLAIMS_ORPHAN_GRACE_MS` in pg-referee-claims.ts is the sibling.
+ *
+ * **Both clocks start at the reservation**: this one at `created_at`, and the
+ * call's deadline just after `begin` returns (src/routes.ts §
+ * `runDebateClaimCheck`), so setup comes out of the model's time (GPT Sol's
+ * E6). The two minutes of margin cover the finish retries (14 s) and the gap
+ * between the database stamping `created_at` and the route starting its
+ * clock. What it cannot cover is a single store write that hangs for longer:
+ * Postgres has no statement timeout here, and a store that slow is an outage.
+ * Until the sweep ends an abandoned row, it holds the article's one check, so
+ * a press there is a 409 for up to about eight minutes.
  */
-export const CHECK_ORPHAN_GRACE_MS = DEBATE_CHECK_TIMEOUT_MS + 30_000;
+export const CHECK_ORPHAN_GRACE_MS = DEBATE_CHECK_TIMEOUT_MS + 120_000;
 
 /** The partial unique index the reservation leans on. src/db/schema.ts. */
 const ONE_PENDING = "debate_claim_checks_one_pending";

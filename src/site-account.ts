@@ -16,7 +16,7 @@
  * Greg approved it as "q-p5h2a7 A" on 2026-10-09.
  */
 
-/** Must equal the id in the migration; tests/public-shelf-topics-pg.test.ts checks it does. */
+/** Must equal the id in the migration; tests/site-account-pg.test.ts checks it does. */
 export const SITE_OWNER_ID = "5173e000-0000-4000-8000-000000000001";
 
 /** What /admin/costs calls this owner. */
