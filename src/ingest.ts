@@ -64,8 +64,8 @@ const TRACKING = new Set([
   "ref_url",
   "vero_id",
   "wt_mc",
-  // Google's cross-domain linker, ad-click and Merchant Center ids, Marketo's and Omeda's email ids:
-  // names nothing uses for content. Added 2026-10-09, plan 261009d.
+  // Google's cross-domain, ad-click and Merchant Center ids, plus Marketo's and Omeda's audience ids:
+  // vendor-specific attribution or audience parameters, not page selectors. Added 2026-10-09, plan 261009d.
   "_ga",
   "_gl",
   "gclsrc",

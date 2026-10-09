@@ -87,6 +87,11 @@ GPT Sol on the plan:
 All three findings taken: the deploy overlap accepted above, the refresh sentence corrected, and
 `gad_source`, `gad_campaignid` and `srsltid` added.
 
+GPT Sol on the code:
+[261009d-…-code-review-sol.md](261009d-every-version-of-an-arxiv-paper-is-one-article-code-review-sol.md).
+No P1 or P2. It fixed two comments that overstated themselves (the `ResolvedPaper.key` rule is
+arXiv's, not every source's; Marketo's and Omeda's ids are audience ids, not merely email ones).
+
 ## Not touched
 
 - The two existing duplicate rows in production (`arxiv-2609-01481v1-spya-sjatfv` and
