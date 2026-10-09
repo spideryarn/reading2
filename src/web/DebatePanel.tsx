@@ -1234,11 +1234,10 @@ export function DebatePanel({
   const scholar = articleTitle?.trim() ? scholarUrl(articleTitle.trim()) : null;
 
   /**
-   * **The owner's *Cited by***, or null. On screen with Reception — and, before
-   * any search is stored, whatever `?debate=` says: there is no sub-mode
-   * control to be in Claims with until there is a debate. Built once and placed
-   * in one of two spots below, at the end of Reception's list or under the
-   * not-searched-yet states, which cannot both be drawn.
+   * **The owner's *Cited by***, or null. On screen with Reception, whether or
+   * not a search is stored. Built once and placed in one of two spots below,
+   * at the end of Reception's list or under the not-searched-yet states, which
+   * cannot both be drawn.
    */
   const citedBy =
     access.kind === "owner" && view === "reception" ? (

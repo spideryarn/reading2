@@ -40,7 +40,7 @@ type DebateClaimsStatus = "loading" | "none" | "ready" | "error";
 export interface UseDebateClaims {
   status: DebateClaimsStatus;
   claimList: DebateClaimList | null;
-  /** The article moved under this list — blocks, sections or the cited head. */
+  /** The rendered body or cited head moved under this list. */
   stale: boolean;
   /** The article is the same and the current prompt would write this differently. */
   outdated: boolean;

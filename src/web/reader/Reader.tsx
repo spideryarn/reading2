@@ -4689,8 +4689,8 @@ export function Reader({
         /* The same state the Diagram band's chips read (`diagramParam`), not
            the address, which lags a chip press — Dock.tsx § Props `diagram`. */
         diagram={subNav.diagram}
-        /* The same for Debate's sub-mode: a press landing on Claims arms
-           nothing (activation.ts § `activationForDebate`). */
+        /* The same for Debate's sub-mode: Reception arms its search and Claims
+           arms its own list (activation.ts § `activationForDebate`). */
         debate={subNav.debate}
         onMode={onDockMode}
         /* Which mode buttons are drawn dimmed. Empty for the owner, so the bar

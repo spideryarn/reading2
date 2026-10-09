@@ -260,8 +260,8 @@ const READS = [
   /* Added 2026-10-03 with the `relations` stage. `CITED_FINGERPRINT_COLUMNS`,
      like `faq`, whose fingerprint it uses. docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
   "relations",
-  /* Added 2026-10-08 with the `debate-claims` stage. `CITED_FINGERPRINT_COLUMNS`,
-     like `faq`, whose fingerprint it uses. docs/plans/261008i-debate-claims-picked-by-the-reader.md. */
+  /* Added 2026-10-08 with the `debate-claims` stage. `CITED_FINGERPRINT_COLUMNS`
+     supplies its rendered head and tree fallback. docs/plans/261008i-debate-claims-picked-by-the-reader.md. */
   "debateClaims",
   /* Added 2026-09-30 with the `crossrefs` stage. `CITED_FINGERPRINT_COLUMNS`,
      like `faq`: its article head carries the cited metadata fields.
@@ -695,5 +695,17 @@ describe("the metadata page and the pipeline agree about which steps can be curr
     expect(decides).toContain("blocks");
     const missing = decides.filter((name) => !body.includes(`case "${name}"`));
     expect(missing).toEqual([]);
+  });
+
+  it("uses Debate claims' full outdated decider on the owner read", async () => {
+    const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+    const source = await readFile(path.join(root, "src", "store", "pg.ts"), "utf-8");
+    const from = source.indexOf("async loadDebateClaims(slug: string)");
+    const to = source.indexOf("async loadRelations(slug: string)", from);
+    expect({ from: from > 0, to: to > from }, "the read-method anchors still exist").toEqual({
+      from: true,
+      to: true,
+    });
+    expect(source.slice(from, to)).toContain("outdated: debateClaimsAreOutdated(claimList)");
   });
 });

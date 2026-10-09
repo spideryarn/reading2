@@ -297,10 +297,11 @@ export interface ArticleReader {
   loadFaq(slug: string): Promise<FaqFound>;
 
   /**
-   * Debate's claims list, plus whether it still describes the article — FAQ's
-   * two staleness facts, over FAQ's fingerprint. A visitor reads the list off
-   * the public payload instead (src/store/public-reader.ts), without the
-   * staleness verdict. docs/plans/261008i-debate-claims-picked-by-the-reader.md.
+   * Debate's claims list, plus whether its rendered body and cited head still
+   * describe the article, and whether its prompt/model generation is current.
+   * A visitor reads the list off the public payload instead
+   * (src/store/public-reader.ts), without the staleness verdict.
+   * docs/plans/261008i-debate-claims-picked-by-the-reader.md.
    */
   loadDebateClaims(slug: string): Promise<DebateClaimListFound>;
 

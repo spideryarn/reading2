@@ -268,7 +268,7 @@ const CITATIONS_SOURCE_HASH = citationsFingerprint(BLOCKS, TREE, META);
 const FAQ_SOURCE_HASH = faqFingerprint(BLOCKS, TREE, META);
 /* `relations` fingerprints its rendered body/head and eligible paragraph pairs. */
 const RELATIONS_SOURCE_HASH = relationsFingerprint(BLOCKS, TREE, META);
-/* `debate-claims` is FAQ's fingerprint, through its own module for the same reason. */
+/* `debate-claims` fingerprints the exact rendered body and cited head. */
 const DEBATE_CLAIMS_SOURCE_HASH = debateClaimsFingerprint(BLOCKS, TREE, META);
 /* `crossrefs` fingerprints the exact article and skeleton strings it sends. */
 const CROSSREFS_SOURCE_HASH = crossrefsFingerprint(BLOCKS, TREE, META);

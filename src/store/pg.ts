@@ -89,6 +89,7 @@ import {
 } from "../faq.js";
 import {
   inputFingerprint as debateClaimsFingerprint,
+  isOutdated as debateClaimsAreOutdated,
   isStale as debateClaimsIsStale,
   PROMPT_VERSION as DEBATE_CLAIMS_PROMPT_VERSION,
 } from "../debate-claims.js";
@@ -654,7 +655,7 @@ const REVISION_READ_POLICY: Record<
     faq: "value",
     /* `faq`'s bytes and `faq`'s fingerprint, so the same cited columns. */
     relations: "value",
-    /* `faq`'s bytes and `faq`'s fingerprint again: the claims list. */
+    /* Debate Claims' rendered article head carries this field. */
     debateClaims: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
     crossrefs: "value",
@@ -681,7 +682,7 @@ const REVISION_READ_POLICY: Record<
     faq: "value",
     /* `faq`'s bytes and `faq`'s fingerprint, so the same cited columns. */
     relations: "value",
-    /* `faq`'s bytes and `faq`'s fingerprint again: the claims list. */
+    /* Debate Claims' rendered article head carries this field. */
     debateClaims: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
     crossrefs: "value",
@@ -708,7 +709,7 @@ const REVISION_READ_POLICY: Record<
     faq: "value",
     /* `faq`'s bytes and `faq`'s fingerprint, so the same cited columns. */
     relations: "value",
-    /* `faq`'s bytes and `faq`'s fingerprint again: the claims list. */
+    /* Debate Claims' rendered article head carries this field. */
     debateClaims: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
     crossrefs: "value",
@@ -787,7 +788,7 @@ const REVISION_READ_POLICY: Record<
     faq: "value",
     /* `faq`'s bytes and `faq`'s fingerprint, so the same cited columns. */
     relations: "value",
-    /* `faq`'s bytes and `faq`'s fingerprint again: the claims list. */
+    /* Debate Claims' rendered article head carries this field. */
     debateClaims: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
     crossrefs: "value",
@@ -845,7 +846,7 @@ const REVISION_READ_POLICY: Record<
     faq: "value",
     /* FAQ's fingerprint exactly, so the outline too. */
     relations: "value",
-    /* FAQ's fingerprint exactly, so the outline too (the fallback head). */
+    /* Only for Debate Claims' fallback head when metadata has no title. */
     debateClaims: "value",
     /* The top-level skeleton is in its user message, so it needs the tree. */
     crossrefs: "value",
@@ -1416,7 +1417,7 @@ export const REVISION_PROJECTIONS = {
     relations: articleRevisions.relations,
     ...CITED_FINGERPRINT_COLUMNS,
   },
-  /* The cited set, as `faq`: the same bytes and the same fingerprint. */
+  /* The cited head and tree fallback its exact-request fingerprint needs. */
   debateClaims: {
     id: articleRevisions.id,
     debateClaims: articleRevisions.debateClaims,
@@ -3464,7 +3465,7 @@ const rawPgArticleReader: ArticleReader = {
             },
           );
         }
-        /* `faq`'s stamp exactly: the same fingerprint over the same cited head. */
+        /* Its exact rendered body and cited head, with the tree as title fallback. */
         case "debate-claims": {
           const list = revision.debateClaims as DebateClaimList | null;
           if (!list || !tree || blocks.length === 0) return false;
@@ -4004,7 +4005,7 @@ const rawPgArticleReader: ArticleReader = {
       stale:
         !tree ||
         debateClaimsIsStale(claimList, blocks, tree, citedMetaFingerprintOf(found.revision)),
-      outdated: claimList.version !== DEBATE_CLAIMS_PROMPT_VERSION,
+      outdated: debateClaimsAreOutdated(claimList),
     };
   },
 

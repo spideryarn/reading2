@@ -71,6 +71,7 @@ export function artefactsOf(article: PublicArticle): PublicArtefactSet {
     ...(article.simpleSummary === undefined ? {} : { simpleSummary: article.simpleSummary }),
     ...(article.citations === undefined ? {} : { citations: article.citations }),
     ...(article.debate === undefined ? {} : { debate: article.debate }),
+    ...(article.debateClaims === undefined ? {} : { debateClaims: article.debateClaims }),
     ...(article.sketch === undefined ? {} : { sketch: article.sketch }),
   };
 }

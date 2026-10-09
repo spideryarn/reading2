@@ -17,7 +17,6 @@ import type { Article } from "../src/article-input.js";
 import { cascadeForce } from "../src/jobs.js";
 import { CAPABLE_MODEL } from "../src/models.js";
 import { FORCE_ONLY_WHEN_NAMED, STEP_ORDER, DEFAULT_INGEST_STEPS } from "../src/pipeline.js";
-import { articleWithIdsFingerprint } from "../src/source-hash.js";
 import { SHAPE } from "../src/store/artifacts.js";
 import type { Block, DebateClaimListDropped } from "../src/types.js";
 import {
@@ -29,6 +28,8 @@ import {
   buildDebateClaimList,
   emptyDropped,
   generateDebateClaims,
+  inputFingerprint,
+  isOutdated,
   toListedClaims,
 } from "../src/debate-claims.js";
 import { plainWords } from "../src/plain-words.js";
@@ -292,9 +293,26 @@ describe("the request", () => {
     expect(JSON.stringify(body)).not.toMatch(/web_search|"plugins"/);
     expect(body.system[1]?.text).toBe(DEBATE_CLAIMS_SYSTEM);
     expect(run.claimList.claims).toHaveLength(1);
-    expect(run.claimList.sourceHash).toBe(
-      articleWithIdsFingerprint(article.blocks, article.tree, null),
+    expect(run.claimList.sourceHash).toBe(inputFingerprint(article.blocks, article.tree, null));
+  });
+
+  it("fingerprints only the body and head bytes the request sends", () => {
+    const changedTree = structuredClone(example.tree);
+    const root = changedTree.nodes[changedTree.rootId];
+    if (!root) throw new Error("the fixture tree has no root");
+    root.title = `${root.title} (renamed)`;
+
+    const supplement = { ...A, id: "spya-dddddd", treatment: "supplement" as const };
+    const now = inputFingerprint(blocks, example.tree, example.meta);
+    expect(inputFingerprint(blocks, changedTree, example.meta)).toBe(now);
+    expect(inputFingerprint([...blocks, supplement], example.tree, example.meta)).toBe(now);
+    expect(inputFingerprint([{ ...A, text: `${A.text} Changed.` }, B, C], example.tree, example.meta)).not.toBe(
+      now,
     );
+
+    const noMeta = inputFingerprint(blocks, example.tree, null);
+    expect(inputFingerprint(blocks, changedTree, null)).toBe(noMeta);
+    expect(inputFingerprint(blocks, { ...example.tree, slug: "a-new-fallback-title" }, null)).not.toBe(noMeta);
   });
 
   it("carries the shared plain-words and paperwork sections", () => {
@@ -305,6 +323,11 @@ describe("the request", () => {
   it("has its own prompt version, not Debate's", () => {
     expect(PROMPT_VERSION).toMatch(/^debate-claims\//);
     expect(PROMPT_VERSION).not.toBe(DEBATE_PROMPT_VERSION);
+  });
+
+  it("calls a different capable-model generation outdated", () => {
+    expect(isOutdated({ version: PROMPT_VERSION, generator: CAPABLE_MODEL })).toBe(false);
+    expect(isOutdated({ version: PROMPT_VERSION, generator: "an-older-capable-model" })).toBe(true);
   });
 });
 

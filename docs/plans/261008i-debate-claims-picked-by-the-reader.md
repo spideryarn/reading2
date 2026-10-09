@@ -285,3 +285,28 @@ verdict *land with the fixes made*. Accepted:
 Gates as run by me: typecheck green; 36 files, 1027 passed, 2 skipped (debate, public DTO, command
 bar, activation, metadata, doc-links). The full suite's only failures in the builder's run were
 `chat-live-turn` and `citation-investigate-route`, fixed on dev by `32147ae71` after this tree's base.
+
+### Stage 2 (2026-10-09): landed
+
+Built by an Opus subagent (`905c46ff6`): the `debate-claims` step and artefact
+(`article_revisions.debate_claims`, migration `20261008222555_debate_claims`), `src/debate-claims.ts`
+and `src/web/useDebateClaims.ts`. Pressing Claims arms `debate-claims` and never `debate`;
+arriving only reads. The Reception | Claims control is drawn before any search is stored. A visitor
+gets `claims[].{id, blockId, quote, statement}` and no controls; a list alone makes Debate present
+for a visitor (inventory only, which the reviewer confirmed changes no refusal). Export carries it.
+Departures, kept: a stale list also hides *Check this claim in chat*; not added to Metadata's re-run
+rows (the stale banner's *List again* covers it).
+
+Code review and fixes, GPT Sol:
+[261008i-debate-claims-stage2-code-review-sol.md](261008i-debate-claims-stage2-code-review-sol.md),
+verdict *land with the fixes made*. Accepted:
+
+| | Finding | Fix |
+|---|---|---|
+| D1 | P1: a claims-only public article advertised Debate but dropped the list when lifting the payload | `public-artefacts.ts` keeps it |
+| D2 | P1: the stamp hashed the whole tree, so renaming a section staled the list and offered a paid re-run | hashes the rendered body and head the prompt actually sends |
+| D3 | P1: the owner read's `outdated` ignored model drift | uses `debateClaimsAreOutdated` |
+
+D2 moved one expectation in `tests/freshness-deciders-agree.test.ts` (a renamed section no longer
+stales the list; both deciders still agree), which I updated. Gates as run by me: typecheck green;
+48 files, 1895 passed, 18 skipped, then the freshness file 152/152.

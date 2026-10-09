@@ -1255,8 +1255,8 @@ export const articleRevisions = spideryarn.table(
      * `DebateClaimList`, src/types.ts, written by the `debate-claims` step.
      * docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2.
      *
-     * The WHOLE artefact, like its neighbours; `sourceHash` is FAQ's
-     * fingerprint. **Public**, read-only, through `PUBLIC_PROJECTIONS`: model
+     * The WHOLE artefact, like its neighbours; `sourceHash` covers its rendered
+     * body and cited head. **Public**, read-only, through `PUBLIC_PROJECTIONS`: model
      * output about the article, which mode.md makes a visitor's by default.
      * A column of its own rather than a field inside `debate`, because the
      * two are made by different presses and go stale on different clocks.

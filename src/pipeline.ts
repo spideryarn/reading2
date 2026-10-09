@@ -637,7 +637,7 @@ export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
      really has moved it re-runs without being forced. And it replaces rather
      than appends. */
   "debate",
-  /* `faq`'s two reasons: it reads the blocks, the tree and the metadata,
+  /* It reads the body and metadata head (with the tree as a title fallback),
      nothing in the pipeline reads what it writes, and it replaces rather than
      appends. A positional cascade from a press one band along must not buy it.
      docs/plans/261008i-debate-claims-picked-by-the-reader.md. */
@@ -5351,9 +5351,9 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
     label: "Listing its claims",
     produces: ["debate-claims"],
     /**
-     * `faq`'s stamp exactly: `articleWithIdsFingerprint` over the blocks, the
-     * tree and the cited head, with the **real, nullable** metadata, which is
-     * what `generateDebateClaims` hashes too. **No `profileHash`**.
+     * Its exact rendered body and cited head, with the **real, nullable**
+     * metadata and the tree only as a fallback title. This is what
+     * `generateDebateClaims` hashes too. **No `profileHash`**.
      */
     stamp: async (ctx, store) => {
       const article = await tryReadArticle(ctx.slug, store);

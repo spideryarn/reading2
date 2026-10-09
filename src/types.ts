@@ -7285,7 +7285,7 @@ export interface DebateClaimList {
   version: string;
   generator: string;
   slug: string;
-  /** `articleWithIdsFingerprint` over the blocks, the tree and the cited head. */
+  /** Fingerprint of the rendered body and cited head; the tree only supplies a fallback title. */
   sourceHash: string;
   /**
    * **In document order**, never a ranking. **An empty list is a real answer**:
@@ -7300,7 +7300,7 @@ export interface DebateClaimList {
 /** `GET /api/debate-claims/:slug`. Two staleness facts: no profile is in this stamp. */
 export interface DebateClaimListResponse {
   claimList: DebateClaimList;
-  /** The article moved underneath this — blocks, sections or the cited head. */
+  /** The rendered body or cited head moved underneath this. */
   stale: boolean;
   /** The article is the same and we would write this differently now. */
   outdated: boolean;

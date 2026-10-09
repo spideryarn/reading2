@@ -900,10 +900,12 @@ describe("when the article itself moves, every step gets the same answer from bo
       async () => {
         const { stale, disagree } = read(await askAll());
         expect(disagree).toEqual({});
-        /* `relations` and `simple` send the paragraphs without the section
-           titles; `skim` lays its route over them. `labels` and `assets` hash
-           the blocks alone. */
-        expect(stale).toEqual(inOrder([...without(READS_THE_HEAD, "relations", "simple"), "skim"]));
+        /* `relations`, `simple` and `debate-claims` send the paragraphs
+           without the section titles; `skim` lays its route over them.
+           `labels` and `assets` hash the blocks alone. */
+        expect(stale).toEqual(
+          inOrder([...without(READS_THE_HEAD, "relations", "simple", "debate-claims"), "skim"]),
+        );
       },
     );
   });

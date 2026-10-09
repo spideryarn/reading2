@@ -58,7 +58,7 @@ import {
 } from "./messages-structured-output.js";
 import { findQuote } from "./quote-match.js";
 import {
-  articleWithIdsFingerprint,
+  checkpointKey,
   type BlockFingerprint,
   fallbackHeadTitle,
   type MetaFingerprintWithUrl,
@@ -106,9 +106,9 @@ export const ANSWER_TOKENS =
   300 + 12 * Math.ceil((40 + MAX_QUOTE_CHARS + MAX_STATEMENT_CHARS + 60) / 3);
 
 /**
- * What this list was written from: the blocks, the tree (only for the
- * fallback head) and the cited metadata head — `articleWithIdsFingerprint`,
- * the one `faq` and `debate` use. The stamp in src/pipeline.ts hands it the
+ * What this list was written from: the exact dynamic article bytes sent to the
+ * model — the cited metadata head and body blocks. The tree matters only when
+ * it supplies the fallback title. The stamp in src/pipeline.ts hands this the
  * real, nullable meta, and so does `generateDebateClaims`.
  */
 export function inputFingerprint(
@@ -116,10 +116,18 @@ export function inputFingerprint(
   tree: Tree,
   meta: MetaFingerprintWithUrl | null,
 ): string {
-  return articleWithIdsFingerprint(blocks, tree, meta);
+  const promptMeta = (meta ?? { title: fallbackHeadTitle(tree) }) as Meta;
+  /* `BlockFingerprint.treatment` is a database string rather than Block's
+     narrower union; the CHECK behind it permits only the same values, and
+     `isBodyEvidence` is "not a supplement". */
+  const evidence = blocks.filter((block) => block.treatment !== "supplement");
+  return checkpointKey([
+    "debate-claims-input/1",
+    articleWithIds(promptMeta, evidence),
+  ]);
 }
 
-/** Does this list still describe the article, tree and metadata? */
+/** Does this list still describe the rendered body and metadata head? */
 export function isStale(
   list: DebateClaimList,
   blocks: readonly BlockFingerprint[],
