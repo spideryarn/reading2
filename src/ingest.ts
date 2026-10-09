@@ -64,6 +64,19 @@ const TRACKING = new Set([
   "ref_url",
   "vero_id",
   "wt_mc",
+  // Google's cross-domain linker, ad-click and Merchant Center ids, Marketo's and Omeda's email ids:
+  // names nothing uses for content. Added 2026-10-09, plan 261009d.
+  "_ga",
+  "_gl",
+  "gclsrc",
+  "gad_source",
+  "gad_campaignid",
+  "srsltid",
+  "gbraid",
+  "wbraid",
+  "mkt_tok",
+  "oly_anon_id",
+  "oly_enc_id",
 ]);
 
 /** Enough of a host to be a host, rather than a typo we would rather refuse. */
@@ -268,8 +281,11 @@ export function normaliseUrl(input: string): string {
  * `pdf/`, `html/` and its own DOI, and the fetch step (src/pipeline.ts) reads
  * the same document whichever was pasted, so all of them answer with the
  * paper's one key. It stays on the cheap side of the asymmetry above: the merge
- * is one the source itself guarantees, and a version is part of the key, so
- * `2608.13566` and `2608.13566v1` are still two articles. The query is not
+ * is one the source itself guarantees. **Every version is one article** too,
+ * since 2026-10-09: `2608.13566`, `…v1` and `…v2` share a key, so a reader
+ * holding v1 who pastes v2 gets v1 back. That is a merge of two texts that can
+ * differ, accepted because a revision is the same paper and the duplicate was
+ * the commoner failure (plan 261009d, report spya-n50aft). The query is not
  * read for such an address, tracking or not. Every other address keys exactly
  * as it did.
  * docs/plans/261005l-an-arxiv-link-of-any-shape-imports-the-paper-and-a-source-resolver-other-sources-can-join.md

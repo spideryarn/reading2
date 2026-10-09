@@ -39,7 +39,11 @@ export interface ResolvedPaper {
   workId: string;
   /** The address the paper is known by. */
   canonicalUrl: string;
-  /** What `urlKey` (src/ingest.ts) answers for `canonicalUrl`, so every shape of the link is one article. */
+  /**
+   * What `urlKey` (src/ingest.ts) answers for `canonicalUrl`, so every shape of the link is one article.
+   * Built from `workId`, so every version of a paper is one article too (plan 261009d): the version
+   * decides what is fetched, not whether we already have it.
+   */
   key: string;
   /** Passes `isSlug` (src/ingest.ts): lower-case, `[a-z0-9-]` only, at most `PAPER_SLUG_MAX` long. */
   slug: string;
@@ -182,7 +186,7 @@ export function arxivPaper(id: { versionedId: string; workId: string }): Resolve
     versionedId: id.versionedId,
     workId: id.workId,
     canonicalUrl: `https://arxiv.org/abs/${id.versionedId}`,
-    key: `arxiv.org/abs/${id.versionedId}`,
+    key: `arxiv.org/abs/${id.workId}`,
     slug,
     candidates: arxivCandidates(id.versionedId),
   };

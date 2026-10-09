@@ -96,6 +96,15 @@ const ASKED = {
     final: "https://arxiv.org/html/9912.98871",
     status: "published",
   },
+  /** Imported from a `…v1` link: found by the plain link and by any other version. Report spya-n50aft. */
+  versioned: {
+    id: "0c6f7d0e-2b5f-4f7e-9a51-3d1e7f0a9c26",
+    revision: "6e2a1c84-9b7d-4c3e-8f15-7a0d2b9e4c51",
+    slug: "test-find-article-arxiv-v1",
+    asked: "https://arxiv.org/abs/9912.98876v1",
+    final: "https://arxiv.org/html/9912.98876v1",
+    status: "published",
+  },
   /** A short link that ended on a blog post: its link may move, so it does not find it. */
   blog: {
     id: "8ad54b71-aee4-4f44-9b31-ea63c0cd42ae",
@@ -231,6 +240,23 @@ describe("finding an article that is not named after what you have", { timeout: 
     expect(await slugForUrlKey(urlKey(paper.final)), "the paper").toBe(paper.slug);
     expect(await slugForUrlKey(urlKey("https://arxiv.org/abs/9912.98871")), "its landing page").toBe(paper.slug);
     expect(await slugForUrlKey(urlKey("https://bit.ly/s1FindArticleNobody"))).toBeUndefined();
+  });
+
+  /**
+   * **Every version of a paper is one article** — the shelf held the article a
+   * `…v1` link imported, and the plain abstract link imported it again.
+   * Report spya-n50aft, plan 261009d.
+   */
+  it("finds a paper imported from a versioned link by the plain link, and by another version", async () => {
+    const { slugForUrlKey } = await import("../src/store/find-article.js");
+    const { versioned } = ASKED;
+    for (const spelling of [
+      "https://arxiv.org/abs/9912.98876",
+      "https://arxiv.org/pdf/9912.98876",
+      "https://arxiv.org/abs/9912.98876v2",
+    ]) {
+      expect(await slugForUrlKey(urlKey(spelling)), spelling).toBe(versioned.slug);
+    }
   });
 
   /**
