@@ -61,14 +61,23 @@ This started as an experiment and is a real product now, with accounts, billing,
 since 2026-09-03. The readership is small and knows it is a beta, so we still optimise for how fast
 we can move.
 
-The thing the app is *for* is **granularity zoom**
-([granularity-zoom.md](docs/project/granularity-zoom.md)): the article at several levels of detail
-at once, down the page for position and across for how much detail. The leftmost level is a
-sentence for the whole piece; the rightmost is always the author's verbatim prose; move sideways and
-the text expands or contracts without you losing your place. Everything else lives in a band beside
-the prose that the modes take turns in
-([reading-view-overview.md](docs/project/reading-view-overview.md) is the map). Fourteen modes are
-built; the ones marked *experimental* are behind a switch on `/profile`
+**What it does is help you read deeply and efficiently.** Greg, 2026-10-09:
+
+> reading deeply means like understanding it, learning, remembering, having ideas, noticing,
+> highlighting, perhaps seeing problems, seeing connections, perhaps to your own work, being a
+> referee for a journal. These are all examples of deeply.
+>
+> And then efficiently. … it takes less time and it works better than just reading the original
+> paper.
+
+It gets there by several paths rather than one: the marked-up copy from a clever friend; that friend
+to talk to and bounce ideas off; knowing who you are and why you are reading this piece, so that
+what you get is relevant to your purpose; AI that helps you rather than doing it instead of you; and
+evidence underneath, the learning-and-memory research behind Learn above all.
+
+The article is always on screen. Beside it is a band that the reading modes take turns in
+([reading-view-overview.md](docs/project/reading-view-overview.md) is the map). The ones marked
+*experimental* are behind a switch on `/profile`
 ([experimental-features.md](docs/project/experimental-features.md)) because they are not yet good
 enough to show a stranger by default.
 
@@ -76,16 +85,26 @@ enough to show a stranger by default.
 
 - **Plain** — the prose and nothing else, the default. Every other mode is a step away from it and a
   step back.
-- **Structure** — the piece's parts and sections as a tree: two linked columns in a wide window, and
-  in a narrow one a nested list, detailed where you are and sparse elsewhere
-  ([structure.md](docs/project/structure.md)).
-- **Summary** — a sentence on every part of the piece, and every section of every part, as deep as
-  you ask ([summaries.md](docs/project/summaries.md)).
-- **Diagram** — the shape of the piece as a picture, with where you are marked on it
-  ([diagram.md](docs/project/diagram.md)); one picture by default, four more experimental.
+- **Structure** — the piece's parts and sections as a tree: two linked columns in a wide window, a
+  nested list in a narrow one ([structure.md](docs/project/structure.md)). It is what is left of
+  the first feature, granularity zoom, and the same tree drives the Spine down the side of the page
+  ([granularity-zoom.md](docs/project/granularity-zoom.md)).
+- **Summary** — the piece in plain words, brief or fuller, each paragraph linked to the passages
+  it came from, or the same as a numbered thread ([summaries.md](docs/project/summaries.md),
+  [tweets.md](docs/project/tweets.md)).
+- **Skim** — a route through the paper's key passages, walked with a handful of stops, then a dozen,
+  then more ([skim.md](docs/project/skim.md)).
+- **Marginalia** — notes in a column to the right of the prose, each level with the paragraph it is
+  about: a question for each part, where an idea first appears, and where the argument has got to
+  ([marginalia.md](docs/project/marginalia.md)).
+- **Diagram** *(experimental)* — the shape of the argument as a picture a model draws, and
+  optionally paints ([diagram.md](docs/project/diagram.md), [sketch.md](docs/project/sketch.md)).
 - **Search by meaning** — a word, a phrase, or a description of what you are after; the relevant
   passages are marked in the prose, each hit saying how sure it is
   ([search.md](docs/project/search.md)).
+- **A command bar** — type or say what you want ("jump to the first place it mentions X") and it
+  opens the right mode on the right passage
+  ([reading-view-overview.md](docs/project/reading-view-overview.md)).
 
 **Understanding it**
 
@@ -93,15 +112,19 @@ enough to show a stranger by default.
   underlined wherever they occur ([glossary.md](docs/project/glossary.md)).
 - **Ideas** — the propositions the piece assumes you already hold, and the ones it introduces
   ([ideas.md](docs/project/ideas.md)).
-- **Quotes** *(experimental)* — the most central, striking lines, in the author's own words
+- **Quotes** — the most central, striking lines, in the author's own words
   ([quotes.md](docs/project/quotes.md)).
+- **Cross-references and links** — a phrase that sums up another passage is underlined and jumps to
+  it ([cross-references.md](docs/project/cross-references.md)); hover the author's own hyperlinks
+  and see where they go before you leave ([links.md](docs/project/links.md)).
+- **FAQ** *(experimental)* — the questions a careful reader would ask, each answered by the piece's
+  own passages rather than by a written answer ([faq.md](docs/project/faq.md)).
+- **Citations** *(experimental)* — every work the piece cites, each with a link out
+  ([citations.md](docs/project/citations.md)).
 - **Timeline** *(experimental)* — when the piece says things happened, showing the uncertainty
   rather than hiding it ([timeline.md](docs/project/timeline.md)).
-- **Links** — hover the author's own hyperlinks and see something about the destination before you
-  leave ([links.md](docs/project/links.md)).
 - **Debate** *(experimental)* — what the rest of the web says about this piece; the one mode whose
-  content is not drawn from the article
-  ([the plan](docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md)).
+  content is not drawn from the article ([debate.md](docs/project/debate.md)).
 
 **Asking**
 
@@ -117,20 +140,22 @@ enough to show a stranger by default.
 
 **Keeping it**
 
-- **Learn** (called Remember until 2026-10-05) — say what you took from the piece and find out where it holds and
-  where it comes apart ([learn-mode.md](docs/project/learn-mode.md)); or the other way round,
-  a **Quiz** in which the article asks and you answer, marked against the text rather than an answer
-  key ([quiz.md](docs/project/quiz.md)).
+- **Learn** — say what you took from the piece and find out where it holds and where it comes apart
+  ([learn-mode.md](docs/project/learn-mode.md)); or the other way round, a **Quiz** in which the
+  article asks and you answer, marked against the text rather than an answer key
+  ([quiz.md](docs/project/quiz.md)).
 - **The library** — every article you have added, one click from where you left off
   ([library.md](docs/project/library.md)). Make one public and strangers can read it at
-  `/read/public` ([public-shelf.md](docs/project/public-shelf.md)); your notes, chats and searches
-  stay yours.
+  `/read/public` ([public-shelf.md](docs/project/public-shelf.md)), or share it by a private link;
+  your notes, chats and searches stay yours.
 - **It knows who is reading** — say once who you are and what you know, and for any article why you
   are reading it, and the notes are written for you
   ([reader-profile.md](docs/project/reader-profile.md)).
 - **It's the reader's data** — one button exports everything Spideryarn holds about an article as
   plain files ([export.md](docs/project/export.md)); what we do with a reader's data is in
-  [privacy.md](docs/project/privacy.md).
+  [privacy.md](docs/project/privacy.md). If you have a checkout of this repo, an AI agent such as
+  Claude Desktop or Claude Code can also use your account through a small MCP server that runs on
+  your machine ([mcp.md](docs/project/mcp.md)).
 
 Chat deserves a flag, because "a chatbot with the article stuffed in the context window" is a named
 anti-goal here. It was built anyway, at Greg's request, and the argument that what was built is not
@@ -180,8 +205,7 @@ here:
 | Doc | What's in it |
 |---|---|
 | [vision.md](docs/project/vision.md) | what we're trying to do, the principles, and what we're deliberately *not* doing |
-| [granularity-zoom.md](docs/project/granularity-zoom.md) | the core feature: the tree, generation, interaction, failure modes |
-| [reading-view-overview.md](docs/project/reading-view-overview.md) | everything the reader sees, and the fourteen modes |
+| [reading-view-overview.md](docs/project/reading-view-overview.md) | everything the reader sees, and every mode |
 | [setup-dev.md](docs/project/setup-dev.md) | install, dev, every pipeline command, and which model each job uses |
 | [original-version/](docs/project/original-version/overview.md) | the larger app this came from — a library to consult, not a backlog to import |
 
