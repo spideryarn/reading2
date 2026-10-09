@@ -56,7 +56,7 @@
 }
 
 /* ---- Bibliography | Reception | Claims ----
-   Peer review's three sub-modes (PeerReviewMode.tsx § PeerReviewViews; Debate's
+   Sources' three sub-modes (SourcesMode.tsx § SourcesViews; Debate's
    Reception | Claims until 2026-10-09), drawn with the part-switcher every mode
    shares (`.summ-views`, `.summ-view-btn`, mode-band.css § the part-switcher),
    so the segmented controls cannot drift apart. The row is the band's head

@@ -55,7 +55,7 @@ status; the next feedback sweep does.
   that. Before: the guide never mentioned Referee, and sent referees to *Peer review › Claims*.
   After: 14/14, and the magazine reviewer, the reading group and a planted paragraph got no offer
   ([261009d](../investigations/261009d-the-guide-offers-referee-to-referees-measured.md)). Plan
-  [261009w](../plans/261009w-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md),
+  [261009x](../plans/261009x-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md),
   GPT Sol on the plan (eight findings, all taken) and on the code.
 - **Referee's button card** now says *"Refereeing it? What to weigh before you decide: your criteria,
   its claims, and a second look at your notes"*, and its second paragraph points to the other mode

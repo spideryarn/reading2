@@ -170,12 +170,12 @@ describe("our words for the modes", () => {
 
   it("marks an experimental mode as one, and an ordinary one not", () => {
     const section = modeWordsSection();
-    /* Debate was the example until 2026-10-09, when it came out as Peer review. */
+    /* Debate was the example until 2026-10-09, when it came out as Sources. */
     /* Referee was the example until 2026-10-09, when the guide could offer it
-       from behind the switch (plan 261009w). */
+       from behind the switch (plan 261009x). */
     expect(section).toContain("- Diagram (experimental): ");
     expect(section).toContain("- Referee (experimental; offer it only when ");
-    expect(section).toContain("- Peer review: ");
+    expect(section).toContain("- Sources: ");
     expect(section).toContain("- Glossary: ");
     expect(section).toContain("  - Learn › Explore (experimental): ");
   });

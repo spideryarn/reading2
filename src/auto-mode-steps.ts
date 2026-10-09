@@ -26,7 +26,7 @@ import type { StepName } from "./types.js";
  *
  * `tweets` and `simple` are Summary's two artefacts (its thread and its
  * plain-words levels); `glossary`, `quotes`, `ideas` and `skim` are their own
- * modes'; `citations` is Peer review's Bibliography since 2026-10-09 (not its
+ * modes'; `citations` is Sources' Bibliography since 2026-10-09 (not its
  * Reception search or its Claims list, which wait for their own chips — plan
  * 261009l § On import); `crossrefs` belongs to no mode — the links from a phrase in one
  * passage to the passage that backs it sit in the prose in every mode

@@ -1,13 +1,78 @@
-You are reviewing a plan before it is built, in the Spideryarn repo (read-only review).
+# Plan review: Peer review becomes Sources, all the way down (261009w)
 
-Read, in this order:
-1. docs/plans/261009w-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md — the plan under review.
-2. docs/research/261009b-what-a-peer-reviewer-needs-and-where-sources-and-referee-divide.md — the research behind it (also review its product reasoning briefly: is the Sources/Referee line sound, are the "ideas for later" well ranked by evidence, is anything overstated against docs/research/261009b-peer-reviewer-web-pass-sonnet.md).
-3. The code it touches: src/guide.ts (modeWordsSection, button, experimental), src/acts-alone.ts, src/mode-catalog.ts (ModeCatalogEntry comments, referee row), src/web/reader/Reader.tsx (chipModes useMemo near `modeDoor(`), src/web/command-runners.ts (modeDoor, modeRunner), src/web/chat-commands.ts (chipFor), src/web/Dock.tsx (visibleModes), src/web/CommandBar.tsx (subModeRows), src/web/experimental-visibility.ts, src/converse.ts (GUIDE_SYSTEM), src/web/guide-acts.ts (how the page acts on an "opens at once" token), evals/guide/offers.ts.
-4. docs/project/referee-mode.md § Confidentiality and § The rules the whole mode obeys; docs/project/experimental-features.md.
+You are reviewing a **plan**, read-only. Candidate: commit `f5b247d4503e563c70c0c25bb523c5f0ffc72872`,
+file `docs/plans/261009w-peer-review-becomes-sources-all-the-way-down.md`. The repo at that commit is
+the code the plan will change.
 
-Context: another session is concurrently renaming the "Peer review" mode to "Sources" (docs/plans/261009s-peer-review-becomes-sources-all-the-way-down.md may not be in this tree; it owns Sources' rows and Referee's aliases).
+Context worth reading: `docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md` (the
+merge this renames, and its held Stage 3), `docs/project/mode.md § Renaming a mode` (the checklist
+of where a mode's name is stored), the two precedents
+`docs/plans/261001r-trajectory-becomes-skim-and-marginalia-rename-audit.md` with
+`drizzle/20261001224759_skim.sql`, and
+`docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md`.
 
-Find: correctness gaps (will a Referee token actually render as a working chip and act for a reader with the experimental switch off — trace chipFor → door → modeRunner → the Dock's activators; does the "opens at once" path through guide-acts work; anything in the activators or in RefereeMode that assumes the switch is on), places the plan misses (other consumers of the chip door, the live/spoken guide, visitors, phone), whether a pure `chipDoorRows` is the right seam, whether the separate record vs a field is the right shape, prompt-injection risk (an article claiming the reader is a referee), the eval design, and anything simpler. Also: is offering a hidden mode via the guide a change to a security defence per docs/project/security-map.md? (It must not be; say if you think it is.)
+The brief (from Greg via the Overseer): rename the mode "Peer review" to "Sources" comprehensively —
+docs, code, database — and in the same work rename the stored names `citations` → `bibliography`,
+`debate` → `reception`, `debate-claims` → a sources-prefixed name (not bare `claims`). Old links
+`?mode=peer-review`, `?mode=citations`, `?mode=debate` must still land. "source" already means other
+things here; decide every hit by hand. **Plan the migration so that the deployed code and the
+database are never out of step in a way that breaks a reader.** Apply locally only; never touch
+production; the Overseer deploys (`npm run deploy` applies migrations, then pushes and waits for
+Vercel — `scripts/deploy.ts`, `docs/project/deployment.md`).
 
-Write findings as a numbered list, each with severity (P0–P3), the file/line evidence, and a concrete fix. Be concise. End with a one-line verdict.
+## What to do
+
+An independent attack first. In particular:
+
+1. **The database design** (§ The database). Is expand/contract the right shape here, and is each
+   part of it sound against the actual code? Read the real seams: `src/db/schema.ts`
+   (`articleRevisions`, `revision_step_runs_step`, `chat_threads` origin CHECKs, `debateClaimChecks`,
+   the cost bucket CHECK), `src/store/pg-revisions.ts` (draft begin copies step runs; the lease
+   insert `ON CONFLICT` and its updates), `src/store/artifacts-pg.ts` (`runRowFor`, `heldBy`),
+   `src/store/pg-jobs.ts § toJob`, `src/store/pg-debate-claim-checks.ts`. For each of the six expand
+   parts: does the old code keep working against it, does the new code, and are writes from either
+   seen by both? Would the step-run mirror trigger break the lease semantics (e.g. an `ON CONFLICT
+   … DO UPDATE … setWhere` that now sees a mirrored row; a delete of `extraSteps()`; a copy of runs
+   into a new draft creating both spellings and then the trigger mirroring again)? Would a view over
+   the renamed claim-checks table really carry the old store's statements (its `ON CONFLICT`
+   target, `RETURNING`, the partial unique index, grants to the app role)? Is there a simpler design
+   that meets the brief — and is any part over-built for what can actually happen in a deploy
+   window?
+2. **Anything the plan misses** that stores or transmits a renamed name: `jobs.reset`, `work_key`,
+   Storage paths, export bundle, public payload, IndexedDB, localStorage last-view, Sentry tags,
+   generated files, cost categories, `scripts/`, `evals/`, `tools/`, the help corpus, the rate
+   bucket names, `src/web/lib/api.ts` (`CACHEABLE`, `NONE_YET_AS_NULL`), anything else.
+3. **The naming table and the keep-list.** Is any decision wrong or inconsistent (e.g. keeping
+   singular `citation`, keeping `cite-` CSS and `?citeby=`, `citations-find` → `citation-find`,
+   `DebatePanel` → `ReceptionPanel`, chat origin `debate` split by shape into `reception` /
+   `sources-claims`)? Is the collision-avoidance for "source" workable?
+4. **Stage boundaries.** Is each stage landable on its own (tests green, deployable alone with its
+   own expand migration)? Is anything sequenced so that a deploy between stages would break?
+5. **The accepted costs** (§ What is still accepted): the stale tab's 404 on renamed API routes in
+   particular. Is it acceptable under the brief, or should old routes alias for one deploy?
+
+## Severity
+
+| | |
+|---|---|
+| **P0** | data loss, exploitable security, incorrect charging, or the service broadly unusable |
+| **P1** | user-visible wrong behaviour, or an authoritative contract violated |
+| **P2** | design or maintainability risk with no wrong behaviour today |
+| **P3** | non-behavioural prose or comment defect |
+
+An ID on every finding (F1, F2, …), with file:line evidence and a concrete change to the plan.
+
+## Output
+
+A verdict on the first line: `BUILD AS PLANNED`, `BUILD WITH CHANGES`, or `RETHINK`. Then the
+findings, most severe first.
+
+## My own suspicions (worth less; spend most of the run elsewhere)
+
+- The `revision_step_runs` mirror trigger is the part I am least sure of: the lease machinery is
+  keyed on `(revision_id, step_name)` and I have not traced every statement.
+- Whether drizzle's whole-row `select()` on `article_revisions` with the `legacy…` columns still
+  declared costs anything that matters, or whether something iterates all columns (export, public
+  DTO) and would emit the legacy ones.
+- The sentence I would least like to be wrong about: *"Old code selects the columns by name, so a
+  column renamed in place fails every read of a revision"* — is that actually true of this code?

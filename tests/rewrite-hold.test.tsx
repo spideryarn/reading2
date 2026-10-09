@@ -250,7 +250,7 @@ const { QuotesBand } = await import("../src/web/modes/quotes/QuotesMode.js");
 const { useQuotesRead } = await import("../src/web/useQuotes.js");
 const { TimelineBand } = await import("../src/web/modes/timeline/TimelineMode.js");
 const { FaqBand } = await import("../src/web/modes/faq/FaqMode.js");
-const { PeerReviewBand } = await import("../src/web/modes/peer-review/PeerReviewMode.js");
+const { SourcesBand } = await import("../src/web/modes/sources/SourcesMode.js");
 const { useCitationsRead } = await import("../src/web/useCitations.js");
 const { SkimBand } = await import("../src/web/modes/skim/SkimMode.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
@@ -274,10 +274,10 @@ function GlossaryOuter({ show }: { show: boolean }) {
     : null;
 }
 
-/* Quotes and Peer review's Bibliography read above their band too, for the
+/* Quotes and Sources' Bibliography read above their band too, for the
    marks in the prose (useQuotes.ts § `useQuotesRead`, useCitations.ts §
-   `useCitationsRead`). Peer review's band holds Reception's and Claims' reads
-   itself, in every sub-mode (PeerReviewMode.tsx), so all three of its cases
+   `useCitationsRead`). Sources' band holds Reception's and Claims' reads
+   itself, in every sub-mode (SourcesMode.tsx), so all three of its cases
    mount the one band, on the sub-mode their `search` names. */
 function QuotesOuter({ show }: { show: boolean }) {
   const read = useQuotesRead(SLUG);
@@ -285,10 +285,10 @@ function QuotesOuter({ show }: { show: boolean }) {
     ? createElement(QuotesBand, { slug: SLUG, read, onJump: noop, steps: [], yours: { rows: [], blocks: [], onOpen: noop } })
     : null;
 }
-function PeerReviewOuter({ show }: { show: boolean }) {
+function SourcesOuter({ show }: { show: boolean }) {
   const read = useCitationsRead(SLUG);
   return show
-    ? createElement(PeerReviewBand, {
+    ? createElement(SourcesBand, {
         slug: SLUG,
         citationsRead: read,
         onJump: noop,
@@ -661,8 +661,8 @@ const ROWS: Row[] = [
     hook: "useDebate.ts",
     step: "debate",
     path: "/api/debate/",
-    /* Peer review's Reception since 2026-10-09 (plan 261009l). */
-    search: "?peer-review=reception",
+    /* Sources' Reception since 2026-10-09 (plan 261009l). */
+    search: "?sources=reception",
     body: (which, { stale }) => ({
       debate: {
         version: "test",
@@ -697,7 +697,7 @@ const ROWS: Row[] = [
       stale,
       outdated: false,
     }),
-    mount: (show) => createElement(PeerReviewOuter, { show }),
+    mount: (show) => createElement(SourcesOuter, { show }),
     verb: "Search again",
     shape: ON_THE_BANNER,
     forced: ["Search again"],
@@ -706,14 +706,14 @@ const ROWS: Row[] = [
     readAgain: "Try again",
   },
   /* Claims' list (plan 261008i stage 2): the same band on
-     `?peer-review=claims` (`?debate=claims` until 2026-10-09), whose stale
+     `?sources=claims` (`?debate=claims` until 2026-10-09), whose stale
      banner's *List again* is the forced verb. */
   {
     name: "Debate's claims list",
     hook: "useDebateClaims.ts",
     step: "debate-claims",
     path: "/api/debate-claims/",
-    search: "?peer-review=claims",
+    search: "?sources=claims",
     body: (which, { stale }) => ({
       claimList: {
         ...stamp(which, false),
@@ -760,7 +760,7 @@ const ROWS: Row[] = [
         outdated: false,
       },
     },
-    mount: (show) => createElement(PeerReviewOuter, { show }),
+    mount: (show) => createElement(SourcesOuter, { show }),
     verb: "List again",
     shape: ON_THE_BANNER,
     forced: ["List again"],
@@ -799,7 +799,7 @@ const ROWS: Row[] = [
       stale,
       outdated: false,
     }),
-    mount: (show) => createElement(PeerReviewOuter, { show }),
+    mount: (show) => createElement(SourcesOuter, { show }),
     verb: "Find them again",
     shape: ON_THE_BANNER,
     forced: ["Find them again"],
@@ -1037,7 +1037,7 @@ it("releases a refused press even if the start callback rejects", async () => {
   expect(hold.rewriting, "no posted job can ever settle a rejected start").toBe(false);
 });
 
-it("wires an owner's Bibliography through the real Peer review wrapper into Claims' C1 line", async () => {
+it("wires an owner's Bibliography through the real Sources wrapper into Claims' C1 line", async () => {
   const claims = ROWS.find((candidate) => candidate.step === "debate-claims");
   expect(claims).toBeDefined();
   start(claims!);

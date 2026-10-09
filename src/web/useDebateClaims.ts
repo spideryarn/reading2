@@ -11,12 +11,12 @@
  *
  * ## Its own press, never Reception's
  *
- * Mounted beside `useDebate` by `PeerReviewBand` in all three of Peer review's sub-modes (`DebateBand` in Debate's two until 2026-10-09), so that a press
+ * Mounted beside `useDebate` by `SourcesBand` in all three of Sources' sub-modes (`DebateBand` in Debate's two until 2026-10-09), so that a press
  * on Claims that is still waiting for this GET is retired the moment the reader
  * moves to Reception (`enabled`), exactly as `useDebate` retires a Reception
  * press that lands on Claims (useAutoRun.ts § `enabled`, GPT Sol's C1 on stage
  * 1). The two hooks spend two different targets (`debate` and
- * `debate-claims`, activation.ts § `activationForPeerReview`), so neither press
+ * `debate-claims`, activation.ts § `activationForSources`), so neither press
  * can buy the other's work: the list is a few cents and searches nothing; the
  * Reception search goes to the open web.
  *

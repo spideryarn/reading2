@@ -366,7 +366,7 @@ their switch says.
 
 Measured: 14/14, including a magazine reviewer and a planted paragraph who got no offer
 ([261009d](../investigations/261009d-the-guide-offers-referee-to-referees-measured.md)). Plan
-[261009w](../plans/261009w-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md).
+[261009x](../plans/261009x-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md).
 
 ## Why the mode is `referee`, not `reviewer`
 

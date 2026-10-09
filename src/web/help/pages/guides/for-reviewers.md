@@ -2,7 +2,7 @@
 title: Reviewing a paper
 summary: For a peer reviewer, or anybody reading critically, a route through the modes that point you at passages, with the judgement left to you.
 keywords: reviewer referee peer review critical critique assess evaluate manuscript preprint journal claims evidence guide
-related: mode-referee, mode-peer-review, comments, faq-is-the-ai-reading-for-me, for-experts
+related: mode-referee, mode-sources, comments, faq-is-the-ai-reading-for-me, for-experts
 ---
 
 This is for reading a paper in order to judge it. The tools here point you at passages, and
@@ -36,9 +36,9 @@ preprints, open-review submissions, and drafts the author has agreed to share.
 - **Ask [Search](/help/mode-search) by meaning**, for example “where does he concede a weakness?”.
   The marks [down the spine](/help/spine) show whether the matches sit in one place or run through
   the whole piece.
-- **Check what it is built on** in [Peer review](/help/mode-peer-review)’s **Bibliography**.
+- **Check what it is built on** in [Sources](/help/mode-sources)’ **Bibliography**.
   **first cited** jumps to where the article first cites a work.
-- **See what others have said** in Peer review’s **Reception**, which searches the web. Many pieces
+- **See what others have said** in Sources’ **Reception**, which searches the web. Many pieces
   turn out to have no reception at all, and it says so. **Claims** lists the claims the paper rests
   on, for you to check against the web.
 

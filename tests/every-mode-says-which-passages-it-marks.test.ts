@@ -115,7 +115,7 @@ const SILENT: BandMode[] = [
      docs/plans/260911g-citations-mode.md § What is deliberately not built. When
      it lands, this entry moves to PRODUCERS. Reception and Claims (Debate
      until then): a row is a page on the web, and a claim's passage a jump. */
-  "peer-review",
+  "sources",
   /* Earned for Citations' reason: each passage under a question is a jump, and
      a `?faq=` selection that marks a question's passages is deferred —
      docs/plans/260916d-faq-mode.md § Deferred. When it lands, this entry moves

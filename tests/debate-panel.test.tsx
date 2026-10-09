@@ -61,12 +61,12 @@ import type {
   DirectDebateRow,
 } from "../src/types.js";
 import type { DebateOrder } from "../src/web/debate-order.js";
-import type { DebateView, PeerReviewView } from "../src/web/params.js";
+import type { DebateView, SourcesView } from "../src/web/params.js";
 import type { UseDebate } from "../src/web/useDebate.js";
 import type { PublicDebate, PublicDebateClaimList } from "../src/public-types.js";
 import type { UseDebateClaims } from "../src/web/useDebateClaims.js";
 import { claimListOf, checksOwner, claimListOwner } from "./helpers/debate-claims-owner.js";
-import { peerReviewHead } from "./helpers/peer-review-head.js";
+import { sourcesHead } from "./helpers/sources-head.js";
 import { type CitedInParagraph, workShortName, worksCitedIn } from "../src/web/cited-in-paragraph.js";
 import { pendingActivation, resetActivations } from "../src/web/activation.js";
 import { enclosing, readerCssNoComments } from "./helpers/stylesheets.js";
@@ -217,7 +217,7 @@ let root: Root;
 const jumped: BlockId[] = [];
 
 /** Every sub-mode segment pressed, in order — and the handoff button's press. */
-const viewed: PeerReviewView[] = [];
+const viewed: SourcesView[] = [];
 /** Every order button pressed, in order. */
 const ordered: DebateOrder[] = [];
 /** Every stop the relevance bar was dragged to — `null` is its reset. */
@@ -267,8 +267,8 @@ function paint(
           citers: { result, retry: () => retried.push("retry") },
           claimChats: NO_CLAIM_CHATS,
         },
-        /* Peer review's chip row, as `PeerReviewBand` hands it (since 2026-10-09). */
-        head: peerReviewHead({
+        /* Sources' chip row, as `SourcesBand` hands it (since 2026-10-09). */
+        head: sourcesHead({
           view,
           onView: (next) => viewed.push(next),
           ownerSlug: o.slug,
@@ -311,7 +311,7 @@ function paintShared(
     root.render(
       createElement(DebatePanel, {
         access: { kind: "visitor", debate, claimList: extra.claimList ?? null },
-        head: peerReviewHead({
+        head: sourcesHead({
           view,
           onView: (next) => viewed.push(next),
           ownerSlug: null,

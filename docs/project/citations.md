@@ -1,8 +1,8 @@
 # Citations — every work the piece cites, with a link out
 
-**Since 2026-10-09 this is [Peer review](peer-review.md)'s Bibliography**, the first of its three
+**Since 2026-10-09 this is [Sources](sources.md)' Bibliography**, the first of its three
 sub-modes and the one it opens on; an old `?mode=citations` lands there. The mode, its address and
-its chip row are [peer-review.md](peer-review.md)'s; this page keeps the depth on the list itself.
+its chip row are [sources.md](sources.md)'s; this page keeps the depth on the list itself.
 The stored names — the `citations` step, column and route, `CitationsPanel`, the `cite-` CSS — keep
 the word until the name is confirmed (plan
 [261009l § Stage 3](../plans/261009l-peer-review-mode-merges-citations-and-debate.md#stage-3-held-for-greg-the-stored-names)).
@@ -824,8 +824,8 @@ opens a fresh conversation in Chat with the work quoted (its title, then the aut
 the article gives them) and a question after it, and sends that as the first question: the press
 is the Send since 2026-10-06 ([261006j](../plans/261006j-ask-in-chat-sends-the-question.md)). Once a chat exists,
 a line under the row's controls shows how many questions were asked and how the latest answer
-begins, and pressing it opens that conversation beside Peer review's Bibliography. Chat's list
-marks the conversation with Peer review's icon. A visitor has neither the button nor the line.
+begins, and pressing it opens that conversation beside Sources' Bibliography. Chat's list
+marks the conversation with Sources' icon. A visitor has neither the button nor the line.
 
 It is the Glossary's button with a different origin, `{ mode: "citations", itemId, quote }`: the
 work's id, which a re-run inherits by its key, and a snapshot of its title. Matched by the mode and
@@ -913,13 +913,13 @@ the same way.
 A press is one
 model call and no web search (that is *Look it up*, per row); the list is replaced only if the run
 succeeds, and a work found again keeps its id, so a link *Look it up* stored stays with it. The
-Metadata row is drawn independently of the experimental switch; Peer review itself is outside it.
+Metadata row is drawn independently of the experimental switch; Sources itself is outside it.
 Why it is safe to offer is in [`src/rerun-steps.ts`](../../src/rerun-steps.ts).
 
 ## Who sees it
 
 Making the list, and *Look it up*, are owner-only. It was behind the
-[experimental switch](experimental-features.md) until 2026-10-09, when it came out as Peer review's
+[experimental switch](experimental-features.md) until 2026-10-09, when it came out as Sources'
 Bibliography; the list is now made on every import (plan 261009l § On import). **Since 2026-09-29 a visitor to a public article
 sees a stored list** in the band, from the page's own payload: each work's address re-judged by
 `publicCitationUrl` (a refused one takes the link off the row, not the row), its dedupe `key` left
@@ -932,7 +932,7 @@ Selecting a work to mark every passage that cites it (`?cite=`), and with it an 
 button on the hover card that starts nothing; marking every occurrence of a
 mention in its block rather than only an unambiguous one; joining the citation section to the *link*
 and *note* cards, so a work cited by a hyperlink or a footnote marker gets it too; *Find more* past
-the cap; a citation count for a row Crossref does not hold (DataCite's `citationCount`, which would cover arXiv preprints and is thinly populated, and OpenAlex's `cited_by_count`, which is up to 80 more requests a list), a *most cited* order, feeding the count to *Dig deeper*'s influence call, and refreshing a count on read ([261005i](../plans/261005i-citations-show-crossref-citation-count-with-source-and-date-read.md) § Passed over); searching every unlinked row at once; marks in the prose for a visitor; *Dig deeper* on every row at once; placing a cited work in the debate's threads (option C2 of [261004b § Part 2](../plans/261004b-citation-hover-card-offers-dig-deeper.md); folding Citations into Debate as a sub-mode was built on 2026-10-09 as [Peer review](peer-review.md)); an HTML page as the paper's full text; quoting the paper inside the streamed answer; *In your library* for a visitor, or used as the text *Look it up* reads; a stranger's public upload matched by our guess at its DOI; an author–year PDF bibliography's entries; a PDF list's entry for a visitor; OpenAlex (needs an account). Each is in one of the plans' lists of what is deliberately not built, with the reason.
+the cap; a citation count for a row Crossref does not hold (DataCite's `citationCount`, which would cover arXiv preprints and is thinly populated, and OpenAlex's `cited_by_count`, which is up to 80 more requests a list), a *most cited* order, feeding the count to *Dig deeper*'s influence call, and refreshing a count on read ([261005i](../plans/261005i-citations-show-crossref-citation-count-with-source-and-date-read.md) § Passed over); searching every unlinked row at once; marks in the prose for a visitor; *Dig deeper* on every row at once; placing a cited work in the debate's threads (option C2 of [261004b § Part 2](../plans/261004b-citation-hover-card-offers-dig-deeper.md); folding Citations into Debate as a sub-mode was built on 2026-10-09 as [Sources](sources.md)); an HTML page as the paper's full text; quoting the paper inside the streamed answer; *In your library* for a visitor, or used as the text *Look it up* reads; a stranger's public upload matched by our guess at its DOI; an author–year PDF bibliography's entries; a PDF list's entry for a visitor; OpenAlex (needs an account). Each is in one of the plans' lists of what is deliberately not built, with the reason.
 
 ## The code
 
@@ -947,7 +947,7 @@ code keeps of it) ·
 [`citation-effective-influence.ts`](../../src/citation-effective-influence.ts) (the one read path) ·
 [`cited-in-spideryarn.ts`](../../src/cited-in-spideryarn.ts) and
 [`pg-cited-in-spideryarn.ts`](../../src/store/pg-cited-in-spideryarn.ts) (already an article here) ·
-[`PeerReviewMode.tsx`](../../src/web/modes/peer-review/PeerReviewMode.tsx) (the band, since 2026-10-09; it was `CitationsMode.tsx`) ·
+[`SourcesMode.tsx`](../../src/web/modes/sources/SourcesMode.tsx) (the band, since 2026-10-09; it was `CitationsMode.tsx`) ·
 [`citations.css`](../../src/web/styles/citations.css) ·
 [`annotate.ts`](../../src/web/annotate.ts) § `citeMarks` (the prose marks) ·
 [`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx) § `CiteCard` (the card).

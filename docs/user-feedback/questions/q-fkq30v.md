@@ -4,7 +4,7 @@ report: spya-h5aypq
 status: open
 asked: 2026-10-09
 title: Peer review research: two Claims, Candidates, Referee and the switch, and which idea next?
-refs: SPIDERYARN-READING2-FZ · qi-8g2tr5bt · docs/research/261009b-what-a-peer-reviewer-needs-and-where-sources-and-referee-divide.md · docs/plans/261009w-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md · docs/investigations/261009d-the-guide-offers-referee-to-referees-measured.md · docs/user-feedback/261009_1237-peer-review-research-and-where-sources-and-referee-divide.md
+refs: SPIDERYARN-READING2-FZ · qi-8g2tr5bt · docs/research/261009b-what-a-peer-reviewer-needs-and-where-sources-and-referee-divide.md · docs/plans/261009x-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md · docs/investigations/261009d-the-guide-offers-referee-to-referees-measured.md · docs/user-feedback/261009_1237-peer-review-research-and-where-sources-and-referee-divide.md
 ---
 Done: the research, and your P.S. When a reader tells the guide, or writes in Why you're reading this, that they are refereeing, the guide now offers Referee as a button, even with experimental features off. It is never opened for them, and it comes with one sentence: the article's text already went to an AI provider when it was added, and Referee's Notices say what journals' rules are on that. Measured 14 of 14, and a magazine reviewer got no offer. On dev, not deployed.
 

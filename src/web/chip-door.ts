@@ -13,7 +13,7 @@
  * while the switch is off.
  *
  * **The guide's door adds the named exceptions** (plan
- * docs/plans/261009w-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md):
+ * docs/plans/261009x-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md):
  * `guideDoorRows`. Chat's door does not, so an old or planted Referee token in
  * an ordinary chat stays plain text with the switch off (GPT Sol's F1 on that
  * plan). Neither list is the bar's: the Dock and the command bar do not read

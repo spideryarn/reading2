@@ -1,12 +1,13 @@
-# 261009w — The guide offers Referee to a reader who says they are refereeing
+# 261009x — The guide offers Referee to a reader who says they are refereeing
 
 Owned by [plans.md](../project/plans.md). Report `spya-h5aypq` (#519, SPIDERYARN-READING2-FZ),
 Overseer queue item `qi-8g2tr5bt`, session `fbh5aypq-peer-review-research`. The research behind it
 is [261009b](../research/261009b-what-a-peer-reviewer-needs-and-where-sources-and-referee-divide.md).
-Runs beside the Sources rename (queue item `qi-m9tmnpy3`, session `fbc2qmbg-rename-to-sources`,
-still in its own worktree as this lands), which owns every Sources name; this plan uses those names
-and stays off its rows. Its first commit called it 261009u, a letter another plan (the guide's next
-steps) landed with first.
+Runs beside the Sources rename,
+[261009w](261009w-peer-review-becomes-sources-all-the-way-down.md) (queue item `qi-m9tmnpy3`),
+whose first stage landed while this was being built and which owns every Sources name; this plan
+uses those names and stays off its rows. This plan was first called 261009u, then 261009w; each
+time another plan landed with the letter first.
 **Status: built, GPT Sol on the plan and the code, measured 14/14
 ([261009d](../investigations/261009d-the-guide-offers-referee-to-referees-measured.md)), on `dev`.
 Not deployed. Four product questions for Greg in
@@ -104,7 +105,7 @@ touched.
 
 ## GPT Sol on the plan
 
-[261009w-plan-review-sol.md](261009w-plan-review-sol.md); prompt alongside it. Verdict: *revise
+[261009x-plan-review-sol.md](261009x-plan-review-sol.md); prompt alongside it. Verdict: *revise
 before build*. All eight findings were taken:
 
 | # | Finding | What was done |

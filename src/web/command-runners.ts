@@ -269,7 +269,7 @@ export function modeDoor(
 /**
  * **The same executor, opening modes through another door** — the guide
  * thread's, whose door holds the modes it may offer from behind the switch
- * (plan 261009w; src/web/chip-door.ts § `guideDoorRows`). Everything else is
+ * (plan 261009x; src/web/chip-door.ts § `guideDoorRows`). Everything else is
  * the executor it was given.
  */
 export function withModeDoor(executor: CommandExecutor, door: ModeDoor): CommandExecutor {

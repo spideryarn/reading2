@@ -80,7 +80,7 @@ describe("the chat prompt's section on offering an action", () => {
 
   /* Plan 261007j: the guide is handed a `mode` button beside every ordinary
      mode, and none beside an experimental one, which the reader may not have —
-     except the ones it may offer from behind the switch (plan 261009w,
+     except the ones it may offer from behind the switch (plan 261009x,
      tests/guide-offers-behind-the-switch.test.ts). */
   it("gives the guide a mode button for every ordinary mode, each a real catalogue key, and none for an experimental one it may not offer", () => {
     const keys = tokensIn(rules("guide"))

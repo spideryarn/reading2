@@ -2,7 +2,7 @@
 /**
  * **A Referee chip works in the guide with the switch off, as a press, and
  * stays plain text in ordinary Chat** — plan
- * docs/plans/261009w-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md,
+ * docs/plans/261009x-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md,
  * GPT Sol's F1, F3 and F6 on it.
  *
  * The real rows (src/web/chip-door.ts), the real doors and runners

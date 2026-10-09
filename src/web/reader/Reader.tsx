@@ -59,7 +59,7 @@ import { IdeasBand, VisitorIdeasBand } from "../modes/ideas/IdeasMode.js";
 import { TimelineBand, VisitorTimelineBand } from "../modes/timeline/TimelineMode.js";
 import { QuotesBand, VisitorQuotesBand } from "../modes/quotes/QuotesMode.js";
 import { quoteCardQuotes, useQuoteMarks } from "./useQuoteMarks.js";
-import { PeerReviewBand, VisitorPeerReviewBand } from "../modes/peer-review/PeerReviewMode.js";
+import { SourcesBand, VisitorSourcesBand } from "../modes/sources/SourcesMode.js";
 import { FaqBand, VisitorFaqBand } from "../modes/faq/FaqMode.js";
 import {
   armSkimOpening,
@@ -158,7 +158,7 @@ import {
   refereeParam,
   summaryParam,
   structureParam,
-  peerReviewParam,
+  sourcesParam,
   bearsParam,
   debateThreadParam,
   type BandMode,
@@ -1203,7 +1203,7 @@ export function Reader({
     referee: refereeParam,
     summary: summaryParam,
     structure: structureParam,
-    "peer-review": peerReviewParam,
+    sources: sourcesParam,
   });
   const inQuiz = useRef(false);
   const nowInQuiz = quizNav.mode === "learn" && quizNav.learn === "quiz" && quizNav.thread === null;
@@ -1419,7 +1419,7 @@ export function Reader({
    *
    * **Every work, not only those above the threshold bar**, which departs from
    * what quotes mode does and follows what the glossary does. `?citebar=` is
-   * reachable only inside Peer review's Bibliography while these marks are visible from
+   * reachable only inside Sources' Bibliography while these marks are visible from
    * every mode, so barring them here would change a paragraph's appearance
    * from a control the reader has no way to see. Fable, 2026-09-16.
    *
@@ -1607,7 +1607,7 @@ export function Reader({
   const [openOccurrence, setOpenOccurrence] = useState<string | null>(null);
 
   /**
-   * **One row to bring into view in Glossary, Ideas and Peer review's Claims**,
+   * **One row to bring into view in Glossary, Ideas and Sources' Claims**,
    * once each — `citeFocus` above is Bibliography's (src/web/item-focus.ts). Only
    * the way back from a chat sets them (`openOrigin` below). One piece of
    * state per band, so a request for one band cannot be spent by another.
@@ -1625,15 +1625,15 @@ export function Reader({
    * would unexpectedly jump to the old chat's item.
    *
    * **The list, not the mode**, since 2026-10-09: Bibliography and Claims are
-   * two of Peer review's sub-modes, and moving between them leaves `mode`
+   * two of Sources' sub-modes, and moving between them leaves `mode`
    * alone (GPT Sol's F7 on plan 261009l). `focusesLeft` (item-focus.ts) is the
    * rule, tested on its own.
    */
-  const peerReviewView = subNav["peer-review"];
-  const focusPlaceWas = useRef({ mode, peerReview: peerReviewView });
+  const sourcesView = subNav.sources;
+  const focusPlaceWas = useRef({ mode, sources: sourcesView });
   useEffect(() => {
     const was = focusPlaceWas.current;
-    const now = { mode, peerReview: peerReviewView };
+    const now = { mode, sources: sourcesView };
     focusPlaceWas.current = now;
     for (const slot of focusesLeft(was, now)) {
       switch (slot) {
@@ -1655,14 +1655,14 @@ export function Reader({
         }
       }
     }
-  }, [mode, peerReviewView]);
+  }, [mode, sourcesView]);
   /* **Mode, sub-mode and the parameters that could hide the item, in one
      pushed entry**, so one Back returns to the chat (GPT Sol's F4 on plan
      261009k). Each closed on a line of its own: tests/last-view.test.ts reads
-     them. Debate's way until 2026-10-09, when it became Peer review's. */
-  const [, setPeerReviewWay] = useQueryStates({
+     them. Debate's way until 2026-10-09, when it became Sources'. */
+  const [, setSourcesWay] = useQueryStates({
     mode: modeParam,
-    "peer-review": peerReviewParam,
+    sources: sourcesParam,
     bears: bearsParam,
     debatethread: debateThreadParam,
     thread: threadParam,
@@ -1680,9 +1680,9 @@ export function Reader({
     (workId: string) => {
       setBandAway(false);
       setCiteFocus(focusOn(workId));
-      void setPeerReviewWay({ mode: "peer-review", "peer-review": null, thread: null }, { history: "push" });
+      void setSourcesWay({ mode: "sources", sources: null, thread: null }, { history: "push" });
     },
-    [setPeerReviewWay],
+    [setSourcesWay],
   );
   const [, setIdeaWay] = useQueryStates({
     mode: modeParam,
@@ -1721,7 +1721,7 @@ export function Reader({
           setTermFocus(focusOn(origin.itemId));
           return;
         /* A stored origin keeps its old mode word as data until the deep rename
-           (plan 261009l § Stage 3); each lands on its Peer review sub-mode. */
+           (plan 261009l § Stage 3); each lands on its Sources sub-mode. */
         case "citations":
           openBibliographyWork(origin.itemId);
           return;
@@ -1737,15 +1737,15 @@ export function Reader({
           setBandAway(false);
           if (isLensOrigin(origin)) {
             /* An angle is not in the article: the angles box is Reception's. */
-            void setPeerReviewWay(
-              { mode: "peer-review", "peer-review": "reception", thread: null },
+            void setSourcesWay(
+              { mode: "sources", sources: "reception", thread: null },
               { history: "push" },
             );
             return;
           }
           setClaimFocus(focusOn(claimFocusKey(origin)));
-          void setPeerReviewWay(
-            { mode: "peer-review", "peer-review": "claims", bears: null, debatethread: null, thread: null },
+          void setSourcesWay(
+            { mode: "sources", sources: "claims", bears: null, debatethread: null, thread: null },
             { history: "push" },
           );
           return;
@@ -1755,7 +1755,7 @@ export function Reader({
         }
       }
     },
-    [openTermInGlossary, openBibliographyWork, setIdeaWay, setPeerReviewWay, setThread],
+    [openTermInGlossary, openBibliographyWork, setIdeaWay, setSourcesWay, setThread],
   );
   /**
    * **The quotes, and they are not a state at all** — since 2026-09-08.
@@ -2306,7 +2306,7 @@ export function Reader({
   );
 
   /**
-   * **Each block's position in the article** — Peer review's Claims sub-mode puts
+   * **Each block's position in the article** — Sources' Claims sub-mode puts
    * its claims in the order the piece makes them, and the artefact does not
    * carry that; the blocks do. Built once here and handed to both debate
    * bands. docs/plans/260929h-debate-mode-clearer-sources-and-orders.md F8.
@@ -2823,7 +2823,7 @@ export function Reader({
     referee: subNav.referee,
     summary: subNav.summary,
     structure: subNav.structure,
-    "peer-review": subNav["peer-review"],
+    sources: subNav.sources,
   };
   /* One string, so the effect below has one dependency for all of them. The
      views are fixed vocabularies with no NUL in them. */
@@ -2884,7 +2884,7 @@ export function Reader({
    * **The modes a chat chip may open, and how** (plan 261007j, GPT Sol's F3):
    * two doors, chat's and the guide's, whose rows are src/web/chip-door.ts §
    * `chipDoorRows` and § `guideDoorRows` (the guide's adds the modes it may
-   * offer from behind the switch, plan 261009w). The press is the Dock's own
+   * offer from behind the switch, plan 261009x). The press is the Dock's own
    * pair of activators, through `modeActivators` (set below, beside
    * `onDockMode`).
    */
@@ -2987,7 +2987,7 @@ export function Reader({
    * The find reads the address at the press, not at the render: it carries
    * `?at=`, which the reader's scrolling rewrites.
    *
-   * Each carries a `guide` twin whose mode door is the guide's (plan 261009w):
+   * Each carries a `guide` twin whose mode door is the guide's (plan 261009x):
    * ChatPanel.tsx § `Conversation` hands it to a guide thread's chips.
    */
   const chatCommands = useMemo(() => {
@@ -3619,11 +3619,11 @@ export function Reader({
             onOpenKey={setOpenTimelineKey}
           />
         ) : null;
-      /* **Peer review, since 2026-10-09** — Citations' band and Debate's under
-         one chip row (PeerReviewMode.tsx). **The owner/visitor pair**, each
+      /* **Sources, since 2026-10-09** — Citations' band and Debate's under
+         one chip row (SourcesMode.tsx). **The owner/visitor pair**, each
          half since 2026-09-29: a visitor's rows arrive with every address
          re-judged by `publicCitationUrl` (src/public/dto.ts §
-         `publicCitedWork`, `publicDebate`), and `VisitorPeerReviewBand` mounts
+         `publicCitedWork`, `publicDebate`), and `VisitorSourcesBand` mounts
          no `useCitations` or `useDebate`, so nothing here can start a list or
          a search. **Any one of the three artefacts draws the band**
          (visitor.ts § POLICY, `any-artefact`): with none, `visitorGap` said
@@ -3631,10 +3631,10 @@ export function Reader({
          row's block link is a jump, not a selection.
          docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md,
          docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
-      case "peer-review":
+      case "sources":
         if (!owner)
           return artefacts?.citations || artefacts?.debate || artefacts?.debateClaims ? (
-            <VisitorPeerReviewBand
+            <VisitorSourcesBand
               citations={artefacts.citations ?? null}
               debate={artefacts.debate ?? null}
               claimList={artefacts.debateClaims ?? null}
@@ -3648,7 +3648,7 @@ export function Reader({
             />
           ) : null;
         return (
-          <PeerReviewBand
+          <SourcesBand
             slug={slug}
             citationsRead={owner.citations}
             onJump={bandJump}
@@ -4035,7 +4035,7 @@ export function Reader({
   const activateModeHere = useActivateMode(
     slug,
     carriedSearch(location.search),
-    { diagram: subNav.diagram, summary: summaryView, peerReview: subNav["peer-review"] },
+    { diagram: subNav.diagram, summary: summaryView, sources: subNav.sources },
     onDockMode,
     isOwner,
     mode,
@@ -4050,7 +4050,7 @@ export function Reader({
   const activateModeUnarmed = useActivateMode(
     slug,
     carriedSearch(location.search),
-    { diagram: subNav.diagram, summary: summaryView, peerReview: subNav["peer-review"] },
+    { diagram: subNav.diagram, summary: summaryView, sources: subNav.sources },
     onDockMode,
     false,
     mode,
@@ -4831,9 +4831,9 @@ export function Reader({
         /* The same state the Diagram band's chips read (`diagramParam`), not
            the address, which lags a chip press — Dock.tsx § Props `diagram`. */
         diagram={subNav.diagram}
-        /* The same for Peer review's sub-mode: each arms only its own work
-           (activation.ts § `activationForPeerReview`). */
-        peerReview={subNav["peer-review"]}
+        /* The same for Sources' sub-mode: each arms only its own work
+           (activation.ts § `activationForSources`). */
+        sources={subNav.sources}
         onMode={onDockMode}
         /* Which mode buttons are drawn dimmed. Empty for the owner, so the bar
            is exactly what it was; derived from `MODES` for a visitor, so a mode

@@ -1,7 +1,7 @@
 /**
  * **The guide may offer Referee from behind the experimental switch, as a
  * press, and nothing else changes** — plan
- * docs/plans/261009w-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md.
+ * docs/plans/261009x-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md.
  *
  * Three readers of one record (src/mode-catalog.ts § `OFFERED_BEHIND_THE_SWITCH`):
  * the written guide's list of modes, the press rule (src/acts-alone.ts), and the

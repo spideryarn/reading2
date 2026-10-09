@@ -3,7 +3,7 @@
 Owned by [research.md](../project/research.md). Report `spya-h5aypq` (#519,
 SPIDERYARN-READING2-FZ), Overseer queue item `qi-8g2tr5bt`, session `fbh5aypq-peer-review-research`.
 The plan that builds the first piece is
-[261009w](../plans/261009w-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md).
+[261009x](../plans/261009x-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md).
 Written 2026-10-09.
 
 **What this builds on.** A deeper pass on the same person already exists:
@@ -64,7 +64,7 @@ names: Sources › Bibliography, Reception, Claims. The clash Greg felt while di
 - **The first piece, built with this research:** a reader who tells the guide, or says in *Why
   you're reading this*, that they are refereeing gets Referee offered as a button. It is a press,
   never opened for them. Until now that was impossible for most readers, because Referee is behind
-  the experimental switch and the guide could only name it in words. Plan 261009w, measured in
+  the experimental switch and the guide could only name it in words. Plan 261009x, measured in
   [261009d](../investigations/261009d-the-guide-offers-referee-to-referees-measured.md).
 
 ## The reviewer's job, step by step, and what Spideryarn has for each
@@ -97,7 +97,7 @@ one word (§ The two Claims) and one sub-mode for a different person (Candidates
 A referee's step 4 is Sources, and their steps 3 and 5 are Referee. Nothing in either mode should
 copy the other. The join is the guide: it knows why the reader is reading, so it can say "you are
 refereeing: Referee for the close read, Sources for the literature around it". Until today it could
-not offer Referee as a button to most readers (§ The short answer). That is plan 261009w.
+not offer Referee as a button to most readers (§ The short answer). That is plan 261009x.
 
 ### The two Claims
 
@@ -181,7 +181,7 @@ our readers.
 
 ## Questions for Greg
 
-None blocks plan 261009w. They are in the question file for this report
+None blocks plan 261009x. They are in the question file for this report
 ([q-fkq30v.md](../user-feedback/questions/q-fkq30v.md)), each with its options.
 
 - **Q1. The two Claims.** Keep one word for both, or rename one on screen?

@@ -60,7 +60,7 @@ export function useChatCommands(): CommandExecutor | null {
 
 /**
  * **One thread's executor**: the guide's twin for a guide thread, where the
- * reading view made one (`CommandExecutor.guide`, plan 261009w), and the one
+ * reading view made one (`CommandExecutor.guide`, plan 261009x), and the one
  * around it for every other kind — so a Referee chip that works in the guide
  * stays plain text in ordinary Chat (GPT Sol's F1 on that plan).
  */

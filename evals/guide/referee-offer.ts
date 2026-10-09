@@ -1,7 +1,7 @@
 /**
  * **Does the guide offer Referee to a reader who says they are refereeing, and
  * to nobody else?** — the paid check behind plan
- * docs/plans/261009w-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md.
+ * docs/plans/261009x-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md.
  *
  *     npx tsx evals/guide/referee-offer.ts --label v1 --runs 2     # PAID, about $0.50
  *

@@ -1,8 +1,8 @@
 You are reviewing built code in the Spideryarn repo, in this worktree. You MAY fix what you find inside this change (the files in the diff), then report; anything wider than this change, report only and do not edit. Do not commit, do not touch git state, do not run the paid eval (evals/guide/referee-offer.ts costs money).
 
 Read first:
-1. docs/plans/261009w-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md — the plan, your own earlier plan review in docs/plans/261009w-plan-review-sol.md, and how each finding was handled.
-2. docs/plans/261009w-code-review.diff — the scoped diff against origin/dev (src, tests, the eval). The merge brought in another plan's work (the guide's "next steps", docs/plans/261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md, src/next-steps.ts, src/web/GuideNextSteps.tsx); this change had to integrate with it via guideModeKeys and ChatCommandsFor.
+1. docs/plans/261009x-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md — the plan, your own earlier plan review in docs/plans/261009x-plan-review-sol.md, and how each finding was handled.
+2. docs/plans/261009x-code-review.diff — the scoped diff against origin/dev (src, tests, the eval). The merge brought in another plan's work (the guide's "next steps", docs/plans/261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md, src/next-steps.ts, src/web/GuideNextSteps.tsx); this change had to integrate with it via guideModeKeys and ChatCommandsFor.
 3. Results: evals/guide/results/referee-offer-v2-merged.json and docs/investigations/261009d-the-guide-offers-referee-to-referees-measured.md.
 
 Check especially:

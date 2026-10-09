@@ -2,7 +2,7 @@
 /**
  * Real router, nuqs and visitor band, with rows produced by the public DTO.
  *
- * Debate's band until 2026-10-09; Peer review's since, with Debate's old
+ * Debate's band until 2026-10-09; Sources' since, with Debate's old
  * addresses lifted to its Reception and Claims on boot, on `navigate()`, on
  * Back and from a remembered last view (plan 261009l, GPT Sol's F1).
  */
@@ -14,7 +14,7 @@ import { afterEach, beforeEach, expect, it } from "vitest";
 import { publicArticle } from "../src/public/dto.js";
 import type { PublicCitations, PublicDebate, PublicDebateClaimList } from "../src/public-types.js";
 import type { BlockId, Debate, Tree } from "../src/types.js";
-import { VisitorPeerReviewBand } from "../src/web/modes/peer-review/PeerReviewMode.js";
+import { VisitorSourcesBand } from "../src/web/modes/sources/SourcesMode.js";
 import { modeParam } from "../src/web/params.js";
 import { navigate, settleAddress, useRoute } from "../src/web/router.js";
 import { lastViewKey, useLastView } from "../src/web/last-view.js";
@@ -104,8 +104,8 @@ function Page() {
   useLastView(SLUG, "article", null);
   const [mode] = useQueryState("mode", modeParam);
   if (route.kind !== "read") return createElement("p", null, "not found");
-  if (mode !== "peer-review") return createElement("p", null, `band: ${mode}`);
-  return createElement(VisitorPeerReviewBand, {
+  if (mode !== "sources") return createElement("p", null, `band: ${mode}`);
+  return createElement(VisitorSourcesBand, {
     citations, debate, claimList, onJump: () => {}, blockOrder: new Map([[BLOCK, 0]]),
     publishedAt: undefined, articleTitle: "The shared piece", onOpenWork: (workId) => openedWorks.push(workId),
   });
@@ -154,9 +154,9 @@ it("lifts a cold legacy link, and Reception then stays selected", async () => {
   boot("?mode=debate&debateby=claim&name=linked");
   expect(inClaims()).toBe(true);
   expect(params().has("debateby")).toBe(false);
-  expect(params().get("mode")).toBe("peer-review");
+  expect(params().get("mode")).toBe("sources");
   press('[aria-label="Reception, 1 source"]');
-  await until(() => params().get("peer-review") === "reception");
+  await until(() => params().get("sources") === "reception");
   expect(params().has("debate")).toBe(false);
   expect(titles()).toEqual(["A reply"]);
   expect(host.querySelector(".dbt-title-only h3")?.textContent).toBe("Names this piece by its title only");
@@ -198,8 +198,8 @@ it.each(["?mode=debate&debate=claims", "?mode=debate&debateby=claim"])(
     window.localStorage.setItem(lastViewKey(SLUG, null), remembered);
     boot("");
     await until(inClaims);
-    expect(params().get("mode")).toBe("peer-review");
-    expect(params().get("peer-review")).toBe("claims");
+    expect(params().get("mode")).toBe("sources");
+    expect(params().get("sources")).toBe("claims");
     expect(params().has("debate")).toBe(false);
     expect(params().has("debateby")).toBe(false);
   },
@@ -216,7 +216,7 @@ it("the public DTO keeps relevance judgments, and a normal segment press keeps f
   expect(debate.direct.rows[0]?.identifies[0]?.kind).toBe("named");
   boot("?mode=debate&bears=directly&debatethread=key");
   press('[aria-label="Claims, 0 sources"]');
-  await until(() => params().get("peer-review") === "claims");
+  await until(() => params().get("sources") === "claims");
   expect(titles()).toEqual([]);
   expect(params().get("bears")).toBe("directly");
   expect(params().get("debatethread")).toBe("key");
@@ -245,19 +245,19 @@ it("explains rows withheld by the real public boundary in each empty sub-mode", 
   boot("?mode=debate");
   expect(host.querySelector(".dbt-empty")?.textContent).toBe(debateWithheldOnSharedLink("The search for replies to this piece", 1));
   press('[aria-label="Claims, 0 sources"]');
-  await until(() => params().get("peer-review") === "claims");
+  await until(() => params().get("sources") === "claims");
   expect(host.querySelector(".dbt-empty")?.textContent).toBe(debateWithheldOnSharedLink("The search for answers to what it claims", 3));
 });
 
 /* **The other half of the merge: Citations' old link, and a Bibliography with
    nothing stored.** A visitor whose article has a Reception search and no
-   bibliography still gets Peer review open (visitor.ts § POLICY,
+   bibliography still gets Sources open (visitor.ts § POLICY,
    `any-artefact`), and Bibliography says it has no list rather than drawing a
    blank band (GPT Sol's F3 on plan 261009l). */
 it("lifts an old Citations link to Bibliography, which says it has no list", () => {
   boot("?mode=citations&citeby=document");
-  expect(params().get("mode")).toBe("peer-review");
-  expect(params().has("peer-review")).toBe(false);
+  expect(params().get("mode")).toBe("sources");
+  expect(params().has("sources")).toBe(false);
   expect(params().get("citeby")).toBe("document");
   expect(host.querySelector('[aria-label="Bibliography"]')?.getAttribute("aria-checked")).toBe("true");
   expect(host.textContent).toContain("Nobody has listed the works this one cites yet.");
@@ -265,11 +265,11 @@ it("lifts an old Citations link to Bibliography, which says it has no list", () 
 
 it("says Reception has nothing when the visitor's article has no search stored", () => {
   debate = null as unknown as PublicDebate;
-  boot("?mode=peer-review&peer-review=reception");
+  boot("?mode=sources&sources=reception");
   expect(host.textContent).toContain("Nobody has asked the web about this one yet.");
 });
 
-it("wires a visitor's Bibliography through the real Peer review wrapper into Claims' C1 line", () => {
+it("wires a visitor's Bibliography through the real Sources wrapper into Claims' C1 line", () => {
   citations = {
     citations: [
       {
@@ -290,7 +290,7 @@ it("wires a visitor's Bibliography through the real Peer review wrapper into Cla
   claimList = {
     claims: [{ id: "claim-1", blockId: BLOCK, quote: "The claim in the piece", statement: "The piece makes this claim." }],
   };
-  boot("?mode=peer-review&peer-review=claims");
+  boot("?mode=sources&sources=claims");
 
   const line = host.querySelector(".dbt-cited-here");
   expect(line?.textContent).toContain("Ada Smith 2024");
