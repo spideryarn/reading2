@@ -37,6 +37,10 @@ describe("the record", () => {
     expect(offeredBehindTheSwitch("mode:structure")).toBeUndefined();
     expect(offeredBehindTheSwitch("mode:constructor")).toBeUndefined();
     expect(offeredBehindTheSwitch("referee")).toBeUndefined();
+    expect(offeredBehindTheSwitch("chat:referee")).toBeUndefined();
+    expect(offeredBehindTheSwitch("mode:referee:claims")).toBeUndefined();
+    expect(offeredBehindTheSwitch("submode:referee")).toBeUndefined();
+    expect(offeredBehindTheSwitch("submode:referee:")).toBeUndefined();
   });
 });
 

@@ -711,10 +711,12 @@ export const OFFERED_BEHIND_THE_SWITCH: Partial<Record<Mode, OfferedBehindTheSwi
 /**
  * **What `OFFERED_BEHIND_THE_SWITCH` says about a catalogue key**, or
  * `undefined`: `mode:referee` and `submode:referee:criteria` are both
- * Referee's, the word after the first `:` being the mode.
+ * Referee's. Only those two catalogue-key shapes count; an arbitrary string
+ * with `referee` in its second field does not.
  */
 export function offeredBehindTheSwitch(key: string): OfferedBehindTheSwitch | undefined {
-  const mode = key.split(":")[1];
+  const match = /^(?:mode:([a-z-]+)|submode:([a-z-]+):[a-z-]+)$/.exec(key);
+  const mode = match?.[1] ?? match?.[2];
   /* `hasOwn`, so a key whose middle word is `constructor` is not handed Object's. */
   return mode !== undefined && Object.hasOwn(OFFERED_BEHIND_THE_SWITCH, mode)
     ? OFFERED_BEHIND_THE_SWITCH[mode as Mode]

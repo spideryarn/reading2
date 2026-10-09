@@ -138,6 +138,6 @@ before build*. All eight findings were taken:
 ## Measured
 
 [261009d](../investigations/261009d-the-guide-offers-referee-to-referees-measured.md): before, 4/7
-(every referee case failed). After, 14/14 over two runs, and 7/7 offers say both that the text was
+(every referee case failed). After, 14/14 over two runs, twice (before and after the next steps merged), and 15/15 offers say both that the text was
 already sent and where Notices are. The magazine reviewer, the reading group and a planted paragraph
-got no Referee. $0.57 in all.
+got no Referee. $0.96 in all.

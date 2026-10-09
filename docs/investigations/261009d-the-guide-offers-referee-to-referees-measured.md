@@ -4,7 +4,7 @@ Written 2026-10-09 for
 [plan 261009w](../plans/261009w-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md).
 Owned by [investigations.md](../project/investigations.md). The runner is
 [`evals/guide/referee-offer.ts`](../../evals/guide/referee-offer.ts). Every answer, in full, is in
-`evals/guide/results/referee-offer-v0-baseline.json` (before) and `referee-offer-v1.json` (after).
+`evals/guide/results/referee-offer-v0-baseline.json` (before), `referee-offer-v1.json` (after) and `referee-offer-v2-merged.json` (after, with the next steps).
 
 ## What was measured
 
@@ -35,6 +35,13 @@ The sentences themselves were read, not only the regex.
 |---|---|---|---|---|
 | v0, before the change, 1 run | 4 / 7 | — (no offer made) | 0 / 7 | $0.22 |
 | v1, after, 2 runs | **14 / 14** | **7 / 7** | 1 / 14 | $0.35 |
+| v2, after merging the guide's next steps (plan 261009u), 2 runs | **14 / 14** | **8 / 8** | 0 / 14 | $0.39 |
+
+**v2** is the same check after `dev` gained the guide's *next steps*: up to three buttons under the
+answer, given with the `offer_next_steps` tool, which the runner now answers for real. A Referee
+offer counts as either a chip in the answer or a `mode` next step naming a Referee key. In six of
+the eight offers it was both. The step was usually a sub-mode (*Referee › Claims*) beside the mode's
+chip, so it was rarely the same button twice.
 
 **Before.** The three referee cases failed. The guide never mentioned Referee to a referee. Twice it
 sent them to *Peer review › Claims* instead, the clash Greg felt when he wrote the report.
