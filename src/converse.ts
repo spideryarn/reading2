@@ -263,7 +263,7 @@ export const MAX_TOOL_ROUNDS = 3;
  * **The tools whose result the model does not need**: when a round asks for
  * these and nothing else, this round wrote prose, and every call succeeded,
  * `converse` stops there rather than sending the result back for another
- * round. Plan docs/plans/261009s-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md.
+ * round. Plan docs/plans/261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md.
  */
 export const ENDS_THE_TURN: ReadonlySet<string> = new Set(["offer_next_steps"]);
 
@@ -3605,7 +3605,7 @@ export async function* converse({
        and got them, is the last round.** The model needs nothing back, and
        going round again costs a whole request and, measured in 261009q,
        sometimes a second copy of the reply. Three conditions, each GPT Sol's
-       on plan 261009s (F1, F2):
+       on plan 261009u (F1, F2):
        - **this round's own prose**, not the turn's: a round one that said
          "let me check…" and a round two of only the steps would otherwise end
          on the preamble;

@@ -2,7 +2,7 @@
  * **Does the guide offer next steps that fit, and offer the right control when
  * the reader asks for an action, without claiming to have done it?** — the
  * paid check behind plan
- * docs/plans/261009s-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md.
+ * docs/plans/261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md.
  *
  *     npx tsx evals/guide/next-steps.ts --label v1 --runs 2     # PAID, about $0.50
  *

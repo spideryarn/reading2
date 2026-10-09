@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * **The guide's next steps, drawn** — src/web/GuideNextSteps.tsx, plan
- * docs/plans/261009s-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md.
+ * docs/plans/261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md.
  *
  * Each kind becomes a press through machinery that already exists: an ask
  * sends the words, a mode is `chipFor`'s chip, a search is the quick-search

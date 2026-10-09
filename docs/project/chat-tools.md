@@ -1028,7 +1028,7 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   Live reads, and a voice has nowhere for the button). It replaced 261009i's *Keep this as why
   you're reading*.
 - **Its next steps**, since 2026-10-09: a second tool of its own, **`offer_next_steps`**, which runs
-  nothing ([261009s](../plans/261009s-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md);
+  nothing ([261009u](../plans/261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md);
   Greg, `spya-pqaftb`: *"maybe three would be about right. Probably the LLM should suggest them as
   the language"*). At the end of an answer the model gives up to three steps, each `ask` (words the
   reader can send next), `mode` (an ordinary mode's catalogue key), `search` (words for a quick
@@ -1053,7 +1053,7 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   conversation is mounted. What the reader answers is saved only through the guide's offer and
   their press (above). While the conversation is empty it offers three ways in, each sent as the
   reader's first message (*Where should I start?*, *Help me work out what I want from this*, *How
-  could I read this well?*; plan 261009s); after that, the guide's own next steps (above). `GUIDE_SYSTEM` is told the greeting exists, since it is not in the transcript.
+  could I read this well?*; plan 261009u); after that, the guide's own next steps (above). `GUIDE_SYSTEM` is told the greeting exists, since it is not in the transcript.
 - **A row in the command bar**, *Guide*, on the owner's reading view (`guideRow` in
   [`CommandBar.tsx`](../../src/web/CommandBar.tsx)), which opens it as `?guide=1` does; and since
   261007j the bar's *Ask the guide: "…"* for a sentence the fast pick could not place.

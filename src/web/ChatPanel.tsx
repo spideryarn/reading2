@@ -2091,7 +2091,7 @@ export function Conversation({
         ))}
         {/* The guide's next steps, under its latest answer only, and outside
             every answer's `GuideActContext`: none of them presses itself
-            (GuideNextSteps.tsx, plan 261009s). Not while a turn is out: the
+            (GuideNextSteps.tsx, plan 261009u). Not while a turn is out: the
             buttons would be for the answer before it. */}
         {kind === "guide" && !busy && (
           <GuideNextSteps slug={slug} message={thread.messages.at(-1)} blocks={blocks} onAsk={(q) => onSend(q)} />

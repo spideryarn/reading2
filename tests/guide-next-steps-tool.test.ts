@@ -1,6 +1,6 @@
 /**
  * **The guide's next steps, on the server** — plan
- * docs/plans/261009s-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md.
+ * docs/plans/261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md.
  *
  * The tool's checks (src/next-steps.ts through `runTool`), who is offered it,
  * and `converse` ending the turn on a round that asked only for it.

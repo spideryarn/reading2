@@ -1,7 +1,7 @@
 /**
  * **The guide's next steps: what one may be, checked the same way on both
  * sides** — plan
- * docs/plans/261009s-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md.
+ * docs/plans/261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md.
  *
  * > We obviously don't want to present too many buttons to the user. Maybe
  * > three or four is the maximum, plus the free text input box, of course. So

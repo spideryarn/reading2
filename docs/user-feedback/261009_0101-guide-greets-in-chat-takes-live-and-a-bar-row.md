@@ -1,7 +1,7 @@
 ---
 reports: spya-s6qhzv, spya-x38nge
 ending: shipped
-comment: The guide greets you in the chat, takes Live, has a Guide row in the bar, and offers to save your reason and About you on your press. Since then it also offers buttons for a private link, sharing and archiving (261009s).
+comment: The guide greets you in the chat, takes Live, has a Guide row in the bar, and offers to save your reason and About you on your press. Since then it also offers buttons for a private link, sharing and archiving (261009u).
 ---
 # The guide greets you in the chat, takes Live, and has a row in the command bar
 

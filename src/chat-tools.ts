@@ -616,7 +616,7 @@ export const OFFER_TO_SAVE_TOOL: FunctionTool = {
 
 /**
  * **The guide offers its next steps as buttons** — plan
- * docs/plans/261009s-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md.
+ * docs/plans/261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md.
  * Greg, 2026-10-09 (`spya-pqaftb`): *"maybe three would be about right.
  * Probably the LLM should suggest them as the language"*.
  *
@@ -2273,7 +2273,7 @@ function offerNextSteps(args: Record<string, unknown>): ToolOutcome {
     label,
     detail: "",
     /* Not "write nothing more": beside `offer_to_save`, the model still owes
-       the reader a word about that card (GPT Sol's F2 on plan 261009s). And
+       the reader a word about that card (GPT Sol's F2 on plan 261009u). And
        "accepted", not "sees": whether a mode can open here is the page's call. */
     content:
       `${steps.length} next step${steps.length === 1 ? " was" : "s were"} accepted, to show as buttons under your answer.${dropped} ` +

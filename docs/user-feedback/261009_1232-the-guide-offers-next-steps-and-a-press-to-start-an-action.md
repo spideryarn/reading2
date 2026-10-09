@@ -11,7 +11,7 @@ SPIDERYARN-READING2-FY, #518, kind suggestion; acted on together with part 2 of 
 `spya-ujstyz` to [q-w2740x](questions/q-w2740x.md). Session `fbpqaftb-guide-action-buttons`, queue
 item `qi-j45yc3ck` (superseding `qi-rt49dwcd`). Plan, Opus's product call, both GPT Sol reviews, the
 eval and the browser check:
-[261009s](../plans/261009s-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md).
+[261009u](../plans/261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md).
 
 > For the guide chat, it has a button for where do I start. That's good. I guess what other options
 > can we offer? I suppose other buttons could include help me clarify my intent, suggest some tools

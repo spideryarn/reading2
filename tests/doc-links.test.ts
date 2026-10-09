@@ -75,9 +75,14 @@ const DOC_FILES = [
   ...globSync("docs/**/*.md"),
 ];
 
-/** Everything that carries prose about the docs in a comment. */
+/**
+ * Everything that carries prose about the docs in a comment. Not the
+ * `*.generated.ts` files: they are built from `docs/user-feedback/`, which is
+ * checked above as a doc, and what they hold is readers' words quoted as data —
+ * Greg's "agents.md" in q-rstqvz is a phrase, not a link.
+ */
 const SOURCE_FILES = [
-  ...globSync("src/**/*.{ts,tsx,css}"),
+  ...globSync("src/**/*.{ts,tsx,css}").filter((f) => !f.endsWith(".generated.ts")),
   ...globSync("styles/*.css"),
   ...globSync("*.config.ts"),
 ];

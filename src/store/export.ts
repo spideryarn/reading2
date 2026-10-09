@@ -389,10 +389,19 @@ export async function exportArticle(
        byte-identical. src/db/schema.ts § `publishedAt`. */
     publishedAt: revision.publishedAt,
     /* The year alone, for a paper with no whole day: the same fact, so it is
-       exported where the date is. `journal` and `doi` are still not, which is
-       261004a's open question and not this one's. */
+       exported where the date is. */
     publishedYear: revision.publishedYear,
     note: revision.note,
+    /* The paper's own summary, and for a minimal paper the only prose it has.
+       Left out with nothing saying so until plan 261009s.
+
+       **`doi` and `journal` are left out on purpose, for now**: whether the
+       rollback carries them is Greg's open question (plan 261004a), listed in
+       docs/project/export.md § Why there are two exporters. The reader's zip
+       (src/store/export-bundle.ts) keeps both, in `content/revision.json`.
+       tests/export-meta-abstract-pg.test.ts pins the omission, so deciding it
+       is a change there too. */
+    abstract: revision.abstract,
     source: revision.source,
     method: revision.extractMethod,
     pages: revision.pages,

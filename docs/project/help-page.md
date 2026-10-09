@@ -119,7 +119,9 @@ The plan, its review and its eval: [261007k](../plans/261007k-help-chatbot.md).
   catalogue), and adds the corpus to the same commit. It stays out of a bare `git commit`, a
   command with anything after the commit (`&& git push`), and a commit while some other Help file is
   changed and not in it, so the test is still the backstop
-  ([261007q](../plans/261007q-generated-files-regenerate-on-commit.md)). The corpus stays committed
+  ([261007q](../plans/261007q-generated-files-regenerate-on-commit.md)). When it stays out of a
+  commit that names a changed Help source, it says so and gives the command to run
+  ([261009t](../plans/261009t-the-regenerate-hook-says-when-it-declines-a-commit-that-names-its-sources.md)). The corpus stays committed
   rather than built on deploy, because only Vitest or Vite can read the pages. The
   whole corpus is the model's system prompt ([`src/help-chat-call.ts`](../../src/help-chat-call.ts)
   § `HELP_CHAT_SYSTEM`), with a rule to link the page each answer comes from and to decline, in one

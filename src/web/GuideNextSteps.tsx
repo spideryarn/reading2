@@ -1,7 +1,7 @@
 /**
  * **The guide's next steps, as a row of buttons under its latest answer** —
  * plan
- * docs/plans/261009s-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md.
+ * docs/plans/261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md.
  *
  * > I think the ideal would be if the chat has the ability to add certain
  * > simple UI components like buttons to kick things off […] so that it can

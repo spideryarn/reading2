@@ -1,4 +1,4 @@
-# 261009s — The guide offers next steps as buttons, and a press to start an action
+# 261009u — The guide offers next steps as buttons, and a press to start an action
 
 Owned by [plans.md](../project/plans.md). Overseer queue item `qi-j45yc3ck`; report `spya-pqaftb`
 (#518, SPIDERYARN-READING2-FY) and part 2 of Greg's reply `spya-ujstyz` to
@@ -7,8 +7,8 @@ Supersedes queue item `qi-rt49dwcd`. Session `fbpqaftb-guide-action-buttons`. Fo
 [261009i](261009i-the-guide-greets-in-chat-takes-live-and-a-bar-row.md) and
 [261009q](261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md), whose
 `offer_to_save` tool is the shape this copies.
-Its first commit, `319219010`, called it 261009r; the Search excerpts plan landed with that letter
-first, so this one took the next.
+Its first commit, `319219010`, called it 261009r, and its second 261009s; another plan landed with
+each of those letters first, so this one took the next free one.
 **Status: built, GPT Sol on the plan and the code, measured (eval v1 to v4), seen in a browser, on `dev`. Not deployed. One question for Greg, q-dqh7t6.**
 
 ## What Greg asked for
@@ -189,7 +189,7 @@ read first.
 
 ## After the plan review (overrides the design above where they differ)
 
-[GPT Sol](261009s-plan-review-sol.md): *build with changes*. It reviewed the plan with a first cut
+[GPT Sol](261009u-plan-review-sol.md): *build with changes*. It reviewed the plan with a first cut
 of the code already in the tree. Each finding checked here.
 
 - **F1 (P1), ending the turn on "the answer has words".** Right: the check read the turn's text,
@@ -290,7 +290,7 @@ first and went round as they should.
 
 ## Code review
 
-[GPT Sol](261009s-code-review-sol.md) on [the diff](261009s-code-review.diff), workspace-write:
+[GPT Sol](261009u-code-review-sol.md) on [the diff](261009u-code-review.diff), workspace-write:
 *land with fixes*, no P1.
 
 - **P2, fixed by the reviewer**: a search box the reader had edited kept its words when a later
@@ -318,12 +318,12 @@ first and went round as they should.
   which landed on Metadata's *Access & sharing* card (nothing turned on); a search step whose box,
   edited to *attention heads*, relabelled its button and opened Search with 15 passages; after a
   reload the latest answer's row only; no horizontal scroll at 390. Shots:
-  [empty](261009s-shot-1-empty-guide-1440.png), [empty, phone](261009s-shot-2-empty-guide-390.png),
-  [a row](261009s-shot-3-answer-next-steps-1440.png), [share](261009s-shot-4-share-offer-1440.png),
-  [reload](261009s-shot-5-after-reload-1440.png),
-  [the card](261009s-shot-6-metadata-access-sharing-1440.png),
-  [search](261009s-shot-7-search-offer-1440.png), [edited](261009s-shot-8-search-edited-1440.png),
-  [Search mode](261009s-shot-9-search-mode-1440.png), [phone](261009s-shot-10-next-steps-390.png).
+  [empty](261009u-shot-1-empty-guide-1440.png), [empty, phone](261009u-shot-2-empty-guide-390.png),
+  [a row](261009u-shot-3-answer-next-steps-1440.png), [share](261009u-shot-4-share-offer-1440.png),
+  [reload](261009u-shot-5-after-reload-1440.png),
+  [the card](261009u-shot-6-metadata-access-sharing-1440.png),
+  [search](261009u-shot-7-search-offer-1440.png), [edited](261009u-shot-8-search-edited-1440.png),
+  [Search mode](261009u-shot-9-search-mode-1440.png), [phone](261009u-shot-10-next-steps-390.png).
 - 2026-10-09: **the full suite** found two guards this change had to answer: `src/next-steps.ts` is
   now on the client's allowlist of pure shared modules (tests/client-imports.test.ts), and the
   search step's box says what Enter does: it presses the quick-search chip beside it, as the

@@ -3258,7 +3258,7 @@ export interface ToolRun {
    * **The guide's next steps**, at most three, drawn as a row of buttons under
    * its latest answer (`offer_next_steps` in src/chat-tools.ts,
    * src/web/GuideNextSteps.tsx). Each is a press; the tool runs none of them.
-   * Plan docs/plans/261009s-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md.
+   * Plan docs/plans/261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md.
    */
   steps?: NextStep[];
 }

@@ -49,7 +49,7 @@ const SHARED = new Set([
   /* What one of the guide's next steps may be: the server's tool checks the
      model's steps with it and the page checks the stored run again, so the
      two cannot disagree. Imports only types. See src/next-steps.ts and plan
-     261009s. */
+     261009u. */
   "next-steps.js",
   /* The rules a Debate synthesis keeps — work identity, caps, lengths — which
      the server applies to the model's answer and the panel applies again to

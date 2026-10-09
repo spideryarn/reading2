@@ -37,29 +37,59 @@ Supabase's address and public key (`SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` or
 `~/.config/spideryarn-mcp/<host>.json`. For the local stack, use `--site http://localhost:<port>`
 and the default `.env.local`.
 
-**2. Tell the AI app to run it.** In Claude Desktop (which Cowork on the desktop shares) this goes in
-*Settings → Developer → Edit Config*, i.e. `claude_desktop_config.json`. Use absolute paths, because
-the app starts servers from no particular directory and with a short `PATH`:
+**2. Tell the AI app to run it.** This prints both configs, with this checkout's real paths:
 
-```json
-{
-  "mcpServers": {
-    "spideryarn": {
-      "command": "/Users/greg/code/spideryarn2/node_modules/.bin/tsx",
-      "args": ["/Users/greg/code/spideryarn2/scripts/spideryarn-mcp.ts", "serve",
-               "--site", "https://www.spideryarn.com"],
-      "env": { "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin" }
-    }
-  }
-}
+```
+npx tsx scripts/spideryarn-mcp.ts config --site https://www.spideryarn.com
 ```
 
-The `PATH` must include the directory holding `node`. In Claude Code:
-`claude mcp add spideryarn -- <the same command and args>`.
+- **Claude Desktop**: merge its JSON into
+  *Settings → Developer → Edit Config*, i.e. `~/Library/Application Support/Claude/claude_desktop_config.json`,
+  then quit and reopen the app. The paths are absolute and `PATH` names `node`'s directory, because
+  the app starts servers from no particular directory and with a short `PATH`.
+- **Claude Code**: run the `claude mcp add --scope user …` line it prints. `claude mcp get spideryarn`
+  should then say `✔ Connected`. The line sets the same `PATH` with `--env`; *Connected* checks
+  the MCP connection, not whether the saved Spideryarn sign-in works (call `whoami` below).
 
-*Unverified on 2026-10-07*: whether a server in `claude_desktop_config.json` shows up inside
-Cowork, as well as in an ordinary Claude Desktop chat. Cowork's documentation says local MCP servers
-work on the desktop app.
+On Greg's Mac both are set up (2026-10-09) against the primary checkout,
+`/Users/greg/dev/spideryarn/reading2`, and production. Desktop's previous config is beside it as
+`claude_desktop_config.json.bak-261009-spideryarn`.
+
+**The server runs whatever code and `node_modules` that checkout has.** After a pull that changed
+`package.json`, run `npm install` there, or the server dies before it speaks and the app says only
+*Connection closed*. That is why it had never worked before 2026-10-09
+([261009a § What the spike found](../research/261009a-one-click-mcp-install-for-claude-and-chatgpt.md#what-the-spike-found-2026-10-09-against-the-local-stack)).
+
+*Unverified*: whether a server in `claude_desktop_config.json` shows up inside Cowork, as well as in
+an ordinary Claude Desktop chat. Cowork's documentation says local MCP servers work on the desktop
+app.
+
+**ChatGPT cannot directly launch this local stdio command.** It can connect to a remote server or
+a private server through Secure MCP Tunnel; the tunnel has not been tested here. Claude Desktop
+also supports installable local extensions (`.mcpb`), which we have not packaged. App-specific
+setup options: [261009a](../research/261009a-one-click-mcp-install-for-claude-and-chatgpt.md#app-by-app).
+
+## Checking it works
+
+Without any AI app, the MCP Inspector's CLI speaks to the server exactly as Claude Desktop would, from
+the same JSON. Save the complete JSON object that `config` prints (including the outer
+`{"mcpServers": …}` wrapper, without the surrounding instructions) as `mcp.json`, then:
+
+```
+npx @modelcontextprotocol/inspector --cli --config mcp.json --server spideryarn --method tools/list
+npx @modelcontextprotocol/inspector --cli --config mcp.json --server spideryarn \
+  --method tools/call --tool-name whoami
+```
+
+Give it the config file rather than the command: the Inspector takes the server's `--site` as one of
+its own flags, and the result is a bare *Connection closed*. Through Claude Code itself, without
+touching your settings:
+`claude -p --strict-mcp-config --mcp-config mcp.json --allowedTools mcp__spideryarn__whoami "call whoami"`.
+
+**When an app says *Connection closed*,** the server's stderr is in
+`~/Library/Logs/Claude/mcp-server-spideryarn.log` (Desktop; connection failures also appear in
+`mcp.log`), or run the `command` and `args` by hand from `/tmp`, with the JSON's `env.PATH` set.
+Either shows the real error.
 
 **To stop:** `npx tsx scripts/spideryarn-mcp.ts logout --site …` signs this session out (only
 this one, not your browser) and deletes the file. A running server notices on its next call.
@@ -118,6 +148,12 @@ press *Allow*, and it gets a token from Supabase's OAuth server for your account
   as `MCP_OAUTH_CLIENT_ID`; deploy; then in Claude, Settings → Connectors → *Add custom connector*,
   the address above, *Use your own OAuth client*, its id and secret.
 - **Administrator only**, for now.
+- **Not one click, as designed.** Claude has a link that opens *Add custom connector* already filled
+  in, but this setup also requires a client id and secret. `MCP_OAUTH_CLIENT_ID` accepts exactly one
+  id; adding a separate ChatGPT client or using dynamically registered clients needs a change to
+  that gate, not just a Supabase setting. Both apps support static clients, so dynamic registration
+  is an option for easier setup, not a requirement for supporting both:
+  [261009a § The decision this leaves](../research/261009a-one-click-mcp-install-for-claude-and-chatgpt.md#the-decision-this-leaves-gregs).
 - **The asking tools refuse there**: no dialog can be shown on your Mac from a server, so gifts,
   publishing and private links are done in the Mac app or on the site.
 - **What the token can do at Supabase** is more than the tools, and is written up in
@@ -131,7 +167,7 @@ stay out of the local server's imports: `tests/mcp-remote-import-graph.test.ts`.
 
 | | |
 |---|---|
-| [`scripts/spideryarn-mcp.ts`](../../scripts/spideryarn-mcp.ts) | the command: `login`, `logout`, `whoami`, `serve` |
+| [`scripts/spideryarn-mcp.ts`](../../scripts/spideryarn-mcp.ts) | the command: `login`, `logout`, `whoami`, `serve`, `config` |
 | [`src/mcp/tools.ts`](../../src/mcp/tools.ts) | the tools, as a list that knows nothing about stdio |
 | [`src/mcp/server.ts`](../../src/mcp/server.ts) | the list served as MCP; asks before any asking tool runs |
 | [`src/mcp/approve.ts`](../../src/mcp/approve.ts) | the macOS dialog |

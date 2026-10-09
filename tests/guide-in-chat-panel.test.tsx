@@ -10,7 +10,7 @@
  * - **the greeting**, ours and free, asking in the conversation since plan
  *   261009i (no box): why you are reading when no reason is stored, About you
  *   quoted back when it is there, three ways in while it is empty (plan
- *   261009s), nothing asked when the reason could not be read;
+ *   261009u), nothing asked when the reason could not be read;
  * - **the guide's offer to save** (plan 261009q), a card under its answer
  *   that writes only on a press, never over words changed since the guide
  *   offered it, once per double press, with an Undo that puts back only over
@@ -237,7 +237,7 @@ describe("the guide's greeting", () => {
     expect(host.textContent).toContain("Hi, I'm your guide to Attention Is All You Need.");
     expect(host.textContent).toContain("Why are you reading it?");
     expect(host.querySelector("textarea#guide-purpose")).toBeNull();
-    /* The three ways in, whatever is stored (plan 261009s). */
+    /* The three ways in, whatever is stored (plan 261009u). */
     expect(startLabels()).toEqual([...GUIDE_STARTS]);
     expect(host.querySelector("h2")?.textContent).toBe("Guide");
   });
@@ -498,7 +498,7 @@ describe("the guide's offer to save", () => {
   });
 });
 
-/* Plan 261009s: the guide's next steps, as ChatPanel places them. What each
+/* Plan 261009u: the guide's next steps, as ChatPanel places them. What each
    kind does is tests/guide-next-steps-row.test.tsx. */
 describe("the guide's next steps in the panel", () => {
   const steps = (words: string) => [
