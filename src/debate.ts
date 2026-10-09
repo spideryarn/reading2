@@ -191,7 +191,7 @@ import { anyLost, distinctSources, isDebateBears, isDebateDocument } from "./typ
 /* The model-free half of group one's evidence: what this page shares with this
    article, both ways round. src/shingles.ts. */
 import { articleShingles, isArticleText, isCopy, shingleOverlap } from "./shingles.js";
-import type { ArticleBlockText, ShingleOverlap } from "./shingles.js";
+import type { ArticleBlockText, ArticleShingles, ShingleOverlap } from "./shingles.js";
 import { plainWords } from "./plain-words.js";
 import { paperwork } from "./paperwork.js";
 import { log } from "./log.js";
@@ -888,6 +888,24 @@ function readShared(row: Record<string, unknown>, opts: GroupInput): SharedVerdi
 }
 
 /**
+ * **Is this outside page only a copy of the article?** One predicate for the
+ * direct rows and the reader-picked claim checks: the extract must be mostly
+ * article text, and the row's own verified quotation must be article text too.
+ * The second half keeps a real reply with a long blockquote, whose row quotes
+ * its own rebuttal, from being mistaken for a mirror.
+ */
+function copyEvidence(
+  article: ArticleShingles,
+  shared: Extract<SharedVerdict, { ok: true }>,
+): { overlap: ShingleOverlap; sourceIsCopy: boolean } {
+  const overlap = shingleOverlap(article, shared.evidence.excerpt ?? "", EXTRACT_SEPARATOR);
+  return {
+    overlap,
+    sourceIsCopy: isCopy(overlap) && isArticleText(article, shared.base.sourceQuote),
+  };
+}
+
+/**
  * **Group one — pages that are about this piece.**
  *
  * `articleReferenceQuote` is the whole of what this adds, and it is the check
@@ -945,7 +963,8 @@ export function readDirectGroup(
       return { ok: false, reason: "directnessUnverified" };
     }
 
-    const overlap = shingleOverlap(article, excerpt, EXTRACT_SEPARATOR);
+    const copy = copyEvidence(article, shared);
+    const { overlap } = copy;
     /* **The ceiling, before the row is kept.** A mirror is the most convincing
        row on the screen and the least worth showing.
 
@@ -956,7 +975,7 @@ export function readDirectGroup(
        has to be article text too: a mirror has no words of its own, a fisking's
        are its own rebuttal sentence. Measured over the ten rows the model
        reported across the three journals, this refuses none of them. */
-    if (isCopy(overlap) && isArticleText(article, shared.base.sourceQuote)) {
+    if (copy.sourceIsCopy) {
       return { ok: false, reason: "sourceIsCopy" };
     }
 
@@ -2146,6 +2165,8 @@ export function readCheckedClaimGroup(
   const asked = new Map(targets.map((t) => [t.claimId, t]));
   const found = new Map<string, unknown[][]>();
   const groupCounts = emptyCheckGroupCounts();
+  /* Once for the whole check: every target is judged against the same article. */
+  const article = articleShingles(opts.blockText);
 
   for (const item of groups) {
     if (typeof item !== "object" || item === null || Array.isArray(item)) {
@@ -2185,6 +2206,11 @@ export function readCheckedClaimGroup(
     }
     const read = readGroupWith<DebateCheckRow>(only, MAX_CHECK_ROWS_PER_CLAIM, opts, webSearches, (_row, shared) => {
       if (!shared.ok) return shared;
+      /* A mirror at another address is still the article, not outside evidence.
+         `copyEvidence` is also the direct reader's one implementation. */
+      if (copyEvidence(article, shared).sourceIsCopy) {
+        return { ok: false, reason: "sourceIsCopy" };
+      }
       /* **From the target, never the row.** `shared.base` is built field by
          field in `readShared`, so nothing else the model typed rides along. */
       return target.kind === "listed"

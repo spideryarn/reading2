@@ -32,6 +32,7 @@ import {
   DEBATE_CHECK_FOUND_NOTHING,
   DEBATE_CHECK_NOT_ANSWERED,
   DEBATE_CHECK_OWN_LABEL,
+  DEBATE_CHECK_PENDING,
   DEBATE_CHECK_YOUR_CLAIM,
 } from "../src/messages.js";
 
@@ -236,6 +237,19 @@ describe("Check", () => {
     /* The positive control: nothing out, a tick, and it is on. */
     paint({ checks: [] });
     expect(checkButton()?.disabled).toBe(false);
+  });
+
+  it("holds while check history loads or fails without saying a paid search is running", () => {
+    paint({ status: "loading" });
+    expect(checkButton()?.disabled).toBe(true);
+    expect(host.textContent).not.toContain(DEBATE_CHECK_PENDING);
+    expect(checkButton()?.querySelector(".spin")).toBeNull();
+
+    paint({ status: "error", error: "The checks could not be read." });
+    expect(checkButton()?.disabled).toBe(true);
+    expect(host.textContent).toContain("The checks could not be read.");
+    expect(host.textContent).not.toContain(DEBATE_CHECK_PENDING);
+    expect(checkButton()?.querySelector(".spin")).toBeNull();
   });
 
   it("is not offered on a stale list: no boxes, no Check", () => {

@@ -72,6 +72,44 @@ function withCheck(checks: readonly DebateClaimCheck[], check: DebateClaimCheck)
   return next;
 }
 
+/** Does a stored check belong to this press? Own-claim ids are minted by the server. */
+function answersRequest(check: DebateClaimCheck, request: DebateCheckRequest): boolean {
+  if (request.digFurther !== undefined) {
+    return check.digFurther && check.targets.length === 1 && check.targets[0]?.claimId === request.digFurther;
+  }
+  if (check.digFurther) return false;
+
+  const listed = check.targets.filter((target) => target.kind === "listed").map((target) => target.claimId);
+  const asked = request.claimIds ?? [];
+  if (listed.length !== asked.length || listed.some((claimId, at) => claimId !== asked[at])) return false;
+
+  const own = check.targets.filter((target) => target.kind === "own");
+  return request.own === undefined
+    ? own.length === 0
+    : own.length === 1 && own[0]?.text === request.own.trim();
+}
+
+function later(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, PENDING_POLL_MS));
+}
+
+/** Reconcile an accepted POST whose answer stream broke, using free reads only. */
+async function waitForStoredCheck(
+  mine: string,
+  current: { readonly current: string },
+  before: ReadonlySet<string>,
+  request: DebateCheckRequest,
+  refresh: () => Promise<readonly DebateClaimCheck[] | null>,
+): Promise<boolean> {
+  while (current.current === mine) {
+    const stored = await refresh();
+    const ours = stored?.find((candidate) => !before.has(candidate.id) && answersRequest(candidate, request));
+    if (ours && ours.status !== "pending") return true;
+    await later();
+  }
+  return false;
+}
+
 export function useDebateChecks(slug: string): UseDebateChecks {
   const [status, setStatus] = useState<UseDebateChecks["status"]>("loading");
   const [checks, setChecks] = useState<readonly DebateClaimCheck[]>([]);
@@ -81,27 +119,35 @@ export function useDebateChecks(slug: string): UseDebateChecks {
   /** The article on screen, so an answer for another one is never drawn here. */
   const current = useRef(slug);
   current.current = slug;
+  const checksNow = useRef(checks);
+  checksNow.current = checks;
   const url = `/api/debate-claims/${encodeURIComponent(slug)}/checks`;
 
-  const refresh = useCallback(async () => {
+  const refreshChecks = useCallback(async (): Promise<readonly DebateClaimCheck[] | null> => {
     const mine = slug;
     try {
       const res = await apiFetch(url);
       const body = await readJson<DebateClaimChecksResponse>(res);
-      if (current.current !== mine) return;
+      if (current.current !== mine) return null;
       if (!Array.isArray(body?.checks) || !body.checks.every(isCheck)) {
         throw new MalformedReply("the checks reply has no list of checks");
       }
       setChecks(body.checks);
       setError(null);
       setStatus("ready");
+      return body.checks;
     } catch (err) {
-      if (current.current !== mine) return;
+      if (current.current !== mine) return null;
       setError(describeFetchFailure(err as Error));
       /* A failed re-read keeps what is on screen. */
       setStatus((was) => (was === "ready" ? was : "error"));
+      return null;
     }
   }, [slug, url]);
+
+  const refresh = useCallback(async (): Promise<void> => {
+    await refreshChecks();
+  }, [refreshChecks]);
 
   useEffect(() => {
     setStatus("loading");
@@ -109,6 +155,22 @@ export function useDebateChecks(slug: string): UseDebateChecks {
     setSending(false);
     setPressError(null);
     void refresh();
+  }, [refresh]);
+
+  /* A tab with no pending row would otherwise never learn that another tab
+     started a check after this one's first read. Coming back to it is a free
+     occasion to reconcile. */
+  useEffect(() => {
+    const onFocus = () => void refresh();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [refresh]);
 
   /* Another tab's check is out: read again until it lands. Not while this
@@ -123,6 +185,8 @@ export function useDebateChecks(slug: string): UseDebateChecks {
   const check = useCallback(
     async (request: DebateCheckRequest): Promise<boolean> => {
       const mine = slug;
+      const before = new Set(checksNow.current.map((stored) => stored.id));
+      let accepted = false;
       setSending(true);
       setPressError(null);
       try {
@@ -134,6 +198,7 @@ export function useDebateChecks(slug: string): UseDebateChecks {
         /* A refusal is JSON, before any header: a stale list, a check already
            out, the allowance. Its sentence is the reader's. */
         if (!res.ok || !res.body) throw await failure(res);
+        accepted = true;
         const done = await readAnswerStream<DebateClaimCheck>(res.body, {
           begin(data) {
             if (current.current === mine && isCheck(data)) setChecks((was) => withCheck(was, data));
@@ -147,16 +212,24 @@ export function useDebateChecks(slug: string): UseDebateChecks {
         return true;
       } catch (err) {
         if (current.current !== mine) return false;
+        if (accepted) {
+          /* The server keeps going after a dropped stream. Keep this press
+             held, and reconcile the row until its stored terminal state is
+             visible; returning true clears the picks just as a `done` frame
+             would. This never POSTs. */
+          const recovered = await waitForStoredCheck(mine, current, before, request, refreshChecks);
+          return recovered;
+        }
         setPressError(describeFetchFailure(err as Error));
-        /* The check may well be stored — a dropped stream does not cancel the
-           search on the server — so read what is there. */
+        /* A refusal happened before an answer stream existed. Read once in
+           case another tab's pending check was the reason. */
         void refresh();
         return false;
       } finally {
         if (current.current === mine) setSending(false);
       }
     },
-    [slug, url, refresh],
+    [slug, url, refresh, refreshChecks],
   );
 
   return { status, checks, error, sending, pressError, check, refresh };

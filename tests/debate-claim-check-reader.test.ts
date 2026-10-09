@@ -212,6 +212,33 @@ describe("pass B's refusals still fire", () => {
     expect(read.counts.keptRows).toBe(0);
   });
 
+  it("refuses a different-address copy of the article as outside evidence", () => {
+    const copiedWords = [
+      "alpha bravo charlie delta echo foxtrot golf hotel india juliett kilo lima",
+      "mango nectarine orange papaya quince raspberry strawberry tangerine vanilla watermelon xigua yellowfruit",
+      "acorn butternut cucumber daikon eggplant fennel garlic habanero iceberg jalapeno kohlrabi leek",
+    ].join(" ");
+    const copied = block("spya-copy01", copiedWords);
+    const mirrorUrl = "https://archive.example/a-copy";
+    const read = readCheckedClaimGroup(
+      [
+        {
+          claimId: LISTED.claimId,
+          rows: [goodRow({ url: mirrorUrl, sourceQuote: "alpha bravo charlie delta echo foxtrot golf hotel" })],
+        },
+      ],
+      [LISTED],
+      {
+        ...input,
+        admissible: new Map([[mirrorUrl, { url: mirrorUrl, title: "A copy", excerpt: copiedWords }]]),
+        blockText: blockTextById([copied]),
+      },
+      1,
+    );
+    expect(read.counts.keptRows).toBe(0);
+    expect(read.counts.lost.sourceIsCopy).toBe(1);
+  });
+
   it("sums the kept and reported rows over every claim, and the pages once", () => {
     const read = readCheckedClaimGroup(
       [

@@ -2434,7 +2434,10 @@ function OwnerListedClaims({
   /* Until the checks have been read, nobody knows whether one is out, so
      Check waits: the server would refuse a second one anyway, but only after
      the reader had pressed. */
-  const busy = checks !== null && (checks.sending || checks.status !== "ready" || anyPending(checks.checks));
+  const searching = checks !== null && (checks.sending || anyPending(checks.checks));
+  /* A history read holds the controls too, but it is free and must not wear the
+     spinner or sentence that say a paid web search is running. */
+  const busy = checks !== null && (searching || checks.status !== "ready");
   const picking = checks !== null && claims !== null && !list.stale;
   /* Only ticks on claims still in the list count: a list made again has new ids. */
   const ids = claims === null ? [] : claims.filter((c) => ticked.has(c.id)).map((c) => c.id);
@@ -2531,11 +2534,11 @@ function OwnerListedClaims({
                   }}
                 />
                 <button type="submit" className="gloss-btn dbt-check-send" disabled={!canCheck} title={DEBATE_CHECK_TIP}>
-                  {busy ? <LoaderCircle size={12} className="spin" aria-hidden="true" /> : <Globe size={12} aria-hidden="true" />}
+                  {searching ? <LoaderCircle size={12} className="spin" aria-hidden="true" /> : <Globe size={12} aria-hidden="true" />}
                   {checkLabel(picked)}
                 </button>
               </div>
-              {busy && <p className="gloss-quiet dbt-check-pending">{DEBATE_CHECK_PENDING}</p>}
+              {searching && <p className="gloss-quiet dbt-check-pending">{DEBATE_CHECK_PENDING}</p>}
               {checks?.pressError && <p className="dbt-check-error">{checks.pressError}</p>}
               {/* The checks' own read failed. Quieter than the list's
                   `ReadError`: the list above is still right, only what was
