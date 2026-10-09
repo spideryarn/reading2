@@ -705,7 +705,7 @@ function removeUndefinedMacro(marker: Element, targets: ReadonlySet<string>): bo
 function sourceNameArgument(marker: Element): Element | null {
   let node = marker.nextSibling;
   while (node && node.nodeType === 3 && (node.textContent ?? "").trim() === "") node = node.nextSibling;
-  if (!node || node.nodeType !== 1) return null;
+  if (node?.nodeType !== 1) return null;
   const p = node as Element;
   if (!p.matches("p.ltx_p") || p.children.length > 0) return null;
   return SOURCE_NAME.test((p.textContent ?? "").trim()) ? p : null;
