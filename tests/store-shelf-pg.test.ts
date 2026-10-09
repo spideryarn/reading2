@@ -58,6 +58,7 @@ import {
   citationFinds,
   citationInvestigations,
   comments,
+  debateClaimChecks,
   glossaryHiddenEntries,
   glossaryLookups,
   ingestEvents,
@@ -1035,6 +1036,16 @@ describe("destroying an article", () => {
           quote: "nobody will read again",
           start: 0,
           status: "none",
+        }),
+      debate_claim_checks: () =>
+        db.insert(debateClaimChecks).values({
+          articleId: GONE_ARTICLE,
+          id: mintId(),
+          ownerId: owner,
+          status: "done",
+          listSourceHash: "h",
+          promptVersion: "test",
+          targets: [],
         }),
       glossary_hidden_entries: () =>
         db.insert(glossaryHiddenEntries).values({ articleId: GONE_ARTICLE, entryId: mintId() }),
