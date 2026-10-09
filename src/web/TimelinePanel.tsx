@@ -75,6 +75,7 @@ import { RewriteWaiting } from "./RewriteWaiting.js";
 import { AboutMade } from "./BandAbout.js";
 import { useRenderCount } from "./perf.js";
 import { BandWaiting } from "./BandWaiting.js";
+import { Excerpt } from "./Excerpt.js";
 
 /**
  * **How few events before this stops calling itself a timeline.**
@@ -775,7 +776,7 @@ function EventDetail({
                 }}
               >
                 <span className={`tl-quote${f.whole ? " tl-quote-moved" : ""}`}>
-                  {f.whole ? "whole paragraph — the exact words have moved" : f.short}
+                  {f.whole ? "whole paragraph — the exact words have moved" : <Excerpt blockId={f.blockId} words={f.short} near={f.shortStart ?? f.start} />}
                 </span>
               </button>
               <BlockRef id={f.blockId} onJump={onJump} />

@@ -43,6 +43,11 @@ import type {
   SkimView,
 } from "../src/web/modes/skim/SkimMode.js";
 import { DELAY } from "../src/web/Tooltip.js";
+import temml from "temml";
+import { temmlRenderer } from "../src/maths-tex.js";
+import { renderArticleMaths } from "../src/web/maths.js";
+import { BlockLinkProvider, buildBlockLinkIndex } from "../src/web/BlockLinkCard.js";
+import type { Article } from "../src/types.js";
 
 /* jsdom has no `CSS.escape`, which `useFollow` uses to find the current row;
    the ids here need no escaping. scroll-glide.test.ts does the same. */
@@ -422,9 +427,9 @@ function view(over: Partial<SkimView> = {}): SkimView {
       { depth: 3, label: "Most", count: 4 },
     ],
     rows: [
-      { quoteId: Q[2]!, n: 1, place: [{ title: "Methods", voice: "ai" }], cue: "What earlier work missed", current: false, missing: false, position: null, words: null, where: [], passes: null },
-      { quoteId: Q[0]!, n: 2, place: [{ title: "Results", voice: "ai" }], cue: "The headline result", current: true, missing: false, position: null, words: null, where: [], passes: null },
-      { quoteId: Q[3]!, n: 3, place: [{ title: "Methods", voice: "ai" }], cue: "Where it stops holding", current: false, missing: false, position: null, words: null, where: [], passes: null },
+      { quoteId: Q[2]!, n: 1, place: [{ title: "Methods", voice: "ai" }], cue: "What earlier work missed", current: false, missing: false, position: null, words: null, where: [], passes: null, blockId: null },
+      { quoteId: Q[0]!, n: 2, place: [{ title: "Results", voice: "ai" }], cue: "The headline result", current: true, missing: false, position: null, words: null, where: [], passes: null, blockId: null },
+      { quoteId: Q[3]!, n: 3, place: [{ title: "Methods", voice: "ai" }], cue: "Where it stops holding", current: false, missing: false, position: null, words: null, where: [], passes: null, blockId: null },
     ],
     position: 2,
     card: null,
@@ -547,7 +552,7 @@ describe("the panel", () => {
       owner(),
       view({
         rows: [
-          { quoteId: Q[0]!, n: 1, place: [{ title: "Results", voice: "ai" }], cue: "What does it do?", current: true, missing: false, position: null, words: "The passage.", where: [], passes: null },
+          { quoteId: Q[0]!, n: 1, place: [{ title: "Results", voice: "ai" }], cue: "What does it do?", current: true, missing: false, position: null, words: "The passage.", where: [], passes: null, blockId: null },
         ],
       }),
     );
@@ -582,8 +587,8 @@ describe("the panel", () => {
   it("draws a repeated section path for a screen reader only — no ditto mark beside a quote (260928e)", async () => {
     const repeated = view({
       rows: [
-        { quoteId: Q[2]!, n: 1, place: [{ title: "Methods", voice: "ai" }], cue: null, current: false, missing: false, position: null, words: "First.", where: [], passes: null },
-        { quoteId: Q[3]!, n: 2, place: [{ title: "Methods", voice: "ai" }], cue: null, current: false, missing: false, position: null, words: "Second.", where: [], passes: null },
+        { quoteId: Q[2]!, n: 1, place: [{ title: "Methods", voice: "ai" }], cue: null, current: false, missing: false, position: null, words: "First.", where: [], passes: null, blockId: null },
+        { quoteId: Q[3]!, n: 2, place: [{ title: "Methods", voice: "ai" }], cue: null, current: false, missing: false, position: null, words: "Second.", where: [], passes: null, blockId: null },
       ],
       position: 1,
     });
@@ -614,9 +619,10 @@ describe("the panel", () => {
           words: "First.",
           where: [],
           passes: null,
+          blockId: null,
         },
         // The same text in other voices is still the same place: said, not drawn.
-        { quoteId: Q[3]!, n: 2, place: [{ title: "Results", voice: "ai" }, { title: "Why it holds", voice: "ai" }], cue: null, current: false, missing: false, position: null, words: "Second.", where: [], passes: null },
+        { quoteId: Q[3]!, n: 2, place: [{ title: "Results", voice: "ai" }, { title: "Why it holds", voice: "ai" }], cue: null, current: false, missing: false, position: null, words: "Second.", where: [], passes: null, blockId: null },
       ],
       position: 1,
     });
@@ -760,6 +766,40 @@ describe("the panel", () => {
       await draw(owner(), withWords([null, null, null]));
       expect(rowsOf().map(words)).toEqual([null, null, null]);
     });
+
+    /* spya-pqae7m (Greg, 2026-10-09): a quote from Attention Is All You Need
+       showed its formula as raw TeX on the row. A quote is `block.text`, which
+       holds the TeX source; the row draws the block's own markup instead, with
+       the maths the prose drew (src/web/excerpt-html.ts, plan 261009k). */
+    it("draws a quote's maths as maths and keeps its italics, as the prose does (spya-pqae7m)", async () => {
+      const html =
+        '<p data-spya-id="spya-tr2abc">We scale the dot products by \\(\\frac{1}{\\sqrt{d_k}}\\), as <em>Vaswani et al.</em> do.</p>';
+      const source = { id: B[0]!, tag: "p", kind: "paragraph", text: "", words: 0, html, gistable: true } as unknown as Block;
+      const prose = (
+        await renderArticleMaths({ slug: "attention", title: "Attention", blocks: [source] } as unknown as Article, {
+          load: async () => temmlRenderer(temml),
+        })
+      ).blocks;
+      const quote = "We scale the dot products by \\(\\frac{1}{\\sqrt{d_k}}\\), as Vaswani et al. do.";
+      const v = view({
+        rows: view().rows.map((r, i) => ({ ...r, words: i === 1 ? quote : null, blockId: i === 1 ? B[0]! : null })),
+      });
+      calls.length = 0;
+      await act(async () =>
+        root.render(
+          createElement(BlockLinkProvider, {
+            index: buildBlockLinkIndex(prose, []),
+            children: createElement(SkimPanel, { access: { kind: "owner", owner: owner() }, view: v, away: false }),
+          }),
+        ),
+      );
+      const shown = rowsOf()[1]!.querySelector(".skim-words")!;
+      expect(shown.querySelector("math")).not.toBeNull();
+      expect(shown.textContent).not.toContain("\\(");
+      expect(shown.textContent).not.toContain("frac");
+      expect(shown.querySelector("em")?.textContent).toBe("Vaswani et al.");
+      expect(shown.querySelector("[data-spya-id], [id]")).toBeNull();
+    });
   });
 
   it("dims no row: every row is a stop of this pass (260929e)", async () => {
@@ -819,7 +859,7 @@ describe("the panel", () => {
       depth: 3,
       /* Most walks only its own stop (260929e), so the count must come from the
          whole route, not from the rows drawn. */
-      rows: [{ quoteId: Q[1]!, n: 1, place: [{ title: "Results", voice: "ai" }], cue: null, current: true, missing: false, position: null, words: null, where: [], passes: null }],
+      rows: [{ quoteId: Q[1]!, n: 1, place: [{ title: "Results", voice: "ai" }], cue: null, current: true, missing: false, position: null, words: null, where: [], passes: null, blockId: null }],
     });
     /* The live Quotes list may include two abstract quotes; the route records
        the four it was actually offered, which is the honest denominator. */

@@ -76,6 +76,7 @@ import { ReadError } from "./ReadError.js";
 import { RewriteWaiting } from "./RewriteWaiting.js";
 import { ThresholdSlider } from "./ThresholdSlider.js";
 import { BandWaiting } from "./BandWaiting.js";
+import { Excerpt } from "./Excerpt.js";
 
 /** What a deliberate `questions: []` is drawn as — a real answer, with no retry. */
 export const FAQ_NONE = "The model found no questions worth asking this piece.";
@@ -427,7 +428,10 @@ function QuestionRow({
       <ol className="faq-passages">
         {question.passages.map((p) => (
           <li key={`${p.blockId}:${p.start}`} className="gloss-part gloss-part-senseHere faq-passage">
-            <blockquote className="gloss-part-text faq-quote">{p.quote}</blockquote>
+            <blockquote className="gloss-part-text faq-quote">
+              {/* The article's own words, drawn from the block's markup (Excerpt.tsx, plan 261009k). */}
+              <Excerpt blockId={p.blockId} words={p.quote} />
+            </blockquote>
             <BlockRef id={p.blockId} onJump={onJump} className="faq-jump" />
           </li>
         ))}

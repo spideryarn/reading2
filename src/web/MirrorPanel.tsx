@@ -60,6 +60,7 @@
 import type { MirrorComment, MirrorRemark, MirrorRemarkKind, MirrorResult } from "../referee-mirror-types.js";
 import { worthRetrying } from "../messages.js";
 import type { BlockId } from "../types.js";
+import { Excerpt } from "./Excerpt.js"; // quotes drawn from the block's markup (plan 261009k)
 import { ControlTip, Tooltip } from "./Tooltip.js";
 import { Button } from "@/components/ui/button";
 import { ownLabel, plainWords } from "./lib/own-label.js";
@@ -455,7 +456,7 @@ function Remark({
                 against the thing it is about. Rule 2 of the mode: every row is an
                 index into the piece. */}
             <span className={`mir-quote${comment ? "" : " mir-block-id"}`}>
-              {comment?.quote ?? remark.blockId}
+              {comment?.quote ? <Excerpt blockId={remark.blockId} words={comment.quote} /> : remark.blockId}
             </span>
           </button>
         </Tooltip>
@@ -471,7 +472,7 @@ function Remark({
            `findQuote` proved are in the block, which is what makes that kind the
            one a referee can check at a glance; on a `placement` they are the
            words the number was put on. */
-        <p className="mir-passage">{remark.passage}</p>
+        <p className="mir-passage"><Excerpt blockId={remark.blockId} words={remark.passage} /></p>
       )}
 
       {remark.kind === "placement" && (

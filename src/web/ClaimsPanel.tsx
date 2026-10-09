@@ -128,6 +128,7 @@ import {
 } from "../referee-claims.js";
 import type { Block, BlockId } from "../types.js";
 import { BlockRef } from "./BlockRef.js";
+import { Excerpt } from "./Excerpt.js"; // the quote drawn from the block's markup (plan 261009k)
 import { assignSlots } from "./hit-colours.js";
 import { usePassageLifecycle } from "./passage-lifecycle.js";
 import { type Found, resolveClaim } from "./search-hits.js";
@@ -523,7 +524,7 @@ function OtherTextInQuotes({
         {rows.map((row) => (
           <li className={"clm-passage"} key={`${row.blockId}:${row.start}`}>
             <BlockRef id={row.blockId} onJump={onJump} preview={false} className="clm-jump">
-              <span className="clm-quote">{row.text}</span>
+              <span className="clm-quote"><Excerpt blockId={row.blockId} words={row.text} /></span>
             </BlockRef>
           </li>
         ))}
@@ -594,7 +595,7 @@ function ClaimRow({
           paper's words are already the link's text — the card says only which
           section they are in. */}
       <BlockRef id={claim.blockId} onJump={onJump} preview={false} className="clm-jump">
-        <span className="clm-quote">{claim.quote}</span>
+        <span className="clm-quote"><Excerpt blockId={claim.blockId} words={claim.quote} /></span>
       </BlockRef>
 
       {claim.passages.length > 0 && (
@@ -654,7 +655,7 @@ function ClaimRow({
             className="clm-passage"
           >
             <BlockRef id={p.blockId} onJump={onJump} preview={false} className="clm-jump">
-              <span className="clm-quote">{p.quote}</span>
+              <span className="clm-quote"><Excerpt blockId={p.blockId} words={p.quote} /></span>
             </BlockRef>
             {p.reasoning && <p className="clm-why">{p.reasoning}</p>}
             {/* Never both: `validateClaims` blanks the line as it sets the flag.

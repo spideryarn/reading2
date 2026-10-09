@@ -711,6 +711,22 @@ export interface JobStore {
   pauseForDeadline(id: string, attempt: string, requeueBudget: number): Promise<PauseOutcome>;
 
   /**
+   * **About to begin a `oncePerJob` step: has this job begun it before?**
+   * (src/pipeline.ts § `PipelineStep.oncePerJob`.)
+   *
+   * `begun` — it had not, and the row now says it has, with the database's
+   * time. `begun-before` — an earlier window of this same job began it and
+   * never finished it, so its paid work may already have been bought; the
+   * caller fails the step rather than buy it again. A lost claim throws
+   * `StaleAttemptError`, as every fenced write here does.
+   *
+   * Locked, read and written in one transaction, like `pauseForDeadline`,
+   * because a refused conditional `UPDATE` could not say which of the two
+   * refusals it was. Plan 261009l.
+   */
+  beginPaidStep(id: string, attempt: string, step: StepName): Promise<"begun" | "begun-before">;
+
+  /**
    * A step is **still running**: write what the card should say, keep the claim.
    *
    * The one write that is neither a release nor a finish, and it exists for the

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * The pure half of the quotes panel — src/web/QuotesPanel.tsx.
  *

@@ -116,6 +116,7 @@ import type {
 import { worthRetrying } from "../messages.js";
 import type { Block, BlockId, Comment } from "../types.js";
 import { BlockRef } from "./BlockRef.js";
+import { Excerpt } from "./Excerpt.js"; // quotes drawn from the block's markup (plan 261009k)
 import { assignSlots, PALETTE_BY_HUE } from "./hit-colours.js";
 import { usePassageLifecycle } from "./passage-lifecycle.js";
 import { critsParam, refScaleParam } from "./params.js";
@@ -1451,7 +1452,7 @@ function Yours({
                 this one only goes there. The quote is its text, so the card
                 says only where. */}
             <BlockRef id={p.blockId} onJump={onJump} preview={false} className="crit-jump">
-              <span className="crit-quote">{p.quote}</span>
+              <span className="crit-quote">{p.quote !== undefined && <Excerpt blockId={p.blockId} words={p.quote} />}</span>
             </BlockRef>
             {/* `crit-yours` and not `crit-gap`: there is no gap here, because
                 there is only one judgement. The class is the difference, and
@@ -1536,7 +1537,7 @@ function CriterionResult({
             had it. A cross-family review called it redundant, 2026-09-02, and it
             is: the explanation stayed and the duplicate went. */}
         <span className="crit-rank">{rank}</span>
-        <span className="crit-quote">{result.quote}</span>
+        <span className="crit-quote"><Excerpt blockId={result.blockId} words={result.quote} /></span>
       </button>
 
       {diverging && (

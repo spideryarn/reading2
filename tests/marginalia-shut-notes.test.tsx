@@ -32,7 +32,7 @@ function draw(notes: MarginaliaNote[]): HTMLDivElement {
   document.body.append(el);
   const nextRoot = createRoot(el);
   root = nextRoot;
-  act(() => nextRoot.render(<MarginNotesSlot notes={notes} viewer="owner" />));
+  act(() => nextRoot.render(<MarginNotesSlot blockId="spya-aaaaaa" notes={notes} viewer="owner" />));
   return el;
 }
 
@@ -168,7 +168,7 @@ describe("a shut line", () => {
     document.body.append(el);
     const nextRoot = createRoot(el);
     root = nextRoot;
-    act(() => nextRoot.render(<MarginNotesSlot viewer="visitor" notes={[{ kind: "comment", items: [{ as: "comment", comment }] }]} />));
+    act(() => nextRoot.render(<MarginNotesSlot blockId="spya-aaaaaa" viewer="visitor" notes={[{ kind: "comment", items: [{ as: "comment", comment }] }]} />));
     act(() => el.querySelector<HTMLButtonElement>(".marg-shut-button")?.click());
     expect((el.textContent ?? "").split("the owner's thought").length - 1).toBe(1);
     expect(el.querySelector(".marg-open")).toBeNull();
@@ -265,6 +265,7 @@ describe("a shut line", () => {
     act(() =>
       nextRoot.render(
         <MarginNotesSlot
+          blockId="spya-aaaaaa"
           viewer="owner"
           onOpenAsked={(id) => opened.push(id)}
           notes={[
@@ -306,6 +307,7 @@ describe("a shut line", () => {
       act(() =>
         nextRoot.render(
           <MarginNotesSlot
+            blockId="spya-aaaaaa"
             viewer="owner"
             onOpenAsked={(id) => opened.push(id)}
             notes={[{ kind: "comment", items: [{ as: "question", asked }] }]}
@@ -419,8 +421,8 @@ function LayoutHarness() {
   return (
     <table className="zoom">
       <tbody>
-        <tr><td><MarginNotesSlot viewer="owner" notes={[{ kind: "faq", items: [{ question, quote: "q", morePassages: 0 }] }]} /></td></tr>
-        <tr><td><MarginNotesSlot viewer="owner" notes={[{ kind: "question", depth: 1, text: "Below" }]} /></td></tr>
+        <tr><td><MarginNotesSlot blockId="spya-aaaaaa" viewer="owner" notes={[{ kind: "faq", items: [{ question, quote: "q", morePassages: 0 }] }]} /></td></tr>
+        <tr><td><MarginNotesSlot blockId="spya-aaaaaa" viewer="owner" notes={[{ kind: "question", depth: 1, text: "Below" }]} /></td></tr>
       </tbody>
     </table>
   );

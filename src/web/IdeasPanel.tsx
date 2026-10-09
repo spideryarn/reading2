@@ -57,6 +57,7 @@ import { WrittenForYou } from "./WrittenForYou.js";
 import type { BlockId } from "../types.js";
 import { useRenderCount } from "./perf.js";
 import { BandWaiting } from "./BandWaiting.js";
+import { Excerpt } from "./Excerpt.js";
 
 /**
  * **The owner's half of this panel** — the read's status, the job finding the
@@ -549,7 +550,7 @@ function IdeaRow({
                     }}
                   >
                     <span className={`ideas-quote${f.whole ? " ideas-quote-moved" : ""}`}>
-                      {f.whole ? "whole paragraph — the exact words have moved" : f.short}
+                      {f.whole ? "whole paragraph — the exact words have moved" : <Excerpt blockId={f.blockId} words={f.short} near={f.shortStart ?? f.start} />}
                     </span>
                     {f.reasoning && <span className="ideas-reason">{f.reasoning}</span>}
                   </button>
