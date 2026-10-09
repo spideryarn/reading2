@@ -57,9 +57,8 @@ claims with no path back to the source.
 
 ## What it does today
 
-This started as an experiment and is a real product now, with accounts, billing, and paying readers
-since 2026-09-03. The readership is small and knows it is a beta, so we still optimise for how fast
-we can move.
+This started as an experiment and is a real product now, with accounts, and billing live since
+2026-09-03. It is a beta with very few readers, so we still optimise for how fast we can move.
 
 **What it does is help you read deeply and efficiently.** Greg, 2026-10-09:
 

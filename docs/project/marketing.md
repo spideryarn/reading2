@@ -36,6 +36,10 @@ promising "read this in 2 minutes" is not one we use.
 >
 > — Greg, 2026-10-09
 
+Where we are, as of that day: no one yet. Greg, 2026-10-09: *"the only paying readers are me and a
+test account. And then there's one or two other signups who signed up when I talked to them
+directly, but I don't think they've really used it since."*
+
 One person, using it because they want to, not because they were asked. Judge every idea below by
 whether it gets us closer to that person. Raise the bar once we have one.
 
@@ -71,7 +75,8 @@ with a short personal note asking what it gets wrong, and calls them where he ca
 they will answer honestly, and they are the best judges of whether it got their argument right.
 Each reply is a user interview, and it tests the author-gift idea below on friendly ground first.
 Greg, 2026-10-09: *"That's a good idea for the first experiment. I might try and actually talk to
-them on the phone at the same time."*
+them on the phone at the same time."* He will pick the five and draft the notes from a knowledge-work harness, through
+Spideryarn's MCP server ([mcp.md](mcp.md)).
 
 ### Talks — *idea*
 
