@@ -30,9 +30,13 @@ const COLLAPSED = 12;
 
 /** The wire's topics as the reader's shelf's terms: each with the slugs of its cards. */
 export function publicTerms(shelf: PublicLibrary): ShelfTerm[] {
-  const slugs = new Map<string, string[]>(shelf.topics.map((t) => [t.key, []]));
-  for (const e of shelf.entries) for (const key of e.topics) slugs.get(key)?.push(e.slug);
-  return shelf.topics.map((t) => ({
+  /* `?? []` although the wire type says always: an answer from a server older
+     than the pills (a tab open across a deploy, a cached response) has neither
+     field, and that is "no topics", not a crash. */
+  const topics = shelf.topics ?? [];
+  const slugs = new Map<string, string[]>(topics.map((t) => [t.key, []]));
+  for (const e of shelf.entries) for (const key of e.topics ?? []) slugs.get(key)?.push(e.slug);
+  return topics.map((t) => ({
     key: t.key,
     label: t.label,
     granularity: t.granularity,
