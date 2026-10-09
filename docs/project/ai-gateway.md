@@ -909,17 +909,30 @@ headers, which is tighter. Two failures are retried and nothing else:
 - the status was a transient one **and the body priced nothing**. A refusal that carries a cost
   was billed, and is not bought again.
 
+**A request carrying `openrouter:web_search` is sent again only when it provably never left**
+(since 2026-10-09, [261009e](../plans/261009e-paid-web-search-not-retried-after-it-was-sent.md)):
+the cause names a refused connection, a failed DNS lookup or a connect timeout (`sentNothing` in
+`src/call-failure.ts`). A reset, a closed socket, a timeout after the write, a `fetch failed` that
+names no cause, and any refusal at all, unpriced 503s included, end the call: OpenRouter may
+already have accepted it, and its searches can cost 15–20 cents a call with no idempotency key to stop a
+second purchase. The reader sees that failure where they would once have had a retry. `send` also
+refuses redirects (`redirect: "error"`) on every request, so a refused connection cannot be the
+second hop of a POST that already went out. **What this does not close:** a pipeline step whose
+lease expires is requeued and run again (`src/store/pg-jobs.ts`), and Debate's step then buys its
+searches a second time.
+
 A `200` of any kind is never retried: not one whose body will not read, not one that does not
 parse, and on the stream not one that breaks before its first frame or dies mid-answer. A `200` on
 this wire means OpenRouter accepted the work and may be billing it. On the stream, `end` is cleared
 at the start of every attempt, and `onActivity` is called before the wait and again after it, so a
 caller's stall clock does not count the backoff as provider silence.
 
-**One predicate says which failures may be asked again:** `worthAskingAgain(err)` in
+**General failure eligibility comes from** `worthAskingAgain(err)` in
 `src/ai-call.ts`. Two facts feed it that only the gateway has. `ProviderRefused.priced` says
 whether the meter saw a cost in the refusal's body. And an error from `fetch` itself is remembered
 at `send`, because by the time a caller catches a `TypeError` it cannot tell a dead connection from
-a `200` whose body broke.
+a `200` whose body broke. The gateway's `mayAskAgain` also applies the web-search restriction
+above, using the serialized request rather than the caller's mutable body.
 
 **A caller can switch the gateway's retry off** with `retryTransport: false`, when it already owns
 the decision. Without that the loops multiply: nine requests for one PDF chunk on a bad minute.
@@ -938,8 +951,8 @@ Two trade-offs, both taken on purpose:
 - **A retried attempt's cost is unknown, not zero.** A connection can drop after the provider took
   the work. The failed row is *unpriced*, and the retry may pay twice for the first moment of a
   call. The *priced refusal is not retried* rule covers the case where the provider tells us;
-  nothing covers the case where it does not. It is dearest on an Illustrated plate and on the three
-  calls that run a billed web search (`dig-deeper-search`, `citations-find`, `debate`).
+  nothing covers the case where it does not. It is dearest on an Illustrated plate, which still
+  takes the risk; a call that runs a billed web search no longer does (above).
 - **On the OpenRouter seams a caller's own count is not kept in step.** Simple's `checkCalls`,
   quick search's `tally.requests` and Illustrated's "N call(s)" count asks, so after a retried blip
   the ledger has one more row than the count. The ledger is the truth. The one count that is a

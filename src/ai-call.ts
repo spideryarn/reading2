@@ -80,6 +80,7 @@ import {
   abortClass,
   isErrorEnvelope,
   networkClass,
+  sentNothing,
   stoppedByOurClock,
   thrownClass,
 } from "./call-failure.js";
@@ -1882,6 +1883,17 @@ function frameProviderTrusted(body: AiRequestBody): boolean {
 }
 
 /**
+ * **Does this request buy a server-side web search?** Any engine. Only the
+ * `tools` spelling every caller here uses is recognised, as in
+ * `frameProviderTrusted`. Read by `mayAskAgain`.
+ */
+function searchesTheWeb(body: unknown): boolean {
+  const tools = (body as { tools?: unknown } | null)?.tools;
+  if (!Array.isArray(tools)) return false;
+  return tools.some((t) => (t as { type?: unknown } | null)?.type === "openrouter:web_search");
+}
+
+/**
  * The body a caller passes: whatever the endpoint wants, and a `model`.
  *
  * The four fields this file owns are typed `never`, so passing one is a compile
@@ -2009,11 +2021,18 @@ function prepare(
   url: string;
   headers: Record<string, string>;
   fingerprint: string;
+  webSearch: boolean;
 } {
   const key = apiKey(key0);
+  const payload = outgoing(job, body, streaming);
   return {
     key,
-    payload: outgoing(job, body, streaming),
+    payload,
+    /* The serialized request is the truth: the caller can mutate its tools
+       during fetch, and a toJSON method can change which tools are sent. The
+       substring test first, so a PDF's megabytes of base64 are not parsed
+       again for a request that cannot be a search. */
+    webSearch: payload.includes('"openrouter:web_search"') && searchesTheWeb(JSON.parse(payload)),
     url: `${OPENROUTER_BASE}${pathFor(job)}`,
     /* Chat only: the other paths this function serves (embeddings) were never
        probed with it, and their frames carry no `provider` to correct. */
@@ -2060,6 +2079,12 @@ async function send(
       },
       ...(signal ? { signal } : {}),
       body: prepared.payload,
+      /* **A redirect is a failure, not a second POST.** Following a 307/308
+         could repeat the request at another URL, and a connection
+         refused there would read to `sentNothing` as a request that never
+         left, though the first one did. OpenRouter's API has no reason to
+         redirect. GPT Sol, reviewing plan 261009e. */
+      redirect: "error",
     });
   } catch (err) {
     /* Only an object can go in a `WeakSet`, and anything can be thrown. */
@@ -2108,10 +2133,24 @@ interface RetryOptions {
   retryTransport?: false;
 }
 
-/** After attempt `attempt` failed with `err`: is another one due? An abort and an opt-out both say no. */
-function mayAskAgain(err: unknown, attempt: number, options: RetryOptions | undefined): boolean {
+/**
+ * After attempt `attempt` failed with `err`: is another one due? `webSearch`
+ * describes the serialized request. An abort and an opt-out both say no.
+ *
+ * **A web search is sent again only when it provably never left**: a network
+ * failure whose cause says no connection was made (`sentNothing`). Not after a
+ * reset, which can come after OpenRouter accepted the request, and not after
+ * any refusal, which proves it arrived: an unpriced body says only that no cost
+ * was reported. Its searches can cost 15–20 cents a call, with no idempotency
+ * key to stop a second purchase. A call without one keeps the
+ * wider rule, and pays at most a few tokens twice. qi-2gaxfaaj, plan
+ * docs/plans/261009e-paid-web-search-not-retried-after-it-was-sent.md.
+ */
+function mayAskAgain(err: unknown, attempt: number, options: RetryOptions | undefined, webSearch: boolean): boolean {
   if (options?.retryTransport === false || options?.signal?.aborted) return false;
-  return attempt < TRANSPORT_ATTEMPTS && worthAskingAgain(err);
+  if (attempt >= TRANSPORT_ATTEMPTS || !worthAskingAgain(err)) return false;
+  if (!webSearch) return true;
+  return !(err instanceof ProviderRefused) && sentNothing(err);
 }
 
 /**
@@ -2146,6 +2185,8 @@ async function backOff(attempt: number, signal: AbortSignal | undefined): Promis
  */
 async function asTransportAttempts<T>(
   who: Caller,
+  /** Whether the serialized request carries web search, for `mayAskAgain`. */
+  webSearch: boolean,
   options: RetryOptions | undefined,
   attempt: (n: number | null) => Promise<T>,
 ): Promise<T> {
@@ -2161,7 +2202,7 @@ async function asTransportAttempts<T>(
     try {
       return await attempt(ordinal(n, options));
     } catch (err) {
-      if (!mayAskAgain(err, n, options)) throw err;
+      if (!mayAskAgain(err, n, options, webSearch)) throw err;
       after = unansweredFailure(err);
       await backOff(n, options?.signal);
     }
@@ -2384,7 +2425,7 @@ async function acceptedStream(
     } catch (err) {
       const end = meter.failed(err, options.signal);
       meter.finish(end);
-      if (!mayAskAgain(err, attempt, options)) throw err;
+      if (!mayAskAgain(err, attempt, options, prepared.webSearch)) throw err;
       after = end.outcome === "error" ? end.failure : null;
       /* **Twice, around the wait.** Before it, so a failure that landed just
          short of the caller's stall clock does not have the backoff counted as
@@ -2602,7 +2643,7 @@ export async function openRouterJson(
   /* Before the meter — see `prepare`: no attempt, no record. */
   const prepared = prepare(job, body, false, options?.apiKey);
   /* One attempt, one meter, one row. See `asTransportAttempts`. */
-  return asTransportAttempts({ job, wire: wireOf(job), model: body.model }, options, async (n) => {
+  return asTransportAttempts({ job, wire: wireOf(job), model: body.model }, prepared.webSearch, options, async (n) => {
     const meter = new Meter(job, body.model, wireOf(job), prepared.fingerprint, n);
     meter.trustFrameProvider = frameProviderTrusted(body);
     let end: CallEnd = { outcome: "ok" };
@@ -2909,7 +2950,7 @@ export async function openRouterImage(
     url: `${OPENROUTER_BASE}${routeFor(job).path}`,
   };
   /* One attempt, one meter, one row. See `asTransportAttempts`. */
-  return asTransportAttempts({ job, wire: wireOf(job), model: body.model }, options, async (n) => {
+  return asTransportAttempts({ job, wire: wireOf(job), model: body.model }, false, options, async (n) => {
     const meter = new Meter(job, body.model, wireOf(job), keyFingerprint(key), n);
     let end: CallEnd = { outcome: "ok" };
     try {
@@ -3225,7 +3266,7 @@ export async function openRouterTranscription(
     url: `${OPENROUTER_BASE}${routeFor(job).path}`,
   };
   /* One attempt, one meter, one row. See `asTransportAttempts`. */
-  return asTransportAttempts({ job, wire: wireOf(job), model: body.model }, options, async (n) => {
+  return asTransportAttempts({ job, wire: wireOf(job), model: body.model }, false, options, async (n) => {
     const meter = new Meter(job, body.model, wireOf(job), keyFingerprint(key), n);
     let end: CallEnd = { outcome: "ok" };
     try {
@@ -3420,7 +3461,7 @@ export async function openRouterDecisions(
     url: `${OPENROUTER_BASE}${route.path}`,
   };
   /* One attempt, one meter, one row. See `asTransportAttempts`. */
-  return asTransportAttempts({ job, wire: wireOf(job), model: body.model }, options, async (n) => {
+  return asTransportAttempts({ job, wire: wireOf(job), model: body.model }, false, options, async (n) => {
     const meter = new Meter(job, body.model, wireOf(job), keyFingerprint(key), n);
     let end: CallEnd = { outcome: "ok" };
     try {

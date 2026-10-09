@@ -17,6 +17,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  type AiRequestBody,
   ProviderRefused,
   openRouterDecisions,
   openRouterImage,
@@ -1265,4 +1266,145 @@ describe("a caller with a loop of its own gets the cause on every row, and no or
       [null, "error", beforeAnswer("refused", 503)],
     ]);
   });
+});
+
+/* ------------------------------------------- a paid web search, sent once -- */
+
+/**
+ * **A web search is not bought twice** — qi-2gaxfaaj, plan
+ * docs/plans/261009e-paid-web-search-not-retried-after-it-was-sent.md. A
+ * request carrying `openrouter:web_search` is asked again after a network
+ * failure only when the cause proves no request left; a reset may come after
+ * OpenRouter accepted, and billed, the searches.
+ */
+const SEARCH_TOOLS = [{ type: "openrouter:web_search", parameters: { engine: "exa", max_results: 5 } }];
+
+const SEARCHING: { name: string; ask: (body?: AiRequestBody) => Promise<unknown>; good: () => Response }[] = [
+  {
+    name: "openRouterJson",
+    ask: (body = { model: "m", messages: [], tools: SEARCH_TOOLS }) => openRouterJson("debate", body),
+    good: whole(200, { choices: [{ message: { content: "ok" } }] }),
+  },
+  {
+    name: "openRouterStream",
+    ask: async (body = { model: "m", messages: [], tools: SEARCH_TOOLS }) => {
+      const chunks: unknown[] = [];
+      for await (const c of openRouterStream(
+        "chat",
+        body,
+        { signal: new AbortController().signal, onActivity: () => {}, end: { terminated: false } },
+      )) {
+        chunks.push(c);
+      }
+      return chunks;
+    },
+    good: streamed(WORD, DONE),
+  },
+];
+
+describe.each(SEARCHING)("$name with a web search — sent again only if it never left", (seam) => {
+  it("checks the sent payload even when the caller removes tools during the request", async () => {
+    const body: AiRequestBody = { model: "m", messages: [], tools: SEARCH_TOOLS };
+    const failure = droppedWith("ECONNRESET");
+    let sent = 0;
+    vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
+      sent++;
+      expect(JSON.parse(String(init.body)).tools).toEqual(SEARCH_TOOLS);
+      body.tools = [];
+      if (sent === 1) throw failure;
+      return seam.good();
+    });
+    const run = await drive(() => seam.ask(body));
+    expect(errorOf(run.outcome)).toBe(failure);
+    expect(sent).toBe(1);
+    expect(run.outcomes).toEqual(["error"]);
+  });
+
+  it("checks tools produced by JSON serialization", async () => {
+    const failure = droppedWith("ECONNRESET");
+    const t = script(failure, seam.good);
+    const run = await drive(() => seam.ask({
+      model: "m",
+      messages: [],
+      tools: { toJSON: () => SEARCH_TOOLS },
+    }));
+    expect(t.bodies[0]?.tools).toEqual(SEARCH_TOOLS);
+    expect(errorOf(run.outcome)).toBe(failure);
+    expect(t.sent()).toBe(1);
+    expect(run.outcomes).toEqual(["error"]);
+  });
+
+  it.each([
+    ["a reset", () => droppedWith("ECONNRESET")],
+    ["a closed socket", () => droppedWith("UND_ERR_SOCKET")],
+    ["a broken pipe", () => droppedWith("EPIPE")],
+    ["a headers timeout", () => droppedWith("UND_ERR_HEADERS_TIMEOUT")],
+    ["a body timeout", () => droppedWith("UND_ERR_BODY_TIMEOUT")],
+    ["an ETIMEDOUT, which can come after the write", () => droppedWith("ETIMEDOUT")],
+    ["a bare fetch failed, which names nothing", dropped],
+  ])("does not send it again after %s", async (_what, failure) => {
+    const t = script(failure(), seam.good);
+    const run = await drive(seam.ask);
+    expect(errorOf(run.outcome)).toBeInstanceOf(TypeError);
+    expect(t.sent()).toBe(1);
+    expect(run.outcomes).toEqual(["error"]);
+  });
+
+  it.each(["ECONNREFUSED", "ENOTFOUND", "EAI_AGAIN", "UND_ERR_CONNECT_TIMEOUT"])(
+    "sends it again after %s, which no request got past",
+    async (code) => {
+      const t = script(droppedWith(code), seam.good);
+      const run = await drive(seam.ask);
+      expect(errorOf(run.outcome)).toBeUndefined();
+      expect(t.sent()).toBe(2);
+      expect(run.outcomes).toEqual(["error", "ok"]);
+    },
+  );
+
+  it.each([408, 409, 500, 502, 503, 504, 529])("does not send it again after an unpriced %i", async (status) => {
+    const t = script(refused(status), seam.good);
+    const run = await drive(seam.ask);
+    expect((errorOf(run.outcome) as ProviderRefused).status).toBe(status);
+    expect(t.sent()).toBe(1);
+    expect(run.outcomes).toEqual(["error"]);
+  });
+
+  it.each(["code", "cause"] as const)("does not mistake a refusal's %s for an unsent request", async (where) => {
+    const failure = Object.assign(
+      new ProviderRefused(503, "", new Headers(), false),
+      where === "code" ? { code: "ECONNREFUSED" } : { cause: droppedWith("ECONNREFUSED") },
+    );
+    const t = script(failure, seam.good);
+    const run = await drive(seam.ask);
+    expect(errorOf(run.outcome)).toBe(failure);
+    expect(t.sent()).toBe(1);
+    expect(run.outcomes).toEqual(["error"]);
+  });
+});
+
+it("a web search on the default engine is sent once too", async () => {
+  const t = script(droppedWith("ECONNRESET"), whole(200, { choices: [{ message: { content: "ok" } }] }));
+  const run = await drive(() =>
+    openRouterJson("debate", { model: "m", messages: [], tools: [{ type: "openrouter:web_search" }] }),
+  );
+  expect(errorOf(run.outcome)).toBeInstanceOf(TypeError);
+  expect(t.sent()).toBe(1);
+});
+
+it.each(SEAMS)("$name asks fetch to refuse redirects, including when retries are opted out", async (seam) => {
+  let redirect: RequestRedirect | undefined;
+  vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
+    redirect = init.redirect;
+    return seam.good();
+  });
+  const run = await drive(() => seam.ask({ retryTransport: false }));
+  expect(errorOf(run.outcome)).toBeUndefined();
+  expect(redirect).toBe("error");
+});
+
+it("a call without a web search is still asked again after a reset", async () => {
+  const t = script(droppedWith("ECONNRESET"), whole(200, { choices: [{ message: { content: "ok" } }] }));
+  const run = await drive(() => openRouterJson("debate", { model: "m", messages: [] }));
+  expect(errorOf(run.outcome)).toBeUndefined();
+  expect(t.sent()).toBe(2);
 });
