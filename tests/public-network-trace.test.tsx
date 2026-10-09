@@ -959,12 +959,12 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
      drawn ones are "draws a stored faq" and "draws a stored citations list"
      below. docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
   faq: { where: VISITOR_BAND, says: "Nobody has built an FAQ for this one yet" },
-  /* **Citations and Debate, Peer review since 2026-10-09** (plan 261009l):
+  /* **Citations and Debate, Sources since 2026-10-09** (plan 261009l):
      open on any one of their artefacts (visitor.ts § POLICY, `any-artefact`),
      so on the default fixture, which has none, the one sentence names both.
      The drawn ones are "draws a stored citations list" and "draws a stored
      debate" below. */
-  "peer-review": {
+  sources: {
     where: VISITOR_BAND,
     says: "Nobody has built a Bibliography, a Reception search or a Claims list for this one yet",
   },
@@ -1494,7 +1494,7 @@ describe("a signed-out browser on a shared document", () => {
     expect(text).toContain("We have not read this work");
     expect(text).toContain("A work whose link did not cross");
     expect(band?.querySelector('a[href="https://doi.org/10.1186/1471-2202-5-42"]')).not.toBeNull();
-    expect(host.textContent).not.toContain("Peer review is for whoever added this article");
+    expect(host.textContent).not.toContain("Sources is for whoever added this article");
     /* None of the owner's verbs: no first run, no re-run, no paid search. */
     expect(host.textContent).not.toContain("Find the citations");
     expect(host.textContent).not.toContain("Find them again");
@@ -1572,10 +1572,10 @@ describe("a signed-out browser on a shared document", () => {
        Claims, a press away — and the press asks the server nothing. */
     expect(text).not.toContain("Somebody else answers what it claims.");
     expect(band?.querySelector('a[href="https://reply.example.org/a-reply"]')).not.toBeNull();
-    /* The old `?mode=debate` link landed on Reception, Peer review's second
-       chip since 2026-10-09 (router.ts § `liftLegacyPeerReview`). */
-    expect(new URLSearchParams(location.search).get("mode")).toBe("peer-review");
-    expect(new URLSearchParams(location.search).get("peer-review")).toBe("reception");
+    /* The old `?mode=debate` link landed on Reception, Sources' second
+       chip since 2026-10-09 (router.ts § `liftLegacySources`). */
+    expect(new URLSearchParams(location.search).get("mode")).toBe("sources");
+    expect(new URLSearchParams(location.search).get("sources")).toBe("reception");
     const chips = [...(band?.querySelectorAll<HTMLButtonElement>(".dbt-views [role='radio']") ?? [])];
     /* No bibliography on this payload, so Bibliography's chip has no count. */
     expect(chips[0]?.textContent, "the Bibliography chip, with no count").toBe("Bibliography");
@@ -1583,7 +1583,7 @@ describe("a signed-out browser on a shared document", () => {
     expect(claims?.textContent, "the Claims segment, with its count").toBe("Claims1");
     await act(async () => claims?.click());
     await until(() => readable(band as Element).includes("Somebody else answers what it claims."));
-    expect(new URLSearchParams(location.search).get("peer-review")).toBe("claims");
+    expect(new URLSearchParams(location.search).get("sources")).toBe("claims");
     expect(readable(band as Element)).not.toContain(PUBLIC_DEBATE_QUOTE);
     /* The row the boundary withheld is said, not silently missing — in the
        band's (i) since 2026-10-01, with Debate's other counts (plan 261001m). */
@@ -1595,7 +1595,7 @@ describe("a signed-out browser on a shared document", () => {
       "1 more result that is not shown on a shared link",
     );
     await act(async () => about?.click());
-    expect(host.textContent).not.toContain("Peer review is for whoever added this article");
+    expect(host.textContent).not.toContain("Sources is for whoever added this article");
     /* None of the owner's verbs: no first search, no search again, no retry. */
     expect(host.textContent).not.toContain("Search the web");
     expect(host.textContent).not.toContain("Search again");
@@ -2200,10 +2200,10 @@ describe("a signed-out browser on a shared document", () => {
       "timeline",
       "skim",
       "faq",
-      /* Peer review in each of its three sub-modes, and the two old words. */
-      "peer-review",
-      "peer-review&peer-review=reception",
-      "peer-review&peer-review=claims",
+      /* Sources in each of its three sub-modes, and the two old words. */
+      "sources",
+      "sources&sources=reception",
+      "sources&sources=claims",
       "citations",
       "debate",
     ]) {
@@ -2986,7 +2986,7 @@ describe("a signed-in reader who does not own it", () => {
         MODE_LABEL.quotes,
         MODE_LABEL.glossary,
         MODE_LABEL.ideas,
-        MODE_LABEL["peer-review"],
+        MODE_LABEL.sources,
         MODE_LABEL.search,
         MODE_LABEL.chat,
         MODE_LABEL.learn,

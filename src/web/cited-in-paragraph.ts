@@ -1,5 +1,5 @@
 /**
- * **The works a claim's paragraph cites** — Peer review's bridge between its
+ * **The works a claim's paragraph cites** — Sources' bridge between its
  * halves (plan 261009l § C1): under each claim in Claims, the works the article
  * cites in the paragraph the claim was found in, each a press away from its
  * Bibliography row.

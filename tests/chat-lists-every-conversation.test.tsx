@@ -425,7 +425,7 @@ describe("the filter is a parameter of its own (F6)", () => {
 
   it("is replaced with All when this article has no conversation from that source", async () => {
     stored = [CHAT, LEARN];
-    await mount("?mode=chat&chatfrom=peer-review");
+    await mount("?mode=chat&chatfrom=sources");
     const before = history.length;
     await written();
     expect(param("chatfrom")).toBeNull();

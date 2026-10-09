@@ -79,7 +79,7 @@ const BEHIND_THE_SWITCH: readonly Mode[] = [
      Explore chip stays behind the switch, one level down:
      tests/learn-header-cards.test.tsx § "Explore is behind the switch". */
   /* Debate (2026-09-05) and Citations (2026-09-11) were here until 2026-10-09,
-     when they became Peer review and came out of the switch together. Greg
+     when they became Sources and came out of the switch together. Greg
      (spya-vcvxu5): *"let's move this out of experimental, this combined
      mode"* — docs/project/experimental-features.md. */
   /* 2026-09-16: a new mode on an unmeasured prompt —

@@ -142,7 +142,7 @@
 import type { Mode } from "../modes.js";
 import type { AutoRunTarget } from "./auto-run-targets.js";
 import type { DiagramKind } from "./diagram.js";
-import type { LearnView, PeerReviewView, SummaryView } from "./params.js";
+import type { LearnView, SourcesView, SummaryView } from "./params.js";
 import type { RefereeView } from "./referee-views.js";
 import type { SubMode } from "./sub-modes.js";
 import type { StepName } from "../types.js";
@@ -198,10 +198,10 @@ export type { AutoRunTarget };
  * (two such calls until `debate/7`, 2026-10-08, when the claims search left
  * the press). **Delegated since that day**: a press landing on Reception arms
  * the search, one landing on Claims arms the claims list — one call and no
- * search. Since 2026-10-09 it is one of Peer review's three sub-modes, out of
+ * search. Since 2026-10-09 it is one of Sources' three sub-modes, out of
  * the experimental switch, and **the mode opens on Bibliography**, so a press
- * on the Peer review button buys the search only when the address already
- * names Reception (§ `activationForPeerReview`). No navigation buys it; a
+ * on the Sources button buys the search only when the address already
+ * names Reception (§ `activationForSources`). No navigation buys it; a
  * deliberate press can, again and again, as every paid step can (plan
  * 261009l § Reception's spend).
  *
@@ -245,12 +245,12 @@ export interface PressContext {
    */
   summary: SummaryView;
   /**
-   * Which of Peer review's sub-modes a Peer review press is about to land on
-   * — the reading view's parsed `?peer-review=`, for `summary`'s reason
+   * Which of Sources' sub-modes a Sources press is about to land on
+   * — the reading view's parsed `?sources=`, for `summary`'s reason
    * above. Each sub-mode's press buys only its own work (§
-   * `activationForPeerReview`).
+   * `activationForSources`).
    */
-  peerReview: PeerReviewView;
+  sources: SourcesView;
 }
 
 const MODE_TARGET: Record<Mode, ModeActivation> = {
@@ -261,11 +261,11 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
   /* **Delegated**, as Debate's row was since 2026-10-08 (plan 261008i, GPT
      Sol's F1): each sub-mode has its own work, and a press that lands on one
      must not buy another's. Citations' and Debate's rows until 2026-10-09
-     (plan 261009l). § `activationForPeerReview`. */
-  "peer-review": {
+     (plan 261009l). § `activationForSources`. */
+  sources: {
     kind: "delegated",
-    target: (ctx) => activationForPeerReview(ctx.peerReview),
-    why: "the sub-mode a press lands on is whatever `?peer-review=` says: Bibliography arms the citations, Reception the search, Claims the claims list",
+    target: (ctx) => activationForSources(ctx.sources),
+    why: "the sub-mode a press lands on is whatever `?sources=` says: Bibliography arms the citations, Reception the search, Claims the claims list",
   },
   faq: { kind: "fixed", target: "faq" },
   /* The target is the route even when the job it starts writes the Quotes
@@ -583,15 +583,15 @@ export function activationForSummary(view: SummaryView): AutoRunTarget | null {
 }
 
 /**
- * **What a press that lands on one of Peer review's sub-modes arms**: the
+ * **What a press that lands on one of Sources' sub-modes arms**: the
  * `citations` list for Bibliography, the `debate` search for Reception, and
  * the `debate-claims` list for Claims.
  *
  * One answer for the three places that must agree, as `activationForSummary`
  * is: the bar's delegated row, the command bar's sub-mode rows
  * (`subModeTarget`), and the token the boundary retires (`bandTarget`). The
- * band's own chips arm through `subModeTarget` too (PeerReviewMode.tsx §
- * `PeerReviewViews`). Bibliography's arm was Citations' fixed row until
+ * band's own chips arm through `subModeTarget` too (SourcesMode.tsx §
+ * `SourcesViews`). Bibliography's arm was Citations' fixed row until
  * 2026-10-09 (plan 261009l).
  *
  * **Two targets, never one** (2026-10-08). Until `debate/7` both sub-modes
@@ -604,7 +604,7 @@ export function activationForSummary(view: SummaryView): AutoRunTarget | null {
  * is showing (useDebate.ts, useDebateClaims.ts), so neither press can buy the
  * other's work.
  */
-export function activationForPeerReview(view: PeerReviewView): AutoRunTarget {
+export function activationForSources(view: SourcesView): AutoRunTarget {
   switch (view) {
     /* Citations' fixed target until 2026-10-09: the list of works cited. */
     case "bibliography":
@@ -615,7 +615,7 @@ export function activationForPeerReview(view: PeerReviewView): AutoRunTarget {
       return "debate-claims";
     default: {
       const unhandled: never = view;
-      throw new Error(`unhandled Peer review view: ${String(unhandled)}`);
+      throw new Error(`unhandled Sources view: ${String(unhandled)}`);
     }
   }
 }
@@ -718,7 +718,7 @@ export function armActivationForRefereeView(slug: string, view: RefereeView): vo
  *  - Summary: `activationForSummary` of the view **the row names** — `simple`
  *    for Brief and Fuller, nothing for Thread (SummaryMode.tsx §
  *    `SummaryControls`, and `bandTarget` below);
- *  - Peer review: `activationForPeerReview` of the sub-mode **the row
+ *  - Sources: `activationForSources` of the sub-mode **the row
  *    names** — `citations` for Bibliography, `debate` for Reception,
  *    `debate-claims` for Claims.
  *
@@ -741,10 +741,10 @@ export function subModeTarget(sub: SubMode): AutoRunTarget | null {
       return null;
     /* **Bibliography's row arms the citations, Reception's the `debate`
        search, Claims' the claims list** — the mode row's own answer
-       (`activationForPeerReview`). The band's own chips arm through here too
-       (PeerReviewMode.tsx § `PeerReviewViews`). */
-    case "peer-review":
-      return activationForPeerReview(sub.view);
+       (`activationForSources`). The band's own chips arm through here too
+       (SourcesMode.tsx § `SourcesViews`). */
+    case "sources":
+      return activationForSources(sub.view);
     default: {
       const unhandled: never = sub;
       throw new Error(`unhandled sub-mode: ${JSON.stringify(unhandled)}`);
@@ -799,7 +799,7 @@ export function bandTarget(
     referee: RefereeView;
     learn: LearnView;
     summary: SummaryView;
-    "peer-review": PeerReviewView;
+    sources: SourcesView;
   },
 ): AutoRunTarget | null {
   if (mode === "referee") return REFEREE_TARGET[sub.referee];
@@ -809,7 +809,7 @@ export function bandTarget(
     case "fixed":
       return decision.target;
     case "delegated":
-      return decision.target({ diagram: sub.diagram, summary: sub.summary, peerReview: sub["peer-review"] });
+      return decision.target({ diagram: sub.diagram, summary: sub.summary, sources: sub.sources });
     /* No press was armed, so there is none to retire. */
     case "none":
       return null;

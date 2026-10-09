@@ -24,7 +24,7 @@ import {
 import { GENERATES_MARKER } from "../src/web/CommandBar.js";
 import { Dock } from "../src/web/Dock.js";
 import {
-  peerReviewParam,
+  sourcesParam,
   diagramParam,
   modeParam,
   refereeParam,
@@ -96,7 +96,7 @@ function ReaderNavHarness(): ReturnType<typeof createElement> {
     referee: refereeParam,
     summary: summaryParam,
     structure: structureParam,
-    "peer-review": peerReviewParam,
+    sources: sourcesParam,
   });
   return createElement(Dock, {
     slug: "a-piece",
@@ -563,38 +563,42 @@ describe("Enter on Referee › Hidden text, on the reading view", () => {
   });
 });
 
-/* Peer review's Bibliography | Reception | Claims, since 2026-10-09 (plan
+/* Sources' Bibliography | Reception | Claims, since 2026-10-09 (plan
    261009l); Debate's Reception | Claims before that, since 2026-10-03 (plan
    261003o; GPT Sol's F6): the bar gets its sub-mode rows from `subModesOf`,
    so a sub-mode that lives only in the panel is one the bar never offers; and
    Reader's batched setter enumerates its keys, so one missing from it opens
    the mode and drops the view. */
-describe("Peer review's three sub-modes", () => {
-  const BIBLIOGRAPHY: SubMode = { mode: "peer-review", view: "bibliography" };
-  const CLAIMS: SubMode = { mode: "peer-review", view: "claims" };
-  const RECEPTION: SubMode = { mode: "peer-review", view: "reception" };
+describe("Sources' three sub-modes", () => {
+  const BIBLIOGRAPHY: SubMode = { mode: "sources", view: "bibliography" };
+  const CLAIMS: SubMode = { mode: "sources", view: "claims" };
+  const RECEPTION: SubMode = { mode: "sources", view: "reception" };
 
-  it("lists all three under Peer review, in the control's order", () => {
+  it("lists all three under Sources, in the control's order", () => {
     reading();
     openBar();
-    type("peer review");
-    expect(fullName(rows()[0] as HTMLElement)).toBe("Peer review");
-    expect(subRows().map(fullName).filter((n) => n.startsWith("Peer review ›"))).toEqual([
-      "Peer review › Bibliography",
-      "Peer review › Reception",
-      "Peer review › Claims",
+    type("sources");
+    expect(fullName(rows()[0] as HTMLElement)).toBe("Sources");
+    expect(subRows().map(fullName).filter((n) => n.startsWith("Sources ›"))).toEqual([
+      "Sources › Bibliography",
+      "Sources › Reception",
+      "Sources › Claims",
     ]);
+    /* Its name until 2026-10-09 still finds it, ahead of Referee (plan 261009w). */
+    type("peer review");
+    expect(fullName(rows()[0] as HTMLElement)).toBe("Sources");
+    expect(rows().map(fullName)).toContain("Referee");
   });
 
   it("finds Claims by the compound a reader would say, the old Debate one too, beside Referee's", () => {
     reading();
     openBar();
-    type("peer review claims");
-    expect(fullName(rows()[0] as HTMLElement)).toBe("Peer review › Claims");
+    type("sources claims");
+    expect(fullName(rows()[0] as HTMLElement)).toBe("Sources › Claims");
     type("debate claims");
-    expect(fullName(rows()[0] as HTMLElement)).toBe("Peer review › Claims");
+    expect(fullName(rows()[0] as HTMLElement)).toBe("Sources › Claims");
     type("claims");
-    expect(rows().map(fullName)).toEqual(expect.arrayContaining(["Peer review › Claims", "Referee › Claims"]));
+    expect(rows().map(fullName)).toEqual(expect.arrayContaining(["Sources › Claims", "Referee › Claims"]));
   });
 
   /* **The retired mode words select the view each old link opens**
@@ -604,11 +608,11 @@ describe("Peer review's three sub-modes", () => {
     reading();
     openBar();
     type("citations");
-    expect(fullName(rows()[0] as HTMLElement)).toBe("Peer review › Bibliography");
+    expect(fullName(rows()[0] as HTMLElement)).toBe("Sources › Bibliography");
     type("bibliography");
-    expect(fullName(rows()[0] as HTMLElement)).toBe("Peer review › Bibliography");
+    expect(fullName(rows()[0] as HTMLElement)).toBe("Sources › Bibliography");
     type("debate");
-    expect(fullName(rows()[0] as HTMLElement)).toBe("Peer review › Reception");
+    expect(fullName(rows()[0] as HTMLElement)).toBe("Sources › Reception");
   });
 
   /* **Each row buys its own sub-mode's work and nothing else**: the
@@ -624,13 +628,13 @@ describe("Peer review's three sub-modes", () => {
     expect(subModeGenerates(CLAIMS)).toBe(true);
   });
 
-  it("opens Peer review on Claims from the bar arming the list and never the Reception search", () => {
+  it("opens Sources on Claims from the bar arming the list and never the Reception search", () => {
     const onMode = vi.fn();
     reading({ onMode });
     openBar();
-    type("peer review claims");
+    type("sources claims");
     press("Enter");
-    expect(onMode).toHaveBeenCalledWith("peer-review", CLAIMS);
+    expect(onMode).toHaveBeenCalledWith("sources", CLAIMS);
     expect(pendingActivation("a-piece", "debate")).toBeNull();
     expect(pendingActivation("a-piece", "citations")).toBeNull();
     expect(pendingActivation("a-piece", "debate-claims")).not.toBeNull();
@@ -638,26 +642,26 @@ describe("Peer review's three sub-modes", () => {
 
   /* **The mode row too**: it lands on whatever sub-mode the reading view says
      is showing, so it arms by that, from the parsed state the Reader hands the
-     bar (`<Dock peerReview>`) — the address lags a press (activation.ts §
+     bar (`<Dock sources>`) — the address lags a press (activation.ts §
      `PressContext`). */
-  it("arms the claims list, not the search, from the mode row when Peer review would open on Claims", () => {
+  it("arms the claims list, not the search, from the mode row when Sources would open on Claims", () => {
     const onMode = vi.fn();
-    reading({ onMode, peerReview: "claims" });
+    reading({ onMode, sources: "claims" });
     openBar();
-    type("peer review");
-    expect(fullName(rows()[0] as HTMLElement)).toBe("Peer review");
+    type("sources");
+    expect(fullName(rows()[0] as HTMLElement)).toBe("Sources");
     press("Enter");
-    expect(onMode).toHaveBeenCalledWith("peer-review", undefined, false);
+    expect(onMode).toHaveBeenCalledWith("sources", undefined, false);
     expect(pendingActivation("a-piece", "debate")).toBeNull();
     expect(pendingActivation("a-piece", "citations")).toBeNull();
     expect(pendingActivation("a-piece", "debate-claims")).not.toBeNull();
   });
 
-  it("arms the search from the mode row when Peer review would open on Reception", () => {
+  it("arms the search from the mode row when Sources would open on Reception", () => {
     const onMode = vi.fn();
-    reading({ onMode, peerReview: "reception" });
+    reading({ onMode, sources: "reception" });
     openBar();
-    type("peer review");
+    type("sources");
     press("Enter");
     expect(pendingActivation("a-piece", "debate")).not.toBeNull();
     /* …and never Claims' list (plan 261008i stage 2), nor the citations. */
@@ -667,49 +671,49 @@ describe("Peer review's three sub-modes", () => {
 
   /* Bibliography is the default: a mode row with nothing named buys the
      citations, and never the search. */
-  it("arms the citations from the mode row when Peer review would open on Bibliography", () => {
+  it("arms the citations from the mode row when Sources would open on Bibliography", () => {
     const onMode = vi.fn();
     reading({ onMode });
     openBar();
-    type("peer review");
+    type("sources");
     press("Enter");
     expect(pendingActivation("a-piece", "citations")).not.toBeNull();
     expect(pendingActivation("a-piece", "debate")).toBeNull();
     expect(pendingActivation("a-piece", "debate-claims")).toBeNull();
   });
 
-  it("opens Peer review on Reception from the bar and arms the search, as the mode row does", () => {
+  it("opens Sources on Reception from the bar and arms the search, as the mode row does", () => {
     const onMode = vi.fn();
     reading({ onMode });
     openBar();
-    type("peer review reception");
+    type("sources reception");
     press("Enter");
-    expect(onMode).toHaveBeenCalledWith("peer-review", RECEPTION);
+    expect(onMode).toHaveBeenCalledWith("sources", RECEPTION);
     expect(pendingActivation("a-piece", "debate")).not.toBeNull();
     expect(pendingActivation("a-piece", "debate-claims")).toBeNull();
   });
 
-  it("opens Peer review on Claims through the Reader's setter, in one pushed entry", async () => {
+  it("opens Sources on Claims through the Reader's setter, in one pushed entry", async () => {
     readingThroughReader("?mode=plain&at=spya-k3m9qt");
     const push = vi.spyOn(history, "pushState");
     openBar();
-    type("peer review claims");
+    type("sources claims");
     press("Enter");
     await until(() => {
       const params = new URLSearchParams(location.search);
-      return params.get("mode") === "peer-review" && params.get("peer-review") === "claims";
+      return params.get("mode") === "sources" && params.get("sources") === "claims";
     });
     expect(push).toHaveBeenCalledTimes(1);
     expect(new URLSearchParams(location.search).get("at")).toBe("spya-k3m9qt");
   });
 
   it("leaves Bibliography, the default, out of the address", () => {
-    expect(subModeParams(BIBLIOGRAPHY)).toEqual({ mode: "peer-review", "peer-review": null });
-    expect(subModeParams(CLAIMS)).toEqual({ mode: "peer-review", "peer-review": "claims" });
-    expect(withSubMode("?mode=peer-review&peer-review=claims&at=spya-aaaaaa", BIBLIOGRAPHY)).toBe(
-      "?mode=peer-review&at=spya-aaaaaa",
+    expect(subModeParams(BIBLIOGRAPHY)).toEqual({ mode: "sources", sources: null });
+    expect(subModeParams(CLAIMS)).toEqual({ mode: "sources", sources: "claims" });
+    expect(withSubMode("?mode=sources&sources=claims&at=spya-aaaaaa", BIBLIOGRAPHY)).toBe(
+      "?mode=sources&at=spya-aaaaaa",
     );
-    expect(withSubMode("?mode=plain", CLAIMS)).toBe("?mode=peer-review&peer-review=claims");
+    expect(withSubMode("?mode=plain", CLAIMS)).toBe("?mode=sources&sources=claims");
   });
 });
 
@@ -744,7 +748,7 @@ describe("the registry's two answers agree", () => {
     referee: "criteria",
     learn: "recall",
     summary: "brief",
-    "peer-review": "bibliography",
+    sources: "bibliography",
   } as const;
 
   it("a sub-mode row arms exactly the target the band that mounts would claim", () => {
@@ -794,7 +798,7 @@ describe("the registry's two answers agree", () => {
       /* Brief, Summary's default since 8N (plan 261002c); Simple was until then. */
       { mode: "summary", view: "brief" },
       { mode: "structure", view: "fisheye" },
-      { mode: "peer-review", view: "bibliography" },
+      { mode: "sources", view: "bibliography" },
     ] as const satisfies readonly SubMode[]) {
       const key = sub.mode;
       expect(subModeParams(sub)).toEqual({ mode: sub.mode, [key]: null });

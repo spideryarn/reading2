@@ -4427,7 +4427,7 @@ export const SHARING_MARK_NAME_PRIVATE = "Private — change who can read this";
 export const SHARED_LINK_CARRIES =
   "A shared link carries the article, its table of contents, and the reading " +
   "aids written for it — including the summaries, glossary, ideas, quotes, timeline, skim, " +
-  "FAQ, and Peer review's bibliography, reception and claims. It also carries the " +
+  "FAQ, and Sources' bibliography, reception and claims. It also carries the " +
   "marks, notes and searches of whoever added it. Their conversations with the model are not " +
   "part of it.";
 
@@ -5341,7 +5341,7 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
      that says it is one (src/citations.ts § linkFor). Reception is current;
      claim sources can only be present on a legacy artefact, so neither half
      implies a current press searched for claims or found anything. */
-  "peer-review":
+  sources:
     "The works the model found this piece citing, with a link for each and why the piece uses it; " +
     "the Reception search; and the claims it lists, with any claim sources kept by an earlier search.",
   /* **"where there are gists"**, for the reason the note above `summary`
@@ -5590,7 +5590,7 @@ export function debateClaimsHandoff(sources: number): string {
  * **What the press on Debate searches, said before the button.** Since
  * `debate/7` (2026-10-08) it is one search, for Reception only: the claims are
  * the reader's to pick (plan 261008i). The sub-mode control's own cards say
- * what each sub-mode is (src/web/sub-modes.ts § `PEER_REVIEW_SUB_MODES`); no
+ * what each sub-mode is (src/web/sub-modes.ts § `SOURCES_SUB_MODES`); no
  * sentence sits under the control, because docs/project/mode.md bans a
  * description line there.
  */

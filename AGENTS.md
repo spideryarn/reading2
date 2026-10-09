@@ -62,8 +62,8 @@ listed here; the names under each are files in `docs/project/`.
   `ideas.md` (the propositions the piece assumes) ·
   `quotes.md` (the lines worth keeping) ·
   `timeline.md` (when the piece says these things happened) ·
-  `peer-review.md` (what the piece cites and what others say about it: Citations and Debate as one
-  mode, since 2026-10-09) ·
+  `sources.md` (what the piece cites and what others say about it: Citations and Debate as one
+  mode, Sources, since 2026-10-09; briefly called Peer review) ·
   `citations.md` (the works the piece cites, and where each link came from) ·
   `faq.md` (the questions a careful reader would ask, answered only by the piece's own passages) ·
   `skim.md` (skim a paper at increasing depth: a route through its quotes, walked three times; it
@@ -239,9 +239,9 @@ Four things are ours:
 The rules are here; the reasons are behind the links. Several exist because of a specific accident,
 and the write-up is worth reading once.
 
-**This is a beta, and speed still wins.** There are real, paying readers since 2026-09-03, but the
-readership is small and knows what it signed up for, so we go on optimising for how fast we can
-move. It is not the end of the world if something is briefly broken — a database migration that
+**This is a beta, and speed still wins.** Billing has been live since 2026-09-03 and real people's
+articles are in production, but the readership is tiny and knows it is a beta, so we go on
+optimising for how fast we can move. It is not the end of the world if something is briefly broken — a database migration that
 lands before the code that matches it, and breaks production for the minutes in between, is fine.
 **But there are three standards, not one** — Greg, 2026-09-08: *"Briefly broken is fine for dev, have
 a slightly higher standard for the orchestrator and its web interface, and a higher standard still

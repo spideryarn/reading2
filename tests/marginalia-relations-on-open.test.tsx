@@ -131,7 +131,7 @@ afterEach(async () => {
 
 describe("the column opening on an article with no relation words", () => {
   it("marks its mode as generating but leaves no press token to claim", () => {
-    armActivationForMode(SLUG, "marginalia", { diagram: "sketch", summary: "brief", peerReview: "bibliography" });
+    armActivationForMode(SLUG, "marginalia", { diagram: "sketch", summary: "brief", sources: "bibliography" });
     expect(modeGenerates("marginalia")).toBe(true);
     expect(pendingActivation(SLUG, "relations")).toBeNull();
   });

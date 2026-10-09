@@ -1,7 +1,7 @@
 /**
  * **The sub-modes, named once** — the chips inside a mode that change the whole
  * band: Learn's Recall | Tutorial | Explore | Quiz, Diagram's five pictures, Referee's five views,
- * Summary's Brief | Fuller | Thread, Structure's Fisheye | Expanded, Peer review's Bibliography |
+ * Summary's Brief | Fuller | Thread, Structure's Fisheye | Expanded, Sources' Bibliography |
  * Reception | Claims.
  *
  * Greg, 2026-10-01 (SPIDERYARN-READING2-77):
@@ -29,7 +29,7 @@
 import type { Mode } from "../modes.js";
 import { DIAGRAMS, type DiagramKind } from "./diagram.js";
 import { shownBehindTheSwitch } from "./experimental-visibility.js";
-import type { LearnView, PeerReviewView, StructureView, SummaryView } from "./params.js";
+import type { LearnView, SourcesView, StructureView, SummaryView } from "./params.js";
 import { REFEREE_VIEWS, type RefereeView } from "./referee-views.js";
 
 /**
@@ -43,7 +43,7 @@ export type SubMode =
   | { readonly mode: "referee"; readonly view: RefereeView }
   | { readonly mode: "summary"; readonly view: SummaryView }
   | { readonly mode: "structure"; readonly view: StructureView }
-  | { readonly mode: "peer-review"; readonly view: PeerReviewView };
+  | { readonly mode: "sources"; readonly view: SourcesView };
 
 /** The modes that have sub-modes. */
 export type ModeWithSubModes = SubMode["mode"];
@@ -234,10 +234,10 @@ export const STRUCTURE_SUB_MODES: Readonly<Record<StructureView, SubModeWords>> 
 };
 
 /**
- * **Peer review's three sub-modes**, since 2026-10-09: Bibliography (the
+ * **Sources' three sub-modes**, since 2026-10-09: Bibliography (the
  * Citations mode until then), then Reception and Claims (the Debate mode's two,
- * since 2026-10-03). The band's chip row, PeerReviewMode.tsx §
- * `PeerReviewViews`; Bibliography first because it is the default. Greg,
+ * since 2026-10-03). The band's chip row, SourcesMode.tsx §
+ * `SourcesViews`; Bibliography first because it is the default. Greg,
  * 2026-10-09 (spya-vcvxu5): *"Let's call the sub-mode for citations listed in
  * this article (i.e. the former Citations mode) "Bibliography", and this
  * should be the first submode"*, and the frame for all three, *"what this
@@ -250,7 +250,7 @@ export const STRUCTURE_SUB_MODES: Readonly<Record<StructureView, SubModeWords>> 
  * Reception took Debate's words for what others say.
  * docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md.
  */
-export const PEER_REVIEW_SUB_MODES: Readonly<Record<PeerReviewView, SubModeWords>> = {
+export const SOURCES_SUB_MODES: Readonly<Record<SourcesView, SubModeWords>> = {
   bibliography: {
     label: "Bibliography",
     description: "What this piece cites: the works in its bibliography, each with a link",
@@ -298,8 +298,8 @@ export function subModeWords(sub: SubMode): SubModeWords {
       return SUMMARY_SUB_MODES[sub.view];
     case "structure":
       return STRUCTURE_SUB_MODES[sub.view];
-    case "peer-review":
-      return PEER_REVIEW_SUB_MODES[sub.view];
+    case "sources":
+      return SOURCES_SUB_MODES[sub.view];
     default: {
       const never: never = sub;
       return never;
@@ -327,8 +327,8 @@ export function subModesOf(mode: Mode): readonly SubMode[] {
       return (Object.keys(SUMMARY_SUB_MODES) as SummaryView[]).map((view) => ({ mode, view }));
     case "structure":
       return (Object.keys(STRUCTURE_SUB_MODES) as StructureView[]).map((view) => ({ mode, view }));
-    case "peer-review":
-      return (Object.keys(PEER_REVIEW_SUB_MODES) as PeerReviewView[]).map((view) => ({ mode, view }));
+    case "sources":
+      return (Object.keys(SOURCES_SUB_MODES) as SourcesView[]).map((view) => ({ mode, view }));
     default:
       return [];
   }
@@ -354,7 +354,7 @@ export interface SubModeParams {
   readonly referee?: RefereeView | null;
   readonly summary?: SummaryView | null;
   readonly structure?: StructureView | null;
-  readonly "peer-review"?: PeerReviewView | null;
+  readonly "sources"?: SourcesView | null;
 }
 
 export function subModeParams(sub: SubMode): SubModeParams {
@@ -388,8 +388,8 @@ export function subModeParams(sub: SubMode): SubModeParams {
       return { mode: "summary", summary: sub.view === "brief" ? null : sub.view };
     case "structure":
       return { mode: "structure", structure: sub.view === "fisheye" ? null : sub.view };
-    case "peer-review":
-      return { mode: "peer-review", "peer-review": sub.view === "bibliography" ? null : sub.view };
+    case "sources":
+      return { mode: "sources", sources: sub.view === "bibliography" ? null : sub.view };
     default: {
       const never: never = sub;
       return never;

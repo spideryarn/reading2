@@ -102,7 +102,7 @@ describe("an article", () => {
       chat: "Chat",
       learn: "Learn",
       timeline: "Timeline",
-      "peer-review": "Peer review",
+      sources: "Sources",
       faq: "FAQ",
       skim: "Skim",
       tweets: "Tweets",

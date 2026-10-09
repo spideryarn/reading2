@@ -364,7 +364,7 @@ describe("another pushed view of the same article", () => {
   it("keeps the way back when the reader only changes mode", () => {
     jumped(at(block(15)), block(25));
     act(() =>
-      history.pushState(history.state, "", `/read/x?at=${block(25)}&mode=peer-review`),
+      history.pushState(history.state, "", `/read/x?at=${block(25)}&mode=sources`),
     );
     expect(label()).toBe("↩ back to The middle bit");
   });
@@ -421,8 +421,8 @@ describe("however the reader wanders the stack", () => {
   it("comes home in one press after two more view changes", async () => {
     history.replaceState(null, "", `/read/x?at=${block(3)}`);
     jumped(at(block(15)), block(25));
-    viewChanged(`at=${block(25)}&mode=peer-review`);
-    viewChanged(`at=${block(25)}&mode=peer-review&sort=1`);
+    viewChanged(`at=${block(25)}&mode=sources`);
+    viewChanged(`at=${block(25)}&mode=sources&sort=1`);
     expect(label()).toBe("↩ back to The middle bit");
 
     await pressChip();
@@ -432,7 +432,7 @@ describe("however the reader wanders the stack", () => {
   it("counts from where the reader is, not from where they have been", async () => {
     history.replaceState(null, "", `/read/x?at=${block(3)}`);
     jumped(at(block(15)), block(25));
-    viewChanged(`at=${block(25)}&mode=peer-review`);
+    viewChanged(`at=${block(25)}&mode=sources`);
     await goBack();
     viewChanged(`at=${block(25)}&sort=1`);
 
@@ -444,7 +444,7 @@ describe("however the reader wanders the stack", () => {
   it("survives a step back and forward again", async () => {
     history.replaceState(null, "", `/read/x?at=${block(3)}`);
     jumped(at(block(15)), block(25));
-    viewChanged(`at=${block(25)}&mode=peer-review`);
+    viewChanged(`at=${block(25)}&mode=sources`);
     await goBack();
     await goForward();
 
@@ -460,7 +460,7 @@ describe("however the reader wanders the stack", () => {
   it("is unmoved by a dismissal on an entry the reader has left", async () => {
     history.replaceState(null, "", `/read/x?at=${block(3)}`);
     jumped(at(block(15)), block(25));
-    viewChanged(`at=${block(25)}&mode=peer-review`);
+    viewChanged(`at=${block(25)}&mode=sources`);
     await goBack();
     act(() => host.querySelector<HTMLButtonElement>(".return-chip-close")?.click());
     expect(chip()).toBeNull();
@@ -570,10 +570,10 @@ describe("pressing the chip leaves the modes alone", () => {
   it("keeps a mode opened since the jump, and moves only ?at=", async () => {
     history.replaceState(null, "", `/read/x?at=${block(3)}`);
     jumped(at(block(15)), block(25));
-    viewChanged(`at=${block(25)}&mode=peer-review`);
+    viewChanged(`at=${block(25)}&mode=sources`);
     const entries = history.length;
     await pressChip();
-    expect(param("mode")).toBe("peer-review");
+    expect(param("mode")).toBe("sources");
     expect(param("at")).toBe(block(15));
     expect(moves.list).toEqual([block(15)]);
     /* A deliberate act pushes (url-state.md § Position replaces history). */
@@ -609,18 +609,18 @@ describe("pressing the chip leaves the modes alone", () => {
   it("unwinds two journeys in order, with the mode kept throughout", async () => {
     history.replaceState(null, "", `/read/x?at=${block(3)}`);
     jumped(at(block(15)), block(25));
-    viewChanged(`at=${block(25)}&mode=peer-review`);
+    viewChanged(`at=${block(25)}&mode=sources`);
     jumped(at(block(25)), block(2));
     expect(label()).toBe("↩ back to How it ends");
 
     await pressChip();
     expect(param("at")).toBe(block(25));
-    expect(param("mode")).toBe("peer-review");
+    expect(param("mode")).toBe("sources");
     expect(label()).toBe("↩ back to The middle bit");
 
     await pressChip();
     expect(param("at")).toBe(block(15));
-    expect(param("mode")).toBe("peer-review");
+    expect(param("mode")).toBe("sources");
     expect(chip()).toBeNull();
   });
 
