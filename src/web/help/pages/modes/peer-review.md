@@ -100,6 +100,10 @@ for that.
   piece’s own words, with a link to that passage, and under it a short line in the AI’s words. If
   the piece changes afterwards, the list is shown with **List again**. The number on Claims is how
   many claims are listed, or, once you have checked some, how many sources the checks found.
+- Under a claim, **Cited in this paragraph** names the works the piece cites in the same paragraph
+  as the claim, once Bibliography has been made. Press one to open its row in Bibliography, with its
+  link. It only means the work is cited near the claim: it does not say the work supports it, and a
+  work the piece cites many times may be missing from a later paragraph.
 - To check claims on the web, tick up to four in the list, or type one of your own in **Check a
   claim of your own**, and press **Check**. That is one web search over all of them together, takes
   about a minute and a half, and costs real money; nothing is searched until you press. The sources

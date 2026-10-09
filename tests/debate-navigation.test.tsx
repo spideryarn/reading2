@@ -104,7 +104,7 @@ function Page() {
   if (mode !== "peer-review") return createElement("p", null, `band: ${mode}`);
   return createElement(VisitorPeerReviewBand, {
     citations: null, debate, claimList: null, onJump: () => {}, blockOrder: new Map([[BLOCK, 0]]),
-    publishedAt: undefined, articleTitle: "The shared piece",
+    publishedAt: undefined, articleTitle: "The shared piece", onOpenWork: () => {},
   });
 }
 

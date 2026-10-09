@@ -230,6 +230,33 @@
   font-size: 0.72rem;
 }
 
+/* **Cited in this paragraph** (DebatePanel.tsx § CitedHere, plan 261009l §
+   C1): under the claim's statement, at its indent, the works the paragraph
+   cites, each a quiet link-like button to its Bibliography row. */
+.dbt-cited-here {
+  margin: 0.2rem 0 0;
+  padding-left: calc(0.55rem + 2px);
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+.dbt-cited-work {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--rule-strong);
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.dbt-cited-work:hover { color: var(--ink); text-decoration-color: currentColor; }
+@media (pointer: coarse) {
+  .dbt-cited-work { padding: 0.35rem 0; }
+}
+
 /* **Checking the claims** (DebatePanel.tsx § OwnerListedClaims, plan 261008i
    stage 3): the box and Check are the angle box's row below (`.gloss-ask`),
    wrapping the button under the box in a narrow band. Under each claim its

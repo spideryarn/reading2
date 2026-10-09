@@ -281,7 +281,14 @@ gone); the counts are `src/web/peer-review-counts.ts`; the focus rule is `focuse
 The join (`worksCitedIn(blockId, works)`, a pure function with its own tests), the line under each
 claim in `DebatePanel`'s claims list, owner and visitor, the press opening Bibliography with
 `citeFocus`, and the docs. Red first: a claim whose paragraph cites two works shows both, in
-paragraph order; one citing none shows no heading; a press focuses the Bibliography row.
+Bibliography order (Sol's F6); one citing none shows no heading; a press focuses the Bibliography row.
+
+**What landed (2026-10-09).** `src/web/cited-in-paragraph.ts` (`worksCitedIn`, `workShortName`),
+`CitedHere` in `DebatePanel.tsx` under each listed claim **and** each older searched claim, owner
+and visitor. The press calls Reader's `openBibliographyWork`, which the visitor band now takes too,
+with `citeFocus`. Six tests in `tests/debate-panel.test.tsx` § *Cited in this paragraph*: the
+three UI ones were red before the panel drew the line, and the older-rows one was seen red by
+removing its line. Docs: peer-review.md § Cited in this paragraph, and the help page.
 
 ### Stage 3 (held for Greg): the stored names
 

@@ -270,6 +270,7 @@ import { ModeSurface } from "./ModeSurface.js";
 import { ReadError } from "./ReadError.js";
 import { RewriteWaiting } from "./RewriteWaiting.js";
 import { TipNote, Tooltip } from "./Tooltip.js";
+import { type CitedInParagraph, workShortName, worksCitedIn } from "./cited-in-paragraph.js";
 import { lensThreads, threadForOrigin } from "./useChatAnchors.js";
 import { OriginChatMark } from "./OriginChat.js";
 import { claimFocusKey, type ItemFocus, useLandOnItem } from "./item-focus.js";
@@ -1054,6 +1055,13 @@ interface Props {
    */
   focus?: ItemFocus | null | undefined;
   onFocusTaken?: ((focus: ItemFocus) => void) | undefined;
+  /**
+   * **Bibliography's works, for Claims' *Cited in this paragraph*** (plan
+   * 261009l § C1; src/web/cited-in-paragraph.ts): under each listed claim, the
+   * works the article cites in that claim's paragraph, each opening its
+   * Bibliography row. `null` with no Bibliography, and then there is no line.
+   */
+  citedIn?: CitedInParagraph | null | undefined;
 }
 
 export function DebatePanel({
@@ -1073,6 +1081,7 @@ export function DebatePanel({
   articleTitle,
   focus = null,
   onFocusTaken,
+  citedIn = null,
 }: Props) {
   useRenderCount("DebatePanel");
   /* `null` for a visitor, and every owner-only thing below is behind it. */
@@ -1395,6 +1404,7 @@ export function DebatePanel({
             checks={access.kind === "owner" ? access.checks : null}
             onJump={onJump}
             chats={access.kind === "owner" ? access.claimChats : null}
+            citedIn={citedIn}
           />
         ) : (
           <div className="dbt-listed-wrap">
@@ -1403,7 +1413,7 @@ export function DebatePanel({
             ) : listed.length === 0 ? (
               <p className="gloss-quiet dbt-listed-none">{DEBATE_CLAIMS_LIST_EMPTY}</p>
             ) : (
-              <ListedClaims claims={listed} onJump={onJump} chats={null} />
+              <ListedClaims claims={listed} onJump={onJump} chats={null} citedIn={citedIn} />
             )}
           </div>
         ))}
@@ -1557,6 +1567,7 @@ export function DebatePanel({
                   onJump={onJump}
                   keyRows={keyRows}
                   chats={access.kind === "owner" ? access.claimChats : null}
+                  citedIn={citedIn}
                 />
               </>
             )}
@@ -2238,11 +2249,13 @@ function ClaimsList({
   onJump,
   keyRows,
   chats,
+  citedIn,
 }: {
   groups: readonly ClaimGroup<ClaimRow>[];
   onJump(id: BlockId): void;
   keyRows: ReadonlyMap<string, DebateKeySource>;
   chats: DebateClaimChats | null;
+  citedIn: CitedInParagraph | null;
 }) {
   return (
     <>
@@ -2297,6 +2310,7 @@ function ClaimsList({
                 />
               )}
             </summary>
+            <CitedHere blockId={group.blockId} citedIn={citedIn} />
             <Rows rows={group.rows} keyRows={keyRows} />
           </details>
         );
@@ -2348,12 +2362,14 @@ function OwnerListedClaims({
   checks,
   onJump,
   chats,
+  citedIn,
 }: {
   list: UseDebateClaims;
   /** The owner's checks; `null` only where the type cannot see the owner. */
   checks: UseDebateChecks | null;
   onJump(id: BlockId): void;
   chats: DebateClaimChats | null;
+  citedIn: CitedInParagraph | null;
 }) {
   const [ticked, setTicked] = useState<ReadonlySet<string>>(() => new Set());
   const [own, setOwn] = useState("");
@@ -2459,6 +2475,7 @@ function OwnerListedClaims({
               }
               findings={findings}
               onDig={onDig}
+              citedIn={citedIn}
             />
           )}
           {/* Checked claims the list no longer names: their own groups, from
@@ -2663,6 +2680,7 @@ function ListedClaims({
   pick = null,
   findings = () => null,
   onDig = null,
+  citedIn = null,
 }: {
   claims: readonly ListedClaim[];
   onJump(id: BlockId): void;
@@ -2670,6 +2688,7 @@ function ListedClaims({
   pick?: ClaimPick | null;
   findings?: (claimId: string) => ClaimFindings | null;
   onDig?: ((claimId: string) => void) | null;
+  citedIn?: CitedInParagraph | null;
 }) {
   return (
     <ol className="dbt-listed">
@@ -2728,12 +2747,45 @@ function ListedClaims({
                 <span className="voice-ai">{claim.statement}</span>
                 <span className="dbt-listed-ai"> · {DEBATE_CLAIMS_LIST_AI}</span>
               </p>
+              <CitedHere blockId={claim.blockId} citedIn={citedIn} />
               <CheckFindings findings={found} />
             </div>
           </li>
         );
       })}
     </ol>
+  );
+}
+
+/** The heading of C1's line. It says the works share a paragraph, and nothing about support. */
+export const CITED_IN_PARAGRAPH = "Cited in this paragraph";
+
+/**
+ * **Cited in this paragraph** — the works the article cites in a claim's
+ * paragraph, under the claim (plan 261009l § C1; the join and its limits are
+ * src/web/cited-in-paragraph.ts). Each name opens the work's Bibliography row,
+ * where its link and any reading are. Nothing is drawn when the paragraph
+ * cites nothing, or when there is no Bibliography: a heading over nothing
+ * would read as a finding.
+ */
+function CitedHere({ blockId, citedIn }: { blockId: BlockId; citedIn: CitedInParagraph | null }) {
+  if (citedIn === null) return null;
+  const works = worksCitedIn(blockId, citedIn.works);
+  if (works.length === 0) return null;
+  return (
+    <p className="dbt-cited-here">
+      <span className="dbt-cited-here-head">{CITED_IN_PARAGRAPH}: </span>
+      {works.map((work, i) => (
+        <span key={work.id}>
+          {i > 0 && <span className="dbt-cited-here-sep" aria-hidden="true"> · </span>}
+          <Tooltip placement="top" content={<TipNote>{`${work.title}. Open it in Bibliography.`}</TipNote>}>
+            <button type="button" className="dbt-cited-work" onClick={() => citedIn.onOpen(work.id)}>
+              {workShortName(work)}
+            </button>
+          </Tooltip>
+        </span>
+      ))}
+    </p>
   );
 }
 

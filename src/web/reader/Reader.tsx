@@ -3651,6 +3651,9 @@ export function Reader({
               blockOrder={blockOrder}
               publishedAt={publishedAt}
               articleTitle={article.meta.title}
+              citeFocus={citeFocus}
+              onCiteFocusTaken={citeFocusTaken}
+              onOpenWork={openBibliographyWork}
             />
           ) : null;
         return (
@@ -3667,6 +3670,7 @@ export function Reader({
             onCiteFocusTaken={citeFocusTaken}
             claimFocus={claimFocus}
             onClaimFocusTaken={claimFocusTaken}
+            onOpenWork={openBibliographyWork}
           />
         );
       /* **The owner/visitor pair, since 2026-09-29**, for the citations' reason

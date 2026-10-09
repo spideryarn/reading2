@@ -30,6 +30,7 @@ for Reception and Claims. This page owns the merge.
 - [§ The address, and old links](#the-address-and-old-links) — `?peer-review=`, and where `?mode=citations` and `?mode=debate` land
 - [§ What a press buys](#what-a-press-buys) — each sub-mode's own work, and what is made on import
 - [§ Visitors](#visitors) — open on any one of its three artefacts
+- [§ Cited in this paragraph](#cited-in-this-paragraph) — the works a claim's paragraph cites, under the claim
 - [§ Chats started from it](#chats-started-from-it) — one filter, three tooltips, three ways back
 - [§ The name, and what still says Citations and Debate](#the-name-and-what-still-says-citations-and-debate)
 - [§ Where the code is](#where-the-code-is)
@@ -84,7 +85,9 @@ An explicit `?peer-review=` wins over the old words. `RETIRED_MODES` in
 only the mode: the tab title, `/help/mode-citations` and `/help/mode-debate`, a feedback report.
 *tests/peer-review-old-addresses.test.ts* and *tests/debate-navigation.test.tsx*.
 
-links open; *debate claims* finds Claims. "Peer review" left Referee's aliases, since it is this
+**In the command bar the old words find the sub-mode they meant**, as Tweets' did Summary's Thread:
+*citations* and the bibliography words (*references*, *works cited*) find Bibliography, *debate* and
+Debate's words (*critiques*, *reception*) find Reception, and *debate claims* finds Claims. "Peer review" left Referee's aliases, since it is this
 mode's name; Referee keeps *peer reviewer* and *referee report*, and ranks after Peer review for
 *peer review*.
 
@@ -118,6 +121,29 @@ has asked the web about this one yet* — rather than closing the mode on a visi
 other two. With none of the three, the band is the usual not-built gap, naming both. The visitor
 band, `VisitorPeerReviewBand`, mounts none of the owner's reads, so it can neither read the owner's
 lists nor start anything.
+
+## Cited in this paragraph
+
+**The first link between the two halves** (C1 in
+[261004b § Part 2](../plans/261004b-citation-hover-card-offers-dig-deeper.md)): under each claim in
+Claims, listed or from an older search, a line naming the works the article cites in that claim's
+paragraph, each a press away from its row in Bibliography (`openBibliographyWork`, below).
+
+```
+ ☐ "a starter needs cool water"   [jump] [chat]
+    Cool water suits a young starter. · In the AI's words
+    Cited in this paragraph: Smith et al. 2019 · Starter hydration 2021
+```
+
+No model call: a claim stores the paragraph its quote was found in (`blockId`), a cited work every
+paragraph that cites it (`citedAt`), and the line is the join
+([`cited-in-paragraph.ts`](../../src/web/cited-in-paragraph.ts)). **It proves only that they share a
+paragraph**, so it is headed *Cited in this paragraph*, never *supports this claim*, carries no
+verdict, and gives two claims in one paragraph the same works. It is **best-effort**: direct
+mentions are capped, so a much-cited work can be missing from a late paragraph, and the works keep
+Bibliography's order rather than the paragraph's (GPT Sol's F6). No line where the paragraph cites
+nothing, or where there is no Bibliography; opening Claims never buys one. A visitor gets the same
+line, from the same two lists in the public payload.
 
 ## Chats started from it
 

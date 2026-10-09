@@ -299,6 +299,7 @@ function PeerReviewOuter({ show }: { show: boolean }) {
         onCiteFocusTaken: noop,
         claimFocus: null,
         onClaimFocusTaken: noop,
+        onOpenWork: noop,
       })
     : null;
 }

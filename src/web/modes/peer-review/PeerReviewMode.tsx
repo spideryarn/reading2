@@ -70,6 +70,7 @@ import { type DebateClaimChats, DebatePanel } from "../../DebatePanel.js";
 import type { CitedWorkChats } from "../../OriginChat.js";
 import type { ItemFocus } from "../../item-focus.js";
 import { yearOf } from "../../debate-order.js";
+import type { CitableWork, CitedInParagraph } from "../../cited-in-paragraph.js";
 import { checkedSources, listedClaims, type PeerReviewCounts, peerReviewCounts } from "../../peer-review-counts.js";
 
 /**
@@ -96,6 +97,7 @@ export function PeerReviewBand({
   onCiteFocusTaken,
   claimFocus,
   onClaimFocusTaken,
+  onOpenWork,
 }: {
   slug: string;
   /** Bibliography's opening read, shared with the prose (useCitations.ts § `useCitationsRead`). */
@@ -118,6 +120,8 @@ export function PeerReviewBand({
   /** One claim to bring into view in Claims, once (DebatePanel § `Props.focus`). */
   claimFocus: ItemFocus | null;
   onClaimFocusTaken(focus: ItemFocus): void;
+  /** Open Bibliography on one work — Claims' *Cited in this paragraph* (Reader.tsx § `openBibliographyWork`). */
+  onOpenWork(workId: string): void;
 }) {
   useRenderCount("PeerReviewBand");
   const [view, setView] = useQueryState("peer-review", peerReviewParam);
@@ -169,8 +173,18 @@ export function PeerReviewBand({
       articleTitle={articleTitle}
       focus={claimFocus}
       onFocusTaken={onClaimFocusTaken}
+      citedIn={citedInOf(citations.citations?.citations ?? null, onOpenWork)}
     />
   );
+}
+
+/**
+ * **Bibliography's works for Claims' line** (plan 261009l § C1), or `null`
+ * when there is no Bibliography — then Claims draws no line, and opening
+ * Claims does not buy one.
+ */
+function citedInOf(works: readonly CitableWork[] | null, onOpen: (workId: string) => void): CitedInParagraph | null {
+  return works === null || works.length === 0 ? null : { works, onOpen };
 }
 
 /**
@@ -193,6 +207,9 @@ export function VisitorPeerReviewBand({
   blockOrder,
   publishedAt,
   articleTitle,
+  citeFocus = null,
+  onCiteFocusTaken,
+  onOpenWork,
 }: {
   citations: PublicCitations | null;
   debate: PublicDebate | null;
@@ -203,6 +220,11 @@ export function VisitorPeerReviewBand({
   /** A visitor's meta carries no `publishedAt`, so this is `undefined` today and there is no marker. */
   publishedAt: unknown;
   articleTitle: string | null;
+  /** One work to bring into view in Bibliography, once — set by Claims' *Cited in this paragraph*. */
+  citeFocus?: CiteFocus | null;
+  onCiteFocusTaken?(focus: CiteFocus): void;
+  /** Open Bibliography on one work (Reader.tsx § `openBibliographyWork`), which a visitor's band may do too. */
+  onOpenWork(workId: string): void;
 }) {
   useRenderCount("VisitorPeerReviewBand");
   const [view, setView] = useQueryState("peer-review", peerReviewParam);
@@ -218,7 +240,16 @@ export function VisitorPeerReviewBand({
   });
   const head = <PeerReviewViews view={view} counts={counts} ownerSlug={null} onView={setView} />;
   if (view === "bibliography")
-    return <CitationsPanel access={{ kind: "visitor", citations }} head={head} {...citeControls} onJump={onJump} />;
+    return (
+      <CitationsPanel
+        access={{ kind: "visitor", citations }}
+        head={head}
+        {...citeControls}
+        onJump={onJump}
+        focus={citeFocus}
+        {...(onCiteFocusTaken ? { onFocusTaken: onCiteFocusTaken } : {})}
+      />
+    );
   return (
     <DebatePanel
       access={{ kind: "visitor", debate, claimList }}
@@ -230,6 +261,7 @@ export function VisitorPeerReviewBand({
       blockOrder={blockOrder}
       articleYear={yearOf(publishedAt)}
       articleTitle={articleTitle}
+      citedIn={citedInOf(citations?.citations ?? null, onOpenWork)}
     />
   );
 }

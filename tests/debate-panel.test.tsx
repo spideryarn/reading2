@@ -67,6 +67,7 @@ import type { PublicDebate, PublicDebateClaimList } from "../src/public-types.js
 import type { UseDebateClaims } from "../src/web/useDebateClaims.js";
 import { claimListOf, checksOwner, claimListOwner } from "./helpers/debate-claims-owner.js";
 import { peerReviewHead } from "./helpers/peer-review-head.js";
+import { type CitedInParagraph, workShortName, worksCitedIn } from "../src/web/cited-in-paragraph.js";
 import { pendingActivation, resetActivations } from "../src/web/activation.js";
 import { enclosing, readerCssNoComments } from "./helpers/stylesheets.js";
 import {
@@ -249,6 +250,8 @@ function paint(
     citers?: CitersResult | null;
     /** Claims' list hook. Nobody has pressed Claims unless a test says otherwise. */
     claimList?: UseDebateClaims;
+    /** Bibliography's works, for Claims' *Cited in this paragraph* (plan 261009l § C1). */
+    citedIn?: CitedInParagraph | null;
   } = {},
 ) {
   const result = "citers" in extra ? (extra.citers ?? null) : NO_DOI;
@@ -286,6 +289,7 @@ function paint(
         thread: extra.thread ?? null,
         onThread: (next: string | null) => threaded.push(next),
         articleTitle: "articleTitle" in extra ? (extra.articleTitle ?? null) : ARTICLE_TITLE,
+        citedIn: extra.citedIn ?? null,
       }),
     );
   });
@@ -296,7 +300,12 @@ function paintShared(
   debate: PublicDebate | null,
   view: DebateView = "reception",
   order: DebateOrder = "prioritised",
-  extra: { relevance?: DebateBears | null; thread?: string | null; claimList?: PublicDebateClaimList | null } = {},
+  extra: {
+    relevance?: DebateBears | null;
+    thread?: string | null;
+    claimList?: PublicDebateClaimList | null;
+    citedIn?: CitedInParagraph | null;
+  } = {},
 ) {
   act(() => {
     root.render(
@@ -323,6 +332,7 @@ function paintShared(
         thread: extra.thread ?? null,
         onThread: () => {},
         articleTitle: ARTICLE_TITLE,
+        citedIn: extra.citedIn ?? null,
       }),
     );
   });
@@ -2555,6 +2565,74 @@ describe("Claims' list of the article's claims", () => {
     expect(jump).not.toBeNull();
     press(jump);
     expect(jumped).toEqual([KNOWN]);
+  });
+
+  /* **C1, Cited in this paragraph** (plan 261009l § C1): the works whose
+     citing paragraphs include the claim's, each a press away from its
+     Bibliography row; no line where the paragraph cites nothing. */
+  describe("Cited in this paragraph", () => {
+    const WORKS = [
+      { id: "doi:10.1/a", title: "Cold fermentation of rye", authors: "Ada Smith, Ben Jones, Cy Lee", year: "2019", citedAt: [KNOWN] },
+      { id: "doi:10.1/b", title: "Starter hydration", year: "2021", citedAt: ["spya-zz9zzz" as BlockId, KNOWN] },
+      { id: "doi:10.1/c", title: "Salt", authors: "Dee Roe", citedAt: ["spya-zz9zzz" as BlockId] },
+    ];
+    const opened: string[] = [];
+    const citedIn = (): CitedInParagraph => ({ works: WORKS, onOpen: (id) => opened.push(id) });
+    const lines = () => [...host.querySelectorAll(".dbt-listed-claim")].map((li) => li.querySelector(".dbt-cited-here")?.textContent ?? null);
+
+    beforeEach(() => {
+      opened.length = 0;
+    });
+
+    it("joins on the block id, keeps Bibliography's order, and names each work shortly", () => {
+      expect(worksCitedIn(KNOWN, WORKS).map((w) => w.id)).toEqual(["doi:10.1/a", "doi:10.1/b"]);
+      expect(worksCitedIn("spya-p7x2wd" as BlockId, WORKS)).toEqual([]);
+      expect(workShortName(WORKS[0]!)).toBe("Ada Smith et al. 2019");
+      expect(workShortName(WORKS[1]!)).toBe("Starter hydration 2021");
+      expect(workShortName(WORKS[2]!)).toBe("Dee Roe");
+      expect(workShortName({ title: "A very long title that goes on and on well past the point of a short name" })).toBe(
+        "A very long title that goes on and on well past…",
+      );
+    });
+
+    it("draws the line under a claim whose paragraph cites works, and none under one that cites nothing", () => {
+      paint(owner(), "claims", "prioritised", new Map(), { claimList: ready(), citedIn: citedIn() });
+      const [first, second] = lines();
+      expect(first).toContain("Cited in this paragraph");
+      expect(first).toContain("Ada Smith et al. 2019");
+      expect(first).toContain("Starter hydration 2021");
+      expect(first).not.toContain("Dee Roe");
+      /* Never a heading over nothing, and never a word about support. */
+      expect(second).toBeNull();
+      expect(text()).not.toMatch(/supports? this claim/i);
+    });
+
+    it("opens the work's Bibliography row on a press", () => {
+      paint(owner(), "claims", "prioritised", new Map(), { claimList: ready(), citedIn: citedIn() });
+      const works = [...host.querySelectorAll<HTMLButtonElement>(".dbt-listed-claim .dbt-cited-here button")];
+      expect(works.map((b) => b.textContent)).toEqual(["Ada Smith et al. 2019", "Starter hydration 2021"]);
+      press(works[1]);
+      expect(opened).toEqual(["doi:10.1/b"]);
+    });
+
+    it("draws nothing when there is no Bibliography", () => {
+      paint(owner(), "claims", "prioritised", new Map(), { claimList: ready() });
+      expect(lines()).toEqual([null, null]);
+    });
+
+    it("draws the line under an older search's claim too, keyed on its paragraph", () => {
+      paint(owner(), "claims", "prioritised", new Map(), { citedIn: citedIn() });
+      const group = host.querySelector(".dbt-claim-group");
+      expect(group).not.toBeNull();
+      expect(group?.querySelector(".dbt-cited-here")?.textContent).toContain("Ada Smith et al. 2019");
+    });
+
+    it("gives a visitor the same line over the public payload", () => {
+      paintShared(null, "claims", "prioritised", { claimList: { claims: LISTED }, citedIn: citedIn() });
+      expect(lines()[0]).toContain("Ada Smith et al. 2019");
+      press(host.querySelector(".dbt-cited-here button"));
+      expect(opened).toEqual(["doi:10.1/a"]);
+    });
   });
 
   it("counts the listed claims on the segment when there is a list, and an older search's rows when not", () => {
