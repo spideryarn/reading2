@@ -25,7 +25,7 @@ Why ask now. Your rule is that a rename goes all the way down, to the stored nam
 
 What you will see. One Peer review button where Citations and Debate were. It opens on Bibliography, the list of works the piece cites. The chips across the top read Bibliography, Reception, Claims, each with its count. The button's card is your framing: "What this piece cites, and what others say about it"; each chip's card starts with its half of that. Under each claim in Claims, a line "Cited in this paragraph: Smith et al. 2019 · Lee 2021" names the works cited in that claim's paragraph; pressing one opens its row in Bibliography. It says only that they share a paragraph, never that a work supports the claim, and it costs no AI call.
 
-What it costs to run. Out of the switch, Bibliography is now made on every import (one AI call). Reception's web search and the Claims list still wait for their own chip, as before.
+What it costs to run. Out of the switch, Bibliography is now made when an article is added (one AI call), for anyone who has "generate the main modes" on. Reception's web search and the Claims list are never made in the background; they wait for a press, as before.
 
 Is it a good idea? You asked. Yes, in my view and in a separate opinion from Opus: both halves answer one question, where this piece sits among other people's work, and one button for that takes nothing away. It took under a day of agent time. A GPT model reviewed the plan and then the code, separately.
 
