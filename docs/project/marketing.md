@@ -22,7 +22,9 @@ promising "read this in 2 minutes" is not one we use.
 - **No budget.** Paid ads and sponsorships are out. Time is what we have to spend.
 - **Greg is a good presenter**, so talks, demos and recorded walkthroughs play to a strength.
 - **Greg knows a few academics from grad school**, about fifteen years ago. These are warm
-  contacts, not cold ones.
+  contacts, not cold ones. Mostly computational psychology and neuroscience and nearby fields, with a
+  few in social psychology, biology, computer science and classics. Their fields decide which papers
+  to make the first private links from.
 - **A live product with paying readers** (since 2026-09-03), a public shelf at `/read/public`, and
   private links for single articles ([public-shelf.md](public-shelf.md),
   [public-readable-sharing.md](public-readable-sharing.md)).
@@ -54,8 +56,19 @@ would actually read.
 
 ### Talks — *idea*
 
-Conferences, departmental seminars, reading groups and journal clubs. Greg presents well. A live
-demo on a paper the audience knows is the strongest form, and the recording can be used afterwards.
+Greg presents well. A talk about ideas, with the product as the example, is easier to get invited
+to; a straight demo suits a room that has already asked. Either is fine (Greg, 2026-10-09: *"Whatever
+works"*). Which rooms to aim for:
+
+> I was imagining more like a kind of product conference rather than an academic conference. Though
+> an academic conference might be interesting, but … they're usually interested in their particular
+> domain rather than mine. I suppose I could find one that's about AI or HCI or human augmentation
+> via AI that would be ideal.
+>
+> — Greg, 2026-10-09
+
+So: product conferences first, plus academic venues on AI, HCI or human augmentation, where the
+subject itself is the domain. A recording of any talk can be reused afterwards.
 
 ### Make a Spideryarn version of an author's piece and give it to them — *idea, to run as an experiment*
 
@@ -99,7 +112,8 @@ Most of the parts already exist: High-powered AI for one article
 and gift vouchers that can carry a starter article by private link
 ([billing.md § Gift vouchers](billing.md#gift-vouchers-extra-free-articles-given-by-email)).
 What is new is a voucher that is saved but not yet sent, the author-and-address lookup, and one
-button that does all of it. It needs a plan under `docs/plans/` before it is built.
+button that does all of it. It needs a plan under `docs/plans/` before it is built. Greg asked on
+2026-10-09 for it to be built now, handed to the Overseer rather than built by hand first.
 
 ## Waiting on
 
