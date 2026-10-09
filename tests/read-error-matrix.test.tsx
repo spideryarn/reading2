@@ -668,11 +668,11 @@ const ROWS: readonly Row[] = [
   { hook: "useIdeas.ts", kind: "ideas", search: "?mode=ideas", where: ".mode-band.ideas" },
   { hook: "useTimeline.ts", kind: "timeline", search: "?mode=timeline", where: ".mode-band.timeline" },
   { hook: "useQuotes.ts", kind: "quotes", search: "?mode=quotes", where: ".mode-band.quotes" },
-  { hook: "useDebate.ts", kind: "debate", search: "?mode=peer-review&peer-review=reception", where: ".mode-band.dbt" },
+  { hook: "useDebate.ts", kind: "debate", search: "?mode=sources&sources=reception", where: ".mode-band.dbt" },
   /* Claims' own read, on Claims (plan 261008i stage 2). */
-  { hook: "useDebateClaims.ts", kind: "debate-claims", search: "?mode=peer-review&peer-review=claims", where: ".mode-band.dbt" },
+  { hook: "useDebateClaims.ts", kind: "debate-claims", search: "?mode=sources&sources=claims", where: ".mode-band.dbt" },
   { hook: "useGlossary.ts", kind: "glossary", search: "?mode=glossary", where: ".mode-band.gloss" },
-  { hook: "useCitations.ts", kind: "citations", search: "?mode=peer-review", where: ".mode-band.citations" },
+  { hook: "useCitations.ts", kind: "citations", search: "?mode=sources", where: ".mode-band.citations" },
   {
     hook: "useQuiz.ts",
     kind: "quiz",

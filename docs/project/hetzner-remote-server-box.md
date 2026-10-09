@@ -31,7 +31,8 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
 **The CLI**
 
 - [`scripts/gjd-remote.ts`](../../scripts/gjd-remote.ts) — all of it: `ls`, `new-claude`,
-  `new-shell`, `resume`, `resume-all`, `kill`, `claim-overseer`, `release-overseer`, `log`,
+  `new-shell`, `resume`, `resume-all`, `kill`, `claim-overseer`, `release-overseer`,
+  `tell-overseer`, `log`,
   `doctor`, `provision`, `clone`, `setup`, `push-env`, `upload`, `resolve`, `ssh`, `tunnel`,
   `forget-key`. `--help` is long on purpose.
 - [`scripts/gjd-remote-repo.ts`](../../scripts/gjd-remote-repo.ts) — which repo you are standing in,
@@ -627,6 +628,38 @@ says `shell`. There is no `CLAUDE_SESSION_ID` in that session, so there is no uu
 way to tell that Claude from anyone else's. The row is dim and sorts last, so the cost is small, and
 the alternative is a state that means "there might be a Claude in here somewhere". Start it with
 `new-claude` and it is tracked properly.
+
+## Sending the Overseer a line from the laptop
+
+```
+gjd-remote tell-overseer "deploy when the readiness check is green"
+gjd-remote tell-overseer -p - <<'EOF'
+anything, `backticked` or $(quoted) — but still ONE line
+EOF
+```
+
+Exit 0 is sent, 1 is refused with nothing typed, and 2 is uncertain — look at the Overseer's pane
+before anything else, and do not send it again. Both `-p -` and the three exits are borrowed from
+`mindstone-fleet tell` (Greg, 2026-10-10), whose dashboard has grown more behind the same route —
+long messages handed off as a file, a delivered/queued distinction — that this one has not.
+
+It does what the dashboard's **Message the Overseer** box does, and through the same door: reads
+`/api/state` on the box, finds the holder with `claimFromSnapshot`, and posts the row's identity and
+the text to `/api/steer/message` as speaker `greg`. So every check that route makes still applies —
+one line only, nothing sent while a dialog is open or the input box has text in it — and the answer
+printed is the server's own sentence, with terminal control characters escaped. An incomplete
+answer says delivery is unconfirmed: look at the pane before sending again. The message goes down
+ssh's stdin; neither ssh nor curl gets the text in its arguments. The command you type can still
+appear in local process arguments and shell history, and the dashboard's existing tmux transport
+uses arguments to type it. Curl's config and proxies are disabled for these loopback requests.
+For text starting with `-`, put `--` before it; put `--port N` before that separator if the dashboard
+uses a port other than 8787. Code:
+[`scripts/gjd-remote-tell.ts`](../../scripts/gjd-remote-tell.ts).
+
+**It is refused while the Overseer's Claude was started by name** (`claude --resume Overseer`), and
+so is the dashboard's box: the steer route only trusts a pane whose `claude` command line carries the
+conversation's uuid (`--session-id` or `--resume <uuid>`), and a name is not one. Found the day the
+command was added, 2026-10-09, when that was how the Overseer was running.
 
 ## Sessions nobody made on purpose
 

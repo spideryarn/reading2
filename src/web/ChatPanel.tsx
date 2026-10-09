@@ -99,11 +99,12 @@ import type {
 import { isLearnKind } from "../types.js";
 import { CitedMarkdown } from "./Cited.js";
 import { GuideGreeting } from "./GuideGreeting.js";
+import { GuideNextSteps } from "./GuideNextSteps.js";
 import { GuideSaveOffers } from "./GuideSaveOffer.js";
 import { guideGreeting } from "./guide-greeting.js";
 import { usePurpose } from "./purpose.js";
 import { Button } from "./components/ui/button.js";
-import { useChatCommands } from "./CommandChip.js";
+import { ChatCommandsFor, useChatCommands } from "./CommandChip.js";
 import { chipFor } from "./chat-commands.js";
 import { holdTarget, roomNeeded } from "./chat-hold.js";
 import { chatStep, SNAP, type StepEnds, turnStarts } from "./chat-steps.js";
@@ -1975,7 +1976,7 @@ export function Conversation({
   };
 
   return (
-    <>
+    <ChatCommandsFor kind={kind}>
       <div
         className={`chat-scroll${busy ? " streaming" : ""}`}
         ref={scroller}
@@ -2029,7 +2030,7 @@ export function Conversation({
         }}
       >
         {kind === "guide" && openingGreeting !== null && (
-          <GuideGreeting greeting={openingGreeting} onAsk={(q) => onSend(q)} />
+          <GuideGreeting greeting={openingGreeting} starts={empty} onAsk={(q) => onSend(q)} />
         )}
         {empty &&
           (kind === "guide" ? null : kind === "tutorial" ? (
@@ -2088,6 +2089,13 @@ export function Conversation({
           {kind === "guide" && <GuideSaveOffers slug={slug} message={m} />}
           </GuideActContext.Provider>
         ))}
+        {/* The guide's next steps, under its latest answer only, and outside
+            every answer's `GuideActContext`: none of them presses itself
+            (GuideNextSteps.tsx, plan 261009u). Not while a turn is out: the
+            buttons would be for the answer before it. */}
+        {kind === "guide" && !busy && (
+          <GuideNextSteps slug={slug} message={thread.messages.at(-1)} blocks={blocks} onAsk={(q) => onSend(q)} />
+        )}
         {/* The spoken words still on their way to being saved, as the end of
             this same conversation. ./live/LiveTail.tsx. */}
         {live && <LiveTail live={live} />}
@@ -2187,7 +2195,7 @@ export function Conversation({
         blocks={blocks}
         onJump={onJump}
       />
-    </>
+    </ChatCommandsFor>
   );
 }
 
@@ -2730,7 +2738,9 @@ function ToolStrip({
   tools: ToolRun[] | undefined;
   searches: number | undefined;
 }) {
-  const runs = tools ?? [];
+  /* The guide's next steps get no row: the buttons under the answer are what
+     it did (GuideNextSteps.tsx). */
+  const runs = (tools ?? []).filter((run) => run.name !== "offer_next_steps");
   const webSearches = searches ?? 0;
   if (runs.length === 0 && webSearches === 0) return null;
   return (

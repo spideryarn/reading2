@@ -245,11 +245,11 @@
  {
   "id": "mode:referee",
   "label": "Referee",
-  "description": "Reviewing this for somebody? Your criteria, its claims, and a second look at your own notes",
+  "description": "Refereeing it? What to weigh before you decide: your criteria, its claims, and a second look at your notes",
   "aliases": [
    "review",
    "reviewer",
-   "peer reviewer",
+   "for peer reviewers",
    "referee report",
    "assess",
    "assessment"
@@ -264,11 +264,11 @@
   ]
  },
  {
-  "id": "mode:peer-review",
-  "label": "Peer review",
+  "id": "mode:sources",
+  "label": "Sources",
   "description": "What this piece cites, and what others say about it",
   "aliases": [
-   "sources",
+   "peer review",
    "literature",
    "further reading"
   ],
@@ -673,13 +673,13 @@
   ]
  },
  {
-  "id": "submode:peer-review:bibliography",
+  "id": "submode:sources:bibliography",
   "label": "Bibliography",
   "description": "What this piece cites: the works in its bibliography, each with a link",
   "aliases": [
-   "Peer review",
-   "Bibliography Peer review",
-   "Peer review Bibliography",
+   "Sources",
+   "Bibliography Sources",
+   "Sources Bibliography",
    "Bibliography mode",
    "citations",
    "references",
@@ -699,13 +699,13 @@
   ]
  },
  {
-  "id": "submode:peer-review:reception",
+  "id": "submode:sources:reception",
   "label": "Reception",
   "description": "What others say about this piece: replies, reviews, and work that cites it",
   "aliases": [
-   "Peer review",
-   "Reception Peer review",
-   "Peer review Reception",
+   "Sources",
+   "Reception Sources",
+   "Sources Reception",
    "Reception mode",
    "debate",
    "debate reception",
@@ -730,13 +730,13 @@
   ]
  },
  {
-  "id": "submode:peer-review:claims",
+  "id": "submode:sources:claims",
   "label": "Claims",
   "description": "What others say about each claim it makes: the claims it rests on, with the works it cites beside each",
   "aliases": [
-   "Peer review",
-   "Claims Peer review",
-   "Peer review Claims",
+   "Sources",
+   "Claims Sources",
+   "Sources Claims",
    "Claims mode",
    "debate claims"
   ],

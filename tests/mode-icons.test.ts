@@ -27,9 +27,9 @@ describe("the icon each mode wears", () => {
     expect(MODE_ICON).toEqual({
       plain: AlignLeft, structure: Columns2, summary: Layers, diagram: Network,
       skim: Route, quotes: Quote, glossary: BookA, faq: BadgeQuestionMark,
-      /* Citations' book, Peer review's since 2026-10-09 (plan 261009l); Debate's
+      /* Citations' book, Sources' since 2026-10-09 (plan 261009l); Debate's
          globe stays on Reception's search button. */
-      ideas: Lightbulb, timeline: Clock, "peer-review": BookText, referee: ClipboardCheck,
+      ideas: Lightbulb, timeline: Clock, sources: BookText, referee: ClipboardCheck,
       search: Search, chat: MessagesSquare, learn: Brain,
       marginalia: PanelRight,
     });

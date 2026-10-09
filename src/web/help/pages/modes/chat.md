@@ -46,7 +46,7 @@ Each article keeps its own list of conversations; **‹ Chats**, at the top left
 takes you back to it. That list holds every
 conversation you have had about the article, not only the ones started in Chat. A row from somewhere
 else has a small icon in front of it: point at it, or tap it, to see where it came from, for example
-a claim in Peer review, a passage, or Learn. Pressing a Learn row takes you to Learn, where that
+a claim in Sources, a passage, or Learn. Pressing a Learn row takes you to Learn, where that
 conversation lives; it cannot be renamed or deleted from Chat. When the list has conversations from
 more than one place, the buttons above it (**All**, **Chats** and one for each other place) narrow
 it.
@@ -74,7 +74,11 @@ as a search, a mode that has to be written first, a tag or a bookmark, is still 
 greeting asks why you are reading the piece: answer in the box below as you would any message. When
 you say why, or something about yourself, the guide offers to save it, as close to your own words
 as it can, under its answer: **Save as why you're reading** or **Save to About you**. Nothing is
-saved until you press, and **Undo** puts it back. You can talk to the
+saved until you press, and **Undo** puts it back. Under its latest answer the guide offers up to
+three next steps as buttons: something to ask it next, a mode to open, or a search whose words you
+can change before you press **Quick search**. Ask it to make a private link, share the article or archive
+it, and it offers **Share this article…** or **Archive or put back…**, which take you to the
+Metadata page where you do it; the guide never does these itself. You can talk to the
 guide out loud with **Live**, as in any chat, and type **Guide** in the command bar to get back to it.
 
 **Talking instead of typing.** The microphone turns your speech into text in the box, to edit before

@@ -35,7 +35,7 @@
  * the written list follows.
  *
  * **Two modes' steps are named here rather than derived**: Summary, whose press
- * is delegated since 2026-10-03, and Peer review, delegated by sub-mode since
+ * is delegated since 2026-10-03, and Sources, delegated by sub-mode since
  * 2026-10-09, so `modeStep` cannot answer for either — `DELEGATED_MODE_STEPS`
  * below.
  */
@@ -45,7 +45,7 @@ import { STEP_ORDER } from "../step-order.js";
 import { MODE_LABEL } from "../title-text.js";
 import type { StepName } from "../types.js";
 import { modeStep } from "./activation.js";
-import { PEER_REVIEW_SUB_MODES } from "./sub-modes.js";
+import { SOURCES_SUB_MODES } from "./sub-modes.js";
 
 /**
  * **The steps of a main mode whose press is delegated**, which `modeStep`
@@ -70,15 +70,15 @@ import { PEER_REVIEW_SUB_MODES } from "./sub-modes.js";
  */
 const DELEGATED_MODE_STEPS: Partial<Record<Mode, readonly StepName[]>> = {
   summary: ["simple", "tweets"],
-  /* **Peer review, since 2026-10-09: Bibliography's list, and only that.**
+  /* **Sources, since 2026-10-09: Bibliography's list, and only that.**
      Its press is delegated by sub-mode (activation.ts §
-     `activationForPeerReview`). `citations` is the default sub-mode's, and
+     `activationForSources`). `citations` is the default sub-mode's, and
      Claims' line of works (plan 261009l § Stage 2) reads it. Not `debate`,
      Reception's web search, the dearest press in the app and often empty; not
      `debate-claims`, which serves a sub-mode many readers will not open. Each
      runs on the press of its chip. One model call per import that was not
      paid before (plan 261009l § On import). */
-  "peer-review": ["citations"],
+  sources: ["citations"],
 };
 
 /**
@@ -130,12 +130,12 @@ export const AUTO_MODES_LABEL = "Generate the main modes as soon as it opens";
  */
 export function autoModesDetail(): string {
   /* A mode with two steps (Summary: its lengths and its thread) is named once.
-     Peer review is named by the one sub-mode it prepares, so the line does
+     Sources is named by the one sub-mode it prepares, so the line does
      not promise its Reception search. */
   const names = [
     ...new Set(
       autoModes().map(({ mode }) =>
-        mode === "peer-review" ? `${MODE_LABEL[mode]}’s ${PEER_REVIEW_SUB_MODES.bibliography.label}` : MODE_LABEL[mode],
+        mode === "sources" ? `${MODE_LABEL[mode]}’ ${SOURCES_SUB_MODES.bibliography.label}` : MODE_LABEL[mode],
       ),
     ),
   ];

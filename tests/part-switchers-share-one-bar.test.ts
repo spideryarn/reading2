@@ -27,8 +27,8 @@ import { readerSheets, stripComments } from "./helpers/stylesheets.js";
 /** Each switcher: its file, its own group class and its own button class. */
 const SWITCHERS = [
   { mode: "Summary", file: "src/web/modes/summary/SummaryMode.tsx", group: null, button: null },
-  /* Debate's Reception | Claims until 2026-10-09; Peer review's three chips since. */
-  { mode: "Peer review", file: "src/web/modes/peer-review/PeerReviewMode.tsx", group: "dbt-views", button: null },
+  /* Debate's Reception | Claims until 2026-10-09; Sources' three chips since. */
+  { mode: "Sources", file: "src/web/modes/sources/SourcesMode.tsx", group: "dbt-views", button: null },
   { mode: "Structure", file: "src/web/modes/structure/StructureMode.tsx", group: "struct-views", button: "struct-view-btn" },
   { mode: "Referee", file: "src/web/modes/referee/RefereeMode.tsx", group: "ref-views", button: "ref-view-btn" },
   { mode: "Referee's criterion kind", file: "src/web/CriteriaPanel.tsx", group: "crit-kinds", button: "crit-kind-btn" },

@@ -7,9 +7,10 @@
  * npm run worktree:remove -- --branch <name> --dry-run
  * ```
  *
- * One target, named or implied, and **no bulk form** — for the reason
- * `worktree-sweep.ts` already gives: a verdict must not be carried from an
- * earlier decision into a later deletion.
+ * One target, named or implied — for the reason `worktree-sweep.ts` already
+ * gives: a verdict must not be carried from an earlier decision into a later
+ * deletion. The bulk form, `npm run worktree:sweep -- --remove` (2026-10-09), is
+ * a loop over this, so each tree still re-earns its own verdict here.
  *
  * Written after 2026-09-08, when the Overseer removed a finished worktree by
  * hand-typing `git worktree unlock`, `git worktree remove`, `git branch -d`. The
@@ -75,7 +76,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 import { TRUNK_BRANCH } from "./deploy-checks.js";
@@ -86,8 +87,12 @@ import {
   ancestry,
   classifyPidNamespace,
   composeInUse,
+  containmentFor,
   cwdUsersUnder,
+  type DarwinSnapshot,
+  darwinInUse,
   type InUse,
+  readDarwinSnapshot,
   type OwnerStanding,
   ownerStanding,
   type ProcTable,
@@ -261,9 +266,11 @@ export interface Liveness {
  * this process. The owner's `(pid,start)` in that chain is what makes its own
  * live lock read as `asking` rather than as a live session in the way.
  *
- * No `/proc` at all — the Mac — is an `unknown`, and an unknown refuses: on the
- * Mac this command removes ghosts and orphaned branches, never a live tree. So
- * is a `/proc` that is not the whole box — a private PID namespace, where a live
+ * No `/proc` on the Mac: the same two questions are asked through `ps` and
+ * `lsof` instead (`readDarwinSnapshot`, since 2026-10-09 — until then a live
+ * tree on the Mac was never removable), and any read that fails is an
+ * `unknown`. Neither `/proc` nor the Mac is an `unknown` too. So is a `/proc`
+ * that is not the whole box — a private PID namespace, where a live
  * owner is not unreadable but absent, and would read as stale
  * (`classifyPidNamespace`; GPT Sol's first finding on 260912a).
  *
@@ -275,19 +282,32 @@ export function liveness(
   lockReason: string | undefined,
   pid = process.pid,
   proc: ProcTable | null = procTable(),
+  darwin: (() => DarwinSnapshot | { error: string }) | null = process.platform === "darwin" ? () => readDarwinSnapshot() : null,
+  /* Bulk scans cannot trust a filter's name as proof of pipeline membership. */
+  excludePipelineFilters = true,
 ): Liveness {
   const unmeasured = (why: string): Liveness => {
     const standing: OwnerStanding =
       lockReason === undefined ? { kind: "unlocked" } : { kind: "unrecognised", reason: lockReason };
     return { standing, inUse: { kind: "unknown", why: [why] } };
   };
-  if (proc === null) return unmeasured("this platform has no /proc, so nothing could be checked for running processes");
+  if (proc === null) {
+    if (darwin === null) return unmeasured("this platform has no /proc, so nothing could be checked for running processes");
+    const snap = darwin();
+    if ("error" in snap) return unmeasured(`could not list processes on this Mac — ${snap.error}`);
+    /* A tree whose realpath or identity cannot be read is an unknown, never a
+       quiet fallback to the registered spelling (GPT Sol, 261009v F3). */
+    const contains = containmentFor(worktreePath);
+    if ("error" in contains) return unmeasured(contains.error);
+    const { standing, scan } = darwinInUse(snap, contains, lockReason, pid, excludePipelineFilters);
+    return { standing, inUse: composeInUse(standing, scan) };
+  }
   const scope = classifyPidNamespace(proc.pidNamespace());
   if (scope.kind !== "host") return unmeasured(scope.why);
 
   const chain = ancestry(proc, pid);
   const standing = ownerStanding(proc, lockReason, chain);
-  const scan = cwdUsersUnder(proc, worktreePath, new Set(chain.map((a) => a.pid)), pid);
+  const scan = cwdUsersUnder(proc, worktreePath, new Set(chain.map((a) => a.pid)), pid, excludePipelineFilters);
   return { standing, inUse: composeInUse(standing, scan) };
 }
 
@@ -303,6 +323,30 @@ export interface RemoveOptions {
    * Production leaves it unset.
    */
   liveness?: (worktreePath: string, lockReason: string | undefined) => Liveness;
+  /**
+   * Refuse a tree whose lock names the session asking — `inBulk` below. Set by
+   * `worktree:sweep -- --remove`; a removal by name leaves it unset.
+   */
+  bulk?: boolean;
+}
+
+/**
+ * **In a bulk removal, the asking session's own trees are in use.**
+ *
+ * The ownership proof exists so a session can remove its own tree by name. In a
+ * bulk run it does the opposite of what it is for: `worktree-create.sh` locks an
+ * `Agent` subagent's tree with the *parent* session's pid, so a session sweeping
+ * would read `asking` for every tree its still-working subagents hold, and those
+ * trees have no process of their own between tool calls. So in bulk `asking` is
+ * `in-use`. GPT Sol, 261009v F1; the plan is
+ * docs/plans/261009v-worktree-removal-on-macos-and-an-automatic-sweep.md.
+ */
+export function inBulk(live: Liveness): Liveness {
+  if (live.standing.kind !== "asking") return live;
+  const { session, pid } = live.standing.owner;
+  const reason = `its lock names the session running this (${session}, pid ${pid}) — a session's own trees are removed by name, never in bulk`;
+  const others = live.inUse.kind === "in-use" ? live.inUse.reasons : [];
+  return { standing: live.standing, inUse: { kind: "in-use", reasons: [reason, ...others] } };
 }
 
 /** Why a liveness answer forbids removal, or `null` when it is `idle`. */
@@ -648,6 +692,24 @@ export function removeWorktree(cwd: string, wanted: string | undefined, opts: Re
   if (reg.kind === "skip") return refuse(steps, `refused: ${reg.why}`);
   if (reg.kind === "unknown") return refuse(steps, `refused: ${reg.why}`, `  ${reg.fix}`);
 
+  /* A branch is not a stable tree address: after the sweep's classification
+     it may have moved onto the caller's tree. Re-earn caller protection here,
+     using filesystem identity so a path alias cannot bypass it. Named removal
+     still permits removing one's own tree. */
+  if (opts.bulk === true && reg.kind === "live") {
+    const here = currentToplevel(cwd);
+    if (here === null) return refuse(steps, "refused: could not identify the caller's worktree for bulk removal");
+    try {
+      const callerId = statSync(here);
+      const targetId = statSync(entry.path);
+      if (callerId.dev === targetId.dev && callerId.ino === targetId.ino) {
+        return refuse(steps, "refused: bulk removal never removes the worktree you are standing in");
+      }
+    } catch (err) {
+      return refuse(steps, `refused: could not compare the caller's and target's worktree identities — ${(err as Error).message}`);
+    }
+  }
+
   /* --- a fresh trunk, once, as a sha ----------------------------------- */
   const trunk = fetchTrunkSha(primary);
   if (trunk.kind === "failed") {
@@ -687,7 +749,8 @@ export function removeWorktree(cwd: string, wanted: string | undefined, opts: Re
      The same question for the owner and for anyone else. An unknown refuses
      for both: there is no longer a floor for it to fall back to, and "could not
      tell whether a session is in there" is not an answer to remove on. */
-  const readLiveness = opts.liveness ?? ((p: string, r: string | undefined) => liveness(p, r, opts.pid ?? process.pid));
+  const readOnce = opts.liveness ?? ((p: string, r: string | undefined) => liveness(p, r, opts.pid ?? process.pid, undefined, undefined, opts.bulk !== true));
+  const readLiveness = (p: string, r: string | undefined): Liveness => (opts.bulk === true ? inBulk(readOnce(p, r)) : readOnce(p, r));
   const live = readLiveness(entry.path, entry.lockReason);
   const notLive = livenessRefusal(live);
   if (notLive !== null) return refuse(steps, ...notLive);

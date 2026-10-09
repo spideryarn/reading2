@@ -16,7 +16,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { checksOwner, claimListOf, claimListOwner } from "./helpers/debate-claims-owner.js";
-import { peerReviewHead } from "./helpers/peer-review-head.js";
+import { sourcesHead } from "./helpers/sources-head.js";
 import type {
   BlockId,
   DebateCheckRequest,
@@ -126,8 +126,8 @@ function paint(
   act(() => {
     root.render(
       createElement(DebatePanel, {
-        /* Peer review's chip row, as `PeerReviewBand` hands it (since 2026-10-09). */
-        head: peerReviewHead({
+        /* Sources' chip row, as `SourcesBand` hands it (since 2026-10-09). */
+        head: sourcesHead({
           view: "claims",
           onView: () => {},
           ownerSlug: NO_DEBATE.slug,

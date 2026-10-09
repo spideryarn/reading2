@@ -74,7 +74,7 @@ export const RESET_EXTRA_NAME: Record<ExtraStep, string> = {
   relations: "Relation words",
   sketch: "Sketch",
   illustrated: "Illustrated",
-  /* Peer review's sub-modes since 2026-10-09 (plan 261009l); the steps keep
+  /* Sources' sub-modes since 2026-10-09 (plan 261009l); the steps keep
      their stored names. */
   debate: "Reception",
   "debate-claims": "Claims list",

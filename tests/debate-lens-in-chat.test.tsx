@@ -434,7 +434,7 @@ describe("looking at the debate from an angle", () => {
      The unsent-draft machinery itself is tests/conversation-band-origin.test.tsx's. */
   it("sends the angle once on Enter, lists it in Debate, and does not send or refill it on returning to Chat", async () => {
     who.set(OWNER);
-    await open("?mode=peer-review&peer-review=reception");
+    await open("?mode=sources&sources=reception");
     await until(() => lensBox() !== null, "the box in Debate");
     nextAnswer = "One reply takes that angle.";
     await typeLensAndEnter(LENS);
@@ -448,7 +448,7 @@ describe("looking at the debate from an angle", () => {
     expect(server, "the conversation is on the server").toHaveLength(2);
 
     await act(async () => history.back());
-    await until(() => param("mode") === "peer-review" && angles().length === 1, "Debate again, with the angle listed");
+    await until(() => param("mode") === "sources" && angles().length === 1, "Debate again, with the angle listed");
 
     history.pushState(null, "", `/read/${SLUG}?mode=chat`);
     await act(async () => window.dispatchEvent(new PopStateEvent("popstate")));
@@ -474,7 +474,7 @@ describe("looking at the debate from an angle", () => {
      Chat's box, whatever is in it, is never a Send of its own. */
   it("does not send a second time on a held Enter repeating into Chat's box, and a fresh Enter still sends", async () => {
     who.set(OWNER);
-    await open("?mode=peer-review&peer-review=reception");
+    await open("?mode=sources&sources=reception");
     await until(() => lensBox() !== null, "the box in Debate");
     await typeLensAndEnter(LENS);
     await until(() => param("mode") === "chat" && composer() !== null, "Chat");
@@ -518,7 +518,7 @@ describe("looking at the debate from an angle", () => {
 
   it("starts a fresh chat that records the angle, and Debate lists the way back to it", async () => {
     who.set(OWNER);
-    await open(`?mode=peer-review&peer-review=reception&thread=${STORED.id}`);
+    await open(`?mode=sources&sources=reception&thread=${STORED.id}`);
     await until(() => lensBox() !== null, "the box in Debate");
     expect(angles(), "no chat was started from an angle yet").toHaveLength(0);
     const postsAtLoad = posts().length;
@@ -551,14 +551,14 @@ describe("looking at the debate from an angle", () => {
 
     /* 3. Back to Debate: the line under the box, with no reload. */
     await act(async () => history.back());
-    await until(() => param("mode") === "peer-review" && angles().length === 1, "the angle's line");
+    await until(() => param("mode") === "sources" && angles().length === 1, "the angle's line");
     expect(angles()[0]?.querySelector(".dbt-angle-words")?.textContent).toBe(LENS);
     expect(lensBox()?.value, "the box is empty again").toBe("");
 
     /* 4. The line opens the conversation beside Debate. */
     await act(async () => angles()[0]?.click());
     await until(() => param("thread") === fresh && dialog() !== null, "the conversation beside Debate");
-    expect(param("mode"), "still in Peer review").toBe("peer-review");
+    expect(param("mode"), "still in Sources").toBe("sources");
     await until(() => (dialog()?.textContent ?? "").includes("Two replies take that angle."), "its transcript");
 
     /* 5. Chat's list says where it came from. */
@@ -571,7 +571,7 @@ describe("looking at the debate from an angle", () => {
     const fromDebate = rows.filter((r) => r.querySelector(".chat-thread-source") !== null);
     expect(fromDebate, "one row is marked as started elsewhere").toHaveLength(1);
     expect(fromDebate[0]?.querySelector(".chat-thread-source")?.getAttribute("aria-label")).toBe(
-      "Started from an angle in Peer review › Reception",
+      "Started from an angle in Sources › Reception",
     );
   });
 });

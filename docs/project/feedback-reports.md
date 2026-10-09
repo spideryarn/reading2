@@ -612,7 +612,9 @@ same commit ([`regenerate-commit-generated.sh`](../../.claude/hooks/regenerate-c
 [261007q](../plans/261007q-generated-files-regenerate-on-commit.md)). It stays out of a bare
 `git commit`, a command with anything after the commit (`&& git push`), a commit while another note
 is changed and not in it, and a header that does not parse; `tests/feedback-endings.test.ts` is the
-backstop for all of those. Both files stay committed rather than built on deploy: the deploy's
+backstop for all of those. When it stays out of a commit that names a changed note, it says so and
+gives the command to run
+([261009t](../plans/261009t-the-regenerate-hook-says-when-it-declines-a-commit-that-names-its-sources.md)). Both files stay committed rather than built on deploy: the deploy's
 shipped-emails step reads the endings map from git, at the commit it just shipped.
 
 ## What a report is not

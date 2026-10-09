@@ -762,7 +762,7 @@ const workButton = (id: string): HTMLButtonElement | null =>
 describe("Ask in chat on a cited work", () => {
   it("starts a fresh chat that records the work, and the row shows the way back", async () => {
     who.set(OWNER);
-    await open(`?mode=peer-review&thread=${STORED.id}`);
+    await open(`?mode=sources&thread=${STORED.id}`);
     await until(() => workButton(WORK) !== null && workButton(BARE_WORK) !== null, "both rows' Ask in chat");
     const button = workButton(WORK) as HTMLButtonElement;
     expect(button.textContent?.trim()).toBe("Ask in chat");
@@ -804,7 +804,7 @@ describe("Ask in chat on a cited work", () => {
 
     /* 3. Back to Citations: the mark on that row and no other. */
     await act(async () => history.back());
-    await until(() => param("mode") === "peer-review" && marks().length === 1, "the mark on the row");
+    await until(() => param("mode") === "sources" && marks().length === 1, "the mark on the row");
     const mark = marks()[0] as HTMLButtonElement;
     expect(workRow(WORK)?.contains(mark)).toBe(true);
     expect(mark.getAttribute("aria-label")).toBe(OPEN_WORK_CHAT);
@@ -815,17 +815,17 @@ describe("Ask in chat on a cited work", () => {
     /* 4. The mark opens the conversation beside Citations. */
     await act(async () => mark.click());
     await until(() => param("thread") === fresh && dialog() !== null, "the conversation beside Citations");
-    expect(param("mode")).toBe("peer-review");
+    expect(param("mode")).toBe("sources");
 
     /* 5. Chat's list. */
     await act(async () => dialog()?.querySelector<HTMLButtonElement>(".chat-dialog-close")?.click());
     await until(() => param("thread") === null, "the dialog to close");
-    expect(await sourcesInChatsList(2)).toEqual(["Started from a cited work in Peer review › Bibliography"]);
+    expect(await sourcesInChatsList(2)).toEqual(["Started from a cited work in Sources › Bibliography"]);
   });
 
   it("quotes a work with no authors or year by its title alone", async () => {
     who.set(OWNER);
-    await open("?mode=peer-review");
+    await open("?mode=sources");
     await until(() => workButton(BARE_WORK) !== null, "the row's Ask in chat");
     await act(async () => workButton(BARE_WORK)?.click());
     await until(() => param("mode") === "chat" && composer() !== null, "Chat");
@@ -842,14 +842,14 @@ describe("Ask in chat on a cited work", () => {
       startedFrom("spya-srvz22", { mode: "citations", itemId: WORK, quote: "Consciousness explained (1st ed.)" }, "An older answer."),
       startedFrom("spya-srvy22", { mode: "glossary", itemId: BARE_WORK, quote: "a term" }, "Not the work's."),
     );
-    await open("?mode=peer-review");
+    await open("?mode=sources");
     await until(() => marks().length === 1, "the mark");
     expect(workRow(WORK)?.contains(marks()[0] as HTMLButtonElement)).toBe(true);
     expect(workRow(BARE_WORK)?.querySelector(".origin-chat")).toBeNull();
   });
 
   it("draws neither the button nor the mark for a visitor", async () => {
-    await open("?mode=peer-review");
+    await open("?mode=sources");
     await until(() => workRow(WORK) !== null, "the visitor's rows");
     expect(host.querySelector(".cite-ask-chat")).toBeNull();
     expect(host.querySelector(".origin-chat")).toBeNull();
@@ -862,8 +862,8 @@ describe.each(["glossary", "citations", "ideas"] as const)("a %s entry's chat ac
   const itemId = { glossary: QUOTED, citations: WORK, ideas: IDEA }[mode];
   const quote = { glossary: "qualia", citations: WORK_TITLE, ideas: IDEA_NAME }[mode];
   const origin = { mode, itemId, quote };
-  /* Citations is Peer review's Bibliography since 2026-10-09 (plan 261009l). */
-  const word = (m: "chat" | typeof mode) => (m === "citations" ? "peer-review" : m);
+  /* Citations is Sources' Bibliography since 2026-10-09 (plan 261009l). */
+  const word = (m: "chat" | typeof mode) => (m === "citations" ? "sources" : m);
   const search = `?mode=${word(mode)}${{ glossary: `&term=${QUOTED}`, citations: "", ideas: `&idea=${IDEA}` }[mode]}`;
   const button = () => ({ glossary: entryButton, citations: () => workButton(WORK), ideas: ideaButton })[mode]();
 
@@ -1122,7 +1122,7 @@ describe("the way back from a chat to its item", () => {
     const line = await openChatFrom({ mode: "citations", itemId: WORK, quote: WORK_TITLE });
     expect(line.textContent).toBe(`Back to “${WORK_TITLE}” in Bibliography`);
     await act(async () => line.click());
-    await until(() => param("mode") === "peer-review" && scrolled.length > 0, "Citations, on the row");
+    await until(() => param("mode") === "sources" && scrolled.length > 0, "Citations, on the row");
     expectLandedOn(workRow(WORK));
     expect(param("thread"), "the chat does not float over the item it went back to").toBeNull();
     await act(async () => history.back());
@@ -1136,7 +1136,7 @@ describe("the way back from a chat to its item", () => {
     });
     const line = await openChatFrom({ mode: "citations", itemId: WORK, quote: WORK_TITLE });
     await act(async () => line.click());
-    await until(() => param("mode") === "peer-review", "Citations, while its list is loading");
+    await until(() => param("mode") === "sources", "Citations, while its list is loading");
     expect(scrolled, "there is no row to land on yet").toEqual([]);
 
     /* Leave before the row exists, then let the opening read finish while the
@@ -1149,7 +1149,7 @@ describe("the way back from a chat to its item", () => {
     });
     await settle();
 
-    history.pushState(null, "", `/read/${SLUG}?mode=peer-review`);
+    history.pushState(null, "", `/read/${SLUG}?mode=sources`);
     await act(async () => window.dispatchEvent(new PopStateEvent("popstate")));
     await until(() => workRow(WORK) !== null, "a later ordinary visit to Citations");
     expect(scrolled, "the abandoned focus is not replayed on the later visit").toEqual([]);
@@ -1175,8 +1175,8 @@ describe("the way back from a chat to its item", () => {
     );
     expect(line.textContent).toBe(`Back to “${CLAIM_QUOTE}” in Claims`);
     await act(async () => line.click());
-    await until(() => param("mode") === "peer-review" && scrolled.length > 0, "Claims, on the claim");
-    expect(param("peer-review")).toBe("claims");
+    await until(() => param("mode") === "sources" && scrolled.length > 0, "Claims, on the claim");
+    expect(param("sources")).toBe("claims");
     expect(param("bears"), "a filter that could hide the claim is cleared").toBeNull();
     expect(param("debatethread")).toBeNull();
     expect(param("thread"), "the chat does not float over the item it went back to").toBeNull();
@@ -1192,9 +1192,9 @@ describe("the way back from a chat to its item", () => {
     const line = await openChatFrom({ mode: "debate", lens: "how it relates to Nagel" });
     expect(line.textContent).toBe("Back to your angle in Reception");
     await act(async () => line.click());
-    await until(() => param("mode") === "peer-review", "Peer review");
-    /* Named since 2026-10-09: Bibliography is Peer review's default. */
-    expect(param("peer-review"), "Reception, where the angles are").toBe("reception");
+    await until(() => param("mode") === "sources", "Sources");
+    /* Named since 2026-10-09: Bibliography is Sources' default. */
+    expect(param("sources"), "Reception, where the angles are").toBe("reception");
     expect(param("thread"), "the chat does not float over the item it went back to").toBeNull();
     expect(scrolled).toEqual([]);
   });

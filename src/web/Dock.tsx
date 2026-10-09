@@ -238,8 +238,8 @@ import {
   diagramInSearch,
   marginInSearch,
   type Mode,
-  peerReviewInSearch,
-  type PeerReviewView,
+  sourcesInSearch,
+  type SourcesView,
   type Panel,
   learnInSearch,
   summaryInSearch,
@@ -389,14 +389,14 @@ interface Props {
    */
   diagram?: DiagramKind;
   /**
-   * **Which of Peer review's sub-modes is showing** (`?peer-review=`), as the
+   * **Which of Sources' sub-modes is showing** (`?sources=`), as the
    * reading view has parsed it — off the reading view the carried query string
-   * says (`peerReviewInSearch`). A Peer review press arms only the work of the
-   * sub-mode it lands on (activation.ts § `activationForPeerReview`; Debate's
+   * says (`sourcesInSearch`). A Sources press arms only the work of the
+   * sub-mode it lands on (activation.ts § `activationForSources`; Debate's
    * since 2026-10-08), so this is read for `summary`'s reason above: from the
    * state, not the lagging address.
    */
-  peerReview?: PeerReviewView;
+  sources?: SourcesView;
   /**
    * **Whether this reader sees the modes that are still being built** — and
    * therefore how many buttons the bar draws at all. `visibleModes` is the rule.
@@ -957,9 +957,9 @@ const MODES_UI = [
     group: "guides",
     more: true,
   },
-  /* **First of the critical run — Referee, Peer review — since 2026-10-09**,
+  /* **First of the critical run — Referee, Sources — since 2026-10-09**,
      when Citations, which stood before it from 2026-10-04 (spya-tnqt2t, plan
-     261004j), became one of Peer review's sub-modes. The run is Greg's
+     261004j), became one of Sources' sub-modes. The run is Greg's
      grouping, 2026-09-29: *"Move Citations further right, next to Debate and
      Reviewer"* (SPIDERYARN-READING2-4E). Before the run existed it sat
      straight after Search, because it is Search's kind of thing — a pass
@@ -982,7 +982,7 @@ const MODES_UI = [
     mode: "referee",
     group: "critical",
   },
-  /* **Peer review, last of the critical run and before the input run, where
+  /* **Sources, last of the critical run and before the input run, where
      Debate stood**, since 2026-10-09: Citations and Debate in one button, with
      Bibliography, Reception and Claims as its chips. Greg (spya-vcvxu5): *"let's
      move this out of experimental, this combined mode"*. Citations' list is
@@ -997,7 +997,7 @@ const MODES_UI = [
      Citations' row: docs/plans/260911g-citations-mode.md; Debate's:
      docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md. */
   {
-    mode: "peer-review",
+    mode: "sources",
     group: "critical",
   },
   /* **First of the input run — Search, Chat, Learn — since 2026-09-29.**
@@ -1805,7 +1805,7 @@ export function useActivateMode(
 ): (next: Mode) => void {
   /* Taken apart so the callback depends on the three answers, not on an
      object a caller rebuilds every render. */
-  const { diagram, summary, peerReview } = press;
+  const { diagram, summary, sources } = press;
   return useCallback(
     (next: Mode) => {
       if (onMode === undefined) {
@@ -1832,10 +1832,10 @@ export function useActivateMode(
          Only the press that turns the column on can ask from the browser for
          relation words missing after import (plans 261003f and 261005d). */
       const marginOn = next === "marginalia" && margin;
-      if (arms && !again && !marginOn) armActivationForMode(slug, next, { diagram, summary, peerReview });
+      if (arms && !again && !marginOn) armActivationForMode(slug, next, { diagram, summary, sources });
       onMode(next, undefined, toggles);
     },
-    [slug, search, diagram, summary, peerReview, onMode, arms, current, toggles, margin],
+    [slug, search, diagram, summary, sources, onMode, arms, current, toggles, margin],
   );
 }
 
@@ -1907,7 +1907,7 @@ export function Dock({
   margin: marginProp,
   summary: summaryProp,
   diagram: diagramProp,
-  peerReview: peerReviewProp,
+  sources: sourcesProp,
   marked,
   visitor,
   shelfRow,
@@ -2035,14 +2035,14 @@ export function Dock({
      own parsed state where there is one, and the carried address only off it,
      where a press is a link and arms nothing anyway. § Props `summary`. */
   const summary = summaryProp ?? summaryInSearch(search);
-  /* Which of Peer review's sub-modes a Peer review press would land on, the
-     same way round. § Props `peerReview`. */
-  const peerReview = peerReviewProp ?? peerReviewInSearch(search);
+  /* Which of Sources' sub-modes a Sources press would land on, the
+     same way round. § Props `sources`. */
+  const sources = sourcesProp ?? sourcesInSearch(search);
 
   /* **Opening a mode**, and it is one callback rather than two calls made
      twice — `useActivateMode` above holds the whole of the reasoning, which
      is the reason it is a named thing at all. */
-  const press = { diagram, summary, peerReview };
+  const press = { diagram, summary, sources };
   const activateMode = useActivateMode(slug, search, press, onMode, !isVisitor, mode, false, margin);
   /* The bar's own buttons: the same door, but a second press closes. */
   const pressMode = useActivateMode(slug, search, press, onMode, !isVisitor, mode, true, margin);

@@ -97,10 +97,10 @@ const FLAG = {
   timeline: "timeline",
   skim: "skim",
   faq: "faq",
-  /* Citations and Debate are one row since 2026-10-09, Peer review's, which
+  /* Citations and Debate are one row since 2026-10-09, Sources', which
      either flag moves (visitor.ts § POLICY, `any-artefact`). Keyed here by
      the citations flag; the debate flag is the test after the sweep. */
-  "peer-review": "citations",
+  sources: "citations",
 } as const satisfies Record<string, keyof PublicArtefacts>;
 const ROWS = Object.keys(FLAG) as (keyof typeof FLAG)[];
 
@@ -285,19 +285,19 @@ describe("the sweep over the modes", () => {
     expect(row?.detail).toContain("what the model");
   });
 
-  /* The other half of Peer review's row: Reception's or Claims' artefact alone
+  /* The other half of Sources' row: Reception's or Claims' artefact alone
      moves it as Bibliography's does (plan 261009l, GPT Sol's F3). */
-  it("moves Peer review's row on the debate flag alone, and nothing else", () => {
+  it("moves Sources' row on the debate flag alone, and nothing else", () => {
     const oneOn = sharedInventory({ ...NOTHING, debate: true });
-    expect(keys(oneOn.shared)).toContain("peer-review");
+    expect(keys(oneOn.shared)).toContain("sources");
     for (const other of ROWS) {
-      if (other === "peer-review") continue;
+      if (other === "sources") continue;
       expect(keys(oneOn.ifBuilt), `${other} moved when only debate exists`).toContain(other);
     }
   });
 
   it("does not tell the owner that a new Debate searched around individual claims", () => {
-    const row = sharedInventory(EVERYTHING).shared.find((item) => item.key === "peer-review");
+    const row = sharedInventory(EVERYTHING).shared.find((item) => item.key === "sources");
     expect(row?.detail).toContain("Reception");
     expect(row?.detail).toContain("earlier search");
     expect(row?.detail).not.toContain("went looking for");
@@ -394,19 +394,19 @@ const WIRE_ROW = {
      A cited work's address is re-judged on its way out (src/public/dto.ts §
      `publicCitedWork`), which is invisible to this table. */
   faq: "faq",
-  /* Peer review's Bibliography since 2026-10-09 (plan 261009l). */
-  citations: "peer-review",
+  /* Sources' Bibliography since 2026-10-09 (plan 261009l). */
+  citations: "sources",
   /* Simple, from the day it was built (2026-09-30): a sub-mode of Summary, so
      Summary's row. docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
   simpleSummary: "summary",
   /* And the Debate, the same day (plan 260929c stage 4). A row the boundary
      refuses is withheld and counted (src/public/dto.ts § `publicDebate`),
      which is invisible to this table too. */
-  debate: "peer-review",
+  debate: "sources",
   /* Debate's claims list, from the day it was built (2026-10-08): what
-     Claims draws, so Debate's row (plan 261008i § 2), and Peer review's since
+     Claims draws, so Debate's row (plan 261008i § 2), and Sources' since
      2026-10-09. */
-  debateClaims: "peer-review",
+  debateClaims: "sources",
   /* Not a mode: comments have no button in the bar and are swept by neither
      `MODES` nor `visitorGap`. Their row is the prose one that moved out of
      `NEVER_SHARED` on 2026-09-04.

@@ -27,7 +27,7 @@ pressing **Marginalia** again swaps the notes in for it.
 - **“assumes …”** marks an idea the piece takes for granted; **“introduces …”** one it puts forward
   and argues for. Each sits beside the first passage where the idea occurs; point at it or tap it to
   read the idea in full. These appear only once [Ideas](/help/mode-ideas) has been made.
-- **Other modes’ lines**, shut by default: saved FAQ questions, dated Timeline events, Peer
-  review’s claims and cited works can appear beside their passages, as can your comments. A line shows one
+- **Other modes’ lines**, shut by default: saved FAQ questions, dated Timeline events, Sources’
+  claims and cited works can appear beside their passages, as can your comments. A line shows one
   item or a count; press it to open it.
 - The top of the column shows where you are, and where the argument has got to.

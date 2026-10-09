@@ -137,7 +137,7 @@ export function notBuiltGap(what: keyof PublicArtefacts): VisitorGap {
  *    that flag is set is a fact about *this piece*, not about the mode.
  *  - `any-artefact` carries several, for a mode whose sub-modes show one
  *    each: any one stored opens it. Its noun is the reader-facing names of
- *    those sub-modes, not the storage keys — Peer review's keys deliberately
+ *    those sub-modes, not the storage keys — Sources' keys deliberately
  *    remain `citations` and `debate`.
  */
 type VisitorPolicy =
@@ -146,7 +146,7 @@ type VisitorPolicy =
   | { kind: "artefact"; key: keyof PublicArtefacts }
   /**
    * **Open when any of these is stored**, for a mode whose sub-modes each
-   * show their own artefact — Peer review, since 2026-10-09 (GPT Sol's F3 on
+   * show their own artefact — Sources, since 2026-10-09 (GPT Sol's F3 on
    * plan 261009l). The band says which sub-mode is short of its own; the gap,
    * when there is none of them, names them all.
    */
@@ -317,12 +317,12 @@ const POLICY: Record<Mode, VisitorPolicy> = {
    */
   referee: { kind: "owners-only" },
   /**
-   * **Peer review, since 2026-10-09: open when any one of its artefacts is
+   * **Sources, since 2026-10-09: open when any one of its artefacts is
    * stored** — Citations' list, Debate's Reception search or Claims' list
    * (`debate` is set by either of the last two, public-artefacts.ts §
    * `artefactsIn`). GPT Sol's F3 on plan 261009l: one key could not say it,
    * so the policy shape is `any-artefact`. A sub-mode whose own artefact is
-   * missing says so inside the open band (PeerReviewMode.tsx), rather than
+   * missing says so inside the open band (SourcesMode.tsx), rather than
    * closing the whole mode on a visitor who could read the other two.
    *
    * Each half's history: both were `owners-only` as staging decisions until
@@ -334,12 +334,12 @@ const POLICY: Record<Mode, VisitorPolicy> = {
    * pass for Bibliography or Claims; one metered web search for Reception or
    * a claim check) and nothing to do with *showing* them.
    * Greg, SPIDERYARN-READING2-56: a stored mode on a public article is shown.
-   * The visitor gets `VisitorPeerReviewBand`, which mounts no `useCitations`,
+   * The visitor gets `VisitorSourcesBand`, which mounts no `useCitations`,
    * `useDebate` or job, draws no *Find it* and starts no search.
    * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md,
    * docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md.
    */
-  "peer-review": {
+  sources: {
     kind: "any-artefact",
     keys: ["citations", "debate"],
     noun: "a Bibliography, a Reception search or a Claims list",

@@ -165,7 +165,7 @@ describe("which steps are queued", () => {
       "ideas",
       "simple",
       "skim",
-      /* Peer review's Bibliography, since 2026-10-09: out of the switch, and
+      /* Sources' Bibliography, since 2026-10-09: out of the switch, and
          its default sub-mode. Not `debate` (Reception's paid web search) nor
          `debate-claims`: each runs on the press of its own chip (plan 261009l
          § On import). */
@@ -173,7 +173,7 @@ describe("which steps are queued", () => {
       "crossrefs",
     ]);
     expect(modeStep("summary")).toBeNull();
-    expect(modeStep("peer-review")).toBeNull();
+    expect(modeStep("sources")).toBeNull();
     expect(AUTO_MODE_STEPS).not.toContain("debate");
     expect(AUTO_MODE_STEPS).not.toContain("debate-claims");
     expect(modeStep("marginalia")).toBeNull();
@@ -211,7 +211,7 @@ describe("which steps are queued", () => {
     /* Summary once, though two of the steps are its own (its lengths and its
        thread). It must not vanish with its `fixed` row (F2). */
     expect(autoModesDetail()).toContain(
-      "Summary, Glossary, Quotes, Ideas, Skim and Peer review’s Bibliography are prepared",
+      "Summary, Glossary, Quotes, Ideas, Skim and Sources’ Bibliography are prepared",
     );
     expect(autoModesDetail()).toContain("the links from one passage of the article to another");
   });
