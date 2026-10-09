@@ -125,6 +125,7 @@ An agent about to edit one of these is editing a defence, not a helper.
 | [`src/store/public-access.ts`](../../src/store/public-access.ts) | `publicAccessWhere()` — the one place the two ownerless lookups meet: public, or *public or this key*. Every read in `public-reader.ts` takes it; the listing does not import it |
 | [`src/share-key.ts`](../../src/share-key.ts) | `parseShareKey()` — what counts as a key (22 base64url characters), so nothing else reaches a query or a request; `withoutShareKey()` — the key taken off an address before it is stored or sent |
 | [`src/store/public-library.ts`](../../src/store/public-library.ts) | `publicLibraryQuery()` — the one ownerless *listing*. See below |
+| [`src/store/public-topic-tree.ts`](../../src/store/public-topic-tree.ts) + [`src/public-library-topics.ts`](../../src/public-library-topics.ts) | the public shelf's topic pills: one row read by a fixed key, the site account's, and **withheld whole** while any article it names is no longer listed. Since 2026-10-09. See below |
 | [`src/web/PublicLibraryPage.tsx`](../../src/web/PublicLibraryPage.tsx) | the page that draws it — **the only defence it holds is which route it asks**. See below |
 
 The tests are the specification: `tests/sanitize.test.ts`, `tests/sanitize-client.test.ts`,
@@ -205,7 +206,8 @@ readability bar as `loadArticle`/`loadHead` (a tree and at least one block), so 
 cannot become a card whose destination 404s. It selects eight named columns, orders totally, and is
 bounded. Every one of the eight is a fact about the *document* — the eighth, added the same day, is
 `byline`, the author the publisher's own page declared. Nothing in the projection names the reader
-who shared it.
+who shared it. Since 2026-10-09 it also selects `articles.id`, **server-only**: the topic pills below
+are keyed by it, the card is built without it, and the guard checks the JSON never carries it.
 
 **The existing static guard could not have caught a bad one.** `tests/owner-isolation.test.ts` greps
 `src/store/` for `eq(articles.slug, …)`, and a listing has no slug in it. That file now has a second
@@ -238,6 +240,42 @@ listing's exact order, so `limit` bounds the database's work and not only the re
 It used to refuse to work at all on the filesystem store — a `requirePostgres()` that answered 501.
 That store was deleted on 2026-09-05 and the check went with it: there is one store now, so there is
 no half-implemented public path for a misconfigured dev server to serve.
+
+#### And since 2026-10-09 the listing carries topic pills a model named
+
+> q-p5h2a7 A
+>
+> — Greg, 2026-10-09, approving this change to what a stranger's page receives
+> ([the question](../user-feedback/questions/q-p5h2a7.md), plan
+> [261008j](../plans/261008j-public-shelf-topic-pills-automatic-billed-to-the-site.md))
+
+`GET /api/public/library` now also sends the public shelf's topic pills — each one's key, label,
+breadth and broader topic — and on each card the keys of its topics. What changed, and what holds it:
+
+- **Nothing is worked out or spent for the visitor.** The pills are a stored row of
+  `shelf_topic_sets`, read by [`src/store/public-topic-tree.ts`](../../src/store/public-topic-tree.ts)
+  by one fixed key, the **site account** ([`src/site-account.ts`](../../src/site-account.ts)): a real
+  `auth.users` row that owns nothing and cannot sign in. That file imports no owner context, and
+  `tests/public-imports.test.ts` § `ALLOWED_IN` lets it, and only it, name the table. The writer is
+  the authenticated coordinator ([`src/public-shelf-topics.ts`](../../src/public-shelf-topics.ts)),
+  run after a share, un-share, archive or delete, and it stays out of the public import graph with
+  every model and gateway module.
+- **The model's input is the listing itself** — the same closed query, so only what the page already
+  shows, titles and one-line summaries. No reader profile, nothing private.
+- **Withheld whole, not trimmed.** If any article the tree was made from is no longer listed, no
+  topic is sent at all ([`src/public-library-topics.ts`](../../src/public-library-topics.ts)): a
+  label may have been worded from an un-shared title, and un-sharing must take effect on the next
+  request, as it does for the card. Below eight cards, none either.
+- **The new risk, named.** A hostile shared title could already put its own words on its own card.
+  Now it can also nudge the labels strangers see, and which other owners' articles sit under them.
+  The bounds are every reader's pills': no tools on the call, a strict schema, articles named only by
+  ids the prompt showed, a label of at most 40 characters, drawn as plain text.
+- **For the first time a request records spend against an account other than its own**: the share
+  request's model calls are booked to the site account with no article (`withSpendAttribution`), and
+  its allowance (12 an hour, 40 a day) caps abuse at about 8¢ a day. Past 20 public articles a full
+  rebuild waits for an administrator's button on `/admin`.
+
+The page's one-request inventory below is unchanged: the topics arrive in the same response.
 
 #### And since 2026-09-06 there is a third ownerless read, which hands back bytes
 

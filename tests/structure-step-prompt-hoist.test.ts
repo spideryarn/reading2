@@ -123,11 +123,14 @@ describe("hoisting the structure prompt's three values", () => {
    * paperwork rule and the stamp went to `toc/10` (plan 261001p). It moved
    * from `b6130eea42744aee` for toc/11's starts-only schema (plan 261001s).
    * It moved from `2aa7d4a737bab61b` for toc/12's title, references and
-   * abstract wording (plan 261003c).
+   * abstract wording (plan 261003c). It moved from `33abb578309191a8` on
+   * 2026-10-09, when the capable model became Sonnet 5.5 (plan 261009a): the
+   * key hashes the wire request, model included, so a checkpoint Sonnet 5
+   * wrote is correctly not reused for Sonnet 5.5.
    */
   it("mints one stable key for the toc/12 structure request", () => {
     expect(checkpointKey(canonicalWholeDocumentRequest(wholeDocumentRequest(BLOCKS).params, "standard"))).toBe(
-      "33abb578309191a8",
+      "df075704e326c0ac",
     );
   });
 });

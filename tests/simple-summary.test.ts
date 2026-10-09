@@ -1352,7 +1352,7 @@ describe("the staggered fan-out (plan 261001j)", () => {
   /* The same ids as the small fixture, with enough words to clear the cache floor. */
   const FILLER = Array.from({ length: 400 }, (_, i) => `word${i}`).join(" ");
   const LONG = BLOCKS.map((b) => (b.treatment === "supplement" ? b : { ...b, text: `${b.text} ${FILLER}` }));
-  /* Roughly 700 tokens: cacheable by Opus, below Sonnet's measured floor. */
+  /* Roughly 700 tokens: over the 512 floor of Opus 5.5 and Sonnet 5.5, under Sonnet 5's 1,024. */
   const MIDDLE = BLOCKS.map((b) => (b.treatment === "supplement" ? b : { ...b, text: `${b.text} ${"x".repeat(600)}` }));
   const run = (
     blocks: Block[],
@@ -1466,24 +1466,25 @@ describe("the staggered fan-out (plan 261001j)", () => {
     expect([0, 1].map(marked)).toEqual([false, false]);
   });
 
-  it("uses Opus's lower cache floor for both marking and staggering", async () => {
-    await run(MIDDLE, { cacheArticle: true });
-    expect(sent).toHaveLength(2);
-    expect([0, 1].map(marked)).toEqual([false, false]);
-
-    sent.length = 0;
-    const start = gate();
-    const final = gate();
-    startGate = start.promise;
-    finalGate = final.promise;
-    const pending = run(MIDDLE, { power: "high", cacheArticle: true });
-    await tick();
-    expect(sent.map((c) => levelOf(c.body))).toEqual(["fuller"]);
-    expect(marked(0)).toBe(true);
-    start.open();
-    final.open();
-    await pending;
-  });
+  it.each(["standard", "high"] as const)(
+    "uses the 512 cache floor for both marking and staggering, at %s power",
+    async (power) => {
+      /* Opus 5.5's floor since plan 260930f, and Sonnet 5.5's since 261009a:
+         until 2026-10-09 the standard run sent both at once, unmarked, under
+         Sonnet 5's 1,024. */
+      const start = gate();
+      const final = gate();
+      startGate = start.promise;
+      finalGate = final.promise;
+      const pending = run(MIDDLE, { power, cacheArticle: true });
+      await tick();
+      expect(sent.map((c) => levelOf(c.body))).toEqual(["fuller"]);
+      expect(marked(0)).toBe(true);
+      start.open();
+      final.open();
+      await pending;
+    },
+  );
 
   it("opens no call when the job was already aborted", async () => {
     const job = new AbortController();

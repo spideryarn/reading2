@@ -154,6 +154,20 @@ const RECOVERED =
 const RECOVERED_CUT =
   "The page closed while you were still recording. What was saved is below; the last few seconds may be missing. [mic-cut-off]";
 /**
+ * The words came back after the reader had moved this box on to something
+ * else — the next comment, the next quiz question — so they were not put in
+ * it. They are kept, and Try again puts them in once the reader is back where
+ * they said them. Plan 261009a (qi-cfrv4spd).
+ */
+const MOVED =
+  "These words were said about what you had open before, so they weren't put here. Go back to it and press Try again, or save the recording. [mic-moved]";
+/**
+ * A press while a `[mic-moved]` offer is the only copy of its words: starting
+ * would clear it, so it is refused. GPT Sol's plan review of 261009a, F3.
+ */
+const MOVED_HELD =
+  "Your words from before are still below, and this device couldn't keep a copy. Try again where you said them, or save a copy and discard the recording before dictating again. [mic-moved-held]";
+/**
  * How long after the cap a press is taken as the Stop it was aimed at, and
  * ignored. Longer than a reaction, shorter than deciding to dictate again.
  */
@@ -316,8 +330,9 @@ export interface UseDictation {
    * microphone is broken on the strength of it.
    */
   quiet: boolean;
-  /** Start if stopped, stop if started. The button is a toggle, not a hold. */
-  toggle(): void;
+  /** Start if stopped, stop if started. Returns false when the press is refused. */
+  // biome-ignore lint/suspicious/noConfusingVoidType: void preserves existing callers; false lets the field leave its state intact on refusal.
+  toggle(): false | void;
   /** `not-allowed` and friends, in the reader's words. `no-speech` never gets here. */
   error: string | null;
   /**
@@ -689,6 +704,10 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
     recorded: DictationRecording;
     texts: Array<string | null>;
     where: C;
+    /** The keeper box it was said into, which its words may only go into. See `elsewhere`. */
+    box: string | null;
+    /** Its words came back but were refused for being somewhere else (`[mic-moved]`). See `start`. */
+    moved?: true;
   } | null>(null);
   const [canRetry, setCanRetry] = useState(false);
   /**
@@ -700,6 +719,9 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
    */
   const held = useRef<KeptTape | null>(null);
   const [keptOnDevice, setKeptOnDevice] = useState(false);
+  /** `keptOnDevice` as of the last render, for `start`, which is called from a click. */
+  const keptNow = useRef(keptOnDevice);
+  keptNow.current = keptOnDevice;
   /** Which retry is allowed to publish its answer. See `retry`. */
   const retryGeneration = useRef(0);
   /** The retry request in flight, so an unmount can cancel it. */
@@ -797,6 +819,26 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
     held.current?.forget();
     held.current = null;
     setKeptOnDevice(false);
+  }, []);
+  /**
+   * **Has the box moved on from the one these words were said into?**
+   *
+   * The comment dialog and the quiz panel keep one mounted dictation while the
+   * reader steps from comment to comment, or question to question, and clear
+   * the box on the step. On a browser with no live words nothing in the box
+   * proves it is still the box the words were for, so a transcript arriving
+   * after the step went into the next comment's box. The keeper's `box` names
+   * the target (`comment:<id>`, `quiz:<slug>:<question>`), so it is the
+   * binding: a dictation is delivered only into the box it was said into.
+   *
+   * **A current box of null is not "elsewhere".** Feedback and the command bar
+   * drop their keeper while shut and deliberately still receive a transcript
+   * that arrives after closing (plan 261005a, F2). Null means not on screen;
+   * only a *different* box refuses. Plan 261009a.
+   */
+  const elsewhere = useCallback((box: string | null) => {
+    const now = keeper.current?.box ?? null;
+    return box !== null && now !== null && now !== box;
   }, []);
   /** Missing or throwing delivery is not delivery, so it can never justify deletion. */
   const deliverTranscript = useCallback((text: string): boolean => {
@@ -983,6 +1025,24 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
       if (!first) {
         const text = joinTranscripts(results.map((r) => (r.ok ? r.text : "")));
         if (text) {
+          /* Said about something the reader has since moved off: offered back
+             like a failure, with the words kept so Try again does not pay for
+             them twice. See `elsewhere`. */
+          const box = s.keeper?.box ?? null;
+          if (elsewhere(box)) {
+            setError(MOVED);
+            holdKept(s.kept);
+            setRecording(recorded);
+            retryable.current = {
+              recorded,
+              texts: results.map((r) => (r.ok ? r.text : null)),
+              where: s.where,
+              box,
+              moved: true,
+            };
+            setCanRetry(true);
+            return;
+          }
           /* The words are in the box, so the device copy has done its job —
              unless the box refused them, when it stays for next time. */
           if (!deliverTranscript(text)) s.kept?.release();
@@ -1031,6 +1091,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
           recorded,
           texts: results.map((r) => (r.ok ? r.text : null)),
           where: s.where,
+          box: s.keeper?.box ?? null,
         };
         setCanRetry(true);
       }
@@ -1133,7 +1194,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
       if (stillOurs()) setError(TRANSCRIPTION_UNEXPECTED);
       done();
     });
-  }, [deliverTranscript, holdKept]);
+  }, [deliverTranscript, elsewhere, holdKept]);
 
   const stop = useCallback(() => {
     const s = session.current;
@@ -1180,7 +1241,15 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
   const stopRef = useRef(stop);
   stopRef.current = stop;
 
-  const start = useCallback(() => {
+  const start = useCallback((): false | undefined => {
+    /* **Words refused for being elsewhere, with no copy on the device,** are
+       only in memory, and starting clears them — so the press is refused
+       instead, with a sentence. Every other offer goes on giving way to a new
+       press as before. GPT Sol's plan review of 261009a, F3. */
+    if (retryable.current?.moved && !keptNow.current) {
+      setError(MOVED_HELD);
+      return false;
+    }
     /* Null on Firefox. Everything below is written so that the dictation runs
        without one: the track is ours, the recorder is ours, and the transcript
        is what the reader gets. What is missing is the live words, and the strip
@@ -1351,7 +1420,10 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
           if (result.isFinal) confirmed += result[0].transcript;
           else pending += result[0].transcript;
         }
-        if (confirmed) {
+        /* A phrase said into a box the reader has since moved off is not put
+           in the next one, and is not counted: the transcript will be offered
+           back whole. See `elsewhere`; GPT Sol's plan review of 261009a, F4. */
+        if (confirmed && !elsewhere(s.keeper?.box ?? null)) {
           s.confirmed += 1;
           emit.current(confirmed);
         }
@@ -1648,17 +1720,19 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
          above. Whichever happens second arms the tape. */
       armTape(s, tapeEvents, setEndsAt);
     })();
-  }, [finish, holdKept]);
+    return undefined;
+  }, [elsewhere, finish, holdKept]);
 
-  const toggle = useCallback(() => {
+  const toggle = useCallback((): false | undefined => {
     /* **A press just after the cap was aimed at Stop.** The countdown invites
        exactly that press, and without this it lands on a session that is
        already stopping, takes the `start` branch, and `start` aborts the
        uploads of the fifteen minutes just recorded. The cap has already done
        what the press asked for. GPT Sol's plan review of 261007b, P7. */
-    if (Date.now() - cappedAt.current < CAP_PRESS_GRACE_MS) return;
+    if (Date.now() - cappedAt.current < CAP_PRESS_GRACE_MS) return false;
     if (session.current && !session.current.stopRequested) stop();
-    else start();
+    else return start();
+    return undefined;
   }, [start, stop]);
 
   /**
@@ -1762,6 +1836,13 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
   const retry = useCallback(() => {
     const offer = retryable.current;
     if (!offer) return;
+    /* Pressed in a box these words were not said into: nothing is sent and
+       nothing changes but the sentence. Checked again once the words are back,
+       in case the box moves while they are on their way. */
+    if (elsewhere(offer.box)) {
+      setError(MOVED);
+      return;
+    }
     /* Defensive against a second programmatic press while the button is gone:
        never pay for two retries of the same failed parts at once. */
     retryUpload.current?.abort();
@@ -1812,6 +1893,14 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
       if (!first) {
         const text = joinTranscripts(results.map((r) => (r.ok ? r.text : "")));
         if (text) {
+          /* Still somewhere else: everything stays as it was, the words now
+             paid for, to be tried again from the right box. */
+          if (elsewhere(offer.box)) {
+            offer.moved = true;
+            setError(MOVED);
+            setCanRetry(true);
+            return;
+          }
           retryable.current = null;
           setRecording(null);
           if (!deliverTranscript(text)) holdKept(null);
@@ -1839,7 +1928,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
          one's. GPT Sol's code review, R2. */
       setCanRetry(failures.every((r) => r.retryable));
     })();
-  }, [deliverTranscript, forgetHeld, holdKept]);
+  }, [deliverTranscript, elsewhere, forgetHeld, holdKept]);
 
   /**
    * **A recording an earlier page left behind in this box, offered back.**
@@ -1854,7 +1943,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
    *
    * **Only into an idle box with nothing showing.** A dictation or a failure
    * already on screen is the reader's present; the old one waits, released,
-   * for the next mount.
+   * until that dictation and its offer are settled.
    */
   useEffect(() => {
     const k = keeper.current;
@@ -1866,7 +1955,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
        so no other tab offers it twice; reopening finds the row where it was.
        GPT Sol's code review proposed resetting here, and it was reverted for
        that reason. */
-    if (!k || keepBox === null) return;
+    if (!k || keepBox === null || phase !== "idle" || recording !== null) return;
 
     /* React StrictMode immediately performs setup-cleanup-setup. Defer the
        claim one task so the throwaway setup never takes a Web Lock that the
@@ -1876,7 +1965,18 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
         .recover()
         .then((found) => {
           if (!found) return;
-          if (gone || !mounted.current || session.current || retryable.current || held.current) {
+          /* Nor while a transcript or a retry is on its way: `finish` lets go
+             of `session` before the upload returns, and what comes back may
+             need the row (GPT Sol's plan review of 261009a, F5). */
+          if (
+            gone ||
+            !mounted.current ||
+            session.current ||
+            retryable.current ||
+            held.current ||
+            retryUpload.current ||
+            phaseNow.current !== "idle"
+          ) {
             found.tape.release();
             return;
           }
@@ -1896,7 +1996,12 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
           setRecording(recorded);
           setError(found.complete ? RECOVERED : RECOVERED_CUT);
           if (!found.broken) {
-            retryable.current = { recorded, texts: recorded.parts.map(() => null), where: found.where };
+            retryable.current = {
+              recorded,
+              texts: recorded.parts.map(() => null),
+              where: found.where,
+              box: k.box,
+            };
             setCanRetry(true);
           }
         })
@@ -1906,7 +2011,9 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
       gone = true;
       window.clearTimeout(timer);
     };
-  }, [keepBox, holdKept]);
+    /* Reconsider a deferred tape when the current dictation ends or its offer
+       is settled, without requiring the reader to navigate away and back. */
+  }, [keepBox, phase, recording, holdKept]);
 
   /* Leaving the page with the microphone on. `abort` rather than `stop`,
      because `stop` delivers one last result and this component will not be

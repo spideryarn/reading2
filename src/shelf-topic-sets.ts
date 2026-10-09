@@ -152,6 +152,8 @@ export interface ShelfTopicSetDeps {
   hasKey: () => boolean;
   calls: TopicCalls;
   model: string;
+  /** When a re-think may run; a reader's shelf leaves it out. */
+  due?: DuePolicy;
 }
 
 export interface ShelfTopicSetAnswer {
@@ -276,6 +278,28 @@ function applyStoredSet(
   else delete response.sorting;
 }
 
+/**
+ * **When a re-think may run by itself**, for a shelf that is not one reader's.
+ * A reader's shelf takes the defaults; the public shelf (src/public-shelf-topics.ts)
+ * narrows both. Plan 261008j.
+ */
+export interface DuePolicy {
+  /** The largest shelf a re-think runs on, below `MAX_WORKS`. Above it new works are still filed. */
+  rethinkUpTo?: number;
+  /**
+   * Re-think when the stored tree holds an article no longer on the shelf.
+   * A reader's tree keeps a deleted article's membership harmlessly; the
+   * public tree may have worded a label from an un-shared title, so it must go.
+   */
+  rethinkWhenGone?: boolean;
+}
+
+/** Does the stored tree hold an article that is not among `works`? */
+export function hasGone(result: Pick<TopicSetResult, "members">, works: readonly ShelfWork[]): boolean {
+  const here = new Set(works.flatMap((w) => w.articles.map((a) => a.articleId)));
+  return Object.keys(result.members).some((id) => !here.has(id));
+}
+
 /** What this request should do, from counts alone. */
 export type Due = { kind: "nothing" } | { kind: "rethink" } | { kind: "file"; works: ShelfWork[] };
 
@@ -288,10 +312,16 @@ export type Due = { kind: "nothing" } | { kind: "rethink" } | { kind: "file"; wo
  * deleted as new ones fail to fit, the two totals match and the unplaced
  * trigger does not fire. The size trigger still does in time.
  */
-export function whatIsDue(stored: StoredTopicSet | null, works: readonly ShelfWork[], model: string, profileHash: string): Due {
+export function whatIsDue(
+  stored: StoredTopicSet | null,
+  works: readonly ShelfWork[],
+  model: string,
+  profileHash: string,
+  policy: DuePolicy = {},
+): Due {
   if (works.length < MIN_WORKS) return { kind: "nothing" };
   const result = stored?.result;
-  const mayRethink = works.length <= MAX_WORKS;
+  const mayRethink = works.length <= Math.min(MAX_WORKS, policy.rethinkUpTo ?? MAX_WORKS);
   if (!result) return mayRethink ? { kind: "rethink" } : { kind: "nothing" };
 
   let unplaced = 0;
@@ -306,6 +336,7 @@ export function whatIsDue(stored: StoredTopicSet | null, works: readonly ShelfWo
     /* Grown or shrunk: after a hundred works become twenty, the tree describes a shelf that is gone. */
     if (Math.abs(works.length - result.works) >= Math.max(CHANGE_MIN, Math.ceil(result.works * CHANGE_SHARE))) return { kind: "rethink" };
     if (unplaced >= result.unplaced + Math.max(UNPLACED_MIN, Math.ceil(works.length * UNPLACED_SHARE))) return { kind: "rethink" };
+    if (policy.rethinkWhenGone && hasGone(result, works)) return { kind: "rethink" };
   }
   return unfiled.length > 0 ? { kind: "file", works: unfiled.slice(0, FILE_MAX) } : { kind: "nothing" };
 }
@@ -404,7 +435,7 @@ export async function shelfTopicSet(archived: boolean, deps: ShelfTopicSetDeps):
      may update and return the same array object. */
   applyStoredSet(response, fallback, stored, shelf, works, archived);
 
-  if (whatIsDue(stored, works, deps.model, profileHash).kind === "nothing") return { response, refresh: null };
+  if (whatIsDue(stored, works, deps.model, profileHash, deps.due).kind === "nothing") return { response, refresh: null };
 
   if (live(stored)) {
     response.refreshing = true;
@@ -439,7 +470,7 @@ export async function shelfTopicSet(archived: boolean, deps: ShelfTopicSetDeps):
   try {
     const [s, row, profile] = await Promise.all([deps.store.topicShelf(), deps.store.readTopicSet(), deps.readProfile()]);
     const w = worksOf(s);
-    fresh = { works: w, stored: row, profile, due: whatIsDue(row, w, deps.model, profileHashOf(profile)) };
+    fresh = { works: w, stored: row, profile, due: whatIsDue(row, w, deps.model, profileHashOf(profile), deps.due) };
   } catch (err) {
     logger.error({ ...errorFields(err) }, "the shelf's topic set could not be re-read under its claim");
     await releaseClaim(deps.store, claim, 0);
@@ -495,7 +526,13 @@ export async function shelfTopicSet(archived: boolean, deps: ShelfTopicSetDeps):
       }
       const set = await rethink(fresh.works.map(asTopicWork), deps.calls, {
         profile: normaliseProfileText(fresh.profile),
-        previous: fresh.stored?.result?.topics ?? [],
+        /* On the public shelf old labels are input provenance too, even if
+           the withdrawn article had no topics. Do not carry their wording
+           across the rebuild that removes its membership. Readers retain
+           their usual label continuity. */
+        previous: deps.due?.rethinkWhenGone && fresh.stored?.result && hasGone(fresh.stored.result, fresh.works)
+          ? []
+          : (fresh.stored?.result?.topics ?? []),
         /* Past this another request may claim the row. The margin is for the
            write; time spent after taking the claim was already subtracted by
            anchoring this at `claimStarted`. */
@@ -532,12 +569,15 @@ export async function shelfTopicSet(archived: boolean, deps: ShelfTopicSetDeps):
          the one this request wrote before it briefly released the row. */
       const [claimedShelf, claimedRow] = await Promise.all([deps.store.topicShelf(), deps.store.readTopicSet()]);
       const current = claimedRow?.result;
+      const claimedWorks = worksOf(claimedShelf);
       const todo = current
-        ? worksOf(claimedShelf)
+        ? claimedWorks
             .filter((w) => filedTopics(w, current.members) === undefined)
             .slice(0, FILE_MAX)
         : [];
-      if (!current || current.topics.length === 0 || todo.length === 0) {
+      /* A public tree with withdrawn input needs a rebuild, not this drain.
+         Its wrapper rechecks once after this job releases its allowance. */
+      if (!current || current.topics.length === 0 || todo.length === 0 || (deps.due?.rethinkWhenGone && hasGone(current, claimedWorks))) {
         await deps.store.releaseTopicSet(held, 0);
         held = null;
         return;

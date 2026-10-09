@@ -157,7 +157,7 @@ import { act, createElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { claimListOwner } from "./helpers/debate-claims-owner.js";
+import { checksOwner, claimListOwner } from "./helpers/debate-claims-owner.js";
 
 import type { DebateOwner } from "../src/web/DebatePanel.js";
 import type { DiagramAccess } from "../src/web/DiagramPanel.js";
@@ -1624,7 +1624,7 @@ const NO_CLAIM_CHATS = { summaries: [], onCheck: () => {}, onLens: () => {}, onO
 
 function mountDebate(debate: Debate | null, over: Partial<DebateOwner> = {}): ReactNode {
   return createElement(DebatePanel, {
-    access: { kind: "owner", owner: debateOwner(debate, over), claimList: claimListOwner(), citers: { result: { kind: "no-doi" }, retry: () => {} }, claimChats: NO_CLAIM_CHATS },
+    access: { kind: "owner", owner: debateOwner(debate, over), claimList: claimListOwner(), checks: checksOwner(), citers: { result: { kind: "no-doi" }, retry: () => {} }, claimChats: NO_CLAIM_CHATS },
     onJump: noop,
     /* What a reader who has never touched `?debate=` sends: Reception. */
     view: "reception",

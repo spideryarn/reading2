@@ -845,6 +845,31 @@ export async function exportArticle(
     });
   }
 
+  /* debate-claim-checks.json — the reader's checks of the claims they picked
+     in Debate (plan 261008i § 3). No filesystem store ever read this back, so
+     the shape is the rows, columns as they are, as the bundle writes them. */
+  if (rows.debateClaimChecks.length) {
+    await put("debate_claim_checks", "debate-claim-checks.json", {
+      checks: rows.debateClaimChecks.map((row) =>
+        compact({
+          id: row.id,
+          status: row.status,
+          listSourceHash: row.listSourceHash,
+          promptVersion: row.promptVersion,
+          digFurther: row.digFurther,
+          targets: row.targets,
+          results: row.results,
+          counts: row.counts,
+          webSearches: row.webSearches,
+          model: row.model,
+          error: row.error,
+          createdAt: row.createdAt.toISOString(),
+          finishedAt: row.finishedAt?.toISOString(),
+        }),
+      ),
+    });
+  }
+
   const lookupRows = rows.glossaryLookups;
   if (lookupRows.length) {
     const lookups: Record<string, unknown> = {};

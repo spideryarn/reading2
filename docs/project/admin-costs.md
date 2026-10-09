@@ -153,6 +153,11 @@ hash; only the administrator's own articles carry a slug. No other owner's slug 
 SQL removes it and the shared helpers used by `spendCube` and `spendDetail` finish the one-way key.
 The address bar holds ids and hashes, never an email or a slug.
 
+**One owner is labelled *the site* rather than by email** (since 2026-10-09): the site account
+([`src/site-account.ts`](../../src/site-account.ts)) that the public shelf's topic pills are billed
+to, with no article on its rows. The route puts the label in the owner's `email` field, which every
+label on the page reads ([public-shelf.md § Topic pills](public-shelf.md#topic-pills)).
+
 Whether to show slugs, and with them an article's size and kind, is Greg's to decide: [Q-1] in the
 plan.
 

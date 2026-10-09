@@ -2912,6 +2912,12 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      row back after a refused Dig deeper to show it was left alone — a read
      a neighbour answering the same slug could falsify. No model is called. */
   "tests/dig-deeper-comment.test.ts": "private-postgres",
+  /* Plan 261008i stage 3. Debate's claim checks through the routes and the
+     store: seeds its own scratch articles, writes the list onto the revision
+     in SQL, and races two reservations on two connections, so it needs a
+     database of its own. The allowance and the search are stubbed; no model
+     is called. */
+  "tests/debate-claim-checks-routes.test.ts": "private-postgres",
   "tests/comment-sweep.test.ts": "private-postgres",
   "tests/corpus-lock.test.ts": "private-postgres",
   /* 2026-09-05. Its second block drives a collector whose sink is `costStore`,
@@ -3035,6 +3041,8 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      `shelf_topic_sets`, `rate_limit_events` and `ai_calls`. The provider is a
      stubbed `fetch` with a fake key. */
   "tests/shelf-topics-route.test.ts": "private-postgres",
+  "tests/public-shelf-topics-pg.test.ts": "private-postgres",
+  "tests/site-account-pg.test.ts": "private-postgres",
   /* The model's topic set, 261003f. Seeds two owners and a handful of bare
      articles by hand, and reads and writes `shelf_topic_sets` through the
      store. No model is called. */
@@ -3628,6 +3636,11 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
   "tests/mcp-remote.test.ts": {
     "00000000-0000-4000-8000-00000000b0b0": { kind: "seeded" },
   },
+  /* Plan 261008i. `seedAuthUser` in `beforeAll`: a second reader who owns an
+     article, so a check pressed on it by somebody else is refused. */
+  "tests/debate-claim-checks-routes.test.ts": {
+    "7c0de5a1-0000-4000-8000-00000000d1c5": { kind: "seeded" },
+  },
   "tests/a-paper-queued-before-the-resolver.test.ts": {
     "0b111a99-0000-4000-8000-0000a2c51d01": { kind: "seeded" },
   },
@@ -3669,6 +3682,14 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
      minted per run. 260929c stage 2, rewritten for 261003f. */
   "tests/shelf-topics-route.test.ts": {
     "00000000-0000-4000-8000-00000000c7a1": { kind: "seeded" },
+  },
+  /* Two sharing readers, seeded; and the site account, which the migration
+     drizzle/20261009022454_site_account.sql made, so it is in every database.
+     Its rows here — the topic set, allowance and ai_calls — are deleted by the
+     file. Plan 261008j. */
+  "tests/public-shelf-topics-pg.test.ts": {
+    "00000000-0000-4000-8000-0000000a7a11": { kind: "seeded", why: "seedAuthUser in beforeAll, over a [id, email] list the scan cannot read" },
+    "00000000-0000-4000-8000-0000000a7b22": { kind: "seeded", why: "seedAuthUser in beforeAll, over a [id, email] list the scan cannot read" },
   },
   /* Two readers: `shelf_topic_sets.owner_id` references `auth.users`, both
      own articles, and one's claim id is tried in the other's hands. 261003f. */

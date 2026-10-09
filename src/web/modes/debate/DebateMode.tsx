@@ -41,6 +41,7 @@ import { bearsParam, debateOrderParam, debateParam, debateThreadParam } from "..
 import { useRenderCount } from "../../perf.js";
 import { useDebate } from "../../useDebate.js";
 import { useDebateClaims } from "../../useDebateClaims.js";
+import { useDebateChecks } from "../../useDebateChecks.js";
 import { useCiters } from "../../useCiters.js";
 import { type DebateClaimChats, DebatePanel } from "../../DebatePanel.js";
 import { yearOf } from "../../debate-order.js";
@@ -117,9 +118,13 @@ export function DebateBand({
      261004h. Claims has its own list since 2026-10-08, so *Cited by* no
      longer stands in for a missing search there. */
   const citers = useCiters(slug, view === "reception");
+  /* **The reader's claim checks** (plan 261008i § 3): read on mount, never
+     posted but by a press on Check or Dig further. Read whichever sub-mode is
+     showing, because the Claims segment's count is drawn from them. */
+  const checks = useDebateChecks(slug);
   return (
     <DebatePanel
-      access={{ kind: "owner", owner: debate, claimList, citers, claimChats }}
+      access={{ kind: "owner", owner: debate, claimList, checks, citers, claimChats }}
       onJump={onJump}
       view={view}
       onView={setView}

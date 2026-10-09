@@ -17,7 +17,7 @@ Claude Sonnet to Claude Opus.** For a difficult piece — a dense paper, an argu
 readings — the stronger model writes the structure, gists, quotes, FAQ answers and chat replies.
 Simple's plain-words summaries are the exception: they use Opus for every article. So is
 *Dig deeper*, whose answers are Opus's on every article.
-Opus 5.5's input and output token prices are twice Sonnet 5's; the dated prices and measurement live
+Opus 5.5's input and output token prices are twice Sonnet 5.5's (the same as Sonnet 5's); the dated prices and measurement live
 in [the plan](../plans/260930f-high-powered-ai-per-article.md#what-this-is-in-one-paragraph). Greg,
 2026-09-30:
 
@@ -140,10 +140,10 @@ Simple is not part of the default ingest and already uses Opus whenever it is re
 
 ## Three things that move with the model
 
-- **Effort.** Opus 5.5's default effort is `medium`; Sonnet 5's is `high`. A call that takes the
+- **Effort.** Opus 5.5's default effort is `medium`; Sonnet 5's (and 5.5's) is `high`. A call that takes the
   provider default sends `high` explicitly on Opus, so switching up never means thinking less. Calls
   that already choose their effort keep it.
-- **The cache floor.** Opus 5.5 caches a prefix from **512** tokens, Sonnet 5 from 1,024 — measured
-  live on 2026-09-30 (the plan's § Measurements). `underCacheFloor` takes the model.
+- **The cache floor.** Opus 5.5 caches a prefix from **512** tokens, and so does Sonnet 5.5; Sonnet 5 needed 1,024 (until
+  2026-10-09) — Opus measured live on 2026-09-30 (the plan's § Measurements). `underCacheFloor` takes the model.
 - **The run is read per step.** The job runner reads the article's setting as each step starts, so
   flipping the switch mid-job changes the steps still to come.

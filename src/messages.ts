@@ -5541,6 +5541,75 @@ export const DEBATE_CLAIMS_NOT_SEARCHED_SHARED = "This search did not look into 
  */
 export const DEBATE_CLAIMS_EARLIER = "Claims the earlier search chose";
 
+/* ---- Claims: checking the claims the reader picked (plan 261008i § 3) ----
+
+   The reader ticks claims, or types one, and presses Check: one web search
+   over them all. These are the panel's words for it and the route's refusals.
+   No sentence here ever carries the reader's typed claim. */
+
+/** The box for a claim of the reader's own: its accessible name, and (with an ellipsis) its placeholder. */
+export const DEBATE_CHECK_OWN_LABEL = "Check a claim of your own";
+
+/** The tooltip on Check: what one press buys. */
+export const DEBATE_CHECK_TIP =
+  "One search of the open web for what has been written about the claims you picked. It takes " +
+  "about a minute and a half and costs real money.";
+
+/** Under a claim a check answered with nothing: the search said so for this claim. */
+export const DEBATE_CHECK_FOUND_NOTHING = "This search found nothing it could quote on this claim.";
+
+/** Under a claim a check did not answer: the model left it out, so nothing is known either way. */
+export const DEBATE_CHECK_NOT_ANSWERED =
+  "The search did not answer for this claim, so this says nothing about it either way. Check it again.";
+
+/** While a check is out. */
+export const DEBATE_CHECK_PENDING = "Searching the web for these claims…";
+
+/** Dig further's tooltip: one more search, for this claim alone, somewhere new. */
+export const DEBATE_DIG_FURTHER_TIP =
+  "One more web search for this claim alone, told what has been found already so it looks " +
+  "elsewhere. Costs real money.";
+
+/** The heading over a typed claim's checks. The words after it are the reader's. */
+export const DEBATE_CHECK_YOUR_CLAIM = "Your claim";
+
+/**
+ * Above the checks made against an earlier version of the article — kept,
+ * because they were paid for, but read-only (GPT Sol's E5).
+ */
+export const DEBATE_CHECK_EARLIER = "Checked against an earlier version of this article";
+
+/** A check pressed while another is out — from the partial unique index. */
+export const DEBATE_CHECK_IN_FLIGHT =
+  "A check is already running on this article. Its answer will appear here when it lands.";
+
+/** A check pressed on a list made from an older version of the article. */
+export const DEBATE_CHECK_LIST_STALE =
+  "The article has changed since its claims were listed. List them again before checking any.";
+
+/** A check pressed with no list at all. */
+export const DEBATE_CHECK_NO_LIST = "List this piece's claims before checking any.";
+
+/** A check still running when the server stopped. What the sweep writes. */
+export const DEBATE_CHECK_SWEPT = "The server stopped before this check finished.";
+
+/** The check's allowance's three refusals (src/debate.ts § `admitDebateCheck`). Dig deeper keeps its own. */
+export const DEBATE_CHECK_BUSY =
+  "Another web search you asked for is still running. Wait for it to finish, then check again.";
+export const DEBATE_CHECK_LIMITED =
+  "You have asked for a lot of web searches recently. Try again in a while; nothing was searched.";
+/** The 503 of the three. */
+export const DEBATE_CHECK_RESTING =
+  "Web searches like this one have done as many as they can for today. Try again tomorrow; " +
+  "nothing was searched.";
+
+/** Dig further on a claim no finished check has answered yet. */
+export const DEBATE_DIG_FURTHER_FIRST = "Check this claim before digging further into it.";
+
+/** Ids from a list that has since been made again: a stale tab. */
+export const DEBATE_CHECK_LIST_CHANGED =
+  "The list of claims has changed since this page loaded. Reload it and pick again.";
+
 /* ---- Reception's *Cited by*: the papers that cite the piece, from OpenAlex ----
 
    One plain sentence per outcome of `CitersResult` (src/types.ts), so the

@@ -4,9 +4,14 @@ Up: [plans.md](../project/plans.md) · the page is [public-shelf.md](../project/
 pills are [shelf-terms.md](../project/shelf-terms.md) · the cost is investigation
 [261008a](../investigations/261008a-public-shelf-topic-rethink-cost.md)
 
-**Status: planned and costed, 2026-10-08. Not built: every part of it edits a listed security
-defence, so it waits for Greg (question `q-p5h2a7`, which follows `q-deh67j`).** Queue item
-`qi-4far27sc`. It follows plan
+**Status: built 2026-10-09, after Greg chose option A of `q-p5h2a7` in the Overseer's terminal:**
+
+> q-p5h2a7 A
+>
+> — Greg, 2026-10-09
+
+What was built, and where it differs from this plan, is [§ As built](#as-built-2026-10-09) at the
+end. Queue item `qi-4far27sc`. It follows plan
 [261004j § Part 2](261004j-shelf-topic-pills-more-inclusive-and-public-shelf-pills-awaiting-greg.md#part-2-pills-on-the-public-shelf-spya-mdp0em-not-built-a-question-for-greg),
 which asked the first question.
 
@@ -220,3 +225,58 @@ was re-run): no P0, five P1, four P2. All taken.
 Measured the cost (the investigation, and its script
 `evals/shelf-topic-clusters/public-shelf-cost.ts`), wrote this plan, had it reviewed, recorded
 Greg's answer in `q-deh67j` and asked `q-p5h2a7`. Nothing that touches a defence was built.
+
+## As built, 2026-10-09
+
+Everything in § The design, with these differences, each for a reason:
+
+| Planned | Built | Why |
+|---|---|---|
+| The site account made once by a provisioning script, banned through the Auth admin API | **A migration**, `drizzle/20261009022454_site_account.sql`: one `auth.users` row, no password, no identity, `site@spideryarn.invalid`, `banned_until` 2999 (not `infinity`, which GoTrue may not scan), the four token columns `''`. Additive, `on conflict do nothing` | The Overseer's brief: no hand-written production writes; the Overseer applies migrations with the deploy. Checked locally: password sign-in refused (`invalid_credentials`), the GoTrue admin listing still answers 200. `tests/public-shelf-topics-pg.test.ts` pins the row's columns |
+| The coordinator "gets public deps" | `ShelfTopicSetDeps.due`, a `DuePolicy` (`rethinkUpTo`, `rethinkWhenGone`) read by `whatIsDue`; a reader's shelf leaves it out. `src/public-shelf-topics.ts` holds the public deps (`AUTOMATIC` = 20 and gone-forces-rethink; `BY_HAND` = a reader's own cap) | The cap and the un-share rule are the only two decisions that differ; everything else (claim, allowance, back-off, drain) is shared |
+| The site tree read inside `src/store/public-library.ts` | **Its own file**, `src/store/public-topic-tree.ts`, the only file `tests/public-imports.test.ts` § `ALLOWED_IN` lets name `shelf_topic_sets` | `tests/owner-isolation.test.ts` holds the listing file to naming no owner at all, and this read is by a (fixed) owner |
+| Withholding and the wire's projection | `src/public-library-topics.ts`, pure, imports only types | So it can be tested without a database and sits in the public graph |
+| "/admin says when one is due" | A panel on the `/admin` index (`AdminPublicTopics.tsx`): one sentence of status, **Rebuild shown only when a rebuild is due**, and Refresh. `GET /api/admin/public-shelf-topics`, `POST …/rebuild` (claims before answering 202, awaits the work after) | A button that would do nothing is a button that looks broken |
+| The page "draws the same row of pills" | The row only (`PublicShelfTopics.tsx`): the same `TermChip`, counts and AND narrowing, the reader row's Clear and "All N topics"; no "More detail", no pills on the cards, no `?topics=` | Simplest version first; the row is what Greg asked for |
+| Left out of reader counts; labelled on costs | `mergeUsers` drops the site id; `/api/admin/costs` sends `the site` as its label | — |
+
+**Tests.** Red first, watched failing: `whatIsDue` with the policy (`tests/shelf-topic-sets.test.ts`),
+the withholding projection (`tests/public-library-topics.test.ts`), the route-level suite
+(`tests/public-shelf-topics-pg.test.ts`: 5 of 7 red before the triggers existed), the article id
+never on the wire (`tests/owner-isolation.test.ts`, red with the id leaked on purpose), and the site
+account out of /admin's readers (`tests/billing-admin-plan.test.ts`). The page's pill tests
+(`tests/public-shelf-page.test.tsx` § the topic pills) and the admin sentence
+(`tests/admin-public-topics.test.ts`) were written after their components. **Not written:** a
+separate test that two concurrent requests do not leak either owner context; the scopes are nested
+`AsyncLocalStorage` runs, and the route suite asserts the sharing readers have no tree and no spend
+of this kind.
+
+**Production.** Nothing was written to production by hand. The migration goes out with the next
+deploy, which only the Overseer runs; until it is applied the triggers find no site account and
+the refresh logs an error and does nothing, and the page sends no topics.
+
+### Built-code review, 2026-10-09
+
+Fixed two defects reproduced red first in `tests/shelf-topic-sets.test.ts`:
+
+- A public rebuild passed previous labels into the naming prompt even after an article was
+  withdrawn. It now clears all previous labels in that case, including when the removed article
+  was unplaced; reader label continuity remains unchanged.
+  [The provenance failure](../postmortems/261009c-rebuilt-labels-can-retain-withdrawn-input.md).
+- An un-share during a live rethink could leave the just-written tree stale indefinitely.
+  The public wrapper now reconciles once after work completes, within the same site scopes and
+  request collector and with a separate allowance. The drain skips a public tree with withdrawn
+  input. Further changes during that bounded follow-up, backoff or allowance refusal still wait
+  for another trigger. [The lost trigger](../postmortems/261009d-a-live-claim-can-lose-a-removal-trigger.md).
+
+GPT Sol (high), verdict *ship after fixes*. Its sandbox could not reach Docker, so the Postgres
+suites were run afterwards, outside it, on its fixes: `tests/public-shelf-topics-pg.test.ts`,
+`tests/owner-isolation.test.ts`, `tests/shelf-topics-route.test.ts` and
+`tests/shelf-topic-sets-pg.test.ts`, 94 passed. One finding left as it is:
+
+- **`scripts/share-local-articles.ts`** calls the store directly, so a share made by that
+  local helper waits for the next trigger. Local only; MCP goes through the routes.
+
+The browser check (a Sonnet subagent, Playwright, signed out, 1280 and 390 wide) passed: one
+request, pills narrow by AND and Clear restores, no horizontal scroll, no console errors. It found
+the pill's card saying *"your articles"* to a stranger; now *"the shared articles"*.

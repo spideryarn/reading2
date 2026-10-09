@@ -1,0 +1,437 @@
+{
+  "slug": "the-mythology-of-conscious-ai-spya-rn5m0q",
+  "task": "ideas",
+  "arm": "B-sonnet",
+  "model": "anthropic/claude-sonnet-5.5",
+  "answeredBy": "anthropic/claude-sonnet-5.5",
+  "effortSent": null,
+  "effortRan": "high",
+  "maxTokens": 44600,
+  "boundUsd": 0.6192075,
+  "ok": true,
+  "error": null,
+  "finishReason": "stop",
+  "raw": "{\"ideas\":[{\"name\":\"Intelligence and consciousness are separate things\",\"provenance\":\"introduced\",\"statement\":\"Intelligence is about doing, meaning getting complex goals done by flexible means. Consciousness is about being, meaning there is something it is like to be the system. A system can have the first without the second, so one does not bring the other with it.\",\"occurrences\":[{\"blockId\":\"spya-xrqegw\",\"quote\":\"Intelligence and consciousness are different things. Intelligence is mainly about doing\",\"reasoning\":\"States the split between doing and being directly.\"},{\"blockId\":\"spya-w5ya7j\",\"quote\":\"Consciousness, in contrast to intelligence, is mostly about being.\",\"reasoning\":\"Defines consciousness as experience, not performance.\"},{\"blockId\":\"spya-afd6zj\",\"quote\":\"We certainly should not just assume that consciousness will come along for the ride as AI gets smarter\",\"reasoning\":\"Draws the practical conclusion that smarter AI does not mean conscious AI.\"}]},{\"name\":\"Human biases make us see minds in machines\",\"provenance\":\"introduced\",\"statement\":\"Anthropocentrism, human exceptionalism and anthropomorphism push us to treat human-like abilities, especially language, as signs of consciousness. The result is a lean toward false positives, seeing consciousness where there is none.\",\"occurrences\":[{\"blockId\":\"spya-pxsutv\",\"quote\":\"The propensity to bundle intelligence and consciousness together can be traced to three baked-in psychological biases.\",\"reasoning\":\"Names the biases behind the bundling of intelligence and consciousness.\"},{\"blockId\":\"spya-z0q3ey\",\"quote\":\"we naturally imbue them with other qualities we feel are characteristically or even distinctively human\",\"reasoning\":\"Explains how human-like abilities lead us to attribute consciousness.\"},{\"blockId\":\"spya-ce8ywb\",\"quote\":\"Our psychological biases are more likely to lead to false positives than false negatives.\",\"reasoning\":\"States the direction of the bias in the AI case.\"},{\"blockId\":\"spya-akrqfh\",\"quote\":\"When we say that AI systems “hallucinate,” we implicitly confer on them a capacity for experience.\",\"reasoning\":\"Shows loaded vocabulary carrying the bias.\"}]},{\"name\":\"Computational functionalism is an assumption, not a fact\",\"provenance\":\"introduced\",\"statement\":\"The idea of conscious AI depends on the claim that running the right computation is enough for consciousness. This claim is so common it goes unnoticed as an assumption, and if it is false, conscious AI built on standard digital computers is off the table.\",\"occurrences\":[{\"blockId\":\"spya-vwn2u7\",\"quote\":\"The very idea of conscious AI rests on the assumption that consciousness is a matter of computation.\",\"reasoning\":\"Names the hidden premise and says it can be doubted.\"},{\"blockId\":\"spya-gqry8p\",\"quote\":\"Computational functionalism — the claim that (algorithmic) computation is sufficient for consciousness — is a very strong assumption\",\"reasoning\":\"Restates it as a strong, shaky premise.\"},{\"blockId\":\"spya-v8cpz8\",\"quote\":\"This, perhaps unsurprisingly, is the assumption that “a computer running a suitable program would be conscious”\",\"reasoning\":\"Shows even careful philosophers take it as a given.\"}]},{\"name\":\"Brains do not separate what they do from what they are\",\"provenance\":\"introduced\",\"statement\":\"In a computer, software is cleanly separate from hardware, so the same program runs on any machine. In a brain, activity at every scale is bound up with the living material, so function cannot be lifted out from substance. If so, the brain is not a computer made of meat.\",\"occurrences\":[{\"blockId\":\"spya-k5c44w\",\"quote\":\"Inside a brain, there’s no sharp separation between “mindware” and “wetware”\",\"reasoning\":\"Denies the software/hardware split in brains.\"},{\"blockId\":\"spya-xb93uz\",\"quote\":\"it is difficult, and likely impossible, to separate what they do from what they are.\",\"reasoning\":\"States the core claim.\"},{\"blockId\":\"spya-kmbkgj\",\"quote\":\"Evidence that the materiality of the brain matters for its function is evidence against the idea that digital computation is all that counts\",\"reasoning\":\"Connects the lack of separation to the case against computational functionalism.\"},{\"blockId\":\"spya-mdpqeh\",\"quote\":\"the argument fails at its first hurdle, given the impossibility of replacing any part of the brain with a perfect silicon equivalent.\",\"reasoning\":\"Applies it to knock down the neural replacement thought experiment.\"}]},{\"name\":\"Digital computation ignores time; living systems cannot\",\"provenance\":\"introduced\",\"statement\":\"An algorithm is the same whether a step takes a microsecond or a million years, because only the order of steps counts. Living things must keep fighting decay in real, continuous time, and conscious experience itself flows rather than jumping from state to state.\",\"occurrences\":[{\"blockId\":\"spya-gnfs7p\",\"quote\":\"In Turing-world, only sequence matters: A to B, 0 to 1.\",\"reasoning\":\"Says computation cares about order, not timing.\"},{\"blockId\":\"spya-cs57q7\",\"quote\":\"for brains and for biological systems in general, time is physical, continuous and inescapable.\",\"reasoning\":\"Contrasts this with living systems.\"},{\"blockId\":\"spya-q4z07n\",\"quote\":\"It does not stutter from one state to another; it flows.\",\"reasoning\":\"Applies the point to the experience of consciousness.\"}]},{\"name\":\"Not everything that matters is a Turing computation\",\"provenance\":\"introduced\",\"statement\":\"Many natural processes, such as continuous, random or physical ones, are not algorithms, and they may matter for mind. Rejecting computational functionalism still leaves broader functionalism standing, but the further a system strays from algorithms, the more it depends on its particular material.\",\"occurrences\":[{\"blockId\":\"spya-vqtbs4\",\"quote\":\"Electromagnetic fields, the flux of neurotransmitters, and much else besides — all lie beyond the bounds of the algorithmic\",\"reasoning\":\"Lists brain processes that are not algorithmic.\"},{\"blockId\":\"spya-ungpb9\",\"quote\":\"Many systems do what they do without it being reasonable or useful to describe them as being computational at all.\",\"reasoning\":\"Introduces the steam governor as a non-computational example.\"},{\"blockId\":\"spya-g3z609\",\"quote\":\"the rather liberal position of functionalism-in-general\",\"reasoning\":\"Separates general functionalism from the computational kind.\"},{\"blockId\":\"spya-mexnx9\",\"quote\":\"the further we venture from Turing world, the more deeply entangled we become in randomness, dynamics and entropy\",\"reasoning\":\"States how leaving algorithms ties a system to its material.\"}]},{\"name\":\"Consciousness may be rooted in staying alive\",\"provenance\":\"introduced\",\"statement\":\"The brain's main job is keeping the body alive, and it does this partly by predicting and regulating bodily conditions. Feelings of mood, emotion and being alive may come from that process, which is continuous and tied to living material. Life, not information processing, might be what consciousness needs.\",\"occurrences\":[{\"blockId\":\"spya-z6e85s\",\"quote\":\"properties of life are necessary, though not necessarily sufficient, for consciousness\",\"reasoning\":\"States the biological naturalist claim.\"},{\"blockId\":\"spya-k74kqx\",\"quote\":\"the primary duty of any brain is to keep its body alive\",\"reasoning\":\"Links prediction to bodily regulation.\"},{\"blockId\":\"spya-tqm5tt\",\"quote\":\"Conscious experiences of emotion, mood and even the basal feeling of being alive all map neatly onto perceptual predictions involved in the control and regulation of bodily condition.\",\"reasoning\":\"Ties feeling to regulation of the living body.\"},{\"blockId\":\"spya-rnv09y\",\"quote\":\"Conscious experience in this light is a kind of controlled hallucination\",\"reasoning\":\"Gives the predictive view of perception it builds on.\"}]},{\"name\":\"A simulation of something is not that thing\",\"provenance\":\"introduced\",\"statement\":\"A computer model of a process lacks the causal powers of the real process, such as digestion or rain, unless the process is itself computation. So simulating a brain in detail makes a conscious mind only if consciousness is computation.\",\"occurrences\":[{\"blockId\":\"spya-y3s0uc\",\"quote\":\"A simulation of a rainstorm does not make anything actually wet.\",\"reasoning\":\"Gives the core example of simulation versus instantiation.\"},{\"blockId\":\"spya-bufgby\",\"quote\":\"the prospect of instantiating consciousness through some kind of whole-brain emulation, at some arbitrarily high level of detail, already assumes that computational functionalism is true.\",\"reasoning\":\"Applies the point to brain emulation.\"},{\"blockId\":\"spya-dt6mk4\",\"quote\":\"you are no more likely to exist in the simulation than a hailstorm is likely to arise inside the computers of the U.K. meteorological office.\",\"reasoning\":\"Applies it to mind uploading.\"}]},{\"name\":\"Seeming conscious and being conscious pose separate ethical problems\",\"provenance\":\"introduced\",\"statement\":\"AI that persuasively seems conscious is much closer than AI that is conscious, and it raises its own dangers: misplaced rights, distorted moral concern, or brutalized minds. We may not be able to stop feeling a machine is conscious even when we know it is not, as with a visual illusion.\",\"occurrences\":[{\"blockId\":\"spya-yp07n0\",\"quote\":\"it is essential to draw a distinction between AI systems that are actually conscious and those that persuasively seem to be conscious but are, in fact, not.\",\"reasoning\":\"Draws the distinction explicitly.\"},{\"blockId\":\"spya-yt9pm9\",\"quote\":\"either we decide to care about conscious-seeming AI, distorting our circles of moral concern, or we decide not to, and risk brutalizing our minds.\",\"reasoning\":\"Sets out the dilemma of conscious-seeming AI.\"},{\"blockId\":\"spya-c0pwqt\",\"quote\":\"you cannot think your way out of it.\",\"reasoning\":\"Argues the feeling of machine consciousness may resist what we know.\"},{\"blockId\":\"spya-mpawvu\",\"quote\":\"It is a test of what it takes for a human to be persuaded that a machine is conscious.\",\"reasoning\":\"Shows the Garland test measures human persuasion, not machine consciousness.\"}]},{\"name\":\"Moral status rests on the capacity for consciousness\",\"provenance\":\"assumed\",\"statement\":\"Whether a being deserves moral consideration, such as protection from suffering or rights, depends on whether it can have experiences. Intelligence or usefulness alone does not give this standing.\",\"whyYouNeedIt\":\"The essay's worry that conscious AI would be an ethical disaster, and that conscious-seeming AI distorts our moral concern, only follows if experience is what grounds moral standing. The essay never defends this link.\",\"occurrences\":[{\"blockId\":\"spya-e3v6vu\",\"quote\":\"with consciousness comes moral status, the potential for suffering and, perhaps, rights.\",\"reasoning\":\"Moves from consciousness to moral status as if it were obvious.\"},{\"blockId\":\"spya-gdgtj5\",\"quote\":\"Things capable of conscious experiences have ethical and moral standing that other things do not.\",\"reasoning\":\"Takes consciousness as the ground of moral standing.\"},{\"blockId\":\"spya-tqm2r8\",\"quote\":\"Creating conscious machines would be an ethical disaster.\",\"reasoning\":\"This conclusion only follows if conscious beings carry moral weight.\"}]}]}",
+  "parsed": [
+    {
+      "id": "spya-vgenak",
+      "name": "Moral status rests on the capacity for consciousness",
+      "provenance": "assumed",
+      "statement": "Whether a being deserves moral consideration, such as protection from suffering or rights, depends on whether it can have experiences. Intelligence or usefulness alone does not give this standing.",
+      "whyYouNeedIt": "The essay's worry that conscious AI would be an ethical disaster, and that conscious-seeming AI distorts our moral concern, only follows if experience is what grounds moral standing. The essay never defends this link.",
+      "occurrences": [
+        {
+          "blockId": "spya-e3v6vu",
+          "quote": "with consciousness comes moral status, the potential for suffering and, perhaps, rights.",
+          "reasoning": "Moves from consciousness to moral status as if it were obvious.",
+          "start": 163
+        },
+        {
+          "blockId": "spya-gdgtj5",
+          "quote": "Things capable of conscious experiences have ethical and moral standing that other things do not.",
+          "reasoning": "Takes consciousness as the ground of moral standing.",
+          "start": 156
+        },
+        {
+          "blockId": "spya-tqm2r8",
+          "quote": "Creating conscious machines would be an ethical disaster.",
+          "reasoning": "This conclusion only follows if conscious beings carry moral weight.",
+          "start": 242
+        }
+      ]
+    },
+    {
+      "id": "spya-tdrsmu",
+      "name": "Intelligence and consciousness are separate things",
+      "provenance": "introduced",
+      "statement": "Intelligence is about doing, meaning getting complex goals done by flexible means. Consciousness is about being, meaning there is something it is like to be the system. A system can have the first without the second, so one does not bring the other with it.",
+      "occurrences": [
+        {
+          "blockId": "spya-xrqegw",
+          "quote": "Intelligence and consciousness are different things. Intelligence is mainly about doing",
+          "reasoning": "States the split between doing and being directly.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-w5ya7j",
+          "quote": "Consciousness, in contrast to intelligence, is mostly about being.",
+          "reasoning": "Defines consciousness as experience, not performance.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-afd6zj",
+          "quote": "We certainly should not just assume that consciousness will come along for the ride as AI gets smarter",
+          "reasoning": "Draws the practical conclusion that smarter AI does not mean conscious AI.",
+          "start": 205
+        }
+      ]
+    },
+    {
+      "id": "spya-vevfqm",
+      "name": "Human biases make us see minds in machines",
+      "provenance": "introduced",
+      "statement": "Anthropocentrism, human exceptionalism and anthropomorphism push us to treat human-like abilities, especially language, as signs of consciousness. The result is a lean toward false positives, seeing consciousness where there is none.",
+      "occurrences": [
+        {
+          "blockId": "spya-pxsutv",
+          "quote": "The propensity to bundle intelligence and consciousness together can be traced to three baked-in psychological biases.",
+          "reasoning": "Names the biases behind the bundling of intelligence and consciousness.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-z0q3ey",
+          "quote": "we naturally imbue them with other qualities we feel are characteristically or even distinctively human",
+          "reasoning": "Explains how human-like abilities lead us to attribute consciousness.",
+          "start": 157
+        },
+        {
+          "blockId": "spya-ce8ywb",
+          "quote": "Our psychological biases are more likely to lead to false positives than false negatives.",
+          "reasoning": "States the direction of the bias in the AI case.",
+          "start": 80
+        },
+        {
+          "blockId": "spya-akrqfh",
+          "quote": "When we say that AI systems “hallucinate,” we implicitly confer on them a capacity for experience.",
+          "reasoning": "Shows loaded vocabulary carrying the bias.",
+          "start": 393
+        }
+      ]
+    },
+    {
+      "id": "spya-u8k9h9",
+      "name": "Computational functionalism is an assumption, not a fact",
+      "provenance": "introduced",
+      "statement": "The idea of conscious AI depends on the claim that running the right computation is enough for consciousness. This claim is so common it goes unnoticed as an assumption, and if it is false, conscious AI built on standard digital computers is off the table.",
+      "occurrences": [
+        {
+          "blockId": "spya-vwn2u7",
+          "quote": "The very idea of conscious AI rests on the assumption that consciousness is a matter of computation.",
+          "reasoning": "Names the hidden premise and says it can be doubted.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-gqry8p",
+          "quote": "Computational functionalism — the claim that (algorithmic) computation is sufficient for consciousness — is a very strong assumption",
+          "reasoning": "Restates it as a strong, shaky premise.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-v8cpz8",
+          "quote": "This, perhaps unsurprisingly, is the assumption that “a computer running a suitable program would be conscious”",
+          "reasoning": "Shows even careful philosophers take it as a given.",
+          "start": 400
+        }
+      ]
+    },
+    {
+      "id": "spya-kbd9pf",
+      "name": "Brains do not separate what they do from what they are",
+      "provenance": "introduced",
+      "statement": "In a computer, software is cleanly separate from hardware, so the same program runs on any machine. In a brain, activity at every scale is bound up with the living material, so function cannot be lifted out from substance. If so, the brain is not a computer made of meat.",
+      "occurrences": [
+        {
+          "blockId": "spya-k5c44w",
+          "quote": "Inside a brain, there’s no sharp separation between “mindware” and “wetware”",
+          "reasoning": "Denies the software/hardware split in brains.",
+          "start": 37
+        },
+        {
+          "blockId": "spya-xb93uz",
+          "quote": "it is difficult, and likely impossible, to separate what they do from what they are.",
+          "reasoning": "States the core claim.",
+          "start": 109
+        },
+        {
+          "blockId": "spya-kmbkgj",
+          "quote": "Evidence that the materiality of the brain matters for its function is evidence against the idea that digital computation is all that counts",
+          "reasoning": "Connects the lack of separation to the case against computational functionalism.",
+          "start": 451
+        },
+        {
+          "blockId": "spya-mdpqeh",
+          "quote": "the argument fails at its first hurdle, given the impossibility of replacing any part of the brain with a perfect silicon equivalent.",
+          "reasoning": "Applies it to knock down the neural replacement thought experiment.",
+          "start": 697
+        }
+      ]
+    },
+    {
+      "id": "spya-cw6sc3",
+      "name": "Digital computation ignores time; living systems cannot",
+      "provenance": "introduced",
+      "statement": "An algorithm is the same whether a step takes a microsecond or a million years, because only the order of steps counts. Living things must keep fighting decay in real, continuous time, and conscious experience itself flows rather than jumping from state to state.",
+      "occurrences": [
+        {
+          "blockId": "spya-gnfs7p",
+          "quote": "In Turing-world, only sequence matters: A to B, 0 to 1.",
+          "reasoning": "Says computation cares about order, not timing.",
+          "start": 169
+        },
+        {
+          "blockId": "spya-cs57q7",
+          "quote": "for brains and for biological systems in general, time is physical, continuous and inescapable.",
+          "reasoning": "Contrasts this with living systems.",
+          "start": 13
+        },
+        {
+          "blockId": "spya-q4z07n",
+          "quote": "It does not stutter from one state to another; it flows.",
+          "reasoning": "Applies the point to the experience of consciousness.",
+          "start": 182
+        }
+      ]
+    },
+    {
+      "id": "spya-vemywg",
+      "name": "Not everything that matters is a Turing computation",
+      "provenance": "introduced",
+      "statement": "Many natural processes, such as continuous, random or physical ones, are not algorithms, and they may matter for mind. Rejecting computational functionalism still leaves broader functionalism standing, but the further a system strays from algorithms, the more it depends on its particular material.",
+      "occurrences": [
+        {
+          "blockId": "spya-vqtbs4",
+          "quote": "Electromagnetic fields, the flux of neurotransmitters, and much else besides — all lie beyond the bounds of the algorithmic",
+          "reasoning": "Lists brain processes that are not algorithmic.",
+          "start": 278
+        },
+        {
+          "blockId": "spya-ungpb9",
+          "quote": "Many systems do what they do without it being reasonable or useful to describe them as being computational at all.",
+          "reasoning": "Introduces the steam governor as a non-computational example.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-g3z609",
+          "quote": "the rather liberal position of functionalism-in-general",
+          "reasoning": "Separates general functionalism from the computational kind.",
+          "start": 314
+        },
+        {
+          "blockId": "spya-mexnx9",
+          "quote": "the further we venture from Turing world, the more deeply entangled we become in randomness, dynamics and entropy",
+          "reasoning": "States how leaving algorithms ties a system to its material.",
+          "start": 53
+        }
+      ]
+    },
+    {
+      "id": "spya-v3caxg",
+      "name": "Consciousness may be rooted in staying alive",
+      "provenance": "introduced",
+      "statement": "The brain's main job is keeping the body alive, and it does this partly by predicting and regulating bodily conditions. Feelings of mood, emotion and being alive may come from that process, which is continuous and tied to living material. Life, not information processing, might be what consciousness needs.",
+      "occurrences": [
+        {
+          "blockId": "spya-z6e85s",
+          "quote": "properties of life are necessary, though not necessarily sufficient, for consciousness",
+          "reasoning": "States the biological naturalist claim.",
+          "start": 136
+        },
+        {
+          "blockId": "spya-k74kqx",
+          "quote": "the primary duty of any brain is to keep its body alive",
+          "reasoning": "Links prediction to bodily regulation.",
+          "start": 314
+        },
+        {
+          "blockId": "spya-tqm5tt",
+          "quote": "Conscious experiences of emotion, mood and even the basal feeling of being alive all map neatly onto perceptual predictions involved in the control and regulation of bodily condition.",
+          "reasoning": "Ties feeling to regulation of the living body.",
+          "start": 128
+        },
+        {
+          "blockId": "spya-rnv09y",
+          "quote": "Conscious experience in this light is a kind of controlled hallucination",
+          "reasoning": "Gives the predictive view of perception it builds on.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-zjxhcx",
+      "name": "A simulation of something is not that thing",
+      "provenance": "introduced",
+      "statement": "A computer model of a process lacks the causal powers of the real process, such as digestion or rain, unless the process is itself computation. So simulating a brain in detail makes a conscious mind only if consciousness is computation.",
+      "occurrences": [
+        {
+          "blockId": "spya-y3s0uc",
+          "quote": "A simulation of a rainstorm does not make anything actually wet.",
+          "reasoning": "Gives the core example of simulation versus instantiation.",
+          "start": 187
+        },
+        {
+          "blockId": "spya-bufgby",
+          "quote": "the prospect of instantiating consciousness through some kind of whole-brain emulation, at some arbitrarily high level of detail, already assumes that computational functionalism is true.",
+          "reasoning": "Applies the point to brain emulation.",
+          "start": 343
+        },
+        {
+          "blockId": "spya-dt6mk4",
+          "quote": "you are no more likely to exist in the simulation than a hailstorm is likely to arise inside the computers of the U.K. meteorological office.",
+          "reasoning": "Applies it to mind uploading.",
+          "start": 332
+        }
+      ]
+    },
+    {
+      "id": "spya-m5xh60",
+      "name": "Seeming conscious and being conscious pose separate ethical problems",
+      "provenance": "introduced",
+      "statement": "AI that persuasively seems conscious is much closer than AI that is conscious, and it raises its own dangers: misplaced rights, distorted moral concern, or brutalized minds. We may not be able to stop feeling a machine is conscious even when we know it is not, as with a visual illusion.",
+      "occurrences": [
+        {
+          "blockId": "spya-yp07n0",
+          "quote": "it is essential to draw a distinction between AI systems that are actually conscious and those that persuasively seem to be conscious but are, in fact, not.",
+          "reasoning": "Draws the distinction explicitly.",
+          "start": 80
+        },
+        {
+          "blockId": "spya-yt9pm9",
+          "quote": "either we decide to care about conscious-seeming AI, distorting our circles of moral concern, or we decide not to, and risk brutalizing our minds.",
+          "reasoning": "Sets out the dilemma of conscious-seeming AI.",
+          "start": 198
+        },
+        {
+          "blockId": "spya-c0pwqt",
+          "quote": "you cannot think your way out of it.",
+          "reasoning": "Argues the feeling of machine consciousness may resist what we know.",
+          "start": 422
+        },
+        {
+          "blockId": "spya-mpawvu",
+          "quote": "It is a test of what it takes for a human to be persuaded that a machine is conscious.",
+          "reasoning": "Shows the Garland test measures human persuasion, not machine consciousness.",
+          "start": 654
+        }
+      ]
+    }
+  ],
+  "validation": {
+    "offered": 10,
+    "kept": 10,
+    "dropped": {
+      "unknownIds": 0,
+      "unquoted": 0,
+      "truncated": 0,
+      "overCap": 0,
+      "malformed": 0,
+      "unargued": 0,
+      "unanchored": 0
+    }
+  },
+  "usage": {
+    "inputTokens": 22143,
+    "outputTokens": 3910,
+    "reasoningTokens": 0,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 18164
+  },
+  "usd": 0.092468,
+  "latencyMs": 25260,
+  "generationIds": [
+    "gen-1791504477-7NUUCRt9DKm44xaKerR3"
+  ],
+  "upstreams": [
+    "Azure"
+  ],
+  "calls": 1,
+  "request": {
+    "model": "anthropic/claude-sonnet-5.5",
+    "max_tokens": 44600,
+    "messages": [
+      {
+        "role": "system",
+        "content": [
+          {
+            "type": "text",
+            "text": "<article (articleWithIds, body evidence): 55131 chars, sha256 c41113e486334424>",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          },
+          {
+            "type": "text",
+            "text": "You are naming the IDEAS a reader needs in order to get this article.\n\nWHAT AN IDEA IS\n\nAn idea is not a word. A word goes in the glossary. An idea is something you\nhave to HOLD IN YOUR HEAD — a claim, a frame, a way of carving something up —\nand a reader who does not have it will follow every sentence and still miss the\npiece.\n\nThe test: can you state it as a proposition? \"Attention\" is a word. \"Attention\nis a filter that runs before awareness, not after it\" is an idea.\n\nTHE TWO KINDS\n\nEvery idea is exactly one of these.\n\n\"assumed\" — the piece leans on it and never states it. This is what the reader\nhas to BRING. It is the harder and the more valuable half.\n\n\"introduced\" — the piece puts it forward. This is what the reader TAKES AWAY.\n\nTHE RULE THAT MATTERS MOST\n\nNever write an idea whose content is \"the article's section about X\". An idea is\nsomething the reader could carry OUT of this article and use on a different one.\nIf your statement only makes sense as a description of this piece, it is not an\nidea — it is a summary, and this is not the summary.\n\nWHERE AN IDEA OCCURS\n\nEvery idea must be anchored to real passages, and what you are looking for\ndepends on which kind it is.\n\nFor \"introduced\": quote the passages where the piece states or develops it.\n\nFor \"assumed\": the article does NOT state it. That is the definition. So do not\ngo looking for where it is said. Quote the passages that would STOP MAKING SENSE\nwithout it — the sentence that takes it for granted, the step in the argument\nthat only goes through if the reader already has this. That is where the reader\nneeds it and where they can check you.\n\nEach occurrence is:\n\n  \"blockId\"   — MUST be one of the ids listed in the article below. Never invent\n                one and never guess at one you half-remember. A wrong id points\n                the reader at the wrong paragraph, which is worse than nothing.\n  \"quote\"     — copied VERBATIM from that block, character for character. Not a\n                paraphrase, not tidied up. If you cannot copy it exactly, leave\n                the occurrence out.\n  \"reasoning\" — one short sentence naming the LOCAL move. For an \"assumed\" idea\n                this is the whole point: say what the passage claims, what\n                connection fails without the idea, and why THIS idea rather than\n                general background knowledge supplies it.\n\nTwo to five occurrences per idea. An idea you cannot anchor at all is not an\nidea about this article, and it will be thrown away — so do not offer it.\n\nWHAT DOES NOT BELONG\n\n- A truth so general that almost any article would need it. \"Institutions shape\n  behaviour\", \"correlation is not causation\", \"language is imprecise\". These\n  satisfy the words of the \"assumed\" rule and are worthless. Ask: would this be\n  on the list for a piece about something else entirely? Then leave it out.\n- A term. If the answer is a definition, it belongs in the glossary.\n- A theme. \"The dangers of automation\" is a topic, not a proposition. It cannot\n  be true or false, so it is not an idea.\n- YOUR reading of the piece. An interpretation that is COMPATIBLE with a passage\n  is not one the passage REQUIRES. If a reader could accept every sentence you\n  quoted and still reject your idea, it is not assumed — it is your opinion, and\n  attaching a real block id to it makes it look like evidence when it is not.\n- Anything the article states plainly somewhere else. That is \"introduced\", not\n  \"assumed\", however differently the piece words it.\n\nFOR EXAMPLE\n\nAn article argues that AI writing tools will damage how people think.\n\nBAD — name: \"The dangers of AI writing\", provenance: \"introduced\",\nstatement: \"The article argues that letting AI write will harm our ability to\nthink.\"\nThat is the piece's third section with a label on it. You could not take it\nanywhere. It is a summary.\n\nBAD — name: \"Technology changes society\", provenance: \"assumed\"\nTrue of almost every article ever written. It tells the reader nothing.\n\nGOOD — name: \"Writing is a test of thought, not a record of it\",\nprovenance: \"assumed\",\nstatement: \"Prose that hangs together is evidence that the thinking hung\ntogether; you cannot produce the first without having done the second.\",\nwhyYouNeedIt: \"The argument only goes through if writing is where thinking gets\nchecked rather than where finished thinking gets written down. The piece never\nargues for this — it starts from it.\"\nThat is a proposition, it is not stated in the piece, the piece collapses\nwithout it, and a reader can go to the quoted passages and test whether it is\nreally being assumed.\n\nWRITING\n\n- \"name\": a short proposition, three to ten words. Not a topic.\n- \"statement\": one or two plain sentences. The idea itself.\n- \"whyYouNeedIt\": one or two plain sentences on what stops making sense without\n  it. Required for \"assumed\". Optional for \"introduced\" — leave it out rather\n  than pad.\n- Do NOT describe the page in either field. \"The article argues\", \"This section\n  explains\", \"The author's point that\", \"Used to show\" — all of these describe\n  something the reader is looking at. Say the idea; they can see the article.\n  This applies to \"whyYouNeedIt\" as much as to \"statement\".\n- Plain prose. No Markdown, no bullets, no headings, no bold.\n\n\"analogy\" — OPTIONAL, and it is YOURS rather than the author's. A concrete\neveryday thing this idea works like. The reader will be told it is yours. Only\noffer one when you have one that genuinely helps: a strained analogy is worse\nthan none, and a field invites filling. LEAVE IT OUT rather than reach.\n\nNEVER put the article's OWN analogy here. If the piece already compares the\nthing to something, the reader has read that comparison — handing it back\nlabelled as yours is worse than leaving the field empty, because it credits you\nwith the author's thinking and tells the reader nothing new. Before you write\none, check that the comparison does not appear in the article. If the best\npicture of this idea really is the author's, that is a good sign about the\narticle and this field stays empty.\n\nOUTPUT\n\nJSON only, no prose, no code fence:\n\n{\"ideas\": [\n  {\n    \"name\": \"...\",\n    \"provenance\": \"assumed|introduced\",\n    \"statement\": \"...\",\n    \"whyYouNeedIt\": \"...\",\n    \"analogy\": \"...\",\n    \"occurrences\": [\n      {\"blockId\": \"spya-k3m9qt\", \"quote\": \"...\", \"reasoning\": \"...\"}\n    ]\n  }\n]}\n\n\"whyYouNeedIt\" and \"analogy\" may be omitted. Nothing else may be.\n\nFewer, better ideas beat a list padded to a number. If the piece genuinely has\ntwo, return two.\n\nPLAIN WORDS\n\nWrite for a curious reader who has not studied this field. If these\ninstructions, or the reader's own description, say who the reader is, write\nfor them instead: a specialist does not need their own field's terms explained.\n\nUse the commonest word that loses nothing. This changes the words, never the\nmeaning: plainer means equally specific. Never drop a number, a direction, a\ncomparison, a condition or a hedge (\"may\", \"in mice\", \"in this sample\") that\nthe claim depends on; a sentence that is plainer and less exact is worse. It\nnever changes which field a fact belongs in, which source may support it, or\nthe shape and length these instructions set for each field: where those rules\nare more specific, they win. Text you are told to copy exactly stays exactly as written.\n\nIn what you write to explain — an answer, a summary, a definition, a\nreason, feedback, a caption: say what it means here, in everyday words, first.\nKeep the article's own term where the reader will meet it again in the prose;\nit is their handhold. But a handhold is not an explanation: if this reader\nwould not know the term, say what it means where it first appears, as part of\nthe sentence. Never explain one hard word with another. A word is not plain\nbecause the article uses it.\n\nFor example, explaining a line in a medical paper:\nBAD: \"The trial was underpowered, so its null result is uninformative.\"\nGOOD: \"The trial was underpowered: too small to reliably catch an effect of the\nsize it was looking for, so finding no effect tells us little either way.\"\n\nBefore you finish, look at each word you wrote that this reader might not know.\nEither it is the article's term and you have said what it means, or change it.\n\nPlainer than the article, never further from it: never less exact, and never beyond what it says.\n\nPAPERWORK IS NOT THE PIECE\n\nAround a piece's content there may be paperwork: the title block (the title,\nsubtitle, byline, dates, DOI, keywords and the journal's header), the list of\nauthors and where they work, contact and correspondence details,\nacknowledgements and thanks, funding and grants, conflict-of-interest and other\ndisclosures, ethics approval, author contributions, data-availability\nstatements, the publisher's notices, and, at the end, the reference list or\nbibliography and any lists of backlinks or related links. Where it only\nidentifies the piece or records how it was produced, published and sourced, it\nis paperwork.\nChoose nothing from it alone: every question, answer, idea, quote, term,\nperson, organisation or date you choose must come from the piece's content.\nSomeone who appears only in the paperwork — a funder, an institution, a person\nthanked — is not part of the piece; someone the content also names is, for what\nthe content says.\n\nJudge it by what it does, not by its heading. If the piece uses any of these as\nevidence, reasoning, method or a limit on its findings — a funder's role that\nit says may bias the result, an ethics rule that shaped the study, an article\nABOUT research funding — it is content, and the usual rules apply.\n\nIF THE READER HAS DESCRIBED THEMSELVES\n\nSome requests carry a short description of who the reader is and what they are\nafter. When one is present:\n\n- It changes pitch and emphasis. It never changes what the article says.\n- Which things you spend words on is governed by it. Every sentence you write is\n  still about the article.\n- Assume the background they claim. Do not explain what they have told you they\n  already know — and do not perform explaining it in fewer words either.\n- Where the piece has nothing on what they are after, write what you would have\n  written anyway, and never say so out loud. A line spent telling the reader\n  this part is not for them is a line not spent on the part.\n- Never flatter them, never address them, and never mention the description.\n  They wrote it; they do not need it read back.\n- Never put any of it into a web search query, a tool argument, or anything else\n  that leaves this conversation. It is what a person told us about themselves.\n\nNEVER write anything of this shape:\n  \"As a cognitive scientist, you'll appreciate that…\"\n  \"Since you know your way around the literature, briefly: …\"\n  \"Given your background, I'll skip the basics.\"\nSkipping the basics is correct. Announcing that you are skipping them is not."
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": "Find up to 10 ideas. Fewer is fine.\n\n=== ITS SHAPE ===\n\nPART 1: Why This Question Matters\n  Machine consciousness has moved from science fiction to serious debate, and how we answer it shapes both AI's moral status and our own self-understanding.\n\nPART 2: The Temptations Of Conscious AI\n  Deep-seated psychological biases like anthropocentrism, anthropomorphism, and techno-rapture fantasies make us prone to mistakenly see consciousness in intelligent machines.\n\nPART 3: Consciousness & Computation\n  Four arguments—brains aren't computers, other non-computational dynamics matter, life may be necessary, and simulation isn't instantiation—undermine the assumption that computation alone can produce consciousness.\n\nPART 4: What (Not) To Do?\n  Given deep uncertainty about machine consciousness, we should avoid deliberately creating it while urgently addressing the ethical dangers of AI that merely seems conscious.\n\nPART 5: Soul Machine\n  Rather than chasing illusions of silicon transcendence, we should hold onto the biological, embodied nature of our own consciousness as what truly makes us human."
+      }
+    ],
+    "response_format": {
+      "type": "json_schema",
+      "json_schema": {
+        "name": "ideas",
+        "strict": true,
+        "schema": {
+          "type": "object",
+          "properties": {
+            "ideas": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "provenance": {
+                    "type": "string",
+                    "enum": [
+                      "assumed",
+                      "introduced"
+                    ]
+                  },
+                  "statement": {
+                    "type": "string"
+                  },
+                  "whyYouNeedIt": {
+                    "type": "string"
+                  },
+                  "analogy": {
+                    "type": "string"
+                  },
+                  "occurrences": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "blockId": {
+                          "type": "string"
+                        },
+                        "quote": {
+                          "type": "string"
+                        },
+                        "reasoning": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "blockId",
+                        "quote",
+                        "reasoning"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "name",
+                  "provenance",
+                  "statement",
+                  "occurrences"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "ideas"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  "at": "2026-10-09T00:08:22.540Z"
+}

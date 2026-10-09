@@ -90,7 +90,9 @@ describe("the request the checker sends", () => {
 
   it("keeps the measured request and adds only the strict response schema", async () => {
     await openRouterJson("link-summary", {
-      model: modelFor("link-summary", "standard"),
+      /* The model 261001h measured, literally: link-summary's own moved to
+         GPT-6 Luna on 2026-10-09 and the checker did not (plan 261009a). */
+      model: "openai/gpt-5.6-luna",
       max_completion_tokens: 4000,
       messages: [
         { role: "system", content: SIMPLE_CHECK_SYSTEM },

@@ -7309,6 +7309,128 @@ export interface DebateClaimListResponse {
 /** As `FaqFound`: the same type, because there is no `profileChanged` to omit. */
 export type DebateClaimListFound = DebateClaimListResponse;
 
+/* ------------------------------------------------------ debate claim checks --
+   One reader press: the ticked claims and the typed one, searched on the open
+   web in one call. The `debate_claim_checks` table, written by
+   `POST /api/debate-claims/:slug/checks` (src/routes.ts) and read by
+   src/debate.ts § `readCheckedClaimGroup`. Owner-only: a typed claim is the
+   reader's own words, and nothing here reaches the public payload.
+   docs/plans/261008i-debate-claims-picked-by-the-reader.md § 3. */
+
+/** The most claims one press may search: pass B's shape, one call over a few claims. */
+export const MAX_CHECK_TARGETS = 4;
+
+/** A typed claim's ceiling, the angle box's: refused when over, never cut. */
+export const MAX_OWN_CLAIM_CHARS = MAX_PURPOSE_CHARS;
+
+/**
+ * **What one check searched for.** Built by the server from stored ids, never
+ * from the request: a listed target's anchor and statement are copied off the
+ * stored list, and the client sends only its id (plan § 3, GPT Sol's F12).
+ */
+export type DebateCheckTarget =
+  | {
+      kind: "listed";
+      /** The `ListedClaim.id` it was ticked by. */
+      claimId: string;
+      blockId: BlockId;
+      /** The article's own words, from the list — never the model's. */
+      quote: string;
+      /** The list's one line, the model's wording. */
+      statement: string;
+    }
+  | {
+      kind: "own";
+      /** Minted by the server when the claim was first typed; a Dig further keeps it. */
+      claimId: string;
+      /** The reader's words, trimmed. Never logged, never echoed into an error. */
+      text: string;
+    };
+
+/**
+ * **A row found for a typed claim.** It answers the reader's words, not a
+ * passage, so it has no block and no claim quote — and `blockId` is spelled
+ * `never` so that a row cannot be both kinds by accident.
+ */
+export type OwnClaimDebateRow = DebateRowBase & { blockId?: never; claimQuote?: never };
+
+/** A row of a check: a listed claim's (anchored by the list) or a typed claim's. */
+export type DebateCheckRow = ClaimDebateRow | OwnClaimDebateRow;
+
+/**
+ * **What the search said about one target — and whether it said anything.**
+ *
+ * `answered` with no rows is *"this search found nothing it could quote on
+ * this claim"*. `not-answered` is the model leaving the claim out of its
+ * answer, or answering it twice: never shown as *found nothing*, because that
+ * would be a sentence about a search that may never have looked (F5).
+ */
+export type DebateCheckResult =
+  | { claimId: string; outcome: "answered"; rows: DebateCheckRow[] }
+  | { claimId: string; outcome: "not-answered" };
+
+/** What became of the answer's per-claim groups. Counts only. */
+export interface DebateCheckGroupCounts {
+  /** A requested claim with no group in the answer. */
+  missing: number;
+  /** A claim answered more than once; every one of its groups is set aside. */
+  duplicate: number;
+  /** A group naming no claim that was asked about. Its rows are dropped. */
+  unknown: number;
+  /** An item that was not a group: not an object, no `claimId`, `rows` not a list. */
+  malformed: number;
+  /** Rows inside the groups set aside above — duplicate and unknown. */
+  rowsSetAside: number;
+}
+
+/**
+ * **The whole call's counts**: the pass's own (`DebateCounts`, summed over
+ * the groups read; `returnedSources` and `webSearches` once for the call) and
+ * the groups'.
+ */
+export interface DebateCheckCounts extends DebateCounts {
+  groups: DebateCheckGroupCounts;
+}
+
+export type DebateCheckStatus = "pending" | "done" | "error";
+
+/** One check, as the owner's panel reads it. */
+export interface DebateClaimCheck {
+  id: string;
+  status: DebateCheckStatus;
+  /** The list it was made from — `DebateClaimList.sourceHash` when it was pressed. */
+  listSourceHash: string;
+  promptVersion: string;
+  /** Dig further on one claim: told the addresses it already had, to look elsewhere. */
+  digFurther: boolean;
+  targets: DebateCheckTarget[];
+  /** One per target, in the targets' order, once `done`. Empty otherwise. */
+  results: DebateCheckResult[];
+  counts?: DebateCheckCounts;
+  webSearches?: number;
+  model?: string;
+  /** The reader's sentence for a failed check. */
+  error?: string;
+  createdAt: string;
+  finishedAt?: string;
+}
+
+/** `GET /api/debate-claims/:slug/checks`: every check on the article, oldest first. */
+export interface DebateClaimChecksResponse {
+  checks: DebateClaimCheck[];
+}
+
+/**
+ * `POST /api/debate-claims/:slug/checks`. Ids and the typed words, nothing
+ * else: every anchor and every address a Dig further avoids is the server's.
+ */
+export interface DebateCheckRequest {
+  claimIds?: string[];
+  own?: string;
+  /** One claim, listed or typed, that already has a finished check. Alone. */
+  digFurther?: string;
+}
+
 /* ------------------------------------------------------------- feedback -- */
 
 /**
@@ -8102,3 +8224,25 @@ export type LinkSummaryEvent =
    * generating this very summary. Ask again shortly; it is not an answer.
    */
   | { kind: "pending" };
+
+/**
+ * **What /admin shows about the public shelf's topic pills**, from
+ * `GET /api/admin/public-shelf-topics` and its Rebuild. src/public-shelf-topics.ts;
+ * plan 261008j.
+ */
+export interface PublicShelfTopicsStatus {
+  /** Listed cards. */
+  cards: number;
+  /** When the tree was last re-thought, ISO, or null for never. */
+  rethoughtAt: string | null;
+  /** Cards the tree was made from or filed. */
+  filed: number;
+  /** An article the tree holds is no longer listed, so the page shows no topics. */
+  withheld: boolean;
+  /** A re-think is due that will not run by itself; the Rebuild button runs it. */
+  rebuildDue: boolean;
+  /** Somebody is working on it now. */
+  working: boolean;
+  /** The cut-off, for the page's sentence. */
+  autoMax: number;
+}

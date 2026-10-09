@@ -364,6 +364,7 @@ describe("no Postgres store is selected without a guard", () => {
          addresses from articles they may open. */
       "pgCitedInSpideryarnStore",
       "pgCommentStore",
+      "pgDebateClaimChecksStore",
       "pgFeedbackStore",
       /* The link preview's two, 2026-09-05. Worth one line of why they are
          guarded rather than only that they are: a failed Drizzle query puts

@@ -37,7 +37,7 @@ This doc is the operating manual: where the caches are, what breaks them, and ho
   response
 - [§ How to tell whether it is working](#how-to-tell-whether-it-is-working) — `eval:caching`, the
   prefix-stability test, `aiCost`; a cache that stopped hitting looks like success
-- [§ The floor](#the-floor-and-why-zero-is-ambiguous) — the 1,024-token minimum, and why zero reads
+- [§ The floor](#the-floor-and-why-zero-is-ambiguous) — the per-model minimum (512 or 1,024 tokens), and why zero reads
   is ambiguous
 - [§ What breaks a cache](#what-breaks-a-cache) — the checklist before editing a prompt's head
 - [§ The prices this rests on](#the-prices-this-rests-on) — write 1.25x, read 0.1x, and why not 1h
@@ -362,7 +362,8 @@ OpenRouter — Greg's decision, and [ai-gateway.md](ai-gateway.md) is the whole 
 
 Nothing above changed. `cache_control` is still placed by
 [`src/article-prompt.ts`](../../src/article-prompt.ts), the breakpoints are still explicit, the
-groupings are still `STAGE_EFFORT` and `ARTICLE_RENDERER`, and the floor is still 1,024 tokens. What
+groupings are still `STAGE_EFFORT` and `ARTICLE_RENDERER`. The floor was 1,024
+tokens on Sonnet 5; current floors are in [§ The floor](#the-floor-and-why-zero-is-ambiguous). What
 changed is where the entry lives and how you read it back.
 
 **It was checked, not assumed.** A cold call through the Skin wrote 13,863 cache-creation tokens at
@@ -512,14 +513,14 @@ usually a bug in the *reporting*. Counts only — no prose, nothing sensitive, p
 
 ## The floor, and why zero is ambiguous
 
-Sonnet 5 will not cache a prefix under **1,024 tokens**. Under it, the breakpoint is accepted and
+The capable tier (Sonnet 5.5) will not cache a prefix under **512 tokens** (Sonnet 5, until 2026-10-09, needed **1,024**; `cacheFloorFor` in `src/article-prompt.ts` is the one place that knows). Under it, the breakpoint is accepted and
 does nothing: no error, and zeros in both usage fields — which is indistinguishable from a cache that
 has broken. `underCacheFloor` exists to tell those two apart, and callers log it rather than throwing,
 because a short article is a perfectly good article that simply cannot be cached.
 
 The floor is a property of the model, not of us: Opus 5 and Opus 5.5 need 512 (5.5 measured live on
 2026-09-30, `HIGH_POWER_CACHE_FLOOR_TOKENS` in [`src/article-prompt.ts`](../../src/article-prompt.ts)),
-Anthropic's page also gives 512 for Sonnet 5.5, Haiku 4.5 needs 4,096, and the progression is not
+Sonnet 5.5 is 512 too (Anthropic's page), Haiku 4.5 needs 4,096, and the progression is not
 monotonic ([261001a](../research/261001a-prompt-caching-best-practice-2026.md)). **Anything that edits [`src/models.ts`](../../src/models.ts) should
 look at `CACHE_FLOOR_TOKENS`.** A model change also flushes every cache — caches are model-scoped —
 so a comparison run via a `SPIDERYARN_*_MODEL` override will show all writes and no reads, which is
