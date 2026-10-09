@@ -4495,7 +4495,7 @@ export const SHARING_CONFIRM_TITLE = "Share the full text of this article?";
  */
 export function sharingConfirmBody(title: string | null): string {
   /* No title: the add page asks while the article is still importing, and an
-     import may not have found one yet (`SHARE_AT_ADD_LABEL`, below). */
+     import may not have found one yet (`SHARE_AT_ADD_HEADING`, below). */
   const named = title === null ? "this article" : `“${title}”`;
   return (
     `This puts the whole extracted text of ${named} where anyone can read it without ` +
@@ -4691,20 +4691,34 @@ export const SHARING_RIGHTS_CONFIRM =
  * plan review, P2-6.
  */
 export const IMPORT_LINK_COPY_TIP =
-  "Copy the link this import's article will have. It opens for you once the import has " +
-  "finished, and for anyone else only if you share it. If the import fails, the link leads " +
-  "nowhere.";
+  "Copy the address this import's article will have. It opens for you once the import has " +
+  "finished, and for anyone else only if you make the article public: a private link is a " +
+  "different address. If the import fails, the address leads nowhere.";
 
 /** The copy did not happen. The card has no box holding the link, so this is followed by the address itself. */
 export const IMPORT_LINK_COPY_FAILED = "Your browser would not allow the copy. The link is";
 
-/** The add page's third box. */
-export const SHARE_AT_ADD_LABEL = "Make it public";
+/**
+ * The add page's public control: its heading, and the button that opens the
+ * confirmation. A button and not a tick box since 2026-10-09, the shape the
+ * private link beside it and the Metadata card's *Share with anyone…* already
+ * had: a box stayed ticked while the confirmation was still asking, so the
+ * page looked shared when nothing was. The ellipsis says the press asks
+ * before it does anything. Plan 261009i (spya-nsrkju).
+ */
+export const SHARE_AT_ADD_HEADING = "Public";
+export const SHARE_AT_ADD_LABEL = "Make it public…";
 
-/** Under the label, before anything is pressed. Nothing goes out on the tick: it opens the confirmation. */
-export const SHARE_AT_ADD_WHAT =
-  "Anyone can read it without signing in, and it is listed publicly, once the import has " +
-  "finished. Ticking this shows what would be shared and asks you to confirm.";
+/**
+ * Under the heading, before anything is pressed, followed by a link to the
+ * public shelf named `PUBLIC_SHELF_LABEL` and a full stop (AddShare.tsx), so
+ * *listed publicly* says where. Until 2026-10-09 it ended *"Ticking this shows
+ * what would be shared and asks you to confirm"*, which nobody read: the
+ * section's own first line and the button's tooltip say it now.
+ */
+export const SHARE_AT_ADD_WHAT_LEAD =
+  "Anyone can read it without signing in once the import has finished, and it is listed " +
+  "publicly, under";
 
 /**
  * **The import adopted an article already on the shelf** (`freeSlug`,
@@ -4759,14 +4773,14 @@ export const SHARE_AT_ADD_UNKNOWN =
  * and the import has not published.** *Asked*, not *made*: the mark is
  * written before the request and kept through an answer that never came, so
  * that it took is not established (GPT Sol's fix check, F18). Nothing on the server can be asked about
- * visibility until it has, so the box does not claim either state: it is
- * drawn ticked, with this, and unticking sends the private write. The tab's
+ * visibility until it has, so the control claims neither state: it offers
+ * *Stop sharing* with this, and that press sends the private write. The tab's
  * own memory is a hint and not an answer (src/web/add-share.ts §
  * `ShareIo.marks`). GPT Sol's code review, F10.
  */
 export const SHARE_AT_ADD_RECALLED =
   "You asked to make this public before this page was reloaded, and we cannot read back " +
-  "whether it is until the import has finished. Untick this to make it private.";
+  "whether it is until the import has finished. Press Stop sharing to make it private.";
 
 /** The owner opened the import's address before the article was published. src/web/article/StillBeingAdded.tsx. */
 export const STILL_BEING_ADDED_HEADING = "Still being added";
@@ -4787,8 +4801,8 @@ export const STILL_BEING_ADDED =
 export const STILL_BEING_ADDED_VISITOR =
   "This article is still being added. This page will open it when it is ready.";
 
-/* The add page's Sharing section: *Make it public* above, and a private link
-   beside it, behind one row that starts shut. Greg, 2026-10-06: *"bundle all
+/* The add page's Sharing section: a private link first, then *Make it public*,
+   behind one row that starts shut. Greg, 2026-10-06: *"bundle all
    sharing-related stuff in a default-collapsed section, because most people
    won't want to use it"*. Plan 261005l § 2b. Drawn by src/web/AddSharing.tsx
    and src/web/AddShareLink.tsx. The link's confirmation is the Metadata
@@ -4802,14 +4816,42 @@ export function sharingAtAddSummary(isPublic: boolean, linkOn: boolean): string 
   if (isPublic && linkOn) return "Sharing: public, and a private link";
   if (isPublic) return "Sharing: public";
   if (linkOn) return "Sharing: private link";
-  return "Sharing";
+  /* *Options*, since 2026-10-09, and deliberately not *off*: a bare
+     *Sharing* read as the next step in the flow (plan 261009i), but *off* would
+     be a promise this tab cannot always keep. Another tab may have shared the
+     article, and before publication nothing can be read back (postmortem
+     261005r); a control that is unknown or saving is not *on* either. So the
+     row names a state only when one is on, and the private default is said
+     inside, as the general fact it is (`SHARING_AT_ADD_INTRO`). GPT Sol's plan
+     review, P1. */
+  return "Sharing options";
 }
 
-/** Under the link control's heading, before anything is pressed. The button opens the confirmation. */
+/**
+ * The open section's first line, then a *How sharing works* link to
+ * `/help/sharing`. Each clause is a fact already published elsewhere: Help's
+ * first sentence, the confirmation every share passes through, and Access &
+ * sharing on the Metadata page. Plan 261009i.
+ */
+export const SHARING_AT_ADD_INTRO =
+  "Every article starts private. Nothing is shared until you confirm, and you can also share " +
+  "it later from the article's Metadata page.";
+
+/** The link after `SHARING_AT_ADD_INTRO`. */
+export const SHARING_AT_ADD_HELP = "How sharing works";
+
+/**
+ * Under the link control's heading, before anything is pressed. *Can pass it
+ * on* since 2026-10-09, from `PRIVATE_LINK_WHAT` and the confirmation: a
+ * reader took *private* to mean *only me* (plan 261009i). The sentence about
+ * the button went the way `SHARE_AT_ADD_WHAT_LEAD`'s did.
+ */
 export const LINK_AT_ADD_WHAT =
-  "Anyone who has the link can read the article without signing in, once the import has " +
-  "finished. It is not listed anywhere. The button shows what would be shared and asks you to " +
-  "confirm.";
+  "Anyone who has the link can read it without signing in, and can pass it on, once the " +
+  "import has finished. The private link is not listed anywhere.";
+
+/** The link control's button, which opens the confirmation. */
+export const LINK_AT_ADD_LABEL = "Create a private link…";
 
 /** Confirmed, and not made yet: the import has not made the article's row. */
 export const LINK_AT_ADD_WAITING = "The link will be made as soon as the import is ready for it.";
@@ -5802,21 +5844,25 @@ export const ADDING_SENDS_TEXT_AWAY =
   "The article's text is sent to a third-party model provider for processing.";
 
 /**
- * **The same fact, in the past tense, for the surfaces that never got to ask.**
+ * **The same sentence, in the past tense, after direct add accepts a job.**
  *
  * `/add/<url>` and `/add/upload/<id>` are direct-entry pages for bookmarklets
  * and shared links (src/web/AddPage.tsx). They exist precisely so that the
- * whole request fits in an address, which means there is no form, no Add
- * button and no moment before the POST: the page queues ingestion from its
- * first effect. By the time anybody can read a word on it, the article's text
- * is already on its way.
+ * whole request fits in an address, which means there is no form or Add
+ * button: the page queues ingestion from its first effect. Since 2026-10-09 it
+ * shows `ADDING_SENDS_TEXT_AWAY` while that POST is out and after a refusal,
+ * then this past tense after a job answer.
  *
  * So this is `ADDING_SENDS_TEXT_AWAY` with its tense corrected, and **the
  * asymmetry between the two is the point rather than an inconsistency to tidy
  * up**. Above, the reader still has a choice, so the sentence is present tense
- * and sits beside the control that makes it. Here the choice is already spent,
- * and a present-tense warning about something already done is simply false —
- * the same mistake, and the same fix, as `REFEREE_TEXT_ALREADY_SENT` below.
+ * and sits beside the control that makes it. Here the choice is already spent
+ * once the server accepts the job.
+ *
+ * **A job receipt does not prove a model provider has received the text.** The
+ * sentence predates that distinction; plan 261009i's review records it as a
+ * wider privacy-copy decision for Greg rather than claiming this predicate
+ * establishes it.
  * Anyone tempted to make the three agree should change the *page*, not the
  * copy: a confirmation gate on a deliberately frictionless surface is a product
  * decision and it is Greg's.
