@@ -528,7 +528,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
 /** One line about a report, from its note's `comment:`. An admin's Earlier tab only. */
 export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
   "spya-a5gzb9": "Shipped. Since 2026-10-08 a failed import's Report this also carries the address, file name and error, and every import is kept on record so we can debug it later.",
-  "spya-ahvk74": "Adding an article someone has already made public now stops and asks: read their copy free, or add your own, which uses one article. Whether the free copy can carry your own notes is a question (q-c75pj9).",
+  "spya-ahvk74": "Adding an article someone has already made public now stops and asks: read their copy free, or add your own, which uses one article. You chose to keep the free copy read-only for now (q-c75pj9).",
   "spya-ar65p3": "Shipped: a sideways iPhone no longer enlarges a band's text, and, on your answer, the kinds of line that recur across modes now share six named sizes (on /design, under Text roles).",
   "spya-bbe74w": "Needs a decision is now threads: a contents, one thread at a time with a reply box, Defer for now, the ids, your report shut, a shortcut beside the tabs. Check the reply box on your iPhone.",
   "spya-btjtbb": "Mostly Apple's: an iPhone home-screen app forgets the grant on every restart and 10 minutes after dictation. We fixed one extra prompt of ours. Try Safari's per-site Microphone: Allow; WebKit bug 280394 tracks the rest.",

@@ -12,11 +12,18 @@
  * `words` may carry a leading or trailing `…` of the caller's own — a cut
  * quote, a snippet around a hit. That is put back outside the drawn words,
  * because it is not in the block. `near` is excerpt-html.ts § `ExcerptAt`'s.
+ *
+ * `lazy` is for a long list: the words are drawn as the string until the row
+ * comes near the screen, and formatted then (when-seen.ts). A Search for a
+ * common word lists hundreds of hits, and formatting them all at once froze
+ * the page about 1.0 s longer than strings did (plan 261009r). Not for a card
+ * or a dialog's one excerpt, which would flash as a string first.
  */
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import type { Block, BlockId } from "../types.js";
 import { useBlockLinks } from "./block-link-index.js";
 import { excerptFallbackHtml, excerptHtml } from "./excerpt-html.js";
+import { useSeenOnce } from "./when-seen.js";
 
 const ELLIPSIS = "…";
 
@@ -24,24 +31,37 @@ interface Words {
   words: string;
   /** Where the words sit in the block's drawn text, when the caller knows — a hit's `Found.start`. */
   near?: number | undefined;
+  /** Draw the string until this comes near the screen — for a long list's rows. */
+  lazy?: boolean | undefined;
 }
 
-export function Excerpt({ blockId, words, near }: Words & { blockId: BlockId | null | undefined }) {
+export function Excerpt({ blockId, words, near, lazy }: Words & { blockId: BlockId | null | undefined }) {
   const index = useBlockLinks();
-  return <BlockExcerpt block={blockId ? index?.get(blockId)?.block : undefined} words={words} near={near} />;
+  return (
+    <BlockExcerpt
+      block={blockId ? index?.get(blockId)?.block : undefined}
+      words={words}
+      near={near}
+      lazy={lazy}
+    />
+  );
 }
 
-export function BlockExcerpt({ block, words, near }: Words & { block: Block | undefined }) {
+export function BlockExcerpt({ block, words, near, lazy = false }: Words & { block: Block | undefined }) {
+  const holder = useRef<HTMLSpanElement>(null);
+  const seen = useSeenOnce(holder, lazy && block !== undefined);
   const drawn = useMemo(() => {
-    if (!block) return null;
+    if (!block || !seen) return null;
     const lead = words.startsWith(ELLIPSIS);
     const tail = words.endsWith(ELLIPSIS) && words.length > ELLIPSIS.length;
     const inner = words.slice(lead ? ELLIPSIS.length : 0, tail ? -ELLIPSIS.length : undefined);
     const html =
       excerptHtml(block, inner, near === undefined ? {} : { near }) ?? excerptFallbackHtml(block, inner);
     return html === null ? null : { html, lead, tail };
-  }, [block, words, near]);
+  }, [block, words, near, seen]);
 
+  /* Waiting to be seen: the string, in an element the observer can watch. */
+  if (!seen) return <span ref={holder}>{words}</span>;
   if (!drawn) return <>{words}</>;
   return (
     <>

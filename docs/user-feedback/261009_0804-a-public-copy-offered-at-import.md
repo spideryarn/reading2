@@ -1,7 +1,7 @@
 ---
 reports: spya-ahvk74
 ending: shipped
-comment: Adding an article someone has already made public now stops and asks: read their copy free, or add your own, which uses one article. Whether the free copy can carry your own notes is a question (q-c75pj9).
+comment: Adding an article someone has already made public now stops and asks: read their copy free, or add your own, which uses one article. You chose to keep the free copy read-only for now (q-c75pj9).
 ---
 # A public copy offered at import
 
@@ -26,5 +26,6 @@ the next feedback sweep marks the Sentry issue.
   in the security map was edited.
 
 The product choice the report raised but did not settle, whether the free copy can carry the
-reader's own notes, is asked as [q-c75pj9](questions/q-c75pj9.md), recommending read-only for now.
+reader's own notes, was asked as [q-c75pj9](questions/q-c75pj9.md); Greg chose read-only for now
+(A, reply `spya-hef0p4`, 2026-10-09): richer public copies wait until public articles take off.
 Not built either: matching an *uploaded* PDF to a public article (a file has no address).
