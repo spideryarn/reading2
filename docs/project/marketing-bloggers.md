@@ -6,7 +6,7 @@ users. So maybe actually bloggers would be a good start because they might be up
 
 Up: [marketing-overview.md](marketing-overview.md) · [vision.md](vision.md)
 
-**The names are not here.** The list of writers, with notes on each and how to reach them, is in
+**The names are not here.** The list of writers and communities, with notes on each and how to reach them, is in
 `outreach-private/bloggers.md`, which is gitignored because this repo is public
 ([marketing-overview.md § Outreach lists are private](marketing-overview.md#outreach-lists-are-private)).
 
@@ -31,23 +31,10 @@ sites that day.
 
 ## Where these readers gather
 
-Check each place's rules on self-promotion before posting. The safe framing everywhere is "I built
-this; tell me what's wrong with it", not an advertisement.
-
-- **[Future of Coding](https://futureofcoding.org/community)** (Slack, bridged to Matrix): tools for
-  thought is its most popular topic, and members share prototypes routinely. Read the member
-  handbook first.
-- **Ink & Switch London socials**, on Luma, at tldraw's London space. In person; next date
-  unverified.
-- **[ToolsForThought.Rocks](https://luma.com/tftrocks-oct)**: monthly online talks with demo slots.
-- **Zettelkasten forum** (forum.zettelkasten.de): long-form and sceptical of AI.
-- **Reddit**: r/PKMS, r/Zettelkasten, r/ObsidianMD, r/AskAcademia. The usual norm is that
-  self-promotion stays around a tenth of what you post, sometimes only in weekly threads.
-- **[Interintellect](https://interintellect.com)**: apply to host a salon, e.g. "how to read a hard
-  paper".
-- **Ness Labs**' featured-tool founder interviews, and metascience circles (RoRI).
-- **Substack Notes**, where most of these writers talk to each other, and **Show HN**, which is
-  high-variance.
+The communities themselves (forums, Slacks, subreddits, salons) are listed in
+`outreach-private/bloggers.md`. What holds for all of them: check each place's rules on
+self-promotion before posting, and the safe framing everywhere is "I built this; tell me what's
+wrong with it", not an advertisement.
 
 See also [marketing-talks.md](marketing-talks.md) for in-person London events, several of which
 share this crowd.

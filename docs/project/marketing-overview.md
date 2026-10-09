@@ -72,8 +72,8 @@ Status: **idea** (not started), **trying** (running now) or **done** (with what 
 | Tell one person a day. Slow, but every conversation is also a user interview, and it works better ending with a private link to something that person would read. | idea | here |
 | Five old contacts, each sent a private link to their own latest paper, with a phone call. | trying, from 2026-10-09 | [marketing-author-gifts.md](marketing-author-gifts.md) |
 | Give an author a Spideryarn version of their own piece, privately, and ask what it gets wrong. Plus the admin tool that makes it cheap. | tool being built | [marketing-author-gifts.md](marketing-author-gifts.md) |
-| Talks: product conferences, meetups, and AI / HCI / human-augmentation venues near London. Best first: Feeling of Computing London. | venues found, none booked | [marketing-talks.md](marketing-talks.md) |
-| Podcasts: tools for thought, learning, AI and cognition. Best first: Every, Cortex, Brain Inspired; and Ness Labs (not a podcast, but London and the closest stance). | shows found, none pitched | [marketing-podcasts.md](marketing-podcasts.md) |
+| Talks: product conferences, meetups, and AI / HCI / human-augmentation venues near London. | venues found, none booked | [marketing-talks.md](marketing-talks.md); venues in `outreach-private/` |
+| Podcasts: tools for thought, learning, AI and cognition. | shows found, none pitched | [marketing-podcasts.md](marketing-podcasts.md); shows in `outreach-private/` |
 | Bloggers and newsletter writers who would take a Zoom call, each sent a Spideryarn version of their own recent piece. | writers found, none contacted | [marketing-bloggers.md](marketing-bloggers.md); names in `outreach-private/` |
 | Follow up the one or two people who signed up after talking to Greg and did not come back. | idea | here |
 | Evidence pages: the research behind the product, as blog posts or pages ([positioning.md § Evidence](positioning.md#evidence-and-where-it-goes)). Also marketing, especially for academics. | idea | here |
@@ -86,10 +86,12 @@ gitignored.** This repo is public, and a list of who we plan to approach, with f
 should find before Greg has written to them. Greg, 2026-10-09: *"put all this outreach stuff in
 Gitignore"*.
 
-- **What goes there:** any list naming individuals as people to approach, and notes on how each
-  conversation went. Right now that is `outreach-private/bloggers.md`.
-- **What stays in these docs:** the approach, the reasoning, venues and shows (which are public
-  organisations), and the communities where readers gather.
+- **What goes there:** every outreach list — people, venues and shows to approach, with notes on
+  each and how each conversation went. Right now: `bloggers.md`, `talks.md` and `podcasts.md`.
+  Greg, 2026-10-09, on the venue and show lists: *"move them out too. I know those files will be in
+  the git history, but let's at least take them out of the repo going forward."*
+- **What stays in these docs:** the approach, the reasoning, what the research found in general,
+  and the communities where readers gather.
 - **The catch:** gitignored means it exists only on the machine that wrote it. It is on Greg's Mac,
   not on the remote box, and no commit or push saves it. Back it up some other way, and do not
   delete a worktree or checkout that holds it without copying it out first.
