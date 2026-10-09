@@ -9687,6 +9687,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       const answer = await pgVoucherStore.createVoucher(parsed.value, user.id);
       if (answer.kind === "conflict") throw httpError(409, "A different voucher already has that id.");
       if (answer.kind === "starter-refused") throw starterRefused(answer.reason);
+      if (answer.kind === "create-refused") throw httpError(500, "This voucher create was unexpectedly refused.");
       res.setHeader("Cache-Control", "private, no-store");
       if (answer.kind === "replayed") {
         send(res, 200, { id: answer.id, email: "replayed" } satisfies VoucherCreated);
@@ -9876,6 +9877,8 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
         case "starter-refused":
           /* The freeze was released: fix the article, then press Send again. */
           throw starterRefused(answer.reason);
+        case "superseded":
+          throw httpError(409, "A newer change replaced this Send attempt. Check the gift, then press Send again.");
         case "conflict":
           throw httpError(500, "That gift's voucher id belongs to a different voucher.");
         case "created":

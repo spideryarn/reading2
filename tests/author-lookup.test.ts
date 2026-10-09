@@ -12,6 +12,7 @@
  * Nothing is sent: every call is the injected fake.
  */
 import { describe, expect, it } from "vitest";
+import { getTableConfig } from "drizzle-orm/pg-core";
 
 import { type JsonCall, ProviderRefused } from "../src/ai-call.js";
 import {
@@ -26,6 +27,7 @@ import {
   runAuthorLookup,
 } from "../src/author-lookup.js";
 import { modelFor } from "../src/models.js";
+import { aiCalls } from "../src/db/schema.js";
 
 const SOURCE = "https://essays.example.com/2026/on-reading";
 const BIO_PAGE = "https://ann-smith.example.org/about";
@@ -352,5 +354,13 @@ describe("the request", () => {
     ]);
     expect(MAX_TOTAL_RESULTS).toBe(10);
     expect(MAX_RESULTS_PER_SEARCH).toBe(5);
+  });
+});
+
+describe("lookup cost correlation", () => {
+  it("indexes the ledger by the run id used to list each lookup's cost", () => {
+    const indexes = getTableConfig(aiCalls).indexes;
+    const runIndex = indexes.find((index) => index.config.name === "ai_calls_run");
+    expect(runIndex?.config.columns.map((column) => ("name" in column ? column.name : null))).toEqual([aiCalls.runId.name]);
   });
 });

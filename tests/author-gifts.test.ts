@@ -79,6 +79,7 @@ import {
   parseAuthorGiftPatch,
   sendAuthorGift,
 } from "../src/store/pg-author-gifts.js";
+import { createVoucher } from "../src/store/pg-vouchers.js";
 import type { VoucherEmailDeps } from "../src/store/pg-voucher-emails.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
@@ -475,6 +476,49 @@ describe("POST /api/admin/author-gifts/:id/send", () => {
     const gift = await giftRow(id);
     expect(gift.send_attempt).toBe(newer);
     expect(gift.send_started_at).not.toBeNull();
+  });
+
+  it("a request from an unfrozen attempt cannot create the voucher from its old snapshot", async () => {
+    const mine = await seed("revoked-attempt", { linkOn: true });
+    const { id } = await ensured(mine);
+    const firstAddress = addressOf("revoked-first");
+    const secondAddress = addressOf("revoked-second");
+    await drive("PATCH", `/api/admin/author-gifts/${id}`, { email: firstAddress });
+
+    let entered!: () => void;
+    const atCreate = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const slow = sendAuthorGift(id, {
+      createVoucher: async (input, createdBy, deps) => {
+        entered();
+        await held;
+        return await createVoucher(input, createdBy, deps);
+      },
+    });
+    await atCreate;
+
+    /* A concurrent caller sees the same freeze, refuses its starter and releases
+       that attempt. Greg can now edit the draft while the first caller is still
+       holding the old address. */
+    expect(
+      await sendAuthorGift(id, { createVoucher: async () => ({ kind: "starter-refused", reason: "link-off" }) }),
+    ).toEqual({ kind: "starter-refused", reason: "link-off" });
+    expect((await drive("PATCH", `/api/admin/author-gifts/${id}`, { email: secondAddress })).status).toBe(200);
+
+    release();
+    expect(await slow).toEqual({ kind: "superseded" });
+    const gift = await giftRow(id);
+    expect((await pool.query("select 1 from spideryarn.billing_vouchers where id = $1", [gift.voucher_id])).rows).toHaveLength(0);
+
+    const sent = await sendAuthorGift(id);
+    expect(sent.kind).toBe("created");
+    const voucher = await pool.query("select email from spideryarn.billing_vouchers where id = $1", [gift.voucher_id]);
+    expect(voucher.rows).toEqual([{ email: secondAddress }]);
   });
 });
 

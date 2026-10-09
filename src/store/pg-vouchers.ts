@@ -42,7 +42,7 @@ import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 
 import { type Articles, type Points, articles as articlesOf, budgetFor, ingestHeadroom } from "../billing/points.js";
 import type { Gift } from "../billing-plan.js";
-import { getDb } from "../db/client.js";
+import { type Db, getDb } from "../db/client.js";
 import { articleRevisions, articles, billingAccounts, billingVouchers } from "../db/schema.js";
 import { looksLikeEmail, normaliseEmail } from "../email-address.js";
 import { noteText } from "../email.js";
@@ -357,6 +357,13 @@ export interface VoucherWriteDeps {
   readonly audience?: (normalisedEmail: string) => Promise<GiftAudience>;
   /** The starter article, as the administrator's own reads find it now (src/store/voucher-starter.ts). */
   readonly resolveStarter?: (slug: string) => Promise<StarterResolution>;
+  /**
+   * A final, transaction-local permission to insert a new voucher. Replays are
+   * answered before it. The author-gift sender uses this to lock its gift row
+   * and prove that the frozen attempt is still current after starter/audience
+   * work that happened outside the transaction.
+   */
+  readonly beforeCreate?: (tx: Pick<Db, "select">) => Promise<boolean>;
 }
 
 /**
@@ -466,7 +473,9 @@ export type CreateVoucherAnswer =
   /** That id is a different voucher. */
   | { readonly kind: "conflict" }
   /** A new voucher whose starter cannot be linked as things stand. Nothing was made. */
-  | { readonly kind: "starter-refused"; readonly reason: StarterRefusal };
+  | { readonly kind: "starter-refused"; readonly reason: StarterRefusal }
+  /** The caller's transaction-local permission was revoked before insertion. */
+  | { readonly kind: "create-refused" };
 
 /**
  * **Make one voucher, and queue its recipient's email in the same
@@ -509,6 +518,11 @@ export async function createVoucher(
   const audience = await giftAudienceOrInvite(email, deps.audience ?? giftAudienceFor);
   return await getDb().transaction(
     async (tx): Promise<CreateVoucherAnswer> => {
+      if (deps.beforeCreate && !(await deps.beforeCreate(tx))) {
+        /* A concurrent create may have committed since the first replay read.
+           Its identity still wins; otherwise the caller revoked this create. */
+        return (await replayOf(tx, input, email, createdBy)) ?? { kind: "create-refused" };
+      }
       const [row] = await tx
         .insert(billingVouchers)
         .values({

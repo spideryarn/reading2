@@ -4068,6 +4068,8 @@ export const aiCalls = spideryarn.table(
     index("ai_calls_owner_started").on(t.ownerId, t.startedAt.desc().nullsFirst()),
     /** "What did this ingest cost", asked once per job at the end of it. */
     index("ai_calls_job").on(t.jobId),
+    /** "What did this one collector cost" — author lookup rows join their run to the ledger by this key. */
+    index("ai_calls_run").on(t.runId),
     /**
      * "What has this article cost, over its whole life" — the metadata page's
      * administrator section (src/store/ai-calls-spend-pg.ts § `belongsTo`).

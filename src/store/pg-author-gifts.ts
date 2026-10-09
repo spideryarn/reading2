@@ -704,12 +704,18 @@ export type SendAnswer =
   | { readonly kind: "discarded" }
   /** The article can no longer be linked. The freeze was released, if it was still this attempt's. */
   | { readonly kind: "starter-refused"; readonly reason: StarterRefusal }
+  /** This caller's freeze was released or replaced before the voucher transaction began. */
+  | { readonly kind: "superseded" }
   /** `createVoucher` said the id is a different voucher. Cannot happen; the row stays frozen. */
   | { readonly kind: "conflict" };
 
 /** Seams for tests; each defaults to the real thing. */
 export interface SendDeps {
-  readonly createVoucher?: (input: NewVoucher, createdBy: string) => Promise<CreateVoucherAnswer>;
+  readonly createVoucher?: (
+    input: NewVoucher,
+    createdBy: string,
+    deps: Parameters<typeof createVoucher>[2],
+  ) => Promise<CreateVoucherAnswer>;
 }
 
 /**
@@ -764,7 +770,23 @@ export async function sendAuthorGift(id: string, deps: SendDeps = {}): Promise<S
   };
   const create = deps.createVoucher ?? createVoucher;
   const createdBy = gift.createdBy;
-  const answer = await runAsOwner(createdBy as OwnerId, () => create(input, createdBy));
+  const attempt = gift.sendAttempt;
+  const answer = await runAsOwner(createdBy as OwnerId, () =>
+    create(input, createdBy, {
+      beforeCreate: async (tx) => {
+        /* Lock the gift through the voucher insert's commit. A concurrent
+           starter-refusal unfreeze then waits and sees the voucher; if it won
+           first, this stale snapshot is refused before anything is inserted. */
+        const [current] = await tx
+          .select({ sendAttempt: authorGifts.sendAttempt })
+          .from(authorGifts)
+          .where(eq(authorGifts.id, id))
+          .for("update")
+          .limit(1);
+        return current?.sendAttempt === attempt;
+      },
+    }),
+  );
   switch (answer.kind) {
     case "created":
       logger.info({ giftId: id, voucherId: answer.id }, "author gift sent: voucher made");
@@ -774,7 +796,6 @@ export async function sendAuthorGift(id: string, deps: SendDeps = {}): Promise<S
       return { kind: "replayed", voucherId: answer.id, delivery: latest?.status === "queued" ? latest.id : null };
     }
     case "starter-refused": {
-      const attempt = gift.sendAttempt;
       await db
         .update(authorGifts)
         .set({ sendStartedAt: null, sendAttempt: null, updatedAt: sql`now()` })
@@ -787,6 +808,8 @@ export async function sendAuthorGift(id: string, deps: SendDeps = {}): Promise<S
         );
       return { kind: "starter-refused", reason: answer.reason };
     }
+    case "create-refused":
+      return { kind: "superseded" };
     case "conflict":
       logger.error({ giftId: id }, "author gift send: its voucher id belongs to a different voucher");
       return { kind: "conflict" };
