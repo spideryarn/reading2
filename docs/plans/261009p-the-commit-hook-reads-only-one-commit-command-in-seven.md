@@ -107,8 +107,8 @@ its stricter `approval` mode and only with the commit last, so it acts on **125 
 commits** (counted the same way). This fallback does not carry over: that hook rewrites the command
 and grants permission for it, which is exactly where reading the command for certain is right. What
 it needs is to *say* when it declines on a commit that names one of its sources, so the session
-runs the generator. That is a separate change to a different hook, **handed to the Overseer to queue
-as a bug** in this work's report, rather than left as this sentence.
+runs the generator. That is a separate change to a different hook, handed to the Overseer as a bug,
+and built in [261009t](261009t-the-regenerate-hook-says-when-it-declines-a-commit-that-names-its-sources.md).
 
 ## Stages
 

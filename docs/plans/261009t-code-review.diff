@@ -1,0 +1,515 @@
+diff --git a/.claude/hooks/commit_command.py b/.claude/hooks/commit_command.py
+index 43237fdf9..d145c5b3a 100644
+--- a/.claude/hooks/commit_command.py
++++ b/.claude/hooks/commit_command.py
+@@ -9,8 +9,14 @@ docs/plans/261007q-generated-files-regenerate-on-commit.md.
+ one commit, any segment but a leading literal `cd <dir>`, `git add` and
+ `npm run check:staged-revert`, and commit options it does not know (-a, -i, --dry-run, ...).
+ Never interprets a commit message or another command as a path.
++
++`leading_cd` and `named` are the loose reading for when parse() declines: which files the command
++text names, message and all. A hook may act on that only where a false positive is harmless
++(compressing a screenshot, plan 261009p) or only to say something (plan 261009t).
+ """
++import fnmatch
+ import os
++import re
+ import shlex
+ from typing import NamedTuple, Optional
+ 
+@@ -120,3 +126,56 @@ def parse(cmd: str, cwd: str, *, approval: bool = False) -> Optional[Commit]:
+             continue
+         added.update(os.path.abspath(os.path.join(cwd, n)) for n in names)
+     return Commit(cwd, segments, index, paths, only, dashdash, added)
++
++
++# In the command text, a path starts at the start or after one of these...
++BEFORE = r"(?:^|(?<=[\s'\"=;&|(<>]))"
++# ...and ends at the end or before one of these.
++AFTER = r"(?=$|[\s'\";&|)<>])"
++WORD = r"[^\s'\";&|)<>/]*"  # one path component, which may be a glob
++# A `git commit` anywhere in the command, after any global options (`git -C x commit`): the same
++# matcher as compress-commit-pngs.sh's is_commit, whose self-test proves it both ways.
++COMMIT = re.compile(r"(?:^|[;&|(]|\s)git(?:\s+-\S+(?:\s+[^-\s]\S*)?)*\s+commit(?:\s|$)")
++
++
++def leading_cd(cmd, cwd):
++    """Where a supported leading `cd <dir> &&` (or `;`) goes, or cwd; None if uncertain."""
++    m = re.match(r"\s*cd\s+(?:'([^']*)'|\"([^\"$`\\]*)\"|([^\s;&|<>()$`'\"\\]+))\s*(?:&&|;|\n)", cmd)
++    if not m:
++        # Do not apply paths relative to the payload cwd when the shell will first change it
++        # in a form we do not understand (an escaped path, expansion, cd --, ||, ...).
++        return None if re.match(r"\s*cd(?:\s|$)", cmd) else os.path.realpath(cwd)
++    single, double, bare = m.groups()
++    # The shell expands a leading tilde only when it is unquoted.
++    target = bare if bare is not None else single if single is not None else double
++    if target == "" or (bare is not None and bare.startswith("-")):
++        return None
++    if bare is not None:
++        target = os.path.expanduser(target)
++    target = os.path.join(cwd, target)
++    return os.path.realpath(target) if os.path.isdir(target) else None
++
++
++def named(cmd, name, root, cwd):
++    """Does the command text name this file: the file itself, its folder as a whole word, or its
++    folder as the base of a glob that matches it (`docs/plans/x-shots/*.png`)? Repo-relative,
++    cwd-relative or absolute. A further ancestor counts only as a whole word, so a command that
++    names `docs/plans/a.md` names no screenshot in docs/plans."""
++    def spellings(rel):
++        absolute = os.path.join(root, rel)
++        base = {s for s in (rel, absolute, os.path.relpath(absolute, cwd)) if s not in ("", ".")}
++        return base | {"./" + s for s in base if not os.path.isabs(s)}
++    if any(re.search(BEFORE + re.escape(s) + AFTER, cmd) for s in spellings(name)):
++        return True
++    parent, base = os.path.split(name)
++    for s in spellings(parent):
++        for m in re.finditer(BEFORE + re.escape(s) + "(?:/(" + WORD + "))?" + AFTER, cmd):
++            pattern = m.group(1)
++            if not pattern or (re.search(r"[*?\[]", pattern) and fnmatch.fnmatchcase(base, pattern)):
++                return True
++    parent = os.path.dirname(parent)
++    while parent:
++        if any(re.search(BEFORE + re.escape(s) + "/?" + AFTER, cmd) for s in spellings(parent)):
++            return True
++        parent = os.path.dirname(parent)
++    return False
+diff --git a/.claude/hooks/compress-commit-pngs.sh b/.claude/hooks/compress-commit-pngs.sh
+index 2ad6a6f0e..9973d89a4 100755
+--- a/.claude/hooks/compress-commit-pngs.sh
++++ b/.claude/hooks/compress-commit-pngs.sh
+@@ -63,36 +63,11 @@ command -v pngquant >/dev/null || quiet
+ # receipts. Bash 3.2 and BSD tools need no GNU utilities or newer array builtins.
+ HOOK_DIR=$(cd "$(dirname "$0")" && pwd) || quiet
+ PAYLOAD="$payload" HOOK_DIR="$HOOK_DIR" python3 - <<'PYTHON'
+-import fnmatch, hashlib, json, os, re, signal, subprocess, sys, time
++import hashlib, json, os, signal, subprocess, sys, time
+ sys.dont_write_bytecode = True  # no __pycache__ in .claude/hooks
+ sys.path.insert(0, os.environ["HOOK_DIR"])
+ import commit_command  # the shared reading of what a commit carries
+ 
+-# In the command text, a path starts at the start or after one of these...
+-BEFORE = r"(?:^|(?<=[\s'\"=;&|(<>]))"
+-# ...and ends at the end or before one of these.
+-AFTER = r"(?=$|[\s'\";&|)<>])"
+-WORD = r"[^\s'\";&|)<>/]*"  # one path component, which may be a glob
+-
+-
+-def leading_cd(cmd, cwd):
+-    """Where a supported leading `cd <dir> &&` (or `;`) goes, or cwd; None if uncertain."""
+-    m = re.match(r"\s*cd\s+(?:'([^']*)'|\"([^\"$`\\]*)\"|([^\s;&|<>()$`'\"\\]+))\s*(?:&&|;|\n)", cmd)
+-    if not m:
+-        # Do not apply paths relative to the payload cwd when the shell will first change it
+-        # in a form we do not understand (an escaped path, expansion, cd --, ||, ...).
+-        return None if re.match(r"\s*cd(?:\s|$)", cmd) else os.path.realpath(cwd)
+-    single, double, bare = m.groups()
+-    # The shell expands a leading tilde only when it is unquoted.
+-    target = bare if bare is not None else single if single is not None else double
+-    if target == "" or (bare is not None and bare.startswith("-")):
+-        return None
+-    if bare is not None:
+-        target = os.path.expanduser(target)
+-    target = os.path.join(cwd, target)
+-    return os.path.realpath(target) if os.path.isdir(target) else None
+-
+-
+ def docs_pngs(root):
+     """Every PNG on disk under docs/, repo-relative, symlinked directories not followed. From the
+     filesystem, not git status, which assume-unchanged and skip-worktree can blind."""
+@@ -102,29 +77,6 @@ def docs_pngs(root):
+     return found
+ 
+ 
+-def named(cmd, name, root, cwd):
+-    """Does the command text name this file: the file itself, its folder as a whole word, or its
+-    folder as the base of a glob that matches it (`docs/plans/x-shots/*.png`)? Repo-relative,
+-    cwd-relative or absolute. A further ancestor counts only as a whole word, so a command that
+-    names `docs/plans/a.md` names no screenshot in docs/plans."""
+-    def spellings(rel):
+-        absolute = os.path.join(root, rel)
+-        base = {s for s in (rel, absolute, os.path.relpath(absolute, cwd)) if s not in ("", ".")}
+-        return base | {"./" + s for s in base if not os.path.isabs(s)}
+-    if any(re.search(BEFORE + re.escape(s) + AFTER, cmd) for s in spellings(name)):
+-        return True
+-    parent, base = os.path.split(name)
+-    for s in spellings(parent):
+-        for m in re.finditer(BEFORE + re.escape(s) + "(?:/(" + WORD + "))?" + AFTER, cmd):
+-            pattern = m.group(1)
+-            if not pattern or (re.search(r"[*?\[]", pattern) and fnmatch.fnmatchcase(base, pattern)):
+-                return True
+-    parent = os.path.dirname(parent)
+-    while parent:
+-        if any(re.search(BEFORE + re.escape(s) + "/?" + AFTER, cmd) for s in spellings(parent)):
+-            return True
+-        parent = os.path.dirname(parent)
+-    return False
+ 
+ def main():
+     d = json.loads(os.environ["PAYLOAD"])
+@@ -139,7 +91,7 @@ def main():
+     if commit is not None:
+         cwd, paths = commit.cwd, commit.paths
+     else:
+-        cwd, paths = leading_cd(cmd, cwd), None
++        cwd, paths = commit_command.leading_cd(cmd, cwd), None
+         if cwd is None:
+             return
+ 
+@@ -218,7 +170,7 @@ def main():
+     files = set()
+     restage = {}
+     if paths is None:
+-        files = {name for name in docs_pngs(root) if safe(name) and named(cmd, name, root, cwd)}
++        files = {name for name in docs_pngs(root) if safe(name) and commit_command.named(cmd, name, root, cwd)}
+         files = changed_from_head(files)
+     elif paths:
+         added = {os.path.relpath(a, root) for a in commit.added}
+diff --git a/.claude/hooks/regenerate-commit-generated.sh b/.claude/hooks/regenerate-commit-generated.sh
+index 9a7965997..6be345c28 100755
+--- a/.claude/hooks/regenerate-commit-generated.sh
++++ b/.claude/hooks/regenerate-commit-generated.sh
+@@ -15,7 +15,9 @@
+ # tree, so the generated file has to be named in the command: the hook returns `updatedInput`
+ # with it appended after `--`, which Claude Code honours only with `permissionDecision: allow`.
+ # That approval is the trade-off the plan names. Anything else — a bare commit, `git add -A`,
+-# a trailing `&& git push` — is left alone, for the test to catch.
++# a trailing `&& git push` — is not regenerated or approved, but if its text names a changed
++# source it says which generator to run (`additionalContext` only): declining silently let stale
++# files in unremarked on 136 of 173 commits that named a source (plan 261009t).
+ #
+ # A set is regenerated only when every changed file of its sources is in this commit, and its
+ # sources are unchanged across the run: the generator reads the working tree, and a peer's
+@@ -37,7 +39,7 @@ payload=$(cat) || quiet
+ case "$payload" in *commit*) ;; *) quiet ;; esac   # every Bash call passes here; stay cheap
+ HOOK_DIR=$(cd "$(dirname "$0")" && pwd) || quiet
+ PAYLOAD="$payload" HOOK_DIR="$HOOK_DIR" python3 - <<'PYTHON'
+-import hashlib, json, os, shlex, signal, stat, subprocess, sys, time
++import hashlib, json, os, re, shlex, signal, stat, subprocess, sys, time
+ sys.dont_write_bytecode = True  # no __pycache__ in .claude/hooks
+ sys.path.insert(0, os.environ["HOOK_DIR"])
+ import commit_command  # the shared reading of what a commit carries
+@@ -52,6 +54,7 @@ SETS = [
+         "outputs": ["src/help-corpus.generated.json"],
+         "command": lambda root: ["node", os.path.join(root, "node_modules/vitest/vitest.mjs"), "run", "tests/help-corpus.test.ts"],
+         "env": {"WRITE_HELP_CORPUS": "1"},
++        "hint": "WRITE_HELP_CORPUS=1 npx vitest run tests/help-corpus.test.ts",  # docs/project/help-page.md
+     },
+     {
+         "name": "the feedback endings and questions",
+@@ -59,6 +62,7 @@ SETS = [
+         "outputs": ["src/feedback-endings.generated.ts", "src/feedback-questions.generated.ts"],
+         "command": lambda root: ["node", "--import", os.path.join(root, "node_modules/tsx/dist/loader.mjs"), os.path.join(root, "scripts/feedback-endings.ts")],
+         "env": {},
++        "hint": "npx tsx scripts/feedback-endings.ts",  # docs/project/feedback-reports.md
+     },
+ ]
+ 
+@@ -73,51 +77,110 @@ def under(name, source):
+     return name.startswith(source) if source.endswith("/") else name == source
+ 
+ 
+-def main():
+-    d = json.loads(os.environ["PAYLOAD"])
+-    tool_input = d.get("tool_input") or {}
+-    cwd, cmd = d.get("cwd"), tool_input.get("command", "")
+-    if not isinstance(cwd, str) or not os.path.isdir(cwd) or not isinstance(cmd, str):
+-        return
+-    if "#" in cmd:
+-        return  # shlex drops a comment, and a path appended after one would be inside it
+-    commit = commit_command.parse(cmd, cwd, approval=True)
+-    if commit is None:
+-        return
+-    # The approval below covers the whole command, so only the house recipe gets it.
++def house_recipe(commit):
++    """`[cd <dir> &&] [npm run check:staged-revert &&] [git add -- <files> &&] git commit … -- <paths>`."""
+     if commit.index != len(commit.segments) - 1 or not commit.dashdash or not commit.paths:
+-        return
++        return False
+     leading = commit.segments[:-1]
+     if leading[:1] == [["npm", "run", "check:staged-revert"]]:
+         leading = leading[1:]
+     if len(leading) > 1:
+-        return
++        return False
+     for s in leading:
+         names = s[3:] if s[:3] == ["git", "add", "--"] else None
+         if not names or any(n in (".", "..") or n.startswith(("-", ":")) or os.path.isdir(os.path.join(commit.cwd, n)) for n in names):
+-            return
++            return False
++    return True
++
++
++def main():
++    d = json.loads(os.environ["PAYLOAD"])
++    tool_input = d.get("tool_input") or {}
++    cwd, cmd = d.get("cwd"), tool_input.get("command", "")
++    if not isinstance(cwd, str) or not os.path.isdir(cwd) or not isinstance(cmd, str):
++        return
+ 
+     deadline = time.monotonic() + 25
+     def expired(_signal, _frame):
+         raise TimeoutError()
+     signal.signal(signal.SIGALRM, expired)
+     signal.alarm(25)  # includes filesystem reads, not just subprocess waits
+-    where = {"dir": commit.cwd}
+-    def run(argv, timeout=3, env=None):
++    where = {"dir": cwd}
++    def run(argv, timeout=3, env=None, data=None):
+         remaining = deadline - time.monotonic()
+         if remaining <= 0:
+             raise TimeoutError()
+-        child = subprocess.Popen(argv, cwd=where["dir"], stdin=subprocess.DEVNULL,
++        child = subprocess.Popen(argv, cwd=where["dir"], stdin=subprocess.DEVNULL if data is None else subprocess.PIPE,
+                                  stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, start_new_session=True,
+                                  env={**os.environ, **(env or {})})
+         try:
+-            out, _ = child.communicate(timeout=min(timeout, remaining))
++            out, _ = child.communicate(data, timeout=min(timeout, remaining))
+         except (subprocess.TimeoutExpired, TimeoutError):
+             os.killpg(child.pid, signal.SIGKILL)
+             child.communicate()
+             raise TimeoutError()
+         return child.returncode, out
+ 
++    def declined():
++        """The hook will not regenerate. If this is a commit whose text names a source that differs
++        from HEAD, say which generator to run (plan 261009t). Advice only: no updatedInput, no
++        permission decision, so what the hook approves is unchanged."""
++        if not commit_command.COMMIT.search(cmd):
++            return
++        if re.match(r"\s*cd\s+\S*\.\.", cmd):
++            return  # Bash's cd follows a logical .., leading_cd a physical one; do not guess
++        here = commit_command.leading_cd(cmd, cwd)
++        if here is None:
++            return
++        where["dir"] = here
++        code, out = run(["git", "rev-parse", "--show-toplevel"])
++        if code != 0:
++            return
++        top = os.path.realpath(os.fsdecode(out).rstrip("\n"))
++        where["dir"] = top
++        said = []
++        for s in SETS:
++            # From the disk and HEAD's tree, not git status, which assume-unchanged and
++            # skip-worktree can blind.
++            on_disk = set()
++            for src in s["sources"]:
++                if src.endswith("/"):
++                    for directory, _, files in os.walk(os.path.join(top, src)):
++                        on_disk.update(os.path.relpath(os.path.join(directory, f), top) for f in files)
++                elif os.path.lexists(os.path.join(top, src)):
++                    on_disk.add(src)
++            code, tree = run(["git", "--literal-pathspecs", "ls-tree", "-r", "-z", "HEAD", "--", *s["sources"]])
++            head = {}
++            for record in tree.split(b"\0") if code == 0 else []:
++                meta, tab, name = record.partition(b"\t")
++                if tab and len(meta.split()) == 3:
++                    head[os.fsdecode(name)] = meta.split()[2]
++            candidates = sorted(n for n in on_disk | set(head) if "\n" not in n and commit_command.named(cmd, n, top, here))
++            present = [n for n in candidates if os.path.isfile(os.path.join(top, n)) and not os.path.islink(os.path.join(top, n))]
++            hashes = {}
++            if present:
++                code, out = run(["git", "hash-object", "--no-filters", "--stdin-paths"], data="".join(n + "\n" for n in present).encode())
++                if code != 0 or len(out.split()) != len(present):
++                    continue
++                hashes = dict(zip(present, out.split()))
++            changed = [n for n in candidates if head.get(n) != hashes.get(n)]
++            if changed:
++                more = f" (and {len(changed) - 1} more)" if len(changed) > 1 else ""
++                said.append(f"did not regenerate {s['name']} automatically, because this command is not the one form "
++                            f"the hook can safely extend ([cd <dir> &&] [git add -- <files> &&] git commit … -- <paths>, "
++                            f"the commit last), although it names {changed[0]}{more}, which feeds it. After this command "
++                            f"finishes, run `{s['hint']}` from the repository root, and commit "
++                            f"{' and '.join(s['outputs'])} if it changes them")
++        if said:
++            print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse",
++                              "additionalContext": "Commit hook (never blocks): " + "; ".join(said)}}))
++
++    # The approval below covers the whole command, so only the house recipe gets it.
++    # shlex drops a comment, and a path appended after one would be inside it.
++    commit = None if "#" in cmd else commit_command.parse(cmd, cwd, approval=True)
++    if commit is None or not house_recipe(commit):
++        return declined()
++    where["dir"] = commit.cwd
+     code, out = run(["git", "rev-parse", "--show-toplevel"])
+     if code != 0:
+         return
+@@ -134,12 +197,12 @@ def main():
+     for p in commit.paths:
+         rel = os.path.relpath(os.path.abspath(os.path.join(commit.cwd, p)), root)
+         if rel == ".." or rel.startswith("../"):
+-            return  # outside this repo
++            return declined()  # outside this repo
+         paths.append("" if rel == "." else rel)
+     for absolute in commit.added:
+         rel = os.path.relpath(absolute, root)
+         if rel == ".." or rel.startswith("../"):
+-            return  # approval cannot cover staging files in another repository
++            return declined()  # approval cannot cover staging files in another repository
+ 
+     def changed(sources):
+         """Every file under `sources` that differs from HEAD, staged or not, tracked or not."""
+diff --git a/.claude/hooks/regenerate-commit-generated.test.sh b/.claude/hooks/regenerate-commit-generated.test.sh
+index a51999c47..9d32e5113 100755
+--- a/.claude/hooks/regenerate-commit-generated.test.sh
++++ b/.claude/hooks/regenerate-commit-generated.test.sh
+@@ -146,29 +146,64 @@ check "adds nothing"                             unchanged_input
+ check "and says so"                              says "generator failed"
+ reset_repo
+ 
+-echo "--- left alone ---"
++echo "--- left alone, and silent: nothing of a generator's is named ---"
+ echo y > "$REPO/other/x.ts"
+ run "git commit -F msg -- other/x.ts";                                   check "an unrelated commit"         nothing
++run "git commit -F msg -- other/x.ts && git push";                       check "an unrelated declined commit" nothing
++run 'git commit -m "$X: src/web/help/pages/b.md" -- other/x.ts';         check "an unchanged source named in a message" nothing
+ echo LATER-EDIT > "$REPO/src/web/help/pages/a.md"
+ run "git commit -F msg";                                                 check "a bare commit"               nothing
+-run "git add -A && git commit -F msg -- src/web/help/pages/a.md";        check "git add -A before it"        nothing
+-run "git add -- src/web/help && git commit -F msg -- src/web/help/pages/a.md"; check "git add of a directory" nothing
+-run "git commit -F msg -- src/web/help/pages/a.md && git push";          check "a push after it"             nothing
+-run "git commit -F msg src/web/help/pages/a.md";                         check "paths without --"            nothing
+-run "git commit -F msg -- src/web/help/pages/a.md # note";               check "a trailing comment"          nothing
+-run 'git commit -m "$X" -- src/web/help/pages/a.md';                    check "shell expansion"             nothing
+-run "git commit -a -F msg -- src/web/help/pages/a.md";                   check "an unknown option"           nothing
+-run "git log --grep commit";                                             check "not a commit"                nothing
+-run "git commit -F msg -- src/web/help/pages/a.md;";                      check "a trailing semicolon"        nothing
+-run "git commit -F msg -- src/web/help/pages/a.md &&";                    check "a trailing and operator"     nothing
+-run "git add -- :/ && git commit -F msg -- src/web/help/pages/a.md";      check "git add pathspec magic"      nothing
+-run "git add -- : && git commit -F msg -- src/web/help/pages/a.md";       check "git add empty pathspec"      nothing
+-run "git commit --amend -F msg -- src/web/help/pages/a.md";               check "history rewriting needs its own approval" nothing
+-run "git commit --no-verify -F msg -- src/web/help/pages/a.md";            check "bypassing hooks needs its own approval" nothing
++run "git log --grep commit -- src/web/help/pages/a.md";                  check "not a commit"                nothing
++check "and nothing was regenerated"              lacks src/help-corpus.generated.json LATER-EDIT
++reset_repo
++
++echo "--- declined, and says so: the commit names a changed source (261009t) ---"
++# The hook approves only the house recipe, which it reads for certain. On anything else that names
++# a changed source it must still say which generator to run, or a stale file goes in unremarked.
++hints_help() { unchanged_input && says "WRITE_HELP_CORPUS=1 npx vitest run tests/help-corpus.test.ts" && says "src/web/help/pages/a.md"; }
++hints_feedback() { unchanged_input && says "npx tsx scripts/feedback-endings.ts" && says "docs/user-feedback/n1.md"; }
++echo LATER-EDIT > "$REPO/src/web/help/pages/a.md"
++run "git add -A && git commit -F msg -- src/web/help/pages/a.md";        check "git add -A before it"        hints_help
++run "git add -- src/web/help && git commit -F msg -- src/web/help/pages/a.md"; check "git add of a directory" hints_help
++run "git commit -F msg -- src/web/help/pages/a.md && git push";          check "a push after it"             hints_help
++run "git commit -F msg src/web/help/pages/a.md";                         check "paths without --"            hints_help
++run "git commit -F msg -- src/web/help/pages/a.md # note";               check "a trailing comment"          hints_help
++run 'git commit -m "$X" -- src/web/help/pages/a.md';                    check "shell expansion"             hints_help
++run "git commit -a -F msg -- src/web/help/pages/a.md";                   check "an unknown option"           hints_help
++run "git commit -F msg -- src/web/help/pages/a.md;";                     check "a trailing semicolon"        hints_help
++run "git commit -F msg -- src/web/help/pages/a.md &&";                   check "a trailing and operator"     hints_help
++run "git add -- :/ && git commit -F msg -- src/web/help/pages/a.md";     check "git add pathspec magic"      hints_help
++run "git add -- : && git commit -F msg -- src/web/help/pages/a.md";      check "git add empty pathspec"      hints_help
++run "git commit --amend -F msg -- src/web/help/pages/a.md";              check "history rewriting needs its own approval" hints_help
++run "git commit --no-verify -F msg -- src/web/help/pages/a.md";          check "bypassing hooks needs its own approval" hints_help
++# Shapes measured in session transcripts, 2026-10-06 to 09:
++run 'git commit -q -F $SP/msg.txt -- src/web/help/pages/a.md';          check "a \$SP message file"         hints_help
++run "git commit -F msg -- src/web/help/pages/a.md; git log -1 | cat";    check "a trailing log piped to cat" hints_help
++run "git commit -F msg -- src/web/help/pages/*.md";                      check "a glob over the folder"      hints_help
++run "git commit -F msg -- src/web/help && git log -1";                   check "an ancestor folder"          hints_help
++run "cd src && git commit -F msg -- web/help/pages/a.md && git push";    check "relative to a leading cd"    hints_help
+ ln -s "$REPO/docs" "$REPO/other/alias"
+-run "cd other/alias/.. && git commit -F msg -- src/web/help/pages/a.md";  check "cd through a symlink and .. is uncertain" nothing
++run "cd other/alias/.. && git commit -F msg -- src/web/help/pages/a.md"; check "cd through a symlink and .. is uncertain, and silent" nothing
++run 'git log -1 && git commit -m "$X" -- src/web/help/pages/b.md';      check "a named source that is unchanged" nothing
+ check "and nothing was regenerated"              lacks src/help-corpus.generated.json LATER-EDIT
+ reset_repo
++(cd "$REPO" && git update-index --assume-unchanged src/web/help/pages/a.md)
++echo HIDDEN-EDIT > "$REPO/src/web/help/pages/a.md"
++run 'git commit -m "$X" -- src/web/help/pages/a.md';                    check "assume-unchanged cannot hide a named source" hints_help
++(cd "$REPO" && git update-index --no-assume-unchanged src/web/help/pages/a.md && git update-index --skip-worktree src/web/help/pages/a.md)
++run 'git commit -m "$X" -- src/web/help/pages/a.md';                    check "nor can skip-worktree"       hints_help
++(cd "$REPO" && git update-index --no-skip-worktree src/web/help/pages/a.md)
++reset_repo
++rm "$REPO/src/web/help/pages/a.md"
++run 'git commit -m "$X" -- src/web/help/pages/a.md';                    check "a deleted source counts"     hints_help
++reset_repo
++echo edited > "$REPO/docs/user-feedback/n1.md"
++run "git commit -F - -- docs/user-feedback/n1.md <<'EOF'
++a heredoc message
++EOF"
++check "a heredoc message names the feedback generator" hints_feedback
++check "and nothing was regenerated"              lacks src/feedback-endings.generated.ts edited
++reset_repo
+ 
+ echo "--- directory coverage is not Git membership ---"
+ echo mine > "$REPO/docs/user-feedback/n1.md"
+@@ -256,6 +291,18 @@ pid=$(cat "$REPO/generator.pid")
+ check "the timed-out generator does not survive" bash -c '! kill -0 "$1" 2>/dev/null' _ "$pid"
+ reset_repo
+ 
++echo "--- a hung git while deciding what to say is bounded too ---"
++mkdir -p "$SCRATCH/hung-bin"
++printf '#!/bin/sh\nsleep 60\n' > "$SCRATCH/hung-bin/git" && chmod +x "$SCRATCH/hung-bin/git"
++echo LATER-EDIT > "$REPO/src/web/help/pages/a.md"
++started=$(date +%s)
++out=$(printf '%s' "$(CWD="$REPO" python3 -c 'import json, os; print(json.dumps({"cwd":os.environ["CWD"],"tool_input":{"command":"git commit -m \"$X\" -- src/web/help/pages/a.md"}}))')" \
++  | PATH="$SCRATCH/hung-bin:$PATH" "$HOOK" 2>"$SCRATCH/stderr"); code=$?
++elapsed=$(( $(date +%s) - started ))
++check "returns quietly"                          nothing
++check "well inside the registered timeout"       [ "$elapsed" -le 10 ]
++reset_repo
++
+ echo "--- registration ---"
+ REGISTERED=$(python3 - "$SRC/.claude/settings.json" <<'PY'
+ import json, sys
+diff --git a/docs/plans/261009p-the-commit-hook-reads-only-one-commit-command-in-seven.md b/docs/plans/261009p-the-commit-hook-reads-only-one-commit-command-in-seven.md
+index 62f6ca1ba..b41a859d2 100644
+--- a/docs/plans/261009p-the-commit-hook-reads-only-one-commit-command-in-seven.md
++++ b/docs/plans/261009p-the-commit-hook-reads-only-one-commit-command-in-seven.md
+@@ -107,8 +107,8 @@ its stricter `approval` mode and only with the commit last, so it acts on **125
+ commits** (counted the same way). This fallback does not carry over: that hook rewrites the command
+ and grants permission for it, which is exactly where reading the command for certain is right. What
+ it needs is to *say* when it declines on a commit that names one of its sources, so the session
+-runs the generator. That is a separate change to a different hook, **handed to the Overseer to queue
+-as a bug** in this work's report, rather than left as this sentence.
++runs the generator. That is a separate change to a different hook, handed to the Overseer as a bug,
++and built in [261009t](261009t-the-regenerate-hook-says-when-it-declines-a-commit-that-names-its-sources.md).
+ 
+ ## Stages
+ 
+diff --git a/docs/postmortems/261009j-a-hook-that-cannot-read-the-command-does-nothing-and-says-nothing.md b/docs/postmortems/261009j-a-hook-that-cannot-read-the-command-does-nothing-and-says-nothing.md
+index 8b71d2bbd..f7c4737cb 100644
+--- a/docs/postmortems/261009j-a-hook-that-cannot-read-the-command-does-nothing-and-says-nothing.md
++++ b/docs/postmortems/261009j-a-hook-that-cannot-read-the-command-does-nothing-and-says-nothing.md
+@@ -70,8 +70,8 @@ is a third reason to make that flip, and the cheapest of the three to land.**
+ 2. **A guard that declines says so, when declining could matter.** Not on every command: on a
+    commit that changes a docs PNG and that it could not read, one line of `additionalContext` would
+    have told each session what to run. Subsumed here for the ordinary command shapes measured above;
+-   still the right default for the regenerate hook, which is reported to the Overseer rather than
+-   changed here.
++   still the right default for the regenerate hook, which now does exactly that
++   ([261009t](../plans/261009t-the-regenerate-hook-says-when-it-declines-a-commit-that-names-its-sources.md)).
+ 3. **The git `pre-commit` hook** above. The only option with no parsing in it. Greg's call.
+ 4. **Compress at capture** (in the screenshot helpers) — rejected again for 261007m's reasons:
+    several capture paths, and it misses a copied-in or hand-made shot.
+diff --git a/docs/project/feedback-reports.md b/docs/project/feedback-reports.md
+index 4322e51c9..3bb1486f3 100644
+--- a/docs/project/feedback-reports.md
++++ b/docs/project/feedback-reports.md
+@@ -612,7 +612,9 @@ same commit ([`regenerate-commit-generated.sh`](../../.claude/hooks/regenerate-c
+ [261007q](../plans/261007q-generated-files-regenerate-on-commit.md)). It stays out of a bare
+ `git commit`, a command with anything after the commit (`&& git push`), a commit while another note
+ is changed and not in it, and a header that does not parse; `tests/feedback-endings.test.ts` is the
+-backstop for all of those. Both files stay committed rather than built on deploy: the deploy's
++backstop for all of those. When it stays out of a commit that names a changed note, it says so and
++gives the command to run
++([261009t](../plans/261009t-the-regenerate-hook-says-when-it-declines-a-commit-that-names-its-sources.md)). Both files stay committed rather than built on deploy: the deploy's
+ shipped-emails step reads the endings map from git, at the commit it just shipped.
+ 
+ ## What a report is not
+diff --git a/docs/project/help-page.md b/docs/project/help-page.md
+index 7089e82f9..4d9fc4177 100644
+--- a/docs/project/help-page.md
++++ b/docs/project/help-page.md
+@@ -119,7 +119,9 @@ The plan, its review and its eval: [261007k](../plans/261007k-help-chatbot.md).
+   catalogue), and adds the corpus to the same commit. It stays out of a bare `git commit`, a
+   command with anything after the commit (`&& git push`), and a commit while some other Help file is
+   changed and not in it, so the test is still the backstop
+-  ([261007q](../plans/261007q-generated-files-regenerate-on-commit.md)). The corpus stays committed
++  ([261007q](../plans/261007q-generated-files-regenerate-on-commit.md)). When it stays out of a
++  commit that names a changed Help source, it says so and gives the command to run
++  ([261009t](../plans/261009t-the-regenerate-hook-says-when-it-declines-a-commit-that-names-its-sources.md)). The corpus stays committed
+   rather than built on deploy, because only Vitest or Vite can read the pages. The
+   whole corpus is the model's system prompt ([`src/help-chat-call.ts`](../../src/help-chat-call.ts)
+   § `HELP_CHAT_SYSTEM`), with a rule to link the page each answer comes from and to decline, in one
