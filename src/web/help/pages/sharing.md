@@ -34,9 +34,11 @@ what a visitor would get, ticked that you have the right to share the text, and 
 it**. The padlock then becomes a globe.
 
 **While it is still being added.** You need not wait for an import to finish. The page that shows
-its progress has a **Sharing** section, closed until you open it, with **Make it public** and
-**Create a private link** and the same confirmations. The link button on the import’s card copies
-the address the article will have. Somebody who opens a shared article before its import has
+its progress has a **Sharing options** section. It is closed until you open it, but opens itself
+whenever something in it needs your attention. It has **Create a private link…** and **Make it
+public…**, with the same confirmations. The copy button on the import’s card copies the article’s
+ordinary address, which opens for other people only once the article is public: a private link is a
+different address. Somebody who opens a shared article before its import has
 finished is told it is still being added, and the page opens it when it is ready.
 
 What sharing means:

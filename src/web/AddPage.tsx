@@ -1872,10 +1872,12 @@ function stillSending(transfer: Transfer | null): boolean {
 }
 
 /**
- * **Has the article's text actually gone to a model provider yet?**
+ * **Whether the direct-add disclosure uses its past tense.**
  *
- * The predicate behind the disclosure sentence's tense, and it is asked the
- * right way round: *has an ingest been queued*, not *has the transfer stopped*.
+ * The predicate behind the disclosure sentence's tense: *has an ingest been
+ * queued*, not *has the transfer stopped*. Despite the historical function
+ * name, this does **not** establish that a provider call has begun. That older
+ * mismatch is recorded and deferred in plan 261009i § Review.
  *
  * The first version asked `!stillSending(...)`, and that was false in four
  * ordinary states at once, every one of them a wrong statement about somebody's
@@ -1886,10 +1888,13 @@ function stillSending(transfer: Transfer | null): boolean {
  * that the file was still arriving, in consecutive sentences. GPT Sol, finding
  * 3, and it is the finding I most wanted broken.
  *
- * So: past tense only once something **queued** it. For a URL that is the whole
- * page — the effect posts before the first paint, and there is no state in which
- * it has not. For an upload it is an engine outcome of `queued` or `article`, or
- * this page's own POST having come back with a job id.
+ * So: past tense only once something **queued** it. For a URL that is this
+ * page's POST having come back with a job id; until 2026-10-09 it was the whole
+ * page, on the ground that the effect posts before the first paint, and so a
+ * paste the server *refused* (a `/read/` link, the allowance) was told its text
+ * had gone when nothing had been fetched at all (qi-9x3akt5n, plan 261009i § 7).
+ * For an upload it is an engine outcome of `queued` or `article`, or the same
+ * POST having come back with a job id.
  *
  * **`started`, not `job`.** `started` is set the instant `addUpload` resolves;
  * `job` waits for the next poll to bring that job back, up to a second later. A
@@ -1900,7 +1905,7 @@ function stillSending(transfer: Transfer | null): boolean {
  * `addUpload` answers null there.
  */
 function textHasGone(transfer: Transfer | null, isUpload: boolean, posted: boolean): boolean {
-  if (!isUpload) return true;
+  if (!isUpload) return posted;
   const kind = transfer?.phase.kind;
   return kind === "queued" || kind === "article" || posted;
 }

@@ -184,8 +184,22 @@ async function finish(id = "job-1", slug = SLUG): Promise<void> {
   await settle();
 }
 
-const shareBox = (): HTMLInputElement | null =>
-  host.querySelector<HTMLInputElement>("[data-add-share] > label input[type=checkbox]");
+/**
+ * ***Make it public* as the box it used to be.** It became a button on
+ * 2026-10-09 (plan 261009i), and each press calls what the box called, so the
+ * cases below still say *tick* and *untick*. This hands back the one press the
+ * control offers (*Make it public…*, *Cancel* or *Stop sharing*; the
+ * confirmation's own *Cancel* is deliberately excluded), or null when the
+ * control offers no press, as the box was disabled then; and `checked` is its
+ * `data-on`, which is what the tick showed.
+ */
+const shareBox = (): (HTMLElement & { checked: boolean }) | null => {
+  const control = host.querySelector<HTMLElement>("[data-add-share]:not([data-add-share=adopted])");
+  if (!control) return null;
+  const press = control.querySelector<HTMLButtonElement>("[data-add-share-press]");
+  if (!press) return null;
+  return Object.assign(press, { checked: control.dataset.on === "true" });
+};
 const rightsBox = (): HTMLInputElement | undefined =>
   [...host.querySelectorAll("label")].find((l) => l.textContent?.includes(SHARING_RIGHTS_CONFIRM))?.querySelector("input") ??
   undefined;

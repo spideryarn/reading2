@@ -144,10 +144,18 @@ const { jobEngine } = await import("../src/web/jobEngine.js");
 const {
   PRIVATE_LINK_ALSO_PUBLIC,
   PRIVATE_LINK_CONFIRM_TITLE,
+  PRIVATE_LINK_OPEN_TIP,
+  PRIVATE_LINK_STOP_TIP,
   SHARE_AT_ADD_ALREADY_AN_ARTICLE,
+  LINK_AT_ADD_LABEL,
   SHARE_AT_ADD_LABEL,
   SHARE_AT_ADD_RECALLED,
+  PUBLIC_SHELF_LABEL,
+  SHARING_AT_ADD_INTRO,
+  SHARING_CONFIRM_TITLE,
+  SHARING_OPEN_TIP,
   SHARING_RIGHTS_CONFIRM,
+  SHARING_STOP_TIP,
   LINK_AT_ADD_ON,
   LINK_AT_ADD_UNKNOWN,
   LINK_AT_ADD_WAITING,
@@ -212,8 +220,22 @@ async function finish(id = "job-1", slug = SLUG): Promise<void> {
 const section = () => host.querySelector<HTMLElement>("[data-add-sharing]");
 const toggle = () => host.querySelector<HTMLButtonElement>("[data-add-sharing-toggle]");
 const isOpen = () => section()?.dataset.open === "true";
-const shareBox = (): HTMLInputElement | null =>
-  host.querySelector<HTMLInputElement>("[data-add-share] > label input[type=checkbox]");
+/**
+ * ***Make it public* as the box it used to be.** It became a button on
+ * 2026-10-09 (plan 261009i), and each press calls what the box called, so the
+ * cases below still say *tick* and *untick*. This hands back the one press the
+ * control offers (*Make it public…*, *Cancel* or *Stop sharing*; the
+ * confirmation's own *Cancel* is deliberately excluded), or null when the
+ * control offers no press, as the box was disabled then; and `checked` is its
+ * `data-on`, which is what the tick showed.
+ */
+const shareBox = (): (HTMLElement & { checked: boolean }) | null => {
+  const control = host.querySelector<HTMLElement>("[data-add-share]:not([data-add-share=adopted])");
+  if (!control) return null;
+  const press = control.querySelector<HTMLButtonElement>("[data-add-share-press]");
+  if (!press) return null;
+  return Object.assign(press, { checked: control.dataset.on === "true" });
+};
 const linkControl = () => host.querySelector<HTMLElement>("[data-add-share-link]");
 const linkShown = (): string | null =>
   [...host.querySelectorAll<HTMLInputElement>("input[readonly]")].map((i) => i.value).find((v) => v.includes("key=")) ??
@@ -233,6 +255,14 @@ const text = () => host.textContent ?? "";
 const everything = () =>
   `${host.innerHTML} ${[...host.querySelectorAll("input")].map((i) => i.value).join(" ")}`;
 
+/** Focus is how a keyboard asks for a Tooltip, and opens it without the pointer delay. */
+async function expectTooltip(control: HTMLButtonElement | undefined, words: string): Promise<void> {
+  expect(control, `no control for tooltip “${words}”`).toBeDefined();
+  expect(document.body.textContent).not.toContain(words);
+  await act(async () => control?.focus());
+  expect(document.body.textContent).toContain(words);
+}
+
 async function openSection(): Promise<void> {
   if (!isOpen()) click(toggle(), "Sharing row");
   await settle();
@@ -241,7 +271,7 @@ async function openSection(): Promise<void> {
 /** Open the section, open the question, tick the rights, press *Create the link*. */
 async function createLink(): Promise<void> {
   await openSection();
-  click(button("Create a private link"), "Create a private link button");
+  click(button(LINK_AT_ADD_LABEL), "Create a private link button");
   click(rightsBox(), "rights box");
   click(button("Create the link"), "Create the link button");
   await settle();
@@ -473,13 +503,73 @@ describe("2b: one Sharing section, closed by default", () => {
 
   it("opens to both controls, and shuts again", async () => {
     await importing();
+    expect(toggle()?.parentElement?.tagName, "the disclosure row remains the section's heading").toBe("H2");
     await openSection();
     expect(toggle()?.getAttribute("aria-expanded")).toBe("true");
     expect(shareBox()?.checked).toBe(false);
-    expect(button("Create a private link")).toBeDefined();
+    expect(button(LINK_AT_ADD_LABEL)).toBeDefined();
+    await expectTooltip(button(LINK_AT_ADD_LABEL), PRIVATE_LINK_OPEN_TIP);
+    await expectTooltip(button(SHARE_AT_ADD_LABEL), SHARING_OPEN_TIP);
+    expect(linkControl()?.querySelector(":scope > h3")?.textContent).toBe("Private link");
+    expect(host.querySelector("[data-add-share] > h3")?.textContent).toBe("Public");
     click(toggle(), "Sharing row");
     expect(isOpen()).toBe(false);
     expect(shareBox()).toBeNull();
+  });
+
+  /* Plan 261009i (spya-nsrkju): five critics read the page in character, and
+     these are the four things they agreed it did not say. */
+  it("claims no state when shut with nothing on, and opens on what every article starts as, with Help", async () => {
+    /* Not *off*: this tab cannot always know (GPT Sol's plan review, P1). */
+    await importing();
+    expect(isOpen()).toBe(false);
+    expect(toggle()?.textContent).toBe(sharingAtAddSummary(false, false));
+    expect(sharingAtAddSummary(false, false)).not.toMatch(/off|private|only you/i);
+    await openSection();
+    const intro = host.querySelector("[data-add-sharing-intro]");
+    expect(intro?.textContent).toContain(SHARING_AT_ADD_INTRO);
+    expect(intro?.querySelector("a")?.getAttribute("href")).toBe("/help/sharing");
+  });
+
+  it("draws the private link first, the Metadata card's order", async () => {
+    await importing();
+    await openSection();
+    const link = linkControl();
+    const pub = host.querySelector("[data-add-share]");
+    if (!link || !pub) throw new Error("both controls should be drawn");
+    expect(link.compareDocumentPosition(pub) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("offers no tick box and no *Stop sharing* while the public question is still asking", async () => {
+    /* The box stayed ticked over an unanswered confirmation, so the page
+       looked shared when nothing was. */
+    await importing();
+    await openSection();
+    click(button(SHARE_AT_ADD_LABEL), "Make it public button");
+    expect(text()).toContain(SHARING_CONFIRM_TITLE);
+    const boxes = [...host.querySelectorAll<HTMLInputElement>("[data-add-share] input[type=checkbox]")];
+    expect(boxes.map((b) => b.closest("label")?.textContent), "a box other than the rights tick").toEqual([
+      SHARING_RIGHTS_CONFIRM,
+    ]);
+    expect(shareBox(), "the legacy helper found a press where the public control offers none").toBeNull();
+    expect(button("Stop sharing")).toBeUndefined();
+    expect(button(SHARE_AT_ADD_LABEL), "the opener is still offered over its own question").toBeUndefined();
+    expect(button("Share it")?.closest("div.tw\\:rounded-md")?.querySelector("h4")?.textContent).toBe(
+      SHARING_CONFIRM_TITLE,
+    );
+  });
+
+  it("says where the public listing is, by the public shelf's own name", async () => {
+    await importing();
+    await openSection();
+    const shelf = [...host.querySelectorAll("[data-add-share] a")].find((a) => a.textContent === PUBLIC_SHELF_LABEL);
+    expect(shelf?.getAttribute("href")).toBe("/read/public");
+  });
+
+  it("says the private link itself is unlisted even while the article is public", async () => {
+    await importing();
+    await makePublic();
+    expect(linkControl()?.textContent).toContain("The private link is not listed anywhere.");
   });
 
   it("shows only the control it could read: the link's read failed", async () => {
@@ -504,9 +594,12 @@ describe("2b: no link without the rights tick and the press", () => {
   it("opening the question sends nothing, and shows the Metadata card's confirmation", async () => {
     await importing();
     await openSection();
-    click(button("Create a private link"), "Create a private link button");
+    click(button(LINK_AT_ADD_LABEL), "Create a private link button");
     expect(text()).toContain(PRIVATE_LINK_CONFIRM_TITLE);
     expect(text()).toContain(SHARING_RIGHTS_CONFIRM);
+    expect(button("Create the link")?.closest("div.tw\\:rounded-md")?.querySelector("h4")?.textContent).toBe(
+      PRIVATE_LINK_CONFIRM_TITLE,
+    );
     await settle();
     expect(writes).toEqual([]);
   });
@@ -514,7 +607,7 @@ describe("2b: no link without the rights tick and the press", () => {
   it("the press does nothing until the rights box is ticked", async () => {
     await importing();
     await openSection();
-    click(button("Create a private link"), "Create a private link button");
+    click(button(LINK_AT_ADD_LABEL), "Create a private link button");
     expect(button("Create the link")?.disabled).toBe(true);
     click(button("Create the link"), "Create the link button");
     await settle();
@@ -524,7 +617,7 @@ describe("2b: no link without the rights tick and the press", () => {
   it("ticking the rights box alone sends nothing", async () => {
     await importing();
     await openSection();
-    click(button("Create a private link"), "Create a private link button");
+    click(button(LINK_AT_ADD_LABEL), "Create a private link button");
     click(rightsBox(), "rights box");
     await settle();
     expect(writes).toEqual([]);
@@ -537,12 +630,13 @@ describe("2b: no link without the rights tick and the press", () => {
     expect(linkShown()).toBe(`${location.origin}/read/${SLUG}?key=${KEY}`);
     expect(text()).toContain(LINK_AT_ADD_ON);
     expect(button("Turn off")).toBeDefined();
+    await expectTooltip(button("Turn off"), PRIVATE_LINK_STOP_TIP);
   });
 
   it("Cancel closes the confirmation and sends nothing", async () => {
     await importing();
     await openSection();
-    click(button("Create a private link"), "Create a private link button");
+    click(button(LINK_AT_ADD_LABEL), "Create a private link button");
     click(rightsBox(), "rights box");
     click(button("Cancel"), "Cancel button");
     await settle();
@@ -629,7 +723,7 @@ describe("2b: the section opens itself when it has something to say, and names w
   it("cannot be shut over an open question", async () => {
     await importing();
     await openSection();
-    click(button("Create a private link"), "Create a private link button");
+    click(button(LINK_AT_ADD_LABEL), "Create a private link button");
     expect(isOpen()).toBe(true);
     expect(toggle(), "a row that would shut it").toBeNull();
   });
@@ -648,6 +742,8 @@ describe("2b: the section opens itself when it has something to say, and names w
     await makePublic();
     click(toggle(), "Sharing row");
     expect(toggle()?.textContent?.trim()).toBe(sharingAtAddSummary(true, false));
+    await openSection();
+    await expectTooltip(button("Stop sharing"), SHARING_STOP_TIP);
   });
 
   it("with both on, says both, and says the link is not what keeps it readable", async () => {
@@ -689,7 +785,7 @@ describe("2b: the page does not leave by itself while the link is unsettled", ()
   it("waits while the link's confirmation is open, and opens on the button", async () => {
     await importing();
     await openSection();
-    click(button("Create a private link"), "Create a private link button");
+    click(button(LINK_AT_ADD_LABEL), "Create a private link button");
     await finish();
     expect(navigations).toEqual([]);
     click(button(OPEN), OPEN);

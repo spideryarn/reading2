@@ -1,0 +1,965 @@
+diff --git a/docs/project/ingest-queue.md b/docs/project/ingest-queue.md
+index e49e267f1..c11d1689e 100644
+--- a/docs/project/ingest-queue.md
++++ b/docs/project/ingest-queue.md
+@@ -668,7 +668,9 @@ Three things, all in the browser, in
+   re-reads the article when the job is done. It does not send the reader to the add page, because
+   arriving there posts an import.
+ - **A *Sharing* section, shut by default**, holding *Make it public* and, since 2026-10-06,
+-  *Create a private link*. What each asks and sends, and what a visitor sees who arrives before
++  *Create a private link*. Since 2026-10-09 the link comes first, both are buttons, and the row
++  reads *Sharing options* and opens on a line about the private default with a link to Help —
++  [261009i](../plans/261009i-add-page-sharing-clearer.md). What each asks and sends, and what a visitor sees who arrives before
+   the import has published, are in
+   [public-readable-sharing.md § While the article is still importing](public-readable-sharing.md#while-the-article-is-still-importing).
+ - **The card is drawn from the POST's answer** (since 2026-10-06). The page used to look its job
+diff --git a/docs/project/public-readable-sharing.md b/docs/project/public-readable-sharing.md
+index 3679ceb0c..c880d4c2c 100644
+--- a/docs/project/public-readable-sharing.md
++++ b/docs/project/public-readable-sharing.md
+@@ -220,10 +220,13 @@ code by `tests/public-readable-sharing-page.test.tsx` and `tests/privacy-page.te
+ 
+ ## While the article is still importing
+ 
+-Since 2026-10-05 the add page has a **Make it public** box
++Since 2026-10-05 the add page has a **Make it public** control
+ ([`AddShare.tsx`](../../src/web/AddShare.tsx) drawing a `ShareAtAdd`,
+ [`src/web/add-share.ts`](../../src/web/add-share.ts)), which Greg asked for (`spya-e9t58e`). The plan
+-is [261005l](../plans/261005l-permalink-and-share-while-an-article-is-importing.md). **The server
++is [261005l](../plans/261005l-permalink-and-share-while-an-article-is-importing.md). It was a tick
++box until 2026-10-09, when it became a button like the private link's, because the box stayed
++ticked while its confirmation was still asking; the presses call what the box did, so nothing it
++sends changed — [261009i](../plans/261009i-add-page-sharing-clearer.md). **The server
+ did not change.** `PUT /api/article/:slug/visibility` has always needed only the owner's row, and
+ every public read needs a published revision, so a switch pressed early exposes nothing early: the
+ article becomes readable by others when the import publishes.
+diff --git a/src/help-corpus.generated.json b/src/help-corpus.generated.json
+index aeffd1c02..523011663 100644
+--- a/src/help-corpus.generated.json
++++ b/src/help-corpus.generated.json
+@@ -347,7 +347,7 @@
+   "summary": "The two ways to let other people read an article, a private link and making it public, and what each lets them see.",
+   "keywords": "share public publish link private link key send someone some people friend colleague visitor see comments bookmarks chats profile private padlock globe shared articles unshare stop turn off unlisted",
+   "experimental": false,
+-  "body": "Every article starts **private**. The padlock beside the title means it is not public. Sending\nsomeone its ordinary address lets nobody in: copying an address changes nothing about who can open\nit.\n\nThere are two ways to let other people read one, and both are under **Access & sharing** on the\narticle’s Metadata page: a private link, for the people you send it to, and making it public, for\neveryone.\n\n**A private link.** Press **Create a link**, look at what somebody with the link would get, tick\nthat you have the right to share the text, and press **Create the link**. Then copy the link and\nsend it however you like.\n\n- **Anyone who has the link can read the article without an account**, and can pass the link on. We\n  cannot tell you who has opened it.\n- **An article shared only this way is not listed anywhere**, and the page tells whoever opens it\n  that it is a private link. They get what a visitor to a public article gets, and like any visitor\n  they cannot write anything or start any AI work.\n- **Turn off** stops the link working from the next request. Creating a link again makes a new one,\n  and the old one stays dead.\n- A private link does not change what the article counts against your allowance. If the article is\n  also public, its ordinary address works without the link, and turning the link off does not make\n  it private.\n\n**Making it public.** Press the padlock. It takes you to **Access & sharing** on the article’s\nMetadata page, where you press **Share with anyone…**. Nothing goes out until you have seen exactly\nwhat a visitor would get, ticked that you have the right to share the text, and pressed **Share\nit**. The padlock then becomes a globe.\n\n**While it is still being added.** You need not wait for an import to finish. The page that shows\nits progress has a **Sharing** section, closed until you open it, with **Make it public** and\n**Create a private link** and the same confirmations. The link button on the import’s card copies\nthe address the article will have. Somebody who opens a shared article before its import has\nfinished is told it is still being added, and the page opens it when it is ready.\n\nWhat sharing means:\n\n- **Anyone can read it without an account, and it is listed** on the public shelf,\n  [Shared articles](/read/public), so people who were never sent the link can find it. It is\n  not listed in search engines.\n- **Visitors get the article and the reading aids already made for it**, and **your comments and\n  bookmarks** with the AI’s answers to them. They cannot write anything or start any AI work, so a\n  visitor never uses up your allowance. **Your chats and your profile are not shared.**\n- **An article added since 5 September 2026 counts as half while shared.** Older charged articles\n  still count in full — see [Plans](/help/plans).\n\n**Stop sharing** takes the article off the public shelf and refuses the next request for it. It\ncannot take back a page somebody has already loaded or copied."
++  "body": "Every article starts **private**. The padlock beside the title means it is not public. Sending\nsomeone its ordinary address lets nobody in: copying an address changes nothing about who can open\nit.\n\nThere are two ways to let other people read one, and both are under **Access & sharing** on the\narticle’s Metadata page: a private link, for the people you send it to, and making it public, for\neveryone.\n\n**A private link.** Press **Create a link**, look at what somebody with the link would get, tick\nthat you have the right to share the text, and press **Create the link**. Then copy the link and\nsend it however you like.\n\n- **Anyone who has the link can read the article without an account**, and can pass the link on. We\n  cannot tell you who has opened it.\n- **An article shared only this way is not listed anywhere**, and the page tells whoever opens it\n  that it is a private link. They get what a visitor to a public article gets, and like any visitor\n  they cannot write anything or start any AI work.\n- **Turn off** stops the link working from the next request. Creating a link again makes a new one,\n  and the old one stays dead.\n- A private link does not change what the article counts against your allowance. If the article is\n  also public, its ordinary address works without the link, and turning the link off does not make\n  it private.\n\n**Making it public.** Press the padlock. It takes you to **Access & sharing** on the article’s\nMetadata page, where you press **Share with anyone…**. Nothing goes out until you have seen exactly\nwhat a visitor would get, ticked that you have the right to share the text, and pressed **Share\nit**. The padlock then becomes a globe.\n\n**While it is still being added.** You need not wait for an import to finish. The page that shows\nits progress has a **Sharing options** section, closed until you open it and open whenever something in it\nneeds your attention, with **Create a private link…** and **Make it public…** and the same\nconfirmations. The copy button on the import’s card copies\nthe article’s ordinary address, which opens for other people only once the article is public: a\nprivate link is a different address. Somebody who opens a shared article before its import has\nfinished is told it is still being added, and the page opens it when it is ready.\n\nWhat sharing means:\n\n- **Anyone can read it without an account, and it is listed** on the public shelf,\n  [Shared articles](/read/public), so people who were never sent the link can find it. It is\n  not listed in search engines.\n- **Visitors get the article and the reading aids already made for it**, and **your comments and\n  bookmarks** with the AI’s answers to them. They cannot write anything or start any AI work, so a\n  visitor never uses up your allowance. **Your chats and your profile are not shared.**\n- **An article added since 5 September 2026 counts as half while shared.** Older charged articles\n  still count in full — see [Plans](/help/plans).\n\n**Stop sharing** takes the article off the public shelf and refuses the next request for it. It\ncannot take back a page somebody has already loaded or copied."
+  },
+  {
+   "anchor": "comments",
+diff --git a/src/messages.ts b/src/messages.ts
+index 123841442..1d712a4be 100644
+--- a/src/messages.ts
++++ b/src/messages.ts
+@@ -4495,7 +4495,7 @@ export const SHARING_CONFIRM_TITLE = "Share the full text of this article?";
+  */
+ export function sharingConfirmBody(title: string | null): string {
+   /* No title: the add page asks while the article is still importing, and an
+-     import may not have found one yet (`SHARE_AT_ADD_LABEL`, below). */
++     import may not have found one yet (`SHARE_AT_ADD_HEADING`, below). */
+   const named = title === null ? "this article" : `“${title}”`;
+   return (
+     `This puts the whole extracted text of ${named} where anyone can read it without ` +
+@@ -4692,19 +4692,33 @@ export const SHARING_RIGHTS_CONFIRM =
+  */
+ export const IMPORT_LINK_COPY_TIP =
+   "Copy the link this import's article will have. It opens for you once the import has " +
+-  "finished, and for anyone else only if you share it. If the import fails, the link leads " +
+-  "nowhere.";
++  "finished, and for anyone else only if you make the article public: a private link is a " +
++  "different address. If the import fails, the link leads nowhere.";
+ 
+ /** The copy did not happen. The card has no box holding the link, so this is followed by the address itself. */
+ export const IMPORT_LINK_COPY_FAILED = "Your browser would not allow the copy. The link is";
+ 
+-/** The add page's third box. */
+-export const SHARE_AT_ADD_LABEL = "Make it public";
++/**
++ * The add page's public control: its heading, and the button that opens the
++ * confirmation. A button and not a tick box since 2026-10-09, the shape the
++ * private link beside it and the Metadata card's *Share with anyone…* already
++ * had: a box stayed ticked while the confirmation was still asking, so the
++ * page looked shared when nothing was. The ellipsis says the press asks
++ * before it does anything. Plan 261009i (spya-nsrkju).
++ */
++export const SHARE_AT_ADD_HEADING = "Public";
++export const SHARE_AT_ADD_LABEL = "Make it public…";
+ 
+-/** Under the label, before anything is pressed. Nothing goes out on the tick: it opens the confirmation. */
+-export const SHARE_AT_ADD_WHAT =
+-  "Anyone can read it without signing in, and it is listed publicly, once the import has " +
+-  "finished. Ticking this shows what would be shared and asks you to confirm.";
++/**
++ * Under the heading, before anything is pressed, followed by a link to the
++ * public shelf named `PUBLIC_SHELF_LABEL` and a full stop (AddShare.tsx), so
++ * *listed publicly* says where. Until 2026-10-09 it ended *"Ticking this shows
++ * what would be shared and asks you to confirm"*, which nobody read: the
++ * section's own first line and the button's tooltip say it now.
++ */
++export const SHARE_AT_ADD_WHAT_LEAD =
++  "Anyone can read it without signing in once the import has finished, and it is listed " +
++  "publicly, under";
+ 
+ /**
+  * **The import adopted an article already on the shelf** (`freeSlug`,
+@@ -4766,7 +4780,7 @@ export const SHARE_AT_ADD_UNKNOWN =
+  */
+ export const SHARE_AT_ADD_RECALLED =
+   "You asked to make this public before this page was reloaded, and we cannot read back " +
+-  "whether it is until the import has finished. Untick this to make it private.";
++  "whether it is until the import has finished. Press Stop sharing to make it private.";
+ 
+ /** The owner opened the import's address before the article was published. src/web/article/StillBeingAdded.tsx. */
+ export const STILL_BEING_ADDED_HEADING = "Still being added";
+@@ -4802,14 +4816,42 @@ export function sharingAtAddSummary(isPublic: boolean, linkOn: boolean): string
+   if (isPublic && linkOn) return "Sharing: public, and a private link";
+   if (isPublic) return "Sharing: public";
+   if (linkOn) return "Sharing: private link";
+-  return "Sharing";
++  /* *Options*, since 2026-10-09, and deliberately not *off*: a bare
++     *Sharing* read as the next step in the flow (plan 261009i), but *off* would
++     be a promise this tab cannot always keep. Another tab may have shared the
++     article, and before publication nothing can be read back (postmortem
++     261005r); a control that is unknown or saving is not *on* either. So the
++     row names a state only when one is on, and the private default is said
++     inside, as the general fact it is (`SHARING_AT_ADD_INTRO`). GPT Sol's plan
++     review, P1. */
++  return "Sharing options";
+ }
+ 
+-/** Under the link control's heading, before anything is pressed. The button opens the confirmation. */
++/**
++ * The open section's first line, then a *How sharing works* link to
++ * `/help/sharing`. Each clause is a fact already published elsewhere: Help's
++ * first sentence, the confirmation every share passes through, and Access &
++ * sharing on the Metadata page. Plan 261009i.
++ */
++export const SHARING_AT_ADD_INTRO =
++  "Every article starts private. Nothing is shared until you confirm, and you can also share " +
++  "it later from the article's Metadata page.";
++
++/** The link after `SHARING_AT_ADD_INTRO`. */
++export const SHARING_AT_ADD_HELP = "How sharing works";
++
++/**
++ * Under the link control's heading, before anything is pressed. *Can pass it
++ * on* since 2026-10-09, from `PRIVATE_LINK_WHAT` and the confirmation: a
++ * reader took *private* to mean *only me* (plan 261009i). The sentence about
++ * the button went the way `SHARE_AT_ADD_WHAT_LEAD`'s did.
++ */
+ export const LINK_AT_ADD_WHAT =
+-  "Anyone who has the link can read the article without signing in, once the import has " +
+-  "finished. It is not listed anywhere. The button shows what would be shared and asks you to " +
+-  "confirm.";
++  "Anyone who has the link can read it without signing in, and can pass it on, once the " +
++  "import has finished. It is not listed anywhere.";
++
++/** The link control's button, which opens the confirmation. */
++export const LINK_AT_ADD_LABEL = "Create a private link…";
+ 
+ /** Confirmed, and not made yet: the import has not made the article's row. */
+ export const LINK_AT_ADD_WAITING = "The link will be made as soon as the import is ready for it.";
+diff --git a/src/web/AddArticle.tsx b/src/web/AddArticle.tsx
+index 4325cbf86..39f1e5b9a 100644
+--- a/src/web/AddArticle.tsx
++++ b/src/web/AddArticle.tsx
+@@ -27,7 +27,7 @@
+  * See docs/project/ingest-queue.md.
+  */
+ import { useEffect, useMemo, useState } from "react";
+-import { AlertCircle, Check, ChevronRight, Circle, Link2, LoaderCircle, Plus, RotateCw, X } from "lucide-react";
++import { AlertCircle, Check, ChevronRight, Circle, Copy, LoaderCircle, Plus, RotateCw, X } from "lucide-react";
+ import { Button } from "@/components/ui/button";
+ import { slugFromUrl } from "../ingest.js";
+ import {
+@@ -642,7 +642,10 @@ export function JobCard({
+               aria-label={copied === "copied" ? undefined : "Copy the link this article will have"}
+               onClick={() => copy(link())}
+             >
+-              {copied === "copied" ? <Check size={13} /> : <Link2 size={13} />}
++              {/* *Copy*, not the chain: the chain is *Private link*'s, and
++                  this address opens for nobody else until the article is
++                  public. A reader took one for the other (plan 261009i). */}
++              {copied === "copied" ? <Check size={13} /> : <Copy size={13} />}
+               {copied === "copied" && "Copied"}
+             </Button>
+           </Tooltip>
+diff --git a/src/web/AddPage.tsx b/src/web/AddPage.tsx
+index e8665bd6a..d0181f885 100644
+--- a/src/web/AddPage.tsx
++++ b/src/web/AddPage.tsx
+@@ -1886,10 +1886,13 @@ function stillSending(transfer: Transfer | null): boolean {
+  * that the file was still arriving, in consecutive sentences. GPT Sol, finding
+  * 3, and it is the finding I most wanted broken.
+  *
+- * So: past tense only once something **queued** it. For a URL that is the whole
+- * page — the effect posts before the first paint, and there is no state in which
+- * it has not. For an upload it is an engine outcome of `queued` or `article`, or
+- * this page's own POST having come back with a job id.
++ * So: past tense only once something **queued** it. For a URL that is this
++ * page's POST having come back with a job id; until 2026-10-09 it was the whole
++ * page, on the ground that the effect posts before the first paint, and so a
++ * paste the server *refused* (a `/read/` link, the allowance) was told its text
++ * had gone when nothing had been fetched at all (qi-9x3akt5n, plan 261009i § 7).
++ * For an upload it is an engine outcome of `queued` or `article`, or the same
++ * POST having come back with a job id.
+  *
+  * **`started`, not `job`.** `started` is set the instant `addUpload` resolves;
+  * `job` waits for the next poll to bring that job back, up to a second later. A
+@@ -1900,7 +1903,7 @@ function stillSending(transfer: Transfer | null): boolean {
+  * `addUpload` answers null there.
+  */
+ function textHasGone(transfer: Transfer | null, isUpload: boolean, posted: boolean): boolean {
+-  if (!isUpload) return true;
++  if (!isUpload) return posted;
+   const kind = transfer?.phase.kind;
+   return kind === "queued" || kind === "article" || posted;
+ }
+diff --git a/src/web/AddShare.tsx b/src/web/AddShare.tsx
+index cebfb0919..5ee6952fa 100644
+--- a/src/web/AddShare.tsx
++++ b/src/web/AddShare.tsx
+@@ -1,12 +1,20 @@
+ /**
+- * **The add page's *Make it public* box** — draws a `ShareAtAdd`
++ * **The add page's *Public* control** — draws a `ShareAtAdd`
+  * (src/web/add-share.ts), which holds the state and sends the request.
+  * docs/plans/261005l-permalink-and-share-while-an-article-is-importing.md.
+  *
+  * Off by default and never remembered, like High-powered AI above it
+- * (AddHighPower.tsx): a remembered tick would publish every later import.
++ * (AddHighPower.tsx): a remembered choice would publish every later import.
+  *
+- * **The tick opens a question; it shares nothing.** The confirmation is the
++ * **A button, not a tick box, since 2026-10-09** (plan 261009i, spya-nsrkju):
++ * the shape of the private link beside it and of the Metadata card's own
++ * *Share with anyone…*. The box stayed ticked while the confirmation was still
++ * asking, so the page looked shared when nothing was. Each press calls what
++ * the box called (`open`, `untick`), so what is sent did not change. Which
++ * press is offered in which state is `press`, below; `data-on` on the control
++ * says what the box's tick used to.
++ *
++ * **The press opens a question; it shares nothing.** The confirmation is the
+  * Metadata card's own, built from the pieces that card exports
+  * (AccessSharing.tsx, and PrivateLink.tsx for the same shape used a second
+  * time), so the sentences an owner agrees to are the same in both places. Its
+@@ -20,20 +28,24 @@
+  * Metadata.
+  */
+ import { useSyncExternalStore } from "react";
+-import { Globe, TriangleAlert } from "lucide-react";
++import { Globe, Link2Off, TriangleAlert } from "lucide-react";
+ 
+ import {
++  PUBLIC_SHELF_LABEL,
+   SHARE_AT_ADD_ALREADY_AN_ARTICLE,
+   SHARE_AT_ADD_GAVE_UP,
++  SHARE_AT_ADD_HEADING,
+   SHARE_AT_ADD_LABEL,
+   SHARE_AT_ADD_ON,
+   SHARE_AT_ADD_RECALLED,
+   SHARE_AT_ADD_UNKNOWN,
+   SHARE_AT_ADD_WAITING,
+-  SHARE_AT_ADD_WHAT,
++  SHARE_AT_ADD_WHAT_LEAD,
+   SHARING_CANNOT_UNRING,
+   SHARING_CONFIRM_TITLE,
++  SHARING_OPEN_TIP,
+   SHARING_RIGHTS_CONFIRM,
++  SHARING_STOP_TIP,
+   UNSHARING_COSTS_ALLOWANCE,
+   sharingConfirmBody,
+   sharingInFlight,
+@@ -42,8 +54,10 @@ import type { PublicArtefacts } from "../types.js";
+ import { ARTEFACT_KEYS, CopyLink, Inventory, Personalisation } from "./AccessSharing.js";
+ import type { ShareAtAdd, ShareAtAddState } from "./add-share.js";
+ import { Button } from "./components/ui/button.js";
+-import { readHref } from "./router.js";
++import { Link } from "./Link.js";
++import { PUBLIC_LIBRARY_HREF, readHref } from "./router.js";
+ import { sharedInventory } from "./shared-inventory.js";
++import { TipNote, Tooltip } from "./Tooltip.js";
+ 
+ /** Every flag false, from the card's own list of keys so a new artefact cannot be left out. */
+ export const NOTHING_BUILT = Object.fromEntries(ARTEFACT_KEYS.map((key) => [key, false])) as unknown as PublicArtefacts;
+@@ -85,40 +99,47 @@ export function AddShare({
+     );
+   }
+ 
+-  const checked =
+-    state.kind === "confirming" ||
+-    state.kind === "waiting" ||
+-    state.kind === "gave-up" ||
+-    state.kind === "on" ||
+-    /* May be public on the server, and unticking is what takes it back. */
+-    state.kind === "unknown" ||
+-    (state.kind === "saving" && state.to === "public") ||
+-    (state.kind === "refused" && state.on);
++  const on = sharedOrAsked(state);
++  const offered = press(state);
+ 
+   return (
+-    <div data-add-share className="tw:mt-3 tw:text-sm">
+-      <label className="tw:flex tw:items-start tw:gap-2">
+-        <input
+-          type="checkbox"
+-          className="tw:mt-0.5"
+-          checked={checked}
+-          disabled={state.kind === "saving"}
+-          onChange={(event) => (event.target.checked ? share.open() : share.untick())}
+-        />
+-        <span>
+-          <span className="tw:inline-flex tw:items-center tw:gap-1">
+-            <Globe size={13} className="tw:text-ink-faint" />
++    <div data-add-share data-on={on} className="tw:mt-4 tw:text-sm">
++      <h3 className="tw:m-0 tw:flex tw:items-center tw:gap-1 tw:text-sm tw:font-normal tw:text-foreground">
++        <Globe size={13} className="tw:text-ink-faint" />
++        {SHARE_AT_ADD_HEADING}
++      </h3>
++      {offered === "open" && (
++        <p className="tw:m-0 tw:text-muted-foreground">
++          {SHARE_AT_ADD_WHAT_LEAD}{" "}
++          <Link href={PUBLIC_LIBRARY_HREF} className="tw:text-highlight-text tw:underline">
++            {PUBLIC_SHELF_LABEL}
++          </Link>
++          .
++        </p>
++      )}
++      <p className="tw:m-0 tw:text-muted-foreground" aria-live="polite">
++        {line(state)}
++      </p>
++
++      {offered === "open" && (
++        <Tooltip placement="bottom" content={<TipNote>{SHARING_OPEN_TIP}</TipNote>}>
++          {/* `outline`: this opens the question. The primary is on *Share it*,
++              which is the press that publishes. */}
++          <Button type="button" variant="outline" size="sm" className="tw:mt-2" onClick={() => share.open()}>
++            <Globe size={14} />
+             {SHARE_AT_ADD_LABEL}
+-          </span>
+-          <span className="tw:block tw:text-muted-foreground">{SHARE_AT_ADD_WHAT}</span>
+-          <span className="tw:block tw:text-muted-foreground" aria-live="polite">
+-            {line(state)}
+-          </span>
+-        </span>
+-      </label>
+-
+-      {/* Outside the label: a label holding a second checkbox and two buttons
+-          would hand every click on them to the box above. */}
++          </Button>
++        </Tooltip>
++      )}
++
++      {/* Asked for and not sent yet: every attempt so far was answered *no
++          article here yet*, so calling it off takes nothing back. */}
++      {offered === "cancel" && (
++        <Button type="button" variant="ghost" size="sm" className="tw:mt-2" onClick={() => share.untick()}>
++          Cancel
++        </Button>
++      )}
++
+       {state.kind === "confirming" && (
+         <div className="tw:mt-2 tw:rounded-md tw:border tw:border-rule-strong tw:bg-surface-raised tw:p-3">
+           <h2 className="tw:m-0 tw:mb-2 tw:text-sm tw:font-semibold tw:text-ink">
+@@ -156,10 +177,74 @@ export function AddShare({
+           <p className="tw:m-0 tw:text-muted-foreground">{UNSHARING_COSTS_ALLOWANCE}</p>
+         </div>
+       )}
++
++      {/* Public, or may be: the Metadata card's own label, tooltip and
++          `outline`, because this is the safe direction. */}
++      {offered === "stop" && (
++        <Tooltip placement="bottom" content={<TipNote>{SHARING_STOP_TIP}</TipNote>}>
++          <Button type="button" variant="outline" size="sm" className="tw:mt-2" onClick={() => share.untick()}>
++            <Link2Off size={14} />
++            Stop sharing
++          </Button>
++        </Tooltip>
++      )}
+     </div>
+   );
+ }
+ 
++/**
++ * **Whether the box would have been ticked**: asked for, public, or possibly
++ * public. Drawn as `data-on` for the tests, which held the tick before the box
++ * became a button.
++ */
++function sharedOrAsked(state: ShareAtAddState): boolean {
++  return (
++    state.kind === "confirming" ||
++    state.kind === "waiting" ||
++    state.kind === "gave-up" ||
++    state.kind === "on" ||
++    state.kind === "unknown" ||
++    (state.kind === "saving" && state.to === "public") ||
++    (state.kind === "refused" && state.on)
++  );
++}
++
++/**
++ * **The one press offered in each state**, and what it calls is what the box
++ * called: ticking was `open`, unticking was `untick`.
++ *
++ *  - `open`: nothing asked for, so *Make it public…*.
++ *  - `cancel`: confirmed and not sent yet (`untick` takes nothing back).
++ *  - `stop`: public, or it may be (`unknown`, a refused take-back): `untick`
++ *    sends `private`, as unticking did.
++ *  - `none`: the confirmation is open and has its own *Cancel*, or a request
++ *    is in flight (the box was disabled then), or there is nothing to draw.
++ */
++function press(state: ShareAtAddState): "open" | "cancel" | "stop" | "none" {
++  switch (state.kind) {
++    case "off":
++      return "open";
++    case "refused":
++      return state.on ? "stop" : "open";
++    case "waiting":
++    case "gave-up":
++      return "cancel";
++    case "on":
++    case "unknown":
++      return "stop";
++    case "probing":
++    case "adopted":
++    case "unavailable":
++    case "confirming":
++    case "saving":
++      return "none";
++    default: {
++      const never: never = state;
++      return never;
++    }
++  }
++}
++
+ function line(state: ShareAtAddState) {
+   switch (state.kind) {
+     case "probing":
+diff --git a/src/web/AddShareLink.tsx b/src/web/AddShareLink.tsx
+index f4975fbe3..526577709 100644
+--- a/src/web/AddShareLink.tsx
++++ b/src/web/AddShareLink.tsx
+@@ -23,6 +23,7 @@ import { Link2, Link2Off } from "lucide-react";
+ 
+ import {
+   LINK_AT_ADD_GAVE_UP,
++  LINK_AT_ADD_LABEL,
+   LINK_AT_ADD_ON,
+   LINK_AT_ADD_UNKNOWN,
+   LINK_AT_ADD_UNREAD,
+@@ -85,11 +86,11 @@ export function AddShareLink({
+ 
+   return (
+     <div data-add-share-link className="tw:mt-4 tw:text-sm">
+-      <h2 className="tw:m-0 tw:flex tw:items-center tw:gap-1 tw:text-sm tw:font-normal tw:text-foreground">
++      <h3 className="tw:m-0 tw:flex tw:items-center tw:gap-1 tw:text-sm tw:font-normal tw:text-foreground">
+         <Link2 size={13} className="tw:text-ink-faint" />
+         {PRIVATE_LINK_HEADING}
+-      </h2>
+-      {canAsk && <p className="tw:m-0 tw:mb-2 tw:text-muted-foreground">{LINK_AT_ADD_WHAT}</p>}
++      </h3>
++      {canAsk && <p className="tw:m-0 tw:text-muted-foreground">{LINK_AT_ADD_WHAT}</p>}
+       <p className="tw:m-0 tw:text-muted-foreground" aria-live="polite">
+         {line(state)}
+       </p>
+@@ -100,7 +101,7 @@ export function AddShareLink({
+               the link*, which is the press that makes one. */}
+           <Button type="button" variant="outline" size="sm" className="tw:mt-2" onClick={() => link.open()}>
+             <Link2 size={14} />
+-            Create a private link
++            {LINK_AT_ADD_LABEL}
+           </Button>
+         </Tooltip>
+       )}
+diff --git a/src/web/AddSharing.tsx b/src/web/AddSharing.tsx
+index 489f7c386..7411068c8 100644
+--- a/src/web/AddSharing.tsx
++++ b/src/web/AddSharing.tsx
+@@ -1,7 +1,8 @@
+ /**
+  * **The add page's Sharing section** — one row under High-powered AI, shut by
+- * default, holding *Make it public* (AddShare.tsx) and *Create a private
+- * link* (AddShareLink.tsx).
++ * default, holding *Create a private link* (AddShareLink.tsx) and then *Make
++ * it public* (AddShare.tsx): the Metadata card's order, the less exposed
++ * first.
+  * docs/plans/261005l-permalink-and-share-while-an-article-is-importing.md
+  * § Stage 2, 2b. Greg, 2026-10-06:
+  *
+@@ -31,15 +32,33 @@
+  * you were (PageSection.tsx says why it is not in the address). The add page
+  * keys this component on the slug, so another article starts shut.
+  *
++ * ## Said as a state, and saying where to learn more (2026-10-09)
++ *
++ * Plan 261009i (spya-nsrkju), after five critics read the page in character.
++ * The row was the quietest thing on it, `text-xs` and grey, and a bare
++ * *Sharing* read as the next step rather than as a setting that is off. It is
++ * now the page's body size, names a state only when one is on, with an icon
++ * as well as words (`sharingAtAddSummary` says why it never says *off*), and
++ * the open section starts with what every article starts as, that nothing
++ * goes out unconfirmed, that it can wait for the Metadata page, and a link to
++ * Help.
++ *
+  * ## Over an article already on the shelf
+  *
+  * No row and no control: the one line saying where to share it, as stage 1
+  * drew it. Both controllers ask the same probe, so they agree.
+  */
+ import { useEffect, useState, useSyncExternalStore } from "react";
+-import { ChevronRight } from "lucide-react";
++import { ChevronRight, Globe, Link2 } from "lucide-react";
+ 
+-import { SHARE_AT_ADD_ALREADY_AN_ARTICLE, sharingAtAddSummary } from "../messages.js";
++import {
++  SHARE_AT_ADD_ALREADY_AN_ARTICLE,
++  SHARING_AT_ADD_HELP,
++  SHARING_AT_ADD_INTRO,
++  sharingAtAddSummary,
++} from "../messages.js";
++import { helpHref } from "./help/help-anchors.js";
++import { Link } from "./Link.js";
+ import { type LinkAtAdd, linkUnsettled } from "./add-share-link.js";
+ import { type ShareAtAdd, shareUnsettled } from "./add-share.js";
+ import { AddShare, shareDraws } from "./AddShare.js";
+@@ -84,14 +103,19 @@ export function AddSharing({
+   const linkOn = linked.kind === "on";
+   const open = unsettled || (chosen ?? (isPublic || linkOn));
+   const summary = sharingAtAddSummary(isPublic, linkOn);
++  /* An on state in a shape as well as in words: public wins, as it does for
++     who can read the article. Nothing for the rest, whose summary claims no
++     state (no padlock: `sharingAtAddSummary` says why). */
++  const StateIcon = isPublic ? Globe : linkOn ? Link2 : null;
+ 
+   return (
+     <section data-add-sharing data-open={open} className="tw:mt-3 tw:text-sm">
+       {unsettled ? (
+         /* Not a control while it may not be shut: a button that did nothing
+            would be worse than no button. */
+-        <h2 className="tw:m-0 tw:flex tw:h-7 tw:items-center tw:gap-1.5 tw:text-xs tw:font-normal tw:text-muted-foreground">
+-          <ChevronRight size={13} className="tw:rotate-90" />
++        <h2 className="tw:m-0 tw:flex tw:h-7 tw:items-center tw:gap-1.5 tw:text-sm tw:font-normal tw:text-foreground">
++          <ChevronRight size={13} className="tw:rotate-90 tw:text-ink-faint" />
++          {StateIcon && <StateIcon size={13} className="tw:text-ink-faint" />}
+           {summary}
+         </h2>
+       ) : (
+@@ -103,16 +127,26 @@ export function AddSharing({
+           data-add-sharing-toggle
+           aria-expanded={open}
+           onClick={() => setChosen(!open)}
+-          className="tw:-ml-2 tw:inline-flex tw:h-7 tw:items-center tw:gap-1.5 tw:rounded-md tw:bg-transparent tw:px-2 tw:text-xs tw:text-muted-foreground tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground"
++          className="tw:-ml-2 tw:inline-flex tw:h-7 tw:items-center tw:gap-1.5 tw:rounded-md tw:bg-transparent tw:px-2 tw:text-sm tw:text-foreground tw:transition-colors tw:hover:bg-highlight/10"
+         >
+-          <ChevronRight size={13} className={`tw:transition-transform ${open ? "tw:rotate-90" : ""}`} />
++          <ChevronRight
++            size={13}
++            className={`tw:text-ink-faint tw:transition-transform ${open ? "tw:rotate-90" : ""}`}
++          />
++          {StateIcon && <StateIcon size={13} className="tw:text-ink-faint" />}
+           {summary}
+         </button>
+       )}
+       {open && (
+         <div className="tw:pl-5">
+-          <AddShare share={share} offer={offer} />
++          <p data-add-sharing-intro className="tw:mt-1 tw:mb-0 tw:text-muted-foreground">
++            {SHARING_AT_ADD_INTRO}{" "}
++            <Link href={helpHref("sharing")} className="tw:text-highlight-text tw:underline">
++              {SHARING_AT_ADD_HELP}
++            </Link>
++          </p>
+           <AddShareLink link={link} offer={offer} alsoPublic={isPublic} />
++          <AddShare share={share} offer={offer} />
+         </div>
+       )}
+     </section>
+diff --git a/src/web/add-share.ts b/src/web/add-share.ts
+index 32bd3760a..5dc89ff05 100644
+--- a/src/web/add-share.ts
++++ b/src/web/add-share.ts
+@@ -1,7 +1,13 @@
+ /**
+  * **Make it public, chosen while the article is being added** — the add
+- * page's third box,
++ * page's public control,
+  * docs/plans/261005l-permalink-and-share-while-an-article-is-importing.md.
++ *
++ * **It was a tick box until 2026-10-09, and this file still talks like one.**
++ * The control is now buttons (src/web/AddShare.tsx § `press`, plan 261009i):
++ * *ticking* is *Make it public…*, which calls `open`; *unticking* is *Cancel*
++ * or *Stop sharing*, which call `untick`; *the box ticked* is the control's
++ * `data-on`. Nothing this controller sends changed with the drawing.
+  * Greg, 2026-10-05 (spya-e9t58e):
+  *
+  * > While I'm importing an article, make it possible for me to mark it as
+@@ -277,7 +283,7 @@ export class ShareAtAdd {
+     this.kick();
+   }
+ 
+-  /** The box, ticked: open the confirmation. Sends nothing. */
++  /** *Make it public…* (the box, ticked): open the confirmation. Sends nothing. */
+   open(): void {
+     const from = this.state;
+     if (from.kind !== "off" && !(from.kind === "refused" && !from.on)) return;
+@@ -309,7 +315,7 @@ export class ShareAtAdd {
+     this.kick();
+   }
+ 
+-  /** The box, unticked. Ignored while a request is in flight (the box is disabled then). */
++  /** *Cancel* or *Stop sharing* (the box, unticked). Ignored while a request is in flight (no press is offered then). */
+   untick(): void {
+     this.retryOnNextAlive = false;
+     switch (this.state.kind) {
+diff --git a/src/web/help/pages/sharing.md b/src/web/help/pages/sharing.md
+index 00851dcba..966be6d1a 100644
+--- a/src/web/help/pages/sharing.md
++++ b/src/web/help/pages/sharing.md
+@@ -34,9 +34,11 @@ what a visitor would get, ticked that you have the right to share the text, and
+ it**. The padlock then becomes a globe.
+ 
+ **While it is still being added.** You need not wait for an import to finish. The page that shows
+-its progress has a **Sharing** section, closed until you open it, with **Make it public** and
+-**Create a private link** and the same confirmations. The link button on the import’s card copies
+-the address the article will have. Somebody who opens a shared article before its import has
++its progress has a **Sharing options** section, closed until you open it and open whenever something in it
++needs your attention, with **Create a private link…** and **Make it public…** and the same
++confirmations. The copy button on the import’s card copies
++the article’s ordinary address, which opens for other people only once the article is public: a
++private link is a different address. Somebody who opens a shared article before its import has
+ finished is told it is still being added, and the page opens it when it is ready.
+ 
+ What sharing means:
+diff --git a/tests/add-page-share.test.tsx b/tests/add-page-share.test.tsx
+index 002647d58..7b1cba99f 100644
+--- a/tests/add-page-share.test.tsx
++++ b/tests/add-page-share.test.tsx
+@@ -184,8 +184,24 @@ async function finish(id = "job-1", slug = SLUG): Promise<void> {
+   await settle();
+ }
+ 
+-const shareBox = (): HTMLInputElement | null =>
+-  host.querySelector<HTMLInputElement>("[data-add-share] > label input[type=checkbox]");
++/**
++ * ***Make it public* as the box it used to be.** It became a button on
++ * 2026-10-09 (plan 261009i), and each press calls what the box called, so the
++ * cases below still say *tick* and *untick*. This hands back the one press the
++ * control offers (*Make it public…*, *Cancel* or *Stop sharing*; the
++ * confirmation's own *Cancel* while it is open), or the control itself when it
++ * offers none, as the box was disabled then; and `checked` is its `data-on`,
++ * which is what the tick showed.
++ */
++const shareBox = (): (HTMLElement & { checked: boolean }) | null => {
++  const control = host.querySelector<HTMLElement>("[data-add-share]:not([data-add-share=adopted])");
++  if (!control) return null;
++  const press =
++    [...control.querySelectorAll<HTMLButtonElement>("button")].find((b) =>
++      [SHARE_AT_ADD_LABEL, "Cancel", "Stop sharing"].includes(b.textContent?.trim() ?? ""),
++    ) ?? control;
++  return Object.assign(press, { checked: control.dataset.on === "true" });
++};
+ const rightsBox = (): HTMLInputElement | undefined =>
+   [...host.querySelectorAll("label")].find((l) => l.textContent?.includes(SHARING_RIGHTS_CONFIRM))?.querySelector("input") ??
+   undefined;
+diff --git a/tests/add-page-sharing-section.test.tsx b/tests/add-page-sharing-section.test.tsx
+index 0aa7438a4..e0747b8bd 100644
+--- a/tests/add-page-sharing-section.test.tsx
++++ b/tests/add-page-sharing-section.test.tsx
+@@ -145,8 +145,12 @@ const {
+   PRIVATE_LINK_ALSO_PUBLIC,
+   PRIVATE_LINK_CONFIRM_TITLE,
+   SHARE_AT_ADD_ALREADY_AN_ARTICLE,
++  LINK_AT_ADD_LABEL,
+   SHARE_AT_ADD_LABEL,
+   SHARE_AT_ADD_RECALLED,
++  PUBLIC_SHELF_LABEL,
++  SHARING_AT_ADD_INTRO,
++  SHARING_CONFIRM_TITLE,
+   SHARING_RIGHTS_CONFIRM,
+   LINK_AT_ADD_ON,
+   LINK_AT_ADD_UNKNOWN,
+@@ -212,8 +216,24 @@ async function finish(id = "job-1", slug = SLUG): Promise<void> {
+ const section = () => host.querySelector<HTMLElement>("[data-add-sharing]");
+ const toggle = () => host.querySelector<HTMLButtonElement>("[data-add-sharing-toggle]");
+ const isOpen = () => section()?.dataset.open === "true";
+-const shareBox = (): HTMLInputElement | null =>
+-  host.querySelector<HTMLInputElement>("[data-add-share] > label input[type=checkbox]");
++/**
++ * ***Make it public* as the box it used to be.** It became a button on
++ * 2026-10-09 (plan 261009i), and each press calls what the box called, so the
++ * cases below still say *tick* and *untick*. This hands back the one press the
++ * control offers (*Make it public…*, *Cancel* or *Stop sharing*; the
++ * confirmation's own *Cancel* while it is open), or the control itself when it
++ * offers none, as the box was disabled then; and `checked` is its `data-on`,
++ * which is what the tick showed.
++ */
++const shareBox = (): (HTMLElement & { checked: boolean }) | null => {
++  const control = host.querySelector<HTMLElement>("[data-add-share]:not([data-add-share=adopted])");
++  if (!control) return null;
++  const press =
++    [...control.querySelectorAll<HTMLButtonElement>("button")].find((b) =>
++      [SHARE_AT_ADD_LABEL, "Cancel", "Stop sharing"].includes(b.textContent?.trim() ?? ""),
++    ) ?? control;
++  return Object.assign(press, { checked: control.dataset.on === "true" });
++};
+ const linkControl = () => host.querySelector<HTMLElement>("[data-add-share-link]");
+ const linkShown = (): string | null =>
+   [...host.querySelectorAll<HTMLInputElement>("input[readonly]")].map((i) => i.value).find((v) => v.includes("key=")) ??
+@@ -241,7 +261,7 @@ async function openSection(): Promise<void> {
+ /** Open the section, open the question, tick the rights, press *Create the link*. */
+ async function createLink(): Promise<void> {
+   await openSection();
+-  click(button("Create a private link"), "Create a private link button");
++  click(button(LINK_AT_ADD_LABEL), "Create a private link button");
+   click(rightsBox(), "rights box");
+   click(button("Create the link"), "Create the link button");
+   await settle();
+@@ -476,12 +496,57 @@ describe("2b: one Sharing section, closed by default", () => {
+     await openSection();
+     expect(toggle()?.getAttribute("aria-expanded")).toBe("true");
+     expect(shareBox()?.checked).toBe(false);
+-    expect(button("Create a private link")).toBeDefined();
++    expect(button(LINK_AT_ADD_LABEL)).toBeDefined();
+     click(toggle(), "Sharing row");
+     expect(isOpen()).toBe(false);
+     expect(shareBox()).toBeNull();
+   });
+ 
++  /* Plan 261009i (spya-nsrkju): five critics read the page in character, and
++     these are the four things they agreed it did not say. */
++  it("claims no state when shut with nothing on, and opens on what every article starts as, with Help", async () => {
++    /* Not *off*: this tab cannot always know (GPT Sol's plan review, P1). */
++    await importing();
++    expect(isOpen()).toBe(false);
++    expect(toggle()?.textContent).toBe(sharingAtAddSummary(false, false));
++    expect(sharingAtAddSummary(false, false)).not.toMatch(/off|private|only you/i);
++    await openSection();
++    const intro = host.querySelector("[data-add-sharing-intro]");
++    expect(intro?.textContent).toContain(SHARING_AT_ADD_INTRO);
++    expect(intro?.querySelector("a")?.getAttribute("href")).toBe("/help/sharing");
++  });
++
++  it("draws the private link first, the Metadata card's order", async () => {
++    await importing();
++    await openSection();
++    const link = linkControl();
++    const pub = host.querySelector("[data-add-share]");
++    if (!link || !pub) throw new Error("both controls should be drawn");
++    expect(link.compareDocumentPosition(pub) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
++  });
++
++  it("offers no tick box and no *Stop sharing* while the public question is still asking", async () => {
++    /* The box stayed ticked over an unanswered confirmation, so the page
++       looked shared when nothing was. */
++    await importing();
++    await openSection();
++    click(button(SHARE_AT_ADD_LABEL), "Make it public button");
++    expect(text()).toContain(SHARING_CONFIRM_TITLE);
++    const boxes = [...host.querySelectorAll<HTMLInputElement>("[data-add-share] input[type=checkbox]")];
++    expect(boxes.map((b) => b.closest("label")?.textContent), "a box other than the rights tick").toEqual([
++      SHARING_RIGHTS_CONFIRM,
++    ]);
++    expect(button("Stop sharing")).toBeUndefined();
++    expect(button(SHARE_AT_ADD_LABEL), "the opener is still offered over its own question").toBeUndefined();
++  });
++
++  it("says where the public listing is, by the public shelf's own name", async () => {
++    await importing();
++    await openSection();
++    const shelf = [...host.querySelectorAll("[data-add-share] a")].find((a) => a.textContent === PUBLIC_SHELF_LABEL);
++    expect(shelf?.getAttribute("href")).toBe("/read/public");
++  });
++
+   it("shows only the control it could read: the link's read failed", async () => {
+     linkRead = async () => json({ error: "boom" }, { status: 500 });
+     await importing();
+@@ -504,7 +569,7 @@ describe("2b: no link without the rights tick and the press", () => {
+   it("opening the question sends nothing, and shows the Metadata card's confirmation", async () => {
+     await importing();
+     await openSection();
+-    click(button("Create a private link"), "Create a private link button");
++    click(button(LINK_AT_ADD_LABEL), "Create a private link button");
+     expect(text()).toContain(PRIVATE_LINK_CONFIRM_TITLE);
+     expect(text()).toContain(SHARING_RIGHTS_CONFIRM);
+     await settle();
+@@ -514,7 +579,7 @@ describe("2b: no link without the rights tick and the press", () => {
+   it("the press does nothing until the rights box is ticked", async () => {
+     await importing();
+     await openSection();
+-    click(button("Create a private link"), "Create a private link button");
++    click(button(LINK_AT_ADD_LABEL), "Create a private link button");
+     expect(button("Create the link")?.disabled).toBe(true);
+     click(button("Create the link"), "Create the link button");
+     await settle();
+@@ -524,7 +589,7 @@ describe("2b: no link without the rights tick and the press", () => {
+   it("ticking the rights box alone sends nothing", async () => {
+     await importing();
+     await openSection();
+-    click(button("Create a private link"), "Create a private link button");
++    click(button(LINK_AT_ADD_LABEL), "Create a private link button");
+     click(rightsBox(), "rights box");
+     await settle();
+     expect(writes).toEqual([]);
+@@ -542,7 +607,7 @@ describe("2b: no link without the rights tick and the press", () => {
+   it("Cancel closes the confirmation and sends nothing", async () => {
+     await importing();
+     await openSection();
+-    click(button("Create a private link"), "Create a private link button");
++    click(button(LINK_AT_ADD_LABEL), "Create a private link button");
+     click(rightsBox(), "rights box");
+     click(button("Cancel"), "Cancel button");
+     await settle();
+@@ -629,7 +694,7 @@ describe("2b: the section opens itself when it has something to say, and names w
+   it("cannot be shut over an open question", async () => {
+     await importing();
+     await openSection();
+-    click(button("Create a private link"), "Create a private link button");
++    click(button(LINK_AT_ADD_LABEL), "Create a private link button");
+     expect(isOpen()).toBe(true);
+     expect(toggle(), "a row that would shut it").toBeNull();
+   });
+@@ -689,7 +754,7 @@ describe("2b: the page does not leave by itself while the link is unsettled", ()
+   it("waits while the link's confirmation is open, and opens on the button", async () => {
+     await importing();
+     await openSection();
+-    click(button("Create a private link"), "Create a private link button");
++    click(button(LINK_AT_ADD_LABEL), "Create a private link button");
+     await finish();
+     expect(navigations).toEqual([]);
+     click(button(OPEN), OPEN);
+diff --git a/tests/add-share.test.ts b/tests/add-share.test.ts
+index cdbd5d60d..8979c1df4 100644
+--- a/tests/add-share.test.ts
++++ b/tests/add-share.test.ts
+@@ -11,6 +11,9 @@
+  * completion (P2-7). And from its code review: the only `private` sent is the
+  * box unticked (F11), the tab has one controller per slug (F12), and what the
+  * tab remembers across a reload leads to *unknown* and sends nothing (F10).
++ *
++ * *The box* is the control as it was drawn until 2026-10-09; it is buttons
++ * now (plan 261009i), and src/web/add-share.ts's header maps the words.
+  */
+ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+ 
+diff --git a/tests/direct-add-says-the-text-has-gone.test.tsx b/tests/direct-add-says-the-text-has-gone.test.tsx
+index 7a80f70d7..b096db1ef 100644
+--- a/tests/direct-add-says-the-text-has-gone.test.tsx
++++ b/tests/direct-add-says-the-text-has-gone.test.tsx
+@@ -62,8 +62,11 @@ const queued: string[] = [];
+  * `textHasGone` in AddPage.tsx, and GPT Sol's third finding on
+  * docs/plans/260903j-background-pdf-upload-so-add-does-not-wait.md.
+  *
+- * A URL is unaffected, and the case below still asserts it: that arm posts
+- * before the first paint and has no state in which it has not.
++ * **A URL follows the same rule since 2026-10-09.** It used to be exempt, on
++ * the ground that its arm posts before the first paint; but a paste the server
++ * refuses (a `/read/` link, a spent allowance) sends nothing, and the page told
++ * it the text had gone (qi-9x3akt5n, plan 261009i § 7). So `add` answers a job
++ * here, and the URL cases flush before they read the tense.
+  */
+ let uploadQueues = true;
+ 
+@@ -79,7 +82,7 @@ const queue: UseJobs = {
+      article somebody else's job is holding — src/web/useStepJob.ts. */
+   add: async (url: string) => {
+     queued.push(url);
+-    return null as Job | null;
++    return { id: "job-1" } as Job;
+   },
+   addUpload: async (uploadId: string) => {
+     queued.push(uploadId);
+@@ -134,12 +137,13 @@ function render(source: Parameters<typeof AddPage>[0]["source"]): string {
+ }
+ 
+ describe("the direct-add pages disclose where the text went", () => {
+-  it("says it on /add/<url>, on the same render that queues the ingest", () => {
+-    const text = render({ kind: "url", url: "example.com/an-essay" });
++  it("says it on /add/<url>: the present tense while the POST is out, the past once it is queued", async () => {
++    const first = render({ kind: "url", url: "example.com/an-essay" });
+     // Both halves in one assertion, because either on its own is passable and
+     // wrong: a page that discloses and never queues, or the bug as it was.
+     expect(queued).toEqual(["https://example.com/an-essay"]);
+-    expect(text).toContain(DIRECT_ADD_SENT_TEXT_AWAY);
++    expect(first).toContain(ADDING_SENDS_TEXT_AWAY);
++    expect(await settled()).toContain(DIRECT_ADD_SENT_TEXT_AWAY);
+   });
+ 
+   it("says it on /add/upload/<id> too, where there is not even an address to look at", async () => {
+@@ -172,13 +176,14 @@ describe("the direct-add pages disclose where the text went", () => {
+     );
+   });
+ 
+-  it("uses the past tense, not the add box's present tense", () => {
++  it("uses the past tense, not the add box's present tense, once it is queued", async () => {
+     /* The two sentences differ by one verb and the difference is the whole
+        point: on the shelf the reader still has a choice, and here they do not.
+        Asserted as an absence as well as a presence so that somebody making the
+        three disclosures "consistent" finds out here rather than by shipping a
+        page that warns about something it has already done. */
+-    const text = render({ kind: "url", url: "example.com/an-essay" });
++    render({ kind: "url", url: "example.com/an-essay" });
++    const text = await settled();
+     expect(text).not.toContain(ADDING_SENDS_TEXT_AWAY);
+     expect(DIRECT_ADD_SENT_TEXT_AWAY).not.toBe(ADDING_SENDS_TEXT_AWAY);
+   });
+diff --git a/tests/job-card-copy-link.test.tsx b/tests/job-card-copy-link.test.tsx
+index b089ab99d..45f3b893d 100644
+--- a/tests/job-card-copy-link.test.tsx
++++ b/tests/job-card-copy-link.test.tsx
+@@ -103,6 +103,11 @@ describe("the copy-the-link button on a job card", () => {
+     expect(IMPORT_LINK_COPY_TIP).toContain("this import's article");
+     expect(IMPORT_LINK_COPY_TIP).toContain("If the import fails, the link leads nowhere");
+     expect(IMPORT_LINK_COPY_TIP).not.toContain("for good");
++    /* Not *if you share it*: a private link is another address, and a reader
++       who took this one for it sent colleagues a link that opened for nobody
++       (plan 261009i, from GPT Sol's critique). */
++    expect(IMPORT_LINK_COPY_TIP).toContain("only if you make the article public");
++    expect(IMPORT_LINK_COPY_TIP).toContain("a private link is a different address");
+   });
+ 
+   it("also copies a minimal paper's import link", async () => {
+diff --git a/tests/refused-job-reason-survives.test.tsx b/tests/refused-job-reason-survives.test.tsx
+index a91c7419b..4d570956d 100644
+--- a/tests/refused-job-reason-survives.test.tsx
++++ b/tests/refused-job-reason-survives.test.tsx
+@@ -54,7 +54,7 @@
+ import { act, createElement, type ReactElement } from "react";
+ import { createRoot, type Root } from "react-dom/client";
+ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+-import { OWN_READING_PAGE } from "../src/messages.js";
++import { DIRECT_ADD_SENT_TEXT_AWAY, OWN_READING_PAGE } from "../src/messages.js";
+ import type { Article } from "../src/types.js";
+ 
+ (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+@@ -482,4 +482,31 @@ describe("the add page, which is the fifth copy and was found in a browser", ()
+     expect(host.textContent).not.toContain("It didn't get as far as the queue");
+     expect([...host.querySelectorAll("button")].map((b) => b.textContent)).not.toContain("Try again");
+   });
++
++  it("does not say the text has been sent when the paste was refused", async () => {
++    /* qi-9x3akt5n, plan 261009i § 7. A refused POST fetched nothing and sent
++       nothing to anybody, so the past tense would be a false sentence about
++       what happened to the reader's text. The present tense is the shelf's,
++       a statement about what adding does, and stays true. */
++    refused = OWN_READING_PAGE.message;
++    await act(async () => {
++      root.render(createElement(AddPage, { source: { kind: "url", url: "example.com/an-essay" } }));
++    });
++    await settle();
++    await answerPolls();
++
++    expect(host.textContent).toContain(OWN_READING_PAGE.message);
++    expect(host.textContent).not.toContain(DIRECT_ADD_SENT_TEXT_AWAY);
++  });
++
++  it("says it has been sent once the server took the job", async () => {
++    /* The mirror, so the case above cannot pass by never saying it at all. */
++    refusing = false;
++    await act(async () => {
++      root.render(createElement(AddPage, { source: { kind: "url", url: "example.com/an-essay" } }));
++    });
++    await settle();
++
++    expect(host.textContent).toContain(DIRECT_ADD_SENT_TEXT_AWAY);
++  });
+ });

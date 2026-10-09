@@ -23,6 +23,7 @@ import { Link2, Link2Off } from "lucide-react";
 
 import {
   LINK_AT_ADD_GAVE_UP,
+  LINK_AT_ADD_LABEL,
   LINK_AT_ADD_ON,
   LINK_AT_ADD_UNKNOWN,
   LINK_AT_ADD_UNREAD,
@@ -52,7 +53,7 @@ import { TipNote, Tooltip } from "./Tooltip.js";
  * **Whether there is anything to draw**, for the Sharing section
  * (AddSharing.tsx). No control until the first read has answered, none when
  * it could not, and none over a published article. Outside the interval the
- * page offers its boxes in (`offer`), an untouched control is not drawn.
+ * page offers its controls in (`offer`), an untouched control is not drawn.
  */
 export function linkDraws(state: LinkAtAddState, offer: boolean): boolean {
   if (state.kind === "reading" || state.kind === "unavailable" || state.kind === "adopted") return false;
@@ -71,7 +72,7 @@ export function AddShareLink({
   alsoPublic,
 }: {
   link: LinkAtAdd;
-  /** As `AddShare`'s: whether the page is offering its boxes now. */
+  /** As `AddShare`'s: whether the page is offering its controls now. */
   offer: boolean;
   /** The article is public too, as far as *Make it public* knows: the link is then not what keeps it readable. */
   alsoPublic: boolean;
@@ -85,11 +86,11 @@ export function AddShareLink({
 
   return (
     <div data-add-share-link className="tw:mt-4 tw:text-sm">
-      <h2 className="tw:m-0 tw:flex tw:items-center tw:gap-1 tw:text-sm tw:font-normal tw:text-foreground">
+      <h3 className="tw:m-0 tw:flex tw:items-center tw:gap-1 tw:text-sm tw:font-normal tw:text-foreground">
         <Link2 size={13} className="tw:text-ink-faint" />
         {PRIVATE_LINK_HEADING}
-      </h2>
-      {canAsk && <p className="tw:m-0 tw:mb-2 tw:text-muted-foreground">{LINK_AT_ADD_WHAT}</p>}
+      </h3>
+      {canAsk && <p className="tw:m-0 tw:text-muted-foreground">{LINK_AT_ADD_WHAT}</p>}
       <p className="tw:m-0 tw:text-muted-foreground" aria-live="polite">
         {line(state)}
       </p>
@@ -100,16 +101,16 @@ export function AddShareLink({
               the link*, which is the press that makes one. */}
           <Button type="button" variant="outline" size="sm" className="tw:mt-2" onClick={() => link.open()}>
             <Link2 size={14} />
-            Create a private link
+            {LINK_AT_ADD_LABEL}
           </Button>
         </Tooltip>
       )}
 
       {state.kind === "confirming" && (
         <div className="tw:mt-2 tw:rounded-md tw:border tw:border-rule-strong tw:bg-surface-raised tw:p-3">
-          <h3 className="tw:m-0 tw:mb-2 tw:text-sm tw:font-semibold tw:text-ink">
+          <h4 className="tw:m-0 tw:mb-2 tw:text-sm tw:font-semibold tw:text-ink">
             {PRIVATE_LINK_CONFIRM_TITLE}
-          </h3>
+          </h4>
           <p className="tw:m-0 tw:mb-2 tw:text-ink-faint">{privateLinkConfirmBody(null)}</p>
           <Inventory inventory={sharedInventory(NOTHING_BUILT)} />
           <Personalisation kinds={undefined} />

@@ -668,7 +668,9 @@ Three things, all in the browser, in
   re-reads the article when the job is done. It does not send the reader to the add page, because
   arriving there posts an import.
 - **A *Sharing* section, shut by default**, holding *Make it public* and, since 2026-10-06,
-  *Create a private link*. What each asks and sends, and what a visitor sees who arrives before
+  *Create a private link*. Since 2026-10-09 the link comes first, both are buttons, and the row
+  reads *Sharing options* and opens on a line about the private default with a link to Help —
+  [261009i](../plans/261009i-add-page-sharing-clearer.md). What each asks and sends, and what a visitor sees who arrives before
   the import has published, are in
   [public-readable-sharing.md § While the article is still importing](public-readable-sharing.md#while-the-article-is-still-importing).
 - **The card is drawn from the POST's answer** (since 2026-10-06). The page used to look its job
