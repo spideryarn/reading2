@@ -3,6 +3,15 @@ keywords: critiques reception responses reviews criticism replies web what other
 related: mode-citations, faq-beyond-the-article
 ---
 
+## In short
+
+A piece is rarely the last word. Debate searches the open web for what others have said about it —
+replies, critiques, follow-ups — so you can read it alongside the responses it finds. Every result
+links to its source so you can check it, and when the search finds no reception, which is often, it
+says so plainly.
+
+![Debate’s Claims view: a relevance slider, a thread shared by two sources, one claim quoted from the piece, and under it an arXiv paper marked as a key source, Critical, with an excerpt from it](../images/mode-debate.png "Claims: one of the piece’s claims, and a paper the AI judges to dispute it. The AI tags are the model’s reading; the excerpt is the source’s own words.")
+
 ## When to use it
 
 For a well-known paper, a contested essay, or anything you are about to rely on; not for a blog post
@@ -12,8 +21,6 @@ whoever added the article can run the search; visitors to a shared article see w
 found.
 
 ## Reading it
-
-![Debate’s Claims view: a relevance slider, a thread shared by two sources, one claim quoted from the piece, and under it an arXiv paper marked as a key source, Critical, with an excerpt from it](../images/mode-debate.png "Claims: one of the piece’s claims, and a paper the AI judges to dispute it. The AI tags are the model’s reading; the excerpt is the source’s own words.")
 
 - Two searches, two views. **Reception** is what others have written about this piece itself:
   replies, reviews, and work that cites it and says something about it. **Claims** is what has been

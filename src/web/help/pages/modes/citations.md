@@ -3,6 +3,16 @@ keywords: references bibliography sources works cited papers links doi arxiv sch
 related: mode-debate, faq-beyond-the-article
 ---
 
+## In short
+
+A paper is built on other people’s work, and knowing which works it leans on most tells you where it
+comes from and what to read next. Citations lists the works this piece cites, prioritised by the
+AI’s estimates of how much the piece relies on them and how influential they are. It uses the
+article’s own link where it gave one, and a Scholar search or a matching link found later for the
+rest.
+
+![The Citations panel: a threshold slider hiding 7 of 58 citations, then two works, each with its bars, Dig deeper and Ask in chat](../images/mode-citations.png "Citations, prioritised: each work with what we have read of it, its two bars, and where the piece first cites it.")
+
 ## When to use it
 
 For an academic paper or a report, where the question is “what is this built on, and where do I find
@@ -10,8 +20,6 @@ it?” Making the list and **Dig deeper** are for whoever added the article; vis
 article see the stored list.
 
 ## Reading it
-
-![The Citations panel: a threshold slider hiding 7 of 58 citations, then two works, each with its bars, Dig deeper and Ask in chat](../images/mode-citations.png "Citations, prioritised: each work with what we have read of it, its two bars, and where the piece first cites it.")
 
 - Each row says what we have read of the work, which is usually nothing: the sentence on what the
   piece uses it for is written from the article, not from the cited work.
