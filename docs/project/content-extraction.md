@@ -300,6 +300,7 @@ everything it makes is sanitised afterwards like the rest of the page.
 | a code listing as a `<div>` per line | a paragraph per line | one `<pre>` |
 | a boxed passage as an SVG frame round a `foreignObject` | an empty block | the passage's own blocks |
 | authors in the title block, none in the metadata | Readability's guess: a cited author, or "and" | the paper's authors, names only, through `metaAuthors` ([`src/meta-authors.ts`](../../src/meta-authors.ts)); right on 12 of 19 live pages and refused on the rest, 2026-10-07 ([261007d](../plans/261007d-front-matter-folded-by-default-and-arxiv-html-authors.md) § Stage 2 says why affiliations are not read) |
+| the title block itself: each author's affiliation, email and `\thanks` note in a pop-up CSS hides | one paragraph of every author fused, with `thanks:`, `footnotemark: 1` and `Affiliation:` as text; and Readability **deleting** the first short author element it took for the byline | one row per author (name, then each contact on its own line), each note once, numbered, and a name carrying the numbers of the notes it shares; one line of names when nobody has details. The page's nodes are moved, a word check and the link targets checked before the swap, and an unproved `\footnotemark` refuses. 16 of 20 live pages, 2026-10-09 ([261009d](../plans/261009d-arxiv-html-title-block-tidied-at-import.md)) |
 
 **Every rewrite is narrow, and declines rather than guesses.** It applies only on a page fetched
 from arXiv's or ar5iv's `/html/` and beneath `article.ltx_document`: a stranger's page cannot opt
@@ -797,7 +798,9 @@ leaves out one of those authors, so a page whose JSON-LD Readability already rea
 the byline it had. The list is joined with `"; "` because Referee mode's `authorKeys` reads
 `"Jane Doe, John Smith"` as one person. **The general point**: when this stage takes one string from Readability for
 something that can be plural, read how Readability chose the one. That is where this bug was, in
-plain sight. The reasoning is in
+plain sight. **And read what else that code does to get it**: the element Readability takes for the
+byline it also deletes from the article, which on arXiv's HTML was an author's details or a whole
+author ([261009b](../postmortems/261009b-readability-deletes-the-element-it-takes-for-the-byline.md)). The reasoning is in
 [../plans/260928b-multi-author-bylines-from-citation-meta.md](../plans/260928b-multi-author-bylines-from-citation-meta.md)
 and the class in
 [../postmortems/260928a-a-library-field-that-holds-one-value-for-a-list-keeps-one.md](../postmortems/260928a-a-library-field-that-holds-one-value-for-a-list-keeps-one.md).

@@ -32,7 +32,7 @@ import { ruleTitleTidier, type TitleTidier } from "./title-tidy.js";
 import { canonicaliseCallouts, type CalloutStats } from "./callouts.js";
 import { ChallengePage, challengeIn } from "./challenge-page.js";
 import { removePlatformFurniture } from "./furniture.js";
-import { prepareLatexml } from "./latexml.js";
+import { latexmlAuthorNames, prepareLatexml } from "./latexml.js";
 import { READER_COMMENTS_KEY, removeReaderComments } from "./reader-comments.js";
 import { canonicaliseMaths } from "./maths-import.js";
 import { loadMathsRenderer } from "./maths-server.js";
@@ -491,6 +491,10 @@ function readingArm(
      it and Readability deletes every `<script>`. `provenanceArm` has the same
      line in the same place. */
   const challenge = challengeIn(dom.window.document);
+  /* A LaTeXML title block's names, before `prepareDocument` rewrites the block
+     into one row per author (src/latexml.ts § 6). `metaAuthors` still reads the
+     `<meta>` tags where it always has, below, and falls back to these. */
+  const titleBlockNames = latexmlAuthorNames(dom.window.document);
   const { notes, callouts, removed, kept } = prepareDocument(dom.window.document, protect);
   /* Before the parse, and it has to be: Readability mutates the document it is
      given, and `keepClasses: false` takes the `noprint` class off whatever
@@ -498,7 +502,7 @@ function readingArm(
   const notForPrint = notForPrintText(dom.window.document);
   /* Before the parse for the same reason: every author the page declares,
      which Readability collapses to one — src/meta-authors.ts. */
-  const authors = metaAuthors(dom.window.document);
+  const authors = metaAuthors(dom.window.document, titleBlockNames);
   /* And the same again: the page's own DOI or arXiv id, off its meta tags and its address. */
   const ownIds = ownIdsOfDocument(dom.window.document, url);
   const article = new Readability(dom.window.document).parse();
