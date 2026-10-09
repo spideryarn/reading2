@@ -3780,6 +3780,9 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     });
 
     const made = await guideMade(slug, thread);
+    /* Read once for the whole turn: the joined string for the prompt, and its
+       fields for a guide's offers (`saved` below). */
+    const profileParts = wantsProfile ? await resolveProfileParts(slug) : null;
     for await (const event of converse({
       power: powerOf(article),
       meta: article.meta,
@@ -3803,7 +3806,19 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
          call", which stopped being true the day chat grew a tool loop. The
          conclusion held; the reason had rotted. Found by a GPT Sol review,
          2026-08-26.) */
-      profile: wantsProfile ? await resolveProfile(slug) : null,
+      profile: profileParts === null ? null : renderProfile(profileParts),
+      /* **And the same read, field by field, on a guide turn**: what
+         `offer_to_save` records as an offer's basis, so a card pressed after
+         the words changed saves nothing (plan 261009q). A shelf that could
+         not be read leaves the reason out rather than calling it empty, and
+         the tool then refuses to make an offer for that field. */
+      saved:
+        thread.kind === "guide" && profileParts !== null
+          ? {
+              profile: normaliseProfileText(profileParts.profile),
+              ...(profileParts.purposeFailed ? {} : { purpose: normaliseProfileText(profileParts.purpose) }),
+            }
+          : null,
       /* **What the reader has marked and discussed, on every Explore turn** —
          send, retry and edit alike, because all three reach this one call. From
          the stored thread's kind and id, like `kind` below. `null` for every
@@ -4057,6 +4072,34 @@ async function hintOpened(
       throw new Error(`unhandled hint refusal: ${String(unhandled)}`);
     }
   }
+}
+
+/**
+ * **Delete one of the reader's questions and everything after it.**
+ * `POST /api/chat/:slug/:threadId/delete-from`, body `{ messageId,
+ * expectedTailId }`. Report spya-mx423m; the rules are `withDeleteFrom` in
+ * src/chat.ts, and a refusal is its `ChatConflict`, so a 409.
+ *
+ * Under the conversation's turn order, for the reason the thread `DELETE`
+ * gives: nothing about a delete needs to interleave with a turn. Nothing is
+ * aborted first, unlike an edit: a conversation with an answer arriving is
+ * refused, and the panel does not offer the button then.
+ */
+async function deleteChatFrom(
+  slug: string,
+  threadId: string,
+  body: unknown,
+): Promise<{ threads: ChatThread[]; deleted: number }> {
+  const { messageId, expectedTailId } = objectBody(body);
+  /* The tail is required, unlike edit's: a new route has no old tab to stay
+     compatible with, and an unguarded delete is a stale tab deleting turns it
+     never saw. */
+  if (typeof messageId !== "string" || typeof expectedTailId !== "string") {
+    throw httpError(400, "Expected { messageId, expectedTailId }");
+  }
+  return inTurnOrder(`${slug}/${threadId}`, () =>
+    chatStore.deleteFrom(slug, threadId, messageId, { expectedTailId }),
+  );
 }
 
 /**
@@ -5842,7 +5885,7 @@ async function runRefereeClaims(slug: string, res: ServerResponse): Promise<void
 }
 
 /* ------------------------------------------ debate's reader claim checks --
-   The reader ticks claims in Debate's Claims, or types one, and presses Check:
+   The reader ticks claims in Peer review's Claims, or types one, and presses Check:
    one web search over them all, stored as a check. Plan
    docs/plans/261008i-debate-claims-picked-by-the-reader.md § 3;
    src/store/pg-debate-claim-checks.ts; src/debate.ts § `generateClaimCheck`. */
@@ -11377,9 +11420,9 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
    * article gets no list in v1: this is not under `/api/public/`, and adding it
    * there is a new field on the public boundary.
    *
-   * **No experimental gate**, because Debate has none on the server: the switch
-   * hides the bar's button, and a bookmarked `?mode=debate` stays reachable
-   * (docs/project/experimental-features.md). GPT Sol's F4.
+   * **No experimental gate.** Debate had none on the server even while its
+   * bar button was behind the switch, and since 2026-10-09 this is Reception
+   * inside Peer review, which is offered to everyone. GPT Sol's F4.
    *
    * **The identity is the imported one, not the shelf's**: a reader's rename
    * would fail the title check on a correct DOI (F2).
@@ -12157,6 +12200,19 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     handler: async ({ request: { req, res } }, captures) => {
       const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
       send(res, 200, await hintOpened(slug, id, await readBody(req)));
+    },
+  },
+
+  /* The reader deleted a question and everything after it. No model call;
+     `first-capture` for `hint-opened`'s reason. */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/delete-from$/,
+    article: "first-capture",
+    handler: async ({ request: { req, res } }, captures) => {
+      const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
+      send(res, 200, await deleteChatFrom(slug, id, await readBody(req)));
     },
   },
 

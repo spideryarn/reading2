@@ -16,6 +16,8 @@
  * requests for the same item apart, so a second press scrolls again.
  */
 import { type RefObject, useEffect, useRef } from "react";
+import type { BandMode } from "../modes.js";
+import type { PeerReviewView } from "./params.js";
 
 export interface ItemFocus {
   /** What the band's rows carry in their data attribute. */
@@ -106,4 +108,43 @@ export function useLandOnItem({
  */
 export function claimFocusKey(claim: { blockId: string; quote: string }): string {
   return `${claim.blockId} ${claim.quote}`;
+}
+
+/** The four lists a focus can bring a row into view in, one piece of state each (Reader.tsx). */
+export type FocusSlot = "term" | "cite" | "idea" | "claim";
+
+/** Where the reader is, as far as a focus cares: the mode, and Peer review's sub-mode. */
+export interface FocusPlace {
+  mode: BandMode;
+  peerReview: PeerReviewView;
+}
+
+/** The list a place shows, if it is one a focus can land in. */
+function slotAt(place: FocusPlace): FocusSlot | null {
+  switch (place.mode) {
+    case "glossary":
+      return "term";
+    case "ideas":
+      return "idea";
+    case "peer-review":
+      return place.peerReview === "bibliography" ? "cite" : place.peerReview === "claims" ? "claim" : null;
+    default:
+      return null;
+  }
+}
+
+/**
+ * **Which focuses a move forgets** — the one the reader has just left, if
+ * they left its list. A focus belongs to one visit: a reader who leaves while
+ * the list is still loading (or a filter is being lowered) never lets the panel
+ * hand it back, and an ordinary later visit would jump to the old chat's item.
+ *
+ * **Asked of the list, not the mode**, since 2026-10-09: Bibliography and
+ * Claims are two sub-modes of Peer review, and moving between them does not
+ * change `mode` (GPT Sol's F7 on plan 261009l). Arriving forgets nothing, so a
+ * focus set in the same tick as the move that shows its list survives it.
+ */
+export function focusesLeft(was: FocusPlace, now: FocusPlace): FocusSlot[] {
+  const left = slotAt(was);
+  return left !== null && left !== slotAt(now) ? [left] : [];
 }

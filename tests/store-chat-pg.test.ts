@@ -4,8 +4,8 @@
  * Every assertion here has a one-line way to make it red, and the list is
  * deliberately the design's: a retry that keeps the previous attempt's
  * citations, an edit that deletes `>=` instead of `>`, a rename that bumps
- * `updatedAt`, a `finish` that skips the thread's clock when the message did
- * not match, and messages ordered by `created_at` instead of `ordinal`. The
+ * `updatedAt`, a rejected `finish` that still bumps the thread's clock, and
+ * messages ordered by `created_at` instead of `ordinal`. The
  * last one is the sharpest: it looks right, and **a test that only ever writes
  * one turn cannot tell the two clauses apart**, because a question and its
  * empty answer are written in one call with one timestamp.
@@ -275,25 +275,22 @@ describe("the Postgres chat store", () => {
     expect(messages.some((m) => m.id === "spya-zzzzzz")).toBe(false);
   });
 
-  it("bumps the thread's clock even when the message matched nothing", async () => {
-    /* The filesystem rebuilds the thread object — and so its `updatedAt` —
-       whenever the THREAD matches, whether or not a message inside it does.
-       The panel sorts threads by that, so an `if (rowCount)` guard here would
-       look like an optimisation and be a real difference in what the reader
-       sees. */
+  it("does not bump the thread's clock when the attempt fence rejects the finish", async () => {
+    /* `updated_at` means stored activity. A stale model call after a retry — or
+       after delete-from pruned its row — stored nothing and must not move the
+       conversation ahead of the activity the reader can still see. */
     const started = await pgChatStore.begin(
       SLUG,
       { threadId: THREAD, question: "Q?" },
       clockFrom("2026-08-01T00:00:00.000Z"),
     );
     const before = (await pgChatStore.load(SLUG))[0]?.updatedAt;
-    await pgChatStore.finish(SLUG, THREAD, "spya-absent", { status: "done" }, {
+    await pgChatStore.finish(SLUG, THREAD, started.reply.id, { status: "done" }, {
       now: () => "2026-08-02T00:00:00.000Z",
-      attempt: started.attempt,
+      attempt: "not-the-current-attempt",
     });
     const after = (await pgChatStore.load(SLUG))[0]?.updatedAt;
-    expect(after).not.toBe(before);
-    expect(after).toBe("2026-08-02T00:00:00.000Z");
+    expect(after).toBe(before);
   });
 
   it("retries an answer in place, and takes the last attempt's sources with it", async () => {

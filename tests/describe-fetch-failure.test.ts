@@ -328,6 +328,7 @@ describe("the chat controller's own catches", () => {
       loadThreads: never,
       renameThread: never,
       deleteThread: never,
+      deleteFrom: never,
       runTurn: never,
       appendSpoken: never,
       settledAnswer: async () => null,

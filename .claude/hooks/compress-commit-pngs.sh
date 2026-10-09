@@ -8,11 +8,13 @@
 # few hours, and a red suite blocks deploys. The test stays as the backstop; this makes it
 # rare. Plan: docs/plans/261007m-compress-docs-screenshots-on-commit.md.
 #
-# Only literal PNG paths in one ordinary `git commit`, or unchanged staged PNGs in
-# a bare commit. Uncertain shell syntax, repository switches and commit options are
-# skipped. Never interpret a commit message or another command as a screenshot path.
-# Re-staging uses a receipt for the bytes actually written, and checks the index has
-# not changed since selection. Parent-directory symlinks are refused too.
+# When commit_command.parse can read the command: its literal PNG paths, or unchanged staged
+# PNGs in a bare commit. When it cannot (six commits in seven, as sessions write them), every
+# changed PNG under docs/ the command text names: the file, its folder as a whole word, or a glob
+# over its folder. That can compress a screenshot the commit leaves out, which is harmless; skipping
+# was not (plan 261009p). A file whose index copy was its exact bytes is re-staged, using a
+# receipt for the source and bytes actually written, and only if the index has not changed
+# since selection. Parent-directory symlinks are refused too.
 #
 # The same contract as push-doc-hint.sh: ALWAYS exit 0, quiet on any error. A hook that
 # ever blocks a commit costs more than every screenshot it ever shrank. The registration
@@ -61,10 +63,68 @@ command -v pngquant >/dev/null || quiet
 # receipts. Bash 3.2 and BSD tools need no GNU utilities or newer array builtins.
 HOOK_DIR=$(cd "$(dirname "$0")" && pwd) || quiet
 PAYLOAD="$payload" HOOK_DIR="$HOOK_DIR" python3 - <<'PYTHON'
-import hashlib, json, os, signal, subprocess, sys, time
+import fnmatch, hashlib, json, os, re, signal, subprocess, sys, time
 sys.dont_write_bytecode = True  # no __pycache__ in .claude/hooks
 sys.path.insert(0, os.environ["HOOK_DIR"])
 import commit_command  # the shared reading of what a commit carries
+
+# In the command text, a path starts at the start or after one of these...
+BEFORE = r"(?:^|(?<=[\s'\"=;&|(<>]))"
+# ...and ends at the end or before one of these.
+AFTER = r"(?=$|[\s'\";&|)<>])"
+WORD = r"[^\s'\";&|)<>/]*"  # one path component, which may be a glob
+
+
+def leading_cd(cmd, cwd):
+    """Where a supported leading `cd <dir> &&` (or `;`) goes, or cwd; None if uncertain."""
+    m = re.match(r"\s*cd\s+(?:'([^']*)'|\"([^\"$`\\]*)\"|([^\s;&|<>()$`'\"\\]+))\s*(?:&&|;|\n)", cmd)
+    if not m:
+        # Do not apply paths relative to the payload cwd when the shell will first change it
+        # in a form we do not understand (an escaped path, expansion, cd --, ||, ...).
+        return None if re.match(r"\s*cd(?:\s|$)", cmd) else os.path.realpath(cwd)
+    single, double, bare = m.groups()
+    # The shell expands a leading tilde only when it is unquoted.
+    target = bare if bare is not None else single if single is not None else double
+    if target == "" or (bare is not None and bare.startswith("-")):
+        return None
+    if bare is not None:
+        target = os.path.expanduser(target)
+    target = os.path.join(cwd, target)
+    return os.path.realpath(target) if os.path.isdir(target) else None
+
+
+def docs_pngs(root):
+    """Every PNG on disk under docs/, repo-relative, symlinked directories not followed. From the
+    filesystem, not git status, which assume-unchanged and skip-worktree can blind."""
+    found = []
+    for directory, _, names in os.walk(os.path.join(root, "docs")):
+        found += [os.path.relpath(os.path.join(directory, n), root) for n in names if n.lower().endswith(".png")]
+    return found
+
+
+def named(cmd, name, root, cwd):
+    """Does the command text name this file: the file itself, its folder as a whole word, or its
+    folder as the base of a glob that matches it (`docs/plans/x-shots/*.png`)? Repo-relative,
+    cwd-relative or absolute. A further ancestor counts only as a whole word, so a command that
+    names `docs/plans/a.md` names no screenshot in docs/plans."""
+    def spellings(rel):
+        absolute = os.path.join(root, rel)
+        base = {s for s in (rel, absolute, os.path.relpath(absolute, cwd)) if s not in ("", ".")}
+        return base | {"./" + s for s in base if not os.path.isabs(s)}
+    if any(re.search(BEFORE + re.escape(s) + AFTER, cmd) for s in spellings(name)):
+        return True
+    parent, base = os.path.split(name)
+    for s in spellings(parent):
+        for m in re.finditer(BEFORE + re.escape(s) + "(?:/(" + WORD + "))?" + AFTER, cmd):
+            pattern = m.group(1)
+            if not pattern or (re.search(r"[*?\[]", pattern) and fnmatch.fnmatchcase(base, pattern)):
+                return True
+    parent = os.path.dirname(parent)
+    while parent:
+        if any(re.search(BEFORE + re.escape(s) + "/?" + AFTER, cmd) for s in spellings(parent)):
+            return True
+        parent = os.path.dirname(parent)
+    return False
 
 def main():
     d = json.loads(os.environ["PAYLOAD"])
@@ -72,10 +132,16 @@ def main():
     cmd = (d.get("tool_input") or {}).get("command", "")
     if not isinstance(cwd, str) or not os.path.isdir(cwd) or not isinstance(cmd, str):
         return
+    # The parser reads a commit for certain or not at all, and sessions here seldom write one it
+    # can read (131 of 908 commits, 261009p). When it cannot, fall back to the screenshots the
+    # command names: a parse failure must not mean "compress nothing".
     commit = commit_command.parse(cmd, cwd)
-    if commit is None:
-        return
-    cwd, paths = commit.cwd, commit.paths
+    if commit is not None:
+        cwd, paths = commit.cwd, commit.paths
+    else:
+        cwd, paths = leading_cd(cmd, cwd), None
+        if cwd is None:
+            return
 
     deadline = time.monotonic() + 26
     def run(argv, data=None, timeout=2, directory=None):
@@ -110,33 +176,73 @@ def main():
         return (name.startswith("docs/") and name.lower().endswith(".png") and "\n" not in name
                 and os.path.isfile(file) and not os.path.islink(file) and os.path.realpath(file) == file)
 
+    def index_entry(name):
+        entry = git("ls-files", "--stage", "-z", "--", name).split(b"\t", 1)[0].split()
+        return entry if len(entry) == 3 and entry[0] in (b"100644", b"100755") and entry[2] == b"0" else None
+
+    def index_receipt(name):
+        """The index entry and exact worktree bytes it matched, or None."""
+        entry = index_entry(name)
+        if entry is None:
+            return None
+        with open(os.path.join(root, name), "rb") as f:
+            data = f.read()
+        # diff --quiet trusts assume-unchanged/skip-worktree; raw blob equality does not.
+        blob = git("hash-object", "--no-filters", "--stdin", data=data).strip()
+        return (entry, hashlib.sha256(data).hexdigest()) if blob == entry[1] else None
+
+    def changed_from_head(names):
+        """Names whose raw worktree bytes differ from HEAD, using two Git calls for the batch."""
+        ordered = sorted(names)
+        if not ordered:
+            return set()
+        # Listing the tree once is cheaper than asking Git about every candidate. An unborn HEAD
+        # makes every file new; other failures still fail open into compression, never the commit.
+        code, tree = run(["git", "--literal-pathspecs", "-C", root,
+                          "ls-tree", "-r", "-z", "HEAD", "--", "docs"])
+        head = {}
+        if code == 0:
+            for record in tree.split(b"\0"):
+                meta, separator, raw_name = record.partition(b"\t")
+                fields = meta.split()
+                if separator and len(fields) == 3 and fields[1] == b"blob":
+                    head[os.fsdecode(raw_name)] = fields[2]
+        raw_names = b"".join(os.fsencode(name) + b"\n" for name in ordered)
+        hashes = git("hash-object", "--no-filters", "--stdin-paths", data=raw_names).splitlines()
+        if len(hashes) != len(ordered):
+            raise RuntimeError()
+        return {name for name, blob in zip(ordered, hashes) if head.get(name) != blob}
+
     # Preserve literal spelling: resolving symlinks here would bypass the compressor's
     # own refusal and could rewrite a different file from the path being committed.
-    if paths:
-        files = set()
+    files = set()
+    restage = {}
+    if paths is None:
+        files = {name for name in docs_pngs(root) if safe(name) and named(cmd, name, root, cwd)}
+        files = changed_from_head(files)
+    elif paths:
         added = {os.path.relpath(a, root) for a in commit.added}
         for name in paths:
             relative = os.path.relpath(os.path.abspath(os.path.join(cwd, name)), root)
             if safe(relative) and (relative in added or git("ls-files", "-z", "--", relative)):
                 files.add(relative)
-        restage = {}
     else:
         staged = git("diff", "--cached", "--no-renames", "--name-only", "-z", "--diff-filter=AM")
-        files, restage = set(), {}
         for raw in staged.split(b"\0"):
-            if not raw:
-                continue
             name = os.fsdecode(raw)
-            if not safe(name):
-                continue
-            entry = git("ls-files", "--stage", "-z", "--", name).split(b"\t", 1)[0].split()
-            if len(entry) != 3 or entry[0] not in (b"100644", b"100755") or entry[2] != b"0":
-                continue
-            # diff --quiet trusts assume-unchanged/skip-worktree; raw blob equality does not.
-            if git("hash-object", "--no-filters", "--", name).strip() != entry[1]:
-                continue
-            files.add(name)
-            restage[name] = entry
+            receipt = index_receipt(name) if raw and safe(name) else None
+            if receipt is not None:
+                files.add(name)
+                restage[name] = receipt
+    # However a file was chosen: if the index held exactly its bytes, the index gets the
+    # compressed bytes too, so a later commit of the index carries them. Bind that decision to
+    # the exact source bytes: a peer edit before the compressor reads the file stays unstaged.
+    for name in files:
+        if name in restage:
+            continue
+        receipt = index_receipt(name)
+        if receipt is not None:
+            restage[name] = receipt
     if not files:
         return
     # The script bounds pngquant and its whole batch. A process-group deadline also
@@ -152,17 +258,20 @@ def main():
         name = receipt["file"]
         if name not in restage or not safe(name):
             continue
+        entry, source_sha256 = restage[name]
+        if receipt.get("sourceSha256") != source_sha256:
+            continue  # a peer edit before compression must stay unstaged
         with open(os.path.join(root, name), "rb") as f:
             data = f.read()
         if hashlib.sha256(data).hexdigest() != receipt["sha256"]:
             continue  # an unstaged peer edit after compression must stay unstaged
         current = git("ls-files", "--stage", "-z", "--", name).split(b"\t", 1)[0].split()
-        if current != restage[name]:
+        if current != entry:
             continue  # another owner changed what was staged
         # Stage the verified bytes, rather than re-reading a worktree a peer can edit.
         blob = git("hash-object", "-w", "--stdin", data=data).strip()
         current = git("ls-files", "--stage", "-z", "--", name).split(b"\t", 1)[0].split()
-        if current == restage[name]:
+        if current == entry:
             git("update-index", "--cacheinfo", os.fsdecode(current[0]), os.fsdecode(blob), name)
     if did:
         msg = "Commit hook (never blocks): " + "; ".join(did)

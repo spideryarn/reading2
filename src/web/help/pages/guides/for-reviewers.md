@@ -2,7 +2,7 @@
 title: Reviewing a paper
 summary: For a peer reviewer, or anybody reading critically, a route through the modes that point you at passages, with the judgement left to you.
 keywords: reviewer referee peer review critical critique assess evaluate manuscript preprint journal claims evidence guide
-related: mode-referee, mode-citations, mode-debate, comments, faq-is-the-ai-reading-for-me, for-experts
+related: mode-referee, mode-peer-review, comments, faq-is-the-ai-reading-for-me, for-experts
 ---
 
 This is for reading a paper in order to judge it. The tools here point you at passages, and
@@ -10,8 +10,8 @@ Referee never returns a verdict. Most of what the modes show links back to the a
 check it in one click — see [Is the AI reading the article for
 me?](/help/questions#faq-is-the-ai-reading-for-me).
 
-Several of these modes are [experimental features](/help/experimental-features): Referee, Citations,
-Debate and FAQ appear only once you turn those on.
+Several of these modes are [experimental features](/help/experimental-features): Referee and FAQ
+appear only once you turn those on.
 
 ## Before you add it
 
@@ -36,10 +36,11 @@ preprints, open-review submissions, and drafts the author has agreed to share.
 - **Ask [Search](/help/mode-search) by meaning**, for example “where does he concede a weakness?”.
   The marks [down the spine](/help/spine) show whether the matches sit in one place or run through
   the whole piece.
-- **Check what it is built on** in [Citations](/help/mode-citations). **first cited** jumps to
-  where the article first cites a work.
-- **See what others have said** in [Debate](/help/mode-debate): press **Search the web**. Many
-  pieces turn out to have no reception at all, and it says so.
+- **Check what it is built on** in [Peer review](/help/mode-peer-review)’s **Bibliography**.
+  **first cited** jumps to where the article first cites a work.
+- **See what others have said** in Peer review’s **Reception**, which searches the web. Many pieces
+  turn out to have no reception at all, and it says so. **Claims** lists the claims the paper rests
+  on, for you to check against the web.
 
 ## Write your comments
 

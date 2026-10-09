@@ -248,9 +248,11 @@ export const MODE_LABEL: Record<Mode, string> = {
      2026-10-06 (docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md).
      docs/plans/261005l-remember-becomes-learn-and-explore-covers-critiques.md. */
   learn: "Learn",
-  debate: "Debate",
+  /* Citations and Debate until 2026-10-09, when they became this mode's
+     sub-modes. The name is provisional (Greg: "Maybe peer review") and shares
+     a phrase with Referee — docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md. */
+  "peer-review": "Peer review",
   structure: "Structure",
-  citations: "Citations",
   faq: "FAQ",
   skim: "Skim",
   marginalia: "Marginalia",

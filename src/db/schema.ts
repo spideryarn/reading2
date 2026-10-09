@@ -2982,12 +2982,13 @@ export const jobs = spideryarn.table(
     requeues: integer("requeues").notNull().default(0),
 
     /**
-     * **The `oncePerJob` step this job has begun, and when** (src/pipeline.ts §
-     * `PipelineStep.oncePerJob`). Written by `beginPaidStep` before the step's
-     * paid work starts, and never cleared: a step that finished is skipped as
-     * done before the marker is read, and a step that did not finish must not
-     * be bought again by a later window of the same job. Per job, so a reader's
-     * Retry — a new row — starts clean. Plan 261009l.
+     * **The paid purchase this job has begun, and when** (`PaidPurchase`,
+     * `JobStore.beginPaidStep`). Usually the whole `oncePerJob` step; for
+     * Illustrated it is the plates inside the step, after its deliberate
+     * hand-back. Written before the purchase starts and never cleared: finished
+     * work is skipped before the marker is read, and unfinished paid work must
+     * not be bought again by a later window of the same job. Per job, so a
+     * reader's Retry — a new row — starts clean. Plans 261009l and 261009o.
      */
     paidStepBegun: text("paid_step_begun"),
     paidStepBegunAt: timestamp("paid_step_begun_at", { withTimezone: true }),

@@ -53,9 +53,9 @@ import { MODE_LABEL } from "../../title-text.js";
 import { bandTarget } from "../activation.js";
 import { FeatureBoundary } from "../FeatureBoundary.js";
 import {
-  debateParam,
   diagramParam,
   type Mode,
+  peerReviewParam,
   refereeParam,
   learnParam,
   structureParam,
@@ -93,9 +93,8 @@ export const MODE_CONTAINMENT: Record<Mode, Containment> = {
   learn: BAND,
   quotes: BAND,
   timeline: BAND,
-  debate: BAND,
+  "peer-review": BAND,
   structure: BAND,
-  citations: BAND,
   faq: BAND,
   skim: BAND,
   /* No band, but a column of its own on the right, and that column is inside
@@ -106,7 +105,7 @@ export const MODE_CONTAINMENT: Record<Mode, Containment> = {
 
 /**
  * **Each sub-mode's parameter, under its mode's own name** — `?diagram=`,
- * `?debate=` and so on, which is what lets `sub[mode]` below be the view that
+ * `?peer-review=` and so on, which is what lets `sub[mode]` below be the view that
  * mode is showing. `satisfies` and not an annotation, so nuqs still sees each
  * parser's own type and a seventh mode with sub-modes fails to compile here.
  */
@@ -116,7 +115,7 @@ const SUB_MODE_PARAMS = {
   learn: learnParam,
   summary: summaryParam,
   structure: structureParam,
-  debate: debateParam,
+  "peer-review": peerReviewParam,
 } satisfies Record<ModeWithSubModes, unknown>;
 
 /**
@@ -132,8 +131,8 @@ const SUB_MODE_PARAMS = {
  * - **`anyone`**: Summary (a visitor gets the plain-words lengths and the
  *   thread too, off the payload — SummaryMode.tsx § `VisitorSummaryBand`),
  *   Structure (Fisheye and Expanded are two bands for anyone, off the payload)
- *   and Debate (Reception and Claims, read by both `DebateBand` and
- *   `VisitorDebateBand` — DebateMode.tsx).
+ *   and Peer review (Bibliography, Reception and Claims, read by both
+ *   `PeerReviewBand` and `VisitorPeerReviewBand` — PeerReviewMode.tsx).
  *
  * A `Record`, so a new mode with sub-modes is a compile error until somebody
  * has said which. tests/a-broken-mode-leaves-the-article-readable.test.tsx.
@@ -144,7 +143,7 @@ const SUB_MODE_SELECTS_A_BAND_FOR: Record<ModeWithSubModes, "anyone" | "owner"> 
   learn: "owner",
   summary: "anyone",
   structure: "anyone",
-  debate: "anyone",
+  "peer-review": "anyone",
 };
 
 function hasSubModes(mode: Mode): mode is ModeWithSubModes {

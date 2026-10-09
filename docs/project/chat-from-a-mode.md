@@ -35,12 +35,12 @@ remains.
 
 | Mode | The button is on | Component | Owning section |
 |---|---|---|---|
-| Debate | each claim's heading (icon only) | [`DebatePanel.tsx`](../../src/web/DebatePanel.tsx) § `ClaimsList` | [debate.md § Check a claim in chat](debate.md#check-a-claim-in-chat) |
-| Debate | the angle box (a *lens*: the reader's words, no item) | [`DebatePanel.tsx`](../../src/web/DebatePanel.tsx) § `Angles` | [debate.md § Look at the debate from an angle](debate.md#look-at-the-debate-from-an-angle) |
+| Peer review › Claims | each claim's heading (icon only) | [`DebatePanel.tsx`](../../src/web/DebatePanel.tsx) § `ClaimsList` | [debate.md § Check a claim in chat](debate.md#check-a-claim-in-chat) |
+| Peer review › Reception | the angle box (a *lens*: the reader's words, no item) | [`DebatePanel.tsx`](../../src/web/DebatePanel.tsx) § `Angles` | [debate.md § Look at the debate from an angle](debate.md#look-at-the-debate-from-an-angle) |
 | Glossary | the open entry, in Dig deeper's place | [`OriginChat.tsx`](../../src/web/OriginChat.tsx) § `AskInChatButton` | [glossary.md § Asking about an entry in chat](glossary.md#asking-about-an-entry-in-chat) |
 | Glossary | a term's hover card in the prose, and Skim's term chip (which draws the same card), in Dig deeper's place | [`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx) § `TermCard` (`onAskTerm`) | [glossary.md § The hover card](glossary.md#the-hover-card) |
-| Citations | the open row, in Dig deeper's place | [`OriginChat.tsx`](../../src/web/OriginChat.tsx) § `AskInChatButton` | [citations.md § Ask in chat](citations.md#ask-in-chat-a-conversation-about-one-work) |
-| Citations | a cited work's hover card in the prose, in Dig deeper's place | [`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx) § `CiteCard` (`onAskCitedWork`) | [citations.md § Marked in the prose](citations.md#marked-in-the-prose-in-every-mode) |
+| Peer review › Bibliography | the open row, in Dig deeper's place | [`OriginChat.tsx`](../../src/web/OriginChat.tsx) § `AskInChatButton` | [citations.md § Ask in chat](citations.md#ask-in-chat-a-conversation-about-one-work) |
+| Peer review › Bibliography | a cited work's hover card in the prose, in Dig deeper's place | [`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx) § `CiteCard` (`onAskCitedWork`) | [citations.md § Marked in the prose](citations.md#marked-in-the-prose-in-every-mode) |
 | Ideas | the open idea, under its passages (since 2026-10-09) | [`OriginChat.tsx`](../../src/web/OriginChat.tsx) § `AskInChatButton`, drawn by [`IdeasPanel.tsx`](../../src/web/IdeasPanel.tsx) § `IdeaRow` | [ideas.md § Asking about an idea in chat](ideas.md#asking-about-an-idea-in-chat) |
 
 The rows and the angle box draw the way back with `OriginChatMark` from the same file; a hover card
@@ -70,7 +70,7 @@ origin (`summary` is reserved in the database CHECK and not built, and since 202
 > — Greg, 2026-10-09 (spya-tv6wn5), in [261009k](../plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)
 
 An open chat in Chat's band that has an origin draws one line above its transcript: the mode's own
-icon and *Back to "the item's name" in Mode* (an angle reads *Back to your angle in Debate*),
+icon and *Back to "the item's name" in Mode* (an angle reads *Back to your angle in Peer review › Reception*),
 clipped on one line. The origin is the stored one, or, before the server has named a fresh thread,
 the one waiting beside its draft (`ConversationBand`, `pendingOrigin`). The words are
 [`thread-source.ts`](../../src/web/thread-source.ts) § `originBack`; the line is
@@ -83,10 +83,10 @@ A press calls `openOrigin` in [`Reader.tsx`](../../src/web/reader/Reader.tsx), o
 | Origin | The press | What the reader sees |
 |---|---|---|
 | Glossary | `openTermInGlossary` (`?term=`, the gate lowered if it hides the entry) and a focus | the entry open, its row scrolled into view |
-| Citations | the focus (`citeFocus`) and `showBand` | the row scrolled into view, the bar lowered if needed |
+| Citations (Peer review › Bibliography) | the focus (`citeFocus`) and `showBand`, on Bibliography | the row scrolled into view, the bar lowered if needed |
 | Ideas | one push of `mode=ideas&idea=`, and a focus | the idea open, its row in view; not the row press, which jumps the prose |
-| Debate, a claim | one push of `mode=debate&debate=claims` that clears `?bears=` and `?debatethread=`, and a focus | the claim's row in view, an older search's claim unfolded |
-| Debate, an angle | one push of `mode=debate` on Reception | the angles box |
+| Debate, a claim | one push of `mode=peer-review&peer-review=claims` that clears `?bears=` and `?debatethread=`, and a focus | the claim's row in view, an older search's claim unfolded |
+| Debate, an angle | one push of `mode=peer-review&peer-review=reception` | the angles box |
 
 **The way back lands on the item, and the item is one press from its block.** No arm jumps the
 prose: on a phone the band lies over it, and the flash would be held until the band moved (GPT

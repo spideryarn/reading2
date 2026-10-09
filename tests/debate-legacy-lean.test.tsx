@@ -151,6 +151,7 @@ function paint(o: UseDebate, view: DebateView = "reception", order: DebateOrder 
   act(() => {
     root.render(
       createElement(DebatePanel, {
+        head: null,
         access: { kind: "owner", owner: o, claimList: claimListOwner(), checks: checksOwner(), citers: { result: { kind: "no-doi" }, retry: () => {} }, claimChats: NO_CLAIM_CHATS },
         onJump: () => {},
         view,

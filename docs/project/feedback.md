@@ -341,8 +341,14 @@ postmortem [261008c](../postmortems/261008c-needs-a-decision-lists-reports-nobod
 - **Where they show.** *Needs a decision* is the threads, not a list of reports. It opens on a
   **contents**: three groups, *Needs a decision*, *You've replied, being considered* and
   *Deferred* (shut), one line a thread with its title, its `q-` id and its report's `#number`.
-  Pressing one shows **that thread alone**, with *‹ All threads*, *N of M* and *‹ Previous* /
-  *Next ›*; the pills are hidden meanwhile, because on a phone with the keyboard up they cost three
+  Pressing one shows **that thread alone**, with *‹ All threads*, *N of M needing a decision* when
+  it is one of those threads (otherwise just how many need one), and *‹ Previous* / *Next ›*, which
+  step **only through the threads that need a decision** (and the one showing, so *Next* still works
+  from a thread just answered or deferred); replied and deferred threads are reached from the
+  contents. At an end a button is `aria-disabled` with a `title`, and pressed anyway it says the
+  same on the row, for a phone
+  ([261009m](../plans/261009m-needs-a-decision-pager-steps-only-through-waiting-threads.md)). The
+  pills are hidden meanwhile, because on a phone with the keyboard up they cost three
   lines. Below the contents, and only there, are the waiting reports **no open question is about**,
   under *Waiting, but no question written yet*, saying there is nothing to answer for them;
   `feedback-questions.ts` lists the same reports for the sweep to write one. A waiting report that

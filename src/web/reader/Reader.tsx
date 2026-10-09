@@ -59,8 +59,7 @@ import { IdeasBand, VisitorIdeasBand } from "../modes/ideas/IdeasMode.js";
 import { TimelineBand, VisitorTimelineBand } from "../modes/timeline/TimelineMode.js";
 import { QuotesBand, VisitorQuotesBand } from "../modes/quotes/QuotesMode.js";
 import { quoteCardQuotes, useQuoteMarks } from "./useQuoteMarks.js";
-import { DebateBand, VisitorDebateBand } from "../modes/debate/DebateMode.js";
-import { CitationsBand, VisitorCitationsBand } from "../modes/citations/CitationsMode.js";
+import { PeerReviewBand, VisitorPeerReviewBand } from "../modes/peer-review/PeerReviewMode.js";
 import { FaqBand, VisitorFaqBand } from "../modes/faq/FaqMode.js";
 import {
   armSkimOpening,
@@ -123,7 +122,7 @@ import { Dock, useActivateMode, useActivateSubMode, visibleModes } from "../Dock
 import { gateToReveal, PRIORITY_GATE } from "../GlossaryPanel.js";
 import { ProseHoverCard, type QuoteCardSource } from "../ProseHoverCard.js";
 import type { CiteFocus } from "../CitationsPanel.js";
-import { claimFocusKey, focusOn, focusTaken, type ItemFocus } from "../item-focus.js";
+import { claimFocusKey, focusesLeft, focusOn, focusTaken, type ItemFocus } from "../item-focus.js";
 import { shownEntries } from "../glossary-shown.js";
 import { editArticleTags } from "../article-tags.js";
 import { chatExecutor, type ModeCommand, modeDoor, readingExecutor, type TagsControl } from "../command-runners.js";
@@ -159,7 +158,7 @@ import {
   refereeParam,
   summaryParam,
   structureParam,
-  debateParam,
+  peerReviewParam,
   bearsParam,
   debateThreadParam,
   type BandMode,
@@ -1205,7 +1204,7 @@ export function Reader({
     referee: refereeParam,
     summary: summaryParam,
     structure: structureParam,
-    debate: debateParam,
+    "peer-review": peerReviewParam,
   });
   const inQuiz = useRef(false);
   const nowInQuiz = quizNav.mode === "learn" && quizNav.learn === "quiz" && quizNav.thread === null;
@@ -1421,7 +1420,7 @@ export function Reader({
    *
    * **Every work, not only those above the threshold bar**, which departs from
    * what quotes mode does and follows what the glossary does. `?citebar=` is
-   * reachable only inside Citations mode while these marks are visible from
+   * reachable only inside Peer review's Bibliography while these marks are visible from
    * every mode, so barring them here would change a paragraph's appearance
    * from a control the reader has no way to see. Fable, 2026-09-16.
    *
@@ -1609,8 +1608,8 @@ export function Reader({
   const [openOccurrence, setOpenOccurrence] = useState<string | null>(null);
 
   /**
-   * **One row to bring into view in Glossary, Ideas and Debate's Claims**,
-   * once each — `citeFocus` above is Citations' (src/web/item-focus.ts). Only
+   * **One row to bring into view in Glossary, Ideas and Peer review's Claims**,
+   * once each — `citeFocus` above is Bibliography's (src/web/item-focus.ts). Only
    * the way back from a chat sets them (`openOrigin` below). One piece of
    * state per band, so a request for one band cannot be spent by another.
    */
@@ -1621,41 +1620,71 @@ export function Reader({
   const [claimFocus, setClaimFocus] = useState<ItemFocus | null>(null);
   const claimFocusTaken = useCallback((taken: ItemFocus) => setClaimFocus(focusTaken(taken)), []);
   /**
-   * A focus belongs to one visit to its mode. If the reader leaves while the
+   * A focus belongs to one visit to its list. If the reader leaves while the
    * list is still loading (or while a filter is being lowered), its panel
    * cannot hand the request back. Forget it here, or an ordinary later visit
    * would unexpectedly jump to the old chat's item.
+   *
+   * **The list, not the mode**, since 2026-10-09: Bibliography and Claims are
+   * two of Peer review's sub-modes, and moving between them leaves `mode`
+   * alone (GPT Sol's F7 on plan 261009l). `focusesLeft` (item-focus.ts) is the
+   * rule, tested on its own.
    */
-  const focusModeWas = useRef(mode);
+  const peerReviewView = subNav["peer-review"];
+  const focusPlaceWas = useRef({ mode, peerReview: peerReviewView });
   useEffect(() => {
-    const previous = focusModeWas.current;
-    focusModeWas.current = mode;
-    if (previous === mode) return;
-    switch (previous) {
-      case "glossary":
-        setTermFocus(null);
-        return;
-      case "citations":
-        setCiteFocus(null);
-        return;
-      case "ideas":
-        setIdeaFocus(null);
-        return;
-      case "debate":
-        setClaimFocus(null);
-        return;
+    const was = focusPlaceWas.current;
+    const now = { mode, peerReview: peerReviewView };
+    focusPlaceWas.current = now;
+    for (const slot of focusesLeft(was, now)) {
+      switch (slot) {
+        case "term":
+          setTermFocus(null);
+          break;
+        case "cite":
+          setCiteFocus(null);
+          break;
+        case "idea":
+          setIdeaFocus(null);
+          break;
+        case "claim":
+          setClaimFocus(null);
+          break;
+        default: {
+          const unhandled: never = slot;
+          return unhandled;
+        }
+      }
     }
-  }, [mode]);
-  /* **Mode and the parameters that could hide the item, in one pushed
-     entry**, so one Back returns to the chat (GPT Sol's F4 on plan 261009k).
-     Each closed on a line of its own: tests/last-view.test.ts reads them. */
-  const [, setDebateWay] = useQueryStates({
+  }, [mode, peerReviewView]);
+  /* **Mode, sub-mode and the parameters that could hide the item, in one
+     pushed entry**, so one Back returns to the chat (GPT Sol's F4 on plan
+     261009k). Each closed on a line of its own: tests/last-view.test.ts reads
+     them. Debate's way until 2026-10-09, when it became Peer review's. */
+  const [, setPeerReviewWay] = useQueryStates({
     mode: modeParam,
-    debate: debateParam,
+    "peer-review": peerReviewParam,
     bears: bearsParam,
     debatethread: debateThreadParam,
     thread: threadParam,
   });
+  /**
+   * **Open Bibliography on one work** — the focus and the move in one place,
+   * so neither can be written without the other (GPT Sol's F7 on plan
+   * 261009l). The move is one pushed entry naming the mode and the sub-mode
+   * (Bibliography is the absent default), so a reader on Reception or Claims
+   * lands on the list the focus is for. Called by a chat's way back to a
+   * cited work, and by Claims' *Cited in this paragraph* (that plan's
+   * Stage 2).
+   */
+  const openBibliographyWork = useCallback(
+    (workId: string) => {
+      setBandAway(false);
+      setCiteFocus(focusOn(workId));
+      void setPeerReviewWay({ mode: "peer-review", "peer-review": null, thread: null }, { history: "push" });
+    },
+    [setPeerReviewWay],
+  );
   const [, setIdeaWay] = useQueryStates({
     mode: modeParam,
     idea: ideaParam,
@@ -1692,10 +1721,10 @@ export function Reader({
           openTermInGlossary(origin.itemId);
           setTermFocus(focusOn(origin.itemId));
           return;
+        /* A stored origin keeps its old mode word as data until the deep rename
+           (plan 261009l § Stage 3); each lands on its Peer review sub-mode. */
         case "citations":
-          void setThread(null);
-          setCiteFocus(focusOn(origin.itemId));
-          showBand("citations");
+          openBibliographyWork(origin.itemId);
           return;
         case "ideas":
           /* Not Ideas' row press, which jumps the prose. The old occurrence
@@ -1709,12 +1738,15 @@ export function Reader({
           setBandAway(false);
           if (isLensOrigin(origin)) {
             /* An angle is not in the article: the angles box is Reception's. */
-            void setDebateWay({ mode: "debate", debate: "reception", thread: null }, { history: "push" });
+            void setPeerReviewWay(
+              { mode: "peer-review", "peer-review": "reception", thread: null },
+              { history: "push" },
+            );
             return;
           }
           setClaimFocus(focusOn(claimFocusKey(origin)));
-          void setDebateWay(
-            { mode: "debate", debate: "claims", bears: null, debatethread: null, thread: null },
+          void setPeerReviewWay(
+            { mode: "peer-review", "peer-review": "claims", bears: null, debatethread: null, thread: null },
             { history: "push" },
           );
           return;
@@ -1724,7 +1756,7 @@ export function Reader({
         }
       }
     },
-    [openTermInGlossary, showBand, setIdeaWay, setDebateWay, setThread],
+    [openTermInGlossary, openBibliographyWork, setIdeaWay, setPeerReviewWay, setThread],
   );
   /**
    * **The quotes, and they are not a state at all** — since 2026-09-08.
@@ -2275,7 +2307,7 @@ export function Reader({
   );
 
   /**
-   * **Each block's position in the article** — Debate's Claims sub-mode puts
+   * **Each block's position in the article** — Peer review's Claims sub-mode puts
    * its claims in the order the piece makes them, and the artefact does not
    * carry that; the blocks do. Built once here and handed to both debate
    * bands. docs/plans/260929h-debate-mode-clearer-sources-and-orders.md F8.
@@ -2792,7 +2824,7 @@ export function Reader({
     referee: subNav.referee,
     summary: subNav.summary,
     structure: subNav.structure,
-    debate: subNav.debate,
+    "peer-review": subNav["peer-review"],
   };
   /* One string, so the effect below has one dependency for all of them. The
      views are fixed vocabularies with no NUL in them. */
@@ -3596,66 +3628,49 @@ export function Reader({
             onOpenKey={setOpenTimelineKey}
           />
         ) : null;
-      /* **The owner/visitor pair, since 2026-09-29** — Stage 4, which built the
-         boundary a visitor's row must pass: every row's address re-judged by
-         `publicCitationUrl` (a refusal drops the row, counted), and the
-         article's own address inside a direct row judged as the masthead's is
-         (src/public/dto.ts § `publicDebate`). Gated on the debate itself, like
-         the timeline's: an absent key means `visitorGap` said `not-built` and
-         the `VisitorBand` is in the slot. `VisitorDebateBand` mounts no
-         `useDebate`, so nothing here can start a search.
-         docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md § Stage 4,
+      /* **Peer review, since 2026-10-09** — Citations' band and Debate's under
+         one chip row (PeerReviewMode.tsx). **The owner/visitor pair**, each
+         half since 2026-09-29: a visitor's rows arrive with every address
+         re-judged by `publicCitationUrl` (src/public/dto.ts §
+         `publicCitedWork`, `publicDebate`), and `VisitorPeerReviewBand` mounts
+         no `useCitations` or `useDebate`, so nothing here can start a list or
+         a search. **Any one of the three artefacts draws the band**
+         (visitor.ts § POLICY, `any-artefact`): with none, `visitorGap` said
+         `not-built` and the `VisitorBand` is in the slot. No passages — every
+         row's block link is a jump, not a selection.
+         docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md,
          docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
-      case "debate":
-        /* Either the debate or Claims' list is enough to draw the band since
-           2026-10-08 (plan 261008i § 2): a list made with no search stored is
-           still the visitor's to read. */
+      case "peer-review":
         if (!owner)
-          return artefacts?.debate || artefacts?.debateClaims ? (
-            <VisitorDebateBand
+          return artefacts?.citations || artefacts?.debate || artefacts?.debateClaims ? (
+            <VisitorPeerReviewBand
+              citations={artefacts.citations ?? null}
               debate={artefacts.debate ?? null}
               claimList={artefacts.debateClaims ?? null}
               onJump={bandJump}
               blockOrder={blockOrder}
               publishedAt={publishedAt}
               articleTitle={article.meta.title}
+              citeFocus={citeFocus}
+              onCiteFocusTaken={citeFocusTaken}
+              onOpenWork={openBibliographyWork}
             />
           ) : null;
         return (
-          <DebateBand
+          <PeerReviewBand
             slug={slug}
+            citationsRead={owner.citations}
             onJump={bandJump}
             blockOrder={blockOrder}
             publishedAt={publishedAt}
             articleTitle={article.meta.title}
+            workChats={workChats}
             claimChats={claimChats}
-            focus={claimFocus}
-            onFocusTaken={claimFocusTaken}
-          />
-        );
-      /* **The owner/visitor pair, since 2026-09-29.** It was the owner alone
-         until a public article's stored Skim was refused to a signed-out
-         reader (SPIDERYARN-READING2-56); a stored list is the same case. The
-         visitor's rows arrive with every address re-judged by
-         `publicCitationUrl` (src/public/dto.ts § `publicCitedWork`), and the
-         branch is gated on the list itself, like the timeline's: an absent key
-         means `visitorGap` said `not-built` and the `VisitorBand` is in the
-         slot. No passages — the row's "first cited" is a jump, not a selection.
-         docs/plans/260911g-citations-mode.md,
-         docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
-      case "citations":
-        if (!owner)
-          return artefacts?.citations ? (
-            <VisitorCitationsBand citations={artefacts.citations} onJump={bandJump} />
-          ) : null;
-        return (
-          <CitationsBand
-            slug={slug}
-            read={owner.citations}
-            onJump={bandJump}
-            focus={citeFocus}
-            onFocusTaken={citeFocusTaken}
-            chats={workChats}
+            citeFocus={citeFocus}
+            onCiteFocusTaken={citeFocusTaken}
+            claimFocus={claimFocus}
+            onClaimFocusTaken={claimFocusTaken}
+            onOpenWork={openBibliographyWork}
           />
         );
       /* **The owner/visitor pair, since 2026-09-29**, for the citations' reason
@@ -4029,7 +4044,7 @@ export function Reader({
   const activateModeHere = useActivateMode(
     slug,
     carriedSearch(location.search),
-    { diagram: subNav.diagram, summary: summaryView, debate: subNav.debate },
+    { diagram: subNav.diagram, summary: summaryView, peerReview: subNav["peer-review"] },
     onDockMode,
     isOwner,
     mode,
@@ -4044,7 +4059,7 @@ export function Reader({
   const activateModeUnarmed = useActivateMode(
     slug,
     carriedSearch(location.search),
-    { diagram: subNav.diagram, summary: summaryView, debate: subNav.debate },
+    { diagram: subNav.diagram, summary: summaryView, peerReview: subNav["peer-review"] },
     onDockMode,
     false,
     mode,
@@ -4825,9 +4840,9 @@ export function Reader({
         /* The same state the Diagram band's chips read (`diagramParam`), not
            the address, which lags a chip press — Dock.tsx § Props `diagram`. */
         diagram={subNav.diagram}
-        /* The same for Debate's sub-mode: Reception arms its search and Claims
-           arms its own list (activation.ts § `activationForDebate`). */
-        debate={subNav.debate}
+        /* The same for Peer review's sub-mode: each arms only its own work
+           (activation.ts § `activationForPeerReview`). */
+        peerReview={subNav["peer-review"]}
         onMode={onDockMode}
         /* Which mode buttons are drawn dimmed. Empty for the owner, so the bar
            is exactly what it was; derived from `MODES` for a visitor, so a mode

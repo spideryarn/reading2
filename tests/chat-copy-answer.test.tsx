@@ -63,6 +63,7 @@ function paint(): void {
         recovering: false,
         blocks: new Map<string, string>(),
         onEdit: () => {},
+        onDeleteFrom: undefined,
         canEdit: false,
         editing: false,
         onEditing: () => {},

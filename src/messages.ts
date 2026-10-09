@@ -290,6 +290,22 @@ export const PAID_STEP_NOT_REPEATED: ReaderFacingFailure = {
     "for. It was not started again by itself. Press Retry to run it. [jb-paid-once]",
 };
 
+/**
+ * **Illustrated's plates, which this job may already have begun, not painted
+ * again by themselves.** The twin of `PAID_STEP_NOT_REPEATED` for a purchase
+ * marked inside a step rather than at it (`StepContext.beginPaidWork`): the
+ * brief may have been banked and handed to this window on purpose, but the
+ * plates were sent by an earlier one, which stopped before they came back.
+ * Plan 261009o.
+ */
+export const PLATES_NOT_REPEATED: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "These pictures may already have started being painted when the job stopped, so they may " +
+    "already have been paid for. They were not painted again by themselves. Press Retry to paint " +
+    "them. [jb-plates-once]",
+};
+
 export const CODE_KINDS: Record<string, FailureKind> = {
   "ai-busy": "retry",
   "ai-no-credit": "ours",
@@ -391,6 +407,9 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      which is the only way this work is bought twice. See
      `PAID_STEP_NOT_REPEATED`. */
   "jb-paid-once": "retry",
+  /* The same refusal for Illustrated's plates, marked at the plate phase
+     rather than at the step. See `PLATES_NOT_REPEATED`. */
+  "jb-plates-once": "retry",
   /* **The two refusals *Dig deeper* on a glossary entry can give**, and the only `gl-` pair.
      Neither is a model call and neither is a fault: one says the article never
      quotes the term, the other that the glossary no longer fits the article.
@@ -4408,7 +4427,7 @@ export const SHARING_MARK_NAME_PRIVATE = "Private — change who can read this";
 export const SHARED_LINK_CARRIES =
   "A shared link carries the article, its table of contents, and the reading " +
   "aids written for it — including the summaries, glossary, ideas, quotes, timeline, skim, " +
-  "FAQ, citations and Debate. It also carries the " +
+  "FAQ, and Peer review's bibliography, reception and claims. It also carries the " +
   "marks, notes and searches of whoever added it. Their conversations with the model are not " +
   "part of it.";
 
@@ -5315,11 +5334,16 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
   search: "The questions you have put to this piece, in your words, and the passages they found.",
   learn: "What you said you took from the piece, and the quizzes on it.",
   referee: "Your peer-review pass over the piece: your criteria, and what it found against them.",
-  /* Reception is current; claim sources can only be present on a legacy
-     artefact. Say both without implying a current press searched for claims,
-     and without promising that Reception found anything. */
-  debate:
-    "The Reception search, and any claim sources kept by an earlier search.",
+  /* Citations' row and Debate's until 2026-10-09, in the sub-modes' order.
+     "The model found", because the bibliography is its reading — a work cited
+     only by name in running text is on it only if the model noticed it — while
+     the links are not the model's: each is one the article gave, or a search
+     that says it is one (src/citations.ts § linkFor). Reception is current;
+     claim sources can only be present on a legacy artefact, so neither half
+     implies a current press searched for claims or found anything. */
+  "peer-review":
+    "The works the model found this piece citing, with a link for each and why the piece uses it; " +
+    "the Reception search; and the claims it lists, with any claim sources kept by an earlier search.",
   /* **"where there are gists"**, for the reason the note above `summary`
      gives: a provisional tree has none, and this row is read about articles
      that have not finished ingesting (src/public/dto.ts § `provisional`).
@@ -5331,12 +5355,6 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
   structure:
     "The headings and the model's one-line gist for each section, arranged as two linked " +
     "columns or, on a narrow screen, one nested list — where there are gists.",
-  /* "The model found", because the list is its reading — a work cited only by
-     name in running text is on it only if the model noticed it — while the
-     links are not the model's: each is one the article gave, or a search that
-     says it is one (src/citations.ts § linkFor). */
-  citations:
-    "The works the model found this piece citing, with a link for each and why the piece uses it.",
   /* "The model thought", because the questions and which passage answers each
      are its reading; the passages themselves are the article's words (src/faq.ts
      § verifyPassage). */
@@ -5572,7 +5590,7 @@ export function debateClaimsHandoff(sources: number): string {
  * **What the press on Debate searches, said before the button.** Since
  * `debate/7` (2026-10-08) it is one search, for Reception only: the claims are
  * the reader's to pick (plan 261008i). The sub-mode control's own cards say
- * what each sub-mode is (src/web/sub-modes.ts § `DEBATE_SUB_MODES`); no
+ * what each sub-mode is (src/web/sub-modes.ts § `PEER_REVIEW_SUB_MODES`); no
  * sentence sits under the control, because docs/project/mode.md bans a
  * description line there.
  */

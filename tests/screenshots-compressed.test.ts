@@ -282,7 +282,9 @@ describe("pngquant availability", () => {
       const receiptLine = log.mock.calls.map(([line]) => String(line)).find((line) => line.startsWith("compression-result "));
       expect(receiptLine).toBeDefined();
       expect(JSON.parse(receiptLine!.slice("compression-result ".length))).toMatchObject({
-        file: path.relative(REPO, valid), sha256: createHash("sha256").update(readFileSync(valid)).digest("hex"),
+        file: path.relative(REPO, valid),
+        sourceSha256: createHash("sha256").update(original).digest("hex"),
+        sha256: createHash("sha256").update(readFileSync(valid)).digest("hex"),
       });
     } finally {
       if (previousPath === undefined) delete process.env.PATH;

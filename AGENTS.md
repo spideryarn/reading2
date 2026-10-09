@@ -61,6 +61,8 @@ listed here; the names under each are files in `docs/project/`.
   `ideas.md` (the propositions the piece assumes) ·
   `quotes.md` (the lines worth keeping) ·
   `timeline.md` (when the piece says these things happened) ·
+  `peer-review.md` (what the piece cites and what others say about it: Citations and Debate as one
+  mode, since 2026-10-09) ·
   `citations.md` (the works the piece cites, and where each link came from) ·
   `faq.md` (the questions a careful reader would ask, answered only by the piece's own passages) ·
   `skim.md` (skim a paper at increasing depth: a route through its quotes, walked three times; it
@@ -108,7 +110,8 @@ listed here; the names under each are files in `docs/project/`.
 - **[security-map.md](docs/project/security-map.md)** — start here for security: the untrusted
   parties (none of them is another reader) and where each defence physically lives.
   <br>↳ `security.md` (the deep dive) · `auth.md` · `admin.md` (the one view across owners) ·
-  `billing.md` (what a slot is, and what stops a script taking twenty)
+  `billing.md` (what a slot is, and what stops a script taking twenty) ·
+  `security-risks.md` (the register: each known risk, its level, and whether Greg has accepted it)
 - **[code-quality-overview.md](docs/project/code-quality-overview.md)** — the commands that tell you
   whether what you just did works, and which of them are gates.
   <br>↳ `testing.md` · `typechecking.md` · `linting.md` · `static-analysis.md` (`npm run check`) ·

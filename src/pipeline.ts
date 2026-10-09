@@ -176,6 +176,7 @@ import {
   PROMPT_VERSION as SKETCH_PROMPT_VERSION,
   SKETCH_OUTPUT_SCHEMA,
 } from "./sketch.js";
+import { arxivAffiliationReader } from "./arxiv-affiliations.js";
 import { openRouterAuthorsReader } from "./pdf-authors.js";
 import { openRouterFrontMatterReader } from "./pdf-frontmatter.js";
 import { runPdfExtract } from "./pdf-read.js";
@@ -210,6 +211,7 @@ import {
   ILLUSTRATE_SKETCH_PROFILE,
   ILLUSTRATE_SKETCH_STALE,
   pdfTooManyPages,
+  PLATES_NOT_REPEATED,
   type ReaderFacingFailure,
   SOURCE_DOCUMENT_DAMAGED,
   SOURCE_DOCUMENT_GONE,
@@ -247,6 +249,7 @@ import {
   type Block,
   type JobUpload,
   type Meta,
+  type PaidPurchase,
   type StepName,
   type StepPreview,
   type StoredReadingDifficulty,
@@ -719,6 +722,18 @@ export interface StepContext {
    */
   jobId?: string;
   /**
+   * **Mark a purchase this job must not make twice**, on the job row and this
+   * claim's fence (`JobStore.beginPaidStep`). `"begun"`: go ahead. `"begun-before"`:
+   * an earlier window of this same job began it and never finished, so it may
+   * already be paid for, and the step fails rather than buy it again.
+   *
+   * `oncePerJob` marks a whole step; this is for a step whose purchase comes
+   * after its own deliberate hand-back, which marking the step would refuse —
+   * Illustrated's plates. Absent from a command line or a test, where nothing
+   * requeues. docs/plans/261009o-a-requeued-job-does-not-buy-the-illustrated-plates-again.md.
+   */
+  beginPaidWork?: (purchase: PaidPurchase) => Promise<"begun" | "begun-before">;
+  /**
    * How long the queue allows this step, `STEP_BUDGET_MS[step]` in src/jobs.ts,
    * which this file cannot import. The structure step's slices path stops
    * itself inside it. `undefined` from a command line or a test.
@@ -963,6 +978,10 @@ export interface PipelineStep<N extends StepName = StepName> {
    * marker is the job row's `paid_step_begun` (`JobStore.beginPaidStep`), and
    * `runStep` (src/jobs.ts) is the one reader.
    * docs/plans/261009l-a-requeued-job-does-not-buy-the-debate-search-again.md.
+   *
+   * A step whose purchase comes after a hand-back of its own marks that
+   * purchase instead, through `StepContext.beginPaidWork` — `illustrated`'s
+   * plates (plan 261009o).
    */
   oncePerJob?: true;
   /**
@@ -1846,6 +1865,17 @@ function briefBank(
  */
 function refuseToIllustrate(reason: IllustrateRefusal): never {
   throw stageFailure(ILLUSTRATE_REFUSAL[reason]);
+}
+
+/** `generateIllustrated`'s `beginPlates`, on the job's once-per-job marker. Plan 261009o. */
+function beginIllustratedPlates(
+  beginPaidWork: NonNullable<StepContext["beginPaidWork"]>,
+): () => Promise<void> {
+  return async () => {
+    if ((await beginPaidWork("illustrated-plates")) === "begun-before") {
+      throw stageFailure(PLATES_NOT_REPEATED);
+    }
+  };
 }
 
 /**
@@ -2762,7 +2792,16 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
            encoding so that stays visible. */
         const html = new TextDecoder().decode(bytes);
         try {
-          const result = await runExtract({ html, url, slug: ctx.slug, titleTidier: stepTitleTidier(ctx, store) });
+          const result = await runExtract({
+            html,
+            url,
+            slug: ctx.slug,
+            titleTidier: stepTitleTidier(ctx, store),
+            /* An arXiv HTML paper's affiliations, by the PDF path's authors
+               pass on the same model (plan 261009m). Called only on a LaTeXML
+               title block whose names are the whole author list. */
+            affiliations: arxivAffiliationReader(openRouterAuthorsReader(modelFor("pdf-frontmatter", ctx.power)), ctx),
+          });
           /* **The audit line for the named pre-Readability removers.**
              `removePlatformFurniture` and `removeReaderComments` delete an
              element because of a publisher/platform name, and a delete
@@ -5034,6 +5073,13 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
            docs/plans/261007l-illustrated-fits-a-claim-and-a-late-stop-says-so.md. */
         ...(ctx.deadlineAt !== undefined ? { deadlineAt: ctx.deadlineAt } : {}),
         ...(ctx.jobId ? { bank: briefBank(ctx, ctx.jobId, checkpoints, sourceHash) } : {}),
+        /* **The plates are bought once per job.** A window that died with them
+           out has lost them — they are stored only once the set is back — and
+           the requeue would hand the banked brief to a window that buys them
+           all again. Marked here rather than as `oncePerJob`, because the
+           step's own hand-back after the brief is a second window too.
+           docs/plans/261009o-a-requeued-job-does-not-buy-the-illustrated-plates-again.md. */
+        ...(ctx.beginPaidWork ? { beginPlates: beginIllustratedPlates(ctx.beginPaidWork) } : {}),
       });
 
       /* **Written here rather than in `generateIllustrated`**, which writes

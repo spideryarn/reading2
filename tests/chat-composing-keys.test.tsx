@@ -70,6 +70,7 @@ function paint(threadId: string | null): void {
         onDelete: () => {},
         canStartOver: true,
         onRetry: () => {},
+        onDeleteFrom: undefined,
         onEdit: (_message: string, next: string) => {
           edited.push(next);
         },

@@ -135,25 +135,29 @@ export const MODES = [
      all, and drawing those like the dated ones would throw away the only thing
      the piece actually said. docs/plans/260831i-timeline-mode.md. */
   "timeline",
-  /* The fourteenth, 2026-09-05, and the first whose content is **not in the
-     article at all**: it goes out to the open web and comes back with what
-     other people have written — replies to this piece, and the argument around
-     the claims it makes. It costs this list one word like the eleven before it.
+  /* **`debate` was the fourteenth, 2026-09-05 to 2026-10-09**, and it is not a
+     mode any more: what the web says about the piece is Peer review's
+     Reception and Claims now (`?mode=debate` still opens it, through
+     `RETIRED_MODES` below). Why it was called `debate` rather than
+     `reception` or `critiques` is in the plan that made it,
+     docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md; the
+     step, the column and the routes keep the word until the deep rename
+     (docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md § Stage 3). */
+  /* **Peer review, 2026-10-09** — what this piece cites, and what others say
+     about it: three sub-modes (`?peer-review=`), Bibliography (the Citations
+     mode until that day), Reception and Claims (the Debate mode's two). Out
+     of the experimental switch on the day it was made. Greg (spya-vcvxu5):
+     "let's move this out of experimental, this combined mode … Maybe peer
+     review, because that, I think, incorporates the idea that it's both
+     internal and external to the article".
 
-     **`debate` and not `critiques` or `reception`**, which is Greg's pick and
-     the reason is that both obvious names promise something false on most of
-     the shelf: *reception* presumes the piece was noticed, *critiques* presumes
-     the response was hostile — so either reads wrong over a corroboration or the
-     author's own later correction, two of the most useful rows this mode can
-     produce.
-
-     `responses` was the runner-up and was refused on the code, for the reason
-     this list has now refused a name twice: `Response`, `respond()`, HTTP
-     responses and chat answers are all over `src/`, and one word meaning two
-     things is the collision `toc` → `hierarchy` above cost this repo a rename to
-     escape.
-     docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md. */
-  "debate",
+     **The name is provisional, and it clashes with Referee**, which is the
+     mode for somebody *doing* a peer review; the question is in
+     docs/user-feedback/questions/q-xf2xvb.md. Which is why the stored names
+     (`citations`, `debate`, `debate-claims`) are not renamed yet.
+     docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md,
+     docs/project/peer-review.md. */
+  "peer-review",
   /* The fifteenth, 2026-09-07, and the only one so far that is an *instrument*
      rather than an addition: two linked columns over the same tree Hierarchy
      and Outline already draw — every part on the left, the current part's
@@ -189,18 +193,12 @@ export const MODES = [
      there is not, and came out from behind the switch in Outline's place.
      Hierarchy stayed, until 2026-09-29. docs/plans/260910g-structure-mode-subsumes-outline.md. */
   "structure",
-  /* 2026-09-11: every work the piece cites, each with a link out, ranked the
-     way Glossary is — asked for through the Feedback button (SPIDERYARN-READING2-2Y).
-     The link is derived by code from the article, never written by the model,
-     which is the one safety property; behind the experimental switch. Its
-     stored output is public, while making it and *Find it* remain owner-only.
-     **`citations` and not `references` or `sources`**:
-     the step and the column were already `citations` in stage 1, and
-     `references`/`sources` are aliases in `MODE_CATALOG`. The name does share
-     a word with chat's web citations (src/web/citations.ts, `Citation` in
-     src/types.ts) — which is why the stored type is `CitedWork`.
-     docs/plans/260911g-citations-mode.md, docs/project/citations.md. */
-  "citations",
+  /* **`citations` was here from 2026-09-11 to 2026-10-09** — every work the
+     piece cites, each with a link out. It is Peer review's Bibliography now,
+     and `?mode=citations` opens it there, through `RETIRED_MODES` below. The
+     step and the column keep the word (stored as `CitedWork`, because chat's
+     web citations share it). docs/plans/260911g-citations-mode.md,
+     docs/project/citations.md. */
   /* 2026-09-16: the questions a careful reader would put to this piece while
      reading it, each answered by passages of the piece itself — never a
      written answer. Asked for through the Feedback button (SPIDERYARN-READING2-3A);
@@ -345,6 +343,16 @@ export const RETIRED_MODES: Readonly<Record<string, BandMode>> = {
      word means rather than the word.
      docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md. */
   remember: "learn",
+  /* Citations and Debate, two modes until 2026-10-09, are Peer review's three
+     sub-modes. **These rows alone open Peer review at Bibliography**: Debate's
+     word has to become `?mode=peer-review&peer-review=reception` (or
+     `claims`), which is `liftLegacyPeerReview` in src/web/router.ts,
+     on boot, on a client navigation, on Back and on a restored last view, as
+     `tweets` is lifted. These rows are what the frame before that rewrite, the
+     tab title, `/help/mode-citations` and a feedback report's mode read.
+     docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md. */
+  citations: "peer-review",
+  debate: "peer-review",
 };
 
 /**

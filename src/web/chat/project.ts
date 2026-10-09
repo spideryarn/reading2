@@ -100,6 +100,17 @@ export function storedSpoken(thread: ChatThread | null | undefined, op: SpokenOp
 }
 
 /**
+ * **When a pruned conversation was last added to**: when its kept tail's turn
+ * began, which is what `updatedAt` was set to when that turn was asked. The
+ * server's rule, `withDeleteFrom` in src/chat.ts, so the list's order and its
+ * "last message" agree before and after a reload. Exported for the reducer's
+ * commit, which writes down what this drew.
+ */
+export function prunedAt(thread: ChatThread, kept: readonly ChatMessage[]): string {
+  return kept.at(-1)?.createdAt ?? thread.createdAt;
+}
+
+/**
  * Lay one operation over the list.
  *
  * **Structural sharing is a requirement, not an optimisation.** A chat delta
@@ -139,6 +150,18 @@ function draw(threads: readonly ChatThread[], op: Operation): readonly ChatThrea
         updatedAt: op.at,
         messages: spokenMessages(thread.messages, op),
       };
+      return next;
+    }
+    case "prune": {
+      /* The deleted rows off the screen while the request is out — drawn,
+         because a refusal takes it back. By id, so a row appended since stays. */
+      const at = threads.findIndex((t) => t.id === op.threadId);
+      if (at < 0) return threads;
+      const thread = threads[at] as ChatThread;
+      const messages = thread.messages.filter((m) => !op.ids.includes(m.id));
+      if (messages.length === thread.messages.length) return threads;
+      const next = threads.slice();
+      next[at] = { ...thread, updatedAt: prunedAt(thread, messages), messages };
       return next;
     }
     case "repair": {

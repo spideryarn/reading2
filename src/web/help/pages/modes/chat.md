@@ -46,13 +46,15 @@ Each article keeps its own list of conversations; **‹ Chats**, at the top left
 takes you back to it. That list holds every
 conversation you have had about the article, not only the ones started in Chat. A row from somewhere
 else has a small icon in front of it: point at it, or tap it, to see where it came from, for example
-a claim in Debate, a passage, or Learn. Pressing a Learn row takes you to Learn, where that
+a claim in Peer review, a passage, or Learn. Pressing a Learn row takes you to Learn, where that
 conversation lives; it cannot be renamed or deleted from Chat. When the list has conversations from
 more than one place, the buttons above it (**All**, **Chats** and one for each other place) narrow
 it.
 
 <kbd>Enter</kbd> sends and <kbd>Shift Enter</kbd> starts a new line; <kbd>Esc</kbd> stops an answer
 still arriving. **Answer again** gets a fresh answer, and the pencil lets you rewrite your question.
+The bin beside the pencil deletes that question, its answer and everything after it: press it, then
+press it again to confirm. The first question has no bin; to delete it, delete the conversation.
 When a conversation is longer than the panel, the arrows under it step to the previous or next
 message, or back to the first, and **Latest** jumps to the end. The (i) in the corner of a
 conversation says which AI model answered it, and how hard it was asked to think.
@@ -69,8 +71,10 @@ take you to a passage, or open a mode that has nothing to write, such as Structu
 Glossary or Summary's Brief or Fuller once they have already been written for this article. It
 says so when it does, and **Back** undoes it. Anything that costs money or changes your things, such
 as a search, a mode that has to be written first, a tag or a bookmark, is still a button you press. Its
-greeting asks why you are reading the piece: answer in the box below as you would any message, and
-**Keep this as why you're reading** under your answer saves it, in your words. You can talk to the
+greeting asks why you are reading the piece: answer in the box below as you would any message. When
+you say why, or something about yourself, the guide offers to save it, as close to your own words
+as it can, under its answer: **Save as why you're reading** or **Save to About you**. Nothing is
+saved until you press, and **Undo** puts it back. You can talk to the
 guide out loud with **Live**, as in any chat, and type **Guide** in the command bar to get back to it.
 
 **Talking instead of typing.** The microphone turns your speech into text in the box, to edit before

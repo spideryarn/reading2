@@ -72,6 +72,7 @@ function paint(t: ChatThread, opts: { listening?: boolean } = {}) {
         canStartOver: true,
         onRetry: () => {},
         onEdit: () => {},
+        onDeleteFrom: undefined,
         onStop: () => {},
         onJump: (id: string) => {
           jumped.push(id);
