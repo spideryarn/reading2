@@ -106,7 +106,7 @@ let useJobsCalls = 0;
 /** The queue as the engine would report it — replaced by the test, not polled. */
 let jobs: Job[] = [];
 /** What the next `add()` resolves to. Null is a refusal, with `failure` its reason. */
-let added: Job | { article: string; repeat?: true } | null = null;
+let added: Job | { article: string; repeat?: true } | { publicCopy: { slug: string; title: string } } | null = null;
 let failure: string | null = null;
 /** Every URL `add()` was asked for. Two entries is a second slot spent. */
 const posted: string[] = [];
@@ -123,8 +123,8 @@ vi.mock("../src/web/useJobs.js", () => ({
       error: null,
       driverFailures: {},
       lastFailure: () => failure,
-      add: async (url: string) => {
-        posted.push(url);
+      add: async (url: string, options?: { ownCopy?: true }) => {
+        posted.push(options?.ownCopy ? `own:${url}` : url);
         if (holdPost) await new Promise<void>((go) => (releasePost = go));
         return added;
       },
@@ -430,6 +430,35 @@ describe("pressing it", () => {
     await hover();
     expect(text()).toContain("already on your shelf");
     expect(posted).toEqual([url]);
+  });
+
+  /**
+   * **Somebody else has already made it public** — nothing spent, and the card
+   * offers both: their copy, free, and the reader's own, which posts again
+   * with `ownCopy` (docs/plans/261009j-a-public-copy-offered-at-import.md).
+   */
+  it("offers the public copy free, or the reader's own, when somebody has made it public", async () => {
+    const { PUBLIC_COPY_ON_THE_CARD, PUBLIC_COPY_OWN_ON_THE_CARD, PUBLIC_COPY_READ_ON_THE_CARD } = await import(
+      "../src/messages.js"
+    );
+    const url = "https://example.org/public-elsewhere";
+    added = { publicCopy: { slug: "their-copy", title: "Theirs" } };
+    await render(url, true);
+    await hover();
+    await press();
+    await settle();
+
+    expect(posted).toEqual([url]);
+    expect(text()).toContain(PUBLIC_COPY_ON_THE_CARD);
+    const link = [...(card()?.querySelectorAll("a") ?? [])].find((a) => a.textContent?.includes(PUBLIC_COPY_READ_ON_THE_CARD));
+    expect(link?.getAttribute("href")).toBe("/read/their-copy");
+    const own = [...(card()?.querySelectorAll("button") ?? [])].find((b) => b.textContent?.includes(PUBLIC_COPY_OWN_ON_THE_CARD));
+    expect(own).toBeTruthy();
+
+    added = job("job-own", url);
+    await act(async () => own?.click());
+    await settle();
+    expect(posted).toEqual([url, `own:${url}`]);
   });
 
   it("posts the link's own address and shows the step that is running", async () => {

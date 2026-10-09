@@ -4743,6 +4743,24 @@ export const REPEAT_PASTE_ON_THE_SHELF =
 /** The same, on a link's hover card, in the card's own lower-case voice. */
 export const REPEAT_PASTE_ON_THE_CARD = "already on your shelf, nothing spent";
 
+/**
+ * **Somebody else has already made this address public**, and nothing has been
+ * spent yet: the add asks which the reader wants. Greg, 2026-10-09: *"ask them
+ * if they'd rather use the public one for free or have their own version which
+ * will use up one of their allotted slots."* What each gives is said, because
+ * the free one is read-only: no notes, chat or search of the reader's own
+ * (plan 261006k). docs/plans/261009j-a-public-copy-offered-at-import.md.
+ */
+export const PUBLIC_COPY_FOUND = (title: string): string => `“${title}” is already public on Spideryarn.`;
+export const PUBLIC_COPY_EXPLAIN =
+  "You can read it there for free, with everything already made for it. Your own copy is yours to annotate, search, chat with and make new modes for, and uses one article from your allowance.";
+export const PUBLIC_COPY_READ = "Read the public copy (free)";
+export const PUBLIC_COPY_OWN = "Add my own copy";
+/** The same, on a link's hover card, in the card's own lower-case voice. */
+export const PUBLIC_COPY_ON_THE_CARD = "already public here, nothing spent";
+export const PUBLIC_COPY_READ_ON_THE_CARD = "read it free";
+export const PUBLIC_COPY_OWN_ON_THE_CARD = "add my own copy";
+
 /** Confirmed, and not sent yet: the import has not made the article's row. */
 export const SHARE_AT_ADD_WAITING = "Will be made public as soon as the import is ready for it.";
 

@@ -59,6 +59,10 @@ import {
   DIRECT_ADD_SENT_TEXT_AWAY,
   UPLOAD_STILL_ARRIVING,
   ADD_IMPORT_LOST,
+  PUBLIC_COPY_EXPLAIN,
+  PUBLIC_COPY_FOUND,
+  PUBLIC_COPY_OWN,
+  PUBLIC_COPY_READ,
   REPEAT_PASTE_ON_THE_SHELF,
   worthRetrying,
 } from "../messages.js";
@@ -66,7 +70,8 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { QuotaNotice } from "./QuotaNotice.js";
 import { LIBRARY_HREF, navigate, readHref } from "./router.js";
 import type { Job } from "../types.js";
-import { useJobs } from "./useJobs.js";
+import { type PublicCopyFound, useJobs } from "./useJobs.js";
+import { takeOwnCopyIntent } from "./own-copy-intent.js";
 import { jobEngine } from "./jobEngine.js";
 import { type Transfer, uploadEngine } from "./uploadEngine.js";
 import { useUpload } from "./useUpload.js";
@@ -656,6 +661,25 @@ export function AddPage({
      remount, which state does not. */
   const posted = useRef<string | null>(null);
 
+  /**
+   * **The reader's own copy, chosen over a public one** — for this address
+   * only. Set by *Add my own copy* below, or on arrival by the one-shot that
+   * `PrivateCopy` leaves when its link is pressed (own-copy-intent.ts), so a
+   * reader who has just chosen their own copy on the public article is not
+   * asked again. A ref keyed by the address, read once per address, because
+   * StrictMode runs the posting effect twice and the one-shot answers once.
+   * docs/plans/261009j-a-public-copy-offered-at-import.md.
+   */
+  const ownCopyRef = useRef<{ source: string; own: boolean } | null>(null);
+  if (ownCopyRef.current?.source !== source) {
+    ownCopyRef.current = { source, own: origin.kind === "url" && takeOwnCopyIntent(source) };
+  }
+  /* The public copy somebody else already made of this address, as the POST
+     answered it — nothing spent, nothing queued; the reader chooses. */
+  const [publicAnswer, setPublicAnswer] = useState<
+    (PublicCopyFound["publicCopy"] & { source: string }) | null
+  >(null);
+
   /* Bumped by Retry. The effect's guard is on the URL, and after a failed POST
      the URL is the same one — so without something that changes, pressing Retry
      would do nothing at all. */
@@ -807,12 +831,14 @@ export function AddPage({
        one claim. The server survives that — `queueAnUpload` answers the loser
        with the winner's job — but surviving a race is not a reason to run one. */
     if (engineRef.current) return;
-    const want = `${attempt}\u0000${wanted}`;
+    const own = ownCopyRef.current?.source === source && ownCopyRef.current.own;
+    const want = `${attempt}\u0000${wanted}\u0000${own ? "own" : ""}`;
     if (posted.current === want) return;
     posted.current = want;
     setStarted(null);
     setFailure(null);
     setArticleAnswer(null);
+    setPublicAnswer(null);
     setPhase({ kind: "running" });
     claimed.current = null;
     const reader = readerRef.current;
@@ -821,7 +847,9 @@ export function AddPage({
        `origin.kind === "upload"` does not do for a field read inside a
        dependency list. */
     const queueIt =
-      uploadId !== undefined ? uploadRef.current(uploadId) : addRef.current(source);
+      uploadId !== undefined
+        ? uploadRef.current(uploadId)
+        : addRef.current(source, own ? { ownCopy: true } : undefined);
     void queueIt.then((queued) => {
       /* **Only if this is still the POST we are waiting for.** Two `/add/`
          addresses in quick succession, or Retry, leave two requests in flight,
@@ -850,6 +878,12 @@ export function AddPage({
          nothing queued. The same completion, marked, so the page says so. */
       if ("article" in queued) {
         setArticleAnswer({ slug: queued.article, source: wanted, repeat: queued.repeat === true });
+        return;
+      }
+      /* **Or somebody else has already made it public**, and nothing was
+         spent: the page stops and asks (`PublicChoice` below). */
+      if ("publicCopy" in queued) {
+        setPublicAnswer({ ...queued.publicCopy, source: wanted });
         return;
       }
       /* The job itself is kept, and not only its id: it is what the page
@@ -1337,8 +1371,18 @@ export function AddPage({
   /* A repeat offers no new import choices. A purpose already entered or a
      High-powered choice made while awaiting the answer still needs its controls. */
   const repeated = completionRepeat;
+  /* **Asking: the public copy, or your own?** Nothing has been imported or
+     sent, so, as over a repeat, no import choices and no "sent away" line. A
+     purpose already typed stays in the session draft and is back in its box
+     after *Add my own copy*. */
+  const choosing = publicAnswer !== null && publicAnswer.source === wanted;
+  const chooseOwnCopy = (): void => {
+    ownCopyRef.current = { source, own: true };
+    setPublicAnswer(null);
+    setAttempt((n) => n + 1);
+  };
   const showAutoModes =
-    !repeated && offerAutoModes(job, mine, alreadyArticle, ok, failed, stillArriving);
+    !repeated && !choosing && offerAutoModes(job, mine, alreadyArticle, ok, failed, stillArriving);
   /* Waiting on the reader, with the add finished. The tick box stays up
      through this too: it is the reader's setting and can still be changed. */
   const deciding = phase.kind === "ready";
@@ -1346,7 +1390,7 @@ export function AddPage({
      false for a finished job and for an existing-article answer, which are
      exactly when the box has to stay. While running it also stays over a failed
      job, whose card has a Retry that may yet finish it (F3). */
-  const showPurpose = deciding || (phase.kind === "running" && (showAutoModes || job !== null));
+  const showPurpose = deciding || (phase.kind === "running" && !choosing && (showAutoModes || job !== null));
   /* A failed or stopped job is not on its way to making the article: its
      card's Retry may yet, but "it saves once the article exists" would be a
      promise. The 261001s browser check found that line under a failed import. */
@@ -1446,7 +1490,7 @@ export function AddPage({
 
           **Not over a repeat paste**, which sent nothing anywhere: the server
           answered with the article already on the shelf (plan 261007k). */}
-      {ok && !repeated && (
+      {ok && !repeated && !choosing && (
         <p className="tw:mb-4 tw:mt-0 tw:text-sm tw:text-muted-foreground">
           {textHasGone(mine, origin.kind === "upload", startedId !== null)
             ? DIRECT_ADD_SENT_TEXT_AWAY
@@ -1483,7 +1527,7 @@ export function AddPage({
           for another two minutes. */}
       {/* And not once the POST has answered with an article, which is a
           completion with no job: the upload retention path, or a repeat. */}
-      {ok && !job && !failed && !mine && !completion && (
+      {ok && !job && !failed && !mine && !completion && !choosing && (
         <p className="tw:text-sm tw:text-muted-foreground">Queueing it…</p>
       )}
 
@@ -1700,6 +1744,8 @@ export function AddPage({
         </div>
       )}
 
+      {choosing && <PublicChoice found={publicAnswer} onOwnCopy={chooseOwnCopy} />}
+
       {phase.kind === "repeat" && (
         <div data-add-repeat className="tw:mt-3">
           <p className="tw:mt-0 tw:mb-2 tw:text-sm tw:text-foreground">{REPEAT_PASTE_ON_THE_SHELF}</p>
@@ -1717,6 +1763,30 @@ export function AddPage({
         </Link>
       </p>
     </main>
+  );
+}
+
+/**
+ * **Somebody else has already made this address public: theirs, free, or your
+ * own, for a slot.** Nothing has been spent. The free one is a link to the
+ * public reading view; the other re-posts the add with `ownCopy`, which is the
+ * ordinary import. Greg, 2026-10-09 (`spya-ahvk74`);
+ * docs/plans/261009j-a-public-copy-offered-at-import.md.
+ */
+function PublicChoice({ found, onOwnCopy }: { found: PublicCopyFound["publicCopy"]; onOwnCopy: () => void }) {
+  return (
+    <div data-add-public className="tw:mt-3">
+      <p className="tw:mt-0 tw:mb-1 tw:text-sm tw:text-foreground">{PUBLIC_COPY_FOUND(found.title)}</p>
+      <p className="tw:mt-0 tw:mb-3 tw:text-sm tw:text-muted-foreground">{PUBLIC_COPY_EXPLAIN}</p>
+      <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
+        <Button asChild size="sm">
+          <Link href={readHref(found.slug)}>{PUBLIC_COPY_READ}</Link>
+        </Button>
+        <Button type="button" variant="outline" size="sm" onClick={onOwnCopy}>
+          {PUBLIC_COPY_OWN}
+        </Button>
+      </div>
+    </div>
   );
 }
 

@@ -744,6 +744,22 @@ stand-in tree. Neither was ever how a reader was meant to do it — the reading 
 for a tree that never arrived, and step re-runs are free —
 [261007k](../plans/261007k-repeat-paste-is-free-and-says-so.md).
 
+**An address somebody else has made public is offered, free, before it is charged** (since
+2026-10-09). Greg, 2026-10-09:
+
+> We should notice during the import process if a user tries to add an article that we already
+> have as public, and ask them if they'd rather use the public one for free or have their own
+> version which will use up one of their allotted slots.
+
+A plain add that is not on the reader's own shelf asks next whether a public article has the same
+`urlKey`, and if one does answers `200 { publicCopy: { slug, title } }`, with nothing reserved and
+no job. The add page stops on the choice: **Read the public copy (free)**, a link to it, or **Add my
+own copy**, which posts again with `ownCopy: true` and is the ordinary paid add. The link's hover
+card and the MCP tool offer the same two. *Add a private copy to your shelf* on a public article has
+already chosen, so it marks the address (`src/web/own-copy-intent.ts`) and the add page sends
+`ownCopy` at once. Which public articles count is Citations' ownerless read, reused unchanged —
+[261009j](../plans/261009j-a-public-copy-offered-at-import.md).
+
 **The add box stopped being an `<input type="url">` for this.** The browser will not submit one
 without a scheme, and `example.com/an-essay` is meant to work — so it is a plain text input whose
 validation is `slugFromUrl`, the same function the server derives the slug with. The one check that
@@ -2351,7 +2367,8 @@ derivation so the two agree by construction rather than by trust.
   GET    /api/jobs             every job this server knows about, newest first
   POST   /api/uploads          { filename, bytes, sha256 } → 201, where to PUT a PDF and for how long
   GET    /api/uploads/:id      what became of one upload
-  POST   /api/jobs             { url } | { uploadId } | { slug, steps?, force? }  → 202, the job
+  POST   /api/jobs             { url, ownCopy? } | { uploadId } | { slug, steps?, force? }  → 202, the job
+                               (a plain { url } may answer 200 { article, repeat } or 200 { publicCopy })
   GET    /api/jobs/:id         one job — what the poll reads
   DELETE /api/jobs/:id         hide a finished job from its reader (Dismiss); the row stays
   POST   /api/jobs/:id/cancel

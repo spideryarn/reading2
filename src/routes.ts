@@ -272,6 +272,7 @@ import type { CitersResult } from "./types.js";
 import { linkSummaryStream } from "./link-summary.js";
 import { liveKeys } from "./live-keys.js";
 import { isSlug, normaliseUrl, slugFromFilename, slugFromUrl, urlKey } from "./ingest.js";
+import { publicCopyAmong, type PublicCopyFound } from "./public-copy.js";
 import { slugForUrlKey } from "./store/find-article.js";
 import { isOwnReadingPage } from "./own-reading-page.js";
 import {
@@ -6893,9 +6894,22 @@ export function parseJobRequest(body: unknown): {
    * docs/plans/261002j-illustrated-steering-note.md.
    */
   illustrationNote?: string;
+  /**
+   * With a plain `url` only: **the reader has chosen their own copy** over the
+   * public one somebody else already made of this address, so the add does not
+   * offer it again and is the ordinary paid one.
+   * docs/plans/261009j-a-public-copy-offered-at-import.md.
+   */
+  ownCopy?: true;
 } {
-  const { url, slug, steps, force, useProfile, uploadId, readThis, illustrationNote } = (body ??
+  const { url, slug, steps, force, useProfile, uploadId, readThis, illustrationNote, ownCopy } = (body ??
     {}) as Record<string, unknown>;
+  if (ownCopy !== undefined) {
+    if (ownCopy !== true) throw httpError(400, "ownCopy must be true, or left out");
+    if (typeof url !== "string" || slug !== undefined || uploadId !== undefined || steps !== undefined || force !== undefined) {
+      throw httpError(400, "ownCopy goes with a url and nothing that asks for other work");
+    }
+  }
   const level = parseUploadLevel(body);
   if (level !== undefined && uploadId === undefined) {
     throw httpError(400, "level goes with an uploadId");
@@ -7000,6 +7014,7 @@ export function parseJobRequest(body: unknown): {
       slug: derived,
       url: source,
       ...rest,
+      ...(ownCopy === true ? { ownCopy: true as const } : {}),
     };
   }
 
@@ -12632,17 +12647,33 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          the article, and swallowing it here would drop that work and report
          success. docs/plans/261007k-repeat-paste-is-free-and-says-so.md. */
       if (request.url !== undefined && request.steps === undefined && request.force === undefined) {
-        const have = await slugForUrlKey(urlKey(request.url));
+        const key = urlKey(request.url);
+        const have = await slugForUrlKey(key);
         if (have !== undefined) {
           send(res, 200, { article: have, repeat: true });
           return;
+        }
+        /* **Or somebody else has already made it public**, and the reader is
+           asked before anything is spent — Greg, 2026-10-09: *"ask them if
+           they'd rather use the public one for free or have their own version
+           which will use up one of their allotted slots."* Their own article
+           is asked about first, because it is theirs and free. `ownCopy` is
+           the answer *"my own"*, and is the ordinary add below. Same lock
+           argument as the repeat: a read that reserves nothing.
+           docs/plans/261009j-a-public-copy-offered-at-import.md. */
+        if (request.ownCopy !== true) {
+          const found = publicCopyAmong(await citedCandidates(""), key);
+          if (found !== undefined) {
+            send(res, 200, { publicCopy: found } satisfies PublicCopyFound);
+            return;
+          }
         }
       }
       const profile =
         request.url !== undefined || request.useProfile === false
           ? null
           : await resolveProfile(request.slug);
-      const { useProfile: _asked, ...work } = request;
+      const { useProfile: _asked, ownCopy: _own, ...work } = request;
       /* `openEarly` on a pasted address only: the article opens on a stand-in
          outline and a second job builds the structure. `enqueue` honours it
          only for a new article. **Deleting it here and in `queueAnUpload` is the
