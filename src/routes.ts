@@ -78,6 +78,13 @@ import {
   fetchAllowanceStore,
 } from "./store/index.js";
 import { defaultShelfTopicSetDeps, shelfTopicSet } from "./shelf-topic-sets.js";
+import { SITE_ACCOUNT_LABEL, SITE_OWNER_ID } from "./site-account.js";
+import {
+  beginPublicShelfTopicsRefresh,
+  BY_HAND,
+  publicShelfTopicsStatus,
+  refreshPublicShelfTopics,
+} from "./public-shelf-topics.js";
 /* **Pure functions only**, and that is the whole reason this import survived
    step 10 while the writes beside it did not. `withRetry` and `withEdit` take a
    snapshot and return what the result would be, so they can be run as a gate
@@ -457,6 +464,7 @@ import type {
   SketchResponse,
   LibraryResponse,
   LibraryTermsResponse,
+  PublicShelfTopicsStatus,
   LibraryTagsResponse,
   ArticleTagsResponse,
   LearnStance,
@@ -6482,6 +6490,26 @@ async function searchTheLibrary(params: URLSearchParams): Promise<LibrarySearchR
  * edit or one `UPDATE`, rather than as separate writes a reader can land
  * between.
  */
+/**
+ * **Answer, then bring the public shelf's topic pills up to date**, before the
+ * handler returns: the three routes that can move an article on or off
+ * `/read/public` — share and un-share, archive and restore, delete.
+ *
+ * Awaited after the answer is sent, as `/api/library/terms` does, so the spend
+ * lands in this request's collector — booked to the site account with no
+ * article, not to this reader (src/public-shelf-topics.ts § `asTheSite`) — and
+ * a Vercel function stays alive until it is done. Nothing is due on most
+ * requests, and then it is two reads. `refreshPublicShelfTopics` never throws.
+ * Plan 261008j, approved as "q-p5h2a7 A", 2026-10-09.
+ */
+async function sendThenRefreshPublicTopics(res: ServerResponse, body: unknown, listing: boolean): Promise<void> {
+  try {
+    send(res, 200, body);
+  } finally {
+    if (listing) await refreshPublicShelfTopics();
+  }
+}
+
 async function patchShelf(
   slug: string,
   body: unknown,
@@ -9465,6 +9493,41 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     },
   },
 
+  /* **The public shelf's topic pills** — /admin's panel. The status says
+     whether the page is showing them, and whether a rebuild is due that will
+     not run by itself (past `PUBLIC_RETHINK_AUTO_MAX` cards). The Rebuild runs
+     it, as the site account, at any size up to a reader's own cap: claimed
+     before the answer, so the answer already says it is working, and awaited
+     after it, so the spend lands in this request. Plan 261008j, approved as
+     "q-p5h2a7 A", 2026-10-09. */
+  {
+    kind: "exact",
+    method: "GET",
+    path: "/api/admin/public-shelf-topics",
+    article: "none",
+    handler: async ({ request: { res } }) => {
+      res.setHeader("Cache-Control", "private, no-store");
+      const status: PublicShelfTopicsStatus = await publicShelfTopicsStatus();
+      send(res, 200, status);
+    },
+  },
+  {
+    kind: "exact",
+    method: "POST",
+    path: "/api/admin/public-shelf-topics/rebuild",
+    article: "none",
+    handler: async ({ request: { res } }) => {
+      const run = await beginPublicShelfTopicsRefresh(BY_HAND);
+      try {
+        res.setHeader("Cache-Control", "private, no-store");
+        const status: PublicShelfTopicsStatus = await publicShelfTopicsStatus();
+        send(res, 202, status);
+      } finally {
+        await run();
+      }
+    },
+  },
+
   /* **Gift vouchers** — `/admin/vouchers`. The only writes to
      `billing_vouchers` bar the reader's own claim, and they are here, inside
      the namespace gate above the table, so no reader can reach them.
@@ -9933,7 +9996,10 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          know — a deleted account's ledger rows outlive it — has no email. */
       const owners = [...new Set(groups.map((g) => g.ownerId))].map((id) => ({
         id,
-        email: emails.get(id) ?? null,
+        /* The site account has an address nobody receives mail at; what it
+           is, is the site — the public shelf's topic pills (plan 261008j).
+           Every label on the page reads this field. */
+        email: id === SITE_OWNER_ID ? SITE_ACCOUNT_LABEL : (emails.get(id) ?? null),
       }));
       const costs: AdminCosts = {
         since: asked.since,
@@ -10063,7 +10129,12 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     pattern: SHELF_ENTRY_PATTERN,
     article: "first-capture",
     handler: async ({ request: { req, res } }, captures) => {
-      send(res, 200, await patchShelf(slugPart(captures, 1), await readBody(req)));
+      const body = await readBody(req);
+      const answer = await patchShelf(slugPart(captures, 1), body);
+      /* Archiving or restoring moves a shared article off or onto the public
+         shelf; a rename or a purpose does not touch it. */
+      const listing = typeof body === "object" && body !== null && "archived" in body;
+      await sendThenRefreshPublicTopics(res, answer, listing);
     },
   },
 
@@ -10090,7 +10161,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     pattern: SHELF_ENTRY_PATTERN,
     article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
-      send(res, 200, await shelfStore.destroy(slugPart(captures, 1)));
+      await sendThenRefreshPublicTopics(res, await shelfStore.destroy(slugPart(captures, 1)), true);
     },
   },
 
@@ -10475,10 +10546,10 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     article: "first-capture",
     handler: async ({ request: { req, res } }, captures) => {
       const asked = parseVisibilityRequest(await readBody(req));
-      send(
+      await sendThenRefreshPublicTopics(
         res,
-        200,
         await visibilityStore.set(slugPart(captures, 1), asked.visibility, asked.rightsConfirmed),
+        true,
       );
     },
   },

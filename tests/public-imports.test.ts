@@ -466,6 +466,16 @@ describe("the public API's tables", () => {
   const ALLOWED_IN: Record<string, string[]> = {
     "src/store/public-reader.ts": ["jobs"],
     "src/store/job-fence.ts": ["jobs"],
+    /* **The public shelf's topic pills**, approved by Greg as "q-p5h2a7 A" on
+       2026-10-09 (plan 261008j). Its three sentences: the read is
+       `readPublicTopicTree`, one row by a fixed key, the site account's
+       (src/site-account.ts), never the visitor's or a reader's, and the file
+       imports no owner context it could be pointed with; it selects the
+       topics and memberships only, and src/public-library-topics.ts withholds
+       them whole while any article they name is no longer listed; and the
+       writer is the authenticated coordinator (src/public-shelf-topics.ts),
+       which stays forbidden above with every model and gateway module. */
+    "src/store/public-topic-tree.ts": ["shelfTopicSets"],
   };
 
   /**

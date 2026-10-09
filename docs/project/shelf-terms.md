@@ -482,7 +482,8 @@ line (cards) or its byline line (table). Plan
   archive in drops the line until the archived list has loaded.
 - **The `+N` cannot reveal the hidden topics on the card.** The rest are in More detail.
 - **Not on the Include public section's cards**, which are other people's articles and not in this
-  reader's tree, and not on `/read/public`.
+  reader's tree. `/read/public` has its own pills (row only, none on the cards):
+  [public-shelf.md § Topic pills](public-shelf.md#topic-pills).
 
 The page works out each article's topics once per answer (`articleTopics`) and gives the same value
 to the Topics row and, through a context, to the cards and cells. The card and the table take the
@@ -574,4 +575,7 @@ it Greg runs it with his owner uuid and the production `DATABASE_URL` in the she
 - Near-synonyms (*neural nets* / *neural networks*) can both appear, and near-copies of one article
   that differ by a few words are separate works (exact-hash grouping only).
 - English only; other-language articles are skipped and counted.
-- The public shelf (`/read/public`) gets nothing.
+- The public shelf (`/read/public`) has its own tree since 2026-10-09, stored under the site
+  account and made by the same coordinator with a narrower policy (`DuePolicy`: a re-think runs by
+  itself only up to 20 cards, and an un-shared article forces one) —
+  [public-shelf.md § Topic pills](public-shelf.md#topic-pills).

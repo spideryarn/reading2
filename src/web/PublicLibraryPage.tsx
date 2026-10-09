@@ -83,7 +83,7 @@
  * Every sentence is in `src/messages.ts` § the shelf of public articles.
  * docs/project/public-shelf.md is the doc.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   PUBLIC_SHELF_EMPTY,
@@ -104,6 +104,7 @@ import {
 import type { PublicLibrary, PublicLibraryEntry } from "../public-library-types.js";
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
+import { narrowPublic, PublicShelfTopics, publicTerms } from "./PublicShelfTopics.js";
 import { loadPublicLibrary } from "./public-api.js";
 import { timeAgo } from "./relative-time.js";
 import { PUBLIC_SHARING_HREF, readHref } from "./router.js";
@@ -135,6 +136,19 @@ export function PublicLibraryPage({
      reads as a fault. `useSlow` owns the threshold, and the shelf's own loading
      line follows the same rule. */
   const slow = useSlow(state.kind === "loading");
+  /* **The topic pills**, from the same one request (plan 261008j). Chosen
+     keys are this page's own state: no URL, and nothing stored. */
+  const shelf = state.kind === "loaded" ? state.shelf : null;
+  const terms = useMemo(() => (shelf ? publicTerms(shelf) : []), [shelf]);
+  const [chosen, setChosen] = useState<string[]>([]);
+  /* A topic that is no longer sent (a rebuild, an un-share) stops narrowing. */
+  const applied = chosen.filter((k) => terms.some((t) => t.key === k));
+  const toggle = useCallback(
+    (key: string) => setChosen((now) => (now.includes(key) ? now.filter((k) => k !== key) : [...now, key])),
+    [],
+  );
+  const clear = useCallback(() => setChosen([]), []);
+  const cards = shelf ? narrowPublic(shelf, terms, applied) : [];
 
   return (
     /* **`className="site"` is required, not decorative.** The `--site-*` custom
@@ -243,6 +257,10 @@ export function PublicLibraryPage({
           )}
 
           {state.kind === "loaded" && state.shelf.entries.length > 0 && (
+            <PublicShelfTopics shelf={state.shelf} terms={terms} chosen={applied} onToggle={toggle} onClear={clear} />
+          )}
+
+          {state.kind === "loaded" && state.shelf.entries.length > 0 && (
             /* A real list, so a screen reader is told how many there are before
                reading any of them. `list-none` because the markers would be
                drawn beside cards, which is not what a marker is for — and
@@ -252,7 +270,7 @@ export function PublicLibraryPage({
                here tests with. */
             // biome-ignore lint/a11y/noRedundantRoles: redundant in the spec and not in Safari, which drops list semantics from a `ul` whose `list-style` is `none` — the exact combination on this line
             <ul role="list" className="tw:m-0 tw:grid tw:list-none tw:gap-4 tw:p-0 tw:sm:grid-cols-2">
-              {state.shelf.entries.map((entry) => (
+              {cards.map((entry) => (
                 <li key={entry.slug} className="tw:m-0">
                   <PublicCard entry={entry} />
                 </li>
