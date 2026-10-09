@@ -1113,7 +1113,7 @@ export function settleAddress(pathname: string, search: string, hash: string): s
   at = liftLegacySlug(at);
   at = liftLegacyTweets(at);
   at = liftLegacyDebateBy(at);
-  at = liftLegacyPeerReview(at);
+  at = liftLegacySources(at);
   at = liftLegacyAbout(at);
   /* `liftStrandedText` stood here from 2026-09-05 to 2026-09-29, rewriting
      `?mode=hierarchy&text=0` to Structure and dropping every `text=0`. Both
@@ -1404,33 +1404,39 @@ function liftLegacyDebateBy(at: Address): Address {
 const DEBATE_CLAIMS = "debate=claims";
 
 /**
- * **Citations and Debate, two modes until 2026-10-09, to the Peer review
- * sub-mode each became**:
+ * **Citations and Debate, two modes until 2026-10-09, to the Sources
+ * sub-mode each became, and Peer review, Sources' name for part of that day,
+ * to Sources**:
  *
- * - `?mode=citations` → `?mode=peer-review` (Bibliography, the default);
- * - `?mode=debate` → `?mode=peer-review&peer-review=reception`, or `claims`
+ * - `?mode=citations` → `?mode=sources` (Bibliography, the default);
+ * - `?mode=debate` → `?mode=sources&sources=reception`, or `claims`
  *   when the old address said `debate=claims`;
- * - `?chatfrom=debate` and `?chatfrom=citations` → `?chatfrom=peer-review`,
- *   Chat's list filter for conversations started from any of the three.
+ * - `?mode=peer-review` → `?mode=sources`, and its sub-mode pair
+ *   `peer-review=X` → `sources=X`, wherever it appears;
+ * - `?chatfrom=debate`, `?chatfrom=citations` and `?chatfrom=peer-review` →
+ *   `?chatfrom=sources`, Chat's list filter for conversations started from
+ *   any of the three sub-modes.
  *
- * `RETIRED_MODES` (src/modes.ts) alone would open Peer review at its default,
+ * `RETIRED_MODES` (src/modes.ts) alone would open Sources at its default,
  * so an old Reception or Claims link would land on Bibliography; this is what
  * `liftLegacyTweets` is to Summary's thread. **It runs after
  * `liftLegacyDebateBy`**, so an older `?debateby=claim` has already become
- * `debate=claims` by the time it is read here. **An explicit `peer-review=`
- * wins** over the old words, as an explicit `debate=` wins over `debateby`.
- * The `debate=` pairs a Debate address carried are consumed; on any other
- * address a stray `debate=` is read by nothing and left as written. Every
- * other pair — `?citeby`, `?citebar`, `?debateby`, `?bears`,
+ * `debate=claims` by the time it is read here. **The newest explicit word
+ * wins**: `sources=` over `peer-review=` over `debate=`, as an explicit
+ * `debate=` wins over `debateby`; a `peer-review=` beside a `sources=` is
+ * dropped. The `debate=` pairs a Debate address carried are consumed; on any
+ * other address a stray `debate=` is read by nothing and left as written.
+ * Every other pair — `?citeby`, `?citebar`, `?debateby`, `?bears`,
  * `?debatethread`, the sub-modes' own — is kept exactly as written.
  *
  * One function behind every arrival: `settleAddress` on boot,
  * `liftedLegacyHref` on a navigation and on Back, and `liftedLegacySearch` for
  * a remembered last view (last-view.ts § `restoredHref`), which is put on the
  * address after boot and would otherwise walk past this (GPT Sol's F1 on plan
- * 261009l). docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md.
+ * 261009l). docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md,
+ * docs/plans/261009s-peer-review-becomes-sources-all-the-way-down.md.
  */
-function liftLegacyPeerReview(at: Address): Address {
+function liftLegacySources(at: Address): Address {
   const pairs = queryPairs(at.search);
   const pairValue = (pair: string | undefined): string | null => {
     if (pair === undefined || !pair.includes("=")) return null;
@@ -1442,45 +1448,55 @@ function liftLegacyPeerReview(at: Address): Address {
   };
   const modeWord = pairValue(pairs.find((pair) => hasKey(pair, "mode")));
   const chatFromWord = pairValue(pairs.find((pair) => hasKey(pair, "chatfrom")));
-  const oldMode = modeWord === "citations" || modeWord === "debate" ? modeWord : null;
-  const oldChatFrom = chatFromWord === "citations" || chatFromWord === "debate";
-  if (oldMode === null && !oldChatFrom) return at;
+  const isOldWord = (word: string | null): boolean =>
+    word === "citations" || word === "debate" || word === "peer-review";
+  const oldMode = isOldWord(modeWord) ? modeWord : null;
+  const oldChatFrom = isOldWord(chatFromWord);
+  const oldSubMode = pairs.some((pair) => hasKey(pair, "peer-review"));
+  if (oldMode === null && !oldChatFrom && !oldSubMode) return at;
 
-  /* The sub-mode the old address meant, unless it names the new one itself. */
-  const explicit = pairs.some((pair) => hasKey(pair, "peer-review"));
+  /* The sub-mode the old address meant, unless it names a newer one itself. */
+  const explicit = pairs.some((pair) => hasKey(pair, "sources"));
   const debateView = pairValue(pairs.find((pair) => hasKey(pair, "debate"))) === "claims" ? "claims" : "reception";
-  const view = oldMode === "debate" && !explicit ? debateView : null;
+  const view = oldMode === "debate" && !explicit && !oldSubMode ? debateView : null;
 
   let wroteMode = false;
+  let wroteSubMode = explicit;
   let wroteChatFrom = false;
   const kept = pairs.flatMap((pair) => {
     if (oldMode !== null && hasKey(pair, "mode")) {
       if (wroteMode) return [];
       wroteMode = true;
-      return ["mode=peer-review"];
+      return ["mode=sources"];
+    }
+    if (hasKey(pair, "peer-review")) {
+      if (wroteSubMode || !pair.includes("=")) return [];
+      wroteSubMode = true;
+      return [`sources${pair.slice(pair.indexOf("="))}`];
     }
     if (oldMode === "debate" && hasKey(pair, "debate")) return [];
     if (oldChatFrom && hasKey(pair, "chatfrom")) {
       if (wroteChatFrom) return [];
       wroteChatFrom = true;
-      return ["chatfrom=peer-review"];
+      return ["chatfrom=sources"];
     }
     return [pair];
   });
-  if (view !== null) kept.push(`peer-review=${view}`);
+  if (view !== null) kept.push(`sources=${view}`);
   return { pathname: at.pathname, search: kept.length > 0 ? `?${kept.join("&")}` : "", hash: at.hash };
 }
 
 /**
  * **Every old spelling `settleAddress` lifts that can also arrive after
  * boot** — `liftedTweetsHref`'s job, for the thread's old addresses, Debate's
- * old order, and Citations' and Debate's old mode words together. `navigate()`
+ * old order, and the old mode words of Citations, Debate and Peer review
+ * together. `navigate()`
  * and Back/Forward (`useRoute`) ask this, so a tab open across a deploy lands
  * where a fresh load would. `null` when the address carries none of them.
  */
 export function liftedLegacyHref(href: string): string | null {
   const at = splitHref(href);
-  const lifted = liftLegacyPeerReview(liftLegacyDebateBy(liftLegacyTweets(at)));
+  const lifted = liftLegacySources(liftLegacyDebateBy(liftLegacyTweets(at)));
   return lifted === at ? null : `${lifted.pathname}${lifted.search}${lifted.hash}`;
 }
 
@@ -1488,11 +1504,11 @@ export function liftedLegacyHref(href: string): string | null {
  * **The same lifts for a bare query string** — a remembered last view, which
  * last-view.ts § `restoredHref` puts on the address after `settleAddress` has
  * run (GPT Sol's F1 on plan 261009l). Debate's old order first, then the
- * Peer review words, as `settleAddress` orders them. The thread's old word is
+ * Sources words, as `settleAddress` orders them. The thread's old word is
  * last-view's own business (`opensTheThread` drops it).
  */
 export function liftedLegacySearch(search: string): string {
-  return liftLegacyPeerReview(liftLegacyDebateBy({ pathname: "", search, hash: "" })).search;
+  return liftLegacySources(liftLegacyDebateBy({ pathname: "", search, hash: "" })).search;
 }
 
 /**

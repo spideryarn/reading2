@@ -47,7 +47,7 @@ import { type BandMode, isBandMode } from "../src/modes.js";
 import { modePress } from "../src/web/reader/mode-press.js";
 import { modeDoor } from "./helpers/dock-more.js";
 import type { BlockId, Job } from "../src/types.js";
-import type { PeerReviewView } from "../src/web/params.js";
+import type { SourcesView } from "../src/web/params.js";
 import { EXPERIMENTAL_ON } from "./helpers/experimental-fixtures.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -233,7 +233,7 @@ function QuotesBand({ slug }: { slug: string }): ReactElement {
 }
 
 /**
- * **Peer review, and Reception is the one where being wrong costs the most.**
+ * **Sources, and Reception is the one where being wrong costs the most.**
  *
  * Here for `TimelineBand`'s reason and one of its own. Every other mode in this
  * file spends one model call; Reception spends one call that goes out to the
@@ -243,16 +243,16 @@ function QuotesBand({ slug }: { slug: string }): ReactElement {
  * it is one call to `useAutoRun` in useDebate.ts.
  *
  * **Every read mounted in every sub-mode, as the real band mounts them**
- * (PeerReviewMode.tsx, plan 261009l), each told whether its own sub-mode is
+ * (SourcesMode.tsx, plan 261009l), each told whether its own sub-mode is
  * showing, so a press armed for one sub-mode that lands on another is retired
  * unspent. It was Debate's band until 2026-10-09, with Reception and Claims
  * alone. The band says the status of the sub-mode on screen.
  *
- * Remove the `useAutoRun` call in useDebate.ts, or turn `peer-review`'s
+ * Remove the `useAutoRun` call in useDebate.ts, or turn `sources`'s
  * `MODE_TARGET` row to `{ kind: "none" }`, and every other test in this file
  * stays green.
  */
-function PeerReviewBand({ slug, view }: { slug: string; view: PeerReviewView }): ReactElement {
+function SourcesBand({ slug, view }: { slug: string; view: SourcesView }): ReactElement {
   const bibliography = useCitations(slug, useCitationsRead(slug), view === "bibliography");
   const reception = useDebate(slug, view === "reception");
   /* Claims' own list and press (plan 261008i stage 2). */
@@ -264,7 +264,7 @@ function PeerReviewBand({ slug, view }: { slug: string; view: PeerReviewView }):
   const shown = view === "bibliography" ? bibliography : view === "reception" ? reception : claims;
   return createElement(
     "div",
-    { "data-band": "peer-review" },
+    { "data-band": "sources" },
     shown.automatic ? "auto" : shown.starting ? "starting" : shown.status,
   );
 }
@@ -346,11 +346,11 @@ const EMPTY_BLOCK_ORDER: BlockId[] = [];
  * `location.search` itself, so this is how a test says `?diagram=illustrated`
  * without a router.
  */
-/** `?peer-review=`, which is what a bar press reads to know which of Peer review's sub-modes it lands on. */
-function setPeerReviewView(view: PeerReviewView | null): void {
+/** `?sources=`, which is what a bar press reads to know which of Sources' sub-modes it lands on. */
+function setSourcesView(view: SourcesView | null): void {
   const url = new URL(window.location.href);
-  if (view === null) url.searchParams.delete("peer-review");
-  else url.searchParams.set("peer-review", view);
+  if (view === null) url.searchParams.delete("sources");
+  else url.searchParams.set("sources", view);
   window.history.replaceState(null, "", url);
 }
 
@@ -445,8 +445,8 @@ const SETTLED_EMPTY_IDEAS_READ = {
  * which reach the panel through that setter and through nothing else.
  */
 let arrive: (next: BandMode) => void = () => {};
-/** Move between Peer review's three views without unmounting its controller, as Back does. */
-let arriveView: (view: PeerReviewView) => void = () => {};
+/** Move between Sources' three views without unmounting its controller, as Back does. */
+let arriveView: (view: SourcesView) => void = () => {};
 
 /**
  * **Which picture is on screen**, through the app's own degrade rule rather than
@@ -458,9 +458,9 @@ const diagramKind = (): string => diagramInSearch(window.location.search);
 
 function Reading({ slug, start }: { slug: string; start: BandMode }): ReactElement {
   const [mode, setMode] = useState<BandMode>(start);
-  const [peerReview, setPeerReview] = useState<PeerReviewView>("bibliography");
+  const [sources, setSources] = useState<SourcesView>("bibliography");
   arrive = setMode;
-  arriveView = setPeerReview;
+  arriveView = setSources;
   return createElement(
     "div",
     null,
@@ -468,7 +468,7 @@ function Reading({ slug, start }: { slug: string; start: BandMode }): ReactEleme
     mode === "quotes" ? createElement(QuotesBand, { slug }) : null,
     mode === "timeline" ? createElement(TimelineBand, { slug }) : null,
     mode === "glossary" ? createElement(GlossaryBand, { slug }) : null,
-    mode === "peer-review" ? createElement(PeerReviewBand, { slug, view: peerReview }) : null,
+    mode === "sources" ? createElement(SourcesBand, { slug, view: sources }) : null,
     mode === "faq" ? createElement(FaqBand, { slug }) : null,
     mode === "skim" ? createElement(SkimBand, { slug }) : null,
     /* **The band Diagram opens is whichever picture the address bar names**, and
@@ -552,7 +552,7 @@ function pressTheButton(): Promise<void> {
 function bandSays(): string | null {
   return (
     host.querySelector(
-      '[data-band="ideas"], [data-band="quotes"], [data-band="timeline"], [data-band="peer-review"], [data-band="sketch"], [data-band="illustrated"]',
+      '[data-band="ideas"], [data-band="quotes"], [data-band="timeline"], [data-band="sources"], [data-band="sketch"], [data-band="illustrated"]',
     )?.textContent ?? null
   );
 }
@@ -575,7 +575,7 @@ beforeEach(() => {
   resetActivations();
   jobEngine.reset();
   setDiagram(null);
-  setPeerReviewView(null);
+  setSourcesView(null);
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
@@ -706,23 +706,23 @@ describe("a press", () => {
     expect(posts).toEqual([{ slug: "constitution", steps: ["timeline"] }]);
   });
 
-  /* Bibliography, Peer review's default since 2026-10-09: a press on the
+  /* Bibliography, Sources' default since 2026-10-09: a press on the
      button with nothing named lists the citations, and nothing else. */
-  it("lists the citations when the Peer review press lands on Bibliography, and starts no search", async () => {
+  it("lists the citations when the Sources press lands on Bibliography, and starts no search", async () => {
     await open("plain");
-    await press("Peer review");
+    await press("Sources");
     await settle();
 
     expect(artefactGets("citations").length).toBeGreaterThan(0);
     expect(posts).toEqual([{ slug: "constitution", steps: ["citations"] }]);
   });
 
-  /* The fourth positive control, and the dearest. See PeerReviewBand above. */
+  /* The fourth positive control, and the dearest. See SourcesBand above. */
   it("runs the debate search, which nothing else here presses", async () => {
-    setPeerReviewView("reception");
+    setSourcesView("reception");
     await open("plain");
     await act(async () => arriveView("reception"));
-    await press("Peer review");
+    await press("Sources");
     await settle();
 
     expect(artefactGets("debate").length).toBeGreaterThan(0);
@@ -740,7 +740,7 @@ describe("a press", () => {
   it("asks who cites the piece on a bookmarked arrival, and starts no search", async () => {
     await open("plain");
     await act(async () => arriveView("reception"));
-    await act(async () => arrive("peer-review"));
+    await act(async () => arrive("sources"));
     await settle();
 
     expect(artefactGets("debate").length).toBeGreaterThan(0);
@@ -750,11 +750,11 @@ describe("a press", () => {
   });
 
   it("drops a Reception press when Back lands on Claims before the read settles", async () => {
-    setPeerReviewView("reception");
+    setSourcesView("reception");
     holdGets = true;
     await open("plain");
     await act(async () => arriveView("reception"));
-    await press("Peer review");
+    await press("Sources");
     await act(async () => arriveView("claims"));
 
     holdGets = false;
@@ -770,11 +770,11 @@ describe("a press", () => {
      Reception search; Reception's press, above, asks for the search and never
      the list (that test's `posts` is exactly one request, with the list's
      hook mounted beside it). */
-  it("lists the claims when the Peer review press lands on Claims, and starts no search", async () => {
-    setPeerReviewView("claims");
+  it("lists the claims when the Sources press lands on Claims, and starts no search", async () => {
+    setSourcesView("claims");
     await open("plain");
     await act(async () => arriveView("claims"));
-    await press("Peer review");
+    await press("Sources");
     await settle();
 
     expect(artefactGets("debate-claims").length).toBeGreaterThan(0);
@@ -784,7 +784,7 @@ describe("a press", () => {
   it("only reads the claims list when a link, Back or a restore lands on Claims", async () => {
     await open("plain");
     await act(async () => arriveView("claims"));
-    await act(async () => arrive("peer-review"));
+    await act(async () => arrive("sources"));
     await settle();
 
     expect(artefactGets("debate-claims").length).toBeGreaterThan(0);
@@ -793,11 +793,11 @@ describe("a press", () => {
   });
 
   it("drops a Claims press when Back lands on Reception before the read settles", async () => {
-    setPeerReviewView("claims");
+    setSourcesView("claims");
     holdGets = true;
     await open("plain");
     await act(async () => arriveView("claims"));
-    await press("Peer review");
+    await press("Sources");
     await act(async () => arriveView("reception"));
 
     holdGets = false;

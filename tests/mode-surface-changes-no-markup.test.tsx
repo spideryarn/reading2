@@ -258,7 +258,7 @@ const { App } = await import("../src/web/App.js");
 const { ModeSurface } = await import("../src/web/ModeSurface.js");
 const { SearchPanel } = await import("../src/web/SearchPanel.js");
 const { DebatePanel } = await import("../src/web/DebatePanel.js");
-const { peerReviewHead } = await import("./helpers/peer-review-head.js");
+const { sourcesHead } = await import("./helpers/sources-head.js");
 const { DiagramPanel } = await import("../src/web/DiagramPanel.js");
 const { GlossaryPanel } = await import("../src/web/GlossaryPanel.js");
 const { IdeasPanel } = await import("../src/web/IdeasPanel.js");
@@ -1629,8 +1629,8 @@ const NO_CLAIM_CHATS = { summaries: [], onCheck: () => {}, onLens: () => {}, onO
 
 function mountDebate(debate: Debate | null, over: Partial<DebateOwner> = {}): ReactNode {
   return createElement(DebatePanel, {
-    /* Peer review's chip row, as `PeerReviewBand` hands it (since 2026-10-09). */
-    head: peerReviewHead({ view: "reception", onView: noop, ownerSlug: SLUG, debate }),
+    /* Sources' chip row, as `SourcesBand` hands it (since 2026-10-09). */
+    head: sourcesHead({ view: "reception", onView: noop, ownerSlug: SLUG, debate }),
     access: { kind: "owner", owner: debateOwner(debate, over), claimList: claimListOwner(), checks: checksOwner(), citers: { result: { kind: "no-doi" }, retry: () => {} }, claimChats: NO_CLAIM_CHATS },
     onJump: noop,
     /* What a reader who has never touched `?debate=` sends: Reception. */
@@ -1900,10 +1900,10 @@ const TWEETS_VISITOR: BandShape = {
 };
 
 /**
- * Debate's panel — Peer review's Reception since 2026-10-09 — and its header is
+ * Debate's panel — Sources' Reception since 2026-10-09 — and its header is
  * the one that **cannot** come out empty. It was the globe and an `<h2>` until
- * that day; now it is Peer review's chip row, Bibliography | Reception |
- * Claims, handed in by the mode (PeerReviewMode.tsx § `PeerReviewViews`), and
+ * that day; now it is Sources' chip row, Bibliography | Reception |
+ * Claims, handed in by the mode (SourcesMode.tsx § `SourcesViews`), and
  * the Reception | Claims control that sat under the head as
  * `div.summ-controls.dbt-controls` went into it — a deliberate change to both
  * shapes (plan 261009l). The band's name is the mode's.
@@ -1918,8 +1918,8 @@ const TWEETS_VISITOR: BandShape = {
  * change to both shapes: it is drawn with or without a stored debate.
  */
 const DEBATE_SHAPE: BandShape = {
-  className: "mode-band gloss dbt peer-review has-about",
-  label: "Peer review",
+  className: "mode-band gloss dbt sources has-about",
+  label: "Sources",
   head: true,
   children: [
     "button.band-about[aria-expanded,aria-haspopup,aria-label,type]",
@@ -1930,7 +1930,7 @@ const DEBATE_SHAPE: BandShape = {
   headChildren: ["div.summ-views.dbt-views[aria-label,data-more-unmasked,role]"],
 };
 
-/** The same header — Peer review's chip row, not empty, which is what makes
+/** The same header — Sources' chip row, not empty, which is what makes
  *  this panel the control for the five bands whose headers do empty out.
  *
  *  `div.dbt-scroll` holds the owner's *Cited by*, which since 2026-10-04 is on
@@ -1942,8 +1942,8 @@ const DEBATE_SHAPE: BandShape = {
  *  Reception | Claims under the head (plan 261008i stage 2, GPT Sol's F9) and
  *  since 2026-10-09 as the head itself: Claims has a list of its own to reach. */
 const DEBATE_LOADING: BandShape = {
-  className: "mode-band gloss dbt peer-review has-about",
-  label: "Peer review",
+  className: "mode-band gloss dbt sources has-about",
+  label: "Sources",
   head: true,
   children: [
     "button.band-about[aria-expanded,aria-haspopup,aria-label,type]",
@@ -2130,7 +2130,7 @@ describe("the bands stage 2 migrated, as they stood before it", () => {
     expectShape(DEBATE_SHAPE);
   });
 
-  it("keeps Peer review's chip row as the header, with nothing else in it", async () => {
+  it("keeps Sources' chip row as the header, with nothing else in it", async () => {
     await paint(mountDebate(null));
     expectShape(DEBATE_LOADING);
   });

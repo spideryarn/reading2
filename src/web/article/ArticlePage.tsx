@@ -625,12 +625,12 @@ function OwnedReader({
    *
    * `useCitationsRead` is the opening GET plus `applyFound` and
    * `applyInvestigation`, and nothing else.
-   * `PeerReviewBand` (`CitationsBand` until 2026-10-09) layers `useStepJob`, `useAutoRun` and the POST that is
+   * `SourcesBand` (`CitationsBand` until 2026-10-09) layers `useStepJob`, `useAutoRun` and the POST that is
    * *Find it on the web* on top of it — and those stay down there for the two
    * reasons the Quotes comment above gives, which apply here unchanged.
    *
    * **Unconditional.** Citations was behind the experimental switch until it
-   * became Peer review's Bibliography on 2026-10-09; even then, gating this
+   * became Sources' Bibliography on 2026-10-09; even then, gating this
    * read would only have made its old address half-work. The band has to read
    * the same list, so the saving was never real. src/web/useCitations.ts
    * § CitationsRead.

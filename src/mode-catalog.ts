@@ -97,7 +97,7 @@ export interface ModeCatalogEntry {
    * rename — if the line is ever shortened, the denial is the part to keep.
    * `debate`'s named the empty case, because most pieces have no reception at
    * all and a mode that is empty four times in five reads as broken unless the
-   * button said so first. Since 2026-10-09 Debate is Peer review's Reception,
+   * button said so first. Since 2026-10-09 Debate is Sources' Reception,
    * which opens on Bibliography, so the button no longer promises the empty
    * case; Reception's own empty state says it.
    */
@@ -204,9 +204,10 @@ export interface ModeCatalogEntry {
    *  6. **It does not take a word that is a page's or an action's own.**
    *     Comments answers to `notes`, Feedback to `help`. The modes come first
    *     in the list, so a mode nickname that starts with one of those wins it.
-   *     Two older words already do, and the test names them rather than
-   *     hiding them: `annotations` (Marginalia over Comments) and `sources`
-   *     (Citations over Metadata's `source`).
+   *     One older word already does, and the test names it rather than
+   *     hiding it: `annotations` (Marginalia over Comments). Metadata's
+   *     `source` is the start of the Sources mode's own label since
+   *     2026-10-09, which the rule allows.
    *  7. **It does not start with a verb the argument parser owns** — `find`,
    *     `search`, `look up`, `define`, `tag` and the rest of `VERBS` in
    *     src/web/command-match.ts — or the bar would also offer *Find “in
@@ -335,9 +336,14 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        bar, so the shorter word here would take every start of the longer one.
        Not `criteria`, which is the chip's own row. */
     /* "peer review" was here until 2026-10-09, when it went to the mode
-       named Peer review (plan 261009l § The name). `peer reviewer` stays: it
-       is about the person doing one, which is who this mode is for. */
-    aliases: ["review", "reviewer", "peer reviewer", "referee report", "assess", "assessment"],
+       then named Peer review, now Sources (plan 261009l § The name, plan
+       261009s), which keeps it as its old name. The person doing one, who is
+       who this mode is for, is here as `for peer reviewers`, the landing
+       tile's words, rather than `peer reviewer` as it was until Sources took
+       `peer review`: Referee comes first in the bar, so a nickname here that
+       *starts* `peer review` would take Sources' (rule 5 above). Typed, `peer
+       reviewer` still finds this mode, a tier lower, inside the longer word. */
+    aliases: ["review", "reviewer", "for peer reviewers", "referee report", "assess", "assessment"],
     experimental: true,
   },
   summary: {
@@ -473,11 +479,13 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     experimental: true,
   },
   /* **Citations and Debate until 2026-10-09**, now this mode's three
-     sub-modes (src/web/sub-modes.ts § `PEER_REVIEW_SUB_MODES`, where the
+     sub-modes (src/web/sub-modes.ts § `SOURCES_SUB_MODES`, where the
      retired words and the bibliography words are the sub-mode rows' own
-     aliases, so each opens the view it means).
-     docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md. */
-  "peer-review": {
+     aliases, so each opens the view it means). Called Peer review until later
+     that day.
+     docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md,
+     docs/plans/261009s-peer-review-becomes-sources-all-the-way-down.md. */
+  sources: {
     /* Greg's frame for it, 2026-10-09 (spya-vcvxu5): *"what this article
        cites and what other people say about it, this article might be a good
        sort of TLDR somehow for the different submodes"*. Each chip's card
@@ -507,13 +515,15 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
          page with its address (DebatePanel.tsx § Row).
        No price — mode.md § The card on the button. */
     how: "Bibliography is one model call over the article, written once and stored, and every address shown for a work is one the article itself gave, found by code rather than typed by the model, or else a Scholar search marked as one. Reception comes from a pass over the open web, and Claims lists the piece's claims with one model call and no web search, for you to check against the web; each is stored once it lands. Every source links out, so you can check it rather than take our word for it.",
-    /* "peer review" left Referee's aliases on 2026-10-09: it is this mode's
-       name, so the label finds it and an alias saying it again would be a
-       second copy (tests/mode-catalog.test.ts § never another mode's label).
-       Referee keeps `peer reviewer`, which is about the person (plan 261009l §
-       The name). The two retired mode words are the sub-mode rows' aliases,
-       not these. */
-    aliases: ["sources", "literature", "further reading"],
+    /* "peer review" left Referee's aliases on 2026-10-09 for this mode, then
+       called Peer review (plan 261009l § The name). It stays here as the
+       mode's old name, so typing it still finds this mode first; Referee has
+       `for peer reviewers`, which is about the person. `sources` was
+       an alias until it became the label (plan 261009s), and an alias saying
+       the label again would be a second copy (tests/mode-catalog.test.ts §
+       never another mode's label). The two retired mode words are the
+       sub-mode rows' aliases, not these. */
+    aliases: ["peer review", "literature", "further reading"],
     /* Out of the switch on the day it was made. Greg, 2026-10-09
        (spya-vcvxu5): *"let's move this out of experimental, this combined
        mode"*. Both halves were behind it until then.
@@ -637,7 +647,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        width is
        `fitView`'s `margW` (src/web/layout.ts): below it the column is not
        drawn. */
-    how: "It marks where the argument turns, with so, but or vs beside those paragraphs. One model call makes those words, the first time the article's owner opens the column; the notes are there meanwhile and the words join them when they are ready. Everything else is read, never made here: the questions come with the article's parts, the sentence at the top is where the argument has got to, and ideas, FAQ, Timeline, and Peer review's claims and cited works appear once they have been made in their own modes. It needs a wide window; on a narrow one the notes are hidden.",
+    how: "It marks where the argument turns, with so, but or vs beside those paragraphs. One model call makes those words, the first time the article's owner opens the column; the notes are there meanwhile and the words join them when they are ready. Everything else is read, never made here: the questions come with the article's parts, the sentence at the top is where the argument has got to, and ideas, FAQ, Timeline, and Sources' claims and cited works appear once they have been made in their own modes. It needs a wide window; on a narrow one the notes are hidden.",
     /* `annotations` was the mode's own word until 2026-10-01 (261001n); the
        Comments row has it too and this row wins it. **Nothing here may start
        with `notes`**, which is the Comments row's. */

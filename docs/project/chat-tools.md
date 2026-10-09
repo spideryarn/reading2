@@ -547,7 +547,7 @@ From 2026-10-01 it showed chats only.
   (stage 3) targets the guide.
 - **Where a row came from** is one pure function, `threadSource` in
   [`thread-source.ts`](../../src/web/thread-source.ts), in this order: a stored origin (*Started
-  from a claim in Peer review › Claims*), one of Learn's conversation kinds (`learn`, `tutorial` or `explore`,
+  from a claim in Sources › Claims*), one of Learn's conversation kinds (`learn`, `tutorial` or `explore`,
   rendered as *From Learn › Recall* and its siblings), an anchor (*About a
   passage*: the "?" and a comment's question), and otherwise a plain chat. A row from elsewhere has
   an icon at its head, the source mode's own from the bar
@@ -568,7 +568,7 @@ From 2026-10-01 it showed chats only.
   origin; see `ConversationBand`'s arrival rule and `tests/chat-draft-survives-a-mode-change.test.tsx`.
 - **The filter** above the list is All, Chats, then one choice per other source present, with
   Learn's three sub-modes as one. It is drawn only when there is more than one source. The
-  choice is `?chatfrom=` ([url-state.md](url-state.md)). The sources are Peer review (its Reception and Claims, and its Bibliography, which
+  choice is `?chatfrom=` ([url-state.md](url-state.md)). The places are Sources (its Reception and Claims, and its Bibliography, which
   were Debate and Citations until 2026-10-09), Glossary and Ideas (a chat started from a claim or an angle, an entry, a cited work, an idea),
   Learn, and a passage.
 - **An open chat with an origin has a way back** to its item, one line above the transcript:

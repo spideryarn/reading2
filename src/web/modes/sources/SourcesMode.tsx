@@ -1,6 +1,6 @@
 /**
- * **Peer review mode's controller** — what this piece cites, and what others
- * say about it. One band, three sub-modes (`?peer-review=`):
+ * **Sources mode's controller** — what this piece cites, and what others
+ * say about it. One band, three sub-modes (`?sources=`):
  *
  * ```
  *  ┌ Bibliography 42 │ Reception 3 │ Claims 8 ┐                 (i)
@@ -13,13 +13,16 @@
  * experimental, this combined mode. … Maybe peer review, because that, I
  * think, incorporates the idea that it's both internal and external to the
  * article, i.e. what they cite and also what other people say about them."*
+ * It was called Peer review until later that day, when the clash with Referee
+ * was put to him: *"B Sources. Rename comprehensively, eg including docs,
+ * code, database etc"* (spya-egmn6r).
  *
  * **A wrapper, not a rewrite.** The two panels are 1,700 and 3,200 lines,
- * each with its own tests; this draws one chip row (`PeerReviewViews`, below)
+ * each with its own tests; this draws one chip row (`SourcesViews`, below)
  * and hands it to whichever panel the sub-mode names as that panel's `head`,
  * so there is exactly one `ModeSurface` on screen, the panel's, with
- * `mode="peer-review"` so its (i) opens with this mode's card. The chips'
- * numbers come from peer-review-counts.ts, the same selectors the panels draw
+ * `mode="sources"` so its (i) opens with this mode's card. The chips'
+ * numbers come from sources-counts.ts, the same selectors the panels draw
  * their lists with (GPT Sol's F4).
  *
  * **Every read stays mounted in all three sub-modes**, so each chip can show
@@ -28,17 +31,18 @@
  * for one sub-mode that finds another on screen is retired unspent
  * (useAutoRun.ts § `enabled`). The reads are free GETs.
  *
- * The visitor twin, `VisitorPeerReviewBand`, draws the same chips and panels
+ * The visitor twin, `VisitorSourcesBand`, draws the same chips and panels
  * off the public payload and mounts none of those hooks, so it can neither
  * read the owner's lists nor start anything. Any one of the three artefacts
  * opens the mode for a visitor (visitor.ts § POLICY); a sub-mode with nothing
  * stored says so inside the band.
  *
  * The stored names under it — the `citations`, `debate` and `debate-claims`
- * steps, columns and routes, the panels' file names and CSS — are held until
- * Greg confirms the name (plan § Stage 3).
+ * steps, columns and routes, the panels' file names and CSS — are renamed
+ * after the sub-modes in later stages of plan 261009s.
  * docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md,
- * docs/project/peer-review.md.
+ * docs/plans/261009s-peer-review-becomes-sources-all-the-way-down.md,
+ * docs/project/sources.md.
  */
 
 import { useQueryState } from "nuqs";
@@ -51,11 +55,11 @@ import {
   citeOrderParam,
   debateOrderParam,
   debateThreadParam,
-  PEER_REVIEW_VIEWS,
-  type PeerReviewView,
-  peerReviewParam,
+  SOURCES_VIEWS,
+  type SourcesView,
+  sourcesParam,
 } from "../../params.js";
-import { PEER_REVIEW_SUB_MODES } from "../../sub-modes.js";
+import { SOURCES_SUB_MODES } from "../../sub-modes.js";
 import { armActivationForSubMode } from "../../activation.js";
 import { ControlTip, Tooltip, TooltipGroup } from "../../Tooltip.js";
 import { useRevealChosen } from "../../useRevealChosen.js";
@@ -71,7 +75,7 @@ import type { CitedWorkChats } from "../../OriginChat.js";
 import type { ItemFocus } from "../../item-focus.js";
 import { yearOf } from "../../debate-order.js";
 import type { CitableWork, CitedInParagraph } from "../../cited-in-paragraph.js";
-import { checkedSources, listedClaims, type PeerReviewCounts, peerReviewCounts } from "../../peer-review-counts.js";
+import { checkedSources, listedClaims, type SourcesCounts, sourcesCounts } from "../../sources-counts.js";
 
 /**
  * **The owner's band.** Every read the three sub-modes need, the chip row, and
@@ -84,7 +88,7 @@ import { checkedSources, listedClaims, type PeerReviewCounts, peerReviewCounts }
  * `OwnedReader` because the prose marks citations in every mode
  * (useCitations.ts § `useCitationsRead`).
  */
-export function PeerReviewBand({
+export function SourcesBand({
   slug,
   citationsRead,
   onJump,
@@ -123,11 +127,11 @@ export function PeerReviewBand({
   /** Open Bibliography on one work — Claims' *Cited in this paragraph* (Reader.tsx § `openBibliographyWork`). */
   onOpenWork(workId: string): void;
 }) {
-  useRenderCount("PeerReviewBand");
-  const [view, setView] = useQueryState("peer-review", peerReviewParam);
+  useRenderCount("SourcesBand");
+  const [view, setView] = useQueryState("sources", sourcesParam);
   const citations = useCitations(slug, citationsRead, view === "bibliography");
   const debate = useDebate(slug, view === "reception");
-  /* Claims' own list and its own press (activation.ts § `activationForPeerReview`). */
+  /* Claims' own list and its own press (activation.ts § `activationForSources`). */
   const claimList = useDebateClaims(slug, view === "claims");
   /* The reader's claim checks (plan 261008i § 3): read on mount, posted only
      by a press on Check or Dig further. Read in every sub-mode, because the
@@ -139,7 +143,7 @@ export function PeerReviewBand({
   const citeControls = useCitationControls();
   const debateControls = useDebateControls();
 
-  const counts = peerReviewCounts({
+  const counts = sourcesCounts({
     works: citations.citations?.citations ?? null,
     debate: debate.debate,
     listed: listedClaims({ kind: "owner", status: claimList.status, claimList: claimList.claimList }),
@@ -147,7 +151,7 @@ export function PeerReviewBand({
     relevance: debateControls.relevance,
     thread: debateControls.thread,
   });
-  const head = <PeerReviewViews view={view} counts={counts} ownerSlug={slug} onView={setView} />;
+  const head = <SourcesViews view={view} counts={counts} ownerSlug={slug} onView={setView} />;
 
   if (view === "bibliography")
     return (
@@ -199,7 +203,7 @@ function citedInOf(works: readonly CitableWork[] | null, onOpen: (workId: string
  * sub-mode, the orders, the bars and the thread are the reader's own URL, so a
  * visitor has them all.
  */
-export function VisitorPeerReviewBand({
+export function VisitorSourcesBand({
   citations,
   debate,
   claimList,
@@ -226,11 +230,11 @@ export function VisitorPeerReviewBand({
   /** Open Bibliography on one work (Reader.tsx § `openBibliographyWork`), which a visitor's band may do too. */
   onOpenWork(workId: string): void;
 }) {
-  useRenderCount("VisitorPeerReviewBand");
-  const [view, setView] = useQueryState("peer-review", peerReviewParam);
+  useRenderCount("VisitorSourcesBand");
+  const [view, setView] = useQueryState("sources", sourcesParam);
   const citeControls = useCitationControls();
   const debateControls = useDebateControls();
-  const counts = peerReviewCounts({
+  const counts = sourcesCounts({
     works: citations?.citations ?? null,
     debate,
     listed: listedClaims({ kind: "visitor", claimList }),
@@ -238,7 +242,7 @@ export function VisitorPeerReviewBand({
     relevance: debateControls.relevance,
     thread: debateControls.thread,
   });
-  const head = <PeerReviewViews view={view} counts={counts} ownerSlug={null} onView={setView} />;
+  const head = <SourcesViews view={view} counts={counts} ownerSlug={null} onView={setView} />;
   if (view === "bibliography")
     return (
       <CitationsPanel
@@ -298,14 +302,14 @@ function useDebateControls() {
 }
 
 /**
- * **Bibliography | Reception | Claims** — Peer review's three sub-modes, the
+ * **Bibliography | Reception | Claims** — Sources' three sub-modes, the
  * band's header row. It was Debate's two-way control (`DebateViews`, 2026-10-03,
  * plan 261003o) until 2026-10-09, widened to three, and is built the way
  * Summary's Brief | Fuller | Thread is: a radiogroup of buttons, each its own
  * tab stop, drawn joined so the three read as one choice (mode-band.css § the
  * part-switcher).
  *
- * **Each chip carries the count of what its list draws** (peer-review-counts.ts),
+ * **Each chip carries the count of what its list draws** (sources-counts.ts),
  * so a reader on Bibliography can see there are three replies a press away —
  * Greg read one claim's two sources as the whole debate because nothing told
  * him there were others. Bibliography has no number while there is no list.
@@ -317,28 +321,28 @@ function useDebateControls() {
  * what others say.
  *
  * The owner's press arms the chip's own work, the same contract as its
- * command-bar row (activation.ts § `activationForPeerReview`): Bibliography the
+ * command-bar row (activation.ts § `activationForSources`): Bibliography the
  * citations, Reception the paid search, Claims the claims list. A stored list
  * consumes its token without running. A visitor can never arm owner work.
  */
-export function PeerReviewViews({
+export function SourcesViews({
   view,
   counts,
   ownerSlug,
   onView,
 }: {
-  view: PeerReviewView;
-  counts: PeerReviewCounts;
+  view: SourcesView;
+  counts: SourcesCounts;
   ownerSlug: string | null;
-  onView(view: PeerReviewView): void;
+  onView(view: SourcesView): void;
 }) {
   const group = useRef<HTMLDivElement>(null);
   useRevealChosen(group, view);
   return (
-    <div ref={group} className="summ-views dbt-views" role="radiogroup" aria-label="Peer review view">
+    <div ref={group} className="summ-views dbt-views" role="radiogroup" aria-label="Sources view">
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
-        {PEER_REVIEW_VIEWS.map((v) => {
-          const words = PEER_REVIEW_SUB_MODES[v];
+        {SOURCES_VIEWS.map((v) => {
+          const words = SOURCES_SUB_MODES[v];
           const count = countOf(counts, v);
           return (
             <Tooltip
@@ -359,7 +363,7 @@ export function PeerReviewViews({
                 tabIndex={0}
                 className={`summ-view-btn${v === view ? " on" : ""}`}
                 onClick={() => {
-                  if (ownerSlug !== null) armActivationForSubMode(ownerSlug, { mode: "peer-review", view: v });
+                  if (ownerSlug !== null) armActivationForSubMode(ownerSlug, { mode: "sources", view: v });
                   if (v !== view) onView(v);
                 }}
               >
@@ -375,7 +379,7 @@ export function PeerReviewViews({
 }
 
 /** One chip's number and what it counts, for its accessible name; `null` when there is no number. */
-function countOf(counts: PeerReviewCounts, view: PeerReviewView): { n: number; noun: string } | null {
+function countOf(counts: SourcesCounts, view: SourcesView): { n: number; noun: string } | null {
   const plural = (n: number, one: string) => (n === 1 ? one : `${one}s`);
   switch (view) {
     case "bibliography":
@@ -394,7 +398,7 @@ function countOf(counts: PeerReviewCounts, view: PeerReviewView): { n: number; n
 }
 
 /** The second paragraph of each chip's card: how its rows were got, and what was checked. */
-const VIEW_HOW: Record<PeerReviewView, string> = {
+const VIEW_HOW: Record<SourcesView, string> = {
   bibliography:
     "Listed by one model call over the article, and kept. Every address shown for a work is one the article itself gave, found by code rather than typed by the model, or else a Scholar search marked as one.",
   reception:

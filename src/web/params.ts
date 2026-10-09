@@ -367,7 +367,7 @@ export const guideParam = parseAsBit.withOptions({ history: "replace" });
 
 /**
  * **Which conversations Chat's list is narrowed to, by where they came from**
- * — `?chatfrom=chats`, a mode (`peer-review`, `glossary`, `ideas`), `learn` or
+ * — `?chatfrom=chats`, a mode (`sources`, `glossary`, `ideas`), `learn` or
  * `passage`. Since 2026-10-05
  * the list shows every conversation about the article (report `spya-hyfqkq`,
  * docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md
@@ -384,13 +384,14 @@ export const guideParam = parseAsBit.withOptions({ history: "replace" });
  * conversation belongs to which word is `chatFrom` in thread-source.ts; the
  * words are here so this eager file does not import that one. It was
  * `remember` until 2026-10-06 and is not aliased: an old `?chatfrom=remember`
- * is an unknown word, which reads as All. **`peer-review` is one word for
+ * is an unknown word, which reads as All. **`sources` is one word for
  * Bibliography, Reception and Claims** since 2026-10-09; the old
- * `?chatfrom=debate` and `?chatfrom=citations` are lifted to it before
- * anything reads them (router.ts § `liftLegacyPeerReview`), as GPT Sol's F5 on plan
+ * `?chatfrom=debate` and `?chatfrom=citations`, and `?chatfrom=peer-review`
+ * from the day the mode was called Peer review, are lifted to it before
+ * anything reads them (router.ts § `liftLegacySources`), as GPT Sol's F5 on plan
  * 261009l asked.
  */
-export const CHAT_FROM_WORDS = ["chats", "peer-review", "glossary", "ideas", "learn", "passage"] as const;
+export const CHAT_FROM_WORDS = ["chats", "sources", "glossary", "ideas", "learn", "passage"] as const;
 export type ChatFrom = (typeof CHAT_FROM_WORDS)[number];
 
 export const chatFromParam = createParser<ChatFrom>({
@@ -1397,19 +1398,22 @@ export function learnInSearch(search: string): LearnView {
   return (named === null ? null : learnParam.parse(named)) ?? learnParam.defaultValue;
 }
 
-/* ---------------------------------------------------------- peer review -- */
+/* -------------------------------------------------------------- sources -- */
 
 /**
- * **Which of Peer review's three sub-modes the band draws** — `?peer-review=`,
+ * **Which of Sources' three sub-modes the band draws** — `?sources=`,
  * since 2026-10-09 (docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md).
+ * It was `?peer-review=` while the mode was called Peer review, earlier that
+ * day, and an old one is lifted to this before anything reads it (router.ts §
+ * `liftLegacySources`; docs/plans/261009s-peer-review-becomes-sources-all-the-way-down.md).
  *
  * `bibliography` is what the piece cites (the Citations mode until that day);
  * `reception` is what others have written about the piece itself; `claims` is
  * the list of the claims the piece rests on (since 2026-10-08, plan 261008i
  * § 2), with an older search's claim sources under it. The last two were
  * Debate's `?debate=` from 2026-10-03, which this replaced: an old
- * `?mode=debate&debate=claims` is lifted to `?mode=peer-review&peer-review=claims`
- * before anything reads it (router.ts § `liftLegacyPeerReview`). *Which thing, within this
+ * `?mode=debate&debate=claims` is lifted to `?mode=sources&sources=claims`
+ * before anything reads it (router.ts § `liftLegacySources`). *Which thing, within this
  * mode*, so the shape of `?summary=` and `?referee=`: in the URL, because it
  * changes the whole band, and pushed, because switching is a deliberate act
  * Back should undo. **`bibliography` is the default** (Greg: "this should be
@@ -1420,35 +1424,35 @@ export function learnInSearch(search: string): LearnView {
  * press and only then — the mode's button, the sub-mode's command-bar row or
  * its chip: a press landing on Bibliography arms the `citations` list, on
  * Reception the `debate` search, on Claims the `debate-claims` list
- * (activation.ts § `activationForPeerReview`). Back, a pasted link and a
+ * (activation.ts § `activationForSources`). Back, a pasted link and a
  * last-view restore arrive here and buy nothing.
  */
-export const PEER_REVIEW_VIEWS = ["bibliography", "reception", "claims"] as const;
-export type PeerReviewView = (typeof PEER_REVIEW_VIEWS)[number];
+export const SOURCES_VIEWS = ["bibliography", "reception", "claims"] as const;
+export type SourcesView = (typeof SOURCES_VIEWS)[number];
 /**
  * **The two sub-modes the Debate panel draws** — Reception and Claims. Named
  * for the panel, which keeps its stored name until the deep rename (plan
  * 261009l § Stage 3).
  */
-export type DebateView = Exclude<PeerReviewView, "bibliography">;
+export type DebateView = Exclude<SourcesView, "bibliography">;
 
-export const peerReviewParam = createParser<PeerReviewView>({
-  parse: (v) => ((PEER_REVIEW_VIEWS as readonly string[]).includes(v) ? (v as PeerReviewView) : null),
+export const sourcesParam = createParser<SourcesView>({
+  parse: (v) => ((SOURCES_VIEWS as readonly string[]).includes(v) ? (v as SourcesView) : null),
   serialize: (v) => v,
 })
   .withDefault("bibliography")
   .withOptions({ history: "push" });
 
 /**
- * **Which sub-mode a carried `?peer-review=` names**, degraded as
- * `peerReviewParam` degrades it — `summaryInSearch`'s twin, for the bar off
+ * **Which sub-mode a carried `?sources=` names**, degraded as
+ * `sourcesParam` degrades it — `summaryInSearch`'s twin, for the bar off
  * the reading view (Dock.tsx), which has no React state to read. On the
  * reading view the bar is handed the parsed state, because the address lags a
  * press (activation.ts § `PressContext`).
  */
-export function peerReviewInSearch(search: string): PeerReviewView {
-  const asked = new URLSearchParams(search).get("peer-review");
-  return (asked === null ? null : peerReviewParam.parse(asked)) ?? peerReviewParam.defaultValue;
+export function sourcesInSearch(search: string): SourcesView {
+  const asked = new URLSearchParams(search).get("sources");
+  return (asked === null ? null : sourcesParam.parse(asked)) ?? sourcesParam.defaultValue;
 }
 
 /* --------------------------------------------------------------- debate -- */
@@ -1466,7 +1470,7 @@ export function peerReviewInSearch(search: string): PeerReviewView {
  * `claim` was a fourth value until 2026-10-03, when *by claim* became the
  * Claims sub-mode. An old `?debateby=claim` never reaches this parser: it is
  * rewritten to `?debate=claims` first (router.ts § `liftLegacyDebateBy`), and that to
- * `?peer-review=claims` (§ `liftLegacyPeerReview`).
+ * `?sources=claims` (§ `liftLegacySources`).
  *
  * **Its own key**, for `citeby`'s reason: every parameter survives a mode
  * switch, so a shared `?sort=` would carry one mode's order into another. `push`,

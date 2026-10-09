@@ -184,16 +184,16 @@ describe("the ranking normalises what the reader typed", () => {
   /**
    * **The doubled internal space, which is the one that is easy to get wrong.**
    *
-   * `peer review` is Referee's alias, and GPT Sol reproduced the hole on
+   * `peer review` was Referee's alias then (Sources' since 2026-10-09), and GPT Sol reproduced the hole on
    * 2026-09-07: a normaliser that trims and lowercases but does not *collapse*
    * lets `"peer  review"` sit in a table looking correct and match nothing. The
    * same function guards the table itself — tests/mode-catalog.test.ts imports
    * this one — so the two cannot disagree.
    */
   it("collapses runs of internal whitespace", () => {
-    /* Peer review by its name since 2026-10-09, Referee after it by `peer reviewer` (plan 261009l). */
-    expect(rankModes("peer  review", MODES)).toEqual(["peer-review", "referee"]);
-    expect(rankModes("PEER \t REVIEW ", MODES)).toEqual(["peer-review", "referee"]);
+    /* Sources by its old name, an alias since 2026-10-09 (plans 261009l, 261009s), Referee after it inside `for peer reviewers`. */
+    expect(rankModes("peer  review", MODES)).toEqual(["sources", "referee"]);
+    expect(rankModes("PEER \t REVIEW ", MODES)).toEqual(["sources", "referee"]);
   });
 
   it("matches nothing when nothing matches, rather than falling back to everything", () => {

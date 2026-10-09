@@ -249,9 +249,11 @@ export const MODE_LABEL: Record<Mode, string> = {
      docs/plans/261005l-remember-becomes-learn-and-explore-covers-critiques.md. */
   learn: "Learn",
   /* Citations and Debate until 2026-10-09, when they became this mode's
-     sub-modes. The name is provisional (Greg: "Maybe peer review") and shares
-     a phrase with Referee — docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md. */
-  "peer-review": "Peer review",
+     sub-modes under the name Peer review (Greg: "Maybe peer review") —
+     docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md. Sources
+     later that day, because Peer review shared a phrase with Referee (Greg:
+     "B Sources", spya-egmn6r) — docs/plans/261009s-peer-review-becomes-sources-all-the-way-down.md. */
+  sources: "Sources",
   structure: "Structure",
   faq: "FAQ",
   skim: "Skim",

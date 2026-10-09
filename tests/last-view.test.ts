@@ -110,32 +110,41 @@ describe("rememberableSearch", () => {
     expect(hasArticleState("?summary=simple")).toBe(true);
   });
 
-  /* Peer review's Bibliography | Reception | Claims, Debate's Reception |
-     Claims before 2026-10-09 (plan 261003o; GPT Sol's F6). Left out of
-     `REMEMBERED`, a reader who was reading Claims comes back to Bibliography.
-     Restoring it spends nothing: each sub-mode makes its list on a press,
-     never on arrival. An old Debate view stored before the merge comes back
-     on the sub-mode it named (tests/peer-review-old-addresses.test.ts). */
-  it("keeps Peer review's sub-mode, so Claims is restored as Claims", () => {
-    expect(rememberableSearch("?mode=peer-review&peer-review=claims&bears=partly")).toBe(
-      "?mode=peer-review&peer-review=claims&bears=partly",
+  /* Sources' Bibliography | Reception | Claims (Peer review's, until
+     2026-10-09), Debate's Reception | Claims before that day (plan 261003o;
+     GPT Sol's F6). Left out of `REMEMBERED`, a reader who was reading Claims
+     comes back to Bibliography. Restoring it spends nothing: each sub-mode
+     makes its list on a press, never on arrival. An old Debate or Peer review
+     view stored before a rename comes back on the sub-mode it named
+     (tests/sources-old-addresses.test.ts). */
+  it("keeps Sources' sub-mode, so Claims is restored as Claims", () => {
+    expect(rememberableSearch("?mode=sources&sources=claims&bears=partly")).toBe(
+      "?mode=sources&sources=claims&bears=partly",
     );
-    expect(restoredHref("/read/x", "", "?mode=peer-review&peer-review=claims")).toBe(
-      "/read/x?mode=peer-review&peer-review=claims",
+    expect(restoredHref("/read/x", "", "?mode=sources&sources=claims")).toBe("/read/x?mode=sources&sources=claims");
+    expect(restoredHref("/read/x", "", "?mode=debate&debate=claims")).toBe("/read/x?mode=sources&sources=claims");
+    expect(restoredHref("/read/x", "", "?mode=peer-review&peer-review=reception")).toBe(
+      "/read/x?mode=sources&sources=reception",
     );
-    expect(restoredHref("/read/x", "", "?mode=debate&debate=claims")).toBe(
-      "/read/x?mode=peer-review&peer-review=claims",
-    );
-    expect(hasArticleState("?peer-review=claims")).toBe(true);
-    /* The old key still marks an explicit old link, for `deep`'s reason. */
+    expect(hasArticleState("?sources=claims")).toBe(true);
+    /* The old keys still mark an explicit old link, for `deep`'s reason. */
     expect(hasArticleState("?debate=claims")).toBe(true);
   });
 
+  /* GPT Sol's F7 on plan 261009s: the sub-mode key was `peer-review` for the
+     day the mode was called Peer review. A lone `?peer-review=claims` is
+     somebody's old link, so it must count as explicit article state and win
+     over this browser's stored view. */
+  it("lets an old link carrying only `peer-review` win over a remembered view", () => {
+    expect(hasArticleState("?peer-review=claims")).toBe(true);
+    expect(restoredHref("/read/x", "?peer-review=claims", "?mode=quotes")).toBeNull();
+    expect(NEVER_REMEMBERED).toContain("peer-review");
+    expect(rememberableSearch("?peer-review=claims&at=spya-k3m9qt")).toBe("?at=spya-k3m9qt");
+  });
+
   it("no longer stores the retired identification threshold, or puts an old one back", () => {
-    expect(rememberableSearch("?mode=peer-review&name=linked")).toBe("?mode=peer-review");
-    expect(restoredHref("/read/x", "", "?mode=debate&name=linked")).toBe(
-      "/read/x?mode=peer-review&peer-review=reception",
-    );
+    expect(rememberableSearch("?mode=sources&name=linked")).toBe("?mode=sources");
+    expect(restoredHref("/read/x", "", "?mode=debate&name=linked")).toBe("/read/x?mode=sources&sources=reception");
   });
 
   it("lets an old link carrying only `name` win over a remembered view", () => {

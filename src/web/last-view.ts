@@ -113,7 +113,7 @@ export const REMEMBERED = [
   "gate", // glossary threshold
   "rank", // quotes order
   "bar", // quotes threshold
-  "peer-review", // bibliography, reception or claims — a restore draws what is stored; only a press makes anything
+  "sources", // bibliography, reception or claims — a restore draws what is stored; only a press makes anything
   "debateby", // reception's order
   "bears", // claims' relevance threshold
   "debatethread", // which of debate's threads narrows its list
@@ -202,13 +202,21 @@ export const NEVER_REMEMBERED = [
      link somebody had just opened. GPT Sol's plan review of 261006a, PR-2. */
   "remember",
   /* **Debate's sub-mode key until 2026-10-09**, when Debate became Peer
-     review's Reception and Claims and the key became `peer-review` above
+     review's (now Sources') Reception and Claims and the key became
+     `peer-review`, then `sources` above
      (docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md).
      An old `?mode=debate&debate=claims` is lifted to the new words before
      anything reads it, on arrival and on restore (router.ts §
-     `liftLegacyPeerReview`); anywhere else the pair is read by nothing.
+     `liftLegacySources`); anywhere else the pair is read by nothing.
      Listed for `deep`'s reason. */
   "debate",
+  /* **Sources' sub-mode key for the day the mode was called Peer review**
+     (2026-10-09; docs/plans/261009s-peer-review-becomes-sources-all-the-way-down.md).
+     Lifted to `sources` on arrival and on restore (router.ts §
+     `liftLegacySources`). Listed for `deep`'s reason: a lone
+     `?peer-review=claims` is somebody's old link, and must win over a stored
+     view (GPT Sol's F7 on plan 261009s). */
+  "peer-review",
 ] as const;
 
 /** Every parameter this app puts on an article's address. */

@@ -847,7 +847,7 @@ export type CitationsAccess =
        */
       chats?: CitedWorkChats;
     }
-  /* `null` since 2026-10-09: Peer review opens for a visitor on any of its
+  /* `null` since 2026-10-09: Sources opens for a visitor on any of its
      three artefacts (visitor.ts § POLICY), so Bibliography can be open with
      no list stored, and says so (GPT Sol's F3 on plan 261009l). */
   | { kind: "visitor"; citations: PublicCitations | null; owner?: never; chats?: never };
@@ -855,8 +855,8 @@ export type CitationsAccess =
 interface Props {
   access: CitationsAccess;
   /**
-   * **Peer review's chip row**, drawn as this band's header (PeerReviewMode.tsx
-   * § `PeerReviewViews`) — the same row the Debate panel draws for Reception
+   * **Sources' chip row**, drawn as this band's header (SourcesMode.tsx
+   * § `SourcesViews`) — the same row the Debate panel draws for Reception
    * and Claims, so switching sub-mode does not move it. Since 2026-10-09; the
    * band had no head row while its order row was drawn before then.
    */
@@ -997,13 +997,13 @@ export function CitationsPanel({
 
   return (
     <ModeSurface
-      label={MODE_LABEL["peer-review"]}
-      feature="gloss citations peer-review"
-      mode="peer-review"
+      label={MODE_LABEL.sources}
+      feature="gloss citations sources"
+      mode="sources"
       about={about}
-      /* **Peer review's chip row**, since 2026-10-09: Bibliography | Reception
+      /* **Sources' chip row**, since 2026-10-09: Bibliography | Reception
           | Claims, each with its count, Bibliography's being every work cited
-          (peer-review-counts.ts). Until then this band had no head row while
+          (sources-counts.ts). Until then this band had no head row while
           its order row was drawn — the move Glossary made (plan 260929a), for
           Greg's *"it says at the top how many works there are. I feel like
           that's maybe there's a more space-efficient way to say that"*
@@ -1041,7 +1041,7 @@ export function CitationsPanel({
 
       {owner?.status === "loading" && <BandWaiting className="gloss-quiet">Looking for the citations…</BandWaiting>}
 
-      {/* **A visitor with no list stored**: Peer review opened on Reception's
+      {/* **A visitor with no list stored**: Sources opened on Reception's
           or Claims' artefact (visitor.ts § POLICY, `any-artefact`), so
           Bibliography says it has nothing rather than drawing a blank band. */}
       {access.kind === "visitor" && citations === null && <p className="gloss-quiet">{CITATIONS_NONE_SHARED}</p>}
