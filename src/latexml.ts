@@ -855,8 +855,8 @@ const ORCID_LINK_LABEL = /\b(?:orcid|profile|record)\b/iu;
  *   div.ltx_authors      (one)
  *     span.ltx_creator.ltx_role_author   ×n
  *       span.ltx_personname              one, holding one name
- *       span.ltx_note.ltx_role_thanks    the footnote `\thanks` makes, when it is set beside the name: not read
- *       span.ltx_author_notes            affiliations, addresses, emails: not read
+ *       span.ltx_note.ltx_role_thanks    the footnote `\thanks` makes, when it is set beside the name: not read here (`latexmlTitleBlock` hands it to a model)
+ *       span.ltx_author_notes            affiliations, addresses, emails: not read here (`latexmlTitleBlock` hands them to a model)
  *     span.ltx_author_before             the space, the ", " or the " and " between them: not read
  * ```
  *
@@ -880,6 +880,49 @@ const ORCID_LINK_LABEL = /\b(?:orcid|profile|record)\b/iu;
 export function latexmlAuthorNames(doc: Document): string[] | null {
   const block = titleBlockOf(doc);
   return block ? (readCreators(block)?.map((c) => c.name) ?? null) : null;
+}
+
+/**
+ * **The title block as the authors pass reads it**: the names `latexmlAuthorNames`
+ * reads, and one line of text per creator — the name and everything set beside
+ * it (the `\thanks` note, the affiliation and email contacts) — which is what a
+ * model's affiliations are held to (src/arxiv-affiliations.ts). Read before
+ * `prepareDocument`, like the names: `tidyTitleBlock` moves these nodes. `null`
+ * exactly when `latexmlAuthorNames` is.
+ *
+ * **One projection of the page, defined here**: LaTeXML's furniture — a note's
+ * repeated marks and number, and a contact's label when it is exactly one of
+ * the measured `CONTACT_LABELS` — is **replaced by a space**, never just
+ * deleted. Replaced, because deleting fuses the words either side:
+ * `Affiliation:Department` `Affiliation:University` became `DepartmentUniversity`,
+ * a word the page never printed (GPT Sol, plan review of 261009m). Taken out at
+ * all, because LaTeXML splits one institution over several contacts
+ * (`Affiliation: Department of Physics, Affiliation: University of Trento`), and
+ * with the labels in, that institution is no run of words (2610.08392). A label
+ * not in the list stays, as words: it may be the author's.
+ */
+export function latexmlTitleBlock(doc: Document): { names: string[]; creators: string[] } | null {
+  const block = titleBlockOf(doc);
+  const creators = block ? readCreators(block) : null;
+  if (!creators) return null;
+  return {
+    names: creators.map((c) => c.name),
+    creators: creators.map((c) => {
+      const copy = c.creator.cloneNode(true) as Element;
+      const furniture = [
+        ...Array.from(copy.querySelectorAll(NOTE_FURNITURE)),
+        ...Array.from(copy.querySelectorAll(".ltx_contact_name")).filter(
+          (label) => label.children.length === 0 && CONTACT_LABELS.has((label.textContent ?? "").trim()),
+        ),
+      ];
+      for (const el of furniture) el.replaceWith(copy.ownerDocument.createTextNode(" "));
+      /* And a space after the name and each contact and note, for the same
+         reason: they are separate lines in the pop-up, whatever whitespace the
+         markup has between them. */
+      for (const el of Array.from(copy.querySelectorAll(".ltx_personname, .ltx_contact, .ltx_note"))) el.after(" ");
+      return (copy.textContent ?? "").replace(/\s+/gu, " ").trim();
+    }),
+  };
 }
 
 /** The one `.ltx_authors` under the one `article.ltx_document` at a LaTeXML address, or `null`. */

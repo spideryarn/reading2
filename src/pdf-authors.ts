@@ -381,6 +381,16 @@ const findAffiliation = (have: Word[], want: string[]): FoundSpan | null => {
   return null;
 };
 
+/**
+ * Whether `affiliation` is a run of `text`'s words, by the rule `verifyAuthors`
+ * holds an affiliation to a page with. For a caller that knows which part of
+ * the page belongs to which author (src/arxiv-affiliations.ts).
+ */
+export function affiliationPrintedIn(text: string, affiliation: string): boolean {
+  const want = words(affiliation);
+  return want.length > 0 && findAffiliation(wordsOf(text), want) !== null;
+}
+
 const oneLine = (s: string) => s.replace(/\s+/gu, " ").trim();
 
 export type AuthorsVerdict =
