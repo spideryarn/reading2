@@ -404,7 +404,7 @@ export async function exportArticle(
     unverified: revision.unverified,
     recall: revision.recall,
     pagesChecked: revision.pagesChecked,
-    /* The checker's complaints: the reader's copy keeps what the store keeps. Plan 261009m. */
+    /* The checker's complaints: the reader's copy keeps what the store keeps. Plan 261009n. */
     quality: revision.quality,
     /* The difficulty rating with all five of its facts, the model and the
        time included: this file is the reader's own copy, and nothing else in

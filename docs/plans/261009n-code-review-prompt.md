@@ -1,6 +1,6 @@
-You are reviewing the CODE for plan docs/plans/261009m-pdf-quality-warnings-not-stored.md, in the repo at the current directory (a git worktree; the work is commit HEAD, on top of origin/dev).
+You are reviewing the CODE for plan docs/plans/261009n-pdf-quality-warnings-not-stored.md, in the repo at the current directory (a git worktree; the work is commit HEAD, on top of origin/dev).
 
-Read the plan, your own plan review (docs/plans/261009m-plan-review-sol.md), and the scoped diff in docs/plans/261009m-code-review.diff (generated snapshot JSON excluded; `git show HEAD` has it all). Then read the code around each hunk.
+Read the plan, your own plan review (docs/plans/261009n-plan-review-sol.md), and the scoped diff in docs/plans/261009n-code-review.diff (generated snapshot JSON excluded; `git show HEAD` has it all). Then read the code around each hunk.
 
 What it does: adds `article_revisions.quality text[]` (CHECK: null, or non-empty with no null element) so the PDF checker's `Meta.quality` survives the store; names it in `metaColumns`/`META_COLUMNS`/`readMeta` (src/store/artifacts-pg.ts), the owner read `metaFrom` and its projection and read policy (src/store/pg.ts), the carry policy (src/store/pg-revisions.ts) and the rollback export (src/store/export.ts); keeps it from public visitors; adds class-check tests (tests/store-artefacts-pg.test.ts § takes meta apart, tests/meta-from-columns.test.ts) and a through-every-read suite (tests/pdf-quality-pg.test.ts).
 

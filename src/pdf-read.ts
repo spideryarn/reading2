@@ -3608,7 +3608,7 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
    * Greg's call, 2026-08-30, against the stated order of capability, then
    * robustness: publish the article and retain the quality evidence. The
    * store keeps the detailed warnings (`article_revisions.quality`, since plan
-   * 261009m — before that they were computed and lost), the server log records
+   * 261009n — before that they were computed and lost), the server log records
    * their count, and nothing in the reading view renders them yet.
    *
    * **What this costs, stated plainly, because it is the defence being stood

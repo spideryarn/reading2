@@ -5,7 +5,7 @@
  * columns field by field, and a field it does not name is simply absent — the
  * class in docs/postmortems/261009h-a-flag-the-store-did-not-keep.md. `quality`
  * went that way: the PDF checker's complaints had no column, so this read never
- * had them to give (plan 261009m).
+ * had them to give (plan 261009n).
  *
  * Two halves, both checked by the compiler before the assertion runs:
  *

@@ -56,7 +56,7 @@ run per PDF. Their `recall` and `pagesChecked` are intact, and those are what th
 
 ## GPT Sol's plan review
 
-[261009m-plan-review-sol.md](261009m-plan-review-sol.md), APPROVE WITH CHANGES. Taken: the CHECK
+[261009n-plan-review-sol.md](261009n-plan-review-sol.md), APPROVE WITH CHANGES. Taken: the CHECK
 and the wording of null (F3), the owner-read and export checks and the separate publication-date arm
 (F2), the public forbidden-field lists (F4), the two stale comments (F5). **Not taken, F1**: the
 `metadata` step writes meta through the same `metaColumns`, so an administrator re-running it alone

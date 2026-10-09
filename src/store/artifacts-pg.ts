@@ -950,7 +950,7 @@ export function metaColumns(meta: Meta): Partial<typeof articleRevisions.$inferI
     pagesChecked: meta.pagesChecked ?? null,
     /* The checker's complaints. Null for none, never `[]`, so "found nothing"
        has one spelling and a re-extraction that finds nothing clears the last
-       one's list. Unstored until plan 261009m, which is how every PDF's
+       one's list. Unstored until plan 261009n, which is how every PDF's
        complaints were computed and then lost. */
     quality: meta.quality?.length ? [...meta.quality] : null,
   };

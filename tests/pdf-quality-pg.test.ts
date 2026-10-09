@@ -1,6 +1,6 @@
 /**
  * **A PDF's quality complaints, through every read that has to keep them and
- * the one that must not show them.** Plan 261009m.
+ * the one that must not show them.** Plan 261009n.
  *
  * `Meta.quality` is the transcription checker's complaints, in its own words
  * (src/pdf-read.ts § `runPdfExtract`). Until this plan no column held them,

@@ -1191,7 +1191,7 @@ describe("writing artefacts into a draft", () => {
          it, here or in `NotExtracts`, and once here it fails the round trip
          until `metaColumns` and `readMeta` both name it. `quality` was the
          field this would have caught: computed by every PDF extraction and
-         dropped at the store's door until plan 261009m. */
+         dropped at the store's door until plan 261009n. */
       const meta: ExtractOwned = {
         slug: SLUG,
         title: "Rewritten",
@@ -1365,7 +1365,7 @@ describe("writing artefacts into a draft", () => {
     expect(await refusedBy({ publishedAt: "2011-03-10", publishedYear: null })).toBeUndefined();
   });
 
-  /* Plan 261009m: the PDF checker's complaints, which had no column. */
+  /* Plan 261009n: the PDF checker's complaints, which had no column. */
   it("keeps a PDF's quality complaints, writes none as null, and clears them on a clean re-extraction", async () => {
     await withClaim(async (tx, claimed) => {
       await begun(tx, claimed, "extract");

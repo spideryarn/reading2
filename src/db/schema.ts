@@ -986,7 +986,7 @@ export const articleRevisions = spideryarn.table(
      * column (2026-10-09), when the complaints were computed and dropped at
      * the store's door because nothing here named them. Never `{}` and never
      * a null element (`article_revisions_quality_nonempty`), so "none" has one
-     * spelling. docs/plans/261009m-pdf-quality-warnings-not-stored.md.
+     * spelling. docs/plans/261009n-pdf-quality-warnings-not-stored.md.
      */
     quality: text("quality").array(),
 
@@ -1462,7 +1462,7 @@ export const articleRevisions = spideryarn.table(
     ),
     /* No complaints is NULL, never an empty list, and no complaint is NULL:
        `metaColumns` writes null for none, and this refuses any other writer
-       that would give "none" a second spelling. Plan 261009m. */
+       that would give "none" a second spelling. Plan 261009n. */
     check(
       "article_revisions_quality_nonempty",
       sql`${t.quality} is null or (cardinality(${t.quality}) > 0 and array_position(${t.quality}, null) is null)`,

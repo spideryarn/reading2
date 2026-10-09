@@ -83,7 +83,7 @@ and `valence`, recorded in
    (`src/store/pg.ts` ~1931), and has no column, yet `src/feedback-article.ts:297` still reads it.
    Its own comment calls it *"the whole of what is left of that defence"*. Every other mapper names
    all its optional fields. **Fixed the same day** by
-   [261009m](../plans/261009m-pdf-quality-warnings-not-stored.md), with this item's test for both
+   [261009n](../plans/261009n-pdf-quality-warnings-not-stored.md), with this item's test for both
    `Meta` read halves — see § Follow-up. Only `ClaimsRun` already has this kind of test
    (`tests/store-pg-referee-claims.test.ts`, `Record<keyof ClaimsRun, true>`).
 3. **Whole-row JSON for the message** instead of columns: rejected. It would make the class
@@ -126,7 +126,7 @@ a store maps by hand, I check the store's read half returns it, not that I passe
 
 ## Follow-up: the `Meta.quality` sibling, and a second sweep
 
-[261009m](../plans/261009m-pdf-quality-warnings-not-stored.md) gave the PDF checker's complaints a
+[261009n](../plans/261009n-pdf-quality-warnings-not-stored.md) gave the PDF checker's complaints a
 column (`article_revisions.quality`), named it in `metaColumns`, `readMeta`, `metaFrom`, the carry
 policy and the rollback export, and kept it from visitors. Every PDF extracted before then has lost
 its complaints for good; its `recall` and `pagesChecked` survived. Item 1's check now exists for
@@ -146,7 +146,7 @@ store dropping a field a producer sets. What it did find, none of it changed her
 - **A standalone `metadata` run clears the PDF provenance block** on an article `extract` already
   read — `source`, `method`, `pages`, `unverified`, `recall`, `pagesChecked`, and now `quality` —
   because both steps write through `metaColumns`. Only the administrator can run it alone.
-  Raised by GPT Sol's plan review of 261009m.
+  Raised by GPT Sol's plan review of 261009n.
 - **`CitationLookup`'s own host, searches, model and time are not stored**; the read rebuilds them
   from the find row. Its one producer sets identical values, so nothing is lost today. It would
   become this class if a lookup ever ran apart from its find.

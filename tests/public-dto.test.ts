@@ -318,7 +318,7 @@ const FORBIDDEN_ON_META = [
   "unverified",
   "recall",
   "pagesChecked",
-  "quality", // the PDF checker's complaints, plan 261009m
+  "quality", // the PDF checker's complaints, plan 261009n
   "comments", // the count of the owner's own questions
   "purpose", // "why you're reading this one"
   "profile",
