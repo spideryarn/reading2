@@ -1,7 +1,7 @@
 ---
 reports: spya-caue42, spya-thpsnd
 ending: shipped
-comment: Shipped: Reception and Claims, and since 2026-10-09 the claims picker you chose: Claims lists the claims, you tick some or type your own, and one search checks them. Still waiting on you: should a visitor see your checks?
+comment: Shipped: Reception and Claims, and the claims picker you chose: Claims lists the claims, you tick some or type your own, and one search checks them. Visitors to a shared article see the claims, not your checks (your answer A).
 ---
 
 # Debate: Reception and Claims sub-modes, and a tidier panel
