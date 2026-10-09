@@ -97,6 +97,7 @@ import {
   HELP_NOT_FIRST,
   isSpokenKind,
   requireTail,
+  type SpokenKind,
   withEdit,
   withRetry,
 } from "./chat.js";
@@ -4362,16 +4363,26 @@ function parseSpokenTools(x: unknown): { tools: ToolRun[] } | undefined {
  * refuses a contradiction anyway (`withSpokenTurn`). It picks the prompt and
  * the tools (a guide's are the guide's, plan 261009i), nothing else.
  */
-function liveKind(thread: ChatThread | undefined, sent: unknown): ThreadKind | undefined {
+function liveKind(thread: ChatThread | undefined, sent: unknown): SpokenKind | undefined {
   if (sent !== undefined && !isSpokenKind(sent)) {
     throw httpError(400, "kind must be a conversation that takes a live conversation");
   }
-  /* Refused before anything is minted or billed, as the spoken append would
-     refuse it later (GPT Sol's F2 on the plan). */
-  if (thread && sent !== undefined && thread.kind !== sent) {
-    throw httpError(409, "That conversation is already a different kind.");
+  /* A caller may omit `kind`, but that does not make a stored Tutorial,
+     Explore or Candidates conversation eligible. Refuse it here, before the
+     Realtime mint or GPT-Live journal/create can spend anything; the spoken
+     append has the same gate for the later write. */
+  if (thread) {
+    if (!isSpokenKind(thread.kind)) {
+      throw httpError(409, "That conversation does not take a live conversation.");
+    }
+    /* Refused before anything is minted or billed, as the spoken append would
+       refuse it later (GPT Sol's F2 on the plan). */
+    if (sent !== undefined && thread.kind !== sent) {
+      throw httpError(409, "That conversation is already a different kind.");
+    }
+    return thread.kind;
   }
-  return thread?.kind ?? sent;
+  return sent;
 }
 
 /**
@@ -4804,9 +4815,10 @@ async function liveClose(sessionId: string, body: unknown): Promise<{ ok: true }
  *
  * **`reader_notes` is refused here twice.** It is not in `LIVE_SERVER_TOOLS`,
  * which is built from the shared `CHAT_TOOLS` and not from `toolsFor`; and the
- * context below names no `kind`, so `runTool` would call it an unknown tool
- * even if the first check went. This endpoint has no thread to leave out of
- * that tool's list — docs/project/chat-tools.md § The reader's notes.
+ * context below names either `guide` or no kind, so `runTool`'s guide list or
+ * default `CHAT_TOOLS` would call it an unknown tool even if the first check
+ * went. This endpoint has no thread to leave out of that tool's list —
+ * docs/project/chat-tools.md § The reader's notes.
  */
 async function liveTool(slug: string, body: unknown): Promise<ToolOutcome> {
   const { name, args, kind } = (body ?? {}) as Record<string, unknown>;

@@ -550,10 +550,11 @@ export function gptLiveSession(opts: {
         instructions: gptLiveBackendInstructions(opts),
         /* Low: the reader is waiting in silence while this model thinks. */
         reasoning: { effort: "low" },
-        /* The same nine the Realtime engine has — `show_passage` and the eight
-           chat tools — already in the flat function shape the Responses API
-           takes. Not `strict`: their schemas have optional parameters and no
-           `additionalProperties: false`, which strict mode refuses. */
+        /* The same tools the Realtime engine has — `show_passage` and this
+           conversation kind's server tools — already in the flat function
+           shape the Responses API takes. Not `strict`: their schemas have
+           optional parameters and no `additionalProperties: false`, which
+           strict mode refuses. */
         tools: liveTools(opts.kind),
       },
     },

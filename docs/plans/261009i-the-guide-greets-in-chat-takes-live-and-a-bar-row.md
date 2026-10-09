@@ -6,7 +6,7 @@ Owned by [plans.md](../project/plans.md). Overseer queue item `qi-7wcnqdd6`; rep
 [261007j](261007j-the-guide-a-conversation-about-how-to-read-this.md),
 [261007p](261007p-the-guide-acts-without-a-press-and-opens-every-new-article.md) and
 [261008a](261008a-guide-opens-glossary-and-summary-when-already-made.md).
-**Status: built, plan reviewed by GPT Sol; on `dev` once the code review below is done. Not deployed. One question for Greg, `q-w2740x`.**
+**Status: built, GPT Sol on the plan and the code, seen in a browser, on `dev`. Not deployed. One question for Greg, `q-w2740x`.**
 
 ## What Greg asked for
 
@@ -228,5 +228,40 @@ model-written greeting).
 - [x] Row, aliases, owner-only, catalogue regenerated; test that `guide` ranks it first.
 
 ### Stage 4: docs, browser, review, bookkeeping
-- [ ] Sonnet subagent: desktop and phone (greeting, keep button, Live button present, bar row).
-- [ ] GPT Sol code review (workspace-write); gates; push; queue entries; question file; note.
+- [x] Sonnet subagent: desktop and phone (greeting, keep button, Live button present, bar row).
+- [x] GPT Sol code review (workspace-write); gates; push; queue entries; question file; note.
+
+## Code review
+
+[GPT Sol](261009i-code-review-sol.md) on [the diff](261009i-code-review.diff): *land with fixes*.
+
+- **P1, fixed by the reviewer**: a stored Tutorial, Explore or Candidates thread could open a Live
+  session, and on GPT-Live be billed, before the spoken append refused its kind. Older than this
+  stage (Realtime since `cc2b67d49`, GPT-Live since `b3d4b4c9e`). `liveKind` now refuses any stored
+  kind that takes no Live before anything is minted or journalled. Postmortem
+  [261009i](../postmortems/261009i-a-late-prerequisite-guards-the-aftermath-not-the-action.md).
+- **P2, fixed by the reviewer**: a slow purpose read could draw the greeting above words the reader
+  had already sent, and offer to keep them as an answer to a question they never saw. The greeting
+  is now snapshotted only while the conversation is still empty.
+- **P3, reported and left**: `/live-tool` still takes the kind from the page, so a hand-made request
+  that omits it gets Chat's tools. Not a model or article bypass (the model chooses only the name;
+  the reader's own page says the kind), and a hand-made request from the owner could open a chat
+  session anyway. Binding it on the server would mean storing the kind on the session's journal
+  row: a schema change for no reader-visible gain now.
+- After the review: its new GPT-Live test opened a Tutorial by the id it asked for, which a
+  one-per-article kind need not keep; it now opens the id the store returned (30/30).
+
+## Log
+
+- 2026-10-09: **seen in a browser**, Sonnet subagent, Playwright, 1440 and 390, local articles, one
+  paid turn. All six checks passed, no console errors: the greeting bubble with no box; Live present
+  in the guide's composer (not connected); the greeting kept above the reader's answer, *Keep this*
+  under it, pressed, and Metadata showing the reason; *Guide* first for "guide" in the bar with Help
+  second, opening the guide from Structure; no horizontal scroll at 390; and after a reload, the old
+  turns with no greeting and no keep button. Shots: [greeting](261009i-shot-1-greeting.png),
+  [after sending](261009i-shot-2-after-send.png), [kept](261009i-shot-3-kept.png),
+  [Metadata](261009i-shot-3b-metadata.png), [the bar](261009i-shot-4-commandbar.png),
+  [phone](261009i-shot-5-phone-greeting.png), [reload](261009i-shot-6-reload.png).
+- 2026-10-09: the prompt change to `GUIDE_SYSTEM` (the greeting paragraph in place of the box
+  sentence) was not re-measured against the 261007a eval; it removes a sentence about a box that no
+  longer exists and tells the model what the reader was asked.

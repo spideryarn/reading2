@@ -392,7 +392,9 @@ describe("what the session is created with", () => {
 
   it("gives a chat the companion's prompt, and refuses a kind that takes no Live", async () => {
     await ticket("spya-vaaagc", {});
-    expect((minted?.session as { instructions: string }).instructions).not.toContain(SPOKEN_GUIDE);
+    const session = minted?.session as { instructions: string } | undefined;
+    expect(session).toBeDefined();
+    expect(session?.instructions).not.toContain(SPOKEN_GUIDE);
     expect((await ticket("spya-vaaagx", { kind: "explore" })).status).toBe(400);
   });
 
@@ -400,6 +402,20 @@ describe("what the session is created with", () => {
     await speak("spya-vaaagm", { question: "Q?", answer: "A.", expectedTailId: null });
     minted = null;
     const out = await ticket("spya-vaaagm", { kind: "guide" });
+    expect(out.status).toBe(409);
+    expect(minted).toBeNull();
+  });
+
+  it("refuses a stored conversation whose kind takes no Live, before minting", async () => {
+    await asTestOwner(() =>
+      chatStore.begin(SLUG, {
+        threadId: "spya-vaaagt",
+        question: "Teach me this",
+        kind: "tutorial",
+      }),
+    );
+    minted = null;
+    const out = await ticket("spya-vaaagt");
     expect(out.status).toBe(409);
     expect(minted).toBeNull();
   });

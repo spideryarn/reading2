@@ -426,7 +426,8 @@ export const SHOW_PASSAGE_TOOL = {
 };
 
 /**
- * Every chat tool plus `show_passage`, in the shape realtime wants.
+ * The conversation's server tools plus `show_passage`, in the shape realtime
+ * wants: Chat's shared tools normally, or the guide's article-only subset.
  *
  * **Realtime flattens the function.** `CHAT_TOOLS` is chat/completions' shape —
  * `{ type: "function", function: { name, description, parameters } }` — and
@@ -434,9 +435,9 @@ export const SHOW_PASSAGE_TOOL = {
  * wrapper. Sending the nested form is rejected outright rather than quietly
  * ignored, which is a mercy and is why this is a `map` and not a hope.
  *
- * Reusing `CHAT_TOOLS` rather than restating them is the point: a tool
- * description is a prompt (src/chat-tools.ts), and two copies of a prompt is
- * one copy that will be updated.
+ * Reusing `CHAT_TOOLS` and `GUIDE_TOOLS` rather than restating either is the
+ * point: a tool description is a prompt (src/chat-tools.ts), and two copies of
+ * a prompt is one copy that will be updated.
  */
 export function liveTools(kind?: ThreadKind): unknown[] {
   /* A guide is offered the typed guide's own tools (`toolsFor`): its article

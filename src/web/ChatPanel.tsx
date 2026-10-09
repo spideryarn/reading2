@@ -1467,9 +1467,13 @@ export function Conversation({
    * ran in is over, so nothing that mounts later can act on it.
    */
   const ownAct = useGuideAct(thread.id, kind, visible, onAnswered);
-  /* **The guide's greeting** (plan 261009i): read once, and drawn only by a
-     conversation that was empty when this mount first saw it, then kept above
-     the turns while it stays mounted. A guide opened with turns in it shows
+  /* **The guide's greeting** (plan 261009i): drawn only by a conversation
+     that was empty when this mount first saw it, and snapshotted only while it
+     is still empty. `usePurpose` is asynchronous; if the reader sends before
+     it answers, drawing its eventual greeting above that message would turn
+     words written without seeing the question into an apparent answer (and
+     offer to save them as the reason). Once shown, the snapshot stays above
+     the turns while this mount lasts. A guide opened with turns in it shows
      none — GuideGreeting.tsx says why. */
   const guideRead = usePurpose(kind === "guide" ? slug : null);
   const greeting = kind === "guide" ? guideGreeting(guideRead, articleTitle) : null;
@@ -1560,6 +1564,11 @@ export function Conversation({
   const liveChars = liveSize(liveLines);
   const hasTurns = thread.messages.length > 0;
   const empty = thread.messages.length === 0 && liveLines.length === 0;
+  const [openingGreeting, setOpeningGreeting] = useState<ReturnType<typeof guideGreeting>>(null);
+  useLayoutEffect(() => {
+    if (!greetsHere.current || openingGreeting !== null || greeting === null || !empty) return;
+    setOpeningGreeting(greeting);
+  }, [empty, greeting, openingGreeting]);
   const toolsNow = (last?.tools ?? []).map((run) => run.status).join() + (last?.searches ?? "");
   /**
    * ## A streamed answer stays where it starts
@@ -1919,8 +1928,8 @@ export function Conversation({
           measureSteps(el);
         }}
       >
-        {kind === "guide" && greetsHere.current && greeting !== null && (
-          <GuideGreeting greeting={greeting} onAsk={(q) => onSend(q)} />
+        {kind === "guide" && openingGreeting !== null && (
+          <GuideGreeting greeting={openingGreeting} onAsk={(q) => onSend(q)} />
         )}
         {empty &&
           (kind === "guide" ? null : kind === "tutorial" ? (
@@ -1966,7 +1975,7 @@ export function Conversation({
           />
           {/* The reader's answer to the greeting's question, kept as their
               reason only if they press (GuideGreeting.tsx § GuideKeepReason). */}
-          {greetsHere.current && greeting?.asksReason && m === firstAsked && (
+          {openingGreeting?.asksReason && m === firstAsked && (
             <GuideKeepReason slug={slug} text={m.text} />
           )}
           </GuideActContext.Provider>

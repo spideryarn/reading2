@@ -23,6 +23,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatThread, ThreadKind } from "../src/types.js";
 import { forgetChatDrafts } from "../src/web/chat-draft.js";
+import type { LiveApi } from "../src/web/live/useLiveConversation.js";
 import type { ChatFrom } from "../src/web/params.js";
 
 /** What `GET /api/reader?slug=` answers. */
@@ -36,6 +37,8 @@ const patches: unknown[] = [];
 let patchLosesReply = false;
 /** Something to run before the reader read answers: another tab saving. */
 let beforeRead: (() => void) | null = null;
+/** A deliberately slow opening read, for the race between the greeting and a first send. */
+let delayedRead: Promise<Response> | null = null;
 
 vi.mock("../src/web/lib/api.js", async () => {
   const real = await vi.importActual<typeof import("../src/web/lib/api.js")>("../src/web/lib/api.js");
@@ -53,6 +56,7 @@ vi.mock("../src/web/lib/api.js", async () => {
       }
       if (String(url).startsWith("/api/reader")) {
         beforeRead?.();
+        if (delayedRead !== null) return delayedRead;
         return Promise.resolve(json(reader));
       }
       return Promise.resolve(json({}));
@@ -94,7 +98,10 @@ let root: Root;
 const sent: string[] = [];
 let guideOpened = 0;
 
-function paint(listed: ChatThread[], over: { from?: ChatFrom | null; threadId?: string | null; guide?: ChatThread | null } = {}) {
+function paint(
+  listed: ChatThread[],
+  over: { from?: ChatFrom | null; threadId?: string | null; guide?: ChatThread | null; live?: LiveApi } = {},
+) {
   const guide = over.guide ?? null;
   act(() => {
     root.render(
@@ -132,6 +139,7 @@ function paint(listed: ChatThread[], over: { from?: ChatFrom | null; threadId?: 
         onJump: () => {},
         recovering: new Set<string>(),
         blocks: new Map<string, string>(),
+        live: over.live,
         focusNonce: 0,
         error: null,
       }),
@@ -153,6 +161,7 @@ beforeEach(() => {
   patches.length = 0;
   patchLosesReply = false;
   beforeRead = null;
+  delayedRead = null;
   sent.length = 0;
   guideOpened = 0;
   forgetChatDrafts();
@@ -277,6 +286,63 @@ describe("the guide's greeting", () => {
     expect(patches).toEqual([{ purpose: "For my journal club\n next week" }]);
     expect(host.textContent).toContain(KEPT_REASON_LABEL);
     expect(sent, "keeping it sends nothing").toEqual([]);
+  });
+
+  it("does not turn a message sent before the purpose read into an answer to a greeting shown later", async () => {
+    let answerRead: ((response: Response) => void) | undefined;
+    delayedRead = new Promise<Response>((resolve) => {
+      answerRead = resolve;
+    });
+    paint([CHAT], { guide: EMPTY_GUIDE, threadId: EMPTY_GUIDE.id });
+    await answer("Where should I start?");
+    expect(host.textContent).not.toContain("Why are you reading it?");
+
+    delayedRead = null;
+    await act(async () =>
+      answerRead?.(
+        new Response(JSON.stringify(reader), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
+    await settle();
+    expect(host.textContent).not.toContain("Why are you reading it?");
+    expect(keepButton()).toBeUndefined();
+  });
+
+  it("does not put a late greeting above the first spoken words", async () => {
+    let answerRead: ((response: Response) => void) | undefined;
+    delayedRead = new Promise<Response>((resolve) => {
+      answerRead = resolve;
+    });
+    const live = {
+      lines: [
+        {
+          id: "spoken-1",
+          role: "reader",
+          text: "Where should I start?",
+          done: false,
+          exchange: "spoken-1",
+          session: 0,
+          order: 0,
+        },
+      ],
+    } as unknown as LiveApi;
+    paint([CHAT], { guide: EMPTY_GUIDE, threadId: EMPTY_GUIDE.id, live });
+    await settle();
+
+    delayedRead = null;
+    await act(async () =>
+      answerRead?.(
+        new Response(JSON.stringify(reader), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
+    await settle();
+    expect(host.textContent).not.toContain("Why are you reading it?");
   });
 
   it("never overwrites a reason saved elsewhere since the greeting read", async () => {

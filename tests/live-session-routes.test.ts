@@ -94,9 +94,9 @@ import {
 import { responseReport, transcriptionReport } from "../src/web/live/meter.js";
 import { handleApi } from "../src/routes.js";
 import { costStore } from "../src/store/ai-calls.js";
-import { realtimeSessionStore } from "../src/store/index.js";
+import { chatStore, realtimeSessionStore } from "../src/store/index.js";
 import type { RealtimeSession } from "../src/store/contracts.js";
-import { acceptAny, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
+import { acceptAny, asTestOwner, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
 
@@ -106,7 +106,12 @@ const SLUG = "test-live-session-routes";
 
 await pgReady({
   suite: "tests/live-session-routes.test.ts",
-  tables: ["spideryarn.articles", "spideryarn.realtime_sessions"],
+  tables: [
+    "spideryarn.articles",
+    "spideryarn.chat_threads",
+    "spideryarn.chat_messages",
+    "spideryarn.realtime_sessions",
+  ],
 });
 
 let article: ScratchArticle | undefined;
@@ -743,6 +748,34 @@ describe("a GPT-Live session", () => {
     expect(rows[0]?.costSource).toBe("computed");
     expect(rows[0]?.requestedModel).toBe(GPT_LIVE_MODEL);
     expect(rows[0]?.articleSlug).toBe(SLUG);
+  });
+
+  it("gives a fresh guide the guide prompt and tools", async () => {
+    const out = await open("spya-lgaagd", { kind: "guide" });
+    expect(out.status).toBe(200);
+    const sent = liveCreate.seen[0]?.body as {
+      session: { instructions: string; delegation: { responses: { instructions: string; tools: { name: string }[] } } };
+    };
+    expect(sent.session.instructions).toContain("YOU ARE THEIR GUIDE TO READING THIS PIECE");
+    expect(sent.session.delegation.responses.instructions).toContain("YOU ARE THEIR GUIDE TO READING THIS PIECE");
+    expect(sent.session.delegation.responses.tools.map((tool) => tool.name)).not.toContain("search_library");
+  });
+
+  it("refuses a stored conversation whose kind takes no Live before journalling or creating", async () => {
+    /* A Tutorial is one per article (`targetOf`), so the stored id may not be
+       the one asked for: open the one the store kept. */
+    const turn = await asTestOwner(() =>
+      chatStore.begin(SLUG, {
+        threadId: "spya-lgaagt",
+        question: "Teach me this",
+        kind: "tutorial",
+      }),
+    );
+    const before = await journalled();
+    const out = await open(turn.thread.id);
+    expect(out.status).toBe(409);
+    expect(await journalled()).toBe(before);
+    expect(liveCreate.seen).toHaveLength(0);
   });
 
   it("adds nothing for the browser's first report of 15, and thirteen seconds for 28", async () => {
