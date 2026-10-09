@@ -180,7 +180,9 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
 - **`src/web/Excerpt.tsx` § `Excerpt`, with `src/web/excerpt-html.ts`** — the article's own words
   anywhere outside the prose (a quote, a passage, a selection, a snippet): drawn from the block's
   markup, so a formula is maths and an italic is italic. Never draw them as a bare string —
-  [maths.md § Excerpts outside the prose](maths.md#excerpts-outside-the-prose).
+  [maths.md § Excerpts outside the prose](maths.md#excerpts-outside-the-prose). A list that can
+  run to hundreds of rows passes `lazy`, so only the rows near the screen are formatted
+  (`src/web/when-seen.ts`).
 - **`src/web/IconButton.tsx` § `IconButton`** — an icon-only button that a `Tooltip` can wrap.
   `src/web/components/ui/` for shadcn's `Button` and `Toggle`, and `src/web/Toast.tsx` for a
   passing confirmation, and its `useGoesByItself` for anything else that should go after a few
