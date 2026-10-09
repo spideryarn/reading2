@@ -35,7 +35,7 @@ export function focusOn(id: string): (was: ItemFocus | null) => ItemFocus {
  * `setFocus(focusTaken(taken))`.
  */
 export function focusTaken(taken: ItemFocus): (now: ItemFocus | null) => ItemFocus | null {
-  return (now) => (now?.n === taken.n ? null : now);
+  return (now) => (now?.id === taken.id && now.n === taken.n ? null : now);
 }
 
 /**
@@ -93,9 +93,9 @@ export function useLandOnItem({
       land.current?.(row);
       /* Optional call: jsdom has no `scrollIntoView`. */
       row.scrollIntoView?.({ block: "nearest" });
-      break;
+      taken.current?.(focus);
+      return;
     }
-    taken.current?.(focus);
   }, [focus, ready, known, drawn, scope, attribute]);
 }
 

@@ -37,7 +37,7 @@
  * the day it was read. It is neither of the two scores and moves no order.
  */
 import { type ReactNode, useEffect, useRef } from "react";
-import type { ItemFocus } from "./item-focus.js";
+import { type ItemFocus, useLandOnItem } from "./item-focus.js";
 import { useTapReveal } from "./useTapReveal.js";
 import { ScoreBars } from "./ScoreBars.js";
 import { OrderGroup } from "./OrderGroup.js";
@@ -906,35 +906,27 @@ export function CitationsPanel({
      row and an empty head row holds the top of the band instead. */
   const orders = citations && all.length > 1 ? orderOptions(all) : [];
 
-  /* **Bring the focused work into view** — `Props.focus`. Three steps, each a
-     render apart, which is why this is an effect over what is drawn rather than
-     one call at the press: the list may still be loading (nothing is taken
-     then), the bar may be hiding the row, and the bar's new value comes back
-     through the URL on a later render. A work the ready list does not have is
-     dropped rather than waited for. The row is looked for inside this panel's
-     own list. `nearest`, so a row already on screen does not move. */
+  /* **Bring the focused work into view** — `Props.focus`. Lowering the bar is
+     Citations' one extra step; the shared focus effect waits for that later
+     render, then lands and consumes the request exactly as the other item
+     modes do (item-focus.ts). */
   const list = useRef<HTMLOListElement>(null);
+  const focusKnown = focus !== null && all.some((w) => w.id === focus.id);
   const focusDrawn = focus !== null && shown.some((w) => w.id === focus.id);
   useEffect(() => {
-    if (focus === null || !ready) return;
-    if (!all.some((w) => w.id === focus.id)) {
-      onFocusTaken?.(focus);
-      return;
-    }
+    if (focus === null || !ready || !focusKnown) return;
     const lowered = barToReveal(all, focus.id, chosenOrder, bar);
-    if (lowered !== null) {
-      onBar(lowered);
-      return;
-    }
-    if (!focusDrawn) return;
-    for (const item of list.current?.querySelectorAll("[data-citation-id]") ?? []) {
-      if (item.getAttribute("data-citation-id") !== focus.id) continue;
-      /* Optional call: jsdom has no `scrollIntoView`. */
-      item.scrollIntoView?.({ block: "nearest" });
-      break;
-    }
-    onFocusTaken?.(focus);
-  }, [focus, ready, all, chosenOrder, bar, focusDrawn, onBar, onFocusTaken]);
+    if (lowered !== null) onBar(lowered);
+  }, [focus, ready, focusKnown, all, chosenOrder, bar, onBar]);
+  useLandOnItem({
+    focus,
+    ready,
+    known: focusKnown,
+    drawn: focusDrawn,
+    scope: list,
+    attribute: "data-citation-id",
+    onTaken: onFocusTaken,
+  });
 
   /* What the band's (i) adds after the mode's own words: the two sentences
      about the whole list (plan 261001l moved them off the foot), the count, and

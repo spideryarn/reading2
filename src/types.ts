@@ -4207,7 +4207,8 @@ export type ChatAnchor =
  * not built: `chat_threads_origin_mode` in src/db/schema.ts lists it, and the
  * route accepts only the modes that are built (`ORIGIN_MODES`).
  *
- * **A glossary entry and a cited work since 2026-10-06**
+ * **A glossary entry and a cited work since 2026-10-06, and an idea since
+ * 2026-10-09**
  * (plan docs/plans/261006d-glossary-and-citations-ask-in-chat-with-origin.md, D1):
  * each has a durable id, so the id is its identity and the name beside it is
  * a snapshot. See `GlossaryOrigin`.
@@ -4260,9 +4261,9 @@ export type CitationsOrigin = { mode: "citations"; itemId: string; quote: string
 export type IdeasOrigin = { mode: "ideas"; itemId: string; quote: string };
 
 /**
- * The most the name snapshot of a glossary or citations origin may be. The
- * route refuses a longer one, so **every sender cuts with `originName`**: a
- * glossary name has no length limit of its own (plan 261006d's review, F1).
+ * The most the name snapshot of a glossary, citations or ideas origin may be.
+ * The route refuses a longer one, so **every sender cuts with `originName`**:
+ * a glossary name has no length limit of its own (plan 261006d's review, F1).
  */
 export const MAX_ORIGIN_NAME_CHARS = 300;
 
@@ -4325,9 +4326,9 @@ export function sameAnchor(stored: ChatAnchor | undefined, wanted: ChatAnchor): 
  * a different claim. **A claim and a lens are never the same**, whatever their
  * words, so the shapes are compared before any field is.
  *
- * **A glossary entry or a cited work is its id**: the name is a snapshot and
- * is not compared, so a reworded entry is still the same origin (plan
- * 261006d, D1).
+ * **A glossary entry, a cited work or an idea is its id**: the name is a
+ * snapshot and is not compared, so a reworded item is still the same origin
+ * (plans 261006d D1 and 261009i stage 3).
  */
 export function sameOrigin(a: ThreadOrigin, b: ThreadOrigin): boolean {
   switch (a.mode) {

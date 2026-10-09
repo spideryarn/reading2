@@ -86,9 +86,8 @@ export interface InvestigateDraft {
 
 /**
  * Why the last *Investigate* stopped, on the row it was pressed on, and what
- * was stored there when it was pressed — so the panel can tell "the previous
- * one is still shown" from "the new one was kept after all"
- * (src/web/CitationInvestigation.tsx § investigationViewOf).
+ * was stored there when it was pressed. No client surface reads this state
+ * since the button went in plan 261009i; it remains with the dormant verb.
  */
 export interface InvestigateFailure {
   id: string;
@@ -460,9 +459,9 @@ export function useCitationsRead(slug: string): CitationsRead {
    *   puts an investigation on the row; the words before it are a draft.
    * - **An `error` does not prove nothing was kept**: a save can succeed and
    *   the frame after it be lost. So a failure after the stream opened reads
-   *   the list again, while this run still holds admission, and the panel
-   *   draws a stored answer newer than the one at the press instead of the
-   *   failure (CitationInvestigation.tsx § investigationViewOf).
+   *   the list again, while this run still holds admission. Before the button
+   *   went in plan 261009i, the panel used that newer stored answer instead of
+   *   the failure; the re-read still preserves the stored result now.
    * - **Leaving the article stops the reading, not the investigation.** The
    *   server does not pass the socket's close to the model call, so it
    *   finishes and stores anyway. Another article only aborts this fetch.

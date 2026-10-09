@@ -405,6 +405,7 @@ let server: ChatThread[] = [];
 let nextAnswer = "";
 let minted = 0;
 let refuseNextSend = false;
+let citationsMayReply: Promise<void> | null = null;
 /** Ids the fake mints; the id alphabet has no `i`, `l`, `o` or `1`. */
 const mint = (): string => `spya-srv${"abcdefgh"[minted++ % 8]}22`;
 
@@ -515,6 +516,7 @@ beforeEach(() => {
   nextAnswer = "";
   minted = 0;
   refuseNextSend = false;
+  citationsMayReply = null;
   who.set(null);
   activation.resetActivations();
   resetExperimental();
@@ -529,6 +531,9 @@ beforeEach(() => {
       body = String(init?.body);
     }
     trace.push({ url, method, body });
+    if (url.startsWith("/api/citations/") && citationsMayReply !== null) {
+      return citationsMayReply.then(() => reply(url, method, body));
+    }
     return Promise.resolve(reply(url, method, body));
   });
   host = document.createElement("div");
@@ -1116,6 +1121,34 @@ describe("the way back from a chat to its item", () => {
     await act(async () => line.click());
     await until(() => param("mode") === "citations" && scrolled.length > 0, "Citations, on the row");
     expectLandedOn(workRow(WORK));
+    await act(async () => history.back());
+    await until(() => param("mode") === "chat" && param("thread") === CHAT, "one Back to the chat");
+  });
+
+  it("does not replay an unfinished focus when Citations is visited later", async () => {
+    let letCitationsReply!: () => void;
+    citationsMayReply = new Promise<void>((resolve) => {
+      letCitationsReply = resolve;
+    });
+    const line = await openChatFrom({ mode: "citations", itemId: WORK, quote: WORK_TITLE });
+    await act(async () => line.click());
+    await until(() => param("mode") === "citations", "Citations, while its list is loading");
+    expect(scrolled, "there is no row to land on yet").toEqual([]);
+
+    /* Leave before the row exists, then let the opening read finish while the
+       band is unmounted. The abandoned request belongs to that first visit. */
+    await act(async () => history.back());
+    await until(() => param("mode") === "chat" && param("thread") === CHAT, "the chat again");
+    await act(async () => {
+      letCitationsReply();
+      await citationsMayReply;
+    });
+    await settle();
+
+    history.pushState(null, "", `/read/${SLUG}?mode=citations`);
+    await act(async () => window.dispatchEvent(new PopStateEvent("popstate")));
+    await until(() => workRow(WORK) !== null, "a later ordinary visit to Citations");
+    expect(scrolled, "the abandoned focus is not replayed on the later visit").toEqual([]);
   });
 
   it("goes back to an idea: selected, and its row brought into view", async () => {
@@ -1191,4 +1224,3 @@ describe("the way back from a chat to its item", () => {
     expectLandedOn(ideaRow(IDEA));
   });
 });
-

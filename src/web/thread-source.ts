@@ -215,4 +215,3 @@ export function originBack(origin: ThreadOrigin): OriginBackWords {
   const what = quote === null ? "your angle" : `“${quote}”`;
   return { mode, modeLabel, quote, text: `Back to ${what} in ${modeLabel}` };
 }
-

@@ -1610,6 +1610,32 @@ export function Reader({
   const ideaFocusTaken = useCallback((taken: ItemFocus) => setIdeaFocus(focusTaken(taken)), []);
   const [claimFocus, setClaimFocus] = useState<ItemFocus | null>(null);
   const claimFocusTaken = useCallback((taken: ItemFocus) => setClaimFocus(focusTaken(taken)), []);
+  /**
+   * A focus belongs to one visit to its mode. If the reader leaves while the
+   * list is still loading (or while a filter is being lowered), its panel
+   * cannot hand the request back. Forget it here, or an ordinary later visit
+   * would unexpectedly jump to the old chat's item.
+   */
+  const focusModeWas = useRef(mode);
+  useEffect(() => {
+    const previous = focusModeWas.current;
+    focusModeWas.current = mode;
+    if (previous === mode) return;
+    switch (previous) {
+      case "glossary":
+        setTermFocus(null);
+        return;
+      case "citations":
+        setCiteFocus(null);
+        return;
+      case "ideas":
+        setIdeaFocus(null);
+        return;
+      case "debate":
+        setClaimFocus(null);
+        return;
+    }
+  }, [mode]);
   /* **Mode and the parameters that could hide the item, in one pushed
      entry**, so one Back returns to the chat (GPT Sol's F4 on plan 261009i).
      Each closed on a line of its own: tests/last-view.test.ts reads them. */
