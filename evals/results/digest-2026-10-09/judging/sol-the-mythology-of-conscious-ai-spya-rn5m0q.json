@@ -1,0 +1,210 @@
+{
+  "judge": "sol",
+  "slug": "the-mythology-of-conscious-ai-spya-rn5m0q",
+  "lineups": {
+    "summary-fuller": {
+      "scores": {
+        "V": {
+          "accuracy": 4,
+          "coverage": 4,
+          "nuance": 4,
+          "usefulness": 4,
+          "overall": 8,
+          "note": "Clear overview including the closing human-nature argument, but the four-argument paragraph lacks citations for life and simulation, especially spya-z6e85s and spya-y3s0uc."
+        },
+        "W": {
+          "accuracy": 4,
+          "coverage": 4,
+          "nuance": 5,
+          "usefulness": 4,
+          "overall": 8,
+          "note": "Preserves the conditional simulation argument at spya-bufgby, but its final paragraph cites neither the organoid concern nor the no-build recommendation at spya-eufate and spya-tqm2r8."
+        },
+        "X": {
+          "accuracy": 4,
+          "coverage": 3,
+          "nuance": 4,
+          "usefulness": 4,
+          "overall": 7,
+          "note": "Explains the central distinctions clearly, but omits the explicit recommendation against deliberately creating conscious AI at spya-tqm2r8."
+        },
+        "Y": {
+          "accuracy": 4,
+          "coverage": 5,
+          "nuance": 4,
+          "usefulness": 5,
+          "overall": 8,
+          "note": "Connects predictive processing to living regulation at spya-tqm5tt, though the opening 'largely a myth' framing is stronger than the qualified conclusion at spya-qekh87."
+        },
+        "Z": {
+          "accuracy": 4,
+          "coverage": 5,
+          "nuance": 5,
+          "usefulness": 5,
+          "overall": 9,
+          "note": "Balances the life argument, uncertainty and ethical consequences well, but its four-argument paragraph cites only introductory material rather than spya-z6e85s and spya-y3s0uc."
+        }
+      },
+      "rank": [
+        "Z",
+        ["V", "W", "Y"],
+        "X"
+      ],
+      "separates": "Z offers the best balance of explanatory connections, uncertainty and practical stakes. The middle group has different strengths but comparable limitations in framing or citation coverage; X leaves out a central practical recommendation."
+    },
+    "ideas": {
+      "scores": {
+        "V": {
+          "accuracy": 3,
+          "coverage": 2,
+          "nuance": 2,
+          "usefulness": 2,
+          "overall": 4,
+          "note": "Turns spya-tqm2r8 into a general premise that creating any being capable of suffering is wrong, which the essay neither states nor needs."
+        },
+        "W": {
+          "accuracy": 4,
+          "coverage": 5,
+          "nuance": 4,
+          "usefulness": 5,
+          "overall": 9,
+          "note": "Consistently explains why each proposition matters, including the predictive-processing bridge at spya-faupat; its moral-status premise slightly strengthens the qualification in spya-gdgtj5."
+        },
+        "X": {
+          "accuracy": 3,
+          "coverage": 4,
+          "nuance": 3,
+          "usefulness": 4,
+          "overall": 7,
+          "note": "Useful distinction between general and computational functionalism at spya-g3z609, but infers that greater intelligence cannot increase the likelihood of consciousness from spya-afd6zj, which only rejects automatic emergence."
+        },
+        "Y": {
+          "accuracy": 4,
+          "coverage": 5,
+          "nuance": 4,
+          "usefulness": 4,
+          "overall": 8,
+          "note": "Covers the main argumentative propositions with relevant citations, including spya-g3z609, but most entries do not explicitly explain why the reader needs the proposition."
+        },
+        "Z": {
+          "accuracy": 4,
+          "coverage": 2,
+          "nuance": 3,
+          "usefulness": 3,
+          "overall": 5,
+          "note": "Its replacement discussion draws on spya-xpydj4, but the list omits computational functionalism, the life hypothesis and the moral-status premise."
+        }
+      },
+      "rank": [
+        "W",
+        "Y",
+        "X",
+        "Z",
+        "V"
+      ],
+      "separates": "W best fulfils the specific task by explaining each proposition's role in the argument, while Y provides similarly broad coverage with fewer explicit connections. X overstates one important inference, and the shorter lists omit central premises; V also invents an unnecessarily sweeping ethical assumption."
+    },
+    "chat-q1": {
+      "scores": {
+        "V": {
+          "accuracy": 4,
+          "coverage": 4,
+          "nuance": 4,
+          "usefulness": 4,
+          "overall": 8,
+          "note": "Correctly separates ethical stakes from technical doubts at spya-tqm2r8, but presents the third argument's dependence on the second more categorically than spya-v8e0gy warrants."
+        },
+        "W": {
+          "accuracy": 5,
+          "coverage": 5,
+          "nuance": 5,
+          "usefulness": 5,
+          "overall": 9,
+          "note": "Accurately distinguishes the explicitly most important technical argument at spya-r8t03u from the independent ethical stakes at spya-tqm2r8."
+        },
+        "X": {
+          "accuracy": 3,
+          "coverage": 5,
+          "nuance": 4,
+          "usefulness": 4,
+          "overall": 7,
+          "note": "Misreads 'redundant' at spya-tqm2r8: the warning might be redundant if conscious AI is impossible, rather than redundancy making sense only if the arguments fail."
+        },
+        "Y": {
+          "accuracy": 3,
+          "coverage": 4,
+          "nuance": 3,
+          "usefulness": 4,
+          "overall": 6,
+          "note": "Says the article does not rank the arguments, overlooking the explicit 'first, and most important' designation at spya-r8t03u."
+        },
+        "Z": {
+          "accuracy": 5,
+          "coverage": 5,
+          "nuance": 5,
+          "usefulness": 5,
+          "overall": 9,
+          "note": "Explains the uneven dependencies and shows how the arguments locate possible risks without grounding the ethical prohibition themselves, using spya-eufate and spya-tqm2r8."
+        }
+      },
+      "rank": [
+        ["W", "Z"],
+        "V",
+        "X",
+        "Y"
+      ],
+      "separates": "W and Z clearly distinguish the weight of the technical arguments from the uncertainty and moral stakes behind the no-build conclusion. V is sound but less careful about dependencies; X and Y each introduce a concrete misreading."
+    },
+    "chat-q2": {
+      "scores": {
+        "V": {
+          "accuracy": 1,
+          "coverage": 1,
+          "nuance": 1,
+          "usefulness": 1,
+          "overall": 1,
+          "note": "Contains only an unexecuted search invocation and gives no answer about the distinction explained at spya-y3s0uc."
+        },
+        "W": {
+          "accuracy": 4,
+          "coverage": 4,
+          "nuance": 4,
+          "usefulness": 5,
+          "overall": 8,
+          "note": "Gives a direct, fair account of the conditional argument at spya-bufgby, but leaves out Seth's distinction between general and computational functionalism at spya-g3z609."
+        },
+        "X": {
+          "accuracy": 4,
+          "coverage": 5,
+          "nuance": 4,
+          "usefulness": 4,
+          "overall": 8,
+          "note": "Explains the functionalist objection and earlier arguments well, but its final claim that Seth does not argue for the relevant classification understates the life-based case at spya-tqm5tt."
+        },
+        "Y": {
+          "accuracy": 4,
+          "coverage": 5,
+          "nuance": 5,
+          "usefulness": 5,
+          "overall": 9,
+          "note": "Precisely identifies the computational exception at spya-ksbt2g and explains why the simulation point is conditional, while acknowledging the earlier arguments and approximation issue at spya-e5kxct."
+        },
+        "Z": {
+          "accuracy": 3,
+          "coverage": 4,
+          "nuance": 3,
+          "usefulness": 3,
+          "overall": 6,
+          "note": "Attributes an asserted rejection of a perfect causal copy to Seth, although spya-g3z609 allows broader functional organization and spya-bufgby specifically concerns computational simulations."
+        }
+      },
+      "rank": [
+        "Y",
+        ["W", "X"],
+        "Z",
+        "V"
+      ],
+      "separates": "Y most carefully explains what the simulation argument establishes and what remains disputed, while giving the earlier sections their due. W and X are useful with different omissions or overstatements; Z blurs a computational simulation with a perfect causal copy, and V supplies no answer."
+    }
+  }
+}

@@ -1,0 +1,326 @@
+{
+  "slug": "entropy-24-00930-spya-pywwkq",
+  "task": "ideas",
+  "arm": "E-haiku+digest",
+  "model": "anthropic/claude-haiku-5.5",
+  "answeredBy": "anthropic/claude-haiku-5.5",
+  "effortSent": null,
+  "effortRan": "medium",
+  "maxTokens": 44600,
+  "boundUsd": 0.168595625,
+  "ok": true,
+  "error": null,
+  "finishReason": "stop",
+  "raw": "{\"ideas\":[{\"name\":\"Information flow is not information processing\",\"provenance\":\"introduced\",\"statement\":\"Measures of how information moves between neurons, such as mutual information and transfer entropy, do not show how separate input streams combine in a target neuron; that combination is a different quantity needing its own analysis.\",\"occurrences\":[{\"blockId\":\"spya-s0db2g\",\"quote\":\"Information transfer captures the overall “flow” of information through the system; however, it is limited in its ability to reveal how different streams of information “interact” and how neurons produce novel or modified information from multiple sources [19].\",\"reasoning\":\"States that transfer measures miss how inputs interact, which is the gap PID is brought in to fill.\"},{\"blockId\":\"spya-wer4cd\",\"quote\":\"Information transfer (discussed above) tells us about how the past of either source Xi informs the future of Y, but to understand “processing”, we are interested in how the interaction between the two source variables’ past influences the target’s future in a way that is not reducible to either source considered individually.\",\"reasoning\":\"Separates transfer about each source from the joint interaction that counts as processing.\"}]},{\"name\":\"Synergy is information only the inputs jointly provide\",\"provenance\":\"introduced\",\"statement\":\"Synergy is the part of what several inputs tell you about a target that no single input, and no sum of single inputs, provides; a whole larger than the sum of its parts signals it.\",\"whyYouNeedIt\":\"The later empirical claims about synergy only make sense once the reader holds this definition, which the article gives through the whole-versus-parts comparison.\",\"occurrences\":[{\"blockId\":\"spya-e94ury\",\"quote\":\"If the left-hand side of Equation (4) (the “whole”) is greater than the right-hand side (the sum of the “parts”), then there is some information about Y that is disclosed by the joint state of all the neurons that is not disclosed by any individual parent.\",\"reasoning\":\"Defines synergy as joint information exceeding the sum of individual contributions.\"},{\"blockId\":\"spya-h5jzvm\",\"quote\":\"Syn(X₁, X₂;Y) is the information about Y that can only be learned by observing the joint states of X₁ and X₂ together.\",\"reasoning\":\"States the synergy term precisely as joint-only information.\"}]},{\"name\":\"Redundancy measure choice is unresolved and shapes results\",\"provenance\":\"assumed\",\"statement\":\"Because no single redundancy measure is agreed on, the split of information into redundant, unique and synergistic parts depends on which measure is chosen, so results from one measure are not automatically results about the system.\",\"whyYouNeedIt\":\"The article's empirical claims rest on the Imin measure, and it only matters that those findings could change under another measure if the reader already accepts that the decomposition is measure-dependent.\",\"occurrences\":[{\"blockId\":\"spya-bgsd4n\",\"quote\":\"Unfortunately, classical Shannon information theory provides no unique solution to any of these, and so considerable work has been devoted to developing formal measures of each.\",\"reasoning\":\"Shows the decomposition is underdetermined without a chosen measure, which the reader must accept for the choice to matter.\"},{\"blockId\":\"spya-rc76qn\",\"quote\":\"The majority of the studies discussed in this paper used the original Imin measure proposed in [1], although this measure has been criticized for unintuitive behavior [29,39].\",\"reasoning\":\"Notes the main results use one contested measure, so their sensitivity to that choice is an open question the reader must weigh.\"}]},{\"name\":\"Rich clubs concentrate information processing\",\"provenance\":\"introduced\",\"statement\":\"Densely interconnected high-traffic neurons (rich clubs) carry a disproportionate share of synergistic processing in cortical networks, so the best-connected core is where most computation happens.\",\"occurrences\":[{\"blockId\":\"spya-fud8q3\",\"quote\":\"Numerically, the triads inside the rich clubs had 2.7 times the amount of synergy as the triads not in the rich club (Figure 4B).\",\"reasoning\":\"Gives the per-triad synergy difference between rich-club and other triads.\"},{\"blockId\":\"spya-fud8q3\",\"quote\":\"Despite the fact that that less than 40% of the neurons were in the rich club, the rich club triads accounted for ∼88% of the network-wide synergy.\",\"reasoning\":\"Gives the network-wide share of synergy held by rich-club triads.\"}]},{\"name\":\"Synergy tracks feedforward and recurrent connectivity\",\"provenance\":\"introduced\",\"statement\":\"Synergy in a triad rises with the strength of the source-to-target (feedforward) connections and with connections among the source neurons (recurrent), while feedback from target to sources is not reliably linked to synergy.\",\"occurrences\":[{\"blockId\":\"spya-kqkb58\",\"quote\":\"the amount of synergy observed in a given triad was reliably about a quarter of the transfer entropy for that triad [2].\",\"reasoning\":\"Reports the synergy-to-transfer-entropy relation found in the authors' recordings.\"},{\"blockId\":\"spya-sd9fzd\",\"quote\":\"Using PID, we found that triads with more recurrent connections also had greater synergy [4].\",\"reasoning\":\"States the recurrent-connection result directly.\"},{\"blockId\":\"spya-sd9fzd\",\"quote\":\"Finally, feedback connections were not significantly related to synergy.\",\"reasoning\":\"Reports that feedback connections were not a significant predictor.\"}]},{\"name\":\"Synergy peaks at moderate input similarity\",\"provenance\":\"introduced\",\"statement\":\"Synergy rises as the activity of two converging inputs becomes more similar, but only up to a peak near 7% of the maximum possible mutual information; beyond that, redundancy takes over and synergy falls.\",\"occurrences\":[{\"blockId\":\"spya-ybmve2\",\"quote\":\"Interestingly, synergy only increased up to a point. The peak in synergy occurred when the mutual information was about 7% of the maximal value, regardless of the timescale.\",\"reasoning\":\"Gives the non-monotonic relation and the peak location.\"},{\"blockId\":\"spya-cs9fdy\",\"quote\":\"This suggests that as the similarity of the converging information grows past some point, it becomes redundant, and the total amount of synergistic output is suppressed.\",\"reasoning\":\"Explains the decline in synergy as redundancy growing past a point.\"}]},{\"name\":\"Synergy is a statistical dependence, not a mechanism\",\"provenance\":\"introduced\",\"statement\":\"PID shows that a neuron's output depends on its inputs jointly in ways beyond their sum, but it does not reveal the biological mechanism producing that pattern.\",\"occurrences\":[{\"blockId\":\"spya-spdx0y\",\"quote\":\"while it provides a powerful framework for recognizing statistical dependencies between neurons, it does not necessarily provide a mechanistic explanation for why particular neurons are synergy-dominated or redundancy-dominated.\",\"reasoning\":\"States directly that PID identifies dependencies but not mechanisms.\"}]},{\"name\":\"Information decomposition needs data that scale with the number of inputs\",\"provenance\":\"introduced\",\"statement\":\"The data needed to estimate joint probabilities grow exponentially with the number of interacting neurons, and the number of PID parts grows even faster, so complete decomposition of a neuron with many inputs is impractical.\",\"occurrences\":[{\"blockId\":\"spya-tz99zn\",\"quote\":\"For a system of binary elements such as spiking neurons, there are 2 k possible combinations of 0s and 1s.\",\"reasoning\":\"Gives the exponential growth in joint states with the number of elements.\"},{\"blockId\":\"spya-aby2dp\",\"quote\":\"The most significant is the explosive growth of the PI lattice. For a system with k parent neurons, the number of distinct PI atoms is given by the kth Dedekind number (minus two) [30].\",\"reasoning\":\"Shows the count of decomposition parts grows explosively with inputs.\"}]},{\"name\":\"Local PID gives time-resolved information dynamics\",\"provenance\":\"introduced\",\"statement\":\"Because information can be computed for each specific configuration of states rather than only as an average, PID can yield a moment-by-moment profile of redundant, unique and synergistic information.\",\"occurrences\":[{\"blockId\":\"spya-mczhkp\",\"quote\":\"In the context of neural recordings, the obvious application of this is the construction of a time-resolved, “informational time series”, where the particular redundant, synergistic, and unique modes of information sharing can be resolved for every moment in time.\",\"reasoning\":\"Describes the time-resolved application of local PID to neural recordings.\"}]}]}",
+  "parsed": [
+    {
+      "id": "spya-asj8m2",
+      "name": "Redundancy measure choice is unresolved and shapes results",
+      "provenance": "assumed",
+      "statement": "Because no single redundancy measure is agreed on, the split of information into redundant, unique and synergistic parts depends on which measure is chosen, so results from one measure are not automatically results about the system.",
+      "whyYouNeedIt": "The article's empirical claims rest on the Imin measure, and it only matters that those findings could change under another measure if the reader already accepts that the decomposition is measure-dependent.",
+      "occurrences": [
+        {
+          "blockId": "spya-bgsd4n",
+          "quote": "Unfortunately, classical Shannon information theory provides no unique solution to any of these, and so considerable work has been devoted to developing formal measures of each.",
+          "reasoning": "Shows the decomposition is underdetermined without a chosen measure, which the reader must accept for the choice to matter.",
+          "start": 257
+        },
+        {
+          "blockId": "spya-rc76qn",
+          "quote": "The majority of the studies discussed in this paper used the original Imin measure proposed in [1], although this measure has been criticized for unintuitive behavior [29,39].",
+          "reasoning": "Notes the main results use one contested measure, so their sensitivity to that choice is an open question the reader must weigh.",
+          "start": 758
+        }
+      ]
+    },
+    {
+      "id": "spya-fp973v",
+      "name": "Information flow is not information processing",
+      "provenance": "introduced",
+      "statement": "Measures of how information moves between neurons, such as mutual information and transfer entropy, do not show how separate input streams combine in a target neuron; that combination is a different quantity needing its own analysis.",
+      "occurrences": [
+        {
+          "blockId": "spya-s0db2g",
+          "quote": "Information transfer captures the overall “flow” of information through the system; however, it is limited in its ability to reveal how different streams of information “interact” and how neurons produce novel or modified information from multiple sources [19].",
+          "reasoning": "States that transfer measures miss how inputs interact, which is the gap PID is brought in to fill.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-wer4cd",
+          "quote": "Information transfer (discussed above) tells us about how the past of either source Xi informs the future of Y, but to understand “processing”, we are interested in how the interaction between the two source variables’ past influences the target’s future in a way that is not reducible to either source considered individually.",
+          "reasoning": "Separates transfer about each source from the joint interaction that counts as processing.",
+          "start": 0
+        }
+      ]
+    },
+    {
+      "id": "spya-qbcpfa",
+      "name": "Synergy is information only the inputs jointly provide",
+      "provenance": "introduced",
+      "statement": "Synergy is the part of what several inputs tell you about a target that no single input, and no sum of single inputs, provides; a whole larger than the sum of its parts signals it.",
+      "whyYouNeedIt": "The later empirical claims about synergy only make sense once the reader holds this definition, which the article gives through the whole-versus-parts comparison.",
+      "occurrences": [
+        {
+          "blockId": "spya-e94ury",
+          "quote": "If the left-hand side of Equation (4) (the “whole”) is greater than the right-hand side (the sum of the “parts”), then there is some information about Y that is disclosed by the joint state of all the neurons that is not disclosed by any individual parent.",
+          "reasoning": "Defines synergy as joint information exceeding the sum of individual contributions.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-h5jzvm",
+          "quote": "Syn(X₁, X₂;Y) is the information about Y that can only be learned by observing the joint states of X₁ and X₂ together.",
+          "reasoning": "States the synergy term precisely as joint-only information.",
+          "start": 177
+        }
+      ]
+    },
+    {
+      "id": "spya-vj2wym",
+      "name": "Synergy tracks feedforward and recurrent connectivity",
+      "provenance": "introduced",
+      "statement": "Synergy in a triad rises with the strength of the source-to-target (feedforward) connections and with connections among the source neurons (recurrent), while feedback from target to sources is not reliably linked to synergy.",
+      "occurrences": [
+        {
+          "blockId": "spya-kqkb58",
+          "quote": "the amount of synergy observed in a given triad was reliably about a quarter of the transfer entropy for that triad [2].",
+          "reasoning": "Reports the synergy-to-transfer-entropy relation found in the authors' recordings.",
+          "start": 458
+        },
+        {
+          "blockId": "spya-sd9fzd",
+          "quote": "Using PID, we found that triads with more recurrent connections also had greater synergy [4].",
+          "reasoning": "States the recurrent-connection result directly.",
+          "start": 0
+        },
+        {
+          "blockId": "spya-sd9fzd",
+          "quote": "Finally, feedback connections were not significantly related to synergy.",
+          "reasoning": "Reports that feedback connections were not a significant predictor.",
+          "start": 1152
+        }
+      ]
+    },
+    {
+      "id": "spya-t440d2",
+      "name": "Rich clubs concentrate information processing",
+      "provenance": "introduced",
+      "statement": "Densely interconnected high-traffic neurons (rich clubs) carry a disproportionate share of synergistic processing in cortical networks, so the best-connected core is where most computation happens.",
+      "occurrences": [
+        {
+          "blockId": "spya-fud8q3",
+          "quote": "Numerically, the triads inside the rich clubs had 2.7 times the amount of synergy as the triads not in the rich club (Figure 4B).",
+          "reasoning": "Gives the per-triad synergy difference between rich-club and other triads.",
+          "start": 209
+        },
+        {
+          "blockId": "spya-fud8q3",
+          "quote": "Despite the fact that that less than 40% of the neurons were in the rich club, the rich club triads accounted for ∼88% of the network-wide synergy.",
+          "reasoning": "Gives the network-wide share of synergy held by rich-club triads.",
+          "start": 524
+        }
+      ]
+    },
+    {
+      "id": "spya-p4z0jn",
+      "name": "Synergy peaks at moderate input similarity",
+      "provenance": "introduced",
+      "statement": "Synergy rises as the activity of two converging inputs becomes more similar, but only up to a peak near 7% of the maximum possible mutual information; beyond that, redundancy takes over and synergy falls.",
+      "occurrences": [
+        {
+          "blockId": "spya-ybmve2",
+          "quote": "Interestingly, synergy only increased up to a point. The peak in synergy occurred when the mutual information was about 7% of the maximal value, regardless of the timescale.",
+          "reasoning": "Gives the non-monotonic relation and the peak location.",
+          "start": 187
+        },
+        {
+          "blockId": "spya-cs9fdy",
+          "quote": "This suggests that as the similarity of the converging information grows past some point, it becomes redundant, and the total amount of synergistic output is suppressed.",
+          "reasoning": "Explains the decline in synergy as redundancy growing past a point.",
+          "start": 724
+        }
+      ]
+    },
+    {
+      "id": "spya-ewfj68",
+      "name": "Information decomposition needs data that scale with the number of inputs",
+      "provenance": "introduced",
+      "statement": "The data needed to estimate joint probabilities grow exponentially with the number of interacting neurons, and the number of PID parts grows even faster, so complete decomposition of a neuron with many inputs is impractical.",
+      "occurrences": [
+        {
+          "blockId": "spya-tz99zn",
+          "quote": "For a system of binary elements such as spiking neurons, there are 2 k possible combinations of 0s and 1s.",
+          "reasoning": "Gives the exponential growth in joint states with the number of elements.",
+          "start": 432
+        },
+        {
+          "blockId": "spya-aby2dp",
+          "quote": "The most significant is the explosive growth of the PI lattice. For a system with k parent neurons, the number of distinct PI atoms is given by the kth Dedekind number (minus two) [30].",
+          "reasoning": "Shows the count of decomposition parts grows explosively with inputs.",
+          "start": 116
+        }
+      ]
+    },
+    {
+      "id": "spya-y9dkzb",
+      "name": "Synergy is a statistical dependence, not a mechanism",
+      "provenance": "introduced",
+      "statement": "PID shows that a neuron's output depends on its inputs jointly in ways beyond their sum, but it does not reveal the biological mechanism producing that pattern.",
+      "occurrences": [
+        {
+          "blockId": "spya-spdx0y",
+          "quote": "while it provides a powerful framework for recognizing statistical dependencies between neurons, it does not necessarily provide a mechanistic explanation for why particular neurons are synergy-dominated or redundancy-dominated.",
+          "reasoning": "States directly that PID identifies dependencies but not mechanisms.",
+          "start": 80
+        }
+      ]
+    },
+    {
+      "id": "spya-bq8sk5",
+      "name": "Local PID gives time-resolved information dynamics",
+      "provenance": "introduced",
+      "statement": "Because information can be computed for each specific configuration of states rather than only as an average, PID can yield a moment-by-moment profile of redundant, unique and synergistic information.",
+      "occurrences": [
+        {
+          "blockId": "spya-mczhkp",
+          "quote": "In the context of neural recordings, the obvious application of this is the construction of a time-resolved, “informational time series”, where the particular redundant, synergistic, and unique modes of information sharing can be resolved for every moment in time.",
+          "reasoning": "Describes the time-resolved application of local PID to neural recordings.",
+          "start": 155
+        }
+      ]
+    }
+  ],
+  "validation": {
+    "offered": 9,
+    "kept": 9,
+    "dropped": {
+      "unknownIds": 0,
+      "unquoted": 0,
+      "truncated": 0,
+      "overCap": 0,
+      "malformed": 0,
+      "unargued": 0,
+      "unanchored": 0
+    }
+  },
+  "usage": {
+    "inputTokens": 30186,
+    "outputTokens": 2849,
+    "reasoningTokens": 0,
+    "cacheReadTokens": 19023,
+    "cacheWriteTokens": 0
+  },
+  "usd": 0.00273103,
+  "latencyMs": 12383,
+  "generationIds": [
+    "gen-1791504639-hbJrcAhcH3vshdKYnF5t"
+  ],
+  "upstreams": [
+    "Azure"
+  ],
+  "calls": 1,
+  "request": {
+    "model": "anthropic/claude-haiku-5.5",
+    "max_tokens": 44600,
+    "messages": [
+      {
+        "role": "system",
+        "content": [
+          {
+            "type": "text",
+            "text": "<article (articleWithIds, body evidence): 58535 chars, sha256 688b710ed398d233>",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          },
+          {
+            "type": "text",
+            "text": "<digest block: 17647 chars, sha256 b51df7801903d274>"
+          },
+          {
+            "type": "text",
+            "text": "You are naming the IDEAS a reader needs in order to get this article.\n\nWHAT AN IDEA IS\n\nAn idea is not a word. A word goes in the glossary. An idea is something you\nhave to HOLD IN YOUR HEAD — a claim, a frame, a way of carving something up —\nand a reader who does not have it will follow every sentence and still miss the\npiece.\n\nThe test: can you state it as a proposition? \"Attention\" is a word. \"Attention\nis a filter that runs before awareness, not after it\" is an idea.\n\nTHE TWO KINDS\n\nEvery idea is exactly one of these.\n\n\"assumed\" — the piece leans on it and never states it. This is what the reader\nhas to BRING. It is the harder and the more valuable half.\n\n\"introduced\" — the piece puts it forward. This is what the reader TAKES AWAY.\n\nTHE RULE THAT MATTERS MOST\n\nNever write an idea whose content is \"the article's section about X\". An idea is\nsomething the reader could carry OUT of this article and use on a different one.\nIf your statement only makes sense as a description of this piece, it is not an\nidea — it is a summary, and this is not the summary.\n\nWHERE AN IDEA OCCURS\n\nEvery idea must be anchored to real passages, and what you are looking for\ndepends on which kind it is.\n\nFor \"introduced\": quote the passages where the piece states or develops it.\n\nFor \"assumed\": the article does NOT state it. That is the definition. So do not\ngo looking for where it is said. Quote the passages that would STOP MAKING SENSE\nwithout it — the sentence that takes it for granted, the step in the argument\nthat only goes through if the reader already has this. That is where the reader\nneeds it and where they can check you.\n\nEach occurrence is:\n\n  \"blockId\"   — MUST be one of the ids listed in the article below. Never invent\n                one and never guess at one you half-remember. A wrong id points\n                the reader at the wrong paragraph, which is worse than nothing.\n  \"quote\"     — copied VERBATIM from that block, character for character. Not a\n                paraphrase, not tidied up. If you cannot copy it exactly, leave\n                the occurrence out.\n  \"reasoning\" — one short sentence naming the LOCAL move. For an \"assumed\" idea\n                this is the whole point: say what the passage claims, what\n                connection fails without the idea, and why THIS idea rather than\n                general background knowledge supplies it.\n\nTwo to five occurrences per idea. An idea you cannot anchor at all is not an\nidea about this article, and it will be thrown away — so do not offer it.\n\nWHAT DOES NOT BELONG\n\n- A truth so general that almost any article would need it. \"Institutions shape\n  behaviour\", \"correlation is not causation\", \"language is imprecise\". These\n  satisfy the words of the \"assumed\" rule and are worthless. Ask: would this be\n  on the list for a piece about something else entirely? Then leave it out.\n- A term. If the answer is a definition, it belongs in the glossary.\n- A theme. \"The dangers of automation\" is a topic, not a proposition. It cannot\n  be true or false, so it is not an idea.\n- YOUR reading of the piece. An interpretation that is COMPATIBLE with a passage\n  is not one the passage REQUIRES. If a reader could accept every sentence you\n  quoted and still reject your idea, it is not assumed — it is your opinion, and\n  attaching a real block id to it makes it look like evidence when it is not.\n- Anything the article states plainly somewhere else. That is \"introduced\", not\n  \"assumed\", however differently the piece words it.\n\nFOR EXAMPLE\n\nAn article argues that AI writing tools will damage how people think.\n\nBAD — name: \"The dangers of AI writing\", provenance: \"introduced\",\nstatement: \"The article argues that letting AI write will harm our ability to\nthink.\"\nThat is the piece's third section with a label on it. You could not take it\nanywhere. It is a summary.\n\nBAD — name: \"Technology changes society\", provenance: \"assumed\"\nTrue of almost every article ever written. It tells the reader nothing.\n\nGOOD — name: \"Writing is a test of thought, not a record of it\",\nprovenance: \"assumed\",\nstatement: \"Prose that hangs together is evidence that the thinking hung\ntogether; you cannot produce the first without having done the second.\",\nwhyYouNeedIt: \"The argument only goes through if writing is where thinking gets\nchecked rather than where finished thinking gets written down. The piece never\nargues for this — it starts from it.\"\nThat is a proposition, it is not stated in the piece, the piece collapses\nwithout it, and a reader can go to the quoted passages and test whether it is\nreally being assumed.\n\nWRITING\n\n- \"name\": a short proposition, three to ten words. Not a topic.\n- \"statement\": one or two plain sentences. The idea itself.\n- \"whyYouNeedIt\": one or two plain sentences on what stops making sense without\n  it. Required for \"assumed\". Optional for \"introduced\" — leave it out rather\n  than pad.\n- Do NOT describe the page in either field. \"The article argues\", \"This section\n  explains\", \"The author's point that\", \"Used to show\" — all of these describe\n  something the reader is looking at. Say the idea; they can see the article.\n  This applies to \"whyYouNeedIt\" as much as to \"statement\".\n- Plain prose. No Markdown, no bullets, no headings, no bold.\n\n\"analogy\" — OPTIONAL, and it is YOURS rather than the author's. A concrete\neveryday thing this idea works like. The reader will be told it is yours. Only\noffer one when you have one that genuinely helps: a strained analogy is worse\nthan none, and a field invites filling. LEAVE IT OUT rather than reach.\n\nNEVER put the article's OWN analogy here. If the piece already compares the\nthing to something, the reader has read that comparison — handing it back\nlabelled as yours is worse than leaving the field empty, because it credits you\nwith the author's thinking and tells the reader nothing new. Before you write\none, check that the comparison does not appear in the article. If the best\npicture of this idea really is the author's, that is a good sign about the\narticle and this field stays empty.\n\nOUTPUT\n\nJSON only, no prose, no code fence:\n\n{\"ideas\": [\n  {\n    \"name\": \"...\",\n    \"provenance\": \"assumed|introduced\",\n    \"statement\": \"...\",\n    \"whyYouNeedIt\": \"...\",\n    \"analogy\": \"...\",\n    \"occurrences\": [\n      {\"blockId\": \"spya-k3m9qt\", \"quote\": \"...\", \"reasoning\": \"...\"}\n    ]\n  }\n]}\n\n\"whyYouNeedIt\" and \"analogy\" may be omitted. Nothing else may be.\n\nFewer, better ideas beat a list padded to a number. If the piece genuinely has\ntwo, return two.\n\nPLAIN WORDS\n\nWrite for a curious reader who has not studied this field. If these\ninstructions, or the reader's own description, say who the reader is, write\nfor them instead: a specialist does not need their own field's terms explained.\n\nUse the commonest word that loses nothing. This changes the words, never the\nmeaning: plainer means equally specific. Never drop a number, a direction, a\ncomparison, a condition or a hedge (\"may\", \"in mice\", \"in this sample\") that\nthe claim depends on; a sentence that is plainer and less exact is worse. It\nnever changes which field a fact belongs in, which source may support it, or\nthe shape and length these instructions set for each field: where those rules\nare more specific, they win. Text you are told to copy exactly stays exactly as written.\n\nIn what you write to explain — an answer, a summary, a definition, a\nreason, feedback, a caption: say what it means here, in everyday words, first.\nKeep the article's own term where the reader will meet it again in the prose;\nit is their handhold. But a handhold is not an explanation: if this reader\nwould not know the term, say what it means where it first appears, as part of\nthe sentence. Never explain one hard word with another. A word is not plain\nbecause the article uses it.\n\nFor example, explaining a line in a medical paper:\nBAD: \"The trial was underpowered, so its null result is uninformative.\"\nGOOD: \"The trial was underpowered: too small to reliably catch an effect of the\nsize it was looking for, so finding no effect tells us little either way.\"\n\nBefore you finish, look at each word you wrote that this reader might not know.\nEither it is the article's term and you have said what it means, or change it.\n\nPlainer than the article, never further from it: never less exact, and never beyond what it says.\n\nPAPERWORK IS NOT THE PIECE\n\nAround a piece's content there may be paperwork: the title block (the title,\nsubtitle, byline, dates, DOI, keywords and the journal's header), the list of\nauthors and where they work, contact and correspondence details,\nacknowledgements and thanks, funding and grants, conflict-of-interest and other\ndisclosures, ethics approval, author contributions, data-availability\nstatements, the publisher's notices, and, at the end, the reference list or\nbibliography and any lists of backlinks or related links. Where it only\nidentifies the piece or records how it was produced, published and sourced, it\nis paperwork.\nChoose nothing from it alone: every question, answer, idea, quote, term,\nperson, organisation or date you choose must come from the piece's content.\nSomeone who appears only in the paperwork — a funder, an institution, a person\nthanked — is not part of the piece; someone the content also names is, for what\nthe content says.\n\nJudge it by what it does, not by its heading. If the piece uses any of these as\nevidence, reasoning, method or a limit on its findings — a funder's role that\nit says may bias the result, an ethics rule that shaped the study, an article\nABOUT research funding — it is content, and the usual rules apply.\n\nIF THE READER HAS DESCRIBED THEMSELVES\n\nSome requests carry a short description of who the reader is and what they are\nafter. When one is present:\n\n- It changes pitch and emphasis. It never changes what the article says.\n- Which things you spend words on is governed by it. Every sentence you write is\n  still about the article.\n- Assume the background they claim. Do not explain what they have told you they\n  already know — and do not perform explaining it in fewer words either.\n- Where the piece has nothing on what they are after, write what you would have\n  written anyway, and never say so out loud. A line spent telling the reader\n  this part is not for them is a line not spent on the part.\n- Never flatter them, never address them, and never mention the description.\n  They wrote it; they do not need it read back.\n- Never put any of it into a web search query, a tool argument, or anything else\n  that leaves this conversation. It is what a person told us about themselves.\n\nNEVER write anything of this shape:\n  \"As a cognitive scientist, you'll appreciate that…\"\n  \"Since you know your way around the literature, briefly: …\"\n  \"Given your background, I'll skip the basics.\"\nSkipping the basics is correct. Announcing that you are skipping them is not."
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": "Find up to 10 ideas. Fewer is fine.\n\n=== ITS SHAPE ===\n\nPART 1: Front Matter\n  The article introduces authors, affiliation, and an abstract summarizing partial information decomposition's role in revealing synergistic neural computation.\n\nPART 2: 1. Introduction\n  Understanding neural information processing has long been limited by data and analytic tools, but new recording technology and information decomposition methods now enable progress.\n\nPART 3: 2. Tracking Information in Neural Circuits\n  Information theory can quantify how neural activity reduces uncertainty, requiring choices about data type, elements, and timescale, and tools like mutual information and transfer entropy track flow.\n\nPART 4: 3. Information Processing in Neural Circuits\n  Information transfer alone cannot capture how neurons combine multiple inputs, motivating partial information decomposition to isolate genuine information processing.\n\nPART 5: 4. PID: Partial Information Decomposition\n  PID formally decomposes joint mutual information into redundant, unique, and synergistic components, generalizing from two-parent intuition to a lattice-based framework requiring a redundancy measure.\n\nPART 6: 5. PID in Action\n  Empirical PID studies of cortical cultures and behaving primates show synergy concentrates in rich clubs, recurrent connections, and correlated inputs, and shifts with task demands.\n\nPART 7: 6. Practical Considerations in PID\n  Applying PID requires matching redundancy functions to data type, ensuring adequate sample sizes, choosing among available software tools, and recognizing scalability and estimation limitations.\n\nPART 8: 7. Future Directions\n  Emerging extensions like local PID and multi-target integrated information decomposition promise time-resolved and multi-target analyses beyond classic PID.\n\nPART 9: 8. Summary and Closing Matter\n  Synergy demonstrates that neurons compute sensitively on input patterns rather than simple sums, with structure shaped by local network environment and behavioral state."
+      }
+    ],
+    "response_format": {
+      "type": "json_schema",
+      "json_schema": {
+        "name": "ideas",
+        "strict": true,
+        "schema": {
+          "type": "object",
+          "properties": {
+            "ideas": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "provenance": {
+                    "type": "string",
+                    "enum": [
+                      "assumed",
+                      "introduced"
+                    ]
+                  },
+                  "statement": {
+                    "type": "string"
+                  },
+                  "whyYouNeedIt": {
+                    "type": "string"
+                  },
+                  "analogy": {
+                    "type": "string"
+                  },
+                  "occurrences": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "blockId": {
+                          "type": "string"
+                        },
+                        "quote": {
+                          "type": "string"
+                        },
+                        "reasoning": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "blockId",
+                        "quote",
+                        "reasoning"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "name",
+                  "provenance",
+                  "statement",
+                  "occurrences"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "ideas"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  "at": "2026-10-09T00:10:51.652Z"
+}

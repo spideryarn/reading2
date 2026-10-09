@@ -1,0 +1,62 @@
+{"judge": "opus", "slug": "entropy-24-00930-spya-pywwkq", "lineups": {
+  "summary-fuller": {
+    "scores": {
+      "V": {"accuracy": 4, "coverage": 5, "nuance": 4, "usefulness": 4, "overall": 8,
+            "note": "Broadest coverage (MI vs TE, Imin, caveats, future directions); drops 'relative' from the redundancy rise in spya-t8fayf and calls the multi-phase task simply 'reach-and-grasp'."},
+      "W": {"accuracy": 4, "coverage": 3, "nuance": 3, "usefulness": 4, "overall": 7,
+            "note": "Clear and correct, but omits the unresolved redundancy-measure choice (spya-bgsd4n, spya-rc76qn) that conditions every number it reports."},
+      "X": {"accuracy": 5, "coverage": 4, "nuance": 5, "usefulness": 5, "overall": 9,
+            "note": "Keeps the key hedges: underdetermination and contested redundancy (spya-bgsd4n), 'redundancy rose relatively' (spya-t8fayf), multivariate TE in the macaque study (spya-wr7f6y)."},
+      "Y": {"accuracy": 4, "coverage": 4, "nuance": 3, "usefulness": 4, "overall": 7,
+            "note": "Reports '10% less' synergy for feedback without the article's hedge that feedback was not significantly related (spya-sd9fzd); no redundancy-measure caveat."},
+      "Z": {"accuracy": 5, "coverage": 4, "nuance": 4, "usefulness": 4, "overall": 8,
+            "note": "Accurate, includes Imin criticism (spya-rc76qn) and the clustering result (spya-wr7f6y); says nothing of finite-data estimation limits."}
+    },
+    "rank": ["X", ["V", "Z"], "W", "Y"],
+    "separates": "X keeps both the methodological caveat that synergy depends on a contested redundancy measure and the 'relative' qualifier on the movement-phase redundancy, in fewer words than V; W and Y lose the measure caveat."},
+  "ideas": {
+    "scores": {
+      "V": {"accuracy": 4, "coverage": 5, "nuance": 4, "usefulness": 4, "overall": 8,
+            "note": "Spots a genuine unstated assumption (stationarity of the pooled distribution, spya-j6s6fp/spya-wr7f6y); several items are findings rather than premises, and 'why you need it' appears on only two."},
+      "W": {"accuracy": 4, "coverage": 3, "nuance": 4, "usefulness": 3, "overall": 7,
+            "note": "Good lead item tying results to Imin (spya-rc76qn), but thin explanations, mostly restated findings, and no timescale or estimation-bias premise."},
+      "X": {"accuracy": 4, "coverage": 3, "nuance": 3, "usefulness": 3, "overall": 6,
+            "note": "Estimation bias (spya-qa7gt2) is a good pick, but items are terse, the lattice-explosion item rests on one vague quote (spya-aby2dp), and the mechanism caveat is missing."},
+      "Y": {"accuracy": 4, "coverage": 5, "nuance": 5, "usefulness": 5, "overall": 9,
+            "note": "Finds the less obvious load-bearing premises: bin size (spya-bdrp5d), triads as the unit of comparison (spya-sw5ukx), and the slide from statistical synergy to 'processed more information' (spya-fud8q3 vs spya-spdx0y)."},
+      "Z": {"accuracy": 4, "coverage": 5, "nuance": 4, "usefulness": 4, "overall": 8,
+            "note": "Names the truly assumed premise that information means uncertainty reduction (spya-t4pc0p); the empirical item 8 is a bundle of findings rather than a premise."}
+    },
+    "rank": ["Y", ["V", "Z"], "W", "X"],
+    "separates": "Y surfaces premises a reader genuinely needs and might miss (timescale, triad unit, synergy-as-processing gap) and says why each matters; the others lean more on restating results as 'ideas'."},
+  "chat-q1": {
+    "scores": {
+      "V": {"accuracy": 4, "coverage": 5, "nuance": 4, "usefulness": 4, "overall": 8,
+            "note": "Covers motivation and every section-5 finding, noting TE builds the network (spya-sw5ukx); the connection is listed more than argued."},
+      "W": {"accuracy": 4, "coverage": 4, "nuance": 5, "usefulness": 5, "overall": 9,
+            "note": "Argues the tension well: synergy tracking TE (spya-kqkb58) means flow largely predicts processing, and PID earns its keep in the departures (spya-cs9fdy); 'one source at a time' slightly overstates."},
+      "X": {"accuracy": 5, "coverage": 3, "nuance": 4, "usefulness": 4, "overall": 8,
+            "note": "Sharp on the timescale divergence (spya-cs9fdy) and the bivariate-TE caveat (spya-j4cy9j), but skips the rich-club and recurrent findings."},
+      "Y": {"accuracy": 4, "coverage": 3, "nuance": 4, "usefulness": 3, "overall": 6,
+            "note": "Notices synergy is part of the joint information so not independent of flow, but misses the timescale result (spya-cs9fdy), the clearest place flow and processing diverge."},
+      "Z": {"accuracy": 5, "coverage": 5, "nuance": 5, "usefulness": 5, "overall": 9,
+            "note": "Says the correlation with TE cuts both ways and that 'computation' is a definition adopted (spya-e94ury, spya-spdx0y), not shown; uses the timescale result as the decisive case."}
+    },
+    "rank": [["Z", "W"], "V", "X", "Y"],
+    "separates": "Z and W actually answer the 'how does it connect' half critically: the strong synergy-TE correlation undercuts the motivation, and only the divergences (timescale, task) show PID adding something."},
+  "chat-q2": {
+    "scores": {
+      "V": {"accuracy": 4, "coverage": 5, "nuance": 5, "usefulness": 5, "overall": 9,
+            "note": "Defines synergy via underdetermination (spya-bgsd4n), notes the macaque replication but not of recurrence (spya-wr7f6y), and reasons on direction of measure effects; the 'only three variables' remark understates the TE embedding."},
+      "W": {"accuracy": 1, "coverage": 1, "nuance": 1, "usefulness": 1, "overall": 1,
+            "note": "Failed: cut off at max_tokens, no answer."},
+      "X": {"accuracy": 4, "coverage": 4, "nuance": 4, "usefulness": 4, "overall": 8,
+            "note": "Good inference that rich clubs are defined by flow and synergy tracks TE (spya-bftp48, spya-kqkb58), and that recurrence is modest; omits the macaque replication (spya-wr7f6y)."},
+      "Y": {"accuracy": 3, "coverage": 3, "nuance": 3, "usefulness": 3, "overall": 6,
+            "note": "Says it has not checked replication when the article itself reports one in macaques (spya-wr7f6y); calls the recurrent result only a regression though spya-sd9fzd also compares counts."},
+      "Z": {"accuracy": 5, "coverage": 5, "nuance": 5, "usefulness": 5, "overall": 9,
+            "note": "Clear on why the measure changes synergy itself (spya-bgsd4n), cites the replication and its limits, and links measure sensitivity to correlated rich-club activity (spya-cs9fdy)."}
+    },
+    "rank": [["V", "Z"], "X", "Y", "W"],
+    "separates": "V and Z combine a precise definition, the article's own replication evidence and its limits, and reasoned inferences about how the redundancy measure and data size would move the result; X misses the replication and Y wrongly implies none is reported."}
+}}

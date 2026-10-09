@@ -27,9 +27,10 @@ import {
   openRouterDecisions,
   openRouterTranscription,
   pathFor,
+  wireEffort,
   UnreadableAnswer,
 } from "../src/ai-call.js";
-import { AI_JOB_WIRE } from "../src/models.js";
+import { AI_JOB_WIRE, modelFor } from "../src/models.js";
 import { collectSpend } from "../src/ai-spend.js";
 import type { StreamEnd } from "../src/openrouter-stream.js";
 
@@ -1842,5 +1843,27 @@ describe("the decisions wire", () => {
     await expect(
       collectSpend(() => openRouterDecisions("search-quick", ASK)),
     ).rejects.toThrowError(UnreadableAnswer);
+  });
+});
+
+describe("quiz-verdict's reasoning setting", () => {
+  it("sends none through classifyVerdict's real gateway request", async () => {
+    const sent = stubTransport(() => new Response(JSON.stringify({
+      model: "openai/gpt-6-luna", choices: [{ message: { content: "right" }, finish_reason: "stop" }],
+      usage: { prompt_tokens: 310, completion_tokens: 1, cost: 0.00004 },
+    }), { status: 200 }));
+    const { classifyVerdict } = await import("../src/quiz-verdict.js");
+    const { result } = await collectSpend(() => classifyVerdict({
+      question: "What carries confidence?", answer: "The wash channel", mark: "Right.",
+    }));
+    expect(result).toBe("right");
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.body).toMatchObject({ model: "openai/gpt-6-luna", max_tokens: 8, reasoning: { effort: "none" } });
+  });
+  it("asks for no reasoning, so a one-word answer fits its eight tokens", () => {
+    /* Plan 261009a: on GPT-6 Luna, which reasons by default, the provider
+       default spent all 8 tokens thinking and returned `finish_reason: length`
+       with no word — 2 of 3 live verdicts lost. GPT-5.6 Luna had not needed it. */
+    expect(wireEffort("quiz-verdict", modelFor("quiz-verdict", "standard"))).toBe("none");
   });
 });

@@ -344,7 +344,9 @@ describe("suggestCommands", () => {
     expect(sent).toHaveLength(1);
     expect(sent[0]?.url).toBe("https://openrouter.ai/api/v1/chat/completions");
     expect(sent[0]?.body).toMatchObject({
-      model: "openai/gpt-5.6-luna",
+      /* GPT-6 Luna since 2026-10-09: the eval re-run on it passed every check
+         GPT-5.6 Luna did (evals/command-suggest/results/261009/, plan 261009a). */
+      model: "openai/gpt-6-luna",
       max_completion_tokens: COMMAND_SUGGEST_MAX_TOKENS,
       reasoning: { effort: "none" },
       provider: { require_parameters: true },

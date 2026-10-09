@@ -149,9 +149,8 @@ export const US_INFERENCE_MULTIPLIER = 1.1;
 
 /**
  * The multipliers Anthropic applies to the input price. Written as constants
- * rather than baked into the table so that the table's rows cannot disagree
- * with each other about what a cache read costs — which is the mistake that
- * would be invisible, since every row would still look plausible.
+ * rather than baked into each row. Sonnet 5.5's cache reads are the exception:
+ * 0.05× input, explicitly overridden in its row (plan 261009a code review).
  */
 const CACHE_WRITE_5M = 1.25;
 const CACHE_WRITE_1H = 2.0;
@@ -171,8 +170,9 @@ function anthropicPrice(input: number, output: number): ModelPrice {
 /**
  * **Every model this app can reach through the Anthropic SDK.**
  *
- * Three rows, because src/models.ts is a closed list: `CAPABLE_MODEL` is the
- * only one any stage names, and the other two are here because
+ * Four rows, because src/models.ts is a closed list: `CAPABLE_MODEL` is the
+ * only one any stage names (Sonnet 5.5; Sonnet 5 until 2026-10-09, kept so
+ * its rows still price), and the other two are here because
  * `SPIDERYARN_*_MODEL` can point a stage at them for a one-off comparison and a
  * run whose cost silently reads zero would be a poor way to find that out.
  *
@@ -189,6 +189,7 @@ function anthropicPrice(input: number, output: number): ModelPrice {
  * except by `crossCheckOpenRouter`, which says in its name that it is doing so.
  */
 export const ANTHROPIC_PRICES: Readonly<Record<string, readonly PriceRow[]>> = {
+  "claude-sonnet-5-5": [{ from: "1970-01-01", price: { ...anthropicPrice(2.0, 10.0), cacheRead: 0.10 } }],
   "claude-sonnet-5": [{ from: "1970-01-01", price: anthropicPrice(2.0, 10.0) }],
   "claude-opus-5": [{ from: "1970-01-01", price: anthropicPrice(5.0, 25.0) }],
   "claude-haiku-4-5": [{ from: "1970-01-01", price: anthropicPrice(1.0, 5.0) }],

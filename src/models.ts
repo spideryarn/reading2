@@ -28,11 +28,11 @@
  *
  * | Constant | Reached through | The name |
  * |---|---|---|
- * | `CAPABLE_MODEL` | Anthropic's own spelling — sent by nothing, kept for reference | `claude-sonnet-5` |
- * | `CAPABLE_MODEL_OPENROUTER` | OpenRouter — the three request-path calls | `anthropic/claude-sonnet-5` |
- * | `QUICK_MODEL_OPENROUTER` | OpenRouter, and **only** OpenRouter | `openai/gpt-5.6-luna` |
+ * | `CAPABLE_MODEL` | Anthropic's own spelling — sent by nothing, kept for reference | `claude-sonnet-5-5` |
+ * | `CAPABLE_MODEL_OPENROUTER` | OpenRouter — the three request-path calls | `anthropic/claude-sonnet-5.5` |
+ * | `QUICK_MODEL_OPENROUTER` | OpenRouter, and **only** OpenRouter | `openai/gpt-6-luna` |
  *
- * `claude-sonnet-5` is the current Sonnet, and that dateless string is the whole
+ * `claude-sonnet-5-5` is the current Sonnet, and that dateless string is the whole
  * id — a pinned model, not an alias for one. So there is no `-latest` to ask for
  * and nothing to append: a date suffix on the end of it is a model id that does
  * not exist. (The two OpenRouter slugs were checked against OpenRouter's live
@@ -197,7 +197,13 @@ import {
  * parameter that *would* have broken is `budget_tokens`, which Sonnet 5 rejects
  * with a 400 — this app has never used it.
  */
-export const CAPABLE_MODEL = "claude-sonnet-5";
+export const CAPABLE_MODEL = "claude-sonnet-5-5";
+/* ^ Sonnet 5 until 2026-10-09 (plan 261009a: always the latest of each family).
+   Sonnet 5.5 is the same price and rejects what Opus 5.5 rejects — disabled
+   thinking, sampling parameters, a forced `tool_choice` — none of which the
+   capable tier sends, which is why High-powered AI already ran every capable
+   task on Opus 5.5 through these same seams. Sonnet 5's two spellings stay
+   in `generationKey` below, so nothing it wrote reads as stale. */
 /* ^ **Nothing puts this on the wire any more — and it is still load-bearing.**
    Since 2026-08-27 the seven stages send `CAPABLE_MODEL_OPENROUTER`, which is
    literally this string with a vendor prefix. But this one stayed, because the
@@ -225,14 +231,15 @@ export const CAPABLE_MODEL = "claude-sonnet-5";
  * this project's `.env.local` carries and because two of those three want the
  * `openrouter:web_search` server tool. See docs/project/setup-dev.md § Secrets.
  */
-export const CAPABLE_MODEL_OPENROUTER = "anthropic/claude-sonnet-5";
+export const CAPABLE_MODEL_OPENROUTER = "anthropic/claude-sonnet-5.5";
 
 /**
  * **The quick tier.** OpenRouter only — there is deliberately no Anthropic-SDK
  * spelling of this one, because there cannot be; see the header.
  *
- * $0.20 in / $1.20 out per million tokens against Sonnet 5's $2.00 / $10.00, so
- * roughly a tenth the price, with a 1.05M context window and `reasoning_effort`
+ * $0.10 in / $0.50 out per million tokens (GPT-6 Luna; GPT-5.6 Luna until
+ * 2026-10-09, at $0.20 / $1.20) against Sonnet 5.5's $2.00 / $10.00, so
+ * roughly a twentieth the price, with a 1.05M context window and `reasoning_effort`
  * and structured outputs both supported. What it does not take is `stop` or
  * `verbosity`, neither of which this app sends.
  *
@@ -243,7 +250,7 @@ export const CAPABLE_MODEL_OPENROUTER = "anthropic/claude-sonnet-5";
  * a reason to move one; moving one still needs an eval under `evals/` that says
  * what was gained and what was lost.
  */
-export const QUICK_MODEL_OPENROUTER = "openai/gpt-5.6-luna";
+export const QUICK_MODEL_OPENROUTER = "openai/gpt-6-luna";
 
 /**
  * **The high-power model — the capable tier's stronger model.** Most tasks use
@@ -254,7 +261,7 @@ export const QUICK_MODEL_OPENROUTER = "openai/gpt-5.6-luna";
  * each other, for the reason § Do not derive one spelling from the other gives
  * — and this pair is the proof of it: dashes in the name, a dot in the slug.
  *
- * Opus 5.5, at $4 / $20 per million tokens against Sonnet 5's $2 / $10 —
+ * Opus 5.5, at $4 / $20 per million tokens against Sonnet 5's (and 5.5's) $2 / $10 —
  * exactly twice, which is what Greg asked for ("broadly double"). Checked for
  * request compatibility before it was chosen: it rejects `thinking: {type:
  * "disabled"}` and a forced `tool_choice`, and `src/` sends neither; and its
@@ -296,6 +303,10 @@ export function generatorFor(power: ModelPower): string {
  */
 export const CAPABLE_GENERATION_KEY = "anthropic/claude-sonnet-5";
 
+/** Sonnet 5's two spellings, the capable model until 2026-10-09: one generation with its successor. */
+const PREVIOUS_CAPABLE_MODEL = "claude-sonnet-5";
+const PREVIOUS_CAPABLE_MODEL_OPENROUTER = "anthropic/claude-sonnet-5";
+
 /**
  * **Which generation of work a model id belongs to, for freshness only.**
  *
@@ -323,6 +334,11 @@ export function generationKey(modelId: string): string {
   switch (modelId) {
     case CAPABLE_MODEL:
     case CAPABLE_MODEL_OPENROUTER:
+    /* Sonnet 5, the capable model until 2026-10-09. Its work is not stale
+       for being Sonnet 5's: re-billing the corpus to rewrite it on the next
+       Sonnet would be the "large bill" the header warns about (plan 261009a). */
+    case PREVIOUS_CAPABLE_MODEL:
+    case PREVIOUS_CAPABLE_MODEL_OPENROUTER:
     case HIGH_POWER_MODEL:
     case HIGH_POWER_MODEL_OPENROUTER:
       return CAPABLE_GENERATION_KEY;
@@ -380,8 +396,12 @@ export function articlePower(highPowerSince: string | Date | null | undefined): 
  * reaches a model only through `PdfReader`. That seam exists because the
  * evidence behind this string is two documents and one comparison, which is
  * enough to start with and not enough to build around.
+ *
+ * Measured on GPT-5.6 Luna; moved to GPT-6 Luna, the same family, on
+ * 2026-10-09 (plan 261009a), after all three fixture types were transcribed
+ * and one scanned page was compared by eye.
  */
-export const PDF_READER_MODEL = "openai/gpt-5.6-luna";
+export const PDF_READER_MODEL = "openai/gpt-6-luna";
 
 /**
  * **What finds a figure the PDF itself could not place** — the model shown a
@@ -400,6 +420,13 @@ export const PDF_READER_MODEL = "openai/gpt-5.6-luna";
  * It is a *preview* model; if OpenRouter retires the id, every call fails and
  * every figure it would have found stays caption-only — the state it was
  * already in.
+ *
+ * **Not moved to Gemini 3.8 Flash on 2026-10-09**, though "always the latest
+ * of each family" is the rule (plan 261009a): 3.8 reasons on every call, so
+ * 11 calls took ~5.5 s and ~$0.0045 each against ~1.8 s and ~$0.0015, with
+ * 7 right, 3 correctly refused, 1 missed and none wrong — no gain to pay for.
+ * evals/results/latest-models-smoke-2026-10-09.md. Worth retrying with its
+ * reasoning off.
  */
 export const PDF_FIGURE_LOCATOR_MODEL = "google/gemini-3-flash-preview";
 
@@ -535,7 +562,8 @@ export const COMMAND_PICK_MODEL = "typesafe/jev-1.13";
  * docs/investigations/261007b-help-chat-model-and-refusals.md: every
  * off-topic and jailbreak question declined, answers grounded in the pages,
  * about a second to the first word, and a prefix cache that reads across
- * different questions ($0.0068 cold, $0.0006 warm). DeepSeek answered as
+ * different questions ($0.0068 cold, $0.0006 warm) — on GPT-5.6 Luna; GPT-6
+ * Luna since 2026-10-09 (plan 261009a, re-run in its write-up). DeepSeek answered as
  * well but three to four times slower, on whichever small upstream OpenRouter
  * picked, with a cache that hit about half the time. Its own literal, though the
  * string is currently the same as `QUICK_MODEL_OPENROUTER`'s, so moving one job
@@ -544,7 +572,7 @@ export const COMMAND_PICK_MODEL = "typesafe/jev-1.13";
  * measured. Moving it to a non-OpenAI model is also a decision about caching:
  * `help-chat` in src/ai-call.ts says why.
  */
-export const HELP_CHAT_MODEL = "openai/gpt-5.6-luna";
+export const HELP_CHAT_MODEL = "openai/gpt-6-luna";
 
 /**
  * **What turns a dictation into text.** Not on a tier, for the same reason the
@@ -1687,6 +1715,23 @@ export type ResolvedModel = {
  * modules call `loadEnvLocal()` inside a function rather than at import, so an
  * id captured at module load can be captured before `.env.local` has been read.
  */
+/**
+ * **A task held on a model its tier has moved past** — the exception to
+ * "always the latest of each family" (docs/project/setup-dev.md § Which model
+ * everything uses), and only where a measurement says the newer one is worse
+ * at this job. Each entry says what was measured; an entry without that is a
+ * task quietly left behind.
+ *
+ * `simple-check`, Summary's fidelity guard, stays on GPT-5.6 Luna (plan
+ * 261009a): re-run on GPT-6 Luna over the 261001h labels it caught the same
+ * 21 of 26 faults but raised 44 new alarms on faithful paragraphs — none of
+ * them a real fault on a hand read — and every alarm makes Opus rewrite that
+ * level. evals/results/fidelity-guard-luna6-new-alarms-2026-10-09.md.
+ */
+const PINNED_MODEL: Partial<Record<Task, string>> = {
+  "simple-check": "openai/gpt-5.6-luna",
+};
+
 export function resolveModel(task: Task, power: ModelPower): ResolvedModel {
   const wire = TASK_WIRE[task];
   const envVar = MODEL_ENV_VAR[task];
@@ -1694,8 +1739,10 @@ export function resolveModel(task: Task, power: ModelPower): ResolvedModel {
   /* **An override still wins at high power.** It is somebody running a
      comparison on purpose, and the comparison is what they asked for. */
   if (override) return { id: override, provider: GATEWAY, wire, source: "override" };
+  const pinned = PINNED_MODEL[task];
+  if (pinned !== undefined) return { id: pinned, provider: GATEWAY, wire, source: "default" };
   /* One spelling now, for every task on either wire: OpenRouter's. The Skin
-     wants `anthropic/claude-sonnet-5` exactly as chat/completions does. */
+     wants `anthropic/claude-sonnet-5.5` exactly as chat/completions does. */
   return {
     id: openRouterIdForTier(TASK_TIER[task], power),
     provider: GATEWAY,

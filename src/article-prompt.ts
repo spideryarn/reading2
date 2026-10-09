@@ -266,9 +266,27 @@ export const CACHE_FLOOR_TOKENS = 1_024;
 export const HIGH_POWER_CACHE_FLOOR_TOKENS = 512;
 
 /**
+ * **The models whose floor is 512 rather than 1,024**: the high-power model,
+ * by `isHighPowerModel`, and Sonnet 5.5, the capable model since 2026-10-09
+ * (plan 261009a) — Anthropic's figure. Literals, both spellings, for
+ * src/models.ts § Do not derive one spelling from the other; this file does
+ * not import that one.
+ */
+const FLOOR_512_MODELS: ReadonlySet<string> = new Set(["claude-sonnet-5-5", "anthropic/claude-sonnet-5.5"]);
+
+/**
+ * The minimum cacheable prefix, in tokens, for the model a call is going to.
+ * A model not listed gets the higher floor, so the alarm below errs towards
+ * "too short" for a model nobody has looked up.
+ */
+export function cacheFloorFor(model: string): number {
+  return isHighPowerModel(model) || FLOOR_512_MODELS.has(model) ? HIGH_POWER_CACHE_FLOOR_TOKENS : CACHE_FLOOR_TOKENS;
+}
+
+/**
  * True when marking this block would silently buy nothing — **for the model the
- * call is going to**, because the floor is the model's and the two capable
- * models' floors differ by half. Asking with Sonnet's would log a false "too
+ * call is going to**, because the floor is the model's: 512 on Sonnet 5.5 and
+ * Opus 5.5, 1,024 on Sonnet 5 (`cacheFloorFor`). Asking with Sonnet's would log a false "too
  * short" on every 512–1,023-token prefix a high-powered article sends, which is
  * the costly direction to be wrong in (see `cachedText`).
  *
@@ -279,8 +297,7 @@ export const HIGH_POWER_CACHE_FLOOR_TOKENS = 512;
  * look exactly like a cache that has stopped working.
  */
 export function underCacheFloor(text: string, model: string): boolean {
-  const floor = isHighPowerModel(model) ? HIGH_POWER_CACHE_FLOOR_TOKENS : CACHE_FLOOR_TOKENS;
-  return estimateTokens(text) < floor;
+  return estimateTokens(text) < cacheFloorFor(model);
 }
 
 /**

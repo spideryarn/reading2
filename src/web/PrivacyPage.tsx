@@ -494,10 +494,13 @@ export function PrivacyPage() {
             can send — plus the two live-conversation models are somewhere in
             it. Add a model, and that test tells you this page is out of date. */}
         <p className="tw:text-xs tw:text-ink-faint">
-          The default models, as of the date above: <code>claude-sonnet-5</code> for most of the reading
+          The default models, as of the date above: <code>claude-sonnet-5-5</code> (<code>claude-sonnet-5</code>{" "}
+          until 9 October 2026) for most of the reading
           aids, chat and search, and for the guide in Chat, which is also told roughly how many other
           articles you have opened here (none, a few, or many), and Opus or a similar frontier model in its place on an article
-          switched to High-powered AI; <code>gpt-5.6-luna</code> for quick jobs and for reading PDFs,
+          switched to High-powered AI; <code>gpt-6-luna</code> (<code>gpt-5.6-luna</code> until 9 October 2026, and
+          still to check a summary’s paragraphs against the passages they cite)
+          for quick jobs and for reading PDFs,
           and, when you ask the command bar to suggest what to do with an article, to write that short
           list, for which it is shown your profile and your reason for reading the article, with our
           list of commands, and to answer a question you ask in Help’s <em>Ask about Spideryarn</em>{" "}
@@ -513,7 +516,7 @@ export function PrivacyPage() {
           shown the article’s passages and the words you searched for, and to work out which command
           you meant when you type or say a sentence into the command bar, for which it is shown that
           sentence and our list of commands (when the command needs words from your sentence, such
-          as what to search for, <code>gpt-5.6-luna</code> is shown the sentence too, to pick them
+          as what to search for, <code>gpt-6-luna</code> is shown the sentence too, to pick them
           out);{" "}
           <code>gpt-transcribe</code> for dictation;{" "}
           <code>deepseek-v4.1-flash</code> to read the title, authors, abstract and DOI off the first

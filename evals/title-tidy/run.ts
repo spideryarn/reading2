@@ -54,9 +54,12 @@ if (!Number.isInteger(RUNS) || RUNS < 1 || !Number.isInteger(CONCURRENCY) || CON
 }
 
 const LUNA = "openai/gpt-6-luna";
+const HAIKU = "anthropic/claude-haiku-5.5";
 const ARMS: Record<string, { model: string; opts: ModelTidyOptions }> = {
   deepseek: { model: TITLE_TIDY_MODEL, opts: {} },
   luna: { model: LUNA, opts: { model: LUNA, gateway: (_job, body, o) => openRouterJson("eval", body, o) } },
+  luna6: { model: LUNA, opts: { model: LUNA, gateway: (_job, body, o) => openRouterJson("eval", body, o) } },
+  haiku: { model: HAIKU, opts: { model: HAIKU, gateway: (_job, body, o) => openRouterJson("eval", body, o) } },
 };
 
 for (const arm of ARM_NAMES) if (!Object.hasOwn(ARMS, arm)) throw new Error(`Unknown title-tidy arm: ${arm}`);

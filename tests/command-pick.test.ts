@@ -374,9 +374,11 @@ describe("pickCommand", () => {
     expect(sent[1]?.url).toBe("https://openrouter.ai/api/v1/chat/completions");
     /* The whole body: evals/command-pick/chat.ts § `chatAsk` with the `luna`
        arm and `argumentMessages`. A key more or less is a different request
-       from the one the 48-of-48 was measured on. */
+       from the one the 48-of-48 was measured on. GPT-6 Luna since 2026-10-09,
+       re-measured on the same stored picks: 47 of 47, as GPT-5.6 Luna
+       (evals/command-pick/results/261009/, plan 261009a). */
     expect(sent[1]?.body).toEqual({
-      model: "openai/gpt-5.6-luna",
+      model: "openai/gpt-6-luna",
       max_tokens: 100,
       reasoning: { effort: "none" },
       provider: { require_parameters: true },

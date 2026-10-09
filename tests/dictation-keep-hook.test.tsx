@@ -531,6 +531,10 @@ describe("a recording an earlier page left behind", () => {
         }),
     };
     const h = drive({ keep: slow });
+    /* Begin recovery while idle; a new press now defers recovery rather than
+       querying while opening. Exercise a claim already in flight. */
+    await settle();
+    expect(hand).not.toBeNull();
     await press(h);
     leftBehind();
     await act(async () => hand?.(waiting));
