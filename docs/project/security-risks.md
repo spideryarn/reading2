@@ -366,10 +366,18 @@ The review was read-only and asked no live service anything, so these were not s
 rulesets; the exact scopes of the Vercel CLI login and Vercel MCP token; whether Supabase's
 production roles still match the documented grants; the Stripe and Resend keys' restrictions;
 whether the Hetzner firewall matches Terraform; outbound filtering on the box; production backups;
-Greg's Mac. `npm audit` was not run (it needs the network). **But GitHub said, on the push that
-landed this register (2026-10-09), that Dependabot has 11 alerts on the default branch, 2 of them
-high** — not yet read, and the obvious next entry once someone opens
-`https://github.com/spideryarn/reading2/security/dependabot`.
+Greg's Mac. `npm audit` was not run during the review (it needs the network). GitHub then reported
+11 Dependabot alerts on the default branch, 2 of them high. Those were triaged later the same day
+from `npm audit`, in
+[261009r-dependabot-alerts-triage-and-patch-bumps.md](../plans/261009r-dependabot-alerts-triage-and-patch-bumps.md).
+None of the advisories can be reached from the server, the API or the client. The highs
+(`brace-expansion`, `source-map-js`) were patched in the lockfile, so `npm audit` now reports no
+high. The other four (moderate: `esbuild` under `drizzle-kit`, `smol-toml`, `fast-copy`; low:
+`dompurify`) are left open deliberately, and the plan says why for each. **What is still
+unread** is GitHub's own alerts page,
+`https://github.com/spideryarn/reading2/security/dependabot`: `npm audit`'s count does not match
+GitHub's 11, and the box has no GitHub credential, so someone signed in should confirm nothing on
+that page is missing from the plan's table.
 
 **No new finding was reported in this review** for: the API gate and owner isolation; the public
 namespace and private links; the remote MCP gate; SSRF defences; sanitising and model output;
