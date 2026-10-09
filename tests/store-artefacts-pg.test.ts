@@ -1102,6 +1102,20 @@ const JOB_STEPS: JobStep[] = [
  * Copied in shape from tests/store-step-fence.test.ts, which explains it at
  * length.
  */
+/**
+ * The `Meta` fields the `extract` step does not write, and where each lives
+ * instead. Everything else must round-trip through `metaColumns` and
+ * `readMeta` — see *takes meta apart…* below.
+ */
+type NotExtracts =
+  /* Stage 1's facts, written by `fetch` (src/store/artifacts-pg.ts § `META_COLUMNS`). */
+  | "url" | "fetchedAt" | "rawSha256" | "filename"
+  /* Written by `blocks` from its own five columns. */
+  | "readingDifficulty"
+  /* Exclusive with `publishedYear` by CHECK; its own test below. */
+  | "publishedAt";
+type ExtractOwned = Required<Omit<Meta, NotExtracts>>;
+
 async function withClaim(
   body: (tx: Tx, claimed: JobDraftRef) => Promise<void>,
 ): Promise<void> {
@@ -1171,9 +1185,25 @@ describe("writing artefacts into a draft", () => {
        test, which is the one that matters. */
     await withClaim(async (tx, claimed) => {
       await begun(tx, claimed, "extract");
-      const meta: Meta = {
+      /* **Total over the fields `extract` owns, by type** — the class check
+         docs/postmortems/261009h-a-flag-the-store-did-not-keep.md names. A new
+         `Meta` field does not compile into this fixture until somebody places
+         it, here or in `NotExtracts`, and once here it fails the round trip
+         until `metaColumns` and `readMeta` both name it. `quality` was the
+         field this would have caught: computed by every PDF extraction and
+         dropped at the store's door until plan 261009m. */
+      const meta: ExtractOwned = {
         slug: SLUG,
         title: "Rewritten",
+        /* Only stored when it differs from the title after tidying. */
+        titleOriginal: "REWRITTEN",
+        siteName: "Somewhere",
+        abstract: "An abstract.",
+        doi: "10.1234/example",
+        journal: "A Journal",
+        /* A year alone: `publishedAt` beside it is a row the table refuses,
+           and the day has its own round trip further down. */
+        publishedYear: 2011,
         byline: "Somebody",
         /* Through the jsonb column and back, affiliations and all — the
            authors-bearing round trip GPT Sol found nothing else exercised
@@ -1188,6 +1218,7 @@ describe("writing artefacts into a draft", () => {
         unverified: false,
         recall: 0.94,
         pagesChecked: 12,
+        quality: ["page 3: a paragraph in the text layer is missing", "page 7: low recall"],
       };
       /* `extract` writes two things and this writes one, which the store allows
          — `has` is what refuses the half-finished step, not `write`. */
@@ -1332,6 +1363,54 @@ describe("writing artefacts into a draft", () => {
     /* And each alone goes in, so the refusals above are about the pair and the bounds. */
     expect(await refusedBy({ publishedAt: null, publishedYear: 2011 })).toBeUndefined();
     expect(await refusedBy({ publishedAt: "2011-03-10", publishedYear: null })).toBeUndefined();
+  });
+
+  /* Plan 261009m: the PDF checker's complaints, which had no column. */
+  it("keeps a PDF's quality complaints, writes none as null, and clears them on a clean re-extraction", async () => {
+    await withClaim(async (tx, claimed) => {
+      await begun(tx, claimed, "extract");
+      const complained = { slug: SLUG, title: "A paper", source: "pdf" as const, quality: ["page 2: low recall"] };
+      await writeArtefacts(claimed, tx, SLUG, "extract", { meta: complained }, {});
+      expect(await readArtefact(claimed, tx, SLUG, "extract", "meta")).toMatchObject(complained);
+
+      /* An empty list is "none", and none has one spelling: NULL. */
+      await writeArtefacts(claimed, tx, SLUG, "extract", { meta: { ...complained, quality: [] } }, {});
+      const [row] = await tx
+        .select({ quality: articleRevisions.quality })
+        .from(articleRevisions)
+        .where(eq(articleRevisions.id, claimed.revisionId));
+      expect(row).toEqual({ quality: null });
+
+      /* And a re-extraction that finds nothing clears the last one's list
+         rather than leaving it beside a transcription it is not about. */
+      await writeArtefacts(claimed, tx, SLUG, "extract", { meta: complained }, {});
+      await writeArtefacts(claimed, tx, SLUG, "extract", { meta: { slug: SLUG, title: "A paper", source: "pdf" } }, {});
+      expect(await readArtefact(claimed, tx, SLUG, "extract", "meta")).not.toHaveProperty("quality");
+    });
+  });
+
+  it("is refused an empty complaint list, or a null complaint, by the table itself", async () => {
+    const refusedBy = async (quality: (string | null)[] | null): Promise<string | undefined> => {
+      try {
+        await getDb().transaction(async (tx) => {
+          await tx
+            .update(articleRevisions)
+            .set({ quality: quality as string[] | null })
+            .where(eq(articleRevisions.id, ref.revisionId));
+          throw new RollBack();
+        });
+        return undefined;
+      } catch (err) {
+        if (err instanceof RollBack) return undefined;
+        const cause = (err as { cause?: { code?: string; constraint?: string } }).cause;
+        expect(cause?.code).toBe("23514");
+        return cause?.constraint;
+      }
+    };
+    expect(await refusedBy([])).toBe("article_revisions_quality_nonempty");
+    expect(await refusedBy(["page 2: low recall", null])).toBe("article_revisions_quality_nonempty");
+    expect(await refusedBy(["page 2: low recall"])).toBeUndefined();
+    expect(await refusedBy(null)).toBeUndefined();
   });
 
   /* Plan 261005j: the difficulty rating, an artefact of its own beside the
