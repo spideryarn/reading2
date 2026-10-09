@@ -366,7 +366,10 @@ The review was read-only and asked no live service anything, so these were not s
 rulesets; the exact scopes of the Vercel CLI login and Vercel MCP token; whether Supabase's
 production roles still match the documented grants; the Stripe and Resend keys' restrictions;
 whether the Hetzner firewall matches Terraform; outbound filtering on the box; production backups;
-Greg's Mac. `npm audit` was not run (it needs the network).
+Greg's Mac. `npm audit` was not run (it needs the network). **But GitHub said, on the push that
+landed this register (2026-10-09), that Dependabot has 11 alerts on the default branch, 2 of them
+high** — not yet read, and the obvious next entry once someone opens
+`https://github.com/spideryarn/reading2/security/dependabot`.
 
 **No new finding was reported in this review** for: the API gate and owner isolation; the public
 namespace and private links; the remote MCP gate; SSRF defences; sanitising and model output;
