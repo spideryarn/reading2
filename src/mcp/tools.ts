@@ -25,6 +25,7 @@ import type { ToolAnnotations } from "@modelcontextprotocol/server";
 import * as z from "zod";
 
 import type { AdminUser } from "../admin.js";
+import { type AdminAuthorGift, AUTHOR_GIFT_NOTES_MAX } from "../admin-author-gifts.js";
 import type { AdminVoucher } from "../admin-vouchers.js";
 import { freeArticles } from "../admin-vouchers.js";
 import { SHARING_RIGHTS_CONFIRM } from "../messages.js";
@@ -731,6 +732,57 @@ export const TOOLS: readonly Tool[] = [
       throw new Error("retry_gift_voucher_email must run the delivery prepared for approval");
     },
   }),
+
+  /* **Author gifts** — plan 261009u § D6. Greg wanted the notes reachable "perhaps
+     via MCP", so an agent can read the drafts and add what it found. Neither tool
+     reaches the outside world, so neither asks; *Send* is deliberately not a tool
+     (it sends mail), and stays a button on /admin/vouchers. */
+  tool({
+    name: "list_author_gifts",
+    title: "List author gifts",
+    description:
+      "Admin only. Every author gift, newest first: a draft gift voucher for the author of one of the admin's own " +
+      "articles. Each has its id, status (draft, sending, sent or discarded), the article (slug, title, link), the " +
+      "address and name and which lookup supplied each (null when typed by hand), the note to them, how many free " +
+      "articles, the admin's notes in full, and every web-search lookup with what it found, its sources and its " +
+      "cost in nano-dollars. Never a private link. Nothing can be sent from here: a gift is sent only by pressing " +
+      "Send on /admin/vouchers.",
+    input: z.strictObject({}),
+    annotations: { readOnlyHint: true, openWorldHint: false },
+    handler: async (api) => {
+      const { gifts } = await api.call<{ gifts: AdminAuthorGift[] }>("GET", "/api/admin/author-gifts");
+      return { gifts: gifts.map((g) => ({ ...g, starter: { ...g.starter, link: articleLink(api, g.starter.slug) } })) };
+    },
+  }),
+
+  tool({
+    name: "update_author_gift",
+    title: "Change an author gift's notes or draft",
+    description:
+      "Admin only. Changes an author gift: its notes, and, while it is still a draft, its address, name, note to " +
+      "them and number of free articles. Sends nothing. `notes` **replaces the whole notes field**, so read the " +
+      "current notes with list_author_gifts and send them back with your addition. Once a gift has been sent only " +
+      "its notes can change. Changing the address or name marks it as typed by hand rather than found by a lookup.",
+    input: z.strictObject({
+      id: z.string().uuid().describe("The gift's id, from list_author_gifts."),
+      notes: z
+        .string()
+        .max(AUTHOR_GIFT_NOTES_MAX)
+        .nullable()
+        .optional()
+        .describe("The whole new notes text (null or empty clears it). Admins only ever see it; it is never emailed."),
+      email: z.string().min(3).nullable().optional().describe("The recipient's address, or null for none yet."),
+      recipientName: z.string().max(80).nullable().optional().describe('Their name; the email opens "Dear <name>,".'),
+      recipientNote: voucherNote.describe("A note to them, put in their email when the gift is sent."),
+      articles: z.number().int().min(1).max(1000).optional().describe("How many free articles."),
+    }),
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    handler: async (api, { id, ...change }) => {
+      const body = Object.fromEntries(Object.entries(change).filter(([, v]) => v !== undefined));
+      if (Object.keys(body).length === 0) throw new ApiError(400, "Nothing to change.");
+      return await api.call("PATCH", `/api/admin/author-gifts/${seg(id)}`, body);
+    },
+  }),
 ];
 
 /* ----------------------------------------------------- failures, in words -- */
@@ -742,6 +794,8 @@ const ADMIN_ONLY = new Set([
   "create_gift_voucher",
   "update_gift_voucher",
   "retry_gift_voucher_email",
+  "list_author_gifts",
+  "update_author_gift",
 ]);
 
 /** A failure as the sentence a tool error says. Neither source of its text can hold a token. */

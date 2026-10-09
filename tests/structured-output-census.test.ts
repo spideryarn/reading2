@@ -66,6 +66,8 @@ const DECORATORS = ["withMessagesJsonSchema", "withChatJsonSchema"] as const;
 const EXCEPTIONS: Record<string, string> = {
   "src/citation-find.ts":
     "Web search runs on the same call. Nobody has measured that with a schema, and the search annotations are a security witness.",
+  "src/author-lookup.ts":
+    "Web search runs on the same call, as in citation-find.ts, and the server checks every URL and address in the answer against the search annotations itself (plan 261009u D4).",
   "src/labels.ts":
     "Its answer is tuples, which the provider's supported schema subset cannot express. It needs a change of answer shape and a quality check first; it already re-asks on a malformed pair.",
   "src/structure-expand.ts":

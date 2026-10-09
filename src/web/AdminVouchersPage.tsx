@@ -22,7 +22,7 @@
  * (newest first, the server's), and a row that turns into a form, which a
  * TanStack cell renderer would make harder to read rather than easier.
  */
-import { useCallback, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useContext, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { RefreshCw } from "lucide-react";
 
 import {
@@ -36,6 +36,17 @@ import {
 } from "../admin-vouchers.js";
 import { readableDate } from "../billing-plan.js";
 import type { LibraryEntry } from "../types.js";
+import { AuthorGifts } from "./AdminAuthorGifts.js";
+import {
+  BUTTON,
+  INPUT,
+  Refusal,
+  StarterSelect,
+  type StarterShelf,
+  TEXTAREA,
+  starterChoices,
+  useStarterShelf,
+} from "./admin-vouchers-parts.js";
 import { Shell } from "./AdminPage.js";
 import { Button } from "./components/ui/button.js";
 import { SignedInReader } from "./lib/made-for.js";
@@ -52,21 +63,12 @@ import {
   useAdminVouchers,
   type VoucherPatchInput,
 } from "./useAdminVouchers.js";
-import { useJobs } from "./useJobs.js";
 import { useNow } from "./useNow.js";
-import { useShelf } from "./useShelf.js";
 import { articleTitleVoice, voiceClass } from "./voice.js";
 
 /** The table's name: its caption, and its scroll box's while it scrolls. */
 const CAPTION = "Every gift voucher, newest first";
 
-const INPUT =
-  "tw:h-8 tw:rounded-md tw:border tw:border-border tw:bg-card tw:px-2 tw:text-sm tw:text-foreground tw:outline-none tw:any-pointer-coarse:text-base tw:focus:border-highlight-text tw:focus:ring-2 tw:focus:ring-highlight-text/25";
-const BUTTON =
-  "tw:inline-flex tw:h-7 tw:items-center tw:gap-1 tw:rounded-full tw:border tw:border-border tw:bg-transparent tw:px-3 tw:text-xs tw:text-muted-foreground tw:hover:border-highlight/50 tw:hover:text-foreground tw:disabled:opacity-50";
-/** The note to them is a sentence or two, so it gets lines rather than a single box. */
-const TEXTAREA =
-  "tw:min-h-16 tw:rounded-md tw:border tw:border-border tw:bg-card tw:px-2 tw:py-1.5 tw:text-sm tw:text-foreground tw:outline-none tw:any-pointer-coarse:text-base tw:focus:border-highlight-text tw:focus:ring-2 tw:focus:ring-highlight-text/25";
 const CELL = "tw:px-3 tw:py-2 tw:align-top tw:first:pl-4 tw:last:pr-4";
 const HEAD = `${CELL} tw:whitespace-nowrap tw:text-left tw:text-xs tw:font-medium tw:text-muted-foreground`;
 
@@ -85,17 +87,6 @@ const [STARTER_LEAD, STARTER_TAIL] = giftEmailStarterLine("\u0000").split("\u000
 
 function recipientNameTooLong(name: string): boolean {
   return [...name].length > RECIPIENT_NAME_MAX;
-}
-
-function Refusal({ message }: { message: string }) {
-  return (
-    <p
-      role="alert"
-      className="tw:mb-4 tw:rounded-md tw:border tw:border-destructive/40 tw:bg-destructive/10 tw:p-3 tw:text-sm tw:text-foreground"
-    >
-      {message}
-    </p>
-  );
 }
 
 /** A whole number from the box, or null when it is not one. The server checks 1–1000. */
@@ -154,13 +145,6 @@ function starterReady(state: StarterState): boolean {
       return never;
     }
   }
-}
-
-/** What a starter can be: the shelf's articles that have been read, newest first. */
-function starterChoices(shelf: readonly LibraryEntry[] | null): LibraryEntry[] {
-  return (shelf ?? [])
-    .filter((a) => a.processing !== "minimal")
-    .sort((a, b) => (a.addedAt < b.addedAt ? 1 : a.addedAt > b.addedAt ? -1 : 0));
 }
 
 /** A link that opens beside this page, so the voucher draft is still here after. */
@@ -281,31 +265,20 @@ function StarterPicker({
 
   return (
     <div className="tw:mt-3 tw:flex tw:flex-col tw:gap-2 tw:text-xs tw:text-muted-foreground">
-      <div className="tw:flex tw:flex-wrap tw:items-end tw:gap-2">
-        <label className="tw:flex tw:min-w-0 tw:flex-1 tw:basis-56 tw:flex-col tw:gap-1">
-          <span>
+      <StarterSelect
+        id="voucher-new-starter"
+        label={
+          <>
             <span className="tw:text-sm tw:font-medium tw:text-foreground">Starter article</span> (optional —
             their email links it, to start with; your articles, newest first)
-          </span>
-          <select
-            id="voucher-new-starter"
-            value={slug}
-            onChange={(e) => onChoose(e.target.value)}
-            className={`${INPUT} tw:w-full tw:min-w-0`}
-          >
-            <option value="">None</option>
-            {choices.map((a) => (
-              <option key={a.slug} value={a.slug}>
-                {a.title}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button type="button" onClick={reload} title="Read your articles again" className={BUTTON}>
-          <RefreshCw size={12} />
-          Refresh
-        </button>
-      </div>
+          </>
+        }
+        noneLabel="None"
+        choices={choices}
+        slug={slug}
+        onChoose={onChoose}
+        reload={reload}
+      />
       <div className="tw:flex tw:flex-wrap tw:items-end tw:gap-2">
         <label className="tw:flex tw:min-w-0 tw:flex-1 tw:basis-56 tw:flex-col tw:gap-1">
           Or import one (it opens the add page; choose it here once it is on your shelf)
@@ -346,10 +319,11 @@ function StarterPicker({
   );
 }
 
-function CreateForm({ create, canReplay, readerId }: {
+function CreateForm({ create, canReplay, shelf }: {
   create: UseAdminVouchers["create"];
   canReplay: UseAdminVouchers["canReplay"];
-  readerId: string;
+  /** The administrator's own shelf, for the starter; read once for the page. */
+  shelf: StarterShelf;
 }) {
   const [email, setEmail] = useState("");
   const [articles, setArticles] = useState(String(DEFAULT_ARTICLES));
@@ -367,13 +341,6 @@ function CreateForm({ create, canReplay, readerId }: {
   const draftNow = useRef(draft);
   draftNow.current = draft;
 
-  /* The administrator's own shelf, for the starter. Read again when an import
-     finishes (the shelf page's own wiring, Library.tsx) and on Refresh. */
-  const shelf = useShelf(readerId);
-  const reloadShelf = shelf.reload;
-  /* A failed read is already in `shelf.error`, which the picker shows. */
-  const readShelfAgain = useCallback(() => void reloadShelf().catch(() => {}), [reloadShelf]);
-  useJobs("watches-queue", readShelfAgain);
   const choices = useMemo(() => starterChoices(shelf.articles), [shelf.articles]);
   const starter = starterState(starterSlug, shelf.articles);
   const count = wholeNumber(articles);
@@ -525,7 +492,7 @@ function CreateForm({ create, canReplay, readerId }: {
         state={starter}
         statusId={STARTER_STATUS}
         shelfError={shelf.error}
-        reload={readShelfAgain}
+        reload={shelf.reload}
         replay={replay}
       />
       {/* The submit is the form's last control and its one filled button —
@@ -1040,9 +1007,33 @@ function VoucherRow({
   );
 }
 
+/**
+ * The voucher form, then *Author gifts* (plan 261009u), sharing one read of
+ * the administrator's shelf for their two article pickers.
+ */
+function SignedInForms({
+  readerId,
+  create,
+  canReplay,
+  onVoucherMade,
+}: {
+  readerId: string;
+  create: UseAdminVouchers["create"];
+  canReplay: UseAdminVouchers["canReplay"];
+  onVoucherMade: () => void;
+}) {
+  const shelf = useStarterShelf(readerId);
+  return (
+    <>
+      <CreateForm create={create} canReplay={canReplay} shelf={shelf} />
+      <AuthorGifts shelf={shelf} onVoucherMade={onVoucherMade} />
+    </>
+  );
+}
+
 export function AdminVouchersPage() {
   useDocumentTitle(pageTitle({ kind: "admin", page: "vouchers" }));
-  const { vouchers, error, loading, reload, create, canReplay, update, retry } = useAdminVouchers();
+  const { vouchers, error, loading, reload, create, canReplay, update, retry, reloadAfterEmail } = useAdminVouchers();
   /* Whose shelf the starter picker reads. App draws every admin page signed
      in, inside this provider; null would be a page drawn outside it. */
   const readerId = useContext(SignedInReader);
@@ -1057,9 +1048,12 @@ export function AdminVouchersPage() {
       </p>
 
       {readerId === null ? (
-        <Refusal message="Sign in again to create a voucher." />
+        <>
+          <Refusal message="Sign in again to create a voucher." />
+          <AuthorGifts shelf={null} onVoucherMade={reloadAfterEmail} />
+        </>
       ) : (
-        <CreateForm create={create} canReplay={canReplay} readerId={readerId} />
+        <SignedInForms readerId={readerId} create={create} canReplay={canReplay} onVoucherMade={reloadAfterEmail} />
       )}
 
       {error && <Refusal message={vouchers ? `Refresh failed, so this is the previous list. ${error}` : error} />}
