@@ -668,13 +668,47 @@ export function withLocal(
   return { ...question, answers, state: "responded", deferredAt: null };
 }
 
-/** The groups in the order the contents draws them, and the pager walks them. */
+/** The groups in the order the contents draws them; the pager uses raw server order instead. */
 export const THREAD_GROUPS: readonly FeedbackQuestionState[] = ["waiting", "responded", "deferred"];
 
 /** Every thread in contents order: waiting, then being considered, then deferred, each oldest first. */
 export function threadOrder(questions: readonly ThreadQuestion[]): ThreadQuestion[] {
   return THREAD_GROUPS.flatMap((state) => questions.filter((question) => question.state === state));
 }
+
+/**
+ * **Where Previous and Next may go**: the threads that need a decision, and the
+ * one showing wherever it is, in the order the server sent them (oldest asked
+ * first, each group's order in the contents). Greg, 2026-10-09 (spya-nmt06n): "I
+ * only want them to cycle through the next and previous that need a decision,
+ * rather than anything else." Replied, deferred and kept-for-a-draft threads are
+ * not stops, but the one showing is, so Next still goes on from a thread just
+ * answered or deferred, which has stopped waiting under the reader's hand.
+ * Plan 261009m § 1–2.
+ */
+export function pagerStops(
+  questions: readonly ThreadQuestion[],
+  live: ReadonlySet<string>,
+  showing: string,
+): PagerStops {
+  const deciding = (question: ThreadQuestion) => live.has(question.id) && question.state === "waiting";
+  return {
+    stops: questions.filter((question) => question.id === showing || deciding(question)),
+    deciding: new Set(questions.filter(deciding).map((question) => question.id)),
+  };
+}
+
+/** The pager's stops, and which of them need a decision (the one showing may not). */
+export interface PagerStops {
+  stops: ThreadQuestion[];
+  deciding: ReadonlySet<string>;
+}
+
+/** The pager's hints, on the button and, pressed at an end, on the row for a phone. */
+const PAGER_HINT = {
+  previous: { go: "Previous thread that needs a decision", end: "No earlier thread needs a decision" },
+  next: { go: "Next thread that needs a decision", end: "No later thread needs a decision" },
+} as const;
 
 /**
  * The questions of this opening's **newest** admin answer, whichever filter
@@ -1442,18 +1476,41 @@ function ThreadContents({
  */
 function ThreadView({
   question,
-  order,
+  pager: { stops, deciding },
   replies,
   active,
 }: {
   question: ThreadQuestion;
-  order: ThreadQuestion[];
+  /** `pagerStops`: the threads that need a decision, and this one. */
+  pager: PagerStops;
   replies: QuestionReplies;
   active: boolean;
 }) {
-  const at = order.findIndex((one) => one.id === question.id);
-  const previous = at > 0 ? order[at - 1] : undefined;
-  const next = at >= 0 && at < order.length - 1 ? order[at + 1] : undefined;
+  const at = stops.findIndex((one) => one.id === question.id);
+  const previous = at > 0 ? stops[at - 1] : undefined;
+  const next = at >= 0 && at < stops.length - 1 ? stops[at + 1] : undefined;
+  const pagerKey = stops.map((one) => `${one.id}:${deciding.has(one.id) ? "1" : "0"}`).join("|");
+  /* Which end was pressed, against which pager snapshot, and how many times:
+     said on the row only while that same snapshot still has the same end. A
+     reply, deferral or newer read therefore takes the old sentence away (GPT
+     Sol, 261009m P3). The count re-keys the words, so a second press is
+     announced again. */
+  const [refused, setRefused] = useState<{
+    pagerKey: string;
+    which: keyof typeof PAGER_HINT;
+    times: number;
+  } | null>(null);
+  const said =
+    refused !== null &&
+    refused.pagerKey === pagerKey &&
+    (refused.which === "previous" ? previous : next) === undefined
+      ? refused
+      : null;
+  /* The key check above hides stale words in the changing render; clearing
+     afterwards prevents them reviving if a later read restores an old shape. */
+  useEffect(() => {
+    setRefused((was) => (was !== null && was.pagerKey !== pagerKey ? null : was));
+  }, [pagerKey]);
   const { summary, details } = splitQuestionBody(question.body);
   const now = Date.now();
   return (
@@ -1462,27 +1519,50 @@ function ThreadView({
         <button type="button" className="fb-copy" onClick={replies.close}>
           ‹ All threads
         </button>
-        {at >= 0 ? (
-          <span className="fb-thread-place">
-            {at + 1} of {order.length}
-          </span>
-        ) : null}
-        <button
-          type="button"
-          className="fb-copy"
-          disabled={previous === undefined}
-          onClick={() => previous && replies.open(previous.id)}
-        >
-          ‹ Previous
-        </button>
-        <button
-          type="button"
-          className="fb-copy"
-          disabled={next === undefined}
-          onClick={() => next && replies.open(next.id)}
-        >
-          Next ›
-        </button>
+        <span className="fb-thread-place">
+          {deciding.has(question.id)
+            ? `${at + 1} of ${deciding.size} needing a decision`
+            : deciding.size === 0
+              ? "No threads need a decision now"
+              : `${deciding.size} need${deciding.size === 1 ? "s" : ""} a decision`}
+        </span>
+        {/* **`aria-disabled`, not `disabled`, and a `title`** (261009m § 4): a
+            natively disabled button is no reliable trigger for a hint
+            (tooltips.md), and the house card portals to `document.body`,
+            underneath this modal dialog, which is why the shortcut beside the
+            tabs has a `title` too. A phone has no hover, so pressing an end
+            says the same sentence on the row. */}
+        {(
+          [
+            ["previous", previous, "‹ Previous"],
+            ["next", next, "Next ›"],
+          ] as const
+        ).map(([which, to, word]) => (
+          <button
+            key={which}
+            type="button"
+            className="fb-copy"
+            aria-disabled={to === undefined || undefined}
+            title={to === undefined ? PAGER_HINT[which].end : PAGER_HINT[which].go}
+            onClick={() => {
+              if (to === undefined) {
+                setRefused((was) => ({ pagerKey, which, times: (was?.times ?? 0) + 1 }));
+                return;
+              }
+              /* A refusal belongs to this visit. Without clearing it here,
+                 paging away and back revives the old sentence unprompted. */
+              setRefused(null);
+              replies.open(to.id);
+            }}
+          >
+            {word}
+          </button>
+        ))}
+        {/* Always mounted, empty until an end is pressed: a live region that
+            arrives with its words in it is often not announced (P2). */}
+        <p className="fb-thread-end" role="status" aria-atomic="true">
+          {said === null ? null : <span key={said.times}>{PAGER_HINT[said.which].end}</span>}
+        </p>
       </nav>
       <article className="fb-question" data-question={question.id} data-state={question.state}>
         <p className="fb-earlier-meta">
@@ -1587,7 +1667,7 @@ export function EarlierThreads({
       {thread === undefined ? (
         <ThreadContents questions={order} liveQuestions={liveQuestions ?? []} replies={replies} />
       ) : (
-        <ThreadView question={thread} order={order} replies={replies} active={showing} />
+        <ThreadView question={thread} pager={pagerStops(questions, live, thread.id)} replies={replies} active={showing} />
       )}
     </section>
   );

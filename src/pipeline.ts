@@ -176,6 +176,7 @@ import {
   PROMPT_VERSION as SKETCH_PROMPT_VERSION,
   SKETCH_OUTPUT_SCHEMA,
 } from "./sketch.js";
+import { arxivAffiliationReader } from "./arxiv-affiliations.js";
 import { openRouterAuthorsReader } from "./pdf-authors.js";
 import { openRouterFrontMatterReader } from "./pdf-frontmatter.js";
 import { runPdfExtract } from "./pdf-read.js";
@@ -2762,7 +2763,16 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
            encoding so that stays visible. */
         const html = new TextDecoder().decode(bytes);
         try {
-          const result = await runExtract({ html, url, slug: ctx.slug, titleTidier: stepTitleTidier(ctx, store) });
+          const result = await runExtract({
+            html,
+            url,
+            slug: ctx.slug,
+            titleTidier: stepTitleTidier(ctx, store),
+            /* An arXiv HTML paper's affiliations, by the PDF path's authors
+               pass on the same model (plan 261009m). Called only on a LaTeXML
+               title block whose names are the whole author list. */
+            affiliations: arxivAffiliationReader(openRouterAuthorsReader(modelFor("pdf-frontmatter", ctx.power)), ctx),
+          });
           /* **The audit line for the named pre-Readability removers.**
              `removePlatformFurniture` and `removeReaderComments` delete an
              element because of a publisher/platform name, and a delete

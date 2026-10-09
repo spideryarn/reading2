@@ -1,7 +1,7 @@
 ---
 reports: spya-xg4jyr
 ending: shipped
-comment: New arXiv imports now show one tidy row per author, with footnotes numbered underneath. Two follow-ups are asked separately: affiliations by the small model, and re-importing this paper.
+comment: New arXiv imports show one tidy row per author, and each name's affiliation on hover. Your Attention import is re-imported after the next deploy, as you asked.
 ---
 
 # An arXiv paper's author list, tidied at import
@@ -29,7 +29,11 @@ underneath; 16 of 20 live pages, no word lost. Screenshots of a local import:
 Not done here, each written down:
 
 - **Affiliations on the masthead tooltip by the small model**, and **re-extracting Greg's article**
-  (a production write): asked in [q-qjbb9a](questions/q-qjbb9a.md).
+  (a production write): asked in [q-qjbb9a](questions/q-qjbb9a.md). Greg answered 1A and 2A on
+  2026-10-09 (`spya-fb8y50`). 1A shipped on `dev`:
+  [261009m](../plans/261009m-arxiv-html-affiliations-by-the-authors-pass.md), about half a cent an
+  import (queue item `qi-62h5hz6s`). 2A, the re-extraction of `arxiv-1706-03762-spya-wyt7j0` and
+  that article only, waits for the deploy carrying 261009d and 261009m; the Overseer runs it.
 - LaTeXML's body footnotes drawn mid-sentence: queued, `qi-d7g2qmze`.
 - Readability's byline deletion on the shapes the rewrite refuses, and on any web page:
   queued, `qi-yhkw2ej6`.
