@@ -42,7 +42,8 @@ When something was found, **Ask Opus about these** sends only the flagged bits �
 the article — to Opus, which says of each one whether it is probably harmless or worth a look, and
 why. It is an opinion, not a filter: every row stays listed in the same order, and the chip’s mark
 does not change. The hidden text may have been written to fool a model, so read the rows yourself
-too. The answer is not saved: reloading the page forgets it, and asking again runs it again.
+too. The answer is saved with the article, with the day it was asked, so it is still there when
+you come back; asking again replaces it.
 
 Colour means two different things:
 

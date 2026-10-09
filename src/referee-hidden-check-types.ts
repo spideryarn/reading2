@@ -45,3 +45,19 @@ export interface HiddenCheckResult {
   /** The model that answered, as the gateway reported it. */
   model: string;
 }
+
+/**
+ * **A check as it is kept** — the finished result and when it arrived. Plan
+ * docs/plans/261009a-save-hidden-text-opinions.md: the `done` frame carries
+ * this, and `GET /api/referee/hidden-check/:slug` answers `{ check }` with it
+ * or `null`, so a reload shows the same lines without paying again.
+ */
+export interface StoredHiddenCheck extends HiddenCheckResult {
+  /** When the answer was validated and saved, ISO. */
+  checkedAt: string;
+  /**
+   * Present and `false` only on a `done` frame whose save failed: the referee
+   * sees the answer, and a line saying a reload will not bring it back.
+   */
+  saved?: false;
+}

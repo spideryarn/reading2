@@ -545,6 +545,10 @@ resolved after the parse — [prompting-guide.md § What the model writes back](
 
 ## Its cost
 
+**What it paid for is kept.** A model's answer is stored with when it happened, unless saving would
+add enormous complexity or the answer is certainly ephemeral or worthless —
+[database.md § AI output we paid for is kept](database.md#ai-output-we-paid-for-is-kept).
+
 **Nothing to add, if the mode spends through a pipeline step or an article route** —
 [cost-tracking.md](cost-tracking.md) is the three rules that make that true. A step's spend is
 attributed to the article by `runStep`, and its `(step, job)` pair becomes its own line in the

@@ -251,9 +251,18 @@ The rules, each code rather than an intention:
 - **The reason cannot disguise anything**: zero-width, tag and bidi characters print as code
   points, its direction is isolated, and its box clips so stacked combining marks cannot paint over
   the row above.
-- **Nothing is stored**, as with Mirror: the answer lives beside the scan in `RefereeBand` for the
-  life of the band, so changing chips keeps it; a reload forgets it, and a second press pays again.
-  Leaving stops the paid call. The gateway records the call itself.
+- **The last answer is kept, with when it was asked** — since 2026-10-09, in
+  `referee_hidden_checks`, one row per article
+  ([`src/store/pg-referee-hidden-checks.ts`](../../src/store/pg-referee-hidden-checks.ts), plan
+  [261009a](../plans/261009a-save-hidden-text-opinions.md)). It shipped unsaved on Mirror's
+  precedent, and Greg asked for it kept: *"Any time we run AI processing or do valuable work, we
+  should save it"* ([database.md § AI output we paid for is kept](database.md#ai-output-we-paid-for-is-kept)).
+  A reload reads it back (`GET /api/referee/hidden-check/:slug`, owner-only) and the summary says
+  *Asked on 8 October 2026.* Only a validated answer is written; a failed or abandoned run leaves the
+  last one, on screen and in the table; an older press finishing late cannot replace a newer one.
+  The call now runs to the end when the referee leaves, so its answer is waiting for them. A changed
+  scan needs nothing: a kept judgment is drawn only beside an identical row. It goes out in
+  `db:export` and the reader's download as `referee-hidden-check.json`.
 `tests/referee-notices.test.tsx` § *a finding marks the Hidden text chip* and
 `tests/source-scan-notice.test.tsx` § *findings in plain words* hold it.
 

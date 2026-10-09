@@ -549,6 +549,8 @@ function augmentationFiles(rows: ArticleRows): Map<string, string> {
   }
   const claims = rows.refereeClaims[0];
   if (claims) at("referee-claims.json", { run: rowJson(claims) });
+  const hiddenCheck = rows.refereeHiddenChecks[0];
+  if (hiddenCheck) at("referee-hidden-check.json", { check: rowJson(hiddenCheck) });
   if (rows.glossaryLookups.length) {
     at("glossary-lookups.json", { lookups: rows.glossaryLookups.map((row) => rowJson(row)) });
   }
@@ -656,6 +658,7 @@ one thing that will make the rest of these files make sense.
                            nested inside the thread it belongs to.
       searches.json        Meaning-searches you ran, and what they matched.
       referee-claims.json  Referee mode: what the paper claims.
+      referee-hidden-check.json Referee mode: Opus's opinion of each row of hidden text.
       referee-criteria.json Referee mode: the criteria you set, and how the article scored.
 
 \`manifest.json\` lists every file in the zip under \`entries\`, with its uncompressed size —
@@ -851,6 +854,7 @@ const FILE_NOTES: Readonly<Record<string, string>> = {
   "augmentations/chat.json": "Your conversations: threads, with every message nested inside its thread.",
   "augmentations/searches.json": "Meaning-searches you ran, and what they matched.",
   "augmentations/referee-claims.json": "Referee mode: what the paper claims.",
+  "augmentations/referee-hidden-check.json": "Referee mode: Opus's opinion of each row of hidden text.",
   "augmentations/referee-criteria.json": "Referee mode: the criteria you set, and how the article scored.",
 };
 

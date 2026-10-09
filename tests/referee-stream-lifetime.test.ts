@@ -225,7 +225,12 @@ vi.mock("../src/source-scan.js", async (importOriginal) => ({
 
 await pgReady({
   suite: "tests/referee-stream-lifetime.test.ts",
-  tables: ["spideryarn.referee_criteria", "spideryarn.referee_claims", "spideryarn.revision_blocks"],
+  tables: [
+    "spideryarn.referee_criteria",
+    "spideryarn.referee_claims",
+    "spideryarn.referee_hidden_checks",
+    "spideryarn.revision_blocks",
+  ],
 });
 
 const { handleApi, CRITERION_ORPHAN_GRACE_MS } = await import("../src/routes.js");
@@ -917,21 +922,25 @@ describe("a referee's stream outlives nothing it should", { timeout: 60_000 }, (
 
   describe("POST /api/referee/hidden-check/:slug", () => {
     /* Mirror's shape: no lock, so lifetime is what there is to check — a fourth
-       closure that can forget to return its promise — and the paid call must be
-       handed `gone`, since nothing is stored for an answer nobody waits for. */
-    it("holds the request open until the stream is finished, and hands the call the reader's signal", async () => {
+       closure that can forget to return its promise. Since 2026-10-09 the
+       answer is kept (plan 261009a), so the paid call is **not** handed `gone`:
+       it runs to the end and is saved for the referee's next visit. */
+    it("holds the request open until the stream is finished, runs on without the reader's signal, and saves", async () => {
       const call = begin("POST", `/api/referee/hidden-check/${SLUG}`);
       await reachedOrSettled(gates.hidden, call, "POST /api/referee/hidden-check/:slug");
 
       expect(call.settled(), "the request answered while the stream was still running").toBe(false);
       expect(call.ended()).toBe(false);
-      expect(gates.hiddenSignal.at(-1)).toBeInstanceOf(AbortSignal);
+      expect(gates.hiddenSignal.at(-1)).toBeUndefined();
 
       gates.hidden.release();
       await call.promise;
       expect(call.settled()).toBe(true);
       expect(call.ended()).toBe(true);
       expect(call.written()).toContain("event: done");
+      /* Saved: the frame carries the stored check's date and no `saved: false`. */
+      expect(call.written()).toContain('"checkedAt"');
+      expect(call.written()).not.toContain('"saved":false');
     });
   });
 

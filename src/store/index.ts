@@ -88,6 +88,7 @@ import type {
   ReaderStore,
   RealtimeSessionStore,
   RefereeClaimsStore,
+  RefereeHiddenCheckStore,
   RefereeCriteriaStore,
   SearchStore,
   ShelfStore,
@@ -118,6 +119,7 @@ import { pgGlossaryHiddenStore } from "./pg-glossary-hidden.js";
 import { pgQuizAttemptStore } from "./pg-quiz-attempts.js";
 import { pgReaderStore } from "./pg-reader.js";
 import { pgRefereeClaimsStore } from "./pg-referee-claims.js";
+import { pgRefereeHiddenCheckStore } from "./pg-referee-hidden-checks.js";
 import { pgRefereeCriteriaStore } from "./pg-referee-criteria.js";
 import { pgSearchStore } from "./pg-searches.js";
 import { pgLibrarySearch, pgShelfStore } from "./pg-shelf.js";
@@ -339,6 +341,17 @@ export const refereeCriteriaStore: RefereeCriteriaStore = guarded("referee-crite
  * [db-errors.ts](db-errors.ts).
  */
 export const refereeClaimsStore: RefereeClaimsStore = guarded("referee-claims", pgRefereeClaimsStore);
+
+/**
+ * Hidden text's Opus check, kept — one row per article. Guarded for the
+ * reason above: a failed query's parameters would carry the model's reasons,
+ * which may quote a manuscript's hidden words.
+ * docs/plans/261009a-save-hidden-text-opinions.md.
+ */
+export const refereeHiddenCheckStore: RefereeHiddenCheckStore = guarded(
+  "referee-hidden-checks",
+  pgRefereeHiddenCheckStore,
+);
 
 export const glossaryLookupStore: GlossaryLookupStore = guarded("lookups", pgGlossaryLookupStore);
 

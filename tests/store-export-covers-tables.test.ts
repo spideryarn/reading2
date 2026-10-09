@@ -478,6 +478,18 @@ function fixtures(): Record<RollbackTable | BundledTable, Fixture> {
         model: sentinel("referee_claims"),
       });
     },
+    /* One row and no id, as above. The sentinel goes in `model`. Plan 261009a. */
+    referee_hidden_checks: async () => {
+      await db.insert(schema.refereeHiddenChecks).values({
+        articleId: ARTICLE_ID,
+        ownerId: owner(),
+        judgments: [],
+        unanswered: 0,
+        notSent: 0,
+        model: sentinel("referee_hidden_checks"),
+        finishedAt: new Date(),
+      });
+    },
     /* An id the article used to have. `beforeAll` already inserts the identity
        row for the block that is still there — this is the other kind, the one
        only the bundle carries. */
@@ -714,6 +726,7 @@ const COLUMNS_LEFT_OUT: Record<BundledTable, Readonly<Record<string, string>>> =
   search_runs: {},
   referee_criteria: {},
   referee_claims: {},
+  referee_hidden_checks: {},
   glossary_lookups: {},
   citation_finds: {},
   citation_investigations: {},
@@ -755,6 +768,7 @@ const ROWS_IN: Record<BundledTable, (parsed: unknown) => unknown[]> = {
   search_runs: (parsed) => listAt(parsed, "runs"),
   referee_criteria: (parsed) => listAt(parsed, "criteria"),
   referee_claims: (parsed) => [at(parsed, "run")],
+  referee_hidden_checks: (parsed) => [at(parsed, "check")],
   glossary_lookups: (parsed) => listAt(parsed, "lookups"),
   citation_finds: (parsed) => listAt(parsed, "finds"),
   citation_investigations: (parsed) => listAt(parsed, "investigations"),
@@ -798,6 +812,7 @@ await pgReady({
   tables: [
     "spideryarn.referee_criteria",
     "spideryarn.referee_claims",
+    "spideryarn.referee_hidden_checks",
     "spideryarn.glossary_lookups",
     "spideryarn.citation_finds",
     "spideryarn.citation_investigations",
@@ -866,6 +881,9 @@ describe("what the record calls exported, both exports were watched writing", ()
       .delete(schema.refereeCriteria)
       .where(eq(schema.refereeCriteria.articleId, ARTICLE_ID));
     await db.delete(schema.refereeClaims).where(eq(schema.refereeClaims.articleId, ARTICLE_ID));
+    await db
+      .delete(schema.refereeHiddenChecks)
+      .where(eq(schema.refereeHiddenChecks.articleId, ARTICLE_ID));
     await db.delete(schema.chatMessages).where(eq(schema.chatMessages.articleId, ARTICLE_ID));
     await db.delete(schema.chatThreads).where(eq(schema.chatThreads.articleId, ARTICLE_ID));
     await db.delete(schema.searchRuns).where(eq(schema.searchRuns.articleId, ARTICLE_ID));

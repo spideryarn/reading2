@@ -35,6 +35,8 @@ written as a stub for [auth.md](auth.md) to point at and had not been true for s
 
 ## In this doc
 
+- [§ AI output we paid for is kept](#ai-output-we-paid-for-is-kept) — the rule, in Greg's words,
+  and when skipping it is allowed
 - [§ A new migration, in five lines](#a-new-migration-in-five-lines) — how a migration is named,
   generated and applied; start here to add a column or a table
 - [§ There is one store, and nothing left of the flag](#there-is-one-store-and-nothing-left-of-the-flag) — why no
@@ -66,6 +68,22 @@ written as a stub for [auth.md](auth.md) to point at and had not been true for s
 - [§ Checkpoints](#checkpoints-work-a-failed-attempt-already-paid-for) — the cache of model work a
   failed attempt already paid for
 - [§ What is not done yet](#what-is-not-done-yet) — known gaps (uplink, Vercel env, `restrict`)
+
+## AI output we paid for is kept <a id="ai-output-we-paid-for-is-kept"></a>
+
+Anything a model produced that cost money, time or the reader's effort is stored, with when it
+happened, unless there is a really good reason not to: saving it would add enormous complexity, or
+it is certainly ephemeral or worthless. A reader's privacy is a good reason too, where we have
+promised not to keep something ([privacy.md](privacy.md)). When you skip saving, say why in the code.
+
+> Any time we run AI processing or do valuable work, we should save it, unless there's a really good
+> reason, like it's going to introduce enormous complexity or we're completely sure it's ephemeral
+> or not going to be valuable.
+>
+> — Greg, 2026-10-08 (report `spya-gqq38u`, on the Hidden text check, which shipped unsaved)
+
+What is still thrown away, and why, is listed in
+[261009a § The sweep](../plans/261009a-save-hidden-text-opinions.md#the-sweep-other-paid-ai-output-we-throw-away).
 
 ## A new migration, in five lines
 

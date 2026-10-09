@@ -299,6 +299,7 @@ describe("declaredTables", () => {
       "realtime_sessions",
       "referee_claims",
       "referee_criteria",
+      "referee_hidden_checks",
       "revision_blocks",
       "revision_phrase_runs",
       "revision_step_runs",

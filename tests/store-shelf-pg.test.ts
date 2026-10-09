@@ -65,6 +65,7 @@ import {
   quizAttempts,
   realtimeSessions,
   refereeClaims,
+  refereeHiddenChecks,
   refereeCriteria,
   revisionBlocks,
   searchRuns,
@@ -1114,6 +1115,16 @@ describe("destroying an article", () => {
         db
           .insert(refereeClaims)
           .values({ articleId: GONE_ARTICLE, ownerId: owner, status: "pending" }),
+      referee_hidden_checks: () =>
+        db.insert(refereeHiddenChecks).values({
+          articleId: GONE_ARTICLE,
+          ownerId: owner,
+          judgments: [],
+          unanswered: 0,
+          notSent: 0,
+          model: "test/model",
+          finishedAt: new Date(),
+        }),
       referee_criteria: () =>
         db.insert(refereeCriteria).values({
           articleId: GONE_ARTICLE,

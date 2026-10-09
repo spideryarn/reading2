@@ -24,7 +24,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { HtmlSourceScan, ScanFinding } from "../src/injection-scan-types.js";
-import type { HiddenCheckResult, HiddenJudgment } from "../src/referee-hidden-check-types.js";
+import type { HiddenJudgment, StoredHiddenCheck } from "../src/referee-hidden-check-types.js";
 import { checkedInputs, grouped, ordered } from "../src/scan-groups.js";
 import { ASK_OPUS_NOTE, SourceScanNotice, sourceScanMark, visibleReason } from "../src/web/SourceScanNotice.js";
 import type { HiddenCheckApi } from "../src/web/useHiddenCheck.js";
@@ -81,7 +81,7 @@ function check(over: Partial<HiddenCheckApi> = {}): HiddenCheckApi {
 const done = (judgments: HiddenJudgment[], rows: number): HiddenCheckApi =>
   check({
     status: "done",
-    result: { judgments, unanswered: rows - judgments.length, notSent: 0, model: "m" } satisfies HiddenCheckResult,
+    result: { judgments, unanswered: rows - judgments.length, notSent: 0, model: "m", checkedAt: "2026-10-08T12:00:00.000Z" } satisfies StoredHiddenCheck,
   });
 
 let host: HTMLDivElement;
@@ -203,6 +203,24 @@ describe("one line per row, and a summary", () => {
   it("shows nothing before a check has finished", () => {
     paint(examined([HIDDEN]), check());
     expect(opinions()).toEqual([]);
+  });
+
+  /* Plan 261009a: the answer is kept, so a line may be days old. */
+  it("says when it was asked, and when a save failed, that a reload will lose it", () => {
+    const findings = [HIDDEN];
+    const kept = done([judgment(findings, 0)], 1);
+    paint(examined(findings), kept);
+    expect(text()).toContain("Opus judged 1 row harmless. Asked on 8 October 2026.");
+    paint(examined(findings), { ...kept, result: { ...kept.result!, saved: false } });
+    expect(text()).toContain("Asked on 8 October 2026; not saved, so a reload will lose it.");
+  });
+
+  it("keeps the last answer's lines beside a failed retry", () => {
+    const findings = [HIDDEN];
+    const kept = done([judgment(findings, 0, { reason: "A hidden menu label." })], 1);
+    paint(examined(findings), { ...kept, status: "failed", error: "The AI service is busy." });
+    expect(text()).toContain("The AI service is busy.");
+    expect(opinions()[0]?.textContent).toBe("Opus: probably harmless — A hidden menu label.");
   });
 });
 

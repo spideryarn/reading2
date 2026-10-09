@@ -39,6 +39,7 @@ import {
   articleTags,
   quizAttempts,
   refereeClaims,
+  refereeHiddenChecks,
   refereeCriteria,
   revisionBlocks,
   searchRuns,
@@ -175,6 +176,11 @@ export const ARTICLE_TABLE_COVERAGE = {
   referee_claims: {
     rollback: { exported: true, into: "referee-claims.json" },
     bundle: { exported: true, into: "augmentations/referee-claims.json" },
+  },
+  /* Hidden text's Opus check, kept since 2026-10-09 — plan 261009a. */
+  referee_hidden_checks: {
+    rollback: { exported: true, into: "referee-hidden-check.json" },
+    bundle: { exported: true, into: "augmentations/referee-hidden-check.json" },
   },
   glossary_lookups: {
     rollback: { exported: true, into: "glossary-lookups.json" },
@@ -650,6 +656,8 @@ export interface ArticleRows {
    * `[0]` says what the shape is at the point it matters.
    */
   readonly refereeClaims: readonly (typeof refereeClaims.$inferSelect)[];
+  /** At most one row, keyed by `article_id` like `refereeClaims`. Plan 261009a. */
+  readonly refereeHiddenChecks: readonly (typeof refereeHiddenChecks.$inferSelect)[];
   readonly glossaryLookups: readonly (typeof glossaryLookups.$inferSelect)[];
   readonly citationFinds: readonly (typeof citationFinds.$inferSelect)[];
   readonly citationInvestigations: readonly (typeof citationInvestigations.$inferSelect)[];
@@ -850,6 +858,11 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     .from(refereeClaims)
     .where(eq(refereeClaims.articleId, article.id))
     .limit(1);
+  const hiddenChecks = await tx
+    .select()
+    .from(refereeHiddenChecks)
+    .where(eq(refereeHiddenChecks.articleId, article.id))
+    .limit(1);
   const lookups = await tx
     .select()
     .from(glossaryLookups)
@@ -897,6 +910,7 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     searchRuns: runs,
     refereeCriteria: criteria,
     refereeClaims: claims,
+    refereeHiddenChecks: hiddenChecks,
     glossaryLookups: lookups,
     citationFinds: finds,
     citationInvestigations: investigations,
