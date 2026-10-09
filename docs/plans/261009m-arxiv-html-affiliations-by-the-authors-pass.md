@@ -162,3 +162,8 @@ The measurement re-run after both: the same 13 results.
   each killed. Re-measured on the final code; a local stage-2 run stored the affiliations.
 - 2026-10-09: GPT Sol's code review, two P1 fixes of its own (§ The code review); the gates; the
   measurement unchanged; q-qjbb9a answered and the report's note updated.
+- 2026-10-09: the masthead checked in a browser by a Sonnet subagent on the local re-extraction:
+  Shazeer's tooltip reads "Google Brain", Gomez's "University of Toronto", Polosukhin's has no
+  affiliation line and no blank row; at 390px it wraps and fits (`261009m-shot-1-tooltip.png`,
+  `-2-phone.png`). Seen in passing, not this change: at 1000px the side panel covers the end of
+  the expanded author line, so a name under it gets no hover.
