@@ -177,6 +177,10 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
 - **`src/web/voice.ts` § `voiceClass`, `withVoice`** — text whose voice depends on the data (the
   author's, a model's or the reader's) in its face; `src/web/tree.ts` § `nodeLabel` for a tree
   row's words and voice together ([fonts.md](fonts.md)).
+- **`src/web/Excerpt.tsx` § `Excerpt`, with `src/web/excerpt-html.ts`** — the article's own words
+  anywhere outside the prose (a quote, a passage, a selection, a snippet): drawn from the block's
+  markup, so a formula is maths and an italic is italic. Never draw them as a bare string —
+  [maths.md § Excerpts outside the prose](maths.md#excerpts-outside-the-prose).
 - **`src/web/IconButton.tsx` § `IconButton`** — an icon-only button that a `Tooltip` can wrap.
   `src/web/components/ui/` for shadcn's `Button` and `Toggle`, and `src/web/Toast.tsx` for a
   passing confirmation, and its `useGoesByItself` for anything else that should go after a few

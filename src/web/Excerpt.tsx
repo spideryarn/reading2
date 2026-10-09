@@ -3,33 +3,44 @@
  * markup, so a formula is maths and an italic is italic, as in the paragraph
  * they came from (src/web/excerpt-html.ts, plan 261009k, spya-pqae7m).
  *
- * The block is found through the reading view's block index
- * (BlockLinkCard.tsx § `useBlockLinks`), so a caller passes only the id it
- * already has. Outside the reading view, for a block the article no longer
- * has, or for words the block does not hold, the string is drawn as before.
+ * `Excerpt` finds the block through the reading view's block index
+ * (block-link-index.ts § `useBlockLinks`), so a caller passes only the id it
+ * already has; `BlockExcerpt` is for a caller already holding the block, or
+ * drawn outside that index — the block-link card, the info page. Without a
+ * block, or for words the block does not hold, the string is drawn as before.
  *
  * `words` may carry a leading or trailing `…` of the caller's own — a cut
  * quote, a snippet around a hit. That is put back outside the drawn words,
- * because it is not in the block.
+ * because it is not in the block. `near` is excerpt-html.ts § `ExcerptAt`'s.
  */
 import { useMemo } from "react";
-import type { BlockId } from "../types.js";
-import { useBlockLinks } from "./BlockLinkCard.js";
+import type { Block, BlockId } from "../types.js";
+import { useBlockLinks } from "./block-link-index.js";
 import { excerptFallbackHtml, excerptHtml } from "./excerpt-html.js";
 
 const ELLIPSIS = "…";
 
-export function Excerpt({ blockId, words }: { blockId: BlockId | null | undefined; words: string }) {
+interface Words {
+  words: string;
+  /** Where the words sit in the block's drawn text, when the caller knows — a hit's `Found.start`. */
+  near?: number | undefined;
+}
+
+export function Excerpt({ blockId, words, near }: Words & { blockId: BlockId | null | undefined }) {
   const index = useBlockLinks();
-  const block = blockId ? index?.get(blockId)?.block : undefined;
+  return <BlockExcerpt block={blockId ? index?.get(blockId)?.block : undefined} words={words} near={near} />;
+}
+
+export function BlockExcerpt({ block, words, near }: Words & { block: Block | undefined }) {
   const drawn = useMemo(() => {
     if (!block) return null;
     const lead = words.startsWith(ELLIPSIS);
     const tail = words.endsWith(ELLIPSIS) && words.length > ELLIPSIS.length;
     const inner = words.slice(lead ? ELLIPSIS.length : 0, tail ? -ELLIPSIS.length : undefined);
-    const html = excerptHtml(block, inner) ?? excerptFallbackHtml(block, inner);
+    const html =
+      excerptHtml(block, inner, near === undefined ? {} : { near }) ?? excerptFallbackHtml(block, inner);
     return html === null ? null : { html, lead, tail };
-  }, [block, words]);
+  }, [block, words, near]);
 
   if (!drawn) return <>{words}</>;
   return (

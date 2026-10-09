@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * Chat — the parts that are checkable arithmetic rather than a model call.
  *

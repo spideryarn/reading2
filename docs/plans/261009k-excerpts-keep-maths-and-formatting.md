@@ -15,8 +15,8 @@ Report: **spya-pqae7m** (Greg, 2026-10-09 07:42 UTC), on *Attention Is All You N
 >
 > — Greg, 2026-10-09
 
-Status: **stage 1 built** (the renderer, Skim drawn through it, tests red-then-green); stage 2 (the
-other sites) planned below.
+Status: **built** — the renderer, Skim, and 31 more sites, with GPT Sol's plan review folded in
+(§ Plan review). Code review: § Code review.
 
 ## Why it happened
 
@@ -49,40 +49,49 @@ offset spaces:
 
 **One function, one component, one lookup.**
 
-- `src/web/excerpt-html.ts` § `excerptHtml(block, words)` → html or `null`.
+- `src/web/excerpt-html.ts` § `excerptHtml(block, words, { near? })` → html or `null`, cached per
+  block (a `WeakMap`), so a list re-rendering draws nothing twice.
   1. Find `words` in the block **before its maths was drawn** — the same forgiving finder the prose
-     marks use (`quote-match.ts` § `findQuote`), no `near`, first occurrence, as `resolveQuotes`.
-     If not found there, find them in the block **as drawn** (a selection or a snippet whose
-     formulas are already symbols).
+     marks use (`quote-match.ts` § `findQuote`), first occurrence, as `resolveQuotes`. If not found
+     there, find them in the block **as drawn** (a selection or a snippet whose formulas are already
+     symbols). A caller that knows where its words sit in the drawn text — a `Found.start`, a
+     comment's anchor — passes `near`, which goes straight to the drawn form and chooses between
+     repeats. Text inside a dropped element (a diagram's labels) is not matched against.
   2. Widen each end out of any formula it falls inside — a TeX span (`findMathSpans`) or an
      existing `<math>` — so a cut never shows half a formula or a stray `\(`.
   3. `Range.cloneContents()`, then keep only inline formatting (`em i strong b sub sup code kbd
-     samp var s del ins u small q cite abbr dfn`), each **recreated bare**, plus `<math>` cloned
-     whole. Links become their words (an excerpt usually sits inside a button that goes to the
-     passage; a link inside a button is invalid and unclickable). Pictures, svg, scripts and form
-     controls go. A nested block boundary becomes a space, as `extractText` does.
+     samp var s del ins u small cite abbr dfn`), each **recreated bare**, plus `<math>` copied
+     whole but with every `id`, `name`, `href`, `xlink:href`, `tabindex`, `data-*` taken off and
+     any HTML inside it reduced to words. The inline elements the range sits wholly inside are put
+     back around it (`cloneContents` leaves them out). Links and `<q>` become their words (an
+     excerpt usually sits inside a button that goes to the passage, and its caller already quotes
+     it). Pictures, svg, scripts and form controls go. A nested block boundary becomes a space, as
+     `extractText` does.
   4. Draw the TeX with **the renderer that drew the block's** (only for the first form), make every
      formula inline (MathML's `display` attribute and temml's `tml-display` class removed, so a row
      stays a row — CSS `display: inline` would take it out of MathML layout), and put the result
      **back through the article policy** (`sanitizeBlockHtml`), as maths.ts does with its own
      output.
 - `excerptFallbackHtml(block, words)`: words the block cannot place (a quote from an older
-  revision) are still drawn with their maths if the block's renderer is to hand; otherwise `null`
-  and the caller's string is drawn as before.
+  revision) are still drawn with their maths if the block's renderer is to hand — except in a code
+  block, where `\(…\)` is code; otherwise `null` and the caller's string is drawn as before.
 - **Where the pre-maths html and the renderer come from**: the `RENDERED_MATHS` provenance symbol
   (maths-provenance.ts), which held `true`, now holds `{ html, render }` — the block's sanitised
   html before maths, and the renderer that drew it. `rendersMaths` still asks only `in`. It is a
   symbol, so it cannot arrive in JSON or authored html, and object spreads carry it (rehost).
-- `src/web/Excerpt.tsx` § `<Excerpt blockId words />`: looks the block up in the reading view's
-  existing index (`BlockLinkCard.tsx` § `useBlockLinks`, whose entries now carry `block`), strips a
-  caller's leading/trailing `…` and puts it back outside, and draws the string unchanged outside
-  the reading view, for an unknown block, or for words the block does not hold.
+- `src/web/Excerpt.tsx` § `<Excerpt blockId words near? />`: looks the block up in the reading
+  view's existing index (`block-link-index.ts` § `useBlockLinks`, whose entries now carry `block`;
+  the context moved out of BlockLinkCard.tsx so the card can draw an excerpt without an import
+  cycle), strips a caller's leading/trailing `…` and puts it back outside, and draws the string
+  unchanged outside the reading view, for an unknown block, or for words the block does not hold.
+  `<BlockExcerpt block words />` is the same for a caller holding the block: the block-link card,
+  and the info page, which is outside the index.
 
 **Safety argument.** The input is html that already passed the article policy at ingress. Kept
 elements are created new with no attributes, so nothing can carry an `id`, a `data-spya-*` block
-id or an `href` out (docs/project/block-ids.md); kept `<math>` is one maths.ts already accepted
-(its addressing attributes refused), or the article's own MathML, which the policy allows. Then the
-same policy runs once more. No new allowance; one more consumer of the policy, which is what
+id or an `href` out (docs/project/block-ids.md); kept `<math>` has its addressing attributes and
+every `data-*` stripped, whether temml drew it or the article carried it (Sol found the second
+carried all four through). Then the same policy runs once more. No new allowance; one more consumer of the policy, which is what
 security-map.md asks. It is parsed in an inert document, so nothing loads.
 
 ## Stages
@@ -91,15 +100,17 @@ security-map.md asks. It is parsed in an inert document, so nothing loads.
    `tests/skim-panel.test.tsx` § *draws a quote's maths as maths and keeps its italics* was red
    (`expected null not to be null` on the `<math>`), green after. `tests/excerpt-html.test.ts` pins the
    function; two of its cases were confirmed to fail by breaking the widening and the inline step.
-2. **Every other site with a block id at hand** — `<Excerpt>` in place of the string:
+2. **Every other site with a block id at hand** — built, `<Excerpt>` in place of the string:
    Quotes rows and highlight rows; Ideas evidence; Timeline occurrences; Search row and its card;
    Claims (claim, passages, other text in quotes), Criteria (result, placements), Mirror;
-   Debate claim heads; FAQ passages; Marginalia FAQ, timeline and question notes; Glossary's asked
+   Debate claim heads; FAQ passages; Marginalia FAQ, timeline and asked-question notes (the block
+   id is now passed to `MarginNotesSlot`; the structural question note is a model's words and stays
+   a string); Glossary's asked
    quote; Citations' first-cited words; the in-article-link hover card; the block-link card behind
    every chip; Dock, comment, annotate and chat dialogs' quoted passage; Illustrated vignettes;
    "where you left off".
-3. Docs: maths.md § What stays as source loses the side-panels line and gains a pointer here;
-   quotes.md / skim.md get a line; the feedback note.
+3. Docs: maths.md § Excerpts outside the prose (and § What stays as source loses the side-panels
+   line); web-client.md § Shared code (client) names `Excerpt`; the feedback note.
 
 **Left as strings, on purpose** (each is a few words, or has no block to draw from):
 
@@ -124,12 +135,68 @@ security-map.md asks. It is parsed in an inert document, so nothing loads.
 
 ## Costs and risks
 
-- Each drawn excerpt parses its block's html once (memoised per block and words). A Search list of
-  a few hundred hits parses a few hundred paragraphs — milliseconds. If it shows, cache per block.
-- A quote whose words appear twice in a block draws the first, which is what the prose mark does.
+- One excerpt parses its block's html about four times (cut, finish, the policy, React's sink). Sol
+  measured ~1.7 s for 300 ordinary excerpts in jsdom — not a browser, but enough to stop calling it
+  "milliseconds". Results are now cached per block across rows and renders; a Search list still pays
+  once per hit on first draw.
+- **Measured.** The browser check (Vite dev, headless Chrome, a box busy with other agents' tests)
+  searched BERT for "the": 588 hits, 99 of them with maths, and main-thread long tasks of 1–3 s
+  while the list drew. There is no baseline with the old code, so how much of that is this change
+  is not known. Each block is now **parsed once** and its finder built once, however many excerpts
+  are cut from it, and an excerpt that is only words skips the policy pass (it was serialised from
+  text nodes, so it is already escaped). In jsdom, 600 excerpts from 60 blocks went from 765 ms to
+  197 ms. Not re-measured in Chrome; if a common-word Search still stalls, the next step is drawing
+  excerpts only for rows on screen.
+- A stored quote whose words appear twice in a block draws the first, which is what the prose mark
+  does; a hit, an idea, a timeline occurrence and a comment draw the one they were placed at.
 - Excerpts that sit inside elements with their own font rules keep them: the excerpt is a `<span>`.
 - Peers in Skim (`fbud2w92`, the Skim-questions session) touch SkimPanel; this changes only the two
   lines that draw the words, plus a `blockId` on the row.
+
+## Browser check
+
+A Sonnet subagent, Playwright on the box, the local database, BERT (`arxiv-1810-spya-e24vmj`, 35
+blocks with TeX, 39 quotes of which 10 carry maths; a Skim route planned for it through the UI):
+
+- **Quotes**: 39 excerpts, 10 with `<math>`; italic *i*-th and *C*, BERT<sub>BASE</sub> drawn as in
+  the prose. **Skim**: the cut row with maths and its hover card both draw it (2 → 4 `<math>` on
+  hover). Zero `\(` anywhere on the page in either mode.
+- **Block-link card**: a chip's card drew its paragraph with 2 `<math>`; another kept `<em>`/`<sub>`.
+- `.excerpt [id], .excerpt [href], .excerpt [data-spya-id]`: 0 in Quotes, Skim, the Skim card and a
+  588-hit Search. No console errors in Chrome or WebKit.
+- Not checked: the current Skim stop's row (stop 1 had no maths).
+- Shots: [quotes and a card](261009k-shot-1-quotes-maths-and-block-link-card.png),
+  [skim and its card](261009k-shot-2-skim-maths-and-tooltip.png),
+  [iPhone quotes](261009k-shot-3-iphone-quotes-maths.png).
+
+## Plan review
+
+GPT Sol, read-only — [261009k-…-plan-review-sol.md](261009k-excerpts-keep-maths-and-formatting-plan-review-sol.md),
+verdict *proceed with changes*. All nine taken:
+
+| | Finding | What changed |
+|---|---|---|
+| F1 | an excerpt wholly inside one `<em>` came out plain | `withAncestors` puts the enclosing inline elements back; test |
+| F2 | the article's own MathML carried `id`, `href`, `name`, `data-spya-*` through | `inertMath` strips them, HTML inside reduced to words; test with Sol's payload |
+| F3 | first occurrence imposed on callers that know their position | `near`, passed by Ideas, Timeline, Search, Quotes' highlight rows, Marginalia, annotate and chat dialogs; test |
+| F4 | the info page is outside the index, so it drew raw TeX | `BlockExcerpt` takes the block; Metadata and the block-link card use it, which also removed the card's hand copy |
+| F5 | matched text a dropped `<svg>` then removed | dropped elements' text is not matched; test |
+| F6 | the cost was understated, and `useMemo` shares nothing between rows | per-block `WeakMap` cache; the number above |
+| F7 | a kept `<q>` doubles the caller's quotation marks | `<q>` unwrapped; test |
+| F8 | Marginalia FAQ and Timeline notes had no block id | passed down from Reader to `MarginNotesSlot` |
+| F9 | the fallback could turn a stale code quote's `\(…\)` into maths | no maths fallback for a code block; test |
+
+**A cost this adds, named.** Twelve node-environment test files (`quotes-panel`, `quotes-step`,
+`glossary`, `block-ref`, `chat`, `command-match-mode-aliases`, `command-pick-catalogue`, `diagram`,
+`dock-mode-order`, `dock-mode-urls`, `prioritised-defaults`, `tweets-page`) import a component whose
+graph now reaches `Excerpt` → `excerpt-html.ts` → the sanitiser, which builds DOMPurify on `window`
+when it loads; they run under jsdom now. A future node test importing a panel will fail loudly
+(`window is not defined`), not silently. The alternatives were weighed and passed over: making
+`src/web/sanitize.ts` build its DOMPurify lazily is a change to a defence (security-map.md), left for
+Greg; reaching the sanitiser by dynamic import makes an excerpt's first draw race the import; and
+dropping the final policy pass would remove the second line the safety argument rests on.
+maths-provenance.ts was split out on 2026-09-12 for this same reason, for a module (`search-hits.ts`)
+that is pure; a React panel already needs a DOM to be drawn.
 
 ## Questions and assumptions (unattended run)
 

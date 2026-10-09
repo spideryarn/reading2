@@ -267,6 +267,7 @@ import {
    import graph. key-chord.ts imports nothing, so that argument is answered. */
 import { isImeComposing, isModChord, isTyping } from "./key-chord.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
+import { Excerpt } from "./Excerpt.js"; // quotes drawn from the block's markup (plan 261009k)
 import { BandWaiting } from "./BandWaiting.js";
 import { InstallHint } from "./InstallHint.js";
 import { DropdownMenu } from "radix-ui";
@@ -4802,10 +4803,10 @@ function Questions({
                 const p = passageOf(entry.item, paragraphs.get(entry.item.blockId));
                 return p.whole ? (
                   <>
-                    <em className="passage-whole">Whole paragraph</em> — {p.text}
+                    <em className="passage-whole">Whole paragraph</em> — <Excerpt blockId={entry.item.blockId} words={p.text} />
                   </>
                 ) : (
-                  p.text
+                  <Excerpt blockId={entry.item.blockId} words={p.text} />
                 );
               })()}
             </span>

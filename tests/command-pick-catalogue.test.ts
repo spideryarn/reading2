@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * **The bar's rows as a model is shown them** — `pickOption`
  * (src/web/command-match.ts) and the checked-in list built from it,

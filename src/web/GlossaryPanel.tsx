@@ -135,6 +135,7 @@ import { RewriteWaiting } from "./RewriteWaiting.js";
 import { GlossaryKindIcon } from "./GlossaryKindIcon.js";
 import { useRenderCount } from "./perf.js";
 import { BandWaiting } from "./BandWaiting.js";
+import { Excerpt } from "./Excerpt.js";
 
 /**
  * **The owner's half of this panel** — the read's status, the job writing it,
@@ -1848,7 +1849,10 @@ function AskATerm({
       {askDraft && !asked && (
         <div className="gloss-ask-answer">
           <p className="gloss-ask-found">
-            <strong>{askDraft.quote}</strong>
+            <strong>
+              {/* The article's own words, drawn from the block's markup (Excerpt.tsx, plan 261009k). */}
+              <Excerpt blockId={askDraft.blockId} words={askDraft.quote} />
+            </strong>
             <BlockRef id={askDraft.blockId} onJump={onJump} />
           </p>
           {askDraft.text && (
@@ -1867,7 +1871,9 @@ function AskATerm({
               the model was asked about. Showing the reader's string here would
               be the panel quoting something it did not use. */}
           <p className="gloss-ask-found">
-            <strong>{asked.quote}</strong>
+            <strong>
+              <Excerpt blockId={asked.blockId} words={asked.quote} />
+            </strong>
             <BlockRef id={asked.blockId} onJump={onJump} />
           </p>
           <AddedNote added={asked.added} shownIds={shownIds} onTerm={onTerm} onUnhide={onUnhide} />

@@ -68,9 +68,11 @@ import {
   useFloating,
   useTransitionStyles,
 } from "@floating-ui/react";
-import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { Block, BlockId } from "../types.js";
 import { snippet } from "./citations.js";
+import { BlockLinkContext, type BlockLinkEntry, type BlockLinkIndex } from "./block-link-index.js";
+import { BlockExcerpt } from "./Excerpt.js";
 import { MARG_TIPS, isMargTipKey } from "./marginalia/tips.js";
 import type { Section } from "./position.js";
 import { SAFE_ID, spentWords } from "./reading-time.js";
@@ -78,22 +80,9 @@ import { ControlTip, TipNote } from "./Tooltip.js";
 import type { ReadingTimeFor } from "./useReadingTime.js";
 import { XREF_SELECTOR, type XrefResolver } from "./xref.js";
 
-/** What a card says about one block. */
-export interface BlockLinkEntry {
-  /** The block's plain text — `""` for an image or a figure. */
-  text: string;
-  /** The title of the section it sits in, or undefined where that has none. */
-  section: string | undefined;
-  /**
-   * The block itself, as the prose draws it, so an excerpt anywhere in the
-   * reading view is drawn from its markup (Excerpt.tsx, plan 261009k). Absent
-   * in an index built from text alone, and then an excerpt is a string.
-   */
-  block?: Block;
-}
-
-/** Every block of this article, by id. Also the "is this id real" check. */
-export type BlockLinkIndex = ReadonlyMap<BlockId, BlockLinkEntry>;
+/* The index's types and context live in block-link-index.ts, so `Excerpt`
+   can read them without importing this card (plan 261009k). */
+export { type BlockLinkEntry, type BlockLinkIndex, useBlockLinks } from "./block-link-index.js";
 
 /** The one sentence for a link to a block this article does not have. */
 export const MISSING_BLOCK = "This passage is not in this version of the article.";
@@ -123,12 +112,6 @@ export function buildBlockLinkIndex(
   return index;
 }
 
-const BlockLinkContext = createContext<BlockLinkIndex | null>(null);
-
-/** The index, or null outside the reading view — where a link cannot know. */
-export function useBlockLinks(): BlockLinkIndex | null {
-  return useContext(BlockLinkContext);
-}
 
 /**
  * Mounted once by Reader around the whole reading view. Portalled panels (the
@@ -294,7 +277,10 @@ function contentFor(
           // a tooltip that failed to load.
           <p className="tip-cite-empty">This block has no text of its own.</p>
         ) : (
-          <p className="tip-cite-text">{shown}</p>
+          // The block's own markup, maths and italics kept (plan 261009k).
+          <p className="tip-cite-text">
+            <BlockExcerpt block={entry.block} words={shown} />
+          </p>
         ))}
     </>
   );

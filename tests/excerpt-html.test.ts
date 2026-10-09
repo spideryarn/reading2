@@ -105,6 +105,44 @@ describe("excerptHtml", () => {
     expect(el.querySelector("math")?.textContent).toBe("E=m");
   });
 
+  /* GPT Sol's plan review, F1–F7 (docs/plans/261009k-…-plan-review-sol.md). */
+  it("keeps the formatting an excerpt sits wholly inside — F1", () => {
+    const one = parse(excerptHtml(block("<p>Plain <em>important words</em> here.</p>"), "important words")!);
+    expect(one.querySelector("em")?.textContent).toBe("important words");
+    const nested = parse(excerptHtml(block("<p>A <strong>b <em>very deep</em> c</strong>.</p>"), "very deep")!);
+    expect(nested.querySelector("strong > em")?.textContent).toBe("very deep");
+  });
+
+  it("carries no address out of the article's own MathML — F2", () => {
+    const b = block(
+      '<p>See <math id="spya-aaaaaa" data-spya-pdf-figure="forged"><mtext><a href="https://evil.test/x" name="n">target</a></mtext></math> now.</p>',
+    );
+    const html = excerptHtml(b, "See target now")!;
+    const el = parse(html);
+    expect(el.querySelector("math")).not.toBeNull();
+    expect(el.querySelector("[id], [name], [href], a")).toBeNull();
+    expect(html).not.toContain("data-spya");
+    expect(el.textContent).toBe("See target now");
+  });
+
+  it("draws the occurrence a caller places, not the first — F3", () => {
+    const b = block("<p><em>same words</em> and then <strong>same words</strong>.</p>");
+    const second = renderedText(b.html).lastIndexOf("same words");
+    expect(parse(excerptHtml(b, "same words", { near: second })!).querySelector("strong")).not.toBeNull();
+    expect(parse(excerptHtml(b, "same words")!).querySelector("em")).not.toBeNull();
+  });
+
+  it("does not match words through a diagram it would then leave out — F5", () => {
+    const b = block("<p><em>before</em><svg><text>label</text></svg><strong>after</strong></p>");
+    expect(excerptHtml(b, "before label after")).toBeNull();
+  });
+
+  it("unwraps the article's own <q>: the caller already quotes the excerpt — F7", () => {
+    const el = parse(excerptHtml(block("<p>He said <q>no more</q> twice.</p>"), "said no more twice")!);
+    expect(el.querySelector("q")).toBeNull();
+    expect(el.textContent).toBe("said no more twice");
+  });
+
   it("is null for words the block does not hold, and leaves a price alone", () => {
     expect(excerptHtml(block("<p>Nothing like it.</p>"), "something else")).toBeNull();
     const el = parse(excerptHtml(block("<p>It cost $5 and $10.</p>"), "cost $5 and $10")!);
@@ -125,5 +163,10 @@ describe("excerptFallbackHtml", () => {
     expect(excerptFallbackHtml(block("<p>x</p>"), "\\(d_k\\)")).toBeNull();
     expect(excerptFallbackHtml(undefined, "\\(d_k\\)")).toBeNull();
     expect(excerptFallbackHtml(await drawn(ATTENTION), "plain words <b>")).toBeNull();
+  });
+
+  it("leaves a code block's TeX as code — F9", async () => {
+    const b = { ...(await drawn(ATTENTION)), kind: "code" } as Block;
+    expect(excerptFallbackHtml(b, "printf(\"\\(x\\)\")")).toBeNull();
   });
 });

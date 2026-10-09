@@ -64,6 +64,7 @@ import {
   type Quote,
 } from "../types.js";
 import { LABEL as QUOTE_SCORE_LABEL } from "./QuotesPanel.js";
+import { Excerpt } from "./Excerpt.js"; // quotes drawn from the block's markup (plan 261009k)
 import { aiProvenance } from "./quote-band-rows.js";
 import { urlKey } from "../ingest.js";
 import { hostOf } from "../urls.js";
@@ -1297,7 +1298,7 @@ function LinkCard({
               paragraph's first sentence is the author's, and a gist of it would
               be ours — and the reader can see the whole thing by following the
               link, which is one click away and already works. */}
-          <p className="prose-card-text prose-card-quote">{clip(anchor.text, 260)}</p>
+          <p className="prose-card-text prose-card-quote"><Excerpt blockId={anchor.blockId} words={clip(anchor.text, 260)} /></p>
           <p className="prose-card-foot">
             <button
               type="button"

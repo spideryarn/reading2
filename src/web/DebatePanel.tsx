@@ -227,6 +227,7 @@ import {
   readStoredLean,
 } from "../types.js";
 import { BlockRef } from "./BlockRef.js";
+import { Excerpt } from "./Excerpt.js"; // quotes drawn from the block's markup (plan 261009k)
 import { isImeComposing } from "./key-chord.js";
 import { receptionSections } from "./debate-levels.js";
 import {
@@ -2653,7 +2654,7 @@ function CheckedClaim({
           </>
         ) : (
           <>
-            <span className="dbt-group-quote">“{head.quote}”</span>
+            <span className="dbt-group-quote">“<Excerpt blockId={head.blockId} words={head.quote} />”</span>
             <BlockRef id={head.blockId} onJump={onJump} />
           </>
         )}
@@ -2742,7 +2743,7 @@ function ListedClaims({
             )}
             <div className="dbt-listed-body">
               <p className="dbt-group-claim dbt-listed-head">
-                <span className="dbt-group-quote">“{claim.quote}”</span>
+                <span className="dbt-group-quote">“<Excerpt blockId={claim.blockId} words={claim.quote} />”</span>
                 <BlockRef id={claim.blockId} onJump={onJump} />
                 {chats && (
                   <Tooltip placement="top" content={<TipNote>{DEBATE_CHECK_CLAIM}</TipNote>}>

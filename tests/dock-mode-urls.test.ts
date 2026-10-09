@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * **The query string the dock writes when you switch modes.**
  *
