@@ -1,8 +1,8 @@
-# GPT Sol: plan review of 261009e (read-only)
+# GPT Sol: plan review of 261009g (read-only)
 
 You are reviewing a plan in the Spideryarn repo (cwd). Read-only: do not edit any file.
 
-Read `docs/plans/261009e-dictation-stays-with-its-article-and-the-button-says-its-tricks.md` (the
+Read `docs/plans/261009g-dictation-stays-with-its-article-and-the-button-says-its-tricks.md` (the
 plan), then `docs/project/dictation.md` § "Words go only where they were said" and § "A closed tab
 does not lose a dictation", `src/web/dictation-keep.ts`, and the parts of `src/web/useDictation.ts`
 that use `keep`/`keepBox`/`elsewhere`/recovery. The implementation is already drafted in the working

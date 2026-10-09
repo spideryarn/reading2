@@ -2930,7 +2930,7 @@ export function Composer({
    * box `chat:<slug>:<thread id>`, the new-conversation box
    * `chat:<slug>:new:<kind>`, a passage draft `chat:<slug>:draft:<block>`.
    * Per article alone, a tape left in one conversation came back in another
-   * (Overseer, 2026-10-09; plan 261009e).
+   * (Overseer, 2026-10-09; plan 261009g).
    */
   keepAs: string;
   onSend(question: string): void;

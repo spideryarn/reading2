@@ -1,10 +1,10 @@
-# GPT Sol: code review of 261009e
+# GPT Sol: code review of 261009g
 
 Spideryarn repo (cwd, a git worktree). Review the uncommitted change: `git diff HEAD`, plus the
 untracked files from `git status` (three new tests under `tests/`, the plan and its review under
-`docs/plans/261009e-*`).
+`docs/plans/261009g-*`).
 
-Read the plan first: `docs/plans/261009e-dictation-stays-with-its-article-and-the-button-says-its-tricks.md`,
+Read the plan first: `docs/plans/261009g-dictation-stays-with-its-article-and-the-button-says-its-tricks.md`,
 including the section on your own earlier plan review, which says what was taken and what declined.
 
 You may **fix what you find inside this change** (edit files in this worktree). Do not commit, do not

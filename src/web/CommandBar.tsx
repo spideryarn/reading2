@@ -2073,7 +2073,7 @@ export function CommandBar({
     transcribe,
     /* Per article, because a command is about the page it was said on: one
        name for the whole site offered a phrase said on one article back on the
-       next, transcribed against the first and run on the second (plan 261009e). */
+       next, transcribed against the first and run on the second (plan 261009g). */
     ...(open ? { keep: keepDictation(`commands:${article?.slug ?? ""}`) } : {}),
     /* **A double press on Stop presses Enter when the words arrive** — Greg,
        2026-10-05: *"yes for the command bar"* (plan 261005a; dictation.md § A

@@ -69,7 +69,7 @@ export function deviceUnavailableWords(wanted: string | null, using: string | nu
  * does with the phrase: run the row it names, or ask what it meant. So it says
  * Enter, which is true of both (Greg's yes to the bar, 2026-10-05, plan 261005a).
  * The annotate box neither sends nor presses Enter: its done action is Save
- * (GPT Sol's review of 261009e, F1, after its card said "send").
+ * (GPT Sol's review of 261009g, F1, after its card said "send").
  */
 export type DoneAction = "send" | "enter" | "save";
 const DONE_WORDS: Record<DoneAction, { again: string; button: string; strip: string }> = {
@@ -205,7 +205,7 @@ const DICTATION_OFFLINE =
  *
  * Not the privacy sentence ({@link DICTATION_PROMISE}): it is already the
  * button's description, and the card's text joins that description, so a
- * screen reader would hear it twice (GPT Sol, 261009e F2). There is no keyboard
+ * screen reader would hear it twice (GPT Sol, 261009g F2). There is no keyboard
  * shortcut for the microphone; if one is ever added, it is named here.
  *
  * A hover and focus card, so a finger does not see it: a tap on the

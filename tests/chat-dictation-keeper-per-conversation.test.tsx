@@ -8,7 +8,7 @@
  * drawn each have to say what it is about: ChatPanel's conversation and
  * new-conversation boxes, and ChatDialog's passage draft.
  *
- * docs/plans/261009e-dictation-stays-with-its-article-and-the-button-says-its-tricks.md.
+ * docs/plans/261009g-dictation-stays-with-its-article-and-the-button-says-its-tricks.md.
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";

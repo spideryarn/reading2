@@ -151,7 +151,7 @@ check for the call sites.
 
 ## GPT Sol's plan review, and what was taken
 
-[The review](261009e-dictation-stays-with-its-article-plan-review-sol.md) (run after a first draft of
+[The review](261009g-dictation-stays-with-its-article-plan-review-sol.md) (run after a first draft of
 the code, read-only) agreed the root cause and the trawl, and found the problems in the card:
 
 - **F1, taken.** Annotate's double press saves, and its card said "send" (and its strip said
@@ -176,12 +176,12 @@ gutter at 390, and is gone while recording; the tape in IndexedDB is `chat:fowle
 Metadata's *Why you're reading this one*: the card has no double-press line, and the tape is
 `profile:article-purpose:fowler-phrenology`. Not checked in the browser: the guide greeting, the
 command bar and annotate cards, a conversation's thread id in the name (tests cover those).
-Shots: `261009e-shot-1-desktop.png`, `261009e-shot-2-phone.png`,
-`261009e-shot-3-desktop-metadata.png`, `261009e-shot-4-phone-metadata.png`.
+Shots: `261009g-shot-1-desktop.png`, `261009g-shot-2-phone.png`,
+`261009g-shot-3-desktop-metadata.png`, `261009g-shot-4-phone-metadata.png`.
 
 ## GPT Sol's code review
 
-[The review](261009e-dictation-stays-with-its-article-code-review-sol.md) approved after fixing four
+[The review](261009g-dictation-stays-with-its-article-code-review-sol.md) approved after fixing four
 things inside the stage: Help's Chat page and dictation.md still said Annotate's double press sends
 (F1); the card test now covers the description merge, the live `again` window and Annotate's strip
 (F2); the chat test now renders the real `ChatPanel` and `ChatDialog` callers (F3, which reverses

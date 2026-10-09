@@ -4,7 +4,7 @@
  * limit, and the double press nobody would guess.** Greg, 2026-10-09
  * (spya-xdvnrg); docs/project/tooltips.md § A shortcut is named on its card.
  *
- * docs/plans/261009e-dictation-stays-with-its-article-and-the-button-says-its-tricks.md.
+ * docs/plans/261009g-dictation-stays-with-its-article-and-the-button-says-its-tricks.md.
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";

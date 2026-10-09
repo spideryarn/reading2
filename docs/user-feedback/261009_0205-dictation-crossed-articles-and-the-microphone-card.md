@@ -8,7 +8,7 @@ comment: A recording left on one article is no longer offered on another; Chat, 
 Two admin reports from Greg (`scripts/feedback-reporter.ts` exit 0 on both), filed 2026-10-09 at
 02:05 and 02:07 UTC, and the Overseer's addendum about Chat. Session
 `fbvzj8fc-dictation-cross-article`. Plan, the trawl's table, both GPT Sol reviews and the browser
-check: [261009e](../plans/261009e-dictation-stays-with-its-article-and-the-button-says-its-tricks.md).
+check: [261009g](../plans/261009g-dictation-stays-with-its-article-and-the-button-says-its-tricks.md).
 
 > I was in the guide chat for a previous article. The attention is all you need one, and I guess
 > there was some kind of error, maybe with voice dictation. […] And so I said, try again. And so it

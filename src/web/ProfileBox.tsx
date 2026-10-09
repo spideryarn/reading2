@@ -152,7 +152,7 @@ export function ProfileBox({
    * is one field for every article. Required rather than optional because it
    * names the box's dictation keeper: a per-article box keeping under a name
    * without the slug offered one article's recording back on the next
-   * (Greg, 2026-10-09, spya-vzj8fc; plan 261009e).
+   * (Greg, 2026-10-09, spya-vzj8fc; plan 261009g).
    */
   article: string | null;
   label: string;

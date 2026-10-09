@@ -438,7 +438,7 @@ export function AnnotateDialog({
        included, since two selections can start at the same character. The
        keeper's name is also what a transcript is bound to (dictation.md §
        Words go only where they were said). The slug too: block ids are unique
-       within an article, not across them (plan 261009e). */
+       within an article, not across them (plan 261009g). */
     keep: keepDictation(`annotate:${route.kind === "read" ? route.slug : ""}:${annotateKey(anchor)}`),
     /* A double press on Stop also saves: Save is what ⌘+Enter does here, and
        never Ask AI (dictation.md § A double press). Only once `loaded`: `press`

@@ -12,7 +12,7 @@
  * also what binds a dictation in memory to the box it was said into — so the
  * name has to carry the article wherever the field is per article.
  *
- * docs/plans/261009e-dictation-stays-with-its-article-and-the-button-says-its-tricks.md.
+ * docs/plans/261009g-dictation-stays-with-its-article-and-the-button-says-its-tricks.md.
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";

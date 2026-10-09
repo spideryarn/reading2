@@ -725,7 +725,7 @@ passed over, and GPT Sol's review.
   `profile:<field>:<slug>` for *Why you're reading this one*. **The name is the partition, so it
   names everything the words are about**: a per-article box keeping under a name without the slug
   offered one article's recording back on the next, and Try again put it there (Greg, 2026-10-09,
-  `spya-vzj8fc`; [261009e](../plans/261009e-dictation-stays-with-its-article-and-the-button-says-its-tricks.md)
+  `spya-vzj8fc`; [261009g](../plans/261009g-dictation-stays-with-its-article-and-the-button-says-its-tricks.md)
   has every box's verdict). `ProfileBox`'s `article` and `Composer`'s `keepAs` are required for
   that reason. A recording is offered back only in the box it was
   made in, to the reader who made it, and is transcribed against the `where` it was recorded with.
