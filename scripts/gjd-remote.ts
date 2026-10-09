@@ -76,6 +76,7 @@ import {
   sessionState,
   setRoleCommand,
 } from "./gjd-remote-tmux.js";
+import { DEFAULT_FLEET_PORT, overseerTarget, readTellAnswer, splitStatus, tellPostCommand } from "./gjd-remote-tell.js";
 import { bootstrapProbeScript, buildProvisionRunner, cloudInitGate, provisionVerdict } from "./gjd-remote-provision.js";
 import { declaredServers, mcpVerdict } from "./gjd-remote-mcp.js";
 import {
@@ -2212,6 +2213,70 @@ function claimLine(claim: OverseerClaim): string {
       return never;
     }
   }
+}
+
+/**
+ * One line to the Overseer, through the dashboard's steer route on the box.
+ * The reasoning is in scripts/gjd-remote-tell.ts.
+ *
+ * Two round trips, both `curl` on the box against 127.0.0.1, where the
+ * dashboard listens. **The message goes down ssh's stdin, never onto ssh's
+ * or curl's command line**, so neither exposes it in `ps` and the text needs
+ * no shell quoting. The `Origin` header is the dashboard's own address,
+ * which is how a non-browser client opts in to `checkOrigin` — the same thing
+ * tools/overseer/rule-work.ts does.
+ */
+function cmdTellOverseer(text: string, port: number): void {
+  const base = `http://127.0.0.1:${port}`;
+  const state = sshRun(`curl --disable --noproxy '*' -sS --fail --max-time 20 ${shq(`${base}/api/state`)}`);
+  if (state.status !== 0) die(`could not read the dashboard at ${base} on the box: ${escapeName(lastWords(state.stderr))}`);
+  let snapshot: unknown;
+  try {
+    snapshot = JSON.parse(state.stdout);
+  } catch {
+    die(`the dashboard at ${base} answered something that is not JSON`);
+  }
+  const target = overseerTarget(snapshot, text);
+  if (!target.ok) die(`not sent — ${target.why}`);
+
+  // `-w` puts the status on a line of its own after the body, so a refusal's
+  // JSON and its HTTP status arrive together; no `--fail`, because a refusal's
+  // body is the sentence worth showing.
+  const post = spawnSync(
+    "ssh",
+    [
+      ...SSH_OPTS,
+      ...sshMasterOpts(),
+      HOST(),
+      tellPostCommand(port),
+    ],
+    { input: JSON.stringify(target.body), encoding: "utf8" },
+  );
+  // THREE EXITS, as `mindstone-fleet tell` has them: 0 sent, 1 refused with
+  // nothing typed, 2 uncertain. A script retrying on any non-zero would type
+  // an uncertain message twice; 2 is the one it must not retry.
+  const uncertain = (msg: string): never => {
+    console.error(red(`✗ ${msg}`));
+    process.exit(2);
+  };
+  if (post.status !== 0) {
+    uncertain(
+      `the request to ${base} did not complete (${post.status}): ${escapeName(lastWords(post.stderr || ""))}\n` +
+        "  it may still have arrived — look at the Overseer's pane before sending again",
+    );
+  }
+  const { httpStatus, body } = splitStatus(post.stdout || "");
+  const answer = readTellAnswer(httpStatus, body);
+  appendLog({ cmd: "tell-overseer", name: target.name });
+  if (answer.ok) {
+    console.log(green(`✓ sent to ${printableName(target.name)}, the Overseer`));
+    return;
+  }
+  if (!answer.textMayBeInTheBox) die(`not sent to ${printableName(target.name)} — ${answer.why}`);
+  uncertain(
+    `delivery not confirmed to ${printableName(target.name)} — ${answer.why}\n` +
+      "  the text may have arrived or be in its input box: look at the pane before sending again",
+  );
 }
 
 /**
@@ -5418,6 +5483,18 @@ ${bold("SESSIONS")}
                           session and with the tmux server: after a reboot NO
                           session is the Overseer, which ${dim("ls")} says out loud.
   release-overseer <name> let go of the claim, leaving the session running
+  tell-overseer <text…>   send the Overseer one line, as you, and say whether it landed
+                          Goes through the fleet dashboard's own steer route on
+                          the box — the same path as its "Message the Overseer"
+                          box — so every check it makes still applies: one line
+                          only, refused if a dialog is open or the input box has
+                          text in it. Quote the text, or the shell eats ?, * and '.
+                          For text starting with -, put -- before the text.
+                          Exits 0 sent, 1 refused (nothing typed), 2 uncertain —
+                          look at the pane, and do not send it again.
+      -p, --prompt TEXT     the text, instead of after the command (-p - reads stdin,
+                            so backticks and $() need no quoting)
+          --port N          the dashboard's port on the box (default 8787)
   log                     every session launched from here, and whether it ran
       --lost                only the ones that never started ${dim("— the reboot case")}
       --limit N             how many rows ${dim("(default 40)")}
@@ -5886,6 +5963,33 @@ async function main(): Promise<void> {
     case "release-overseer":
       return cmdRole(cmd === "claim-overseer" ? "claim" : "release", positionalName(rest));
 
+    case "tell-overseer": {
+      const usage = 'usage: gjd-remote tell-overseer [--port N] [--] "<one line of text>"   or   -p - <<\'EOF\' … EOF';
+      const { values, positionals } = (() => {
+        try {
+          return parseArgs({
+            args: rest,
+            allowPositionals: true,
+            options: { port: { type: "string" }, prompt: { type: "string", short: "p" } },
+          });
+        } catch {
+          // parseArgs quotes unknown options in its error, and an option here
+          // can be the message itself. Never echo that error to the terminal.
+          die(usage);
+        }
+      })();
+      if (values.prompt !== undefined && positionals.length > 0) die(usage);
+      // `-p -` is `new-claude`'s, borrowed from `mindstone-fleet tell`: a
+      // heredoc carries backticks and `$()` that shell quoting would eat. Its
+      // final newline is the heredoc's, not the message's — left on, the route
+      // would refuse the text as two lines.
+      const text = values.prompt === undefined ? positionals.join(" ") : (resolvePrompt(values.prompt) ?? "").replace(/\r?\n$/, "");
+      if (text.trim() === "") die(usage);
+      const port = values.port === undefined ? DEFAULT_FLEET_PORT : Number(values.port);
+      if (!Number.isInteger(port) || port < 1 || port > 65535) die(`--port wants a port number, not ${printableName(values.port ?? "")}`);
+      return cmdTellOverseer(text, port);
+    }
+
     case "new-shell": {
       const { values, positionals } = parseArgs({
         args: rest,
@@ -6119,7 +6223,7 @@ async function main(): Promise<void> {
       return console.log(HELP);
 
     default: {
-      const known = ["ls", "log", "new-claude", "new-shell", "resume", "kill", "doctor", "provision", "clone", "setup", "push-env", "upload", "resolve", "ssh", "tunnel", "forget-key"];
+      const known = ["ls", "log", "new-claude", "new-shell", "resume", "kill", "doctor", "provision", "clone", "setup", "push-env", "upload", "resolve", "ssh", "tunnel", "forget-key", "resume-all", "claim-overseer", "release-overseer", "tell-overseer"];
       // The containment clause is not decoration: `new` and `shell` were the
       // names of these two commands until 2026-08-31 and there are no aliases,
       // so the typo path is the whole migration. Two-char prefixes get `new`
