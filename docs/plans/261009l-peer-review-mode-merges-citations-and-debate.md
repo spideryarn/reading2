@@ -62,7 +62,9 @@ wrong name costs very different amounts at different depths:
 - **The mode word** (`?mode=peer-review`, the `Mode` union, the help page, the remembered last view)
   is new in this work and has few stored copies. Changing it later is moderate.
 - **The stored names** (the `citations`, `debate` and `debate-claims` steps and columns, routes,
-  files, chat origins, CSS prefixes) total about 4,000 hits across 300 files. This is the expensive
+  files, chat origins, CSS prefixes) total about 4,000 hits across 330 source files
+  (`grep -rio debate src | wc -l` gives 2,667 in 138 files; the same for `citations` gives 1,553 in
+  194, some of them chat's unrelated web citations; 2026-10-09). This is the expensive
   part, and it is the part a later name change would make us pay for twice.
 
 So: build B and C1 now, with "Peer review" on screen and `peer-review` as the mode word, because
@@ -130,16 +132,22 @@ per sub-mode, so the steps are named by hand in `DELEGATED_MODE_STEPS`, as Summa
 - **`debate-claims` is not queued.** It is cheap, but it serves a sub-mode many readers will not
   open. It runs on the press of its chip.
 
-**Reception's spend, now that every reader has it.** A Reception search is stored once per article
-revision. It is made again only from the stale banner's *Search again*, which `useRewriteHold`
-holds. The claim checks have their own allowance (10 an hour, 30 a day). Sol is asked to confirm
-nothing lets one reader buy Reception searches in a loop.
+**Reception's spend, now that every reader has it.** No navigation buys it: `useAutoRun` needs a
+claimed press, and a link, Back, popstate or a last-view restore never claims one. A press on its
+chip, the bar button landing on it, or a command-bar pick is a deliberate press. **But an owner can
+buy it again and again**, as they can every other completed step: Metadata offers each step again
+and posts a forced run on every press, and the command bar's rerun rows do the same.
+`useRewriteHold` only stops two overlapping. That is true today of every paid step, and of Reception
+for the readers with the switch on. This plan accepts it as it stands rather than adding a limit,
+because it is one owner spending on their own article by a deliberate press, which billing already
+watches. A per-reader allowance (the claim checks have one) is the follow-up if the cost report shows
+abuse. (Corrected after Sol's F2. The first draft said only the stale banner re-ran it, which was
+false.)
 
 ### C1: the works cited in each claim's paragraph
 
 Under each listed claim (`ListedClaim`, in the `debate-claims` artefact), a line headed **Cited in
-this paragraph**. It lists the works whose `citedAt` includes the claim's `blockId`, in the order
-they are first cited in that paragraph, each as its short name ("Smith 2019", or the title when
+this paragraph**. It lists the works whose `citedAt` includes the claim's `blockId`, in Bibliography order, each as its short name ("Smith 2019", or the title when
 there is no author and year).
 
 - **Pressing a work opens Bibliography on that work's row.** It reuses the `citeFocus` hand-off
@@ -157,8 +165,12 @@ there is no author and year).
 - **No Bibliography yet** (owner, not generated): no line, and no run started. Opening Claims does
   not buy the citations step. On import it will usually exist already.
 
-`citedAt` lists every body block that cites the work, including footnote expansion (plan 261009e),
-so the join is complete for the paragraphs we resolved.
+`citedAt` lists the body blocks that cite the work, including footnote expansion (plan 261009e).
+**It is best-effort, not complete**: a work's direct mentions are capped, so a heavily cited work can
+be missing from a late paragraph. The works are listed **in Bibliography order**, which is each
+work's first citation in the whole piece, not its order within the paragraph (Sol F6). Both are
+acceptable for a line that only says "cited here". Making them exact would mean extending the stored
+citation data, and that is not worth it for this line.
 
 ## Stages
 
@@ -207,6 +219,33 @@ so the join is complete for the paragraphs we resolved.
    Plus the reading-view-overview line, `debate.md § Not decided`, which is now decided, and
    `mode.md § Renaming` (this merge as a precedent).
 
+10. **After Sol's plan review** ([261009l-peer-review-plan-review-sol.md](261009l-peer-review-plan-review-sol.md)):
+    - **One canonicaliser for old addresses (F1).** A pure function used by `settleAddress`,
+      `liftedLegacyHref` *and* last-view's `restoredHref`. It runs `liftLegacyDebateBy` first, lets
+      an explicit `peer-review=` win, and drops the translated `debate=`. It is tested for boot,
+      navigate, popstate and a stored last view, for Citations, Reception, Claims and `debateby=claim`.
+    - **Visitor policy (F3).** A new `any-artefact` policy shape over the keys, and a per-sub-mode
+      missing state inside the open surface. A visitor with Reception but no Bibliography sees
+      Peer review open, with Bibliography saying there is no list. Tested for citations only,
+      reception only, claims only, mixed, and none.
+    - **Counts (F4).** The three counts become pure selectors, out of `CitationsPanel` and
+      `DebatePanel`, used by both the chip row and the panels, so the numbers keep their meaning.
+      Exactly one `ModeSurface`, the panel's. The surface and boundary tests get a row for each of
+      the three owner views, not only the default.
+    - **Chat (F5).** A stored origin `debate` or `citations` maps to `mode: "peer-review"` and the
+      `peer-review` filter. The tooltips keep sub-mode wording. Old `chatfrom=debate|citations`
+      (and remembered ones) become `chatfrom=peer-review`. Tested: icon, filter, and the way back
+      (work→Bibliography, lens→Reception, claim→Claims).
+    - **Focus lifecycle (F7).** One Reader-owned `openBibliographyWork(id)` sets `citeFocus` and
+      pushes the Bibliography view together. The citation focus clears on leaving Bibliography, and
+      the claim focus on leaving Claims, not only on leaving the mode.
+    - **Rerun commands (F8).** `citations` and `debate` leave `RERUN_MODE` and get hand-written rows
+      labelled Bibliography and Reception. A bare "rerun peer review" picks neither.
+    - **The held rename (F9).** The queue item exists before this work closes, with its blocker
+      (Greg confirms the name), its acceptance criteria and the inventory command. Every new
+      identifier added here is Peer-review-named (`PeerReviewBand`, `PEER_REVIEW_VIEWS`,
+      `peerReviewParam`). `citations` and `debate` appear only at the existing storage and API seams.
+
 Done when: typecheck, the full suite and doc-links are green, and every old link above lands in the
 right place, under a test.
 
@@ -251,6 +290,10 @@ iPad and phone widths by a Sonnet subagent, then the bookkeeping: the question f
   beside a claim reads as "supports this claim", which the join cannot say.
 
 ## Log
+
+- 2026-10-09: GPT Sol's plan review: BUILD WITH CHANGES, F1 to F9, all accepted and written into
+  Stage 1 § 10. F2 corrected a false claim about Reception's spend, and the repeat press is accepted
+  as is. F6 softened C1's completeness and order claims.
 
 - 2026-10-09: plan written. Opus's product opinion: the merge is good; default to Bibliography;
   queue only Bibliography on import; ask about the name first (overruled above, with the deep rename
