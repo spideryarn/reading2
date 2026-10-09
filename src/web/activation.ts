@@ -197,8 +197,8 @@ export type { AutoRunTarget };
  * goes out to the open web, up to ~$0.14 and rising with the length of the
  * article (two such calls until `debate/7`, 2026-10-08, when the claims
  * search left the press). **Delegated since that day**: a press landing on
- * Reception arms the search, one landing on Claims arms nothing
- * (§ `activationForDebate`). What keeps the price honest is that the mode is behind the
+ * Reception arms the search, one landing on Claims arms the claims list —
+ * one call and no search (§ `activationForDebate`). What keeps the price honest is that the mode is behind the
  * experimental-features switch, so the button is not in front of every reader,
  * and that the blurb on it says so.
  *
@@ -260,7 +260,7 @@ const MODE_TARGET: Record<Mode, ModeActivation> = {
   debate: {
     kind: "delegated",
     target: (ctx) => activationForDebate(ctx.debate),
-    why: "the sub-mode a press lands on is whatever `?debate=` says: Reception arms the search, Claims nothing",
+    why: "the sub-mode a press lands on is whatever `?debate=` says: Reception arms the search, Claims the claims list",
   },
   citations: { kind: "fixed", target: "citations" },
   faq: { kind: "fixed", target: "faq" },
@@ -580,21 +580,26 @@ export function activationForSummary(view: SummaryView): AutoRunTarget | null {
 
 /**
  * **What a press that lands on one of Debate's sub-modes arms**: the `debate`
- * search for Reception, and nothing for Claims.
+ * search for Reception, and the `debate-claims` list for Claims.
  *
  * One answer for the three places that must agree, as `activationForSummary`
  * is: the bar's delegated row, the command bar's sub-mode rows
- * (`subModeTarget`), and the token the boundary retires (`bandTarget`).
+ * (`subModeTarget`), and the token the boundary retires (`bandTarget`). The
+ * panel's own segments arm through `subModeTarget` too (DebatePanel.tsx §
+ * `DebateViews`).
  *
- * **Claims arms nothing since `debate/7`** (2026-10-08). Until then both
- * sub-modes armed the one `debate` run, which searched for both; the press now
- * searches for Reception only, so a Claims press arming it would buy Reception
- * for a reader who asked for claims (GPT Sol's F1 on plan
- * docs/plans/261008i-debate-claims-picked-by-the-reader.md). The claims list
- * the plan's next stage adds will be Claims' own target.
+ * **Two targets, never one** (2026-10-08). Until `debate/7` both sub-modes
+ * armed the one `debate` run, which searched for both; the press now searches
+ * for Reception only, so a Claims press arming it would buy Reception for a
+ * reader who asked for claims (GPT Sol's F1 on plan
+ * docs/plans/261008i-debate-claims-picked-by-the-reader.md). Claims' own work
+ * is the list of the article's claims, one call and no search (that plan's
+ * § 2), and each hook spends only its own target and only while its sub-mode
+ * is showing (useDebate.ts, useDebateClaims.ts), so neither press can buy the
+ * other's work.
  */
-export function activationForDebate(view: DebateView): AutoRunTarget | null {
-  return view === "reception" ? "debate" : null;
+export function activationForDebate(view: DebateView): AutoRunTarget {
+  return view === "reception" ? "debate" : "debate-claims";
 }
 
 /**
@@ -696,7 +701,7 @@ export function armActivationForRefereeView(slug: string, view: RefereeView): vo
  *    for Brief and Fuller, nothing for Thread (SummaryMode.tsx §
  *    `SummaryControls`, and `bandTarget` below);
  *  - Debate: `activationForDebate` of the sub-mode **the row names** —
- *    `debate` for Reception, nothing for Claims.
+ *    `debate` for Reception, `debate-claims` for Claims.
  *
  * `bandTarget` below gives the same answer for the band that mounts, which is
  * what lets a token armed here be claimed — tests/command-bar-sub-modes.test.tsx holds
@@ -715,10 +720,11 @@ export function subModeTarget(sub: SubMode): AutoRunTarget | null {
     /* Nothing to generate in either view: the tree is in the page's payload. */
     case "structure":
       return null;
-    /* **Reception's row arms the `debate` search; Claims' arms nothing** —
-       the mode row's own answer (`activationForDebate`), since the press
-       searches for Reception only (`debate/7`, plan 261008i). The band's own
-       segments arm nothing: they are drawn only once a debate is stored. */
+    /* **Reception's row arms the `debate` search; Claims' arms the claims
+       list** — the mode row's own answer (`activationForDebate`), since the
+       press searches for Reception only (`debate/7`, plan 261008i). The
+       panel's own segments arm through here too (DebatePanel.tsx §
+       `DebateViews`). */
     case "debate":
       return activationForDebate(sub.view);
     default: {

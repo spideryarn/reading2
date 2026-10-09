@@ -47,10 +47,11 @@ Two sub-modes on a segmented control (`?debate=claims`; Reception is the default
   For the owner it ends with **Cited by**: the papers that cite the piece, from OpenAlex, most cited
   first, ten and then all (see [§ Cited by](#cited-by-the-papers-that-cite-the-piece) below). A
   visitor gets a Google Scholar search for who cites it instead.
-- **Claims**: a current press does not search this group. It says so rather than presenting an empty
-  result as a failed search. A debate from before `debate/7` still draws its saved claim sources
-  exactly as before: one open disclosure per claim, in article order, headed by the article's own
-  words; the relevance bar belongs here.
+- **Claims**: the list of the claims the article rests on, for the reader to pick from
+  ([§ The claims list](#the-claims-list)). The Reception search no longer looks into claims. A
+  debate from before `debate/7` still draws its saved claim sources under the list, exactly as
+  before, headed *Claims the earlier search chose*: one open disclosure per claim, in article
+  order, headed by the article's own words; the relevance bar belongs there.
 
 When the article has changed since the search ran, a banner says so and offers *Search again*.
 That button is held from the press until the new search has been read, so one press cannot buy two
@@ -65,6 +66,37 @@ angle of their own typed into the box at the top
 
 Open this doc to find your way in; the plans below are still where the design and its reasoning
 live.
+
+## The claims list
+
+Since 2026-10-08 Claims opens on a list of up to eight claims the article rests on that someone
+outside could argue with, in article order
+([261008i § 2](../plans/261008i-debate-claims-picked-by-the-reader.md)). It is its own pipeline
+step and artefact, `debate-claims` (the `debate_claims` column), made by **one model call over the
+article and no web search**: a few cents, where the Reception search is the dearest press in the
+app. Each claim is the article's own words, re-found in the paragraph it names and stored as the
+article's characters (the Referee rule, `findQuote` in `"spaced"` mode), with a jump to that
+paragraph, and under it one short line in the AI's words, labelled so. A claim whose quote is not
+in its paragraph is dropped and counted. Picking claims and checking them on the web is the plan's
+next stage; until then each listed claim has *Check this claim in chat*.
+
+**The press rule.** Pressing the Claims chip — the panel's segment, the command bar's *Debate:
+Claims*, or the Debate button when it lands on Claims — makes the list when there is none. A link,
+Back, a reload or a last-view restore that lands on Claims only reads, and shows *List its claims*.
+The two sub-modes arm two different targets (`activationForDebate`, `src/web/activation.ts`), and
+each hook spends only its own while its own sub-mode is showing, so a Claims press can never buy
+the Reception search, nor a Reception press the list.
+
+**Its states**: none (*List its claims* for the owner; a sentence for a visitor), running, an empty
+list (a sentence: a real answer), a failed run (its sentence and *Retry*), and **stale** — the
+article has changed since — when the list is drawn read-only under a banner with *List again*.
+
+**Who sees it.** The owner, with the controls. A visitor to a shared article sees the list
+read-only — each claim's id, paragraph, quote and statement, through the public projection — and
+nothing to press; the list alone, with no search stored, is enough to open Debate to them.
+
+The Claims segment's count is the number of listed claims when there is a list, and otherwise the
+older search's claim sources, as before.
 
 ## Check a claim in chat
 
@@ -329,6 +361,9 @@ Each module's header comment says what it owns and why; start with `src/debate.t
 
 - [`src/debate.ts`](../../src/debate.ts) — the pipeline step: the searches, and what is kept. Its
   header opens with the one thing to understand first.
+- [`src/debate-claims.ts`](../../src/debate-claims.ts) — Claims' list: the `debate-claims` step,
+  its prompt and the anchoring of each claim. The panel's half is
+  [`src/web/useDebateClaims.ts`](../../src/web/useDebateClaims.ts).
 - [`src/debate-themes.ts`](../../src/debate-themes.ts) — the optional search-free synthesis call:
   the themes the Reception sources share, and the key sources.
 - [`src/debate-synthesis.ts`](../../src/debate-synthesis.ts) — the rules a synthesis must keep, read

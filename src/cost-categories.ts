@@ -189,6 +189,8 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   "simple-check": "step-driven",
   skim: "step-driven",
   debate: "step-driven",
+  /* Debate's claims list, one Messages call and no search (src/debate-claims.ts). */
+  "debate-claims": "step-driven",
   citations: "step-driven",
   /* Three tasks a reader waits on with the page open. */
   explain: "interactive request work",

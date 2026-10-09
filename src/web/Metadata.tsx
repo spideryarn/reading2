@@ -395,6 +395,9 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
      moment the step exists, which is exactly what that record is for. The mode
      itself, its button and its panel are a later stage. */
   debate: MessagesSquare,
+  /* The same two speech marks: the list Debate's Claims picks from. Reused
+     rather than a new import. docs/plans/261008i-debate-claims-picked-by-the-reader.md. */
+  "debate-claims": MessagesSquare,
   /* A link: what the row is for is the address of each work the piece cites.
      Reused rather than a new import — the Citations panel is stage 2 of
      docs/plans/260911g-citations-mode.md, and may choose its own glyph. */

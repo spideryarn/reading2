@@ -98,6 +98,7 @@ import type {
   QuizKeptAnswer,
   QuizQuestionId,
   FaqFound,
+  DebateClaimListFound,
   RelationsResponse,
   CrossrefsFound,
   SimpleSummaryFound,
@@ -294,6 +295,14 @@ export interface ArticleReader {
    * docs/plans/260916d-faq-mode.md.
    */
   loadFaq(slug: string): Promise<FaqFound>;
+
+  /**
+   * Debate's claims list, plus whether it still describes the article — FAQ's
+   * two staleness facts, over FAQ's fingerprint. A visitor reads the list off
+   * the public payload instead (src/store/public-reader.ts), without the
+   * staleness verdict. docs/plans/261008i-debate-claims-picked-by-the-reader.md.
+   */
+  loadDebateClaims(slug: string): Promise<DebateClaimListFound>;
 
   /**
    * How each paragraph bears on the one before it, plus whether it still

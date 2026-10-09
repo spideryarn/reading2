@@ -75,6 +75,7 @@ import type {
   DebateClaimsNotRun,
   DebateSynthesis,
   FaqQuestion,
+  ListedClaim,
   SimpleLevel,
   SimpleParagraph,
   GlossaryKind,
@@ -424,6 +425,7 @@ export interface PublicArtefactSet {
   simpleSummary?: PublicSimpleSummary;
   citations?: PublicCitations;
   debate?: PublicDebate;
+  debateClaims?: PublicDebateClaimList;
   sketch?: PublicSketch;
 }
 
@@ -601,6 +603,27 @@ export interface PublicSkim {
  */
 export interface PublicFaq {
   questions: FaqQuestion[];
+}
+
+/**
+ * **Debate's claims list, as a visitor gets it** — from the day it was built
+ * (2026-10-08, docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2).
+ * Generated output about the article, so readable by a visitor by default
+ * (docs/project/mode.md § The artefact); only making it spends.
+ *
+ * **Each claim crosses field by field** — `{ id, blockId, quote, statement }`:
+ * the article's own words, where they are, and the model's one-line wording of
+ * the claim. No profile is in this stage, so there is nothing about a person
+ * to drop. **Read-only**: the visitor's panel has no button to make, redo or
+ * check one.
+ *
+ * **What does not cross** is the pipeline, as everywhere in this file —
+ * `version`, `generator`, `slug`, `sourceHash`, `generatedAt`, `elapsedMs` —
+ * and `dropped`, our checking's tally. Nor does any check the owner ran on a
+ * listed claim: those are a separate table (plan § 4).
+ */
+export interface PublicDebateClaimList {
+  claims: ListedClaim[];
 }
 
 /**

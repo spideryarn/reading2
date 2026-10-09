@@ -5494,18 +5494,41 @@ export const DEBATE_BEFORE_SEARCH =
   "One search of the open web, for what others have written about this piece. It takes about " +
   "a minute and costs real money. Many pieces have no reception at all. Searched once and kept.";
 
-/**
- * **Claims, on a debate whose press did not search for claims** — every one
- * searched at `debate/7` or later (src/types.ts § `DebateClaims`). Never the
- * empty-search sentences above: no search ran, so none found nothing.
- *
- * The owner's says what is coming, because the press that used to fill this
- * is gone and the list to pick from is the next stage of plan 261008i.
- * **Temporary**: that stage replaces it.
- */
-export const DEBATE_CLAIMS_NOT_SEARCHED =
-  "Claims are no longer searched along with Reception. A list of the piece's claims, for you to " +
-  "pick which ones to check, is coming next.";
+/* ---- Claims: the list of the article's claims (plan 261008i § 2) ----
+
+   Since 2026-10-08 Claims draws a list of the claims the article rests on,
+   made by one model call over the article and no web search, on the owner's
+   press. These are its states' sentences. The sentence that stood here until
+   then, DEBATE_CLAIMS_NOT_SEARCHED, said the list was coming; the list is the
+   answer to it. */
+
+/** The owner's Claims before a list is made: what *List its claims* does, before the button. */
+export const DEBATE_CLAIMS_LIST_NONE =
+  "List the claims this piece rests on that someone outside could argue with, so you can pick which " +
+  "to check. One model call over the article, no web search, and it takes a few tens of seconds.";
+
+/** The button that makes the list, on the owner's Claims with none. */
+export const DEBATE_CLAIMS_LIST_RUN = "List its claims";
+
+/** The button beside a stale list, which makes it again. */
+export const DEBATE_CLAIMS_LIST_AGAIN = "List again";
+
+/** A visitor's Claims with no list: there is nothing to press, so it says only what is true. */
+export const DEBATE_CLAIMS_LIST_NONE_SHARED = "No list of this piece's claims has been made.";
+
+/** A list that came back empty: a real answer, not a failure. */
+export const DEBATE_CLAIMS_LIST_EMPTY =
+  "No claim in this piece stood out as one someone outside could argue with.";
+
+/** The banner over a list made from an older version of the article. Read-only until made again. */
+export const DEBATE_CLAIMS_LIST_STALE =
+  "The article has changed since these claims were listed, so some may no longer be in it.";
+
+/** The label under each listed claim's statement: whose words those are. */
+export const DEBATE_CLAIMS_LIST_AI = "In the AI's words";
+
+/** The owner's Claims while the GET is in flight. */
+export const DEBATE_CLAIMS_LIST_LOADING = "Looking for the list of its claims…";
 
 /** …the visitor's, and the band's (i) for both: what is true of the stored search, and only that. */
 export const DEBATE_CLAIMS_NOT_SEARCHED_SHARED = "This search did not look into what the piece claims.";

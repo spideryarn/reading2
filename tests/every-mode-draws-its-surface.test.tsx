@@ -763,6 +763,8 @@ const EVERY_TARGET: Record<AutoRunTarget, true> = {
   quotes: true,
   timeline: true,
   debate: true,
+  /* Debate's Claims list — armed one level down, by a press that lands on Claims. */
+  "debate-claims": true,
   citations: true,
   faq: true,
   relations: true,

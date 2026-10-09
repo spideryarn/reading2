@@ -1399,16 +1399,17 @@ export function learnInSearch(search: string): LearnView {
  * 2026-10-03 (docs/plans/261003o-debate-reception-and-claims-sub-modes-and-a-tidier-panel.md).
  *
  * `reception` is what others have written about the piece itself; `claims` is
- * what has been written about the claims it makes. *Which thing, within this
+ * the list of the claims the piece rests on (since 2026-10-08, plan 261008i
+ * § 2), with an older search's claim sources under it. *Which thing, within this
  * mode*, so the shape of `?summary=` and `?referee=`: in the URL, because it
  * changes the whole band, and pushed, because switching is a deliberate act
  * Back should undo. **`reception` is the default** and is omitted from the
  * address; an unknown value reads as Reception.
  *
- * **Writing it never spends.** Debate searches when its owner presses — the
- * mode's button landing on Reception, or Reception's command-bar row, which
- * arm the `debate` run; since 2026-10-08 a press landing on Claims arms
- * nothing, because the search is for Reception only (activation.ts §
+ * **Writing it never spends.** Each sub-mode's work starts on its owner's
+ * press and only then — the mode's button, the sub-mode's command-bar row or
+ * its segment: a press landing on Reception arms the `debate` search, one
+ * landing on Claims the `debate-claims` list (activation.ts §
  * `activationForDebate`). Back, a pasted link and a last-view restore arrive
  * here and buy nothing.
  *

@@ -3476,10 +3476,14 @@ export function Reader({
          docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md § Stage 4,
          docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
       case "debate":
+        /* Either the debate or Claims' list is enough to draw the band since
+           2026-10-08 (plan 261008i § 2): a list made with no search stored is
+           still the visitor's to read. */
         if (!owner)
-          return artefacts?.debate ? (
+          return artefacts?.debate || artefacts?.debateClaims ? (
             <VisitorDebateBand
-              debate={artefacts.debate}
+              debate={artefacts.debate ?? null}
+              claimList={artefacts.debateClaims ?? null}
               onJump={bandJump}
               blockOrder={blockOrder}
               publishedAt={publishedAt}

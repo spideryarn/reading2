@@ -4,9 +4,10 @@
  * for.
  *
  * The read half is `GET /api/debate/:slug`; the write half is a **job**, and
- * this one costs more than any of its neighbours — two separately metered
- * model calls that each go out to the open web, up to ~$0.27 a run and rising
- * with the length of the article (src/debate.ts § the spend ceiling).
+ * this one costs more than any of its neighbours — a metered call that goes
+ * out to the open web, and rises with the length of the article (src/debate.ts
+ * § the spend ceiling; two such calls until `debate/7`, when the claims search
+ * left the press). Claims' list is `useDebateClaims`, beside this one.
  *
  * ## Two verbs, like the timeline next door
  *

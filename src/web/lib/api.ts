@@ -988,10 +988,10 @@ function saving(
 }
 
 /**
- * The sixteen reads that may answer `200 null` for "not made yet" — every
+ * The seventeen reads that may answer `200 null` for "not made yet" — every
  * artefact read since plan 261007n — see the note where it is used, above.
  *
- * **The same sixteen as the routes that call `orNullWhenNotMadeYet`** in
+ * **The same seventeen as the routes that call `orNullWhenNotMadeYet`** in
  * src/routes.ts, and nothing derives one list from the other: a new artefact
  * read is a name here as well as the helper there. Exported for the test that
  * fails when they differ (tests/api-fetch-offline.test.ts).
@@ -1001,7 +1001,7 @@ function saving(
  * a file, and a missing artefact there is a missing plate.
  */
 export const NONE_YET_AS_NULL =
-  /^\/api\/(?:quiz|crossrefs|citations|simple|ideas|faq|timeline|debate|glossary|quotes|tweets|relations|skim|sketch|illustrated|arc)\/[^/?]+$/;
+  /^\/api\/(?:quiz|crossrefs|citations|simple|ideas|faq|timeline|debate|debate-claims|glossary|quotes|tweets|relations|skim|sketch|illustrated|arc)\/[^/?]+$/;
 
 /** `application/json`, whatever parameters follow it. */
 function isJson(res: Response): boolean {
@@ -1098,6 +1098,9 @@ const CACHEABLE = [
      is here rather than with the panel because the derived test asks for it the
      moment the route exists. */
   "/api/debate/",
+  /* With the route, as `/api/faq/` is: Debate's claims list, which Claims
+     draws from — docs/plans/261008i-debate-claims-picked-by-the-reader.md. */
+  "/api/debate-claims/",
   "/api/citations/",
   "/api/metadata/",
   "/api/tweets/",

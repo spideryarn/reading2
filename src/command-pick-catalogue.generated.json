@@ -725,7 +725,7 @@
  {
   "id": "submode:debate:claims",
   "label": "Claims",
-  "description": "What has been written about the claims it makes, by people who may never have read it",
+  "description": "The claims it rests on that someone outside could argue with, listed for you to pick from",
   "aliases": [
    "Debate",
    "Claims Debate",
@@ -733,7 +733,7 @@
    "Claims mode"
   ],
   "kind": "submode",
-  "generates": false,
+  "generates": true,
   "contexts": [
    "owner-article",
    "owner-article-archived",

@@ -40,6 +40,8 @@ import type {
   Debate,
   DirectDebateRow,
   Faq,
+  DebateClaimList,
+  ListedClaim,
   SimpleSentence,
   SimpleSummary,
   Glossary,
@@ -73,6 +75,7 @@ const NO_ARTEFACTS = {
   simpleSummary: null,
   citations: null,
   debate: null,
+  debateClaims: null,
   /* Cross-references (plan 261001b): none built, and so nothing to be fresh. */
   crossrefs: null,
   crossrefsFresh: false,
@@ -1347,6 +1350,30 @@ describe("the artefacts a shared link carries", () => {
   };
 
   /**
+   * **Debate's claims list with every field set** — `dropped` above all, and a
+   * key on a claim the stored document should not have, so a projection that
+   * copied its argument would carry it out. Plan 261008i stage 2.
+   */
+  const CLAIM_LIST: DebateClaimList = {
+    version: "debate-claims/1",
+    generator: "some-model",
+    slug: "noema",
+    sourceHash: "abc123",
+    claims: [
+      {
+        id: "spya-cdm2a4",
+        blockId: "spya-bbbbbb" as BlockId,
+        quote: "the measurement",
+        statement: "A measurement has to carry its own meaning.",
+        ...({ ownerId: "owner id sentinel on a listed claim" } as object),
+      } as ListedClaim,
+    ],
+    dropped: { unknownIds: 1, unquoted: 2, tooLong: 0, duplicate: 0, overCap: 3, malformed: 0 },
+    generatedAt: "2026-10-08T10:00:00.000Z",
+    elapsedMs: 9_000,
+  };
+
+  /**
    * **A stored Simple with every field set** — the stamp above all: the
    * paragraphs cross, the pipeline's provenance does not. Plan 260930i.
    */
@@ -1634,6 +1661,7 @@ describe("the artefacts a shared link carries", () => {
     simpleSummary: SIMPLE,
     citations: CITATIONS,
     debate: null,
+    debateClaims: CLAIM_LIST,
     comments: [],
     searches: [],
     sketch: null,
@@ -2161,6 +2189,27 @@ describe("the artefacts a shared link carries", () => {
     expect(JSON.stringify(built.faq)).not.toContain("dropped");
   });
 
+  /** Each listed claim's id, place, quote and the AI's line, and nothing about our pipeline. Plan 261008i. */
+  it("carries Debate's listed claims, field by field, and not what checking dropped", () => {
+    expect(pathsUnder("debateClaims")).toEqual(
+      ["claims", "claims[].blockId", "claims[].id", "claims[].quote", "claims[].statement"].sort(),
+    );
+    expect(built.debateClaims).toEqual({
+      claims: [
+        {
+          id: "spya-cdm2a4",
+          blockId: "spya-bbbbbb",
+          quote: "the measurement",
+          statement: "A measurement has to carry its own meaning.",
+        },
+      ],
+    });
+    const json = JSON.stringify(built.debateClaims);
+    for (const gone of ["dropped", "sourceHash", "generator", "version", "owner id sentinel"]) {
+      expect(json, gone).not.toContain(gone);
+    }
+  });
+
   /** Both levels' paragraphs and ids, and not the stamp or the owner's profile hash. Plans 260930i, 261001b. */
   it("carries Simple's paragraphs and their ids at Brief and Fuller, and not the stamp or a stored middle level", () => {
     expect(pathsUnder("simpleSummary")).toEqual(
@@ -2501,6 +2550,7 @@ describe("the artefacts a shared link carries", () => {
       simpleSummary: null,
       citations: null,
       debate: null,
+      debateClaims: null,
       crossrefs: null,
       crossrefsFresh: false,
       comments: [],
@@ -2539,7 +2589,7 @@ describe("the artefacts a shared link carries", () => {
       assets: null,
       ...NO_ARTEFACTS,
     });
-    for (const key of ["glossary", "ideas", "tweets", "skim", "faq", "simpleSummary", "citations", "debate"]) {
+    for (const key of ["glossary", "ideas", "tweets", "skim", "faq", "simpleSummary", "citations", "debate", "debateClaims"]) {
       expect(key in bare, key).toBe(false);
     }
   });

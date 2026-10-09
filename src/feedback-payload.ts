@@ -214,6 +214,7 @@ const STEPS = [
   "sketch",
   "illustrated",
   "debate",
+  "debate-claims",
   "citations",
   "crossrefs",
   "simple",

@@ -3465,7 +3465,8 @@ export type StepName =
      The only step whose content is not in the article at all: it runs a
      metered web search and returns pages that answer the piece. Until
      `debate/7` (2026-10-08) a second search looked for the argument around
-     the claims it makes; the reader now picks those (plan 261008i).
+     the claims it makes; the reader now picks those (plan 261008i), from
+     the list `debate-claims` below makes.
 
      **It is deliberately NOT an `ArticleStage`** (src/models.ts). That type is
      the subset of these names that send the article bare on the Messages wire,
@@ -3475,6 +3476,12 @@ export type StepName =
      among the ones the compiler asks for, and a reader will otherwise go
      looking for the missing rows. */
   | "debate"
+  /* **The article's own claims, listed for Debate's Claims to pick from** —
+     docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2. One
+     Messages-wire call over `articleWithIds` on the body, **no web search**,
+     made by a press on Claims. Ideas' article block at `high` effort, so an
+     `ArticleStage`. */
+  | "debate-claims"
   /* **Every work the piece cites, linked** — docs/plans/260911g-citations-mode.md.
      One Messages-wire call over the whole article, bibliography and notes
      included, and a link derived by code from the article's own hrefs.
@@ -7233,6 +7240,74 @@ export type CitersResult =
  * by shape.
  */
 export type DebateFound = DebateResponse;
+
+/* ---------------------------------------------------------- debate-claims --
+   The article's own claims, listed for the reader to pick from — the
+   `debate_claims` column on `article_revisions`, written by the
+   `debate-claims` step (src/debate-claims.ts) and drawn by Debate's Claims
+   sub-mode. No web search: one model call over the article.
+   docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2. */
+
+/**
+ * **One claim the article rests on that someone outside could argue with.**
+ * Anchored the house way (docs/project/block-ids.md): `blockId` + `quote`,
+ * the quote re-found in its block with `findQuote(…, "spaced")` and stored as
+ * the article's characters, never the model's.
+ */
+export interface ListedClaim {
+  /** Minted per run (src/ids.ts). What a check will name the claim by (plan § 3). */
+  id: string;
+  blockId: BlockId;
+  /** The article's own words for the claim, copied out of its block. */
+  quote: string;
+  /** One short line in plain words: **the model's wording**, and labelled so on screen. */
+  statement: string;
+}
+
+/** What validation threw away. Counts only — never a claim or a quote. */
+export interface DebateClaimListDropped {
+  /** A claim naming a block id that is not in the body evidence. */
+  unknownIds: number;
+  /** A claim whose quote `findQuote` (`"spaced"`) could not find in its block. */
+  unquoted: number;
+  /** A located quote over the cap — dropped, never cut. */
+  tooLong: number;
+  /** A second claim on the same words of the same block. */
+  duplicate: number;
+  /** Claims past `MAX_LISTED_CLAIMS`, cut in the model's order. */
+  overCap: number;
+  /** Items we could not read: a missing field, an overlong statement, a non-object. */
+  malformed: number;
+}
+
+/** The artefact. The `debate_claims` column on `article_revisions`. */
+export interface DebateClaimList {
+  version: string;
+  generator: string;
+  slug: string;
+  /** `articleWithIdsFingerprint` over the blocks, the tree and the cited head. */
+  sourceHash: string;
+  /**
+   * **In document order**, never a ranking. **An empty list is a real answer**:
+   * the model found no claim someone outside could argue with.
+   */
+  claims: ListedClaim[];
+  dropped: DebateClaimListDropped;
+  generatedAt: string;
+  elapsedMs: number;
+}
+
+/** `GET /api/debate-claims/:slug`. Two staleness facts: no profile is in this stamp. */
+export interface DebateClaimListResponse {
+  claimList: DebateClaimList;
+  /** The article moved underneath this — blocks, sections or the cited head. */
+  stale: boolean;
+  /** The article is the same and we would write this differently now. */
+  outdated: boolean;
+}
+
+/** As `FaqFound`: the same type, because there is no `profileChanged` to omit. */
+export type DebateClaimListFound = DebateClaimListResponse;
 
 /* ------------------------------------------------------------- feedback -- */
 

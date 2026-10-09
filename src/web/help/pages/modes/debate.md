@@ -16,13 +16,17 @@ found.
 ![Debate’s Claims view: a relevance slider, a thread shared by two sources, one claim quoted from the piece, and under it an arXiv paper marked as a key source, Critical, with an excerpt from it](../images/mode-debate.png "Claims: one of the piece’s claims, and a paper the AI judges to dispute it. The AI tags are the model’s reading; the excerpt is the source’s own words.")
 
 - Two views. **Reception** is what others have written about this piece itself: replies, reviews,
-  and work that cites it and says something about it. **Claims** is what has been written about the
-  claims it makes, by people who may never have read it. The number on each is how many sources it
-  is showing.
+  and work that cites it and says something about it. **Claims** lists the claims the piece rests
+  on that someone outside could argue with. The number on Reception is how many sources it is
+  showing; on Claims, how many claims are listed.
 - **Search the web** searches for Reception only. It used to pick three or four of the piece's
-  claims by itself and search those too; it no longer does, and choosing the claims to check
-  yourself is coming. A search made before that change still shows the claims it chose, under
-  **Claims the earlier search chose**.
+  claims by itself and search those too; it no longer does. A search made before that change still
+  shows the claims it chose, under **Claims the earlier search chose**.
+- Opening **Claims** makes the list the first time, with one AI call over the piece and no web
+  search; a link or Back to Claims only shows **List its claims**. Each claim is quoted in the
+  piece's own words, with a link to that passage, and under it a short line in the AI's words. If
+  the piece changes afterwards, the list is shown with **List again**. Choosing claims to check on
+  the web is coming. Visitors to a shared article see the list but cannot make one.
 - In Reception, pages that link to the piece or quote it come first. Pages that only mention its
   title follow under **Names this piece by its title only**: often a paper citing it, sometimes a
   page about something else with the same title, so check before you rely on one.
@@ -32,10 +36,10 @@ found.
   what any of those papers says about the piece. It needs the piece to have a DOI on record, and
   only whoever added the article sees it. **Search Google Scholar**, under it, opens a search for
   the piece’s title.
-- In Claims, each claim is quoted in the piece’s own words, with a link to that passage and the
-  sources on it underneath. Press a claim to fold its sources away. The **relevance** slider hides
+- Under **Claims the earlier search chose**, each claim is quoted in the piece’s own words, with a
+  link to that passage and the sources on it underneath. Press a claim to fold its sources away. The **relevance** slider hides
   sources the AI judged to bear on their claim only loosely or partly.
-- To look into one claim yourself, press the chat icon on its heading. It opens a new conversation
+- To look into one claim yourself, press the chat icon beside it. It opens a new conversation
   in [Chat](/help/mode-chat) and sends a question with the claim quoted. Once you have asked, a line
   under the claim shows how the chat’s latest answer begins; press it to open that conversation
   again beside Debate. If a later search words the claim differently the line goes, and the

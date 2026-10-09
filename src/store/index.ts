@@ -245,6 +245,7 @@ export const loadIdeas = reader.loadIdeas.bind(reader);
 export const loadTimeline = reader.loadTimeline.bind(reader);
 export const loadQuiz = reader.loadQuiz.bind(reader);
 export const loadFaq = reader.loadFaq.bind(reader);
+export const loadDebateClaims = reader.loadDebateClaims.bind(reader);
 export const loadRelations = reader.loadRelations.bind(reader);
 export const loadCrossrefs = reader.loadCrossrefs.bind(reader);
 export const loadSimpleSummary = reader.loadSimpleSummary.bind(reader);

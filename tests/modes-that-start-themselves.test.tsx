@@ -156,6 +156,7 @@ const { useQuotes } = await import("../src/web/useQuotes.js");
 const { useTimeline } = await import("../src/web/useTimeline.js");
 const { useGlossary } = await import("../src/web/useGlossary.js");
 const { useDebate } = await import("../src/web/useDebate.js");
+const { useDebateClaims } = await import("../src/web/useDebateClaims.js");
 const { useCiters } = await import("../src/web/useCiters.js");
 const { useFaq } = await import("../src/web/useFaq.js");
 const { useSkim } = await import("../src/web/useSkim.js");
@@ -245,6 +246,10 @@ function QuotesBand({ slug }: { slug: string }): ReactElement {
  */
 function DebateBand({ slug, reception }: { slug: string; reception: boolean }): ReactElement {
   const view = useDebate(slug, reception);
+  /* **Claims' own list and press, mounted in both sub-modes as the real band
+     mounts it** (DebateMode.tsx, plan 261008i stage 2): told whether Claims is
+     showing, so a Claims press that lands on Reception is retired unspent. */
+  useDebateClaims(slug, !reception);
   /* The owner's band makes a second read, the papers that cite the piece
      (src/web/modes/debate/DebateMode.tsx, plan 261004h). It is here so the two
      Debate cases below can show it asks on arrival and can start nothing. */
@@ -333,6 +338,14 @@ const EMPTY_BLOCK_ORDER: BlockId[] = [];
  * `location.search` itself, so this is how a test says `?diagram=illustrated`
  * without a router.
  */
+/** `?debate=`, which is what a bar press reads to know which of Debate's sub-modes it lands on. */
+function setDebateView(view: "reception" | "claims" | null): void {
+  const url = new URL(window.location.href);
+  if (view === null) url.searchParams.delete("debate");
+  else url.searchParams.set("debate", view);
+  window.history.replaceState(null, "", url);
+}
+
 function setDiagram(kind: string | null): void {
   const url = new URL(window.location.href);
   if (kind === null) url.searchParams.delete("diagram");
@@ -554,6 +567,7 @@ beforeEach(() => {
   resetActivations();
   jobEngine.reset();
   setDiagram(null);
+  setDebateView(null);
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
@@ -723,6 +737,49 @@ describe("a press", () => {
     await settle();
 
     expect(artefactGets("debate").length).toBeGreaterThan(0);
+    expect(posts).toEqual([]);
+  });
+
+  /* **Claims' list, made by a press and only by a press** — plan 261008i
+     stage 2. The press that lands on Claims asks for the list and never the
+     Reception search; Reception's press, above, asks for the search and never
+     the list (that test's `posts` is exactly one request, with the list's
+     hook mounted beside it). */
+  it("lists the claims when the Debate press lands on Claims, and starts no search", async () => {
+    setDebateView("claims");
+    await open("plain");
+    await act(async () => arriveDebate(false));
+    await press("Debate");
+    await settle();
+
+    expect(artefactGets("debate-claims").length).toBeGreaterThan(0);
+    expect(posts).toEqual([{ slug: "constitution", steps: ["debate-claims"] }]);
+  });
+
+  it("only reads the claims list when a link, Back or a restore lands on Claims", async () => {
+    await open("plain");
+    await act(async () => arriveDebate(false));
+    await act(async () => arrive("debate"));
+    await settle();
+
+    expect(artefactGets("debate-claims").length).toBeGreaterThan(0);
+    expect(bandSays()).toBe("none");
+    expect(posts).toEqual([]);
+  });
+
+  it("drops a Claims press when Back lands on Reception before the read settles", async () => {
+    setDebateView("claims");
+    holdGets = true;
+    await open("plain");
+    await act(async () => arriveDebate(false));
+    await press("Debate");
+    await act(async () => arriveDebate(true));
+
+    holdGets = false;
+    releaseGets();
+    await settle();
+
+    expect(artefactGets("debate-claims").length).toBeGreaterThan(0);
     expect(posts).toEqual([]);
   });
 

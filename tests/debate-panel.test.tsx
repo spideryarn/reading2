@@ -63,7 +63,9 @@ import type {
 import type { DebateOrder } from "../src/web/debate-order.js";
 import type { DebateView } from "../src/web/params.js";
 import type { UseDebate } from "../src/web/useDebate.js";
-import type { PublicDebate } from "../src/public-types.js";
+import type { PublicDebate, PublicDebateClaimList } from "../src/public-types.js";
+import type { UseDebateClaims } from "../src/web/useDebateClaims.js";
+import { claimListOf, claimListOwner } from "./helpers/debate-claims-owner.js";
 import { pendingActivation, resetActivations } from "../src/web/activation.js";
 import { enclosing, readerCssNoComments } from "./helpers/stylesheets.js";
 import {
@@ -80,7 +82,13 @@ import {
   DEBATE_CLAIMS_EARLIER,
   DEBATE_CLAIMS_NONE,
   DEBATE_CLAIMS_NONE_SHARED,
-  DEBATE_CLAIMS_NOT_SEARCHED,
+  DEBATE_CLAIMS_LIST_AI,
+  DEBATE_CLAIMS_LIST_EMPTY,
+  DEBATE_CLAIMS_LIST_NONE,
+  DEBATE_CLAIMS_LIST_NONE_SHARED,
+  DEBATE_CLAIMS_LIST_RUN,
+  DEBATE_CLAIMS_LIST_STALE,
+  DEBATE_CLAIMS_LIST_AGAIN,
   DEBATE_CLAIMS_NOT_SEARCHED_SHARED,
   DEBATE_EXTRACTS_ONLY,
   DEBATE_TITLE_ONLY,
@@ -238,13 +246,21 @@ function paint(
     articleTitle?: string | null;
     /** What `useCiters` answered. An article with no DOI unless a test says otherwise. */
     citers?: CitersResult | null;
+    /** Claims' list hook. Nobody has pressed Claims unless a test says otherwise. */
+    claimList?: UseDebateClaims;
   } = {},
 ) {
   const result = "citers" in extra ? (extra.citers ?? null) : NO_DOI;
   act(() => {
     root.render(
       createElement(DebatePanel, {
-        access: { kind: "owner", owner: o, citers: { result, retry: () => retried.push("retry") }, claimChats: NO_CLAIM_CHATS },
+        access: {
+          kind: "owner",
+          owner: o,
+          claimList: extra.claimList ?? claimListOwner(),
+          citers: { result, retry: () => retried.push("retry") },
+          claimChats: NO_CLAIM_CHATS,
+        },
         onJump: (id: BlockId) => jumped.push(id),
         view,
         onView: (next: DebateView) => viewed.push(next),
@@ -264,15 +280,15 @@ function paint(
 
 /** The same panel as a visitor gets it. */
 function paintShared(
-  debate: PublicDebate,
+  debate: PublicDebate | null,
   view: DebateView = "reception",
   order: DebateOrder = "prioritised",
-  extra: { relevance?: DebateBears | null; thread?: string | null } = {},
+  extra: { relevance?: DebateBears | null; thread?: string | null; claimList?: PublicDebateClaimList | null } = {},
 ) {
   act(() => {
     root.render(
       createElement(DebatePanel, {
-        access: { kind: "visitor", debate },
+        access: { kind: "visitor", debate, claimList: extra.claimList ?? null },
         onJump: (id: BlockId) => jumped.push(id),
         view,
         onView: (next: DebateView) => viewed.push(next),
@@ -374,7 +390,7 @@ describe("Reception and Claims, each drawing its own search", () => {
     /* mode.md bans a description line under a control: what each one is goes
        in its card and the band's (i). */
     expect(card()).toContain("What others have written about this piece itself");
-    expect(card()).toContain("What has been written about the claims it makes");
+    expect(card()).toContain("The claims it rests on that someone outside could argue with");
   });
 
   it("hands a press back as the sub-mode's word, and nothing for the one already open", () => {
@@ -406,12 +422,14 @@ describe("Reception and Claims, each drawing its own search", () => {
     expect(pendingActivation("a-piece", "debate")).toBeNull();
   });
 
-  it("does not tell a reader that the unsearched Claims group came from a second search", () => {
+  /* Since stage 2 of plan 261008i Claims is the list of the article's claims,
+     and its card says how that list is made: no search. */
+  it("does not tell a reader that Claims came from a second search", () => {
     paint(owner({ debate: artefact({ claims: { pass: "not-run", rows: [] } }) }));
     const claims = host.querySelector<HTMLElement>('[aria-label="Claims, 0 sources"]');
     act(() => claims?.focus());
     const tip = document.querySelector('[role="tooltip"], [role="dialog"]')?.textContent ?? "";
-    expect(tip).toContain("No search for sources about individual claims was run");
+    expect(tip).toContain("Listed by one model call over the article, with no web search");
     expect(tip).not.toContain("Found by a second search");
   });
 
@@ -670,8 +688,9 @@ describe("the empty states are different sentences, in each sub-mode", () => {
       "One search of the open web, for what others have written about this piece. It takes about " +
         "a minute and costs real money. Many pieces have no reception at all. Searched once and kept.",
     );
-    /* No sub-mode control over a search that has not run. */
-    expect(host.querySelector(".dbt-views")).toBeNull();
+    /* The sub-mode control is drawn before any search is (plan 261008i, F9):
+       Claims has a list of its own to reach. Reception is the one chosen. */
+    expect(host.querySelector(".dbt-views [aria-checked='true']")?.textContent).toBe("Reception0");
     expect(
       [...host.querySelectorAll("button")].some((b) =>
         (b.textContent ?? "").includes("Search the web"),
@@ -702,7 +721,10 @@ describe("the empty states are different sentences, in each sub-mode", () => {
       claims: { pass: "not-run", rows: [] },
     });
     paint(owner({ debate }), "claims");
-    expect(host.querySelector(".dbt-empty")?.textContent).toBe(DEBATE_CLAIMS_NOT_SEARCHED);
+    /* Since stage 2 Claims draws the list's own state instead of a sentence
+       about a search: here, nobody has listed the claims. */
+    expect(host.querySelector(".dbt-empty")).toBeNull();
+    expect(text()).toContain(DEBATE_CLAIMS_LIST_NONE);
     expect(text()).not.toContain(DEBATE_CLAIMS_NONE);
     expect(text()).not.toContain(debateClaimsUnverified(0));
     expect(text()).not.toContain(DEBATE_CLAIMS_EARLIER);
@@ -716,9 +738,10 @@ describe("the empty states are different sentences, in each sub-mode", () => {
     expect(handoff()).toBeNull();
   });
 
-  it("tells a visitor the claims search did not run, rather than that it kept nothing", () => {
+  it("tells a visitor no list was made, rather than that a claims search kept nothing", () => {
     paintShared(shared({ claims: { pass: "not-run", rows: [] } }), "claims");
-    expect(host.querySelector(".dbt-empty")?.textContent).toBe(DEBATE_CLAIMS_NOT_SEARCHED_SHARED);
+    expect(host.querySelector(".dbt-empty")).toBeNull();
+    expect(text()).toContain(DEBATE_CLAIMS_LIST_NONE_SHARED);
     expect(text()).not.toContain(DEBATE_CLAIMS_NONE_SHARED);
   });
 
@@ -729,7 +752,6 @@ describe("the empty states are different sentences, in each sub-mode", () => {
     const empty = artefact({ claims: { rows: [], counts: counts(EMPTY) } });
     paint(owner({ debate: empty }), "claims");
     expect(host.querySelector(".dbt-empty")?.textContent).toBe(DEBATE_CLAIMS_NONE);
-    expect(text()).not.toContain(DEBATE_CLAIMS_NOT_SEARCHED);
     expect(text()).not.toContain(DEBATE_CLAIMS_EARLIER);
 
     paint(owner(), "claims");
@@ -2445,5 +2467,139 @@ describe("DebatePanel — threads", () => {
       expect(titles()).toEqual(["Three"]);
       expect(host.querySelector(".dbt-thread-showing")?.textContent).toContain("Showing 1 excerpt picked as key");
     });
+  });
+});
+
+/* ------------------------------------------------- Claims: the claims list -- */
+
+/**
+ * **Claims' list of the article's claims** — plan 261008i stage 2, § 2 and
+ * § 5. Its own read and press, so it is drawn whatever Reception has stored;
+ * each state is its own sentence; the quote is the article's and the line
+ * under it is labelled as the AI's; a stale list is read-only with *List
+ * again*; and a visitor gets the list and nothing to press.
+ */
+describe("Claims' list of the article's claims", () => {
+  const LISTED = [
+    { id: "spya-cdm2a4", blockId: KNOWN, quote: "a starter needs cool water", statement: "Cool water suits a young starter." },
+    { id: "spya-cdm2b5", blockId: "spya-p7x2wd" as BlockId, quote: "salt slows it down", statement: "Salt slows fermentation." },
+  ];
+  const ready = (over: Partial<UseDebateClaims> = {}) =>
+    claimListOwner({ status: "ready", claimList: claimListOf(LISTED), ...over });
+  const listedQuotes = () => [...host.querySelectorAll(".dbt-listed-claim .dbt-group-quote")].map((q) => q.textContent);
+  const buttonsNamed = (name: string) =>
+    [...host.querySelectorAll("button")].filter((b) => (b.textContent ?? "").includes(name));
+
+  it("is reachable before any search is stored: the control is drawn and Claims offers List its claims", () => {
+    paint(owner({ status: "none", debate: null }), "claims");
+    expect(segments()).toEqual(["Reception0", "Claims0"]);
+    expect(text()).toContain(DEBATE_CLAIMS_LIST_NONE);
+    expect(buttonsNamed(DEBATE_CLAIMS_LIST_RUN)).toHaveLength(1);
+    /* Reception's pre-search screen is Reception's, not Claims'. */
+    expect(text()).not.toContain("Nobody has asked the web about this one yet.");
+    /* The positive control: Reception still draws it. */
+    paint(owner({ status: "none", debate: null }));
+    expect(text()).toContain("Nobody has asked the web about this one yet.");
+    expect(text()).not.toContain(DEBATE_CLAIMS_LIST_NONE);
+  });
+
+  it("presses List its claims with the unforced request", () => {
+    let ensured = 0;
+    let regenerated = 0;
+    paint(owner({ status: "none", debate: null }), "claims", "prioritised", new Map(), {
+      claimList: claimListOwner({
+        ensure: async () => {
+          ensured++;
+        },
+        regenerate: async () => {
+          regenerated++;
+        },
+      }),
+    });
+    press(buttonsNamed(DEBATE_CLAIMS_LIST_RUN)[0]);
+    expect([ensured, regenerated]).toEqual([1, 0]);
+  });
+
+  it("draws the list with each quote, its jump, and the AI's line labelled as the AI's", () => {
+    paint(owner(), "claims", "prioritised", new Map(), { claimList: ready() });
+    expect(listedQuotes()).toEqual(["“a starter needs cool water”", "“salt slows it down”"]);
+    const statements = [...host.querySelectorAll(".dbt-listed-statement")].map((p) => p.textContent);
+    expect(statements[0]).toContain("Cool water suits a young starter.");
+    expect(statements[0]).toContain(DEBATE_CLAIMS_LIST_AI);
+    /* The quote is not labelled as the AI's: it is the article's. */
+    expect(host.querySelector(".dbt-listed-head")?.textContent).not.toContain(DEBATE_CLAIMS_LIST_AI);
+    /* Each claim offers the way to its block, and pressing it goes there. */
+    const jump = host.querySelector<HTMLElement>(".dbt-listed-claim .dbt-listed-head button, .dbt-listed-claim .dbt-listed-head a");
+    expect(jump).not.toBeNull();
+    press(jump);
+    expect(jumped).toEqual([KNOWN]);
+  });
+
+  it("counts the listed claims on the segment when there is a list, and an older search's rows when not", () => {
+    /* The default debate carries one legacy claim row. */
+    paint(owner(), "claims");
+    expect(segments()).toEqual(["Reception1", "Claims1"]);
+    paint(owner(), "claims", "prioritised", new Map(), { claimList: ready() });
+    expect(segments()).toEqual(["Reception1", "Claims2"]);
+    expect(host.querySelector(".dbt-views [role='radio'][aria-checked='true']")?.getAttribute("aria-label")).toBe(
+      "Claims, 2 claims",
+    );
+    /* …and the older search's rows are still drawn, under their own heading. */
+    expect(host.querySelector(".dbt-group-head")?.textContent).toBe(DEBATE_CLAIMS_EARLIER);
+  });
+
+  it("says an empty list is a real answer, with its own sentence", () => {
+    paint(owner(), "claims", "prioritised", new Map(), {
+      claimList: claimListOwner({ status: "ready", claimList: claimListOf([]) }),
+    });
+    expect(text()).toContain(DEBATE_CLAIMS_LIST_EMPTY);
+    expect(listedQuotes()).toEqual([]);
+  });
+
+  it("offers List again on a stale list, shown read-only, and forces it", () => {
+    let ensured = 0;
+    let regenerated = 0;
+    const verbs = {
+      ensure: async () => {
+        ensured++;
+      },
+      regenerate: async () => {
+        regenerated++;
+      },
+    };
+    paint(owner(), "claims", "prioritised", new Map(), { claimList: ready({ stale: true, ...verbs }) });
+    expect(text()).toContain(DEBATE_CLAIMS_LIST_STALE);
+    expect(listedQuotes()).toHaveLength(2);
+    /* Read-only: no chat button on a listed claim. */
+    expect(host.querySelector(".dbt-listed-claim .dbt-claim-check")).toBeNull();
+    press(buttonsNamed(DEBATE_CLAIMS_LIST_AGAIN)[0]);
+    expect([ensured, regenerated]).toEqual([0, 1]);
+    /* The positive control: a current list has the chat button and no banner. */
+    paint(owner(), "claims", "prioritised", new Map(), { claimList: ready() });
+    expect(text()).not.toContain(DEBATE_CLAIMS_LIST_STALE);
+    expect(buttonsNamed(DEBATE_CLAIMS_LIST_AGAIN)).toHaveLength(0);
+    expect(host.querySelectorAll(".dbt-listed-claim .dbt-claim-check")).toHaveLength(2);
+  });
+
+  it("draws nothing of the list in Reception", () => {
+    paint(owner(), "reception", "prioritised", new Map(), { claimList: ready() });
+    expect(listedQuotes()).toEqual([]);
+  });
+
+  it("gives a visitor the list and no controls", () => {
+    paintShared(shared({ claims: { pass: "not-run", rows: [] } }), "claims", "prioritised", {
+      claimList: { claims: LISTED },
+    });
+    expect(listedQuotes()).toEqual(["“a starter needs cool water”", "“salt slows it down”"]);
+    expect(host.querySelector(".dbt-claim-check")).toBeNull();
+    expect(buttonsNamed(DEBATE_CLAIMS_LIST_RUN)).toHaveLength(0);
+    expect(buttonsNamed(DEBATE_CLAIMS_LIST_AGAIN)).toHaveLength(0);
+    expect(host.querySelector(".gloss-empty")).toBeNull();
+  });
+
+  it("gives a visitor the list when no search was stored at all", () => {
+    paintShared(null, "claims", "prioritised", { claimList: { claims: LISTED } });
+    expect(listedQuotes()).toHaveLength(2);
+    expect(segments()).toEqual(["Reception0", "Claims2"]);
   });
 });

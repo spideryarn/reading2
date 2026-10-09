@@ -94,7 +94,9 @@ export function artefactsIn(article: PublicArticle): PublicArtefacts {
     faq: article.faq !== undefined,
     simpleSummary: article.simpleSummary !== undefined,
     citations: article.citations !== undefined,
-    debate: article.debate !== undefined,
+    /* Debate is open to a visitor with either of its artefacts: the search,
+       or Claims' list made with no search stored (plan 261008i § 2). */
+    debate: article.debate !== undefined || article.debateClaims !== undefined,
     sketch: article.sketch !== undefined,
   };
 }

@@ -249,7 +249,7 @@ export const DEBATE_SUB_MODES: Readonly<Record<DebateView, SubModeWords>> = {
   },
   claims: {
     label: "Claims",
-    description: "What has been written about the claims it makes, by people who may never have read it",
+    description: "The claims it rests on that someone outside could argue with, listed for you to pick from",
     experimental: false,
   },
 };

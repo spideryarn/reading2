@@ -77,7 +77,7 @@ function publish(debate: Debate): PublicDebate {
     headingTitle: null, finalUrl: "https://example.org/piece",
     blocks: [], tree: { rootId: "spya-root", nodes: {} } as unknown as Tree,
     arc: null, assets: null, glossary: null, ideas: null, quotes: null, tweets: null,
-    timeline: null, skim: null, faq: null, simpleSummary: null, citations: null, debate,
+    timeline: null, skim: null, faq: null, simpleSummary: null, citations: null, debate, debateClaims: null,
     crossrefs: null, crossrefsFresh: false, comments: [], searches: [], sketch: null,
     navLabelStatus: "ready", sourceGuess: null,
     sharedBy: "public",
@@ -97,7 +97,7 @@ function Page() {
   if (route.kind !== "read") return createElement("p", null, "not found");
   if (mode !== "debate") return createElement("p", null, `band: ${mode}`);
   return createElement(VisitorDebateBand, {
-    debate, onJump: () => {}, blockOrder: new Map([[BLOCK, 0]]),
+    debate, claimList: null, onJump: () => {}, blockOrder: new Map([[BLOCK, 0]]),
     publishedAt: undefined, articleTitle: "The shared piece",
   });
 }
