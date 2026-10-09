@@ -210,7 +210,7 @@ export function SkimBand({
   glossary: GlossaryRead;
   /**
    * *Ask in chat* on a term chip's card: the Glossary band's sender, the one
-   * the prose card gets (plan 261009i). Separate from *Hide*, which is the
+   * the prose card gets (plan 261009k). Separate from *Hide*, which is the
    * glossary read's.
    */
   onAskTerm: AskAboutTerm;
@@ -368,7 +368,7 @@ export interface SkimView {
   card: StopCard | null;
   /** *Hide* on a term chip's card, or `null` for a visitor (SkimPanel.tsx § `TermChip`, plan 261006e). */
   termActions: TermActions | null;
-  /** *Ask in chat* on a term chip's card, or `null` for a visitor (plan 261009i). */
+  /** *Ask in chat* on a term chip's card, or `null` for a visitor (plan 261009k). */
   onAskTerm: AskAboutTerm | null;
   onDepth(depth: SkimDepth): void;
   onRow(quoteId: string): void;

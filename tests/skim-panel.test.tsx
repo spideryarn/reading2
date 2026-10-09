@@ -156,7 +156,7 @@ vi.mock("../src/web/flash.js", async (importOriginal) => {
   };
 });
 
-const { SkimPanel, SkimDoor, coverageNote, skimPromise } = await import(
+const { SkimPanel, SkimDoor, SKIM_CUE_EXPLAINED, coverageNote, skimPromise } = await import(
   "../src/web/SkimPanel.js"
 );
 const { armSkimOpening, firstSkimArrival, SkimBand } = await import(
@@ -372,6 +372,9 @@ function owner(over: Partial<UseSkim> = {}): UseSkim {
     stale: false,
     outdated: false,
     profileChanged: false,
+    profileNoticeDismissed: false,
+    dismissFailed: null,
+    dismissProfileNotice: async () => {},
     notOnRoute: 0,
     slug: "a-route",
     error: null,
@@ -436,7 +439,7 @@ function view(over: Partial<SkimView> = {}): SkimView {
   };
 }
 
-/** The owner's *Ask in chat* on a term, as the Skim band hands it to the card (plan 261009i). */
+/** The owner's *Ask in chat* on a term, as the Skim band hands it to the card (plan 261009k). */
 const ask = (entry: { id: string }) => void calls.push(`ask ${entry.id}`);
 
 /** The owner's *Hide* on a term, as the Skim band hands it to the card. */
@@ -468,6 +471,11 @@ const CARD: StopCard = {
 async function draw(o: UseSkim, v: SkimView) {
   calls.length = 0;
   await act(async () => root.render(createElement(SkimPanel, { access: { kind: "owner", owner: o }, view: v, away: false })));
+}
+
+async function drawVisitor(v: SkimView) {
+  calls.length = 0;
+  await act(async () => root.render(createElement(SkimPanel, { access: { kind: "visitor", route: ROUTE }, view: v, away: false })));
 }
 
 const text = (sel: string) => host.querySelector(sel)?.textContent ?? null;
@@ -548,6 +556,27 @@ describe("the panel", () => {
       .map((el) => el.className)
       .filter((c) => c === "skim-place" || c === "skim-cue" || c === "skim-words");
     expect(order).toEqual(["skim-place", "skim-cue", "skim-words"]);
+  });
+
+  it("explains the current cue on its mouse card without nesting another control in the row button", async () => {
+    const posed = view();
+    await draw(owner(), {
+      ...posed,
+      rows: posed.rows.map((row) => row.current ? { ...row, words: "The current quote is already shown whole." } : row),
+    });
+    const cue = host.querySelector<HTMLElement>(".skim-row.current .skim-cue")!;
+    expect(cue.closest("button")?.classList.contains("skim-go")).toBe(true);
+    expect(cue.matches("button, [role='button'], [tabindex='0']")).toBe(false);
+
+    vi.useFakeTimers();
+    cue.dispatchEvent(new MouseEvent("mouseenter"));
+    await act(async () => {
+      vi.advanceTimersByTime(DELAY.open);
+    });
+    const card = document.querySelector<HTMLElement>('[role="tooltip"]');
+    expect(document.querySelectorAll('[role="tooltip"]')).toHaveLength(1);
+    expect(card?.textContent).toContain(SKIM_CUE_EXPLAINED);
+    expect(cue.getAttribute("aria-describedby")).toBe(card?.id);
   });
 
   it("draws a repeated section path for a screen reader only — no ditto mark beside a quote (260928e)", async () => {
@@ -770,6 +799,7 @@ describe("the panel", () => {
     /* A tap — a click, with no hover first — opens it: touch has no hover. */
     await act(async () => info().click());
     expect(tip()).toContain(skimPromise(false));
+    expect(tip()).toContain(SKIM_CUE_EXPLAINED);
     expect(info().getAttribute("aria-expanded")).toBe("true");
     await act(async () => info().click());
     expect(info().getAttribute("aria-expanded"), "a second tap closes it").toBe("false");
@@ -802,6 +832,15 @@ describe("the panel", () => {
     expect(tip()).toContain("4 of the 6 quotes offered to this route");
     await act(async () => info().click());
     expect(coverageNote(4, 0)).toBeNull();
+  });
+
+  it("puts the cue explanation in the visitor's band info card too", async () => {
+    await drawVisitor(view());
+    const info = host.querySelector<HTMLButtonElement>(".mode-band > .band-about")!;
+    await act(async () => info.click());
+    expect(document.querySelector('[role="tooltip"], [role="dialog"]')?.textContent).toContain(
+      SKIM_CUE_EXPLAINED,
+    );
   });
 
   it("does not blame the Quotes when the Ideas or outline may have made the route stale", async () => {
@@ -857,7 +896,7 @@ describe("the panel", () => {
     expect(termChip().getAttribute("aria-expanded"), "leaving for Glossary closes it").toBe("false");
   });
 
-  it("asks in chat from the card, with the Glossary band's sender, and closes the card (261009i)", async () => {
+  it("asks in chat from the card, with the Glossary band's sender, and closes the card (261009k)", async () => {
     await draw(owner(), view({ card: CARD, termActions: termActions(), onAskTerm: ask }));
     await act(async () => termChip().focus());
     expect(cardButtons(), "Dig deeper is gone").not.toContain("Dig deeper");
@@ -988,11 +1027,11 @@ describe("the panel", () => {
     await act(async () => termChip().focus());
     expect(termCard()?.textContent).toContain(TERM.senseHere!);
     /* Dig deeper landed in Glossary, so it went with the way there, until
-       2026-10-09. Ask in chat goes to Chat, and Hide stays put (plan 261009i). */
+       2026-10-09. Ask in chat goes to Chat, and Hide stays put (plan 261009k). */
     expect(cardButtons()).toEqual(["Ask in chat", "Hide"]);
   });
 
-  it("keeps Hide and Ask in chat independent: either can be drawn without the other (261009i, Sol F1)", async () => {
+  it("keeps Hide and Ask in chat independent: either can be drawn without the other (261009k, Sol F1)", async () => {
     await draw(owner(), view({ card: CARD, termActions: termActions(), onAskTerm: null }));
     await act(async () => termChip().focus());
     expect(cardButtons()).toEqual(["Hide", "Open glossary"]);
@@ -1159,7 +1198,44 @@ describe("the panel", () => {
     expect(host.textContent).not.toContain("older version of the prompt");
     await draw(owner({ outdated: true, profileChanged: true }), view());
     expect(text(".gloss-stale")).toContain("before your profile said what it says now");
-    expect(host.querySelector(".gloss-stale button")?.textContent).toBe("Plan it again");
+    /* Beside the ×, plan 261009i. */
+    expect(
+      [...host.querySelectorAll(".gloss-stale button:not(.skim-notice-close)")].map((b) => b.textContent),
+    ).toEqual(["Plan it again"]);
+  });
+
+  /* Greg, 2026-10-09 (spya-ud2w92): the profile notice can be sent away;
+     plan 261009i. */
+  describe("the profile notice's ×", () => {
+    it("is on the profile notice, and pressing it asks the owner to dismiss", async () => {
+      let dismissed = 0;
+      await draw(owner({ profileChanged: true, dismissProfileNotice: async () => void dismissed++ }), view());
+      const close = host.querySelector<HTMLButtonElement>(".gloss-stale .skim-notice-close");
+      expect(close, "no × on the profile notice").toBeTruthy();
+      expect(close?.getAttribute("aria-label")).toContain("Dismiss");
+      await act(async () => close?.click());
+      expect(dismissed).toBe(1);
+    });
+
+    it("hides the banner once dismissed, and a job then shows in the foot", async () => {
+      await draw(owner({ profileChanged: true, profileNoticeDismissed: true }), view());
+      expect(host.querySelector(".gloss-stale")).toBeNull();
+      await draw(owner({ profileChanged: true, profileNoticeDismissed: true, job: RUNNING_SKIM_JOB }), view());
+      expect(host.querySelector(".skim-again")?.textContent, "a job after a dismissal shows nowhere").toContain("Stop");
+    });
+
+    it("is not on the stale banner, which a dismissal does not hide", async () => {
+      await draw(owner({ stale: true, profileChanged: true, profileNoticeDismissed: true }), view());
+      expect(text(".gloss-stale")).toContain("have changed since this route was planned");
+      expect(host.querySelector(".skim-notice-close")).toBeNull();
+      await draw(owner({ stale: true, profileChanged: true }), view());
+      expect(host.querySelector(".skim-notice-close")).toBeNull();
+    });
+
+    it("says why when a dismissal did not stick", async () => {
+      await draw(owner({ profileChanged: true, dismissFailed: "The server could not be reached." }), view());
+      expect(text(".skim-notice-failed")).toContain("The server could not be reached.");
+    });
   });
 
   it("shows a running job in the foot on an outdated route", async () => {

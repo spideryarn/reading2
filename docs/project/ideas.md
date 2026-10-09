@@ -457,7 +457,7 @@ on the re-run — which is the right answer.
 
 ## Asking about an idea in chat
 
-Since 2026-10-09 ([261009i](../plans/261009i-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md),
+Since 2026-10-09 ([261009k](../plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md),
 stage 3). Greg: *"if I'm in a citation or perhaps even the glossary or the ideas or anything like
 that, there's just a button say ask in chat that kicks off a chat thread about that particular
 topic"*. The open idea has *Ask in chat* under its passages, for the owner only. The press opens a

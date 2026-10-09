@@ -100,9 +100,14 @@ async function press(): Promise<void> {
 
 describe("the copy-the-link button on a job card", () => {
   it("describes this import's link without promising it survives failure or Retry", () => {
-    expect(IMPORT_LINK_COPY_TIP).toContain("this import's article");
-    expect(IMPORT_LINK_COPY_TIP).toContain("If the import fails, the link leads nowhere");
+    expect(IMPORT_LINK_COPY_TIP).toContain("Copy the address this import's article will have");
+    expect(IMPORT_LINK_COPY_TIP).toContain("If the import fails, the address leads nowhere");
     expect(IMPORT_LINK_COPY_TIP).not.toContain("for good");
+    /* Not *if you share it*: a private link is another address, and a reader
+       who took this one for it sent colleagues a link that opened for nobody
+       (plan 261009i, from GPT Sol's critique). */
+    expect(IMPORT_LINK_COPY_TIP).toContain("only if you make the article public");
+    expect(IMPORT_LINK_COPY_TIP).toContain("a private link is a different address");
   });
 
   it("also copies a minimal paper's import link", async () => {
@@ -118,6 +123,8 @@ describe("the copy-the-link button on a job card", () => {
 
   it("copies the address the article will have, and says Copied in words", async () => {
     render(IMPORT);
+    expect(copyButton()?.getAttribute("aria-label")).toBe("Copy the link this article will have");
+    expect(copyButton()?.querySelector(".lucide-copy")).not.toBeNull();
     await press();
     expect(written).toEqual([`${location.origin}/read/a-piece`]);
     expect(copyButton()?.textContent).toContain("Copied");

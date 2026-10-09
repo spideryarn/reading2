@@ -1032,7 +1032,7 @@ interface Props {
   articleTitle: string | null;
   /**
    * **One claim to bring into view in Claims, once** — a chat's way back to
-   * the claim it was started from (src/web/item-focus.ts; plan 261009i,
+   * the claim it was started from (src/web/item-focus.ts; plan 261009k,
    * stage 2). Its id is `claimFocusKey` of the claim's block and words. The
    * caller has already opened Claims and cleared `?bears=` and
    * `?debatethread=`, which could hide it; this scrolls its row into view

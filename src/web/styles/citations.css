@@ -195,13 +195,13 @@
 
 /* ---- a kept *Dig deeper* (was *Investigate*) answer ------------------------
    Plan 260930a; CitationInvestigation.tsx. The row's button, the wait, the
-   words arriving and the failure went with plan 261009i (2026-10-09); what is
+   words arriving and the failure went with plan 261009k (2026-10-09); what is
    left is the kept answer — folded to its first part, three lines, so the
    list stays a list (plain text, paragraphs by blank lines —
    `white-space: pre-wrap`). Labels reuse `.cite-lookup-label`. Every long
    thing wraps anywhere: a source's title or host at 288px must not push the
    band wide. */
-/* *Ask in chat*, where Dig deeper was (OriginChat.tsx; plans 261006d, 261009i). */
+/* *Ask in chat*, where Dig deeper was (OriginChat.tsx; plans 261006d, 261009k). */
 .cite-ask-chat { font-size: 0.74rem; }
 
 .cite-inv { margin: 0.3rem 0 0; }
@@ -241,7 +241,7 @@
   overflow: hidden;
 }
 /* The text button: *Read all*. Link-quiet, in the line's ink, underlined so
-   it reads as pressable. (*Dig deeper again* shared it until plan 261009i.) */
+   it reads as pressable. (*Dig deeper again* shared it until plan 261009k.) */
 .cite-inv-toggle {
   display: inline-flex;
   align-items: center;

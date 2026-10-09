@@ -35,6 +35,7 @@ reader can read the whole thing back a week later. That is the requirement every
 - [§ Three things that are not obvious and cost an afternoon each](#three-things-that-are-not-obvious-and-cost-an-afternoon-each) — gotchas before debugging
 - [§ The second engine: GPT-Live, behind Experimental](#the-second-engine-gpt-live-behind-experimental) — the other engine and its switch
 - [§ The lifecycle, which is the most failure-prone part](#the-lifecycle-which-is-the-most-failure-prone-part) — connect, hang up, resume; where it breaks
+- [§ In the guide](#in-the-guide) — the spoken guide: its prompt, its tools, and the kind the page sends
 - [§ What is not built](#what-is-not-built) — known gaps
 - [§ See also](#see-also)
 
@@ -581,6 +582,34 @@ with a length bound on the server rather than a union, deliberately: the list be
 union that lagged it would refuse a true report about how a conversation ended. It is best-effort
 either way — a closed laptop says nothing, and a session with no `closed_at` is ordinary rather than
 one still running.
+
+## In the guide
+
+> Why doesn't the Guide chat have a live conversation option?
+>
+> — Greg, 2026-10-09 (`spya-x38nge`)
+
+**Since 2026-10-09** ([261009i](../plans/261009i-the-guide-greets-in-chat-takes-live-and-a-bar-row.md)),
+the guide ([chat-tools.md § The guide](chat-tools.md#the-guide)) has the same Live button as Chat.
+What differs is what the session is told and given, on both engines:
+
+- **The prompt** is the companion's (`LIVE_SYSTEM`, or GPT-Live's two) plus `SPOKEN_GUIDE` in
+  [`src/live.ts`](../../src/live.ts) and `spokenModeWords()` in [`src/guide.ts`](../../src/guide.ts):
+  the reading, not the piece; why they are reading first; modes named, never pressed, since a
+  voice has no buttons.
+- **The tools** are the typed guide's (`GUIDE_TOOLS`) plus `show_passage`. The page says the
+  session's kind on every `/live-tool` call and the route hands it to `runTool`, so the guide's gate
+  (`toolsFor`) applies to a spoken guide as it does to a typed one. The model chooses only a name.
+- **The kind** is the stored thread's; for a guide that exists only in the tab, the page sends it
+  with the ticket (`LiveOptions.kindOf`), and a kind that contradicts a stored thread is refused
+  before anything is minted (`liveKind` in [`src/routes.ts`](../../src/routes.ts)). A spoken turn
+  may create the guide (`SpokenKind`), still one per article (`targetOf`).
+- **The seed** has the typed guide's `[cmd:…]` buttons taken out of its answers
+  (`withoutCommandButtons`), for the reason block ids are: a voice shown brackets in its own past
+  words starts saying them.
+
+Not built: a spoken guide that opens a mode itself, as the typed one does (an `open_mode` tool
+answered in the browser, like `show_passage`). It names them instead.
 
 ## What is not built
 

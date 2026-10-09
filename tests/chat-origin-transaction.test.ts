@@ -62,7 +62,7 @@ describe("origin checked against the transaction's thread snapshot", () => {
 
   /* Plan 261006d, D1: an entry is matched by its id, so the name sent with a
      resend may differ, and the name stored first is the one kept. An idea
-     joined them in plan 261009i (GPT Sol's F7). */
+     joined them in plan 261009k (GPT Sol's F7). */
   describe.each(["glossary", "citations", "ideas"] as const)("a %s origin", (mode) => {
     const ITEM: ThreadOrigin = { mode, itemId: "spya-ttm222", quote: "qualia" };
 

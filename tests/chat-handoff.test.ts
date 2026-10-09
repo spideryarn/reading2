@@ -301,7 +301,7 @@ describe("the messages a glossary entry and a cited work pre-fill", () => {
 
 /**
  * **What *Ask in chat* on an idea sends** (plan
- * docs/plans/261009i-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md,
+ * docs/plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md,
  * stage 3, and GPT Sol's F7). The idea's name and statement are a model's
  * words entering a prompt, so both sit inside the one fence.
  */

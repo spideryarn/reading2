@@ -281,7 +281,7 @@ export const IDEA_QUESTION = "What does the article rest on it for, and does it 
  * word handle; the statement is the proposition. Both are a model's words, so
  * both go inside the one fence, cut together (`fencedQuote`). The origin's
  * snapshot is the name only (`itemOrigin`).
- * docs/plans/261009i-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md, stage 3.
+ * docs/plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md, stage 3.
  */
 export function askAboutIdea(idea: { name: string; statement: string }): string {
   const line = `${idea.name.trim()}: ${idea.statement.trim()}`;

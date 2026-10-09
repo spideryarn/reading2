@@ -791,7 +791,7 @@ query are all still there. Pressing the mode's own button in the Dock does the s
 shows, the *back to ⟨section⟩* chip does not: "back" means the band.
 
 **So does anything outside the band that names it as a destination**: *Open glossary* on a term's
-card in the prose (and, until plan 261009i, *Dig deeper* on a term's or a citation's card; their
+card in the prose (and, until plan 261009k, *Dig deeper* on a term's or a citation's card; their
 *Ask in chat* now goes to Chat), the command bar's glossary commands, a question opened from the Comments drawer while Chat is the mode. Each can name a band
 whose mode is already set, which on its own reveals nothing, so they all go through one callback,
 `showBand` in `Reader.tsx`, that brings the band back and writes the mode only when it changes.

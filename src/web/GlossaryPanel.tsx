@@ -270,7 +270,7 @@ interface Props {
   onAskChat?: ((term: string) => void) | undefined;
   /**
    * **One entry to bring into view, once** — a chat's way back to the entry
-   * it was started from (src/web/item-focus.ts; plan 261009i, stage 2). The
+   * it was started from (src/web/item-focus.ts; plan 261009k, stage 2). The
    * entry is selected by `?term=`, and the gate lowered if it hid the row,
    * by the caller (`openTermInGlossary` in Reader.tsx); this scrolls the row
    * into view once it is drawn. An entry the list does not have (renamed
@@ -1299,7 +1299,7 @@ function Term({
    *
    * It gates the claim this row makes out of `entry.blocks`: that the article
    * does not use these words (until 2026-10-09 also that Dig deeper could not
-   * check them on the web, plan 261009i). `entry.blocks` was computed against whichever
+   * check them on the web, plan 261009k). `entry.blocks` was computed against whichever
    * extraction the list was written for — a glossary is carried into every new
    * revision — so where the list is stale an empty one says nothing at all
    * about the article in front of the reader. Saying it anyway is the bug this
@@ -1596,7 +1596,7 @@ function Term({
 
                It ended "but there is no passage to check it against on the
                web" until 2026-10-09, the reason the entry's Dig deeper was
-               disabled; that button went with plan 261009i, and *Ask in chat*
+               disabled; that button went with plan 261009k, and *Ask in chat*
                needs no passage. */
             unquoted && (
               <p className="gloss-nowhere">
@@ -1973,7 +1973,7 @@ const NOTHING_PENDING: ReadonlySet<string> = new Set();
  * becomes visible. The batch call that writes an entry **does not** search; its
  * `background` is the model's memory and its `url` is a guess at a canonical
  * page. Until 2026-10-09 a *Dig deeper* button here asked the web and kept the
- * answer on the entry; since plan 261009i the button is *Ask in chat*, and a
+ * answer on the entry; since plan 261009k the button is *Ask in chat*, and a
  * kept answer is still drawn, by `LookupAnswer`.
  *
  * ## Three things it says that a simpler version would not
@@ -2024,11 +2024,11 @@ export function Looked({
       {/* **A lookup kept from before 2026-10-09**, when the entry had a *Dig
           deeper* that searched the web and stored its answer here, or the
           answer *Look up a term* stored on a term it added. Dig deeper went
-          (plan 261009i: Greg, *"we don't need the dig deeper button"*); what
+          (plan 261009k: Greg, *"we don't need the dig deeper button"*); what
           it kept stays on the entry. */}
       {lookup && <LookupAnswer lookup={lookup} />}
       <div className="gloss-look">
-        {/* **Ask in chat, where Dig deeper was** (plan 261009i). Never
+        {/* **Ask in chat, where Dig deeper was** (plan 261009k). Never
             disabled, a term the article never quotes included: a chat needs
             no passage. The press sends the question (plan 261006j). It stays
             once a chat exists: a second one can be started. */}

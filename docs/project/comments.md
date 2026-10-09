@@ -924,7 +924,7 @@ the value, since the bug all of this came from was a panel that said "thinkingâ€
 
 Both from Greg, 2026-08-26, on the same weak answer.
 
-> **The button is gone from the dialog, since 2026-10-09** (plan [261009i](../plans/261009i-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md), D2): Greg,
+> **The button is gone from the dialog, since 2026-10-09** (plan [261009k](../plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md), D2): Greg,
 > *"we don't need the dig deeper button"*. The dialog's *Ask in chat* follow-up box is the way to go
 > further, in a separate conversation linked from the comment, where Dig deeper replaced the answer
 > in place. An answer a dig already wrote stays, and the server half below (`{ deep: true }`, the

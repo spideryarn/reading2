@@ -1,7 +1,13 @@
 /**
  * **Make it public, chosen while the article is being added** — the add
- * page's third box,
+ * page's public control,
  * docs/plans/261005l-permalink-and-share-while-an-article-is-importing.md.
+ *
+ * **It was a tick box until 2026-10-09.** The control is now buttons
+ * (src/web/AddShare.tsx § `press`, plan 261009i): *Make it public…* calls
+ * `open`; the outer *Cancel* and *Stop sharing* call `untick`. The method names
+ * remain because changing the controller was not part of changing its drawing;
+ * nothing it sends changed.
  * Greg, 2026-10-05 (spya-e9t58e):
  *
  * > While I'm importing an article, make it possible for me to mark it as
@@ -21,7 +27,7 @@
  *  - **One controller per slug, per tab, for the tab's life** (plan review
  *    P1, code review F12). That intent is retargeted when a Retry comes back
  *    under another slug, and carries `on` across. Here that would say B is
- *    public without sharing it, and unticking would make B private and leave
+ *    public without sharing it, and stopping it would make B private and leave
  *    A public. So the slug is a constructor argument, and `shareAtAddFor`
  *    keeps one instance per slug in a module-level registry: two addresses
  *    that name one article (`/add/A` and `/add/A/`) get the same controller,
@@ -29,7 +35,7 @@
  *    the wrong order. A Retry onto another slug shows that slug's own
  *    controller, and the old one stays as it was, still saying what is true
  *    of its slug.
- *  - **The only `private` it sends is the box being unticked** (code review
+ *  - **The only `private` it sends follows the reader pressing *Stop sharing*** (code review
  *    F11). An earlier version took a share back when the page moved to
  *    another slug. A compensating write whose failure nobody can see is worse
  *    than the state it compensates for, and what it compensated for is an
@@ -40,7 +46,7 @@
  *    is sent (`ShareIo.marks`), since the server can commit one whose answer
  *    the page never sees, and removes it only when the outcome rules
  *    publication out. A fresh controller that finds the mark starts at
- *    `unknown`: the box ticked, a sentence saying why, and unticking sends
+ *    `unknown`: a sentence saying why and *Stop sharing*, which sends
  *    `private`. The mark never sends a publish. Another tab has no mark and
  *    starts at `off`; that residual is accepted.
  *  - **Attached to a page again, it asks first** (fix check F16, F17). The
@@ -52,7 +58,7 @@
  *  - **It first finds out whether there is already an article here** (P2-2).
  *    An import can adopt one already on the shelf (`freeSlug`, src/jobs.ts),
  *    with a glossary and notes that would go public on the press, and the
- *    confirmation here lists an article nothing has been built on. No box
+ *    confirmation here lists an article nothing has been built on. No control
  *    unless the probe says there is nothing published.
  *  - **Nothing is sent without the confirmation**: the rights box ticked for
  *    this slug, and then the press. Both are held here and not in the
@@ -80,14 +86,14 @@ import { statusOf } from "./lib/api.js";
 
 /** One state at a time. */
 export type ShareAtAddState =
-  /** Not known yet whether an article is already published at this slug. No box. */
+  /** Not known yet whether an article is already published at this slug. No control. */
   | { kind: "probing" }
-  /** There is one. No box, and one line pointing at its Metadata page. */
+  /** There is one. No control, and one line pointing at its Metadata page. */
   | { kind: "adopted" }
-  /** The probe could not say. No box and no line: not knowing is not a reason to offer the switch. */
+  /** The probe could not say. No control and no line: not knowing is not a reason to offer the switch. */
   | { kind: "unavailable" }
   | { kind: "off" }
-  /** The box is ticked and the confirmation is open. Nothing has been sent. */
+  /** The confirmation is open. Nothing has been sent. */
   | { kind: "confirming"; rights: boolean }
   /** Confirmed, and not sent yet: the import has not made the article's row. */
   | { kind: "waiting" }
@@ -131,7 +137,7 @@ export interface ShareIo {
 /**
  * **Whether the add page should wait rather than open the article by
  * itself**: the confirmation is open, or there is an answer the reader has
- * not had the chance to read. A share that is on, or a box never touched,
+ * not had the chance to read. A share that is on, or a control never used,
  * holds nothing up. GPT Sol's plan review, P2-5.
  */
 export function shareUnsettled(state: ShareAtAddState): boolean {
@@ -277,7 +283,7 @@ export class ShareAtAdd {
     this.kick();
   }
 
-  /** The box, ticked: open the confirmation. Sends nothing. */
+  /** *Make it public…*: open the confirmation. Sends nothing. */
   open(): void {
     const from = this.state;
     if (from.kind !== "off" && !(from.kind === "refused" && !from.on)) return;
@@ -309,7 +315,7 @@ export class ShareAtAdd {
     this.kick();
   }
 
-  /** The box, unticked. Ignored while a request is in flight (the box is disabled then). */
+  /** The outer *Cancel* or *Stop sharing*. Ignored while a request is in flight (no press is offered then). */
   untick(): void {
     this.retryOnNextAlive = false;
     switch (this.state.kind) {
@@ -390,7 +396,7 @@ export class ShareAtAdd {
       else if (found === "unknown") this.set({ kind: "unavailable" });
       /* Nothing published, and this tab remembers asking to make it public.
          That is not read back from anywhere, so it is not `on`: `unknown`,
-         which draws the box ticked and lets it be unticked. It sends nothing. */
+         which draws the warning and *Stop sharing*. It sends nothing. */
       else if (this.io.marks.recall(this.slug)) this.set({ kind: "unknown", because: "reload" });
       else this.set({ kind: "off" });
       return;
@@ -421,7 +427,7 @@ export class ShareAtAdd {
     const before = this.state;
     /* **Before the request, not when it answers.** The server can commit a
        publish whose reply this page never sees, and a reload in that gap
-       would otherwise find no mark and draw the box off over a public
+       would otherwise find no mark and draw the control as available over a public
        article. Every send, retries and `settle` included. What removes it is
        an outcome that rules publication out, below and in `untick`. */
     if (to === "public") this.io.marks.remember(this.slug);
@@ -432,7 +438,7 @@ export class ShareAtAdd {
         /* Its reader has gone: this answer is nobody's (F1). */
         if (this.retired) return;
         /* The article published while this was out, and the controller has
-           given way to Metadata (`asked`). Its answer is not this box's to draw. */
+           given way to Metadata (`asked`). Its answer is not this control's to draw. */
         if (this.state.kind !== "saving") return;
         this.retryOnNextAlive = false;
         this.notYet = 0;

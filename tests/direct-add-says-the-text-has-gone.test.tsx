@@ -9,7 +9,7 @@
  * and no pause: `AddPage` queues the ingest from its first effect, and the
  * whole point of the page is that the request fits in an address.
  *
- * So until 2026-09-01 somebody arriving that way sent a manuscript to a
+ * So until 2026-09-01 somebody arriving that way queued a manuscript for a
  * third-party model provider having been shown nothing at all. GPT Sol called
  * it the most serious thing in the built code
  * (docs/plans/260831an-referee-mode-code-review-sol.md, finding 1), and it is
@@ -22,7 +22,11 @@
  * it the POST has gone, and a present-tense warning about something already
  * done is false. That asymmetry between the two add surfaces is deliberate, it
  * is the same one `REFEREE_TEXT_ALREADY_SENT` exists for, and this file asserts
- * it in both directions so that "tidying up the inconsistency" goes red.
+ * it in both directions so that "tidying up the inconsistency" goes red. Since
+ * 2026-10-09 a URL uses the present tense while its POST is out and after a
+ * refusal, then the past tense once the server answers with a job. A job receipt
+ * does not itself prove a provider call; plan 261009i records that wider copy
+ * decision as deferred.
  *
  * ## What is posed and why
  *
@@ -62,8 +66,11 @@ const queued: string[] = [];
  * `textHasGone` in AddPage.tsx, and GPT Sol's third finding on
  * docs/plans/260903j-background-pdf-upload-so-add-does-not-wait.md.
  *
- * A URL is unaffected, and the case below still asserts it: that arm posts
- * before the first paint and has no state in which it has not.
+ * **A URL follows the same rule since 2026-10-09.** It used to be exempt, on
+ * the ground that its arm posts before the first paint; but a paste the server
+ * refuses (a `/read/` link, a spent allowance) sends nothing, and the page told
+ * it the text had gone (qi-9x3akt5n, plan 261009i § 7). So `add` answers a job
+ * here, and the URL cases flush before they read the tense.
  */
 let uploadQueues = true;
 
@@ -79,7 +86,7 @@ const queue: UseJobs = {
      article somebody else's job is holding — src/web/useStepJob.ts. */
   add: async (url: string) => {
     queued.push(url);
-    return null as Job | null;
+    return { id: "job-1" } as Job;
   },
   addUpload: async (uploadId: string) => {
     queued.push(uploadId);
@@ -134,12 +141,13 @@ function render(source: Parameters<typeof AddPage>[0]["source"]): string {
 }
 
 describe("the direct-add pages disclose where the text went", () => {
-  it("says it on /add/<url>, on the same render that queues the ingest", () => {
-    const text = render({ kind: "url", url: "example.com/an-essay" });
+  it("says it on /add/<url>: the present tense while the POST is out, the past once it is queued", async () => {
+    const first = render({ kind: "url", url: "example.com/an-essay" });
     // Both halves in one assertion, because either on its own is passable and
     // wrong: a page that discloses and never queues, or the bug as it was.
     expect(queued).toEqual(["https://example.com/an-essay"]);
-    expect(text).toContain(DIRECT_ADD_SENT_TEXT_AWAY);
+    expect(first).toContain(ADDING_SENDS_TEXT_AWAY);
+    expect(await settled()).toContain(DIRECT_ADD_SENT_TEXT_AWAY);
   });
 
   it("says it on /add/upload/<id> too, where there is not even an address to look at", async () => {
@@ -172,13 +180,14 @@ describe("the direct-add pages disclose where the text went", () => {
     );
   });
 
-  it("uses the past tense, not the add box's present tense", () => {
+  it("uses the past tense, not the add box's present tense, once it is queued", async () => {
     /* The two sentences differ by one verb and the difference is the whole
        point: on the shelf the reader still has a choice, and here they do not.
        Asserted as an absence as well as a presence so that somebody making the
        three disclosures "consistent" finds out here rather than by shipping a
        page that warns about something it has already done. */
-    const text = render({ kind: "url", url: "example.com/an-essay" });
+    render({ kind: "url", url: "example.com/an-essay" });
+    const text = await settled();
     expect(text).not.toContain(ADDING_SENDS_TEXT_AWAY);
     expect(DIRECT_ADD_SENT_TEXT_AWAY).not.toBe(ADDING_SENDS_TEXT_AWAY);
   });

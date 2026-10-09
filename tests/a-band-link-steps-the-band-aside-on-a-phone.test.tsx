@@ -631,7 +631,7 @@ describe("Skim, which jumps on opening", () => {
 
 /* Plan 261004b: a card could start another dig while its own mode was already
    open but stepped aside, and changing the URL to the same mode had to reveal
-   it. Since plan 261009i the card's button is *Ask in chat*, which goes to
+   it. Since plan 261009k the card's button is *Ask in chat*, which goes to
    Chat: what is pinned now is that it starts no dig, and that the band it
    lands in is not left hidden. */
 describe("the citation card's Ask in chat lands in a band that is drawn", () => {
@@ -672,7 +672,7 @@ describe("the citation card's Ask in chat lands in a band that is drawn", () => 
       mark?.dispatchEvent(event);
     });
     await until(() => document.querySelector(".prose-card-cite-ask") !== null, "the citation card did not open");
-    expect(document.querySelector(".prose-card")?.textContent, "Dig deeper is gone (plan 261009i)").not.toMatch(/Dig deeper/);
+    expect(document.querySelector(".prose-card")?.textContent, "Dig deeper is gone (plan 261009k)").not.toMatch(/Dig deeper/);
     await act(async () => document.querySelector<HTMLButtonElement>(".prose-card-cite-ask")?.click());
     await settle();
     expect(digs, "Ask in chat starts no dig").toBe(0);

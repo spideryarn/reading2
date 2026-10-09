@@ -171,7 +171,7 @@ describe("the filter", () => {
 });
 
 /**
- * **The way back's words** (plan 261009i, stage 2): which mode a press opens,
+ * **The way back's words** (plan 261009k, stage 2): which mode a press opens,
  * whose icon the line wears, and the sentence it says.
  */
 describe("originBack", () => {

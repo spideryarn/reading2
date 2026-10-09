@@ -17,7 +17,7 @@
  *   is open;
  * - the guide's unsent words come back after a mode change, under the same
  *   guide, stored or begun here;
- * - no Live in the guide.
+ * - Live in the guide, since plan 261009i.
  *
  * The real band and the real `useChat`, with `ChatPanel` stubbed to expose
  * the props it is handed: tests/conversation-band-origin.test.tsx's harness.
@@ -243,14 +243,21 @@ describe("sending in the guide", () => {
     expect(panel?.threadId).toBe("spya-gdsrv9");
   });
 
-  it("offers no Live in the guide, and refuses to start one there", async () => {
+  /* Plan 261009i (Greg, 2026-10-09, `spya-x38nge`): the guide takes Live,
+     and a session started there is the guide's, not a new chat. */
+  it("offers Live in the guide, and starts it in the guide", async () => {
     stored = [GUIDE, CHAT];
     await mount(`?mode=chat&thread=${CHAT.id}`);
     expect(panel?.live).toBeDefined();
     await openGuide();
-    expect(panel?.live).toBeUndefined();
+    expect(panel?.live).toBeDefined();
     const start = prop<(id: string | null) => string | undefined>("onStartLive");
-    expect(start(GUIDE.id)).toBeUndefined();
+    let started: string | undefined;
+    act(() => {
+      started = start(GUIDE.id);
+    });
+    expect(started).toBe(GUIDE.id);
+    expect(guides()).toHaveLength(1);
   });
 
   it("edits with the open guide's rules, never Chat's visible blocks", async () => {

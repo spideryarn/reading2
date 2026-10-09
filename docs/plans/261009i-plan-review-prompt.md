@@ -1,29 +1,7 @@
-# GPT Sol plan review — 261009i
+Review the plan docs/plans/261009i-the-guide-greets-in-chat-takes-live-and-a-bar-row.md in this repo (Spideryarn). Read CLAUDE.md first, then the plan, then the code it names: src/web/GuideGreeting.tsx, src/web/ChatPanel.tsx (where GuideGreeting is drawn, GuideRow), src/web/modes/conversation/ConversationModes.tsx (OFFERS_LIVE, onStartLive, the guide exclusions), src/live.ts (liveInstructions, liveSession, liveTools, LIVE_SERVER_TOOLS), src/live-gpt.ts, src/routes.ts (liveChatToken and the GPT-Live session route, streamChat guide handling), src/chat.ts (SpokenKind, withSpokenTurn, targetOf), src/guide.ts (modeWordsSection), src/converse.ts (GUIDE_SYSTEM), src/chat-tools.ts (toolsFor, GUIDE_TOOLS), src/web/CommandBar.tsx (besideTheModes, helpRow), src/web/purpose.ts, docs/project/security-map.md rows for chat-tools.ts and chat-commands.ts, and the prior plans 261007j, 261007p, 261008a.
 
-You are reviewing a plan in this repository, read-only. Read
-`docs/plans/261009i-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md` and
-`docs/project/chat-from-a-mode.md`, then check the plan against the code it names
-(`src/web/GlossaryPanel.tsx` § Looked, `src/web/CitationsPanel.tsx` § WorkRow, `src/web/CitationInvestigation.tsx`,
-`src/web/ProseHoverCard.tsx` § TermCard / CiteCard, `src/web/SkimPanel.tsx`, `src/web/CommentDialog.tsx`,
-`src/web/reader/Reader.tsx` (handToChat, askGlossaryEntryInChat, citeActions, openTermInGlossary,
-openFromStopCard, jumpTo), `src/web/ChatPanel.tsx`, `src/web/ConversationModes.tsx` (pendingOrigin),
-`src/types.ts` § ThreadOrigin, `src/thread-origin.ts`, `src/routes.ts` § parseOrigin/parseItemOrigin,
-`src/db/schema.ts` § chat_threads_origin_*, `src/web/IdeasPanel.tsx`).
+Constraints for this run: it must not edit a defence listed in docs/project/security-map.md (write-up for Greg instead); simplest version first; never deploy.
 
-Context: an admin (the product owner) asked for this, so whether to do it is settled. Review how.
+Questions: Is the v1 the right 80/20 for Greg's two reports? Does anything in it touch a defence after all? Will Live in a guide break anything (spoken turn creating a guide thread, seed of a guide's history via liveSeedItems/answerAsSeen, kind sent by the browser vs stored kind, the live tool endpoint running tools for a guide session, cost tracking jobFor), and what must be tested? Is the "Keep this as why you're reading" press correct and safe (race with the purpose read, StrictMode, a reason saved elsewhere meanwhile, the greeting changing under the reader)? Is the greeting text table sensible, and is quoting the profile OK? Anything missing for the command-bar row (owner-only contexts, catalogue regeneration, ranking vs Help's alias)?
 
-Find:
-1. Anything the plan gets wrong about the code (a surface missed, a dependency on the Dig deeper
-   props it has not noticed, a test that will break silently rather than loudly).
-2. Anything in stage 2 (`openOrigin`) that would not land on the item: a mode that ignores the
-   parameter when it is already mounted, a gate/filter that hides the item, a phone layout where
-   the band covers the prose so the "highlight the block" is invisible, history behaviour.
-3. Stage 3 (Ideas origin + migration): any of the silent steps the checklist warns about, CHECK
-   constraint shape, whether `Idea.id` is durable enough.
-4. Whether anything here edits a defence listed in docs/project/security-map.md (prompt fencing of
-   article text in the seed, origin validation in the route).
-5. Simpler alternatives that achieve Greg's ask with fewer parts.
-
-Write findings numbered F1…, each with severity (high/medium/low), the evidence (file:line), and
-the fix you propose. End with a one-line verdict: "ready to build", "build after fixes", or
-"rethink".
+Answer with a verdict line first (build / build with changes / do not build), then numbered findings with severity (P1/P2/P3), each with file references and a concrete change. Do not edit files.

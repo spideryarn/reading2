@@ -1,0 +1,1110 @@
+diff --git a/scripts/eval/skim-cue-optional-pairs.ts b/scripts/eval/skim-cue-optional-pairs.ts
+new file mode 100644
+index 000000000..0120863ef
+--- /dev/null
++++ b/scripts/eval/skim-cue-optional-pairs.ts
+@@ -0,0 +1,381 @@
++/**
++ * **The screens and the blind pairs for plan 261009j**: `skim/11` makes a
++ * cue optional. Is a reader better placed by the new cue — or by its absence —
++ * than by the old one, beyond the old prompt's own run-to-run noise? Do the
++ * cues it keeps echo the quote less, without giving more away or saying more
++ * that the records do not support? And when it leaves one out, was one needed?
++ *
++ *     npx tsx scripts/eval/skim-cue-optional-pairs.ts --a1=<results.json> \
++ *       --a2=<results.json> --b1=<results.json> --b2=<results.json> \
++ *       [--file=<slug>=<inputs.json> …] --out=evals/results/<stem>
++ *
++ * Reads results files from scripts/eval/skim-coverage-eval.ts. **No model
++ * call, nothing read from or written to the database.** The arms:
++ *
++ * - **A1, A2** — `skim/10`, two `--old-only` runs: the control;
++ * - **B1, B2** — `skim/11`, two `--new-only` runs, so B has a spread of its
++ *   own (GPT Sol's plan review, F3).
++ *
++ * `--file=` names the inputs of an article read from production
++ * (scripts/eval/skim-inputs-from-production.ts), for its Ideas' statements;
++ * a local article's are in the results file's `snapshot`.
++ *
++ * It writes, beside `--out`:
++ *
++ * - `…-screens.md` — per arm and article: stops, cues kept, cues left out,
++ *   cue lengths and cost; the stops that are not in every arm (the pairs
++ *   cannot judge those, so they are listed to read by hand — Sol F2); then
++ *   every cue B1 and B2 kept, beside A1's;
++ * - `…-pairs-s1.md` … `-s3.md` and `…-key-s1.json` … — s1 is A1 v A2 (the
++ *   control), s2 A1 v B1, s3 A2 v B2. **One population for all three**: the
++ *   quotes that are a stop in all four arms (Sol F2). Sides by `blindCoin`;
++ *   each side is the arm's cue or "(no question)". A quote with no cue on
++ *   either side is not a pair, and is counted apart. The judge sees what the
++ *   model saw (the section, the quote, the key ideas it carries) apart from
++ *   the article's paragraphs, so "licensed by the records" and "true of the
++ *   article" are two questions (Sol F4).
++ *
++ * Run it again once `…-judgment-sN-<judge>.json` files exist and it joins
++ * each to its key and prints, per comparison and judge: who was preferred,
++ * overall, per article and by kind of pair; a two-sided sign test over the
++ * untied pairs; and per arm the echo, giveaway, unlicensed and untrue counts
++ * per cue judged, and how many of its empty sides were judged to need a
++ * question (Sol F1).
++ */
++import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
++import { basename, dirname } from "node:path";
++import { blindCoin } from "../../evals/plain-words/run.js";
++
++interface Stop {
++  quoteId: string;
++  quoteFull: string;
++  paragraph: string;
++  before: string | null;
++  cue: string | null;
++  section: string;
++  ideasIn?: string[];
++}
++interface Run {
++  slug: string;
++  arm: "old" | "new";
++  version: string;
++  costNanos: number;
++  dropped: Record<string, number>;
++  stops: Stop[];
++}
++type ArmName = "A1" | "A2" | "B1" | "B2";
++const ARM_NAMES: readonly ArmName[] = ["A1", "A2", "B1", "B2"];
++
++const args = process.argv.slice(2);
++const arg = (name: string): string | undefined =>
++  args.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3);
++const need = (name: string): string => {
++  const v = arg(name);
++  if (!v) throw new Error(`--${name}=<file> is required`);
++  return v;
++};
++const base = need("out");
++
++interface Snapshot {
++  [slug: string]: { ideas?: unknown };
++}
++const snapshots: Snapshot = {};
++function load(name: ArmName, file: string): Run[] {
++  const data = JSON.parse(readFileSync(file, "utf8")) as { results: Run[]; failures?: unknown[]; snapshot?: Snapshot };
++  const arm = name.startsWith("B") ? "new" : "old";
++  const want = name.startsWith("B") ? "skim/11" : "skim/10";
++  const runs = data.results.filter((r) => r.arm === arm);
++  if (runs.length === 0) throw new Error(`${name}: ${file} has no ${arm} arm`);
++  const seen = new Set<string>();
++  for (const r of runs) {
++    if (seen.has(r.slug)) throw new Error(`${name}: ${file} has two runs of ${r.slug}`);
++    seen.add(r.slug);
++    if (r.version !== want) throw new Error(`${name}: ${r.slug} is ${r.version}, not ${want}`);
++  }
++  if ((data.failures ?? []).length > 0) throw new Error(`${name}: ${file} records failed runs`);
++  Object.assign(snapshots, data.snapshot ?? {});
++  return runs;
++}
++const files = ARM_NAMES.map((n) => need(n.toLowerCase()));
++if (new Set(files).size !== files.length) throw new Error("each arm must be its own run, so its own file");
++const ARMS = Object.fromEntries(ARM_NAMES.map((n, i) => [n, load(n, files[i]!)])) as Record<ArmName, Run[]>;
++const slugs = ARMS.A1.map((r) => r.slug);
++for (const name of ARM_NAMES) {
++  if (ARMS[name].map((r) => r.slug).sort().join(",") !== [...slugs].sort().join(",")) {
++    throw new Error(`${name} covers different articles from A1`);
++  }
++}
++const runOf = (arm: ArmName, slug: string): Run => ARMS[arm].find((r) => r.slug === slug)!;
++
++/* ------------------------------------------------------------- the ideas -- */
++
++/** Each article's key ideas by label (I1, I2, …), as the prompt gave them. */
++const ideasOf = new Map<string, Map<string, string>>();
++for (const slug of slugs) {
++  const fromFile = args.find((a) => a.startsWith(`--file=${slug}=`))?.slice(`--file=${slug}=`.length);
++  let list: { label?: string; name: string; statement: string }[] = [];
++  if (fromFile) {
++    const inputs = JSON.parse(readFileSync(fromFile, "utf8")) as { ideas: { ideas: { name: string; statement: string }[] } };
++    list = inputs.ideas.ideas.map((idea, i) => ({ label: `I${i + 1}`, ...idea }));
++  } else if (Array.isArray(snapshots[slug]?.ideas)) {
++    list = snapshots[slug]!.ideas as typeof list;
++  } else {
++    throw new Error(`${slug}: no Ideas in the snapshot; pass --file=${slug}=<inputs.json>`);
++  }
++  ideasOf.set(slug, new Map(list.map((idea, i) => [idea.label ?? `I${i + 1}`, `${idea.name}: ${idea.statement}`])));
++}
++
++/* --------------------------------------------------------------- screens -- */
++
++const median = (xs: number[]): number => {
++  if (xs.length === 0) return 0;
++  const s = [...xs].sort((a, b) => a - b);
++  return s[Math.floor(s.length / 2)]!;
++};
++const screens: string[] = ["# Skim cue screens (plan 261009j)", ""];
++screens.push("| Arm | article | stops | cues | left out (`noCue`) | bad (`badCue`) | median length | cost |");
++screens.push("|---|---|---|---|---|---|---|---|");
++for (const name of ARM_NAMES) {
++  let stops = 0, cues = 0, none = 0, bad = 0, cost = 0;
++  const lengths: number[] = [];
++  for (const slug of slugs) {
++    const r = runOf(name, slug);
++    const kept = r.stops.filter((s) => s.cue !== null);
++    const noCue = r.dropped.noCue ?? 0;
++    stops += r.stops.length;
++    cues += kept.length;
++    none += noCue;
++    bad += r.dropped.badCue ?? 0;
++    cost += r.costNanos;
++    lengths.push(...kept.map((s) => s.cue!.length));
++    screens.push(
++      `| ${name} | ${slug} | ${r.stops.length} | ${kept.length} | ${noCue} | ${r.dropped.badCue ?? 0} | ${median(kept.map((s) => s.cue!.length))} | $${(r.costNanos / 1e9).toFixed(4)} |`,
++    );
++  }
++  screens.push(`| **${name}** | **all** | **${stops}** | **${cues}** | **${none}** | **${bad}** | **${median(lengths)}** | **$${(cost / 1e9).toFixed(4)}** |`);
++}
++
++/** The quotes that are a stop in every arm: the one population judged. */
++const common = new Map<string, Set<string>>();
++screens.push("", "## Stops not in every arm (not judged; read by hand)", "");
++for (const slug of slugs) {
++  const sets = ARM_NAMES.map((n) => new Set(runOf(n, slug).stops.map((s) => s.quoteId)));
++  const all = [...sets[0]!].filter((q) => sets.every((s) => s.has(q)));
++  common.set(slug, new Set(all));
++  for (const n of ARM_NAMES) {
++    for (const s of runOf(n, slug).stops) {
++      if (common.get(slug)!.has(s.quoteId)) continue;
++      screens.push(`- ${slug} · only some arms, here **${n}**: ${s.quoteFull.slice(0, 160)}… — cue: ${s.cue ?? "(none)"}`);
++    }
++  }
++}
++screens.push("", "## Every stop, B1 and B2 beside A1", "");
++for (const slug of slugs) {
++  screens.push(`### ${slug}`, "");
++  const a1 = new Map(runOf("A1", slug).stops.map((s) => [s.quoteId, s]));
++  const b2 = new Map(runOf("B2", slug).stops.map((s) => [s.quoteId, s]));
++  for (const s of runOf("B1", slug).stops) {
++    screens.push(`- **Quote**: ${s.quoteFull.slice(0, 300)}${s.quoteFull.length > 300 ? "…" : ""}`);
++    screens.push(`  - B1: ${s.cue ?? "(no question)"}`);
++    const other = b2.get(s.quoteId);
++    screens.push(`  - B2: ${other ? (other.cue ?? "(no question)") : "(not a stop in B2)"}`);
++    const old = a1.get(s.quoteId);
++    screens.push(`  - A1: ${old ? (old.cue ?? "(no question)") : "(not a stop in A1)"}`);
++  }
++  screens.push("");
++}
++writeFileSync(`${base}-screens.md`, screens.join("\n"));
++console.log(`wrote ${base}-screens.md`);
++
++/* ----------------------------------------------------------------- pairs -- */
++
++const COMPARISONS: { id: string; x: ArmName; y: ArmName }[] = [
++  { id: "s1", x: "A1", y: "A2" },
++  { id: "s2", x: "A1", y: "B1" },
++  { id: "s3", x: "A2", y: "B2" },
++];
++interface KeyRow {
++  pair: number;
++  slug: string;
++  quoteId: string;
++  /** Which arm is shown as version 1. */
++  one: ArmName;
++  two: ArmName;
++  /** Which arms had a cue: "both" or the one arm that did. */
++  kind: "both" | ArmName;
++}
++const JUDGE_BRIEF = `# Which question helps the reader more?
++
++A reading app walks a reader through an article as a route of short quotes. Before each quote it may
++show one short question or instruction, written by AI, for the reader to read the quote with — or
++nothing. Its only job is to make the quote **mean more for having read it**: easier to understand,
++easier to place in the argument, or easier to see why it matters.
++
++The AI that wrote it saw only **the records**: the quote, its section, and the article's key ideas
++that the quote carries. It never saw the surrounding paragraphs. Each pair below shows the records,
++then the article's own paragraphs (so you can tell what is true), then two versions of what is shown
++before the quote. A version may be "(no question)".
++
++For each pair, decide:
++
++- **better**: which version leaves a reader better placed to understand, situate, or see why the
++  quote matters: "1", "2" or "tie". **A question that adds something real beats no question; a
++  missing question that was needed loses to one that supplies it.** A question that only turns the
++  quote into a question, so that reading it tells the reader nothing the quote would not, is **no
++  better than "(no question)"** — and worse if it misleads.
++- For each version that has a question (all false for "(no question)"):
++  - **echo**: it adds nothing — it only restates the quote as a question or instruction;
++  - **give**: it states the quote's finding or conclusion, so the reader is told the answer first;
++  - **unlicensed**: it says or assumes something the records do not support, or asks something the
++    quote does not answer;
++  - **untrue**: it says something the article's paragraphs show to be wrong or misleading.
++- For each version that is "(no question)" (false when it has one):
++  - **needed**: a question was needed here — the quote does not stand on its own (it leans on "this",
++    "the latter", or a term or choice the reader cannot place) and the records hold what would help.
++
++Answer as JSON only, in a file, one entry per pair, with every field present:
++
++\`\`\`
++{ "judgments": [ { "pair": 1, "better": "1", "echo1": false, "echo2": false, "give1": false, "give2": false, "unlicensed1": false, "unlicensed2": false, "untrue1": false, "untrue2": false, "needed1": false, "needed2": true } ] }
++\`\`\`
++`;
++const shown = (cue: string | null): string => (cue === null ? "(no question)" : cue);
++const flat = (s: string | null): string => (s ?? "(none)").replace(/\n+/g, " ").trim();
++
++for (const c of COMPARISONS) {
++  const coin = blindCoin(261009 + Number(c.id.slice(1)));
++  const key: KeyRow[] = [];
++  const page: string[] = [JUDGE_BRIEF, ""];
++  let bothNone = 0;
++  for (const slug of slugs) {
++    const ys = new Map(runOf(c.y, slug).stops.map((s) => [s.quoteId, s]));
++    for (const sx of runOf(c.x, slug).stops) {
++      if (!common.get(slug)!.has(sx.quoteId)) continue;
++      const sy = ys.get(sx.quoteId)!;
++      if (sx.cue === null && sy.cue === null) {
++        bothNone++;
++        continue;
++      }
++      const flip = coin();
++      const [one, two] = flip ? [c.y, c.x] : [c.x, c.y];
++      const [s1, s2] = flip ? [sy, sx] : [sx, sy];
++      const pair = key.length + 1;
++      key.push({
++        pair,
++        slug,
++        quoteId: sx.quoteId,
++        one,
++        two,
++        kind: sx.cue !== null && sy.cue !== null ? "both" : sx.cue !== null ? c.x : c.y,
++      });
++      const ideas = (sx.ideasIn ?? []).map((l) => ideasOf.get(slug)!.get(l)).filter(Boolean);
++      page.push(
++        `## Pair ${pair}`,
++        "",
++        "**The records**",
++        "",
++        `- Section: ${sx.section}`,
++        `- Key ideas it carries: ${ideas.length ? ideas.join(" · ") : "(none)"}`,
++        `- The quote: ${flat(sx.quoteFull)}`,
++        "",
++        "**The article, around it**",
++        "",
++        `- The paragraph before: ${flat(sx.before)}`,
++        `- The quote's paragraph: ${flat(sx.paragraph)}`,
++        "",
++        `**Version 1**: ${shown(s1.cue)}`,
++        "",
++        `**Version 2**: ${shown(s2.cue)}`,
++        "",
++      );
++    }
++  }
++  const xFirst = key.filter((k) => k.one === c.x).length;
++  if (key.length > 0 && Math.abs(xFirst - key.length / 2) > key.length * 0.2) {
++    throw new Error(`${c.id}: the coin put ${c.x} first ${xFirst} times in ${key.length}`);
++  }
++  writeFileSync(`${base}-pairs-${c.id}.md`, page.join("\n"));
++  writeFileSync(`${base}-key-${c.id}.json`, JSON.stringify({ comparison: c, bothNone, key }, null, 1));
++  console.log(`${c.id} ${c.x} v ${c.y}: ${key.length} pairs (${c.x} shown first ${xFirst}), ${bothNone} with no cue on either side`);
++}
++
++/* --------------------------------------------------------------- scoring -- */
++
++interface Judgment {
++  pair: number;
++  better: "1" | "2" | "tie";
++  [flag: string]: unknown;
++}
++const FLAGS = ["echo", "give", "unlicensed", "untrue", "needed"] as const;
++
++/** Two-sided exact sign test: P(a split at least this uneven | p = ½). */
++function signTest(a: number, b: number): number {
++  const n = a + b;
++  const k = Math.min(a, b);
++  let tail = 0;
++  for (let i = 0; i <= k; i++) {
++    let c = 1;
++    for (let j = 0; j < i; j++) c = (c * (n - j)) / (j + 1);
++    tail += c / 2 ** n;
++  }
++  return Math.min(1, 2 * tail);
++}
++
++const dir = dirname(base);
++const stem = basename(base);
++for (const c of COMPARISONS) {
++  const key = (JSON.parse(readFileSync(`${base}-key-${c.id}.json`, "utf8")) as { key: KeyRow[] }).key;
++  const judged = existsSync(dir)
++    ? readdirSync(dir).filter((f) => f.startsWith(`${stem}-judgment-${c.id}-`) && f.endsWith(".json"))
++    : [];
++  for (const file of judged) {
++    const judge = file.slice(`${stem}-judgment-${c.id}-`.length, -".json".length);
++    const js = (JSON.parse(readFileSync(`${dir}/${file}`, "utf8")) as { judgments: Judgment[] }).judgments;
++    const byPair = new Map<number, Judgment>();
++    for (const j of js) {
++      if (byPair.has(j.pair)) throw new Error(`${file}: pair ${j.pair} judged twice`);
++      if (!["1", "2", "tie"].includes(j.better)) throw new Error(`${file}: pair ${j.pair} better=${j.better}`);
++      for (const f of FLAGS) {
++        for (const side of ["1", "2"]) {
++          if (typeof j[`${f}${side}`] !== "boolean") throw new Error(`${file}: pair ${j.pair} lacks ${f}${side}`);
++        }
++      }
++      byPair.set(j.pair, j);
++    }
++    if (byPair.size !== key.length || key.some((k) => !byPair.has(k.pair))) {
++      throw new Error(`${file}: ${byPair.size} judgments for ${key.length} pairs`);
++    }
++    const winner = (k: KeyRow): string => {
++      const j = byPair.get(k.pair)!;
++      return j.better === "tie" ? "tie" : j.better === "1" ? k.one : k.two;
++    };
++    const tally = (rows: KeyRow[]): string => {
++      const t: Record<string, number> = { [c.x]: 0, [c.y]: 0, tie: 0 };
++      for (const k of rows) t[winner(k)]!++;
++      return `${c.x} ${t[c.x]} · ${c.y} ${t[c.y]} · tie ${t.tie}`;
++    };
++    const t: Record<string, number> = { [c.x]: 0, [c.y]: 0, tie: 0 };
++    for (const k of key) t[winner(k)]!++;
++    console.log(`\n${c.id} ${c.x} v ${c.y}, judge ${judge}: ${key.length} pairs`);
++    console.log(`  all:               ${tally(key)}   sign test p = ${signTest(t[c.x]!, t[c.y]!).toFixed(4)}`);
++    console.log(`  both have a cue:   ${tally(key.filter((k) => k.kind === "both"))}`);
++    console.log(`  only ${c.x} has one:  ${tally(key.filter((k) => k.kind === c.x))}`);
++    console.log(`  only ${c.y} has one:  ${tally(key.filter((k) => k.kind === c.y))}`);
++    console.log(`  per article:       ${slugs.map((s) => `${s.slice(0, 14)} ${tally(key.filter((k) => k.slug === s)).replace(/ · tie \d+/, "")}`).join(" | ")}`);
++    for (const arm of [c.x, c.y]) {
++      const counts = Object.fromEntries(FLAGS.map((f) => [f, 0])) as Record<(typeof FLAGS)[number], number>;
++      let cues = 0, empties = 0;
++      for (const k of key) {
++        const j = byPair.get(k.pair)!;
++        const side = k.one === arm ? "1" : "2";
++        const hasCue = k.kind === "both" || k.kind === arm;
++        if (hasCue) cues++;
++        else empties++;
++        for (const f of FLAGS) if (j[`${f}${side}`] === true) counts[f]++;
++      }
++      console.log(
++        `  ${arm}: ${cues} cues — echo ${counts.echo}, gives it away ${counts.give}, unlicensed ${counts.unlicensed}, untrue ${counts.untrue}; ${empties} left out — needed ${counts.needed}`,
++      );
++    }
++  }
++}
+diff --git a/src/feedback-endings.generated.ts b/src/feedback-endings.generated.ts
+index e23df3777..91bbe4d20 100644
+--- a/src/feedback-endings.generated.ts
++++ b/src/feedback-endings.generated.ts
+@@ -314,6 +314,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
+   "spya-qgh5ta": "shipped",
+   "spya-qmev0s": "shipped",
+   "spya-qnrxuw": "shipped",
++  "spya-qpgvq9": "shipped",
+   "spya-qx08ep": "shipped",
+   "spya-qxufp9": "declined",
+   "spya-qzsvx4": "shipped",
+@@ -451,6 +452,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
+   "spya-wxd4nq": "shipped",
+   "spya-wzmvva": "shipped",
+   "spya-x0pvsh": "shipped",
++  "spya-x0rfs2": "shipped",
+   "spya-x38nge": "shipped",
+   "spya-x4zut6": "shipped",
+   "spya-x896vu": "shipped",
+@@ -505,6 +507,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
+   "spya-za77hj": "shipped",
+   "spya-zadvdv": "shipped",
+   "spya-zbcchv": "shipped",
++  "spya-zdkqx4": "shipped",
+   "spya-zfcp5x": "shipped",
+   "spya-zgf8p2": "shipped",
+   "spya-zhkutu": "shipped",
+@@ -546,6 +549,7 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
+   "spya-nhhd0x": "arXiv papers no longer bring in the TeX LaTeXML could not convert, such as \"\\hohsettheme\" and \"hohRose\". About one paper in nine had some. The article you saw stays as it is.",
+   "spya-nnr8ha": "You chose not now (q-wux4k7, 2026-10-08). Browser zoom, Cmd or Ctrl with +, already scales everything, so no setting was built.",
+   "spya-pd9fnc": "Both halves are on dev. Dictation: the microphone button no longer moves when you press Stop, so a quick second tap lands and sends once the words arrive. The Chat half: a \"‹ Chats\" button and the model in the (i).",
++  "spya-qpgvq9": "spya-x0rfs2: the bar is fixed; the wider layout is put to Greg as q-u04sye",
+   "spya-qxufp9": "Declined: one model call writes the article's tree and these summaries together, and Structure, the shelf and hover cards need the tree as soon as the article opens. Deferring them means splitting that stage.",
+   "spya-s6qhzv": "The guide now greets you in the chat and asks why you're reading (no box), takes Live, and has a Guide row in the command bar. Still waiting on you (q-w2740x): may it save your reason itself, and offer share, private link and archive?",
+   "spya-sshjd2": "Shipped: your Earlier tab now sorts reports into Open, Needs a decision, Set aside and Shipped, numbers each one, and lets you answer my questions in place.",
+@@ -560,11 +564,13 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
+   "spya-vgwt4z": "No change: the Send button already had a spinner, in production since 2026-09-01, and a test now pins it. You decided against adding a minimum time on screen (2026-09-06).",
+   "spya-vzj8fc": "A recording left on one article is no longer offered on another; Chat, passage chat and the command bar had the same gap, all fixed. The microphone now has a card: why talk, the 15-minute limit, and press Stop twice.",
+   "spya-wm5gu2": "Skim and More now sit in Structure and Summary's group, and Comments sits with Marginalia, after it. On a phone More is now almost on screen, but the bar still scrolls sideways.",
++  "spya-x0rfs2": "spya-x0rfs2: the bar is fixed; the wider layout is put to Greg as q-u04sye",
+   "spya-x38nge": "The guide now greets you in the chat and asks why you're reading (no box), takes Live, and has a Guide row in the command bar. Still waiting on you (q-w2740x): may it save your reason itself, and offer share, private link and archive?",
+   "spya-xcmg2d": "Help's Ask box has the same microphone as every other box. Every mode's Help page now opens with a short \"why care, what for, how it works\", then a picture of it in use. Annotated pictures skipped, as you suggested.",
+   "spya-xdvnrg": "A recording left on one article is no longer offered on another; Chat, passage chat and the command bar had the same gap, all fixed. The microphone now has a card: why talk, the 15-minute limit, and press Stop twice.",
+   "spya-xg4jyr": "New arXiv imports now show one tidy row per author, with footnotes numbered underneath. Two follow-ups are asked separately: affiliations by the small model, and re-importing this paper.",
+   "spya-y5gfpf": "Help's Ask box has the same microphone as every other box. Every mode's Help page now opens with a short \"why care, what for, how it works\", then a picture of it in use. Annotated pictures skipped, as you suggested.",
+   "spya-za2tse": "Needs a decision is now threads: a contents, one thread at a time with a reply box, Defer for now, the ids, your report shut, a shortcut beside the tabs. Check the reply box on your iPhone.",
++  "spya-zdkqx4": "spya-x0rfs2: the bar is fixed; the wider layout is put to Greg as q-u04sye",
+   "spya-zuk4f7": "Both stages shipped: Debate asks for work that cites the piece, and OpenAlex supplies its count and list of citing papers.",
+ };
+diff --git a/src/feedback-questions.generated.ts b/src/feedback-questions.generated.ts
+index 9312f6f9e..6c6f622fd 100644
+--- a/src/feedback-questions.generated.ts
++++ b/src/feedback-questions.generated.ts
+@@ -30,6 +30,7 @@ export const FEEDBACK_QUESTION_STATUS: Readonly<Record<string, FeedbackQuestionS
+   "q-sn37bt": "answered",
+   "q-t2vhv6": "answered",
+   "q-tyvutf": "answered",
++  "q-u04sye": "open",
+   "q-vvhb55": "answered",
+   "q-w2740x": "open",
+   "q-wux4k7": "answered",
+@@ -43,6 +44,7 @@ export const FEEDBACK_OPEN_QUESTIONS: readonly CompiledFeedbackQuestion[] = [
+   { id: "q-xd9es7", title: "A filter on which kinds of note Marginalia shows: now, or not yet?", report: "spya-thpsnd", asked: "2026-10-08", body: "Should Marginalia, the column of notes to the right of the article, get a filter so you can say which kinds of note it shows?\n\nA. Not yet (recommended). Leave the column as it is. Each paragraph gets at most one line of each kind, and most kinds start shut, so it is rarely crowded. Look again if it starts to feel busy.\n\nB. A row of switches at the top of the column, one per kind of note: Ideas, FAQ, Timeline, Debate, Citations, Comments. Remembered on this device. About a day of work. Costs one more row of controls in a column that is narrow already.\n\nRecommended: A.\n\nDetails\n\nWhere this came from. On 3 Oct you asked for fewer modes, and suggested putting Glossary, Ideas and Quotes inside Marginalia, \"so that you could say, I only want...\" those notes. Two smaller ideas were proposed instead. One was a single bar button for the list modes; that was answered on 7 Oct by the More button, which now holds Quotes, Glossary, FAQ, Ideas and Timeline. This is the other one, and it was never asked in a way you could answer here.\n\nWhy not put the list modes inside Marginalia. Marginalia is a column beside the article, not a band below it, and it is hidden on a phone. Moving Glossary, Ideas and Quotes into it would take them away on a phone.\n\nWhat Marginalia shows today. A relation word (so, but, vs) where the argument turns; a pinned line saying which part you are in; each part's question; a stamp where an idea first appears; and, shut until pressed, lines from FAQ, Timeline, Debate, Citations and comments, each from a mode that has already run. Glossary terms are marked in the article itself, not in the column, so \"only glossary notes\" would not be one of the switches.\n\nYour three other follow-ups from that report are settled: Tweets is Summary's Thread; the Simple summary level has gone; and More gathers the list modes." },
+   { id: "q-qjbb9a", title: "arXiv papers: read affiliations with the small model, and re-import your Attention paper?", report: "spya-xg4jyr", asked: "2026-10-09", body: "The messy author list is fixed for new arXiv imports, without a model. Two follow-ups are yours to decide.\n\n1. Should arXiv imports also get each author's affiliation on the masthead names (the hover tooltip), read by the same small model PDFs use?\n   1A (recommended). Yes. One small model call per arXiv import (a fraction of a cent), checked against the page's own words as the PDF one is, so it cannot invent an institution. Gives the tooltip PDF imports already have.\n   1B. No. The names stay plain on the masthead; the affiliations are still in the author rows under it.\n\n2. Your \"Attention Is All You Need\" import (the one you reported from) still has the old messy rows, because the fix applies at import time. Shall I re-import it?\n   2A (recommended). Yes, re-extract it. Every paragraph keeps its id, so your comments and highlights stay put; only the old author paragraph is replaced, so anything attached to that one paragraph would come loose. The Structure and summaries are rebuilt (cents).\n   2B. No, leave it as it is.\n\nDetails\n\nWhat you reported (2026-10-09): the author list on your arXiv import of Attention Is All You Need was messy, and you thought a small model was tidying authors at import.\n\nWhat was going on. That small model exists, but only for PDFs. Since 2026-10-05 an arXiv link imports arXiv's HTML version instead of the PDF (it has better maths), and the HTML path never had the model. In fact you have this paper twice: a PDF import from 2026-10-05 with clean rows (\"Noam Shazeer, Google Brain, noam@google.com\") and the HTML one from last night with one 194-word paragraph full of \"thanks:\", \"11footnotemark: 1\" and \"Affiliation:\" labels.\n\nThe cause was layout, not reading. arXiv's HTML hides each author's affiliation, email and footnote in a pop-up that only appears on hover; we drop arXiv's styling, so every pop-up label became text and all eight authors ran into one paragraph. Separately, the library that finds the article on a page (Readability) quietly deleted the first author's details, because it took them for the byline.\n\nWhat shipped. At import, the author block is now rewritten into one row per author (name, then affiliation and email on their own lines), with the footnotes written once underneath, numbered (\"1 Equal contribution. Listing order is random…\"), and each name carrying the numbers of the notes that apply to it. It is all the page's own words, moved rather than retyped, and a check refuses the rewrite if a single word would be lost. 16 of 20 recent arXiv papers get it; the other 4 have an author block in a shape it does not recognise and stay as before.\n\nNot changed: the rows still show by default on this paper. The \"fold the front matter away\" feature does not fire because the very first line is Google's licence notice, which does not look like an author line.\n\nQuestion 1 in more detail. The masthead already shows the names (read from arXiv's markup without a model). What it lacks is the hover tooltip with each author's institution, which PDF imports get from the model. Reading affiliations by rule was tried on 2026-10-07 and was wrong on 7 of 19 papers, silently, so a model is the way to get them. The model is not needed for the tidy rows.\n\nQuestion 2 in more detail. Re-importing means running your article through the import again with the new code. It is a write to your production data, so I am asking rather than doing it." },
+   { id: "q-rstqvz", title: "Which way should agents write their questions and replies into the database?", report: null, asked: "2026-10-09", body: "You asked for these questions and replies to live in the database, with a command an agent runs to ask and to reply. I have planned it; nothing is built. The design is the same whichever you pick: the questions and the agents' replies go into new tables, an agent runs one command to ask, reply or close, and this dialog reads the tables, so both sides appear at once. The one real choice is what lets the agent's command write to the live database. Which?\n\nA. The database login agents already have. It can write any table, and today only a rule keeps agents to reading. Nothing for you to set up. Gives up: \"agents never write to the live database\" becomes \"agents write through this one command\", and only the command's code stops a slip from reaching other tables.\n\nB. A new database login that can do only three things: ask, reply, close (recommended). The database checks every rule itself, so a slip by an agent cannot touch readers' data or your replies. Costs you about ten minutes: run one statement to create the login, and put its address in .env.prod on the box and the Mac.\n\nC. A new web address agents post to with a secret key. It can rate-limit and log, but it is a new way into the site from the internet and a change to the sign-in gate. B gives the same checks without that.\n\nD. Agents sign in as you, the way the Spideryarn MCP server does. No gate change, but the agent holds your whole account: every admin page, billing, publishing.\n\nRecommended: B. A is fine if you are happy to rely on agents following the rule.\n\nAnd separately: neither A nor B stops an agent that has been tricked by a hostile report, because the all-tables login stays on the box beside the new one. Closing that (call it B+) means taking that login off the box and the Mac and giving the reading scripts their own read-only login. Bigger, and its own piece of work. Want it queued? Yes / not now.\n\nDetails\n\nWhat you said (8 Oct, replying to q-f6ub8e): waiting for a deploy is acceptable but does not fit your mental model; you imagined these questions and replies stored in the database, with a command the agent uses to send them, just as it already queries feedback reports.\n\nHow it works today. An agent asks you something by adding a file to the code; the question appears here after the next deploy, typically hours later. Your reply is stored in the database the moment you send it, and an agent reads it with a command. When the agent answers you, it edits the file, and you see that after another deploy. So your half is instant and the agent's half waits.\n\nWhat changes. The question and the agent's replies move into the database beside yours. An agent runs one command to ask, another to reply (naming which of your replies it is answering), and one to close a question once it is settled. The dialog shows the whole thread in order, the agent's lines labelled with the session that wrote them. Every existing question file is copied in once, before the deploy, and the folder stops taking new ones. Notes about what became of each report stay files.\n\nWhy it is your call. Two of the site's listed security defences are in play: no agent writes to the live database, and nothing new gets in before the sign-in gate. A and B both have an agent writing to the live database; C adds a way in; D hands over your account. An unattended agent may not change any of those.\n\nWhy your replies get their own table. Agents treat your replies as your own words, so they are trusted and acted on. If an agent could write into that table, a slip or a trick could produce a line that the next agent reads as you giving an instruction. Under B the new login cannot write there at all.\n\nThe thing GPT Sol caught in review. I first wrote that B would stop a tricked agent. It does not on its own: the box also holds the live site's own login, which can write everything, and an agent determined to misuse it could simply use that one. B protects against mistakes, and stops this new channel from becoming a way in. Protecting against a tricked agent needs B+.\n\nWhat would decide it. If you are content to rely on agents keeping to the rule, A is the least work. If you would rather the database enforced it, B. After you choose, it is about a day of work in three reviewed stages, then the Overseer deploys as usual." },
++  { id: "q-u04sye", title: "Skim: make the current stop quieter, so the quote stands out?", report: "spya-x0rfs2", asked: "2026-10-09", body: "In Skim, the open stop's quote is the third-loudest thing in its own box, under a bold two-line section heading and above black-filled chips. Should we quieten the rest so the quote is what you read first?\n\nA. All three changes below. The quote becomes the strongest line in the box; the chips read as labels rather than buttons, though they still open on hover or tap.\nB. Only the quieter section heading (1). The smallest change, and most of the gain.\nC. Leave it as it is now: the bar is already fixed and the question already smaller.\n\n1. Section heading on the open stop: one size smaller (0.82rem), grey instead of white, semi-bold instead of bold.\n2. Chips (Terms it uses, Ideas it bears on): an outline instead of a black fill, grey text. In the mock-up the outline was too faint; it would be built with the stronger border colour.\n3. The small line under \"Next stop ›\" in the article: upright instead of italic.\n\nRecommended: A.\n\nDetails\n\nYour report spya-x0rfs2 (2026-10-09) said the orange bar on each Skim step was drawn in two parts with a rounded break, and asked whether Skim could be made easier to take in. The bar is fixed and on dev: the open stop is now one box with one straight bar. Your other two reports that morning made the question above a quote optional and smaller; that is on dev too.\n\nFor the wider question, three subagents looked at screenshots: one briefed as a product manager, one as a UI designer, one as a first-time reader. All three said the quote, which is the point of the stop, is drowned out. The bold heading above it is the loudest text in the box, and the black chips below are the highest-contrast shapes on the screen. These three changes are what they proposed that has no effect beyond the look.\n\nBefore and after pictures, the after ones made by injecting the CSS into the page (nothing is built): docs/plans/261009j-shots/proposal-before-row.png and proposal-after-row.png (the open stop), proposal-before-door.png and proposal-after-door.png (the line under Next stop), proposal-after-page.png (the whole page).\n\nProposed and left out, so you know they were considered: putting the profile banner on one line (it was changed this morning by another piece of work); making the other stops in the list quieter and their headings one line (it would make the route harder to scan as a list); a label such as \"Ask yourself:\" before the question (the band's (i) now explains it instead).\n\nWhat would decide it: whether the section heading earns its weight. It tells you where in the paper the stop is, which matters when the route jumps about; quieter, it is still there, just not first." },
+   { id: "q-w2740x", title: "May the guide save your reason and About you itself, and offer share, private link and archive?", report: "spya-s6qhzv", asked: "2026-10-09", body: "Two calls about what the guide may do with your things. Answer like \"1A 2A\".\n\n1. Saving why you're reading, and About you, from what you tell the guide.\nA (recommended): the guide picks the reason out of your own message, word for word; the page checks the words really are yours and saves them by itself, with an Undo. About you gets a button showing the full text, which you press. No model-written words ever become your reason.\nB: keep what was built today: a \"Keep this as why you're reading\" button under your first answer, which saves your whole message on your press. About you stays on the profile page.\nC: the guide writes a short reason in its own words and offers it as a button to press.\n\n2. Share, private link and archive from the guide (\"do you want to create a private link for your journal club?\").\nA (recommended): the guide offers a button that takes you to the right control on the article's Metadata page (sharing, or Archive), and you do it there. It moves you; it never shares or archives anything itself.\nB: buttons in the answer that do it on your press: create and copy a private link, make it public, archive.\nC: not yet.\n\nDetails\n\nYour report (2026-10-09, from the changelog page): the guide's \"why are you reading\" box was confusing, you wanted the chat itself to greet you from what it knows and ask why you're reading, to update your profile and reasons from what you say, and to help you take actions like a private link, sharing or archiving.\n\nWhat is built and on dev (plan 261009i): the guide now greets you in the conversation, with no box. It welcomes you to the piece by title, asks why you are reading it, quotes the start of About you and asks if it is still right, and the guide's first real reply (which has your profile and the whole article) does the personal part. Under your first answer, \"Keep this as why you're reading\" saves your own words when you press it, and never overwrites a reason you saved elsewhere. The guide also takes Live now, and \"Guide\" in the command bar opens it.\n\nWhy these two were not built: both are a model's suggestion acting on your data, and the rule written into our security notes is that anything the AI proposes that writes your data, spends money or leaves the article is a button you press, never an act. 1A would be the first exception for a write; 2B would put sharing, the one action that changes who can read an article, one press away from a sentence an article's own text could have steered the model into writing. That is why the recommendation for 2 only moves you to the control.\n\nWhat 1A costs: a new kind of guide output (a quoted span), a check that it is a substring of your message, an Undo line, and a one-line change to the security notes. It gives up nothing you have today; a planted instruction in an article could at worst choose which of your own words get saved, and Undo takes it back.\n\nWhat 2A costs: one more kind of button, a move to a Metadata section, the same as the guide's existing \"open a mode\" buttons. 2B costs a write path per action and is the one I would not do without you." },
+ ];
+ 
+@@ -52,5 +54,6 @@ export const FEEDBACK_QUESTION_ACTED: Readonly<Record<string, readonly string[]>
+   "q-xd9es7": [],
+   "q-qjbb9a": [],
+   "q-rstqvz": [],
++  "q-u04sye": [],
+   "q-w2740x": [],
+ };
+diff --git a/src/help-corpus.generated.json b/src/help-corpus.generated.json
+index 07dedbdf7..72937a77b 100644
+--- a/src/help-corpus.generated.json
++++ b/src/help-corpus.generated.json
+@@ -47,7 +47,7 @@
+   "summary": "For somebody learning a subject that is new to them, a route from the vocabulary, through a careful read, to testing what stuck.",
+   "keywords": "student learn learning study new subject unfamiliar field beginner course revise exam understand hard difficult guide",
+   "experimental": false,
+-  "body": "This is for reading a piece from a field you do not know yet. Nothing here reads it for you: each\nstep sends you back into the author’s own words better prepared. If Spideryarn itself is new to\nyou, start with [Your first article](/help/first-article).\n\n## Say what you know\n\n- **Fill in About you** on your [reader profile](/help/reader-profile): your background, what you\n  know well, what you are rusty on. It changes what gets explained and how much, never what the\n  article says.\n- **Answer “Why are you reading this?”** for the article. The quiz, for one, aims more of its\n  questions at what you said.\n\n## Before you read\n\n- **Open [Ideas](/help/mode-ideas)** and read **What you need to bring**: the ideas the piece leans\n  on and never states. One that is new to you explains why a passage felt opaque.\n- **Open the [Glossary](/help/mode-glossary)** early. It defines terms from how this piece uses\n  them, and afterwards they stay underlined in every mode.\n- **See how the piece is built** with [Structure](/help/mode-structure) and [the\n  spine](/help/spine): the same parts, drawn two ways.\n- **Walk a [Skim](/help/mode-skim) route** for the shape of a paper. Every stop is the author’s\n  sentence, in place, with a cue for what to look for.\n\n## While you read\n\n- **Read in [Plain](/help/mode-plain)**, and point at an underlined term when you need its\n  definition.\n- **Press the ? in [the margin](/help/gutter)** beside a paragraph you cannot follow. The answer\n  opens as a [chat](/help/mode-chat) you can carry on.\n- **Highlight and write notes** as you go — see [Comments and bookmarks](/help/comments).\n  **Comments** in the bottom bar lists everything you have marked, in article order.\n- **Try [FAQ](/help/mode-faq)** on a dense piece. It writes no answers: each question points to the\n  passages that respond to it. It is one of the [experimental\n  features](/help/experimental-features).\n\n## Afterwards\n\n- **Open [Learn](/help/mode-learn)** when you want it to stick. In **Recall** you say what you took\n  from the piece and find out where you went wrong; **Tutorial** takes a little of the piece at a\n  time; **Quiz** asks up to twenty short questions.\n- **Go back to Ideas** for **What this piece adds**, a short list of the ideas worth taking away.\n- **Read the [Summary](/help/mode-summary)** to check you came away with the main points.\n\nWhen something matters, follow the link and read the passage: see [Is the AI reading the article\nfor me?](/help/questions#faq-is-the-ai-reading-for-me). For every other mode, see [Which mode\nwhen](/help/modes)."
++  "body": "This is for reading a piece from a field you do not know yet. Nothing here reads it for you: each\nstep sends you back into the author’s own words better prepared. If Spideryarn itself is new to\nyou, start with [Your first article](/help/first-article).\n\n## Say what you know\n\n- **Fill in About you** on your [reader profile](/help/reader-profile): your background, what you\n  know well, what you are rusty on. It changes what gets explained and how much, never what the\n  article says.\n- **Answer “Why are you reading this?”** for the article. The quiz, for one, aims more of its\n  questions at what you said.\n\n## Before you read\n\n- **Open [Ideas](/help/mode-ideas)** and read **What you need to bring**: the ideas the piece leans\n  on and never states. One that is new to you explains why a passage felt opaque.\n- **Open the [Glossary](/help/mode-glossary)** early. It defines terms from how this piece uses\n  them, and afterwards they stay underlined in every mode.\n- **See how the piece is built** with [Structure](/help/mode-structure) and [the\n  spine](/help/spine): the same parts, drawn two ways.\n- **Walk a [Skim](/help/mode-skim) route** for the shape of a paper. Every stop is the author’s\n  sentence, in place, with a question to read it with where one helps.\n\n## While you read\n\n- **Read in [Plain](/help/mode-plain)**, and point at an underlined term when you need its\n  definition.\n- **Press the ? in [the margin](/help/gutter)** beside a paragraph you cannot follow. The answer\n  opens as a [chat](/help/mode-chat) you can carry on.\n- **Highlight and write notes** as you go — see [Comments and bookmarks](/help/comments).\n  **Comments** in the bottom bar lists everything you have marked, in article order.\n- **Try [FAQ](/help/mode-faq)** on a dense piece. It writes no answers: each question points to the\n  passages that respond to it. It is one of the [experimental\n  features](/help/experimental-features).\n\n## Afterwards\n\n- **Open [Learn](/help/mode-learn)** when you want it to stick. In **Recall** you say what you took\n  from the piece and find out where you went wrong; **Tutorial** takes a little of the piece at a\n  time; **Quiz** asks up to twenty short questions.\n- **Go back to Ideas** for **What this piece adds**, a short list of the ideas worth taking away.\n- **Read the [Summary](/help/mode-summary)** to check you came away with the main points.\n\nWhen something matters, follow the link and read the passage: see [Is the AI reading the article\nfor me?](/help/questions#faq-is-the-ai-reading-for-me). For every other mode, see [Which mode\nwhen](/help/modes)."
+  },
+  {
+   "anchor": "for-reviewers",
+@@ -317,7 +317,7 @@
+   "summary": "A route through the piece's quotes, a little deeper each time round.",
+   "keywords": "skimming quick read route spiral trajectory stops depth gist more most tour fast overview spiral route trajectory skim read speed read quick read preview scan skim",
+   "experimental": false,
+-  "body": "## In short\n\nSkim picks out a handful of passages which, read on their own, give you a good sense of what the\npiece is about. Think of it as an alternative to a summary that keeps you in the article: every stop\nis a passage from the article, in place, with a short cue saying what to look for. Along the way it\nshows what Glossary and Ideas have already found at each stop, such as an unfamiliar term explained.\nGo round quickly with a few stops, then again in more detail, then again in more.\n\n(Picture: Pressing the right arrow twice: the outlined passage in the article moves to the next stop each time, with Next stop and the next cue beneath it. Caption: Each press of → or Next stop moves to the next stop, and the article scrolls to it.)\n\n## How it works\n\nA route through the piece's quotes, a little deeper each time round.\n\nA short model call over the article's Quotes and its key Ideas — never the rest of its prose — puts the Quotes in an order and gives each a depth, so each pass covers as many of the Ideas as the quotes reach, shaped by your profile if you have one. When there are no Quotes or Ideas yet, they are made first; finding the Ideas is the longer part.\n\n## When to use it\n\nWhen you need the shape of a paper fast but do not want a summary in place of the text: every stop\nis a passage from the article, in place, in context. **Gist** is a handful of stops, **More** about a\ndozen, **Most** a larger share of the piece. The order is planned for you — the results first, say,\nthen a quick look at the methods — not the article’s. Only whoever added the article can plan a\nroute; visitors to a shared article can walk one already planned.\n\n## Reading it\n\n(Picture: A Skim stop: the route’s stops on the left with the current one open, and its passage highlighted in the article on the right, with Next stop below. Caption: A stop on the route: the cue says what to look for, the passage is marked in place, and Next stop moves on.)\n\n- <kbd>‹</kbd> <kbd>›</kbd> at the top, or <kbd>←</kbd> <kbd>→</kbd> while reading, step from stop\n  to stop. **Next stop ›**, in the text under the current stop, does the same, and at the end of a\n  pass becomes **More detail ›**.\n- Each stop has a short cue above it: what to *look for* in the passage, never what it found.\n- A deeper pass has its own new stops and may keep earlier ones where the new ones lean on them.\n  When a route has any, small dots under each stop’s number show which passes it is in, shallowest\n  first: more than one filled, and you may have read it already.\n- Under the current stop, a card gathers what other modes have already found there: **Terms it\n  uses** and **Ideas it bears on**.\n- The dot beside each row shows how far through the article that stop is, so you can see the route\n  jump about.\n- **Reading for:** at the top is what you said you want from this article; the route is planned\n  around it. **Edit** changes it."
++  "body": "## In short\n\nSkim picks out a handful of passages which, read on their own, give you a good sense of what the\npiece is about. Think of it as an alternative to a summary that keeps you in the article: every stop\nis a passage from the article, in place, sometimes with a short question to read it with. Along the way it\nshows what Glossary and Ideas have already found at each stop, such as an unfamiliar term explained.\nGo round quickly with a few stops, then again in more detail, then again in more.\n\n(Picture: Pressing the right arrow twice: the outlined passage in the article moves to the next stop each time, with Next stop and the next cue beneath it. Caption: Each press of → or Next stop moves to the next stop, and the article scrolls to it.)\n\n## How it works\n\nA route through the piece's quotes, a little deeper each time round.\n\nA short model call over the article's Quotes and its key Ideas — never the rest of its prose — puts the Quotes in an order and gives each a depth, so each pass covers as many of the Ideas as the quotes reach, shaped by your profile if you have one. When there are no Quotes or Ideas yet, they are made first; finding the Ideas is the longer part.\n\n## When to use it\n\nWhen you need the shape of a paper fast but do not want a summary in place of the text: every stop\nis a passage from the article, in place, in context. **Gist** is a handful of stops, **More** about a\ndozen, **Most** a larger share of the piece. The order is planned for you — the results first, say,\nthen a quick look at the methods — not the article’s. Only whoever added the article can plan a\nroute; visitors to a shared article can walk one already planned.\n\n## Reading it\n\n(Picture: A Skim stop: the route’s stops on the left with the current one open, and its passage highlighted in the article on the right, with Next stop below. Caption: A stop on the route: the question to read it with, the passage marked in place, and Next stop to move on.)\n\n- <kbd>‹</kbd> <kbd>›</kbd> at the top, or <kbd>←</kbd> <kbd>→</kbd> while reading, step from stop\n  to stop. **Next stop ›**, in the text under the current stop, does the same, and at the end of a\n  pass becomes **More detail ›**.\n- Some stops have a short question above the quote, written by AI, to read it with: what the quote\n  refers to, what it settles, or why it matters — never what it found. A stop whose quote stands on\n  its own has none.\n- A deeper pass has its own new stops and may keep earlier ones where the new ones lean on them.\n  When a route has any, small dots under each stop’s number show which passes it is in, shallowest\n  first: more than one filled, and you may have read it already.\n- Under the current stop, a card gathers what other modes have already found there: **Terms it\n  uses** and **Ideas it bears on**.\n- The dot beside each row shows how far through the article that stop is, so you can see the route\n  jump about.\n- **Reading for:** at the top is what you said you want from this article; the route is planned\n  around it. **Edit** changes it."
+  },
+  {
+   "anchor": "mode-marginalia",
+diff --git a/src/public-types.ts b/src/public-types.ts
+index da76e67e9..a9e2fa223 100644
+--- a/src/public-types.ts
++++ b/src/public-types.ts
+@@ -557,7 +557,8 @@ export interface PublicTimeline {
+  *
+  * **The stops cross field by field** — `{ quoteId, depth, role, cue, again }`,
+  * all of them about the article: a quote id the payload's `quotes` resolves, a
+- * pass, the model's one line on what to look for there, and the deeper passes
++ * pass, the model's optional line to read the passage with (`null` where it
++ * gave none, which since `skim/11` is most stops), and the deeper passes
+  * the stop is walked in again (`skim/9`, plan 261003l — without it a visitor
+  * would walk a different pass from the owner).
+  *
+diff --git a/src/skim.ts b/src/skim.ts
+index 8759b678f..95b756794 100644
+--- a/src/skim.ts
++++ b/src/skim.ts
+@@ -150,8 +150,18 @@ export type {
+  * paragraph was measured and removed (its code is commit c943494a9).
+  * docs/plans/261006e-skim-cue-situates-the-quote-and-term-chips-use-the-glossary-card.md;
+  * measured in docs/investigations/261006b-skim-cue-situates-the-quote-eval.md.
++ *
++ * `skim/11`, 2026-10-09: **a cue is optional**, and `"cue": ""` is the
++ * default. Greg's reports spya-qpgvq9 and spya-zdkqx4: a question that
++ * near-verbatim sets the quote up as its answer *"adds nothing"*, and most of
++ * `skim/10`'s did (56 of 68 on five routes). Section 3 now asks for a cue only
++ * when it says what the quote's "this" stands for, names the question the
++ * passage settles, or says why this passage matters, gives the model an echo
++ * test, and forbids asking what the quote does not answer. An empty cue is
++ * `noCue`, not `badCue`. The input hash is unchanged, as at `skim/10`.
++ * docs/plans/261009j-skim-question-optional-and-the-border.md.
+  */
+-export const PROMPT_VERSION = "skim/10";
++export const PROMPT_VERSION = "skim/11";
+ 
+ /**
+  * **A cue is a sentence or two, not a paragraph about the passage**: an
+@@ -217,6 +227,7 @@ export function emptyDrops(): SkimDrops {
+     malformed: 0,
+     badRole: 0,
+     badCue: 0,
++    noCue: 0,
+     badAgain: 0,
+     overCarried: 0,
+     overCap: 0,
+@@ -658,10 +669,14 @@ function isDepth(value: unknown): value is SkimDepth {
+   return value === 1 || value === 2 || value === 3;
+ }
+ 
+-function cueOf(value: unknown): string | null {
+-  if (typeof value !== "string") return null;
++/** A stop's cue: kept, left out on purpose (`""`, since `skim/11`), or bad. */
++type CueRead = { kind: "cue"; cue: string } | { kind: "none" } | { kind: "bad" };
++
++function cueOf(value: unknown): CueRead {
++  if (typeof value !== "string") return { kind: "bad" };
+   const cue = value.trim();
+-  return cue.length === 0 || cue.length > MAX_CUE_CHARS ? null : cue;
++  if (cue.length === 0) return { kind: "none" };
++  return cue.length > MAX_CUE_CHARS ? { kind: "bad" } : { kind: "cue", cue };
+ }
+ 
+ /**
+@@ -692,8 +707,10 @@ function againOf(value: unknown, depth: SkimDepth): { again: SkimDepth[]; bad: n
+  *
+  * 1. not an object, no quote id, or a depth outside 1–3 → dropped (`malformed`);
+  * 2. a quote id not in `quotes` → dropped (`unknownQuote`);
+- * 3. a bad cue — not a string, empty, or over `MAX_CUE_CHARS` once trimmed →
+- *    `null`, **the stop kept** (`badCue`). A role is no longer asked for or
++ * 3. a bad cue — not a string, or over `MAX_CUE_CHARS` once trimmed →
++ *    `null`, **the stop kept** (`badCue`). An empty one is the model saying
++ *    "no cue" (`skim/11`) → `null`, kept, counted as `noCue` and not as a
++ *    fault. A role is no longer asked for or
+  *    read: every new stop's is `null`, and that is not counted (Sol F25);
+  * 4. a quote named twice → its **shallowest** occurrence kept, in that
+  *    occurrence's place; the earlier on a tie (`duplicate`);
+@@ -746,8 +763,10 @@ export function validateRoute(
+       dropped.unknownQuote++;
+       continue;
+     }
+-    const cue = cueOf(r.cue);
+-    if (cue === null) dropped.badCue = (dropped.badCue ?? 0) + 1;
++    const cueRead = cueOf(r.cue);
++    if (cueRead.kind === "bad") dropped.badCue = (dropped.badCue ?? 0) + 1;
++    if (cueRead.kind === "none") dropped.noCue = (dropped.noCue ?? 0) + 1;
++    const cue = cueRead.kind === "cue" ? cueRead.cue : null;
+     const { again, bad } = againOf(r.again, r.depth);
+     if (bad > 0) dropped.badAgain = (dropped.badAgain ?? 0) + bad;
+     read.push({
+@@ -1048,69 +1067,92 @@ WHAT YOU DECIDE
+    same way: a pass that skips a whole section with quotes in it should have a
+    reason.
+ 
+-3. A CUE for each stop: one or two complete sentences, at most ${MAX_CUE_CHARS} characters
+-   in all, that get the reader ready for this passage.
+-
+-   MOST QUOTES STAND ON THEIR OWN, AND THEIR CUE ONLY POINTS. When the
+-   quote itself says what it is about, the cue is one instruction or one
+-   question naming what to look for, and nothing else. This is the common
+-   case, and a short cue is a good cue.
+-   GOOD: "Notice what they say earlier work could not do.",
+-   "Which measure do they choose, and what do they give up for it?",
+-   "Note how many of the patients improved, and how many got worse."
+-   Do not put a sentence in front that says the quote's point first in your
+-   own words. That hands the reader the passage before they have read it.
+-
+-   SOME QUOTES LEAN ON WORDS THEY DO NOT EXPLAIN, AND THEIR CUE SETS THE
+-   SCENE FIRST. A quote is cut out of its paragraph, so it may say "the
+-   latter", "this approach", "these results", "their method", "such
+-   models" or "it" about something the paragraph had already named. Then
+-   the reader needs to know what is at stake before a pointer makes sense:
+-   the question being settled, the two things being compared, or what the
+-   quote's "this" or "the latter" stands for. SET THE SCENE as a question,
+-   or as a bare naming of the options, and THEN POINT at what to look for.
+-   GOOD: "Is the model reasoning, or recalling its training data? See which
+-   reading their results favour.",
+-   "Two measures are on offer, one simple and one exact. Which do they
+-   choose, and what do they give up for it?",
+-   "Does the effect hold outside the lab as well as in it? Note the number."
+-   BAD, it leans on the quote's own unexplained words: "Which interpretation
+-   does their evidence favour?" (which interpretations?), "Look for why this
+-   approach fails." (which approach?)
+-
+-   The scene names the question and the options. It is never a statement
+-   of what the passage says, shows or argues.
+-
+-   NEVER say what the passage found, concluded or chose. Leave the answer
+-   in the passage.
+-   BAD, it gives the finding away: "Their results show the model is
+-   recalling, not reasoning.", "Small trials can make a weak drug look
++3. A CUE for each stop, or none. A cue is one or two complete sentences, at
++   most ${MAX_CUE_CHARS} characters in all, that the reader reads just before the
++   passage. Its only job is to make the passage mean more for having read it:
++   easier to understand, easier to place, or easier to see why it matters.
++   Many passages need no cue. Write "cue": "" whenever you cannot add
++   something the passage does not already say. An empty cue is a good answer,
++   not a failure.
++
++   THE ECHO TEST. Read your cue with the quote hidden, then ask: what does the
++   reader know now that the quote's own words would not have told them? If
++   the answer is "nothing", because the cue only turns the quote into a
++   question or an instruction, it is an echo. Write "" instead. An echo adds
++   nothing, and it teaches the reader to skip the cues.
++   BAD, an echo: "How did the towns that kept their mangroves fare in the
++   storm?" over a quote saying that towns which kept their mangroves lost
++   far fewer homes. The right cue there is "".
++   BAD, an echo: "Notice the comparison the author draws with gardening."
++   over a quote that makes that comparison.
++
++   A CUE EARNS ITS PLACE IN ONE OF THREE WAYS, each bringing in something
++   the quote does not say:
++   - IT SAYS WHAT "THIS" IS. A quote is cut out of its paragraph, so it may
++     say "the latter", "this approach", "these results", "their method",
++     "such models" or "it" about something the paragraph had already named.
++     Say what the word stands for, or name the options, then point.
++     THIS IS THE ONE CASE WHERE A CUE IS EXPECTED: a quote that says "the
++     latter", "the former", "this approach" or the like, when the quote
++     itself does not name what it means and the key ideas or the outline
++     tell you, gets a cue, even if the rest of the quote reads clearly.
++     GOOD: "Two explanations are on offer: the drug itself, or the patients'
++     expectations. See which one this rules out."
++     BAD, it leans on the quote's own unexplained words: "Which
++     interpretation does their evidence favour?" (which interpretations?)
++   - IT SETS THE QUESTION. The passage settles something the reader does not
++     yet know is open. Name the question, then point.
++     GOOD: "Does the effect hold outside the lab as well as in it? Note the
++     number."
++   - IT SAYS WHY THIS PASSAGE, when the records show it. The quote carries
++     one of the key ideas, or is the reason for a choice the quote itself
++     names. Say which idea it carries, or which choice it is the reason for,
++     in the records' own terms, never what the passage says.
++     GOOD: "This is the reason the survey pools all three sites. Look at what
++     happens to the smallest samples."
++     Do not describe the author's stance or the passage's place in the
++     argument in words the records do not give you: not "the counterview they
++     answer", "borrowed from other fields", "the paper's central frame",
++     "the problem the paper solves", unless the quote or a key idea says so.
++     That is your reading of the piece, and it is often wrong.
++
++   PREFER A QUESTION. A cue that is a question leaves the passage to answer
++   it. A statement is for naming what "this" stands for, or which key idea
++   the quote carries, and nothing else. Never describe the passage itself
++   ("This passage says how…", "This explains why…", "This sets up…"): that
++   is a summary of it, read before it.
++
++   ASK ONLY WHAT THE QUOTE ANSWERS. If the passage does not hold the answer,
++   the reader goes looking for something that is not there. Do not assume a
++   trade-off, a cause or a contrast the quote does not state.
++   BAD: "Note what they give up for the speed." over a quote that says the
++   method is both faster and more accurate.
++
++   NEVER SAY WHAT THE PASSAGE FOUND, CONCLUDED OR CHOSE. Leave the answer in
++   the passage. Pointing at a number or a result is fine ("note the
++   number"); stating it is not. The scene you set names the question and the
++   options; it is never a statement of what the passage says, shows or
++   argues.
++   BAD, it gives the finding away: "Small trials can make a weak drug look
+    strong. See what they warn doctors about." (the first sentence is the
+-   finding), "Synergy is concentrated in the rich club.", "Shows the effect
+-   is robust.", "Sleep improves memory by 20%.", "The author is wrong
+-   about X."
+-   Pointing at a number or a result is fine ("note the number"); stating it
+-   is not. No findings, no verdicts: the reader gets those from the passage.
+-
+-   ONLY WHAT THE RECORDS SAY. Every detail in a cue must be in what you
+-   were given: the quote, the key ideas and the outline. Do not add a
+-   place, a date, a method, a size or a motive to make the scene vivid
+-   ("in mice", "last year", "by hand"), and do not sharpen what the quote
+-   says ("never" for "rarely", "all" for "most"). If you cannot tell from
+-   what you were given what "the latter" or "this approach" means, do not
+-   guess and do not invent a scene: write a plain cue that says what to
+-   look for ("Look for which of the two readings they settle on, and
+-   why."). A wrong scene is worse than none.
+-
+-   WRITE WHOLE SENTENCES. One or two, each complete, each ending in one
+-   full stop or one question mark. Never a fragment ("Which one the
+-   evidence favours."), never ".?".
+-
+-   Setting the scene is not explaining a term. The PLAIN WORDS section
+-   below says not to explain a term inside a question: for a cue, that means
+-   do not stop to define the article's vocabulary. It does not stop you
+-   naming the two options or saying what "this" stands for. Where the two
+-   seem to disagree, for a cue this section wins.
++   finding), "Shows the effect is robust.", "Sleep improves memory by 20%."
++
++   ONLY WHAT THE RECORDS SAY. Every detail in a cue must be in what you were
++   given: the quote, the key ideas and the outline. Do not add a place, a
++   date, a method, a size, a motive or background you know from elsewhere,
++   and do not sharpen what the quote says ("never" for "rarely", "all" for
++   "most"). If you cannot tell from what you were given what "the latter" or
++   "this approach" means, do not guess: write "". A wrong scene is worse
++   than none.
++
++   WRITE WHOLE SENTENCES. One or two, each complete, each ending in one full
++   stop or one question mark. Never a fragment, never ".?".
++
++   Setting the scene is not explaining a term. The PLAIN WORDS section below
++   says not to explain a term inside a question: for a cue, that means do not
++   stop to define the article's vocabulary. It does not stop you naming the
++   two options or saying what "this" stands for. Where the two seem to
++   disagree, for a cue this section wins.
+ 
+    Each cue stands on its own. Never refer to another stop ("next", "as
+    before", "the previous stop", "now"), because a reader can arrive at any
+@@ -1133,10 +1175,12 @@ JSON only, no prose, no code fence. The array order IS the route:
+ 
+ {"stops": [
+   {"quote": "Q7", "depth": 1, "again": [2], "cue": "..."},
+-  {"quote": "Q3", "depth": 1, "again": [], "cue": "..."},
++  {"quote": "Q3", "depth": 1, "again": [], "cue": ""},
+   {"quote": "Q12", "depth": 2, "again": [], "cue": "..."}
+ ]}
+ 
++"cue": "" means that stop has no cue.
++
+ THE ANSWER MUST PARSE. Inside a string, a straight double quote ends the
+ string: a cue never needs one, so do not use one — write the words bare, or
+ use single quotes. Never put a real line break inside a string.
+diff --git a/src/types.ts b/src/types.ts
+index 3bf083960..70cca7f00 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -1422,11 +1422,19 @@ export interface SkimDrops {
+    */
+   badRole: number;
+   /**
+-   * A cue that was missing, empty, not a string or over the cap — set to
+-   * `null`, the stop kept. **Absent on routes before `trajectory/5`**, which
+-   * had no cue; read it as 0.
++   * A cue that was missing, not a string or over the cap — set to `null`, the
++   * stop kept. **Absent on routes before `trajectory/5`**, which had no cue;
++   * read it as 0. An empty cue counted here too until `skim/11`, when it
++   * became the model's way of saying "no cue" (`noCue`).
+    */
+   badCue?: number;
++  /**
++   * Stops the model gave no cue on purpose (`"cue": ""`, or only spaces) —
++   * `null`, the stop kept, and not a fault. Since `skim/11`
++   * (docs/plans/261009j-skim-question-optional-and-the-border.md); absent
++   * before, read it as 0.
++   */
++  noCue?: number;
+   /**
+    * `again` entries dropped: not 2 or 3, not deeper than the stop's own depth,
+    * repeated, or naming a depth no stop is first placed at. The stop is kept.
+diff --git a/src/web/FeaturesPage.tsx b/src/web/FeaturesPage.tsx
+index 9ac3ff90b..1657bcbae 100644
+--- a/src/web/FeaturesPage.tsx
++++ b/src/web/FeaturesPage.tsx
+@@ -142,7 +142,7 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
+             of the main modes". */}
+         <Showcase shot={SHOTS.skim} title="Skim." mode="skim" offset under>
+           Skim the paper in increasing depth: a route through its quotes, walked three times — the
+-          gist, then more, then most — each stop with a line on what to look for.
++          gist, then more, then most — with a question to read a stop with where one helps.
+         </Showcase>
+         {/* Alone rather than in a Gallery: one portrait in a three-column grid
+             sits in the left third with two empty cells beside it, which reads as
+diff --git a/src/web/SkimPanel.tsx b/src/web/SkimPanel.tsx
+index e57d3bf1f..6c9f8f821 100644
+--- a/src/web/SkimPanel.tsx
++++ b/src/web/SkimPanel.tsx
+@@ -277,6 +277,15 @@ export function skimPromise(profiled: boolean): string {
+     : "The passages are the article's own words, chosen by Quotes. The order and the cues are the model's reading, for somebody reading the piece for the first time.";
+ }
+ 
++/**
++ * **What the question above a quote is** (Greg, spya-qpgvq9, plan 261009j): in
++ * the band's (i), which a keyboard and a finger reach, and on the question's
++ * own card for a mouse. Since `skim/11` most stops have none, so it says why
++ * a stop has one.
++ */
++export const SKIM_CUE_EXPLAINED =
++  "The line above a quote is a question to read it with, written by AI. It is there only where it helps: to say what the quote refers to, what it settles, or why it matters.";
++
+ /**
+  * At Most, how much of the Quotes offered to this route the three passes walk
+  * between them — *"every one of the N quotes offered to this route"*, or *"M of
+@@ -696,6 +705,7 @@ export function SkimPanel({ access, view, away }: Props) {
+   const about = routed ? (
+     <>
+       <p>{promise}</p>
++      <p>{SKIM_CUE_EXPLAINED}</p>
+       {pips && <p>{pipsLegend(pips)}</p>}
+       {coverage && <p>{coverage}</p>}
+       {made && (
+@@ -816,7 +826,16 @@ export function SkimPanel({ access, view, away }: Props) {
+                           )}
+                           {/* The cue before the quote: it is the question to
+                               read the passage with (Greg, SPIDERYARN-READING2-8J). */}
+-                          {row.current && row.cue && <span className="skim-cue">{row.cue}</span>}
++                          {/* Its card says what it is, for a mouse; the band's
++                              (i) says the same for a keyboard and a finger,
++                              since the question sits inside the row's button
++                              and cannot take focus or a tap of its own
++                              (plan 261009j, Sol's plan review F5). */}
++                          {row.current && row.cue && (
++                            <Tooltip content={<p>{SKIM_CUE_EXPLAINED}</p>} placement="top">
++                              <span className="skim-cue">{row.cue}</span>
++                            </Tooltip>
++                          )}
+                           {words && <span className="skim-words">“{words.shown}”</span>}
+                         </span>
+                       </button>
+diff --git a/src/web/help/pages/guides/for-students.md b/src/web/help/pages/guides/for-students.md
+index 44079322b..c90b16d80 100644
+--- a/src/web/help/pages/guides/for-students.md
++++ b/src/web/help/pages/guides/for-students.md
+@@ -26,7 +26,7 @@ you, start with [Your first article](/help/first-article).
+ - **See how the piece is built** with [Structure](/help/mode-structure) and [the
+   spine](/help/spine): the same parts, drawn two ways.
+ - **Walk a [Skim](/help/mode-skim) route** for the shape of a paper. Every stop is the author’s
+-  sentence, in place, with a cue for what to look for.
++  sentence, in place, with a question to read it with where one helps.
+ 
+ ## While you read
+ 
+diff --git a/src/web/help/pages/modes/skim.md b/src/web/help/pages/modes/skim.md
+index 54fdcaafb..9aed9fcd3 100644
+--- a/src/web/help/pages/modes/skim.md
++++ b/src/web/help/pages/modes/skim.md
+@@ -7,7 +7,7 @@ related: mode-quotes, mode-structure
+ 
+ Skim picks out a handful of passages which, read on their own, give you a good sense of what the
+ piece is about. Think of it as an alternative to a summary that keeps you in the article: every stop
+-is a passage from the article, in place, with a short cue saying what to look for. Along the way it
++is a passage from the article, in place, sometimes with a short question to read it with. Along the way it
+ shows what Glossary and Ideas have already found at each stop, such as an unfamiliar term explained.
+ Go round quickly with a few stops, then again in more detail, then again in more.
+ 
+@@ -23,12 +23,14 @@ route; visitors to a shared article can walk one already planned.
+ 
+ ## Reading it
+ 
+-![A Skim stop: the route’s stops on the left with the current one open, and its passage highlighted in the article on the right, with Next stop below](../images/mode-skim.png "A stop on the route: the cue says what to look for, the passage is marked in place, and Next stop moves on.")
++![A Skim stop: the route’s stops on the left with the current one open, and its passage highlighted in the article on the right, with Next stop below](../images/mode-skim.png "A stop on the route: the question to read it with, the passage marked in place, and Next stop to move on.")
+ 
+ - <kbd>‹</kbd> <kbd>›</kbd> at the top, or <kbd>←</kbd> <kbd>→</kbd> while reading, step from stop
+   to stop. **Next stop ›**, in the text under the current stop, does the same, and at the end of a
+   pass becomes **More detail ›**.
+-- Each stop has a short cue above it: what to *look for* in the passage, never what it found.
++- Some stops have a short question above the quote, written by AI, to read it with: what the quote
++  refers to, what it settles, or why it matters — never what it found. A stop whose quote stands on
++  its own has none.
+ - A deeper pass has its own new stops and may keep earlier ones where the new ones lean on them.
+   When a route has any, small dots under each stop’s number show which passes it is in, shallowest
+   first: more than one filled, and you may have read it already.
+diff --git a/src/web/styles/skim.css b/src/web/styles/skim.css
+index 829fe9e7d..9c49db055 100644
+--- a/src/web/styles/skim.css
++++ b/src/web/styles/skim.css
+@@ -145,7 +145,17 @@
+ }
+ .skim-what { display: flex; flex-direction: column; min-width: 0; gap: 0.15rem; }
+ .skim-place { font-size: var(--type-item); line-height: 1.35; }
+-.skim-cue { color: var(--ink-soft); font-size: var(--type-body); line-height: 1.35; }
++/* A named exception to the text roles (typography.md § Text roles in a band):
++   not --type-body, though it is a sentence under the row. It is the model's
++   optional question before the quote, and matters less than the quote (Greg,
++   spya-qpgvq9, plan 261009j); its monospace face reads larger than the quote's
++   serif at the same size, so it sits a clear step below --type-quote.
++   tests/type-roles.test.ts holds it at 0.78rem. */
++.skim-cue {
++  color: var(--ink-soft);
++  font-size: 0.78rem;
++  line-height: 1.4;
++}
+ /* The quote's own words (plan 260928e) — cut short on every row but the
+    current one, whose row shows them whole. A touch smaller than the path,
+    so the section still reads as the row's heading. */
+@@ -162,10 +172,32 @@
+   line-height: 1.4;
+ }
+ 
+-.skim-row.current .skim-go {
++/* **The current stop is one box with one bar** (plan 261009j, report
++   spya-x0rfs2). The `<li>` holds both the row and the stop card under it, so
++   it carries the ground, the corners and the bar, and neither child paints
++   any. Until 2026-10-09 each child painted its own ground and an inset
++   box-shadow bar, and the row's rounded bottom corner bent its bar away just
++   before the card's began: two bars with a notch between them. The bar is a
++   strip set in from the corners, not an inset shadow, because an inset shadow
++   follows any rounded corner it meets. */
++.skim-row.current {
++  position: relative;
++  border-radius: var(--radius);
+   background: var(--surface-raised);
+-  box-shadow: inset 3px 0 0 var(--highlight);
+ }
++.skim-row.current::before {
++  content: "";
++  position: absolute;
++  top: var(--radius);
++  bottom: var(--radius);
++  left: 0;
++  width: 3px;
++  border-radius: 2px;
++  background: var(--highlight);
++  pointer-events: none;
++}
++.skim-row.current .skim-go,
++.skim-row.current .skim-go:hover { background: none; }
+ .skim-row.current .skim-place { font-weight: 600; color: var(--ink); }
+ 
+ /* **Where the stop sits in the article** — a vertical hairline under the row's
+@@ -312,15 +344,28 @@
+ /* ------------------------------------------------------ the door in the prose --
+    After the current stop's block, outside `.prose` (TableView.tsx §
+    `afterBlock`). Right-aligned, where the eye lands at the end of a paragraph,
+-   and in the UI face so it cannot be mistaken for the author's words. */
++   and in the UI face so it cannot be mistaken for the author's words.
++   **Inside the prose's measure, not the cell's** (plan 261009j): the cell is
++   wider than the centred `.prose` box, and until 2026-10-09 the door was
++   right-aligned to the cell, so the next stop's cue ran across the rule drawn
++   down the prose's right-hand side. It takes the same measure and centring as
++   `.prose` (and as Quiz's `.quiz-in-prose`), and the prose's face and size on
++   the box only, because the measure is in `ch` of that face; its contents are
++   back in the UI face. */
+ .skim-door {
+   display: flex;
+   flex-direction: column;
+   align-items: flex-end;
+   gap: 0.25rem;
+-  margin: 0.5rem 0 0.2rem;
+-  font-family: var(--font-ui);
+-}
++  max-width: clamp(45ch, 90vw, var(--reading-measure));
++  margin: 0.5rem auto 0.2rem;
++  /* `.prose`'s own face, not `--font-reading`: that is Geist here, whose `ch`
++     is wider, and the door came out 160px wider than the text (browser check,
++     plan 261009j). The gutter learned the same (prose.css § the gutter). */
++  font-family: var(--font-author);
++  font-size: var(--reading-size);
++}
++.skim-door > * { font-family: var(--font-ui); }
+ .skim-door-row {
+   display: flex;
+   justify-content: flex-end;
+@@ -348,17 +393,15 @@
+ 
+ /* -------------------------------------------------------------- the stop card --
+    Under the current row only: what the other modes already wrote about this
+-   paragraph (src/web/stop-card.ts). Indented to the row's text, under the
+-   row's left bar, and quieter than the row so it reads as notes on it. */
++   paragraph (src/web/stop-card.ts). Indented to the row's text, inside the
++   current stop's one box (`.skim-row.current`, above), which paints its ground
++   and its bar, and quieter than the row so it reads as notes on it. */
+ .skim-card {
+   display: flex;
+   flex-direction: column;
+   gap: 0.5rem;
+   margin: 0 0 0.4rem;
+   padding: 0.35rem 0.5rem 0.45rem calc(0.4rem + 1.4em + 0.55rem);
+-  border-radius: 0 0 var(--radius) var(--radius);
+-  background: var(--surface-raised);
+-  box-shadow: inset 3px 0 0 var(--highlight);
+   font-size: 0.85rem;
+   line-height: 1.4;
+ }
+diff --git a/tests/skim.test.ts b/tests/skim.test.ts
+index 121f3d8ca..bcb50185e 100644
+--- a/tests/skim.test.ts
++++ b/tests/skim.test.ts
+@@ -299,7 +299,7 @@ describe("validating the model's route", () => {
+     expect(d.malformed).toBe(7);
+   });
+ 
+-  it("keeps a stop whose cue is bad, with the cue set to null and counted as badCue", () => {
++  it("keeps a stop whose cue is bad, with the cue set to null and counted as badCue; an empty one is noCue (skim/11)", () => {
+     const d = emptyDrops();
+     const long = "x".repeat(MAX_CUE_CHARS + 1);
+     const exact = "y".repeat(MAX_CUE_CHARS);
+@@ -319,7 +319,20 @@ describe("validating the model's route", () => {
+     );
+     expect(stops.map((s) => s.quoteId)).toHaveLength(8);
+     expect(stops.map((s) => s.cue)).toEqual([null, null, null, null, null, exact, "Trimmed?", null]);
+-    expect(d.badCue).toBe(6);
++    /* Over the cap, a number, missing, an array. `""` and `"   "` are the
++       model leaving the cue out, which skim/11 asks it to do whenever a cue
++       would only echo the quote: not a fault. */
++    expect(d.badCue).toBe(4);
++    expect(d.noCue).toBe(2);
++  });
++
++  it("asks for a cue only when it adds something, and says an empty one is a good answer (skim/11, plan 261009j)", () => {
++    const prompt = SKIM_SYSTEM;
++    expect(prompt).toContain('"cue": ""');
++    expect(prompt).toContain("THE ECHO TEST");
++    expect(prompt).toContain("ASK ONLY WHAT THE QUOTE ANSWERS");
++    expect(prompt).toContain("IT SAYS WHY THIS PASSAGE");
++    expect(prompt).not.toContain("MOST QUOTES STAND ON THEIR OWN, AND THEIR CUE ONLY POINTS");
+   });
+ 
+   it("keeps a 150-character cue and nulls a 201-character one: the cap is 200 since skim/10 (plan 261006e)", () => {
+@@ -720,39 +733,34 @@ describe("what the prompt is given", () => {
+   });
+ 
+   it("asks for a context-free cue, not a role, under a new prompt version (Sol F18, F25)", () => {
+-    expect(PROMPT_VERSION).toBe("skim/10");
++    expect(PROMPT_VERSION).toBe("skim/11");
+     expect(MAX_CUE_CHARS).toBe(200);
+     expect(SKIM_SYSTEM).toContain(`"cue": "..."`);
+     expect(SKIM_SYSTEM).not.toContain(`"role"`);
+-    expect(SKIM_SYSTEM).toContain(`at most ${MAX_CUE_CHARS} characters`);
++    expect(SKIM_SYSTEM).toContain(`most ${MAX_CUE_CHARS} characters`);
+     /* No reference to another stop, because a reader arrives from anywhere. */
+     expect(SKIM_SYSTEM).toMatch(/Never refer to another stop/);
+   });
+ 
+-  it("asks the cue to set the scene the quote assumes, then point, and never give the finding away (skim/10, plan 261006e)", () => {
++  it("a cue it does write sets the scene the quote assumes, then points, and never gives the finding away (skim/10, kept in skim/11)", () => {
+     /* Greg's report spya-jghnva: a cue that leans on the quote's own
+        unexplained "the latter interpretation" tells the reader to look for
+-       something without saying what the choice is. */
+-    expect(SKIM_SYSTEM).toMatch(/SET THE SCENE/);
+-    expect(SKIM_SYSTEM).toMatch(/THEN POINT/);
+-    expect(SKIM_SYSTEM).toMatch(/NEVER say what the passage found/);
+-    /* The second wording (round two of the eval): a scene only where the quote
+-       leans on something unsaid, as a question or a naming of the options;
+-       otherwise the pointer alone; nothing added; whole sentences. */
+-    expect(SKIM_SYSTEM).toMatch(/MOST QUOTES STAND ON THEIR OWN, AND THEIR CUE ONLY POINTS/);
+-    expect(SKIM_SYSTEM).toMatch(/This is the common\s+case/);
+-    expect(SKIM_SYSTEM).toMatch(/SET THE SCENE as a question,\s+or as a bare naming of the options/);
+-    expect(SKIM_SYSTEM).toMatch(/never a statement\s+of what the passage says/);
++       something without saying what the choice is. skim/11 keeps that as the
++       first of the three ways a cue earns its place (plan 261009j). */
++    expect(SKIM_SYSTEM).toMatch(/IT SAYS WHAT "THIS" IS/);
++    expect(SKIM_SYSTEM).toMatch(/IT SETS THE QUESTION/);
++    expect(SKIM_SYSTEM).toMatch(/NEVER SAY WHAT THE PASSAGE FOUND/);
++    expect(SKIM_SYSTEM).toMatch(/never a statement of what the passage says/);
+     expect(SKIM_SYSTEM).toMatch(/ONLY WHAT THE RECORDS SAY/);
+     expect(SKIM_SYSTEM).toMatch(/WRITE WHOLE SENTENCES/);
+     expect(SKIM_SYSTEM).toMatch(/one or two complete sentences/);
+     /* Both kinds of BAD example: his own cue, and one that states the finding. */
+-    expect(SKIM_SYSTEM).toMatch(/"Which interpretation\s+does their evidence favour\?"/);
++    expect(SKIM_SYSTEM).toMatch(/"Which\s+interpretation does their evidence favour\?"/);
+     expect(SKIM_SYSTEM).toMatch(/BAD, it leans on the quote's own unexplained words/);
+     expect(SKIM_SYSTEM).toMatch(/BAD, it gives the finding away/);
+-    /* A referent the model cannot see is not to be guessed at. */
+-    expect(SKIM_SYSTEM).toMatch(/do not\s+guess/);
+-    expect(SKIM_SYSTEM).toMatch(/A wrong scene is worse than\s+none/);
++    /* A referent the model cannot see is not to be guessed at: no cue instead. */
++    expect(SKIM_SYSTEM).toMatch(/do not guess: write ""/);
++    expect(SKIM_SYSTEM).toMatch(/A wrong scene is worse\s+than none/);
+     /* The shared "ask" paragraph says not to explain a term inside a question;
+        the cue's own rule says which of the two wins, so they do not fight. */
+     expect(SKIM_SYSTEM).toMatch(/Do not explain the term inside the question/);
+diff --git a/tests/type-roles.test.ts b/tests/type-roles.test.ts
+index b3d9306bb..9cda3b3fd 100644
+--- a/tests/type-roles.test.ts
++++ b/tests/type-roles.test.ts
+@@ -69,7 +69,6 @@ interface Row {
+ const WITNESSES: Record<string, string> = {
+   ".skim-place": ".skim-row.current button.skim-go .skim-place",
+   ".skim-words": ".skim-row.current button.skim-go .skim-words",
+-  ".skim-cue": ".skim-row.current button.skim-go .skim-cue",
+   ".skim-cluster-h": ".skim-card section.skim-cluster .skim-cluster-h",
+   ".tl-label": ".tl-item.open button.tl-row .tl-label",
+   ".tl-quote": ".tl-occurrences li.open button .tl-quote",
+@@ -121,7 +120,6 @@ const REGISTRY: Row[] = [
+   // Skim
+   { file: "skim.css", selector: ".skim-place", role: "item" },
+   { file: "skim.css", selector: ".skim-words", role: "quote" },
+-  { file: "skim.css", selector: ".skim-cue", role: "body" },
+   { file: "skim.css", selector: ".skim-cluster-h", role: "label" },
+   // Timeline
+   { file: "timeline.css", selector: ".tl-label", role: "item" },
+@@ -187,6 +185,15 @@ interface Exception {
+ }
+ 
+ const EXCEPTIONS: Exception[] = [
++  {
++    file: "skim.css",
++    selector: ".skim-cue",
++    value: "0.78rem",
++    reason:
++      "The model's optional question before a quote, which matters less than the quote it " +
++      "introduces (Greg, spya-qpgvq9). Its monospace face reads larger than the quote's serif " +
++      "at the same size, so it sits a clear step below --type-quote rather than at --type-body.",
++  },
+   {
+     file: "quiz.css",
+     selector: ".quiz-question",

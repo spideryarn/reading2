@@ -27,7 +27,7 @@
  * See docs/project/ingest-queue.md.
  */
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, Check, ChevronRight, Circle, Link2, LoaderCircle, Plus, RotateCw, X } from "lucide-react";
+import { AlertCircle, Check, ChevronRight, Circle, Copy, LoaderCircle, Plus, RotateCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { slugFromUrl } from "../ingest.js";
 import {
@@ -642,7 +642,10 @@ export function JobCard({
               aria-label={copied === "copied" ? undefined : "Copy the link this article will have"}
               onClick={() => copy(link())}
             >
-              {copied === "copied" ? <Check size={13} /> : <Link2 size={13} />}
+              {/* *Copy*, not the chain: the chain is *Private link*'s, and
+                  this address opens for nobody else until the article is
+                  public. A reader took one for the other (plan 261009i). */}
+              {copied === "copied" ? <Check size={13} /> : <Copy size={13} />}
               {copied === "copied" && "Copied"}
             </Button>
           </Tooltip>

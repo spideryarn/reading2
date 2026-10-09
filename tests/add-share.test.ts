@@ -11,6 +11,9 @@
  * completion (P2-7). And from its code review: the only `private` sent is the
  * box unticked (F11), the tab has one controller per slug (F12), and what the
  * tab remembers across a reload leads to *unknown* and sends nothing (F10).
+ *
+ * *The box* is the control as it was drawn until 2026-10-09; it is buttons
+ * now (plan 261009i), and src/web/add-share.ts's header maps the words.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 

@@ -906,7 +906,7 @@ export function CommentDialog({
 
       <footer>
         {comment.status === "done" && <SearchBadge comment={comment} />}
-        {/* **No *Dig deeper* here since 2026-10-09** (plan 261009i, D2). It
+        {/* **No *Dig deeper* here since 2026-10-09** (plan 261009k, D2). It
             asked again with a forced web search and a stronger model, and
             replaced this answer in place; Greg: *"we don't need the dig deeper
             button"*. The follow-up box above, *Ask in chat*, is the way to go

@@ -1,5 +1,5 @@
 {
-  "id": "4d5fcd5a-c0f4-48e3-a016-1482de0c8123",
+  "id": "94a01de9-e0d5-437c-9acb-fc26c0629bce",
   "prevId": "8a3a28bd-4b40-4f96-a55b-91f1daeefd1c",
   "version": "7",
   "dialect": "postgresql",
@@ -1406,6 +1406,18 @@
         "purpose": {
           "name": "purpose",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "skim_profile_notice_dismissed_for": {
+          "name": "skim_profile_notice_dismissed_for",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "skim_profile_notice_dismissed_at": {
+          "name": "skim_profile_notice_dismissed_at",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },
@@ -3028,7 +3040,7 @@
         },
         "chat_threads_origin_mode": {
           "name": "chat_threads_origin_mode",
-          "value": "\"spideryarn\".\"chat_threads\".\"origin_mode\" is null or \"spideryarn\".\"chat_threads\".\"origin_mode\" in ('debate','summary','glossary','citations','ideas')"
+          "value": "\"spideryarn\".\"chat_threads\".\"origin_mode\" is null or \"spideryarn\".\"chat_threads\".\"origin_mode\" in ('debate','summary','glossary','citations')"
         },
         "chat_threads_origin_none": {
           "name": "chat_threads_origin_none",
@@ -3040,11 +3052,7 @@
         },
         "chat_threads_origin_item": {
           "name": "chat_threads_origin_item",
-          "value": "\"spideryarn\".\"chat_threads\".\"origin_mode\" is null or \"spideryarn\".\"chat_threads\".\"origin_mode\" not in ('glossary','citations','ideas') or (\"spideryarn\".\"chat_threads\".\"origin_item_id\" is not null and \"spideryarn\".\"chat_threads\".\"origin_quote\" is not null and \"spideryarn\".\"chat_threads\".\"origin_block_id\" is null and \"spideryarn\".\"chat_threads\".\"origin_lens\" is null)"
-        },
-        "chat_threads_origin_summary": {
-          "name": "chat_threads_origin_summary",
-          "value": "\"spideryarn\".\"chat_threads\".\"origin_mode\" is distinct from 'summary' or (\"spideryarn\".\"chat_threads\".\"origin_item_id\" is null and \"spideryarn\".\"chat_threads\".\"origin_block_id\" is null and \"spideryarn\".\"chat_threads\".\"origin_quote\" is null)"
+          "value": "\"spideryarn\".\"chat_threads\".\"origin_mode\" is null or \"spideryarn\".\"chat_threads\".\"origin_mode\" not in ('glossary','citations') or (\"spideryarn\".\"chat_threads\".\"origin_item_id\" is not null and \"spideryarn\".\"chat_threads\".\"origin_quote\" is not null and \"spideryarn\".\"chat_threads\".\"origin_block_id\" is null and \"spideryarn\".\"chat_threads\".\"origin_lens\" is null)"
         },
         "chat_threads_origin_lens_debate_only": {
           "name": "chat_threads_origin_lens_debate_only",

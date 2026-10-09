@@ -6,7 +6,7 @@
  * src/web/useCitations.ts § `investigate`.
  *
  * **Kept answers only, since 2026-10-09.** The row's *Dig deeper* button, the
- * wait, the words arriving and the failure went with plan 261009i (Greg: *"we
+ * wait, the words arriving and the failure went with plan 261009k (Greg: *"we
  * don't need the dig deeper button"*); *Ask in chat* stands in its place. An
  * answer a reader already has is still drawn, with no *Dig deeper again*. The
  * server half and the hook's `investigate` stay until Greg decides about them
@@ -290,7 +290,7 @@ export function investigationParts(answer: string): InvestigationPart[] {
 
 /**
  * **What a row draws under it when *Dig deeper* kept an answer** — before
- * 2026-10-09, when the button went (plan 261009i). Starts folded; the reader
+ * 2026-10-09, when the button went (plan 261009k). Starts folded; the reader
  * opens it.
  */
 export function KeptInvestigation({
@@ -312,7 +312,7 @@ export function KeptInvestigation({
 /**
  * **A kept answer.** Folded: the label and the first part, with a toggle, so
  * the list stays a list. Open: every part, what was read, the sources and the
- * date. *Dig deeper again* sat after the date until 2026-10-09 (plan 261009i).
+ * date. *Dig deeper again* sat after the date until 2026-10-09 (plan 261009k).
  */
 function Kept({
   investigation,

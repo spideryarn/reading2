@@ -537,7 +537,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        The sentence is about the mode, not the press: *Investigate* is on a
        row, owner-only, and the sentence says whose it is. No
        price — mode.md § The card on the button.
-       **Since 2026-10-09 (plan 261009i) the row's button is *Ask in chat*,
+       **Since 2026-10-09 (plan 261009k) the row's button is *Ask in chat*,
        not Dig deeper**, so the sentence says that, and that a reading kept
        from before still shows; the clauses above describe what kept readings
        were made by.

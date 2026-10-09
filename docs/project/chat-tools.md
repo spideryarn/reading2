@@ -540,7 +540,9 @@ From 2026-10-01 it showed chats only.
   ([url-state.md](url-state.md)).
 - **What Chat may open is chats and the guide** (`openableInChat`). A send, an edit and Live go by
   the open conversation's kind, never the band's: a guide turn is sent as `guide`, with no blocks
-  on screen and no Live. Every *Ask in chat* handoff still starts a fresh chat, even with the guide
+  on screen. Live too since 2026-10-09
+  ([261009i](../plans/261009i-the-guide-greets-in-chat-takes-live-and-a-bar-row.md)), with the
+  guide's own spoken prompt and tools ([live-conversation.md § In the guide](live-conversation.md#in-the-guide)). Every *Ask in chat* handoff still starts a fresh chat, even with the guide
   open; a handoff names its target (`ChatHandoff.target`), and only the bar's *Ask the guide*
   (stage 3) targets the guide.
 - **Where a row came from** is one pure function, `threadSource` in
@@ -959,8 +961,9 @@ prompt.
   (`modeGenerates` / `subModeGenerates`; `RISK` says `per-mode`), and the press is the Dock's own
   activator (`useActivateMode`), so it arms what the bar's row arms. Chat's prompt is shown the
   key's shape and a few examples; the guide's carries every ordinary mode with its token beside it
-  ([`src/guide.ts`](../../src/guide.ts) § `modeWordsSection`). There is no `purpose` button: the
-  guide's greeting holds the reader's own box instead (the plan's F5).
+  ([`src/guide.ts`](../../src/guide.ts) § `modeWordsSection`). There is no `purpose` button (the plan's F5): the
+  guide's greeting asks in the conversation, and since 261009i *Keep this as why you're reading*
+  under the reader's first answer saves their own words on their press.
 - **Asked twice.** `chipFor` runs at the draw and again at the press
   ([`CommandChip.tsx`](../../src/web/CommandChip.tsx)), so whether the page can run it is never
   remembered from the render. A press goes through `chatExecutor`
@@ -1008,10 +1011,20 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   message only (`experienceLine`), so the cached prefix is the same for everyone.
   [privacy.md § The guide is told…](privacy.md#the-guide-is-told-how-many-other-articles-you-have-opened).
 - **Its tools** are `GUIDE_TOOLS` (§ The nine above), and no web search.
-- **Its greeting is ours**, not a model's ([`GuideGreeting.tsx`](../../src/web/GuideGreeting.tsx)):
-  free, and holding the same autosaving *Why you're reading this one* box Metadata has, so the
-  reason saved is always the reader's own words. *Ask the guide where to start* sends a fixed first
-  question once there is one.
+- **Its greeting is ours**, not a model's ([`GuideGreeting.tsx`](../../src/web/GuideGreeting.tsx),
+  words chosen in [`guide-greeting.ts`](../../src/web/guide-greeting.ts)): free, and since
+  2026-10-09 it asks in the conversation rather than in a box
+  ([261009i](../plans/261009i-the-guide-greets-in-chat-takes-live-and-a-bar-row.md); Greg,
+  `spya-s6qhzv`: *"if we're in a chat interface, I want to use the chat interface"*). It welcomes
+  the reader to the piece by title, asks why they are reading it when no reason is stored, quotes
+  the start of *About you* back and asks if it is still right, and stays above the turns while the
+  conversation is mounted. Under the reader's first answer, **Keep this as why you're reading**
+  saves their own words, on their press, never over a reason stored meanwhile — no model chooses
+  or writes the reason. *Ask the guide where to start* sends a fixed first question once a reason
+  is stored. `GUIDE_SYSTEM` is told the greeting exists, since it is not in the transcript.
+- **A row in the command bar**, *Guide*, on the owner's reading view (`guideRow` in
+  [`CommandBar.tsx`](../../src/web/CommandBar.tsx)), which opens it as `?guide=1` does; and since
+  261007j the bar's *Ask the guide: "…"* for a sentence the fast pick could not place.
 - **Its buttons** are chat's, offered unasked when it suggests a mode or a search
   (§ Command buttons), **and one of them may press itself** (since 2026-10-07,
   [261007p](../plans/261007p-the-guide-acts-without-a-press-and-opens-every-new-article.md); Greg on

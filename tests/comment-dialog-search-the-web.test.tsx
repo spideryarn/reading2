@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * **A comment's footer offers no *Dig deeper*; its *Ask in chat* box is the
- * way to go further** (plan 261009i, D2: Greg, 2026-10-09, *"we don't need the
+ * way to go further** (plan 261009k, D2: Greg, 2026-10-09, *"we don't need the
  * dig deeper button"*).
  *
  * The button was *Search the web*, then *Dig deeper* (plan 261001p). Its
@@ -82,7 +82,7 @@ async function drawOwned(status: ClientComment["status"]): Promise<void> {
 const digDeeper = () =>
   [...container.querySelectorAll("button")].filter((b) => /Dig deeper|Search the web/.test(b.textContent ?? ""));
 
-describe("no Dig deeper on a comment (261009i)", () => {
+describe("no Dig deeper on a comment (261009k)", () => {
   it.each(["none", "pending", "done", "error"] as const)("is not offered on a %s comment", async (status) => {
     await drawOwned(status);
     expect(container.querySelector(".cmt-deepen")).toBeNull();

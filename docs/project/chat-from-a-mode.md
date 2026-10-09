@@ -27,8 +27,8 @@ adding the "Ask in chat" button"* (Greg, 2026-10-06, [261006d](../plans/261006d-
 The press is the Send: *"When I click "ask in Chat" anywhere, automatically submit the input"*
 (Greg, 2026-10-06, [261006j](../plans/261006j-ask-in-chat-sends-the-question.md)). And then Dig
 deeper went, and the chat stands in its place: *"I'm tempted to get rid of the dig deeper button and
-just replace it with the ask in chat button"* (Greg, 2026-10-09, [261009i](../plans/261009i-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)). Until 2026-10-09
-(plan 261009i) Dig deeper was beside it; kept Dig deeper answers still show, and its server half
+just replace it with the ask in chat button"* (Greg, 2026-10-09, [261009k](../plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)). Until 2026-10-09
+(plan 261009k) Dig deeper was beside it; kept Dig deeper answers still show, and its server half
 remains.
 
 ## Which modes have it
@@ -51,7 +51,7 @@ Owner only: a visitor has no chat.
 
 Timeline, Quotes, FAQ and Skim have no such button (checked 2026-10-09: none of their panels imports
 `OriginChat.tsx` or `chat-handoff.ts`). Greg asked for it *"in a citation or perhaps even the
-glossary or the ideas or anything like that"* (plan 261009i); the other three wait on a queue item,
+glossary or the ideas or anything like that"* (plan 261009k); the other three wait on a queue item,
 and FAQ first needs an id that survives a re-run.
 
 Three things look like this and are not: Summary's *Ask about a paragraph*
@@ -67,7 +67,7 @@ origin (`summary` is reserved in the database CHECK and not built, and since 202
 > that generated them. … I want to be able to go back to the citations mode, and also sort of
 > highlight the, you know, block or whatever that the chat is relevant to.
 >
-> — Greg, 2026-10-09 (spya-tv6wn5), in [261009i](../plans/261009i-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)
+> — Greg, 2026-10-09 (spya-tv6wn5), in [261009k](../plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)
 
 An open chat in Chat's band that has an origin draws one line above its transcript: the mode's own
 icon and *Back to "the item's name" in Mode* (an angle reads *Back to your angle in Debate*),

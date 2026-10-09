@@ -25,7 +25,7 @@
  * docs/project/skim.md.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { NONE_YET_AS_NULL_HEADER, type Job, type Skim, type SkimResponse } from "../types.js";
+import { NONE_YET_AS_NULL_HEADER, type Job, type Skim, type SkimProfileNoticeDismissalRequest, type SkimResponse } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { useFreshReads, useRewriteHold } from "./rewrite-hold.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
@@ -48,6 +48,25 @@ export interface UseSkim {
   outdated: boolean;
   /** The route was written for another profile — including none, when you now have one. */
   profileChanged: boolean;
+  /**
+   * The reader sent the profile-changed notice away, for this route under the
+   * profile they have now — `SkimResponse.profileNoticeDismissed`, or `true`
+   * from the moment they press its × until a read after the write says
+   * otherwise.
+   */
+  profileNoticeDismissed: boolean;
+  /**
+   * Why the last × did not stick. Shown in the banner, which is back by then.
+   */
+  dismissFailed: string | null;
+  /**
+   * The banner's ×: hide the notice now and record it — plan 261009i. **A
+   * failed write reads the route before it puts the banner back**, because the
+   * write may have landed before the answer was lost; that read decides. If
+   * the read cannot answer either, the banner comes back with the reason: an
+   * unconfirmed dismissal is not shown as a done one.
+   */
+  dismissProfileNotice(): Promise<void>;
   /** How many of the current Quotes are on no pass of this route. */
   notOnRoute: number;
   slug: string;
@@ -100,6 +119,28 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
   const [stale, setStale] = useState(false);
   const [outdated, setOutdated] = useState(false);
   const [profileChanged, setProfileChanged] = useState(false);
+  const [profileNoticeDismissed, setProfileNoticeDismissed] = useState(false);
+  /* Keyed by slug: the ×'s failure belongs to the article it was pressed on. */
+  const [dismissFailed, setDismissFailed] = useState<{ slug: string; why: string } | null>(null);
+  /**
+   * **The ×'s write, from the press until its own trailing read has landed.**
+   * A read already out when the × was pressed saw the database before the
+   * write, so while this is set a read does not put the notice back on the
+   * route it names — unless the write failed, when the server's answer is the
+   * only one there is. A ref, because the read checks it after its `await`s.
+   */
+  const dismissal = useRef<{ slug: string; generatedAt: string; failed: string | null } | null>(null);
+  /** Every read that answered, counted, and its answer — so the × can tell whether one landed after its write. */
+  const answered = useRef<{ n: number; slug: string; generatedAt: string | null; dismissed: boolean }>({
+    n: 0,
+    slug,
+    generatedAt: null,
+    dismissed: false,
+  });
+  /* For a write that finishes after the reader has moved to another article:
+     its render's `refresh` reads the old one (GPT Sol's code review). */
+  const slugNow = useRef(slug);
+  slugNow.current = slug;
   const [notOnRoute, setNotOnRoute] = useState(0);
   const [error, setError] = useState<string | null>(null);
   /* A manual press made while a prerequisite read is unresolved. Keep the
@@ -140,6 +181,8 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
           setStale(false);
           setOutdated(false);
           setProfileChanged(false);
+          setProfileNoticeDismissed(false);
+          answered.current = { n: answered.current.n + 1, slug, generatedAt: null, dismissed: false };
           setNotOnRoute(0);
           landed(started, res, null);
           setError(null);
@@ -161,6 +204,14 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
         setStale(loaded.stale);
         setOutdated(loaded.outdated);
         setProfileChanged(loaded.profileChanged);
+        /* `=== true`: a server from before the field (the minutes of a deploy)
+           says nothing, which is "not dismissed". */
+        const dismissed = loaded.profileNoticeDismissed === true;
+        const writing = dismissal.current;
+        const held =
+          writing !== null && writing.slug === slug && writing.generatedAt === route.generatedAt && writing.failed === null;
+        setProfileNoticeDismissed(dismissed || held);
+        answered.current = { n: answered.current.n + 1, slug, generatedAt: route.generatedAt, dismissed };
         setNotOnRoute(loaded.notOnRoute);
         setError(null);
         saidNoneFor.current = null;
@@ -176,6 +227,48 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
   );
 
   const { reload, refresh } = useOrderedRead(load);
+
+  const dismissProfileNotice = useCallback(async () => {
+    if (skim === null) return;
+    /* Two presses in one tick: the button is gone on the next render, not this one. */
+    if (dismissal.current?.slug === slug && dismissal.current.generatedAt === skim.generatedAt) return;
+    const mine = { slug, generatedAt: skim.generatedAt, failed: null as string | null };
+    dismissal.current = mine;
+    setProfileNoticeDismissed(true);
+    setDismissFailed(null);
+    try {
+      const body: SkimProfileNoticeDismissalRequest = { generatedAt: skim.generatedAt };
+      const res = await apiFetch(`/api/skim/${encodeURIComponent(slug)}/profile-notice-dismissal`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      /* A 204 has no body; anything else is a JSON sentence `readJson` throws. */
+      if (!res.ok) await readJson(res);
+    } catch (err) {
+      mine.failed = describeFetchFailure(err as Error);
+    }
+    if (slugNow.current !== slug) {
+      if (dismissal.current === mine) dismissal.current = null;
+      return;
+    }
+    /* Either way, trail any read already out — it saw the route before the
+       press — so the last word is a read made after the write. */
+    const before = answered.current.n;
+    await refresh();
+    if (dismissal.current === mine) dismissal.current = null;
+    if (mine.failed === null || slugNow.current !== slug) return;
+    const after = answered.current;
+    if (after.n === before) {
+      /* No read answered: nothing confirms the write, so the banner is back. */
+      setProfileNoticeDismissed(false);
+      setDismissFailed({ slug, why: mine.failed });
+    } else if (after.slug === slug && after.generatedAt === mine.generatedAt && !after.dismissed) {
+      /* The read put the banner back; say why. Not for a replacement route
+         (the 409), whose notice, if any, this press never saw. */
+      setDismissFailed({ slug, why: mine.failed });
+    }
+  }, [skim, slug, refresh]);
 
   const retryRead = useCallback(async () => {
     setError(null);
@@ -314,6 +407,9 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
     stale,
     outdated,
     profileChanged,
+    profileNoticeDismissed,
+    dismissFailed: dismissFailed?.slug === slug ? dismissFailed.why : null,
+    dismissProfileNotice,
     notOnRoute,
     slug,
     error,

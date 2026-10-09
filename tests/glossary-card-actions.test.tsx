@@ -9,7 +9,7 @@
  * > — Greg, 2026-10-02 (spya-p09u4s)
  *
  * The card had *Dig deeper* from then until 2026-10-09, when *Ask in chat*
- * took its place, as it did in the band (plan 261009i: Greg, *"we don't need
+ * took its place, as it did in the band (plan 261009k: Greg, *"we don't need
  * the dig deeper button"*).
  *
  * The claims:
@@ -219,7 +219,7 @@ describe("the card's owner actions", () => {
     expect(ask?.getAttribute("aria-label")).toBe(ASK_ENTRY_IN_CHAT);
     expect(ask?.querySelector("svg"), "Chat's two bubbles").not.toBeNull();
     expect(button("Hide")).toBeTruthy();
-    expect(card()?.textContent, "Dig deeper is gone (plan 261009i)").not.toMatch(/Dig deeper|Digging deeper/);
+    expect(card()?.textContent, "Dig deeper is gone (plan 261009k)").not.toMatch(/Dig deeper|Digging deeper/);
     /* One row, since 2026-10-03 (spya-za77hj): Greg, *"They should all be on
        the same row to minimize vertical space"*. The owner's two verbs sit in
        the foot beside the way out, which is now named for what it does. */

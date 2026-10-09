@@ -2,7 +2,7 @@
 /**
  * **An open Glossary entry has *Ask in chat* where *Dig deeper* was, and a
  * kept lookup answer is still drawn** — `Looked` in src/web/GlossaryPanel.tsx,
- * plan docs/plans/261009i-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md
+ * plan docs/plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md
  * § Stage 1.
  *
  * Greg, 2026-10-09 (spya-tv6wn5): *"we don't need the dig deeper button"*.
@@ -109,7 +109,7 @@ const anyDigDeeper = () =>
 describe("an open Glossary entry, for its owner", () => {
   it("has Ask in chat and no Dig deeper, and the press asks about that entry", () => {
     const { asked } = draw({});
-    expect(anyDigDeeper(), "Dig deeper is gone (plan 261009i)").toEqual([]);
+    expect(anyDigDeeper(), "Dig deeper is gone (plan 261009k)").toEqual([]);
     expect(host.querySelector(".gloss-dig")).toBeNull();
     const button = askButton();
     expect(button?.textContent?.trim()).toBe("Ask in chat");

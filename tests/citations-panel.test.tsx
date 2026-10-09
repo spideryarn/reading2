@@ -569,9 +569,9 @@ describe("CitationsPanel", () => {
   /* GPT Sol F17 (second code review) and SPIDERYARN-READING2-3K pinned the
      copy of the row's *Dig deeper* card: no promised search count, a card and
      not a `title`, what a press costs and keeps. The button went on 2026-10-09
-     (plan 261009i), and with it the card; what is pinned now is that no row
+     (plan 261009k), and with it the card; what is pinned now is that no row
      offers it, and that the mode's own description no longer does either. */
-  it("offers no Dig deeper on any row, and the mode's description does not promise one (261009i)", async () => {
+  it("offers no Dig deeper on any row, and the mode's description does not promise one (261009k)", async () => {
     const searched = work({
       id: "spya-e2f3g4",
       title: "Searched",
@@ -618,7 +618,7 @@ describe("CitationsPanel", () => {
     expect(row(BARE.id).querySelector(".cite-influence-unknown")).toBeNull();
     expect(row(BARE.id).querySelector(".score-bars")).toBeNull();
     /* The card says why. It said Dig deeper looks for it on the web from plan
-       261003m stage 2 until that button went on 2026-10-09 (plan 261009i), so
+       261003m stage 2 until that button went on 2026-10-09 (plan 261009k), so
        it must not offer it now. */
     const card = await cardFor(unknown!);
     const said = `${card.head} ${card.body}`;
@@ -757,7 +757,7 @@ describe("CitationsPanel", () => {
     expect(text).not.toContain(CAPPED_NOTE);
     expect(text).toContain(INFLUENCE_NOTE);
     /* The owner's (i) says what a kept web estimate is (plan 261003m stage 2),
-       and since 261009i offers no Dig deeper to make one. */
+       and since 261009k offers no Dig deeper to make one. */
     expect(text).toContain(INFLUENCE_WEB_NOTE);
     expect(INFLUENCE_WEB_NOTE).toMatch(/an AI estimate/);
     expect(INFLUENCE_WEB_NOTE).not.toMatch(/dig deeper/i);
@@ -1168,9 +1168,9 @@ describe("what a row says we have read", () => {
     expect(row(CENTRAL.id).querySelector(".cite-why")).toBeNull();
   });
 
-  it("does not reveal why, or draw anything live, for a run the hook still reports (261009i)", async () => {
+  it("does not reveal why, or draw anything live, for a run the hook still reports (261009k)", async () => {
     /* Nothing on a row starts a dig since 2026-10-09; the hook's state is the
-       server half's, left in place (plan 261009i, D5). A row draws only what
+       server half's, left in place (plan 261009k, D5). A row draws only what
        is kept. */
     await draw(owner({
       citations: artefact([CENTRAL, FAMOUS]),
@@ -1382,7 +1382,7 @@ describe("what a row says after Look it up", () => {
   });
 
   /* Plan 260930d: Look it up became Dig deeper's first step, so no row had a
-     Look it up button of its own; since plan 261009i no row has Dig deeper
+     Look it up button of its own; since plan 261009k no row has Dig deeper
      either. Without the owner's chats bundle a row has no button at all. */
   it("offers no Look it up and no Dig deeper on any row", async () => {
     let pressed = 0;
@@ -1407,7 +1407,7 @@ describe("what a row says after Look it up", () => {
 
 /* ------------------------------------------------- a kept Dig deeper answer --
    Plan 260930a stage 2 built the button, the answer streaming into its row,
-   and the failure; those went on 2026-10-09 (plan 261009i: Greg, *"we don't
+   and the failure; those went on 2026-10-09 (plan 261009k: Greg, *"we don't
    need the dig deeper button"*). What is left is the kept answer, folded to
    its first part, and what was read said by code. */
 
@@ -1507,7 +1507,7 @@ describe("a kept Dig deeper answer", () => {
       expect(a.getAttribute("rel")).toContain("noopener");
     }
     expect(r.querySelector(".cite-inv-sources")?.textContent).toContain("The paper's page");
-    /* *· Dig deeper again* followed the date until 2026-10-09 (plan 261009i). */
+    /* *· Dig deeper again* followed the date until 2026-10-09 (plan 261009k). */
     expect(r.querySelector(".cite-inv-foot")?.textContent).toMatch(/^Researched \S+$/);
     expect(r.querySelector(".cite-inv-again")).toBeNull();
     /* Plan 260930d: the offer of Look it up went with its button. */
@@ -1625,7 +1625,7 @@ describe("a kept Dig deeper answer", () => {
 });
 
 /* ------------------------------------------------------- a finger's press --
-   A row's paid button (Dig deeper, until plan 261009i) carried a card saying
+   A row's paid button (Dig deeper, until plan 261009k) carried a card saying
    what a press costs, and on a touch screen the tap that opened the card was
    also the tap that spent the money (plan 260930a § Review log, Browser
    check). The info cards below open the same way: a finger's tap reveals.
@@ -1654,7 +1654,7 @@ async function press(el: Element, down: "touch" | "mouse", click: string = down)
 
 
 /* The describe that pinned a finger's first tap on the row's paid button
-   (Dig deeper) revealing its card went with the button (plan 261009i). The
+   (Dig deeper) revealing its card went with the button (plan 261009k). The
    helpers above stay: the info cards below use them. */
 
 /* ------------------------------------ already an article here, plan 260930b -- */
@@ -1848,7 +1848,7 @@ describe("an influence Dig deeper found on the web", () => {
   });
 });
 
-/* Report `spya-c2qmbg`, plan 261004b: something outside the band (the prose card's *Dig deeper* until plan 261009i) opens this
+/* Report `spya-c2qmbg`, plan 261004b: something outside the band (the prose card's *Dig deeper* until plan 261009k) opens this
    band on the work's row. The row has to be drawn before it can be scrolled to,
    and the prioritised order may be hiding it. */
 describe("Crossref's citation count on a row (plan 261005i)", () => {
@@ -2080,5 +2080,5 @@ describe("opening the band on one work", () => {
   /* Two tests pinned that a row being dug kept the bar low enough to stay
      drawn (GPT Sol's plan review of 261004b, F1), and that a reader who raised
      the bar afterwards was not fought. Nothing on the client starts a dig since
-     plan 261009i, so the effect and its tests went. */
+     plan 261009k, so the effect and its tests went. */
 });

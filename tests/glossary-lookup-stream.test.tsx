@@ -356,11 +356,11 @@ describe("a lookup that ends without `done`", () => {
 
 /* Plan 261001p's browser check pinned here that a failed *Dig deeper again*
    said why under the button, on screen. The button went on 2026-10-09 (plan
-   261009i), and the panel no longer draws a lookup's progress or failure: the
+   261009k), and the panel no longer draws a lookup's progress or failure: the
    hook's `look` is the server half's, left in place until Greg decides (D5).
    What the panel must still do is keep the stored answer on screen, and offer
    no Dig deeper. */
-describe("the panel, around a lookup the hook still runs (261009i)", () => {
+describe("the panel, around a lookup the hook still runs (261009k)", () => {
   const SENTENCE = "Our AI provider refused the request. Try again later. [ai-provider-402]";
   const HAD = {
     ...GLOSSARY,

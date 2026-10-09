@@ -1,4 +1,4 @@
-# 261009i — Ask in chat replaces Dig deeper, and a chat goes back to its item
+# 261009k — Ask in chat replaces Dig deeper, and a chat goes back to its item
 
 Up: [plans.md](../project/plans.md) · report spya-tv6wn5 (#504, Sentry SPIDERYARN-READING2-FF) ·
 queue item `qi-bvypm9bn` · builds on [261005i](261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md),
@@ -111,7 +111,7 @@ forgotten:
 | `debate` (lens) | one push: `mode=debate`, `debate=reception` | the angles box; an angle is not in the article |
 | `ideas` (stage 3) | `?idea=itemId` + mode, and a one-shot focus | the idea's row scrolled into view and open; its passages marked by the selection |
 
-*Revised after GPT Sol's plan review* ([261009i-plan-review-sol.md](261009i-plan-review-sol.md)):
+*Revised after GPT Sol's plan review* ([261009k-plan-review-sol.md](261009k-plan-review-sol.md)):
 
 - **F3: selecting is not landing.** `?term=` and `?idea=` select a row but nothing scrolls it into
   view, so an entry below the fold was "opened" out of sight. Citations' `CiteFocus` (`{id, n}`,
@@ -282,7 +282,7 @@ chat yet, and the browser check at 390 and 1440 is the end-of-plan pass.
 
 (Both since done: the Ideas Help page has a paragraph, and the browser pass is below.)
 
-### GPT Sol's code review — [261009i-code-review-sol.md](261009i-code-review-sol.md)
+### GPT Sol's code review — [261009k-code-review-sol.md](261009k-code-review-sol.md)
 
 Verdict *do not ship*, on F4 alone (two Help screenshots still showed Dig deeper), which the browser
 pass then reshot. Fixed by the reviewer: **F1**, a focus left pending when the reader left a mode
@@ -303,10 +303,10 @@ unknown item. **F3**: stale comments.
 - Ideas: an open idea has Ask in chat. Not pressed, because the local database lacks this branch's
   migration (below).
 - Debate: not pressed in the browser, to keep the model calls to four. The unit tests cover it.
-- Shots: [1](261009i-shot-1-glossary-ask-chat-back-line-1440.png),
-  [2](261009i-shot-2-glossary-chat-390.png), [3](261009i-shot-3-glossary-back-to-row-390.png),
-  [4](261009i-shot-4-citations-back-to-row-1440.png), [5](261009i-shot-5-cited-work-card-ask-in-chat.png),
-  [6](261009i-shot-6-ideas-open-idea-ask-in-chat.png).
+- Shots: [1](261009k-shot-1-glossary-ask-chat-back-line-1440.png),
+  [2](261009k-shot-2-glossary-chat-390.png), [3](261009k-shot-3-glossary-back-to-row-390.png),
+  [4](261009k-shot-4-citations-back-to-row-1440.png), [5](261009k-shot-5-cited-work-card-ask-in-chat.png),
+  [6](261009k-shot-6-ideas-open-idea-ask-in-chat.png).
 - Help images `glossary-card.png` and `mode-citations.png` reshot, with their alt text and the Help
   corpus updated.
 

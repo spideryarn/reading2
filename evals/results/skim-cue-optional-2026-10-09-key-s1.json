@@ -1,0 +1,778 @@
+{
+ "comparison": {
+  "id": "s1",
+  "x": "A1",
+  "y": "A2"
+ },
+ "bothNone": 0,
+ "key": [
+  {
+   "pair": 1,
+   "slug": "arxiv-1706-03762-spya-wyt7j0",
+   "quoteId": "spya-mqh8yr",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 2,
+   "slug": "arxiv-1706-03762-spya-wyt7j0",
+   "quoteId": "spya-qu698m",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 3,
+   "slug": "arxiv-1706-03762-spya-wyt7j0",
+   "quoteId": "spya-hxyhq0",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 4,
+   "slug": "arxiv-1706-03762-spya-wyt7j0",
+   "quoteId": "spya-t5yvtb",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 5,
+   "slug": "arxiv-1706-03762-spya-wyt7j0",
+   "quoteId": "spya-d88dd6",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 6,
+   "slug": "arxiv-1706-03762-spya-wyt7j0",
+   "quoteId": "spya-mgr83q",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 7,
+   "slug": "arxiv-1706-03762-spya-wyt7j0",
+   "quoteId": "spya-fmsdbj",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 8,
+   "slug": "arxiv-1706-03762-spya-wyt7j0",
+   "quoteId": "spya-uqvat7",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 9,
+   "slug": "arxiv-1706-03762-spya-wyt7j0",
+   "quoteId": "spya-w6v2ap",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 10,
+   "slug": "arxiv-1706-03762-spya-wyt7j0",
+   "quoteId": "spya-bq5qds",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 11,
+   "slug": "arxiv-1706-03762-spya-wyt7j0",
+   "quoteId": "spya-qcpz3s",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 12,
+   "slug": "2608-13566v1-spya-yurten",
+   "quoteId": "spya-nv073m",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 13,
+   "slug": "2608-13566v1-spya-yurten",
+   "quoteId": "spya-gs7srt",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 14,
+   "slug": "2608-13566v1-spya-yurten",
+   "quoteId": "spya-z2tgym",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 15,
+   "slug": "2608-13566v1-spya-yurten",
+   "quoteId": "spya-rjm5ef",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 16,
+   "slug": "2608-13566v1-spya-yurten",
+   "quoteId": "spya-meqteq",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 17,
+   "slug": "2608-13566v1-spya-yurten",
+   "quoteId": "spya-xdf3up",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 18,
+   "slug": "2608-13566v1-spya-yurten",
+   "quoteId": "spya-suzmjd",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 19,
+   "slug": "2608-13566v1-spya-yurten",
+   "quoteId": "spya-meyjye",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 20,
+   "slug": "2608-13566v1-spya-yurten",
+   "quoteId": "spya-d6v43d",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 21,
+   "slug": "2608-13566v1-spya-yurten",
+   "quoteId": "spya-h4p2k0",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 22,
+   "slug": "2608-13566v1-spya-yurten",
+   "quoteId": "spya-m45yqv",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 23,
+   "slug": "2608-13566v1-spya-yurten",
+   "quoteId": "spya-jnwxwp",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 24,
+   "slug": "2608-13566v1-spya-yurten",
+   "quoteId": "spya-uucbqb",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 25,
+   "slug": "2608-13566v1-spya-yurten",
+   "quoteId": "spya-f9jtmx",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 26,
+   "slug": "2608-13566v1-spya-yurten",
+   "quoteId": "spya-ra9sej",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 27,
+   "slug": "2608-13566v1-spya-yurten",
+   "quoteId": "spya-n7ntq2",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 28,
+   "slug": "2608-13566v1-spya-yurten",
+   "quoteId": "spya-cbtpn5",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 29,
+   "slug": "2608-13566v1-spya-yurten",
+   "quoteId": "spya-fwea42",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 30,
+   "slug": "2608-13566v1-spya-yurten",
+   "quoteId": "spya-dakvm6",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 31,
+   "slug": "2608-13566v1-spya-yurten",
+   "quoteId": "spya-dp566v",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 32,
+   "slug": "2608-13566v1-spya-yurten",
+   "quoteId": "spya-sf0e3t",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 33,
+   "slug": "2608-13566v1-spya-yurten",
+   "quoteId": "spya-epgykg",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 34,
+   "slug": "2608-13566v1-spya-yurten",
+   "quoteId": "spya-ueq60u",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 35,
+   "slug": "2608-13566v1-spya-yurten",
+   "quoteId": "spya-qq44zu",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 36,
+   "slug": "2608-13566v1-spya-yurten",
+   "quoteId": "spya-n03axr",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 37,
+   "slug": "2608-13566v1-spya-yurten",
+   "quoteId": "spya-kvgagg",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 38,
+   "slug": "2608-13566v1-spya-yurten",
+   "quoteId": "spya-jtnv9m",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 39,
+   "slug": "2608-13566v1-spya-yurten",
+   "quoteId": "spya-pwtvqw",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 40,
+   "slug": "2608-13566v1-spya-yurten",
+   "quoteId": "spya-an0yqq",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 41,
+   "slug": "2608-13566v1-spya-yurten",
+   "quoteId": "spya-cfa9t4",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 42,
+   "slug": "entropy-24-00930-spya-pywwkq",
+   "quoteId": "spya-rwuyy2",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 43,
+   "slug": "entropy-24-00930-spya-pywwkq",
+   "quoteId": "spya-rf5knz",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 44,
+   "slug": "entropy-24-00930-spya-pywwkq",
+   "quoteId": "spya-v025zn",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 45,
+   "slug": "entropy-24-00930-spya-pywwkq",
+   "quoteId": "spya-y4cdmx",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 46,
+   "slug": "entropy-24-00930-spya-pywwkq",
+   "quoteId": "spya-n8r3m7",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 47,
+   "slug": "entropy-24-00930-spya-pywwkq",
+   "quoteId": "spya-ba5p3n",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 48,
+   "slug": "entropy-24-00930-spya-pywwkq",
+   "quoteId": "spya-nfrxa9",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 49,
+   "slug": "entropy-24-00930-spya-pywwkq",
+   "quoteId": "spya-pghzsz",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 50,
+   "slug": "entropy-24-00930-spya-pywwkq",
+   "quoteId": "spya-vw0zh2",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 51,
+   "slug": "entropy-24-00930-spya-pywwkq",
+   "quoteId": "spya-bd0msy",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 52,
+   "slug": "entropy-24-00930-spya-pywwkq",
+   "quoteId": "spya-skhc7m",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 53,
+   "slug": "entropy-24-00930-spya-pywwkq",
+   "quoteId": "spya-j49b36",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 54,
+   "slug": "entropy-24-00930-spya-pywwkq",
+   "quoteId": "spya-sa6kvs",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 55,
+   "slug": "entropy-24-00930-spya-pywwkq",
+   "quoteId": "spya-s6mdbh",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 56,
+   "slug": "entropy-24-00930-spya-pywwkq",
+   "quoteId": "spya-f9950a",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 57,
+   "slug": "entropy-24-00930-spya-pywwkq",
+   "quoteId": "spya-f9uk98",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 58,
+   "slug": "entropy-24-00930-spya-pywwkq",
+   "quoteId": "spya-hx0qes",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 59,
+   "slug": "entropy-24-00930-spya-pywwkq",
+   "quoteId": "spya-pgxy5r",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 60,
+   "slug": "entropy-24-00930-spya-pywwkq",
+   "quoteId": "spya-ysau24",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 61,
+   "slug": "entropy-24-00930-spya-pywwkq",
+   "quoteId": "spya-pa40p4",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 62,
+   "slug": "arxiv-2010-spya-tkm7nm",
+   "quoteId": "spya-ahg3nk",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 63,
+   "slug": "arxiv-2010-spya-tkm7nm",
+   "quoteId": "spya-kax8bt",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 64,
+   "slug": "arxiv-2010-spya-tkm7nm",
+   "quoteId": "spya-q3qdwd",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 65,
+   "slug": "arxiv-2010-spya-tkm7nm",
+   "quoteId": "spya-zq0utk",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 66,
+   "slug": "arxiv-2010-spya-tkm7nm",
+   "quoteId": "spya-r5phhp",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 67,
+   "slug": "arxiv-2010-spya-tkm7nm",
+   "quoteId": "spya-tywrk8",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 68,
+   "slug": "arxiv-2010-spya-tkm7nm",
+   "quoteId": "spya-c743zr",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 69,
+   "slug": "arxiv-2010-spya-tkm7nm",
+   "quoteId": "spya-n02336",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 70,
+   "slug": "arxiv-2010-spya-tkm7nm",
+   "quoteId": "spya-epj785",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 71,
+   "slug": "arxiv-2010-spya-tkm7nm",
+   "quoteId": "spya-mj3bmt",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 72,
+   "slug": "arxiv-2010-spya-tkm7nm",
+   "quoteId": "spya-jux4za",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 73,
+   "slug": "cargocult-spya-rz663q",
+   "quoteId": "spya-zat4mm",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 74,
+   "slug": "cargocult-spya-rz663q",
+   "quoteId": "spya-zwbtkt",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 75,
+   "slug": "cargocult-spya-rz663q",
+   "quoteId": "spya-y38mpq",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 76,
+   "slug": "cargocult-spya-rz663q",
+   "quoteId": "spya-zz5jad",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 77,
+   "slug": "cargocult-spya-rz663q",
+   "quoteId": "spya-qz4f53",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 78,
+   "slug": "cargocult-spya-rz663q",
+   "quoteId": "spya-gk7rfh",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 79,
+   "slug": "cargocult-spya-rz663q",
+   "quoteId": "spya-zhmerc",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 80,
+   "slug": "cargocult-spya-rz663q",
+   "quoteId": "spya-jw75b8",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 81,
+   "slug": "cargocult-spya-rz663q",
+   "quoteId": "spya-hz6mw5",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 82,
+   "slug": "cargocult-spya-rz663q",
+   "quoteId": "spya-z6r8uh",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 83,
+   "slug": "cargocult-spya-rz663q",
+   "quoteId": "spya-mn57wu",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 84,
+   "slug": "source-spya-furjgs",
+   "quoteId": "spya-uyucc0",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 85,
+   "slug": "source-spya-furjgs",
+   "quoteId": "spya-r026vz",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 86,
+   "slug": "source-spya-furjgs",
+   "quoteId": "spya-u8e7gf",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 87,
+   "slug": "source-spya-furjgs",
+   "quoteId": "spya-ur90mw",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 88,
+   "slug": "source-spya-furjgs",
+   "quoteId": "spya-dz3qz0",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 89,
+   "slug": "source-spya-furjgs",
+   "quoteId": "spya-gspp08",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 90,
+   "slug": "source-spya-furjgs",
+   "quoteId": "spya-atfq79",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 91,
+   "slug": "source-spya-furjgs",
+   "quoteId": "spya-knxj5e",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 92,
+   "slug": "source-spya-furjgs",
+   "quoteId": "spya-qe8vxc",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 93,
+   "slug": "source-spya-furjgs",
+   "quoteId": "spya-p5ysre",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 94,
+   "slug": "source-spya-furjgs",
+   "quoteId": "spya-mamcdp",
+   "one": "A2",
+   "two": "A1",
+   "kind": "both"
+  },
+  {
+   "pair": 95,
+   "slug": "source-spya-furjgs",
+   "quoteId": "spya-t8duv0",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  },
+  {
+   "pair": 96,
+   "slug": "source-spya-furjgs",
+   "quoteId": "spya-smgpkx",
+   "one": "A1",
+   "two": "A2",
+   "kind": "both"
+  }
+ ]
+}

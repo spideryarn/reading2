@@ -898,7 +898,7 @@ export type ChatCommand =
        * exists. The server uses it only when this exchange creates the thread.
        * `SpokenTurn.kind` in src/chat.ts; SPIDERYARN-READING2-70.
        */
-      kind?: Extract<ThreadKind, "chat" | "learn">;
+      kind?: Extract<ThreadKind, "chat" | "learn" | "guide">;
     }
   /** Ask about one conversation, because the screen is wrong about it. */
   | { type: "repair"; opId: OpId; slug: string; threadId: string }

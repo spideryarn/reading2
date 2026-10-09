@@ -68,7 +68,10 @@ until you send something. The guide can do one thing per answer by itself, if it
 take you to a passage, or open a mode that has nothing to write, such as Structure or Learn, or the
 Glossary or Summary's Brief or Fuller once they have already been written for this article. It
 says so when it does, and **Back** undoes it. Anything that costs money or changes your things, such
-as a search, a mode that has to be written first, a tag or a bookmark, is still a button you press.
+as a search, a mode that has to be written first, a tag or a bookmark, is still a button you press. Its
+greeting asks why you are reading the piece: answer in the box below as you would any message, and
+**Keep this as why you're reading** under your answer saves it, in your words. You can talk to the
+guide out loud with **Live**, as in any chat, and type **Guide** in the command bar to get back to it.
 
 **Talking instead of typing.** The microphone turns your speech into text in the box, to edit before
 you send. It is worth trying even if you type quickly: most people say more out loud than they would

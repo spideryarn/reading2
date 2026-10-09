@@ -421,7 +421,7 @@ function descending(a: number | undefined, b: number | undefined): number {
  * **The bar that puts a hidden work back**, or null when nothing is hiding it —
  * `gateToReveal` (GlossaryPanel.tsx) over this list's score, for the same
  * press: something outside the band opens it on a row (the prose card's *Dig
- * deeper* until 2026-10-09; a chat's way back to its item from plan 261009i
+ * deeper* until 2026-10-09; a chat's way back to its item from plan 261009k
  * stage 2), and a row the prioritised order is hiding cannot be opened. **Lowered, never cleared**, so
  * the slider visibly moves; null in any other order, where the bar is dormant
  * and must not be moved behind the reader's back; and floored to the step, so
@@ -599,7 +599,7 @@ export const INFLUENCE_NOTE =
  * The owner's (i) adds this after `INFLUENCE_NOTE` (plan 261003m stage 2). Not
  * a visitor's: their rows never carry what a web search found. It began "Dig
  * deeper also looks for a work's influence on the web" until 2026-10-09, when
- * that button went (plan 261009i); rows it filled in keep their estimate.
+ * that button went (plan 261009k); rows it filled in keep their estimate.
  */
 export const INFLUENCE_WEB_NOTE =
   "A row marked “from the web” shows an AI estimate of the work's influence, read from one page an earlier web search found, in place of the model's memory, and its card shows that page's words.";
@@ -647,7 +647,7 @@ export const CITED_BY_NOTE = `A row that says “cited 357 times · ${REGISTRY_N
  * The card on those words, for owner and visitor alike. The owner's added
  * "Dig deeper looks on the web for a page that says how well known the work
  * is" from plan 261003m stage 2 until 2026-10-09, when that button went (plan
- * 261009i): nothing on the row looks for it now.
+ * 261009k): nothing on the row looks for it now.
  */
 export const INFLUENCE_UNKNOWN_NOTE =
   "No usable influence score for this work: the model was not confident it knows it, or its score was missing. In prioritised order the bar goes by this row's relevance alone.";
@@ -711,7 +711,7 @@ export function citeReadAssessed(words: number, host: string): string {
 /**
  * *Dig deeper* (was *Investigate*) read the paper's own text (plan 261001a): a
  * PDF code confirmed is this work. It ended "(Dig deeper)" until 2026-10-09,
- * when that button went (plan 261009i); the kept reading still says this.
+ * when that button went (plan 261009k); the kept reading still says this.
  */
 export function citeReadPaper(words: number, host: string, readAt: string): string {
   const day = new Date(readAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
@@ -853,7 +853,7 @@ interface Props {
   /**
    * **One work to bring into view, once** — something outside the band has
    * just opened it for this work: the prose card's *Dig deeper* from plan
-   * 261004b until 2026-10-09, and from plan 261009i stage 2 a chat's way back. Not a selection: the row has
+   * 261004b until 2026-10-09, and from plan 261009k stage 2 a chat's way back. Not a selection: the row has
    * no selected state and there is no `?cite=`. `n` tells two presses on the
    * same work apart. The panel lowers the bar if it is hiding the row
    * (`barToReveal`), scrolls to the row once it is drawn, and calls
@@ -866,7 +866,7 @@ interface Props {
 
 /**
  * `Props.focus`. The shared `ItemFocus` (src/web/item-focus.ts) since plan
- * 261009i, where Glossary, Ideas and Debate took the same shape; the name
+ * 261009k, where Glossary, Ideas and Debate took the same shape; the name
  * stays for this panel's callers.
  */
 export type CiteFocus = ItemFocus;
@@ -1239,7 +1239,7 @@ function WorkRow({
      never the model's (src/citation-find.ts). */
   const foundAs = work.found?.title ? ` — “${work.found.title}”` : "";
   /* **A kept *Dig deeper* answer is still drawn**, the owner's, with no *Dig
-     deeper again*: the button went on 2026-10-09 (plan 261009i), and what it
+     deeper again*: the button went on 2026-10-09 (plan 261009k), and what it
      found stays on the row. Nothing new is written to it. */
   const kept = owned ? work.investigation : undefined;
 
@@ -1281,7 +1281,7 @@ function WorkRow({
             search Scholar ↗
           </a>
         )}
-        {/* **Where Dig deeper was** (plan 261009i; beside it from plan
+        {/* **Where Dig deeper was** (plan 261009k; beside it from plan
             261006d until then). The press sends the question (plan 261006j).
             It stays once a chat exists: a second one can be started. */}
         {chats && (
@@ -1331,7 +1331,7 @@ function dayOf(iso: string): string {
 /**
  * ***from the web*, beside the influence bar** (plan 261003m stage 2): the
  * number came from one page of *Dig deeper*'s web search (kept from before the
- * button went on 2026-10-09, plan 261009i), not from the model's memory. The card says so in our words, names the host and the day, and then
+ * button went on 2026-10-09, plan 261009k), not from the model's memory. The card says so in our words, names the host and the day, and then
  * shows the page's own words, in a `<q>` so they read as the page's and not
  * ours. The quote stays in the app's face: third-party text is left UI
  * (docs/project/fonts.md § Whose voice is it). No link: the address is in the

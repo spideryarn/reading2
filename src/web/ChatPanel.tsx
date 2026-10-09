@@ -98,7 +98,9 @@ import type {
 } from "../types.js";
 import { isLearnKind } from "../types.js";
 import { CitedMarkdown } from "./Cited.js";
-import { GuideGreeting } from "./GuideGreeting.js";
+import { GuideGreeting, GuideKeepReason } from "./GuideGreeting.js";
+import { guideGreeting } from "./guide-greeting.js";
+import { usePurpose } from "./purpose.js";
 import { Button } from "./components/ui/button.js";
 import { useChatCommands } from "./CommandChip.js";
 import { chipFor } from "./chat-commands.js";
@@ -207,6 +209,8 @@ interface Props {
   onThread(id: string | null): void;
   /** The article, so dictation can be primed with this one's vocabulary. */
   slug: string;
+  /** The article's title, for the guide's greeting (plan 261009i). */
+  articleTitle?: string | undefined;
   /**
    * Whether the conversations have been asked for and answered.
    *
@@ -318,7 +322,7 @@ interface Props {
    * from an item in another mode: the stored origin, or the one still waiting
    * for the server to name the thread (`ConversationBand` resolves which). A
    * line above the transcript then offers the way back (`OriginBack`; plan
-   * 261009i, stage 2). Chat's alone: Learn never passes one.
+   * 261009k, stage 2). Chat's alone: Learn never passes one.
    */
   origin?: ThreadOrigin | undefined;
   /** Open the origin's mode on its item (Reader.tsx § `openOrigin`). */
@@ -428,6 +432,7 @@ export const SUGGESTIONS: { label: string; ask: string }[] = [
 
 export function ChatPanel({
   slug,
+  articleTitle,
   loaded,
   loadFailed,
   threads,
@@ -723,7 +728,7 @@ export function ChatPanel({
       {error && <p className="chat-error">{error}</p>}
 
       {/* **The way back to the item this chat was started from** (plan
-          261009i, stage 2). A chat only: not Learn, not the guide. */}
+          261009k, stage 2). A chat only: not Learn, not the guide. */}
       {!learn && open?.kind === "chat" && origin && onOrigin && <OriginBack origin={origin} onBack={onOrigin} />}
 
       {open ? (
@@ -755,6 +760,7 @@ export function ChatPanel({
           live={shownLive}
           onStartLive={onStartLive ? () => onStartLive(open.id) : undefined}
           guideAct={guideAct}
+          articleTitle={articleTitle}
         />
       ) : learn ? (
         /* **Learn never draws a list, not even for a frame.** The band
@@ -1267,7 +1273,7 @@ function GuideRow({
  */
 /**
  * **One line above the transcript: back to the item this chat was started
- * from**, in its mode (plan 261009i, stage 2; the words are
+ * from**, in its mode (plan 261009k, stage 2; the words are
  * thread-source.ts § `originBack`). It wears the mode's own icon, because a
  * control that takes you into a mode does (docs/project/icons.md). The
  * item's name is the article's or a model's words, so it is in the author's
@@ -1456,9 +1462,12 @@ export function Conversation({
   onStartLive,
   onAnswered,
   guideAct,
+  articleTitle,
 }: {
   /** The article, so the composer's dictation can be primed with its vocabulary. */
   slug: string;
+  /** The article's title, for the guide's greeting (plan 261009i). */
+  articleTitle?: string | undefined;
   thread: ChatThread;
   /** See `onHintOpened` in Props. Absent where nothing records the press. */
   onHintOpened?: ((messageId: string, hint: string) => void) | undefined;
@@ -1513,6 +1522,18 @@ export function Conversation({
    * ran in is over, so nothing that mounts later can act on it.
    */
   const ownAct = useGuideAct(thread.id, kind, visible, onAnswered);
+  /* **The guide's greeting** (plan 261009i): drawn only by a conversation
+     that was empty when this mount first saw it, and snapshotted only while it
+     is still empty. `usePurpose` is asynchronous; if the reader sends before
+     it answers, drawing its eventual greeting above that message would turn
+     words written without seeing the question into an apparent answer (and
+     offer to save them as the reason). Once shown, the snapshot stays above
+     the turns while this mount lasts. A guide opened with turns in it shows
+     none — GuideGreeting.tsx says why. */
+  const guideRead = usePurpose(kind === "guide" ? slug : null);
+  const greeting = kind === "guide" ? guideGreeting(guideRead, articleTitle) : null;
+  const greetsHere = useRef(thread.messages.length === 0);
+  const firstAsked = thread.messages.find((m) => m.role === "user");
   const act = guideAct ?? ownAct;
   /* **Offered, and spent, only once this conversation draws that answer as
      finished.** The `Answered` event can land before the store's notification
@@ -1598,6 +1619,11 @@ export function Conversation({
   const liveChars = liveSize(liveLines);
   const hasTurns = thread.messages.length > 0;
   const empty = thread.messages.length === 0 && liveLines.length === 0;
+  const [openingGreeting, setOpeningGreeting] = useState<ReturnType<typeof guideGreeting>>(null);
+  useLayoutEffect(() => {
+    if (!greetsHere.current || openingGreeting !== null || greeting === null || !empty) return;
+    setOpeningGreeting(greeting);
+  }, [empty, greeting, openingGreeting]);
   const toolsNow = (last?.tools ?? []).map((run) => run.status).join() + (last?.searches ?? "");
   /**
    * ## A streamed answer stays where it starts
@@ -1957,10 +1983,11 @@ export function Conversation({
           measureSteps(el);
         }}
       >
+        {kind === "guide" && openingGreeting !== null && (
+          <GuideGreeting greeting={openingGreeting} onAsk={(q) => onSend(q)} />
+        )}
         {empty &&
-          (kind === "guide" ? (
-            <GuideGreeting slug={slug} onAsk={(q) => onSend(q)} />
-          ) : kind === "tutorial" ? (
+          (kind === "guide" ? null : kind === "tutorial" ? (
             <TutorialInvitation />
           ) : kind === "explore" ? (
             <ExploreInvitation onAsk={(q) => onSend(q)} />
@@ -2001,6 +2028,11 @@ export function Conversation({
                what is on screen. */
             discards={thread.messages.length - i - 1}
           />
+          {/* The reader's answer to the greeting's question, kept as their
+              reason only if they press (GuideGreeting.tsx § GuideKeepReason). */}
+          {openingGreeting?.asksReason && m === firstAsked && (
+            <GuideKeepReason slug={slug} text={m.text} />
+          )}
           </GuideActContext.Provider>
         ))}
         {/* The spoken words still on their way to being saved, as the end of

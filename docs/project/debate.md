@@ -419,7 +419,7 @@ cited in its paragraph (no model call); or a model filing each cited work under 
 Overseer recommended the second then the third. Open with it: the merged mode's name, and whether it
 comes out from behind the experimental switch, which Debate is behind and Citations is not. The
 first small step, a Dig deeper button on a citation's card, shipped (and became *Ask in chat* with
-plan 261009i). It is part of the wider wish to
+plan 261009k). It is part of the wider wish to
 declutter the bottom bar ([interface-vision.md](interface-vision.md#decluttering-the-bottom-bar)).
 
 ## Where the code is

@@ -143,6 +143,7 @@ import { buildArcColumn, buildGeometry, buildOutline, buildSummaryTree, nodeLabe
 import {
   marginParam,
   modeParam,
+  guideParam,
   noteParam,
   panelParam,
   sortParam,
@@ -1098,10 +1099,19 @@ export function Reader({
     },
     [slug, showBand],
   );
+  /* The bar's *Guide* row (plan 261009i): `?guide=1` with Chat's band, the
+     same door the first open uses (params.ts § `guideParam`), which Chat turns
+     into the stored guide or a new one once its list has answered. Sends
+     nothing, so it spends nothing. */
+  const [, setGuideParam] = useQueryState("guide", guideParam);
+  const openTheGuide = useCallback(() => {
+    void setGuideParam(true);
+    showBand("chat");
+  }, [setGuideParam, showBand]);
   const askInChat = useCallback((term: string) => handToChat(askAboutTerm(term), "send"), [handToChat]);
   /* **A fifth and a sixth since 2026-10-06: *Ask in chat* on a Glossary entry
      and on a Citations row**, and since 2026-10-09 on the prose hover card of
-     each, where Dig deeper was (plan 261009i). Each travels twice, as a claim does: its name fenced in the question, and as
+     each, where Dig deeper was (plan 261009k). Each travels twice, as a claim does: its name fenced in the question, and as
      the `origin` the thread stores, which is the entry's durable id and a
      snapshot of its name cut to the route's cap (`itemOrigin`). Not
      `askInChat` above, which is for a word the article does not contain and
@@ -1117,7 +1127,7 @@ export function Reader({
       handToChat(askAboutCitedWork(work), "send", itemOrigin("citations", work.id, work.title)),
     [handToChat],
   );
-  /* **A seventh since 2026-10-09: an idea's *Ask in chat*** (plan 261009i,
+  /* **A seventh since 2026-10-09: an idea's *Ask in chat*** (plan 261009k,
      stage 3). The name and the statement go in the fence; the origin is the
      idea's id and its name. */
   const askIdeaInChat = useCallback(
@@ -1438,9 +1448,9 @@ export function Reader({
    * row is in view (CitationsPanel.tsx § `Props.focus`); state rather than a
    * URL parameter because nothing about it should survive a reload. The prose
    * card's *Dig deeper* set it from plan 261004b until 2026-10-09, when that
-   * button became *Ask in chat* (plan 261009i), which goes to Chat instead.
+   * button became *Ask in chat* (plan 261009k), which goes to Chat instead.
    * Since then a chat's way back to its item sets it (`openOrigin` below, plan
-   * 261009i stage 2); Glossary, Ideas and Debate have the same shape (item-focus.ts).
+   * 261009k stage 2); Glossary, Ideas and Debate have the same shape (item-focus.ts).
    */
   const [citeFocus, setCiteFocus] = useState<CiteFocus | null>(null);
   /* Only the request that was served: a second press may have replaced it. */
@@ -1637,7 +1647,7 @@ export function Reader({
     }
   }, [mode]);
   /* **Mode and the parameters that could hide the item, in one pushed
-     entry**, so one Back returns to the chat (GPT Sol's F4 on plan 261009i).
+     entry**, so one Back returns to the chat (GPT Sol's F4 on plan 261009k).
      Each closed on a line of its own: tests/last-view.test.ts reads them. */
   const [, setDebateWay] = useQueryStates({
     mode: modeParam,
@@ -1654,7 +1664,7 @@ export function Reader({
   /**
    * **The way back from a chat to the item it was started from** — the line
    * above the transcript in Chat's band (ChatPanel.tsx § `OriginBack`; plan
-   * docs/plans/261009i-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md,
+   * docs/plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md,
    * stage 2). Each arm opens the origin's mode and asks its band to bring the
    * item's row into view; **none jumps the prose**: on a phone the band lies
    * over it, so the flash would be held until the band moved and the reader
@@ -2630,7 +2640,7 @@ export function Reader({
     () => ({ summaries: chatSummaries, onAsk: askCitedWorkInChat, onOpen: openClaimChat }),
     [chatSummaries, askCitedWorkInChat, openClaimChat],
   );
-  /* And Ideas' rows (plan 261009i, stage 3), from the same raw summaries. */
+  /* And Ideas' rows (plan 261009k, stage 3), from the same raw summaries. */
   const ideaChats = useMemo(
     () => ({ summaries: chatSummaries, onAsk: askIdeaInChat, onOpen: openClaimChat }),
     [chatSummaries, askIdeaInChat, openClaimChat],
@@ -2914,6 +2924,8 @@ export function Reader({
         askThroughLens: isOwner ? suggestedLensInChat : undefined,
         /* The bar's *Ask the guide* row, after a pick that could not tell. The owner's, as Chat is. */
         askGuide: isOwner ? askTheGuide : undefined,
+        /* The bar's *Guide* row: the owner's, as the guide is. */
+        openGuide: isOwner ? openTheGuide : undefined,
         /* A chat chip's `mode` proposal: the owner's, as Chat is (`chipModes`). */
         modes: chipModes,
       }),
@@ -2933,6 +2945,7 @@ export function Reader({
       openQuickSearch,
       suggestedLensInChat,
       askTheGuide,
+      openTheGuide,
       chipModes,
     ],
   );
@@ -3345,6 +3358,7 @@ export function Reader({
               onHandoffThread={handoffThread}
               onSettled={refreshChats}
               onOrigin={openOrigin}
+              articleTitle={article.meta.title}
             />
           </ChatCommands>
         ) : null;
@@ -3704,7 +3718,7 @@ export function Reader({
             onControl={setSkimControl}
             glossary={owner.glossary}
             /* *Ask in chat* on a term chip's card: the Glossary band's own
-               sender, as on the prose card (plan 261009i). */
+               sender, as on the prose card (plan 261009k). */
             onAskTerm={askGlossaryEntryInChat}
             onOpen={openFromStopCard}
             canOpen={canOpenFromStopCard}
@@ -4730,7 +4744,7 @@ export function Reader({
            Glossary band's and the Citations rows' own senders, so a chat
            started from a card records the same origin as one started in the
            band. Each card had *Dig deeper* there until 2026-10-09 (plans
-           261002c, 261004b, 261009i). Null for a visitor, who has no chat. */
+           261002c, 261004b, 261009k). Null for a visitor, who has no chat. */
         onAskTerm={owner ? askGlossaryEntryInChat : null}
         onAskCitedWork={owner ? askCitedWorkInChat : null}
         quotes={quoteCard}

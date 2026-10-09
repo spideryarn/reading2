@@ -42,4 +42,4 @@ a tool a chat can use to fill the row in (`qi-ccxkybft`).
 ids on every run, so a chat could never find its question again.
 
 The plan, both GPT Sol reviews and the checks:
-[261009i](../plans/261009i-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md).
+[261009k](../plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md).

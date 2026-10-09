@@ -37,7 +37,7 @@ const RUN_BUTTONS = [
   { file: "src/web/SearchPanel.tsx", hook: "srch-go", size: "sm" },
   /* Glossary's *Look up*, and *Find terms* when it is drawn without
      `JobProgress` (GPT Sol's R10). An entry's *Dig deeper* (`gloss-dig`) and
-     Citations' (`cite-investigate`) were here until plan 261009i removed both
+     Citations' (`cite-investigate`) were here until plan 261009k removed both
      buttons; *Ask in chat* in their place is `AskInChatButton`, the same `sm`
      Button (OriginChat.tsx). */
   { file: "src/web/GlossaryPanel.tsx", hook: "gloss-ask-go", size: "sm" },

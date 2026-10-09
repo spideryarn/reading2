@@ -49,6 +49,7 @@ import {
   tagStore,
   readingTimeStore,
   glossaryHiddenStore,
+  skimNoticeStore,
   quizAttemptStore,
   loadArticle,
   loadGlossary,
@@ -97,6 +98,7 @@ import {
   HELP_NOT_FIRST,
   isSpokenKind,
   requireTail,
+  type SpokenKind,
   withEdit,
   withRetry,
 } from "./chat.js";
@@ -412,7 +414,7 @@ import { hashProfile, normaliseProfileText, profileIsStale, renderProfile } from
 import { keysOpenFree, type MadeArtefact } from "./acts-alone.js";
 import { type GuideExperience, experienceOf } from "./guide.js";
 import { panelRunKind } from "./glossary.js";
-import { routeProfileIsStale } from "./skim.js";
+import { profileNoticeKey, routeProfileIsStale } from "./skim.js";
 import {
   type ArticleStage,
   articlePower,
@@ -1228,6 +1230,23 @@ function readingTimeBatch(body: unknown): Record<string, number> {
     out[id] = value;
   }
   return out;
+}
+
+/**
+ * `POST /api/skim/:slug/profile-notice-dismissal`'s body: `{ generatedAt }`,
+ * the route the reader was looking at, and nothing else
+ * (`SkimProfileNoticeDismissalRequest`).
+ */
+function skimDismissalGeneratedAt(body: unknown): string {
+  const sent = objectBody(body);
+  for (const key of Object.keys(sent)) {
+    if (key !== "generatedAt") throw httpError(400, "That request has a field this endpoint does not take");
+  }
+  const { generatedAt } = sent;
+  if (typeof generatedAt !== "string" || generatedAt.length === 0 || generatedAt.length > 64) {
+    throw httpError(400, "Expected { generatedAt: <the route's generatedAt> }");
+  }
+  return generatedAt;
 }
 
 /**
@@ -4355,6 +4374,36 @@ function parseSpokenTools(x: unknown): { tools: ToolRun[] } | undefined {
 }
 
 /**
+ * **Which kind of conversation a live session is for** — the stored thread's,
+ * or, for one that exists only in the tab (an empty guide, an empty Learn
+ * conversation), the kind the browser says it has. Checked against
+ * `SpokenKind`, never cast; the stored kind always wins, and the spoken append
+ * refuses a contradiction anyway (`withSpokenTurn`). It picks the prompt and
+ * the tools (a guide's are the guide's, plan 261009i), nothing else.
+ */
+function liveKind(thread: ChatThread | undefined, sent: unknown): SpokenKind | undefined {
+  if (sent !== undefined && !isSpokenKind(sent)) {
+    throw httpError(400, "kind must be a conversation that takes a live conversation");
+  }
+  /* A caller may omit `kind`, but that does not make a stored Tutorial,
+     Explore or Candidates conversation eligible. Refuse it here, before the
+     Realtime mint or GPT-Live journal/create can spend anything; the spoken
+     append has the same gate for the later write. */
+  if (thread) {
+    if (!isSpokenKind(thread.kind)) {
+      throw httpError(409, "That conversation does not take a live conversation.");
+    }
+    /* Refused before anything is minted or billed, as the spoken append would
+       refuse it later (GPT Sol's F2 on the plan). */
+    if (sent !== undefined && thread.kind !== sent) {
+      throw httpError(409, "That conversation is already a different kind.");
+    }
+    return thread.kind;
+  }
+  return sent;
+}
+
+/**
  * **A ticket for one live conversation.** `POST /api/chat/:slug/:threadId/live`.
  *
  * Hands the browser three things and no more: an ephemeral `ek_…` secret, the
@@ -4389,7 +4438,7 @@ async function liveChatToken(
   threadId: string,
   body: unknown,
 ): Promise<LiveTicket> {
-  const { placement, useProfile } = (body ?? {}) as Record<string, unknown>;
+  const { placement, useProfile, kind } = (body ?? {}) as Record<string, unknown>;
   /* **Validated against the shared union, never cast.** The two ends declare
      `MicPlacement` once, in src/types.ts, and this is the gate that keeps a
      string off the wire from becoming a `Record` lookup that quietly answers
@@ -4406,6 +4455,7 @@ async function liveChatToken(
   const thread = (await chatStore.load(slug)).find((t) => t.id === threadId);
 
   const session = liveSession({
+    kind: liveKind(thread, kind),
     meta: article.meta,
     blocks: article.blocks,
     profile: useProfile === false ? null : await resolveProfile(slug),
@@ -4512,7 +4562,7 @@ async function liveChatSession(
   threadId: string,
   body: unknown,
 ): Promise<GptLiveTicket> {
-  const { sdp, placement, useProfile } = (body ?? {}) as Record<string, unknown>;
+  const { sdp, placement, useProfile, kind } = (body ?? {}) as Record<string, unknown>;
   if (typeof sdp !== "string" || sdp.trim() === "") {
     throw httpError(400, "Expected { sdp }, the browser's SDP offer");
   }
@@ -4540,7 +4590,7 @@ async function liveChatSession(
     tree: article.tree,
     profile: useProfile === false ? null : await resolveProfile(slug),
     history: thread?.messages ?? [],
-    kind: thread?.kind,
+    kind: liveKind(thread, kind),
   });
 
   /* **Journal first.** If this insert throws, OpenAI is never asked and nothing
@@ -4783,17 +4833,28 @@ async function liveClose(sessionId: string, body: unknown): Promise<{ ok: true }
  *
  * **`reader_notes` is refused here twice.** It is not in `LIVE_SERVER_TOOLS`,
  * which is built from the shared `CHAT_TOOLS` and not from `toolsFor`; and the
- * context below names no `kind`, so `runTool` would call it an unknown tool
- * even if the first check went. This endpoint has no thread to leave out of
- * that tool's list — docs/project/chat-tools.md § The reader's notes.
+ * context below names either `guide` or no kind, so `runTool`'s guide list or
+ * default `CHAT_TOOLS` would call it an unknown tool even if the first check
+ * went. This endpoint has no thread to leave out of that tool's list —
+ * docs/project/chat-tools.md § The reader's notes.
  */
 async function liveTool(slug: string, body: unknown): Promise<ToolOutcome> {
-  const { name, args } = (body ?? {}) as Record<string, unknown>;
+  const { name, args, kind } = (body ?? {}) as Record<string, unknown>;
   if (typeof name !== "string" || !LIVE_SERVER_TOOLS.has(name)) {
     throw httpError(400, "That is not a tool a live session may run");
   }
+  /* **The session's kind, so `runTool`'s own gate applies** (`toolsFor`): a
+     guide's model that names a tool the guide is not offered is answered as
+     an unknown tool, exactly as in a typed guide (plan 261009i). Said by the
+     reader's own page, which read it from the conversation it started; the
+     model chooses only the name. Absent is a chat's or Learn's session, which
+     run the shared eight as before. */
+  if (kind !== undefined && !isSpokenKind(kind)) {
+    throw httpError(400, "kind must be a conversation that takes a live conversation");
+  }
   const article = await loadArticle(slug);
   return runTool(name, (args ?? {}) as Record<string, unknown>, {
+    ...(kind === "guide" ? { kind } : {}),
     slug,
     meta: article.meta,
     blocks: article.blocks,
@@ -11205,14 +11266,49 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       const found = await orNullWhenNotMadeYet({ req, res }, () => loadSkim(at));
       if (found === null) return;
       const now = await profile;
+      const nowHash = now ? hashProfile(now) : null;
+      const { profileNoticeDismissedFor, ...rest } = found;
+      const profileChanged = routeProfileIsStale(found.skim.profileHash, nowHash);
       const body: SkimResponse = {
-        ...found,
-        profileChanged: routeProfileIsStale(
-          found.skim.profileHash,
-          now ? hashProfile(now) : null,
-        ),
+        ...rest,
+        profileChanged,
+        /* The stored key is never sent: it carries the profile's hash. */
+        profileNoticeDismissed:
+          profileChanged &&
+          profileNoticeDismissedFor === profileNoticeKey(found.skim.generatedAt, nowHash),
       };
       send(res, 200, body);
+    },
+  },
+
+  /* **Send the profile-changed notice away**, for this route under the profile
+     the reader has now — docs/plans/261009i-skim-profile-notice-can-be-dismissed.md
+     (Greg, 2026-10-09, `spya-ud2w92`). Body `{ generatedAt }`: the route the
+     reader was looking at. Owner-only through the store. The server works out
+     the profile hash itself. No route → 404; another route than the one named,
+     before or during the write → 409, and the client reads again; route and
+     profile agree → 204 and nothing written, since there is no notice to
+     dismiss. Never spends. */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/skim\/([\w.%-]+)\/profile-notice-dismissal$/,
+    article: "first-capture",
+    handler: async ({ request: { req, res } }, captures) => {
+      const at = slugPart(captures, 1);
+      const generatedAt = skimDismissalGeneratedAt(await readBody(req));
+      const profile = resolveProfile(at);
+      void profile.catch(() => {});
+      const found = await loadSkim(at);
+      const nowHash = await profile.then((now) => (now ? hashProfile(now) : null));
+      const replanned = () => httpError(409, "This route has been planned again since. Read it again.");
+      if (found.skim.generatedAt !== generatedAt) throw replanned();
+      if (routeProfileIsStale(found.skim.profileHash, nowHash)) {
+        const key = profileNoticeKey(generatedAt, nowHash);
+        if (!(await skimNoticeStore.dismissProfileNotice(at, generatedAt, key))) throw replanned();
+      }
+      res.statusCode = 204;
+      res.end();
     },
   },
 

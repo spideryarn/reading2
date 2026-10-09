@@ -553,7 +553,7 @@ describe("what the card says after Look it up", () => {
   });
 
   /* Plan 260930a § UI: a kept *Dig deeper* answer lives in the band, not on the
-     hover card. The card's button is *Ask in chat* since 261009i; see below. */
+     hover card. The card's button is *Ask in chat* since 261009k; see below. */
   it("shows nothing of Investigate, even on a work that has a kept answer", () => {
     const investigated: CitedWork = {
       ...TULVING,
@@ -640,7 +640,7 @@ describe("the card says when the work is already an article here", () => {
 /* Report `spya-c2qmbg`, Greg, 2026-10-03: *"What I was hoping is that it would
    have a button for dig deeper in the tooltip."* Plan 261004b. The card had
    Dig deeper from then until 2026-10-09, when *Ask in chat* took its place
-   (plan 261009i: *"we don't need the dig deeper button"*). */
+   (plan 261009k: *"we don't need the dig deeper button"*). */
 describe("Ask in chat from the card", () => {
   const INVESTIGATION: NonNullable<CitedWork["investigation"]> = {
     answer: "A kept answer.",

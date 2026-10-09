@@ -80,7 +80,7 @@ work's standing on the pages its web search returned, and kept a number (§ [Dig
 deeper](#dig-deeper-a-closer-look-at-one-work-on-demand), *It looks for the work's influence*). The words open a
 card, on hover, focus or tap, saying it is *an AI estimate from web evidence*, the site, the day,
 and the page's own words. Since 2026-10-09 nothing on the client asks for a new one (plan
-[261009i](../plans/261009i-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)): a kept number still shows, and the card on *influence unknown* no longer says Dig
+[261009k](../plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)): a kept number still shows, and the card on *influence unknown* no longer says Dig
 deeper looks for it, for the owner or a visitor.
 
 **Every reader of a row's influence goes through one function**, `effectiveInfluence` in
@@ -464,7 +464,7 @@ offered, passed over for the margin's density —
 From 2026-10-04 that button was *Dig deeper*: a press started the row's own dig, closed the card,
 and opened Citations with that row scrolled into view
 ([261004b](../plans/261004b-citation-hover-card-offers-dig-deeper.md)). **Since 2026-10-09 it is
-*Ask in chat*** (plan [261009i](../plans/261009i-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)): the Citations row's own sender (`askCitedWorkInChat`), so
+*Ask in chat*** (plan [261009k](../plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)): the Citations row's own sender (`askCitedWorkInChat`), so
 the chat records the same origin as one started from the row, and the card closes. It is the
 card's own `onAskCitedWork` prop, owner only. *search Scholar* stays beside it on a row with no
 link. The glossary card's is the same shape. The one-shot that opened Citations on a row
@@ -597,7 +597,7 @@ which brings its own job id and allowance and judges the page more strictly than
 
 ## Dig deeper: a closer look at one work, on demand
 
-> **The button is gone, since 2026-10-09** (plan [261009i](../plans/261009i-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)):
+> **The button is gone, since 2026-10-09** (plan [261009k](../plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)):
 > Greg, *"we don't need the dig deeper button"*. *Ask in chat* stands where it was
 > (§ [Ask in chat](#ask-in-chat-a-conversation-about-one-work)), and *Dig deeper again* went from a
 > kept answer's foot. **A kept answer is still drawn on its row**, folded, read-only
@@ -812,7 +812,7 @@ picked, `citation-influence` when a page of the search is about the work, and
 ## Ask in chat: a conversation about one work
 
 Since 2026-10-06 every owner row has **Ask in chat**; it sat beside Dig deeper until 2026-10-09,
-and stands in its place since (plan [261009i](../plans/261009i-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)). It
+and stands in its place since (plan [261009k](../plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)). It
 opens a fresh conversation in Chat with the work quoted (its title, then the authors and year where
 the article gives them) and a question after it, and sends that as the first question: the press
 is the Send since 2026-10-06 ([261006j](../plans/261006j-ask-in-chat-sends-the-question.md)). Once a chat exists,

@@ -150,8 +150,18 @@ export type {
  * paragraph was measured and removed (its code is commit c943494a9).
  * docs/plans/261006e-skim-cue-situates-the-quote-and-term-chips-use-the-glossary-card.md;
  * measured in docs/investigations/261006b-skim-cue-situates-the-quote-eval.md.
+ *
+ * `skim/11`, 2026-10-09: **a cue is optional**, and `"cue": ""` is the
+ * default. Greg's reports spya-qpgvq9 and spya-zdkqx4: a question that
+ * near-verbatim sets the quote up as its answer *"adds nothing"*, and most of
+ * `skim/10`'s did (56 of 68 on five routes). Section 3 now asks for a cue only
+ * when it says what the quote's "this" stands for, names the question the
+ * passage settles, or says why this passage matters, gives the model an echo
+ * test, and forbids asking what the quote does not answer. An empty cue is
+ * `noCue`, not `badCue`. The input hash is unchanged, as at `skim/10`.
+ * docs/plans/261009j-skim-question-optional-and-the-border.md.
  */
-export const PROMPT_VERSION = "skim/10";
+export const PROMPT_VERSION = "skim/11";
 
 /**
  * **A cue is a sentence or two, not a paragraph about the passage**: an
@@ -217,6 +227,7 @@ export function emptyDrops(): SkimDrops {
     malformed: 0,
     badRole: 0,
     badCue: 0,
+    noCue: 0,
     badAgain: 0,
     overCarried: 0,
     overCap: 0,
@@ -509,6 +520,24 @@ export function routeProfileIsStale(
 }
 
 /**
+ * **Which profile-changed notice the reader sent away** — the key stored in
+ * `articles.skim_profile_notice_dismissed_for` when they press its ×, and
+ * compared on every read. Greg, 2026-10-09 (`spya-ud2w92`).
+ *
+ * The route's `generatedAt` and the reader's profile hash now, so the
+ * dismissal holds for that route under that profile and nothing else: a
+ * re-plan re-stamps `generatedAt`, and a further profile change moves the
+ * hash, and either brings the notice back. **Not the route's `profileHash`**:
+ * planned for A, profile B, dismissed, back to A, re-planned (still A), B
+ * again — keyed on the stamp, the old dismissal would hide the new route's
+ * notice (GPT Sol's plan review, finding 1). `none` is no profile; a hash
+ * never contains a space. docs/plans/261009i-skim-profile-notice-can-be-dismissed.md.
+ */
+export function profileNoticeKey(routeGeneratedAt: string, profileHashNow: string | null): string {
+  return `${routeGeneratedAt} ${profileHashNow ?? "none"}`;
+}
+
+/**
  * **The abstract is not on the route.** Greg, 2026-09-28: *"prefer not to
  * include the Abstract as part of a trajectory, since that's kinda obviously
  * already a good place to get the gist, and it's dense."*
@@ -640,10 +669,14 @@ function isDepth(value: unknown): value is SkimDepth {
   return value === 1 || value === 2 || value === 3;
 }
 
-function cueOf(value: unknown): string | null {
-  if (typeof value !== "string") return null;
+/** A stop's cue: kept, left out on purpose (`""`, since `skim/11`), or bad. */
+type CueRead = { kind: "cue"; cue: string } | { kind: "none" } | { kind: "bad" };
+
+function cueOf(value: unknown): CueRead {
+  if (typeof value !== "string") return { kind: "bad" };
   const cue = value.trim();
-  return cue.length === 0 || cue.length > MAX_CUE_CHARS ? null : cue;
+  if (cue.length === 0) return { kind: "none" };
+  return cue.length > MAX_CUE_CHARS ? { kind: "bad" } : { kind: "cue", cue };
 }
 
 /**
@@ -674,8 +707,10 @@ function againOf(value: unknown, depth: SkimDepth): { again: SkimDepth[]; bad: n
  *
  * 1. not an object, no quote id, or a depth outside 1–3 → dropped (`malformed`);
  * 2. a quote id not in `quotes` → dropped (`unknownQuote`);
- * 3. a bad cue — not a string, empty, or over `MAX_CUE_CHARS` once trimmed →
- *    `null`, **the stop kept** (`badCue`). A role is no longer asked for or
+ * 3. a bad cue — not a string, or over `MAX_CUE_CHARS` once trimmed →
+ *    `null`, **the stop kept** (`badCue`). An empty one is the model saying
+ *    "no cue" (`skim/11`) → `null`, kept, counted as `noCue` and not as a
+ *    fault. A role is no longer asked for or
  *    read: every new stop's is `null`, and that is not counted (Sol F25);
  * 4. a quote named twice → its **shallowest** occurrence kept, in that
  *    occurrence's place; the earlier on a tie (`duplicate`);
@@ -728,8 +763,10 @@ export function validateRoute(
       dropped.unknownQuote++;
       continue;
     }
-    const cue = cueOf(r.cue);
-    if (cue === null) dropped.badCue = (dropped.badCue ?? 0) + 1;
+    const cueRead = cueOf(r.cue);
+    if (cueRead.kind === "bad") dropped.badCue = (dropped.badCue ?? 0) + 1;
+    if (cueRead.kind === "none") dropped.noCue = (dropped.noCue ?? 0) + 1;
+    const cue = cueRead.kind === "cue" ? cueRead.cue : null;
     const { again, bad } = againOf(r.again, r.depth);
     if (bad > 0) dropped.badAgain = (dropped.badAgain ?? 0) + bad;
     read.push({
@@ -1030,69 +1067,92 @@ WHAT YOU DECIDE
    same way: a pass that skips a whole section with quotes in it should have a
    reason.
 
-3. A CUE for each stop: one or two complete sentences, at most ${MAX_CUE_CHARS} characters
-   in all, that get the reader ready for this passage.
+3. A CUE for each stop, or none. A cue is one or two complete sentences, at
+   most ${MAX_CUE_CHARS} characters in all, that the reader reads just before the
+   passage. Its only job is to make the passage mean more for having read it:
+   easier to understand, easier to place, or easier to see why it matters.
+   Many passages need no cue. Write "cue": "" whenever you cannot add
+   something the passage does not already say. An empty cue is a good answer,
+   not a failure.
 
-   MOST QUOTES STAND ON THEIR OWN, AND THEIR CUE ONLY POINTS. When the
-   quote itself says what it is about, the cue is one instruction or one
-   question naming what to look for, and nothing else. This is the common
-   case, and a short cue is a good cue.
-   GOOD: "Notice what they say earlier work could not do.",
-   "Which measure do they choose, and what do they give up for it?",
-   "Note how many of the patients improved, and how many got worse."
-   Do not put a sentence in front that says the quote's point first in your
-   own words. That hands the reader the passage before they have read it.
+   THE ECHO TEST. Read your cue with the quote hidden, then ask: what does the
+   reader know now that the quote's own words would not have told them? If
+   the answer is "nothing", because the cue only turns the quote into a
+   question or an instruction, it is an echo. Write "" instead. An echo adds
+   nothing, and it teaches the reader to skip the cues.
+   BAD, an echo: "How did the towns that kept their mangroves fare in the
+   storm?" over a quote saying that towns which kept their mangroves lost
+   far fewer homes. The right cue there is "".
+   BAD, an echo: "Notice the comparison the author draws with gardening."
+   over a quote that makes that comparison.
 
-   SOME QUOTES LEAN ON WORDS THEY DO NOT EXPLAIN, AND THEIR CUE SETS THE
-   SCENE FIRST. A quote is cut out of its paragraph, so it may say "the
-   latter", "this approach", "these results", "their method", "such
-   models" or "it" about something the paragraph had already named. Then
-   the reader needs to know what is at stake before a pointer makes sense:
-   the question being settled, the two things being compared, or what the
-   quote's "this" or "the latter" stands for. SET THE SCENE as a question,
-   or as a bare naming of the options, and THEN POINT at what to look for.
-   GOOD: "Is the model reasoning, or recalling its training data? See which
-   reading their results favour.",
-   "Two measures are on offer, one simple and one exact. Which do they
-   choose, and what do they give up for it?",
-   "Does the effect hold outside the lab as well as in it? Note the number."
-   BAD, it leans on the quote's own unexplained words: "Which interpretation
-   does their evidence favour?" (which interpretations?), "Look for why this
-   approach fails." (which approach?)
+   A CUE EARNS ITS PLACE IN ONE OF THREE WAYS, each bringing in something
+   the quote does not say:
+   - IT SAYS WHAT "THIS" IS. A quote is cut out of its paragraph, so it may
+     say "the latter", "this approach", "these results", "their method",
+     "such models" or "it" about something the paragraph had already named.
+     Say what the word stands for, or name the options, then point.
+     THIS IS THE ONE CASE WHERE A CUE IS EXPECTED: a quote that says "the
+     latter", "the former", "this approach" or the like, when the quote
+     itself does not name what it means and the key ideas or the outline
+     tell you, gets a cue, even if the rest of the quote reads clearly.
+     GOOD: "Two explanations are on offer: the drug itself, or the patients'
+     expectations. See which one this rules out."
+     BAD, it leans on the quote's own unexplained words: "Which
+     interpretation does their evidence favour?" (which interpretations?)
+   - IT SETS THE QUESTION. The passage settles something the reader does not
+     yet know is open. Name the question, then point.
+     GOOD: "Does the effect hold outside the lab as well as in it? Note the
+     number."
+   - IT SAYS WHY THIS PASSAGE, when the records show it. The quote carries
+     one of the key ideas, or is the reason for a choice the quote itself
+     names. Say which idea it carries, or which choice it is the reason for,
+     in the records' own terms, never what the passage says.
+     GOOD: "This is the reason the survey pools all three sites. Look at what
+     happens to the smallest samples."
+     Do not describe the author's stance or the passage's place in the
+     argument in words the records do not give you: not "the counterview they
+     answer", "borrowed from other fields", "the paper's central frame",
+     "the problem the paper solves", unless the quote or a key idea says so.
+     That is your reading of the piece, and it is often wrong.
 
-   The scene names the question and the options. It is never a statement
-   of what the passage says, shows or argues.
+   PREFER A QUESTION. A cue that is a question leaves the passage to answer
+   it. A statement is for naming what "this" stands for, or which key idea
+   the quote carries, and nothing else. Never describe the passage itself
+   ("This passage says how…", "This explains why…", "This sets up…"): that
+   is a summary of it, read before it.
 
-   NEVER say what the passage found, concluded or chose. Leave the answer
-   in the passage.
-   BAD, it gives the finding away: "Their results show the model is
-   recalling, not reasoning.", "Small trials can make a weak drug look
+   ASK ONLY WHAT THE QUOTE ANSWERS. If the passage does not hold the answer,
+   the reader goes looking for something that is not there. Do not assume a
+   trade-off, a cause or a contrast the quote does not state.
+   BAD: "Note what they give up for the speed." over a quote that says the
+   method is both faster and more accurate.
+
+   NEVER SAY WHAT THE PASSAGE FOUND, CONCLUDED OR CHOSE. Leave the answer in
+   the passage. Pointing at a number or a result is fine ("note the
+   number"); stating it is not. The scene you set names the question and the
+   options; it is never a statement of what the passage says, shows or
+   argues.
+   BAD, it gives the finding away: "Small trials can make a weak drug look
    strong. See what they warn doctors about." (the first sentence is the
-   finding), "Synergy is concentrated in the rich club.", "Shows the effect
-   is robust.", "Sleep improves memory by 20%.", "The author is wrong
-   about X."
-   Pointing at a number or a result is fine ("note the number"); stating it
-   is not. No findings, no verdicts: the reader gets those from the passage.
+   finding), "Shows the effect is robust.", "Sleep improves memory by 20%."
 
-   ONLY WHAT THE RECORDS SAY. Every detail in a cue must be in what you
-   were given: the quote, the key ideas and the outline. Do not add a
-   place, a date, a method, a size or a motive to make the scene vivid
-   ("in mice", "last year", "by hand"), and do not sharpen what the quote
-   says ("never" for "rarely", "all" for "most"). If you cannot tell from
-   what you were given what "the latter" or "this approach" means, do not
-   guess and do not invent a scene: write a plain cue that says what to
-   look for ("Look for which of the two readings they settle on, and
-   why."). A wrong scene is worse than none.
+   ONLY WHAT THE RECORDS SAY. Every detail in a cue must be in what you were
+   given: the quote, the key ideas and the outline. Do not add a place, a
+   date, a method, a size, a motive or background you know from elsewhere,
+   and do not sharpen what the quote says ("never" for "rarely", "all" for
+   "most"). If you cannot tell from what you were given what "the latter" or
+   "this approach" means, do not guess: write "". A wrong scene is worse
+   than none.
 
-   WRITE WHOLE SENTENCES. One or two, each complete, each ending in one
-   full stop or one question mark. Never a fragment ("Which one the
-   evidence favours."), never ".?".
+   WRITE WHOLE SENTENCES. One or two, each complete, each ending in one full
+   stop or one question mark. Never a fragment, never ".?".
 
-   Setting the scene is not explaining a term. The PLAIN WORDS section
-   below says not to explain a term inside a question: for a cue, that means
-   do not stop to define the article's vocabulary. It does not stop you
-   naming the two options or saying what "this" stands for. Where the two
-   seem to disagree, for a cue this section wins.
+   Setting the scene is not explaining a term. The PLAIN WORDS section below
+   says not to explain a term inside a question: for a cue, that means do not
+   stop to define the article's vocabulary. It does not stop you naming the
+   two options or saying what "this" stands for. Where the two seem to
+   disagree, for a cue this section wins.
 
    Each cue stands on its own. Never refer to another stop ("next", "as
    before", "the previous stop", "now"), because a reader can arrive at any
@@ -1115,9 +1175,11 @@ JSON only, no prose, no code fence. The array order IS the route:
 
 {"stops": [
   {"quote": "Q7", "depth": 1, "again": [2], "cue": "..."},
-  {"quote": "Q3", "depth": 1, "again": [], "cue": "..."},
+  {"quote": "Q3", "depth": 1, "again": [], "cue": ""},
   {"quote": "Q12", "depth": 2, "again": [], "cue": "..."}
 ]}
+
+"cue": "" means that stop has no cue.
 
 THE ANSWER MUST PARSE. Inside a string, a straight double quote ends the
 string: a cue never needs one, so do not use one — write the words bare, or

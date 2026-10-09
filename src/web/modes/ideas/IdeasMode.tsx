@@ -65,7 +65,7 @@ export function IdeasBand({
   /**
    * **A chat about one idea**: the thread summaries `Reader` holds, the
    * sender behind an idea's *Ask in chat*, and the handler that reopens a chat
-   * already started from one (OriginChat.tsx § `ItemChats`; plan 261009i,
+   * already started from one (OriginChat.tsx § `ItemChats`; plan 261009k,
    * stage 3). The owner's band only.
    */
   chats?: IdeaChats | undefined;

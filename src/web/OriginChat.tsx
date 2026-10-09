@@ -1,7 +1,7 @@
 /**
  * **A chat started from an item in a mode: the button that starts one, and
  * the mark that reopens it.** Shared by Debate's claims, Glossary's entries,
- * Citations' rows and Ideas' rows (since plan 261009i), so they are one
+ * Citations' rows and Ideas' rows (since plan 261009k), so they are one
  * design and not four copies.
  *
  * - `OriginChatMark` is the way back: the chat's count of questions and how
@@ -10,7 +10,7 @@
  *   (plan docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md, D4).
  * - `AskInChatButton` is Glossary's and Citations' *Ask in chat*, beside Dig
  *   deeper (plan docs/plans/261006d-glossary-and-citations-ask-in-chat-with-origin.md, D5)
- *   until 2026-10-09, and in its place since (plan 261009i).
+ *   until 2026-10-09, and in its place since (plan 261009k).
  *   Debate's claim has its own icon-only button on the claim's heading.
  *
  * **Nothing is stored on the item's side.** A caller finds its chat by
@@ -46,7 +46,7 @@ export interface ItemChats<Item> {
 export type GlossaryEntryChats = ItemChats<Pick<GlossaryEntry, "id" | "name">>;
 /** What Citations' rows are handed: `onAsk` takes the work's id and what names it. */
 export type CitedWorkChats = ItemChats<Pick<CitedWork, "id" | "title" | "authors" | "year">>;
-/** What Ideas' rows are handed: `onAsk` takes the idea's id, its name and its statement (plan 261009i, stage 3). */
+/** What Ideas' rows are handed: `onAsk` takes the idea's id, its name and its statement (plan 261009k, stage 3). */
 export type IdeaChats = ItemChats<Pick<Idea, "id" | "name" | "statement">>;
 
 /** The words on Glossary's, Citations' and Ideas' button. */
@@ -127,7 +127,7 @@ export function OriginChatMark({
 
 /**
  * **Glossary's and Citations' *Ask in chat*.** Where Dig deeper was (plan
- * 261009i), and drawn as it was: the shared outline `Button` at `sm`, with the
+ * 261009k), and drawn as it was: the shared outline `Button` at `sm`, with the
  * caller's `.gloss-btn` hook, an icon and a label. The prose hover cards draw
  * their own smaller button with the same words (ProseHoverCard.tsx). Chat's icon from the bar, because
  * the press takes the reader into Chat.

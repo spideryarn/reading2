@@ -1,7 +1,7 @@
 /**
  * **One item to bring into view in a band, once** — the way back from a chat
  * to the item it was started from lands here (plan
- * docs/plans/261009i-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md,
+ * docs/plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md,
  * stage 2, and GPT Sol's F3: *selecting is not landing*).
  *
  * Citations had this first, as `CiteFocus` (plan 261004b): something outside

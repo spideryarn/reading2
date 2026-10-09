@@ -69,7 +69,6 @@ interface Row {
 const WITNESSES: Record<string, string> = {
   ".skim-place": ".skim-row.current button.skim-go .skim-place",
   ".skim-words": ".skim-row.current button.skim-go .skim-words",
-  ".skim-cue": ".skim-row.current button.skim-go .skim-cue",
   ".skim-cluster-h": ".skim-card section.skim-cluster .skim-cluster-h",
   ".tl-label": ".tl-item.open button.tl-row .tl-label",
   ".tl-quote": ".tl-occurrences li.open button .tl-quote",
@@ -121,7 +120,6 @@ const REGISTRY: Row[] = [
   // Skim
   { file: "skim.css", selector: ".skim-place", role: "item" },
   { file: "skim.css", selector: ".skim-words", role: "quote" },
-  { file: "skim.css", selector: ".skim-cue", role: "body" },
   { file: "skim.css", selector: ".skim-cluster-h", role: "label" },
   // Timeline
   { file: "timeline.css", selector: ".tl-label", role: "item" },
@@ -187,6 +185,15 @@ interface Exception {
 }
 
 const EXCEPTIONS: Exception[] = [
+  {
+    file: "skim.css",
+    selector: ".skim-cue",
+    value: "0.78rem",
+    reason:
+      "The model's optional question before a quote, which matters less than the quote it " +
+      "introduces (Greg, spya-qpgvq9). Its monospace face reads larger than the quote's serif " +
+      "at the same size, so it sits a clear step below --type-quote rather than at --type-body.",
+  },
   {
     file: "quiz.css",
     selector: ".quiz-question",
@@ -465,4 +472,14 @@ describe("the named exceptions", () => {
       );
     });
   }
+
+  it("uses the author's face only to measure the Skim door, then restores each child's voice", () => {
+    const fixed = witness(".skim-door > p.skim-door-cue");
+    expect(window.getComputedStyle(fixed.target).fontFamily).toBe("var(--font-ui)");
+    fixed.host.remove();
+
+    const generated = witness(".skim-door > p.skim-door-cue.skim-door-cue-next");
+    expect(window.getComputedStyle(generated.target).fontFamily).toBe("var(--font-ai)");
+    generated.host.remove();
+  });
 });

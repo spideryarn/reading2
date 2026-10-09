@@ -1,0 +1,12 @@
+You are reviewing a plan before it is built, read-only. Repo: /var/tmp/spideryarn-worktrees/fbnsrkju-add-page-clearer (Spideryarn). The plan is docs/plans/261009i-add-page-sharing-clearer.md. Read it, then the code it touches: src/web/AddSharing.tsx, src/web/AddShare.tsx, src/web/AddShareLink.tsx, src/web/add-share.ts (the controller; its state machine and `untick`), src/web/AddPage.tsx (the Sharing mount near line 1650, and `textHasGone` / the DIRECT_ADD_SENT_TEXT_AWAY line near 1440 and 1902), src/web/AddArticle.tsx (JobCard's copy button ~line 630), src/messages.ts (SHARE_AT_ADD_*, LINK_AT_ADD_*, IMPORT_LINK_COPY_TIP, SHARING_OPEN_TIP, SHARING_STOP_TIP, sharingAtAddSummary, ADDING_SENDS_TEXT_AWAY, DIRECT_ADD_SENT_TEXT_AWAY), src/web/help/pages/sharing.md, and docs/project/public-readable-sharing.md § While the article is still importing, plus docs/postmortems/261005r-*.md.
+
+Context: Greg (the owner) asked for the Add page's sharing part to be less confusing. Rule from him: a sentence about what sharing does is a published promise; keep its meaning exact, and flag any change of meaning. The confirmation (inventory + rights tick + press) must stay.
+
+Please check, and report findings ranked P1/P2/P3 with file:line evidence:
+1. Is every new or reworded sentence true of the code, in every state it can be shown in? Especially "Sharing: off" on the shut row, the new top line ("Every article starts private. Nothing is shared until you confirm, and you can also share it later from the article's Metadata page."), the two descriptions, and the reworded IMPORT_LINK_COPY_TIP.
+2. Does the tick-box → button mapping table (item 4) cover every ShareAtAddState and call the same controller methods, with no state where a share that is on (or may be on) cannot be taken back from the page, and no state that looks on when it is not?
+3. The qi-9x3akt5n fix (item 7): is "the POST answered with a job" the right condition for the past tense for a pasted address? Any state where it is wrong (repeat paste, upload, reload of /add/ that re-finds an existing job, a job that later fails)?
+4. Anything simpler that gets most of the benefit, or anything in "What it does not do" that should be in v1 instead.
+5. Anything the plan forgets to update (docs, tests, Help, other pages that describe the add page's sharing).
+
+End with a one-line verdict: BUILD AS IS / BUILD WITH CHANGES (list) / RETHINK.

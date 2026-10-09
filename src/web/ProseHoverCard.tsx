@@ -352,9 +352,9 @@ function HoverCard({
    * ***Ask in chat* on a term's card** — the Glossary band's own sender. Greg,
    * 2026-10-02: *"We have a 'Dig deeper' in Glossary mode. Add that to the
    * in-text glossary tooltip."* (spya-p09u4s); the card's Dig deeper became
-   * this on 2026-10-09, as the band's did (plan 261009i). Its own capability,
+   * this on 2026-10-09, as the band's did (plan 261009k). Its own capability,
    * not part of `termActions`, so Hide and the chat do not hang off each other
-   * (GPT Sol's plan review of 261009i, F1). `null` or absent for a visitor,
+   * (GPT Sol's plan review of 261009k, F1). `null` or absent for a visitor,
    * who has no chat.
    */
   onAskTerm?: AskAboutTerm | null;
@@ -362,7 +362,7 @@ function HoverCard({
    * ***Ask in chat* on a cited work's card** — the Citations rows' own sender.
    * Greg, 2026-10-03 (report `spya-c2qmbg`): *"What I was hoping is that it
    * would have a button for dig deeper in the tooltip."* Plan 261004b; it
-   * became *Ask in chat* on 2026-10-09 (plan 261009i). `null` or absent for a
+   * became *Ask in chat* on 2026-10-09 (plan 261009k). `null` or absent for a
    * visitor, who has no chat.
    */
   onAskCitedWork?: ((work: CitedWork) => void) | null;
@@ -2038,7 +2038,7 @@ function clip(text: string, max: number): string {
  * (report `spya-c2qmbg`), the glossary's card had the same button since
  * 261002c, and the press is a deliberate one on a labelled button, not the
  * hover. It was *Dig deeper*, which started the row's own dig and opened
- * Citations on that row, until 2026-10-09; since plan 261009i it is *Ask in
+ * Citations on that row, until 2026-10-09; since plan 261009k it is *Ask in
  * chat*, the band's own sender: `CiteActions`.
  *
  * ## And a count instead of more marks
@@ -2175,7 +2175,7 @@ function CiteCard({
             above (`CitedAtJumps`). */}
         {!work.citedInBody && <span className="prose-card-cite-where">only in the references</span>}
         {/* The owner's one verb, last and pushed right: *Ask in chat*, where
-            *Dig deeper* was until 2026-10-09 (plan 261009i). The band's own
+            *Dig deeper* was until 2026-10-09 (plan 261009k). The band's own
             sender, so the chat records the same origin as a press on the row
             would. The card closes on the press: the answer is in Chat. */}
         {onAsk && (
@@ -2325,7 +2325,7 @@ export type AskAboutTerm = (entry: Pick<GlossaryEntry, "id" | "name">) => void;
  * Reader passes whole. On the read rather than the band so the card can use it
  * in any mode: plan 261002c, GPT Sol's plan review finding 1. It carried
  * *Dig deeper*'s `look` too until 2026-10-09; *Ask in chat* is its own prop
- * (`AskAboutTerm`), plan 261009i.
+ * (`AskAboutTerm`), plan 261009k.
  */
 export interface TermActions {
   /** Pessimistic: resolves once the server has it and the list is re-read; throws a sentence. */
@@ -2375,7 +2375,7 @@ export function TermCard({
    * nothing left to show. Never disabled: a chat needs no passage, so a term
    * the article never quotes can be asked about too. Until 2026-10-09 this was
    * *Dig deeper*, which started a lookup and opened the Glossary band on the
-   * term (plan 261009i).
+   * term (plan 261009k).
    */
   const ask = () => {
     if (!onAsk) return;

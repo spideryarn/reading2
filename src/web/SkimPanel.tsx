@@ -50,6 +50,7 @@ import {
   Lightbulb,
   Route,
   TriangleAlert,
+  X,
 } from "lucide-react";
 import type { UseSkim } from "./useSkim.js";
 import type { PublicSkim } from "../public-types.js";
@@ -277,6 +278,15 @@ export function skimPromise(profiled: boolean): string {
 }
 
 /**
+ * **What the question above a quote is** (Greg, spya-qpgvq9, plan 261009j): in
+ * the band's (i), which a keyboard and a finger reach, and on the question's
+ * own card for a mouse. Since `skim/11` most stops have none, so it says why
+ * a stop has one.
+ */
+export const SKIM_CUE_EXPLAINED =
+  "The line above a quote is a question to read it with, written by AI. It is there only where it helps: to say what the quote refers to, what it settles, or why it matters.";
+
+/**
  * At Most, how much of the Quotes offered to this route the three passes walk
  * between them — *"every one of the N quotes offered to this route"*, or *"M of
  * N"*. **All three, not Most alone**: since plan 260929e a pass does not
@@ -338,7 +348,9 @@ export function emptyHint(owner: Pick<UseSkim, "quotesFirst" | "ideasFirst">): s
  * `outdated` itself is still read — the stop card treats outdated sources as
  * usable. docs/plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md.
  */
-export function bannerReason(owner: Pick<UseSkim, "stale" | "profileChanged">): string | null {
+export function bannerReason(
+  owner: Pick<UseSkim, "stale" | "profileChanged" | "profileNoticeDismissed">,
+): string | null {
   if (owner.stale) {
     /* One input hash covers all three, so this read cannot honestly attribute
        the mismatch to Quotes. `notOnRoute` is also only a present-day count: a
@@ -346,8 +358,56 @@ export function bannerReason(owner: Pick<UseSkim, "stale" | "profileChanged">): 
        arrived later. */
     return "The Quotes, Ideas, or outline have changed since this route was planned.";
   }
-  if (owner.profileChanged) return "This route was planned before your profile said what it says now.";
+  /* **Dismissible, and only this one** — Greg, 2026-10-09 (`spya-ud2w92`):
+     *"there should be a way to dismiss it if I decide that I actually don't
+     care and I don't want to plan it again."* The stale reason above is not:
+     a route over Quotes that have moved can stop where nothing is. The
+     dismissal holds for this route under this profile (src/skim.ts §
+     `profileNoticeKey`). docs/plans/261009i-skim-profile-notice-can-be-dismissed.md. */
+  if (owner.profileChanged && !owner.profileNoticeDismissed) return PROFILE_NOTICE;
   return null;
+}
+
+const PROFILE_NOTICE = "This route was planned before your profile said what it says now.";
+
+/**
+ * **The one banner over a route** (`bannerReason` says which), with *Plan it
+ * again* — and, on the profile notice only, the × that sends it away (plan
+ * 261009i). A failed × is said here, inside the banner, which is back by
+ * then; if the read shows the dismissal landed after all, there is no banner
+ * and nothing is said.
+ */
+function RouteBanner({ owner, again }: { owner: UseSkim; again: ReactNode }) {
+  const reason = bannerReason(owner);
+  if (reason === null) return null;
+  const dismissible = reason === PROFILE_NOTICE;
+  return (
+    <div className="gloss-stale">
+      <p>
+        <TriangleAlert size={13} />
+        {reason}
+        {dismissible && (
+          <Tooltip
+            content={<p>Keep this route, and stop saying so until your profile changes again.</p>}
+            placement="bottom"
+          >
+            <button
+              type="button"
+              className="skim-notice-close close-x"
+              aria-label="Dismiss: keep this route"
+              onClick={() => void owner.dismissProfileNotice()}
+            >
+              <X aria-hidden="true" />
+            </button>
+          </Tooltip>
+        )}
+      </p>
+      {dismissible && owner.dismissFailed && (
+        <p className="skim-notice-failed">Could not hide this: {owner.dismissFailed}</p>
+      )}
+      {again}
+    </div>
+  );
 }
 
 /** The sparkline's drawing — src/web/route-spark.ts has the geometry. */
@@ -645,6 +705,7 @@ export function SkimPanel({ access, view, away }: Props) {
   const about = routed ? (
     <>
       <p>{promise}</p>
+      <p>{SKIM_CUE_EXPLAINED}</p>
       {pips && <p>{pipsLegend(pips)}</p>}
       {coverage && <p>{coverage}</p>}
       {made && (
@@ -682,8 +743,9 @@ export function SkimPanel({ access, view, away }: Props) {
            docs/plans/260929b-one-place-to-re-run-ai-processing.md. */
         owner &&
         ready &&
-        !owner.stale &&
-        !owner.profileChanged &&
+        /* No banner — not "no reason for one": a dismissed profile notice
+           has no button left, so a job from Metadata shows here (plan 261009i). */
+        bannerReason(owner) === null &&
         (owner.job || owner.starting || owner.failed || (waiting && !owner.error)) ? (
           <div className="skim-foot">
             <div className="skim-again">{run("Plan it again", true)}</div>
@@ -705,15 +767,7 @@ export function SkimPanel({ access, view, away }: Props) {
 
       {ready && (
         <>
-          {owner && bannerReason(owner) && (
-            <div className="gloss-stale">
-              <p>
-                <TriangleAlert size={13} />
-                {bannerReason(owner)}
-              </p>
-              {run("Plan it again", true)}
-            </div>
-          )}
+          {owner && <RouteBanner owner={owner} again={run("Plan it again", true)} />}
 
           {/* What the route was planned for, or the question — owner only,
               and only over a ready route (Sol F6: the empty state's automatic
@@ -772,7 +826,16 @@ export function SkimPanel({ access, view, away }: Props) {
                           )}
                           {/* The cue before the quote: it is the question to
                               read the passage with (Greg, SPIDERYARN-READING2-8J). */}
-                          {row.current && row.cue && <span className="skim-cue">{row.cue}</span>}
+                          {/* Its card says what it is, for a mouse; the band's
+                              (i) says the same for a keyboard and a finger,
+                              since the question sits inside the row's button
+                              and cannot take focus or a tap of its own
+                              (plan 261009j, Sol's plan review F5). */}
+                          {row.current && row.cue && (
+                            <Tooltip content={<p>{SKIM_CUE_EXPLAINED}</p>} placement="top">
+                              <span className="skim-cue">{row.cue}</span>
+                            </Tooltip>
+                          )}
                           {words && <span className="skim-words">“{words.shown}”</span>}
                         </span>
                       </button>
@@ -985,7 +1048,7 @@ function StopCardView({
  *
  * `onOpen` is the way into Glossary, or `null` when this reader has no
  * Glossary control. Then the card has no *Open glossary*. Its *Ask in chat*
- * (the owner's, since plan 261009i; *Dig deeper* until then) goes to Chat, so
+ * (the owner's, since plan 261009k; *Dig deeper* until then) goes to Chat, so
  * it is drawn either way.
  */
 function TermChip({

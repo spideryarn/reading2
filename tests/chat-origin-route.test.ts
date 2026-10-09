@@ -335,7 +335,7 @@ describe("a lens origin on the way in", () => {
 /**
  * **The item shapes: a glossary entry, a cited work and an idea**
  * (plan docs/plans/261006d-glossary-and-citations-ask-in-chat-with-origin.md, D1 and D3;
- * the idea is plan 261009i's stage 3).
+ * the idea is plan 261009k's stage 3).
  * An id and a snapshot of the name. The id is never dereferenced, so a made-up
  * one is accepted; only the shape is checked.
  */
@@ -668,7 +668,7 @@ describe("the origin's columns", () => {
     expect(await refusedBy({ originMode: "summary" })).toBeNull();
   });
 
-  /* Plan 261009i, GPT Sol's F8: `summary` has no shape, so it may carry none
+  /* Plan 261009k, GPT Sol's F8: `summary` has no shape, so it may carry none
      of the shape columns, and does not get one by accident before it is built. */
   it("refuses a summary origin that carries an item id, a block or a quote", async () => {
     expect(await refusedBy({ originMode: "summary", originItemId: "spya-aaaaaa" })).toMatch(

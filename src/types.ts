@@ -1422,11 +1422,19 @@ export interface SkimDrops {
    */
   badRole: number;
   /**
-   * A cue that was missing, empty, not a string or over the cap — set to
-   * `null`, the stop kept. **Absent on routes before `trajectory/5`**, which
-   * had no cue; read it as 0.
+   * A cue that was missing, not a string or over the cap — set to `null`, the
+   * stop kept. **Absent on routes before `trajectory/5`**, which had no cue;
+   * read it as 0. An empty cue counted here too until `skim/11`, when it
+   * became the model's way of saying "no cue" (`noCue`).
    */
   badCue?: number;
+  /**
+   * Stops the model gave no cue on purpose (`"cue": ""`, or only spaces) —
+   * `null`, the stop kept, and not a fault. Since `skim/11`
+   * (docs/plans/261009j-skim-question-optional-and-the-border.md); absent
+   * before, read it as 0.
+   */
+  noCue?: number;
   /**
    * `again` entries dropped: not 2 or 3, not deeper than the stop's own depth,
    * repeated, or naming a depth no stop is first placed at. The stop is kept.
@@ -1505,10 +1513,29 @@ export interface SkimResponse {
    * not counting those in the abstract, which are left out on purpose.
    */
   notOnRoute: number;
+  /**
+   * The reader sent the profile-changed notice away with its ×, for this
+   * route under the profile they have now (src/skim.ts § `profileNoticeKey`).
+   * Only ever true beside `profileChanged`. Greg, 2026-10-09 (`spya-ud2w92`).
+   * docs/plans/261009i-skim-profile-notice-can-be-dismissed.md.
+   */
+  profileNoticeDismissed: boolean;
 }
 
-/** As `QuotesFound`: everything but the one question about the reader. */
-export type SkimFound = Omit<SkimResponse, "profileChanged">;
+/**
+ * As `QuotesFound`: everything but the questions about the reader — with the
+ * stored dismissal key in their place, which the route compares with the key
+ * for the profile the reader has now and never sends on.
+ */
+export type SkimFound = Omit<SkimResponse, "profileChanged" | "profileNoticeDismissed"> & {
+  profileNoticeDismissedFor: string | null;
+};
+
+/** `POST /api/skim/:slug/profile-notice-dismissal`: the route the reader was looking at. */
+export interface SkimProfileNoticeDismissalRequest {
+  /** That route's `Skim.generatedAt`, its identity. */
+  generatedAt: string;
+}
 
 /**
  * The Sketch diagram as the panel receives it — docs/project/diagram.md § Sketch.
@@ -1596,6 +1623,22 @@ export const MAX_PROFILE_CHARS = 1_500;
  * stands on the reasoning above rather than on the pairing.
  */
 export const MAX_PURPOSE_CHARS = 600;
+
+/**
+ * Trim it, settle the line endings, and call whitespace-only nothing.
+ *
+ * `\r\n` first, because a paste from a Windows-authored document carries them
+ * and they are invisible in every surface a reader or a reviewer would look at
+ * — including a diff of the hash's input, which is the one place it would
+ * matter. Returns `null` rather than `""` so that "the reader emptied the box"
+ * and "the reader never touched it" cannot be told apart *here*; whoever cares
+ * about that distinction holds it above this line.
+ */
+export function normaliseProfileText(text: string | null | undefined): string | null {
+  if (!text) return null;
+  const clean = text.replace(/\r\n/g, "\n").trim();
+  return clean.length > 0 ? clean : null;
+}
 
 /**
  * **One author of the piece, as the piece declares them** — the page's
@@ -4252,7 +4295,7 @@ export type CitationsOrigin = { mode: "citations"; itemId: string; quote: string
 
 /**
  * One of Ideas' propositions: its id, and its name when the chat started
- * (plan docs/plans/261009i-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md).
+ * (plan docs/plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md).
  * `GlossaryOrigin`'s rules, with one difference: an idea keeps its id across
  * a re-run only while it keeps its normalised name (src/ideas.ts), so a
  * paraphrased idea gets a new id and this origin then finds nothing. Best
@@ -4328,7 +4371,7 @@ export function sameAnchor(stored: ChatAnchor | undefined, wanted: ChatAnchor): 
  *
  * **A glossary entry, a cited work or an idea is its id**: the name is a
  * snapshot and is not compared, so a reworded item is still the same origin
- * (plans 261006d D1 and 261009i stage 3).
+ * (plans 261006d D1 and 261009k stage 3).
  */
 export function sameOrigin(a: ThreadOrigin, b: ThreadOrigin): boolean {
   switch (a.mode) {

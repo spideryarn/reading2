@@ -828,7 +828,7 @@ it.
   the add page's *ask why* mark names this article, the arrival is applied at once, without waiting
   for the settings store, and the owner's purpose read decides only the modal
   ([`first-open-purpose.ts`](../../src/web/first-open-purpose.ts)): with room for a band, the
-  guide's greeting holds the same box and there is no modal; on a phone, no reason stored gets the
+  guide's greeting asks why in the conversation (261009i) and there is no modal; on a phone, no reason stored gets the
   modal over the article alone, as before. A failed read keeps the mark, so the next load asks with
   the modal, which is what it always did ([reader-profile.md](reader-profile.md)).
 

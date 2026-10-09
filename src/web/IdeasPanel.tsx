@@ -83,7 +83,7 @@ export type IdeasAccess =
       /**
        * **A chat about one idea**: its *Ask in chat* and the mark that reopens
        * a chat already started from it (OriginChat.tsx § `ItemChats`; plan
-       * 261009i, stage 3). On the owner's arm because a visitor has no chat.
+       * 261009k, stage 3). On the owner's arm because a visitor has no chat.
        * Optional, so a panel drawn without it (most tests) has no button.
        */
       chats?: IdeaChats;
@@ -103,7 +103,7 @@ interface Props {
   onJump(id: BlockId): void;
   /**
    * **One idea to bring into view, once** — a chat's way back to the idea it
-   * was started from (src/web/item-focus.ts; plan 261009i, stage 2). The
+   * was started from (src/web/item-focus.ts; plan 261009k, stage 2). The
    * idea is selected by `?idea=`; this only scrolls its row into view, and
    * does not jump the prose the way a press on the row does. An id the list
    * does not have is handed back at once, and the band shows its list.
@@ -571,7 +571,7 @@ function IdeaRow({
           </div>
 
           {/* **Ask in chat, and the way back to a chat already started from
-              this idea** (plan 261009i, stage 3), drawn as a Glossary entry
+              this idea** (plan 261009k, stage 3), drawn as a Glossary entry
               draws them (GlossaryPanel.tsx § `Looked`). The press sends the
               idea's name and statement, fenced, and a question about it
               (chat-handoff.ts § `askAboutIdea`). Owner only. */}

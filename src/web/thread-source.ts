@@ -59,7 +59,7 @@ export const SOURCE_DEBATE_LENS = "Started from an angle in Debate";
 export const SOURCE_GLOSSARY_ENTRY = "Started from a glossary entry";
 /** And for one started from a cited work's *Ask in chat*. */
 export const SOURCE_CITED_WORK = "Started from a cited work";
-/** And for one started from an idea's *Ask in chat* (plan 261009i, stage 3). */
+/** And for one started from an idea's *Ask in chat* (plan 261009k, stage 3). */
 export const SOURCE_IDEA = "Started from an idea";
 
 /** …and for a chat anchored to a block or to words in one: the "?" and a comment's question. */
@@ -188,7 +188,7 @@ export function narrowed<T extends SourcedThread>(threads: readonly T[], from: C
 /**
  * **The way back from an open chat to the item it was started from** — the
  * line above the transcript in Chat's band (ChatPanel.tsx § `OriginBack`;
- * plan docs/plans/261009i-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md,
+ * plan docs/plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md,
  * stage 2). Greg, 2026-10-09: *"I want to be able to go back to the
  * citations mode, and also sort of highlight the … block or whatever that
  * the chat is relevant to."*

@@ -87,7 +87,7 @@ export interface InvestigateDraft {
 /**
  * Why the last *Investigate* stopped, on the row it was pressed on, and what
  * was stored there when it was pressed. No client surface reads this state
- * since the button went in plan 261009i; it remains with the dormant verb.
+ * since the button went in plan 261009k; it remains with the dormant verb.
  */
 export interface InvestigateFailure {
   id: string;
@@ -110,7 +110,7 @@ export interface InvestigateFailure {
  * the same reason (plan 261002c). The band's hook passes all six through.
  *
  * **Nothing on the client calls `investigate` since 2026-10-09**: the row's and
- * the card's buttons went with plan 261009i, and *Ask in chat* stands in their
+ * the card's buttons went with plan 261009k, and *Ask in chat* stands in their
  * place; a kept answer is still drawn. It stays, with the route, until Greg
  * decides whether he wants Dig deeper back (that plan's D5).
  */
@@ -460,7 +460,7 @@ export function useCitationsRead(slug: string): CitationsRead {
    * - **An `error` does not prove nothing was kept**: a save can succeed and
    *   the frame after it be lost. So a failure after the stream opened reads
    *   the list again, while this run still holds admission. Before the button
-   *   went in plan 261009i, the panel used that newer stored answer instead of
+   *   went in plan 261009k, the panel used that newer stored answer instead of
    *   the failure; the re-read still preserves the stored result now.
    * - **Leaving the article stops the reading, not the investigation.** The
    *   server does not pass the socket's close to the model call, so it

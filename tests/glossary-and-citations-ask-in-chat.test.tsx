@@ -34,12 +34,12 @@
  * button (a chat needs no passage), and a name longer than the origin's cap
  * is sent cut, not refused.
  *
- * **Ideas joined them on 2026-10-09** (plan 261009i, stage 3), with the same
+ * **Ideas joined them on 2026-10-09** (plan 261009k, stage 3), with the same
  * seven claims, and so did **the way back from the chat** (stage 2): the line
  * above an open chat's transcript that opens the item's mode on the item —
  * for every origin, Debate's claim and angle included.
  *
- * **Since 2026-10-09 the button stands where Dig deeper was** (plan 261009i):
+ * **Since 2026-10-09 the button stands where Dig deeper was** (plan 261009k):
  * no entry and no row offers Dig deeper, and that is pinned here in the
  * rendered reader too. The *Ask in chat* the *Look up a term* box offers is
  * not touched (tests/glossary-ask-in-chat.test.tsx).
@@ -615,7 +615,7 @@ const term = (id: string): HTMLElement | null =>
 const nameOf = (id: string): string => GLOSSARY.entries.find((e) => e.id === id)?.name ?? "";
 const entryButton = (): HTMLButtonElement | null =>
   host.querySelector<HTMLButtonElement>(".mode-band .gloss-look button.gloss-ask-chat");
-/** Any Dig deeper left in the band — none since plan 261009i. */
+/** Any Dig deeper left in the band — none since plan 261009k. */
 const digDeeper = (): HTMLButtonElement[] =>
   [...host.querySelectorAll<HTMLButtonElement>(".mode-band button")].filter((b) =>
     /Dig deeper|Digging deeper/.test(b.textContent ?? ""),
@@ -629,7 +629,7 @@ describe("Ask in chat on a Glossary entry", () => {
     const button = entryButton() as HTMLButtonElement;
     expect(button.textContent?.trim()).toBe("Ask in chat");
     expect(button.getAttribute("aria-label")).toBe(ASK_ENTRY_IN_CHAT);
-    expect(digDeeper(), "in Dig deeper's place, which is gone (plan 261009i)").toEqual([]);
+    expect(digDeeper(), "in Dig deeper's place, which is gone (plan 261009k)").toEqual([]);
     /* The run buttons' size (plan 261007m S2): the shared outline/sm Button. */
     expect(button.dataset.variant).toBe("outline");
     expect(button.dataset.size).toBe("sm");
@@ -1055,7 +1055,7 @@ describe("Ask in chat on an idea", () => {
 /* ------------------------------------------------------- the way back -- */
 
 /**
- * **The way back from a chat to the item it was started from** (plan 261009i,
+ * **The way back from a chat to the item it was started from** (plan 261009k,
  * stage 2): a line above the open chat's transcript, and a press on it that
  * opens the item's mode and brings the item's row into view. jsdom has no
  * `scrollIntoView`, so it is put on the prototype for each test and records

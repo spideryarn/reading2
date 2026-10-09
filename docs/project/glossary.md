@@ -12,7 +12,7 @@ This doc is long, and a read stops about line 860. **Jump with these.**
 - [§ Looking a term up](#looking-a-term-up) — the box for a word the article does not contain (a
   different *Ask in chat*, with no origin)
 - [§ Digging deeper into a term](#digging-deeper-into-a-term) — Dig deeper, the web-search answer:
-  its button went on 2026-10-09 (plan 261009i); kept answers still show, the server half remains
+  its button went on 2026-10-09 (plan 261009k); kept answers still show, the server half remains
 - [§ Where it lives, and why that cost nothing](#where-it-lives-and-why-that-cost-nothing) — the
   band's place in the page
 - [§ What is generated, and when](#what-is-generated-and-when) — the stage, Find more, regeneration
@@ -512,7 +512,7 @@ Three details worth knowing before changing it:
   Greg: *"We have a 'Dig deeper' in Glossary mode. Add that to the in-text glossary tooltip."*
   (spya-p09u4s), and the card had *Dig deeper* from 2026-10-02 **until 2026-10-09**, when *Ask in
   chat* took its place there as in the band (plan
-  [261009i](../plans/261009i-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)).
+  [261009k](../plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)).
   *Ask in chat* calls the band's own sender (`askGlossaryEntryInChat`), so the chat records the
   same origin as one started from the entry, and closes the card; it is never disabled. It is its
   own prop, `onAskTerm`, not part of `termActions`, so Hide and the chat do not hang off each
@@ -736,7 +736,7 @@ A list written before `glossary/9` keeps its citation entries until its step nex
 ### Digging deeper into a term
 
 > **The button is gone, since 2026-10-09** (plan
-> [261009i](../plans/261009i-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)):
+> [261009k](../plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)):
 > Greg, *"we don't need the dig deeper button"*. *Ask in chat* stands where it was
 > ([§ Asking about an entry in chat](#asking-about-an-entry-in-chat)), on the entry and on the
 > hover card. **A lookup an entry already has is still drawn** (`LookupAnswer`), and the server half
@@ -969,7 +969,7 @@ and three days later:
 
 **Since 2026-10-09 it stands where Dig deeper was**, on the entry and on the hover card in the
 prose (plan
-[261009i](../plans/261009i-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)).
+[261009k](../plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)).
 A lookup answer kept from before is still drawn above it.
 
 What the owner gets:
