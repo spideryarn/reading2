@@ -16,8 +16,10 @@
  *   words that could not be saved) stays on screen until the next start, so
  *   switching engine or turning Experimental off does not make a failure
  *   vanish.
- * - **Turning Experimental off ends a GPT-Live call first**, by the ordinary
- *   hang-up, so the words are kept.
+ * - **Turning Experimental off ends a call on the engine only Experimental
+ *   offers** (Realtime, since 2026-10-10: anything but `DEFAULT_ENGINE`), by
+ *   the ordinary hang-up, so the words are kept. The switch would otherwise
+ *   say one thing while the call did another.
  * - **Reconnect asks again.** If the effective engine is still the owner, it is
  *   the hook's own reconnect. If not, the owner hangs up and the effective
  *   engine starts on the same conversation, with the same rule as the hook's:
@@ -30,7 +32,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { LiveEngine } from "../../types.js";
 import { useExperimental } from "../useExperimental.js";
-import { effectiveEngine, owningEngine, useEnginePreference } from "./engine.js";
+import { DEFAULT_ENGINE, effectiveEngine, owningEngine, useEnginePreference } from "./engine.js";
 import { useGptLive } from "./gpt-live/useGptLive.js";
 import { useLiveConversation, type LiveApi, type LiveOptions } from "./useLiveConversation.js";
 
@@ -48,7 +50,12 @@ export function useLive(slug: string, opts: LiveOptions = {}): LiveApi {
   const preference = useEnginePreference();
 
   const apis: Record<LiveEngine, LiveApi> = { realtime, "gpt-live": gptLive };
-  const effective = effectiveEngine(preference, experimental.on);
+  /* **While the setting is still being read, a remembered choice stands.** It
+     reads as off until the fetch lands, and a reader who had chosen Realtime
+     — which only Experimental can offer, so they had it on — would otherwise
+     get GPT-Live for a press in that moment (GPT Sol, plan 261010a P2). If the
+     fetch says off, a call already begun is ended by the effect below. */
+  const effective = effectiveEngine(preference, experimental.on || !experimental.loaded);
   const owner = owningEngine({ realtime: realtime.phase, "gpt-live": gptLive.phase });
   /** The engine the most recent start went to. */
   const [last, setLast] = useState<LiveEngine | null>(null);
@@ -111,15 +118,15 @@ export function useLive(slug: string, opts: LiveOptions = {}): LiveApi {
     restarting.current = mine;
   }, [start]);
 
-  /* Experimental switched off under a GPT-Live call. `loaded` as well as
-     `on`: the setting reads as off for a moment while it is being fetched, and
-     that must not hang up on anybody. */
-  const gptLiveBusy = owner === "gpt-live";
+  /* Experimental switched off under a call on the engine only it offers.
+     `loaded` as well as `on`: the setting reads as off for a moment while it is
+     being fetched, and that must not hang up on anybody. */
+  const experimentalOwner = owner !== null && owner !== DEFAULT_ENGINE ? owner : null;
   useEffect(() => {
-    if (!gptLiveBusy || !experimental.loaded || experimental.on) return;
+    if (!experimentalOwner || !experimental.loaded || experimental.on) return;
     restarting.current = 0;
-    void now.current.apis["gpt-live"].stop();
-  }, [gptLiveBusy, experimental.loaded, experimental.on]);
+    void now.current.apis[experimentalOwner].stop();
+  }, [experimentalOwner, experimental.loaded, experimental.on]);
 
   const api = { ...apis[shown], start, stop, reconnect };
   const seam = devSeam();

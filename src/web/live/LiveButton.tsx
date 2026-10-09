@@ -5,15 +5,22 @@
  * § 1d).
  *
  * **One exception, and only with Experimental features on: the voice-engine
- * choice** (plan 261003a). It is here rather than under LiveStatus's Advanced
- * because that panel exists only during and after a call, and the engine is
- * chosen before one and pinned for the whole of it.
+ * choice** (plan 261003a), as a small arrow joined to the right of the Live
+ * button (plan 261010a; Greg, spya-t858ug: *"a little drop down arrow to the
+ * right of the live button"*, where it had been a select beside it). It is here
+ * rather than under LiveStatus's Advanced because that panel exists only during
+ * and after a call, and the engine is chosen before one and pinned for the
+ * whole of it.
  */
-import { LoaderCircle, PhoneOff, Radio, X } from "lucide-react";
+import { Check, ChevronDown, LoaderCircle, PhoneOff, Radio, X } from "lucide-react";
+import { DropdownMenu } from "radix-ui";
+import { useState } from "react";
 
+import type { LiveEngine } from "../../types.js";
+import { MENU_ITEM, MENU_SURFACE, useFingerPressMenu } from "../menu.js";
 import { ControlTip, Tooltip } from "../Tooltip.js";
 import { useExperimental } from "../useExperimental.js";
-import { ENGINE_COPY, effectiveEngine, parseEngine, rememberEngine, useEnginePreference } from "./engine.js";
+import { ENGINE_COPY, ENGINE_ORDER, effectiveEngine, parseEngine, rememberEngine, useEnginePreference } from "./engine.js";
 import type { LiveApi } from "./useLiveConversation.js";
 
 export function LiveButton({ live, disabled, onStart, labelled, continues }: {
@@ -35,7 +42,7 @@ export function LiveButton({ live, disabled, onStart, labelled, continues }: {
 }) {
   /* **Which engine the next call uses**, offered only while Experimental
      features are on. With the switch off there is no choice and the engine is
-     Realtime, as it was before there were two. ./engine.ts, ./useLive.ts. */
+     GPT-Live, every reader's. ./engine.ts, ./useLive.ts. */
   const experimental = useExperimental();
   const engine = effectiveEngine(useEnginePreference(), experimental.on);
   const connecting = live.phase === "connecting";
@@ -56,7 +63,7 @@ export function LiveButton({ live, disabled, onStart, labelled, continues }: {
         />
       }>
         <button type="button"
-          className={`chat-live-btn${on ? " on" : ""}${connecting || closing ? " opening" : ""}`}
+          className={`chat-live-btn${experimental.on ? " split" : ""}${on ? " on" : ""}${connecting || closing ? " opening" : ""}`}
           aria-label={action}
           disabled={closing || (disabled && !on && !connecting)}
           onClick={() => { if (on || connecting) void live.stop(); else onStart(); }}
@@ -68,30 +75,71 @@ export function LiveButton({ live, disabled, onStart, labelled, continues }: {
           </span>
         </button>
       </Tooltip>
-      {experimental.on && <Tooltip placement="top" keepSide className="tip-soon" content={
+      {experimental.on && <EngineArrow engine={engine} busy={on || connecting || closing} />}
+    </span>
+  );
+}
+
+/**
+ * **The engine menu, opened from an arrow joined to the Live button.**
+ *
+ * The house's Radix menu (`../menu.ts`, shared with the shelf's "⋯" and the
+ * bar's More): its surface, its finger-sized items, and a finger opening it at
+ * the click rather than the press. Two radio items, the default first.
+ *
+ * **Disabled for the whole of a call**: the engine is pinned to the call, and a
+ * control that could be changed mid-call would say otherwise. **Its keys stop
+ * here**, as the select's did, so a letter pressed while choosing is not also
+ * one of the reading view's single-key shortcuts. The menu is portalled out of
+ * this subtree, so its content stops them too.
+ */
+function EngineArrow({ engine, busy }: { engine: LiveEngine; busy: boolean }) {
+  const [open, setOpen] = useState(false);
+  const finger = useFingerPressMenu(open, setOpen);
+  const stopKeys = (e: { stopPropagation(): void }) => e.stopPropagation();
+  return (
+    <DropdownMenu.Root open={open} onOpenChange={setOpen} modal={false}>
+      <Tooltip placement="top" keepSide className="tip-soon" enabled={!open} content={
         <ControlTip head="Voice engine"
-          what={`${ENGINE_COPY.realtime.label}: ${ENGINE_COPY.realtime.tip.toLowerCase()}.`}
-          how={`${ENGINE_COPY["gpt-live"].label}: ${ENGINE_COPY["gpt-live"].tip.toLowerCase()}.`}
-          state={on || connecting || closing ? "Hang up to change it." : undefined}
+          what={`${ENGINE_COPY["gpt-live"].label}: ${ENGINE_COPY["gpt-live"].tip.toLowerCase()}.`}
+          how={`${ENGINE_COPY.realtime.label}: ${ENGINE_COPY.realtime.tip.toLowerCase()}.`}
+          state={busy ? "Hang up to change it." : `Next call: ${ENGINE_COPY[engine].label}.`}
         />
       }>
-        {/* One small select. Disabled for the whole of a call: the engine is
-            pinned to the call, and a control that could be changed mid-call
-            would say otherwise. */}
-        <label className="chat-live-engine">
-          <span className="sr-only">Voice engine</span>
-          <select value={engine} disabled={on || connecting || closing}
-            onKeyDown={(e) => e.stopPropagation()}
-            onChange={(e) => {
-              const next = parseEngine(e.target.value);
+        <DropdownMenu.Trigger asChild {...finger}>
+          <button type="button" className="chat-live-arrow" disabled={busy}
+            aria-label={`Voice engine: ${ENGINE_COPY[engine].label}`}
+            onKeyDown={stopKeys}
+          >
+            <ChevronDown size={14} aria-hidden="true" />
+          </button>
+        </DropdownMenu.Trigger>
+      </Tooltip>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content side="top" align="end" sideOffset={6} collisionPadding={10}
+          onKeyDown={stopKeys}
+          className={`chat-live-engine-menu ${MENU_SURFACE} tw:min-w-[13rem] tw:max-w-[min(20rem,calc(100vw-1.75rem))]`}
+        >
+          <DropdownMenu.RadioGroup value={engine}
+            onValueChange={(value) => {
+              const next = parseEngine(value);
               if (next) rememberEngine(next);
             }}
           >
-            <option value="realtime" title={ENGINE_COPY.realtime.tip}>{ENGINE_COPY.realtime.label}</option>
-            <option value="gpt-live" title={ENGINE_COPY["gpt-live"].tip}>{ENGINE_COPY["gpt-live"].label}</option>
-          </select>
-        </label>
-      </Tooltip>}
-    </span>
+            {ENGINE_ORDER.map((name) => (
+              <DropdownMenu.RadioItem key={name} value={name} className={MENU_ITEM}>
+                <span className="tw:flex tw:min-w-0 tw:flex-1 tw:flex-col">
+                  <span>{ENGINE_COPY[name].label}</span>
+                  <span className="tw:text-xs tw:text-muted-foreground">{ENGINE_COPY[name].tip}</span>
+                </span>
+                <DropdownMenu.ItemIndicator>
+                  <Check size={14} aria-hidden="true" className="tw:shrink-0 tw:text-highlight-text" />
+                </DropdownMenu.ItemIndicator>
+              </DropdownMenu.RadioItem>
+            ))}
+          </DropdownMenu.RadioGroup>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   );
 }

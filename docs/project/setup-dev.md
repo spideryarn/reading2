@@ -352,8 +352,9 @@ on which tier, and `NON_TASK_MODELS` for every model on no tier — which includ
 scorer, `SHELF_TOPICS_MODEL`, and the title tidier, `TITLE_TIDY_MODEL` — both missing from this table
 until 2026-10-07. Two more live outside that
 file: `IMAGE_MODEL` in [`src/illustrated.ts`](../../src/illustrated.ts) draws Illustrated's
-pictures, and `LIVE_MODEL` in [`src/live.ts`](../../src/live.ts) is live conversation's realtime
-model, the one call that does not go through OpenRouter ([ai-gateway.md](ai-gateway.md)).
+pictures, and [`src/live.ts`](../../src/live.ts) holds live conversation's, the one call that does not go
+through OpenRouter ([ai-gateway.md](ai-gateway.md)): `GPT_LIVE_MODEL` and `GPT_LIVE_BACKEND_MODEL`
+for GPT-Live, every reader's engine, and `LIVE_MODEL` for Realtime, behind Experimental features.
 
 **One article can move up a tier.** High-powered AI swaps the capable tier's Sonnet 5.5 for Opus 5.5
 (`anthropic/claude-opus-5.5`, stamped `claude-opus-5-5`) for that article's capable-tier calls only —

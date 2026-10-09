@@ -310,16 +310,21 @@ The reasoning, the patterns looked at and
 what was deferred (one line per heading level, a thinner bar) are
 [261002h](../plans/261002h-headings-breadcrumb-at-the-top-of-the-reading-view.md).
 
-**And the choice of voice engine for a Live conversation, since 2026-10-03** — a select beside the
-Live button, *Realtime* or *GPT-Live (new)*. Switched off, there is no choice and a call is on
-Realtime, as it always was. It is behind the switch because GPT-Live is a second implementation
-built to be compared with the first and then for one of them to be deleted, on a provider API three
-weeks old: its answers about the article come from a second model the voice has to remember to ask,
-and none of that has been tried with a real microphone. Readers who have not asked for unfinished
-things keep the engine that works. **Here the switch is stricter than "hidden, not unreachable"**:
-off, the client starts no GPT-Live call whatever choice was remembered, and turning it off mid-call
-ends one by the ordinary hang-up. That is the client's rule; the `live-session` route is not gated.
-[live-conversation.md § The second engine](live-conversation.md#the-second-engine-gpt-live-behind-experimental).
+**And the choice of voice engine for a Live conversation, since 2026-10-03** — since 2026-10-10 a
+small arrow joined to the right of the Live button, opening *GPT-Live* or *Realtime*. Switched off,
+there is no arrow and a call is on GPT-Live, every reader's engine:
+
+> Let's make Live the default and keep real-time only for Experimental Features.
+>
+> — Greg, 2026-10-09 (report `spya-t858ug`)
+
+Until then it was the other way round — a select beside the button, Realtime for everyone and
+GPT-Live behind the switch while it was new
+([261010a](../plans/261010a-gpt-live-is-the-live-engine-for-everyone-realtime-from-an-arrow-on-the-live-button.md)
+has why it moved). **Here the switch is stricter than "hidden, not unreachable"**: off, the client
+starts no Realtime call whatever choice was remembered, and turning it off mid-call ends one by the
+ordinary hang-up. That is the client's rule; neither live route is gated.
+[live-conversation.md § GPT-Live](live-conversation.md#gpt-live-and-realtime-behind-experimental).
 
 **And one control on the Metadata page: *Start this article again*** — a block inside *AI
 processing* rather than a section of its own: a reset, and optionally the modes made again. The

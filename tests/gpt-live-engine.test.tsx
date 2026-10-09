@@ -158,15 +158,19 @@ describe("the three things, as pure rules", () => {
     expect(engine.parseEngine(null)).toBeNull();
   });
 
-  it("with Experimental off the engine is Realtime, whatever was chosen", () => {
-    expect(engine.effectiveEngine("gpt-live", false)).toBe("realtime");
-    expect(engine.effectiveEngine(null, false)).toBe("realtime");
+  it("GPT-Live is the default (Greg, spya-t858ug)", () => {
+    expect(engine.DEFAULT_ENGINE).toBe("gpt-live");
   });
 
-  it("with Experimental on it is the choice, or the default before there is one", () => {
+  it("with Experimental off the engine is GPT-Live, whatever was chosen", () => {
+    expect(engine.effectiveEngine("realtime", false)).toBe("gpt-live");
+    expect(engine.effectiveEngine(null, false)).toBe("gpt-live");
+  });
+
+  it("with Experimental on it is the choice, or GPT-Live before there is one", () => {
     expect(engine.effectiveEngine("gpt-live", true)).toBe("gpt-live");
     expect(engine.effectiveEngine("realtime", true)).toBe("realtime");
-    expect(engine.effectiveEngine(null, true)).toBe(engine.DEFAULT_EXPERIMENTAL_ENGINE);
+    expect(engine.effectiveEngine(null, true)).toBe("gpt-live");
   });
 
   it("a call is owned from connecting until its hang-up has finished", () => {
@@ -208,124 +212,177 @@ describe("the remembered preference", () => {
 });
 
 describe("where a start goes", () => {
-  it("Realtime while Experimental is off, even with GPT-Live remembered", () => {
-    engine.rememberEngine("gpt-live");
+  it("GPT-Live while Experimental is off, even with Realtime remembered", () => {
+    engine.rememberEngine("realtime");
     const live = mountLive();
     act(() => live().start({ threadId: "t1" }));
-    expect(h.fakes.realtime.starts).toEqual([{ threadId: "t1" }]);
-    expect(h.fakes["gpt-live"].starts).toEqual([]);
-    expect(tagOf(live())).toBe("realtime");
+    expect(h.fakes["gpt-live"].starts).toEqual([{ threadId: "t1" }]);
+    expect(h.fakes.realtime.starts).toEqual([]);
+    expect(tagOf(live())).toBe("gpt-live");
     expect(live().phase).toBe("connecting");
   });
 
-  it("GPT-Live when Experimental is on and it was chosen", () => {
+  it("Realtime when Experimental is on and it was chosen", () => {
     h.experimental.set({ on: true });
-    engine.rememberEngine("gpt-live");
+    engine.rememberEngine("realtime");
     const live = mountLive();
     act(() => live().start({ threadId: "t1", microphone: false }));
-    expect(h.fakes["gpt-live"].starts).toEqual([{ threadId: "t1", microphone: false }]);
-    expect(h.fakes.realtime.starts).toEqual([]);
-    expect(tagOf(live())).toBe("gpt-live");
+    expect(h.fakes.realtime.starts).toEqual([{ threadId: "t1", microphone: false }]);
+    expect(h.fakes["gpt-live"].starts).toEqual([]);
+    expect(tagOf(live())).toBe("realtime");
   });
 
-  it("the default while Experimental is on and nothing was chosen", () => {
+  it("GPT-Live while Experimental is on and nothing was chosen", () => {
     h.experimental.set({ on: true });
     const live = mountLive();
     act(() => live().start({ threadId: "t1" }));
-    expect(h.fakes[engine.DEFAULT_EXPERIMENTAL_ENGINE].starts).toHaveLength(1);
+    expect(h.fakes["gpt-live"].starts).toHaveLength(1);
+    expect(h.fakes.realtime.starts).toEqual([]);
+  });
+
+  it("a remembered Realtime choice stands while the setting is still being read", () => {
+    h.experimental.set({ on: false, loaded: false });
+    engine.rememberEngine("realtime");
+    const live = mountLive();
+    act(() => live().start({ threadId: "t1" }));
+    expect(h.fakes.realtime.starts).toHaveLength(1);
+    expect(h.fakes["gpt-live"].starts).toEqual([]);
+  });
+
+  it("while the setting is being read and nothing was chosen, GPT-Live", () => {
+    h.experimental.set({ on: false, loaded: false });
+    const live = mountLive();
+    act(() => live().start({ threadId: "t1" }));
+    expect(h.fakes["gpt-live"].starts).toHaveLength(1);
   });
 
   it("is refused while the other engine still has a call", () => {
     h.experimental.set({ on: true });
     const live = mountLive();
     act(() => live().start({ threadId: "t1" }));
-    expect(h.fakes.realtime.starts).toHaveLength(1);
-    act(() => engine.rememberEngine("gpt-live"));
+    expect(h.fakes["gpt-live"].starts).toHaveLength(1);
+    act(() => engine.rememberEngine("realtime"));
     act(() => live().start({ threadId: "t1" }));
-    expect(h.fakes["gpt-live"].starts).toEqual([]);
+    expect(h.fakes.realtime.starts).toEqual([]);
   });
 });
 
 describe("the engine is pinned to the call", () => {
   it("a change of preference mid-call changes neither what the page sees nor what Stop stops", async () => {
     h.experimental.set({ on: true });
-    engine.rememberEngine("gpt-live");
+    engine.rememberEngine("realtime");
     const live = mountLive();
     act(() => live().start({ threadId: "t1" }));
-    act(() => h.fakes["gpt-live"].set({ phase: "live" }));
+    act(() => h.fakes.realtime.set({ phase: "live" }));
 
-    act(() => engine.rememberEngine("realtime"));
-    expect(tagOf(live())).toBe("gpt-live");
+    act(() => engine.rememberEngine("gpt-live"));
+    expect(tagOf(live())).toBe("realtime");
     expect(live().phase).toBe("live");
 
     await act(async () => { await live().stop(); });
-    expect(h.fakes["gpt-live"].stops).toBe(1);
-    expect(h.fakes.realtime.stops).toBe(0);
+    expect(h.fakes.realtime.stops).toBe(1);
+    expect(h.fakes["gpt-live"].stops).toBe(0);
     /* The call is over, so the page now sees the engine the next start would use. */
-    expect(tagOf(live())).toBe("realtime");
+    expect(tagOf(live())).toBe("gpt-live");
   });
 
-  it("turning Experimental off ends a GPT-Live call, once, by the ordinary hang-up", async () => {
+  it("turning Experimental off ends a Realtime call, once, by the ordinary hang-up", async () => {
     h.experimental.set({ on: true });
-    engine.rememberEngine("gpt-live");
+    engine.rememberEngine("realtime");
     const live = mountLive();
     act(() => live().start({ threadId: "t1" }));
-    act(() => h.fakes["gpt-live"].set({ phase: "live" }));
-    expect(h.fakes["gpt-live"].stops).toBe(0);
+    act(() => h.fakes.realtime.set({ phase: "live" }));
+    expect(h.fakes.realtime.stops).toBe(0);
 
     await act(async () => { h.experimental.set({ on: false }); });
-    expect(h.fakes["gpt-live"].stops).toBe(1);
-    expect(h.fakes.realtime.starts).toEqual([]);
-    expect(tagOf(live())).toBe("realtime");
+    expect(h.fakes.realtime.stops).toBe(1);
+    expect(h.fakes["gpt-live"].starts).toEqual([]);
+    expect(tagOf(live())).toBe("gpt-live");
     expect(live().phase).toBe("idle");
+  });
+
+  it("a Realtime call begun while the setting loaded is ended if it turns out off", async () => {
+    h.experimental.set({ on: false, loaded: false });
+    engine.rememberEngine("realtime");
+    const live = mountLive();
+    act(() => live().start({ threadId: "t1" }));
+    act(() => h.fakes.realtime.set({ phase: "live" }));
+    expect(h.fakes.realtime.stops).toBe(0);
+    await act(async () => { h.experimental.set({ on: false, loaded: true }); });
+    expect(h.fakes.realtime.stops).toBe(1);
+  });
+
+  it("asks nobody to hang up when there is no call", async () => {
+    engine.rememberEngine("realtime");
+    mountLive();
+    await act(async () => { h.experimental.set({ on: true }); });
+    await act(async () => { h.experimental.set({ on: false }); });
+    expect(h.fakes.realtime.stops).toBe(0);
+    expect(h.fakes["gpt-live"].stops).toBe(0);
+  });
+
+  it("keeps a Realtime call's failed hang-up on screen after Experimental is turned off", async () => {
+    h.experimental.set({ on: true });
+    engine.rememberEngine("realtime");
+    const live = mountLive();
+    act(() => live().start({ threadId: "t1" }));
+    act(() => h.fakes.realtime.set({ phase: "live" }));
+    /* The automatic hang-up is the one that fails. */
+    h.fakes.realtime.endsOn = "failed";
+    await act(async () => { h.experimental.set({ on: false }); });
+    expect(h.fakes.realtime.stops).toBe(1);
+    expect(tagOf(live())).toBe("realtime");
+    expect(live().phase).toBe("failed");
+
+    act(() => live().start({ threadId: "t1" }));
+    expect(h.fakes["gpt-live"].starts).toHaveLength(1);
+    expect(tagOf(live())).toBe("gpt-live");
   });
 
   it("does not hang up while the setting is only being re-read", async () => {
     h.experimental.set({ on: true });
-    engine.rememberEngine("gpt-live");
-    const live = mountLive();
-    act(() => live().start({ threadId: "t1" }));
-    act(() => h.fakes["gpt-live"].set({ phase: "live" }));
-    await act(async () => { h.experimental.set({ on: false, loaded: false }); });
-    expect(h.fakes["gpt-live"].stops).toBe(0);
-    /* Still the owner's api, though the next start would now be Realtime's. */
-    expect(tagOf(live())).toBe("gpt-live");
-  });
-
-  it("leaves a Realtime call alone when Experimental changes", async () => {
+    engine.rememberEngine("realtime");
     const live = mountLive();
     act(() => live().start({ threadId: "t1" }));
     act(() => h.fakes.realtime.set({ phase: "live" }));
+    await act(async () => { h.experimental.set({ on: false, loaded: false }); });
+    expect(h.fakes.realtime.stops).toBe(0);
+    /* Still the owner's api, though the next start would now be GPT-Live's. */
+    expect(tagOf(live())).toBe("realtime");
+  });
+
+  it("leaves a GPT-Live call alone when Experimental changes", async () => {
+    const live = mountLive();
+    act(() => live().start({ threadId: "t1" }));
+    act(() => h.fakes["gpt-live"].set({ phase: "live" }));
     await act(async () => { h.experimental.set({ on: true }); });
     await act(async () => { h.experimental.set({ on: false }); });
-    expect(h.fakes.realtime.stops).toBe(0);
-    /* Nor is the idle GPT-Live hook asked to hang up a call it does not have. */
     expect(h.fakes["gpt-live"].stops).toBe(0);
-    expect(tagOf(live())).toBe("realtime");
+    /* Nor is the idle Realtime hook asked to hang up a call it does not have. */
+    expect(h.fakes.realtime.stops).toBe(0);
+    expect(tagOf(live())).toBe("gpt-live");
   });
 
   it("keeps a failed call's engine on screen until the next start", async () => {
     h.experimental.set({ on: true });
-    engine.rememberEngine("gpt-live");
+    engine.rememberEngine("realtime");
     const live = mountLive();
     act(() => live().start({ threadId: "t1" }));
-    act(() => h.fakes["gpt-live"].set({ phase: "failed", error: "The live connection was lost." }));
+    act(() => h.fakes.realtime.set({ phase: "failed", error: "The live connection was lost." }));
 
     await act(async () => { h.experimental.set({ on: false }); });
-    expect(tagOf(live())).toBe("gpt-live");
+    expect(tagOf(live())).toBe("realtime");
     expect(live().error).toBe("The live connection was lost.");
 
     /* Retry goes to the engine the reader would now get, and the page follows. */
     act(() => live().start({ threadId: "t1" }));
-    expect(h.fakes.realtime.starts).toHaveLength(1);
-    expect(tagOf(live())).toBe("realtime");
+    expect(h.fakes["gpt-live"].starts).toHaveLength(1);
+    expect(tagOf(live())).toBe("gpt-live");
   });
 });
 
 describe("Reconnect asks again", () => {
   it("is the hook's own reconnect when the engine has not changed", () => {
-    h.experimental.set({ on: true });
-    engine.rememberEngine("gpt-live");
     const live = mountLive();
     act(() => live().start({ threadId: "t1" }));
     act(() => h.fakes["gpt-live"].set({ phase: "live" }));
@@ -335,27 +392,27 @@ describe("Reconnect asks again", () => {
   });
 
   it("hangs up the owner and starts the engine now in effect, on the same conversation", async () => {
-    /* A Realtime call, begun before Experimental was switched on with GPT-Live chosen. */
-    engine.rememberEngine("gpt-live");
+    /* A GPT-Live call, begun before Experimental was switched on with Realtime chosen. */
+    engine.rememberEngine("realtime");
     const live = mountLive();
     act(() => live().start({ threadId: "t1", microphone: false }));
-    act(() => h.fakes.realtime.set({ phase: "live" }));
+    act(() => h.fakes["gpt-live"].set({ phase: "live" }));
     await act(async () => { h.experimental.set({ on: true }); });
-    expect(tagOf(live())).toBe("realtime");
+    expect(tagOf(live())).toBe("gpt-live");
 
     act(() => live().reconnect());
     await tick();
-    expect(h.fakes.realtime.reconnects).toBe(0);
-    expect(h.fakes.realtime.stops).toBe(1);
-    expect(h.fakes["gpt-live"].starts).toEqual([{ threadId: "t1", microphone: false }]);
-    expect(tagOf(live())).toBe("gpt-live");
+    expect(h.fakes["gpt-live"].reconnects).toBe(0);
+    expect(h.fakes["gpt-live"].stops).toBe(1);
+    expect(h.fakes.realtime.starts).toEqual([{ threadId: "t1", microphone: false }]);
+    expect(tagOf(live())).toBe("realtime");
   });
 
   it("does not restart if the reader hangs up in between", async () => {
-    engine.rememberEngine("gpt-live");
+    engine.rememberEngine("realtime");
     const live = mountLive();
     act(() => live().start({ threadId: "t1" }));
-    act(() => h.fakes.realtime.set({ phase: "live" }));
+    act(() => h.fakes["gpt-live"].set({ phase: "live" }));
     await act(async () => { h.experimental.set({ on: true }); });
 
     act(() => {
@@ -363,23 +420,23 @@ describe("Reconnect asks again", () => {
       void live().stop();
     });
     await tick();
-    expect(h.fakes["gpt-live"].starts).toEqual([]);
+    expect(h.fakes.realtime.starts).toEqual([]);
   });
 
   it("does not restart after a hang-up that failed", async () => {
-    engine.rememberEngine("gpt-live");
+    engine.rememberEngine("realtime");
     const live = mountLive();
     act(() => live().start({ threadId: "t1" }));
-    act(() => h.fakes.realtime.set({ phase: "live" }));
+    act(() => h.fakes["gpt-live"].set({ phase: "live" }));
     await act(async () => { h.experimental.set({ on: true }); });
-    h.fakes.realtime.endsOn = "failed";
+    h.fakes["gpt-live"].endsOn = "failed";
     act(() => live().reconnect());
     await tick();
-    expect(h.fakes["gpt-live"].starts).toEqual([]);
+    expect(h.fakes.realtime.starts).toEqual([]);
   });
 });
 
-describe("the choice in the Live control", () => {
+describe("the arrow on the Live button", () => {
   function mountButton(phase: LiveApi["phase"] = "idle") {
     const host = document.createElement("div");
     document.body.appendChild(host);
@@ -389,52 +446,85 @@ describe("the choice in the Live control", () => {
       roots.push(root);
       root.render(createElement(LiveButton, { live, onStart: () => {} }));
     });
-    return () => host.querySelector<HTMLSelectElement>(".chat-live-engine select");
+    return () => host.querySelector<HTMLButtonElement>("button.chat-live-arrow");
   }
 
-  it("is not there with Experimental off", () => {
-    engine.rememberEngine("gpt-live");
-    const select = mountButton();
-    expect(select()).toBeNull();
-    expect(document.body.textContent).not.toMatch(/GPT-Live/);
+  /** Radix opens a menu on a mouse's primary `pointerdown`. */
+  function press(el: Element) {
+    const ev = new MouseEvent("pointerdown", { bubbles: true, cancelable: true, button: 0 });
+    Object.defineProperty(ev, "pointerType", { value: "mouse" });
+    act(() => { el.dispatchEvent(ev); });
+  }
+
+  const menu = () => document.querySelector<HTMLElement>('[role="menu"]');
+  const items = () => [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')];
+
+  it("is not there with Experimental off, and nor is any other choice", () => {
+    engine.rememberEngine("realtime");
+    const arrow = mountButton();
+    expect(arrow()).toBeNull();
+    expect(document.querySelector("select")).toBeNull();
+    expect(document.body.textContent).not.toMatch(/Realtime|GPT-Live/);
   });
 
-  it("offers the two engines with Experimental on, showing the one in effect", () => {
+  it("with Experimental on, opens a menu of the two engines with the one in effect checked", () => {
     h.experimental.set({ on: true });
-    const select = mountButton();
-    expect([...(select()?.options ?? [])].map((o) => [o.value, o.textContent, o.title])).toEqual([
-      ["realtime", "Realtime", "One model listens and answers"],
-      ["gpt-live", "GPT-Live (new)", "A voice that keeps listening while a second model checks the article"],
-    ]);
-    expect(select()?.value).toBe(engine.DEFAULT_EXPERIMENTAL_ENGINE);
-    expect(select()?.disabled).toBe(false);
+    const arrow = mountButton();
+    const el = arrow();
+    if (!el) throw new Error("no arrow rendered");
+    expect(el.getAttribute("aria-label")).toBe("Voice engine: GPT-Live");
+    expect(el.disabled).toBe(false);
+    press(el);
+    expect(menu()).not.toBeNull();
+    expect(items().map((i) => [i.textContent?.includes("GPT-Live"), i.textContent?.includes("Realtime"), i.getAttribute("aria-checked")]))
+      .toEqual([[true, false, "true"], [false, true, "false"]]);
   });
 
   it("remembers a choice, and shows it", () => {
     h.experimental.set({ on: true });
-    const select = mountButton();
-    const el = select();
-    if (!el) throw new Error("no engine choice rendered");
-    act(() => {
-      el.value = "gpt-live";
-      el.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    expect(engine.rememberedEngine()).toBe("gpt-live");
-    expect(select()?.value).toBe("gpt-live");
+    const arrow = mountButton();
+    const el = arrow();
+    if (!el) throw new Error("no arrow rendered");
+    press(el);
+    const realtime = items()[1];
+    if (!realtime) throw new Error("no Realtime item");
+    act(() => { realtime.click(); });
+    expect(engine.rememberedEngine()).toBe("realtime");
+    expect(arrow()?.getAttribute("aria-label")).toBe("Voice engine: Realtime");
   });
 
-  it.each(["connecting", "live", "closing"] as const)("cannot be changed while a call is %s", (phase) => {
+  it("keeps its keys from the reading view's shortcuts", () => {
     h.experimental.set({ on: true });
-    const select = mountButton(phase);
-    expect(select()?.disabled).toBe(true);
+    const arrow = mountButton();
+    const el = arrow();
+    if (!el) throw new Error("no arrow rendered");
+    const heard: string[] = [];
+    const listen = (e: KeyboardEvent) => heard.push(e.key);
+    document.addEventListener("keydown", listen);
+    try {
+      act(() => { el.dispatchEvent(new KeyboardEvent("keydown", { key: "j", bubbles: true })); });
+      press(el);
+      const first = items()[0];
+      if (!first) throw new Error("menu did not open");
+      act(() => { first.dispatchEvent(new KeyboardEvent("keydown", { key: "k", bubbles: true })); });
+    } finally {
+      document.removeEventListener("keydown", listen);
+    }
+    expect(heard).toEqual([]);
+  });
+
+  it.each(["connecting", "live", "closing"] as const)("cannot be opened while a call is %s", (phase) => {
+    h.experimental.set({ on: true });
+    const arrow = mountButton(phase);
+    expect(arrow()?.disabled).toBe(true);
   });
 
   it("appears and disappears with the switch, without a reload", async () => {
-    const select = mountButton();
-    expect(select()).toBeNull();
+    const arrow = mountButton();
+    expect(arrow()).toBeNull();
     await act(async () => { h.experimental.set({ on: true }); });
-    expect(select()).not.toBeNull();
+    expect(arrow()).not.toBeNull();
     await act(async () => { h.experimental.set({ on: false }); });
-    expect(select()).toBeNull();
+    expect(arrow()).toBeNull();
   });
 });

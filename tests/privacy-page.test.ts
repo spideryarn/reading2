@@ -107,15 +107,23 @@ describe("the privacy page", () => {
        The regex is anchored on the `export const` so a mention in a comment
        cannot satisfy it. */
     const live = readFileSync(path.join(ROOT, "src/live.ts"), "utf8");
-    const ids = [...live.matchAll(/export const LIVE_(?:MODEL|TRANSCRIBER) = "([^"]+)"/g)].map(
-      (m) => m[1] as string,
-    );
-    /* A positive control on the extraction itself: if the shape of those two
-       declarations ever changes, `ids` goes empty and the assertion below
-       passes over nothing at all — silent success, and the page would stop
+    /* Both engines' models: Realtime's `LIVE_MODEL` and `LIVE_TRANSCRIBER`, and
+       GPT-Live's voice and the backend behind it, which is every reader's
+       engine since 2026-10-10 (plan 261010a). */
+    const ids = [
+      ...live.matchAll(/export const (?:GPT_)?LIVE_(?:MODEL|TRANSCRIBER|BACKEND_MODEL) = "([^"]+)"/g),
+    ].map((m) => m[1] as string);
+    /* A positive control on the extraction itself: if the shape of those four
+       declarations ever changes, `ids` goes short and the assertion below
+       passes over less than it should — silent success, and the page would stop
        being checked without a test going red. docs/reusable/silent-success.md. */
-    expect(ids).toHaveLength(2);
+    expect(ids).toHaveLength(4);
     expect(ids.filter((id) => !PAGE.includes(id))).toEqual([]);
+    /* `gpt-6-luna` is on the page for other jobs too, so its presence alone
+       says nothing about live conversation: the live sentence must name it. */
+    expect(PAGE.replace(/\s+/g, " ")).toContain(
+      "<code>gpt-live-1</code> for the live voice mode, with <code>gpt-6-luna</code> behind it",
+    );
   });
 
   it("says a bug report may carry the reader's own article, and no longer that it never does", () => {
@@ -194,7 +202,7 @@ describe("the privacy page", () => {
   });
 
   it("dates the privacy notice to the latest disclosure change", () => {
-    expect(PAGE).toContain('const LAST_UPDATED = "9 October 2026"');
+    expect(PAGE).toContain('const LAST_UPDATED = "10 October 2026"');
   });
 
   it("says the public shelf's topics are named from shared titles and summaries only", () => {
