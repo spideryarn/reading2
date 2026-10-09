@@ -200,7 +200,9 @@ Press once and nothing changes from today.
   presses.)
 - **A transcript can land in the next comment's or question's box** (F1's older half): on Safari
   and Firefox, move to another comment or quiz question while the words are on their way and they
-  arrive in the new box. A bug, older than this plan.
+  arrive in the new box. A bug, older than this plan. Fixed by
+  [261009a](261009a-dictation-transcript-lands-in-the-next-box.md): the words are offered back on
+  the strip (`[mic-moved]`) and land when the reader is back where they said them.
 
 ## Open question for Greg (not blocking)
 

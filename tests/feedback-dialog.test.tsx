@@ -2674,7 +2674,7 @@ describe("the Earlier tab", () => {
       it("gives the reply box its own microphone: its own keeper, off the article, and Send off while it is busy", async () => {
         await openThread();
         expect(thread().querySelector(".mock-mic")).not.toBeNull();
-        expect(replyMicUses.at(-1)).toEqual({ keep: "feedback-reply", doneKey: "reply:q-aaaaaa", context: { kind: "profile" } });
+        expect(replyMicUses.at(-1)).toEqual({ keep: "feedback-reply:q-aaaaaa", doneKey: "reply:q-aaaaaa", context: { kind: "profile" } });
         typeReply("said out loud");
         expect(button(thread(), "Send reply").disabled).toBe(false);
 
