@@ -4,7 +4,7 @@
  * a broken SSE is reconciled before the same picks can be pressed again, and
  * overlapping reads land newest-wins. Plan 261008i stage 3.
  */
-import { act, createElement } from "react";
+import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -59,10 +59,11 @@ function storedAs(id: string, status: DebateClaimCheck["status"]): DebateClaimCh
 
 let host: HTMLDivElement;
 let root: Root;
+let unmountRoot: () => void;
 let hook: ChecksHook;
 
-function Harness() {
-  hook = useDebateChecks("a-piece");
+function Harness({ slug = "a-piece" }: { slug?: string }) {
+  hook = useDebateChecks(slug);
   return createElement("span", { "data-sending": hook.sending });
 }
 
@@ -82,11 +83,58 @@ beforeEach(async () => {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
+  const testRoot = root;
+  let mounted = true;
+  unmountRoot = () => {
+    if (!mounted) return;
+    mounted = false;
+    act(() => testRoot.unmount());
+  };
 });
 
 afterEach(() => {
-  act(() => root.unmount());
+  unmountRoot();
   host.remove();
+});
+
+describe("the article lifetime", () => {
+  it("applies the initial read after StrictMode replays the mount effects", async () => {
+    const done = stored("done");
+    wire.apiFetch.mockResolvedValue({ ok: true, body: {}, jsonBody: { checks: [done] } });
+    await act(async () => root.render(createElement(StrictMode, null, createElement(Harness))));
+    await settle();
+
+    expect(wire.apiFetch).toHaveBeenCalledTimes(2);
+    expect(hook.status).toBe("ready");
+    expect(hook.checks).toEqual([done]);
+  });
+
+  it("applies the new article's initial read and drops a late read for the old slug", async () => {
+    wire.getBodies.push({ checks: [] });
+    await act(async () => root.render(createElement(Harness)));
+    await settle();
+
+    let oldReply!: (value: unknown) => void;
+    wire.apiFetch.mockImplementationOnce(() => new Promise((resolve) => (oldReply = resolve)));
+    let oldRead!: Promise<void>;
+    act(() => {
+      oldRead = hook.refresh();
+    });
+
+    const newCheck = storedAs("spya-new", "done");
+    wire.apiFetch.mockResolvedValue({ ok: true, body: {}, jsonBody: { checks: [newCheck] } });
+    await act(async () => root.render(createElement(Harness, { slug: "another-piece" })));
+    await settle();
+    expect(wire.apiFetch).toHaveBeenLastCalledWith("/api/debate-claims/another-piece/checks");
+    expect(hook.status).toBe("ready");
+    expect(hook.checks).toEqual([newCheck]);
+
+    await act(async () => {
+      oldReply({ ok: true, body: {}, jsonBody: { checks: [stored("pending")] } });
+      await oldRead;
+    });
+    expect(hook.checks).toEqual([newCheck]);
+  });
 });
 
 describe("checks made outside this tab", () => {
@@ -183,6 +231,46 @@ describe("a broken answer stream", () => {
       });
       expect(hook.checks).toEqual([other, ownDone]);
     } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("unmounting during a broken-stream recovery", () => {
+  it.each([false, true])("stops polling once the panel is gone (StrictMode: %s)", async (strict) => {
+    vi.useFakeTimers();
+    try {
+      wire.apiFetch.mockResolvedValue({ ok: true, body: {}, jsonBody: { checks: [] } });
+      await act(async () => {
+        const probe = createElement(Harness);
+        root.render(strict ? createElement(StrictMode, null, probe) : probe);
+      });
+      await settle();
+
+      const pending = storedAs("spya-own", "pending");
+      wire.apiFetch.mockImplementation(async () => ({ ok: true, body: {}, jsonBody: { checks: [pending] } }));
+      wire.readAnswerStream.mockImplementationOnce(
+        async (_body: unknown, handlers: { begin(data: unknown): void }) => {
+          handlers.begin(pending);
+          throw new Error("stream stopped after begin");
+        },
+      );
+
+      let outcome!: Promise<boolean>;
+      act(() => {
+        outcome = hook.check({ claimIds: [TARGET.claimId] });
+      });
+      await settle();
+      unmountRoot();
+      const callsAtUnmount = wire.apiFetch.mock.calls.length;
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(PENDING_POLL_MS * 3);
+      });
+      expect(wire.apiFetch.mock.calls.length, "the poll outlived the unmount").toBe(callsAtUnmount);
+      expect(await outcome).toBe(false);
+    } finally {
+      unmountRoot();
       vi.useRealTimers();
     }
   });

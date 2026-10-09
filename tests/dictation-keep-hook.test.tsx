@@ -14,7 +14,7 @@
  * tape, which both paths share, and this path has no `onend` to choreograph.
  */
 import { act, createElement, StrictMode, type ReactNode } from "react";
-import { createRoot, type Root } from "react-dom/client";
+import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetMicrophoneLock } from "../src/web/mic-lock.js";
 import type {
@@ -194,12 +194,20 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  /* Every hook a test mounted is unmounted, before the stubs it may still
+     touch go: most tests here never called `unmount`, and a session left
+     recording keeps a bare timer that can fire after jsdom is torn down.
+     docs/postmortems/261009e-live-stall-tick-outlived-the-test.md. */
+  for (const unmount of mounted) unmount();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   document.body.innerHTML = "";
 });
 
 /* ----------------------------------------------------------- the harness -- */
+
+/** The unmount of every hook still mounted; `afterEach` empties it. */
+const mounted = new Set<() => void>();
 
 function drive(
   opts: { keep?: DictationKeeper<unknown>; accepts?: boolean; noTranscript?: boolean; strict?: boolean } = {},
@@ -224,9 +232,14 @@ function drive(
   }
   const host = document.createElement("div");
   document.body.appendChild(host);
-  let root: Root;
+  const root = createRoot(host);
+  const unmount = () => {
+    if (!mounted.delete(unmount)) return;
+    act(() => root.unmount());
+    host.remove();
+  };
+  mounted.add(unmount);
   act(() => {
-    root = createRoot(host);
     const probe = createElement(Probe, { keep: activeKeep });
     root.render(opts.strict ? createElement(StrictMode, null, probe) : probe);
   });
@@ -243,7 +256,7 @@ function drive(
         root.render(opts.strict ? createElement(StrictMode, null, probe) : probe);
       });
     },
-    unmount: () => act(() => root.unmount()),
+    unmount,
   };
 }
 
