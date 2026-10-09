@@ -55,14 +55,14 @@
   padding: 0 0.7rem 0.7rem;
 }
 
-/* ---- Reception | Claims ----
-   Debate's two sub-modes (DebatePanel.tsx § DebateViews), drawn with Summary's
-   own row (`.summ-controls`, summary.css) and the part-switcher every mode
-   shares (`.summ-views`, `.summ-view-btn`, mode-band.css § the
-   part-switcher), so the segmented controls cannot drift apart. What is here is only what differs: this row sits *under* the band's
-   head rather than being its top row, so it does not need the room Summary's
-   leaves for the (i) in the corner; and each segment carries a count. */
-.mode-band.has-about > .dbt-controls { padding-right: 0.6rem; }
+/* ---- Bibliography | Reception | Claims ----
+   Peer review's three sub-modes (PeerReviewMode.tsx § PeerReviewViews; Debate's
+   Reception | Claims until 2026-10-09), drawn with the part-switcher every mode
+   shares (`.summ-views`, `.summ-view-btn`, mode-band.css § the part-switcher),
+   so the segmented controls cannot drift apart. The row is the band's head
+   (`.band-head`), which already keeps the (i)'s corner clear, in both panels.
+   What is here is only what differs: each chip carries a count. Its own row
+   under the head, `.dbt-controls`, went with that move. */
 /* Spaced from its label by the part-switcher's own gap. */
 .dbt-view-count {
   color: var(--ink-faint);

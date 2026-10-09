@@ -187,6 +187,7 @@ async function draw(citations: CitedWork[]) {
   await act(async () =>
     root.render(
       createElement(CitationsPanel, {
+        head: null,
         access: { kind: "owner", owner: owner(citations) },
         order: "document",
         onOrder: () => {},
@@ -356,6 +357,7 @@ describe("a Debate row on screen", () => {
     await act(async () =>
       root.render(
         createElement(DebatePanel, {
+          head: null,
           access: { kind: "owner", owner: debateOwner(row), claimList: claimListOwner(), checks: checksOwner(), citers: { result: { kind: "no-doi" }, retry: () => {} }, claimChats: NO_CLAIM_CHATS },
           onJump: () => {},
           /* The fixture is a claim row, so Claims is the sub-mode that draws it. */

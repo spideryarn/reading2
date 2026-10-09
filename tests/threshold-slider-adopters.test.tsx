@@ -203,6 +203,7 @@ async function drawCitations(bar: number | null, onBar: (bar: number | null) => 
   await act(async () =>
     root.render(
       createElement(CitationsPanel, {
+        head: null,
         access: { kind: "owner", owner: citationsOwner() },
         order: "prioritised",
         onOrder: noop,

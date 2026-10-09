@@ -1,6 +1,14 @@
-# Debate mode
+# Debate mode — Peer review's Reception and Claims
 
 Up: [reading-view-overview.md](reading-view-overview.md)
+
+**Since 2026-10-09 this is two of [Peer review](peer-review.md)'s three sub-modes**, Reception and
+Claims, after Bibliography (the Citations mode until then). The mode, its address
+(`?mode=peer-review&peer-review=reception` or `claims`; an old `?mode=debate` lands there) and its
+chip row are [peer-review.md](peer-review.md)'s; this page keeps the depth on what the two
+sub-modes draw. The stored names — the `debate` and `debate-claims` steps, columns and routes,
+`DebatePanel`, the `dbt-` CSS — keep the word until the name is confirmed (plan
+[261009l § Stage 3](../plans/261009l-peer-review-mode-merges-citations-and-debate.md#stage-3-held-for-greg-the-stored-names)).
 
 What the rest of the web says about this piece: Reception now, plus claim sources preserved from an
 earlier search. **The only mode whose content is not in the article at all**, which is why nearly
@@ -373,7 +381,7 @@ self-citations; an API key.
 The plan is the reference:
 [260905f](../plans/260905f-debate-mode-what-the-web-says-about-this-piece.md), and for how a row
 is laid out, the four orders and the relevance bar,
-[260929h](../plans/260929h-debate-mode-clearer-sources-and-orders.md). Behind the switch for now; since 2026-09-29 a visitor to a public article sees a stored one, every row's address
+[260929h](../plans/260929h-debate-mode-clearer-sources-and-orders.md). Behind the switch until 2026-10-09, when it came out as Peer review; since 2026-09-29 a visitor to a public article sees a stored one, every row's address
 re-judged at the boundary and a refused row withheld and counted — only running a search is the
 owner's ([260929c](../plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md)).
 Since 2026-09-30 a search also finds the themes its sources share and picks out the key ones,
@@ -404,23 +412,27 @@ How the mode was evaluated, and what that found:
 spike that showed a web search never comes back empty in
 [260905f-debate-mode-stage-0-spike-results.md](../plans/260905f-debate-mode-stage-0-spike-results.md).
 
-## Not decided: folding Citations into Debate
+## Decided: Citations folded into Debate, as Peer review
 
 Greg suggested it (spya-c2qmbg): the works a paper cites and what others say about it are two halves
 of one question, and from one cited work he would like to see where it sits in the wider debate. On
-2026-10-04 he deferred it:
+2026-10-04 he deferred it (*"needs more thought. Write up somewhere, and we'll come back to it"*),
+with the options in [261004b § Part 2](../plans/261004b-citation-hover-card-offers-dig-deeper.md).
+On 2026-10-09 he chose the second of them, one mode with three sub-modes, then the third, each
+claim listing the works cited in its paragraph, and took the merged mode out of the experimental
+switch:
 
-> needs more thought. Write up somewhere, and we'll come back to it
+> I'm inclined to go with B and then C1 to begin with. … For question two, I guess let's move this
+> out of experimental, this combined mode. I am hesitating what to call it. Debate doesn't feel
+> quite right. Maybe peer review …
+>
+> — Greg, 2026-10-09 (spya-vcvxu5, to q-xf2xvb)
 
-The options, with a diagram, are in
-[261004b § Part 2](../plans/261004b-citation-hover-card-offers-dig-deeper.md): keep two modes
-linked by buttons; one mode with Reception, Claims and Cited works; list beside each claim the works
-cited in its paragraph (no model call); or a model filing each cited work under a debate thread. The
-Overseer recommended the second then the third. Open with it: the merged mode's name, and whether it
-comes out from behind the experimental switch, which Debate is behind and Citations is not. The
-first small step, a Dig deeper button on a citation's card, shipped (and became *Ask in chat* with
-plan 261009k). It is part of the wider wish to
-declutter the bottom bar ([interface-vision.md](interface-vision.md#decluttering-the-bottom-bar)).
+What was built, and what is held until the name is confirmed, is
+[peer-review.md](peer-review.md) and plan
+[261009l](../plans/261009l-peer-review-mode-merges-citations-and-debate.md). It is part of the
+wider wish to declutter the bottom bar
+([interface-vision.md](interface-vision.md#decluttering-the-bottom-bar)).
 
 ## Where the code is
 
@@ -444,8 +456,8 @@ Each module's header comment says what it owns and why; start with `src/debate.t
 - [`src/debate-journal.ts`](../../src/debate-journal.ts) — the capture journal the evaluation
   replays.
 - [`src/web/DebatePanel.tsx`](../../src/web/DebatePanel.tsx) — the panel, and
-  [`src/web/modes/debate/`](../../src/web/modes/debate/DebateMode.tsx) the mode controller that
-  mounts it.
+  [`PeerReviewMode.tsx`](../../src/web/modes/peer-review/PeerReviewMode.tsx) the mode controller
+  that mounts it (`DebateMode.tsx` until 2026-10-09).
 - [`src/web/debate-levels.ts`](../../src/web/debate-levels.ts) — Reception's two groups, and why the
   slider that used to hide the title-only one is gone.
   [`src/web/debate-order.ts`](../../src/web/debate-order.ts) — Reception's orders, Claims' grouping

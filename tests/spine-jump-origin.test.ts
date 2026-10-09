@@ -336,7 +336,7 @@ describe("the mark for where the reader jumped from", () => {
     jumped(at(block(7)), block(18));
     const before = renders.Spine;
 
-    act(() => history.pushState(history.state, "", `/read/x?at=${block(18)}&mode=citations`));
+    act(() => history.pushState(history.state, "", `/read/x?at=${block(18)}&mode=peer-review`));
 
     expect(renders.Spine).toBe(before);
     expect(marks()).toHaveLength(1);

@@ -137,6 +137,7 @@ function paintOwner(summaries: ThreadSummary[] = []): void {
   act(() => {
     root.render(
       createElement(DebatePanel, {
+        head: null,
         ...shared,
         access: {
           kind: "owner",
@@ -163,7 +164,7 @@ function paintVisitor(): void {
     claims: { rows: ROWS, sourceNotPublishable: 0 },
   } as unknown as PublicDebate;
   act(() => {
-    root.render(createElement(DebatePanel, { ...shared, access: { kind: "visitor", debate, claimList: null } }));
+    root.render(createElement(DebatePanel, { head: null, ...shared, access: { kind: "visitor", debate, claimList: null } }));
   });
 }
 

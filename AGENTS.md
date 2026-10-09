@@ -61,6 +61,8 @@ listed here; the names under each are files in `docs/project/`.
   `ideas.md` (the propositions the piece assumes) ·
   `quotes.md` (the lines worth keeping) ·
   `timeline.md` (when the piece says these things happened) ·
+  `peer-review.md` (what the piece cites and what others say about it: Citations and Debate as one
+  mode, since 2026-10-09) ·
   `citations.md` (the works the piece cites, and where each link came from) ·
   `faq.md` (the questions a careful reader would ask, answered only by the piece's own passages) ·
   `skim.md` (skim a paper at increasing depth: a route through its quotes, walked three times; it

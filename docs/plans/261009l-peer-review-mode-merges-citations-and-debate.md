@@ -249,6 +249,33 @@ citation data, and that is not worth it for this line.
 Done when: typecheck, the full suite and doc-links are green, and every old link above lands in the
 right place, under a test.
 
+**What landed (2026-10-09).** All of § 1 to § 10 bar F9's queue item, which is the orchestrator's
+to file. The canonicaliser is `liftLegacyPeerReview` in `router.ts`, reached by `settleAddress`,
+`liftedLegacyHref` and `liftedLegacySearch` (last-view's `restoredHref`);
+`tests/peer-review-old-addresses.test.ts` and `tests/debate-navigation.test.tsx` hold it. The band
+is `src/web/modes/peer-review/PeerReviewMode.tsx` (`DebateMode.tsx` and `CitationsMode.tsx` are
+gone); the counts are `src/web/peer-review-counts.ts`; the focus rule is `focusesLeft` in
+`item-focus.ts`. Decisions the plan left open, each small:
+
+- **The retired words are the sub-mode rows' aliases, not the mode row's**: `citations` (and the
+  bibliography words) on Bibliography, `debate` (and Debate's words) on Reception, `debate claims`
+  on Claims — mode.md § Retiring a mode, step 2, so each old word opens the view its old link
+  opens. The mode row has `sources`, `literature`, `further reading`; "peer review" is its label, so
+  an alias repeating it is refused by tests/mode-catalog.test.ts, and Referee no longer has it.
+- **The icon is Citations' `BookText`**, because the button opens on Bibliography; Debate's globe
+  stays on Reception's search button.
+- **Both panels' surfaces carry a `peer-review` class and the label "Peer review"**, so one selector
+  finds the band in any sub-mode.
+- **The chip row is the band's `.band-head`**, so it sits above Reception's angle box (it sat under
+  it); `.dbt-controls` is gone.
+- **Every read is mounted in all three sub-modes** (free GETs), each auto-run gated on its own
+  sub-mode; `useCitations` gained the `enabled` argument the other two hooks had.
+- **`?debate=` moved to `NEVER_REMEMBERED`**; a stray one on a non-Debate address is left as written.
+- **The way back's words name the sub-mode** (*Back to "…" in Bibliography*), and the tooltips
+  *Started from a claim in Peer review › Claims*.
+- **Features page tiles** are titled *Bibliography.* and *Reception.*, both tagged Peer review.
+- **The import line** says *… and Peer review's Bibliography are prepared*.
+
 ### Stage 2: C1
 
 The join (`worksCitedIn(blockId, works)`, a pure function with its own tests), the line under each

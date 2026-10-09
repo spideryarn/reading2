@@ -107,6 +107,9 @@ const PINNED_ANCHORS = [
   "for-students",
   "for-reviewers",
   "for-experts",
+  /* 2026-10-09: Citations and Debate became Peer review (plan 261009l).
+     `mode-citations` and `mode-debate` above are aliases now (RETIRED_MODES). */
+  "mode-peer-review",
 ];
 
 const LIVE = new Set<string>(HELP_ANCHORS);

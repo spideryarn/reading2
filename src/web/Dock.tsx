@@ -235,11 +235,11 @@ import type { DiagramKind } from "./diagram.js";
 import {
   type BandMode,
   DEFAULT_MODE,
-  debateInSearch,
-  type DebateView,
   diagramInSearch,
   marginInSearch,
   type Mode,
+  peerReviewInSearch,
+  type PeerReviewView,
   type Panel,
   learnInSearch,
   summaryInSearch,
@@ -388,14 +388,14 @@ interface Props {
    */
   diagram?: DiagramKind;
   /**
-   * **Which of Debate's sub-modes is showing** (`?debate=`), as the reading
-   * view has parsed it — off the reading view the carried query string says
-   * (`debateInSearch`). Since 2026-10-08 a Debate press arms the search only
-   * when it lands on Reception (activation.ts § `activationForDebate`), so this
-   * is read for `summary`'s reason above: from the state, not the lagging
-   * address.
+   * **Which of Peer review's sub-modes is showing** (`?peer-review=`), as the
+   * reading view has parsed it — off the reading view the carried query string
+   * says (`peerReviewInSearch`). A Peer review press arms only the work of the
+   * sub-mode it lands on (activation.ts § `activationForPeerReview`; Debate's
+   * since 2026-10-08), so this is read for `summary`'s reason above: from the
+   * state, not the lagging address.
    */
-  debate?: DebateView;
+  peerReview?: PeerReviewView;
   /**
    * **Whether this reader sees the modes that are still being built** — and
    * therefore how many buttons the bar draws at all. `visibleModes` is the rule.
@@ -956,27 +956,11 @@ const MODES_UI = [
     group: "guides",
     more: true,
   },
-  /* **First of the critical run — Citations, Referee, Debate — since
-     2026-10-04**: Greg, *"Move the citations mode one to the left in the
-     bottom bar"* (spya-tnqt2t, plan 261004j). It joined this run on
-     2026-09-29, between Referee and Debate — *"Move Citations further right,
-     next to Debate and Reviewer"* (SPIDERYARN-READING2-4E). Its list is the piece's own references, Debate's
-     is the web's, and Referee is somebody weighing the piece against other
-     work: the three are reading it critically. It stood after Timeline before
-     that.
-
-     `BookText` — a closed book with lines on it, i.e. *a work*. `Library` was
-     the obvious glyph and is refused: it is the shelf's, on every page. `Quote`
-     is Quotes'. docs/plans/260911g-citations-mode.md. */
-  {
-    mode: "citations",
-    group: "critical",
-  },
-  /* **In the critical run — Citations, Referee, Debate — since
-     2026-09-29**, which is Greg's grouping: *"Move Citations further right,
-     next to Debate and Reviewer"* (SPIDERYARN-READING2-4E). First of it until
-     2026-10-04, when Citations moved one place left past it (spya-tnqt2t,
-     plan 261004j). Before the run existed it sat
+  /* **First of the critical run — Referee, Peer review — since 2026-10-09**,
+     when Citations, which stood before it from 2026-10-04 (spya-tnqt2t, plan
+     261004j), became one of Peer review's sub-modes. The run is Greg's
+     grouping, 2026-09-29: *"Move Citations further right, next to Debate and
+     Reviewer"* (SPIDERYARN-READING2-4E). Before the run existed it sat
      straight after Search, because it is Search's kind of thing — a pass
      over the piece looking for passages — pointed at somebody who has been
      asked to peer-review it rather than at somebody reading it for themselves.
@@ -997,28 +981,22 @@ const MODES_UI = [
     mode: "referee",
     group: "critical",
   },
-  /* **Last of the critical run, before the input run, since 2026-09-29**, when
-     Greg moved Chat past it (*"Move Chat right, just before Recall"*) and put
-     Citations and Referee beside it (SPIDERYARN-READING2-4E). Debate's content
-     comes from neither the article nor the reader — it is the only mode in
-     this bar whose content is **not in the article at all** — so it stays at
-     the far end of the outward run, one run short of the reader's own.
+  /* **Peer review, last of the critical run and before the input run, where
+     Debate stood**, since 2026-10-09: Citations and Debate in one button, with
+     Bibliography, Reception and Claims as its chips. Greg (spya-vcvxu5): *"let's
+     move this out of experimental, this combined mode"*. Citations' list is
+     the piece's own references, Debate's is the web's, and Referee beside it
+     is somebody weighing the piece: the run reads it critically.
 
-     **`Globe`, and it is the same word this app already draws for "this came
-     from the open web"** — the glossary's web lookup, chat's search, the
-     reviewer brief (GlossaryPanel.tsx, ChatPanel.tsx, CandidatesPanel.tsx). No
-     other button in this bar is a globe, so it is unmistakable from Chat's two
-     bubbles, which `MessageSquareQuote` would not have been. The glyph's
-     other sense in this app — *shared publicly* — appears only on surfaces that
-     are about sharing, and the bar is not one. docs/project/icons.md.
-
-     Its description (src/mode-catalog.ts) names the empty case, because it is
-     the commonest one: most pieces have no critical reception at all, and a
-     mode that is empty four times in five reads as broken unless the button
-     said so first.
+     Debate's place, at the far end of the outward run, because most of what
+     the mode adds is **not in the article at all**. Its icon is Citations'
+     `BookText` (mode-icons.ts), because the button opens on Bibliography;
+     Debate's `Globe` stays on Reception's search button.
+     docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md;
+     Citations' row: docs/plans/260911g-citations-mode.md; Debate's:
      docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md. */
   {
-    mode: "debate",
+    mode: "peer-review",
     group: "critical",
   },
   /* **First of the input run — Search, Chat, Learn — since 2026-09-29.**
@@ -1826,7 +1804,7 @@ export function useActivateMode(
 ): (next: Mode) => void {
   /* Taken apart so the callback depends on the three answers, not on an
      object a caller rebuilds every render. */
-  const { diagram, summary, debate } = press;
+  const { diagram, summary, peerReview } = press;
   return useCallback(
     (next: Mode) => {
       if (onMode === undefined) {
@@ -1853,10 +1831,10 @@ export function useActivateMode(
          Only the press that turns the column on can ask from the browser for
          relation words missing after import (plans 261003f and 261005d). */
       const marginOn = next === "marginalia" && margin;
-      if (arms && !again && !marginOn) armActivationForMode(slug, next, { diagram, summary, debate });
+      if (arms && !again && !marginOn) armActivationForMode(slug, next, { diagram, summary, peerReview });
       onMode(next, undefined, toggles);
     },
-    [slug, search, diagram, summary, debate, onMode, arms, current, toggles, margin],
+    [slug, search, diagram, summary, peerReview, onMode, arms, current, toggles, margin],
   );
 }
 
@@ -1928,7 +1906,7 @@ export function Dock({
   margin: marginProp,
   summary: summaryProp,
   diagram: diagramProp,
-  debate: debateProp,
+  peerReview: peerReviewProp,
   marked,
   visitor,
   shelfRow,
@@ -2056,14 +2034,14 @@ export function Dock({
      own parsed state where there is one, and the carried address only off it,
      where a press is a link and arms nothing anyway. § Props `summary`. */
   const summary = summaryProp ?? summaryInSearch(search);
-  /* Which of Debate's sub-modes a Debate press would land on, the same way
-     round. § Props `debate`. */
-  const debate = debateProp ?? debateInSearch(search);
+  /* Which of Peer review's sub-modes a Peer review press would land on, the
+     same way round. § Props `peerReview`. */
+  const peerReview = peerReviewProp ?? peerReviewInSearch(search);
 
   /* **Opening a mode**, and it is one callback rather than two calls made
      twice — `useActivateMode` above holds the whole of the reasoning, which
      is the reason it is a named thing at all. */
-  const press = { diagram, summary, debate };
+  const press = { diagram, summary, peerReview };
   const activateMode = useActivateMode(slug, search, press, onMode, !isVisitor, mode, false, margin);
   /* The bar's own buttons: the same door, but a second press closes. */
   const pressMode = useActivateMode(slug, search, press, onMode, !isVisitor, mode, true, margin);

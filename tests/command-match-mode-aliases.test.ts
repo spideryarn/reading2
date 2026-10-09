@@ -142,8 +142,8 @@ describe("Greg's four words (spya-uzkmn3)", () => {
 const ALSO_A_CHIP: Readonly<Record<string, string>> = {
   recall: "submode:learn:recall",
   sketch: "submode:diagram:sketch",
-  /* Debate's default chip since 2026-10-03, and an older nickname than that. */
-  reception: "submode:debate:reception",
+  /* `reception` was Debate's nickname and its default chip until 2026-10-09;
+     it is Peer review's Reception chip's own label now, not a nickname. */
 };
 
 describe("every nickname, typed in full", () => {
@@ -173,8 +173,10 @@ describe("every nickname, typed in full", () => {
  */
 const SHARED_STARTS: Readonly<Record<string, readonly Mode[]>> = {
   s: ["structure", "summary", "skim", "search"],
-  d: ["diagram", "debate"],
-  c: ["citations", "chat"],
+  /* Peer review shares Plain's first letter since 2026-10-09; `d` and `c`,
+     which Debate and Citations shared with Diagram and Chat, name one mode
+     each now. */
+  p: ["plain", "peer-review"],
   /* `r` and `re` were shared by Referee and Remember until 2026-10-05, when
      Remember became Learn: each now names Referee alone, and the test below
      that asks for "the one mode it names first" covers them. */
@@ -222,9 +224,10 @@ const A_MODE_COMES_FIRST: Readonly<Record<string, Mode>> = {
      too and comes second. Both were so before 2026-10-04. */
   annotations: "marginalia",
   /* The Metadata row's `source` — where the piece came from — is the start of
-     Citations' `sources`, and the mode comes first. Also older than this file;
-     found by it, and left for Greg to call: either word is a fair claim. */
-  source: "citations",
+     Peer review's `sources` (Citations' until 2026-10-09), and the mode comes
+     first. Also older than this file; found by it, and left for Greg to call:
+     either word is a fair claim. */
+  source: "peer-review",
 };
 
 describe("a word that is another row's own", () => {
@@ -261,7 +264,9 @@ describe("every Run again phrase, typed in full", () => {
 
   it("includes the new nicknames, so the check above is about them", () => {
     expect(rerunWords("glossary").aliases).toContain("rerun jargon");
-    expect(rerunWords("citations").aliases).toContain("further reading again");
+    /* Bibliography's words since 2026-10-09 (plan 261009l, GPT Sol's F8). */
+    expect(rerunWords("citations").aliases).toContain("references again");
+    expect(rerunWords("debate").aliases).toContain("rerun critiques");
   });
 });
 

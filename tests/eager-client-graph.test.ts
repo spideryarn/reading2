@@ -706,7 +706,8 @@ describe("the reading view's modes are code a reader already has", () => {
     /* The walk that finds nothing satisfies both assertions below.
        docs/reusable/silent-success.md. */
     expect(MODE_CONTROLLERS.map(rel), "no mode controllers under src/web/modes/").not.toEqual([]);
-    expect(MODE_CONTROLLERS.map(rel)).toContain("src/web/modes/debate/DebateMode.tsx");
+    /* `DebateMode.tsx` until 2026-10-09, when Debate and Citations became Peer review. */
+    expect(MODE_CONTROLLERS.map(rel)).toContain("src/web/modes/peer-review/PeerReviewMode.tsx");
   });
 
   it("has every one of them in the reader's first download", () => {

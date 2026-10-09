@@ -249,8 +249,7 @@ const { QuotesBand } = await import("../src/web/modes/quotes/QuotesMode.js");
 const { useQuotesRead } = await import("../src/web/useQuotes.js");
 const { TimelineBand } = await import("../src/web/modes/timeline/TimelineMode.js");
 const { FaqBand } = await import("../src/web/modes/faq/FaqMode.js");
-const { DebateBand } = await import("../src/web/modes/debate/DebateMode.js");
-const { CitationsBand } = await import("../src/web/modes/citations/CitationsMode.js");
+const { PeerReviewBand } = await import("../src/web/modes/peer-review/PeerReviewMode.js");
 const { useCitationsRead } = await import("../src/web/useCitations.js");
 const { SkimBand } = await import("../src/web/modes/skim/SkimMode.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
@@ -274,18 +273,33 @@ function GlossaryOuter({ show }: { show: boolean }) {
     : null;
 }
 
-/* Quotes and Citations read above their band too, for the marks in the prose
-   (useQuotes.ts § `useQuotesRead`, useCitations.ts § `useCitationsRead`). */
+/* Quotes and Peer review's Bibliography read above their band too, for the
+   marks in the prose (useQuotes.ts § `useQuotesRead`, useCitations.ts §
+   `useCitationsRead`). Peer review's band holds Reception's and Claims' reads
+   itself, in every sub-mode (PeerReviewMode.tsx), so all three of its cases
+   mount the one band, on the sub-mode their `search` names. */
 function QuotesOuter({ show }: { show: boolean }) {
   const read = useQuotesRead(SLUG);
   return show
     ? createElement(QuotesBand, { slug: SLUG, read, onJump: noop, steps: [], yours: { rows: [], blocks: [], onOpen: noop } })
     : null;
 }
-function CitationsOuter({ show }: { show: boolean }) {
+function PeerReviewOuter({ show }: { show: boolean }) {
   const read = useCitationsRead(SLUG);
   return show
-    ? createElement(CitationsBand, { slug: SLUG, read, onJump: noop, focus: null, onFocusTaken: noop })
+    ? createElement(PeerReviewBand, {
+        slug: SLUG,
+        citationsRead: read,
+        onJump: noop,
+        blockOrder: new Map(BLOCKS.map((b, i) => [b.id, i])),
+        publishedAt: undefined,
+        articleTitle: "A piece",
+        claimChats: { summaries: [], onCheck: noop, onLens: noop, onOpen: noop },
+        citeFocus: null,
+        onCiteFocusTaken: noop,
+        claimFocus: null,
+        onClaimFocusTaken: noop,
+      })
     : null;
 }
 
@@ -645,6 +659,8 @@ const ROWS: Row[] = [
     hook: "useDebate.ts",
     step: "debate",
     path: "/api/debate/",
+    /* Peer review's Reception since 2026-10-09 (plan 261009l). */
+    search: "?peer-review=reception",
     body: (which, { stale }) => ({
       debate: {
         version: "test",
@@ -679,17 +695,7 @@ const ROWS: Row[] = [
       stale,
       outdated: false,
     }),
-    mount: (show) =>
-      show
-        ? createElement(DebateBand, {
-            slug: SLUG,
-            onJump: noop,
-            blockOrder: new Map(BLOCKS.map((b, i) => [b.id, i])),
-            publishedAt: undefined,
-            articleTitle: "A piece",
-            claimChats: { summaries: [], onCheck: noop, onLens: noop, onOpen: noop },
-          })
-        : null,
+    mount: (show) => createElement(PeerReviewOuter, { show }),
     verb: "Search again",
     shape: ON_THE_BANNER,
     forced: ["Search again"],
@@ -697,14 +703,15 @@ const ROWS: Row[] = [
     waiting: "The new search hasn't loaded yet.",
     readAgain: "Try again",
   },
-  /* Claims' list (plan 261008i stage 2): the same band on `?debate=claims`,
-     whose stale banner's *List again* is the forced verb. */
+  /* Claims' list (plan 261008i stage 2): the same band on
+     `?peer-review=claims` (`?debate=claims` until 2026-10-09), whose stale
+     banner's *List again* is the forced verb. */
   {
     name: "Debate's claims list",
     hook: "useDebateClaims.ts",
     step: "debate-claims",
     path: "/api/debate-claims/",
-    search: "?debate=claims",
+    search: "?peer-review=claims",
     body: (which, { stale }) => ({
       claimList: {
         ...stamp(which, false),
@@ -721,17 +728,7 @@ const ROWS: Row[] = [
       stale,
       outdated: false,
     }),
-    mount: (show) =>
-      show
-        ? createElement(DebateBand, {
-            slug: SLUG,
-            onJump: noop,
-            blockOrder: new Map(BLOCKS.map((b, i) => [b.id, i])),
-            publishedAt: undefined,
-            articleTitle: "A piece",
-            claimChats: { summaries: [], onCheck: noop, onLens: noop, onOpen: noop },
-          })
-        : null,
+    mount: (show) => createElement(PeerReviewOuter, { show }),
     verb: "List again",
     shape: ON_THE_BANNER,
     forced: ["List again"],
@@ -770,7 +767,7 @@ const ROWS: Row[] = [
       stale,
       outdated: false,
     }),
-    mount: (show) => createElement(CitationsOuter, { show }),
+    mount: (show) => createElement(PeerReviewOuter, { show }),
     verb: "Find them again",
     shape: ON_THE_BANNER,
     forced: ["Find them again"],

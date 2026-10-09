@@ -16,6 +16,7 @@ import type { BlockId, Citations, CitedWork, Quote, Quotes } from "../src/types.
 import type { QuoteRank, CiteOrder } from "../src/web/params.js";
 import type { QuotesOwner } from "../src/web/QuotesPanel.js";
 import type { UseCitations } from "../src/web/useCitations.js";
+import { peerReviewHead } from "./helpers/peer-review-head.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -255,6 +256,8 @@ async function mountCitations(o: UseCitations, order: CiteOrder): Promise<void> 
   await act(async () =>
     root.render(
       createElement(CitationsPanel, {
+        /* Peer review's chip row, the band's head since 2026-10-09. */
+        head: peerReviewHead({ view: "bibliography", onView: noop, ownerSlug: null, works: o.citations?.citations ?? null }),
         access: { kind: "owner", owner: o },
         order,
         onOrder: noop,
@@ -279,14 +282,19 @@ async function citeCard(): Promise<string> {
 }
 
 describe("the Citations band's top and foot", () => {
-  it("has no head row while the order row is drawn, and the count in the (i) rather than on the band", async () => {
+  /* Since 2026-10-09 the head row is Peer review's chip row, whatever the
+     order row does (plan 261009l); what this held before — no row of its own
+     for the count — still holds: the number is on Bibliography's chip and in
+     the (i), never a line on the band. */
+  it("has only the chip row for a head while the order row is drawn, and the count in the (i) rather than on the band", async () => {
     await mountCitations(citeOwner(citations(WORKS)), "prioritised");
     expect(host.querySelector(".gloss-sort"), "no order row to fold into").not.toBeNull();
-    expect(head()).toBeNull();
+    expect(head()?.querySelector(".dbt-views")).not.toBeNull();
+    expect(head()?.children).toHaveLength(1);
     expect(host.textContent).not.toContain("3 works");
 
     await mountCitations(citeOwner(citations(WORKS)), "document");
-    expect(head()).toBeNull();
+    expect(head()?.children).toHaveLength(1);
     expect(host.textContent).not.toContain("3 works");
     expect(await citeCard()).toContain("3 works cited.");
   });
@@ -377,6 +385,7 @@ describe("the states the fold depends on", () => {
     await act(async () =>
       root.render(
         createElement(CitationsPanel, {
+          head: null,
           access: {
             kind: "visitor",
             /* The public boundary narrows `linkFrom` by excluding the owner's

@@ -16,6 +16,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { checksOwner, claimListOf, claimListOwner } from "./helpers/debate-claims-owner.js";
+import { peerReviewHead } from "./helpers/peer-review-head.js";
 import type {
   BlockId,
   DebateCheckRequest,
@@ -114,20 +115,30 @@ function paint(
   checks: Partial<UseDebateChecks> = {},
   list: Partial<UseDebateClaims> = {},
 ): void {
+  const claimList = claimListOwner({ status: "ready", claimList: claimListOf(LISTED), ...list });
+  const owned = checksOwner({
+    check: async (request: DebateCheckRequest) => {
+      sent.push(request);
+      return true;
+    },
+    ...checks,
+  });
   act(() => {
     root.render(
       createElement(DebatePanel, {
+        /* Peer review's chip row, as `PeerReviewBand` hands it (since 2026-10-09). */
+        head: peerReviewHead({
+          view: "claims",
+          onView: () => {},
+          ownerSlug: NO_DEBATE.slug,
+          debate: NO_DEBATE.debate,
+          claimList: { kind: "owner", status: claimList.status, claimList: claimList.claimList, checks: owned.checks },
+        }),
         access: {
           kind: "owner",
           owner: NO_DEBATE,
-          claimList: claimListOwner({ status: "ready", claimList: claimListOf(LISTED), ...list }),
-          checks: checksOwner({
-            check: async (request: DebateCheckRequest) => {
-              sent.push(request);
-              return true;
-            },
-            ...checks,
-          }),
+          claimList,
+          checks: owned,
           citers: { result: { kind: "no-doi" }, retry: () => {} },
           claimChats: { summaries: [], onCheck: () => {}, onLens: () => {}, onOpen: () => {} },
         },
@@ -275,7 +286,7 @@ describe("what the checks found", () => {
     const titles = [...(claimItem(A.id)?.querySelectorAll(".dbt-item a.dbt-title") ?? [])].map((a) => a.textContent);
     expect(titles).toEqual(["Page at https://a.example/one", "Page at https://a.example/two", "Page at https://a.example/three"]);
     /* The segment counts the rows on screen, a page once per claim. */
-    expect(segments()[1]).toBe("Claims3");
+    expect(segments()[2]).toBe("Claims3");
   });
 
   it("says found nothing only for an explicit empty answer, and something else when a claim was not answered", () => {

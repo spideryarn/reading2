@@ -625,7 +625,7 @@ function OwnedReader({
    *
    * `useCitationsRead` is the opening GET plus `applyFound` and
    * `applyInvestigation`, and nothing else.
-   * `CitationsBand` layers `useStepJob`, `useAutoRun` and the POST that is
+   * `PeerReviewBand` (`CitationsBand` until 2026-10-09) layers `useStepJob`, `useAutoRun` and the POST that is
    * *Find it on the web* on top of it — and those stay down there for the two
    * reasons the Quotes comment above gives, which apply here unchanged.
    *

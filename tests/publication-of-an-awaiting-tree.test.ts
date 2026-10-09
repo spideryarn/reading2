@@ -83,6 +83,8 @@ const MODES: StepName[][] = [
   ["quotes"],
   ["ideas"],
   ["simple"],
+  /* Peer review's Bibliography, queued since 2026-10-09 (plan 261009l § On import). */
+  ["citations"],
   ["crossrefs"],
   ["quotes", "ideas", "skim"],
 ];

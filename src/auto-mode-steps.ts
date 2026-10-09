@@ -26,7 +26,9 @@ import type { StepName } from "./types.js";
  *
  * `tweets` and `simple` are Summary's two artefacts (its thread and its
  * plain-words levels); `glossary`, `quotes`, `ideas` and `skim` are their own
- * modes'; `crossrefs` belongs to no mode — the links from a phrase in one
+ * modes'; `citations` is Peer review's Bibliography since 2026-10-09 (not its
+ * Reception search or its Claims list, which wait for their own chips — plan
+ * 261009l § On import); `crossrefs` belongs to no mode — the links from a phrase in one
  * passage to the passage that backs it sit in the prose in every mode
  * (docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md § 3).
  *
@@ -43,6 +45,7 @@ export const AUTO_MODE_STEPS: readonly StepName[] = [
   "ideas",
   "simple",
   "skim",
+  "citations",
   "crossrefs",
 ];
 

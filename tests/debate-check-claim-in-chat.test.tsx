@@ -458,7 +458,7 @@ async function typeAndSend(box: HTMLTextAreaElement, text: string): Promise<void
 describe("checking a Debate claim in chat", () => {
   it("refreshes the claim after an answer that begins and finishes after leaving Chat", async () => {
     who.set(OWNER);
-    await open("?mode=debate&debate=claims");
+    await open("?mode=peer-review&peer-review=claims");
     await until(() => claims().length === 2, "both claims");
     /* The press is the Send, so the turn is held from before it. */
     holdTurn = true;
@@ -468,7 +468,7 @@ describe("checking a Debate claim in chat", () => {
     expect(chatPosts(), "the press sent the question, once").toHaveLength(1);
     expect(releaseTurn).not.toBeNull();
     await act(async () => history.back());
-    await until(() => param("mode") === "debate" && claims().length === 2, "Debate");
+    await until(() => param("mode") === "peer-review" && claims().length === 2, "Debate");
     expect(marks()).toHaveLength(0);
     await act(async () => releaseTurn?.());
     await until(() => marks()[0]?.querySelector(".origin-chat-line")?.textContent === "A late answer.",
@@ -477,7 +477,7 @@ describe("checking a Debate claim in chat", () => {
 
   it("starts a fresh chat that records the claim, and the claim shows the way back, its line, and loses it on delete", async () => {
     who.set(OWNER);
-    await open(`?mode=debate&debate=claims&thread=${STORED.id}`);
+    await open(`?mode=peer-review&peer-review=claims&thread=${STORED.id}`);
     await until(() => claims().length === 2, "both claims");
     expect(checkButtons(), "one button per claim").toHaveLength(2);
     expect(marks(), "no chat was started from either yet").toHaveLength(0);
@@ -514,7 +514,7 @@ describe("checking a Debate claim in chat", () => {
 
     /* 3. Back to Debate: the mark and its line, with no reload. */
     await act(async () => history.back());
-    await until(() => param("mode") === "debate" && marks().length === 1, "the mark on the claim");
+    await until(() => param("mode") === "peer-review" && marks().length === 1, "the mark on the claim");
     expect(summaryGets().length, "the summaries were asked for again on leaving Chat").toBeGreaterThan(fetchedAtLoad);
     const mark = marks()[0] as HTMLButtonElement;
     expect(claims()[0]?.contains(mark), "on the claim that was checked").toBe(true);
@@ -524,7 +524,7 @@ describe("checking a Debate claim in chat", () => {
     /* 4. The mark opens the conversation beside Debate. */
     await act(async () => mark.click());
     await until(() => param("thread") === fresh && dialog() !== null, "the conversation beside Debate");
-    expect(param("mode"), "still in Debate").toBe("debate");
+    expect(param("mode"), "still in Peer review").toBe("peer-review");
     expect(param("margin"), "and Marginalia was not switched on for it").toBeNull();
     expect(claims()[0]?.open, "and the claim was not folded by the press").toBe(true);
     await until(() => (dialog()?.textContent ?? "").includes("It did not replicate."), "its transcript");
@@ -554,7 +554,7 @@ describe("checking a Debate claim in chat", () => {
     expect(fromDebate, "one row is marked as started elsewhere").toHaveLength(1);
     expect(fromDebate[0]?.textContent).toContain("Check this claim");
     expect(fromDebate[0]?.querySelector(".chat-thread-source")?.getAttribute("aria-label")).toBe(
-      "Started from a claim in Debate",
+      "Started from a claim in Peer review › Claims",
     );
 
     /* 7. Delete it there, go back to Debate, and the mark has gone. */
@@ -562,8 +562,8 @@ describe("checking a Debate claim in chat", () => {
     await act(async () => del?.click());
     await settle();
     await until(() => !server.some((t) => t.id === fresh), "the delete to reach the server");
-    history.pushState(null, "", `/read/${SLUG}?mode=debate&debate=claims`);
+    history.pushState(null, "", `/read/${SLUG}?mode=peer-review&peer-review=claims`);
     await act(async () => window.dispatchEvent(new PopStateEvent("popstate")));
-    await until(() => param("mode") === "debate" && claims().length === 2 && marks().length === 0, "the mark to go");
+    await until(() => param("mode") === "peer-review" && claims().length === 2 && marks().length === 0, "the mark to go");
   });
 });

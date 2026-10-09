@@ -492,6 +492,8 @@ describe("the bar is three frames: Plain, the bands with More, Marginalia with C
       MODE_LABEL.summary,
       MODE_LABEL.skim,
       "More",
+      /* In every reader's bar since 2026-10-09 (plan 261009l). */
+      MODE_LABEL["peer-review"],
       MODE_LABEL.search,
       MODE_LABEL.chat,
       MODE_LABEL.learn,
@@ -512,7 +514,7 @@ describe("the bar is three frames: Plain, the bands with More, Marginalia with C
         button.getAttribute("aria-label"),
       ),
       "the lines between the surviving band runs moved or disappeared",
-    ).toEqual([MODE_LABEL.search]);
+    ).toEqual([MODE_LABEL["peer-review"], MODE_LABEL.search]);
 
     /* Coarse-pointer growth is weighted by the controls actually drawn, at
        both levels. A fixed outer weight was the plan review's P2-1. */

@@ -30,6 +30,7 @@ import type { Mode } from "../modes.js";
 import { METADATA_RERUN_STEPS, type MetadataRerunStep } from "../rerun-steps.js";
 import { MODE_LABEL } from "../title-text.js";
 import { SKETCH_WAIT } from "./sketch-cost.js";
+import { PEER_REVIEW_SUB_MODES } from "./sub-modes.js";
 
 export { METADATA_RERUN_STEPS, type MetadataRerunStep };
 
@@ -54,8 +55,11 @@ export const RERUN_LABEL: Record<MetadataRerunStep, string> = {
   relations: "Relation words",
   sketch: "Sketch",
   skim: "Skim",
-  debate: "Debate",
-  citations: "Citations",
+  /* Peer review's sub-modes, whose steps keep the old names until the deep
+     rename (plan 261009l § Stage 3): Debate's step is Reception's search,
+     Citations' is Bibliography's list. Claims' list has no row here. */
+  debate: PEER_REVIEW_SUB_MODES.reception.label,
+  citations: PEER_REVIEW_SUB_MODES.bibliography.label,
   /* Not a mode, so no `MODE_LABEL` to borrow: the links it draws in the prose. */
   crossrefs: "Cross-references",
   /* Summary's plain-words lengths, which this one step writes together. Named
@@ -101,7 +105,10 @@ export const RERUN_COST_NOTE: Partial<Record<MetadataRerunStep, string>> = {
  * thread. Summary shows two artefacts, so borrowing its name and aliases for
  * either step would make `rerun summarise` a guess — and for the thread it
  * would make `rerun summary` force a thread (GPT Sol, F5 of the 261003l
- * review). Each is named by hand in `RERUN_ALSO_CALLED` instead. A `Partial`
+ * review). Each is named by hand in `RERUN_ALSO_CALLED` instead. **And both
+ * of Peer review's**, since 2026-10-09, for the same reason: borrowing its name
+ * for the citations and the Reception search would make `rerun peer review` a
+ * guess between two paid runs (GPT Sol's F8 on plan 261009l). A `Partial`
  * on purpose: a mode borrowed wrongly would teach the bar a word that runs
  * something the reader did not name.
  */
@@ -112,8 +119,6 @@ const RERUN_MODE: Partial<Record<MetadataRerunStep, Mode>> = {
   timeline: "timeline",
   faq: "faq",
   skim: "skim",
-  debate: "debate",
-  citations: "citations",
 };
 
 /**
@@ -134,6 +139,13 @@ const RERUN_ALSO_CALLED: Partial<Record<MetadataRerunStep, readonly string[]>> =
      so `rerun tweets` still forces the thread. Not `x`: `rerun x` is too
      little to hang a paid run on. */
   tweets: ["tweets", "tweet thread", "twitter", "social"],
+  /* **Each of Peer review's re-runs answers to its own sub-mode's words** —
+     the retired mode word first (`citations`, `debate`), then the nicknames the
+     two modes had, which are the sub-mode rows' own aliases now
+     (sub-modes.ts § `PEER_REVIEW_SUB_MODES`). Never `peer review`: plan
+     261009l, GPT Sol's F8. */
+  citations: PEER_REVIEW_SUB_MODES.bibliography.aliases ?? [],
+  debate: PEER_REVIEW_SUB_MODES.reception.aliases ?? [],
 };
 
 /**

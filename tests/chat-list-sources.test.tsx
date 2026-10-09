@@ -139,12 +139,12 @@ const press = (el: Element | null | undefined): void => {
 };
 
 describe("a row's source icon", () => {
-  it("wears the source's glyph: Brain for Learn, Globe for Debate and Pilcrow for a passage", () => {
+  it("wears the source's glyph: Brain for Learn, Peer review's book for a claim and Pilcrow for a passage", () => {
     paint(EVERY);
     for (const t of [LEARN, TUTORIAL, EXPLORE]) {
       expect(mark(t)?.querySelector("svg.lucide-brain"), t.id).not.toBeNull();
     }
-    expect(mark(CLAIM)?.querySelector("svg.lucide-globe")).not.toBeNull();
+    expect(mark(CLAIM)?.querySelector("svg.lucide-book-text")).not.toBeNull();
     expect(mark(PASSAGE)?.querySelector("svg.lucide-pilcrow")).not.toBeNull();
   });
 
@@ -155,7 +155,7 @@ describe("a row's source icon", () => {
     expect(mark(LEARN)?.getAttribute("aria-label")).toBe("From Learn › Recall");
     expect(mark(TUTORIAL)?.getAttribute("aria-label")).toBe("From Learn › Tutorial");
     expect(mark(EXPLORE)?.getAttribute("aria-label")).toBe("From Learn › Explore");
-    expect(mark(CLAIM)?.getAttribute("aria-label")).toBe("Started from a claim in Debate");
+    expect(mark(CLAIM)?.getAttribute("aria-label")).toBe("Started from a claim in Peer review › Claims");
     expect(mark(PASSAGE)?.getAttribute("aria-label")).toBe("About a passage");
     for (const t of EVERY) {
       if (t !== CHAT) expect(mark(t)?.querySelector("svg"), `${t.id} has a glyph`).not.toBeNull();
@@ -184,7 +184,7 @@ describe("a row's source icon", () => {
     /* Every card on screen: one that is closing fades for a moment after
        the next has opened. */
     const cards = (): string[] => [...document.querySelectorAll('[role="tooltip"]')].map((c) => c.textContent ?? "");
-    expect(cards().some((c) => c.includes("Started from a claim in Debate") && c.includes("RNA can transfer a memory"))).toBe(
+    expect(cards().some((c) => c.includes("Started from a claim in Peer review › Claims") && c.includes("RNA can transfer a memory"))).toBe(
       true,
     );
     expect(debate?.getAttribute("aria-expanded")).toBe("true");
@@ -262,11 +262,11 @@ describe("the filter above the list", () => {
 
   it("offers All, Chats, then one choice per other source present, with Learn's three as one", () => {
     paint(EVERY);
-    expect(words()).toEqual(["All", "Chats", "Debate", "Learn", "About a passage"]);
+    expect(words()).toEqual(["All", "Chats", "Peer review", "Learn", "About a passage"]);
     paint([CHAT, TUTORIAL, EXPLORE]);
     expect(words()).toEqual(["All", "Chats", "Learn"]);
     paint([LEARN, CLAIM]);
-    expect(words()).toEqual(["All", "Debate", "Learn"]);
+    expect(words()).toEqual(["All", "Peer review", "Learn"]);
   });
 
   it("defaults to All, which shows every row", () => {
@@ -290,7 +290,7 @@ describe("the filter above the list", () => {
     expect(choices().find((b) => b.getAttribute("aria-pressed") === "true")?.textContent).toBe("Learn");
     paint(EVERY, { from: "chats" });
     expect(rows().map((r) => r.dataset.thread)).toEqual([CHAT.id]);
-    paint(EVERY, { from: "debate" });
+    paint(EVERY, { from: "peer-review" });
     expect(rows().map((r) => r.dataset.thread)).toEqual([CLAIM.id]);
     paint(EVERY, { from: "passage" });
     expect(rows().map((r) => r.dataset.thread)).toEqual([PASSAGE.id]);
@@ -298,13 +298,13 @@ describe("the filter above the list", () => {
 
   it("tells the band which was pressed, and null for All", () => {
     paint(EVERY, { from: "learn" });
-    press(choices().find((b) => b.textContent === "Debate"));
+    press(choices().find((b) => b.textContent === "Peer review"));
     press(choices().find((b) => b.textContent === "All"));
-    expect(chose).toEqual(["debate", null]);
+    expect(chose).toEqual(["peer-review", null]);
   });
 
   it("shows everything for a choice whose source is not here, so nothing is hidden without a control to say why", () => {
-    paint([CHAT], { from: "debate" });
+    paint([CHAT], { from: "peer-review" });
     expect(rows().map((r) => r.dataset.thread)).toEqual([CHAT.id]);
   });
 });

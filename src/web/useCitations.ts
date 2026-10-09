@@ -193,7 +193,7 @@ export interface UseCitations extends CitationDig {
  * | | mounted by | what it is |
  * |---|---|---|
  * | `useCitationsRead` | `OwnedReader`, always | one `GET /api/citations/:slug` |
- * | `useCitations` | `CitationsBand`, in citations mode | the job poll, the auto-run, the verbs, `find` |
+ * | `useCitations` | `PeerReviewBand` (`CitationsBand` until 2026-10-09), in Peer review | the job poll, the auto-run, the verbs, `find` |
  *
  * **Hoisting the whole hook instead would be two bugs**, and neither is
  * hypothetical — both were found on the quotes version of this move, by a GPT
@@ -207,7 +207,7 @@ export interface UseCitations extends CitationDig {
  *
  * **The GET is unconditional, and the experimental switch does not gate it.**
  * Citations mode is behind that switch, so the tempting saving is to skip this
- * request for readers who cannot see the mode. It does not work: `CitationsBand`
+ * request for readers who cannot see the mode. It does not work: `PeerReviewBand`
  * has to read the list somehow, so either it keeps a read of its own — two
  * states, two requests — or it refreshes this one and the prose marks appear
  * anyway. And it reads the contract backwards:
@@ -402,7 +402,7 @@ export function useCitationsRead(slug: string): CitationsRead {
   }, [citations, reload]);
 
   /* The opening read. Everything after it goes through `reload`, which does not
-     return `status` to `loading` — including `CitationsBand`'s own mount
+     return `status` to `loading` — including `PeerReviewBand`'s own mount
      effect, which joins this request rather than making a second. */
   useEffect(() => {
     void reload();
@@ -651,10 +651,14 @@ function patchFound(w: CitedWork, { link }: FoundPatch): CitedWork {
 /**
  * The band's half: the jobs, the verbs, and *Find it on the web*.
  *
+ * `enabled` is false while Peer review shows Reception or Claims: the hook
+ * stays mounted for Bibliography's count, and spends a press only when its own
+ * sub-mode is showing (useAutoRun.ts § `enabled`).
+ *
  * `read` comes from `useCitationsRead` in `OwnedReader` — see its docstring for
  * why the fetch moved up there, and what this hook still has to do on mount.
  */
-export function useCitations(slug: string, read: CitationsRead): UseCitations {
+export function useCitations(slug: string, read: CitationsRead, enabled = true): UseCitations {
   const {
     status,
     citations,
@@ -713,7 +717,11 @@ export function useCitations(slug: string, read: CitationsRead): UseCitations {
 
   /* `reload` is the way out of a failed read — useAutoRun.ts § A failed read
      is not an answer. */
-  const auto = useAutoRun(slug, "citations", status, ensure, reload);
+  /* `enabled` is whether Bibliography is the sub-mode on screen: since
+     2026-10-09 this hook stays mounted in all three of Peer review's
+     sub-modes, so a press that lands on Reception or Claims is retired
+     unspent, as useDebate.ts and useDebateClaims.ts do for theirs. */
+  const auto = useAutoRun(slug, "citations", status, ensure, reload, enabled);
 
   return {
     status,

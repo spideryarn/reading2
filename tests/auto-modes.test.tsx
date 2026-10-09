@@ -165,9 +165,17 @@ describe("which steps are queued", () => {
       "ideas",
       "simple",
       "skim",
+      /* Peer review's Bibliography, since 2026-10-09: out of the switch, and
+         its default sub-mode. Not `debate` (Reception's paid web search) nor
+         `debate-claims`: each runs on the press of its own chip (plan 261009l
+         § On import). */
+      "citations",
       "crossrefs",
     ]);
     expect(modeStep("summary")).toBeNull();
+    expect(modeStep("peer-review")).toBeNull();
+    expect(AUTO_MODE_STEPS).not.toContain("debate");
+    expect(AUTO_MODE_STEPS).not.toContain("debate-claims");
     expect(modeStep("marginalia")).toBeNull();
     expect(AUTO_MODE_STEPS).not.toContain("relations");
   });
@@ -202,7 +210,9 @@ describe("which steps are queued", () => {
   it("names them to the reader", () => {
     /* Summary once, though two of the steps are its own (its lengths and its
        thread). It must not vanish with its `fixed` row (F2). */
-    expect(autoModesDetail()).toContain("Summary, Glossary, Quotes, Ideas and Skim are prepared");
+    expect(autoModesDetail()).toContain(
+      "Summary, Glossary, Quotes, Ideas, Skim and Peer review’s Bibliography are prepared",
+    );
     expect(autoModesDetail()).toContain("the links from one passage of the article to another");
   });
 });
@@ -222,6 +232,7 @@ describe("what each job asks for", () => {
       ["ideas"],
       ["simple"],
       ["quotes", "ideas", "skim"],
+      ["citations"],
       ["crossrefs"],
     ]);
   });
@@ -230,7 +241,7 @@ describe("what each job asks for", () => {
     /* `crossrefs` sorts after Skim in `STEP_ORDER` and reads nothing, so it
        goes before it. The publication stamps them in this order. */
     const { together, after } = autoModePosts();
-    expect(together).toEqual([["tweets"], ["glossary"], ["quotes"], ["ideas"], ["simple"], ["crossrefs"]]);
+    expect(together).toEqual([["tweets"], ["glossary"], ["quotes"], ["ideas"], ["simple"], ["citations"], ["crossrefs"]]);
     expect(after).toEqual([["quotes", "ideas", "skim"]]);
   });
 
