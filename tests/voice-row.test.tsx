@@ -112,6 +112,7 @@ function paint(kind: "chat" | "learn") {
         canStartOver: true,
         onRetry: () => {},
         onEdit: () => {},
+        onDeleteFrom: undefined,
         onStop: () => {},
         onJump: () => {},
         recovering: new Set<string>(),

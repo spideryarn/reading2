@@ -72,6 +72,7 @@ function paint(open: ChatThread | null) {
         canStartOver: false,
         onRetry: () => {},
         onEdit: () => {},
+        onDeleteFrom: undefined,
         onStop: () => {},
         onJump: () => {},
         recovering: new Set<string>(),

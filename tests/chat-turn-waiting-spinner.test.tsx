@@ -53,6 +53,7 @@ function paint(over: Partial<ChatMessage>, recovering = false): void {
         recovering,
         blocks: new Map<string, string>(),
         onEdit: () => {},
+        onDeleteFrom: undefined,
         canEdit: false,
         editing: false,
         onEditing: () => {},

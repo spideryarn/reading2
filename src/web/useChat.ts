@@ -58,6 +58,7 @@ import {
   appendSpoken,
   askForThreads,
   cancelThread,
+  deleteFrom,
   deleteThread,
   markHintOpened,
   renameThread,
@@ -349,6 +350,12 @@ export interface ChatApi {
    */
   remove(threadId: string, opts?: { restoreOnFailure?: boolean }): void;
   /**
+   * **Delete one of the reader's questions and everything after it** (report
+   * spya-mx423m). The rows leave the screen at once and come back with an
+   * error if the server refuses. See `PruneOperation` in ./chat/model.ts.
+   */
+  deleteFrom(threadId: string, messageId: string): void;
+  /**
    * **Is a delete still waiting on the server?** True from the press until the
    * DELETE is answered either way — including a held one, which has not left
    * yet because the conversation's first turn has not been named.
@@ -400,6 +407,7 @@ const chatEffects: ChatEffects = {
   stopAnswer,
   cancelThread,
   markHintOpened,
+  deleteFrom,
 };
 
 
@@ -990,6 +998,28 @@ export function useChat(slug: string, onSettled?: () => void): ChatApi {
     [controller],
   );
 
+  const deleteFrom = useCallback(
+    (threadId: string, messageId: string) => {
+      /* Off the controller, on the line of the press, for `edit`'s reason: the
+         rows named are the rows the reader is looking at, and the last of them
+         is the tail the server is asked to still have. */
+      const messages = controller.threads.find((t) => t.id === threadId)?.messages ?? [];
+      const index = messages.findIndex((m) => m.id === messageId);
+      if (index < 0) return;
+      controller.dispatch({
+        type: "prune.started",
+        op: {
+          id: asOpId(mintId()),
+          kind: "prune",
+          threadId,
+          messageId,
+          ids: messages.slice(index).map((m) => m.id),
+        },
+      });
+    },
+    [controller],
+  );
+
   const deleting = useMemo(
     () => [...state.operations.values()].some((op) => op.kind === "delete"),
     [state.operations],
@@ -1026,6 +1056,7 @@ export function useChat(slug: string, onSettled?: () => void): ChatApi {
     rename,
     openHint,
     remove,
+    deleteFrom,
     deleting,
     settled,
     named,

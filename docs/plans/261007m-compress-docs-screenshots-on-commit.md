@@ -59,6 +59,10 @@ with one; and the per-file limit went from 2 s to 8 s, so a tall full-page scree
 
 ## What it does not cover, and why that is fine
 
+> **Wrong, as measured on 2026-10-09:** the "stays out" list turned out to be six commit commands in
+> seven as sessions write them, so the hook almost never ran. It now falls back to the screenshots
+> the command names: [261009p](261009p-the-commit-hook-reads-only-one-commit-command-in-seven.md).
+
 - A commit made outside Claude Code (a human in a terminal, a Codex session).
 - Everything in the "stays out" list above, and a folder rather than a file name.
 

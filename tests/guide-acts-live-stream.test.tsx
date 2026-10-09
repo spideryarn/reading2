@@ -77,6 +77,7 @@ function setUp(panel = false) {
     loadThreads: () => new Promise(() => {}),
     renameThread: async () => ({ ok: true }),
     deleteThread: async () => ({ ok: true }),
+    deleteFrom: async () => ({ ok: true }),
     runTurn: (_slug, _thread, _payload, s) => {
       sink = s;
       return new Promise(() => {});
@@ -117,6 +118,7 @@ function setUp(panel = false) {
         canStartOver: false,
         onRetry: () => {},
         onEdit: () => {},
+        onDeleteFrom: undefined,
         onStop: () => {},
         focusNonce: 0,
         error: null,
@@ -132,6 +134,7 @@ function setUp(panel = false) {
         onSend: () => {},
         onRetry: () => {},
         onEdit: () => {},
+        onDeleteFrom: undefined,
         onStop: () => {},
         focusNonce: 0,
         focused: { current: 0 },

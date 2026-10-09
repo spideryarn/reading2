@@ -3577,6 +3577,15 @@ export type StepName =
      `ArticleStage`. */
   | "simple";
 
+/**
+ * **What a job's once-per-job marker can name** (`jobs.paid_step_begun`,
+ * `JobStore.beginPaidStep`): a whole step marked `oncePerJob` (`debate`), or a
+ * purchase inside a step that a later window of the same job must not make
+ * again — Illustrated's plates, which come after the step's own deliberate
+ * hand-back and so cannot be marked at the step. Plans 261009l and 261009o.
+ */
+export type PaidPurchase = StepName | "illustrated-plates";
+
 export type JobStatus = "queued" | "running" | "done" | "error" | "cancelled";
 export type StepStatus = "pending" | "running" | "done" | "skipped" | "error";
 

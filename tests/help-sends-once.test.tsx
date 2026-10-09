@@ -98,6 +98,8 @@ vi.mock("../src/web/useChat.js", () => ({
     discard: () => {},
     rename: () => {},
     remove: () => calls.push("remove"),
+    deleteFrom: () => {},
+    settled: () => true,
     error: null,
   }),
 }));

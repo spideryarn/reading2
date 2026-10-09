@@ -266,6 +266,7 @@ describe("S0-2: the refusal reaches the browser as one it puts the screen back f
       runTurn: effects.runTurn,
       renameThread: effects.renameThread,
       deleteThread: effects.deleteThread,
+      deleteFrom: effects.deleteFrom,
       appendSpoken: async () => ({ ok: false, conflict: false, error: "not in this test" }),
       settledAnswer: async () => null,
       stopAnswer: unused,
