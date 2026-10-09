@@ -247,6 +247,7 @@ function readMeta(ref: JobDraftRef, row: RevisionRow): Meta | null {
     unverified: row.unverified,
     recall: row.recall,
     pagesChecked: row.pagesChecked,
+    quality: row.quality,
   } as Meta);
 }
 
@@ -885,6 +886,7 @@ const META_COLUMNS = [
   "unverified",
   "recall",
   "pagesChecked",
+  "quality",
 ] as const;
 
 function storedOriginal(meta: Meta): string | null {
@@ -946,6 +948,11 @@ export function metaColumns(meta: Meta): Partial<typeof articleRevisions.$inferI
     unverified: meta.unverified ?? null,
     recall: meta.recall ?? null,
     pagesChecked: meta.pagesChecked ?? null,
+    /* The checker's complaints. Null for none, never `[]`, so "found nothing"
+       has one spelling and a re-extraction that finds nothing clears the last
+       one's list. Unstored until plan 261009n, which is how every PDF's
+       complaints were computed and then lost. */
+    quality: meta.quality?.length ? [...meta.quality] : null,
   };
   /* The declared list and the object above must not drift; `META_COLUMNS` is
      what the test checks the two halves against. */

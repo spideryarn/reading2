@@ -82,7 +82,9 @@ and `valence`, recorded in
    `metaColumns` (`src/store/artifacts-pg.ts:897`) nor read back by the Meta reader
    (`src/store/pg.ts` ~1931), and has no column, yet `src/feedback-article.ts:297` still reads it.
    Its own comment calls it *"the whole of what is left of that defence"*. Every other mapper names
-   all its optional fields. Only `ClaimsRun` already has this kind of test
+   all its optional fields. **Fixed the same day** by
+   [261009n](../plans/261009n-pdf-quality-warnings-not-stored.md), with this item's test for both
+   `Meta` read halves — see § Follow-up. Only `ClaimsRun` already has this kind of test
    (`tests/store-pg-referee-claims.test.ts`, `Record<keyof ClaimsRun, true>`).
 3. **Whole-row JSON for the message** instead of columns: rejected. It would make the class
    impossible, but the table is columns-over-JSON on purpose ([sql.md](../project/sql.md)), and
@@ -121,3 +123,33 @@ field did wire `tools` through the store, in the same commit. So it was not igno
 mapping. It was the assumption that a flag set on the done frame and handed to `finish` had been
 saved, because handing it over is the visible half of saving it. When I add a field to a type that
 a store maps by hand, I check the store's read half returns it, not that I passed it in.
+
+## Follow-up: the `Meta.quality` sibling, and a second sweep
+
+[261009n](../plans/261009n-pdf-quality-warnings-not-stored.md) gave the PDF checker's complaints a
+column (`article_revisions.quality`), named it in `metaColumns`, `readMeta`, `metaFrom`, the carry
+policy and the rollback export, and kept it from visitors. Every PDF extracted before then has lost
+its complaints for good; its `recall` and `pagesChecked` survived. Item 1's check now exists for
+`Meta` too, in both read halves: the extract round trip in `tests/store-artefacts-pg.test.ts` is
+typed `Required<Omit<Meta, NotExtracts>>`, and `tests/meta-from-columns.test.ts` holds `metaFrom` to
+every column it is handed and every `Meta` key. Both were seen red.
+
+A second sweep the same day, over every enumerated store mapping (comments, chat, search and
+claims runs, citations, blocks, raw manifests, the `Meta` mappers and the exports), found no other
+store dropping a field a producer sets. What it did find, none of it changed here:
+
+- **The rollback export's `meta.json` omits `abstract`, `doi` and `journal`**
+  (`src/store/export.ts`, the `meta` object). `doi` and `journal` are an open question from
+  [261004a](../plans/261004a-metadata-page-shows-publication-date-and-journal-from-crossref-at-import.md);
+  `abstract` is left out with nothing saying so. The bundle export (`src/store/export-bundle.ts`)
+  writes the revision row whole and keeps all three.
+- **A standalone `metadata` run clears the PDF provenance block** on an article `extract` already
+  read — `source`, `method`, `pages`, `unverified`, `recall`, `pagesChecked`, and now `quality` —
+  because both steps write through `metaColumns`. Only the administrator can run it alone.
+  Raised by GPT Sol's plan review of 261009n.
+- **`CitationLookup`'s own host, searches, model and time are not stored**; the read rebuilds them
+  from the find row. Its one producer sets identical values, so nothing is lost today. It would
+  become this class if a lookup ever ran apart from its find.
+- **`ChatMessage`'s `finish` patch** does not name `passages`, `interrupted`, `stance`, `help` or
+  `hintOpenedAt`. No caller sends them through `finish`, and the `Required<Omit<ChatMessage,
+  NotFinishable>>` test above holds the ones that can be.
