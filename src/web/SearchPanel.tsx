@@ -2177,7 +2177,9 @@ function Hit({
       >
         <span className="srch-hit-body">
           <span className="srch-hit-quote">
-            <Excerpt blockId={found.blockId} words={found.short} near={found.shortStart ?? found.start} />
+            {/* `lazy`: a common word lists hundreds of these, and only the rows
+                near the screen are worth formatting (plan 261009r). */}
+            <Excerpt blockId={found.blockId} words={found.short} near={found.shortStart ?? found.start} lazy />
           </span>
           {found.reasoning && <span className="srch-hit-why">{found.reasoning}</span>}
           {/* Said out loud rather than left to look like a styling bug. A

@@ -78,6 +78,13 @@ because an excerpt usually sits inside a button that goes to the passage. The si
 left as strings on purpose, are in
 [261009k](../plans/261009k-excerpts-keep-maths-and-formatting.md).
 
+**A long list formats only the rows near the screen.** `Excerpt`'s `lazy` draws the plain string
+until the row comes within 400px of view (`src/web/when-seen.ts`), then formats it. Formatting all
+588 hits of a common-word Search at once froze the page about 1.0 s longer than strings did,
+measured in Chrome. Search's rows alone pass it: this work measured and fixed that list's hundreds
+of hits, while a card's single excerpt should not flash as a string first
+([261009r](../plans/261009r-excerpts-measured-in-chrome-search-list-stall.md)).
+
 ## Where it sits
 
 In `src/web/article/access.ts` § `resolveAccess`: after the sanitiser, before the pictures are
