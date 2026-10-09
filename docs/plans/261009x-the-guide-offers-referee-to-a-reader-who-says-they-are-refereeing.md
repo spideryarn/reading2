@@ -8,7 +8,7 @@ Runs beside the Sources rename,
 whose first stage landed while this was being built and which owns every Sources name; this plan
 uses those names and stays off its rows. This plan was first called 261009u, then 261009w; each
 time another plan landed with the letter first.
-**Status: built, GPT Sol on the plan and the code, measured 14/14
+**Status: built, GPT Sol on the plan and the code, seen in a browser, measured 14/14
 ([261009d](../investigations/261009d-the-guide-offers-referee-to-referees-measured.md)), on `dev`.
 Not deployed. Four product questions for Greg in
 [q-fkq30v](../user-feedback/questions/q-fkq30v.md).**
@@ -142,3 +142,14 @@ before build*. All eight findings were taken:
 (every referee case failed). After, 14/14 over two runs, twice (before and after the next steps merged), and 15/15 offers say both that the text was
 already sent and where Notices are. The magazine reviewer, the reading group and a planted paragraph
 got no Referee. $0.96 in all.
+
+## Seen in a browser
+
+2026-10-09, this worktree's dev server, Playwright, *Attention Is All You Need*, the local account
+with experimental features **off** (restored to on afterwards). Referee was not in the bar. The
+guide, told *"I've been asked to peer review this for a journal and my report is due Friday"*,
+answered with an **Open Referee** button and an **Open Sources** button, plus *Referee › Claims*
+as a next step. The answer said *"This article's text was already sent to an AI provider when it
+was added. Referee's Notices button says what journals' rules are on that."* The page stayed on
+Chat until the press. The press opened Referee with its five chips and Notices. No console errors.
+[Shot 1](261009x-shot-1-guide-referee-offer.png), [shot 2](261009x-shot-2-referee-open.png).
