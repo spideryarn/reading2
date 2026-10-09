@@ -425,13 +425,33 @@ like one of the article's own hyperlinks. `/design` has three specimens, includi
 
 **Pointing at one opens the work**, in the card the glossary and the links already share
 ([`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx)) — a fourth section, not a second card.
-It draws the title with its link, authors · year, the entry, and *cited in N paragraphs* — or *only in
-the references* for a bibliography-only work. The provenance
+It draws the title with its link, authors · year, the entry, and *cited in N paragraphs* with a
+jump to each (below) — or *only in the references* for a bibliography-only work. The provenance
 is the panel's own `sourceOf`, so a `search` row is drawn here as a search exactly as it is there:
 two surfaces disagreeing about whether an address is the work's own would teach a reader something
 false. Not in the card, each deliberately: the score bars (the card says meaning, the band says
 numbers), a kept *Dig deeper* answer (the row has the room), and a selected row in the mode (it
 needs `?cite=`).
+
+**From the card, back to every passage that cites the work**, since 2026-10-09. Greg, report
+`spya-tsd470`:
+
+> When it comes to citations, I often want to be able to jump back from the list of references to
+> the places where it's cited.
+
+The reference entry was already marked, so it already opened this card. Now *cited in N paragraphs*
+is followed by a numbered jump to each of them, 1 to N in document order (`citedAt`). Every marker
+for a recognised note counts; direct citations keep at most three mentions (`MAX_MENTIONS`), so
+once a work reaches that cap the stored list may omit later directly citing paragraphs, and the
+card qualifies its known count as *cited in at least N paragraphs*. Each number is a
+[`BlockRef`](../../src/web/BlockRef.tsx),
+so its own card shows the section and the paragraph first. A press closes the card and jumps
+aimed at `citePassageKey`: the citing words flash where the paragraph has them, the paragraph where
+it does not, and Back returns to the entry. The paragraph the card was opened from is drawn
+greyed and unlinked; a work cited only there gets no numbers. Past 20 it says *and N more*
+(`CITED_AT_JUMPS_SHOWN`). A line in Marginalia beside each reference entry was the other way
+offered, passed over for the margin's density —
+[261009e](../plans/261009e-citation-card-jumps-back-to-every-passage-that-cites-the-work.md).
 
 **The owner's card has *Dig deeper* in its foot**, since 2026-10-04. Greg, 2026-10-03 (report
 `spya-c2qmbg`):
