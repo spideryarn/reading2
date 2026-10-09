@@ -1,7 +1,7 @@
 /**
  * **The guide's next steps: what one may be, checked the same way on both
  * sides** — plan
- * docs/plans/261009r-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md.
+ * docs/plans/261009s-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md.
  *
  * > We obviously don't want to present too many buttons to the user. Maybe
  * > three or four is the maximum, plus the free text input box, of course. So
@@ -24,7 +24,7 @@
  * - `search`: words for a quick search, in a box the reader can change first;
  * - `share`: to Metadata's *Access & sharing* card, the one place a private
  *   link or the public switch is pressed;
- * - `archive`: to Metadata, whose own *Archive* button does it.
+ * - `archive`: to Metadata, whose own *Archive* or *Put back* button does it.
  */
 import type { NextStep } from "./types.js";
 

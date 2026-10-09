@@ -32,7 +32,7 @@ import { PROFILE_HREF } from "./router.js";
 
 /**
  * **Three ways in, while the guide is empty** — plan
- * docs/plans/261009r-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md.
+ * docs/plans/261009s-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md.
  * Greg, 2026-10-09 (`spya-pqaftb`): *"other buttons could include help me
  * clarify my intent, suggest some tools or modes … frame this in terms of user
  * value and not use jargon … if it's early in the conversation, we probably

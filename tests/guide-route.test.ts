@@ -216,7 +216,7 @@ describe("a guide turn", () => {
       "article_citations",
       /* Its own, and it saves nothing (plan 261009q). */
       "offer_to_save",
-      /* And its next steps, which run nothing (plan 261009r). */
+      /* And its next steps, which run nothing (plan 261009s). */
       "offer_next_steps",
     ]);
     expect(JSON.stringify(sent.at(-1)?.tools)).not.toContain("web_search");

@@ -12,7 +12,7 @@ The proposed break checks the whole turn’s accumulated `text`, not the prose w
 2. Round 2 writes nothing and calls `offer_next_steps`.
 3. `text` is nonempty because of round 1, so the turn ends with only the preamble and buttons.
 
-This contradicts the plan’s claim that the model has necessarily “written its answer” ([plan:144](/var/tmp/spideryarn-worktrees/guide-action-buttons/docs/plans/261009r-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md:144)). Using `roundText` would catch this particular bug, but even nonempty current-round prose could merely be “Here are some options:”; nonempty text is not proof of semantic completion.
+This contradicts the plan’s claim that the model has necessarily “written its answer” ([plan:144](/var/tmp/spideryarn-worktrees/guide-action-buttons/docs/plans/261009s-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md:144)). Using `roundText` would catch this particular bug, but even nonempty current-round prose could merely be “Here are some options:”; nonempty text is not proof of semantic completion.
 
 Recommendation: remove the special terminal break for v1. Let the tool result tell the model not to repeat anything and allow the ordinary follow-up round. That technique already reduced duplicated `offer_to_save` answers from 9/14 to 0/14 ([precedent plan:225](/var/tmp/spideryarn-worktrees/guide-action-buttons/docs/plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md:225), [precedent plan:277](/var/tmp/spideryarn-worktrees/guide-action-buttons/docs/plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md:277)). It is the safer 80/20 design.
 
@@ -25,7 +25,7 @@ The break is based only on requested tool names. If every proposed step is inval
 - `offer_next_steps`: “write nothing more” ([src/chat-tools.ts:2271](/var/tmp/spideryarn-worktrees/guide-action-buttons/src/chat-tools.ts:2271))
 - `offer_to_save`: mention the save button and continue if needed ([src/chat-tools.ts:2239](/var/tmp/spideryarn-worktrees/guide-action-buttons/src/chat-tools.ts:2239))
 
-That can suppress the save explanation or reproduce the duplication problem. The plan’s assertion that the next-step sentence also works when called alongside another tool is therefore wrong ([plan:148](/var/tmp/spideryarn-worktrees/guide-action-buttons/docs/plans/261009r-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md:148)).
+That can suppress the save explanation or reproduce the duplication problem. The plan’s assertion that the next-step sentence also works when called alongside another tool is therefore wrong ([plan:148](/var/tmp/spideryarn-worktrees/guide-action-buttons/docs/plans/261009s-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md:148)).
 
 Recommendation: remove the early end and give `offer_next_steps` the same conditional no-repeat wording as `offer_to_save`: everything before the call is already visible; do not repeat it; stop if complete, otherwise continue only where necessary. Also tell the model to call next steps only after other tools have resolved.
 
@@ -49,13 +49,13 @@ Recommendation: explicitly define an `ask` press as reader approval of those exa
 
 **F5 — P2: the fixed Archive wording is false on an already archived article**
 
-The plan always labels the navigation step “Archive this article…” ([plan:133](/var/tmp/spideryarn-worktrees/guide-action-buttons/docs/plans/261009r-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md:133)). Existing command code deliberately switches between “Archive this article” and “Put this article back”, because the fixed wording would lie half the time ([src/web/article-commands.ts:166](/var/tmp/spideryarn-worktrees/guide-action-buttons/src/web/article-commands.ts:166), [src/web/article-commands.ts:188](/var/tmp/spideryarn-worktrees/guide-action-buttons/src/web/article-commands.ts:188)).
+The plan always labels the navigation step “Archive this article…” ([plan:133](/var/tmp/spideryarn-worktrees/guide-action-buttons/docs/plans/261009s-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md:133)). Existing command code deliberately switches between “Archive this article” and “Put this article back”, because the fixed wording would lie half the time ([src/web/article-commands.ts:166](/var/tmp/spideryarn-worktrees/guide-action-buttons/src/web/article-commands.ts:166), [src/web/article-commands.ts:188](/var/tmp/spideryarn-worktrees/guide-action-buttons/src/web/article-commands.ts:188)).
 
 Recommendation: either omit `archive` from the 80/20 version or use a neutral navigation label such as “Open article options…”. Do not introduce a second archive-state/controller path merely to preserve the fixed label.
 
 **F6 — P2: the planned tests do not protect the fragile turn invariants**
 
-The plan currently asks only for “text versus no text” and “another tool” tests ([plan:214](/var/tmp/spideryarn-worktrees/guide-action-buttons/docs/plans/261009r-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md:214)). The partial mixed-tool test checks only that two HTTP requests occurred, not what answer or offers survived ([tests/guide-next-steps-tool.test.ts:149](/var/tmp/spideryarn-worktrees/guide-action-buttons/tests/guide-next-steps-tool.test.ts:149)).
+The plan currently asks only for “text versus no text” and “another tool” tests ([plan:214](/var/tmp/spideryarn-worktrees/guide-action-buttons/docs/plans/261009s-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md:214)). The partial mixed-tool test checks only that two HTTP requests occurred, not what answer or offers survived ([tests/guide-next-steps-tool.test.ts:149](/var/tmp/spideryarn-worktrees/guide-action-buttons/tests/guide-next-steps-tool.test.ts:149)).
 
 Add regression cases for:
 

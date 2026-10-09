@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * **The guide's next steps, drawn** — src/web/GuideNextSteps.tsx, plan
- * docs/plans/261009r-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md.
+ * docs/plans/261009s-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md.
  *
  * Each kind becomes a press through machinery that already exists: an ask
  * sends the words, a mode is `chipFor`'s chip, a search is the quick-search
@@ -146,6 +146,34 @@ describe("the guide's next steps", () => {
     expect(chip?.textContent).toContain("multi-head attention");
     await act(async () => chip?.click());
     expect(runners["quick-search"]).toHaveBeenCalledWith(expect.objectContaining({ words: "multi-head attention" }));
+  });
+
+  it("runs the search on Enter in the box, as the chip's press", async () => {
+    const runners = paint(answer([offered([{ kind: "search", words: "attention heads" }])]));
+    const box = host.querySelector<HTMLInputElement>("input[type=search]");
+    await act(async () => {
+      box?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    expect(runners["quick-search"]).toHaveBeenCalledWith(expect.objectContaining({ words: "attention heads" }));
+  });
+
+  it("resets an edited search when a later answer offers the same words", () => {
+    paint(answer([offered([{ kind: "search", words: "attention heads" }])]));
+    const box = host.querySelector<HTMLInputElement>("input[type=search]");
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    act(() => {
+      setValue?.call(box, "my edited search");
+      box?.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(box?.value).toBe("my edited search");
+
+    paint(
+      answer([offered([{ kind: "search", words: "attention heads" }])], {
+        id: "spya-ans002",
+        text: "A later answer.",
+      }),
+    );
+    expect(host.querySelector<HTMLInputElement>("input[type=search]")?.value).toBe("attention heads");
   });
 
   it("takes share to Metadata's sharing card, and archive to Metadata, writing nothing", () => {

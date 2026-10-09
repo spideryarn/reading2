@@ -1,15 +1,15 @@
 /**
  * **The guide's next steps, on the server** — plan
- * docs/plans/261009r-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md.
+ * docs/plans/261009s-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md.
  *
  * The tool's checks (src/next-steps.ts through `runTool`), who is offered it,
  * and `converse` ending the turn on a round that asked only for it.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GUIDE_TOOLS, runTool, toolsFor } from "../src/chat-tools.js";
-import { converse } from "../src/converse.js";
+import { converse, type ConverseEvent } from "../src/converse.js";
 import { checkNextSteps, MAX_ASK_CHARS } from "../src/next-steps.js";
-import type { Block, Meta, ToolRun } from "../src/types.js";
+import type { Block, Meta } from "../src/types.js";
 
 const ctx = (kind: "guide" | "chat") => ({ slug: "s", kind, meta: {} as Meta, blocks: [] as Block[], power: "standard" as const });
 const names = (tools: { function: { name: string } }[]) => tools.map((t) => t.function.name);
@@ -118,16 +118,23 @@ const toolCall = (name: string, args: unknown, content?: string) =>
     ],
   });
 const endsWithTools = frame({ choices: [{ finish_reason: "tool_calls", delta: {} }] });
+const endsWithLength = frame({ choices: [{ finish_reason: "length", delta: {} }] });
+const usage = (input: number, output: number) =>
+  frame({ choices: [], usage: { prompt_tokens: input, completion_tokens: output } });
 const answer = (text: string) => [
   frame({ model: "test/model", choices: [{ delta: { content: text } }] }),
   frame({ choices: [{ finish_reason: "stop", delta: {} }] }),
 ];
 
-async function run(rounds: string[][]) {
+async function run(rounds: string[][], runToolWith?: typeof runTool) {
   let n = 0;
-  const fetch = vi.fn(async () => ({ ok: true, status: 200, headers: new Headers(), body: body(rounds[n++] ?? []) }) as Response);
+  const sent: Record<string, unknown>[] = [];
+  const fetch = vi.fn(async (_url: unknown, init?: RequestInit) => {
+    sent.push(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>);
+    return { ok: true, status: 200, headers: new Headers(), body: body(rounds[n++] ?? []) } as Response;
+  });
   vi.stubGlobal("fetch", fetch);
-  let done: { text: string; tools?: ToolRun[] } | undefined;
+  let done: Extract<ConverseEvent, { type: "done" }> | undefined;
   for await (const event of converse({
     power: "standard",
     meta,
@@ -137,10 +144,11 @@ async function run(rounds: string[][]) {
     slug: "example",
     kind: "guide",
     saved: { purpose: null, profile: null },
+    ...(runToolWith === undefined ? {} : { runToolWith }),
   })) {
-    if (event.type === "done") done = event as { text: string; tools?: ToolRun[] };
+    if (event.type === "done") done = event;
   }
-  return { requests: fetch.mock.calls.length, done };
+  return { requests: fetch.mock.calls.length, sent, done };
 }
 
 afterEach(() => {
@@ -156,6 +164,20 @@ describe("converse, when the guide offers its next steps", () => {
     expect(requests).toBe(1);
     expect(done?.text).toBe("Start with the abstract.");
     expect(done?.tools?.[0]?.steps).toEqual([{ kind: "share" }]);
+  });
+
+  it("keeps the terminal round's usage and truncation verdict", async () => {
+    const { requests, done } = await run([
+      [
+        toolCall("offer_next_steps", { steps: [{ kind: "share" }] }, "Start with the abstract, because"),
+        usage(123, 45),
+        endsWithLength,
+      ],
+    ]);
+    expect(requests).toBe(1);
+    expect(done?.usage).toMatchObject({ inputTokens: 123, outputTokens: 45 });
+    expect(done?.truncated).toBe(true);
+    expect(done?.tools[0]?.steps).toEqual([{ kind: "share" }]);
   });
 
   it("goes round again when the answer has no words yet", async () => {
@@ -202,6 +224,19 @@ describe("converse, when the guide offers its next steps", () => {
     expect(done?.text).toBe("Let me check where that is.\n\nIt is in the first section.");
   });
 
+  it("reaches the tool-disabled last round when a late offer has no prose of its own", async () => {
+    const { requests, sent, done } = await run([
+      [toolCall("search_article_words", { query: "abstract" }, "Let me check where that is."), endsWithTools],
+      [toolCall("search_article_words", { query: "method" }), endsWithTools],
+      [toolCall("offer_next_steps", { steps: [{ kind: "share" }] }), endsWithTools],
+      answer("It is in the first section."),
+    ]);
+    expect(requests).toBe(4);
+    expect(sent.at(-1)?.tool_choice).toBe("none");
+    expect(done?.text).toBe("Let me check where that is.\n\nIt is in the first section.");
+    expect(done?.tools.at(-1)?.steps).toEqual([{ kind: "share" }]);
+  });
+
   /* F2: an offer that drew nothing goes back, so the model hears that no
      button is shown. */
   it("goes round again when the offer was refused", async () => {
@@ -212,5 +247,21 @@ describe("converse, when the guide offers its next steps", () => {
     expect(requests).toBe(2);
     expect(done?.tools?.[0]?.steps).toBeUndefined();
     expect(done?.text).toBe("Start with the abstract.");
+  });
+
+  it("goes round again when the offer tool throws", async () => {
+    const { requests, done } = await run(
+      [
+        [toolCall("offer_next_steps", { steps: [{ kind: "share" }] }, "Start with the abstract."), endsWithTools],
+        answer("I could not offer buttons."),
+      ],
+      async (name, args, context) => {
+        if (name === "offer_next_steps") throw new Error("test failure");
+        return runTool(name, args, context);
+      },
+    );
+    expect(requests).toBe(2);
+    expect(done?.tools[0]).toMatchObject({ name: "offer_next_steps", status: "error" });
+    expect(done?.text).toBe("Start with the abstract.\n\nI could not offer buttons.");
   });
 });

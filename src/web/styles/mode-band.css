@@ -766,7 +766,7 @@ svg.band-waiting-ghost { flex: none; }
   border-color: var(--rule-strong);
 }
 .guide-offer .chat-suggest-btn:hover { border-color: var(--highlight); }
-/* The guide's next steps (plan 261009r): the greeting's column of buttons,
+/* The guide's next steps (plan 261009s): the greeting's column of buttons,
    under its latest answer. A share or archive step carries an icon. A search
    step is a box the reader can change, then the quick-search chip for its
    words, wrapping under it on a narrow band. */

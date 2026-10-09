@@ -113,7 +113,7 @@ ${lines.join("\n")}`;
 }
 
 /**
- * **The keys a guide's `mode` next step may name** (plan 261009r): the rows
+ * **The keys a guide's `mode` next step may name** (plan 261009s): the rows
  * `modeWordsSection` prints a button token beside, so not the experimental
  * ones, which it tells the model to name in words (GPT Sol's F3). The page's
  * `chipFor` still decides whether this reader can open one now.

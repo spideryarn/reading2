@@ -1,7 +1,7 @@
 /**
  * **The guide's next steps, as a row of buttons under its latest answer** —
  * plan
- * docs/plans/261009r-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md.
+ * docs/plans/261009s-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md.
  *
  * > I think the ideal would be if the chat has the ability to add certain
  * > simple UI components like buttons to kick things off […] so that it can
@@ -28,7 +28,7 @@
  * - **share** goes to Metadata's *Access & sharing* card, where the bar's
  *   *Share this article* goes: the private link and the public switch are
  *   pressed there, with their own confirmation.
- * - **archive** goes to Metadata, whose top *Archive* button does it.
+ * - **archive** goes to Metadata, whose top *Archive* or *Put back* button does it.
  *
  * **Never pressed by the guide.** This row is drawn outside the answer's
  * `GuideActContext` (ChatPanel.tsx), so a mode here is a press like a chip in
@@ -64,8 +64,8 @@ export const STEP_WORDS = {
 
 /**
  * **The steps an answer draws**: the last offer's, checked again — a run is
- * stored JSON. `null` for an answer that offered none, or none this page can
- * draw.
+ * stored JSON. `null` for an answer that made no valid offer; page-specific
+ * checks such as `chipFor` happen later in `drawable`.
  */
 export function stepsIn(tools: readonly ToolRun[] | undefined): NextStep[] | null {
   let last: NextStep[] | null = null;
@@ -119,7 +119,10 @@ export function GuideNextSteps({
       <fieldset className="chat-suggest guide-next-steps" aria-label="Next steps">
         <ul>
           {steps.map((step) => (
-            <li key={JSON.stringify(step)}>
+            /* The same suggestion can recur in a later answer. Its search box
+               and CommandChip status belong to that answer, not merely to the
+               step's words, so the message id is part of the identity. */
+            <li key={`${message.id}:${JSON.stringify(step)}`}>
               <Step step={step} slug={slug} blocks={blocks} commands={commands} onAsk={onAsk} />
             </li>
           ))}
@@ -228,6 +231,14 @@ function SearchStep({
         aria-label="Words to search this article for"
         value={now}
         maxLength={120}
+        /* Enter presses the chip beside it, as Enter in the Dock's own quick
+           search runs it: the press is still the chip's, with its checks. */
+        enterKeyHint="search"
+        onKeyDown={(event) => {
+          if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+          event.preventDefault();
+          event.currentTarget.parentElement?.querySelector<HTMLButtonElement>("button.cmd-chip")?.click();
+        }}
         onChange={(event) => setNow(event.target.value)}
       />
       {trimmed !== "" && chipFor(raw, commands, blocks) !== null && (
