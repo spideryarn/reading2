@@ -27,8 +27,9 @@ listed here; the names under each are files in `docs/project/`.
 - **[vision.md](docs/project/vision.md)** — the intent, the principles, the anti-goals, and the two
   exceptions Greg has made to "prefer boring".
   <br>↳ `open-questions.md` · `positioning.md` (the website, the name, who it speaks to first) ·
-  `marketing-overview.md` (how people come to hear about it; the hub for the two after it) ·
-  `marketing-author-gifts.md` · `marketing-talks.md` ·
+  `marketing-overview.md` (how people come to hear about it; the hub for the docs after it) ·
+  `marketing-author-gifts.md` · `marketing-talks.md` · `marketing-podcasts.md` ·
+  `marketing-bloggers.md` ·
   `original-version/` (the larger app this is an offshoot of) · and the five folders that hold the
   project's memory: `plans.md` · `research.md` · `investigations.md` · `postmortems.md` ·
   `tutorials.md`

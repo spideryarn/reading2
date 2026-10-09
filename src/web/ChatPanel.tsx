@@ -104,7 +104,7 @@ import { GuideSaveOffers } from "./GuideSaveOffer.js";
 import { guideGreeting } from "./guide-greeting.js";
 import { usePurpose } from "./purpose.js";
 import { Button } from "./components/ui/button.js";
-import { useChatCommands } from "./CommandChip.js";
+import { ChatCommandsFor, useChatCommands } from "./CommandChip.js";
 import { chipFor } from "./chat-commands.js";
 import { holdTarget, roomNeeded } from "./chat-hold.js";
 import { chatStep, SNAP, type StepEnds, turnStarts } from "./chat-steps.js";
@@ -1976,7 +1976,7 @@ export function Conversation({
   };
 
   return (
-    <>
+    <ChatCommandsFor kind={kind}>
       <div
         className={`chat-scroll${busy ? " streaming" : ""}`}
         ref={scroller}
@@ -2195,7 +2195,7 @@ export function Conversation({
         blocks={blocks}
         onJump={onJump}
       />
-    </>
+    </ChatCommandsFor>
   );
 }
 

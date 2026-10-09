@@ -118,18 +118,18 @@ import { DEFAULT_HIGHLIGHT, isPristineHighlight, spansOverlap } from "../fresh-h
 import type { CommentsApi } from "../useComments.js";
 import { mintId } from "../../ids.js";
 import { Masthead } from "../Masthead.js";
-import { Dock, useActivateMode, useActivateSubMode, visibleModes } from "../Dock.js";
+import { Dock, useActivateMode, useActivateSubMode } from "../Dock.js";
 import { gateToReveal, PRIORITY_GATE } from "../GlossaryPanel.js";
 import { ProseHoverCard, type QuoteCardSource } from "../ProseHoverCard.js";
 import type { CiteFocus } from "../CitationsPanel.js";
 import { claimFocusKey, focusesLeft, focusOn, focusTaken, type ItemFocus } from "../item-focus.js";
 import { shownEntries } from "../glossary-shown.js";
 import { editArticleTags } from "../article-tags.js";
-import { chatExecutor, type ModeCommand, modeDoor, readingExecutor, type TagsControl } from "../command-runners.js";
-import { modeCommand } from "../command-match.js";
+import { chatExecutor, type ModeCommand, modeDoor, readingExecutor, type TagsControl, withModeDoor } from "../command-runners.js";
+import { chipDoorRows, guideDoorRows } from "../chip-door.js";
 import { type FindMoreMode, glossaryAppendOnOffer, quotesAppendOnOffer } from "../find-more.js";
 import { ChatCommands } from "../CommandChip.js";
-import { findHref, subModeRows } from "../CommandBar.js";
+import { findHref } from "../CommandBar.js";
 import { buildNoteIndex, type NoteMarker, type NoteReturn } from "../notes-view.js";
 import {
   blockHues,
@@ -169,7 +169,6 @@ import {
   returnToSubMode,
   type SubMode,
   subModeParams,
-  subModeWords,
 } from "../sub-modes.js";
 import { isMarginaliaModeWord } from "../../modes.js";
 import { arrivalTarget, clearArrivalAnchor, isBlockOnScreen, scrollToBlock } from "../scroll.js";
@@ -2883,15 +2882,11 @@ export function Reader({
     });
   /**
    * **The modes a chat chip may open, and how** (plan 261007j, GPT Sol's F3):
-   * the command bar's mode and sub-mode rows, from the same two functions the
-   * Dock and the bar call — `visibleModes` with this page's switch, mode and
-   * margin, then `subModeRows`. One deliberate subtraction: those functions
-   * keep an experimental mode already open (or a retained experimental
-   * sub-mode) visible as the reader's way out after the switch is turned off.
-   * That escape hatch must not make a model-written token a way *into* the
-   * hidden feature, so the proposal rows remove every experimental target while
-   * the switch is off. The press is the Dock's own pair of activators, through
-   * `modeActivators` (set below, beside `onDockMode`).
+   * two doors, chat's and the guide's, whose rows are src/web/chip-door.ts §
+   * `chipDoorRows` and § `guideDoorRows` (the guide's adds the modes it may
+   * offer from behind the switch, plan 261009x). The press is the Dock's own
+   * pair of activators, through `modeActivators` (set below, beside
+   * `onDockMode`).
    */
   const modeActivators = useRef<{
     mode(next: Mode): void;
@@ -2901,31 +2896,21 @@ export function Reader({
   } | null>(null);
   const chipModes = useMemo(() => {
     if (!isOwner) return undefined;
-    const reachable = visibleModes(experimental.on, mode, marginOpen).map((m) => m.mode);
-    const rows = [
-      ...reachable.map(modeCommand),
-      ...subModeRows(reachable, experimental.on, {
-        diagram: subNav.diagram,
-        learn: mode === "learn" ? subNav.learn : undefined,
-      }),
-    ]
-      .filter((c): c is ModeCommand => c.kind === "mode" || c.kind === "submode")
-      .filter(
-        (c) =>
-          experimental.on ||
-          (c.kind === "mode" ? !MODE_CATALOG[c.mode].experimental : !subModeWords(c.sub).experimental),
+    const nav = { diagram: subNav.diagram, learn: mode === "learn" ? subNav.learn : undefined };
+    const rows = chipDoorRows({ experimentalOn: experimental.on, mode, marginOpen, subNav: nav });
+    const door = (of: readonly ModeCommand[]) =>
+      modeDoor(
+        of,
+        {
+          mode: (c) => modeActivators.current?.mode(c.mode),
+          sub: (c) => modeActivators.current?.sub(c.sub),
+        },
+        {
+          mode: (c) => modeActivators.current?.modeUnarmed(c.mode),
+          sub: (c) => modeActivators.current?.subUnarmed(c.sub),
+        },
       );
-    return modeDoor(
-      rows,
-      {
-        mode: (c) => modeActivators.current?.mode(c.mode),
-        sub: (c) => modeActivators.current?.sub(c.sub),
-      },
-      {
-        mode: (c) => modeActivators.current?.modeUnarmed(c.mode),
-        sub: (c) => modeActivators.current?.subUnarmed(c.sub),
-      },
-    );
+    return { chat: door(rows), guide: door(guideDoorRows(rows, nav)) };
   }, [isOwner, experimental.on, mode, marginOpen, subNav.diagram, subNav.learn]);
   const moreTerms = owner !== null && glossaryAppendOnOffer(owner.glossary) && dockDraws("glossary");
   const moreQuotes = owner !== null && quotesAppendOnOffer(owner.quotes) && dockDraws("quotes");
@@ -2958,8 +2943,9 @@ export function Reader({
         askGuide: isOwner ? askTheGuide : undefined,
         /* The bar's *Guide* row: the owner's, as the guide is. */
         openGuide: isOwner ? openTheGuide : undefined,
-        /* A chat chip's `mode` proposal: the owner's, as Chat is (`chipModes`). */
-        modes: chipModes,
+        /* A chat chip's `mode` proposal: the owner's, as Chat is (`chipModes`).
+           Chat's door; a guide thread's chips get the guide's, below. */
+        modes: chipModes?.chat,
       }),
     [
       slug,
@@ -3000,13 +2986,18 @@ export function Reader({
    *
    * The find reads the address at the press, not at the render: it carries
    * `?at=`, which the reader's scrolling rewrites.
+   *
+   * Each carries a `guide` twin whose mode door is the guide's (plan 261009x):
+   * ChatPanel.tsx § `Conversation` hands it to a guide thread's chips.
    */
   const chatCommands = useMemo(() => {
     const find = (words: string) => navigate(findHref(slug, carriedSearch(window.location.search), words));
-    const forJump = (jump: (blockId: BlockId) => void) =>
-      chatExecutor({ reading: executor, blocks: article.blocks, jump, tags: tagsControl, find });
+    const forJump = (jump: (blockId: BlockId) => void) => {
+      const chat = chatExecutor({ reading: executor, blocks: article.blocks, jump, tags: tagsControl, find });
+      return chipModes === undefined ? chat : { ...chat, guide: withModeDoor(chat, chipModes.guide) };
+    };
     return { band: forJump(bandJump), dialog: forJump(jumpTo) };
-  }, [slug, executor, article.blocks, tagsControl, bandJump, jumpTo]);
+  }, [slug, executor, chipModes, article.blocks, tagsControl, bandJump, jumpTo]);
 
   /**
    * ## Selecting applies the highlight, and the box customises or removes it

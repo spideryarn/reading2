@@ -59,6 +59,17 @@ working, and a shared URL shows two people **the same band**, whatever their swi
 one Diagram chip against five. A gate
 that redirected or 404'd would turn a preference into a broken link.
 
+**One named exception reaches past the bar: the guide may offer Referee to a referee.** Since
+2026-10-09, a mode in `OFFERED_BEHIND_THE_SWITCH`
+([`src/mode-catalog.ts`](../../src/mode-catalog.ts)) gets a button in the written guide's list of
+modes and a place in the guide's chip door, with its sub-modes, whatever the switch says. It is
+offered only to the audience the record names, and it is always a press. Referee is the only one.
+The bar, the Dock, the command bar and ordinary Chat still hide it. That follows from the rule
+above: the switch is about clutter, and a button offered to the one reader who said they need it is
+not clutter.
+[referee-mode.md § Who the guide offers it to](referee-mode.md#who-the-guide-offers-it-to-since-2026-10-09);
+plan [261009x](../plans/261009x-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md).
+
 **Hiding never deletes.** Turning the switch off must not remove an artefact, a note or a
 generated answer. Whatever the reader made while it was on is still there when it goes back on.
 
