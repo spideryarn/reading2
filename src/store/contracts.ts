@@ -46,6 +46,7 @@
  */
 
 import { isAdmin, type AdminUser } from "../admin.js";
+import type { HiddenCheckResult, StoredHiddenCheck } from "../referee-hidden-check-types.js";
 import type { OwnerId } from "../owner.js";
 import type { Db } from "../db/client.js";
 import type { Assets } from "../assets.js";
@@ -1662,6 +1663,27 @@ export interface DebateClaimChecksStore {
    * margin, and not one `live` says this process is running — then list.
    */
   sweep(slug: string, live: (id: string) => boolean): Promise<DebateClaimCheck[]>;
+}
+
+/**
+ * **Hidden text's Opus check, kept** — one row per article, the last finished
+ * answer. src/store/pg-referee-hidden-checks.ts;
+ * docs/plans/261009a-save-hidden-text-opinions.md.
+ *
+ * Only a validated answer is ever written, so there is no begin, no attempt
+ * and no sweep: a failed run leaves the last good answer where it was. Both
+ * methods are owner-scoped: a slug the caller does not own is a 404.
+ */
+export interface RefereeHiddenCheckStore {
+  /** The kept check, or `null` when this article has never been checked. */
+  read(slug: string): Promise<StoredHiddenCheck | null>;
+  /**
+   * Keep `result`, replacing whatever was there. `startedAt` is when the
+   * referee pressed; the store stamps the finish. Returns the row kept after
+   * the attempt, which may be a newer check when this write loses the freshness
+   * fence.
+   */
+  save(slug: string, result: HiddenCheckResult, startedAt: Date): Promise<StoredHiddenCheck>;
 }
 
 /**

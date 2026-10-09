@@ -909,7 +909,7 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
   },
   {
     match: { kind: "regex", source: "^\\/api\\/referee\\/hidden-check\\/([\\w.%-]+)$", flags: "" },
-    methods: ["POST"],
+    methods: ["GET", "POST"],
     witnesses: ["/api/referee/hidden-check/w1"],
   },
   {
@@ -987,9 +987,10 @@ const EXPECTED_MATCHER_COUNT = 101;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
    with the admin's earlier feedback; 118 with their replies to questions; 119
    with the Help pages' chatbot; 120 with Hidden text's Opus check; 121 with the
-   deferral of a question; 122 with Debate's claims list; 124 with its checks'
-   GET and POST. */
-const EXPECTED_GUARD_COUNT = 124;
+   deferral of a question; 122 with Debate's claims list; 123 with the kept
+   Hidden text check's GET (plan 261009a); 125 with Debate's claim checks'
+   GET and POST (plan 261008i). */
+const EXPECTED_GUARD_COUNT = 125;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2276,7 +2277,9 @@ describe("the authenticated API's route contract", () => {
         "POST regex /^\\/api\\/referee\\/claims\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/referee\\/scan\\/([\\w.%-]+)$/",
         "POST regex /^\\/api\\/referee\\/mirror\\/([\\w.%-]+)$/",
-        // Hidden text's Opus check, 261007l — beside Mirror, whose shape it is
+        // Hidden text's Opus check, 261007l — beside Mirror, whose shape it is;
+        // its GET, the kept answer, 261009a
+        "GET regex /^\\/api\\/referee\\/hidden-check\\/([\\w.%-]+)$/",
         "POST regex /^\\/api\\/referee\\/hidden-check\\/([\\w.%-]+)$/",
         // jobs and uploads, 260907b stage 3b
         "GET literal /api/jobs",

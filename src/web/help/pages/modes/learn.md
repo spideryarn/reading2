@@ -3,6 +3,17 @@ keywords: recall memory tutorial guided reading explore think ideas own view app
 related: experimental-features
 ---
 
+## In short
+
+Reading something once rarely makes it stick; saying what you took from it, and finding out where
+you went wrong, does. Learn is for that. Tell it what you remember and it checks that against the
+piece, corrects one thing when needed, links the passage and nudges you to remember more. You can
+also work through the piece a little at a time in a Tutorial, answer a Quiz written from it, or use
+Explore to test your own view and where the piece may be weak. Every turn waits for you: the
+remembering is yours to do.
+
+![Recall: a reader’s short account of an essay on Pittsburgh, a reply that corrects one point with two quoted passages, then a question about a later part, and a Hint button](../images/mode-learn.png "Recall: say what you took from it. The reply corrects one thing, quotes the passages, and asks what you remember next.")
+
 ## When to use it
 
 When you are working through a piece, or have finished a part of one, and want it to stick. Saying
@@ -39,8 +50,6 @@ it again. For something you will not need next week, it is not worth the effort.
 Learn is only for whoever added the article.
 
 ## Reading it
-
-![Recall: a reader’s short account of an essay on Pittsburgh, a reply that corrects one point with two quoted passages, then a question about a later part, and a Hint button](../images/mode-learn.png "Recall: say what you took from it. The reply corrects one thing, quotes the passages, and asks what you remember next.")
 
 In Recall, a question is never a test you can fail twice: if a nudge gets nothing, the next reply
 tells you. Saying “just tell me”, or asking a direct question, always gets a plain answer. Whenever

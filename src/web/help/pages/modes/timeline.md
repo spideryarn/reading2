@@ -2,6 +2,15 @@
 keywords: chronology dates events when order history sequence dated undated uncertain year
 ---
 
+## In short
+
+In history, reporting or any story told out of order, it is easy to lose track of what happened
+when. Timeline lists the events the piece mentions in order, each linked to its passage, and keeps
+them as firm or as vague as the article left them: an undated event stays undated rather than being
+guessed. It is the article’s account of time, not a check of it.
+
+![Timeline: a list of events, most with a dash because the piece gives no time, two with the article’s own phrase in quotation marks](../images/mode-timeline.png "Timeline: a dash means the piece gives no time; words in quotation marks are the article’s own.")
+
 ## When to use it
 
 On history, reporting and narrative pieces. Every row is the article’s own claim about time, kept as
@@ -10,8 +19,6 @@ review it will often find nothing, and says so rather than padding; trying again
 nothing.
 
 ## Reading it
-
-![Timeline: a list of events, most with a dash because the piece gives no time, two with the article’s own phrase in quotation marks](../images/mode-timeline.png "Timeline: a dash means the piece gives no time; words in quotation marks are the article’s own.")
 
 - **A date**, such as *26 May* or *at or before 12 May*, was read from the article’s own words by
   plain code, not by the AI.

@@ -39,6 +39,7 @@ import {
   articleTags,
   quizAttempts,
   refereeClaims,
+  refereeHiddenChecks,
   refereeCriteria,
   debateClaimChecks,
   revisionBlocks,
@@ -184,6 +185,11 @@ export const ARTICLE_TABLE_COVERAGE = {
   debate_claim_checks: {
     rollback: { exported: true, into: "debate-claim-checks.json" },
     bundle: { exported: true, into: "augmentations/debate-claim-checks.json" },
+  },
+  /* Hidden text's Opus check, kept since 2026-10-09 — plan 261009a. */
+  referee_hidden_checks: {
+    rollback: { exported: true, into: "referee-hidden-check.json" },
+    bundle: { exported: true, into: "augmentations/referee-hidden-check.json" },
   },
   glossary_lookups: {
     rollback: { exported: true, into: "glossary-lookups.json" },
@@ -661,6 +667,8 @@ export interface ArticleRows {
   readonly refereeClaims: readonly (typeof refereeClaims.$inferSelect)[];
   /** Every claim check, oldest first. Plan 261008i § 3. */
   readonly debateClaimChecks: readonly (typeof debateClaimChecks.$inferSelect)[];
+  /** At most one row, keyed by `article_id` like `refereeClaims`. Plan 261009a. */
+  readonly refereeHiddenChecks: readonly (typeof refereeHiddenChecks.$inferSelect)[];
   readonly glossaryLookups: readonly (typeof glossaryLookups.$inferSelect)[];
   readonly citationFinds: readonly (typeof citationFinds.$inferSelect)[];
   readonly citationInvestigations: readonly (typeof citationInvestigations.$inferSelect)[];
@@ -680,7 +688,7 @@ export interface ArticleRows {
  * Read one article whole, **owner-scoped and as one snapshot**, or throw
  * `ArticleNotFound`.
  *
- * ## One snapshot, not ten
+ * ## One snapshot for every statement
  *
  * Every statement runs inside a single read-only `repeatable read` transaction
  * — `SNAPSHOT` below says why, and `walk` says what that costs. The short
@@ -743,7 +751,7 @@ export async function readArticleRows(slug: string): Promise<ArticleRows> {
 /**
  * **One snapshot for the whole walk**, and nothing may be written down it.
  *
- * `repeatable read` because the ten statements below are one *logical* read
+ * `repeatable read` because the statements below are one *logical* read
  * and must agree with each other. At `read committed` — Postgres's default, and
  * what an unpinned transaction inherits — every statement takes its own
  * snapshot, so a thread committed between the `chat_threads` read and the
@@ -769,8 +777,9 @@ const SNAPSHOT = { isolationLevel: "repeatable read", accessMode: "read only" } 
 /**
  * The walk itself, on one connection, in order.
  *
- * **The cost, measured rather than waved at.** The nine child reads used to run
- * through the pool with `Promise.all`, on up to five connections at once. A
+ * **The cost, measured rather than waved at.** When this snapshot was added,
+ * its nine child reads had run through the pool with `Promise.all`, on up to
+ * five connections at once. A
  * transaction is *one* connection, and one connection runs one statement at a
  * time, so that parallelism is gone. Against
  * `noema-mythology-of-conscious-ai` (141 blocks, 58 chat messages) on the local
@@ -789,13 +798,13 @@ const SNAPSHOT = { isolationLevel: "repeatable read", accessMode: "read only" } 
  * `Promise.all` that has already settled — eight unhandled rejections in
  * exchange for five milliseconds. Sequential also stops at the first failure.
  *
- * The walk is now **twelve round trips** — `BEGIN`, ten selects, `COMMIT` —
- * where it was one select and then nine over five connections. That is the
- * number that matters somewhere latency-bound; against the remote pooler each
- * one is tens of milliseconds. It is paid on an explicit Export press and on
- * `npm run db:export`, neither of which is a hot path, and the alternative is a
- * download that silently omits rows. If it ever needs to be cheaper, the honest
- * fix is fewer statements, not a wider snapshot.
+ * The walk is one `BEGIN`, one `COMMIT`, and one round trip per select below.
+ * That count grows whenever another exported table is added; against the
+ * remote pooler each round trip is tens of milliseconds. It is paid on an
+ * explicit Export press and on `npm run db:export`, neither of which is a hot
+ * path, and the alternative is a download that silently omits rows. If it ever
+ * needs to be cheaper, the honest fix is fewer statements, not a wider
+ * snapshot.
  *
  * The other cost is that a caller now **holds a pooled connection for the whole
  * walk** rather than borrowing one per statement. The pool is five
@@ -866,6 +875,11 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     .from(debateClaimChecks)
     .where(eq(debateClaimChecks.articleId, article.id))
     .orderBy(asc(debateClaimChecks.createdAt), asc(debateClaimChecks.id));
+  const hiddenChecks = await tx
+    .select()
+    .from(refereeHiddenChecks)
+    .where(eq(refereeHiddenChecks.articleId, article.id))
+    .limit(1);
   const lookups = await tx
     .select()
     .from(glossaryLookups)
@@ -914,6 +928,7 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     refereeCriteria: criteria,
     refereeClaims: claims,
     debateClaimChecks: checks,
+    refereeHiddenChecks: hiddenChecks,
     glossaryLookups: lookups,
     citationFinds: finds,
     citationInvestigations: investigations,

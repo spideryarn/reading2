@@ -1082,8 +1082,8 @@ export interface IdeasResponse {
    prove the words are in the piece and cannot prove who wrote them
    (src/quotes.ts § authorVoice). The glossary answers *what does this word
    mean*; the ideas answer *what do I have to hold*; this answers *which lines
-   is it worth carrying out of here* — and every one of them is a sentence the
-   author wrote, found in the article rather than composed. */
+   is it worth carrying out of here* — and every one of them is a sentence
+   found in the article rather than composed. */
 
 /**
  * One quote, and where it sits.

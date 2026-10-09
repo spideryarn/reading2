@@ -3,6 +3,15 @@ keywords: summarise short version tldr gist overview plain english simple brief 
 related: mode-structure, reader-profile
 ---
 
+## In short
+
+Sometimes you need to know what a piece says before deciding whether to read it, or to check
+afterwards that you caught the main points. Summary restates it in plain words, brief or fuller, or
+as a thread of short posts, and each paragraph links back to the passages it rests on. Treat it as a
+way in, not a replacement: a summary keeps the conclusions and drops the reasoning.
+
+![Summary’s Brief view: two paragraphs, each followed by the short codes of the passages it rests on](../images/mode-summary.png "Brief, with a code after each paragraph for the passages it rests on: follow one to read the passage in the article.")
+
 ## When to use it
 
 Before you read, to decide whether a piece is worth your time and roughly where it is going; after,
@@ -17,14 +26,12 @@ your own article. A thread is a compression: treat it as a way in, not a stand-i
 
 ## Reading it
 
-![Summary’s Brief view: two paragraphs, each followed by the short codes of the passages it rests on](../images/mode-summary.png "Brief, with a code after each paragraph for the passages it rests on: follow one to read what the author actually wrote.")
-
 Three buttons at the top choose what you see: **Brief**, **Fuller**, which is several times longer
 and goes into the method, the evidence and the limits, and **Thread**. The phrases in bold are the
 ones to catch if you are skimming.
 
-When a sentence surprises you, follow the code after its paragraph and read what the author actually
-wrote.
+When a sentence surprises you, follow the code after its paragraph and read the passage in the
+article.
 
 On your own article, the small chat icon (two speech bubbles) beside a paragraph opens a new chat
 with that paragraph quoted, ready for your question. Nothing is sent until you press Send.

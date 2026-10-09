@@ -260,3 +260,9 @@ and fence-shaped text carrying a whole forged JSON answer; every LaTeXML and pag
 *probably harmless*, also when it sat beside an attack. Limits: two runs a case, and the attacks are
 the obvious ones; a payload with no command in it was not tried. Whatever a cleverer one achieves,
 the most it can do is write a misleading line under a row that is still drawn.
+
+## Since: the answer is kept (2026-10-09)
+
+*"Nothing is stored"* above is no longer true. Greg asked for the opinions to be saved (report
+`spya-gqq38u`), and [261009a](261009a-save-hidden-text-opinions.md) keeps the last finished answer
+per article, shows it again on reload, and lets the call run on when the referee leaves.

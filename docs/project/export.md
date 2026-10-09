@@ -142,7 +142,7 @@ data", and must not become its definition.**
 So the two share **the queries, and nothing else**.
 [`readArticleRows(slug)`](../../src/store/article-rows.ts) is the one owner-scoped walk — the joins,
 the owner filter, the `order by ordinal` that is the whole ballgame since ids carry no position, and
-[one snapshot](#one-snapshot-not-ten) — and each side projects those rows its own way. The rollback
+[one snapshot](#one-snapshot-for-the-whole-walk) — and each side projects those rows its own way. The rollback
 keeps its hand-written field lists, because a byte comparison pins them. The bundle **serialises
 whole rows** and names only the handful of columns it drops, so a column added to
 [`src/db/schema.ts`](../../src/db/schema.ts) reaches the reader's download without anybody
@@ -170,19 +170,21 @@ The middle option — a synthesized model both sides project from — was propos
 down. It would have to be rich enough for the bundle *and* lossily projectable back to a pinned
 format, and the rows are already the faithful representation.
 
-## One snapshot, not ten
+## One snapshot for the whole walk <a id="one-snapshot-for-the-whole-walk"></a>
 
-The walk reads eleven tables in ten statements, and the rows have to agree with each other, because
-the projections join them: a chat message is written *inside* its thread. Until 2026-09-01 it read
-them through the pool with `Promise.all` and no transaction, so each statement took its own snapshot
-— and a thread committed between the `chat_threads` read and the `chat_messages` read gave the
-caller a message whose thread it had never been handed. `export-bundle.ts` nests messages under the
-threads it was given, so that message was **dropped in silence**, out of a zip that says it holds
-everything. Every statement now runs inside one `repeatable read`, `read only` transaction.
+The walk reads the parent and every declared child table in separate statements, and the rows have
+to agree with each other, because the projections join them: a chat message is written *inside* its
+thread. Until 2026-09-01 it read them through the pool with `Promise.all` and no transaction, so
+each statement took its own snapshot — and a thread committed between the `chat_threads` read and
+the `chat_messages` read gave the caller a message whose thread it had never been handed.
+`export-bundle.ts` nests messages under the threads it was given, so that message was **dropped in
+silence**, out of a zip that says it holds everything. Every statement now runs inside one
+`repeatable read`, `read only` transaction.
 
-It costs about 12 ms per walk on the local database, and the walk is twelve round trips where it was
-three; the numbers, and why `Promise.all` inside the transaction was measured and then not taken,
-are on `walk()` in [`article-rows.ts`](../../src/store/article-rows.ts).
+The original snapshot change cost about 12 ms per walk on the local database. The walk is one
+`BEGIN`, one `COMMIT`, and one round trip per select, so adding an exported table adds a round trip;
+the measurement, and why `Promise.all` inside the transaction was measured and then not taken, are
+on `walk()` in [`article-rows.ts`](../../src/store/article-rows.ts).
 `tests/article-rows-snapshot.test.ts` proves the snapshot without racing anything: it commits a
 thread, a message and a comment *during* the walk, deterministically, and asks the transaction
 itself what isolation it got.

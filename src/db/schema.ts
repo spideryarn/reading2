@@ -73,6 +73,7 @@ import type { RefereeResult } from "../referee-criteria.js";
    shape and the validator that guarantees it live together in
    src/referee-claims.ts. */
 import type { Claim } from "../referee-claims.js";
+import type { HiddenJudgment } from "../referee-hidden-check-types.js";
 import type { Sketch } from "../sketch-scene.js";
 import type { Illustrated } from "../illustrated-plate.js";
 import type { LabelsFile } from "../labels.js";
@@ -2345,6 +2346,59 @@ export const debateClaimChecks = spideryarn.table(
     uniqueIndex("debate_claim_checks_one_pending")
       .on(t.articleId)
       .where(sql`${t.status} = 'pending'`),
+  ],
+);
+
+/**
+ * **Hidden text's Opus check: the last finished answer, one per article** —
+ * docs/plans/261009a-save-hidden-text-opinions.md. Until 2026-10-09 the answer
+ * was thrown away on reload and a second press paid again; Greg asked for it
+ * kept (report spya-gqq38u, and docs/project/database.md § AI output we paid
+ * for is kept).
+ *
+ * `referee_claims`' shape with less in it: **no status, no attempt, no error**,
+ * because only a finished, validated answer is ever written, as one upsert. A
+ * failed or abandoned run leaves the last good answer where it was.
+ *
+ * **No source hash either.** Each judgment carries the inputs it was made from
+ * (`CheckedInputs`, src/scan-groups.ts) and the panel shows it only beside a
+ * row equal to them, so an answer about an older scan reads *not checked*
+ * rather than as current.
+ */
+export const refereeHiddenChecks = spideryarn.table(
+  "referee_hidden_checks",
+  {
+    /** The key, on its own: one check per article, and a new one replaces it. */
+    articleId: uuid("article_id")
+      .primaryKey()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    /** `auth.users(id)`. FK in the migration by hand, like every other owner key. */
+    ownerId: uuid("owner_id").notNull(),
+    /**
+     * The accepted judgments, validated by `validateJudgments`
+     * (src/referee-hidden-check.ts) before they get here. JSONB for the reason
+     * `referee_claims.claims` is: one call's output, written and replaced whole,
+     * never queried across. **The reasons are model text that may quote a
+     * manuscript's hidden words: never logged.**
+     */
+    judgments: jsonb("judgments").$type<HiddenJudgment[]>().notNull(),
+    /** `HiddenCheckResult.unanswered`. */
+    unanswered: integer("unanswered").notNull(),
+    /** `HiddenCheckResult.notSent`, counted in `unanswered` too. */
+    notSent: integer("not_sent").notNull(),
+    /** The model that answered, as the gateway reported it. */
+    model: text("model").notNull(),
+    /** When the referee pressed the button. */
+    createdAt: createdAt(),
+    /** When the answer arrived and was validated. Shown as the check's date. */
+    finishedAt: timestamp("finished_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    check(
+      "referee_hidden_checks_counts",
+      sql`${t.unanswered} >= 0 and ${t.notSent} >= 0 and ${t.notSent} <= ${t.unanswered}`,
+    ),
+    check("referee_hidden_checks_judgments_array", sql`jsonb_typeof(${t.judgments}) = 'array'`),
   ],
 );
 

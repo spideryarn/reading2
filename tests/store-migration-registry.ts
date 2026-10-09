@@ -3634,6 +3634,11 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
   "tests/mcp-remote.test.ts": {
     "00000000-0000-4000-8000-00000000b0b0": { kind: "seeded" },
   },
+  /* Plan 261008i. `seedAuthUser` in `beforeAll`: a second reader who owns an
+     article, so a check pressed on it by somebody else is refused. */
+  "tests/debate-claim-checks-routes.test.ts": {
+    "7c0de5a1-0000-4000-8000-00000000d1c5": { kind: "seeded" },
+  },
   "tests/a-paper-queued-before-the-resolver.test.ts": {
     "0b111a99-0000-4000-8000-0000a2c51d01": { kind: "seeded" },
   },

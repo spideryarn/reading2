@@ -41,6 +41,7 @@ import {
   listArticles,
   readerStore,
   refereeClaimsStore,
+  refereeHiddenCheckStore,
   refereeCriteriaStore,
   debateClaimChecksStore,
   searchStore,
@@ -143,6 +144,7 @@ import { scanArticleSource } from "./source-scan.js";
    used it would trade the reader's first sentence for a spinner. */
 import { isRefereeLeft, mirrorStream } from "./referee-mirror.js";
 import { hiddenCheckStream, isReaderLeft as isHiddenCheckReaderLeft } from "./referee-hidden-check.js";
+import type { StoredHiddenCheck } from "./referee-hidden-check-types.js";
 import { grouped, ordered } from "./scan-groups.js";
 /* A pure predicate. It was imported this way so as not to drag the
    filesystem store (gone 2026-09-05) into a file that had to work with either
@@ -1402,12 +1404,13 @@ function sse(res: ServerResponse): {
    * with `runMirror` moved up a row on 2026-10-05:
    *
    *   stops the model call    `streamLinkSummary`, `streamAskedTerm`,
-   *                           `markOneAnswer`, `runMirror`, `runHiddenCheck`,
+   *                           `markOneAnswer`, `runMirror`,
    *                           `streamHelpAnswer`,
    *                           and `search` for a quick run
    *   lets it run to the end  `answer` (comments), `streamTermLookup`,
    *                           `streamCitationInvestigation`,
-   *                           `runRefereeCriterion`, `runRefereeClaims`, and
+   *                           `runRefereeCriterion`, `runRefereeClaims`, `runHiddenCheck`
+   *                           (since 2026-10-09, plan 261009a), and
    *                           `search` for a meaning run
    *
    * Every stream that runs on has a save path for its answer; a deleted or
@@ -6132,8 +6135,9 @@ async function runMirror(slug: string, res: ServerResponse): Promise<void> {
 
 /* ------------------------------------- referee hidden text: the Opus check --
    The Hidden text sub-mode's *Ask Opus about these*: the scan's flagged rows,
-   never the article, one opinion per row, nothing stored.
+   never the article, one opinion per row, the last answer kept.
    docs/plans/261007l-hidden-text-an-opus-check-the-reader-asks-for-over-the-flagged-fragments-only.md,
+   docs/plans/261009a-save-hidden-text-opinions.md (kept since 2026-10-09),
    and src/referee-hidden-check.ts, which is the thinking. */
 
 /**
@@ -6153,6 +6157,10 @@ async function runMirror(slug: string, res: ServerResponse): Promise<void> {
  * in those states, so only a stale tab gets here.
  */
 async function runHiddenCheck(slug: string, res: ServerResponse): Promise<void> {
+  /* Captured before any awaited preflight work: this is request order, not
+     whichever scan/article read happened to finish first. The store uses it
+     to stop an older press that finishes late replacing a newer answer. */
+  const startedAt = new Date();
   /* Ownership first, before a byte of the manuscript is read — the scan
      route's order, and `sendSource`'s. */
   await shelfStore.read(slug);
@@ -6167,20 +6175,42 @@ async function runHiddenCheck(slug: string, res: ServerResponse): Promise<void> 
      overrides for this job: it is Opus on every article. */
   const article = await loadArticle(slug);
 
-  /* `gone` goes to the model call: nothing is stored, so an answer that
-     finishes after the referee has left has nowhere to go. Mirror's decision,
-     for Mirror's reason. */
-  const { frame, gone } = sse(res);
+  /* **It runs to the end**, and `gone` is not passed on: the answer is kept
+     (plan 261009a), so one that finishes after the referee has left is waiting
+     for them on their next visit rather than paid for twice. Until 2026-10-09
+     nothing was stored and leaving stopped the call, Mirror's way. */
+  const { frame } = sse(res);
   let chars = 0;
   try {
-    for await (const event of hiddenCheckStream({ groups, power: powerOf(article), slug, signal: gone })) {
+    for await (const event of hiddenCheckStream({ groups, power: powerOf(article), slug })) {
       if (event.type === "delta") {
         chars += event.text.length;
         frame("delta", { chars });
         continue;
       }
       const { type: _type, ...result } = event;
-      frame("done", result);
+      /* Kept before it is shown, so an answer the referee has seen is one a
+         reload brings back. A failed save does not throw the answer away - it
+         is already paid for - so the referee gets it, told it was not kept. */
+      let stored: StoredHiddenCheck;
+      try {
+        stored = await refereeHiddenCheckStore.save(slug, result, startedAt);
+      } catch (err) {
+        /* Content-free diagnostics only. A reason may quote an unpublished
+           manuscript, so neither it nor the judgments object crosses into
+           monitoring. The guarded store has already scrubbed failed query
+           parameters before the error reaches this catch. */
+        captureFailure(err, {
+          route: "referee-hidden-check-save",
+          slug,
+          judgments: result.judgments.length,
+          unanswered: result.unanswered,
+          notSent: result.notSent,
+          model: result.model,
+        });
+        stored = { ...result, checkedAt: new Date().toISOString(), saved: false };
+      }
+      frame("done", stored);
     }
   } catch (err) {
     if (!isHiddenCheckReaderLeft(err)) captureFailure(err, { route: "referee-hidden-check", slug });
@@ -9221,6 +9251,7 @@ const REFEREE_CLAIMS_PATTERN = /^\/api\/referee\/claims\/([\w.%-]+)$/;
 /* Debate's reader claim checks (plan 261008i § 3): GET lists them, POST makes
    one. One pattern for both rows, as Claims above. */
 const DEBATE_CHECKS_PATTERN = /^\/api\/debate-claims\/([\w.%-]+)\/checks$/;
+const REFEREE_HIDDEN_CHECK_PATTERN = /^\/api\/referee\/hidden-check\/([\w.%-]+)$/;
 /* Search: the runs of one article, and one run of one article. Two rows apiece,
    so both are named here rather than spelled into the rows twice. */
 const SEARCHES_PATTERN = /^\/api\/search\/([\w.%-]+)$/;
@@ -12135,13 +12166,27 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     },
   },
 
-  /* Hidden text's Opus check. POST only, for Mirror's reason: a run is a model
-     call the referee asks for and nothing is stored. `article: "first-capture"`
-     because it pays, and the cost report has to say which paper it was about. */
+  /* Hidden text's Opus check, kept since 2026-10-09 (plan 261009a). GET is the
+     last finished answer or `null`, asked on the same ownership question as
+     the run, and owner-scoped again in the store. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: REFEREE_HIDDEN_CHECK_PATTERN,
+    article: "first-capture",
+    handler: async ({ request: { res } }, captures) => {
+      const slug = slugPart(captures, 1);
+      await shelfStore.read(slug);
+      send(res, 200, { check: await refereeHiddenCheckStore.read(slug) });
+    },
+  },
+
+  /* POST runs the check. `article: "first-capture"` because it pays, and the
+     cost report has to say which paper it was about. */
   {
     kind: "pattern",
     method: "POST",
-    pattern: /^\/api\/referee\/hidden-check\/([\w.%-]+)$/,
+    pattern: REFEREE_HIDDEN_CHECK_PATTERN,
     article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       await runHiddenCheck(slugPart(captures, 1), res);

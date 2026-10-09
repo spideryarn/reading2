@@ -15,6 +15,11 @@ still asks Greg about anything that outlives the branch.
 >
 > — Greg, 2026-09-08
 
+**A bug is authorised already.** Greg, 2026-10-09: *"You are definitely authorised to fix bugs any
+time you notice them."* So the Overseer promotes a queued item that is a bug with
+`authorize <id> --by greg --why "standing: bugs, 2026-10-09"`, and dispatches it like any other.
+Only a bug: a feature, a product trade-off or added complexity still waits for him.
+
 > **This table is still the queue, and a machine-readable one now exists beside it.**
 > [260909b](../plans/260909b-queued-ideas-mode-the-overseer-queue-as-ndjson.md) built it: an
 > append-only NDJSON file with a CLI (`npx tsx scripts/overseer-queue.ts --help`) and the read-only

@@ -554,6 +554,8 @@ function augmentationFiles(rows: ArticleRows): Map<string, string> {
   if (rows.debateClaimChecks.length) {
     at("debate-claim-checks.json", { checks: rows.debateClaimChecks.map((row) => rowJson(row)) });
   }
+  const hiddenCheck = rows.refereeHiddenChecks[0];
+  if (hiddenCheck) at("referee-hidden-check.json", { check: rowJson(hiddenCheck) });
   if (rows.glossaryLookups.length) {
     at("glossary-lookups.json", { lookups: rows.glossaryLookups.map((row) => rowJson(row)) });
   }
@@ -664,6 +666,7 @@ one thing that will make the rest of these files make sense.
       searches.json        Meaning-searches you ran, and what they matched.
       referee-claims.json  Referee mode: what the paper claims.
       debate-claim-checks.json Debate: the claims you picked or typed, and what each search found.
+      referee-hidden-check.json Referee mode: Opus's opinion of each row of hidden text.
       referee-criteria.json Referee mode: the criteria you set, and how the article scored.
 
 \`manifest.json\` lists every file in the zip under \`entries\`, with its uncompressed size —
@@ -863,6 +866,7 @@ const FILE_NOTES: Readonly<Record<string, string>> = {
   "augmentations/referee-claims.json": "Referee mode: what the paper claims.",
   "augmentations/debate-claim-checks.json":
     "Debate: the claims you picked or typed, and what each search found.",
+  "augmentations/referee-hidden-check.json": "Referee mode: Opus's opinion of each row of hidden text.",
   "augmentations/referee-criteria.json": "Referee mode: the criteria you set, and how the article scored.",
 };
 

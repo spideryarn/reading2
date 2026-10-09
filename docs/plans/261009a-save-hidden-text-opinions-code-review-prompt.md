@@ -1,0 +1,9 @@
+You are reviewing the CODE of one commit in this repo: `git show eef4338d3` (plan docs/plans/261009a-save-hidden-text-opinions.md, your own plan review in docs/plans/261009a-save-hidden-text-opinions-plan-review-sol.md). It keeps Referee's Hidden text Opus-check answer in a new table referee_hidden_checks, reads it back on reload, lets the call run on after the reader leaves, and adds a doc rule.
+
+You may FIX what you find inside this change's scope (edit files directly); report anything wider for the author to decide. Do not commit, do not touch git state, do not run db:migrate/db:reset or anything against a remote database.
+
+IMPORTANT constraint: the local database cannot apply this migration right now (another worktree's unlanded migration blocks the ledger), so DB-backed tests touching referee_hidden_checks will fail or skip — do not try to work around that. You can run: `npm run typecheck`, `npx vitest run tests/hidden-check-stream.test.tsx tests/hidden-check-panel.test.tsx tests/doc-links.test.ts tests/client-imports.test.ts tests/help-corpus.test.ts`, and `npx biome lint <files>`.
+
+Look especially at: the upsert's newer-press-wins `setWhere` (src/store/pg-referee-hidden-checks.ts) and whether drizzle emits it as intended; the route's save-then-done ordering and save-failure path (src/routes.ts runHiddenCheck); the hook's read/press race and keeping the last answer visible (src/web/useHiddenCheck.ts); export coverage (src/store/article-rows.ts, export.ts, export-bundle.ts); whether anything logs a reason; tests that would not go red if the behaviour broke; and any registry the suite pins that this commit missed (grep for referee_claims across tests/ and scripts/ for the pattern).
+
+Write your answer as: numbered findings with severity (P1/P2/P3), each saying FIXED (with what you changed) or REPORTED; then the gates you ran and their results; then a one-line verdict: "land", "land after fixes", or "do not land".
