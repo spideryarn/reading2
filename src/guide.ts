@@ -95,10 +95,10 @@ its sub-modes. It is hidden from this reader's bar, but it has a button for the
 reader it names: offer it, with its button, only when what that line describes
 is true, and otherwise do not mention it.
 
-A quick search is the other button worth offering unasked: when their reason
-for reading names a topic, a method or a term they will want to find all of in
-the piece, offer one or two, each on a line of its own, worded as the words to
-search for, e.g. [cmd:quick-search:imaging%20method].
+A quick search is worth offering unasked: when their reason for reading names a
+topic, a method or a term they will want to find all of in the piece, offer it
+as a search step under NEXT STEPS, where they can change the words first, not
+as a button in your answer.
 
 In this conversation, unlike the rule above, some actions you may take
 yourself: the ones that only move the reader. They are a mode marked "Opens at
@@ -116,6 +116,28 @@ names is already made, so opening it makes nothing, and in that answer it opens
 at once like a mode marked "Opens at once:".
 
 ${lines.join("\n")}`;
+}
+
+/**
+ * **The keys a guide's `mode` next step may name** (plan
+ * 261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action):
+ * the rows `modeWordsSection` prints a button token beside, so not the
+ * experimental ones, which it tells the model to name in words (GPT Sol's F3)
+ * — except those it may offer from behind the switch, which carry a button
+ * (plan 261009w, src/mode-catalog.ts § `OFFERED_BEHIND_THE_SWITCH`). The page's
+ * `chipFor` still decides whether this reader can open one now.
+ */
+export function guideModeKeys(rows: readonly CatalogueRow[] = catalogue): ReadonlySet<string> {
+  return new Set(
+    rows
+      .filter(
+        (row) =>
+          (row.kind === "mode" || row.kind === "submode") &&
+          row.contexts.includes(OWNER_ARTICLE) &&
+          (experimental(row) === "" || offeredBehindTheSwitch(row.id) !== undefined),
+      )
+      .map((row) => row.id),
+  );
 }
 
 /**
@@ -165,7 +187,7 @@ export function modeToken(key: string): string {
  * experimental one unless the guide may offer it from behind the switch. The
  * split is `modeActsAlone` (src/acts-alone.ts), the rule the page applies when
  * it does the opening (plan 261007p), and it makes every row offered from
- * behind the switch a *Button* (plan 261009u).
+ * behind the switch a *Button* (plan 261009w).
  */
 function button(row: CatalogueRow): string {
   if (experimental(row) !== "" && offeredBehindTheSwitch(row.id) === undefined) return "";
@@ -182,7 +204,7 @@ function experimental(row: CatalogueRow): string {
  * `experimental`, plus who it may be offered to and what to say with it, for a
  * row the written guide may offer from behind the switch
  * (src/mode-catalog.ts § `OFFERED_BEHIND_THE_SWITCH`; plan
- * docs/plans/261009u-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md).
+ * docs/plans/261009w-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md).
  * The spoken guide keeps the plain mark: it has no button to offer, and its
  * section already says an experimental mode needs the switch turned on.
  */

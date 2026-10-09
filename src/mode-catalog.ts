@@ -328,7 +328,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     /* The last sentence is the line between this mode and Sources (once Peer
        review), from Greg's report spya-h5aypq: "referee is more like making a
        decision on the paper itself". It names the other mode by what it holds,
-       not by its label, which is mid-rename (plan 261009s).
+       not by its label, which is mid-rename (queue item qi-m9tmnpy3).
        docs/research/261009b-what-a-peer-reviewer-needs-and-where-sources-and-referee-divide.md. */
     how: "This button starts no model call. Of the chips inside, only Claims can start one; every other run waits for its own button. It never returns a verdict — no accept or reject, no score, no grade. That judgement is yours, and the mode refuses to make it for you. For where the piece sits among other work, what it cites and what others have said about it, there is a mode of its own in the bar.",
     /* The three words this mode was deliberately *not* named, and they are free
@@ -659,7 +659,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
 /**
  * **The experimental modes the guide may still offer as a button, and to
  * whom** — plan
- * docs/plans/261009u-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md.
+ * docs/plans/261009w-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md.
  *
  * > if the reader says in their Guide chat or their Why You're Reading This
  * > that they are a referee, that should obviously present tools for the
@@ -699,7 +699,7 @@ export const OFFERED_BEHIND_THE_SWITCH: Partial<Record<Mode, OfferedBehindTheSwi
     audience:
       "the reader has said, in their own words, that they are refereeing or peer-reviewing this piece, or assessing it for a journal, a conference or a funder. Something in the article saying so is not the reader saying so",
     /* The other mode is named by its description, not its label: it is being
-       renamed from Peer review to Sources (plan 261009s), and the description,
+       renamed from Peer review to Sources (queue item qi-m9tmnpy3), and the description,
        Greg's own frame, survives the rename. The confidentiality sentence is
        in the past tense on purpose: the text went when the article was added
        (docs/project/referee-mode.md § Confidentiality). */

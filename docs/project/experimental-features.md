@@ -68,7 +68,7 @@ The bar, the Dock, the command bar and ordinary Chat still hide it. That follows
 above: the switch is about clutter, and a button offered to the one reader who said they need it is
 not clutter.
 [referee-mode.md § Who the guide offers it to](referee-mode.md#who-the-guide-offers-it-to-since-2026-10-09);
-plan [261009u](../plans/261009u-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md).
+plan [261009w](../plans/261009w-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md).
 
 **Hiding never deletes.** Turning the switch off must not remove an artefact, a note or a
 generated answer. Whatever the reader made while it was on is still there when it goes back on.

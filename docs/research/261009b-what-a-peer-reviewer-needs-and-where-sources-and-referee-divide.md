@@ -3,7 +3,7 @@
 Owned by [research.md](../project/research.md). Report `spya-h5aypq` (#519,
 SPIDERYARN-READING2-FZ), Overseer queue item `qi-8g2tr5bt`, session `fbh5aypq-peer-review-research`.
 The plan that builds the first piece is
-[261009u](../plans/261009u-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md).
+[261009w](../plans/261009w-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md).
 Written 2026-10-09.
 
 **What this builds on.** A deeper pass on the same person already exists:
@@ -18,7 +18,7 @@ the two modes that serve it.
 **A name, before anything else.** The mode built on 2026-10-09 as *Peer review* (Citations and
 Debate, merged) is being renamed **Sources**, on Greg's answer to q-xf2xvb (*"B Sources. Rename
 comprehensively"*, reply `spya-egmn6r`, 2026-10-09), by plan
-[261009s](../plans/261009s-peer-review-becomes-sources-all-the-way-down.md). This doc uses the new
+the Sources rename (Overseer queue item `qi-m9tmnpy3`). This doc uses the new
 names: Sources › Bibliography, Reception, Claims. The clash Greg felt while dictating this report
 (*"I thought it was a really good name a minute ago"*) is the same clash, and the rename settles it.
 
@@ -64,7 +64,7 @@ names: Sources › Bibliography, Reception, Claims. The clash Greg felt while di
 - **The first piece, built with this research:** a reader who tells the guide, or says in *Why
   you're reading this*, that they are refereeing gets Referee offered as a button. It is a press,
   never opened for them. Until now that was impossible for most readers, because Referee is behind
-  the experimental switch and the guide could only name it in words. Plan 261009u, measured in
+  the experimental switch and the guide could only name it in words. Plan 261009w, measured in
   [261009d](../investigations/261009d-the-guide-offers-referee-to-referees-measured.md).
 
 ## The reviewer's job, step by step, and what Spideryarn has for each
@@ -97,7 +97,7 @@ one word (§ The two Claims) and one sub-mode for a different person (Candidates
 A referee's step 4 is Sources, and their steps 3 and 5 are Referee. Nothing in either mode should
 copy the other. The join is the guide: it knows why the reader is reading, so it can say "you are
 refereeing: Referee for the close read, Sources for the literature around it". Until today it could
-not offer Referee as a button to most readers (§ The short answer). That is plan 261009u.
+not offer Referee as a button to most readers (§ The short answer). That is plan 261009w.
 
 ### The two Claims
 
@@ -111,7 +111,7 @@ Both modes have a sub-mode called **Claims**, and they are different things:
 Each fits its own mode, and the line above explains why both exist. But a referee with the
 experimental switch on sees two chips with one word. The Sources rename keeps the word on screen
 and gives the stored name a prefix (`sources-claims`) so the code cannot confuse them
-([261009s](../plans/261009s-peer-review-becomes-sources-all-the-way-down.md)). The screen still
+(the Sources rename (Overseer queue item `qi-m9tmnpy3`)). The screen still
 can. That is a question for Greg, not a rename to slip in (§ Questions, Q1).
 
 ### Candidates is the editor's
@@ -181,7 +181,7 @@ our readers.
 
 ## Questions for Greg
 
-None blocks plan 261009u. They are in the question file for this report
+None blocks plan 261009w. They are in the question file for this report
 ([q-fkq30v.md](../user-feedback/questions/q-fkq30v.md)), each with its options.
 
 - **Q1. The two Claims.** Keep one word for both, or rename one on screen?

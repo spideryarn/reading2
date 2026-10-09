@@ -177,7 +177,7 @@ export type Verifier = (token: string) => Promise<VerifyResult>;
  * `client_id` is on every token Supabase's OAuth server issues to an AI app
  * (plan 261007p) and never on a browser session's. `unknown`, because it is
  * whatever the token carries: `requireUser` refuses its mere presence, and
- * src/mcp/remote.ts compares it to the one client it accepts.
+ * src/mcp/remote.ts compares it to the clients `MCP_OAUTH_CLIENT_ID` lists.
  */
 export type TokenClaims = {
   sub: string;

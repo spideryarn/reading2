@@ -12,7 +12,7 @@
 import { describe, expect, it } from "vitest";
 
 import { withTurn } from "../src/chat.js";
-import { CHAT_TOOLS, GUIDE_TOOLS, OFFER_TO_SAVE_TOOL, toolsFor } from "../src/chat-tools.js";
+import { CHAT_TOOLS, GUIDE_TOOLS, OFFER_NEXT_STEPS_TOOL, OFFER_TO_SAVE_TOOL, toolsFor } from "../src/chat-tools.js";
 import { buildConverseMessages, defaultModel, jobFor, roundTools, webSearchTool } from "../src/converse.js";
 import { cachedText } from "../src/article-prompt.js";
 import { A_FEW_ARTICLES, experienceLine, experienceOf, madeLine, modeWordsSection } from "../src/guide.js";
@@ -172,7 +172,7 @@ describe("our words for the modes", () => {
     const section = modeWordsSection();
     /* Debate was the example until 2026-10-09, when it came out as Peer review. */
     /* Referee was the example until 2026-10-09, when the guide could offer it
-       from behind the switch (plan 261009u). */
+       from behind the switch (plan 261009w). */
     expect(section).toContain("- Diagram (experimental): ");
     expect(section).toContain("- Referee (experimental; offer it only when ");
     expect(section).toContain("- Peer review: ");
@@ -282,8 +282,8 @@ describe("which modes are already made", () => {
 });
 
 describe("the guide's tools", () => {
-  it("are the article's own five, in chat's order, then the offer to save", () => {
-    expect(toolsFor("guide")).toEqual([...GUIDE_TOOLS, OFFER_TO_SAVE_TOOL]);
+  it("are the article's own five, in chat's order, then the two offers", () => {
+    expect(toolsFor("guide")).toEqual([...GUIDE_TOOLS, OFFER_TO_SAVE_TOOL, OFFER_NEXT_STEPS_TOOL]);
     expect(GUIDE_TOOLS.map((t) => t.function.name)).toEqual([
       "search_article_words",
       "search_article_meaning",

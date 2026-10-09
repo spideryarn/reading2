@@ -44,7 +44,7 @@ status; the next feedback sweep does.
   the reviewer's job in six steps against the modes we have, where the two modes divide, why
   confidentiality decides whether a referee can use any of this, and seven ideas not built.
 - **The line.** Your lean, and what is already built, agree almost row for row. Sources (Peer
-  review's new name, your answer to q-xf2xvb, being done by plan 261009s) asks *where does this
+  review's new name, your answer to q-xf2xvb, being done under queue item `qi-m9tmnpy3`) asks *where does this
   piece sit?* and is for anyone. Referee asks *what do I have to judge, and have I looked at it?*
   and never gives the verdict. Written into
   [referee-mode.md § Referee and Sources](../project/referee-mode.md#referee-and-sources-since-2026-10-09).
@@ -55,7 +55,7 @@ status; the next feedback sweep does.
   that. Before: the guide never mentioned Referee, and sent referees to *Peer review › Claims*.
   After: 14/14, and the magazine reviewer, the reading group and a planted paragraph got no offer
   ([261009d](../investigations/261009d-the-guide-offers-referee-to-referees-measured.md)). Plan
-  [261009u](../plans/261009u-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md),
+  [261009w](../plans/261009w-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md),
   GPT Sol on the plan (eight findings, all taken) and on the code.
 - **Referee's button card** now says *"Refereeing it? What to weigh before you decide: your criteria,
   its claims, and a second look at your notes"*, and its second paragraph points to the other mode

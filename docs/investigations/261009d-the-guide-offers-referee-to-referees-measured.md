@@ -1,7 +1,7 @@
 # The guide offers Referee to referees, measured: to them, and to nobody else?
 
 Written 2026-10-09 for
-[plan 261009u](../plans/261009u-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md).
+[plan 261009w](../plans/261009w-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md).
 Owned by [investigations.md](../project/investigations.md). The runner is
 [`evals/guide/referee-offer.ts`](../../evals/guide/referee-offer.ts). Every answer, in full, is in
 `evals/guide/results/referee-offer-v0-baseline.json` (before) and `referee-offer-v1.json` (after).

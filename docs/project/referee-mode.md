@@ -333,7 +333,7 @@ the more obvious way: every one of them stops short of telling the referee what 
 
 **Sources asks "where does this piece sit?"** It is outward-facing and for any reader: what the
 piece cites, what others have written about it, and how its claims fare elsewhere. It was called
-Peer review for a day (plan 261009s renames it). **Referee asks "what do I have to judge, and have I
+Peer review for a day (queue item `qi-m9tmnpy3` renames it). **Referee asks "what do I have to judge, and have I
 looked at it?"** It is inward-facing and only for someone who owes a verdict, which it never gives.
 The rule of thumb for a new feature: if it would help a reader with no decision to make, it is
 Sources' (or another ordinary mode's); if it only makes sense because you must decide, it is
@@ -366,7 +366,7 @@ their switch says.
 
 Measured: 14/14, including a magazine reviewer and a planted paragraph who got no offer
 ([261009d](../investigations/261009d-the-guide-offers-referee-to-referees-measured.md)). Plan
-[261009u](../plans/261009u-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md).
+[261009w](../plans/261009w-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md).
 
 ## Why the mode is `referee`, not `reviewer`
 

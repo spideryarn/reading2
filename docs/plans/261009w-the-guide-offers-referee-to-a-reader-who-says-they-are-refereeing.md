@@ -1,10 +1,12 @@
-# 261009u — The guide offers Referee to a reader who says they are refereeing
+# 261009w — The guide offers Referee to a reader who says they are refereeing
 
 Owned by [plans.md](../project/plans.md). Report `spya-h5aypq` (#519, SPIDERYARN-READING2-FZ),
 Overseer queue item `qi-8g2tr5bt`, session `fbh5aypq-peer-review-research`. The research behind it
 is [261009b](../research/261009b-what-a-peer-reviewer-needs-and-where-sources-and-referee-divide.md).
-Runs beside [261009s](261009s-peer-review-becomes-sources-all-the-way-down.md) (Peer review becomes
-Sources), which owns every Sources name; this plan uses those names and stays off its rows.
+Runs beside the Sources rename (queue item `qi-m9tmnpy3`, session `fbc2qmbg-rename-to-sources`,
+still in its own worktree as this lands), which owns every Sources name; this plan uses those names
+and stays off its rows. Its first commit called it 261009u, a letter another plan (the guide's next
+steps) landed with first.
 **Status: built, GPT Sol on the plan and the code, measured 14/14
 ([261009d](../investigations/261009d-the-guide-offers-referee-to-referees-measured.md)), on `dev`.
 Not deployed. Four product questions for Greg in
@@ -67,6 +69,10 @@ for each mode, and `offeredBehindTheSwitch(key)` to read it by catalogue key (`m
    (CommandChip.tsx), wrapped round ChatPanel.tsx's `Conversation`, hands a guide thread the twin
    and every other thread the ordinary one. So a Referee token in ordinary Chat stays plain text
    with the switch off (GPT Sol's F1). The bar, the Dock and the command bar are untouched.
+4. **The guide's next steps** (plan 261009u, which landed on `dev` while this was being built):
+   `guideModeKeys` (src/guide.ts), the keys an `offer_next_steps` mode step may name, is the rows
+   with a button, so it now includes Referee's. The step's button is drawn inside the same
+   `ChatCommandsFor`, so it resolves through the guide's door and is a press like any next step.
 
 **What the guide says with the offer** is the `guidance`. It suggests Referee for the close read and
 the reader's own notes, and the mode for what the piece cites and what others say about it (named by
@@ -78,7 +84,7 @@ research finds confidentiality decides whether a referee can use any of this (GP
 **Referee's own words** (src/mode-catalog.ts). The description is now *"Refereeing it? What to weigh
 before you decide: your criteria, its claims, and a second look at your notes"*, Greg's *making a
 decision*. The `how` gains a last sentence pointing anyone who wants where the piece sits among
-other work to the mode for that. Sources' row and Referee's aliases are 261009s's, and were not
+other work to the mode for that. Sources' row and Referee's aliases are the rename's, and were not
 touched.
 
 ### Passed over
@@ -98,7 +104,7 @@ touched.
 
 ## GPT Sol on the plan
 
-[261009u-plan-review-sol.md](261009u-plan-review-sol.md); prompt alongside it. Verdict: *revise
+[261009w-plan-review-sol.md](261009w-plan-review-sol.md); prompt alongside it. Verdict: *revise
 before build*. All eight findings were taken:
 
 | # | Finding | What was done |

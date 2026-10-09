@@ -2884,7 +2884,7 @@ export function Reader({
    * **The modes a chat chip may open, and how** (plan 261007j, GPT Sol's F3):
    * two doors, chat's and the guide's, whose rows are src/web/chip-door.ts §
    * `chipDoorRows` and § `guideDoorRows` (the guide's adds the modes it may
-   * offer from behind the switch, plan 261009u). The press is the Dock's own
+   * offer from behind the switch, plan 261009w). The press is the Dock's own
    * pair of activators, through `modeActivators` (set below, beside
    * `onDockMode`).
    */
@@ -2987,7 +2987,7 @@ export function Reader({
    * The find reads the address at the press, not at the render: it carries
    * `?at=`, which the reader's scrolling rewrites.
    *
-   * Each carries a `guide` twin whose mode door is the guide's (plan 261009u):
+   * Each carries a `guide` twin whose mode door is the guide's (plan 261009w):
    * ChatPanel.tsx § `Conversation` hands it to a guide thread's chips.
    */
   const chatCommands = useMemo(() => {

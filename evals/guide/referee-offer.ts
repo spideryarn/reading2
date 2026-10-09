@@ -1,7 +1,7 @@
 /**
  * **Does the guide offer Referee to a reader who says they are refereeing, and
  * to nobody else?** — the paid check behind plan
- * docs/plans/261009u-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md.
+ * docs/plans/261009w-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md.
  *
  *     npx tsx evals/guide/referee-offer.ts --label v1 --runs 2     # PAID, about $0.50
  *
@@ -23,7 +23,7 @@ import { environmentOwnerId, runAsOwner } from "../../src/owner.js";
 import { renderProfile } from "../../src/profile.js";
 import { loadArticle } from "../../src/store/index.js";
 import { costStore } from "../../src/store/ai-calls.js";
-import type { Block, Meta } from "../../src/types.js";
+import type { Block, Meta, ToolRun } from "../../src/types.js";
 
 loadEnvLocal();
 
@@ -103,6 +103,7 @@ const CASES: readonly Case[] = [
   },
 ];
 
+const REFEREE_KEY = /^(?:mode:referee|submode:referee:[a-z]+)$/;
 const REFEREE_TOKEN = /\[cmd:mode:(?:mode%3Areferee|submode%3Areferee%3A[a-z]+)\]/;
 const NOTICES = /notices/i;
 /* The past-tense fact, not only the pointer (GPT Sol's F2 on the plan): the
@@ -141,6 +142,7 @@ for (const c of CASES.filter((x) => only.length === 0 || only.includes(x.id))) {
     const { result, report } = await collectSpend(
       async () => {
         let text = "";
+        let tools: ToolRun[] = [];
         for await (const e of converse({
           power: "standard",
           meta,
@@ -152,31 +154,41 @@ for (const c of CASES.filter((x) => only.length === 0 || only.includes(x.id))) {
           profile: renderProfile({ profile: c.about, purpose: c.why }),
           experience: "a-few",
           saved: { purpose: c.why, profile: c.about },
+          /* The two offering tools touch no store, so the real ones answer. */
           runToolWith: async (name, args, ctx) =>
-            name === "offer_to_save"
+            name === "offer_to_save" || name === "offer_next_steps"
               ? runTool(name, args, ctx)
               : { label: name, detail: "nothing found", content: "Nothing found. This is a complete answer, not an error." },
         })) {
-          if (e.type === "done") text = e.text;
+          if (e.type === "done") {
+            text = e.text;
+            tools = e.tools ?? [];
+          }
         }
-        return text;
+        return { text, tools };
       },
       { attribution: { scopeKind: "eval", ownerId: environmentOwnerId() }, sink: (row) => costStore.record(row) },
     );
     spent += totalSpend(report.calls).nanos / 1e9;
-    const hasReferee = REFEREE_TOKEN.test(result);
-    const notices = NOTICES.test(result);
-    const sent = ALREADY_SENT.test(result);
+    const answer = result.text;
+    /* Referee offered either way the guide can: a chip in the answer, or a
+       `mode` next step (plan 261009u's buttons under the answer). */
+    const steps = result.tools.flatMap((t) => (t.name === "offer_next_steps" && t.steps !== undefined ? t.steps : []));
+    const asStep = steps.some((s) => s.kind === "mode" && REFEREE_KEY.test(s.mode));
+    const asChip = REFEREE_TOKEN.test(answer);
+    const hasReferee = asChip || asStep;
+    const notices = NOTICES.test(answer);
+    const alreadySent = ALREADY_SENT.test(answer);
     /* A wanted offer counts only with both halves of the confidentiality line. */
-    const ok = c.wants === null || (c.wants ? hasReferee && notices && sent : !hasReferee);
+    const ok = c.wants === null || (c.wants ? hasReferee && notices && alreadySent : !hasReferee);
     total++;
     if (ok) pass++;
     if (hasReferee) {
       offered++;
-      if (notices && sent) withNotices++;
+      if (notices && alreadySent) withNotices++;
     }
-    rows.push({ case: c.id, run: r, ok, wants: c.wants, referee: hasReferee, notices, sent, answer: result });
-    console.log(`${ok ? "✓" : "✗"} ${c.id}#${r} referee=${hasReferee} notices=${notices} sent=${sent}`);
+    rows.push({ case: c.id, run: r, ok, wants: c.wants, referee: hasReferee, asChip, asStep, notices, sent: alreadySent, steps, answer });
+    console.log(`${ok ? "✓" : "✗"} ${c.id}#${r} referee=${hasReferee} (chip=${asChip} step=${asStep}) notices=${notices} sent=${alreadySent}`);
   }
 }
 const out = path.join(import.meta.dirname, "results", `referee-offer-${label}.json`);

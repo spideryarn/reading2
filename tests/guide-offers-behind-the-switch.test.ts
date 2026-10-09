@@ -1,7 +1,7 @@
 /**
  * **The guide may offer Referee from behind the experimental switch, as a
  * press, and nothing else changes** — plan
- * docs/plans/261009u-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md.
+ * docs/plans/261009w-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md.
  *
  * Three readers of one record (src/mode-catalog.ts § `OFFERED_BEHIND_THE_SWITCH`):
  * the written guide's list of modes, the press rule (src/acts-alone.ts), and the
@@ -11,7 +11,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { modeActsAlone } from "../src/acts-alone.js";
-import { modeToken, modeWordsSection, spokenModeWords } from "../src/guide.js";
+import { guideModeKeys, modeToken, modeWordsSection, spokenModeWords } from "../src/guide.js";
 import { MODE_CATALOG, OFFERED_BEHIND_THE_SWITCH, offeredBehindTheSwitch } from "../src/mode-catalog.js";
 import type { Mode } from "../src/modes.js";
 import catalogue from "../src/command-pick-catalogue.generated.json" with { type: "json" };
@@ -67,6 +67,15 @@ describe("the written guide's list of modes", () => {
     expect(MODE_CATALOG.diagram.experimental).toBe(true);
     expect(lineOf(written, "- Diagram")).toContain("(experimental)");
     expect(written).not.toContain(modeToken("mode:diagram"));
+  });
+
+  /* The next steps' check (src/next-steps.ts) takes the keys with a button, so
+     a Referee next step is kept and a Diagram one still refused. */
+  it("lets a next step name Referee and its sub-modes, and still not another experimental mode", () => {
+    const keys = guideModeKeys();
+    for (const row of refereeRows) expect(keys.has(row.id), row.id).toBe(true);
+    expect(keys.has("mode:diagram")).toBe(false);
+    expect(keys.has("mode:structure")).toBe(true);
   });
 
   it("leaves the spoken guide's list as it was", () => {

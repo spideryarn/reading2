@@ -1,7 +1,7 @@
 You are reviewing a plan before it is built, in the Spideryarn repo (read-only review).
 
 Read, in this order:
-1. docs/plans/261009u-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md — the plan under review.
+1. docs/plans/261009w-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md — the plan under review.
 2. docs/research/261009b-what-a-peer-reviewer-needs-and-where-sources-and-referee-divide.md — the research behind it (also review its product reasoning briefly: is the Sources/Referee line sound, are the "ideas for later" well ranked by evidence, is anything overstated against docs/research/261009b-peer-reviewer-web-pass-sonnet.md).
 3. The code it touches: src/guide.ts (modeWordsSection, button, experimental), src/acts-alone.ts, src/mode-catalog.ts (ModeCatalogEntry comments, referee row), src/web/reader/Reader.tsx (chipModes useMemo near `modeDoor(`), src/web/command-runners.ts (modeDoor, modeRunner), src/web/chat-commands.ts (chipFor), src/web/Dock.tsx (visibleModes), src/web/CommandBar.tsx (subModeRows), src/web/experimental-visibility.ts, src/converse.ts (GUIDE_SYSTEM), src/web/guide-acts.ts (how the page acts on an "opens at once" token), evals/guide/offers.ts.
 4. docs/project/referee-mode.md § Confidentiality and § The rules the whole mode obeys; docs/project/experimental-features.md.
