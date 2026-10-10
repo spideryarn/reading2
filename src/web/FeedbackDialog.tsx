@@ -404,8 +404,9 @@ function reportBody(input: {
 
 /**
  * **Tell anything about to reload the page that a draft is held** — the Write
- * box's words, picture or recording, or a half-written reply to a question —
- * and take it back when neither is, or when the dialog is unmounted.
+ * box's words, picture or recording, a half-written reply to a question, or a
+ * half-written addendum to a report — and take it back when none is, or when
+ * the dialog is unmounted.
  */
 function useDraftHeld(...held: boolean[]): void {
   const any = held.some(Boolean);
@@ -882,16 +883,17 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
   useEffect(() => {
     if (!open) setView("write");
   }, [open]);
-  const { earlier, choice, setShow, retry, questions, liveQuestions, waitingQuestionCount, replies } = useEarlierFeedback(
+  const { earlier, choice, setShow, retry, questions, liveQuestions, waitingQuestionCount, replies, addenda } = useEarlierFeedback(
     open,
     view === "earlier",
     admin,
   );
   /* One thread on its own, in Needs a decision: nothing else in the panel. */
   const threadOpen = choice.show === "waiting" && threadShowing(questions, replies);
-  /* A half-written reply to a question is a draft too (261007d): an automatic
-     reload would lose it exactly as it would lose the Write box's words. */
-  useDraftHeld(holdsDraft, replies.holds);
+  /* A half-written reply to a question is a draft too (261007d), and so is a
+     half-written addendum to a report (261010o): an automatic reload would
+     lose either exactly as it would lose the Write box's words. */
+  useDraftHeld(holdsDraft, replies.holds, addenda.holds);
   const ids = useId();
   const tabId = (which: View) => `${ids}-tab-${which}`;
   const panelId = (which: View) => `${ids}-panel-${which}`;
@@ -1537,7 +1539,15 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
             open={open}
             onEarlier={view === "earlier"}
           />
-          <EarlierList earlier={earlier} choice={choice} retry={retry} questions={liveQuestions} threadOpen={threadOpen} />
+          <EarlierList
+            earlier={earlier}
+            choice={choice}
+            retry={retry}
+            questions={liveQuestions}
+            threadOpen={threadOpen}
+            addenda={addenda}
+            active={open && view === "earlier"}
+          />
         </div>
 
         <div className="fb-actions" hidden={view !== "earlier"}>

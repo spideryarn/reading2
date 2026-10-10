@@ -281,6 +281,8 @@
        the box they reply in (261007d) */
     .fb-question-answer-body,
     .fb-reply-input,
+    /* what the admin added to their own report since (261010o) */
+    .fb-addendum-body,
     .ill-steer-input,
     .cmdbar-input,
     /* About you or the reason, quoted back in the guide's greeting (261009i) */
