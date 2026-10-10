@@ -246,6 +246,24 @@ describe("the Postgres searches store", () => {
       expect((await pgSearchStore.load(SLUG))[0]?.status).toBe("pending");
     });
 
+    /* The stale banner's dismissal is keyed `<runId>@<finishedAt>` (plan
+       261010a, GPT Sol's finding 2): a run keeps its id when it is answered
+       again, so the client must receive the time, and it must move. */
+    it("sends finishedAt with a finished run, none while pending, and a later one after a revision", async () => {
+      const { run, attempt } = await pgSearchStore.begin(SLUG, HASH, "why replic", "quick", "spya-runff2");
+      expect("finishedAt" in run).toBe(false);
+      await pgSearchStore.finish(SLUG, run.id, { status: "done", hits: [], model: "jev" }, attempt);
+      const first = (await pgSearchStore.load(SLUG)).find((r) => r.id === run.id)?.finishedAt;
+      expect(first).toMatch(/^20\d\d-/);
+      const revised = await pgSearchStore.begin(SLUG, HASH, "why replicas", "quick", run.id, undefined, {
+        revises: true,
+      });
+      expect("finishedAt" in revised.run).toBe(false);
+      await pgSearchStore.finish(SLUG, run.id, { status: "done", hits: [], model: "jev" }, revised.attempt);
+      const second = (await pgSearchStore.load(SLUG)).find((r) => r.id === run.id)?.finishedAt;
+      expect(new Date(second ?? 0).getTime()).toBeGreaterThan(new Date(first ?? 0).getTime());
+    });
+
     it("never recreates a deleted row: a revision of an absent id mints a new one (Sol C7)", async () => {
       const { run, attempt } = await pgSearchStore.begin(SLUG, HASH, "why replic", "quick", "spya-rundd2");
       await pgSearchStore.finish(SLUG, run.id, { status: "done", hits: [] }, attempt);

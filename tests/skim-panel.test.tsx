@@ -88,6 +88,11 @@ vi.mock("../src/web/lib/api.js", async () => {
     if (url.startsWith("/api/faq/"))
       return faqBody === null ? new Response(null, { status: 404 }) : new Response(JSON.stringify(faqBody), { status: 200 });
     if (url.startsWith("/api/jobs")) return new Response(JSON.stringify({ jobs: [] }), { status: 200 });
+    /* The stale notice's × (plan 261010a): nothing dismissed yet, and a dismissal lands. */
+    if (url.startsWith("/api/stale-notices/"))
+      return init?.method === "POST"
+        ? new Response(null, { status: 204 })
+        : new Response(JSON.stringify({ dismissed: {} }), { status: 200 });
     return new Response(null, { status: 404 });
   };
   return {
@@ -1240,7 +1245,7 @@ describe("the panel", () => {
     expect(text(".gloss-stale")).toContain("before your profile said what it says now");
     /* Beside the ×, plan 261009i. */
     expect(
-      [...host.querySelectorAll(".gloss-stale button:not(.skim-notice-close)")].map((b) => b.textContent),
+      [...host.querySelectorAll(".gloss-stale button:not(.notice-close)")].map((b) => b.textContent),
     ).toEqual(["Plan it again"]);
   });
 
@@ -1250,7 +1255,7 @@ describe("the panel", () => {
     it("is on the profile notice, and pressing it asks the owner to dismiss", async () => {
       let dismissed = 0;
       await draw(owner({ profileChanged: true, dismissProfileNotice: async () => void dismissed++ }), view());
-      const close = host.querySelector<HTMLButtonElement>(".gloss-stale .skim-notice-close");
+      const close = host.querySelector<HTMLButtonElement>(".gloss-stale .notice-close");
       expect(close, "no × on the profile notice").toBeTruthy();
       expect(close?.getAttribute("aria-label")).toContain("Dismiss");
       await act(async () => close?.click());
@@ -1264,17 +1269,55 @@ describe("the panel", () => {
       expect(host.querySelector(".skim-again")?.textContent, "a job after a dismissal shows nowhere").toContain("Stop");
     });
 
-    it("is not on the stale banner, which a dismissal does not hide", async () => {
-      await draw(owner({ stale: true, profileChanged: true, profileNoticeDismissed: true }), view());
+    /* Plan 261010a: the stale banner has an × of its own now, which is the
+       stale notice's, stored against the route's clock — not this one. */
+    it("does not hide the stale banner, whose × is its own", async () => {
+      const { forgetStaleNotices } = await import("../src/web/useStaleNotices.js");
+      forgetStaleNotices();
+      let dismissed = 0;
+      await draw(
+        owner({
+          stale: true,
+          profileChanged: true,
+          profileNoticeDismissed: true,
+          dismissProfileNotice: async () => void dismissed++,
+        }),
+        view(),
+      );
       expect(text(".gloss-stale")).toContain("have changed since this route was planned");
-      expect(host.querySelector(".skim-notice-close")).toBeNull();
+      expect(host.querySelector('[data-stale-notice="skim"] .notice-close')).toBeTruthy();
+      await act(async () => host.querySelector<HTMLButtonElement>(".gloss-stale .notice-close")?.click());
+      expect(dismissed, "the stale × dismissed the profile notice").toBe(0);
+      expect(host.querySelector(".gloss-stale"), "the stale banner stayed").toBeNull();
+      forgetStaleNotices();
+    });
+
+    it("shows the profile notice once the stale one is dismissed, if it is not dismissed too", async () => {
+      const { forgetStaleNotices } = await import("../src/web/useStaleNotices.js");
+      forgetStaleNotices();
       await draw(owner({ stale: true, profileChanged: true }), view());
-      expect(host.querySelector(".skim-notice-close")).toBeNull();
+      expect(text(".gloss-stale")).toContain("have changed since this route was planned");
+      await act(async () => host.querySelector<HTMLButtonElement>(".gloss-stale .notice-close")?.click());
+      expect(text(".gloss-stale")).toContain("before your profile said what it says now");
+      forgetStaleNotices();
     });
 
     it("says why when a dismissal did not stick", async () => {
       await draw(owner({ profileChanged: true, dismissFailed: "The server could not be reached." }), view());
-      expect(text(".skim-notice-failed")).toContain("The server could not be reached.");
+      expect(text(".notice-failed")).toContain("The server could not be reached.");
+    });
+
+    /* Plan 261010a, GPT Sol's finding 3: a stale route's banner can be sent
+       away, so a stop whose quote has gone says so itself, in its words and
+       in its accessible name. */
+    it("says on a stop whose quote has gone that it is no longer in the Quotes", async () => {
+      const v = view();
+      await draw(owner(), view({ rows: v.rows.map((r, i) => (i === 0 ? { ...r, missing: true } : r)) }));
+      const go = host.querySelector<HTMLButtonElement>(".skim-row .skim-go");
+      expect(go?.disabled).toBe(true);
+      expect(go?.textContent).toContain("This quote is no longer in the Quotes");
+      const others = [...host.querySelectorAll<HTMLElement>(".skim-row .skim-go")].slice(1);
+      for (const b of others) expect(b.textContent).not.toContain("no longer in the Quotes");
     });
   });
 
@@ -1294,7 +1337,7 @@ describe("the panel", () => {
       ensure: async () => void ensured++,
     });
     await draw(o, view());
-    const again = [...host.querySelectorAll<HTMLButtonElement>(".gloss-stale button")];
+    const again = [...host.querySelectorAll<HTMLButtonElement>(".gloss-stale button:not(.notice-close)")];
     expect(again.map((b) => b.textContent)).toEqual(["Plan it again"]);
     await act(async () => again[0]!.click());
     expect([regenerated, ensured]).toEqual([1, 0]);
@@ -2389,7 +2432,7 @@ describe("the band, walked", () => {
        reason to name them either. */
     ideasBody = IDEAS_BODY;
     await mount();
-    await act(async () => host.querySelector<HTMLButtonElement>(".gloss-stale button")!.click());
+    await act(async () => host.querySelector<HTMLButtonElement>(".gloss-stale button:not(.notice-close)")!.click());
     await settled();
     expect(posted).toEqual([{ slug: "a-route", steps: ["skim"], force: ["skim"] }]);
   });
@@ -2398,7 +2441,7 @@ describe("the band, walked", () => {
     /* Stale, so the banner — the one Plan it again left (plans 260929b, 260929c) — is drawn. */
     skimBody = { ...SKIM_BODY, stale: true };
     await mount();
-    await act(async () => host.querySelector<HTMLButtonElement>(".gloss-stale button")!.click());
+    await act(async () => host.querySelector<HTMLButtonElement>(".gloss-stale button:not(.notice-close)")!.click());
     await settled();
     expect(posted).toEqual([{ slug: "a-route", steps: ["ideas", "skim"], force: ["skim"] }]);
   });
@@ -2409,7 +2452,7 @@ describe("the band, walked", () => {
     quotesRead = { ...QUOTES_READ, stale: true };
     ideasBody = IDEAS_BODY;
     await mount();
-    await act(async () => host.querySelector<HTMLButtonElement>(".gloss-stale button")!.click());
+    await act(async () => host.querySelector<HTMLButtonElement>(".gloss-stale button:not(.notice-close)")!.click());
     await settled();
     /* Only the route is forced; `stepIsDone` decides about the Quotes. */
     expect(posted).toEqual([{ slug: "a-route", steps: ["quotes", "skim"], force: ["skim"] }]);
@@ -2424,7 +2467,7 @@ describe("the band, walked", () => {
     });
     await mount();
 
-    await act(async () => host.querySelector<HTMLButtonElement>(".gloss-stale button")!.click());
+    await act(async () => host.querySelector<HTMLButtonElement>(".gloss-stale button:not(.notice-close)")!.click());
     await settled();
     expect(posted, "must not plan against Ideas whose freshness is still unknown").toEqual([]);
 

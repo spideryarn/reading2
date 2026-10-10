@@ -38,7 +38,7 @@
  * ideas must not share search's `found` state.
  */
 import { useRef } from "react";
-import { Lightbulb, TriangleAlert } from "lucide-react";
+import { Lightbulb } from "lucide-react";
 import type { Idea } from "../types.js";
 import { type ItemFocus, useLandOnItem } from "./item-focus.js";
 import { ASK_IDEA_IN_CHAT, AskInChatButton, type IdeaChats, OPEN_IDEA_CHAT, OriginChatMark } from "./OriginChat.js";
@@ -58,6 +58,8 @@ import type { BlockId } from "../types.js";
 import { useRenderCount } from "./perf.js";
 import { BandWaiting } from "./BandWaiting.js";
 import { Excerpt } from "./Excerpt.js";
+import { StaleNotice } from "./StaleNotice.js";
+import { useStaleNotice } from "./useStaleNotices.js";
 
 /**
  * **The owner's half of this panel** — the read's status, the job finding the
@@ -155,6 +157,13 @@ export function IdeasPanel({
   const ideas = access.ideas;
   const all = ideas?.ideas ?? [];
   const chats = access.kind === "owner" ? (access.chats ?? null) : null;
+  /* The stale banner's × (plan 261010a): this list, by its clock. */
+  const staleNotice = useStaleNotice({
+    slug: owner?.slug ?? null,
+    mode: "ideas",
+    identities: owner?.stale ? (owner.ideas?.generatedAt ?? null) : null,
+  });
+  const bannerShowing = staleNotice.showing.length > 0;
   /* **Land on the focused idea** (src/web/item-focus.ts). Every idea in a
      ready list is drawn, in one of the two groups, so known is drawn — unless
      one has a provenance neither group takes. */
@@ -287,11 +296,15 @@ export function IdeasPanel({
           stale list, whose banner carries the job; an outdated list has no
           banner (plan 260929c), so its job shows here. And while a rewrite's
           list has not loaded (`waiting`), for the read that brings it in —
-          unless `ReadError` above is already offering that read. */
+          unless `ReadError` above is already offering that read.
+
+          **"While the banner shows", not "while stale"** (plan 261010a,
+          GPT Sol's finding 4): a dismissed banner carries nothing, so a job
+          started from Metadata shows its progress, failure and Stop here. */
       foot={
         ideas &&
         owner?.status === "ready" &&
-        !owner.stale &&
+        !bannerShowing &&
         (owner.job || owner.starting || owner.failed || (waiting && !owner.error)) ? (
           <div className="ideas-again">{run("Find them again", true)}</div>
         ) : null
@@ -331,15 +344,9 @@ export function IdeasPanel({
               even when every paragraph is byte-identical — which is right,
               because the model judged what the argument rests on from the
               skeleton. */}
-          {owner?.stale ? (
-            <div className="gloss-stale">
-              <p>
-                <TriangleAlert size={13} />
-                These describe an older version of the article.
-              </p>
-              {run("Find them again", true)}
-            </div>
-          ) : null}
+          <StaleNotice notice={staleNotice} action={run("Find them again", true)}>
+            These describe an older version of the article.
+          </StaleNotice>
           {/* No banner for an outdated list (older prompt, same article) —
               Greg, 2026-09-29 (SPIDERYARN-READING2-55): *"it's not worth
               bugging the user about it."* Re-running is in Metadata. Plan

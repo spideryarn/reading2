@@ -49,6 +49,8 @@
  * read against the article where a picture cannot.
  */
 import { BandWaiting } from "./BandWaiting.js";
+import { StaleNotice } from "./StaleNotice.js";
+import { useStaleNotice } from "./useStaleNotices.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Brush,
@@ -453,6 +455,8 @@ export function IllustratedView({ slug, blocks, onJump }: Props) {
   const view = useIllustrated(slug, blocks);
   const { illustrated } = view;
   const steer = useSteerNote(slug, illustrated?.note);
+  /* The stale sentence's × (plan 261010a): this painting, by its identity. */
+  const staleNotice = useStaleNotice({ slug, mode: "illustrated", identities: view.stale ? view.identity : null });
 
   /** Which plate is open, by scene id. `null` is the first — the overview. */
   const [open, setOpen] = useState<string | null>(null);
@@ -556,12 +560,10 @@ export function IllustratedView({ slug, blocks, onJump }: Props) {
 
   if (!illustrated || !plate) return null;
 
+  /* The other caveats stay in the grey line and cannot be sent away; the
+     stale one is the "older version" notice, a line of its own with an ×
+     (plan 261010a, GPT Sol's finding 1). */
   const notes: string[] = [];
-  if (view.stale) {
-    notes.push(
-      "The Sketch this was painted from has moved since — either it was redrawn, or the article moved underneath it. The picture is of an earlier version of the argument.",
-    );
-  }
   const lost = view.faults.filter((f) => f.what.includes("not in this article")).length;
   if (lost > 0) {
     notes.push(`${lost} of the passages it drew from are no longer in this article, so their rows are gone.`);
@@ -692,6 +694,10 @@ export function IllustratedView({ slug, blocks, onJump }: Props) {
         <RewriteWaiting line="The new picture hasn't loaded yet." onRead={view.refresh} />
       )}
 
+      <StaleNotice notice={staleNotice} className="ill-stale">
+        The Sketch this was painted from has moved since — either it was redrawn, or the article moved
+        underneath it. The picture is of an earlier version of the argument.
+      </StaleNotice>
       {notes.length > 0 && <p className="ill-note">{notes.join(" ")}</p>}
 
       <div className="ill-scroll">

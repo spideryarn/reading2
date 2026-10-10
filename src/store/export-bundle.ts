@@ -580,6 +580,9 @@ function augmentationFiles(rows: ArticleRows): Map<string, string> {
   if (rows.quizAttempts.length) {
     at("quiz-attempts.json", { attempts: rows.quizAttempts.map((row) => rowJson(row)) });
   }
+  if (rows.staleNoticeDismissals.length) {
+    at("stale-notices.json", { dismissals: rows.staleNoticeDismissals.map((row) => rowJson(row)) });
+  }
   return out;
 }
 
@@ -641,6 +644,7 @@ one thing that will make the rest of these files make sense.
       reading-time.json    How many seconds you have spent on each block.
       tags.json            Your own tags on the article.
       quiz-attempts.json   Your answers to the quiz questions, and the mark each was given.
+      stale-notices.json   The "older version of the article" notices you dismissed, by mode.
       ideas.json           Propositions the article takes as given.
       quotes.json          Lines worth keeping.
       timeline.json        When the article says things happened.
@@ -837,6 +841,7 @@ const FILE_NOTES: Readonly<Record<string, string>> = {
   "augmentations/reading-time.json": "How many seconds you have spent on each block.",
   "augmentations/tags.json": "Your own tags on the article.",
   "augmentations/quiz-attempts.json": "Your answers to the quiz questions, and the mark each was given.",
+  "augmentations/stale-notices.json": "The \"older version of the article\" notices you dismissed, by mode.",
   "augmentations/ideas.json": "Propositions the article takes as given.",
   "augmentations/quotes.json": "Lines worth keeping.",
   "augmentations/timeline.json": "When the article says things happened.",
@@ -999,6 +1004,7 @@ function bundleCounts(rows: ArticleRows): { readonly label: string; readonly n: 
     { label: "glossary terms you hid", n: rows.glossaryHiddenEntries.length },
     { label: "your tags", n: rows.articleTags.length },
     { label: "quiz answers", n: rows.quizAttempts.length },
+    { label: "notices you dismissed", n: rows.staleNoticeDismissals.length },
     { label: "block ids ever minted", n: rows.blockIdentities.length },
   ];
   return all.filter((count) => count.n > 0);

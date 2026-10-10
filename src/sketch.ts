@@ -737,6 +737,10 @@ export async function generateSketch(opts: {
      They drifted the day the metadata joined the fingerprint (2026-08-31). */
   sketch.sourceHash = inputFingerprint(blocks, tree, realMeta);
   sketch.profileHash = profile ? hashProfile(profile) : null;
+  /* A generation identity, not a content identity: a forced rerun that happens
+     to draw the same scene must still bring a previously dismissed stale notice
+     back if this new picture later goes stale (plan 261010a). */
+  sketch.generatedAt = new Date().toISOString();
   const score = scoreSketch(sketch, report, { blockOrder });
 
   /* **Nothing is written unless it is a picture.** A model answering

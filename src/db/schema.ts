@@ -5499,6 +5499,85 @@ export const glossaryHiddenEntries = spideryarn.table(
 );
 
 /**
+ * **The "older version of the article" notices the owner sent away** — one row
+ * per (article, mode). Greg, 2026-10-09 (`spya-mutgym`): *"Look for all of
+ * those and in each case make sure there is a way for me to dismiss them if I
+ * don't want to rerun it."* docs/plans/261010a-dismiss-older-version-notices.md.
+ *
+ * - **`dismissed_for` is the identities dismissed** — the artefact's own clock
+ *   (src/stale-notice.ts): one for every mode but Search, whose banner counts
+ *   saved runs and sends every stale run it counted. A dismissal **replaces**
+ *   the array, so storage stays at a handful of rows per article however often
+ *   anyone presses × (GPT Sol's plan review, finding 5). Bounded here as well
+ *   as in the route: 1–50 elements, each 1–120 printable ASCII characters
+ *   with no whitespace, and no nulls. The no-whitespace test is independent
+ *   of the newline-delimited length test: otherwise a newline inside one
+ *   element looks exactly like the separator between two valid elements.
+ * - **No `owner_id`**, like `glossary_hidden_entries`: only the owner writes,
+ *   and ownership is inherited through the article, which also deletes it.
+ * - **`created_at` is the first dismissal, `dismissed_at` the latest** — Store
+ *   when it happened. Nothing reads either yet.
+ *
+ * Read by `GET /api/stale-notices/:slug`; never on the public read.
+ */
+/**
+ * The modes and bounds `stale_notice_dismissals`' checks hold — the same as
+ * src/stale-notice.ts's `STALE_NOTICE_MODES`, `MAX_DISMISSED_IDENTITIES` and
+ * `MAX_IDENTITY_LENGTH`, written out here rather than imported, because the
+ * public read's predicates import this file and must reach nothing else
+ * (tests/public-imports.test.ts). tests/stale-notices-route.test.ts holds the
+ * two copies equal.
+ */
+export const STALE_NOTICE_TABLE = {
+  modes: [
+    "glossary",
+    "ideas",
+    "faq",
+    "timeline",
+    "simple",
+    "citations",
+    "tweets",
+    "debate",
+    "debate-claims",
+    "quotes",
+    "skim",
+    "search",
+    "sketch",
+    "illustrated",
+    "claims",
+  ],
+  maxIdentities: 50,
+  maxIdentityLength: 120,
+} as const;
+const MAX_DISMISSED_IDENTITIES = STALE_NOTICE_TABLE.maxIdentities;
+const MAX_IDENTITY_LENGTH = STALE_NOTICE_TABLE.maxIdentityLength;
+const STALE_NOTICE_MODES = STALE_NOTICE_TABLE.modes;
+
+export const staleNoticeDismissals = spideryarn.table(
+  "stale_notice_dismissals",
+  {
+    articleId: uuid("article_id")
+      .notNull()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    mode: text("mode").notNull(),
+    dismissedFor: text("dismissed_for").array().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    dismissedAt: timestamp("dismissed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.articleId, t.mode] }),
+    check(
+      "stale_notice_dismissals_mode",
+      sql`${t.mode} in (${sql.raw(STALE_NOTICE_MODES.map((m) => `'${m}'`).join(", "))})`,
+    ),
+    check(
+      "stale_notice_dismissals_dismissed_for",
+      sql`cardinality(${t.dismissedFor}) between 1 and ${sql.raw(String(MAX_DISMISSED_IDENTITIES))} and array_ndims(${t.dismissedFor}) = 1 and array_position(${t.dismissedFor}, null) is null and array_to_string(${t.dismissedFor}, '') ~ '^[!-~]+$' and array_to_string(${t.dismissedFor}, chr(10)) ~ ${sql.raw(`'^[!-~]{1,${MAX_IDENTITY_LENGTH}}(\\n[!-~]{1,${MAX_IDENTITY_LENGTH}})*$'`)}`,
+    ),
+  ],
+);
+
+/**
  * **Every finished mark in the quiz** — the reader's answer and the mark it was
  * given, so that both are still there when they come back.
  * docs/plans/261005b-quiz-answers-are-kept-and-restored.md § The table (report

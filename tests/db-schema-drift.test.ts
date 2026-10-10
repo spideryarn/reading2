@@ -307,6 +307,7 @@ describe("declaredTables", () => {
       "search_runs",
       "shelf_topic_scores",
       "shelf_topic_sets",
+      "stale_notice_dismissals",
       "upload_source_guesses",
       "uploads",
     ]);
@@ -399,8 +400,9 @@ describe("against a real database", () => {
          (plan 261008i); fifty-two since `import_records` the same day (plan
          261008j); fifty-three since `referee_hidden_checks`, 2026-10-09 (plan
          261009a); fifty-four since `debate_claim_checks` the same day (plan
-         261008i § 3). */
-      expect(report.declaredTables).toBe(54);
+         261008i § 3); fifty-five since `stale_notice_dismissals`, 2026-10-10
+         (plan 261010a). */
+      expect(report.declaredTables).toBe(55);
       expect(driftWarnings(report)).toEqual([]);
     });
   });

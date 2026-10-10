@@ -158,6 +158,7 @@ const AT_REST = rules(withoutMedia(readerCssNoComments()));
 /** Every failure sentence in the reading view, by the selector that draws it. */
 const FAILURES = [
   ".gloss-error", // ReadError and Glossary/Quiz/Skim's own: every band's failed read
+  "div > p.notice-failed",
   ".chat-error",
   ".chat-failed",
   ".chat-live-error",

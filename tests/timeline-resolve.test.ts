@@ -33,7 +33,8 @@ process.env.TZ = "America/Los_Angeles";
 
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { forgetStaleNotices } from "../src/web/useStaleNotices.js";
 import {
   A_CHRONOLOGY,
   datingWords,
@@ -571,10 +572,24 @@ describe("the panel, rendered", () => {
    * definition about a different one — so the banner's own button stands while
    * the footer's stays away.
    */
-  it("still offers the stale banner's button when there is nothing in the list", () => {
-    const el = draw([], { stale: true });
-    expect(el.querySelector(".gloss-stale")).not.toBeNull();
-    expect(el.querySelector(".tl-again")).toBeNull();
-    expect(el.querySelectorAll("button").length).toBeGreaterThan(0);
+  it("still offers the stale banner's button when there is nothing in the list", async () => {
+    /* The banner waits until the reader's dismissals are known (plan
+       261010a), so the read is answered — with none — and let land. */
+    forgetStaleNotices();
+    vi.stubGlobal("fetch", async () =>
+      new Response(JSON.stringify({ dismissed: {} }), { headers: { "content-type": "application/json" } }),
+    );
+    try {
+      const el = draw([], { stale: true });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(el.querySelector(".gloss-stale")).not.toBeNull();
+      expect(el.querySelector(".tl-again")).toBeNull();
+      expect(el.querySelectorAll("button").length).toBeGreaterThan(0);
+    } finally {
+      vi.unstubAllGlobals();
+      forgetStaleNotices();
+    }
   });
 });

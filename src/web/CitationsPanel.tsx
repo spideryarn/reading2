@@ -41,7 +41,7 @@ import { type ItemFocus, useLandOnItem } from "./item-focus.js";
 import { useTapReveal } from "./useTapReveal.js";
 import { ScoreBars } from "./ScoreBars.js";
 import { OrderGroup } from "./OrderGroup.js";
-import { BookOpen, BookText, ExternalLink, TriangleAlert } from "lucide-react";
+import { BookOpen, BookText, ExternalLink } from "lucide-react";
 import {
   MAX_CITATIONS,
   type BlockId,
@@ -93,6 +93,8 @@ import {
 import { ThresholdSlider } from "./ThresholdSlider.js";
 import { BandWaiting } from "./BandWaiting.js";
 import { Excerpt } from "./Excerpt.js";
+import { StaleNotice } from "./StaleNotice.js";
+import { useStaleNotice } from "./useStaleNotices.js";
 
 /**
  * **A row as this panel draws it** — the owner's `CitedWork` and a visitor's
@@ -917,10 +919,18 @@ export function CitationsPanel({
      button gives way to a read, never to a second paid run — IdeasPanel.tsx §
      `run` is the sibling. rewrite-hold.ts. */
   const waiting = owner !== null && owner.rewriting && !owner.job && !owner.starting && !owner.failed;
+  /* The stale banner's × (plan 261010a): this list, by its clock. */
+  const staleNotice = useStaleNotice({
+    slug: owner?.slug ?? null,
+    mode: "citations",
+    identities: owner?.stale ? (owner.citations?.generatedAt ?? null) : null,
+  });
   const showJob =
     owner !== null &&
     ready &&
-    !owner.stale &&
+    /* While the banner shows, not while stale: a dismissed banner carries no
+       job (plan 261010a, GPT Sol's finding 4). */
+    staleNotice.showing.length === 0 &&
     (owner.job || owner.starting || owner.failed || (waiting && !owner.error));
   /* Empty with fewer than two works or two orders, and then there is no order
      row and an empty head row holds the top of the band instead. */
@@ -1061,15 +1071,9 @@ export function CitationsPanel({
         <>
           {/* Stale wins when both are true: it is the one that can make a
               "first cited" jump land somewhere else. */}
-          {owner?.stale ? (
-            <div className="gloss-stale">
-              <p>
-                <TriangleAlert size={13} />
-                This describes an older version of the article.
-              </p>
-              {run("Find them again", true)}
-            </div>
-          ) : null}
+          <StaleNotice notice={staleNotice} action={run("Find them again", true)}>
+            This describes an older version of the article.
+          </StaleNotice>
           {/* No banner for an outdated list (older prompt, same article) —
               Greg, 2026-09-29 (SPIDERYARN-READING2-55): *"it's not worth
               bugging the user about it."* Re-running is in Metadata. Plan

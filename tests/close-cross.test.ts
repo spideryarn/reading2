@@ -24,8 +24,10 @@ const CLOSES: ReadonlyArray<readonly [string, string]> = [
   /* Not a modal or a panel, but a cross a finger has to hit at tablet widths
      (GPT Sol's F5 on plan 261006i). */
   ["marginalia/MarginaliaColumn.tsx", "marg-narrow-close"],
-  /* The same kind: Skim's profile notice (plan 261009i). */
-  ["SkimPanel.tsx", "skim-notice-close"],
+  /* The same kind: every "older version of the article" notice, and Skim's
+     profile notice, which draws through the same component (plans 261009i,
+     261010a). */
+  ["StaleNotice.tsx", "notice-close"],
 ];
 
 /* Comments out, or the one above a rule becomes part of its selector. */

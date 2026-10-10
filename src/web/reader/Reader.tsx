@@ -3754,6 +3754,7 @@ export function Reader({
           />
         ) : (
           <VisitorSearchBand
+            slug={slug}
             searches={searches}
             blocks={article.blocks}
             onJump={bandJump}

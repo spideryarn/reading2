@@ -165,6 +165,7 @@ describe("every Postgres store, asked for the seam it was guarded under", () => 
     ["../src/store/pg-reading-time.js", "pgReadingTimeStore", "reading-time"],
     ["../src/store/pg-glossary-hidden.js", "pgGlossaryHiddenStore", "glossary-hidden"],
     ["../src/store/pg-skim-notice.js", "pgSkimNoticeStore", "skim-notice"],
+    ["../src/store/pg-stale-notices.js", "pgStaleNoticeStore", "stale-notices"],
     ["../src/store/pg-quiz-attempts.js", "pgQuizAttemptStore", "quiz-attempts"],
     ["../src/store/pg-admin.js", "pgAdminStore", "admin"],
     ["../src/store/pg-visibility.js", "pgVisibilityStore", "visibility"],
@@ -407,6 +408,7 @@ describe("no Postgres store is selected without a guard", () => {
          somebody's upload lives. */
       "pgSourceGuessStore",
       "pgSourceStore",
+      "pgStaleNoticeStore",
       /* The third factory, and the one that proved a fixed-size window wrong:
          it guards on its last line, 450 below its signature. */
       "pgStoreSession",

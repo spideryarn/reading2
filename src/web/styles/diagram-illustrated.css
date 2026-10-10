@@ -334,6 +334,14 @@
   margin: 0 0.6rem 0.3rem;
   font-family: var(--font-ui); font-size: 0.77rem; line-height: 1.35; color: var(--ink-faint);
 }
+/* The stale sentence, on its own line with its × (StaleNotice.tsx, plan
+   261010a): `.ill-note`'s look, laid out as every notice's line is. */
+.ill-stale { margin: 0 0.6rem 0.3rem; }
+.ill-stale p {
+  display: flex; align-items: center; gap: 0.35rem; margin: 0;
+  font-family: var(--font-ui); font-size: 0.77rem; line-height: 1.35; color: var(--ink-faint);
+}
+.ill-stale svg { flex: none; }
 .ill-busy, .ill-failed {
   display: flex; align-items: center; gap: 0.4rem;
   margin: 0;

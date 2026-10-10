@@ -196,3 +196,29 @@ finding, and what it changed. **Where this section and the ones above disagree, 
    *"older version of the article"* wording, outside `StaleNotice.tsx` fails unless it is on a named
    exception list (Quiz, with its reason). Update `store-guarded`, `close-cross` and the
    stale-surface test in `mode-surface-changes-no-markup`.
+
+## Built, and GPT Sol's code review
+
+Built as above ([review](261010a-dismiss-older-version-notices-code-review-sol.md), verdict *land
+with fixes*, fixes made by Sol inside the change). In short:
+
+- The client cache is pinned to the reader and the job-engine epoch, so work queued before a
+  sign-out does not run afterwards.
+- Each mode now has its own clock for presses and resolutions, so one mode's failed write cannot
+  undo another's.
+- **A banner waits until the dismissals are known**: it shows once the read answers, or once the
+  read fails. Before, a banner the reader had already dismissed flashed back for one round trip.
+- A visitor's notice now uses the real slug. Sol also added `finishedAt` to the public Search
+  response. **That part was taken back out**, because `src/public/dto.ts` is the allowlist of
+  everything a stranger receives (security-map.md), a defence that is left to Greg. It is also not
+  needed: a visitor's dismissal lasts one page view, and the identity falls back to
+  `<runId>@<createdAt>` (`searchNoticeIdentity`).
+- Sketch and Illustrated stamp `generatedAt` on every run, so a byte-identical rerun is still a new
+  identity.
+- The database check now rejects a newline inside one element.
+- The failure line is scoped to the identity it failed on.
+- A guard test checks that each job-bearing panel's foot gate reads "banner showing".
+
+The local `db:migrate` on the shared Supabase is blocked by another worktree's unlanded
+`20261009220519_author_gifts` ledger row, so the migration ran only in the test lanes' private
+databases.
