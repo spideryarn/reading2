@@ -14,7 +14,7 @@ Report `spya-zux9w6` (#521), a suggestion from Greg, 2026-10-09, in the reading 
 > should, you know, should have a tooltip, and there should be a way to take you to its mode.
 
 **Ending: shipped**, on `dev`, as plan
-[261010d](../plans/261010d-every-annotation-card-opens-its-mode.md). Every mark on the prose was
+[261010e](../plans/261010e-every-annotation-card-opens-its-mode.md). Every mark on the prose was
 surveyed, and the table now lives in
 [tooltips.md § Every card on a mode's mark has a way into its mode](../project/tooltips.md#every-card-on-a-modes-mark-has-a-way-into-its-mode).
 The three cards on a mode's mark now end in the same button:

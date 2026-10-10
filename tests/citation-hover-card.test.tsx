@@ -711,7 +711,7 @@ describe("Ask in chat from the card", () => {
 
 /* Report `spya-zux9w6`, Greg, 2026-10-09: *"Citation tooltips should include a
    link to take you to the citations mode, just like I think quotes do"*. Plan
-   261010d: every card on a mode's mark ends in the same *Open in <Mode>*. */
+   261010e: every card on a mode's mark ends in the same *Open in <Mode>*. */
 describe("Open in Sources from the card", () => {
   const open = () =>
     [...(card()?.querySelectorAll("button") ?? [])].find((b) => /Open in Sources/.test(b.textContent ?? "")) as

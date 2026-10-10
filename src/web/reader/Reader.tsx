@@ -1445,7 +1445,7 @@ export function Reader({
    * **Open Bibliography on one row** — a one-shot the band hands back once the
    * row is in view (CitationsPanel.tsx § `Props.focus`); state rather than a
    * URL parameter because nothing about it should survive a reload. A chat's
-   * way back and, since plan 261010d, a citation card's *Open in Sources* set
+   * way back and, since plan 261010e, a citation card's *Open in Sources* set
    * it; Glossary, Ideas and Debate have the same shape (item-focus.ts).
    */
   const [citeFocus, setCiteFocus] = useState<CiteFocus | null>(null);
@@ -1608,7 +1608,7 @@ export function Reader({
    * **One row to bring into view in Glossary, Ideas and Sources' Claims**,
    * once each — `citeFocus` above is Bibliography's (src/web/item-focus.ts). Only
    * an opener outside the list sets them: a chat's way back (`openOrigin`
-   * below), and for Glossary the prose card since plan 261010d. One piece of
+   * below), and for Glossary the prose card since plan 261010e. One piece of
    * state per band, so a request for one band cannot be spent by another.
    */
   const [termFocus, setTermFocus] = useState<ItemFocus | null>(null);
@@ -1622,7 +1622,7 @@ export function Reader({
    * card's *Open in Glossary* and its second tap, and a chat's way back to a
    * term. `openTermInGlossary` alone selects the entry (`?term=`) but asks no
    * band to scroll, so on a long glossary the row could be off-screen (plan
-   * 261010d).
+   * 261010e).
    */
   const openTermAndLand = useCallback(
     (id: string) => {
@@ -1692,7 +1692,7 @@ export function Reader({
    * If Bibliography is already the visible list and no conversation is open,
    * only restore the band and focus the row. A same-value pushed write creates
    * an empty Back step (`showBand` has the same guard); the card can reach this
-   * case whenever a narrow band has stepped aside (plan 261010d code review).
+   * case whenever a narrow band has stepped aside (plan 261010e code review).
    */
   const openBibliographyWork = useCallback(
     (workId: string) => {
@@ -2009,7 +2009,7 @@ export function Reader({
       byKey,
       generatedAt: quoteSource?.generatedAt,
       onGo: (quote) => goToQuote(quote, jumpTo),
-      /* `showBand`, not `setMode` (plan 261010d): the card's button is drawn
+      /* `showBand`, not `setMode` (plan 261010e): the card's button is drawn
          in Quotes mode too now, where a band stepped aside must come back. */
       onOpenInQuotes: (quote) => {
         revealQuote(quote.id);
@@ -4776,7 +4776,7 @@ export function Reader({
         onAskTerm={owner ? askGlossaryEntryInChat : null}
         onAskCitedWork={owner ? askCitedWorkInChat : null}
         /* *Open in Sources* on a cited work's card: Bibliography, its row in
-           view (plan 261010d). Owner only, as the marks are. */
+           view (plan 261010e). Owner only, as the marks are. */
         onOpenCitedWork={owner ? openBibliographyWork : null}
         quotes={quoteCard}
         blockText={blockText}

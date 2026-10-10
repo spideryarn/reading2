@@ -747,7 +747,7 @@ pushed right. A press opens the mode and brings the item's row into view, select
 mode has a selection. It is drawn in its own mode too, where the same press re-lands the row; a
 button that came and went with the mode would be a second rule to learn. Bringing back a band that
 had stepped aside on a phone is component state, so Back does not put it away again
-(`showBand`'s rule). Plan [261010d](../plans/261010d-every-annotation-card-opens-its-mode.md).
+(`showBand`'s rule). Plan [261010e](../plans/261010e-every-annotation-card-opens-its-mode.md).
 
 This is the single home for which marks have a card. As of 2026-10-10:
 
@@ -769,7 +769,7 @@ card, and the card gets `OpenInMode`.
 **Three rows still have no card**, which is the other half of Greg's sentence, and it is queued
 rather than built: each is its own design (a `mark.cmt` is four kinds of thing and "its mode" is not
 one place; a chat anchor's data has no question to show; neither mark is focusable, so a keyboard
-route needs designing; one mark can carry several ids of each kind). Plan 261010d § Not built here
+route needs designing; one mark can carry several ids of each kind). Plan 261010e § Not built here
 has GPT Sol's reasons, and the work is queue item `qi-yr7hx7t8`.
 
 ## Checking it in a browser

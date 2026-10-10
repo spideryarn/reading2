@@ -1,6 +1,6 @@
 You are reviewing a PLAN (read-only) in the Spideryarn repo at the current working directory.
 
-Plan: docs/plans/261010d-every-annotation-card-opens-its-mode.md. Read it first, then check it against the code:
+Plan: docs/plans/261010e-every-annotation-card-opens-its-mode.md. Read it first, then check it against the code:
 src/web/ProseHoverCard.tsx (CiteCard, TermCard, QuoteCard, the card's selectors, tapSelector), src/web/useHoverCard.ts,
 src/web/annotate.ts, src/web/reader/Reader.tsx (openBibliographyWork, openTermInGlossary, openOrigin, showBand,
 quoteCard, the ProseHoverCard props near line 4717), src/web/item-focus.ts, src/web/CitationsPanel.tsx (focus prop),

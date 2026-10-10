@@ -162,7 +162,7 @@ export function VisitorGlossaryBand({
   /**
    * One entry to scroll into view, once — the owner's band has had it since
    * plan 261009k; a visitor needs it since the prose card's *Open in
-   * Glossary* asks for it (plan 261010d, GPT Sol's F2).
+   * Glossary* asks for it (plan 261010e, GPT Sol's F2).
    */
   focus?: ItemFocus | null | undefined;
   onFocusTaken?: ((focus: ItemFocus) => void) | undefined;

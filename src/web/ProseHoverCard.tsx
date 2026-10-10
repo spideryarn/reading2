@@ -380,7 +380,7 @@ function HoverCard({
    * ***Open in Sources* on a cited work's card** — Reader's
    * `openBibliographyWork`, which opens Bibliography and brings the work's row
    * into view. Report `spya-zux9w6`, Greg, 2026-10-09: *"Citation tooltips
-   * should include a link to take you to the citations mode"* (plan 261010d).
+   * should include a link to take you to the citations mode"* (plan 261010e).
    * `null` or absent and no button is drawn; the marks are the owner's only.
    */
   onOpenCitedWork?: ((workId: string) => void) | null;
@@ -1784,7 +1784,7 @@ function ExternalBody({
  * into view, selecting it where the mode has a selection. It is drawn in its
  * own mode too, where the same press re-lands the row. The survey of which
  * marks have a card at all is docs/project/tooltips.md § Every card on a
- * mode's mark has a way into its mode; plan 261010d.
+ * mode's mark has a way into its mode; plan 261010e.
  */
 export function OpenInMode({ mode, onPress }: { mode: Mode; onPress(): void }) {
   const Icon = MODE_ICON[mode];
@@ -1955,7 +1955,7 @@ function QuoteCard({
         >
           <ChevronRight size={14} />
         </button>
-        {/* Drawn in Quotes mode too since plan 261010d: the press selects the
+        {/* Drawn in Quotes mode too since plan 261010e: the press selects the
             quote, and Quotes brings a selected row into view. */}
         <OpenInMode
           mode="quotes"
@@ -2112,7 +2112,7 @@ function clip(text: string, max: number): string {
  * - **A kept *Dig deeper* answer.** The verdict's short version is here
  *   (`CiteCardReading`); the long reading stays on the row, which has the room.
  * - **A selected row in Citations mode.** There is no `?cite=`. What the card
- *   has instead, since plan 261010d, is *Open in Sources*, which opens
+ *   has instead, since plan 261010e, is *Open in Sources*, which opens
  *   Bibliography and brings the work's row into view — a one-shot focus
  *   (item-focus.ts), not a selection.
  *
@@ -2599,7 +2599,7 @@ export function TermCard({
                 dead end: the mark itself stays inert to a click, because pressing
                 prose has always meant selecting it. It said "in the glossary" until
                 2026-10-03; Greg asked for a label that says what pressing it does.
-                *Open glossary* until plan 261010d, which made it every card's
+                *Open glossary* until plan 261010e, which made it every card's
                 `OpenInMode`. */}
             {onOpen && <OpenInMode mode="glossary" onPress={onOpen} />}
           </span>

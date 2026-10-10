@@ -336,7 +336,7 @@ describe("the card's buttons", () => {
     expect(went).toEqual(["spya-qa0001"]);
   });
 
-  /* Until plan 261010d the button was hidden while Quotes was the mode. It is
+  /* Until plan 261010e the button was hidden while Quotes was the mode. It is
      drawn in every mode now, as every card's *Open in <Mode>* is: the press
      also selects the quote, and Quotes brings a selected row into view. */
   it("opens Quotes on this quote, closing the card", () => {

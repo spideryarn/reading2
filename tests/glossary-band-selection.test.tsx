@@ -240,7 +240,7 @@ describe("a term the threshold hides stops being the open one", () => {
   });
 });
 
-/* Plan 261010d, GPT Sol's F2: the prose card's *Open in Glossary* asks the band
+/* Plan 261010e, GPT Sol's F2: the prose card's *Open in Glossary* asks the band
    to bring the term's row into view, and a visitor's band was never handed the
    request — only the owner's was. */
 describe("a visitor's band lands on the term it was asked for", () => {

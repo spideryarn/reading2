@@ -872,7 +872,7 @@ interface Props {
   /**
    * **One work to bring into view, once** — something outside the band has
    * just opened it for this work: a chat's way back since plan 261009k stage 2,
-   * and the prose card's *Open in Sources* since plan 261010d. (The card had
+   * and the prose card's *Open in Sources* since plan 261010e. (The card had
    * *Dig deeper* from plan 261004b until 2026-10-09.) Not a selection: the row
    * has no selected state and there is no `?cite=`. `n` tells two presses on
    * the same work apart. The panel lowers the bar if it is hiding the row

@@ -628,7 +628,7 @@ describe("Skim, which jumps on opening", () => {
   });
 });
 
-/* Plan 261010d: the quote card now uses `showBand`, not a bare mode setter,
+/* Plan 261010e: the quote card now uses `showBand`, not a bare mode setter,
    and remains available while Quotes itself is open. These are the two
    history-sensitive cases the component-only card test cannot see. */
 describe("the quote card's way into Quotes", () => {
@@ -832,7 +832,7 @@ describe("the term card brings its band back", () => {
     });
     await until(() => document.querySelector(".prose-card .prose-card-open") !== null, "the term card did not open");
     /* jsdom has no `scrollIntoView`; item-focus.ts calls it optionally, so a
-       stub is the only way to see the row was landed on (plan 261010d). */
+       stub is the only way to see the row was landed on (plan 261010e). */
     const landed: Element[] = [];
     const had = Object.getOwnPropertyDescriptor(Element.prototype, "scrollIntoView");
     Element.prototype.scrollIntoView = function (this: Element) {

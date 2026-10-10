@@ -381,7 +381,7 @@
    card, so the buttons are one group that does not break (`.prose-card-acts`)
    and the foot wraps between the link and the group: the link on its line, the
    buttons together on the next. The citation took the same shape in plan
-   261010d, when *Open in Sources* joined *Ask in chat* beside the work's source
+   261010e, when *Open in Sources* joined *Ask in chat* beside the work's source
    line. Every other card's foot is two short things and stays as it was. No row
    gap: each button's own padding is the tap target and already spaces two lines. */
 .prose-card-foot-wraps {

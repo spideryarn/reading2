@@ -1,7 +1,7 @@
 You are reviewing CODE in the Spideryarn repo at the current working directory, and you may FIX what you find inside this stage (edit files directly). Report anything wider for me to decide.
 
-Plan: docs/plans/261010d-every-annotation-card-opens-its-mode.md (and its plan review, docs/plans/261010d-plan-review-sol.md — you wrote that; check its findings were taken correctly).
-The scoped diff: docs/plans/261010d-code-review.diff (b2f8edcf4..HEAD over src/ and tests/). Docs changed too: docs/project/tooltips.md (new section "Every card on a mode's mark has a way into its mode"), citations.md, glossary.md, quotes.md, sources.md.
+Plan: docs/plans/261010e-every-annotation-card-opens-its-mode.md (and its plan review, docs/plans/261010e-plan-review-sol.md — you wrote that; check its findings were taken correctly).
+The scoped diff: docs/plans/261010e-code-review.diff (b2f8edcf4..HEAD over src/ and tests/). Docs changed too: docs/project/tooltips.md (new section "Every card on a mode's mark has a way into its mode"), citations.md, glossary.md, quotes.md, sources.md.
 
 Check in particular:
 1. OpenInMode in src/web/ProseHoverCard.tsx and its three callers (TermCard, CiteCard, QuoteCard): correctness, the card closing before/after the press, accessibility (button name, icon aria-hidden), visitor paths (no citation button for a visitor; Skim's TermChip, which also renders TermCard with onOpen — does the new label or anything else break there?).
