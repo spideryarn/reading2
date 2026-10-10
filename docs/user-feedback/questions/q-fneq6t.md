@@ -1,10 +1,11 @@
 ---
 id: q-fneq6t
 report: spya-u62q09
-status: open
+status: answered
 asked: 2026-10-09
 title: The rename rule: should it name comments and database columns, as you did?
 refs: SPIDERYARN-READING2-FW · qi-yckkzqah · docs/plans/261009x-metadata-ai-processing-named-as-the-modes-are.md · docs/user-feedback/261009_1225-metadata-ai-processing-named-as-the-modes-are.md · docs/reusable/rename-or-move.md
+acted: spya-y6f52j
 ---
 Your rule already says a rename goes all the way down, but its list leaves out two things you named: comments, and database columns (it says stored values, not column or table names). May I add them?
 
@@ -23,3 +24,9 @@ What you asked, on 9 Oct, on the Metadata page of the Attention paper: "if you r
 The rule you mean is "A rename on screen is a rename all the way down", in the rename instructions every agent follows. It came from your words of 6 Oct. Rule docs are changed only with your yes, one change at a time, so this asks rather than edits.
 
 The first half of the same report is done: the AI processing section on the Metadata page now names each item the way the mode bar does (Summary › Thread, Learn › Quiz, Sources › Reception), with one line under each saying what it is. Items that are not a mode (the arc, relation words, cross-references) say where they show up. Both lists in that section, and the "start again" row, take their names from one table, so the next rename of a mode changes them all.
+
+## Greg's answer, 2026-10-10 (in the Feedback dialog, reply `spya-y6f52j`)
+
+> A
+
+Settled: A. docs/reusable/rename-or-move.md § A rename on screen is a rename all the way down now reads as the After sentence above, with your words of 9 Oct quoted under it. (Feedback sweep, 2026-10-10.)

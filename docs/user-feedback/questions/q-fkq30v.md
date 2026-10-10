@@ -1,10 +1,11 @@
 ---
 id: q-fkq30v
 report: spya-h5aypq
-status: open
+status: answered
 asked: 2026-10-09
 title: Peer review research: two Claims, Candidates, Referee and the switch, and which idea next?
 refs: SPIDERYARN-READING2-FZ · qi-8g2tr5bt · docs/research/261009b-what-a-peer-reviewer-needs-and-where-sources-and-referee-divide.md · docs/plans/261009x-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md · docs/investigations/261009d-the-guide-offers-referee-to-referees-measured.md · docs/user-feedback/261009_1237-peer-review-research-and-where-sources-and-referee-divide.md
+acted: spya-dbfeqh
 ---
 Done: the research, and your P.S. When a reader tells the guide, or writes in Why you're reading this, that they are refereeing, the guide now offers Referee as a button, even with experimental features off. It is never opened for them, and it comes with one sentence: the article's text already went to an AI provider when it was added, and Referee's Notices say what journals' rules are on that. Measured 14 of 14, and a magazine reviewer got no offer. On dev, not deployed.
 
@@ -49,3 +50,12 @@ On question 2. Candidates is also the one Referee call that sees the authors' na
 On question 3. With A, the guide's special case for Referee would go, and nothing else changes.
 
 On question 4. The rest are: numbers that disagree with themselves, checked without a model; a figure beside the prose that describes it; and a log of what Spideryarn did, for venues that ask reviewers to declare AI use. A suits the evidence most directly. Offer starters only after the reviewer has written one criterion of their own, so we do not anchor them.
+
+## Greg's answer, 2026-10-10 (in the Feedback dialog, reply `spya-dbfeqh`)
+
+> 1B
+> 2A
+> 3B
+> 4 all? Use your judgment based on that combination of ease and value.
+
+Settled. 2A and 3B need no work: Candidates stays, and Referee stays behind the experimental switch. 1B and 4A are one queue entry (qi-2dxtedww: Referee's Claims becomes Promises all the way down, and starter criteria offered after the reviewer has written one of their own). The rest of 4 are queued in order of ease and value: D (qi-5fn7stsv, your own notes as a skeleton), B (qi-sq25xqqf, does the cited work say that), C (qi-bk9r7kgc, what the piece does not cite). (Feedback sweep, 2026-10-10.)

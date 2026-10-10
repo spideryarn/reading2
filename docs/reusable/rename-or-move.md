@@ -50,14 +50,21 @@ wrong answer.
 
 ## A rename on screen is a rename all the way down
 
-When something is renamed in the UI, rename it everywhere in the same piece of work: identifiers,
-files, URL words, CSS classes, tests, docs, and stored values in the database (an ordinary migration
-that rewrites the value). A grep should find one name, not two.
+When something is renamed in the UI, rename it everywhere in the same piece of work: identifiers and
+the comments that use the name, file and folder names, URL words, CSS classes, tests, docs, log and
+event names, and the database, both the stored values and the column and table names (an ordinary
+migration). A grep should find one name, not two.
 
 > when we rename something in the UI, we should always do a deeper rename … Don't worry about
 > breaking links (e.g. to ?mode=remember) - or add an alias if it's minimal hassle.
 >
 > — Greg, 2026-10-06
+
+> if you rename stuff, make sure that you've renamed it thoroughly. So not just in the UI, but also
+> variables and comments and file names and database columns and whatever else.
+>
+> — Greg, 2026-10-09 (`spya-u62q09`); the list above was widened to match on his answer to
+> `q-fneq6t`, 2026-10-10
 
 ## A deletion is a rename to nothing, and needs the same sweep
 
