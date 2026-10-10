@@ -173,6 +173,7 @@ describe("every Postgres store, asked for the seam it was guarded under", () => 
     ["../src/store/pg-feedback.js", "pgFeedbackStore", "feedback"],
     ["../src/store/realtime-sessions-pg.js", "pgRealtimeSessionStore", "realtime-sessions"],
     ["../src/store/pg-vouchers.js", "pgVoucherStore", "vouchers"],
+    ["../src/store/pg-author-gifts.js", "pgAuthorGiftStore", "author-gifts"],
   ];
 
   for (const [module, name, seam] of seams) {
@@ -350,6 +351,9 @@ describe("no Postgres store is selected without a guard", () => {
       "createPgSourceStore",
       "pgAdminStore",
       "pgArticleReader",
+      /* Author gifts, 2026-10-09 (261010c): addresses, notes, and through Send
+         a voucher create that binds a rendered gift email. */
+      "pgAuthorGiftStore",
       /* The bibliographic cache, 2026-10-01 (261001a stage 1): its parameters
          are public identifiers, but a guard is every adapter's, not a verdict
          on what it binds. */

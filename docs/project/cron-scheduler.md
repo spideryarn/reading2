@@ -127,6 +127,13 @@ rows in the table above is reachable from it: they are all about a reader's data
 wrong place to touch that from. The row that says the box *"should not become its scheduler"* in
 [hetzner-remote-server-box.md](hetzner-remote-server-box.md) is unchanged by any of this.
 
+**The box's own chores are plain systemd timers**, since 2026-10-10: box health, the daily worktree
+sweep, the hourly dashboard refresh, and (once Greg enables it) the feedback sweep —
+[hetzner-remote-server-box.md § The repeating jobs, on timers](hetzner-remote-server-box.md#the-repeating-jobs-on-timers).
+The first three are about the fleet and the box, never a reader's data. The feedback sweep is an
+operator workflow over reports readers chose to send; it remains disabled until Greg approves the
+paid, clock-driven work.
+
 ## See also
 
 - [ingest-queue.md](ingest-queue.md) — the claim, the lease and the attempt token: how work that

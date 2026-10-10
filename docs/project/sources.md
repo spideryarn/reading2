@@ -166,7 +166,9 @@ Reader.tsx § `openOrigin`, GPT Sol's F5).
 **A focus belongs to one visit to its list**: Bibliography's focused work is forgotten on leaving
 Bibliography, and Claims' focused claim on leaving Claims, even when the mode stays Sources
 (item-focus.ts § `focusesLeft`, GPT Sol's F7). One Reader-owned `openBibliographyWork` sets the
-focus and moves to Bibliography together.
+focus and moves to Bibliography together. Its callers: a chat's way back, Claims' *Cited in this
+paragraph*, and, since 2026-10-10, *Open in Sources* on a citation's card in the prose
+([citations.md § Marked in the prose](citations.md#marked-in-the-prose-in-every-mode)).
 
 ## The name, and what still says Citations and Debate
 

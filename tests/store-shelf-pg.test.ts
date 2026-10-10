@@ -51,6 +51,7 @@ import {
   articleShareLinkEvents,
   articleVisibilityChanges,
   articles,
+  authorGifts,
   billingVouchers,
   blockIdentities,
   chatThreads,
@@ -985,6 +986,15 @@ describe("destroying an article", () => {
           costSource: "none",
         }),
       article_revisions: () => Promise.resolve(),
+      /* The admin's draft gift voucher for the author (plan 261010c): `cascade`,
+         the draft goes with the article. Its `author_lookups` hang off the gift,
+         not the article, so they have no seed of their own here. */
+      author_gifts: () =>
+        db.insert(authorGifts).values({
+          articleId: GONE_ARTICLE,
+          starterSlug: GONE_SLUG,
+          createdBy: owner,
+        }),
       /* The private link's audit (plan 261005e): `set null`, like the
          visibility log beside it and for its reason. */
       article_share_link_events: () =>

@@ -50,6 +50,27 @@ or in the system prompt's tools section, that text already written stays written
 other tools now: they are look-ups the model calls before answering, and the measurements show no
 repeats there.
 
+## Addendum, 2026-10-10: it came back on the refused path, and a sentence was not enough
+
+Investigation 261009d's referee eval wrote one answer in 14 twice, on a case whose reason was
+already saved. The model wrote its reply, offered the saved reason back, and was **refused**. The
+sentence above was on the offered path only. Since next steps landed (261009u), the same turn
+mostly wrote a short tail in place of a second copy: *"I didn't need to look anything up for
+this…"*. That was 3 turns in 16
+([261009c § v4 to v6](../investigations/261009c-the-guide-s-offers-to-save-measured.md#v4-to-v6-the-refused-offer-and-the-round-after-the-reply)).
+
+The sentence on every refusal changed what the tail said and not how often: *"I'm done with my
+answer above."* **Told to stop, a model still writes something.** So the long-term fix named above,
+"tell the model in every tool result", is half of it. The other half is structural: do not ask. A
+round that wrote prose, yielded normally to its tools, ended on accepted next steps, and whose every
+call *settled* (`ToolOutcome.settles`: nothing in the result asks anything more of the model) is now
+the last round. That took the tails to 0 in 16. Plan
+[261010b](../plans/261010b-next-steps-end-the-turn-even-beside-an-offer-to-save.md).
+
+**The class, restated:** a round after a finished reply is the bug, whatever the model is told in
+it. Where the loop can know the reply is finished, it should not go round. Where it cannot (an offer
+with no next steps beside it), the sentence is the defence, and it is a weaker one.
+
 ## What would have caught it
 
 A check, in any eval of a tool-using prompt, that no stretch of the answer appears twice

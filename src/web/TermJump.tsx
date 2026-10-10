@@ -26,7 +26,7 @@
  *   words are a term — goes first. G again walks to the next and wraps.
  * - **Where the focus goes.** Onto that term's row in the band, which the
  *   opener has just expanded, and the list scrolls to it; **the article does
- *   not move**. `onOpenTerm` is the hover card's own "Open glossary" button,
+ *   not move**. `onOpenTerm` is the hover card's own "Open in Glossary" button,
  *   which sets `?term=` and the mode and never jumps the prose.
  * - **The way back.** Escape, while the glossary itself owns the press, returns
  *   the focus to what held it — or, when nothing did, to that paragraph's

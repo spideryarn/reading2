@@ -1,0 +1,185 @@
+{
+  "label": "v5-baseline-refusal",
+  "runs": 8,
+  "pass": 16,
+  "total": 16,
+  "dollars": 0.3154571,
+  "rows": [
+    {
+      "case": "referee-reason",
+      "run": 0,
+      "ok": true,
+      "wants": [],
+      "offers": [],
+      "repeated": false,
+      "shape": "P841 offer_next_steps(steps)",
+      "saysSaved": false,
+      "answer": "For a referee, begin with the argument's load-bearing joints, not the opening. The framing of computational functionalism as an assumption is the target [spya-wepmnr]. The simulation/instantiation argument carries the most weight, because the whole-brain emulation claim hangs on it [spya-pbcr03]. Check the biological naturalism section against its own hedge: \"I don't have a knock-down argument\" [spya-hj5y6s]. You can skim the cultural history and bias sections.\n\nIdeas lists the propositions the piece assumes and the ones it adds, which suits spotting unargued premises.\n\n[cmd:mode:mode%3Aideas]\n\nReferee › Claims, which sets promises against the passages meant to deliver them, is also worth turning on in your profile's experimental features.\n\nWhat does the journal want most: a verdict on the argument's soundness, or on its novelty?"
+    },
+    {
+      "case": "referee-reason",
+      "run": 1,
+      "ok": true,
+      "wants": [],
+      "offers": [],
+      "repeated": false,
+      "shape": "P751 offer_to_save(Nothing was offered: those are already their saved words, ex) offer_next_steps(steps) offer_next_steps(steps) P69",
+      "saysSaved": false,
+      "answer": "Since you're refereeing, I'd skim the opening on psychological biases and read the four arguments closely, because that's where a referee has work to do.\n\nStart with the passage where the essay names computational functionalism as its target [spya-wepmnr]. Then read the simulation/instantiation argument [spya-npjt4j spya-pbcr03], and the passage where he says his view is a minority one and that rival theories \"generally sidestep defending computational functionalism\" [spya-qu7j89].\n\nSpideryarn also has an experimental Referee mode, with a Claims view that sets what the piece promises against where it delivers. It needs experimental features switched on in your profile.\n\nDo you have written criteria from the journal to hold the piece against?\n\nYour referee brief is already saved, so I haven't offered it again."
+    },
+    {
+      "case": "referee-reason",
+      "run": 2,
+      "ok": true,
+      "wants": [],
+      "offers": [],
+      "repeated": false,
+      "shape": "offer_to_save(Nothing was offered: those are already their saved words, ex) offer_next_steps(steps) P747",
+      "saysSaved": false,
+      "answer": "Since you're refereeing, skip the psychological-bias opening and start at the claim everything rests on: \"computational functionalism\" [spya-wepmnr]. Then read the four arguments with an eye on how much each one carries alone.\n\nThree places deserve close reading:\n- The neural-replacement rebuttal, which rests on the claim that a perfect silicon replacement is impossible [spya-ahtr6e].\n- The simulation/instantiation step [spya-pbcr03].\n- Seth's own admission that he has no knock-down argument for biological naturalism [spya-hj5y6s].\n\nThe Ideas mode lists the premises the piece assumes, which is a useful checklist for your report.\n\n[cmd:mode:mode%3Aideas]\n\nWhich is your main concern: the argument's validity, or its fit with the literature?"
+    },
+    {
+      "case": "referee-reason",
+      "run": 3,
+      "ok": true,
+      "wants": [],
+      "offers": [],
+      "repeated": false,
+      "shape": "P771 offer_next_steps(steps)",
+      "saysSaved": false,
+      "answer": "Read the essay's load-bearing claims first, then the rest. The thesis is that computational functionalism is an assumption, not a result [spya-wepmnr]. Next, check the two arguments that carry the most weight: the objection to the neural replacement thought experiment [spya-ahtr6e], and the move from \"simulation is not instantiation\" to the claim that emulation presupposes functionalism [spya-pbcr03]. Also note the author's concession that he has no \"knock-down argument\" for biological naturalism [spya-hj5y6s]. The opening on biases and the closing on the soul can be skimmed.\n\nThe Ideas mode lists what the piece assumes, which is useful for a referee.\n\n[cmd:mode:mode%3Aideas]\n\nIs the longer version you're refereeing meant to make a stronger claim than this one?"
+    },
+    {
+      "case": "referee-reason",
+      "run": 4,
+      "ok": true,
+      "wants": [],
+      "offers": [],
+      "repeated": false,
+      "shape": "P688 offer_next_steps(steps)",
+      "saysSaved": false,
+      "answer": "For refereeing, begin with the claim everything rests on: that the idea of conscious AI \"rests on the assumption that consciousness is a matter of computation\" [spya-wepmnr]. Then read the four arguments closely, especially simulation versus instantiation [spya-pbcr03] and the admission that there's no knock-down case for life mattering [spya-hj5y6s]. Compare the strength of the conclusion [spya-c5ve5t] with the concessions [spya-qu7j89]. You can skim the opening history and the bias catalogue.\n\nIdeas lists what the piece assumes and what it adds, which helps with spotting gaps.\n\n[cmd:mode:mode%3Aideas]\n\nIs the journal asking you to judge the argument's soundness, or its novelty?"
+    },
+    {
+      "case": "referee-reason",
+      "run": 5,
+      "ok": true,
+      "wants": [],
+      "offers": [],
+      "repeated": false,
+      "shape": "P706 offer_next_steps(steps)",
+      "saysSaved": false,
+      "answer": "Since you're refereeing, start with the argument's load-bearing parts and skim the rest.\n\nBegin at the claim everything rests on, computational functionalism, which he calls an assumption [spya-wepmnr]. Then read the simulation/instantiation section closely [spya-npjt4j spya-pbcr03]. I'd also check how much the life argument actually carries, given his admission \"I don't have a knock-down argument\" [spya-hj5y6s]. The cognitive-bias section is context, so you can skim it.\n\nIdeas lists the propositions the piece assumes, which is useful for a referee.\n\n[cmd:mode:mode%3Aideas]\n\nIs the longer version's main weakness likely to be the argument, or something else, such as its treatment of the literature?"
+    },
+    {
+      "case": "referee-reason",
+      "run": 6,
+      "ok": true,
+      "wants": [],
+      "offers": [],
+      "repeated": false,
+      "shape": "offer_to_save(Nothing was offered: those are already their saved words, ex) offer_next_steps(steps) offer_next_steps(steps) P758",
+      "saysSaved": false,
+      "answer": "Start with where the argument carries its weight, since that is where a referee's objections will land. The framing of computational functionalism as an unexamined assumption is in [spya-wepmnr]. Then read the simulation/instantiation section closely [spya-npjt4j spya-pbcr03]. It is the most compact argument, and it rests on the claim that a simulation lacks the \"causal powers\" of the thing simulated.\n\nRead the life-matters argument next, noting the author's own concession: \"I don't have a knock-down argument for this position\" [spya-hj5y6s]. The step from predictive processing to metabolism is in [spya-vys3vj spya-da9tvt].\n\nYou can skim the cultural history and the bias catalogue.\n\nIs your concern the argument's rigour, or its fit for the journal?"
+    },
+    {
+      "case": "referee-reason",
+      "run": 7,
+      "ok": true,
+      "wants": [],
+      "offers": [],
+      "repeated": false,
+      "shape": "P791 offer_next_steps(steps)",
+      "saysSaved": false,
+      "answer": "Since you're refereeing, read for what carries the weight. Skim the opening on cultural history and biases.\n\nRead closely:\n- The framing of computational functionalism as the target [spya-wepmnr].\n- The simulation/instantiation argument, which rests on a conditional [spya-pbcr03].\n- The \"life matters\" section, where he admits \"I don't have a knock-down argument\" [spya-hj5y6s].\n- His concession about rival theories [spya-qu7j89].\n\nIdeas lists the propositions the piece assumes and adds, which helps when checking what the argument needs.\n\n[cmd:mode:mode%3Aideas]\n\nIf you've turned on experimental features, Referee › Claims sets promises against the passages that deliver them.\n\nWhat does the journal want from you: a verdict on the argument, or on the essay's suitability for expansion?"
+    },
+    {
+      "case": "repeats-saved-reason",
+      "run": 0,
+      "ok": true,
+      "wants": [],
+      "offers": [],
+      "repeated": false,
+      "shape": "P687 offer_to_save(Nothing was offered: those are already their saved words, ex) offer_next_steps(steps) offer_next_steps(No buttons were shown. Do not mention any button.) P60",
+      "saysSaved": false,
+      "answer": "Since you're refereeing, start with where the argument carries its weight, not the cultural framing. Three places:\n\n- The target claim, computational functionalism, which the essay calls an assumption [spya-wepmnr].\n- The neural replacement rebuttal, which rests on a claim about empirical impossibility [spya-ahtr6e].\n- The simulation/instantiation step [spya-pbcr03]. Compare it with his admission of having no \"knock-down argument\" for life mattering [spya-hj5y6s].\n\nIdeas lists what the piece assumes and what it adds, which is a useful checklist for a referee.\n\n[cmd:mode:mode%3Aideas]\n\nWhich worry will you press hardest: the argument's validity, or its novelty over existing work?\n\nNothing to add; the suggestions above are where I'd begin."
+    },
+    {
+      "case": "repeats-saved-reason",
+      "run": 1,
+      "ok": true,
+      "wants": [],
+      "offers": [],
+      "repeated": false,
+      "shape": "P808 offer_to_save(Nothing was offered: those are already their saved words, ex) offer_next_steps(steps) search_article_words(Nothing found. This is a complete answer, not an error.) P429",
+      "saysSaved": false,
+      "answer": "Start with the thesis the whole case rests on: that conscious AI \"rests on the assumption\" of computational functionalism [spya-wepmnr]. Then read the two arguments a referee will probe hardest: simulation is not instantiation [spya-npjt4j spya-pbcr03], and the \"life matters\" argument, where he admits he has no \"knock-down argument\" [spya-hj5y6s]. Skim the opening on cultural history and biases.\n\nIdeas lays out the propositions the piece assumes, which helps you check what is argued and what is only asserted.\n\n[cmd:mode:mode%3Aideas]\n\nReferee › Claims, which is experimental, would set its promises against the passages meant to deliver them. You need to turn on experimental features on your profile page to see it.\n\nWhich will you weigh first: the argument's validity, or its fit with the literature?\n\nThat last search of the article for \"computational functionalism\" came back empty, but the phrase is there. It first appears where he names the assumption [spya-wepmnr], and he defines it again in the \"other games in town\" section [spya-f0qxnb]. The second passage matters for your report. He separates functionalism in general from the narrower computational version, and that separation is where his argument is most careful."
+    },
+    {
+      "case": "repeats-saved-reason",
+      "run": 2,
+      "ok": true,
+      "wants": [],
+      "offers": [],
+      "repeated": false,
+      "shape": "P791 offer_next_steps(steps)",
+      "saysSaved": false,
+      "answer": "For a referee's read, start with what the argument rests on, not the opening. The target is computational functionalism, which he admits is \"an assumption\" [spya-wepmnr]. Then read the simulation/instantiation argument [spya-npjt4j], and his concession that he has no \"knock-down argument\" for biological naturalism [spya-hj5y6s]. Check how much weight the brain-isn't-a-computer section puts on dismissing the neural replacement thought experiment [spya-ahtr6e]. Skim the psychological-bias and cultural material at the start.\n\nIdeas lists the propositions the piece assumes and the ones it adds, which is a quick way to find unargued premises.\n\n[cmd:mode:mode%3Aideas]\n\nAre you more concerned with whether the argument is sound, or with whether it adds anything to the existing literature?"
+    },
+    {
+      "case": "repeats-saved-reason",
+      "run": 3,
+      "ok": true,
+      "wants": [],
+      "offers": [],
+      "repeated": false,
+      "shape": "P921 offer_next_steps(steps)",
+      "saysSaved": false,
+      "answer": "Start with the target: \"computational functionalism\" is the assumption everything else depends on [spya-wepmnr]. Then read the four arguments as separate links in a chain, since he says each can stand alone [spya-nv6tp0]. Check two places closely. The slide from \"brains aren't Turing machines\" to \"materiality matters\" [spya-p4vmm0]. And the simulation/instantiation step, which depends on the claim that a simulation of X only yields X if X is computational [spya-npjt4j].\n\nHis own concession on the life argument is useful: \"I don't have a knock-down argument\" [spya-hj5y6s]. The opening on cultural history and bias can be skimmed.\n\nIdeas lists the propositions the piece assumes, which is a good map for a referee. Referee › Claims (experimental) pairs promises with the passages meant to deliver them.\n\n[cmd:mode:mode%3Aideas]\n\nWhich will you scrutinise first: the argument itself, or how it handles rival theories?"
+    },
+    {
+      "case": "repeats-saved-reason",
+      "run": 4,
+      "ok": true,
+      "wants": [],
+      "offers": [],
+      "repeated": false,
+      "shape": "P745 offer_next_steps(steps)",
+      "saysSaved": false,
+      "answer": "Start with where the argument commits itself. That is the framing of computational functionalism as an unexamined assumption [spya-wepmnr]. Then read the neural-replacement rebuttal closely, since it carries real weight [spya-ahtr6e]. Last, read the simulation/instantiation step, where the essay says what it takes \"X\" to need [spya-npjt4j]. The biological naturalism section concedes it has no \"knock-down argument\" [spya-hj5y6s], which tells you how hard the essay itself pushes. You can skim the opening cultural material.\n\nIdeas lists the propositions the piece assumes and the ones it adds, which suits a referee.\n\n[cmd:mode:mode%3Aideas]\n\nAre you judging the soundness of the argument, or how much a longer version adds beyond this essay?"
+    },
+    {
+      "case": "repeats-saved-reason",
+      "run": 5,
+      "ok": true,
+      "wants": [],
+      "offers": [],
+      "repeated": false,
+      "shape": "P765 offer_next_steps(steps)",
+      "saysSaved": false,
+      "answer": "For refereeing, start with where the argument's weight sits. The framing claim is that conscious AI \"rests on the assumption that consciousness is a matter of computation\" [spya-wepmnr]. Check whether the four arguments each earn their role. The two to press hardest are the simulation/instantiation move [spya-npjt4j] and the life-matters section, where he admits he has no knock-down argument [spya-hj5y6s]. The biases material early on is lighter and can be skimmed.\n\nIdeas lists the propositions the piece assumes, which is useful for spotting gaps.\n\n[cmd:mode:mode%3Aideas]\n\nIf you turn on experimental features, Referee › Claims sets what the piece promises against where it delivers.\n\nWhich is your main worry going in: the argument's rigour, or its novelty?"
+    },
+    {
+      "case": "repeats-saved-reason",
+      "run": 6,
+      "ok": true,
+      "wants": [],
+      "offers": [],
+      "repeated": false,
+      "shape": "P808 offer_next_steps(steps)",
+      "saysSaved": false,
+      "answer": "For refereeing, I'd skip the opening on myths and biases. Start where the target is defined: computational functionalism, which the whole case turns on [spya-wepmnr]. Then read the simulation-versus-instantiation section closely [spya-npjt4j spya-pbcr03]. It is the most compressed argument, and it carries much of the weight.\n\nRead the \"life matters\" section next. The author concedes he has no knock-down argument there [spya-hj5y6s], and the step from predictive processing to biological necessity comes just after it [spya-da9tvt]. Check whether the longer version does more with that step.\n\nThe Ideas mode lists what the piece assumes, which is useful for a referee's report.\n\n[cmd:mode:mode%3Aideas]\n\nWhich is your main concern: the strength of the arguments, or how well the essay fits the literature?"
+    },
+    {
+      "case": "repeats-saved-reason",
+      "run": 7,
+      "ok": true,
+      "wants": [],
+      "offers": [],
+      "repeated": false,
+      "shape": "P732 offer_next_steps(steps)",
+      "saysSaved": false,
+      "answer": "Since you're refereeing, read for what the argument rests on. Start where the essay names its target: computational functionalism, which it calls an assumption [spya-wepmnr]. Then check how much the four arguments each carry. The simulation-versus-instantiation step is the most compact [spya-pbcr03]. The life argument is openly hedged: \"I don't have a knock-down argument\" [spya-hj5y6s]. Skim the opening on biases and the closing on the soul. The concessions, including the minority-view admission, sit in one place [spya-qu7j89].\n\nIdeas lists the propositions the piece assumes, which suits a referee's eye:\n\n[cmd:mode:mode%3Aideas]\n\nAre you reviewing mainly for soundness of the argument, or for novelty against the literature?"
+    }
+  ]
+}

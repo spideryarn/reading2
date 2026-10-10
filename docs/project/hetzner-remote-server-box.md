@@ -32,7 +32,7 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
 
 - [`scripts/gjd-remote.ts`](../../scripts/gjd-remote.ts) — all of it: `ls`, `new-claude`,
   `new-shell`, `resume`, `resume-all`, `kill`, `claim-overseer`, `release-overseer`,
-  `tell-overseer`, `log`,
+  `tell-overseer`, `tell`, `log`,
   `doctor`, `provision`, `clone`, `setup`, `push-env`, `upload`, `resolve`, `ssh`, `tunnel`,
   `forget-key`. `--help` is long on purpose.
 - [`scripts/gjd-remote-repo.ts`](../../scripts/gjd-remote-repo.ts) — which repo you are standing in,
@@ -629,37 +629,80 @@ way to tell that Claude from anyone else's. The row is dim and sorts last, so th
 the alternative is a state that means "there might be a Claude in here somewhere". Start it with
 `new-claude` and it is tracked properly.
 
-## Sending the Overseer a line from the laptop
+## Sending a session a line from the laptop
 
 ```
 gjd-remote tell-overseer "deploy when the readiness check is green"
+gjd-remote tell <session> "rebase is banned here — merge instead"
+gjd-remote tell -p "hello" -- -dash-leading-session
 gjd-remote tell-overseer -p - <<'EOF'
 anything, `backticked` or $(quoted) — but still ONE line
 EOF
 ```
 
-Exit 0 is sent, 1 is refused with nothing typed, and 2 is uncertain — look at the Overseer's pane
-before anything else, and do not send it again. Both `-p -` and the three exits are borrowed from
-`mindstone-fleet tell` (Greg, 2026-10-10), whose dashboard has grown more behind the same route —
-long messages handed off as a file, a delivered/queued distinction — that this one has not.
-
-It does what the dashboard's **Message the Overseer** box does, and through the same door: reads
-`/api/state` on the box, finds the holder with `claimFromSnapshot`, and posts the row's identity and
-the text to `/api/steer/message` as speaker `greg`. So every check that route makes still applies —
-one line only, nothing sent while a dialog is open or the input box has text in it — and the answer
-printed is the server's own sentence, with terminal control characters escaped. An incomplete
-answer says delivery is unconfirmed: look at the pane before sending again. The message goes down
-ssh's stdin; neither ssh nor curl gets the text in its arguments. The command you type can still
-appear in local process arguments and shell history, and the dashboard's existing tmux transport
-uses arguments to type it. Curl's config and proxies are disabled for these loopback requests.
-For text starting with `-`, put `--` before it; put `--port N` before that separator if the dashboard
-uses a port other than 8787. Code:
+`tell-overseer` finds whoever holds the claim with `claimFromSnapshot`; `tell` takes a session's
+**exact** name, and refuses one that matches only when case is ignored, naming the session it
+probably meant. Either way it does what the dashboard's own message box does, through the same door:
+reads `/api/state` on the box and posts the row's identity and the text to `/api/steer/message` as
+speaker `greg`, so every check that route makes still applies — one line only, nothing typed while a
+dialog is open or the input box has text in it — and the answer printed is the server's own
+sentence, with terminal control characters escaped. It is not a `tmux send-keys`, which would be
+shorter and would skip all of them. The message goes down ssh's stdin; neither ssh nor curl gets the
+text in its arguments. The command you type can still appear in local process arguments and shell
+history, and the dashboard's tmux transport uses arguments to type it. Curl's config and proxies are
+disabled for these loopback requests. For text starting with `-`, put `--` before it; `--port N`
+goes before that separator if the dashboard uses a port other than 8787. For a name starting
+with `-`, put options before `--` and the name after it, as above. Code:
 [`scripts/gjd-remote-tell.ts`](../../scripts/gjd-remote-tell.ts).
 
-**It is refused while the Overseer's Claude was started by name** (`claude --resume Overseer`), and
-so is the dashboard's box: the steer route only trusts a pane whose `claude` command line carries the
-conversation's uuid (`--session-id` or `--resume <uuid>`), and a name is not one. Found the day the
-command was added, 2026-10-09, when that was how the Overseer was running.
+`tell` refuses failed collections and snapshots more than five minutes old, measuring age with
+the box's clock. The route re-checks pane/session ids, pane pid and the conversation uuid in
+Claude's launch arguments, **not the live name**. If a session is renamed after collection, a
+message to its old name can still reach that original session until the list refreshes, even if
+another session now has that name. An in-process `/resume` is also invisible to launch arguments.
+See the guards and their limits in [`tools/fleet/steer.ts`](../../tools/fleet/steer.ts).
+
+**Exit 0 is sent, 1 is refused with nothing typed, and 2 is uncertain** — look at the session's
+pane before anything else, and do not send it again. **"Sent" means the keys were typed and Enter
+pressed, not that the session read it**: this dashboard has no check after Enter that the text
+became a turn (mindstone's has; see below).
+
+Three refusals that are not bugs in `tell`, and are the dashboard's own:
+
+- **A session started a moment ago is not in the list yet.** The dashboard refreshes about once a
+  minute; `tell` says so and stops, rather than waiting.
+- **A session nobody has typed into yet is refused `input-not-empty`.** Its input box holds Claude
+  Code's grey hint (`Try "create a util…"`), and the route cannot tell that from somebody's draft.
+  One started with `new-claude -p` has had its first turn and takes messages. Seen 2026-10-10.
+- **A Claude started by name (`claude --resume Overseer`) is refused `no-claude-in-pane`.** The route
+  trusts a pane only when its `claude` command line carries the conversation's uuid (`--session-id`
+  or `--resume <uuid>`), and a name is not one. That was how the Overseer was running on 2026-10-09,
+  so `tell-overseer` and the dashboard's own box were both refused until it is restarted by uuid.
+
+Proven end to end on 2026-10-10: a throwaway session started with a prompt was sent a line by
+`tell`, showed it as `[Greg, via the fleet dashboard] …`, and answered it.
+
+### Borrowed from `mindstone-fleet`, and why it stays a separate tool
+
+`mindstone-fleet` (Greg's work tool, `fleet-overseer-landing-board`) descends from this code and has
+grown further. **We keep the two separate** (Greg, 2026-10-10: *"That's really for work though, so
+maybe it's better to keep them separate … but borrow the best bits"*): its useful commands run
+scripts out of the Mindstone checkout on its box, its default host is the work box — one forgotten
+`FLEET_HOST=` would put Spideryarn keys on a client machine — and it updates itself from a work repo.
+
+Borrowed, keeping it simple: `tell <name>` beside `tell-overseer`, `-p -` for the text, and the three
+exits. **Not borrowed, each for a stated reason** — candidates if a need shows up:
+
+- **Delivered vs queued vs uncertain** (mindstone's `steer.ts` checks after Enter that the text
+  became a turn). The most valuable of these, and a port into this dashboard's `tools/fleet/steer.ts`,
+  not the CLI — its own plan.
+- **Long messages handed off as a file** on the box, with a pointer typed instead. Could be done from
+  the CLI alone; nobody has needed it yet.
+- **Waiting up to 75 s for a just-started session** to appear in the dashboard's list. Polling plus a
+  tmux-server pin to be safe; the refusal sentence says what to do instead.
+- **A box-health gate on `new-claude`**, **pre-answering launch dialogs** for unattended runs,
+  **`--tab`**, **`session go`**, **`overseer up`** (which starts the Overseer by uuid, and would fix
+  the refusal above), and the multi-person, multi-box machinery, which is for a team.
 
 ## Sessions nobody made on purpose
 
@@ -1067,17 +1110,16 @@ found no address by the time you get here. So `tailscale up` is two commands, no
 ```
 tailscale ip -4 | head -n 1                 # confirm a tailnet address exists BEFORE the next line
 printf 'FLEET_BIND=127.0.0.1,%s\n' "$(tailscale ip -4 | head -n 1)" | sudo tee /etc/fleet-dashboard.env
-sudo systemctl restart fleet-dashboard      # only if the unit is enabled — see the warning below
+sudo systemctl restart fleet-dashboard      # provisioning enables the unit for boot
 ```
 
 **That order, and it matters.** `EnvironmentFile=` is read when the service *starts*, so a restart
 before the file exists binds loopback and looks fine until somebody picks up a phone. Written first,
 the *first* start after login already has the address.
 
-**The restart is conditional on the unit being enabled**, which as of 2026-09-08 it is not: the page
-is up under a tmux job, and starting the unit alongside it makes two supervisors race for `:8787`.
-If the unit is not running, there is nothing to restart — the file is simply waiting for its first
-start, which is what you want.
+Since 2026-10-10 provisioning enables the dashboard unit for boot; the old tmux supervisor is gone.
+If this is an older box where the unit is not running yet, the restart fails harmlessly and the file
+waits for its first start.
 
 Doing this by hand, rather than by an `ExecStartPre` that generates the file, is deliberate: an
 `ExecStartPre` writes the file *after* systemd has already read `EnvironmentFile`, so it would take
@@ -1206,10 +1248,9 @@ when somebody cleans up. Two consequences follow, and both are real rather than 
 - They run **whatever is in the primary checkout when they start**, including a red `dev`. That is
   deliberate: a dashboard that refuses to boot until somebody fixes `dev` is unavailable exactly
   when it is needed.
-- Nothing keeps the primary checkout current, and it is often hours behind `origin/dev`. **Updating
-  it is a deploy**: `git merge origin/dev` there, then `npm run build:fleet` if the dashboard's
-  client changed — `tools/fleet/web/dist/` is gitignored, so no pull can supply it, and a stale one
-  is served with no error anywhere.
+- `dashboard-refresh.timer` fetches and merges `origin/dev` hourly, then rebuilds and restarts only
+  when dashboard inputs changed. A failed merge or restart leaves the unit failed for box-health to
+  report; until the next successful run, the primary and served bundle can still lag.
 
 The unit files are checked in at [`infra/hetzner/systemd/`](../../infra/hetzner/systemd/) and
 installed by [`provision.sh`](../../infra/hetzner/provision.sh), which splices them in verbatim —
@@ -1217,15 +1258,44 @@ installed by [`provision.sh`](../../infra/hetzner/provision.sh), which splices t
 units have to live inside it. `tests/systemd-units.test.ts` compares the two copies byte for byte,
 because two copies of a unit file is how one of them goes stale.
 
-**The fleet dashboard's unit is installed and deliberately not enabled** as of 2026-09-08: the page
-is up under a tmux job and its owner asked to read the unit before it is switched on, since two
-supervisors racing for `:8787` produce a loser whose failure looks like a crash. Its bind list is
+**The fleet dashboard's unit is enabled**, by hand on the live box and, since 2026-10-10, by
+provisioning too. From 2026-09-08 it was installed and left disabled while the page ran under a tmux
+job, since two supervisors racing for `:8787` produce a loser whose failure looks like a crash; that
+tmux job is gone, and the box's scheduled jobs now reach the Overseer through the dashboard, so a
+rebuilt box without it would be one whose alarms have nowhere to go
+([261010d](../plans/261010d-standing-jobs-survive-a-reboot.md)). Its bind list is
 `FLEET_BIND`, which the unit sets to `127.0.0.1` alone and `/etc/fleet-dashboard.env` extends with
 this box's tailnet address — provisioning writes that file from `tailscale ip -4`, removes it when
 there is no address, and [after a login you write it yourself](#after-tailscale-up-give-the-fleet-dashboard-the-address).
 The unit names no tailnet address itself, because that is a per-machine fact and a checked-in copy
 of it is one the next box cannot bind. It deliberately does not name `FLEET_ACT_ENABLED` in any
 form.
+
+### The repeating jobs, on timers
+
+> We want this to be something that's permanent and robust.
+>
+> — Greg, 2026-10-09 (`spya-q2qb7q`)
+
+Beside `box-tidy.timer` and `overseer-watchdog.timer`, four oneshot services run on timers, from the
+primary checkout, as `greg` — [plan 261010d](../plans/261010d-standing-jobs-survive-a-reboot.md):
+
+| timer | when | job | heard by the Overseer |
+|---|---|---|---|
+| `box-health` | 10 min | the dashboard's own health verdict, and whether any of the box's units has `failed` | when its alarms change; daily while one lasts |
+| `worktree-sweep` | 06:30 daily | `worktree:sweep --remove` | only trees that need judging |
+| `dashboard-refresh` | hourly | merge `origin/dev` into the primary; restart the dashboard if its inputs changed | through box-health, when it fails |
+| `feedback-sweep` | 3 h after the last | one Claude feedback sweep | through box-health, when it fails. Installed; provisioning leaves enablement unchanged until Greg says |
+
+Each exits nonzero when it could not do its work, so its unit shows `failed`; box-health reports
+those failures as a line from speaker `box`. The worktree sweep also sends its own successful
+`needs-a-look` judgement messages. An ordinary run with no alarm or judgement stays silent. The
+full record is the journal: `journalctl -u box-health` (or the job's name).
+
+A reboot brings them back with `timers.target`; an OOM-killed run is simply run at the next tick;
+`provision.sh` installs all eight units and enables three timers, leaving `feedback-sweep.timer`
+alone because enabling it starts paid work. The install step after a change is the same as for any
+unit, above, and is the Overseer's.
 
 ## Keeping the disks from filling
 

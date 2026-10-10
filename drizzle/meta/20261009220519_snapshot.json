@@ -1,5 +1,5 @@
 {
-  "id": "64f86872-b349-45dd-a672-bb2f4a687d5b",
+  "id": "5a50581a-85c3-46f3-98ad-0df6a720f31f",
   "prevId": "f4f75bce-b103-4624-8f0e-76231950f48d",
   "version": "7",
   "dialect": "postgresql",
@@ -1548,6 +1548,422 @@
         "articles_share_token_pair": {
           "name": "articles_share_token_pair",
           "value": "(\"spideryarn\".\"articles\".\"share_token\" is null) = (\"spideryarn\".\"articles\".\"share_token_at\" is null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "spideryarn.author_gifts": {
+      "name": "author_gifts",
+      "schema": "spideryarn",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "article_id": {
+          "name": "article_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "voucher_id": {
+          "name": "voucher_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "starter_slug": {
+          "name": "starter_slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "recipient_name": {
+          "name": "recipient_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "recipient_note": {
+          "name": "recipient_note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "articles": {
+          "name": "articles",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 20
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes_updated_at": {
+          "name": "notes_updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "email_lookup_id": {
+          "name": "email_lookup_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "name_lookup_id": {
+          "name": "name_lookup_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "send_started_at": {
+          "name": "send_started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "send_attempt": {
+          "name": "send_attempt",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "discarded_at": {
+          "name": "discarded_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "author_gifts_article": {
+          "name": "author_gifts_article",
+          "columns": [
+            {
+              "expression": "article_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "author_gifts_voucher": {
+          "name": "author_gifts_voucher",
+          "columns": [
+            {
+              "expression": "voucher_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "author_gifts_article_id_articles_id_fk": {
+          "name": "author_gifts_article_id_articles_id_fk",
+          "tableFrom": "author_gifts",
+          "tableTo": "articles",
+          "schemaTo": "spideryarn",
+          "columnsFrom": [
+            "article_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "author_gifts_email_lookup_id_author_lookups_id_fk": {
+          "name": "author_gifts_email_lookup_id_author_lookups_id_fk",
+          "tableFrom": "author_gifts",
+          "tableTo": "author_lookups",
+          "schemaTo": "spideryarn",
+          "columnsFrom": [
+            "email_lookup_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "author_gifts_name_lookup_id_author_lookups_id_fk": {
+          "name": "author_gifts_name_lookup_id_author_lookups_id_fk",
+          "tableFrom": "author_gifts",
+          "tableTo": "author_lookups",
+          "schemaTo": "spideryarn",
+          "columnsFrom": [
+            "name_lookup_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "author_gifts_email_normalised": {
+          "name": "author_gifts_email_normalised",
+          "value": "\"spideryarn\".\"author_gifts\".\"email\" is null or (\"spideryarn\".\"author_gifts\".\"email\" = lower(btrim(\"spideryarn\".\"author_gifts\".\"email\")) and \"spideryarn\".\"author_gifts\".\"email\" like '%_@_%')"
+        },
+        "author_gifts_articles_range": {
+          "name": "author_gifts_articles_range",
+          "value": "\"spideryarn\".\"author_gifts\".\"articles\" between 1 and 1000"
+        },
+        "author_gifts_notes_length": {
+          "name": "author_gifts_notes_length",
+          "value": "\"spideryarn\".\"author_gifts\".\"notes\" is null or char_length(\"spideryarn\".\"author_gifts\".\"notes\") <= 1000000"
+        },
+        "author_gifts_recipient_note_length": {
+          "name": "author_gifts_recipient_note_length",
+          "value": "\"spideryarn\".\"author_gifts\".\"recipient_note\" is null or char_length(\"spideryarn\".\"author_gifts\".\"recipient_note\") <= 1000000"
+        },
+        "author_gifts_recipient_name_length": {
+          "name": "author_gifts_recipient_name_length",
+          "value": "\"spideryarn\".\"author_gifts\".\"recipient_name\" is null or char_length(\"spideryarn\".\"author_gifts\".\"recipient_name\") <= 10000"
+        },
+        "author_gifts_starter_slug_length": {
+          "name": "author_gifts_starter_slug_length",
+          "value": "char_length(\"spideryarn\".\"author_gifts\".\"starter_slug\") <= 10000"
+        },
+        "author_gifts_send_has_email": {
+          "name": "author_gifts_send_has_email",
+          "value": "\"spideryarn\".\"author_gifts\".\"send_started_at\" is null or \"spideryarn\".\"author_gifts\".\"email\" is not null"
+        },
+        "author_gifts_send_not_discarded": {
+          "name": "author_gifts_send_not_discarded",
+          "value": "\"spideryarn\".\"author_gifts\".\"send_started_at\" is null or \"spideryarn\".\"author_gifts\".\"discarded_at\" is null"
+        },
+        "author_gifts_send_attempt_together": {
+          "name": "author_gifts_send_attempt_together",
+          "value": "num_nonnulls(\"spideryarn\".\"author_gifts\".\"send_started_at\", \"spideryarn\".\"author_gifts\".\"send_attempt\") <> 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "spideryarn.author_lookups": {
+      "name": "author_lookups",
+      "schema": "spideryarn",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "author_gift_id": {
+          "name": "author_gift_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "failure": {
+          "name": "failure",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "author_name": {
+          "name": "author_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "author_source_url": {
+          "name": "author_source_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "email_source_url": {
+          "name": "email_source_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "suggested_email": {
+          "name": "suggested_email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "contact_url": {
+          "name": "contact_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "searches": {
+          "name": "searches",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "run_id": {
+          "name": "run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "model": {
+          "name": "model",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "author_lookups_gift": {
+          "name": "author_lookups_gift",
+          "columns": [
+            {
+              "expression": "author_gift_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "author_lookups_one_pending": {
+          "name": "author_lookups_one_pending",
+          "columns": [
+            {
+              "expression": "author_gift_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"spideryarn\".\"author_lookups\".\"outcome\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "author_lookups_author_gift_id_author_gifts_id_fk": {
+          "name": "author_lookups_author_gift_id_author_gifts_id_fk",
+          "tableFrom": "author_lookups",
+          "tableTo": "author_gifts",
+          "schemaTo": "spideryarn",
+          "columnsFrom": [
+            "author_gift_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "author_lookups_outcome": {
+          "name": "author_lookups_outcome",
+          "value": "\"spideryarn\".\"author_lookups\".\"outcome\" is null or \"spideryarn\".\"author_lookups\".\"outcome\" in ('address', 'author', 'nothing', 'failed')"
+        },
+        "author_lookups_finished_together": {
+          "name": "author_lookups_finished_together",
+          "value": "(\"spideryarn\".\"author_lookups\".\"finished_at\" is null) = (\"spideryarn\".\"author_lookups\".\"outcome\" is null)"
+        },
+        "author_lookups_failure_only_failed": {
+          "name": "author_lookups_failure_only_failed",
+          "value": "\"spideryarn\".\"author_lookups\".\"failure\" is null or \"spideryarn\".\"author_lookups\".\"outcome\" = 'failed'"
+        },
+        "author_lookups_searches": {
+          "name": "author_lookups_searches",
+          "value": "\"spideryarn\".\"author_lookups\".\"searches\" is null or \"spideryarn\".\"author_lookups\".\"searches\" >= 0"
+        },
+        "author_lookups_text_lengths": {
+          "name": "author_lookups_text_lengths",
+          "value": "coalesce(char_length(\"spideryarn\".\"author_lookups\".\"failure\"), 0) <= 10000\n          and coalesce(char_length(\"spideryarn\".\"author_lookups\".\"author_name\"), 0) <= 10000\n          and coalesce(char_length(\"spideryarn\".\"author_lookups\".\"author_source_url\"), 0) <= 10000\n          and coalesce(char_length(\"spideryarn\".\"author_lookups\".\"email\"), 0) <= 10000\n          and coalesce(char_length(\"spideryarn\".\"author_lookups\".\"email_source_url\"), 0) <= 10000\n          and coalesce(char_length(\"spideryarn\".\"author_lookups\".\"suggested_email\"), 0) <= 10000\n          and coalesce(char_length(\"spideryarn\".\"author_lookups\".\"contact_url\"), 0) <= 10000\n          and coalesce(char_length(\"spideryarn\".\"author_lookups\".\"model\"), 0) <= 10000"
         }
       },
       "isRLSEnabled": false
@@ -7895,83 +8311,6 @@
         "shelf_topic_sets_claim": {
           "name": "shelf_topic_sets_claim",
           "value": "num_nonnulls(\"spideryarn\".\"shelf_topic_sets\".\"claim_id\", \"spideryarn\".\"shelf_topic_sets\".\"claimed_until\") in (0, 2)"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "spideryarn.stale_notice_dismissals": {
-      "name": "stale_notice_dismissals",
-      "schema": "spideryarn",
-      "columns": {
-        "article_id": {
-          "name": "article_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "mode": {
-          "name": "mode",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "dismissed_for": {
-          "name": "dismissed_for",
-          "type": "text[]",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "dismissed_at": {
-          "name": "dismissed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "stale_notice_dismissals_article_id_articles_id_fk": {
-          "name": "stale_notice_dismissals_article_id_articles_id_fk",
-          "tableFrom": "stale_notice_dismissals",
-          "tableTo": "articles",
-          "schemaTo": "spideryarn",
-          "columnsFrom": [
-            "article_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "stale_notice_dismissals_article_id_mode_pk": {
-          "name": "stale_notice_dismissals_article_id_mode_pk",
-          "columns": [
-            "article_id",
-            "mode"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "stale_notice_dismissals_mode": {
-          "name": "stale_notice_dismissals_mode",
-          "value": "\"spideryarn\".\"stale_notice_dismissals\".\"mode\" in ('glossary', 'ideas', 'faq', 'timeline', 'simple', 'citations', 'tweets', 'debate', 'debate-claims', 'quotes', 'skim', 'search', 'sketch', 'illustrated', 'claims')"
-        },
-        "stale_notice_dismissals_dismissed_for": {
-          "name": "stale_notice_dismissals_dismissed_for",
-          "value": "cardinality(\"spideryarn\".\"stale_notice_dismissals\".\"dismissed_for\") between 1 and 50 and array_ndims(\"spideryarn\".\"stale_notice_dismissals\".\"dismissed_for\") = 1 and array_position(\"spideryarn\".\"stale_notice_dismissals\".\"dismissed_for\", null) is null and array_to_string(\"spideryarn\".\"stale_notice_dismissals\".\"dismissed_for\", '') ~ '^[!-~]+$' and array_to_string(\"spideryarn\".\"stale_notice_dismissals\".\"dismissed_for\", chr(10)) ~ '^[!-~]{1,120}(\\n[!-~]{1,120})*$'"
         }
       },
       "isRLSEnabled": false

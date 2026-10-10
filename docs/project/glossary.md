@@ -508,8 +508,12 @@ Three details worth knowing before changing it:
 - **A mark carrying two terms commits to neither.** Where two entries overlap the same phrase the
   card draws both, because which matched the longer phrase is not something the mark records. A
   second tap there does nothing and leaves the reader the two named buttons.
-- **An owner's card has *Ask in chat* and *Hide*** too, in the foot beside *Open glossary*: one
-  row, *Ask in chat · Hide · Open glossary* (one row since 2026-10-03; they were a row under it).
+- **An owner's card has *Ask in chat* and *Hide*** too, in the foot beside *Open in Glossary*: one
+  row, *Ask in chat · Hide · Open in Glossary* (one row since 2026-10-03; they were a row under it).
+  *Open in Glossary* was *Open glossary* until 2026-10-10, when it became the control every mode's
+  card ends in, and began bringing the entry's row into view as well as selecting it, for a
+  visitor too ([tooltips.md § Every card on a mode's mark has a way into its
+  mode](tooltips.md#every-card-on-a-modes-mark-has-a-way-into-its-mode)).
   Greg: *"We have a 'Dig deeper' in Glossary mode. Add that to the in-text glossary tooltip."*
   (spya-p09u4s), and the card had *Dig deeper* from 2026-10-02 **until 2026-10-09**, when *Ask in
   chat* took its place there as in the band (plan
@@ -520,7 +524,7 @@ Three details worth knowing before changing it:
   other, and Skim's term chips get it the same way (`SkimBand`'s `onAskTerm`). *Hide* is
   [below](#hiding-an-entry); the card closes only once the write has landed, and says a refusal on
   a line of its own. A visitor gets neither. Both are plain buttons, so a finger reaches them the
-  way it reaches *Open glossary* — a tap inside the card is left alone.
+  way it reaches *Open in Glossary* — a tap inside the card is left alone.
 
 ## Hiding an entry
 

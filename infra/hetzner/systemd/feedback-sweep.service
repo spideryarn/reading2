@@ -1,0 +1,41 @@
+# One feedback sweep: Claude Opus, unattended, under the box's default Claude
+# login, following docs/project/feedback-reports.md. Run by
+# feedback-sweep.timer every three hours. scripts/overseer-tools/feedback-sweep-once.sh;
+# plan docs/plans/261010d-standing-jobs-survive-a-reboot.md.
+#
+# THIS SPENDS MONEY ON A CLOCK, so it is installed but enabled only on Greg's
+# word (question in docs/user-feedback/questions/). Until then the same body
+# runs as the tmux loop feedback-sweep-loop.sh -- never both at once.
+#
+# A SYSTEM unit with User=@USER@, not a user unit -- see box-health.service.
+# Type=oneshot, no Restart=, no [Install]: only the timer is enabled. A sweep
+# that fails exits non-zero, and box-health tells the Overseer.
+#
+# What it needs that provisioning does not restore: the Claude login in
+# ~/.claude (with its signed-in Sentry MCP server), and GitHub credentials
+# for the pushes a sweep makes. /home is the persistent volume, so both outlive
+# a rebuilt server; a new volume needs them again by hand.
+#
+# @USER@ is substituted at install time by infra/hetzner/provision.sh.
+# tests/systemd-units.test.ts compares these bytes against the heredoc in that
+# script.
+[Unit]
+Description=Feedback sweep -- one unattended Claude run over the feedback queue (spends money)
+Documentation=file:///home/@USER@/code/spideryarn2/docs/project/feedback-reports.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=@USER@
+Group=@USER@
+WorkingDirectory=/home/@USER@/code/spideryarn2
+# HOME explicitly: Claude's login, the credential helper in ~/.gitconfig and
+# the debrief directory are all under it.
+Environment=HOME=/home/@USER@
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+# The Overseer's working directory, outside /tmp, where it reads the debriefs.
+Environment=OVERSEER_SCRATCH=/home/@USER@/.overseer/scratch
+ExecStart=/bin/bash /home/@USER@/code/spideryarn2/scripts/overseer-tools/feedback-sweep-once.sh
+# run-claude stops the sweep at 150 minutes; this is the backstop above it.
+TimeoutStartSec=3h

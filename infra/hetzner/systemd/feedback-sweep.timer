@@ -1,0 +1,23 @@
+# Runs feedback-sweep.service every three hours.
+# docs/plans/261010d-standing-jobs-survive-a-reboot.md. Enabled only on Greg's
+# word -- see feedback-sweep.service.
+#
+# @USER@ is substituted at install time by infra/hetzner/provision.sh.
+# tests/systemd-units.test.ts compares these bytes against the heredoc in that
+# script.
+[Unit]
+Description=Timer for feedback-sweep.service
+Documentation=file:///home/@USER@/code/spideryarn2/docs/project/feedback-reports.md
+
+[Timer]
+# The first sweep half an hour after boot -- or at once, when the timer is first
+# started on a box that has been up longer than that.
+OnBootSec=30min
+# Three hours after the previous sweep ENDED (OnUnitInactiveSec=, not
+# OnUnitActiveSec=, which counts from the start): the tmux loop's `sleep 10800`
+# after each sweep, which can itself take 150 minutes.
+OnUnitInactiveSec=3h
+Unit=feedback-sweep.service
+
+[Install]
+WantedBy=timers.target

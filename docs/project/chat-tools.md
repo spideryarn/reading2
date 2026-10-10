@@ -1046,8 +1046,13 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   reader can edit and the quick-search chip for its words; *Share this article…* goes to
   Metadata's *Access & sharing* card and *Archive or put back…* to Metadata, the one place each is
   done. No ⚙ line is drawn for it. **It ends the turn** (`ENDS_THE_TURN` in
-  [`src/converse.ts`](../../src/converse.ts)) when it is all a round asked for, that round wrote
-  prose, and the offer was accepted: the model needs nothing back, so no second request. Typed
+  [`src/converse.ts`](../../src/converse.ts)) when it is the last call of a round that wrote prose,
+  the round yielded normally to its tools rather than running out of tokens, and every call in that
+  round *settled*: the steps accepted, and any `offer_to_save` beside them
+  made or refused as already saved (`ToolOutcome.settles`). The model needs nothing back, so no
+  second request — and a second request after a finished reply is where answers came out twice, or
+  with a tail like *"I'm done with my answer above."*
+  ([261010b](../plans/261010b-next-steps-end-the-turn-even-beside-an-offer-to-save.md)). Typed
   only, like `offer_to_save`.
 - **Its greeting is ours**, not a model's ([`GuideGreeting.tsx`](../../src/web/GuideGreeting.tsx),
   words chosen in [`guide-greeting.ts`](../../src/web/guide-greeting.ts)): free, and since

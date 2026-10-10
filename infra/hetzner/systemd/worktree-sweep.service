@@ -1,0 +1,45 @@
+# The daily worktree sweep: `npm run worktree:sweep -- --remove`, run by
+# worktree-sweep.timer. scripts/worktree-sweep-daily.ts; plan
+# docs/plans/261010d-standing-jobs-survive-a-reboot.md.
+#
+# Removes every worktree whose work has landed on dev, each one re-checked by
+# the single-tree removal (Greg's permission, 2026-10-09, quoted in
+# scripts/worktree-sweep.ts). Tells the Overseer only about trees somebody has
+# to judge; the full report is `journalctl -u worktree-sweep`.
+#
+# A SYSTEM unit with User=@USER@, not a user unit -- see box-health.service.
+# Type=oneshot, no Restart=, no [Install]: only the timer is enabled.
+#
+# NO AmbientCapabilities=, unlike box-tidy.service, on purpose: those make a
+# process's own /proc entries unreadable to the user's other processes, and
+# scripts/worktree-inuse.ts lets that past only for box-tidy, by name. Without
+# them this reads /proc exactly as an agent's shell running the same command.
+#
+# @USER@ is substituted at install time by infra/hetzner/provision.sh.
+# tests/systemd-units.test.ts compares these bytes against the heredoc in that
+# script.
+[Unit]
+Description=Worktree sweep -- removes landed worktrees daily; tells the Overseer about the rest
+Documentation=file:///home/@USER@/code/spideryarn2/docs/project/worktrees.md
+# It fetches dev before it judges anything.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=@USER@
+Group=@USER@
+
+# The PRIMARY checkout: a worktree is what this deletes.
+WorkingDirectory=/home/@USER@/code/spideryarn2
+# HOME explicitly: the fetch finds its credential helper in ~/.gitconfig.
+Environment=HOME=/home/@USER@
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+# Under the primary-checkout lock dashboard-refresh.service also takes, so the
+# sweep never removes trees while the refresh is merging into the primary or
+# reinstalling its node_modules. Half an hour's wait, then a failed run.
+ExecStart=/usr/bin/flock -w 1800 /home/@USER@/.overseer/primary-checkout.lock /home/@USER@/code/spideryarn2/node_modules/.bin/tsx scripts/worktree-sweep-daily.ts
+
+# It fetches and walks every tree on a busy box. Behind the sessions for CPU.
+Nice=10
+TimeoutStartSec=1h

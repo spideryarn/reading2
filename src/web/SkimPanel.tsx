@@ -1081,7 +1081,7 @@ function StopCardView({
  * goes when the pointer does (GPT Sol, plan review F2).
  *
  * `onOpen` is the way into Glossary, or `null` when this reader has no
- * Glossary control. Then the card has no *Open glossary*. Its *Ask in chat*
+ * Glossary control. Then the card has no *Open in Glossary*. Its *Ask in chat*
  * (the owner's, since plan 261009k; *Dig deeper* until then) goes to Chat, so
  * it is drawn either way.
  */

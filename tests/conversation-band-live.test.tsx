@@ -22,10 +22,13 @@ vi.mock("../src/web/lib/api.js", async (original) => ({
     updatedAt: "2026-09-06T00:00:00Z", messages: [],
   }] }), { headers: { "content-type": "application/json" } }),
 }));
-vi.mock("../src/web/live/useLiveConversation.js", async () => {
+/* The fake stands in for GPT-Live, the engine every reader gets since
+   2026-10-10 (plan 261010a): a start goes to the effective engine, so faking
+   Realtime here would leave the start with the real GPT-Live hook. */
+vi.mock("../src/web/live/gpt-live/useGptLive.js", async () => {
   const { useCallback, useState } = await import("react");
   return {
-    useLiveConversation: (_slug: string, next: LiveOptions) => {
+    useGptLive: (_slug: string, next: LiveOptions) => {
       options = next;
       const [state, setState] = useState<{ phase: string; threadId: string | null }>({ phase: "idle", threadId: null });
       const start = useCallback(({ threadId }: { threadId: string }) => {

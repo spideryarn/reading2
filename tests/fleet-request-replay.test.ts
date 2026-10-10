@@ -29,6 +29,7 @@ import { makeSendCoordinator } from "../tools/fleet/send-coordinator.js";
 import type { SeenQuestion, SteerResult, SteerTarget } from "../tools/fleet/steer.js";
 import { releaseLock, takeLock, type HeldLock } from "../tools/overseer/lock.js";
 import { FrozenDisk } from "./helpers/fleet-frozen-disk.js";
+import { mintRequestId, readBoxAnswer } from "../scripts/box-notify.js";
 
 const NOW = 1_800_300_000_000;
 const HOST = "100.90.80.70:8787";
@@ -397,5 +398,44 @@ describe("direct-send outcomes, read off the coordinator", () => {
     });
     expect((await w.post(bodyFor("steer-message"))).status).toBe(500);
     expect(w.receipts.recent(1)[0]?.last).toMatchObject({ state: "outcome-unknown", reason: "threw" });
+  });
+});
+
+/**
+ * Speaker `box` — a scheduled job on the box telling the Overseer (plan 261010d,
+ * scripts/box-notify.ts) — through the REAL receipt journal. GPT Sol's plan
+ * review, finding 1: the journal had its own speaker allowlist, so a route
+ * that parsed `box` would still have refused every message at the receipt.
+ */
+describe("speaker box on the steer routes", () => {
+  it("is accepted on /api/steer/message, typed once, and a retry of the same envelope replays as sent", async () => {
+    const w = world("steer-message");
+    const requestId = mintRequestId(NOW);
+    const body = { ...bodyFor("steer-message"), speaker: "box", requestId };
+    const first = await w.post(body);
+    expect(first.status).toBe(200);
+    expect(first.json).toMatchObject({ ok: true, op: "message" });
+    expect(readBoxAnswer(first.status ?? 0, JSON.stringify(first.json), "fixture")).toEqual({ kind: "sent", to: "fixture" });
+
+    const retry = await w.post(body);
+    expect(retry.json).toMatchObject({ ok: true, op: "receipt", replay: true });
+    expect(readBoxAnswer(retry.status ?? 0, JSON.stringify(retry.json), "fixture")).toEqual({ kind: "sent", to: "fixture" });
+    expect(w.transportCalls()).toBe(1);
+    expect(w.receipts.recent(1)[0]?.accepted).toMatchObject({ speaker: "box" });
+  });
+
+  it("an id the dashboard can no longer check is abandoned, never resent", async () => {
+    const w = world("steer-message");
+    const stale = await w.post({ ...bodyFor("steer-message"), speaker: "box", requestId: mintRequestId(NOW - RETENTION_MS) });
+    expect(stale.status).toBe(409);
+    expect(readBoxAnswer(stale.status ?? 0, JSON.stringify(stale.json), "fixture").kind).toBe("abandoned");
+    expect(w.transportCalls()).toBe(0);
+  });
+
+  it("is refused on the queued-action route, which keeps the shared parseSpeaker", async () => {
+    const w = world("actions-session");
+    const refused = await w.post({ ...bodyFor("actions-session"), speaker: "box" });
+    expect(refused.status).toBe(400);
+    expect(w.effects()).toBe(0);
   });
 });

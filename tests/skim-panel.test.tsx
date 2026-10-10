@@ -932,11 +932,11 @@ describe("the panel", () => {
     await act(async () => termChip().focus());
     expect(termChip().getAttribute("aria-expanded")).toBe("true");
     expect(termCard()?.textContent).toContain(TERM.senseHere!);
-    expect(cardButtons()).toEqual(["Ask in chat", "Hide", "Open glossary"]);
+    expect(cardButtons()).toEqual(["Ask in chat", "Hide", "Open in Glossary"]);
     /* The sense is in the card and nowhere in the band: one surface, not two. */
     expect(host.querySelector(".skim-sense")).toBeNull();
     expect(host.querySelector('[aria-label="Open in Glossary"]')).toBeNull();
-    await act(async () => cardButton("Open glossary").click());
+    await act(async () => cardButton("Open in Glossary").click());
     expect(calls).toEqual([`open term ${TERM.id}`]);
     expect(termChip().getAttribute("aria-expanded"), "leaving for Glossary closes it").toBe("false");
   });
@@ -956,7 +956,7 @@ describe("the panel", () => {
        pointerdown/focus/click ordering is exercised separately below. */
     await act(async () => termChip().click());
     expect(termChip().getAttribute("aria-expanded")).toBe("true");
-    expect(cardButtons()).toContain("Open glossary");
+    expect(cardButtons()).toContain("Open in Glossary");
     await act(async () => termChip().click());
     expect(termChip().getAttribute("aria-expanded"), "a second tap closes it").toBe("false");
     await act(async () => termChip().click());
@@ -964,7 +964,7 @@ describe("the panel", () => {
     expect(termChip().getAttribute("aria-expanded"), "a press elsewhere closes it").toBe("false");
   });
 
-  it("gives a visitor's card Open glossary and neither of the owner's verbs", async () => {
+  it("gives a visitor's card Open in Glossary and neither of the owner's verbs", async () => {
     calls.length = 0;
     await act(async () =>
       root.render(
@@ -977,7 +977,7 @@ describe("the panel", () => {
     );
     await act(async () => termChip().focus());
     expect(termCard()?.textContent).toContain(TERM.senseHere!);
-    expect(cardButtons()).toEqual(["Open glossary"]);
+    expect(cardButtons()).toEqual(["Open in Glossary"]);
   });
 
   it("does not pull focus back from another term when a slow Hide completes", async () => {
@@ -1063,10 +1063,10 @@ describe("the panel", () => {
     });
     await settle();
     expect(termChip().getAttribute("aria-expanded")).toBe("true");
-    expect(cardButtons()).toContain("Open glossary");
+    expect(cardButtons()).toContain("Open in Glossary");
   });
 
-  it("draws a card with no Open glossary when Glossary cannot be opened, and keeps Ask in chat and Hide", async () => {
+  it("draws a card with no Open in Glossary when Glossary cannot be opened, and keeps Ask in chat and Hide", async () => {
     const closed = (target: CardTarget) => target.kind !== "term";
     await draw(owner(), view({ card: CARD, canOpen: closed, termActions: termActions(), onAskTerm: ask }));
     await act(async () => termChip().focus());
@@ -1079,11 +1079,11 @@ describe("the panel", () => {
   it("keeps Hide and Ask in chat independent: either can be drawn without the other (261009k, Sol F1)", async () => {
     await draw(owner(), view({ card: CARD, termActions: termActions(), onAskTerm: null }));
     await act(async () => termChip().focus());
-    expect(cardButtons()).toEqual(["Hide", "Open glossary"]);
+    expect(cardButtons()).toEqual(["Hide", "Open in Glossary"]);
     await act(async () => termChip().blur());
     await draw(owner(), view({ card: CARD, termActions: null, onAskTerm: ask }));
     await act(async () => termChip().focus());
-    expect(cardButtons()).toEqual(["Ask in chat", "Open glossary"]);
+    expect(cardButtons()).toEqual(["Ask in chat", "Open in Glossary"]);
   });
 
   it("draws a visitor's card with no button at all when Glossary cannot be opened", async () => {

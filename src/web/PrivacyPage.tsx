@@ -55,7 +55,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
  * can honestly promise: there is no changelog, no diff view and nobody to email
  * about a wording change during a beta. Bump it when you change the words.
  */
-const LAST_UPDATED = "9 October 2026";
+const LAST_UPDATED = "10 October 2026";
 
 /**
  * A heading and its paragraphs. Eight of them; nothing else on the page.
@@ -526,12 +526,16 @@ export function PrivacyPage() {
           none of the text, and to judge how hard an article is to read so that its reading time can
           allow for it, for which it is shown passages from the article, about 3,000 words at
           most;{" "}
+          <code>claude-haiku-5-5</code> to read where each author of a web page you add works, when
+          the page names its authors but not their institutions, for which it is shown the authors’
+          names and the opening of the page, about 6,000 characters at most;{" "}
           <code>gemini-3-flash-preview</code> to find a figure in a PDF when the page alone
           cannot say which picture belongs to which caption, for which it is shown images of those
           pages; <code>gemini-3.1-flash-image</code> to paint the Illustrated diagram, for which it
           is shown a written description of the scene and any figures the article came with; and{" "}
-          <code>gpt-realtime-2.1</code> with <code>gpt-live-transcribe</code> for the live voice
-          mode.
+          <code>gpt-live-1</code> for the live voice mode, with <code>gpt-6-luna</code> behind it,
+          which is shown the article and looks things up in it while you talk; or, if you choose it under Experimental features,{" "}
+          <code>gpt-realtime-2.1</code> with <code>gpt-live-transcribe</code> instead.
         </p>
         {/* **What follows from the command bar's suggestions** (plan 261005k,
             GPT Sol's F5): saying which model is shown the profile is true and

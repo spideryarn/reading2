@@ -1,0 +1,951 @@
+[
+  {
+    "input": {
+      "name": "arxiv 1706.03762v7",
+      "kind": "arxiv-html",
+      "url": "https://arxiv.org/html/1706.03762v7"
+    },
+    "today": [
+      {
+        "name": "Ashish Vaswani",
+        "affiliations": [
+          "Google Brain"
+        ]
+      },
+      {
+        "name": "Noam Shazeer",
+        "affiliations": [
+          "Google Brain"
+        ]
+      },
+      {
+        "name": "Niki Parmar",
+        "affiliations": [
+          "Google Research"
+        ]
+      },
+      {
+        "name": "Jakob Uszkoreit",
+        "affiliations": [
+          "Google Research"
+        ]
+      },
+      {
+        "name": "Llion Jones",
+        "affiliations": [
+          "Google Research"
+        ]
+      },
+      {
+        "name": "Aidan N. Gomez",
+        "affiliations": [
+          "University of Toronto"
+        ]
+      },
+      {
+        "name": "Łukasz Kaiser",
+        "affiliations": [
+          "Google Brain"
+        ]
+      },
+      {
+        "name": "Illia Polosukhin",
+        "affiliations": []
+      }
+    ],
+    "todayCostNanos": 5376000,
+    "declaredNames": null,
+    "records": 24,
+    "haiku": {
+      "authors": [
+        {
+          "name": "Ashish Vaswani",
+          "affiliations": [
+            "Google Brain"
+          ]
+        },
+        {
+          "name": "Noam Shazeer",
+          "affiliations": [
+            "Google Brain"
+          ]
+        },
+        {
+          "name": "Niki Parmar",
+          "affiliations": [
+            "Google Research"
+          ]
+        },
+        {
+          "name": "Jakob Uszkoreit",
+          "affiliations": [
+            "Google Research"
+          ]
+        },
+        {
+          "name": "Llion Jones",
+          "affiliations": [
+            "Google Research"
+          ]
+        },
+        {
+          "name": "Aidan N. Gomez",
+          "affiliations": [
+            "University of Toronto"
+          ]
+        },
+        {
+          "name": "Łukasz Kaiser",
+          "affiliations": [
+            "Google Brain"
+          ]
+        },
+        {
+          "name": "Illia Polosukhin",
+          "affiliations": []
+        }
+      ]
+    },
+    "haikuCostNanos": 728500,
+    "haikuMs": 4485
+  },
+  {
+    "input": {
+      "name": "arxiv 2605.20355v1",
+      "kind": "arxiv-html",
+      "url": "https://arxiv.org/html/2605.20355v1"
+    },
+    "today": [
+      {
+        "name": "Megha Srivastava",
+        "affiliations": [
+          "Stanford University, Stanford, CA, USA"
+        ]
+      },
+      {
+        "name": "Jonathan Ouyang",
+        "affiliations": [
+          "University of California Los Angeles, Los Angeles, CA, USA"
+        ]
+      },
+      {
+        "name": "Eric Zhou",
+        "affiliations": [
+          "University of California Los Angeles, Los Angeles, CA, USA"
+        ]
+      },
+      {
+        "name": "Andrew Silva",
+        "affiliations": [
+          "Toyota Research Institute, Los Altos, CA, USA"
+        ]
+      },
+      {
+        "name": "Emily Sumner",
+        "affiliations": [
+          "Toyota Research Institute, Los Altos, CA, USA"
+        ]
+      },
+      {
+        "name": "Dorsa Sadigh",
+        "affiliations": [
+          "Stanford University, Stanford, CA, USA"
+        ]
+      },
+      {
+        "name": "Yuchen Cui",
+        "affiliations": [
+          "University of California Los Angeles, Los Angeles, CA, USA"
+        ]
+      },
+      {
+        "name": "Deepak Gopinath",
+        "affiliations": [
+          "Toyota Research Institute, Los Altos, CA, USA"
+        ]
+      },
+      {
+        "name": "Guy Rosman",
+        "affiliations": [
+          "Toyota Research Institute, Los Altos, CA, USA"
+        ]
+      }
+    ],
+    "todayCostNanos": 7152000,
+    "declaredNames": null,
+    "records": 23,
+    "haiku": {
+      "authors": null,
+      "note": "Kept the byline as printed: the front-matter pass's author list left out somebody printed before author 3."
+    },
+    "haikuCostNanos": 699300,
+    "haikuMs": 3666
+  },
+  {
+    "input": {
+      "name": "arxiv 2608.13566",
+      "kind": "arxiv-html",
+      "url": "https://arxiv.org/html/2608.13566"
+    },
+    "today": [
+      {
+        "name": "Egor Shibaev",
+        "affiliations": [
+          "Code Modelling Research, JetBrains Research, Munich, Germany",
+          "Constructor University, Bremen, Germany"
+        ]
+      },
+      {
+        "name": "Vera Kudrevskaia",
+        "affiliations": [
+          "Code Modelling Research, JetBrains Research, Munich, Germany",
+          "Constructor University, Bremen, Germany"
+        ]
+      },
+      {
+        "name": "Timur Galimzyanov",
+        "affiliations": [
+          "Code Modelling Research, JetBrains Research, Munich, Germany"
+        ]
+      },
+      {
+        "name": "Mikhail Evtikhiev",
+        "affiliations": [
+          "Code Modelling Research, JetBrains Research, Paphos, Cyprus"
+        ]
+      },
+      {
+        "name": "Ana Terna",
+        "affiliations": [
+          "Code Modelling Research, JetBrains Research, Amsterdam, The Netherlands"
+        ]
+      },
+      {
+        "name": "Rastislav Rabatin",
+        "affiliations": [
+          "Code Modelling Research, JetBrains Research, London, United Kingdom"
+        ]
+      },
+      {
+        "name": "Timur Kudashev",
+        "affiliations": [
+          "Code Modelling Research, JetBrains Research, Munich, Germany",
+          "Constructor University, Bremen, Germany"
+        ]
+      },
+      {
+        "name": "Timofey Bryksin",
+        "affiliations": [
+          "Code Modelling Research, JetBrains Research, Paphos, Cyprus"
+        ]
+      },
+      {
+        "name": "Arina Puchkova",
+        "affiliations": [
+          "Code Modelling Research, JetBrains Research, Munich, Germany"
+        ]
+      },
+      {
+        "name": "Patrik Bartak",
+        "affiliations": [
+          "Code Modelling Research, JetBrains Research, Amsterdam, The Netherlands"
+        ]
+      },
+      {
+        "name": "Egor Bogomolov",
+        "affiliations": [
+          "Code Modelling Research, JetBrains Research, Amsterdam, The Netherlands"
+        ]
+      },
+      {
+        "name": "Sergey Titov",
+        "affiliations": [
+          "Code Modelling Research, JetBrains Research, Amsterdam, The Netherlands"
+        ]
+      }
+    ],
+    "todayCostNanos": 9994000,
+    "declaredNames": null,
+    "records": 24,
+    "haiku": {
+      "authors": null,
+      "note": "Kept the byline as printed: the front-matter pass's author list left out somebody printed before author 2."
+    },
+    "haikuCostNanos": 855200,
+    "haikuMs": 5814
+  },
+  {
+    "input": {
+      "name": "arxiv 2610.01658v1",
+      "kind": "arxiv-html",
+      "url": "https://arxiv.org/html/2610.01658v1"
+    },
+    "today": [
+      {
+        "name": "Kais Hamza",
+        "affiliations": [
+          "School of Mathematics, Monash University, VIC 3800, Australia"
+        ]
+      },
+      {
+        "name": "Laurent Tournier",
+        "affiliations": [
+          "Université Sorbonne Paris Nord, LAGA, CNRS, UMR 7539, F-93430, Villetaneuse, France"
+        ]
+      }
+    ],
+    "todayCostNanos": 3126000,
+    "declaredNames": null,
+    "records": 40,
+    "haiku": {
+      "authors": [
+        {
+          "name": "Kais Hamza",
+          "affiliations": [
+            "School of Mathematics, Monash University, VIC 3800, Australia"
+          ]
+        },
+        {
+          "name": "Laurent Tournier",
+          "affiliations": [
+            "Université Sorbonne Paris Nord, LAGA, CNRS, UMR 7539, F-93430, Villetaneuse, France"
+          ]
+        }
+      ]
+    },
+    "haikuCostNanos": 614100,
+    "haikuMs": 3036
+  },
+  {
+    "input": {
+      "name": "arxiv 2610.01988v1",
+      "kind": "arxiv-html",
+      "url": "https://arxiv.org/html/2610.01988v1"
+    },
+    "today": [
+      {
+        "name": "Adamu Issifu",
+        "affiliations": [
+          "CFisUC, Department of Physics, University of Coimbra, 3004-516 Coimbra, Portugal",
+          "Departamento de Física, Instituto Tecnológico de Aeronáutica, DCTA, 12228-900, São José dos Campos, SP, Brazil",
+          "Laboratório de Computação Científica Avançada e Modelamento (Lab-CCAM), Brazil"
+        ]
+      },
+      {
+        "name": "Orlando Oliveira",
+        "affiliations": [
+          "CFisUC, Department of Physics, University of Coimbra, 3004-516 Coimbra, Portugal"
+        ]
+      },
+      {
+        "name": "Tobias Frederico",
+        "affiliations": [
+          "Departamento de Física, Instituto Tecnológico de Aeronáutica, DCTA, 12228-900, São José dos Campos, SP, Brazil",
+          "Laboratório de Computação Científica Avançada e Modelamento (Lab-CCAM), Brazil"
+        ]
+      }
+    ],
+    "todayCostNanos": 5700000,
+    "declaredNames": null,
+    "records": 11,
+    "haiku": {
+      "authors": null,
+      "note": "Kept the byline as printed: the front-matter pass's author list left out somebody printed before author 2."
+    },
+    "haikuCostNanos": 468900,
+    "haikuMs": 2289
+  },
+  {
+    "input": {
+      "name": "arxiv 2610.03261v1",
+      "kind": "arxiv-html",
+      "url": "https://arxiv.org/html/2610.03261v1"
+    },
+    "today": [
+      {
+        "name": "Elena Morotti",
+        "affiliations": [
+          "Department of Computer Science and Engineerin University of Bologna Bologna, 40126, Italy"
+        ]
+      },
+      {
+        "name": "Davide Evangelista",
+        "affiliations": [
+          "Department of Computer Science and Engineering University of Bologna Bologna, 40126, Italy"
+        ]
+      },
+      {
+        "name": "Elena Loli Piccolomini",
+        "affiliations": [
+          "Department of Computer Science and Engineering University of Bologna Bologna, 40126, Italy"
+        ]
+      }
+    ],
+    "todayCostNanos": 3820000,
+    "declaredNames": null,
+    "records": 20,
+    "haiku": {
+      "authors": [
+        {
+          "name": "Elena Morotti",
+          "affiliations": [
+            "Department of Computer Science and Engineerin University of Bologna Bologna, 40126, Italy"
+          ]
+        },
+        {
+          "name": "Davide Evangelista",
+          "affiliations": [
+            "Department of Computer Science and Engineering University of Bologna Bologna, 40126, Italy"
+          ]
+        },
+        {
+          "name": "Elena Loli Piccolomini",
+          "affiliations": [
+            "Department of Computer Science and Engineering University of Bologna Bologna, 40126, Italy"
+          ]
+        }
+      ]
+    },
+    "haikuCostNanos": 435800,
+    "haikuMs": 1982
+  },
+  {
+    "input": {
+      "name": "arxiv 2610.08392",
+      "kind": "arxiv-html",
+      "url": "https://arxiv.org/html/2610.08392"
+    },
+    "today": [
+      {
+        "name": "Ilya Auslender",
+        "affiliations": [
+          "Department of Physics, University of Trento, Italy"
+        ]
+      },
+      {
+        "name": "Yasaman Heydari",
+        "affiliations": [
+          "Department of Physics, University of Trento, Italy"
+        ]
+      },
+      {
+        "name": "Asiye Malkoç",
+        "affiliations": [
+          "Department of Cellular, Computational and Integrative Biology, University of Trento, Italy"
+        ]
+      },
+      {
+        "name": "Clara Zaccaria",
+        "affiliations": [
+          "Department of Physics, University of Trento, Italy"
+        ]
+      },
+      {
+        "name": "Yuri Bozzi",
+        "affiliations": [
+          "Center for Mind/ Brain Sciences, University of Trento, Italy"
+        ]
+      },
+      {
+        "name": "Lorenzo Pavesi",
+        "affiliations": [
+          "Department of Physics, University of Trento, Italy"
+        ]
+      }
+    ],
+    "todayCostNanos": 5176000,
+    "declaredNames": null,
+    "records": 17,
+    "haiku": {
+      "authors": null,
+      "note": "Kept the byline as printed: the front-matter pass's author list left out somebody printed before author 4."
+    },
+    "haikuCostNanos": 640200,
+    "haikuMs": 3494
+  },
+  {
+    "input": {
+      "name": "arxiv 2610.08750",
+      "kind": "arxiv-html",
+      "url": "https://arxiv.org/html/2610.08750"
+    },
+    "today": [
+      {
+        "name": "Jose Eduardo Escrig Molina",
+        "affiliations": []
+      },
+      {
+        "name": "Daniel Probst",
+        "affiliations": []
+      }
+    ],
+    "todayCostNanos": 3484000,
+    "declaredNames": null,
+    "records": 13,
+    "haiku": {
+      "authors": [
+        {
+          "name": "Jose Eduardo Escrig Molina",
+          "affiliations": [
+            "Bioinformatics Group",
+            "Bioprocess Engineering Group Wageningen Unversity Wageningen, the Netherlands"
+          ]
+        },
+        {
+          "name": "Daniel Probst",
+          "affiliations": [
+            "Bioinformatics Group Wageningen Unversity Wageningen, the Netherlands"
+          ]
+        }
+      ]
+    },
+    "haikuCostNanos": 326800,
+    "haikuMs": 1689
+  },
+  {
+    "input": {
+      "name": "arxiv 2610.08781",
+      "kind": "arxiv-html",
+      "url": "https://arxiv.org/html/2610.08781"
+    },
+    "today": null,
+    "todayCostNanos": 0,
+    "declaredNames": null,
+    "records": 9,
+    "haiku": {
+      "authors": null,
+      "note": "Kept the byline as printed: the front-matter pass's author list left out somebody printed before author 2."
+    },
+    "haikuCostNanos": 651600,
+    "haikuMs": 4165
+  },
+  {
+    "input": {
+      "name": "arxiv 2610.08785",
+      "kind": "arxiv-html",
+      "url": "https://arxiv.org/html/2610.08785"
+    },
+    "today": [
+      {
+        "name": "Kevin Zhang",
+        "affiliations": [
+          "EECS, MIT, Cambridge MA, USA"
+        ]
+      },
+      {
+        "name": "Stephen Bates",
+        "affiliations": []
+      }
+    ],
+    "todayCostNanos": 2446000,
+    "declaredNames": null,
+    "records": 22,
+    "haiku": {
+      "authors": [
+        {
+          "name": "Kevin Zhang",
+          "affiliations": [
+            "EECS, MIT, Cambridge MA, USA"
+          ]
+        },
+        {
+          "name": "Stephen Bates",
+          "affiliations": [
+            "EECS, MIT, Cambridge MA, USA"
+          ]
+        }
+      ]
+    },
+    "haikuCostNanos": 590400,
+    "haikuMs": 3320
+  },
+  {
+    "input": {
+      "name": "arxiv 2610.08790",
+      "kind": "arxiv-html",
+      "url": "https://arxiv.org/html/2610.08790"
+    },
+    "today": [
+      {
+        "name": "Jiraphon Yenphraphai",
+        "affiliations": []
+      },
+      {
+        "name": "Fang Li",
+        "affiliations": []
+      },
+      {
+        "name": "Tianshuo Xu",
+        "affiliations": []
+      },
+      {
+        "name": "Depu Meng",
+        "affiliations": []
+      },
+      {
+        "name": "Quentin Herau",
+        "affiliations": []
+      },
+      {
+        "name": "Yihan Hu",
+        "affiliations": []
+      },
+      {
+        "name": "Raymond A. Yeh",
+        "affiliations": []
+      },
+      {
+        "name": "Wei Zhan",
+        "affiliations": []
+      }
+    ],
+    "todayCostNanos": 4094000,
+    "declaredNames": null,
+    "records": 14,
+    "haiku": {
+      "authors": [
+        {
+          "name": "Jiraphon Yenphraphai",
+          "affiliations": []
+        },
+        {
+          "name": "Fang Li",
+          "affiliations": []
+        },
+        {
+          "name": "Tianshuo Xu",
+          "affiliations": []
+        },
+        {
+          "name": "Depu Meng",
+          "affiliations": []
+        },
+        {
+          "name": "Quentin Herau",
+          "affiliations": []
+        },
+        {
+          "name": "Yihan Hu",
+          "affiliations": []
+        },
+        {
+          "name": "Raymond A. Yeh",
+          "affiliations": []
+        },
+        {
+          "name": "Wei Zhan",
+          "affiliations": []
+        }
+      ]
+    },
+    "haikuCostNanos": 452800,
+    "haikuMs": 2311
+  },
+  {
+    "input": {
+      "name": "arxiv 2610.10761",
+      "kind": "arxiv-html",
+      "url": "https://arxiv.org/html/2610.10761"
+    },
+    "today": [
+      {
+        "name": "Mary Letey",
+        "affiliations": [
+          "Applied Mathematics, Harvard University",
+          "Kempner Institute, Harvard University"
+        ]
+      },
+      {
+        "name": "Arman Rysmakhanov",
+        "affiliations": [
+          "Williams College",
+          "Applied Mathematics, Harvard University"
+        ]
+      },
+      {
+        "name": "Yue M. Lu",
+        "affiliations": [
+          "Applied Mathematics, Harvard University"
+        ]
+      },
+      {
+        "name": "Cengiz Pehlevan",
+        "affiliations": [
+          "Applied Mathematics, Harvard University",
+          "Kempner Institute, Harvard University"
+        ]
+      },
+      {
+        "name": "Jacob A. Zavatone-Veth",
+        "affiliations": [
+          "Center for Brain Science, Harvard University",
+          "Society of Fellows, Harvard University"
+        ]
+      }
+    ],
+    "todayCostNanos": 4946000,
+    "declaredNames": null,
+    "records": 27,
+    "haiku": {
+      "authors": [
+        {
+          "name": "Mary Letey",
+          "affiliations": [
+            "Applied Mathematics, Harvard University",
+            "Kempner Institute, Harvard University"
+          ]
+        },
+        {
+          "name": "Arman Rysmakhanov",
+          "affiliations": [
+            "Williams College",
+            "Applied Mathematics, Harvard University"
+          ]
+        },
+        {
+          "name": "Yue M. Lu",
+          "affiliations": [
+            "Applied Mathematics, Harvard University"
+          ]
+        },
+        {
+          "name": "Cengiz Pehlevan",
+          "affiliations": [
+            "Applied Mathematics, Harvard University",
+            "Kempner Institute, Harvard University"
+          ]
+        },
+        {
+          "name": "Jacob A. Zavatone-Veth",
+          "affiliations": [
+            "Center for Brain Science, Harvard University",
+            "Society of Fellows, Harvard University"
+          ]
+        }
+      ]
+    },
+    "haikuCostNanos": 733900,
+    "haikuMs": 5445
+  },
+  {
+    "input": {
+      "name": "arxiv 2610.10548",
+      "kind": "arxiv-html",
+      "url": "https://arxiv.org/html/2610.10548"
+    },
+    "today": null,
+    "todayCostNanos": 0,
+    "declaredNames": null,
+    "records": 40,
+    "haiku": {
+      "authors": null,
+      "note": "Kept the byline as printed: the front-matter pass's author list left unaccounted words after author 1."
+    },
+    "haikuCostNanos": 387200,
+    "haikuMs": 2066
+  },
+  {
+    "input": {
+      "name": "pdf arxiv 1502",
+      "kind": "pdf",
+      "slug": "arxiv-1502-spya-tqwbn2"
+    },
+    "today": [
+      {
+        "name": "Sergey Ioffe",
+        "affiliations": [
+          "Google Inc"
+        ]
+      },
+      {
+        "name": "Christian Szegedy",
+        "affiliations": [
+          "Google Inc"
+        ]
+      }
+    ],
+    "todayCostNanos": 0,
+    "declaredNames": null,
+    "records": 16,
+    "haiku": {
+      "authors": [
+        {
+          "name": "Sergey Ioffe",
+          "affiliations": [
+            "Google Inc"
+          ]
+        },
+        {
+          "name": "Christian Szegedy",
+          "affiliations": [
+            "Google Inc"
+          ]
+        }
+      ]
+    },
+    "haikuCostNanos": 391900,
+    "haikuMs": 2010
+  },
+  {
+    "input": {
+      "name": "pdf arxiv 2010",
+      "kind": "pdf",
+      "slug": "arxiv-2010-spya-tkm7nm"
+    },
+    "today": [
+      {
+        "name": "Alexey Dosovitskiy",
+        "affiliations": [
+          "Google Research, Brain Team"
+        ]
+      },
+      {
+        "name": "Lucas Beyer",
+        "affiliations": [
+          "Google Research, Brain Team"
+        ]
+      },
+      {
+        "name": "Alexander Kolesnikov",
+        "affiliations": [
+          "Google Research, Brain Team"
+        ]
+      },
+      {
+        "name": "Dirk Weissenborn",
+        "affiliations": [
+          "Google Research, Brain Team"
+        ]
+      },
+      {
+        "name": "Xiaohua Zhai",
+        "affiliations": [
+          "Google Research, Brain Team"
+        ]
+      },
+      {
+        "name": "Thomas Unterthiner",
+        "affiliations": [
+          "Google Research, Brain Team"
+        ]
+      },
+      {
+        "name": "Mostafa Dehghani",
+        "affiliations": [
+          "Google Research, Brain Team"
+        ]
+      },
+      {
+        "name": "Matthias Minderer",
+        "affiliations": [
+          "Google Research, Brain Team"
+        ]
+      },
+      {
+        "name": "Georg Heigold",
+        "affiliations": [
+          "Google Research, Brain Team"
+        ]
+      },
+      {
+        "name": "Sylvain Gelly",
+        "affiliations": [
+          "Google Research, Brain Team"
+        ]
+      },
+      {
+        "name": "Jakob Uszkoreit",
+        "affiliations": [
+          "Google Research, Brain Team"
+        ]
+      },
+      {
+        "name": "Neil Houlsby",
+        "affiliations": [
+          "Google Research, Brain Team"
+        ]
+      }
+    ],
+    "todayCostNanos": 0,
+    "declaredNames": null,
+    "records": 15,
+    "haiku": {
+      "authors": [
+        {
+          "name": "Alexey Dosovitskiy",
+          "affiliations": [
+            "Google Research, Brain Team"
+          ]
+        },
+        {
+          "name": "Lucas Beyer",
+          "affiliations": [
+            "Google Research, Brain Team"
+          ]
+        },
+        {
+          "name": "Alexander Kolesnikov",
+          "affiliations": [
+            "Google Research, Brain Team"
+          ]
+        },
+        {
+          "name": "Dirk Weissenborn",
+          "affiliations": [
+            "Google Research, Brain Team"
+          ]
+        },
+        {
+          "name": "Xiaohua Zhai",
+          "affiliations": [
+            "Google Research, Brain Team"
+          ]
+        },
+        {
+          "name": "Thomas Unterthiner",
+          "affiliations": [
+            "Google Research, Brain Team"
+          ]
+        },
+        {
+          "name": "Mostafa Dehghani",
+          "affiliations": [
+            "Google Research, Brain Team"
+          ]
+        },
+        {
+          "name": "Matthias Minderer",
+          "affiliations": [
+            "Google Research, Brain Team"
+          ]
+        },
+        {
+          "name": "Georg Heigold",
+          "affiliations": [
+            "Google Research, Brain Team"
+          ]
+        },
+        {
+          "name": "Sylvain Gelly",
+          "affiliations": [
+            "Google Research, Brain Team"
+          ]
+        },
+        {
+          "name": "Jakob Uszkoreit",
+          "affiliations": [
+            "Google Research, Brain Team"
+          ]
+        },
+        {
+          "name": "Neil Houlsby",
+          "affiliations": [
+            "Google Research, Brain Team"
+          ]
+        }
+      ]
+    },
+    "haikuCostNanos": 751100,
+    "haikuMs": 4897
+  }
+]

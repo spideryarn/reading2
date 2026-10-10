@@ -1,5 +1,6 @@
 /**
- * `gjd-remote tell-overseer` — one line from the laptop to the Overseer.
+ * `gjd-remote tell-overseer` and `gjd-remote tell <name>` — one line from the
+ * laptop to the Overseer, or to any session.
  *
  * **NOT A SECOND WAY TO TYPE INTO A PANE.** The fleet dashboard on the box
  * already has the one audited write path, `POST /api/steer/message`, and its
@@ -33,7 +34,7 @@ import { escapeName, printableName } from "./gjd-remote-tmux.js";
  */
 export const DEFAULT_FLEET_PORT = 8787;
 
-/** How old a snapshot may be before its answer about the claim is not believed. Same as `overseer tick`. */
+/** How old a snapshot may be before its target is not believed. Same as `overseer tick`. */
 export const CLAIM_MAX_AGE_MS = 5 * 60_000;
 
 /**
@@ -84,24 +85,77 @@ export function overseerTarget(snapshot: unknown, text: string, nowMs?: number):
   const row = rows.find((r): r is Record<string, unknown> => isRecord(r) && r["id"] === claim.id);
   if (row === undefined) return { ok: false, why: `the snapshot named ${printableName(claim.name)} as the Overseer and then had no row for it` };
 
+  return { ok: true, name: claim.name, body: rowBody(row, claim.id, text) };
+}
+
+/**
+ * Any session's row, by its EXACT name, as a ready-to-post body. `tell <name>`,
+ * borrowed from `mindstone-fleet session tell`.
+ *
+ * A failed collection serves its LAST GOOD rows, which may name a session
+ * that has gone. Refuse those and readings older than the claim's limit.
+ * The route checks pane/session ids, pane pid and the conversation uuid in
+ * Claude's launch argv, not the live session name (nor an in-process /resume).
+ * A rename after collection can still send to the session that had the name;
+ * freshness bounds that window, it does not eliminate it.
+ *
+ * A name that matches only when case is ignored is refused, naming the session
+ * it probably meant — the same rule as mindstone's. Typing to `overseer` when
+ * the session is `Overseer` is probably right, and "probably" is not the bar
+ * for keystrokes in somebody's pane.
+ */
+export function sessionTarget(snapshot: unknown, name: string, text: string): TellTarget {
+  if (!isRecord(snapshot) || snapshot["schema"] !== 1) return { ok: false, why: "the dashboard answered something that is not a snapshot this build reads" };
+  if (snapshot["error"] !== null) {
+    return { ok: false, why: "the dashboard's last collection failed, so its list of sessions may not be current — try again in a minute" };
+  }
+  const collected = typeof snapshot["collectedAt"] === "string" ? Date.parse(snapshot["collectedAt"]) : Number.NaN;
+  const served = typeof snapshot["servedAt"] === "string" ? Date.parse(snapshot["servedAt"]) : Number.NaN;
+  if (!Number.isFinite(collected) || !Number.isFinite(served)) {
+    return { ok: false, why: "the dashboard's snapshot has no usable collection or served time" };
+  }
+  const age = served - collected;
+  if (age < 0 || age > CLAIM_MAX_AGE_MS) {
+    return { ok: false, why: "the dashboard's snapshot is stale or stamped in the future — try again after it refreshes" };
+  }
+  if (!Array.isArray(snapshot["rows"])) return { ok: false, why: "the dashboard's snapshot carries no list of sessions" };
+  const rows = snapshot["rows"].filter(isRecord);
+  const exact = rows.filter((r) => r["name"] === name);
+  const row = exact[0];
+  if (exact.length === 1 && row !== undefined) {
+    if (typeof row["id"] !== "string" || !/^\$\d+$/.test(row["id"])) {
+      return { ok: false, why: `the dashboard's row for ${printableName(name)} has no usable tmux session id` };
+    }
+    return { ok: true, name, body: rowBody(row, row["id"], text) };
+  }
+  if (exact.length > 1) return { ok: false, why: `${exact.length} sessions are called ${printableName(name)}` };
+  const near = rows.filter((r) => typeof r["name"] === "string" && r["name"].toLowerCase() === name.toLowerCase());
+  const guess = near[0];
+  if (near.length === 1 && guess !== undefined) {
+    return { ok: false, why: `no session is called ${printableName(name)} — did you mean ${printableName(String(guess["name"]))}?` };
+  }
+  return {
+    ok: false,
+    why: `the dashboard has no session called ${printableName(name)}. It refreshes about once a minute, so one started a moment ago may not be in it yet`,
+  };
+}
+
+/** One dashboard row as the steer route's body — the shape `steerMessageBody` builds in the web client. */
+function rowBody(row: Record<string, unknown>, sessionId: string, text: string): TellBody {
   const paneId = row["paneId"];
   const claudeSessionId = row["claudeSessionId"];
   const panePid = row["panePid"];
   return {
-    ok: true,
-    name: claim.name,
-    body: {
-      // Passed through as they arrived, nulls included, exactly as the card
-      // does: the server refuses a null pane or conversation id with a better
-      // sentence than this file could write.
-      paneId: typeof paneId === "string" ? paneId : null,
-      sessionId: claim.id,
-      claudeSessionId: typeof claudeSessionId === "string" ? claudeSessionId : null,
-      panePid: typeof panePid === "number" ? panePid : null,
-      status: row["status"],
-      text,
-      speaker: "greg",
-    },
+    // Passed through as they arrived, nulls included, exactly as the card
+    // does: the server refuses a null pane or conversation id with a better
+    // sentence than this file could write.
+    paneId: typeof paneId === "string" ? paneId : null,
+    sessionId,
+    claudeSessionId: typeof claudeSessionId === "string" ? claudeSessionId : null,
+    panePid: typeof panePid === "number" ? panePid : null,
+    status: row["status"],
+    text,
+    speaker: "greg",
   };
 }
 

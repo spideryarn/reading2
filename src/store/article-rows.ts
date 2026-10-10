@@ -321,6 +321,42 @@ export const ARTICLE_TABLE_COVERAGE = {
         "artefact it stands behind is in the bundle already.",
     },
   },
+  /* The admin's draft gift voucher for an article's author, and the web
+     lookups for the author's name and address — plan 261010c. Admin-only
+     marketing records attached to an article, never the reader's: the notes
+     are "never in anything the recipient or any reader sees" (§ D6), so neither
+     projection may carry them. The bundle's sentence is read by the reader. */
+  author_gifts: {
+    rollback: {
+      exported: false,
+      why:
+        "An administrator's draft gift voucher for the article's author, with private " +
+        "notes and a send state — docs/plans/261010c-author-gift-draft-voucher-from-the-add-page.md. " +
+        "Admin-only marketing bookkeeping, not article state, and a restore that brought " +
+        "back a half-sent gift could send it twice.",
+    },
+    bundle: {
+      exported: false,
+      why:
+        "Spideryarn's own administrative record about the article, not anything you " +
+        "wrote or anything about the piece, so it is kept out of exports.",
+    },
+  },
+  author_lookups: {
+    rollback: {
+      exported: false,
+      why:
+        "The web searches behind an `author_gifts` row — who wrote the piece and how to " +
+        "reach them. Belongs to that admin-only draft and goes where it goes, and it is " +
+        "looked for again rather than restored.",
+    },
+    bundle: {
+      exported: false,
+      why:
+        "Spideryarn's own administrative record about the article, not anything you " +
+        "wrote or anything about the piece, so it is kept out of exports.",
+    },
+  },
   ai_calls: {
     rollback: {
       exported: false,
