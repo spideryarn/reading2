@@ -955,3 +955,567 @@
     text-shadow: 0 0 calc(var(--logo-px) * 5) color-mix(in oklab, var(--highlight) 60%, transparent);
   }
 }
+
+/* ==========================================================================
+   The thirteen more, 2026-10-10.
+
+   Greg, report spya-axbxr8: *"Logo animations that we have, that we show when
+   loading an article are really fun. Let's generate a bunch more … really
+   have fun with it."* Four longlists from four directions — the reading
+   modes, the vision, the spider and motion craft, and GPT Sol's wildcards —
+   and a shortlist scored as a set against the fourteen above, in
+   docs/plans/261010p-more-logo-animations.md. Seven move only the spider,
+   six only the letters, so the mark-only share stays near half (§ The word
+   is often not there). Every one rests at its base style under reduced
+   motion unless its block says otherwise.
+   ========================================================================== */
+
+/* -- 15. Hop -------------------------------------------------------------
+   The spider crouches, springs straight up stretched tall, hangs for a beat,
+   and lands with a squash and a wobble, while a faint orange footprint under
+   it shrinks as it rises and spreads as it lands. A jumping spider's one
+   famous move, done with the old animation principles: anticipation, stretch,
+   hang, squash. Dragline spends the mark's vertical room downward; this
+   spends it upward.
+
+   **The dock's 40px bar clips, and the spider has about 9.5px above it.**
+   Scaled from its feet, take-off lifts the top by 4px plus 8% of 21px, so
+   5.7px; the apex 5px. GPT Sol's plan review caught the first draft at 9px.
+
+   The footprint is warm rather than dark because the bar is dark: a shadow
+   there would be invisible. */
+.spya-hop .logo-image {
+  transform-origin: 50% 100%;
+  animation: spya-hop 1.6s infinite;
+}
+@keyframes spya-hop {
+  0%, 76%, 100% { transform: none; }
+  14% {
+    transform: translateY(1px) scale(1.12, 0.86);
+    animation-timing-function: cubic-bezier(0.2, 0.8, 0.3, 1);
+  }
+  30% {
+    transform: translateY(-4px) scale(0.94, 1.08);
+    animation-timing-function: ease-out;
+  }
+  42% {
+    transform: translateY(-5px) scale(1, 1);
+    animation-timing-function: ease-in;
+  }
+  56% { transform: translateY(0) scale(1.14, 0.84); }
+  66% { transform: translateY(0) scale(0.96, 1.04); }
+}
+.spya-hop .logo-mark::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  left: 20%;
+  width: 60%;
+  bottom: -2px;
+  height: 2px;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--highlight) 45%, transparent);
+  opacity: 0;
+  transform: scaleX(0);
+  animation: spya-hop-print 1.6s infinite;
+}
+@keyframes spya-hop-print {
+  0%, 100% { opacity: 0; transform: scaleX(0); }
+  8%, 14% { opacity: 0.9; transform: scaleX(1.1); }
+  42% { opacity: 0.35; transform: scaleX(0.45); }
+  56% { opacity: 1; transform: scaleX(1.3); }
+  76% { opacity: 0.6; transform: scaleX(1); }
+}
+
+/* -- 16. Asterisk ---------------------------------------------------------
+   The spider contracts and rises until its six legs read as a small
+   superscript asterisk before the word — a footnote mark — holds there, then
+   unfurls back into a spider with a little overshoot. GPT Sol's: the mark
+   already contains its second form, and the asterisk is the oldest compact
+   promise that there is a source worth following. */
+.spya-asterisk .logo-image {
+  animation: spya-asterisk 1.8s cubic-bezier(0.3, 0, 0.2, 1) infinite;
+}
+@keyframes spya-asterisk {
+  0%, 84%, 100% { transform: none; }
+  22%, 60% { transform: translate(1.5px, -4px) scale(0.55) rotate(15deg); }
+  70% { transform: translate(0, -0.5px) scale(1.06) rotate(-3deg); }
+}
+
+/* -- 17. Magnifier --------------------------------------------------------
+   A small magnifying glass — a ring with a handle — glides in from the lower
+   right and stops over the spider, which swells inside the lens as though
+   found; then the lens lifts away. Search mode, and a glyph a stranger reads
+   at once.
+
+   **The motion is on `translate`, the handle's angle on `rotate`**: the
+   individual properties compose, so one keyframe moves both the ring and the
+   handle while the handle keeps its tilt. Both pseudos rest invisible and
+   off to the lower right, declared statically, so the guard's flattened run
+   leaves them there. The handle meets the ring at 45°: a ring of radius
+   `50% + 4px` about the mark's centre puts that point at `85.4% + 2.8px`.
+   The ring is 4px clear of the mark and the swell 18%, so the found spider
+   stays inside the lens; at 3px and 25% its legs poked through it (browser
+   check, 2026-10-10). */
+.spya-magnifier .logo-image {
+  animation: spya-magnify 2s ease-in-out infinite;
+}
+@keyframes spya-magnify {
+  0%, 20%, 80%, 100% { transform: none; }
+  32%, 64% { transform: scale(1.18); }
+}
+.spya-magnifier .logo-mark::before,
+.spya-magnifier .logo-mark::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  opacity: 0;
+  translate: 9px 8px;
+  transform: none;
+  animation: spya-lens 2s cubic-bezier(0.3, 0.7, 0.2, 1) infinite;
+}
+/* The ring. */
+.spya-magnifier .logo-mark::after {
+  inset: -4px;
+  border: 1.5px solid var(--wordmark-ink);
+  border-radius: 50%;
+}
+/* The handle. */
+.spya-magnifier .logo-mark::before {
+  left: calc(85.4% + 2.8px - 0.75px);
+  top: calc(85.4% + 2.8px);
+  width: 1.5px;
+  height: 6px;
+  border-radius: 1px;
+  background: var(--wordmark-ink);
+  transform-origin: 50% 0;
+  rotate: -45deg;
+}
+@keyframes spya-lens {
+  0%, 100% { opacity: 0; translate: 9px 8px; }
+  22%, 70% { opacity: 1; translate: 0 0; }
+  90% { opacity: 0; translate: 6px -6px; }
+}
+
+/* -- 18. Pacing -----------------------------------------------------------
+   The spider walks three pixels right with a bob on every step, turns round —
+   squashed edge-on, then mirrored — walks back past its slot to the left,
+   turns again, and comes home to the middle. Someone waiting for something to
+   arrive, which is what a loading screen is.
+
+   **Every stop writes the same three functions**, `translate scaleX rotate`,
+   so they interpolate number by number. A stop written `none`, or with a
+   function missing, falls back to matrix interpolation, and a matrix
+   interpolated from `scaleX(0.1)` to `scaleX(-1)` may rotate through 180°
+   instead of passing edge-on. The mark is nearly symmetric, which is what
+   lets the mirror read as the spider turning rather than the logo changing.
+
+   ±3px is inside the corner's 9.6px padding and the 6.4px gap to the word. */
+.spya-pacing .logo-image {
+  transform-origin: 50% 70%;
+  animation: spya-pacing 3s ease-in-out infinite;
+}
+@keyframes spya-pacing {
+  0%, 92%, 100% { transform: translate(0, 0) scaleX(1) rotate(0deg); }
+  5% { transform: translate(0.75px, -0.5px) scaleX(1) rotate(3deg); }
+  10% { transform: translate(1.5px, 0) scaleX(1) rotate(0deg); }
+  15% { transform: translate(2.25px, -0.5px) scaleX(1) rotate(-3deg); }
+  20% { transform: translate(3px, 0) scaleX(1) rotate(0deg); }
+  23% { transform: translate(3px, 0) scaleX(0.1) rotate(0deg); }
+  26% { transform: translate(3px, 0) scaleX(-1) rotate(0deg); }
+  31% { transform: translate(2.25px, -0.5px) scaleX(-1) rotate(3deg); }
+  36% { transform: translate(1.5px, 0) scaleX(-1) rotate(0deg); }
+  41% { transform: translate(0.75px, -0.5px) scaleX(-1) rotate(-3deg); }
+  46% { transform: translate(0, 0) scaleX(-1) rotate(0deg); }
+  51% { transform: translate(-0.75px, -0.5px) scaleX(-1) rotate(3deg); }
+  56% { transform: translate(-1.5px, 0) scaleX(-1) rotate(0deg); }
+  61% { transform: translate(-2.25px, -0.5px) scaleX(-1) rotate(-3deg); }
+  66% { transform: translate(-3px, 0) scaleX(-1) rotate(0deg); }
+  69% { transform: translate(-3px, 0) scaleX(-0.1) rotate(0deg); }
+  72% { transform: translate(-3px, 0) scaleX(1) rotate(0deg); }
+  77% { transform: translate(-2.25px, -0.5px) scaleX(1) rotate(3deg); }
+  82% { transform: translate(-1.5px, 0) scaleX(1) rotate(0deg); }
+  87% { transform: translate(-0.75px, -0.5px) scaleX(1) rotate(-3deg); }
+}
+
+/* -- 19. Line by Line -----------------------------------------------------
+   The spider reads. It turns in four small held ticks, left to right, like
+   eyes stopping along a line; sweeps back and drops a pixel for the next
+   line; three lines; then home. The mascot doing what the app is for, slowly
+   and in order, and on a phone, where only the spider is drawn.
+
+   Paired stops hold each tick; the sweep back is the one quick move. */
+.spya-lines .logo-image {
+  transform-origin: 50% 60%;
+  animation: spya-lines 2.4s ease-in-out infinite;
+}
+@keyframes spya-lines {
+  0%, 88%, 100% { transform: translate(0, 0) rotate(0deg); }
+  3%, 8% { transform: translate(-0.5px, 0) rotate(-6deg); }
+  10%, 14% { transform: translate(-0.2px, 0) rotate(-2deg); }
+  16%, 20% { transform: translate(0.2px, 0) rotate(2deg); }
+  22%, 26% { transform: translate(0.5px, 0) rotate(6deg); }
+  30%, 34% { transform: translate(-0.5px, 1px) rotate(-6deg); }
+  36%, 40% { transform: translate(-0.2px, 1px) rotate(-2deg); }
+  42%, 46% { transform: translate(0.2px, 1px) rotate(2deg); }
+  48%, 52% { transform: translate(0.5px, 1px) rotate(6deg); }
+  56%, 60% { transform: translate(-0.5px, 2px) rotate(-6deg); }
+  62%, 66% { transform: translate(-0.2px, 2px) rotate(-2deg); }
+  68%, 72% { transform: translate(0.2px, 2px) rotate(2deg); }
+  74%, 78% { transform: translate(0.5px, 2px) rotate(6deg); }
+}
+
+/* -- 20. Played Dead ------------------------------------------------------
+   The reader poked it. The spider flinches up, tips over onto its back with a
+   small bounce and goes grey, lies there, twitches once, then rolls the rest
+   of the way round and is upright, orange and entirely innocent. Once per
+   hover: a punchline is not a loop.
+
+   **Hover only**: on the empty loading page a grey spider reads as an
+   error (LogoLoader.tsx § LOADER_EXCLUDED).
+
+   The individual `rotate`, `translate` and `scale` properties, so the flip
+   and the bounce are separate channels and 360° is reachable — a `transform`
+   list from `none` to `rotate(360deg)` would interpolate to no movement at
+   all. They compose with The Settle's `transform`, which is never on at the
+   same time. 360° is visually the base style, so the end cannot snap. */
+.spya-dead .logo-image {
+  transform-origin: 50% 60%;
+  animation: spya-dead 2.2s 1;
+}
+@keyframes spya-dead {
+  0% { rotate: 0deg; translate: 0 0; scale: 1; filter: none; }
+  8% { rotate: 0deg; translate: 0 -2px; scale: 1.05; filter: none; }
+  20% { rotate: 180deg; translate: 0 1px; scale: 1.06 0.9; filter: grayscale(0.7) brightness(0.85); }
+  26%, 50% { rotate: 180deg; translate: 0 0; scale: 1; filter: grayscale(0.7) brightness(0.85); }
+  53% { rotate: 187deg; }
+  56% { rotate: 180deg; }
+  78%, 100% { rotate: 360deg; translate: 0 0; scale: 1; filter: none; }
+}
+
+/* -- 21. Semaphore --------------------------------------------------------
+   One raised foreleg lifts and waves twice, the way a peacock spider flags at
+   a mate, and then the other answers. The rest of the spider is perfectly
+   still. The first time the mark has had a limb.
+
+   **How a PNG gets a limb.** The two pseudos paint the PNG again, each
+   clipped to one foreleg's quadrant and rotated about the joint where that
+   leg meets the body loop, while `.logo-image` is clipped with the
+   complement — the same two quadrants cut out as holes — so the real legs
+   are not drawn under the moving copies. At rest the copies sit exactly
+   where the holes are, so the class on with nothing moving (the guard's
+   still) is the spider, whole. The coordinates are this PNG's: the left leg
+   runs from its tip near (26%, 3%) to the body near (43%, 32%), the right
+   from (74%, 3%) to (55%, 32%), and the mid legs stay below both polygons. A
+   new logo needs them measured again.
+
+   **Each copy reaches 1.5% further down than its hole.** Where two clipped
+   edges meet exactly, each is antialiased against the other and the page
+   shows through the seam: the first version drew a thin dark line across both
+   legs at rest, visible at 2× and on the 2.2× loader (browser check,
+   2026-10-10). Overlapping by a sliver draws the PNG's own pixels over
+   themselves — nearly: the PNG's antialiased edge drawn twice is a shade more
+   opaque, so a faint lighter line at each joint is still measurable at 4× and
+   barely visible on the 2.2× loader, and invisible at the native size. It
+   shows only at rest, which is a loop boundary or the reduced-motion still.
+   A sub-pixel notch opens at the joint while a leg is lifted.
+
+   **Gated on the evenodd polygon** that cuts the holes, as GPT Sol's plan
+   review asked: where it is missing nothing here applies and the spider stays
+   whole. The copies paint the PNG as a background, so they are the image's
+   own pixels and need no colour to match.
+
+   Two keyframes rather than one with a delay, so the loader can hold whole
+   loops of both (tests/logo-loader.test.tsx). */
+@supports (clip-path: polygon(evenodd, 0 0, 100% 0, 0 100%)) {
+  .spya-semaphore .logo-image {
+    clip-path: polygon(evenodd,
+      0 0, 100% 0, 100% 100%, 0 100%, 0 0,
+      18% 0, 34% 0, 44% 27%, 42% 33%, 34% 33%, 18% 12%, 18% 0, 0 0,
+      64% 0, 80% 0, 79% 10%, 63% 33%, 56% 33%, 58% 25%, 64% 0, 0 0);
+  }
+  .spya-semaphore .logo-mark::before,
+  .spya-semaphore .logo-mark::after {
+    content: "";
+    position: absolute;
+    pointer-events: none;
+    inset: 0;
+    background: url(/spideryarn-logo.png) center / 100% 100% no-repeat;
+    transform: rotate(0deg);
+  }
+  .spya-semaphore .logo-mark::before {
+    clip-path: polygon(18% 0, 34% 0, 44% 27%, 41.5% 34.5%, 34% 34.5%, 18% 12%);
+    transform: rotate(0deg);
+    transform-origin: 42% 32%;
+    animation: spya-flag-left 1.8s ease-in-out infinite;
+  }
+  .spya-semaphore .logo-mark::after {
+    clip-path: polygon(64% 0, 80% 0, 79% 10%, 63% 34.5%, 56.5% 34.5%, 58% 25%);
+    transform: rotate(0deg);
+    transform-origin: 57% 32%;
+    animation: spya-flag-right 1.8s ease-in-out infinite;
+  }
+}
+@keyframes spya-flag-left {
+  0%, 40%, 100% { transform: rotate(0deg); }
+  10%, 26% { transform: rotate(-18deg); }
+  18% { transform: rotate(-5deg); }
+}
+@keyframes spya-flag-right {
+  0%, 42%, 84%, 100% { transform: rotate(0deg); }
+  52%, 68% { transform: rotate(18deg); }
+  60% { transform: rotate(5deg); }
+}
+
+/* -- 22. In Quotes --------------------------------------------------------
+   Orange curly quotation marks drop in at either end of the word and settle
+   at cap height — “Spideryarn” — hold, and drift back out. Quotes mode's
+   verdict on the name, a line worth keeping; and for a stranger, the knowing
+   quote marks. Two of the four longlists proposed it independently.
+
+   **Each quote is set in the letter's own line box** (`top: 0`), so the
+   glyph lands at the letters' own cap height in any face and any size with
+   no measuring. **The opening one is tucked a wordmark pixel into the S's
+   box**, into the two glyphs' side bearings: the spider's right-hand leg runs
+   to the mark's very edge, and set outside the S the quote touched it in the
+   dock, the marketing bar and the loader and overlapped it on the shelf
+   (browser check, 2026-10-10).
+
+   Reduced motion: base style, both quotes invisible. */
+.spya-quotes .logo-letter:nth-child(1)::before,
+.spya-quotes .logo-letter:nth-child(10)::after {
+  position: absolute;
+  top: 0;
+  color: var(--highlight-text);
+  pointer-events: none;
+  opacity: 0;
+}
+.spya-quotes .logo-letter:nth-child(1)::before {
+  content: "\201C";
+  right: calc(100% - var(--logo-px) * 1);
+  transform: translate(calc(var(--logo-px) * -1), calc(var(--logo-px) * -2));
+  animation: spya-quote-open 1.8s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+}
+.spya-quotes .logo-letter:nth-child(10)::after {
+  content: "\201D";
+  left: calc(100% + var(--logo-px) * 0.5);
+  transform: translate(calc(var(--logo-px) * 1), calc(var(--logo-px) * -2));
+  animation: spya-quote-close 1.8s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+}
+/* **Smaller on the shelf**, the one host where tucking was not enough: its
+   30px heading sets a quote about 12px wide beside a 10px gap (Library.tsx §
+   ShelfWordmark), and the spider's leg still met it. `scale` is its own
+   property, so it composes with the animated `transform`; each quote shrinks
+   towards the word. */
+.shelf-wordmark.spya-quotes .logo-letter:nth-child(1)::before {
+  scale: 0.8;
+  transform-origin: 100% 50%;
+}
+.shelf-wordmark.spya-quotes .logo-letter:nth-child(10)::after {
+  scale: 0.8;
+  transform-origin: 0 50%;
+}
+@keyframes spya-quote-open {
+  0%, 100% { opacity: 0; transform: translate(calc(var(--logo-px) * -1), calc(var(--logo-px) * -2)); }
+  18%, 72% { opacity: 1; transform: translate(0, 0); }
+}
+@keyframes spya-quote-close {
+  0%, 100% { opacity: 0; transform: translate(calc(var(--logo-px) * 1), calc(var(--logo-px) * -2)); }
+  18%, 72% { opacity: 1; transform: translate(0, 0); }
+}
+/* **"Reading" steps aside for the closing quote** where it follows the name
+   (the marketing bar and every footer, SiteBits.tsx § Wordmark), on the same
+   clock, as it already does for Seam. Without it the quote would sit on the
+   R; with both quotes simply switched off there, the draw would do nothing on
+   those pages, which is the silent failure this file keeps designing out
+   (GPT Sol's plan review, finding 5). */
+.site-wordmark-host.spya-quotes .site-wordmark-rest {
+  animation: spya-quote-room 1.8s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+}
+@keyframes spya-quote-room {
+  0%, 100% { transform: none; }
+  18%, 72% { transform: translateX(calc(var(--logo-px) * 6)); }
+}
+
+/* -- 23. It Clicks --------------------------------------------------------
+   The letters drift out of true, each tipped and nudged by its own small
+   amount, like a sentence not yet understood — and then all ten snap straight
+   at the same instant, with one warm flash across the word. The moment of
+   understanding. A still pause, and it happens again.
+
+   **Hand-picked, not generated**, so the muddle is the same every time and
+   looks deliberate; and small (±3°, ±1px), so it reads as "not yet" rather
+   than as broken rendering. `var()` in a keyframe resolves per element, so
+   one keyframe drives all ten. No stagger: the simultaneity is the idea.
+
+   **The flash is pinned on both sides.** With its colour named only at the
+   snap, CSS eased the ink towards orange from the very first frame, and the
+   whole muddle was drawn warming — no flash at all (browser check,
+   2026-10-10). So 54% names the resting ink and the snap goes from it in 4%;
+   80% names it again. The 0% and 100% stops still name nothing, so the ends
+   take the letter's own value (tests/logo-animation § resting colour). */
+.spya-click .logo-letter:nth-child(1)  { --r: 2.5deg;  --dy: -1; }
+.spya-click .logo-letter:nth-child(2)  { --r: -3deg;   --dy: 0.5; }
+.spya-click .logo-letter:nth-child(3)  { --r: 2deg;    --dy: 1; }
+.spya-click .logo-letter:nth-child(4)  { --r: -1.5deg; --dy: -1; }
+.spya-click .logo-letter:nth-child(5)  { --r: 3deg;    --dy: 0; }
+.spya-click .logo-letter:nth-child(6)  { --r: -2.5deg; --dy: 1; }
+.spya-click .logo-letter:nth-child(7)  { --r: 1.5deg;  --dy: -0.5; }
+.spya-click .logo-letter:nth-child(8)  { --r: -3deg;   --dy: 0.5; }
+.spya-click .logo-letter:nth-child(9)  { --r: 2deg;    --dy: -1; }
+.spya-click .logo-letter:nth-child(10) { --r: -2deg;   --dy: 0.5; }
+.spya-click .logo-letter {
+  animation: spya-click 1.8s infinite;
+}
+@keyframes spya-click {
+  0%, 100% { transform: none; }
+  8% { transform: none; animation-timing-function: ease-in-out; }
+  42% {
+    transform: translateY(calc(var(--dy) * var(--logo-px))) rotate(var(--r));
+    animation-timing-function: linear;
+  }
+  54% {
+    transform: translateY(calc(var(--dy) * var(--logo-px) * 1.1)) rotate(calc(var(--r) * 1.1));
+    color: var(--wordmark-ink);
+    text-shadow: 0 0 0 transparent;
+    animation-timing-function: cubic-bezier(0.7, 0, 1, 0.6);
+  }
+  58% {
+    transform: none;
+    color: var(--highlight-text);
+    text-shadow: 0 0 calc(var(--logo-px) * 4) color-mix(in oklab, var(--highlight) 60%, transparent);
+  }
+  80% { color: var(--wordmark-ink); text-shadow: 0 0 0 transparent; }
+}
+
+/* -- 24. The Shed ---------------------------------------------------------
+   The odd letters rise a pixel and the even ones drop, as a loom opens its
+   warp; they hold; they cross over; then all ten are knocked level with a
+   small downward beat — the reed beating the weft home. Separate strands
+   made into one fabric. Proposed by two of the four lists.
+
+   No stagger, so the whole word splits at once: that is what separates it
+   from Pluck's travelling wave and Sag's curve. */
+.spya-shed .logo-letter:nth-child(odd)  { --shed: 1; }
+.spya-shed .logo-letter:nth-child(even) { --shed: -1; }
+.spya-shed .logo-letter {
+  animation: spya-shed 1.6s infinite;
+}
+@keyframes spya-shed {
+  0%, 86%, 100% { transform: none; }
+  14%, 32% { transform: translateY(calc(var(--shed) * var(--logo-px) * -1)); }
+  46%, 60% {
+    transform: translateY(calc(var(--shed) * var(--logo-px)));
+    animation-timing-function: cubic-bezier(0.6, 0, 1, 1);
+  }
+  68% { transform: translateY(calc(var(--logo-px) * 0.8)); }
+  76% { transform: translateY(calc(var(--logo-px) * -0.2)); }
+}
+
+/* -- 25. Cross-reference --------------------------------------------------
+   A fine orange arc draws itself from the first `r` to the second, over the
+   `ya` between them, holds as though one cited the other, and is wiped away
+   towards the second. Neither letter moves. Cross-references mode, found in
+   the word's own repetition. GPT Sol's.
+
+   **It lives in the clear band between x-height and cap height**: `y` and
+   `a` are x-height letters, so an arc there touches no ink and adds nothing
+   to the word's height. The band is narrow — in Geist 600 the cap height
+   starts 3.6 wordmark pixels below the letter's box top and the x-height 5.8 —
+   so the arc spans 3.4 to 5.5 and its feet stop just above the two `r`s; the
+   first version reached 7.5 and touched both. It hangs off the sixth letter,
+   from its centre, and is 21.2 wordmark pixels wide, the measured distance
+   to the ninth's centre *while animating*: `spya-anim` makes the letters
+   inline-block, which drops the pair kerning, so the static word measures
+   20.5 there and the animating one 21.25.
+
+   `clip-path` rather than `scaleX`: a scaled arch squashes, a clipped one
+   draws. Its resting clip hides it, and its 100% frame — wiped from the
+   other side — hides it too, so the guard's still and any cut-off are
+   invisible. */
+.spya-xref .logo-letter:nth-child(6)::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  left: 50%;
+  top: calc(var(--logo-px) * 3.4);
+  width: calc(var(--logo-px) * 21.2);
+  height: calc(var(--logo-px) * 2.1);
+  border: 1px solid var(--highlight);
+  border-bottom: 0;
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  transform: none;
+  clip-path: inset(0 100% 0 0);
+  animation: spya-xref 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@keyframes spya-xref {
+  0% { clip-path: inset(0 100% 0 0); }
+  30%, 70% { clip-path: inset(0 0 0 0); }
+  90%, 100% { clip-path: inset(0 0 0 100%); }
+}
+
+/* -- 26. Three Readings ---------------------------------------------------
+   Skim's three passes over the word: three scattered letters light — S, y,
+   n — then a pause, then six, then all ten in a quick sweep. A handful of
+   stops, then more, then the whole thing: the way Skim walks a paper at
+   increasing depth. Dew's glow, Skim's shape. Two lists proposed it.
+
+   **One keyframe, three peaks, and each letter says which peaks are its
+   own** (`--p1`, `--p2`, `--p3`, each 0 or 1), mixing that share of the
+   orange into its ink. A letter not in a pass mixes 0% and does not change.
+   The order within a pass is reading order, from the `--i` stagger.
+
+   No 0% or 100% stop, so the ends take the letter's resting ink; the stops
+   between peaks name `--wordmark-ink`. The hover loops; the loader runs it
+   once and holds through the last letter's delay (LogoLoader.tsx). */
+.spya-skim .logo-letter { --p1: 0; --p2: 0; --p3: 1; }
+.spya-skim .logo-letter:nth-child(1),
+.spya-skim .logo-letter:nth-child(7),
+.spya-skim .logo-letter:nth-child(10) { --p1: 1; --p2: 1; }
+.spya-skim .logo-letter:nth-child(3),
+.spya-skim .logo-letter:nth-child(4),
+.spya-skim .logo-letter:nth-child(6) { --p2: 1; }
+.spya-skim .logo-letter {
+  animation: spya-skim 3s ease-in-out infinite;
+  animation-delay: calc(var(--i) * 25ms);
+}
+.logo-loader.spya-skim .logo-letter {
+  animation-iteration-count: 1;
+}
+@keyframes spya-skim {
+  10% {
+    color: color-mix(in oklab, var(--highlight-text) calc(var(--p1) * 100%), var(--wordmark-ink));
+    text-shadow: 0 0 calc(var(--logo-px) * 4) color-mix(in oklab, var(--highlight) calc(var(--p1) * 60%), transparent);
+  }
+  20%, 30% { color: var(--wordmark-ink); text-shadow: 0 0 0 transparent; }
+  38% {
+    color: color-mix(in oklab, var(--highlight-text) calc(var(--p2) * 100%), var(--wordmark-ink));
+    text-shadow: 0 0 calc(var(--logo-px) * 4) color-mix(in oklab, var(--highlight) calc(var(--p2) * 60%), transparent);
+  }
+  48%, 58% { color: var(--wordmark-ink); text-shadow: 0 0 0 transparent; }
+  66% {
+    color: color-mix(in oklab, var(--highlight-text) calc(var(--p3) * 100%), var(--wordmark-ink));
+    text-shadow: 0 0 calc(var(--logo-px) * 4) color-mix(in oklab, var(--highlight) calc(var(--p3) * 60%), transparent);
+  }
+  80% { color: var(--wordmark-ink); text-shadow: 0 0 0 transparent; }
+}
+
+/* -- 27. Set in TeX -------------------------------------------------------
+   The letters lean one by one into an italic slant, as though the word had
+   been typeset in maths mode — where every run of letters is a product of
+   italic variables, S·p·i·d·e·r·y·a·r·n — hold, and straighten. Maths mode.
+
+   A skew rather than `font-style: italic`: Geist ships no italic, and a
+   synthesised one is a different face on every platform. Skewed about the
+   baseline (roughly 72% down the letter's box), so the feet stay put.
+
+   Once per hover; the loader holds it for the stagger plus the run. */
+.spya-tex .logo-letter {
+  transform-origin: 50% 72%;
+  animation: spya-tex 1.4s cubic-bezier(0.3, 0, 0.2, 1) 1;
+  animation-delay: calc(var(--i) * 35ms);
+}
+@keyframes spya-tex {
+  0%, 100% { transform: none; }
+  25%, 65% { transform: skewX(-11deg); }
+}

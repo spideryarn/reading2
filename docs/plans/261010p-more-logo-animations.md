@@ -143,6 +143,36 @@ a head), *Fixations* (underline hops with a regression), *Double Take*, *Turn It
 4. GPT Sol code review (workspace-write, fixes what it finds); gates; commit; push to `dev`.
 5. Feedback note in `docs/user-feedback/`, ending *shipped*.
 
+## The browser check
+
+A Sonnet subagent with Playwright against the worktree's dev server, frames sampled by pausing
+`document.getAnimations()` at exact times, three rounds. Both conditional entries passed:
+
+- **Semaphore** reads as legs waving at 1×, 2× and on the 2.2× loader. At rest the copies first left
+  a dark hairline across both legs where the clipped edges met; overlapping each copy 1.5% past its
+  hole replaced it with a much fainter lighter line, measurable at 4×, barely visible on the loader,
+  invisible at native size. Accepted, and said so in the stylesheet.
+- **Played Dead** "reads as a spider playing dead, not as something broken".
+- **Pacing's** mirror reads as the spider turning. **It Clicks and The Shed** read as clearly
+  different gestures at 1×, so both stay.
+- **Hop** clears the dock's top by 4.2px at take-off, 4.9px at the apex.
+- **Reduced motion**: all thirteen leave no running animation, and twelve are identical to the
+  resting wordmark; Semaphore differs by the faint line above. No console errors.
+
+What it found wrong, all fixed:
+
+- **Cross-reference** touched the tops of both `r`s: Geist's clear band is only 3.57–5.83px below
+  the letter box top. Now 3.4–5.5. Its width was measured on the static word; `spya-anim` makes the
+  letters inline-block, which drops kerning, so the animating distance is 21.25 wordmark pixels, not
+  20.5.
+- **In Quotes'** opening quote touched or overlapped the spider in four hosts. Tucked one wordmark
+  pixel into the S's box, and scaled 0.8 on the shelf, where a 30px heading sets it beside a 10px
+  gap: now 2.0–2.3px clear of the spider everywhere and about 1px clear of the S.
+- **Magnifier**'s swollen spider poked through the ring: ring 4px clear, swell 18%.
+- **It Clicks** was orange throughout the muddle, because its colour was named only at the snap and
+  CSS eased towards it from the first frame (found by reading the screenshots, not reported by the
+  agent). The resting ink is now pinned either side of the flash.
+
 ## Review
 
 Sol's plan review: [261010p-more-logo-animations-review-sol.md](261010p-more-logo-animations-review-sol.md)

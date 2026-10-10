@@ -269,6 +269,18 @@ describe("the loader's two tracks", () => {
       "spya-type": 2,
       "spya-abseil": 2,
       "spya-dew": 1,
+      "spya-hop": 2,
+      "spya-asterisk": 1,
+      "spya-magnifier": 3,
+      "spya-pacing": 1,
+      "spya-lines": 1,
+      "spya-semaphore": 2,
+      "spya-quotes": 2,
+      "spya-click": 1,
+      "spya-shed": 1,
+      "spya-xref": 1,
+      "spya-skim": 1,
+      "spya-tex": 1,
     });
     expect(animationTiming(timedTargets("spya-pluck")[0]?.values ?? new Map())?.delays.at(-1)).toBe(306);
     expect(timedTargets("spya-type").map(({ selector }) => selector).sort()).toEqual([

@@ -1704,7 +1704,7 @@ function ControlsAcrossModes() {
  * The shell below is `HomeLogo`'s, copied rather than imported, and that is
  * the one deliberate duplication here: the component is a `Link` to the library
  * and hangs itself in `position: fixed` in the corner of the window, neither of
- * which is wanted fourteen times in a grid. **The glyphs inside it are not
+ * which is wanted once per animation in a grid. **The glyphs inside it are not
  * copied** since 2026-09-29 — `LogoMark` and `LogoLetters` (LogoGlyphs.tsx)
  * are the same components every page's wordmark draws, so this gallery cannot
  * drift from them.
@@ -1724,7 +1724,7 @@ function LogoAnimations() {
      and half of these run once and stop by design. */
   const [take, setTake] = useState(0);
   /* **The classes go on a frame after the cells exist, and that is not a
-     nicety.** Three of the fourteen are CSS *transitions* rather than keyframes
+     nicety.** Three of the set are CSS *transitions* rather than keyframes
      (`spya-settle`, `spya-seam`, `spya-i`), because a transition is the only
      mechanism that animates the exit as carefully as the entrance. A transition
      needs a previous value to move from, and an element born with its final

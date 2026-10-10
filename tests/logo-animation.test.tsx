@@ -15,9 +15,9 @@
  * agreement by nothing but attention. Drop either half and the failure is
  * silent in the precise sense of docs/reusable/silent-success.md: the picker
  * still returns the entry, the class still goes on the element, nothing throws,
- * no test goes red, and one hover in fourteen simply does nothing at all. Nobody
+ * no test goes red, and one hover in twenty-seven simply does nothing at all. Nobody
  * would report that — a reader who hovers and sees no animation assumes they
- * imagined the feature, and an agent who hovers once has a 13-in-14 chance of
+ * imagined the feature, and an agent who hovers once has a 26-in-27 chance of
  * seeing a different one work.
  *
  * The same reasoning covers the two style rules the animations live under, both
@@ -181,6 +181,20 @@ describe("the two rules the stylesheet is written under", () => {
     expect(seam).toMatch(/transform:\s*translateX\(calc\(var\(--logo-px\) \* 3\)\)/);
   });
 
+  it("moves Reading aside for In Quotes' closing quote rather than switching the quotes off", () => {
+    /* Where "Reading" follows the name, the closing quote would sit on its R.
+       Turning both quotes off there would make In Quotes a draw that does
+       nothing on the marketing bar and every footer, so Reading moves on the
+       quotes' own clock instead. GPT Sol's plan review of 261010p, finding 5. */
+    const room =
+      RULES.match(
+        /(?:^|\n)\.site-wordmark-host\.spya-quotes \.site-wordmark-rest\s*\{([^}]*)\}/,
+      )?.[1] ?? "";
+    expect(room).toMatch(/animation:\s*spya-quote-room 1\.8s/);
+    expect(RULES).toMatch(/spya-quote-close 1\.8s/);
+    expect(RULES).not.toMatch(/\.site-wordmark-host\.spya-quotes[^{]*\{[^}]*content:\s*none/);
+  });
+
   it("defines a @keyframes block for every animation it runs", () => {
     /* A typo in an animation *name* is the one silent no-op the registry check
        above cannot see: the class is registered, the rule parses, the class
@@ -338,8 +352,8 @@ describe("pickLogoAnimation", () => {
     if (LOGO_ANIMATIONS.length < 2) return;
     for (const a of LOGO_ANIMATIONS) {
       /* Enough draws that a uniform picker excluding nothing would repeat with
-         overwhelming probability — at fourteen animations, (13/14)^200 is
-         about 4e-7. A flake here is a real bug. */
+         overwhelming probability — at twenty-seven animations, (26/27)^200 is
+         about 5e-4. A flake here is a real bug. */
       for (let i = 0; i < 200; i++) {
         expect(pickLogoAnimation(a.id)?.id).not.toBe(a.id);
       }
@@ -478,7 +492,7 @@ describe("the trigger", () => {
 });
 
 /**
- * **The eight that animate the letters and nothing else**, by name rather than
+ * **The fourteen that animate the letters and nothing else**, by name rather than
  * read off the registry, so this file cannot agree with a wrong tag by
  * construction. Measured in the dock on 2026-09-15 with the word hidden: each
  * of these left no running animation on any box that was drawn.
@@ -494,6 +508,13 @@ const LETTERS_ONLY = new Set([
   "spya-abseil",
   // 2026-10-02: colour and text-shadow on the letters only (plan 261002e).
   "spya-dew",
+  // 2026-10-10: the letters' six of the thirteen more (plan 261010p).
+  "spya-quotes",
+  "spya-click",
+  "spya-shed",
+  "spya-xref",
+  "spya-skim",
+  "spya-tex",
 ]);
 
 /**
@@ -575,7 +596,7 @@ describe("the draw, when the word is not on the screen", () => {
     }
   });
 
-  it("still reaches all fourteen when the word is drawn", () => {
+  it("still reaches every animation when the word is drawn", () => {
     vi.spyOn(Element.prototype, "getClientRects").mockReturnValue([
       {},
     ] as unknown as DOMRectList);
@@ -610,7 +631,7 @@ describe("the draw, when the word is not on the screen", () => {
     }
   });
 
-  it("tags exactly those eight as needing the word", () => {
+  it("tags exactly those letters-only ones as needing the word", () => {
     const tagged = LOGO_ANIMATIONS.filter((a) => a.reach === "letters").map((a) => a.id);
     expect(tagged.sort()).toEqual([...LETTERS_ONLY].sort());
     expect(LOGO_ANIMATIONS.every((a) => a.reach === "letters" || a.reach === "mark")).toBe(true);

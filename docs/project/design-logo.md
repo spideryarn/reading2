@@ -2,8 +2,8 @@
 
 Up: [design-css-overview.md](design-css-overview.md)
 
-Point at the Spideryarn wordmark, or hold it down on a phone, and one of fourteen animations plays
-— a different one each time. This is what they are, why there are fourteen rather than one, what the
+Point at the Spideryarn wordmark, or hold it down on a phone, and one of twenty-seven animations plays
+— a different one each time. This is what they are, why there are twenty-seven rather than one, what the
 word looks like at rest, and the five ways a new one can silently do nothing.
 
 > Let's have fun with the Spideryarn logo when you hover over it. … Whenever the user hovers or
@@ -14,7 +14,7 @@ word looks like at rest, and the five ways a new one can silently do nothing.
 The code is [`src/web/logo-animation.ts`](../../src/web/logo-animation.ts) (the registry, the
 picker, the trigger) and [`src/web/styles/logo-animations.css`](../../src/web/styles/logo-animations.css)
 (every keyframe, each with its own note). The whole set is drawn at once on **`/design` § Wordmark
-animations**, which is the only way to compare fourteen effects that otherwise arrive one at a time
+animations**, which is the only way to compare twenty-seven effects that otherwise arrive one at a time
 at random.
 
 ## Where this came from, and what it deliberately is not
@@ -36,7 +36,7 @@ on 2026-09-07 — and it earns them by being the thing that makes review possibl
 ## How the thirteen were chosen
 
 (A fourteenth, *Dew on the Thread*, joined on 2026-10-02 — § One look at rest says why it could not
-have existed before.)
+have existed before. Thirteen more joined on 2026-10-10 — § Thirteen more, below.)
 
 Kept in full under `docs/plans/`, because the reasoning is most of the value and the near-misses are
 the first place to look when one of these disappoints on screen.
@@ -74,6 +74,44 @@ The three axes fought, and the shortlist says where. Twice the fight was worth l
 - **The median hover is short, so restraint had to be instant.** An effect that waits half a second
   before starting is beautiful in a gallery and invisible to the reader whose pointer rests for
   300ms.
+
+## Thirteen more
+
+> Logo animations that we have, that we show when loading an article are really fun. Let's generate
+> a bunch more. Perhaps try prompting the agents from a couple of different directions and also get
+> some input from GPT-Sol. Take into account the vision.md and the different modes and, you know,
+> what we're trying to do here, and then really have fun with it.
+>
+> — Greg, 2026-10-09 (report spya-axbxr8)
+
+The same method as the first round, in fewer documents: one
+[brief](../plans/261010p-more-logo-animations-brief.md), four longlists of about fifty ideas from
+four directions — [the reading modes](../plans/261010p-more-logo-animations-longlist-modes.md),
+[the vision](../plans/261010p-more-logo-animations-longlist-vision.md),
+[the spider and motion craft](../plans/261010p-more-logo-animations-longlist-spider.md), and
+[GPT Sol's wildcards](../plans/261010p-more-logo-animations-longlist-sol.md) — and a shortlist
+scored as a set against the fourteen already here
+([the plan](../plans/261010p-more-logo-animations.md), with its near-misses). Where two lists
+proposed the same idea independently, that counted as a vote.
+
+**The spider:** *Hop* (squash, stretch and a footprint), *Asterisk* (it shrinks into a superscript
+footnote mark), *Magnifier* (Search's lens finds it), *Pacing* (walks, turns, walks back), *Line by
+Line* (it reads), *Played Dead* (flips grey onto its back, twitches, rolls upright), and *Semaphore*
+(a foreleg waves — the mark's first limb). **The letters:** *In Quotes*, *It Clicks* (out of true,
+then all ten snap straight at once), *The Shed* (a loom's warp), *Cross-reference* (an arc from one
+`r` to the other), *Three Readings* (Skim's three passes) and *Set in TeX* (italic, as maths).
+
+Three things this round found worth keeping:
+
+- **Semaphore moves part of a PNG** without an SVG trace: two pseudo-elements repaint the image
+  clipped to one foreleg each and rotate about the joint, while the image itself is clipped with the
+  complement. The copies have to overlap their holes by a sliver, or the two antialiased edges leave
+  a seam across both legs at rest.
+- **Played Dead is hover-only.** On the loader a grey spider on its back reads as an error; on a
+  hover it is a punchline, and it plays once rather than looping.
+- **The gap between the spider and the S is about one pixel of clear space**, not the 6px the
+  layout gap suggests: the spider's right-hand leg runs to its box's edge. In Quotes' opening quote
+  touched it in four hosts until it was tucked into the S's side bearing.
 
 ## The two mount points, and the trap between them
 
@@ -204,9 +242,9 @@ goes at **rung 1** — the *first* thing the bar's fit ladder gives up, not the 
 of the two words that pay least. Both copies become the 20px spider and nothing else, and they do it
 early.
 
-That is why **six of the fourteen animate the mark alone** — a ratio, not an accident. An animation
+That is why **thirteen of the twenty-seven animate the mark alone** — a ratio, not an accident. An animation
 that lives entirely in the ten letters is a hover that does nothing wherever the word is gone, and
-eight of the fourteen are in that class.
+fourteen of the twenty-seven are in that class.
 
 **And the word is gone on the reading view at ordinary desktop widths, not only on a phone.** This
 section said "phone" for a week, and that was false the day it was written: the bar's own
@@ -244,13 +282,13 @@ spend the long press's draw before the long press happened. Both enter and leave
 `pointerType === "touch"`; a finger gets the animation only from the hold, and it lingers 4.5s after
 release because a finger has no un-hover to end it with.
 
-**The picker never repeats the previous draw.** A uniform draw over fourteen repeats about one hover
-in fourteen, and a repeat does not read as chance — it reads as the feature being broken, because
+**The picker never repeats the previous draw.** A uniform draw over twenty-seven repeats about one hover
+in twenty-seven, and a repeat does not read as chance — it reads as the feature being broken, because
 the reader's model is "a new one each time". The exclusion costs nothing and removes the only
 outcome that looks like a bug. It is also why the set should not fall below about nine.
 
 **The draw is from what the host can show.** At the moment of the hover or the hold, `lettersDrawn`
-asks whether the host's first `.logo-letter` has a layout box, and if it has none only the six
+asks whether the host's first `.logo-letter` has a layout box, and if it has none only the thirteen
 `mark` animations are in the pool. Three different mechanisms take the word away — the 731px query,
 the dock's fit ladder, and a host with no letters at all — and every one of them leaves a letter
 with no box, so the hook never has to know which applied. It is not general visibility:
@@ -378,7 +416,7 @@ away entirely.
   `forwards` 100% frame, or a transitioned pose, depending on the animation. Most land on the base
   style; The Settle holds its lift, the seam stays parted with its thread drawn, the `i` stays a
   pixel high, and Radius Sweep sits as a two-tone spider. The stylesheet names the still each
-  animation lands on, per animation, and that is the contract a fifteenth has to meet.
+  animation lands on, per animation, and that is the contract a new one has to meet.
 - **No weighting, no rarity, no context.** The wildcard list proposed animations that appear one time
   in fifty, that know the time of day, or that behave differently on a second hover. Some are good
   and they are all a second mechanism; the picker is uniform over what the host can show
@@ -388,7 +426,7 @@ away entirely.
 ## See also
 
 - [loading-spinner.md](loading-spinner.md) — the same set as the article page's loading spinner,
-  two at once; a fifteenth fails its test until it is either given a loader timing or excluded
+  two at once; a new one fails its test until it is either given a loader timing or excluded
 - [design-css-overview.md](design-css-overview.md) — the parent: the stylesheets, the load order,
   which mechanism owns which rule
 - [original-version/design-system.md](original-version/design-system.md) — the previous app's
