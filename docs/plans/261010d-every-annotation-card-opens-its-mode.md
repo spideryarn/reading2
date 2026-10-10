@@ -126,3 +126,36 @@ GPT Sol, 2026-10-10: [261010d-plan-review-sol.md](261010d-plan-review-sol.md), v
 cut Stage 2. All nine findings taken: F1, F3–F6 and F8 cut Stage 2 into a queue entry and corrected
 the survey; F2 adds the visitor's focus; F7 corrects the selection claim; F9 keeps the button in its
 own mode and records the Back rule.
+
+## Code review
+
+GPT Sol, 2026-10-10: [261010d-code-review-sol.md](261010d-code-review-sol.md), APPROVE WITH FIXES
+(made). C1: *Open in Sources* pressed while Bibliography was already the list, with the band
+stepped aside, pushed an empty Back step; `openBibliographyWork` now skips a same-value write, as
+`showBand` does. C2: whole-App tests for the quote's one-push history and the in-mode press. C3: the
+citation foot's old wrap rule removed, so `.prose-card-foot-wraps` / `.prose-card-acts` own it.
+
+## Seen in a browser
+
+Sonnet subagent, Playwright on the box, local dev-admin, a 27-work paper
+(`fd-src-jco-2005-01-libre-…`), 2026-10-10. All four passed:
+
+- **Citation, 1440px:** foot *Ask in chat · Open in Sources* on one row inside the card; the press
+  gave `?mode=sources`, Bibliography, and the work's row fully in view
+  ([shot 1](261010d-shot-1-citation-card-1440.png), [shot 2](261010d-shot-2-sources-opened-1440.png)).
+- **Glossary, 1440px:** the last of ten terms; *Ask in chat · Hide · Open in Glossary* on one row;
+  `?term=` set and the row in view ([3](261010d-shot-3-glossary-card-1440.png),
+  [4](261010d-shot-4-glossary-opened-1440.png)).
+- **Quote, in Quotes mode:** the card shows *Open in Quotes*; three quotes pressed, each `?quote=`
+  matching the card's *N of 12* and the row in view ([5](261010d-shot-5-quote-card-1440.png),
+  [6](261010d-shot-6-quotes-opened-1440.png)).
+- **390px:** the citation foot on one row, no horizontal overflow; the press brought the band up
+  with the row in view ([7](261010d-shot-7-citation-card-390.png),
+  [8](261010d-shot-8-sources-opened-390.png)). A desktop viewport, not WebKit.
+
+**Rows land at the band's bottom edge**, not centred: `useLandOnItem` scrolls with
+`block: "nearest"`, which is that hook's existing rule for every opener, so it is left as it is.
+Two oddities were seen and not chased, both on quote marks and neither in this change's code. The
+first: one early, less careful hover on a mark that also carried a term showed *11 of 12* and
+selected the 10th; three pure quote marks did not reproduce it. The second: one pure quote mark
+(" and ") opened no card.

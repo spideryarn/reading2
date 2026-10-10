@@ -525,6 +525,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
   "spya-zn97q5": "shipped",
   "spya-zper0p": "shipped",
   "spya-zuk4f7": "shipped",
+  "spya-zux9w6": "shipped",
   "spya-zv8dc6": "shipped",
   "spya-zw479b": "shipped",
 };
@@ -590,4 +591,5 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
   "spya-za2tse": "Needs a decision is now threads: a contents, one thread at a time with a reply box, Defer for now, the ids, your report shut, a shortcut beside the tabs. Check the reply box on your iPhone.",
   "spya-zdkqx4": "spya-x0rfs2: the bar is fixed; the quieter open stop Greg chose in q-u04sye is on dev as an experiment",
   "spya-zuk4f7": "Both stages shipped: Debate asks for work that cites the piece, and OpenAlex supplies its count and list of citing papers.",
+  "spya-zux9w6": "The citation, glossary and quote cards now each end in Open in Sources / Glossary / Quotes. Cards on comments, chat anchors and search-style highlights are queued as their own piece of work.",
 };
