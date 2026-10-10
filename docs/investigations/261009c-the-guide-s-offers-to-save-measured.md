@@ -59,7 +59,56 @@ Rescored with it (every 50-character window; the first version of the check samp
 call is already on screen, never write it again. The full set again after it, two runs
 (`offers-v3.json`): **14/14**, none written twice, $0.32.
 
+## v4 to v6: the refused offer, and the round after the reply
+
+For [plan 261009x](../plans/261009x-next-steps-end-the-turn-even-beside-an-offer-to-save.md).
+Investigation 261009d's referee eval had one answer in 14 written twice
+(`reason-says-referee#1`), where the reader's reason was already saved. The runner gained:
+`offer_next_steps` answered for real (it touches no store), which it was not before; two cases
+that make the model re-offer a saved reason, `referee-reason` (261009d's case) and
+`repeats-saved-reason` (the reader says the saved reason again, word for word); a record of each
+turn **round by round** (one per request to OpenRouter), with each round's prose length and each
+tool's outcome; and checks that fail a turn with more prose in a round after the one that wrote the
+reply, or without accepted next steps on its stored runs.
+
+| run | what | turns | tails | written twice | cost |
+|---|---|---|---|---|---|
+| `offers-v4-baseline` | all cases, before (coarse shape) | 21 | — | 0 | $0.56 |
+| `offers-v5-baseline-refusal` | the two refusal cases, before (coarse shape) | 16 | 3 | 0 | $0.32 |
+| `offers-v5-after-refusal` | the 261009j sentence on every refusal, no other change | 16 | 3 | 0 | $0.28 |
+| `offers-v6-before-refusal` | the sentence, and the old turn-ending rule (by rounds) | 16 | **3** | 0 | $0.24 |
+| `offers-v6-after-refusal` | the sentence, and the new rule | 16 | **0** | 0 | $0.28 |
+| `offers-v6-after` | all cases, after | 18 | 0 | 0 | $0.35 |
+
+**What made the tails.** Each one was the same first round: the whole reply (614–726 characters),
+then `offer_to_save` refused (*"those are already their saved words, exactly"*), then
+`offer_next_steps` accepted. Under the old rule an `offer_to_save` in the round sent the turn round
+again, and the model wrote on: *"I didn't need to look anything up for this. The pointers above come
+straight from the article, so nothing is missing."*, *"Tell me which of those two concerns is the
+main one…"* (the question it had just asked), and a paragraph beginning *"Ideas, below, lists the
+propositions the piece assumes…"*. None was a full second copy, because since next steps landed the
+next steps' own result already said "never write any of it again". 261009d's v1 ran before that,
+and its round after rewrote the reply.
+
+**The sentence alone moved the wording, not the count.** With the 261009j sentence on every
+refusal, the tails became *"I'm done with my answer above."* and *"I've stopped there. My answer
+above was complete."* In these two 16-turn samples the count stayed at 3. Told to stop, the model
+does not reliably write nothing.
+
+**After the new rule** (a round that wrote prose, yielded normally to its tools, ended on accepted
+next steps, and whose every call *settled* is the last round), that round ended after one request
+every time it came up: once in the refusal set and five times in the full set (an accepted offer
+beside accepted next steps, whose round after used to add *"You can save your reason with the
+button under this answer."*). All 34
+turns had their offers right and their next steps shown. The usual shape, an offer first and the
+reply after it, is untouched: in 8 of the 34, round 1 offered, round 2 gave next steps, and round 3
+wrote the whole reply.
+
+Not measured: a refusal that asks for something ("offer a shorter one"), which still goes round by
+design (tests pin it), and any article but the fixture essay.
+
 ## What it decided
 
-The v2 prompt ships, with the v3 tool result. Not measured: Live (offers are not offered there), a reader whose About you is
+The v2 prompt ships, with the v3 tool result; since v6, with the 261009j sentence on every result
+of both offering tools, and with the turn ending on next steps even beside an offer to save. Not measured: Live (offers are not offered there), a reader whose About you is
 near the 1,500-character cap, and more than one article.
