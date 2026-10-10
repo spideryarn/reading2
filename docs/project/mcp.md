@@ -114,6 +114,7 @@ this one, not your browser) and deletes the file. A running server notices on it
 | `update_gift_voucher` | admin: edit or revoke; **changing the address re-sends, and asks you first** |
 | `retry_gift_voucher_email` | admin: re-send a failed email; **asks you first** |
 | `list_author_gifts` | admin: the draft gifts for authors, with their notes and lookups (no private link key) — [admin.md § Author gifts](admin.md#author-gifts-a-draft-voucher-for-an-articles-author) |
+| `draft_author_gift` | admin: **saves an unsent gift** for one of your own articles, already filled in (address, name, note to them, size, notes), for you to review and press *Send* on `/admin/vouchers`. Sends nothing, so it does not ask, and works remotely. Never makes the private link: the article must already be public or have one. No web search unless `look_up_author: true`. One per article; an existing one is left alone ([261010i](../plans/261010i-mcp-draft-gift-and-remote-tool-list-without-the-asking-tools.md)) |
 | `update_author_gift` | admin: edit a draft gift's notes, address, name, note to them or size; **replaces** the notes; sends nothing, so it does not ask. There is no tool that sends one |
 
 **"Asks you first" is a macOS dialog the MCP server itself opens**, naming the exact gift or
@@ -121,6 +122,13 @@ article, with *Approve* and *Cancel*. Nothing is sent unless you press *Approve*
 It is there because an agent that reads your email can be steered by what is in an email, and the
 model cannot press that button. (An agent you have also given *computer use* could, in principle;
 that is a capability you grant separately.) Off macOS these tools refuse and point at the web page.
+
+**To review a gift before it goes, draft it.** Greg, 2026-10-10, after his first ChatGPT run:
+*"create_gift_voucher always sends a real email, so ChatGPT refused to draft one."* So
+`draft_author_gift` saves one that nothing sends, and *Send* on `/admin/vouchers` refuses (409) if
+the gift changed after the page showed it, so an agent's later edit cannot ride along. A draft is
+always for one of your articles; a gift with no article has no draft yet, and is made on the page
+or with `create_gift_voucher` on the Mac.
 
 **A gift is sent once.** `create_gift_voucher` needs an `idempotency_key`, a short name for that
 gift. Calling again with the same key and the same gift sends nothing; the same key with a different
@@ -165,8 +173,13 @@ account ([261007p](../plans/261007p-mcp-remote-sign-in-with-oauth.md)).
 - **Administrator only**, for now.
 - **Other browser origins still refuse.** The origin gate remains the site's own, Claude's and
   ChatGPT's; other apps must call without an `Origin` header, as server-side clients normally do.
-- **The asking tools refuse there**: no dialog can be shown on your Mac from a server, so gifts,
-  publishing and private links are done in the Mac app or on the site.
+- **The asking tools are not offered there**: no dialog can be shown on your Mac from a server, so
+  `tools/list` leaves out `make_article_public`, `create_private_link`, `create_gift_voucher` and
+  `retry_gift_voucher_email`, and `update_gift_voucher` comes without `email`
+  (`remoteTools()` in `tools.ts`). Left out rather than listed with "not available here", because
+  models plan around whatever they are offered; a new asking tool is left out unless it declares a
+  `remote` form. Gifting from there is `draft_author_gift`, then *Send* on the site
+  ([261010i](../plans/261010i-mcp-draft-gift-and-remote-tool-list-without-the-asking-tools.md)).
 - **What the token can do at Supabase** is more than the tools, and is written up in
   [security-map.md](security-map.md#and-since-2026-10-07-an-ai-apps-token-which-opens-one-route).
 
@@ -187,7 +200,9 @@ stay out of the local server's imports: `tests/mcp-remote-import-graph.test.ts`.
 
 **Adding a tool** is a row in `TOOLS` that calls an existing route; the server's checks do the
 rest. A tool that sends mail, publishes, or otherwise reaches the outside world gets an `ask`, and a
-test that a *Cancel* sends nothing.
+test that a *Cancel* sends nothing. An asking tool is then absent from the remote server's list,
+unless part of it never asks: give it a `remote` form, a narrower input under which `ask` cannot
+ask, as `update_gift_voucher` has.
 
 **Two things not to break.** `serve` speaks MCP on stdout, so nothing else may ever write there; a
 stray `console.log` corrupts the connection (`tests/mcp-stdio.test.ts` spawns the real thing and

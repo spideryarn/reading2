@@ -22,7 +22,7 @@
  *   checks its own result with `notesAt`, the same function the deploy gate
  *   calls, and exits non-zero if the gate would refuse it.
  *
- * Both hold the deploy's own lock (deploy-checks.ts § RELEASE_LOCK_FILE): notes
+ * Both hold the deploy's own lock (release-lock.ts § RELEASE_LOCK_FILE): notes
  * planned while a deploy is finishing would be planned against a history that
  * is about to move.
  *
@@ -37,8 +37,8 @@ import path from "node:path";
 
 import { parseChangelog, parsePending, type PendingRelease } from "../../src/changelog.js";
 import { isMain } from "../../src/is-main.js";
-import { RELEASE_LOCK_FILE } from "../deploy-checks.js";
 import { LockHeldError, takeLockFile } from "../lockfile.js";
+import { RELEASE_LOCK_FILE } from "../release-lock.js";
 import { main as changelog, Refused } from "./changelog.js";
 import { CHANGELOG_FILE, PENDING_FILE, notesAt, releaseCommits } from "./release-paths.js";
 

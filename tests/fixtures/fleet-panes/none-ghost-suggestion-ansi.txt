@@ -1,0 +1,30 @@
+     [38;5;77m[48;5;22m 785 +[38;5;231m     check failed. [38;5;148mUntil[38;5;231m plan [38;5;141m[48;5;28m261010n[38;5;231m[48;5;22m it shared the next [38;5;197mcase[38;5;186m's sentence, and[38;5;231m                                [39m[49m
+     [2m[38;5;231m 786 [0m[38;5;231m      [38;5;148mGreg[38;5;231m could not tell what it [38;5;148mmeant[38;5;231m (spya-qtk3q2). */[39m
+     [2m[38;5;231m 787 [0m[38;5;231m   [38;5;197mif[38;5;231m (counts.reportedRows === [38;5;141m0[38;5;231m) {[39m
+     [2m[38;5;231m 788 [0m[38;5;231m     [38;5;197mreturn[38;5;231m group === [38;5;186m"direct"[39m
+[38;5;246m  ⎿  [39mUpdated [1msrc/web/sub-modes.ts[0m [38;5;246m(+1 -1)[39m
+     [2m[38;5;231m 277 [0m[38;5;231m   [38;5;148mclaims[38;5;231m: {[39m
+     [2m[38;5;231m 278 [0m[38;5;231m     [38;5;148mlabel[38;5;231m: [38;5;186m"Claims"[38;5;231m,[39m
+     [2m[38;5;231m 279 [0m[38;5;231m     [38;5;242m/* It starts from the piece's own sentences, which is what tells it from Reception:[39m
+     [38;5;167m[48;5;52m 280 -[38;5;231m       "What others say about each claim" read as a second Reception (spya-vh0z7s, plan 261010g). */         [39m[49m
+     [38;5;77m[48;5;22m 280 +[38;5;231m       [38;5;186m"What others say about each claim"[38;5;231m read [38;5;197mas[38;5;231m a second [38;5;148mReception[38;5;231m (spya-vh0z7s, plan [38;5;141m[48;5;28m261010n[38;5;231m[48;5;22m). */         [39m[49m
+     [2m[38;5;231m 281 [0m[38;5;231m     [38;5;148mdescription[38;5;231m: [38;5;186m"The claims this piece rests on, quoted from it: pick some to check against the web"[38;5;231m,[39m
+     [2m[38;5;231m 282 [0m[38;5;231m     [38;5;148mexperimental[38;5;231m: [38;5;141mfalse[38;5;231m,[39m
+     [2m[38;5;231m 283 [0m[38;5;231m     [38;5;242m/* Debate's compound until 2026-10-09, so *debate claims* still finds it.[39m
+[38;5;246m  ⎿  … 14 more files changed[39m
+[38;5;246m  ⎿  Allowed by auto mode classifier[39m
+
+[38;5;231m●[39m Renamed to 261010n everywhere (only comments and doc links changed, so the running suite still reflects the code). Waiting on
+  its result.
+
+  [38;5;246mRead [1m1[0m[38;5;246m file [39m
+
+[38;5;231m●[39m Still running; I'll resume when it notifies.
+
+[38;5;246m✻[39m [38;5;246mSautéed for 42s · done 19:00 · 3 shells still running[39m
+
+[38;5;244m───────────────────────────────────────────────────────────────────────────────────────── fbqtk3q2-sources-reception-messages ─
+[39m❯ [2mcarry on[0m
+[38;5;244m───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[39m  [1m[35mfbqtk3q2-sources-reception-messages[0m[38;5;246m [1m[32m[Opus 5.5][0m[38;5;246m [1m[36m⑂ fbqtk3q2-reception-messages[0m[38;5;246m* [2m·[0m[38;5;246m [1m[32m██░░░░░░░░ 23%[0m[38;5;246m [2m·[0m[38;5;246m [2m5h 10% ↻22:50[0m[38;5;246m [2mwk 0% ↻Sat …[0m
+  [38;5;220m⏵⏵ auto mode on[38;5;246m · gh auth login for PR status · [38;5;44m3 shells[38;5;246m · ← for agents[39m

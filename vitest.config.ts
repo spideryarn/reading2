@@ -14,7 +14,7 @@ import {
   readMemorySnapshot,
   readReserveBytes,
   READINESS_ADMISSION_TOKEN_ENV,
-  resolveParallelWorkers,
+  resolveRunWorkers,
 } from "./vitest-admission.js";
 
 /**
@@ -114,7 +114,15 @@ function workersForThisRun(): number {
      keeps the exec-time value in /proc/self/environ whatever this line does. */
   const readinessAdmissionToken = process.env[READINESS_ADMISSION_TOKEN_ENV];
   delete process.env[READINESS_ADMISSION_TOKEN_ENV];
-  const nominal = resolveParallelWorkers();
+  const asked = resolveRunWorkers();
+  if (asked.kind === "yielding-to-deploy") {
+    console.error(
+      `[vitest] a deploy holds the release lock (pid ${asked.deploy.pid}, since ${asked.deploy.since || "?"}), ` +
+        `so this config asks for ${asked.workers} worker instead of ${asked.wouldHave} to leave the box to the deploy's tests. ` +
+        `VITEST_MAX_WORKERS=N or --maxWorkers=N overrides. docs/project/testing.md § While a deploy runs.`,
+    );
+  }
+  const nominal = asked.workers;
   /* Held in consts rather than read inline, because the journal below has to
      record the readings this decision was actually made on. Passing the readers
      themselves made it re-read /proc/meminfo at record time and write a later

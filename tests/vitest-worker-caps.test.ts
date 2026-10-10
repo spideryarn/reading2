@@ -34,7 +34,7 @@ import type { InlineConfig as ViteInlineConfig } from "vite";
 import { afterAll, afterEach, beforeEach, expect, test, vi } from "vitest";
 import { createVitest, resolveConfig } from "vitest/node";
 
-import { MACHINE_WORKERS_FILE, resolveParallelWorkers } from "../vitest-admission.js";
+import { DEPLOY_YIELD_WORKERS, MACHINE_WORKERS_FILE, resolveParallelWorkers } from "../vitest-admission.js";
 
 const HALF_OF_THIS_MACHINE = Math.max(2, Math.floor(availableParallelism() / 2));
 
@@ -165,13 +165,17 @@ test("one run's override does not leak into the next vitest in this process", as
   // globalThis to survive a watch restart, and this is what that cost.
   // Relative to whatever this machine would say anyway — the box has a machine
   // file and a laptop does not, and the override has to differ from both.
+  // The config without an override also drops to one worker while a live
+  // deploy holds the release lock (plan 261010j), and a deploy can take or
+  // release it between two reads here — so either answer is this machine's,
+  // and neither is the leaked override.
   const machineSays = resolveParallelWorkers();
   const override = machineSays + 1;
 
   asFreshProcess(String(override));
   expect((await resolvedLaneCaps()).get("unit")).toBe(override);
   asFreshProcess();
-  expect((await resolvedLaneCaps()).get("unit")).toBe(machineSays);
+  expect([machineSays, DEPLOY_YIELD_WORKERS]).toContain((await resolvedLaneCaps()).get("unit"));
 });
 
 test("with nothing set anywhere, half the machine and at least two", () => {

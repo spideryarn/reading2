@@ -347,16 +347,20 @@ function question(prompt: string, material: PaneMaterial, options: PaneOption[])
  *
  * `tmux capture-pane -p` already strips these, but `-p -e` keeps them and a
  * caller that wants colour will use it, so a parser that only works on one of
- * the two flags is a trap. CSI first (the common `\x1b[1;32m`), then OSC (which
- * ends with BEL or ST and can carry arbitrary text, so it must be removed before
- * anything else looks at that text), then the two-character escapes.
+ * the two flags is a trap. OSC first (it ends with BEL or ST and carries metadata,
+ * not visible text), then CSI and the two-character escapes. CSI's parameter
+ * range includes colons: tmux emits `4:3m` for curly underline, for example.
  */
+// biome-ignore lint/suspicious/noControlCharactersInRegex: terminal control sequences are what is being parsed
+const ANSI_OSC = /\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g;
+// Capturing the whole CSI lets undimmedLines consume the same tokens as stripAnsi.
+// biome-ignore lint/suspicious/noControlCharactersInRegex: terminal control sequences are what is being parsed
+const ANSI_CSI = /(\u001b\[[0-?]*[ -/]*[@-~])/g;
+
 export function stripAnsi(s: string): string {
   return s
-    // biome-ignore lint/suspicious/noControlCharactersInRegex: the escape character is what is being stripped
-    .replace(/\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g, "")
-    // biome-ignore lint/suspicious/noControlCharactersInRegex: the escape character is what is being stripped
-    .replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, "")
+    .replace(ANSI_OSC, "")
+    .replace(ANSI_CSI, "")
     // biome-ignore lint/suspicious/noControlCharactersInRegex: the escape character is what is being stripped
     .replace(/\u001b[@-Z\\-_]/g, "")
     // ESC ( B and friends: the nF charset-designation sequences, which a
@@ -974,10 +978,16 @@ export type PaneDialog = Extract<PaneQuestion, { kind: "question" }>;
  * A capture cannot tell who put the text there. `❯ do all three` in
  * `none-working-with-prose-decisions-list.txt` may be a person's half-typed
  * reply, a suggestion the harness offered, or the greyed hint a never-used
- * session shows; the pane renders all three the same way and claiming otherwise
- * would be provenance the parser does not have (GPT Sol, 2026-09-08). What is
- * true of all three is that the box is not empty, which is the only fact the
- * decision needs.
+ * session shows; a plain capture renders all three the same way and claiming
+ * otherwise would be provenance the parser does not have (GPT Sol, 2026-09-08).
+ * Without attributes, all three must be treated as occupied.
+ *
+ * **SINCE 2026-10-10 AN ATTRIBUTED CAPTURE IDENTIFIES DIM PLACEHOLDERS.** The
+ * suggestion and the hint are drawn dim and are not in the input buffer, so on
+ * a `capture-pane -e` they are removed before emptiness is judged (see
+ * `undimmedLines`) and a box holding only them is `empty-input`. A plain
+ * capture keeps the old reading. What is left in `occupied-input` is undimmed
+ * text — still not provably a person's, which is why the name stays.
  */
 export type PaneSurface =
   /** A dialog we recognised, already parsed. */
@@ -994,31 +1004,6 @@ export type PaneSurface =
   | { kind: "unrecognised"; why: string };
 
 /**
- * Whether an input-box line has anything on it, read off `raw`.
- *
- * **`raw`, NEVER `text`, AND THIS IS A BLOCKER SOL FOUND IN THE PLAN.**
- * `cleanLines` replaces every character in `DECORATION` with a space, which is
- * right for finding geometry and catastrophic for judging emptiness: a box
- * holding `■` or `────` cleans to a line that trims to nothing, so the guard
- * would call it empty and the send would append to it. Sol reproduced the
- * step — `❯■`, `❯────` and the genuine `❯ ` all clean to exactly `❯`.
- *
- * So geometry is decided on `text` and occupancy on `raw`, which is the same
- * capture with only the ANSI removed. `Line` has carried both since it was
- * written, for a different reason, and this is the second.
- *
- * The `❯` is dropped from the prompt line because it is the box's own marker
- * rather than anybody's text; every other line is judged whole. **`trim()` on
- * `raw` folds U+00A0**, which is what an empty box actually contains — a
- * `trim` that stopped folding it would call every empty box occupied and the
- * feature would vanish silently, so a test holds that character.
- *
- * WHAT IT STILL CANNOT SEE: a box holding only spaces renders exactly like an
- * empty one, and the capture has no cursor in it. That is a box we will type
- * into, appending to whitespace nobody meant. It is the residue of reading a
- * rendering rather than an editor's state, and it is not closable here.
- */
-/**
  * A line's drawn width and left indent, for comparing a border against a border.
  *
  * Trailing whitespace is dropped because `capture-pane` pads to the pane width
@@ -1029,10 +1014,131 @@ function shapeOf(raw: string): { width: number; indent: number } {
   return { width: trimmed.length, indent: trimmed.length - trimmed.replace(/^\s*/, "").length };
 }
 
-function boxLineIsOccupied(raw: string, isPromptLine: boolean): boolean {
-  if (!isPromptLine) return raw.trim() !== "";
-  const marker = raw.indexOf("❯");
-  return (marker === -1 ? raw : raw.slice(marker + 1)).trim() !== "";
+/**
+ * What a capture says, with ANSI removed AND every character drawn dim blanked.
+ *
+ * For `paneSurface`'s emptiness test and nothing else: Claude Code draws text
+ * in its input box that is not input — the ghost suggestion and the first-run
+ * hint — and draws it with SGR 2. Typed, multi-line and pasted input carry no
+ * attribute at all (measured on Claude Code 2.1.296, 2026-10-10). A `-p`
+ * capture has no SGR in it, so nothing is removed and every character still
+ * counts, which is the old behaviour and the safe one.
+ *
+ * **STATE RUNS ACROSS LINES**, because `capture-pane -e` writes attribute
+ * CHANGES: a border line's colour is still in force at the start of the next
+ * line until tmux emits `39`. Tracking per line would be wrong in the safe
+ * direction (a carried dim read as typed); tracking across lines is what the
+ * output means.
+ *
+ * **ONLY SGR 2 SETS DIM; 0, AN EMPTY LIST AND 22 CLEAR IT.** The extended colour
+ * forms are skipped whole, because `38;2;r;g;b` and `38;5;2` contain a `2` that
+ * is not the dim attribute — counting it would call a coloured draft a ghost,
+ * which is the direction that types onto somebody's words. Anything the parser
+ * does not understand clears dim rather than keeping it, for the same reason.
+ *
+ * Blanking preserves character positions, so occupancy can exclude the prompt
+ * marker at its ORIGINAL column even if that marker is dim. Searching again
+ * after filtering could mistake a typed `❯` for the marker and hide a draft.
+ * OSC metadata is removed before interpreting SGR, as in `stripAnsi`.
+ * `paneSurface` checks the line count against `cleanLines` and falls back to
+ * the attribute-blind reading when they disagree.
+ */
+export function undimmedLines(capture: string): string[] {
+  const parts = capture.replace(ANSI_OSC, "").split(ANSI_CSI);
+  let dim = false;
+  let out = "";
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i] ?? "";
+    if (i % 2 === 1) {
+      if (part.endsWith("m")) dim = dimAfter(part.slice(2, -1), dim);
+      continue;
+    }
+    out += dim ? part.replace(/[^\n]/g, " ") : part;
+  }
+  return stripAnsi(out).split("\n");
+}
+
+/** Known attributes that do not change dim, including colour resets. */
+const DIM_NEUTRAL_SGR = new Set([
+  1, 3, 4, 5, 6, 7, 8, 9,
+  10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 27, 28, 29,
+  30, 31, 32, 33, 34, 35, 36, 37, 39,
+  40, 41, 42, 43, 44, 45, 46, 47, 49,
+  50, 51, 52, 53, 54, 55, 59, 60, 61, 62, 63, 64, 65, 73, 74, 75,
+  90, 91, 92, 93, 94, 95, 96, 97, 100, 101, 102, 103, 104, 105, 106, 107,
+]);
+
+function colourValue(p: string): boolean {
+  return /^\d+$/.test(p) && Number(p) <= 255;
+}
+
+/** Colon sub-parameters belong to one attribute, never to SGR 2. */
+function dimNeutralColonSgr(p: string): boolean {
+  if (/^4:[0-5]$/.test(p)) return true;
+  const fields = p.split(":");
+  if (!["38", "48", "58"].includes(fields[0] ?? "")) return false;
+  if (fields[1] === "5") return fields.length === 3 && colourValue(fields[2] ?? "");
+  if (fields[1] !== "2") return false;
+  if (fields.length === 6 && fields[2] !== "" && fields[2] !== "0") return false;
+  return (fields.length === 5 || fields.length === 6) && fields.slice(-3).every(colourValue);
+}
+
+/** Length of a whole semicolon colour group, or null if it is incomplete/unknown. */
+function extendedColourLength(params: readonly string[], at: number): number | null {
+  const kind = params[at + 1];
+  const count = kind === "5" ? 1 : kind === "2" ? 3 : 0;
+  const values = params.slice(at + 2, at + 2 + count);
+  return count === 0 || values.length !== count || !values.every(colourValue) ? null : count + 2;
+}
+
+/** The dim attribute after one SGR's parameter list, starting from `dim`. */
+function dimAfter(params: string, dim: boolean): boolean {
+  if (params === "") return false;
+  if (!/^[0-9;:]*$/.test(params)) return false;
+  const list = params.split(";");
+  let on = dim;
+  for (let i = 0; i < list.length; i++) {
+    const p = list[i] ?? "";
+    if (p.includes(":")) {
+      if (!dimNeutralColonSgr(p)) return false;
+      continue;
+    }
+    const n = p === "" ? 0 : Number(p);
+    switch (n) {
+      case 0:
+      case 22:
+        on = false;
+        break;
+      case 2:
+        on = true;
+        break;
+      case 38:
+      case 48:
+      case 58: {
+        const length = extendedColourLength(list, i);
+        if (length === null) return false;
+        i += length - 1;
+        break;
+      }
+      default:
+        if (!DIM_NEUTRAL_SGR.has(n)) return false;
+    }
+  }
+  return on;
+}
+
+/**
+ * Occupancy uses raw text, with decorations intact and dim runs blanked only
+ * when attributes are available. cleanLines' decoration replacement would
+ * hide a draft holding `■` or `────` (Sol's blocker on the original plan).
+ *
+ * promptMarker comes from the original line, never the filtered text: a typed
+ * `❯` is input. Continuation lines have no marker to exclude. trim() folds the
+ * empty box's U+00A0 as well as spaces; a whitespace-only draft remains a
+ * limitation of reading a rendering rather than the editor's state.
+ */
+function boxLineIsOccupied(raw: string, promptMarker = -1): boolean {
+  return raw.slice(promptMarker + 1).trim() !== "";
 }
 
 /**
@@ -1158,8 +1264,15 @@ export function paneSurface(capture: string): PaneSurface {
   // Wrong in the safe direction if a build ever draws them mismatched: the
   // closing border is not found, the scan runs off the window, and the pane
   // comes back `unrecognised` — a refusal, loudly, rather than a send.
+  // GEOMETRY ON `lines`, OCCUPANCY ON `undimmed` — the same capture with dim
+  // text blanked, so a ghost suggestion is not a draft (2026-10-10). If the two
+  // readings disagree about how many lines there are, the attribute-blind one
+  // is used: it can only call more boxes occupied, never fewer.
+  const undimmed = undimmedLines(capture);
+  const typed = (i: number): string => (undimmed.length === lines.length ? undimmed[i] : lines[i]?.raw) ?? "";
   const border = shapeOf(lines[at - 1]?.raw ?? "");
-  let occupied = boxLineIsOccupied(lines[at]?.raw ?? "", true) ? 1 : 0;
+  const promptMarker = lines[at]?.raw.indexOf("❯") ?? -1;
+  let occupied = boxLineIsOccupied(typed(at), promptMarker) ? 1 : 0;
   for (let i = at + 1; i < lines.length && i <= at + INPUT_BOX_LINES; i++) {
     const line = lines[i];
     if (!line) break;
@@ -1169,7 +1282,7 @@ export function paneSurface(capture: string): PaneSurface {
         ? { kind: "empty-input", promptLine: at }
         : { kind: "occupied-input", promptLine: at, lines: occupied };
     }
-    if (boxLineIsOccupied(line.raw, false)) occupied += 1;
+    if (boxLineIsOccupied(typed(i))) occupied += 1;
   }
   return {
     kind: "unrecognised",
@@ -1390,16 +1503,33 @@ export function isPaneId(id: string): id is `%${string}` {
 }
 
 /**
+ * Which `capture-pane` to take: `"text"` is `-p`, `"attributes"` is `-p -e`.
+ *
+ * **ATTRIBUTES ARE EVIDENCE IN ONE PLACE: THE INPUT BOX.** Claude Code draws its
+ * ghost suggestion (`carry on`) and its first-run hint (`Try "refactor …"`) in
+ * the box with SGR 2, dim, and neither is in the input buffer. Without `-e`
+ * they are indistinguishable from a draft, and `paneSurface` called every such
+ * box occupied — 2026-10-10, docs/postmortems/261010b-ghost-suggestion-read-as-typed-input.md.
+ * Every parser here strips ANSI first, so both forms parse to the same text;
+ * only `paneSurface`'s emptiness test reads the attributes.
+ */
+export type CaptureForm = "text" | "attributes";
+
+/**
  * Read a pane. The one impure thing in this file, kept thin so the server does
  * not shell out inline and so tests never need tmux.
  *
  * Throws on an unknown pane rather than returning "": a pane that has gone away
  * is a session that has gone away, and the caller must not render an empty
  * question for it.
+ *
+ * `form` is `"attributes"` only where a caller must tell typed text from text
+ * Claude Code draws dim in the box itself — see `CaptureForm`.
  */
-export function capturePane(paneId: string): string {
+export function capturePane(paneId: string, form: CaptureForm = "text"): string {
   if (!isPaneId(paneId)) throw new Error(`not a tmux pane id: ${paneId}`);
-  return execFileSync("tmux", ["capture-pane", "-p", "-t", paneId], {
+  const args = form === "attributes" ? ["capture-pane", "-p", "-e", "-t", paneId] : ["capture-pane", "-p", "-t", paneId];
+  return execFileSync("tmux", args, {
     encoding: "utf8",
     maxBuffer: 4 * 1024 * 1024,
     timeout: 10_000,

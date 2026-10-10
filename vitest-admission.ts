@@ -63,7 +63,11 @@
 
 import { readFileSync } from "node:fs";
 import { availableParallelism, homedir, platform } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import type { LockHolder } from "./scripts/lockfile.js";
+import { liveReleaseLockHolder, releaseLockPath } from "./scripts/release-lock.js";
 
 /** Bump when the arithmetic changes, so a log line can be traced to a rule. */
 export const ADMISSION_POLICY_VERSION = 1;
@@ -385,5 +389,83 @@ export function resolveParallelWorkers(machineFile = MACHINE_WORKERS_FILE): numb
   const machine = fromFile === undefined ? undefined : parseWorkerCount(fromFile, machineFile);
   if (machine !== undefined) return machine;
 
+  return halfTheMachine();
+}
+
+/**
+ * **While a deploy holds the release lock, its test run has the box.**
+ *
+ * > I wonder if we can speed up the tests during deploy, e.g. by running them more in parallel. If
+ * > that means we have to conserve resources on the box (e.g. pause a few agents or tell them not to
+ * > run tests while the deploy is running), that would be fine.
+ * >
+ * > — Greg, 2026-10-10
+ *
+ * The deploy's suite ran at the box's crowded-machine number, 2, beside five agents' suites at 2
+ * each, and took 72–83 minutes every time. So the deploy now asks for half the machine
+ * ({@link deployTestWorkers}, passed as `VITEST_MAX_WORKERS`), and every other run that starts while
+ * a live process holds the release lock takes one worker instead of its usual number — slower, not
+ * refused, and it says why. docs/plans/261010j-deploy-test-run-claims-the-box.md.
+ *
+ * **The yield never overrules an explicit `VITEST_MAX_WORKERS`.** That is what exempts the deploy's
+ * own run, which sees its own lock. Memory admission can still reduce the request or refuse the run.
+ * `--maxWorkers` on the command line beats the yield and cap, but cannot bypass a memory refusal.
+ *
+ * **What it does not do.** It decides at the start of a run: a suite already running when the deploy
+ * starts keeps its workers, and one that starts during the deploy keeps one worker after it ends.
+ * The release lock is also held by `changelog:prepare` and `promote`, so runs starting while those
+ * commands run yield too. Neither is worth a scheduler.
+ */
+export const DEPLOY_YIELD_WORKERS = 1;
+
+/** Half the cores, at least two — the default {@link resolveParallelWorkers} falls back to. */
+function halfTheMachine(): number {
   return Math.max(2, Math.floor(availableParallelism() / 2));
+}
+
+/**
+ * The deploy's own suite: half the machine, which is what a machine with no crowded-machine file
+ * takes anyway (and what every laptop run has always taken, so the parallel lanes have been
+ * exercised at this width). The private-postgres lane is serial whatever this says —
+ * {@link resolveParallelWorkers} takes the variable away from vitest for exactly that reason.
+ */
+export function deployTestWorkers(): number {
+  return halfTheMachine();
+}
+
+export type RunWorkers =
+  | { kind: "as-asked"; workers: number }
+  | { kind: "yielding-to-deploy"; workers: number; wouldHave: number; deploy: LockHolder };
+
+/** The decision, as arithmetic over values a test can hand in. */
+export function decideRunWorkers(args: { nominal: number; explicit: boolean; deploy: LockHolder | null }): RunWorkers {
+  const { nominal, explicit, deploy } = args;
+  if (explicit || deploy === null || nominal <= DEPLOY_YIELD_WORKERS) return { kind: "as-asked", workers: nominal };
+  return { kind: "yielding-to-deploy", workers: DEPLOY_YIELD_WORKERS, wouldHave: nominal, deploy };
+}
+
+/**
+ * The live release-lock holder for the checkout this file is in, or null.
+ *
+ * **Fails open**: a checkout git cannot answer for, or a lock file it cannot read, means "no
+ * deploy", and the run takes its usual number. This is a courtesy to the deploy, not a safety
+ * check — the worst a missed yield costs is a slower deploy, which is today's behaviour.
+ */
+export function liveDeploy(): LockHolder | null {
+  try {
+    return liveReleaseLockHolder(releaseLockPath(dirname(fileURLToPath(import.meta.url))));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * What vitest.config.ts asks for: the three layers of {@link resolveParallelWorkers}, then the
+ * deploy's claim. Reads whether the override is nonempty **before** calling it, because that call
+ * consumes the variable. Empty means unset in both decisions.
+ */
+export function resolveRunWorkers(deploy: () => LockHolder | null = liveDeploy): RunWorkers {
+  const explicit = Boolean(process.env.VITEST_MAX_WORKERS?.trim());
+  const nominal = resolveParallelWorkers();
+  return decideRunWorkers({ nominal, explicit, deploy: explicit ? null : deploy() });
 }

@@ -373,7 +373,7 @@ postmortem [261008c](../postmortems/261008c-needs-a-decision-lists-reports-nobod
 
 ```
  POST /api/admin/feedback/deferrals ──▶ a row in feedback_question_deferrals ("not now")
- GET  …/earlier?questions=2         ──▶ threads: unacted replies, a state, the report's text
+ GET  …/earlier?questions=3         ──▶ threads: replies (acted on and not), a state, the report's text
 ```
 
 - **Where they show.** *Needs a decision* is the threads, not a list of reports. It opens on a
@@ -395,17 +395,23 @@ postmortem [261008c](../postmortems/261008c-needs-a-decision-lists-reports-nobod
   `acted:` ids and the admin's deferral: *Deferred* when the deferral is at or after the newest
   reply (a tie is deferred); otherwise *being considered* when a reply has not been acted on;
   otherwise *Needs a decision*, which includes a question an agent acted on and left open with a
-  follow-up in its text. Both times are the database's own clock
+  follow-up in its text. That one says *Needs a decision again* in its thread, and its contents
+  row says *you've replied N×*, because until
+  [261010h](../plans/261010h-needs-a-decision-shows-replies-an-agent-acted-on.md) it looked exactly
+  like a question never answered (`spya-j4sg9g`: *"I could swear I have posted a reply … multiple
+  times"*). Both times are the database's own clock
   (`questionState` in [`src/feedback-question-values.ts`](../../src/feedback-question-values.ts)).
 - **What a thread shows.** The ids, `q-k3m9qt · about #301 (spya-mdp0em)`, the ones to say to the
   Overseer in a terminal (`feedback-questions.ts --show q-…` prints the file); when it was asked;
   its title and text, which an agent wrote, in the model's face and as plain text with its line
   breaks ([fonts.md](fonts.md)), everything after a line that is exactly `Details` shut under
   *Details*; the report it is about, **only when it is the admin's own**, whole and shut, under
-  *Your report #301*; and the admin's replies **no agent has acted on yet**, at most the newest
-  five with a count of the rest, in the reader's face (an acted-on reply is quoted in the text by
-  the agent that acted). The file's `refs:` line is never compiled; `acted:` reaches the browser
-  only as the group and as which replies are listed.
+  *Your report #301*; and the admin's replies, in the reader's face: first those **an agent has
+  acted on**, each marked *acted on*, with a line saying what happened next is written in the
+  question; then those **no agent has acted on yet**. At most the newest five of each, with a count
+  of the rest. The file's `refs:` line is never compiled; `acted:` reaches the browser only as the
+  group and as which list each reply is in. A tab from before 261010h asks `questions=2` and gets
+  threads without the acted list; one from before 261008i asks nothing and gets the six-key shape.
 - **Replying.** In a thread the box is simply there, one thread and so one box at a time, and each
   thread keeps its words when you move to another. It grows with what is in it and never scrolls
   itself (`useFitTextarea`), so the panel is the one scroller: two scrollers under one finger with
@@ -442,14 +448,14 @@ postmortem [261008c](../postmortems/261008c-needs-a-decision-lists-reports-nobod
   opens**. **Earlier opens on *Needs a decision***, and moves to All when that first read says no
   thread is waiting, unless the reader has chosen anything in the meantime (a pill, the button, a
   thread). Every other reader's dialog is unchanged.
-- **Two builds at once.** The browser asks `questions=2`; the server sends threads only then, and
-  the six-key questions of before 261008i otherwise, so a tab loaded before the deploy keeps
-  working after it. A server from before 261008i ignores the parameter, and the browser maps its
-  six-key questions into threads (the newest reply as the only one). A 404 on a reply says to copy
-  the words, reload and reply again. If the questions are not what the browser expects, the whole
-  list shows the ordinary "would not load" sentence, never some of them. If a later list no longer
-  contains a question while its thread is open or its box has words, that question stays beside
-  the draft until it is sent; it is not counted.
+- **Two builds at once.** The browser asks `questions=3`. A tab from before 261010h asks
+  `questions=2` and gets the previous thread shape exactly; one from before 261008i asks nothing
+  and gets the six-key questions from then. In the other direction, this browser maps either older
+  shape into today's threads (with no acted replies). A 404 on a reply says to copy the words,
+  reload and reply again. If the questions are not what the browser expects, the whole list shows
+  the ordinary "would not load" sentence, never some of them. If a later list no longer contains a
+  question while its thread is open or its box has words, that question stays beside the draft
+  until it is sent; it is not counted.
 
 A question leaves the dialog when an agent marks its file `status: answered` and that commit is
 deployed, unless the browser is still holding an unsent reply to it as above.

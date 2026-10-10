@@ -5,7 +5,7 @@ Up: [code-quality-overview.md](code-quality-overview.md)
 ## In this doc
 
 - [§ The runner: Vitest](#the-runner-vitest) — why vitest, and where its config lives
-- [§ A run is not the only thing on the machine](#a-run-is-not-the-only-thing-on-the-machine) — the worker cap, `NO TESTS RAN` / `REFUSING TO START`, `VITEST_MAX_WORKERS`
+- [§ A run is not the only thing on the machine](#a-run-is-not-the-only-thing-on-the-machine) — the worker cap, `NO TESTS RAN` / `REFUSING TO START`, `VITEST_MAX_WORKERS`, and why a run takes one worker while a deploy runs
 - [§ A test's temp files](#a-tests-temp-files) — `os.tmpdir()` is a per-run directory, removed when the run ends
 - [§ Three lanes, and which one your test is in](#three-lanes-and-which-one-your-test-is-in) — adding a test that touches Postgres or Storage; `TEST_LANES`
 - [§ `TEST DATABASE CONTENDED`](#test-database-contended) and [§ `POLLUTED`](#polluted) — what those red banners mean
@@ -167,6 +167,34 @@ file has — everything vitest does with it happens later.
 [`tests/vitest-worker-caps.test.ts`](../../tests/vitest-worker-caps.test.ts) pins **vitest's**
 behaviour as well as ours, so a release that fixes the ordering upstream turns red here instead of
 leaving behind a defence nobody dares delete.
+
+### While a deploy runs
+
+> I wonder if we can speed up the tests during deploy, e.g. by running them more in parallel. If
+> that means we have to conserve resources on the box (e.g. pause a few agents or tell them not to
+> run tests while the deploy is running), that would be fine.
+>
+> — Greg, 2026-10-10
+
+**While a live process holds the release lock, other runs default to one worker**,
+and print why:
+
+    [vitest] a deploy holds the release lock (pid …, since …), so this config asks for 1 worker instead of 2 …
+
+The deploy's own suite asks for half the machine instead of the box's 2, so that is where the cores
+go. Your run is slower, not refused, and its result means exactly what it would have meant. An
+explicit `VITEST_MAX_WORKERS=N` is never overruled by the yield — that is how the deploy's own run
+is exempt from its own lock — so set one if you really need the speed; `--maxWorkers` beats it too.
+Memory admission can still reduce the request or refuse the run. The private lane is serial either way.
+
+The lock is `spideryarn-deploy.lock` in the shared git directory, so every worktree and the
+readiness runner see it ([`scripts/release-lock.ts`](../../scripts/release-lock.ts)). A lock left by
+a killed deploy names a dead pid and is ignored. The decision is taken when a run starts: a run
+already going when the deploy begins keeps its workers. `changelog:prepare` and `promote` hold the
+same lock while they run, and runs starting then yield too.
+`resolveRunWorkers` in [`vitest-admission.ts`](../../vitest-admission.ts);
+[`tests/deploy-claims-the-box.test.ts`](../../tests/deploy-claims-the-box.test.ts);
+[261010j](../plans/261010j-deploy-test-run-claims-the-box.md) has the measurements.
 
 ## A test's temp files
 

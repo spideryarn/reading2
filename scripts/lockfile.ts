@@ -70,7 +70,8 @@ export interface LockOptions {
   token?: string;
 }
 
-function defaultIsAlive(pid: number): boolean {
+/** Does this pid still exist? Exported for `release-lock.ts`, which asks the same question. */
+export function isProcessAlive(pid: number): boolean {
   if (!Number.isFinite(pid) || pid <= 0) return false;
   try {
     process.kill(pid, 0);
@@ -166,7 +167,7 @@ function publishExclusive(file: string, body: string): { ino: number } | null {
 
 /** Take the lock, or throw `LockHeldError`. Never steals; see the header. */
 export function takeLockFile(file: string, opts: LockOptions = {}): Lock {
-  const isAlive = opts.isAlive ?? defaultIsAlive;
+  const isAlive = opts.isAlive ?? isProcessAlive;
   const now = opts.now ?? (() => new Date());
   const token = opts.token ?? randomUUID();
   const body = `${process.pid}\n${now().toISOString()}\n${token}\n`;

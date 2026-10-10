@@ -160,6 +160,7 @@ import { readFileSync } from "node:fs";
 
 import {
   capturePane,
+  type CaptureForm,
   grantsPermission,
   isPaneId,
   paneSurface,
@@ -541,8 +542,14 @@ export function checkText(text: string): Refusal | null {
 export type SteerIo = {
   /** `tmux list-panes -a -F <PANE_FIELDS>`. Throws when tmux cannot be asked. */
   listPanes(): string;
-  /** The pane's visible text. Throws when the pane is gone. */
-  capture(paneId: string): string;
+  /**
+   * The pane's visible text. Throws when the pane is gone.
+   *
+   * `form` is required so that each caller says which it reads: `sendMessage`
+   * needs `"attributes"` to tell a dim ghost suggestion from a draft, and
+   * `answerQuestion` keeps `"text"`, the form the dashboard read the dialog in.
+   */
+  capture(paneId: string, form: CaptureForm): string;
   /**
    * `pgrep -a -f -- <uuid>`, or "" when nothing matched.
    *
@@ -582,7 +589,7 @@ export function realIo(): SteerIo {
     execFileSync(cmd, [...args], { encoding: "utf8", timeout: 10_000, maxBuffer: 8 * 1024 * 1024 });
   return {
     listPanes: () => run(["list-panes", "-a", "-F", PANE_FIELDS]),
-    capture: (paneId) => capturePane(paneId),
+    capture: (paneId, form) => capturePane(paneId, form),
     claudeCandidates: (claudeSessionId) => {
       try {
         // THE PATTERN IS THE UUID ALONE, not `--session-id <uuid>`. Two reasons,
@@ -1323,9 +1330,14 @@ export function sendMessage(
   const check = verifyTarget(target, io);
   if (!check.ok) return check;
 
+  // WITH ATTRIBUTES (`-e`), because the box's emptiness depends on them: Claude
+  // Code's ghost suggestion is dim text in an empty box, and a plain capture
+  // reads it as a draft (2026-10-10, postmortem 261010b). Sending over it is
+  // safe: the suggestion is drawn only while the input is empty and the first
+  // keystroke hides it, so the Enter submits our text alone.
   let capture: string;
   try {
-    capture = io.capture(target.paneId);
+    capture = io.capture(target.paneId, "attributes");
   } catch (e) {
     return no("pane-gone", `pane ${target.paneId} could not be read: ${(e as Error).message}`);
   }
@@ -1480,7 +1492,7 @@ export function answerQuestion(
 
   let capture: string;
   try {
-    capture = io.capture(target.paneId);
+    capture = io.capture(target.paneId, "text");
   } catch (e) {
     return no("pane-gone", `pane ${target.paneId} could not be read: ${(e as Error).message}`);
   }
