@@ -34,6 +34,7 @@ import {
   AUTHOR_LOOKUP_STALE_MINUTES,
   type AdminAuthorGift,
   type AdminAuthorLookup,
+  type AuthorGiftSendExpected,
   type AuthorGiftStatus,
   type AuthorLookupOutcome,
 } from "../admin-author-gifts.js";
@@ -111,8 +112,11 @@ const NOTES_STAMP_SEEN = sql`date_trunc('milliseconds', ${authorGifts.notesUpdat
 /* ---------------------------------------------------------------- ensure -- */
 
 export type EnsureAnswer =
-  /** A new gift, its private link if it needed one, and its first lookup, pending. */
-  | { readonly kind: "created"; readonly id: string; readonly lookupId: string }
+  /**
+   * A new gift, its private link if it needed one, and its first lookup,
+   * pending — or no lookup at all when the caller asked for none (261010g).
+   */
+  | { readonly kind: "created"; readonly id: string; readonly lookupId: string | null }
   /** The article already had one. Nothing was touched — not the link, not the lookups (R2-F2). */
   | { readonly kind: "existing"; readonly id: string; readonly status: AuthorGiftStatus }
   /**
@@ -121,6 +125,32 @@ export type EnsureAnswer =
    * call making it and reading it back, a race with the owner.
    */
   | { readonly kind: "refused"; readonly reason: StarterRefusal };
+
+/**
+ * **What a new gift starts with** (plan 261010g § D1) — an agent drafting a
+ * gift it already knows the address for, through `draft_author_gift`. Applied
+ * only by the insert that makes the gift: an existing gift is never changed
+ * here. `lookup: false` makes no lookup row, so nothing is searched.
+ * `makeLink: false` never makes the private link: the person did not tick
+ * the rights box, so a private article without one is refused `link-off`
+ * (Sol's F2 on 261010g — the share-link event records that tick).
+ */
+export interface EnsureOptions {
+  readonly makeLink: boolean;
+  readonly lookup: boolean;
+  readonly draft: AuthorGiftDraft;
+}
+
+/** The fields a new gift may be made with: typed by whoever asked, so with no lookup provenance. */
+export interface AuthorGiftDraft {
+  readonly email?: string | null;
+  readonly recipientName?: string | null;
+  readonly recipientNote?: string | null;
+  readonly articles?: number;
+  readonly notes?: string | null;
+}
+
+const NO_OPTIONS: EnsureOptions = { makeLink: true, lookup: true, draft: {} };
 
 /** Seams for tests; each defaults to the real thing. */
 export interface EnsureDeps {
@@ -149,7 +179,12 @@ export interface EnsureDeps {
  * Not one transaction overall: the link is the share-link store's own write,
  * under its own lock, and is wanted whether or not this call wins the insert.
  */
-export async function ensureAuthorGift(slug: string, createdBy: string, deps: EnsureDeps = {}): Promise<EnsureAnswer> {
+export async function ensureAuthorGift(
+  slug: string,
+  createdBy: string,
+  options: EnsureOptions = NO_OPTIONS,
+  deps: EnsureDeps = {},
+): Promise<EnsureAnswer> {
   const db = getDb();
   const [article] = await db.select({ id: articles.id }).from(articles).where(ownedSlug(slug)).limit(1);
   if (!article) return { kind: "refused", reason: "absent" };
@@ -159,7 +194,7 @@ export async function ensureAuthorGift(slug: string, createdBy: string, deps: En
 
   const resolve = deps.resolveStarter ?? resolveStarter;
   let resolved = await resolve(slug);
-  if (resolved.kind === "link-off") {
+  if (resolved.kind === "link-off" && options.makeLink) {
     await pgShareLinkStore.create(slug, { keepExisting: true });
     resolved = await resolve(slug);
   }
@@ -169,12 +204,25 @@ export async function ensureAuthorGift(slug: string, createdBy: string, deps: En
   if (resolved.starter.articleId !== article.id) return { kind: "refused", reason: "absent" };
 
   const made = await db.transaction(async (tx) => {
+    const { draft } = options;
     const [gift] = await tx
       .insert(authorGifts)
-      .values({ articleId: article.id, starterSlug: slug, createdBy })
+      .values({
+        articleId: article.id,
+        starterSlug: slug,
+        createdBy,
+        ...(draft.email === undefined ? {} : { email: draft.email }),
+        ...(draft.recipientName === undefined ? {} : { recipientName: draft.recipientName }),
+        ...(draft.recipientNote === undefined ? {} : { recipientNote: draft.recipientNote }),
+        ...(draft.articles === undefined ? {} : { articles: draft.articles }),
+        ...(draft.notes === undefined || draft.notes === null
+          ? {}
+          : { notes: draft.notes, notesUpdatedAt: sql`date_trunc('milliseconds', clock_timestamp())` }),
+      })
       .onConflictDoNothing({ target: authorGifts.articleId })
       .returning({ id: authorGifts.id });
     if (!gift) return null;
+    if (!options.lookup) return { id: gift.id, lookupId: null };
     const [lookup] = await tx
       .insert(authorLookups)
       .values({ authorGiftId: gift.id })
@@ -207,19 +255,65 @@ async function giftOfArticle(articleId: string): Promise<{ id: string; status: A
 
 /**
  * **What `POST /api/admin/author-gifts` may carry**: `{ slug, rightsConfirmed:
- * true }` and nothing else. The tick is the private link's rights tick-box,
- * which the share-link route asks for too; an unknown key is a 400, so a
- * misspelt field is not silently a default.
+ * true }`, and optionally `lookup` (default true) and `draft`, the fields a
+ * new gift starts with (261010g). The tick is the private link's rights
+ * tick-box, which the share-link route asks for too; an unknown key is a 400,
+ * so a misspelt field is not silently a default.
  */
-export function parseEnsureAuthorGift(body: unknown): Parsed<{ readonly slug: string }> {
+export function parseEnsureAuthorGift(
+  body: unknown,
+): Parsed<{ readonly slug: string; readonly options: EnsureOptions }> {
   if (!isPlainObject(body)) return { ok: false, message: "Expected a JSON object." };
-  const unknown = Object.keys(body).filter((key) => !["slug", "rightsConfirmed"].includes(key));
+  const unknown = Object.keys(body).filter((key) => !["slug", "rightsConfirmed", "makeLink", "lookup", "draft"].includes(key));
   if (unknown.length > 0) return { ok: false, message: `Unexpected field: ${unknown.join(", ")}.` };
-  if (body.rightsConfirmed !== true) {
+  /* Exactly one of the two: the person's tick, which lets a link be made, or
+     `makeLink: false`, which never makes one (an agent's draft, 261010g F2). */
+  const noLink = "makeLink" in body;
+  if (noLink && (body.makeLink !== false || "rightsConfirmed" in body)) {
+    return { ok: false, message: "makeLink may only be false, and goes without rightsConfirmed." };
+  }
+  if (!noLink && body.rightsConfirmed !== true) {
     return { ok: false, message: "Confirm you have the right to share this article by private link (rightsConfirmed: true)." };
   }
   if (!isSlug(body.slug)) return { ok: false, message: "slug must be an article's slug." };
-  return { ok: true, value: { slug: body.slug } };
+  if ("lookup" in body && typeof body.lookup !== "boolean") return { ok: false, message: "lookup must be true or false." };
+  const draft = "draft" in body ? parseDraftFields(body.draft) : ({ ok: true, value: {} } as const);
+  if (!draft.ok) return draft;
+  return {
+    ok: true,
+    value: { slug: body.slug, options: { makeLink: !noLink, lookup: body.lookup !== false, draft: draft.value } },
+  };
+}
+
+const DRAFT_KEYS = ["email", "recipientName", "recipientNote", "articles", "notes"];
+
+/**
+ * **A new gift's fields, by the PATCH's own rules** — `parseAuthorGiftPatch`
+ * for the voucher's fields, so a draft can never hold what *Send* would
+ * refuse, and the notes as plain text (there is nothing yet to replace, so no
+ * `notesBase`). Not `discarded`, not `appendNotes`.
+ */
+function parseDraftFields(value: unknown): Parsed<AuthorGiftDraft> {
+  if (!isPlainObject(value)) return { ok: false, message: "draft must be an object of the gift's fields." };
+  const unknown = Object.keys(value).filter((key) => !DRAFT_KEYS.includes(key));
+  if (unknown.length > 0) return { ok: false, message: `Unexpected field in draft: ${unknown.join(", ")}.` };
+  const { notes, ...fields } = value;
+  let parsed: AuthorGiftDraft = {};
+  if (Object.keys(fields).length > 0) {
+    const patch = parseAuthorGiftPatch(fields);
+    if (!patch.ok) return patch;
+    const { email, recipientName, recipientNote, articles } = patch.value;
+    parsed = {
+      ...(email === undefined ? {} : { email }),
+      ...(recipientName === undefined ? {} : { recipientName }),
+      ...(recipientNote === undefined ? {} : { recipientNote }),
+      ...(articles === undefined ? {} : { articles }),
+    };
+  }
+  if (!("notes" in value) || notes === null) return { ok: true, value: parsed };
+  const text = parseNotesText(notes, "notes");
+  if (!text.ok) return text;
+  return { ok: true, value: { ...parsed, notes: text.value === "" ? null : text.value } };
 }
 
 /* --------------------------------------------------------------- lookups -- */
@@ -826,6 +920,8 @@ export type SendAnswer =
   | { readonly kind: "not-found" }
   | { readonly kind: "no-address" }
   | { readonly kind: "discarded" }
+  /** The gift is not what the confirmation showed (`SendDeps.expected`). Nothing frozen, nothing made. */
+  | { readonly kind: "changed" }
   /** The article can no longer be linked. The freeze was released, if it was still this attempt's. */
   | { readonly kind: "starter-refused"; readonly reason: StarterRefusal }
   /** This caller's freeze was released or replaced before the voucher transaction began. */
@@ -833,8 +929,59 @@ export type SendAnswer =
   /** `createVoucher` said the id is a different voucher. Cannot happen; the row stays frozen. */
   | { readonly kind: "conflict" };
 
-/** Seams for tests; each defaults to the real thing. */
+/** What the *Send* confirmation showed; the wire type is the one home (src/admin-author-gifts.ts). */
+type SendExpected = AuthorGiftSendExpected;
+
+function matchesExpected(
+  row: { email: string | null; recipientName: string | null; recipientNote: string | null; articles: number },
+  expected: SendExpected,
+): boolean {
+  return (
+    row.email === expected.email &&
+    row.recipientName === expected.recipientName &&
+    row.recipientNote === expected.recipientNote &&
+    row.articles === expected.articles
+  );
+}
+
+/** What `POST …/:id/send` may carry: nothing, or `{ expected }`, strictly. */
+export function parseSendAuthorGift(body: unknown): Parsed<{ readonly expected: SendExpected | null }> {
+  if (body === undefined || body === null) return { ok: true, value: { expected: null } };
+  if (!isPlainObject(body)) return { ok: false, message: "Expected a JSON object." };
+  const unknown = Object.keys(body).filter((key) => key !== "expected");
+  if (unknown.length > 0) return { ok: false, message: `Unexpected field: ${unknown.join(", ")}.` };
+  if (!("expected" in body)) return { ok: true, value: { expected: null } };
+  const e = body.expected;
+  const keys = ["email", "recipientName", "recipientNote", "articles"];
+  const nullableString = (v: unknown) => v === null || typeof v === "string";
+  if (
+    !isPlainObject(e) ||
+    Object.keys(e).length !== keys.length ||
+    !keys.every((k) => k in e) ||
+    typeof e.email !== "string" ||
+    !nullableString(e.recipientName) ||
+    !nullableString(e.recipientNote) ||
+    typeof e.articles !== "number" ||
+    !Number.isInteger(e.articles)
+  ) {
+    return { ok: false, message: "expected must be the gift as shown: email, recipientName, recipientNote and articles." };
+  }
+  return {
+    ok: true,
+    value: {
+      expected: {
+        email: e.email,
+        recipientName: e.recipientName as string | null,
+        recipientNote: e.recipientNote as string | null,
+        articles: e.articles,
+      },
+    },
+  };
+}
+
+/** Seams for tests, and the confirmation's snapshot; each seam defaults to the real thing. */
 export interface SendDeps {
+  readonly expected?: SendExpected | null;
   readonly createVoucher?: (
     input: NewVoucher,
     createdBy: string,
@@ -860,6 +1007,15 @@ export interface SendDeps {
  */
 export async function sendAuthorGift(id: string, deps: SendDeps = {}): Promise<SendAnswer> {
   const db = getDb();
+  const { expected } = deps;
+  /* What the confirmation showed must still be the row (261010g, Sol's F1).
+     Stored values, compared exactly: the page sends back what it was given. */
+  const unchanged = expected
+    ? sql`${authorGifts.email} is not distinct from ${expected.email}
+          and ${authorGifts.recipientName} is not distinct from ${expected.recipientName}
+          and ${authorGifts.recipientNote} is not distinct from ${expected.recipientNote}
+          and ${authorGifts.articles} = ${expected.articles}`
+    : undefined;
   const [frozen] = await db
     .update(authorGifts)
     .set({ sendStartedAt: sql`now()`, sendAttempt: sql`gen_random_uuid()`, updatedAt: sql`now()` })
@@ -869,6 +1025,7 @@ export async function sendAuthorGift(id: string, deps: SendDeps = {}): Promise<S
         isNull(authorGifts.sendStartedAt),
         isNull(authorGifts.discardedAt),
         sql`${authorGifts.email} is not null`,
+        unchanged,
       ),
     )
     .returning();
@@ -876,7 +1033,16 @@ export async function sendAuthorGift(id: string, deps: SendDeps = {}): Promise<S
   if (!gift) {
     const [row] = await db.select().from(authorGifts).where(eq(authorGifts.id, id)).limit(1);
     if (!row) return { kind: "not-found" };
-    if (row.sendStartedAt === null) return row.discardedAt !== null ? { kind: "discarded" } : { kind: "no-address" };
+    if (row.sendStartedAt === null) {
+      if (row.discardedAt !== null) return { kind: "discarded" };
+      if (row.email === null) return { kind: "no-address" };
+    }
+    /* A draft that missed the freeze only by its fields, or a frozen row that
+       is not what was shown: either way, not what the person approved. */
+    if (expected && !matchesExpected(row, expected)) return { kind: "changed" };
+    /* Unfrozen between the two statements (a starter refusal releasing another
+       press's attempt): press again. */
+    if (row.sendStartedAt === null) return { kind: "superseded" };
     gift = row;
   }
   /* The CHECKs `author_gifts_send_has_email` and `…_send_attempt_together`

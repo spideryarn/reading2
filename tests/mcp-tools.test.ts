@@ -19,7 +19,7 @@ import { SHARING_RIGHTS_CONFIRM } from "../src/messages.js";
 import { ApiError, makeApi, type TokenSource } from "../src/mcp/api.js";
 import { type Approver, defaultApprover, dialogText, type Operation, osascriptArgs, readDialogAnswer } from "../src/mcp/approve.js";
 import { buildServer } from "../src/mcp/server.js";
-import { TOOLS, voucherId } from "../src/mcp/tools.js";
+import { remoteTools, TOOLS, voucherId } from "../src/mcp/tools.js";
 
 const SITE = "https://sy.test";
 const ACCESS = "SENTINEL-ACCESS-7f3a9c";
@@ -368,8 +368,74 @@ describe("each tool calls the route it claims", () => {
   it("there is no tool that sends an author gift", () => {
     expect(TOOLS.map((t) => t.name).filter((n) => /author_gift/.test(n))).toEqual([
       "list_author_gifts",
+      "draft_author_gift",
       "update_author_gift",
     ]);
+  });
+
+  /* Plan 261010g § D1: a gift an agent drafts and Greg sends from /admin/vouchers. */
+  it("draft_author_gift makes a filled-in draft in one POST, with no lookup, and does not ask", async () => {
+    const approver = new StubApprover(false);
+    const h = await harness(
+      {
+        "POST /api/admin/author-gifts": {
+          status: 201,
+          body: { id: VOUCHER, status: "draft", created: true, lookupId: null, privateLinkKey: "SENTINEL-PRIVATE-LINK-KEY" },
+        },
+      },
+      approver,
+    );
+    const result = await h.call("draft_author_gift", {
+      slug: "on-tools",
+      email: "ann@example.com",
+      recipientName: "Ann",
+      recipientNote: "Made this of your paper.",
+      articles: 10,
+      notes: "Her address is on her homepage.",
+    });
+    expect(result.isError, result.text).toBe(false);
+    expect(approver.asked).toEqual([]);
+    expect(h.seen).toEqual([
+      expect.objectContaining({
+        method: "POST",
+        path: "/api/admin/author-gifts",
+        body: {
+          slug: "on-tools",
+          makeLink: false,
+          lookup: false,
+          draft: {
+            email: "ann@example.com",
+            recipientName: "Ann",
+            recipientNote: "Made this of your paper.",
+            articles: 10,
+            notes: "Her address is on her homepage.",
+          },
+        },
+      }),
+    ]);
+    expect(result.json()).toMatchObject({ id: VOUCHER, created: true, status: "draft", lookup: false });
+    expect(result.text).not.toContain("SENTINEL-PRIVATE-LINK-KEY");
+    expect(result.text).toMatch(/\/admin\/vouchers/);
+  });
+
+  it("draft_author_gift with look_up_author asks the route for a lookup", async () => {
+    const h = await harness({
+      "POST /api/admin/author-gifts": { status: 202, body: { id: VOUCHER, status: "draft", created: true, lookupId: VOUCHER } },
+    });
+    const result = await h.call("draft_author_gift", { slug: "on-tools", look_up_author: true });
+    expect(result.isError, result.text).toBe(false);
+    expect(h.seen[0]?.body).toEqual({ slug: "on-tools", makeLink: false, lookup: true, draft: {} });
+    expect(result.json()).toMatchObject({ created: true, lookup: true });
+  });
+
+  it("draft_author_gift on an article that already has a gift says nothing was changed", async () => {
+    const h = await harness({
+      "POST /api/admin/author-gifts": { status: 200, body: { id: VOUCHER, status: "sent", created: false } },
+    });
+    const result = await h.call("draft_author_gift", { slug: "on-tools", email: "ann@example.com" });
+    expect(result.isError, result.text).toBe(false);
+    expect(result.json()).toMatchObject({ id: VOUCHER, created: false, status: "sent" });
+    expect(result.text).toMatch(/update_author_gift/);
   });
 
   it("list_gift_vouchers leaves out the notes and the claimant's usage (Sol F17)", async () => {
@@ -801,6 +867,7 @@ describe("no token reaches a result", () => {
         create_gift_voucher: { email: "a@example.com", articles: 1, idempotency_key: "k" },
         update_gift_voucher: { id: VOUCHER, articles: 2 },
         update_author_gift: { id: VOUCHER, notes: "n" },
+        draft_author_gift: { slug: "s" },
         retry_gift_voucher_email: { voucherId: VOUCHER },
       };
       await h.call(t.name, args[t.name] ?? {});
@@ -1072,4 +1139,48 @@ describe("list_users and user_activity read the admin's users route, trimmed", (
       expect(approver.asked).toEqual([]);
     });
   }
+});
+
+/* Plan 261010g § D2: on the remote server nobody can be asked, so a tool that
+   asks is left out of the list rather than listed and refused — unless it
+   declares what it is without the asking part. */
+describe("the remote server's tool list", () => {
+  const remote = remoteTools();
+  const names = remote.map((t) => t.name);
+
+  it("leaves out every tool that always asks", () => {
+    for (const name of ["make_article_public", "create_private_link", "create_gift_voucher", "retry_gift_voucher_email"]) {
+      expect(names, name).not.toContain(name);
+    }
+  });
+
+  it("keeps everything that never asks, draft_author_gift included", () => {
+    for (const t of TOOLS.filter((t) => !t.ask)) expect(names).toContain(t.name);
+    expect(names).toContain("draft_author_gift");
+  });
+
+  it("keeps update_gift_voucher without the address, which is the part that asks", () => {
+    const update = remote.find((t) => t.name === "update_gift_voucher");
+    expect(update).toBeDefined();
+    expect(Object.keys(update?.input.shape ?? {})).not.toContain("email");
+    expect(update?.input.safeParse({ id: VOUCHER, email: "a@example.com" }).success).toBe(false);
+    expect(update?.description).not.toMatch(/approve/);
+  });
+
+  it("leaves out a new asking tool by default, and serves a declared remote form", () => {
+    const base = TOOLS.find((t) => t.name === "whoami")!;
+    const asking = { ...base, name: "future_send", ask: async () => null };
+    const declared = {
+      ...asking,
+      name: "future_edit",
+      remote: { description: "Edits; the sending part is not here.", input: base.input },
+    };
+    const served = remoteTools([base, asking, declared]);
+    expect(served.map((t) => t.name)).toEqual(["whoami", "future_edit"]);
+    expect(served[1]?.description).toBe("Edits; the sending part is not here.");
+  });
+
+  it("says nothing on the remote about a dialog on this computer", () => {
+    for (const t of remote) expect(t.description, t.name).not.toMatch(/dialog/i);
+  });
 });

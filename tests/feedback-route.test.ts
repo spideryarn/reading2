@@ -175,8 +175,20 @@ vi.mock("../src/feedback-questions.generated.js", () => ({
     { id: "q-bbbbbb", title: "A question about nothing filed", report: null, asked: "2026-10-06", body: "Stands alone." },
     { id: "q-cccccc", title: "About a reader's report", report: "spya-n0tm1n", asked: "2026-10-07", body: "The body says it all." },
   ],
-  /* q-bbbbbb's first reply has been acted on (plan 261008i). */
-  FEEDBACK_QUESTION_ACTED: { "q-aaaaaa": [], "q-bbbbbb": ["spya-act3d0"], "q-cccccc": [] },
+  /* q-bbbbbb's first replies have been acted on (plans 261008i and 261010h). */
+  FEEDBACK_QUESTION_ACTED: {
+    "q-aaaaaa": [],
+    "q-bbbbbb": [
+      "spya-act3d0",
+      "spya-act3d1",
+      "spya-act3d2",
+      "spya-act3d3",
+      "spya-act3d4",
+      "spya-act3d5",
+      "spya-act3d6",
+    ],
+    "q-cccccc": [],
+  },
 }));
 
 vi.mock("../src/store/index.js", async (importActual) => {
@@ -892,6 +904,26 @@ describe("questions for the admin, and replies to them", () => {
     ]);
   });
 
+  /* Plan 261010h (spya-j4sg9g): a client that asks `questions=3` also gets
+     the replies an agent has acted on, so a thread answered and asked again
+     does not look like one never answered. Shape 2 stays exactly as it was. */
+  it("sends acted replies apart to a client that asks for shape 3, and shape 2 without them", async () => {
+    newestAnswer = [
+      { id: "spya-act3d0", questionId: "q-bbbbbb", body: "First go", createdAt: "2026-10-07T07:00:00.000Z" },
+      { id: "spya-repzyy", questionId: "q-bbbbbb", body: "Yes, do it", createdAt: "2026-10-07T08:00:00.000Z" },
+    ];
+    const three = ((await get(`${EARLIER}?questions=3`)).body as Sent).questions;
+    const b3 = three.find((one) => one.id === "q-bbbbbb");
+    expect(b3?.actedAnswers).toEqual([{ id: "spya-act3d0", body: "First go", createdAt: "2026-10-07T07:00:00.000Z" }]);
+    expect(b3?.olderActedAnswers).toBe(0);
+    expect(b3?.answers).toEqual([{ id: "spya-repzyy", body: "Yes, do it", createdAt: "2026-10-07T08:00:00.000Z" }]);
+    expect(three.find((one) => one.id === "q-aaaaaa")?.actedAnswers).toEqual([]);
+    const two = ((await get(THREADS)).body as Sent).questions;
+    expect(Object.keys(two[1] ?? {}).sort()).toEqual([
+      "answers", "asked", "body", "deferredAt", "id", "olderAnswers", "report", "state", "title",
+    ]);
+  });
+
   it("sends at most five unacted replies a thread, the newest, and counts the rest (F12)", async () => {
     newestAnswer = Array.from({ length: 7 }, (_, i) => ({
       id: `spya-rep00${i}`,
@@ -908,6 +940,26 @@ describe("questions for the admin, and replies to them", () => {
       "reply 6",
     ]);
     expect(first?.olderAnswers).toBe(2);
+  });
+
+  it("sends at most five acted replies a thread, the newest in oldest-first order, and counts the rest", async () => {
+    newestAnswer = Array.from({ length: 7 }, (_, i) => ({
+      id: `spya-act3d${i}`,
+      questionId: "q-bbbbbb",
+      body: `acted reply ${i}`,
+      createdAt: `2026-10-07T0${i}:00:00.000Z`,
+    }));
+    const questions = ((await get(`${EARLIER}?questions=3`)).body as Sent).questions;
+    const acted = questions.find((one) => one.id === "q-bbbbbb");
+    expect(((acted?.actedAnswers ?? []) as { body: string }[]).map((one) => one.body)).toEqual([
+      "acted reply 2",
+      "acted reply 3",
+      "acted reply 4",
+      "acted reply 5",
+      "acted reply 6",
+    ]);
+    expect(acted?.olderActedAnswers).toBe(2);
+    expect(acted?.answers).toEqual([]);
   });
 
   it("sends every open question, oldest first, with the admin's own report and newest reply", async () => {

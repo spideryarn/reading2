@@ -238,8 +238,8 @@ describe("Author gifts", () => {
     expect(reason?.textContent).toContain("lookup");
   });
 
-  it("asks before Send by naming the address, then sends, and re-reads the vouchers", async () => {
-    giftsAnswer = () => [gift({ email: "ann@example.test" })];
+  it("asks before Send by naming the address, then sends what it showed, and re-reads the vouchers", async () => {
+    giftsAnswer = () => [gift({ email: "ann@example.test", recipientName: "Ann" })];
     await mount();
     const vouchersRead = () => calls.filter((c) => c.method === "GET" && c.url === "/api/admin/vouchers").length;
     const before = vouchersRead();
@@ -248,9 +248,61 @@ describe("Author gifts", () => {
     expect(card(DRAFT)?.textContent).toContain("Send the gift email to ann@example.test?");
     await act(async () => button(card(DRAFT), "Send to ann@example.test")?.click());
     await settle();
-    expect(writes()).toEqual([{ method: "POST", url: `/api/admin/author-gifts/${DRAFT}/send`, body: undefined }]);
+    /* Plan 261010g: the gift as the confirmation showed it, so an agent's edit since is refused. */
+    expect(writes()).toEqual([
+      {
+        method: "POST",
+        url: `/api/admin/author-gifts/${DRAFT}/send`,
+        body: { expected: { email: "ann@example.test", recipientName: "Ann", recipientNote: null, articles: 20 } },
+      },
+    ]);
     expect(card(DRAFT)?.textContent).toContain("The gift email is on its way");
     expect(vouchersRead()).toBeGreaterThan(before);
+  });
+
+  it("keeps the gift being confirmed when a refresh brings an agent's edit", async () => {
+    const shown = gift({ email: "ann@example.test", recipientName: "Ann", recipientNote: "For Ann", articles: 20 });
+    giftsAnswer = () => [shown];
+    await mount();
+    await act(async () => button(card(DRAFT), "Send")?.click());
+
+    giftsAnswer = () => [gift({ email: "agent@example.test", recipientName: "Agent", recipientNote: "Changed", articles: 5 })];
+    await act(async () => (section().querySelector('[aria-label="Refresh the author gifts"]') as HTMLButtonElement).click());
+    await settle();
+    expect(button(card(DRAFT), "Send to ann@example.test")).toBeDefined();
+    expect(card(DRAFT)?.textContent).toContain("For Ann");
+    sendAnswer = { status: 409, body: { error: "That gift changed since you opened it, so nothing was sent." } };
+    await act(async () => button(card(DRAFT), "Send to ann@example.test")?.click());
+    await settle();
+    expect(writes()).toEqual([
+      {
+        method: "POST",
+        url: `/api/admin/author-gifts/${DRAFT}/send`,
+        body: { expected: { email: "ann@example.test", recipientName: "Ann", recipientNote: "For Ann", articles: 20 } },
+      },
+    ]);
+    expect(card(DRAFT)?.querySelector('[role="alert"]')?.textContent).toContain("changed since you opened it");
+    expect(card(DRAFT)?.textContent).toContain("agent@example.test");
+    /* Reopening is an explicit review of the new fields. */
+    await act(async () => button(card(DRAFT), "Send")?.click());
+    expect(button(card(DRAFT), "Send to agent@example.test")).toBeDefined();
+  });
+
+  it("closes an open confirmation when a refresh says the gift is discarded", async () => {
+    giftsAnswer = () => [gift({ email: "ann@example.test" })];
+    await mount();
+    await act(async () => button(card(DRAFT), "Send")?.click());
+    giftsAnswer = () => [gift({ status: "discarded", email: "ann@example.test", discardedAt: "2026-10-09T12:00:00Z" })];
+    await act(async () => (section().querySelector('[aria-label="Refresh the author gifts"]') as HTMLButtonElement).click());
+    await settle();
+    expect(card(DRAFT)?.querySelector("[data-gift-status]")?.textContent).toContain("Discarded");
+    expect(button(card(DRAFT), "Send to ann@example.test")).toBeUndefined();
+    expect(writes()).toEqual([]);
+    giftsAnswer = () => [gift({ email: "ann@example.test" })];
+    await act(async () => (section().querySelector('[aria-label="Refresh the author gifts"]') as HTMLButtonElement).click());
+    await settle();
+    expect(button(card(DRAFT), "Send to ann@example.test")).toBeUndefined();
+    expect(button(card(DRAFT), "Send")).toBeDefined();
   });
 
   it("shows a refused Send in the server's words, beside the gift", async () => {

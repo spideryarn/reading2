@@ -349,9 +349,194 @@ describe("POST /api/admin/author-gifts — ensure", () => {
   });
 });
 
+/* A draft made already filled in, by an agent through draft_author_gift
+   (plan 261010g § D1): the fields go into the insert, and `lookup: false`
+   starts no search. Nothing is emailed: no voucher, no gift email. */
+describe("POST /api/admin/author-gifts — a filled-in draft (261010g)", () => {
+  it("writes the fields, makes no lookup, starts nothing, and queues no voucher or email", async () => {
+    const box = mailbox();
+    control.deps = box.deps;
+    const mine = await seed("filled", { linkOn: true });
+    const key = await shareTokenOf(mine.id);
+    const reply = await drive("POST", "/api/admin/author-gifts", {
+      slug: mine.slug,
+      makeLink: false,
+      lookup: false,
+      draft: {
+        email: ` ${addressOf("Filled").toUpperCase()} `,
+        recipientName: "Ada",
+        recipientNote: "I made this of your paper.",
+        articles: 7,
+        notes: "Found at https://example.invalid/ada",
+      },
+    });
+    expect(reply.status).toBe(201);
+    expect(reply.body).toEqual({ id: reply.body.id, status: "draft", created: true, lookupId: null });
+    const id = String(reply.body.id);
+    expect(await giftRow(id)).toMatchObject({
+      email: addressOf("filled"),
+      recipient_name: "Ada",
+      recipient_note: "I made this of your paper.",
+      articles: 7,
+      notes: "Found at https://example.invalid/ada",
+      email_lookup_id: null,
+      name_lookup_id: null,
+      send_started_at: null,
+    });
+    expect((await giftRow(id)).notes_updated_at).not.toBeNull();
+    expect(await lookupsOf(id)).toEqual([]);
+    expect(control.lookupsStarted).toEqual([]);
+    const { rows } = await pool.query("select count(*)::int as n from spideryarn.billing_vouchers where email = $1", [
+      addressOf("filled"),
+    ]);
+    expect(rows[0]).toEqual({ n: 0 });
+    expect(box.sent).toEqual([]);
+    expect(await shareTokenOf(mine.id)).toBe(key);
+  });
+
+  /* Sol's F2 on the plan: a model must not record a rights confirmation
+     nobody gave, so `makeLink: false` never makes the link. */
+  it("with makeLink: false, refuses a private article with no link, and makes no link, gift or event", async () => {
+    const mine = await seed("filled-nolink");
+    const reply = await drive("POST", "/api/admin/author-gifts", { slug: mine.slug, makeLink: false, lookup: false });
+    expect(reply.status).toBe(409);
+    expect(String(reply.body.error)).toMatch(/private link/);
+    expect(await shareTokenOf(mine.id)).toBeNull();
+    const { rows } = await pool.query(
+      `select (select count(*)::int from spideryarn.author_gifts where article_id = $1) as gifts,
+              (select count(*)::int from spideryarn.article_share_link_events where article_id = $1) as events`,
+      [mine.id],
+    );
+    expect(rows[0]).toEqual({ gifts: 0, events: 0 });
+
+    /* A public article needs no link, so it can be drafted. */
+    const open = await seed("filled-public", { visibility: "public" });
+    expect((await drive("POST", "/api/admin/author-gifts", { slug: open.slug, makeLink: false, lookup: false })).status).toBe(201);
+  });
+
+  it("still starts a lookup when asked, and the lookup fills only what the draft left empty", async () => {
+    const mine = await seed("filled-lookup", { linkOn: true });
+    const reply = await drive("POST", "/api/admin/author-gifts", {
+      slug: mine.slug,
+      makeLink: false,
+      draft: { email: addressOf("typed") },
+    });
+    expect(reply.status).toBe(202);
+    const id = String(reply.body.id);
+    const lookupId = String(reply.body.lookupId);
+    expect(control.lookupsStarted).toEqual([lookupId]);
+    expect(
+      await finishLookup(lookupId, {
+        kind: "found",
+        authorName: "Grace Hopper",
+        authorSourceUrl: "https://example.org/grace",
+        email: addressOf("found"),
+        emailSourceUrl: "https://example.org/grace",
+        suggestedEmail: null,
+        contactUrl: null,
+        searches: 1,
+        model: "anthropic/claude-sonnet-5",
+        notes: null,
+      }),
+    ).toMatchObject({ kind: "finished", applied: { email: false, name: true } });
+    expect(await giftRow(id)).toMatchObject({
+      email: addressOf("typed"),
+      email_lookup_id: null,
+      recipient_name: "Grace Hopper",
+      name_lookup_id: lookupId,
+    });
+  });
+
+  it("leaves an existing gift exactly as it was", async () => {
+    const mine = await seed("filled-existing");
+    const first = await drive("POST", "/api/admin/author-gifts", {
+      slug: mine.slug,
+      rightsConfirmed: true,
+      lookup: false,
+      draft: { email: addressOf("first"), notes: "first" },
+    });
+    expect(first.status).toBe(201);
+    const before = await giftRow(String(first.body.id));
+    const again = await drive("POST", "/api/admin/author-gifts", {
+      slug: mine.slug,
+      rightsConfirmed: true,
+      lookup: false,
+      draft: { email: addressOf("second"), notes: "second", articles: 3 },
+    });
+    expect(again.status).toBe(200);
+    expect(again.body).toEqual({ id: first.body.id, status: "draft", created: false });
+    expect(await giftRow(String(first.body.id))).toEqual(before);
+  });
+
+  it("refuses bad fields with a 400 before anything is made", async () => {
+    const mine = await seed("filled-bad");
+    for (const body of [
+      { draft: { email: "not an address" } },
+      { draft: { articles: 0 } },
+      { draft: { recipientName: "n".repeat(81) } },
+      { draft: { discarded: true } },
+      { draft: { appendNotes: "x" } },
+      { draft: "x" },
+      { lookup: "no" },
+      { makeLink: false },
+      { rightsConfirmed: undefined, makeLink: true },
+    ]) {
+      const reply = await drive("POST", "/api/admin/author-gifts", { slug: mine.slug, rightsConfirmed: true, ...body });
+      expect(reply.status, JSON.stringify(body)).toBe(400);
+    }
+    const { rows } = await pool.query("select count(*)::int as n from spideryarn.author_gifts where article_id = $1", [mine.id]);
+    expect(rows[0]).toEqual({ n: 0 });
+    expect(await shareTokenOf(mine.id)).toBeNull();
+  });
+});
+
 /* ------------------------------------------------------------------- send -- */
 
 describe("POST /api/admin/author-gifts/:id/send", () => {
+  /* Plan 261010g, Sol's F1: an agent's edit between Greg reading the
+     confirmation and pressing Send must not send to an address he never saw. */
+  it("with what the confirmation showed: sends when it still matches, and refuses, sending nothing, when it changed", async () => {
+    const box = mailbox();
+    control.deps = box.deps;
+    const mine = await seed("send-expected", { linkOn: true });
+    const made = await drive("POST", "/api/admin/author-gifts", {
+      slug: mine.slug,
+      makeLink: false,
+      lookup: false,
+      draft: { email: addressOf("seen"), recipientName: "Ada", articles: 5 },
+    });
+    const id = String(made.body.id);
+    const shown = { email: addressOf("seen"), recipientName: "Ada", recipientNote: null, articles: 5 };
+    /* The agent re-addresses it after the page drew it. */
+    expect((await drive("PATCH", `/api/admin/author-gifts/${id}`, { email: addressOf("agent") })).status).toBe(200);
+
+    const refused = await drive("POST", `/api/admin/author-gifts/${id}/send`, { expected: shown });
+    expect(refused.status).toBe(409);
+    expect(String(refused.body.error)).toMatch(/changed/);
+    expect(await giftRow(id)).toMatchObject({ send_started_at: null, email: addressOf("agent") });
+    const { rows } = await pool.query("select count(*)::int as n from spideryarn.billing_vouchers where email like $1", [
+      `agift-%-${RUN}@example.invalid`,
+    ]);
+    expect(rows[0]).toEqual({ n: 0 });
+    expect(box.sent).toEqual([]);
+
+    const now = { ...shown, email: addressOf("agent") };
+    const sent = await drive("POST", `/api/admin/author-gifts/${id}/send`, { expected: now });
+    expect(sent.status).toBe(201);
+    /* A replay compares against the frozen row too. */
+    expect((await drive("POST", `/api/admin/author-gifts/${id}/send`, { expected: shown })).status).toBe(409);
+    expect((await drive("POST", `/api/admin/author-gifts/${id}/send`, { expected: now })).status).toBe(200);
+    expect(box.sent).toHaveLength(1);
+  });
+
+  it("refuses an expected snapshot that is not one", async () => {
+    const mine = await seed("send-expected-bad", { linkOn: true });
+    const { id } = await ensured(mine);
+    for (const body of [{ expected: "x" }, { expected: { email: "a@b.c" } }, { other: 1 }]) {
+      expect((await drive("POST", `/api/admin/author-gifts/${id}/send`, body)).status, JSON.stringify(body)).toBe(400);
+    }
+  });
+
   it("makes the voucher from the frozen fields and queues exactly one gift email; a repeat queues none", async () => {
     const box = mailbox();
     control.deps = box.deps;
