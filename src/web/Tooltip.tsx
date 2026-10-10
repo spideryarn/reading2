@@ -330,7 +330,7 @@ export function Tooltip({
     useFocus(context, { enabled }),
     /* No `bubbles`: a tooltip opened from a control inside an interactive card
        takes the first Escape and the card the second — one press, one surface
-       (tests/one-escape-closes-one-surface.test.tsx, plan 261010g). */
+       (tests/one-escape-closes-one-surface.test.tsx, plan 261010s). */
     useDismiss(context, { enabled }),
     useRole(context, { role: interactive ? "dialog" : "tooltip" }),
   ]);
@@ -449,7 +449,7 @@ export function Tooltip({
               {/* Delay groups are exclusive: opening one member closes the
                   previous one. A tooltip inside an interactive card is its
                   child, not its replacement, so give descendants their own
-                  group (Skim's term card, plan 261010g). */}
+                  group (Skim's term card, plan 261010s). */}
               {interactive ? <FloatingDelayGroup delay={DELAY}>{content}</FloatingDelayGroup> : content}
               {/* fill and stroke are PROPS, not CSS. FloatingArrow needs the
                   values itself: given a strokeWidth it draws a second, clipped

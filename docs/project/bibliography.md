@@ -843,7 +843,7 @@ a line in the button's place shows how many questions were asked and the chat's 
 latest answer begins, until there is one), and pressing it opens that conversation beside Sources'
 Bibliography; the hover card's button reopens it too
 ([chat-from-a-mode.md § One chat per item](chat-from-a-mode.md#one-chat-per-item), plan
-[261010g](../plans/261010g-ask-in-chat-resumes-its-thread-and-becomes-an-icon.md)). Chat's list
+[261010s](../plans/261010s-ask-in-chat-resumes-its-thread-and-becomes-an-icon.md)). Chat's list
 marks the conversation with Sources' icon. A visitor has neither the button nor the line.
 
 It is the Glossary's button with a different origin, `{ mode: "bibliography", itemId, quote }` (`citations` until 2026-10-09, still read): the

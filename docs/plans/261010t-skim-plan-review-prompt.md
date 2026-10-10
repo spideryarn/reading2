@@ -2,7 +2,7 @@
 
 You are reviewing a plan before it is built, in the repo you are running in. Read-only.
 
-Read: docs/plans/261010g-skim-deeper-passes-always-longer-and-a-previous-stop-door.md (the plan),
+Read: docs/plans/261010t-skim-deeper-passes-always-longer-and-a-previous-stop-door.md (the plan),
 then src/skim.ts (`targetsFor`, `validateRoute`, `maxCarried`, `visibleCounts`, `growthFailure`,
 `buildSkim`, the SKIM_SYSTEM prompt section 2 and RULES, `renderPromptParts`), src/web/skim-route.ts
 (`walkedIn`, `offeredDepths`, `passRoute`, `doorAfter`), src/web/modes/skim/SkimMode.tsx (`step`,

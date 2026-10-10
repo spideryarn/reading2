@@ -5020,7 +5020,7 @@ export function summarise(thread: ChatThread): ThreadSummary {
     turns: thread.messages.filter((m) => m.role === "user").length,
     ...(last ? { lastLine: last } : {}),
     /* The reader's own conversation, summarised for the reader: shown on the
-       mark of the item it was started from (plan 261010g, D4). */
+       mark of the item it was started from (plan 261010s, D4). */
     ...(thread.gist ? { gist: thread.gist } : {}),
   };
 }

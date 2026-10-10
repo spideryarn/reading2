@@ -2040,7 +2040,7 @@ export function Looked({
             disabled, a term the article never quotes included: a chat needs
             no passage. The press sends the question (plan 261006j). Only
             while the entry has no chat: then the mark, the way back to it,
-            stands in its place (plan 261010g, D2). */}
+            stands in its place (plan 261010s, D2). */}
         {chat ? (
           <OriginChatMark chat={chat} label={OPEN_ENTRY_CHAT} onOpen={chats.onOpen} />
         ) : (

@@ -582,7 +582,7 @@ other thing he offered — and the pips on the prose's door.
 
 **A deeper pass is never shorter, and Most is longer than More, as walked** — Greg, 2026-10-09,
 reports spya-nbmce7 and spya-q2w7yt, plan
-[261010g](../plans/261010g-skim-deeper-passes-always-longer-and-a-previous-stop-door.md):
+[261010t](../plans/261010t-skim-deeper-passes-always-longer-and-a-previous-stop-door.md):
 
 > Levels of the skim mode were supposed to get more and more detailed, and yet in this case it
 > seems as though the most detailed skim submode has fewer steps than the middle one.

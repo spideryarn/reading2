@@ -8,7 +8,7 @@ comment: Ask in chat now reopens the item's chat instead of starting another, th
 Reports `spya-pdpnjf` (#526, SPIDERYARN-READING2-G6) and `spya-fy05y6` (#527, SPIDERYARN-READING2-G7),
 Greg (admin, provenance proved by `feedback-reporter.ts`), 2026-10-09 23:06 UTC, filed from Sources ›
 Bibliography on `arxiv-1706-03762`. Both quoted in full in the plan,
-[261010g](../plans/261010g-ask-in-chat-resumes-its-thread-and-becomes-an-icon.md). In short:
+[261010s](../plans/261010s-ask-in-chat-resumes-its-thread-and-becomes-an-icon.md). In short:
 
 > I tried clicking Ask in Chat again. I think for the same citation, and I'm 99% sure it somehow
 > created a new chat rather than resuming the existing one for that citation. […] Can we get rid of
@@ -50,4 +50,4 @@ and want reshooting at the next help-page pass.
 Checks: a red-first test for each of the three behaviours, GPT Sol's plan and code reviews (its
 code review fixed a second Claims list that still drew both controls, phantom chats after a refused
 first send, and touch), and a browser pass on the box (Bibliography and the hover card, desktop and
-390px; screenshots `261010g-shot-*.png` beside the plan).
+390px; screenshots `261010s-shot-*.png` beside the plan).

@@ -980,7 +980,7 @@ A lookup answer kept from before is still drawn above it.
 What the owner gets:
 
 - **The button**, Chat's two bubbles with its words in a card (icon only since plan
-  [261010g](../plans/261010g-ask-in-chat-resumes-its-thread-and-becomes-an-icon.md)), goes to Chat
+  [261010s](../plans/261010s-ask-in-chat-resumes-its-thread-and-becomes-an-icon.md)), goes to Chat
   and opens a fresh conversation with the term quoted and a question after it, then sends that
   question. The press is the Send since 2026-10-06
   ([261006j](../plans/261006j-ask-in-chat-sends-the-question.md)), and Back returns to the Glossary.
@@ -988,7 +988,7 @@ What the owner gets:
   chat's gist (what it has covered, in the AI's words), or how its latest answer begins until it
   has one. Pressing it opens that conversation beside the Glossary (`?thread=`, the mode
   unchanged). **The button goes**, and the hover card's reopens the same chat: an entry has one
-  chat reached from it, since plan 261010g
+  chat reached from it, since plan 261010s
   ([chat-from-a-mode.md § One chat per item](chat-from-a-mode.md#one-chat-per-item)).
 - **In Chat's list** the conversation has the Glossary's icon, with a card that names the term, and
   the filter above the list gains *Glossary*.

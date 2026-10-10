@@ -14,7 +14,7 @@
  * now carries with every question. It is what lets a new conversation asking
  * "any confounds?" see that an earlier one, titled with whatever its first
  * question happened to be, went on to list three. It never replaces the
- * reader's title. **Since plan 261010g it is also shown to the reader**, on
+ * reader's title. **Since plan 261010s it is also shown to the reader**, on
  * the mark of the item a chat was started from (src/routes.ts § `summarise`,
  * OriginChat.tsx § `OriginChatMark`): Greg asked for *"a short summary of the
  * chat"* there (spya-pdpnjf).

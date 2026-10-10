@@ -583,7 +583,7 @@ function IdeaRow({
               draws them (GlossaryPanel.tsx § `Looked`). The press sends the
               idea's name and statement, fenced, and a question about it
               (chat-handoff.ts § `askAboutIdea`). Owner only. One or the
-              other, never both (plan 261010g, D2). */}
+              other, never both (plan 261010s, D2). */}
           {chats && (
             <div className="gloss-look ideas-ask">
               {chat ? (

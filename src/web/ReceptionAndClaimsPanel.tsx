@@ -2289,7 +2289,7 @@ function ClaimsList({
               <span className="rcp-group-quote">“{group.claimQuote}”</span>
               <BlockRef id={group.blockId} onJump={onJump} />
               {/* Only while the claim has no chat: then the mark below is the
-                  one chat control, and opens it (plan 261010g, D2). */}
+                  one chat control, and opens it (plan 261010s, D2). */}
               {chats && !chat && (
                 <Tooltip placement="top" content={<TipNote>{SOURCES_CLAIM_CHECK_CLAIM}</TipNote>}>
                   <Button

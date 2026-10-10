@@ -346,7 +346,7 @@ modes; each item points to the mode doc that holds its machinery.
   > this pattern.
   >
   > — Greg, 2026-10-09 (spya-pdpnjf,
-  > [261010g](../plans/261010g-ask-in-chat-resumes-its-thread-and-becomes-an-icon.md))
+  > [261010s](../plans/261010s-ask-in-chat-resumes-its-thread-and-becomes-an-icon.md))
 
   Which modes have it and the twelve steps to add it to another:
   [chat-from-a-mode.md](chat-from-a-mode.md).

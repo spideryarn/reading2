@@ -4373,7 +4373,7 @@ export const chatThreads = spideryarn.table(
      * by the model in the reader's *other* conversations, beside the title, so
      * a new one can see what an earlier one already said. Never the title: the
      * reader's title and renames are untouched. Shown on screen since plan
-     * 261010g, on the mark of the item a chat was started from.
+     * 261010s, on the mark of the item a chat was started from.
      * Null until the first gist, and whenever the last attempt failed before
      * any succeeded.
      */

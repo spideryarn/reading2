@@ -920,7 +920,7 @@ describe("the panel", () => {
      (spya-se0e4v): "they should provide/reuse the usual 'go to glossary' etc
      in rich tooltips". The card is portalled, so it is found on `document`. */
   const termCard = () => document.querySelector<HTMLElement>('[role="dialog"]');
-  /* An icon-only button (plan 261010g) is named by its aria-label. */
+  /* An icon-only button (plan 261010s) is named by its aria-label. */
   const buttonName = (b: HTMLButtonElement) => b.textContent?.trim() || b.getAttribute("aria-label");
   const cardButtons = () => [...(termCard()?.querySelectorAll("button") ?? [])].map(buttonName);
   const cardButton = (label: string) =>

@@ -241,7 +241,7 @@ export class ChatController {
   /**
    * New item chats whose caller still needs to hear if the optimistic thread
    * disappears. Keyed by thread rather than operation so it survives a
-   * refusal's repair and a later delete (plan 261010g).
+   * refusal's repair and a later delete (plan 261010s).
    */
   #onGone = new Map<string, (id: string) => void>();
   /** Article-level completion work survives the composer's detach. */
