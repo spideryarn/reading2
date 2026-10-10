@@ -800,6 +800,10 @@ Each of these has cost somebody real time on this box.
   Greg, 2026-09-08: *"SendMessage for Claude agents where available, and fall back to tmux as a
   backup plan."* Your own peer name is whatever `ListAgents` prints at the top; Greg sets it with
   `/rename`, and it is not the tmux session name.
+- **Never use `gjd-remote tell` yourself: it speaks as Greg.** It is Greg's tool, and what it sends
+  arrives prefixed `[Greg, via the fleet dashboard]`, whatever the text says about who wrote it. On
+  2026-10-10 an Overseer "hold your test runs" sent that way became Greg's instruction to three
+  sessions, and one then refused to take the Overseer's later go-ahead as lifting it.
 - **An empty `ListAgents` is not a dead peer.** `ListAgents` and `SendMessage` find peers per Claude
   config directory. A session started under another one sees only the sessions registered there,
   and its `SendMessage` to you answers *"No agent named 'Overseer' is reachable."* Seen 2026-09-10,
