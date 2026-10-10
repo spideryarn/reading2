@@ -558,7 +558,13 @@ Every few hours, as a tmux loop like the feedback sweep's:
    `git log origin/main..HEAD` is empty, there is nothing to deploy.
 2. Read every new migration and `.sql` file since `origin/main`. Additive ones you apply and name in
    the report. Anything that would destroy reader data goes to Greg first — a dropped table or
-   column, a delete, a truncate, a destructive backfill.
+   column, a delete, a truncate, a destructive backfill. **Whether to ship a migration in one go,
+   risking a brief breakage while old and new code overlap, or in careful steps, is your call, not
+   Greg's.** Default to one go and the brief breakage, and choose the careful steps only when
+   you judge them really necessary. Greg, 2026-10-10: *"Re the Sources rename - I'd rather just
+   break things briefly and keep things simple"*, and *"in future just do the migration decision
+   yourself, whether that's allow for a brief breakage or if you think it's really necessary we can
+   do the multi-step or careful way, but don't stop to ask me"*.
 3. **Write the release notes first**: `npm run changelog:prepare` under `scripts/tmux-job.ts`, then
    pull. Greg, 2026-10-01: *"make sure that the latest release notes are included in the deploy
    itself"*. It commits and pushes the notes for what is about to ship
