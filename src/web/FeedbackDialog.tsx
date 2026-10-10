@@ -130,7 +130,12 @@ import { imageFileFromDrop, imageFileFromPaste, screenshotFromFile } from "./fee
 import { apiFetch, failure } from "./lib/api.js";
 import { keepDictation } from "./dictation-keep.js";
 import { useReaderTranscriber } from "./dictation-upload.js";
-import { forgetFeedbackDraft, readFeedbackDraft, saveFeedbackDraft } from "./feedback-draft.js";
+import {
+  type FeedbackDraft,
+  forgetMatchingFeedbackDraft,
+  readFeedbackDraft,
+  saveFeedbackDraft,
+} from "./feedback-draft.js";
 import { noteFeedbackDraft } from "./safe-to-reload.js";
 import { Toast, type ToastMessage } from "./Toast.js";
 import { useCopy } from "./useCopy.js";
@@ -482,8 +487,9 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
    * And keying it to `open` meant a reader who closed the dialog after a failed
    * send came back with a **new** id, so their retry filed a second report of
    * the same bug rather than being recognised as the same one. The id now
-   * changes in exactly one place: after a report is successfully filed, when
-   * `discard()` starts the next one.
+   * changes only when a report is successfully filed (`discard()` starts the
+   * next one), or when an edited retry needs a fresh id so the server cannot
+   * accept an older payload as its duplicate.
    */
   const [reportId, setReportId] = useState<string>(() => mintId());
   /* The same value, readable from inside a promise that started before the last
@@ -491,6 +497,14 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
      against to find out whether that report is still the one on screen. */
   const reportIdRef = useRef(reportId);
   reportIdRef.current = reportId;
+  /* Every record this tab last read or wrote for the current draft. The body
+     and kind matter as much as the id: another tab can write newer words under
+     the restored id, and this tab must not mistake their record for its own. */
+  const savedDrafts = useRef(
+    new Map<string, FeedbackDraft>(
+      restored ? [[restored.savedId, { body: restored.body, kind: restored.kind }]] : [],
+    ),
+  );
   /**
    * **What the newest attempt sent, under which id.** The server answers a
    * reused id with the row it already holds and ignores the new payload, so a
@@ -506,19 +520,26 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
   /**
    * **The draft, copied to this browser a second after it last changed**, so a
    * page that hangs or reloads does not take it (feedback-draft.ts; Greg,
-   * spya-exhqqr). Under this report's id, which is how a tab knows the record
-   * is its own to remove: an emptied box removes only its own, and a filed
-   * report removes its own in `send`. A restored draft carries this tab's fresh
-   * id, never the saved one, so two tabs that restore one draft cannot share an
-   * id and have the second send answered as a duplicate.
+   * spya-exhqqr). A restored draft carries this tab's fresh report id, never the
+   * saved one, so two tabs cannot send it under one id and have the second
+   * answered as a duplicate. `savedDrafts` keeps the exact older snapshot this
+   * tab read: an emptied or filed draft may remove that snapshot, but not newer
+   * words another tab has since written under the same id.
    */
   const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (readerId === undefined) return;
     const timer = setTimeout(() => {
       draftTimer.current = null;
-      if (body.trim() === "") forgetFeedbackDraft(readerId, reportId);
-      else saveFeedbackDraft(readerId, reportId, { body, kind });
+      if (body.trim() === "" && kind === null) {
+        for (const [id, draft] of savedDrafts.current) {
+          forgetMatchingFeedbackDraft(readerId, id, draft);
+        }
+      } else {
+        const draft = { body, kind };
+        saveFeedbackDraft(readerId, reportId, draft);
+        savedDrafts.current.set(reportId, draft);
+      }
     }, DRAFT_SAVE_MS);
     draftTimer.current = timer;
     return () => clearTimeout(timer);
@@ -630,7 +651,7 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
    * So a draft survives being dismissed, and is cleared only here — when a
    * report has been filed (`send`).
    */
-  const discard = useCallback((keepDraft: boolean) => {
+  const discard = useCallback((keepDraft: boolean): string => {
     /* Invalidates any paste still being re-encoded — see `shotGeneration`. */
     shotGeneration.current += 1;
     if (!keepDraft) {
@@ -646,7 +667,11 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
     resetCopy();
     setPreparing(false);
     sending.current = false;
-    setReportId(mintId());
+    const next = mintId();
+    reportIdRef.current = next;
+    savedDrafts.current = new Map();
+    setReportId(next);
+    return next;
   }, [resetCopy]);
 
   /**
@@ -661,19 +686,20 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
    * Until then it was a `sent` stage with its own panel, and a `thanksSeen`
    * effect that emptied the form once the reader closed that panel; both went.
    *
-   * **`bodyRef` is the box as it is now**, readable from inside a send that
-   * began before the last render — the same pattern as `reportIdRef` — and it is
-   * how a completion finds out whether the reader went on typing after Send.
+   * **The four refs below are the form as it is now**, readable from inside a
+   * send that began before the last render — the same pattern as `reportIdRef`
+   * — and how a completion finds out whether the reader changed anything after
+   * Send.
    *
    * **Words typed after Send are not the report that was filed.** The box stays
    * editable while a request is in flight, so a reader can add a sentence
    * between pressing Send and the answer arriving — and that sentence was never
    * in the POST. Clearing it would delete writing that was never filed. So the
    * draft survives, and the new `reportId` makes pressing Send again file it as
-   * the second report it is. GPT Sol established this as a P0 on 2026-09-05. The
-   * rule — `discard(body !== sentBody)` — did not change with the move to a
-   * toast; only *when* it runs did: at the moment the send succeeds, rather than
-   * when the reader closed the old thank-you panel.
+   * the second report it is. GPT Sol established the body case as a P0 on
+   * 2026-09-05. Plan 261010f's code review widened the comparison to every
+   * mutable report field, because a kind chosen while Send was in flight is just
+   * as unsent as words typed then.
    *
    * **The other half Sol named** — after a *failed* send, an edit and a retry
    * carried the same `reportId`, and `src/store/pg-feedback.ts` answers
@@ -687,6 +713,12 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
   const dismissToast = useCallback(() => setToast(null), []);
   const bodyRef = useRef(body);
   bodyRef.current = body;
+  const kindRef = useRef(kind);
+  kindRef.current = kind;
+  const consentedRef = useRef(consented);
+  consentedRef.current = consented;
+  const shotRef = useRef(shot);
+  shotRef.current = shot;
 
   /**
    * **A prefill is applied once per request id, and never over the reader's
@@ -806,7 +838,12 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
      Audio may have no transcript yet, and its device backup is best effort.
      `open` is deliberately not part of the reload veto. */
   const holdsDraft =
-    body.trim() !== "" || shot !== null || preparing || dictationBusy || Boolean(dictate.dictation.recording);
+    body.trim() !== "" ||
+    kind !== null ||
+    shot !== null ||
+    preparing ||
+    dictationBusy ||
+    Boolean(dictate.dictation.recording);
   /* Told to the reload veto below, with any half-written reply to a question:
      the Earlier hook is called after the tabs' state it needs. */
 
@@ -1061,15 +1098,29 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
          any newer words, but it must not close the opening they are using now. */
       closeOpening(openingAtSend);
       /* The browser's copy of what was just filed goes, and a save still
-         pending for it must not put it back. Words typed since are saved again
-         under the next report's id by the effect above. */
+         pending for it must not put it back. A draft changed since Send is
+         saved synchronously below under the next report's id. */
+      if (draftTimer.current !== null) clearTimeout(draftTimer.current);
+      draftTimer.current = null;
+      const finished =
+        bodyRef.current === body &&
+        kindRef.current === kind &&
+        consentedRef.current === consented &&
+        shotRef.current === shot;
       if (readerId !== undefined) {
-        if (draftTimer.current !== null) clearTimeout(draftTimer.current);
-        draftTimer.current = null;
-        forgetFeedbackDraft(readerId, mine);
+        for (const [id, draft] of savedDrafts.current) {
+          forgetMatchingFeedbackDraft(readerId, id, draft);
+        }
       }
-      const finished = bodyRef.current === body;
-      discard(!finished);
+      const next = discard(!finished);
+      /* The debounce is allowed to lag while the page is healthy, but success
+         just removed the prior report's durable copy. Persist a newer draft
+         now so a reload in the next second cannot lose it. */
+      if (!finished && readerId !== undefined) {
+        const draft = { body: bodyRef.current, kind: kindRef.current };
+        saveFeedbackDraft(readerId, next, draft);
+        savedDrafts.current.set(next, draft);
+      }
       /* **The dictation's message goes with the report it was about.** This
          dialog is mounted for the life of the page, and so is its dictation, so
          a `[mic-silent]` from a dictation that caught nothing used to greet every

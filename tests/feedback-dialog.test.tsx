@@ -775,6 +775,37 @@ describe("the feedback dialog", () => {
     }
   });
 
+  it("does not let an older attempt's timeout overwrite a newer success", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      mount();
+      type("It hung.");
+      answer = (init) =>
+        new Promise((_, reject) => {
+          init.signal?.addEventListener("abort", () =>
+            reject(new DOMException("The operation was aborted.", "AbortError")),
+          );
+        });
+      send();
+      await act(async () => {});
+
+      /* Reopening abandons the visible latch while the first request remains in
+         flight, so the same report may be retried. */
+      reopen();
+      answer = ok(200);
+      send();
+      await act(async () => {});
+      expect(host.querySelector(".toast"), "the retry should have succeeded").not.toBeNull();
+
+      await act(async () => {
+        vi.advanceTimersByTime(60_000);
+      });
+      expect(host.querySelector(".fb-failed"), "the old timeout spoke for the newer attempt").toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("files an edited retry as a new report, so the edit is not dropped as a duplicate", async () => {
     /* The server answers a reused id with the row it already has, so after a
        send whose answer was lost, an edit and a retry under the same id would
@@ -1215,6 +1246,18 @@ describe("the draft kept for a reload", () => {
     expect(saved()).toMatchObject({ body: "Half a report", kind: "problem" });
   });
 
+  it("keeps the chosen kind even before the reader has written words", async () => {
+    mount();
+    pick("A suggestion");
+    await later(1000);
+    expect(saved()).toMatchObject({ body: "", kind: "suggestion" });
+    reload();
+    const suggestion = [...host.querySelectorAll<HTMLButtonElement>("button.fb-kind-button")].find(
+      (button) => (button.textContent ?? "").includes("A suggestion"),
+    );
+    expect(suggestion?.getAttribute("aria-pressed")).toBe("true");
+  });
+
   it("brings them back after a reload, as a new report", async () => {
     mount();
     type("Half a report");
@@ -1229,6 +1272,30 @@ describe("the draft kept for a reload", () => {
     /* A fresh id, so two tabs that restore one draft cannot share one and have
        the second answered as a duplicate. */
     expect(idOf(0)).not.toBe(before);
+    reload();
+    expect(firstBox().value, "the filed restored draft was removed").toBe("");
+  });
+
+  it("keeps words added after Send durable when that send succeeds", async () => {
+    mount();
+    type("The first thing.");
+    await later(1000);
+    let release: (() => void) | null = null;
+    answer = () =>
+      new Promise<Response>((resolve) => {
+        release = () => resolve(new Response(JSON.stringify({ id: "x" }), { status: 201 }));
+      });
+    send();
+    type("The first thing. And another.");
+    await later(1000);
+    expect(saved()?.body).toBe("The first thing. And another.");
+
+    act(() => release?.());
+    await act(async () => {});
+    reload();
+    expect(firstBox().value, "the unsent addition survived the successful request").toBe(
+      "The first thing. And another.",
+    );
   });
 
   it("forgets the draft once it is filed, even with a save still pending", async () => {
@@ -1256,6 +1323,44 @@ describe("the draft kept for a reload", () => {
     expect(saved()?.body).toBe("the other tab's");
   });
 
+  it("does not erase newer words another tab saved under a restored id", async () => {
+    kept.set(
+      KEY,
+      JSON.stringify({ body: "The shared old draft", kind: null, id: "spya-firsttab", at: Date.now() }),
+    );
+    mount();
+    expect(firstBox().value).toBe("The shared old draft");
+    /* The originating tab goes on writing after this tab restored its snapshot.
+       The id still matches, but the contents no longer belong to this send. */
+    kept.set(
+      KEY,
+      JSON.stringify({ body: "The other tab's newer words", kind: null, id: "spya-firsttab", at: Date.now() }),
+    );
+    send();
+    await act(async () => {});
+    expect(saved()?.body).toBe("The other tab's newer words");
+  });
+
+  it("removes the old saved id after an edited retry succeeds under a new one", async () => {
+    mount();
+    type("The first attempt.");
+    await later(1000);
+    const oldId = saved()?.id;
+    answer = async () => {
+      throw new Error("offline");
+    };
+    send();
+    await act(async () => {});
+
+    type("The edited retry.");
+    answer = ok(201);
+    send();
+    await act(async () => {});
+    expect(idOf(1)).not.toBe(oldId);
+    reload();
+    expect(firstBox().value, "the filed attempt survived under its old saved id").toBe("");
+  });
+
   it("removes its own record when the box is emptied, and only its own", async () => {
     mount();
     type("Something");
@@ -1270,6 +1375,20 @@ describe("the draft kept for a reload", () => {
     expect(saved()?.body).toBe("the other tab's");
   });
 
+  it("removes a restored record when its box is emptied before the fresh id is saved", async () => {
+    kept.set(
+      KEY,
+      JSON.stringify({ body: "Restored words", kind: null, id: "spya-oldtab1", at: Date.now() }),
+    );
+    mount();
+    expect(firstBox().value).toBe("Restored words");
+    type("");
+    await later(1000);
+    expect(saved()).toBeNull();
+    reload();
+    expect(firstBox().value).toBe("");
+  });
+
   it("does not bring back a draft more than a week old", () => {
     kept.set(
       KEY,
@@ -1278,6 +1397,13 @@ describe("the draft kept for a reload", () => {
     mount();
     expect(firstBox().value).toBe("");
     expect(saved()).toBeNull();
+  });
+
+  it("removes malformed storage instead of reparsing it on every mount", () => {
+    kept.set(KEY, "{broken");
+    mount();
+    expect(firstBox().value).toBe("");
+    expect(kept.has(KEY)).toBe(false);
   });
 
   it("is another reader's business, not this one's", () => {
@@ -1503,6 +1629,30 @@ describe("the thank-you, and getting out of it", () => {
     await act(async () => {});
     expect(idOf(1)).not.toBe(idOf(0));
     expect(body().body).toBe("The first thing. And another.");
+  });
+
+  it("keeps a kind chosen after Send as part of the next report", async () => {
+    mountControlled();
+    type("The words stay the same.");
+    pick("A problem");
+    let release: (() => void) | null = null;
+    answer = () =>
+      new Promise<Response>((resolve) => {
+        release = () => resolve(new Response(JSON.stringify({ id: "x" }), { status: 201 }));
+      });
+    send();
+    pick("A suggestion");
+    act(() => release?.());
+    await act(async () => {});
+
+    expect(body().kind, "the filed report kept its original kind").toBe("problem");
+    expect(firstBox().value, "the unchanged words belong to the unsent kind change").toBe(
+      "The words stay the same.",
+    );
+    const suggestion = [...host.querySelectorAll<HTMLButtonElement>("button.fb-kind-button")].find(
+      (button) => (button.textContent ?? "").includes("A suggestion"),
+    );
+    expect(suggestion?.getAttribute("aria-pressed")).toBe("true");
   });
 
   /**

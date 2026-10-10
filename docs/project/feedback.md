@@ -206,7 +206,8 @@ Not reproduced, so three states that could do it are closed rather than one caus
 
 The words and kind are copied to `localStorage` a second after they last change, per reader, and
 read back once when the dialog mounts ([`feedback-draft.ts`](../../src/web/feedback-draft.ts)).
-Several tabs: last write wins, and a tab removes only a record saved under its own report id. A
+Several tabs: last write wins, and a tab removes only an exact snapshot it read or wrote that is
+still unchanged; a newer body or kind under the same id belongs to the tab that changed it. A
 restored draft is a new report, with a fresh id. Not the screenshot or the tick-box. Gone when sent,
 on **Sign out**, or after a week; `/privacy` says so
 ([privacy.md § On the reader's own device](privacy.md#on-the-readers-own-device-until-the-words-arrive)).

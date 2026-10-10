@@ -115,10 +115,12 @@ or blocked `localStorage` costs the copy, never the dialog.
   reason). Saving the id would make a reload after a landed-but-unanswered send file once, but two
   tabs that both restore one draft would share an id, and the second tab's send would be answered
   `duplicate` and its words dropped. A possible duplicate row is cheaper than lost words.
-- **Removal is only ever of our own record** (F3): the success path cancels the pending save and
-  removes the record only if its id, body and kind are the ones just filed; emptying the box removes
-  it only if its id is this tab's. Words typed after Send stay in the box and are saved under the
-  new id as usual.
+- **Removal is only ever of a snapshot this tab read or wrote** (F3): the id, body and kind must all
+  still match, so a restored id cannot erase newer words its original tab wrote later. Success and
+  clearing both the words and the kind checks every snapshot this draft has used, including the saved
+  id behind a restored draft and an id rotated for an edited retry. Anything changed after Send stays
+  in the form and its words and kind are saved synchronously under the next id, before the one-second
+  debounce.
 - **Multiple tabs, Greg's worry:** one draft per reader, last write wins. A tab reads it only when it
   loads, so two open tabs never fight over a box on screen; the cost is that a reload brings back
   whichever tab wrote last.
@@ -160,9 +162,15 @@ changed; pushed to `dev`; note in `docs/user-feedback/` naming both reports.
   removing it: its test goes red.
 - **Stage 2** as planned: `src/web/feedback-draft.ts`, the dialog's restore, save and removal,
   `FeedbackHost` passing `readerId`, and **Sign out** removing it. Nine tests; the two race guards
-  (removal of a filed draft with a save pending, removal of only our own record) each go red when
+  (removal of a filed draft with a save pending, removal only when the saved snapshot still matches)
+  each go red when
   taken out. The first version of the pending-save test passed with its guard removed, because no
   save had landed before Send; it now saves first.
+- **Code review added the transitions the first tests stopped short of:** a failed dictation retry
+  cannot turn the next microphone press into Send; a restored or edited-retry draft is removed after
+  filing without erasing a newer tab's words; changes made while Send is in flight are durable
+  immediately; a kind chosen without words survives; malformed storage is removed; and an older
+  timeout cannot overwrite a newer success. Each reproduced the defect before its fix.
 - **Words on screen**: `/privacy`'s paragraph on what the browser keeps gained one sentence, after
   the dictation copy's: *"A Feedback report you have started and not sent is kept the same way, so a
   page that reloads doesn’t lose it; it is deleted once you send it or sign out, and is not offered
@@ -170,3 +178,17 @@ changed; pushed to `dev`; note in `docs/user-feedback/` naming both reports.
 - An accident on the way, for the record: a scripted edit to this file replaced an empty slice and
   wrote the paragraph between every character (8.5 MB). `tests/docs-size-cap.test.ts` caught it, and
   the text was recovered exactly by deleting every copy of the inserted paragraph.
+
+## Code review and browser check
+
+- **GPT Sol's code review**: APPROVE WITH CHANGES, seven fixes made by the reviewer and read before
+  commit ([its answer](261010f-feedback-dialog-send-after-dictation-code-review-sol.md)). The ones
+  that matter: removal is now of an exact snapshot (id, body and kind) rather than by id, so another
+  tab's newer words under a restored id survive; a draft changed while a send was in flight is saved
+  at once rather than a second later; a kind chosen during a send counts as unsent; a Stop press owns
+  exactly one ending, so a later Try again cannot arm the fast second press.
+- **Browser** (system Chrome, fake microphone, stubbed transcription, iPad viewport with taps and
+  desktop): Send while listening, Send just after Stop, a fast double tap with a 100 ms
+  transcription, the draft across a reload and gone after sending, and the `/privacy` sentence all
+  passed; one POST each time, no console errors. The thank-you toast's text was not confirmed. Not
+  tried on a real iPad, which is where the hang happened.

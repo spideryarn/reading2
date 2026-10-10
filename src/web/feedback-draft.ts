@@ -16,9 +16,10 @@
  *
  * **Several tabs: last write wins.** A tab reads the record only when its
  * dialog mounts, so two open tabs never fight over a box on screen; a reload
- * brings back whichever tab wrote last. Each record carries the id of the
- * report it was saved from, and a tab removes a record only when that id is
- * its own, so filing a report in one tab does not wipe another tab's draft.
+ * brings back whichever tab wrote last. Each record carries the report id,
+ * body and kind of one exact snapshot. The dialog removes only a snapshot it
+ * read or wrote whose three values still match, so filing a stale copy cannot
+ * wipe newer words another tab saved under the same id.
  *
  * **Gone** when its report is filed, when the reader presses Sign out, and
  * when it is read more than a week after it was saved — the same three as the
@@ -35,8 +36,13 @@ export interface FeedbackDraft {
   kind: FeedbackKind | null;
 }
 
+export interface RestoredFeedbackDraft extends FeedbackDraft {
+  /** The report that saved this exact snapshot, used for conditional removal. */
+  savedId: string;
+}
+
 interface Saved extends FeedbackDraft {
-  /** The report id of the tab that saved it: whose record this is to remove. */
+  /** The report id this snapshot was saved under. */
   id: string;
   /** When it was saved, in ms. */
   at: number;
@@ -48,38 +54,57 @@ export const FEEDBACK_DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const keyFor = (readerId: string): string => `spya.feedbackDraft.${storageReader(readerId)}`;
 
 function read(readerId: string): Saved | null {
+  let raw: string | null;
   try {
-    const raw = localStorage.getItem(keyFor(readerId));
-    if (raw === null) return null;
-    const v = JSON.parse(raw) as Partial<Saved> | null;
-    if (
-      v === null ||
-      typeof v.body !== "string" ||
-      typeof v.id !== "string" ||
-      typeof v.at !== "number" ||
-      !(v.kind === null || v.kind === "problem" || v.kind === "suggestion")
-    ) {
-      localStorage.removeItem(keyFor(readerId));
-      return null;
-    }
-    return { body: v.body, kind: v.kind, id: v.id, at: v.at };
+    raw = localStorage.getItem(keyFor(readerId));
   } catch {
     return null;
   }
+  if (raw === null) return null;
+
+  let v: Partial<Saved> | null;
+  try {
+    v = JSON.parse(raw) as Partial<Saved> | null;
+  } catch {
+    try {
+      localStorage.removeItem(keyFor(readerId));
+    } catch {
+      /* Blocked after the read: leave it rather than troubling the dialog. */
+    }
+    return null;
+  }
+  if (
+    v === null ||
+    typeof v.body !== "string" ||
+    typeof v.id !== "string" ||
+    typeof v.at !== "number" ||
+    !(v.kind === null || v.kind === "problem" || v.kind === "suggestion")
+  ) {
+    try {
+      localStorage.removeItem(keyFor(readerId));
+    } catch {
+      /* Blocked after the read: leave it rather than troubling the dialog. */
+    }
+    return null;
+  }
+  return { body: v.body, kind: v.kind, id: v.id, at: v.at };
 }
 
 /**
  * The reader's saved draft, or null. Read once, when the dialog mounts. A
  * stale or malformed record is removed rather than offered.
  */
-export function readFeedbackDraft(readerId: string): FeedbackDraft | null {
+export function readFeedbackDraft(readerId: string): RestoredFeedbackDraft | null {
   const saved = read(readerId);
   if (saved === null) return null;
-  if (Date.now() - saved.at > FEEDBACK_DRAFT_TTL_MS || saved.body.trim() === "") {
-    forgetFeedbackDraft(readerId);
+  if (
+    Date.now() - saved.at > FEEDBACK_DRAFT_TTL_MS ||
+    (saved.body.trim() === "" && saved.kind === null)
+  ) {
+    forgetFeedbackDraft(readerId, saved.id);
     return null;
   }
-  return { body: saved.body, kind: saved.kind };
+  return { body: saved.body, kind: saved.kind, savedId: saved.id };
 }
 
 /** Save this tab's draft, made under report `id`, over whatever was there. */
@@ -92,10 +117,33 @@ export function saveFeedbackDraft(readerId: string, id: string, draft: FeedbackD
   }
 }
 
+/** Remove exactly the record this tab last read or wrote, if it is still there. */
+export function forgetMatchingFeedbackDraft(
+  readerId: string,
+  id: string,
+  draft: FeedbackDraft,
+): void {
+  try {
+    const saved = read(readerId);
+    if (
+      saved === null ||
+      saved.id !== id ||
+      saved.body !== draft.body ||
+      saved.kind !== draft.kind
+    ) {
+      return;
+    }
+    localStorage.removeItem(keyFor(readerId));
+  } catch {
+    /* Nothing to do. */
+  }
+}
+
 /**
- * Remove the reader's saved draft — only if it was saved under report `id`,
- * when one is given, so a tab removes its own record and never another tab's.
- * Without an id (Sign out, a stale record) it goes whoever saved it.
+ * Remove the reader's saved draft — only if it is still under report `id`,
+ * when one is given. Snapshot-sensitive dialog cleanup uses
+ * {@link forgetMatchingFeedbackDraft}; without an id (Sign out) this removes
+ * the reader's record whoever saved it.
  */
 export function forgetFeedbackDraft(readerId: string, id?: string): void {
   try {

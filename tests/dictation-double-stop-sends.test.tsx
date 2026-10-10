@@ -31,6 +31,8 @@ const mic = vi.hoisted(() => ({
   armed: false,
   transcribing: false,
   toggles: 0,
+  endsAt: null as number | null,
+  finishNow: null as (() => void) | null,
   options: null as unknown,
 }));
 vi.mock("../src/web/useDictation.js", () => ({
@@ -39,8 +41,11 @@ vi.mock("../src/web/useDictation.js", () => ({
     return {
       armed: mic.armed,
       transcribing: mic.transcribing,
+      phase: mic.armed ? "listening" : mic.transcribing ? "transcribing" : "idle",
+      endsAt: mic.endsAt,
       toggle() {
         mic.toggles++;
+        mic.finishNow?.();
       },
     };
   },
@@ -136,6 +141,8 @@ beforeEach(() => {
   mic.armed = false;
   mic.transcribing = false;
   mic.toggles = 0;
+  mic.endsAt = null;
+  mic.finishNow = null;
   draw();
 });
 
@@ -301,6 +308,39 @@ describe("a second press on Stop, in the field", () => {
     start();
     stop();
     expect(f().again).toBeUndefined();
+  });
+});
+
+describe("the box's done action while dictation is involved", () => {
+  it("records the wish before a synchronous ending", () => {
+    start();
+    mic.finishNow = () => {
+      options().onTranscript("synchronous words");
+      mic.armed = false;
+      options().onEnd();
+    };
+
+    act(() => f().finishThenDone());
+
+    expect(sent).toEqual([{ value: "synchronous words", busy: false }]);
+  });
+
+  it("does not toggle into a new session after the cap has already stopped this one", () => {
+    start();
+    mic.endsAt = Date.now();
+    draw();
+    const before = mic.toggles;
+
+    act(() => f().finishThenDone());
+
+    expect(mic.toggles, "the stale armed render reached the hook's start branch").toBe(before);
+    expect(f().sendingAfter).toBe(true);
+    act(() => {
+      options().onTranscript("words stopped by the cap");
+      mic.armed = false;
+      options().onEnd();
+    });
+    expect(sent).toEqual([{ value: "words stopped by the cap", busy: false }]);
   });
 });
 

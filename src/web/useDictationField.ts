@@ -259,6 +259,9 @@ export function useDictationField<C>({
    */
   const stoppedAt = useRef<number | null>(null);
   const endedWith = useRef<{ key: string | undefined } | null>(null);
+  /* A Stop press owns exactly one ending. A later Retry also calls `onEnd`, but
+     it must not be mistaken for the fast ending of that earlier press. */
+  const stopAwaitingEnd = useRef(false);
   const [sendingAfter, setSendingAfter] = useState(false);
   const key = useRef(doneKey);
   key.current = doneKey;
@@ -274,7 +277,9 @@ export function useDictationField<C>({
        opened again before the transcript returns. */
     wantSend.current = null;
     delivered.current = false;
+    stoppedAt.current = null;
     endedWith.current = null;
+    stopAwaitingEnd.current = false;
     setSendingAfter(false);
     closeAgain();
   }, [doneKey, closeAgain]);
@@ -373,10 +378,13 @@ export function useDictationField<C>({
          outlives the ending it was made for. */
       const wish = wantSend.current;
       const send = wish !== null && delivered.current && wish.key === key.current;
+      const stopped = stopAwaitingEnd.current;
       /* For a second press that arrives after this ending: see `stoppedAt`. A
          wish already taken here has been honoured, so there is nothing left
          for a later press to send. */
-      endedWith.current = delivered.current && !send ? { key: key.current } : null;
+      endedWith.current = stopped && delivered.current && !send ? { key: key.current } : null;
+      stopAwaitingEnd.current = false;
+      if (endedWith.current === null) stoppedAt.current = null;
       wantSend.current = null;
       delivered.current = false;
       setSendingAfter(false);
@@ -427,9 +435,11 @@ export function useDictationField<C>({
       againTimer.current = setTimeout(closeAgain, DOUBLE_PRESS_MS);
       stoppedAt.current = Date.now();
       endedWith.current = null;
+      stopAwaitingEnd.current = true;
     }
     if (!dictation.armed && done.current && stoppedAt.current !== null) {
-      const soon = Date.now() - stoppedAt.current < DOUBLE_PRESS_MS;
+      const elapsed = Date.now() - stoppedAt.current;
+      const soon = elapsed >= 0 && elapsed < DOUBLE_PRESS_MS;
       const ended = endedWith.current;
       if (soon && !dictation.transcribing && ended !== null && ended.key === key.current) {
         /* The second press of a double press, after a fast ending: send. */
@@ -447,6 +457,9 @@ export function useDictationField<C>({
       if (dictation.toggle() === false) return;
       wantSend.current = null;
       delivered.current = false;
+      stoppedAt.current = null;
+      endedWith.current = null;
+      stopAwaitingEnd.current = false;
       closeAgain();
       /* A press during the previous session's transcription supersedes that
          session. Its rough Chromium words stay in the box, but they are now
@@ -505,6 +518,9 @@ export function useDictationField<C>({
   useEffect(() => {
     if (phase !== "opening") return;
     wantSend.current = null;
+    stoppedAt.current = null;
+    endedWith.current = null;
+    stopAwaitingEnd.current = false;
     setSendingAfter(false);
   }, [phase]);
   return {
