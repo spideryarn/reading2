@@ -26,7 +26,8 @@ import { EARLIER_FEEDBACK_LIMIT, MAX_FEEDBACK_ANSWER_CHARS } from "../src/types.
 import { exactly } from "../src/web/relative-time.js";
 
 const posts: { input: string; init: RequestInit }[] = [];
-let answer: () => Promise<Response>;
+/** Handed the request's init, so an answer can watch its `signal` (plan 261010f). */
+let answer: (init: RequestInit) => Promise<Response>;
 /** Every `GET /api/feedback` — the Earlier tab's reads, kept apart from `posts`. */
 const lists: string[] = [];
 let listAnswer: (input: string) => Promise<Response>;
@@ -42,7 +43,7 @@ vi.mock("../src/web/lib/api.js", () => ({
       return listAnswer(input);
     }
     posts.push({ input, init: init ?? {} });
-    return answer();
+    return answer(init ?? {});
   },
   failure: async (res: Response) => new Error(await res.text()),
 }));
@@ -63,6 +64,8 @@ vi.mock("../src/web/router.js", async (importOriginal) => ({
  */
 const mic = { supported: true, armed: false, transcribing: false, artifact: 7, recording: null as object | null };
 const micToggles: string[] = [];
+/** Each time the dialog asked the field to stop and send once the words land (261010f). */
+let micFinishes = 0;
 /** What `dismiss` was handed, in order. Plan 261001k. */
 const micDismissals: number[] = [];
 /**
@@ -113,6 +116,9 @@ vi.mock("../src/web/useDictationField.js", () => ({
       busy: mic.transcribing || mic.armed,
       toggle: () => {
         micToggles.push("field");
+      },
+      finishThenDone: () => {
+        micFinishes += 1;
       },
     };
   },
@@ -678,31 +684,110 @@ describe("the feedback dialog", () => {
     expect(body().kind).toBe("suggestion");
   });
 
-  it("will not send while the microphone is still listening", async () => {
+  it("sends nothing while the microphone is still listening, and asks for it to stop and send", async () => {
     /* **`armed`, not `transcribing`.** `readOnly` is only the two seconds after
        the reader presses stop; a guard on that alone lets Cmd+Enter file the
        rough live guesses while they are still talking — or nothing at all on a
        browser with no live recogniser. Two positive failures rather than one,
-       because the second passes while the first bug is still there. */
+       because the second passes while the first bug is still there.
+
+       **And pressing Send is not ignored** (plan 261010f, reports spya-t9qu3v
+       and spya-exhqqr). It used to be disabled here, greyed and still reading
+       "Send", and on an iPad that was a dead button. Now it stops the
+       microphone and sends once the real words are in the box — the double
+       press on Stop, reached from Send. Live even with the box empty: on a
+       browser with no live recogniser the words are not in it yet. */
     mic.armed = true;
+    micFinishes = 0;
     mount();
+    expect(host.querySelector<HTMLButtonElement>("button.fb-send")?.disabled).toBe(false);
     type("Half a sentence, still speaking");
-    expect(host.querySelector<HTMLButtonElement>("button.fb-send")?.disabled).toBe(true);
     send();
     await act(async () => {});
     expect(posts).toHaveLength(0);
+    expect(micFinishes).toBe(1);
     mic.armed = false;
   });
 
-  it("will not send while the transcript is still on its way", async () => {
+  it("sends nothing while the transcript is still on its way, and asks to send once it lands", async () => {
     mic.transcribing = true;
+    micFinishes = 0;
     mount();
     type("Said out loud, being written down");
+    expect(host.querySelector<HTMLButtonElement>("button.fb-send")?.disabled).toBe(false);
+    send();
+    await act(async () => {});
+    expect(posts).toHaveLength(0);
+    expect(micFinishes).toBe(1);
+    mic.transcribing = false;
+  });
+
+  it("still refuses an over-long report while the microphone is on, without asking it to send", async () => {
+    mic.armed = true;
+    micFinishes = 0;
+    mount();
+    type("x".repeat(MAX_FEEDBACK_ANSWER_CHARS + 1));
     expect(host.querySelector<HTMLButtonElement>("button.fb-send")?.disabled).toBe(true);
     send();
     await act(async () => {});
     expect(posts).toHaveLength(0);
-    mic.transcribing = false;
+    expect(micFinishes).toBe(0);
+    mic.armed = false;
+  });
+
+  it("gives up on a send that never answers after a minute, and a retry is the same report", async () => {
+    /* A request suspended with the app on an iPad can stay unsettled for good,
+       and the latch then refused every later press. Plan 261010f. */
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      mount();
+      type("It hung.");
+      answer = (init) =>
+        new Promise((_, reject) => {
+          init.signal?.addEventListener("abort", () =>
+            reject(new DOMException("The operation was aborted.", "AbortError")),
+          );
+        });
+      send();
+      await act(async () => {});
+      expect(host.querySelector(".fb-failed")).toBeNull();
+      await act(async () => {
+        vi.advanceTimersByTime(59_000);
+      });
+      expect(host.querySelector(".fb-failed"), "not before the minute is up").toBeNull();
+      await act(async () => {
+        vi.advanceTimersByTime(1_000);
+      });
+      expect(host.querySelector(".fb-failed")).not.toBeNull();
+      expect(firstBox().value).toBe("It hung.");
+
+      answer = ok(200);
+      send();
+      await act(async () => {});
+      expect(posts).toHaveLength(2);
+      expect(idOf(1), "the latch is released and the id kept").toBe(idOf(0));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("files an edited retry as a new report, so the edit is not dropped as a duplicate", async () => {
+    /* The server answers a reused id with the row it already has, so after a
+       send whose answer was lost, an edit and a retry under the same id would
+       be thanked and thrown away. A changed draft is a new report. */
+    mount();
+    type("It broke.");
+    answer = async () => {
+      throw new Error("offline");
+    };
+    send();
+    await act(async () => {});
+    type("It broke. And here is what I was doing.");
+    answer = ok(201);
+    send();
+    await act(async () => {});
+    expect(posts).toHaveLength(2);
+    expect(idOf(1)).not.toBe(idOf(0));
   });
 
   it("stops the microphone when the dialog is shut", () => {
