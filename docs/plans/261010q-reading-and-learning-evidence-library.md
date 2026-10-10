@@ -1,6 +1,6 @@
 # A library of evidence on reading and learning deeply and efficiently
 
-**Status: in progress, 2026-10-10.** Docs only: no product change lands here. Report `spya-gsw9bh`
+**Status: done, 2026-10-10.** Docs only: no product change lands here. Report `spya-gsw9bh`
 (#522, Greg, 2026-10-09), queue item `qi-f36eap6b`.
 
 ## The ask
@@ -130,3 +130,19 @@ told where the tutorial is.
   can follow), 261009b (what a peer reviewer needs).
 - 2026-10-10: Sol's plan review taken in full — topics split to 21, two-axis grading, claim-level
   digest, overview kept thin.
+- 2026-10-10: twenty-one researchers wrote their files (topic 21 waited for a free slot). Almost all
+  sources were read at abstract level: publishers blocked automated fetching; each file says which.
+  DOI check: 370 DOIs, 307 matched automatically, the other 63 checked by hand and all resolve to the
+  paper cited (the misses were the title sitting on another line). The researchers had already caught
+  at least ten wrong DOIs in the leads this plan gave them.
+- 2026-10-10: digest written; GPT Sol's review
+  ([digest-review-sol.md](../research/261010a-reading-and-learning-evidence/digest-review-sol.md)):
+  SOUND AFTER FIXES, 12 findings, which Sol applied in the digest. The one that mattered most: the
+  draft confused delaying the *final test* (where retrieval's advantage appears) with delaying the
+  *first* recall (untested); only calibration is clearly helped by a later self-check. The tutorial
+  was aligned with the corrected digest.
+- 2026-10-10: two earlier research notes corrected in place (260828b on pre-highlighting; 260831e on
+  two second-hand claims). Overview under vision.md, signposted in AGENTS.md, research.md and
+  tutorials.md. Tutorial checked in Playwright, light and dark, 1280px and 390px; Figure 1's row labels
+  fixed. Product ideas queued as eight proposals (`qi-v7fq6bs5`, `qi-nm7427wf`, `qi-4eae2qjt`,
+  `qi-skyqrn2d`, `qi-yg6rvktz`, `qi-xeaxyqpc`, `qi-sw9vwfhx`, `qi-3vbfw234`), none authorised or built.

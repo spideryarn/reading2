@@ -445,6 +445,15 @@ that **advice written after using AI summaries was shorter, less factual, more s
 and that **people felt less invested in forming their own view** after reading a summary rather than
 the source — a second concrete "surrender" data point beyond the Microsoft/CMU study above.
 
+> **Correction, 2026-10-10.** Both findings above were cited second-hand, and the 2026-10-10 evidence
+> library traced them. The second is almost certainly Melumad & Yun 2025 (*PNAS Nexus*, seven
+> experiments, about 10,400 people), which compared an LLM with web search, not AI summaries with the
+> source, and measured "learning" mostly by self-report and features of the advice written. The Etkin
+> result is a real pre-registered study (N = 195), but its "hurts the best readers" split may be
+> partly regression to the mean. Cite neither from here; read
+> [07-trusting-ai-text-vs-the-source.md](../261010a-reading-and-learning-evidence/07-trusting-ai-text-vs-the-source.md)
+> and [05-summaries-organisers-and-coherence.md](../261010a-reading-and-learning-evidence/05-summaries-organisers-and-coherence.md).
+
 There is a positive counter-finding worth keeping, because it is directly actionable:
 **providing full text upfront produced the best comprehension, and letting people open the full
 article *after* seeing a summary — rather than never — largely eliminated the comprehension deficit.**

@@ -1,0 +1,869 @@
+<!doctype html>
+<html lang="en">
+<!--
+    TUTORIAL REQUEST
+
+    Greg's report spya-gsw9bh (#522), 2026-10-09, from the reading view of arxiv-2609-01481:
+    "I'd like to think through and build up a library of peer-reviewed evidence about how to read and
+    learn deeply and efficiently. I know a lot about learning and memory, but I don't know so much
+    about reading per se. … I'm equally interested in research that suggests a better way to do
+    things, as well as research that corroborates the way that we are doing things. … And then I
+    guess use the write tutorial skill to generate me an HTML tutorial … that will describe all this
+    research in detail. We also have research on the decorative.html experiment that might be
+    relevant too."
+
+    Generated: 2026-10-10
+    Written to: docs/reusable/write-tutorial.md
+
+    Sources read:
+      docs/research/261010a-reading-and-learning-evidence/01..21-*.md   the twenty-one topic files
+      docs/research/261010a-reading-and-learning-evidence/digest.md      the conclusions (after GPT Sol's review)
+      docs/plans/261010q-reading-and-learning-evidence-library.md        the plan and its Sol review
+      docs/research/260828b-decorated-mode/ideas-reading-science.md, docs/tutorials/260929a-decorated-mode.html
+      docs/research/260831e-helping-peer-reviewers/prior-art-and-cognitive-offloading.md
+      docs/research/261002c-recall-and-tutorial-pedagogy-for-remember-mode.md
+      the mode docs under docs/project/ that the digest cites
+
+    Reviewed: GPT Sol (high effort) reviewed the digest on 2026-10-10 (SOUND AFTER FIXES, 12 findings,
+    applied by Sol in digest.md; its report is digest-review-sol.md beside it). The page was then
+    aligned with the corrected digest: the two delays (final test vs a later self-check) were confused
+    in the first draft; the DeVerna 90% is of false headlines; citation-checking is associated with,
+    not shown to cause, lower trust; other-chosen highlighting is mixed; marketing lines narrowed.
+    Diagrams checked in Playwright (system Chrome), light and dark, 1280px and 390px: Figure 1's row
+    labels clipped the grid and were moved; one badge's light-mode contrast raised to pass.
+
+    Caveat carried into the page: most sources were read at abstract level (publishers blocked
+    automated fetching); all 370 DOIs were resolved against Crossref on 2026-10-10. Numbers here are
+    the topic files' numbers; open the paper before quoting one outside the repo.
+-->
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="What the research on reading and learning says about each Spideryarn mode: twenty-one questions, each given a verdict, with the counter-evidence as prominent as the support.">
+<title>Reading and Learning Evidence</title>
+<style>
+  :root {
+    --bg: #fbfaf8; --panel: #ffffff; --ink: #1f2328; --ink-soft: #5b6470;
+    --rule: #e2e0dc; --accent: #db8a45; --link: #1a5fb4;
+
+    /* verdict colours, used the same way in every diagram and badge */
+    --v-sup:   #116b33; --v-sup-fill:   #ddf5e3;   /* supported */
+    --v-ind:   #1d4ed8; --v-ind-fill:   #e2ebfe;   /* supported indirectly */
+    --v-unt:   #4b5260; --v-unt-fill:   #eceae6;   /* untested */
+    --v-none:  #a15c07; --v-none-fill:  #fdf1dc;   /* no reliable effect / suggests otherwise */
+    --v-harm:  #b3261e; --v-harm-fill:  #fdeaea;   /* evidence of harm */
+    --c-gpt:   #6d28d9; --c-gpt-fill:   #eee9fd;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16181c; --panel: #1e2128; --ink: #e6e6e3; --ink-soft: #a3adba;
+      --rule: #333842; --link: #7fb4ff; --accent: #e8a066;
+      --v-sup:  #7fd396; --v-sup-fill:  #142b1c;
+      --v-ind:  #8fb6ff; --v-ind-fill:  #1b2740;
+      --v-unt:  #c9ccd2; --v-unt-fill:  #2a2c31;
+      --v-none: #f0b167; --v-none-fill: #3a2c17;
+      --v-harm: #f38b84; --v-harm-fill: #351a19;
+      --c-gpt:  #b79cf5; --c-gpt-fill:  #271e3d;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 2.5rem 1rem 6rem; background: var(--bg); color: var(--ink);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    max-width: 62rem; margin-inline: auto; -webkit-font-smoothing: antialiased;
+  }
+  h1 { font-size: 2.1rem; line-height: 1.15; letter-spacing: -0.02em; margin: 0 0 .4rem; }
+  h2 { font-size: 1.42rem; line-height: 1.25; letter-spacing: -0.01em; margin: 3.2rem 0 .8rem;
+       padding-bottom: .35rem; border-bottom: 2px solid var(--rule); }
+  h3 { font-size: 1.1rem; margin: 2rem 0 .5rem; }
+  p, li { max-width: 46rem; }
+  a { color: var(--link); text-underline-offset: 2px; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .875em;
+         background: color-mix(in srgb, var(--ink) 7%, transparent); padding: .1em .35em; border-radius: 3px; }
+  blockquote { margin: 1rem 0; padding: .2rem 0 .2rem 1rem; border-left: 3px solid var(--rule);
+               color: var(--ink-soft); max-width: 46rem; }
+  .lede { font-size: 1.06rem; color: var(--ink-soft); max-width: 44rem; }
+  .meta { font-size: .84rem; color: var(--ink-soft); margin: .6rem 0 2rem; }
+  .callout { border: 1px solid var(--rule); border-left: 4px solid var(--accent); background: var(--panel);
+             border-radius: 5px; padding: .9rem 1.1rem; margin: 1.2rem 0; max-width: 50rem; }
+  .callout p { margin: .4rem 0 0; }
+  .callout .title { font-weight: 650; }
+  .callout.warn { border-left-color: var(--v-harm); background: var(--v-harm-fill); }
+  .callout.key  { border-left-color: var(--v-sup);  background: var(--v-sup-fill); }
+  .callout.model{ border-left-color: var(--c-gpt);  background: var(--c-gpt-fill); }
+  .callout.decide { border-left-color: var(--v-none); background: var(--v-none-fill); }
+  .toc { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 1rem 1.4rem; margin: 1.6rem 0; }
+  .toc ol { margin: .4rem 0; padding-left: 1.3rem; }
+  .toc li { margin: .18rem 0; }
+  .paths { margin-top: 1rem; padding-top: .9rem; border-top: 1px dashed var(--rule); font-size: .93rem; }
+  .paths p { margin: .35rem 0; }
+  figure { margin: 1.6rem 0; }
+  .scroll { overflow-x: auto; border: 1px solid var(--rule); border-radius: 6px; background: var(--panel); padding: .6rem; }
+  svg { display: block; width: 100%; min-width: 720px; height: auto; }
+  svg text { fill: var(--ink); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  svg .soft { fill: var(--ink-soft); }
+  svg .line { stroke: var(--ink-soft); fill: none; }
+  svg .grid { stroke: var(--rule); fill: none; }
+  .b-sup  { fill: var(--v-sup-fill);  stroke: var(--v-sup); }
+  .b-ind  { fill: var(--v-ind-fill);  stroke: var(--v-ind); }
+  .b-unt  { fill: var(--v-unt-fill);  stroke: var(--v-unt); }
+  .b-none { fill: var(--v-none-fill); stroke: var(--v-none); }
+  .b-harm { fill: var(--v-harm-fill); stroke: var(--v-harm); }
+  .t-sup { fill: var(--v-sup) !important; } .t-ind { fill: var(--v-ind) !important; }
+  .t-unt { fill: var(--v-unt) !important; } .t-none { fill: var(--v-none) !important; }
+  .t-harm { fill: var(--v-harm) !important; }
+  figcaption { font-size: .85rem; color: var(--ink-soft); margin-top: .5rem; max-width: 46rem; }
+  .badge { display: inline-block; font-size: .78rem; font-weight: 650; padding: .05rem .5rem; border-radius: 999px;
+           border: 1px solid; white-space: nowrap; vertical-align: .08em; }
+  .badge.sup  { color: var(--v-sup);  background: var(--v-sup-fill);  border-color: var(--v-sup); }
+  .badge.ind  { color: var(--v-ind);  background: var(--v-ind-fill);  border-color: var(--v-ind); }
+  .badge.unt  { color: var(--v-unt);  background: var(--v-unt-fill);  border-color: var(--v-unt); }
+  .badge.none { color: var(--v-none); background: var(--v-none-fill); border-color: var(--v-none); }
+  .badge.harm { color: var(--v-harm); background: var(--v-harm-fill); border-color: var(--v-harm); }
+  table { border-collapse: collapse; margin: 1rem 0; font-size: .92rem; width: 100%; }
+  th, td { border-bottom: 1px solid var(--rule); padding: .45rem .55rem; text-align: left; vertical-align: top; }
+  th { font-weight: 650; background: var(--panel); }
+  .tablewrap { overflow-x: auto; }
+  details { border: 1px solid var(--rule); border-radius: 6px; background: var(--panel); margin: .6rem 0; padding: .55rem .9rem; max-width: 52rem; }
+  details > summary { cursor: pointer; font-weight: 600; }
+  details[open] > summary { margin-bottom: .4rem; }
+  details p, details li { font-size: .95rem; }
+  .step { display: grid; grid-template-columns: 2.2rem 1fr; gap: .8rem; margin: 1.3rem 0; max-width: 52rem; }
+  .step .n { width: 2rem; height: 2rem; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 700;
+             display: flex; align-items: center; justify-content: center; }
+  .step h4 { margin: .15rem 0 .3rem; font-size: 1rem; }
+  .step p { margin: .3rem 0; }
+  .small { font-size: .88rem; color: var(--ink-soft); }
+  @media (max-width: 600px) { body { padding: 1.5rem 16px 4rem; } h1 { font-size: 1.7rem; } }
+</style>
+</head>
+<body>
+
+<h1>What the research says about how Spideryarn helps people read</h1>
+<p class="lede">Twenty-one questions about reading and learning, from retrieval practice to voice to AI
+summaries. Each mode is checked against the evidence, and the counter-evidence gets as much room as
+the support.</p>
+<p class="meta">10 October 2026 · skim: 10 minutes (TL;DR, mental models, Pass 1, the judgment section) ·
+deep read: about an hour · the library behind it: <code>docs/project/reading-research-overview.md</code></p>
+
+<div class="callout key">
+  <p class="title">TL;DR</p>
+  <p>The strongest ground Spideryarn stands on is the part where the reader produces something and is then shown
+  the text: Recall, Quiz, explaining it to yourself. The "augment, don't replace" stance now has real support from
+  three randomised studies in 2025, though none of them is about experts reading papers. Most of what the model
+  makes <em>for</em> the reader (summaries, the tree, the Sketch) is supported only as an orienting aid. That help
+  shrinks for readers who already know the field, and our readers often do.</p>
+  <p>The biggest gap is the reader we actually have. Nobody has measured what an expert remembers from a full paper
+  days later, with or without a tool like ours. In the three small reading-tool studies that checked, the tool made reading faster or easier
+  without a detected gain in correct answers.</p>
+</div>
+
+<h2 id="models">Four ways to think about it</h2>
+
+<div class="callout model">
+  <p class="title">1. A gym, not a lift</p>
+  <p>Vision.md's forklift analogy, turned into a prediction. The memory literature says the work you do yourself is
+  what stays: recalling, explaining, guessing before checking. A tool that lifts the weight for you makes the session
+  easier and the muscle smaller. So for any mode, ask whether the reader or the model is doing the lifting.</p>
+</div>
+<div class="callout model">
+  <p class="title">2. A map helps a stranger more than a local</p>
+  <p>Help that suits a newcomer fades, and sometimes backfires, for someone who knows the ground. This is the
+  <em>expertise reversal effect</em>, and it runs through half the library. A gap-free summary, a dense web of
+  cross-links, a hand-holding tutor: each is worth most to the reader who needs it least in our audience.</p>
+</div>
+<div class="callout model">
+  <p class="title">3. Feeling fluent is not knowing</p>
+  <p>In three small controlled studies, reading tools made reading faster or feel easier, and readers got no more
+  answers right. Readers are poor judges of what they understood even without help (correlation
+  about 0.24), and AI help makes them more confident still. A mode that feels great is not yet evidence that it works.</p>
+</div>
+<div class="callout model">
+  <p class="title">4. A citation is a badge, not a check</p>
+  <p>A link to the source raises trust whether or not anyone opens it. In one study fewer than one in ten answers
+  had a reference checked at all, and checking went with lower trust. "Every sentence is a door into the text" is
+  only as good as how often the door is used.</p>
+</div>
+
+<nav class="toc">
+  <strong>Contents</strong>
+  <ol>
+    <li><a href="#pass1">Pass 1: the shape of the evidence</a></li>
+    <li><a href="#pass2">Pass 2: the twenty-one questions</a></li>
+    <li><a href="#pass3">Pass 3: one reader, one paper, followed through</a></li>
+    <li><a href="#pass4">Pass 4: the hard parts</a></li>
+    <li><a href="#judgment">Judgment: where we disagree with the evidence, and what to try</a></li>
+    <li><a href="#marketing">What could honestly be said</a></li>
+    <li><a href="#faq">Questions you might ask</a></li>
+    <li><a href="#appendix">Appendix: terms, and where everything is</a></li>
+  </ol>
+  <div class="paths">
+    <p><strong>If you care most about Learn mode:</strong> <a href="#q-retrieval">retrieval</a>,
+      <a href="#q-meta">knowing what you know</a>, <a href="#q-tutor">tutoring</a>, then <a href="#timing">the timing problem</a>.</p>
+    <p><strong>If you care most about AI text versus the article:</strong> <a href="#q-ai">AI tutors</a>,
+      <a href="#q-trust">trust</a>, <a href="#q-summary">summaries</a>, <a href="#q-generate">generating vs receiving</a>.</p>
+    <p><strong>If you want the product ideas:</strong> <a href="#judgment">Judgment</a>, then the worked example's
+      <a href="#pass3-change">what would change</a>.</p>
+    <p><strong>If you want marketing lines:</strong> <a href="#marketing">What could honestly be said</a>, and read
+      <a href="#pass4">Pass 4</a> first.</p>
+    <p><strong>If you only have five minutes:</strong> TL;DR, the four models above, and <a href="#fig-grid">Figure 1</a>.</p>
+  </div>
+</nav>
+
+<!-- ============================================================ PASS 1 -->
+<h2 id="pass1">Pass 1: the shape of the evidence</h2>
+
+<p>Twenty-one web researchers each took one question, such as "does retrieval practice work for prose?" or "does
+easy look-up stop you learning the word?". Each wrote a file of graded, cited findings. A digest then took the
+product's claims one at a time and gave each a verdict. There are five verdicts, and they are kept apart on
+purpose:</p>
+
+<ul>
+  <li><span class="badge sup">Supported</span> good evidence in people and material close to ours.</li>
+  <li><span class="badge ind">Supported indirectly</span> good evidence, but in students, short passages or a lab task. We are assuming it carries over.</li>
+  <li><span class="badge unt">Untested</span> nobody has tested it anywhere close enough to count. Not the same as wrong.</li>
+  <li><span class="badge none">No reliable effect / suggests otherwise</span> tested, and absent, too small, or pointing the other way.</li>
+  <li><span class="badge harm">Evidence of harm</span> tested, and it made something that matters worse.</li>
+</ul>
+
+<p>Every finding is also graded twice. <strong>Certainty</strong> asks how solid the result is (High, Moderate, Low,
+Contested). <strong>Directness</strong> asks how close the people and material were to an adult reading a research
+paper (Direct, Indirect, Analogy). Figure 1 puts the product's main claims on those two axes. Almost everything sits
+in the middle column, because almost nothing was studied on our readers.</p>
+
+<figure id="fig-grid">
+<div class="scroll">
+<svg viewBox="0 0 760 420" role="img" aria-labelledby="f1t f1d">
+  <title id="f1t">Figure 1: product claims by certainty and directness</title>
+  <desc id="f1d">A grid with certainty from High to Contested down the side and directness Direct, Indirect, Analogy across the top. Most claims sit in the Indirect column.</desc>
+  <text x="380" y="22" text-anchor="middle" font-size="14" font-weight="650">How close was the evidence to our readers? →</text>
+  <text x="230" y="48" text-anchor="middle" font-size="14">Direct</text>
+  <text x="440" y="48" text-anchor="middle" font-size="14">Indirect</text>
+  <text x="650" y="48" text-anchor="middle" font-size="14">Analogy</text>
+  <text x="20" y="240" font-size="14" font-weight="650" transform="rotate(-90 20 240)" text-anchor="middle">How solid is it? →</text>
+  <text x="122" y="98" font-size="14" text-anchor="end">High</text>
+  <text x="122" y="186" font-size="14" text-anchor="end">Moderate</text>
+  <text x="122" y="274" font-size="14" text-anchor="end">Low</text>
+  <text x="122" y="362" font-size="14" text-anchor="end">Contested</text>
+  <rect class="grid" x="130" y="58" width="200" height="88"/><rect class="grid" x="340" y="58" width="200" height="88"/><rect class="grid" x="550" y="58" width="200" height="88"/>
+  <rect class="grid" x="130" y="146" width="200" height="88"/><rect class="grid" x="340" y="146" width="200" height="88"/><rect class="grid" x="550" y="146" width="200" height="88"/>
+  <rect class="grid" x="130" y="234" width="200" height="88"/><rect class="grid" x="340" y="234" width="200" height="88"/><rect class="grid" x="550" y="234" width="200" height="88"/>
+  <rect class="grid" x="130" y="322" width="200" height="88"/><rect class="grid" x="340" y="322" width="200" height="88"/><rect class="grid" x="550" y="322" width="200" height="88"/>
+  <!-- High · Indirect -->
+  <rect class="b-ind" x="350" y="68" width="180" height="30" rx="6"/><text x="440" y="88" text-anchor="middle" font-size="13">Recall beats re-reading</text>
+  <rect class="b-none" x="350" y="106" width="180" height="30" rx="6"/><text x="440" y="126" text-anchor="middle" font-size="13">Readers know what they got</text>
+  <!-- High · Analogy -->
+  <rect class="b-ind" x="560" y="68" width="180" height="30" rx="6"/><text x="650" y="88" text-anchor="middle" font-size="13">Wrong AI advice misleads</text>
+  <rect class="b-ind" x="560" y="106" width="180" height="30" rx="6"/><text x="650" y="126" text-anchor="middle" font-size="13">Voice is ~3× faster</text>
+  <!-- Moderate · Direct -->
+  <rect class="b-sup" x="140" y="156" width="180" height="30" rx="6"/><text x="230" y="176" text-anchor="middle" font-size="13">Reviewers miss most errors</text>
+  <rect class="b-ind" x="140" y="194" width="180" height="30" rx="6"/><text x="230" y="214" text-anchor="middle" font-size="13">AI summaries over-reach</text>
+  <!-- Moderate · Indirect -->
+  <rect class="b-ind" x="350" y="156" width="180" height="30" rx="6"/><text x="440" y="176" text-anchor="middle" font-size="13">Withholding answers is safer</text>
+  <rect class="b-none" x="350" y="194" width="180" height="30" rx="6"/><text x="440" y="214" text-anchor="middle" font-size="13">Novice help suits experts</text>
+  <!-- Moderate · Analogy -->
+  <rect class="b-ind" x="560" y="156" width="180" height="30" rx="6"/><text x="650" y="176" text-anchor="middle" font-size="13">A gloss beats no gloss</text>
+  <rect class="b-sup" x="560" y="194" width="180" height="30" rx="6"/><text x="650" y="214" text-anchor="middle" font-size="13">A goal narrows learning</text>
+  <!-- Low · Indirect -->
+  <rect class="b-harm" x="350" y="244" width="180" height="30" rx="6"/><text x="440" y="264" text-anchor="middle" font-size="13">Summary replacing text</text>
+  <rect class="b-none" x="350" y="282" width="180" height="30" rx="6"/><text x="440" y="302" text-anchor="middle" font-size="13">A citation makes you check</text>
+  <!-- Low · Direct -->
+  <rect class="b-unt" x="140" y="244" width="180" height="30" rx="6"/><text x="230" y="264" text-anchor="middle" font-size="13">Tools feel better, not truer</text>
+  <!-- Low · Analogy -->
+  <rect class="b-unt" x="560" y="244" width="180" height="30" rx="6"/><text x="650" y="264" text-anchor="middle" font-size="13">Machine-drawn maps help</text>
+  <!-- Contested · Indirect -->
+  <rect class="b-unt" x="350" y="332" width="180" height="30" rx="6"/><text x="440" y="352" text-anchor="middle" font-size="13">Experts like gappier text</text>
+  <rect class="b-ind" x="350" y="370" width="180" height="30" rx="6"/><text x="440" y="390" text-anchor="middle" font-size="13">Testing holds on hard text</text>
+</svg>
+</div>
+<figcaption>Figure 1. A selection of the thirty claims, placed by the certainty and directness of their best
+evidence. Colour is the verdict: green supported, blue supported indirectly, grey untested, amber suggests
+otherwise, red evidence of harm. Note how empty the Direct column is. The full table is in the digest.</figcaption>
+</figure>
+
+<div class="callout warn">
+  <p class="title">Two things to hold onto from here on</p>
+  <p><strong>The population gap.</strong> Most of this research is on undergraduates, school pupils or second-language
+  learners, reading short passages. An expert reading a forty-page paper in their own field is almost never the person
+  studied.</p>
+  <p><strong>The reading gap.</strong> Publishers blocked automated access, so most sources were read at abstract level.
+  Every DOI was checked against Crossref and each resolves to the paper it is cited as. But the numbers are the topic
+  files' numbers, and they should be checked against the paper before they leave the repo.</p>
+</div>
+
+<!-- ============================================================ PASS 2 -->
+<h2 id="pass2">Pass 2: the twenty-one questions</h2>
+
+<p>Grouped into five themes. Each line is the answer in brief; open it for the evidence, the grades and what it means
+for the modes it touches. The file name is where the citations are.</p>
+
+<h3>Learning from what you read</h3>
+
+<details id="q-retrieval"><summary>Does recalling what you read beat re-reading it? <span class="badge ind">Supported indirectly</span></summary>
+<p><strong>Yes, from about a day on, and only with feedback.</strong> Pulling an article's content out of your own head
+beats looking at it again, for what you remember days or weeks later. Across 222 classroom studies the average benefit
+is moderate (g ≈ 0.5). It has been shown on roughly 2,500-word journal papers, not only word lists. Two catches: if the
+<em>final</em> test comes within minutes, re-reading looks <em>better</em>, so the benefit shows up later; and without
+the right answer shown afterwards, a hard test on journal papers did little. Recalling a whole paragraph transferred to new questions; fill-in-the-blank mostly did not.</p>
+<p><strong>Contrary:</strong> whether the effect survives complex, tightly interlinked material is disputed. The famous
+"retrieval beats concept-mapping" result partly vanished in a 2023 preregistered replication. No study looked at
+researchers reading papers in their field.</p>
+<p><strong>For Spideryarn:</strong> Recall and Quiz are built on this, and their "show the passage after the attempt"
+design is the right kind of feedback. What is missing is a later check (see <a href="#timing">the timing problem</a>).
+<span class="small">File 01.</span></p>
+</details>
+
+<details id="q-meta"><summary>Do readers know what they understood? Do questions before reading help? <span class="badge none">Suggests otherwise</span></summary>
+<p><strong>Readers are poor judges of their own understanding</strong>: the correlation between what they predict and
+what they score is about 0.24, across 94 studies. Writing a summary or keywords <em>after a delay</em> improves that
+(g = 0.46). Comparing your answer against a standard helps too.</p>
+<p><strong>Questions asked before reading help the content they ask about</strong> (g = 0.66), and almost nothing else
+(g = 0.01). So a pre-question steers attention; it is not general priming. ChatGPT-written pre-questions worked about as
+well as human ones in four experiments.</p>
+<p><strong>For Spideryarn:</strong> nothing in the product shows a reader their actual level except Quiz's marks. A
+confidence rating before the mark, and a "guess before you reveal" state on the top FAQ questions, are the obvious
+experiments. <span class="small">File 02.</span></p>
+</details>
+
+<details id="q-tutor"><summary>What makes tutoring work, and is the "zone of proximal development" real? <span class="badge ind">Supported indirectly</span></summary>
+<p><strong>Tutoring helps by about 0.8 standard deviations, not Bloom's famous 2.</strong> Step-by-step computer tutors
+come close to humans. Help in small contingent steps is where the benefit lives. The zone of proximal development is a
+framing rather than a tested quantity. What is testable is "contingent help that fades", and even fading has thinner
+support than its fame suggests.</p>
+<p><strong>A difficulty the learner cannot overcome stops being desirable.</strong> This is the rationale for Recall's
+"tell after two rungs". <strong>Help that suits novices fades or reverses for experts</strong> (expertise reversal).
+The "85% rule" for how often to get things wrong comes from machine-learning classifiers, not people.</p>
+<p><strong>Contrary:</strong> no peer-reviewed study tests whether pitching a text easier or harder suits expert adults.
+<span class="small">File 03.</span></p>
+</details>
+
+<details id="q-ai"><summary>Do AI tutors and LLM help make people learn, or just perform? <span class="badge ind">Supported indirectly</span></summary>
+<p><strong>The clearest result, from 2025:</strong> about 1,000 high-school pupils doing maths practice with an
+unguarded GPT-4 scored 48% higher in practice. With the tool removed, they scored 17% <em>lower</em> than pupils who
+never had it. A guarded tutor package (teacher-written solutions, common mistakes, step-by-step hints, no answers handed over)
+avoided the drop but did not beat the control either (Bastani et
+al., <em>PNAS</em>; a published correction exists that nobody could open).</p>
+<p><strong>The one reading study:</strong> 405 pupils aged 14 to 15 read history passages. Three days later, LLM-only
+study did worse on comprehension and memory than note-taking alone or note-taking plus the LLM, and most pupils still
+preferred the LLM (Kreijkes et al. 2025).</p>
+<p><strong>Counterweight:</strong> a carefully scripted AI tutor beat in-class active learning in Harvard physics, on an
+immediate test only. And a much-cited meta-analysis showing a huge ChatGPT effect has been retracted.
+<span class="small">File 04.</span></p>
+</details>
+
+<details id="q-generate"><summary>Is doing it yourself better than being given it? <span class="badge ind">Supported indirectly, less than the slogan says</span></summary>
+<p><strong>Self-explanation helps</strong>: prompting people to explain material to themselves gives g = 0.55, and
+0.79 for text. <strong>But the extra over simply being handed a good explanation is smaller</strong>: g = 0.35 against
+instructor-supplied explanations, from only six comparisons. Much of the benefit comes from being given an explanation
+at all.</p>
+<p>The famous "interactive beats constructive beats active beats passive" ordering (ICAP) was never properly tested;
+its own authors call it a "gross first cut". Summarising is rated low-utility for students. Retrieval beat building a
+concept map. "Constructive" is not automatically best; what wins is whatever makes you do inferential work.</p>
+<p><strong>For Spideryarn:</strong> this is the cross-cutting question for every artefact the model makes. Being given
+a summary or a map is fine as orientation, especially for a newcomer. The reader would learn more by attempting
+something first, but by less than the slogans claim. <span class="small">File 08.</span></p>
+</details>
+
+<details id="q-purpose"><summary>Does asking why someone is reading help? <span class="badge sup">Supported, with a cost</span></summary>
+<p><strong>A reader's goal changes what they learn</strong>: more of the relevant parts, less of the rest. Taking a
+different perspective later recovers ideas that were "unrecallable" under the first. Curiosity improves memory, even
+for incidental material. Giving learners control over sequencing and pacing has an overall effect near zero (g = 0.05).
+Interest-flavoured personalisation risks adding interesting-but-irrelevant detail, which hurts.</p>
+<p><strong>For Spideryarn:</strong> asking for a purpose is well founded. The cost is that it narrows what is
+remembered, and nothing in the product prompts for what the purpose did not ask about. <span class="small">File 20.</span></p>
+</details>
+
+<h3>AI text and the source text</h3>
+
+<details id="q-summary"><summary>Does a summary beside the article help? <span class="badge unt">Untested as built</span> <span class="badge harm">Harm if it replaces reading</span></summary>
+<p><strong>An orienting passage ahead of the detail</strong> (an "advance organiser") helps, but only "if used in
+appropriate situations and measured properly". The one broad meta-analysis is from 1980. <strong>The same help fades
+or reverses for experts</strong>: in a 2025 meta-analysis, high-assistance instruction helped low-knowledge learners
+(d = +0.51), while low-assistance instruction was better for high-knowledge learners (d = −0.43).</p>
+<p><strong>When a summary <em>replaced</em> the passage</strong>, it helped weaker readers and hurt stronger ones
+(Etkin et al. 2025, 195 young adults). The size of the drop depends on how readers were split: d = 0.83 one way, 0.35
+with an independent split, and the first may be partly regression to the mean.</p>
+<p><strong>Contested:</strong> the classic claim that experts learn more from <em>gappier</em> text failed to replicate
+inside its own paper and was reversed for skilled readers later. No study tests a summary read alongside a long
+article. <span class="small">File 05.</span></p>
+</details>
+
+<details id="q-offload"><summary>Does offloading to a tool cost you memory or skill? <span class="badge ind">Depends on intent</span></summary>
+<p><strong>Offloading is normal and often sensible.</strong> Its memory cost nearly vanishes when people know a test is
+coming, and saving something can improve memory for what you study next. <strong>The "Google effect" is
+shaky</strong>: its priming experiment failed to replicate twice. Surveys link heavier AI use to less self-reported
+critical thinking, but they are correlations.</p>
+<p><strong>AI inflates confidence</strong>: people solving problems with AI scored about 3 points higher and
+overestimated by about 4. "Cognitive surrender" and "metacognitive laziness" are named ideas with little or no data
+behind them yet; treat them as hypotheses. <span class="small">File 06.</span></p>
+</details>
+
+<details id="q-trust"><summary>Should the reader see the article's words or an AI's account of them? <span class="badge ind">The article's words</span></summary>
+<p><strong>Wrong automated advice drags people below what they achieve alone</strong>, replicated across many fields,
+and training does not reliably prevent it. <strong>LLM summaries of science abstracts overgeneralise</strong> at about
+five times the odds of expert-written ones (4,900 summaries), and asking for accuracy made it worse. That rate depends on
+the model and the prompt.</p>
+<p><strong>Citations raise trust even when they are random.</strong> Fewer than one in ten was hovered, and checking
+went with lower trust.
+<strong>AI explanations mostly raise agreement</strong>, right or wrong. A forced step (commit to your own answer
+first) cut over-reliance but was liked less.</p>
+<p><strong>For Spideryarn:</strong> verbatim Quotes and passage-only FAQ answers are well chosen. The exposed parts are
+the model-written bits around them: Skim's role lines, the reason a quote was chosen, the FAQ's questions.
+<span class="small">File 07.</span></p>
+</details>
+
+<details id="q-critical"><summary>Does checking a paper against the outside world help judge it? <span class="badge ind">Supported indirectly</span></summary>
+<p><strong>Lateral reading</strong> (leaving the page to learn about its source, as fact-checkers do) and teaching
+students to judge sources both work, but for students judging websites, not experts judging papers. <strong>Peer
+reviewers miss most errors</strong>: 607 BMJ reviewers found about 2.6 of 9 planted major errors, and brief training
+barely helped. That is the library's one Direct result about expert readers' own performance.</p>
+<p><strong>An LLM fact-check that correctly labelled 90% of the false headlines did not help people tell true from
+false</strong>, and where it was unsure or wrong it moved belief the wrong way. Human fact-checks did help. This backs Referee's "no verdict"
+rule. <span class="small">File 18.</span></p>
+</details>
+
+<h3>On the page</h3>
+
+<details id="q-notes"><summary>Do highlighting and notes help? <span class="badge ind">Memory yes, comprehension not reliably</span></summary>
+<p>The reader's own highlighting gives a small gain in memory (about 0.36) and no reliable gain in comprehension.
+<strong>Highlighting chosen by an instructor did better</strong>, about 0.44 for both. Taking notes beats not taking
+them, modestly. "Longhand beats laptop" did not survive a direct replication; it is contested, not settled.</p>
+<p><strong>For Spideryarn:</strong> Comments' bare mark is the weakest-evidenced act. A few words in your own words do
+more. <span class="small">File 09.</span></p>
+</details>
+
+<details id="q-gloss"><summary>Does easy look-up stop you learning the word? <span class="badge ind">No, against no help</span> <span class="badge unt">Untested against guessing first</span></summary>
+<p>Greg's question: "maybe the glossary, because it's constantly making it easy for you to look up the answer, means
+that you're not actually learning it." <strong>Glossed reading beats unglossed</strong> for learning words: 45% vs
+27% of target words immediately, 33% vs 20% later (42 studies, second-language learners). So look-up does not cancel
+learning compared with no help.</p>
+<p><strong>But</strong> formats that make you choose before seeing beat plain definitions, and the memory literature
+says producing an answer before seeing it, even wrongly, helps when feedback follows. Nobody has compared "show it" with
+"guess first, then show it" for adults reading expository text. <span class="small">File 10.</span></p>
+</details>
+
+<details id="q-hyper"><summary>Do links, previews and side panels help or distract? <span class="badge ind">Help, less for experts</span></summary>
+<p>Putting related material next to what it explains helps (g ≈ 0.6), but the effect shrinks or reverses for readers
+who know the material, and "as close as possible" is not always best. Links cost little to read past; the cost is in
+deciding whether to follow them. The one controlled hover-preview study found speed gains and no change in
+effectiveness. <span class="small">File 11.</span></p>
+</details>
+
+<details id="q-skim"><summary>Does skimming in passes work? Does speed reading? <span class="badge ind">Skim for triage</span> <span class="badge none">Speed reading: no</span></summary>
+<p>Adults read non-fiction silently at about 238 words a minute, and about 100 when reading to remember.
+<strong>Skimming keeps the important ideas and loses detail and inference</strong>, and its benefit depended on easy
+navigation. Scim, the nearest published system to Skim, made readers faster with no accuracy gain. <strong>No rigorous
+trial</strong> of SQ3R, PQ4R or the three-pass method exists. RSVP (one word at a time) gives no reliable gain and
+removes looking back, which helps comprehension. The 2026-08-28 verdict to leave it unbuilt stands. <span class="small">File 12.</span></p>
+</details>
+
+<details id="q-struct"><summary>Do headings and an outline help? <span class="badge ind">Supported indirectly</span></summary>
+<p>Headings and overviews improve memory for a text's topics and their organisation. Two cautions. When only
+<em>some</em> topics are signalled, the unsignalled ones are remembered <em>worse</em> than in a text with no signals.
+Signals also trade detail for breadth. No study compares model-made headings with an author's. <span class="small">File 13.</span></p>
+</details>
+
+<details id="q-type"><summary>Typography, decoration, and the decorated-mode experiment <span class="badge none">Several settled no</span></summary>
+<p><strong>"Bionic reading" does nothing</strong> (four studies, 2024–26). <strong>Hard-to-read fonts as a "desirable
+difficulty" failed to replicate</strong> (a 17-lab pooling). Reading on screen costs a little comprehension of
+expository text (g ≈ −0.2). <strong>A correction to our own earlier note:</strong> pre-highlighting by someone else is
+not "the worst" decoration. Accurate marks chosen by someone else helped a little in one meta-analysis and did
+nothing in a later experiment. <em>Wrong</em> marks hurt comprehension, and readers' confidence ran backwards against
+their scores. The real danger is model-quality marks being wrong. Marking author,
+model and reader voices in different typefaces has never been tested; within normal ranges a typeface does not change
+comprehension, so the cost is small. <span class="small">File 17.</span></p>
+</details>
+
+<details id="q-search"><summary>Does search inside a piece change how you read the rest? <span class="badge ind">Places, not answers, is the safe shape</span></summary>
+<p>Telling readers what is relevant improves learning of those parts and lowers it for the rest, so a reader who
+follows search hits remembers those passages better and the rest worse. Answering with the text open helps now and not
+after a day. Receiving a synthesised answer instead of the sources gives shallower learning. Search inside one document
+has never been tested. <span class="small">File 19.</span></p>
+</details>
+
+<h3>Talking, and pictures</h3>
+
+<details id="q-voice"><summary>Is speaking better than typing? <span class="badge ind">Faster and fuller</span> <span class="badge unt">Learning: not shown</span></summary>
+<p>Greg's belief: "voice is lower effort, it's faster. And … people probably say more and probably provide more
+context." <strong>Faster</strong>: about 2.9 times phone typing. <strong>More</strong>: spoken answers had more words
+and topics (1,001 people, randomised). <strong>Lower effort</strong>: only perceived effort has support. <strong>Better
+for learning</strong>: mixed. Spoken explaining elaborates more and written explaining organises better. In the one
+voice-versus-text AI tutor study (a preprint), voice nearly doubled interaction, cost 2.8 times as much, and gave no
+learning gain. <span class="small">File 14.</span></p>
+</details>
+
+<details id="q-pictures"><summary>Do pictures help? What about AI-made ones? <span class="badge none">Decorative: about neutral</span></summary>
+<p>Explanatory pictures beside words help, mostly for newcomers. Purely decorative pictures are about neutral.
+Interesting but irrelevant material ("seductive details") hurts, more so when it comes first. Attractive design gives
+small gains, mostly in motivation. <strong>Nothing tests AI-made pictures</strong>, or shows that a wrong picture
+plants a false belief. That is exactly the risk Illustrated's own doc names. <span class="small">File 15.</span></p>
+</details>
+
+<details id="q-maps"><summary>Does a diagram of the argument help, if the reader did not draw it? <span class="badge ind">Weakly</span> <span class="badge unt">Machine-drawn: untested</span></summary>
+<p>Concept maps help on average, and building one is associated with more benefit than studying one (g = 0.72 vs 0.43,
+across studies). But in a direct test, author-made organisers <em>beat</em> learner-made ones on transfer. Argument
+mapping's large effects shrink from g = 1.59 to 0.87 after correcting for publication bias, and they come from
+training people to build maps. There is no evidence on machine-drawn maps or on timelines for adults. <span class="small">File 16.</span></p>
+</details>
+
+<h3>Prior art</h3>
+
+<details id="q-census"><summary>What happened when HCI researchers built AI reading tools? <span class="badge unt">Feel better, rarely truer</span></summary>
+<p>ScholarPhi (definitions in place), Scim (highlighted sentences in passes), Paper Plain (gists and plain-language
+definitions) and others. Where answer correctness was measured, the tool made no significant difference: 16/27 vs
+16/27, 0.80 vs 0.76, 52% vs 50%. What moved was speed, ease and confidence. One Paper Plain reader who used only the
+gists rated their understanding highly and scored 2/7. No study measured delayed retention by expert adults.
+Spideryarn's own reader-study protocol (written reconstruction, blinded scoring, confidence against it) is stronger
+than most of this literature. <span class="small">File 21.</span></p>
+</details>
+
+<!-- ============================================================ PASS 3 -->
+<h2 id="pass3">Pass 3: one reader, one paper, followed through</h2>
+
+<p>The worked example is the paper Greg was reading when he asked for this, arXiv 2609.01481, "Harness-of-Harness".
+Picture a reader who builds agent tooling. They open it in Spideryarn to compare the paper's planner, developer and
+tester loop with their own. Here is what they do, and what the evidence says at each step.</p>
+
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 760 200" role="img" aria-labelledby="f2t f2d">
+  <title id="f2t">Figure 2: the reader's path through the paper, coloured by verdict</title>
+  <desc id="f2d">Eight steps left to right: purpose, Brief summary, Skim, glossary, highlight, chat, Sources, Recall. Each box is coloured by the verdict for what that step claims.</desc>
+  <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="t-unt" fill="currentColor"/></marker></defs>
+  <g font-size="13">
+    <rect class="b-sup"  x="8"   y="40" width="80" height="54" rx="8"/><text x="48"  y="63" text-anchor="middle">1 Purpose</text><text x="48" y="81" text-anchor="middle" class="soft">goal</text>
+    <rect class="b-unt"  x="102" y="40" width="80" height="54" rx="8"/><text x="142" y="63" text-anchor="middle">2 Brief</text><text x="142" y="81" text-anchor="middle" class="soft">summary</text>
+    <rect class="b-ind"  x="196" y="40" width="80" height="54" rx="8"/><text x="236" y="63" text-anchor="middle">3 Skim</text><text x="236" y="81" text-anchor="middle" class="soft">pass 1</text>
+    <rect class="b-ind"  x="290" y="40" width="80" height="54" rx="8"/><text x="330" y="63" text-anchor="middle">4 Glossary</text><text x="330" y="81" text-anchor="middle" class="soft">"harness"</text>
+    <rect class="b-ind"  x="384" y="40" width="80" height="54" rx="8"/><text x="424" y="63" text-anchor="middle">5 Mark</text><text x="424" y="81" text-anchor="middle" class="soft">+ note</text>
+    <rect class="b-none" x="478" y="40" width="80" height="54" rx="8"/><text x="518" y="63" text-anchor="middle">6 Chat</text><text x="518" y="81" text-anchor="middle" class="soft">asks</text>
+    <rect class="b-ind"  x="572" y="40" width="80" height="54" rx="8"/><text x="612" y="63" text-anchor="middle">7 Sources</text><text x="612" y="81" text-anchor="middle" class="soft">Reception</text>
+    <rect class="b-ind"  x="666" y="40" width="86" height="54" rx="8"/><text x="709" y="63" text-anchor="middle">8 Recall</text><text x="709" y="81" text-anchor="middle" class="soft">at once</text>
+  </g>
+  <g class="line" stroke-width="1.6">
+    <line x1="88" y1="67" x2="100" y2="67" marker-end="url(#ar)"/><line x1="182" y1="67" x2="194" y2="67" marker-end="url(#ar)"/>
+    <line x1="276" y1="67" x2="288" y2="67" marker-end="url(#ar)"/><line x1="370" y1="67" x2="382" y2="67" marker-end="url(#ar)"/>
+    <line x1="464" y1="67" x2="476" y2="67" marker-end="url(#ar)"/><line x1="558" y1="67" x2="570" y2="67" marker-end="url(#ar)"/>
+    <line x1="652" y1="67" x2="664" y2="67" marker-end="url(#ar)"/>
+  </g>
+  <text x="380" y="132" text-anchor="middle" font-size="13" class="soft">Green: supported · blue: supported indirectly · grey: untested · amber: the nearest evidence is a caution</text>
+  <text x="380" y="160" text-anchor="middle" font-size="13">The best-supported step (8) comes last, and nothing brings the reader back to it later.</text>
+</svg>
+</div>
+<figcaption>Figure 2. One reading session, step by step. The colour is the verdict for the claim each step makes, as
+the next eight paragraphs explain.</figcaption>
+</figure>
+
+<div class="step"><div class="n">1</div><div>
+<h4>They say why they are reading</h4>
+<p>"Compare their loop with our Overseer." The profile and purpose go into every prompt. <span class="badge sup">Supported</span>
+A goal improves recall of what is relevant to it. The cost: it lowers recall of the rest, and this reader may never
+notice the paper's section on benchmarks because it was not what they came for.</p>
+</div></div>
+
+<div class="step"><div class="n">2</div><div>
+<h4>They open the Brief summary first</h4>
+<p><span class="badge unt">Untested as built</span> An orienting summary is the advance-organiser idea, which helps
+conditionally. But this reader knows the field, and help tuned to newcomers fades for experts. If they read the
+Brief <em>instead of</em> the paper, the 2025 evidence points to harm for strong readers. The Brief links every
+paragraph to its passages; whether they press those links is the open question.</p>
+</div></div>
+
+<div class="step"><div class="n">3</div><div>
+<h4>They take Skim's first pass</h4>
+<p><span class="badge ind">Supported indirectly, for triage</span> Skimming keeps the important ideas and loses detail
+and inference, and Skim's stepping makes navigation easy, which is what made skimming pay. The stops on pass one are
+what they will remember best, because a preview works only for what it points at. Scim's verdict applies: faster, not
+more correct.</p>
+</div></div>
+
+<div class="step"><div class="n">4</div><div>
+<h4>They point at "harness" and the glossary card explains it</h4>
+<p><span class="badge ind">Supported against no help</span> A gloss beats no gloss. Whether guessing first would make
+the term stick better is untested. ScholarPhi's lesson matters here: the paper uses "harness" in more than one sense,
+and readers took an incomplete definition list as complete.</p>
+</div></div>
+
+<div class="step"><div class="n">5</div><div>
+<h4>They highlight a sentence about the tester, and add a note</h4>
+<p><span class="badge ind">Memory yes, comprehension not reliably</span> The mark alone helps memory a little. The note
+in their own words does more, especially if they come back to it.</p>
+</div></div>
+
+<div class="step"><div class="n">6</div><div>
+<h4>They ask chat whether the tester catches regressions</h4>
+<p><span class="badge none">Nearest evidence is a caution</span> Chat answers with citation chips. The 2025 trials say
+an AI that hands over answers lowers later unaided performance and raises confidence, and a citation raises trust
+whether or not it is opened. Asking "where does the piece say…" is the better kind of question than "what is the
+answer".</p>
+</div></div>
+
+<div class="step"><div class="n">7</div><div>
+<h4>They look at Sources, then Reception</h4>
+<p><span class="badge ind">Supported indirectly</span> Checking outside the document is what fact-checkers do. The rows
+are what others wrote, not a model's verdict, and the evidence says a verdict would not have helped.</p>
+</div></div>
+
+<div class="step"><div class="n">8</div><div>
+<h4>They finish, and Learn asks them what they took from it</h4>
+<p><span class="badge ind">Supported indirectly</span> This is the best-supported thing in the session: recall, then
+the passage. Recalling straight after reading is what the retention experiments did, so the timing is fine for memory.
+What is missing is a second look later: readers judge their own understanding better after a delay, and nothing brings
+them back.</p>
+</div></div>
+
+<h3 id="pass3-change">What the evidence would change in that session</h3>
+<ul>
+  <li>After step 1, a prompt later on for "what does the piece say that you didn't come for?".</li>
+  <li>At step 2, for a reader who says they know the field, "your one-line gist first" before the Brief.</li>
+  <li>At step 4, an optional "what do you think it means?" before the card. The card would also say when a term has more than one sense.</li>
+  <li>At step 5, "a few words" offered as the easy next step after the mark.</li>
+  <li>At step 6, sometimes "what do you think?" before answering, and a count of how often chips are pressed.</li>
+  <li>At step 8, the same Recall offered again tomorrow as a second check, and a confidence rating before Quiz marks.</li>
+</ul>
+
+<!-- ============================================================ PASS 4 -->
+<h2 id="pass4">Pass 4: the hard parts</h2>
+
+<h3 id="timing">The timing problem</h3>
+<p>Two different delays are easy to confuse, and GPT Sol's review caught this page's first draft confusing them.</p>
+<ul>
+  <li><strong>The delay before the final test.</strong> Retrieval's advantage over re-reading shows up on a test a day or
+  more later; on a test minutes later, re-reading can look better. That is about <em>when you measure</em>. Recalling
+  straight after reading, as Learn does, is exactly what the retention experiments did.</li>
+  <li><strong>The delay before a self-check.</strong> Readers judge their own understanding better when they summarise
+  after a gap rather than at once. That is a reason for a <em>second</em>, later check.</li>
+</ul>
+<p>So the timing of Recall is fine; what is missing is the later check. Whether a second recall a day later adds
+retention on top of the first is untested in this library, though spacing is named in <code>learning-vision.md</code>
+as "the strongest effect in the literature". It is not built, partly because the app has no scheduler.</p>
+
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 760 290" role="img" aria-labelledby="f3t f3d">
+  <title id="f3t">Figure 3: schematic of retrieval versus re-reading over time</title>
+  <desc id="f3d">Two lines falling over time. Re-reading starts slightly higher; retrieval falls more slowly and is higher from about a day on.</desc>
+  <line class="line" x1="90" y1="40" x2="90" y2="240" stroke-width="1.5"/>
+  <line class="line" x1="90" y1="240" x2="700" y2="240" stroke-width="1.5"/>
+  <text x="40" y="140" font-size="13" transform="rotate(-90 40 140)" text-anchor="middle">remembered</text>
+  <text x="140" y="262" font-size="13" text-anchor="middle">minutes</text>
+  <text x="400" y="262" font-size="13" text-anchor="middle">a day or two</text>
+  <text x="650" y="262" font-size="13" text-anchor="middle">a week</text>
+  <path d="M110,62 C 300,150 450,195 690,215" stroke="var(--v-unt)" stroke-width="3" fill="none"/>
+  <path d="M110,74 C 300,120 450,150 690,168" stroke="var(--v-sup)" stroke-width="3" fill="none"/>
+  <text x="560" y="228" font-size="13" class="t-unt">re-reading</text>
+  <text x="560" y="152" font-size="13" class="t-sup">recall with feedback</text>
+  <line x1="200" y1="40" x2="200" y2="240" stroke="var(--accent)" stroke-dasharray="4 4" stroke-width="1.5"/>
+  <text x="208" y="54" font-size="13">a test here can favour re-reading</text>
+  <line x1="420" y1="40" x2="420" y2="240" stroke="var(--v-sup)" stroke-dasharray="4 4" stroke-width="1.5"/>
+  <text x="428" y="54" font-size="13">from here, recall's benefit shows</text>
+</svg>
+</div>
+<figcaption>Figure 3. Schematic, not data: the shape reported by Roediger and Karpicke (2006) and the classroom
+meta-analyses in file 01. The horizontal axis is when the <em>final test</em> happens; both groups studied, and
+recalled or re-read, at the start. The curves show the crossover, not its size.</figcaption>
+</figure>
+
+<h3>The expert problem</h3>
+<p>Expertise reversal says help that suits a newcomer fades, or reverses, for someone who knows the field. It appears
+in the summary evidence, in the split-attention evidence, in signalling, and in multimedia. Our readers are often the
+experts, and several modes (a gap-free summary, dense cross-links, the tree, a tutor) are novice-shaped help. The
+reader profile is a <em>self-description</em>, while the effect depends on actual knowledge.</p>
+
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 760 270" role="img" aria-labelledby="f4t f4d">
+  <title id="f4t">Figure 4: schematic of expertise reversal</title>
+  <desc id="f4d">Benefit on the vertical axis, prior knowledge on the horizontal. Heavy help starts high and falls below light help as knowledge grows.</desc>
+  <line class="line" x1="90" y1="30" x2="90" y2="220" stroke-width="1.5"/>
+  <line class="line" x1="90" y1="220" x2="700" y2="220" stroke-width="1.5"/>
+  <text x="40" y="125" font-size="13" transform="rotate(-90 40 125)" text-anchor="middle">what the reader gets</text>
+  <text x="140" y="244" font-size="13" text-anchor="middle">new to the field</text>
+  <text x="640" y="244" font-size="13" text-anchor="middle">expert in it</text>
+  <path d="M110,60 L690,190" stroke="var(--v-ind)" stroke-width="3" fill="none"/>
+  <path d="M110,160 L690,80" stroke="var(--v-sup)" stroke-width="3" fill="none"/>
+  <text x="130" y="50" font-size="13" class="t-ind">heavy help: full summary, every link, step-by-step</text>
+  <text x="430" y="78" font-size="13" class="t-sup">light help: the text, a cue, a question</text>
+  <text x="560" y="210" font-size="13" class="soft">most of our readers?</text>
+</svg>
+</div>
+<figcaption>Figure 4. Schematic. In the 2025 meta-analysis in file 05, high assistance helped low-knowledge learners
+(d = +0.51), while low assistance was better for high-knowledge learners (d = −0.43). Those were instructional-design
+tasks, not paper reading.</figcaption>
+</figure>
+
+<h3>Seeing versus doing</h3>
+<p>Figure 5 places the modes by who does the work. The left half is where the product puts most of its effort, and the
+right half is where most of the learning evidence is.</p>
+
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 760 220" role="img" aria-labelledby="f5t f5d">
+  <title id="f5t">Figure 5: modes from "the model does it" to "the reader does it"</title>
+  <desc id="f5d">A horizontal axis. On the left, Illustrated, Summary, Sketch, Structure. In the middle, Quotes, Skim, FAQ, Glossary, Search. On the right, Comments, Quiz, Recall, Explore.</desc>
+  <defs><marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="t-unt" fill="currentColor"/></marker></defs>
+  <line class="line" x1="40" y1="150" x2="720" y2="150" stroke-width="2" marker-end="url(#ar2)"/>
+  <text x="40" y="180" font-size="13">the model makes it, the reader looks</text>
+  <text x="720" y="180" font-size="13" text-anchor="end">the reader produces, then checks the text</text>
+  <g font-size="13">
+    <rect class="b-none" x="40" y="40" width="96" height="30" rx="6"/><text x="88" y="60" text-anchor="middle">Illustrated</text>
+    <rect class="b-unt" x="40" y="88" width="96" height="30" rx="6"/><text x="88" y="108" text-anchor="middle">Summary</text>
+    <rect class="b-ind" x="150" y="40" width="96" height="30" rx="6"/><text x="198" y="60" text-anchor="middle">Sketch</text>
+    <rect class="b-ind" x="150" y="88" width="96" height="30" rx="6"/><text x="198" y="108" text-anchor="middle">Structure</text>
+    <rect class="b-ind" x="276" y="40" width="96" height="30" rx="6"/><text x="324" y="60" text-anchor="middle">Quotes</text>
+    <rect class="b-ind" x="276" y="88" width="96" height="30" rx="6"/><text x="324" y="108" text-anchor="middle">Skim</text>
+    <rect class="b-ind" x="386" y="40" width="96" height="30" rx="6"/><text x="434" y="60" text-anchor="middle">FAQ</text>
+    <rect class="b-ind" x="386" y="88" width="96" height="30" rx="6"/><text x="434" y="108" text-anchor="middle">Glossary</text>
+    <rect class="b-ind" x="496" y="40" width="96" height="30" rx="6"/><text x="544" y="60" text-anchor="middle">Search</text>
+    <rect class="b-ind" x="496" y="88" width="96" height="30" rx="6"/><text x="544" y="108" text-anchor="middle">Comments</text>
+    <rect class="b-ind" x="612" y="40" width="96" height="30" rx="6"/><text x="660" y="60" text-anchor="middle">Quiz</text>
+    <rect class="b-ind" x="612" y="88" width="96" height="30" rx="6"/><text x="660" y="108" text-anchor="middle">Recall, Explore</text>
+  </g>
+</svg>
+</div>
+<figcaption>Figure 5. Placement is a judgment, not a measurement. The gap between seeing and doing is real but smaller
+than the slogans say: being handed a good explanation gives most of the benefit of producing one (file 08), and in one
+direct test author-made organisers beat learner-made ones (file 16).</figcaption>
+</figure>
+
+<h3>Where the files disagreed, and how the digest settled it</h3>
+<details><summary>Five disagreements</summary>
+<ul>
+  <li><strong>Etkin et al. 2025</strong> was graded Moderate in one file and Low in another. The one that read the paper
+  found the "hurts strong readers" split may be partly regression to the mean, and the drop is d = 0.35 under an
+  independent split. The digest uses Low–Moderate and the smaller figure.</li>
+  <li><strong>Pre-highlighting</strong>: our 2026-08-28 note called it "the worst" decoration. Two files found accurate
+  highlights help a little and wrong ones harm. The earlier note now carries a correction.</li>
+  <li><strong>The reverse-cohesion effect</strong> (experts learn more from gappier text) is contested. The broader
+  expertise-reversal meta-analysis is the safer ground.</li>
+  <li><strong>Constructing versus viewing</strong>: both files agree that generating adds something on top of a good
+  artefact, but less than the slogans claim.</li>
+  <li><strong>A retracted meta-analysis</strong> of ChatGPT and learning (g = 0.87) is excluded. Bastani et al. has a
+  correction nobody could open, so its figures are provisional.</li>
+</ul>
+</details>
+
+<h3>How much to trust the library itself</h3>
+<details><summary>Method, and its limits</summary>
+<p>Each researcher was told to cite only papers opened in that session, to check every DOI, to grade certainty and
+directness separately, and to give contrary evidence equal room. Publisher sites mostly blocked automated reading, so
+abstracts came through Crossref, OpenAlex, Europe PMC and Semantic Scholar. Each file says which sources were read in
+full. All 370 DOIs were then resolved against Crossref. 307 matched automatically. The rest were checked by hand and each
+resolves to the paper it is cited as. The researchers caught at least ten wrong DOIs among the leads they were given.
+GPT Sol reviewed the plan before the research and the digest after it, checking each conclusion against the topic
+files.</p>
+</details>
+
+<!-- ============================================================ JUDGMENT -->
+<h2 id="judgment">Judgment: where we disagree with the evidence, and what to try</h2>
+
+<div class="callout decide">
+  <p class="title">Where the product and the evidence pull apart</p>
+  <p><strong>The missing later check.</strong> Learn and Quiz come at the end of reading, which suits memory, but nothing brings the reader back for the delayed self-check that improves calibration.</p>
+  <p><strong>Expert readers.</strong> Several modes are novice-shaped help, and the evidence says such help fades for experts.</p>
+  <p><strong>Seeing is not doing.</strong> Most of what the model makes is looked at, not used.</p>
+  <p><strong>Feeling is not understanding.</strong> Nothing shows a reader their actual level except Quiz's marks.</p>
+  <p><strong>Links are not checks.</strong> "A door into the text" works only if the door is used, and we do not measure it.</p>
+  <p><strong>Narrowing by goal.</strong> Purpose and search focus the reader and cost them the rest.</p>
+</div>
+
+<p>The ideas this points at, roughly in order of value for the effort. None is decided, and none was built by this
+work. Each goes to Greg as a proposal.</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>Idea</th><th>Why</th><th>Effort</th></tr></thead>
+<tbody>
+<tr><td><strong>Run the reader study</strong> (260910a), adding an item the tool does not cover, a seeded hole, each reader's baseline and a delayed test</td><td>The only way to answer the population gap</td><td>moderate, mostly Greg's time</td></tr>
+<tr><td><strong>A delayed Learn/Quiz re-offer</strong>: "come back tomorrow", after the immediate attempt</td><td>The missing later check</td><td>moderate (no scheduler)</td></tr>
+<tr><td><strong>Confidence before the mark</strong> in Quiz</td><td>Readers judge themselves poorly</td><td>small</td></tr>
+<tr><td><strong>Guess first</strong> on glossary cards and top FAQ questions, optional</td><td>Generation and pre-questions</td><td>small</td></tr>
+<tr><td><strong>Measure chip press-through</strong> in chat and summaries</td><td>Links as badges, not checks</td><td>small</td></tr>
+<tr><td><strong>"Your gist first"</strong> before the Brief, for readers who say they know the field</td><td>Expertise reversal</td><td>small</td></tr>
+<tr><td><strong>Say honestly what each mode is for</strong>: Skim is triage, Live is fluency, Illustrated is delight</td><td>Untested or no learning effect</td><td>small, copy</td></tr>
+<tr><td><strong>Show coverage after search</strong></td><td>Goal narrowing</td><td>small–moderate</td></tr>
+<tr><td><strong>Even coverage in the tree</strong>, or say where labels are missing</td><td>Partial signalling hurts</td><td>small</td></tr>
+<tr><td><strong>Source cues on Reception rows</strong>: author position, motive, reviewed or not</td><td>Teaching sourcing works</td><td>moderate</td></tr>
+<tr><td><strong>Fidelity checks for overgeneralisation and for cross-references</strong></td><td>LLM summaries overgeneralise</td><td>moderate</td></tr>
+<tr><td><strong>Use the Sketch</strong>: recall the argument, then compare</td><td>Viewing gives less than doing</td><td>moderate</td></tr>
+<tr><td><strong>A one-question level check</strong> at the start of Tutorial</td><td>A tested way to set guidance</td><td>small</td></tr>
+<tr><td><strong>Note, not just mark</strong>, and resurface notes later</td><td>Marks help memory, not comprehension</td><td>small</td></tr>
+<tr><td><strong>Planted-error test of Referee</strong></td><td>Reviewers find 2.6 of 9</td><td>moderate</td></tr>
+</tbody>
+</table>
+</div>
+
+<!-- ============================================================ MARKETING -->
+<h2 id="marketing">What could honestly be said</h2>
+<p>Only what the evidence carries, phrased no stronger. Check each number against the paper before it is printed.</p>
+<ul>
+  <li>Testing yourself on what you read beats re-reading it for keeping it, one of the best-replicated findings in
+  learning research. Spideryarn's Learn mode is built on it.</li>
+  <li>In one 2025 randomised trial (Turkish high-school maths, in <em>PNAS</em>), unrestricted GPT-4 help left pupils
+  worse off once it was gone. Spideryarn is designed to keep you reading the article itself. (The paper has a correction
+  this library has not yet read.)</li>
+  <li>In one 2025 study of 4,900 science summaries, several LLMs overgeneralised, at rates that varied by model and
+  prompt. Spideryarn keeps the author's text beside its AI help, and marks verified quotes as word for word.</li>
+</ul>
+<div class="callout warn"><p class="title">Not to be said</p>
+<p>That Spideryarn improves comprehension or retention. Nobody, including us, has measured that yet.</p></div>
+
+<!-- ============================================================ FAQ -->
+<h2 id="faq">Questions you might ask</h2>
+
+<details><summary>So is the glossary bad for learning?</summary>
+<p>No evidence says so. A gloss beats no gloss for learning words. What is untested is whether "guess first, then
+check" would beat "check", and the memory literature predicts it would. That is a cheap, optional experiment, not a
+reason to change the glossary.</p></details>
+
+<details><summary>Should we stop making summaries?</summary>
+<p>No. A summary is a reasonable orientation, especially for a newcomer. The risk is a summary <em>replacing</em> the
+reading, and the evidence that it can hurt strong readers. Keep it a press, never a default, keep its links to
+passages, and find out whether anyone presses them.</p></details>
+
+<details><summary>Is voice worth the cost?</summary>
+<p>For speed and how much people say: yes, that is the best-supported part of Greg's belief. For learning: not shown.
+Dictation is cheap and well founded. Live's case is fluency and preference, and the one comparison found it cost 2.8
+times as much for no learning gain.</p></details>
+
+<details><summary>Why is so little of this about expert readers?</summary>
+<p>Because research is done where participants are: students in classes and labs. That is why "Indirect" is the most
+common grade, and why the reader study matters more than another literature search would.</p></details>
+
+<details><summary>Can we cite a number from this in a talk?</summary>
+<p>Open the paper first. Most sources were read at abstract level, and at least one key study has a correction nobody
+could open.</p></details>
+
+<!-- ============================================================ APPENDIX -->
+<h2 id="appendix">Appendix: terms, and where everything is</h2>
+
+<h3>Terms used above</h3>
+<div class="tablewrap"><table>
+<tr><th>Term</th><th>Plain meaning</th></tr>
+<tr><td>Effect size (d, g)</td><td>How far apart two groups' averages are, in standard deviations. Roughly 0.2 is small, 0.5 medium, 0.8 large.</td></tr>
+<tr><td>Meta-analysis</td><td>A study that pools many studies' results into one estimate.</td></tr>
+<tr><td>Testing effect / retrieval practice</td><td>Pulling something out of memory strengthens it more than looking at it again.</td></tr>
+<tr><td>Metacomprehension, calibration</td><td>How well you judge what you understood, and how closely that judgement matches reality.</td></tr>
+<tr><td>Expertise reversal</td><td>Help that suits a novice fades or backfires for someone who knows the material.</td></tr>
+<tr><td>Advance organiser</td><td>An orienting passage that gives you the frame before the detail.</td></tr>
+<tr><td>Self-explanation</td><td>Explaining to yourself why something follows, while studying it.</td></tr>
+<tr><td>ICAP</td><td>The claim that interactive > constructive > active > passive engagement. Influential; not well tested.</td></tr>
+<tr><td>Seductive details</td><td>Interesting but irrelevant additions, which tend to hurt learning.</td></tr>
+<tr><td>Signalling</td><td>Headings, overviews and cues that point at a text's structure.</td></tr>
+<tr><td>Split attention / spatial contiguity</td><td>Having to hunt between two places for related information costs learning; putting them together helps.</td></tr>
+<tr><td>Lateral reading</td><td>Leaving a page to find out about its source, as fact-checkers do.</td></tr>
+<tr><td>RSVP</td><td>Rapid serial visual presentation: one word at a time, in one place.</td></tr>
+<tr><td>Automation bias</td><td>Accepting an automated suggestion over your own judgement, including when it is wrong.</td></tr>
+</table></div>
+
+<h3>Where everything is</h3>
+<ul>
+  <li><code>docs/project/reading-research-overview.md</code> is the map, with one line per file.</li>
+  <li><code>docs/research/261010a-reading-and-learning-evidence/digest.md</code> holds the conclusions: thirty claims with verdicts, mode by mode, and the product ideas.</li>
+  <li><code>docs/research/261010a-reading-and-learning-evidence/01-…21-*.md</code> are the twenty-one topic files, with the evidence and citations.</li>
+  <li><code>docs/plans/261010q-reading-and-learning-evidence-library.md</code> is the plan and its GPT Sol reviews.</li>
+  <li><code>docs/investigations/260910a-reader-study-protocol-…md</code> is the reader study that would answer what this cannot.</li>
+</ul>
+
+</body>
+</html>
