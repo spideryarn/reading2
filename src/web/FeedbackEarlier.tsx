@@ -1535,7 +1535,8 @@ function ThreadContents({
 /**
  * **One thread on its own**: where it sits among the rest and the way back,
  * the ids, the question (its *Details* shut), the report it is about (shut),
- * what the admin has replied that no agent has yet acted on, and the box.
+ * what the admin has replied, acted on first and then not yet acted on, and
+ * the box.
  */
 function ThreadView({
   question,

@@ -6,7 +6,7 @@ asked: 2026-10-10
 title: May I sharpen the rule for when an agent closes your question?
 refs: docs/plans/261010g-needs-a-decision-shows-replies-an-agent-acted-on.md (§ The rule proposal) · docs/plans/261010g-plan-review-sol.md (P2-3) · docs/project/feedback-reports.md § To act on one, step 3 · docs/postmortems/261010a-needs-a-decision-hid-replies-an-agent-had-acted-on.md · SPIDERYARN-READING2-GE · qi-yf62kckg
 ---
-You replied A to q-rstqvz three times because an agent kept that question open after acting on your first reply, waiting for A to be built, though nothing was left for you to choose. The rule agents follow says to leave a question open "when his reply asks for more", and that was read loosely. May I change it?
+You answered A to q-rstqvz three times. Every reply was stored, but agents kept the question open while A was still to be built, even though you had nothing more to decide. The rule agents follow says to leave a question open "when his reply asks for more", and that was read loosely. May I change it?
 
 A (recommended): change it to the wording under Details. An agent closes a question as soon as you owe no further reply; work still to be built is tracked in the Overseer's queue. If it does need more from you, it rewrites the short part of the question you see first, so the new question is not hidden under Details.
 

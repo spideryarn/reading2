@@ -448,14 +448,14 @@ postmortem [261008c](../postmortems/261008c-needs-a-decision-lists-reports-nobod
   opens**. **Earlier opens on *Needs a decision***, and moves to All when that first read says no
   thread is waiting, unless the reader has chosen anything in the meantime (a pill, the button, a
   thread). Every other reader's dialog is unchanged.
-- **Two builds at once.** The browser asks `questions=2`; the server sends threads only then, and
-  the six-key questions of before 261008i otherwise, so a tab loaded before the deploy keeps
-  working after it. A server from before 261008i ignores the parameter, and the browser maps its
-  six-key questions into threads (the newest reply as the only one). A 404 on a reply says to copy
-  the words, reload and reply again. If the questions are not what the browser expects, the whole
-  list shows the ordinary "would not load" sentence, never some of them. If a later list no longer
-  contains a question while its thread is open or its box has words, that question stays beside
-  the draft until it is sent; it is not counted.
+- **Two builds at once.** The browser asks `questions=3`. A tab from before 261010g asks
+  `questions=2` and gets the previous thread shape exactly; one from before 261008i asks nothing
+  and gets the six-key questions from then. In the other direction, this browser maps either older
+  shape into today's threads (with no acted replies). A 404 on a reply says to copy the words,
+  reload and reply again. If the questions are not what the browser expects, the whole list shows
+  the ordinary "would not load" sentence, never some of them. If a later list no longer contains a
+  question while its thread is open or its box has words, that question stays beside the draft
+  until it is sent; it is not counted.
 
 A question leaves the dialog when an agent marks its file `status: answered` and that commit is
 deployed, unless the browser is still holding an unsent reply to it as above.

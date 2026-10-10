@@ -1,0 +1,1051 @@
+diff --git a/docs/plans/261010g-code-review-prompt.md b/docs/plans/261010g-code-review-prompt.md
+new file mode 100644
+index 000000000..b4910fc51
+--- /dev/null
++++ b/docs/plans/261010g-code-review-prompt.md
+@@ -0,0 +1,11 @@
++You are reviewing code for plan docs/plans/261010g-needs-a-decision-shows-replies-an-agent-acted-on.md (read it first, and your own plan review docs/plans/261010g-plan-review-sol.md). The work is the last commit on this branch (compare HEAD against HEAD~1; the scoped diff is docs/plans/261010g-code-review.diff).
++
++Per docs/reusable/codex-cli-as-subagent.md § The house workflow: **fix what you find inside this change** (edit files directly; keep fixes small and in the house style; add or adjust tests for anything you fix), and report anything wider for the author to decide. Do NOT commit, and do NOT run any git command that changes state (no add, commit, stash, checkout, restore, reset). Run `npx vitest run tests/feedback-route.test.ts tests/feedback-dialog.test.tsx tests/feedback-thread-with-local.test.ts` and `npm run typecheck` after any fix.
++
++Check in particular:
++1. src/routes.ts questionsForAdmin: shapes 1/2/3 exact, shape 2 byte-identical to before, the acted list bounded and ordered; the route's `questions` param handling.
++2. src/web/FeedbackEarlier.tsx: withLegacyQuestions maps shape 1 and shape 2 to shape 3 and nothing else; the strict check (keys, acted entries valid, no id in both lists, olderActedAnswers a non-negative integer); withLocal with acted receipts (including mixed receipts and the deferral comparison when a receipt is ignored); the thread rendering (acted block, note copy with and without Details, "Needs a decision again", contents row count); anything that compares or keys on question shape elsewhere (pagerKey, retained drafts, the waiting count).
++3. Tests: do they actually pin the behaviour (would they fail if the feature were reverted)? Anything untested that matters (e.g. shape-1 rollback mapping now including acted fields, route shape 3 bounds of >5 acted replies)?
++4. Docs: docs/project/feedback.md, the comments in src/types.ts, src/feedback-question.ts, src/feedback-question-values.ts; the postmortem docs/postmortems/261010a-…; the note docs/user-feedback/261009_2346-…; the question docs/user-feedback/questions/q-jpy4xv.md (plain words for Greg, accurate).
++
++End with: a list of what you changed (file, one line each), a numbered list of anything you did not fix with severity P1/P2/P3, and a one-line verdict: LAND / LAND AFTER FIXES / DO NOT LAND.
+diff --git a/docs/plans/261010g-needs-a-decision-shows-replies-an-agent-acted-on.md b/docs/plans/261010g-needs-a-decision-shows-replies-an-agent-acted-on.md
+new file mode 100644
+index 000000000..946468c6e
+--- /dev/null
++++ b/docs/plans/261010g-needs-a-decision-shows-replies-an-agent-acted-on.md
+@@ -0,0 +1,114 @@
++# *Needs a decision* shows the replies an agent has already acted on
++
++Report `spya-j4sg9g` (#534, SPIDERYARN-READING2-GE), Greg, 2026-10-09 23:46 UTC, from build
++`5f6d3d5f`:
++
++> I could swear I have posted a reply to q-rstqvz multiple times in the Feedback needs a decision UI.
++>
++> — Greg, 2026-10-09
++
++## What happened
++
++All three of his replies are in production (`spya-qnak8d`, `spya-b3qx08`, `spya-ybbudu`); nothing
++was lost. The feedback sweep of 2026-10-10 (`aca0acae3`) closed q-rstqvz and moved the real
++blocker to q-xh4y0s. What was left was why, from where he sat, the replies looked absent.
++
++At build `5f6d3d5f`, `q-rstqvz.md` was `status: open` with `acted: spya-qnak8d, spya-b3qx08`. The
++server (`src/routes.ts` § `questionsForAdmin`) then:
++
++1. **dropped both replies from the thread**, because `answers` lists only replies no agent has acted
++   on (plan 261008i, decision 2: "acted replies are already quoted in the question's body");
++2. **put the thread back in *Needs a decision***, because `questionState` says `waiting` when every
++   reply is acted on (261008i, decision 1) — the same state, the same words and the same pager stop
++   as a question nobody has ever answered.
++
++The quotations decision 2 relied on were real, but they were the last two sections of a
++6,000-character body, under the shut *Details*. So the thread he opened looked exactly like a
++question he had never answered. He answered it again (23:45), saw only that reply, and filed the
++report a minute later.
++
++Two causes, one in the dialog and one in how agents close questions:
++
++- **The dialog** cannot tell "never answered" from "answered, acted on, and asked again", and hides
++  the reply in both. That is the bug fixed here.
++- **The agent** that acted on his first reply kept the question open until option A was built,
++  though nothing was left for him to choose. That is the rule in
++  [feedback-reports.md § To act on one](../project/feedback-reports.md#asking-greg-a-question-and-acting-on-his-answer)
++  step 3 ("leave it `open` when his reply asks for more"), read too loosely. Its wording is a rule,
++  so a sharper version goes to Greg as a proposal (below) rather than being edited here.
++
++## The change
++
++1. **The server sends acted replies too**, in their own field: `actedAnswers`, the newest five acted
++   replies oldest first, and `olderActedAnswers`, how many older acted ones it did not send — the
++   same bound and the same shape as `answers` / `olderAnswers` (261008i F12). `answers` and `state`
++   are unchanged: an acted reply still does not make a thread *being considered*.
++2. **The thread draws them**, before the unacted ones, each as *You replied · 9 Oct, 19:38 · acted
++   on*, with one line under the block. Bodies without a `Details` line are valid, so the line does
++   not assume one (GPT Sol P2-4): *An agent acted on what you said. What happened next is written
++   in the question*, plus *, under Details* only when the body has that section.
++3. **A waiting thread with acted replies says so.** Its state word is *Needs a decision again*
++   instead of *Needs a decision*, and the line above starts *An agent acted on what you said and
++   kept this open, so it is asking something more.* In the contents, its row's meta line adds
++   *· you've replied N×* (every reply, acted and not, sent and older), shown only when at least one
++   was acted on.
++4. **Wire compatibility, both ways (as 261008i F3):** the browser asks for `questions=3`; the server
++   answers shape 3 with the two new keys, `questions=2` (a tab loaded before this deploy) exactly as
++   today, and anything else the six-key shape 1. A new tab against an old server (a rollback) sends
++   `questions=3`, which an old server treats as "not 2" and answers in **shape 1** (GPT Sol P1-1);
++   `withLegacyQuestions` maps shape 1 and shape 2 each straight to shape 3, with empty acted lists.
++5. **`withLocal` knows about acted replies** (GPT Sol P1-2). A reply receipt is laid over the
++   server's thread until a later read has it; an idempotent retry can return a reply that the
++   server already lists as acted on. Such a receipt is ignored, so it is neither drawn twice nor
++   moves a waiting thread to *being considered*. The strict check refuses a reply id in both lists.
++
++*Passed over:*
++
++- **Just open *Details* by default when a thread has acted replies.** Smaller, but *Details* is the
++  long background; his own words would still be at the bottom of it and the thread would still say
++  *Needs a decision* as if new.
++- **Change `questionState` so an all-acted open question is not `waiting`.** Wrong when the agent
++  genuinely asked something more, which is what an open question with acted replies is supposed to
++  mean. The state is right; the look was the problem.
++- **Add the keys to shape 2 and accept that a tab from before the deploy shows the failure sentence
++  until reloaded** (261008i's choice for its own change). For this report above all, a dialog that
++  says it failed is the wrong thing to show Greg; a third shape is one ternary and one strip.
++- **An `acted` flag on each answer.** Changes the answer's keys, which the reply POST's receipt
++  check shares (`isQuestionAnswer`), so it touches the send path for no gain.
++
++## The rule proposal (for Greg, not made here)
++
++feedback-reports.md § To act on one, step 3 today:
++
++> 3. set `status: answered` when the question is settled, and leave it `open` when his reply asks
++>    for more;
++
++Proposed:
++
++> 3. set `status: answered` once he owes no further reply, even if building what he chose is still
++>    to come: unfinished work belongs in the queue, not in an open question. If a follow-up does
++>    remain, rewrite the short part above `Details` so it holds the current question, its options
++>    and your recommendation (the dialog then shows the thread as *Needs a decision again*); if the
++>    follow-up is materially a different question, set this one `answered` and ask that in a new
++>    file;
++
++The first draft said to put the follow-up "at the end of the body", which is under the shut
++`Details` — the very place his replies had been lost. GPT Sol's plan review (P2-3) caught it.
++
++It is recorded in the report's note and put to Greg with
++[edit-important-docs.md](../reusable/edit-important-docs.md).
++
++## Stages
++
++One stage: types + route (shape 3), client (legacy map, strict keys, `withLocal`, thread and
++contents), tests in `tests/feedback-route.test.ts`, `tests/feedback-dialog.test.tsx` and
++`tests/feedback-thread-with-local.test.ts`, each seen red (written first for the route; for the
++client, by breaking the line under test and watching it fail), the comments that said acted ids
++never reach the browser, `feedback.md`'s Needs a decision section, and a postmortem.
++
++## Log
++
++- 2026-10-10: plan written. GPT Sol plan review
++  ([261010g-plan-review-sol.md](261010g-plan-review-sol.md)): BUILD AFTER FIXES, five findings,
++  all taken — rollback gets shape 1 not 2, `withLocal` and the strict check across both lists,
++  the rule wording, copy that does not assume `Details`, and the docs and postmortem in scope.
+diff --git a/docs/plans/261010g-plan-review-prompt.md b/docs/plans/261010g-plan-review-prompt.md
+new file mode 100644
+index 000000000..bc166a8f9
+--- /dev/null
++++ b/docs/plans/261010g-plan-review-prompt.md
+@@ -0,0 +1,7 @@
++You are reviewing a plan, read-only. Plan: docs/plans/261010g-needs-a-decision-shows-replies-an-agent-acted-on.md (repo at the current directory).
++
++Context: a trusted admin (Greg) replied three times to a question in the Feedback dialog's "Needs a decision" view and thought none had stuck. The relevant code: src/routes.ts § questionsForAdmin (around line 8790-8870) and the route that calls it (search `query.get("questions")`), src/feedback-question-values.ts § questionState and splitQuestionBody, src/feedback-question.ts, src/types.ts § AdminFeedbackQuestion, src/web/FeedbackEarlier.tsx (withLegacyQuestions, the strict question check / QUESTION_KEYS, withLocal, pagerStops, ThreadContents, ThreadView), the earlier plan docs/plans/261008i-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md, and docs/project/feedback-reports.md § "To act on one". Also the q-rstqvz question file as it was at commit 5f6d3d5f (read it from git history at that commit).
++
++Please check: (1) is the diagnosis right — would Greg, at build 5f6d3d5f, have seen no replies in the q-rstqvz thread and a "Needs a decision" label? Is there any other path (withLocal receipts, the startedAt rule, the pager, retained drafts, caching) by which a reply he just sent could also vanish? (2) Is the design sound and the simplest that fixes it; wire compatibility both ways; anything in withLocal (which merges a just-sent reply into answers) that interacts with actedAnswers; (3) the proposed wording for the rule in feedback-reports.md step 3; (4) anything missing (other consumers of the question shape, docs that describe what a thread lists, tests).
++
++Write findings as a numbered list with severity (P1 must fix / P2 should / P3 nit), file:line evidence, and a one-line verdict at the end: BUILD AS IS / BUILD AFTER FIXES / RETHINK.
+diff --git a/docs/plans/261010g-plan-review-sol.md b/docs/plans/261010g-plan-review-sol.md
+new file mode 100644
+index 000000000..ff6cd7216
+--- /dev/null
++++ b/docs/plans/261010g-plan-review-sol.md
+@@ -0,0 +1,13 @@
++The diagnosis is correct. At `5f6d3d5f`, the question was open with both stored replies marked acted (`5f6d3d5f:docs/user-feedback/questions/q-rstqvz.md:4-7`); the server removed them from `answers` and returned `waiting` (`5f6d3d5f:src/routes.ts:8762-8784`); their quotations were below `Details` (`q-rstqvz.md:24,40-50`), which the UI kept shut. A newly sent third reply would remain visible through `withLocal`; the started-at rule prevents older reads overwriting it, the pager only chooses navigation stops, retained questions preserve an open thread/draft, and the GET is `private, no-store` (`5f6d3d5f:src/routes.ts:9821-9823`). I found no separate ordinary disappearance path—only another agent acting on and deploying that reply, which is the same bug class.
++
++1. **P1 must fix — The rollback compatibility description is wrong.** The plan says a new client requesting `questions=3` from an old server receives shape 2 (`docs/plans/261010g-needs-a-decision-shows-replies-an-agent-acted-on.md:53-57`). In fact, the old route returns shape 2 only for the exact value `"2"`; every other value, including `"3"`, receives six-key shape 1 (`5f6d3d5f:src/routes.ts:9850-9857`). The new adapter must map both V1 and V2 directly to V3, with a test for each direction.
++
++2. **P1 must fix — `withLocal` must understand `actedAnswers`.** It currently deduplicates a receipt only against `question.answers`, then unconditionally changes the thread to `responded` (`src/web/FeedbackEarlier.tsx:649-668`). An idempotent retry can return a previously stored reply (`src/store/pg-feedback.ts:569-583`) while a list response already places that ID in `actedAnswers`; the client would then show it twice—acted and unacted—and incorrectly override `waiting` with `responded`. Deduplicate across both arrays, preserve the server state when every local receipt is already acted, and make the strict validator reject IDs appearing in both arrays (`src/web/FeedbackEarlier.tsx:377-396`).
++
++3. **P2 should — The proposed operating rule hides the current follow-up.** It says to put the new question “at the end of the body” (`docs/plans/261010g-needs-a-decision-shows-replies-an-agent-acted-on.md:82-86`), but everything after `Details` is collapsed (`src/feedback-question-values.ts:40-48`; `src/web/FeedbackEarlier.tsx:1514-1580`). That conflicts with the standing rule that the question and options above `Details` must be answerable alone (`docs/project/feedback-reports.md:515-528`). Better wording: set `answered` once Greg owes no further reply; unfinished implementation belongs in the queue. If a follow-up remains, rewrite the short section above `Details` to contain the current question, options, and recommendation; if it is materially different, close this question and open another.
++
++4. **P2 should — The proposed UI copy assumes every question has a `Details` section and that one agent recorded an action there.** The plan unconditionally says “what it did is at the end of Details” (`docs/plans/261010g-needs-a-decision-shows-replies-an-agent-acted-on.md:46-51`), while bodies without that separator are explicitly valid (`docs/project/feedback-reports.md:525-528`). Use conditional copy, or the more generally true “These replies were acted on; what happened next is recorded in the question.”
++
++5. **P2 should — The documentation and test scope needs to be explicit.** `feedback.md` is not optional: it currently specifies `questions=2`, unacted replies only, and says acted IDs never otherwise reach the browser (`docs/project/feedback.md:374-408`). The same now-stale contract appears in `src/feedback-question-values.ts:98-102`, `src/feedback-question.ts:17-20`, `src/routes.ts:8792-8802`, and `src/types.ts:7797-7821`. Tests should cover acted-reply bounds/order/count, exact V2 preservation, V1→V3 and V2→V3 mapping, strict validation including cross-array duplicate IDs, the `withLocal` retry case, optional `Details`, and the unchanged pager state. The plan also omits the required bug postmortem (`AGENTS.md:403-405`).
++
++**BUILD AFTER FIXES**
+\ No newline at end of file
+diff --git a/docs/postmortems/261010a-needs-a-decision-hid-replies-an-agent-had-acted-on.md b/docs/postmortems/261010a-needs-a-decision-hid-replies-an-agent-had-acted-on.md
+new file mode 100644
+index 000000000..f919e6f1f
+--- /dev/null
++++ b/docs/postmortems/261010a-needs-a-decision-hid-replies-an-agent-had-acted-on.md
+@@ -0,0 +1,100 @@
++# Needs a decision hid replies an agent had acted on
++
++Greg's replies to a question in the Feedback dialog were stored, and an agent acted on them, but the
++dialog stopped showing them and drew the question exactly as if he had never answered. He answered
++again, then reported that his replies seemed lost. Nothing was lost and nothing reached a reader; the
++only person affected was the admin, who stopped trusting that the reply box kept what he sent.
++
++> I could swear I have posted a reply to q-rstqvz multiple times in the Feedback needs a decision UI.
++>
++> — Greg, report `spya-j4sg9g`, 2026-10-09 23:46 UTC, build `5f6d3d5f`
++
++## What happened
++
++All three replies (`spya-qnak8d`, `spya-b3qx08`, `spya-ybbudu`) are in the database. At build
++`5f6d3d5f`, `q-rstqvz` was `status: open` with two replies marked `acted`. The server
++(`src/routes.ts` § `questionsForAdmin`) then did two things, each defensible alone:
++
++1. It sent only replies **not yet acted on** in `answers`, on the argument that acted replies are
++   already quoted in the question's body.
++2. `questionState` (`src/feedback-question-values.ts`) returned `waiting` when every reply was acted
++   on, so the thread went back into *Needs a decision*.
++
++Together: the same words, the same look and the same pager stop as a question nobody has answered,
++with his own replies gone. The quotations did exist, but as the last two sections of a 6,000-character
++body under a shut *Details*. He replied a third time and filed the report a minute later.
++
++## The class, named
++
++**His own input disappears from view once the system has processed it, so "answered, acted on, asked
++again" is drawn the same as "never answered".** A done state rendered as a never-started state.
++Acknowledgement is erased on processing.
++
++The shape: a transition (here, *acted on*) removes the user's input from the screen as bookkeeping
++tidy-up, and nobody asks what the user sees afterwards. The data model kept the distinction; the
++render dropped it.
++
++## Why nothing went red
++
++- **The state function was right.** `waiting` for an all-acted open question is correct: the agent
++  left it open because it is asking something more. The tests covered that and passed.
++- **Each decision had a stated reason, and the reviews looked at this very state, but only as
++  logic.** GPT Sol's 261008i plan review did walk an all-acted open question (F2, defer → reply →
++  acted: the old deferral must not come back; F4, a reply receipt after an acted deploy must not
++  force *being considered*). Both are about which group the thread lands in. Neither asked what
++  Greg sees inside it, because the plan's premise ("acted replies are already quoted in the body")
++  was taken as settled.
++- **No fixture had an all-acted open question in the dialog tests.** Every thread fixture either had
++  unacted replies or none, so the one state where the thread is empty of replies yet not new was
++  never drawn.
++- **Quoting was real, so a spot-check found it.** Looking in *Details* shows the replies. The check
++  agreed with the code because it looked where the code had put them, not where the reader looks.
++
++## Which commit introduced it
++
++`6d5f0b934` ("261008f: Needs a decision becomes threads you can reply to or defer", 2026-10-08),
++built from plan
++[261008i](../plans/261008i-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md), decisions 1
++and 2. It was found by `git log -S olderAnswers -- src/routes.ts`; that commit is the first to mention
++the field, and the author was fixing the opposite problem (waiting rows with no reply control), which
++is why the hidden-acted-replies side effect was not in view.
++
++## Contributing cause
++
++The agent that acted on his first reply left the question `open` "until A is built", though nothing
++was left for him to choose. [feedback-reports.md § To act on one](../project/feedback-reports.md#asking-greg-a-question-and-acting-on-his-answer)
++step 3 says to leave it open "when his reply asks for more", read loosely. Its wording is a rule, so a
++sharper version goes to Greg as a proposal rather than being edited
++([plan 261010g](../plans/261010g-needs-a-decision-shows-replies-an-agent-acted-on.md)).
++Had the question been closed, it would have left the dialog, and the display gap would have waited
++for the next question an agent left open after acting.
++
++## What would have caught it, ranked by ease against value
++
++1. **A fixture of an open question whose replies are all acted on, in the dialog tests.** One
++   fixture, and the test asks what the thread shows. Done: `tests/feedback-dialog.test.tsx` ("replies
++   an agent has acted on"), `tests/feedback-route.test.ts`, `tests/feedback-thread-with-local.test.ts`.
++2. **A review question for any state change that hides something: "for every transition that removes
++   the user's own input from the screen, what does the user see afterwards, and can they tell it from
++   never having typed it?"** Costs a line in a plan review prompt. It would have caught decision 2 at
++   the plan stage.
++3. **Make the bookkeeping state a visible label, not a filter.** Acted replies stay in the list marked
++   *acted on*; the filter is for what needs action, not for what is shown. Done in this fix.
++4. Open *Details* by default when a thread has acted replies. Rejected: his own words would still be
++   at the bottom of the long background, and the thread would still say *Needs a decision* as if new.
++5. Change `questionState` so an all-acted open question is not `waiting`. Rejected: the state is
++   right (the agent genuinely asked something more); the look was the problem.
++
++## The fix that is right for the long term
++
++The fix (on `dev`, not yet deployed) is the long-term shape: shape 3 of `GET /api/admin/feedback/earlier` (`questions=3`)
++adds `actedAnswers` / `olderActedAnswers`; the thread lists them marked *acted on*, says *Needs a
++decision again*, and the contents row says *you've replied N×*. `withLocal` ignores receipts already
++acted on. Shapes 1 and 2 stay for tabs loaded before the deploy. The part left open is the agent
++side: the rule wording in step 3 is with Greg.
++
++## The thing I would tell myself
++
++When a plan says "X is already shown somewhere else, so drop it here", go and open the somewhere
++else as the reader would. I knew the replies were quoted at the end of the body; I did not check that
++anyone would look there, or that a question coming back into *Needs a decision* would make them try.
+diff --git a/docs/project/feedback.md b/docs/project/feedback.md
+index 926a86c69..8aeef5d78 100644
+--- a/docs/project/feedback.md
++++ b/docs/project/feedback.md
+@@ -373,7 +373,7 @@ postmortem [261008c](../postmortems/261008c-needs-a-decision-lists-reports-nobod
+ 
+ ```
+  POST /api/admin/feedback/deferrals ──▶ a row in feedback_question_deferrals ("not now")
+- GET  …/earlier?questions=2         ──▶ threads: unacted replies, a state, the report's text
++ GET  …/earlier?questions=3         ──▶ threads: replies (acted on and not), a state, the report's text
+ ```
+ 
+ - **Where they show.** *Needs a decision* is the threads, not a list of reports. It opens on a
+@@ -395,17 +395,23 @@ postmortem [261008c](../postmortems/261008c-needs-a-decision-lists-reports-nobod
+   `acted:` ids and the admin's deferral: *Deferred* when the deferral is at or after the newest
+   reply (a tie is deferred); otherwise *being considered* when a reply has not been acted on;
+   otherwise *Needs a decision*, which includes a question an agent acted on and left open with a
+-  follow-up in its text. Both times are the database's own clock
++  follow-up in its text. That one says *Needs a decision again* in its thread, and its contents
++  row says *you've replied N×*, because until
++  [261010g](../plans/261010g-needs-a-decision-shows-replies-an-agent-acted-on.md) it looked exactly
++  like a question never answered (`spya-j4sg9g`: *"I could swear I have posted a reply … multiple
++  times"*). Both times are the database's own clock
+   (`questionState` in [`src/feedback-question-values.ts`](../../src/feedback-question-values.ts)).
+ - **What a thread shows.** The ids, `q-k3m9qt · about #301 (spya-mdp0em)`, the ones to say to the
+   Overseer in a terminal (`feedback-questions.ts --show q-…` prints the file); when it was asked;
+   its title and text, which an agent wrote, in the model's face and as plain text with its line
+   breaks ([fonts.md](fonts.md)), everything after a line that is exactly `Details` shut under
+   *Details*; the report it is about, **only when it is the admin's own**, whole and shut, under
+-  *Your report #301*; and the admin's replies **no agent has acted on yet**, at most the newest
+-  five with a count of the rest, in the reader's face (an acted-on reply is quoted in the text by
+-  the agent that acted). The file's `refs:` line is never compiled; `acted:` reaches the browser
+-  only as the group and as which replies are listed.
++  *Your report #301*; and the admin's replies, in the reader's face: first those **an agent has
++  acted on**, each marked *acted on*, with a line saying what happened next is written in the
++  question; then those **no agent has acted on yet**. At most the newest five of each, with a count
++  of the rest. The file's `refs:` line is never compiled; `acted:` reaches the browser only as the
++  group and as which list each reply is in. A tab from before 261010g asks `questions=2` and gets
++  threads without the acted list; one from before 261008i asks nothing and gets the six-key shape.
+ - **Replying.** In a thread the box is simply there, one thread and so one box at a time, and each
+   thread keeps its words when you move to another. It grows with what is in it and never scrolls
+   itself (`useFitTextarea`), so the panel is the one scroller: two scrollers under one finger with
+diff --git a/docs/user-feedback/261009_2346-needs-a-decision-replies-looked-lost.md b/docs/user-feedback/261009_2346-needs-a-decision-replies-looked-lost.md
+new file mode 100644
+index 000000000..2ac53bcb3
+--- /dev/null
++++ b/docs/user-feedback/261009_2346-needs-a-decision-replies-looked-lost.md
+@@ -0,0 +1,40 @@
++---
++reports: spya-j4sg9g
++ending: shipped
++comment: None of your three replies was lost. Once an agent acted on a reply, the dialog hid it and drew the question as never answered. Now it lists them, marked acted on. Whether to sharpen the rule for closing questions is asked in q-jpy4xv.
++---
++# Needs a decision: your replies looked lost
++
++One admin suggestion from Greg (`scripts/feedback-reporter.ts` exit 0), 2026-10-09 23:46 UTC,
++#534, SPIDERYARN-READING2-GE, build `5f6d3d5f`, filed from
++`/read/arxiv-1706-03762-spya-wyt7j0?…&mode=skim`. Queue item `qi-yf62kckg`. This session had no
++Sentry sign-in and did not write the Sentry status; the next feedback sweep does that.
++
++> I could swear I have posted a reply to q-rstqvz multiple times in the Feedback needs a decision UI.
++>
++> — Greg, 2026-10-09 (`spya-j4sg9g`)
++
++**Ending: shipped.** On `dev`, not deployed. The rule half is a question to Greg, `q-jpy4xv`.
++
++## What we found
++
++All three replies are stored (`spya-qnak8d`, `spya-b3qx08`, `spya-ybbudu`); the feedback sweep of
++2026-10-10 closed q-rstqvz and asked the real blocker in q-xh4y0s. Why they looked absent: once an
++agent marked a reply acted on, the dialog stopped listing it, and an open question whose replies
++were all acted on went back to *Needs a decision*, drawn exactly like one never answered. His words
++survived only as quotations at the end of a long body, under the shut *Details*. The agent had held
++the question open until option A was built, which is what put it back in front of him.
++
++## What we did
++
++[Plan 261010g](../plans/261010g-needs-a-decision-shows-replies-an-agent-acted-on.md), with GPT
++Sol's plan and code reviews; postmortem
++[261010a](../postmortems/261010a-needs-a-decision-hid-replies-an-agent-had-acted-on.md).
++
++- A thread lists the replies an agent has acted on, marked *acted on*, with a line saying what
++  happened next is written in the question.
++- A waiting thread with acted replies says *Needs a decision again*, and its row in the contents
++  says *you've replied N×*.
++- Tabs opened before the deploy keep working (they ask for the older shape).
++- The rule in feedback-reports.md § To act on one, step 3, that let a settled question stay open
++  until a build landed, is a rule doc: the sharper wording is put to Greg in `q-jpy4xv`, not made.
+diff --git a/docs/user-feedback/questions/q-jpy4xv.md b/docs/user-feedback/questions/q-jpy4xv.md
+new file mode 100644
+index 000000000..43ca3efef
+--- /dev/null
++++ b/docs/user-feedback/questions/q-jpy4xv.md
+@@ -0,0 +1,27 @@
++---
++id: q-jpy4xv
++report: spya-j4sg9g
++status: open
++asked: 2026-10-10
++title: May I sharpen the rule for when an agent closes your question?
++refs: docs/plans/261010g-needs-a-decision-shows-replies-an-agent-acted-on.md (§ The rule proposal) · docs/plans/261010g-plan-review-sol.md (P2-3) · docs/project/feedback-reports.md § To act on one, step 3 · docs/postmortems/261010a-needs-a-decision-hid-replies-an-agent-had-acted-on.md · SPIDERYARN-READING2-GE · qi-yf62kckg
++---
++You replied A to q-rstqvz three times because an agent kept that question open after acting on your first reply, waiting for A to be built, though nothing was left for you to choose. The rule agents follow says to leave a question open "when his reply asks for more", and that was read loosely. May I change it?
++
++A (recommended): change it to the wording under Details. An agent closes a question as soon as you owe no further reply; work still to be built is tracked in the Overseer's queue. If it does need more from you, it rewrites the short part of the question you see first, so the new question is not hidden under Details.
++
++B: leave the rule as it is. The dialog fix (below) already shows your earlier replies and says "Needs a decision again", so a question left open no longer looks unanswered; but agents may still hold settled questions open.
++
++Details
++
++What happened. All three of your replies were stored. But once an agent had acted on a reply, the dialog stopped showing it, and a question still open went back to looking exactly like one you had never answered. Your earlier replies were quoted only at the very end of the question, under the closed Details. That is fixed on dev, not yet deployed: a thread now lists your replies an agent acted on, marked "acted on", says "Needs a decision again" when it is asking something more, and the list shows "you've replied 3×".
++
++The rule today, in feedback-reports.md (the steps an agent follows when it acts on your reply), step 3:
++
++"set status: answered when the question is settled, and leave it open when his reply asks for more;"
++
++The wording I would put in its place:
++
++"set status: answered once he owes no further reply, even if building what he chose is still to come: unfinished work belongs in the queue, not in an open question. If a follow-up does remain, rewrite the short part above Details so it holds the current question, its options and your recommendation (the dialog then shows the thread as Needs a decision again); if the follow-up is materially a different question, set this one answered and ask that in a new file;"
++
++Why it is your call: that doc's wording is a rule other agents follow, and those are changed only with your approval. What would decide it: A stops settled questions sitting in Needs a decision; B costs nothing now and relies on the dialog fix alone.
+diff --git a/src/feedback-endings.generated.ts b/src/feedback-endings.generated.ts
+index ebd677852..ccc22c2f6 100644
+--- a/src/feedback-endings.generated.ts
++++ b/src/feedback-endings.generated.ts
+@@ -182,6 +182,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
+   "spya-j0scgz": "shipped",
+   "spya-j0xw7s": "shipped",
+   "spya-j389gg": "shipped",
++  "spya-j4sg9g": "shipped",
+   "spya-j5bsp7": "shipped",
+   "spya-j5f7yv": "declined",
+   "spya-j6b69x": "shipped",
+@@ -558,6 +559,7 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
+   "spya-h5aypq": "Researched what a peer reviewer needs and drew the line between Sources and Referee; the guide offers Referee to referees. You answered q-fkq30v: Promises and starter criteria are queued first.",
+   "spya-hrfj6q": "The Referee error was a stored failure from 5 September, before the 28 September fix; a retry works now. The same overflow was live in Search on long papers, and that is fixed.",
+   "spya-hwdefp": "You chose A on 2026-10-05: the private link is built (stage 1). Stages 2 and 3, comments for people with the link and named email addresses, are written up and not built (qi-6jwj562v and qi-mgxnj233).",
++  "spya-j4sg9g": "None of your three replies was lost. Once an agent acted on a reply, the dialog hid it and drew the question as never answered. Now it lists them, marked acted on. Whether to sharpen the rule for closing questions is asked in q-jpy4xv.",
+   "spya-j5f7yv": "Set aside as someday-maybe: a design was written, but it would have cost the owner the tailoring of their own summaries, and you chose to keep everything personalised (2026-10-01).",
+   "spya-kbzzk8": "No change at the time: dictation was not on Whisper but on a Gemini model chosen in a bake-off the day before, because it takes the custom vocabulary. The evidence did not justify a swap.",
+   "spya-krvuc9": "Needs a decision is now threads: a contents, one thread at a time with a reply box, Defer for now, the ids, your report shut, a shortcut beside the tabs. Check the reply box on your iPhone.",
+diff --git a/src/feedback-question-values.ts b/src/feedback-question-values.ts
+index 18fa1b65a..dffef564c 100644
+--- a/src/feedback-question-values.ts
++++ b/src/feedback-question-values.ts
+@@ -99,7 +99,8 @@ export function mintFeedbackQuestionId(random?: () => number): string {
+  * is for agents and is not here: nothing compiled reaches a browser that the
+  * file's author did not write for Greg to read. `acted` is compiled beside it,
+  * for the server alone (`FEEDBACK_QUESTION_ACTED`), which sends the browser
+- * only the state it works out from it (plan 261008i, decision 1).
++ * only the state it works out from it and which list each reply goes in
++ * (plan 261008i, decision 1; 261010g).
+  */
+ export interface CompiledFeedbackQuestion {
+   id: string;
+diff --git a/src/feedback-question.ts b/src/feedback-question.ts
+index d6a0939c9..97e2dd9b2 100644
+--- a/src/feedback-question.ts
++++ b/src/feedback-question.ts
+@@ -15,8 +15,9 @@ import {
+ } from "./feedback-questions.generated.js";
+ 
+ /**
+- * The ids of an open question's replies an agent has acted on: which replies
+- * the thread still lists, and part of its state (plan 261008i). Never sent.
++ * The ids of an open question's replies an agent has acted on: which list a
++ * reply is sent in (261010g), and part of its state (plan 261008i). The ids
++ * themselves are never sent.
+  */
+ export function feedbackQuestionActed(id: string): readonly string[] {
+   return Object.hasOwn(FEEDBACK_QUESTION_ACTED, id) ? (FEEDBACK_QUESTION_ACTED[id] ?? []) : [];
+diff --git a/src/feedback-questions.generated.ts b/src/feedback-questions.generated.ts
+index 2b78debf5..d53d28f8f 100644
+--- a/src/feedback-questions.generated.ts
++++ b/src/feedback-questions.generated.ts
+@@ -24,6 +24,7 @@ export const FEEDBACK_QUESTION_STATUS: Readonly<Record<string, FeedbackQuestionS
+   "q-fneq6t": "answered",
+   "q-hhbddw": "answered",
+   "q-jb5cnd": "answered",
++  "q-jpy4xv": "open",
+   "q-kgrhm4": "answered",
+   "q-kp34gz": "answered",
+   "q-p5h2a7": "answered",
+@@ -49,11 +50,13 @@ export const FEEDBACK_QUESTION_STATUS: Readonly<Record<string, FeedbackQuestionS
+ /** The open ones, oldest first, as an admin's Earlier tab shows them. */
+ export const FEEDBACK_OPEN_QUESTIONS: readonly CompiledFeedbackQuestion[] = [
+   { id: "q-xd9es7", title: "A filter on which kinds of note Marginalia shows: now, or not yet?", report: "spya-thpsnd", asked: "2026-10-08", body: "Should Marginalia, the column of notes to the right of the article, get a filter so you can say which kinds of note it shows?\n\nA. Not yet (recommended). Leave the column as it is. Each paragraph gets at most one line of each kind, and most kinds start shut, so it is rarely crowded. Look again if it starts to feel busy.\n\nB. A row of switches at the top of the column, one per kind of note: Ideas, FAQ, Timeline, Debate, Citations, Comments. Remembered on this device. About a day of work. Costs one more row of controls in a column that is narrow already.\n\nRecommended: A.\n\nDetails\n\nWhere this came from. On 3 Oct you asked for fewer modes, and suggested putting Glossary, Ideas and Quotes inside Marginalia, \"so that you could say, I only want...\" those notes. Two smaller ideas were proposed instead. One was a single bar button for the list modes; that was answered on 7 Oct by the More button, which now holds Quotes, Glossary, FAQ, Ideas and Timeline. This is the other one, and it was never asked in a way you could answer here.\n\nWhy not put the list modes inside Marginalia. Marginalia is a column beside the article, not a band below it, and it is hidden on a phone. Moving Glossary, Ideas and Quotes into it would take them away on a phone.\n\nWhat Marginalia shows today. A relation word (so, but, vs) where the argument turns; a pinned line saying which part you are in; each part's question; a stamp where an idea first appears; and, shut until pressed, lines from FAQ, Timeline, Debate, Citations and comments, each from a mode that has already run. Glossary terms are marked in the article itself, not in the column, so \"only glossary notes\" would not be one of the switches.\n\nYour three other follow-ups from that report are settled: Tweets is Summary's Thread; the Simple summary level has gone; and More gathers the list modes." },
++  { id: "q-jpy4xv", title: "May I sharpen the rule for when an agent closes your question?", report: "spya-j4sg9g", asked: "2026-10-10", body: "You replied A to q-rstqvz three times because an agent kept that question open after acting on your first reply, waiting for A to be built, though nothing was left for you to choose. The rule agents follow says to leave a question open \"when his reply asks for more\", and that was read loosely. May I change it?\n\nA (recommended): change it to the wording under Details. An agent closes a question as soon as you owe no further reply; work still to be built is tracked in the Overseer's queue. If it does need more from you, it rewrites the short part of the question you see first, so the new question is not hidden under Details.\n\nB: leave the rule as it is. The dialog fix (below) already shows your earlier replies and says \"Needs a decision again\", so a question left open no longer looks unanswered; but agents may still hold settled questions open.\n\nDetails\n\nWhat happened. All three of your replies were stored. But once an agent had acted on a reply, the dialog stopped showing it, and a question still open went back to looking exactly like one you had never answered. Your earlier replies were quoted only at the very end of the question, under the closed Details. That is fixed on dev, not yet deployed: a thread now lists your replies an agent acted on, marked \"acted on\", says \"Needs a decision again\" when it is asking something more, and the list shows \"you've replied 3×\".\n\nThe rule today, in feedback-reports.md (the steps an agent follows when it acts on your reply), step 3:\n\n\"set status: answered when the question is settled, and leave it open when his reply asks for more;\"\n\nThe wording I would put in its place:\n\n\"set status: answered once he owes no further reply, even if building what he chose is still to come: unfinished work belongs in the queue, not in an open question. If a follow-up does remain, rewrite the short part above Details so it holds the current question, its options and your recommendation (the dialog then shows the thread as Needs a decision again); if the follow-up is materially a different question, set this one answered and ask that in a new file;\"\n\nWhy it is your call: that doc's wording is a rule other agents follow, and those are changed only with your approval. What would decide it: A stops settled questions sitting in Needs a decision; B costs nothing now and relies on the dialog fix alone." },
+   { id: "q-t3j8hj", title: "May an unattended agent build 2B, the guide saving your words without a press?", report: null, asked: "2026-10-10", body: "You chose 2B on q-dqh7t6: when the guide offers to save your Why you're reading or About you, and the words are a quote of your own message, it saves them straight away with an Undo, instead of waiting for you to press Save. Nothing is built yet, because this loosens a security rule: today nothing a model proposes ever writes without your press. An agent working with nobody watching may not loosen a security rule on a reply alone, so the question is who may build it.\n\nA. Yes: the Overseer may give this build to an unattended agent now, on two conditions: the words are saved only if they appear word for word in a message you typed in that conversation, and the security notes are updated in the same change. GPT Sol reviews the plan and the code. Gives up: you will not watch it being built.\n\nB. No: build it only in a session you are watching.\n\nC. Drop 2B and keep the press, as built.\n\nRecommended: A. With the word-for-word check, the worst a planted instruction in an article could do is save words you yourself typed, and Undo puts the old ones back.\n\nDetails\n\nBackground. On 9 October the guide learned to offer to save two things you tell it: why you are reading this article, and something about yourself (About you, on your profile). It shows the words on a card under its answer, with a Save button and an Undo. Both are fed into later AI prompts, so what is saved there shapes every later answer.\n\nQuestion q-dqh7t6 asked whether that save should stay a press. The recommendation was to keep the press, for two reasons: the press is the one moment you see the words before they go into every future prompt, and an article's own text could try to steer which words the guide offers. You replied 2B on 10 October: save without the press when the words are a quote of your own message.\n\nThe security rule. Our security notes (security-map.md, the row for chat buttons) say that anything a model proposes that writes, spends or leaves the article still needs your press, so a planted instruction can at worst move you around the article. 2B is the first exception. Our feedback rules say an unattended agent does not change such a rule even on your reply, which is why q-xh4y0s asked the same thing about a different build, and you answered A there.\n\nWhat would decide it. Whether you are happy for the exception to be built and reviewed without you watching, given the word-for-word check. The work is queued as qi-wm5nsweg and held until you answer." },
+ ];
+ 
+ /** Each open question's replies an agent has acted on, by id. The server only: never sent. */
+ export const FEEDBACK_QUESTION_ACTED: Readonly<Record<string, readonly string[]>> = {
+   "q-xd9es7": [],
++  "q-jpy4xv": [],
+   "q-t3j8hj": [],
+ };
+diff --git a/src/routes.ts b/src/routes.ts
+index c48585b76..22282a350 100644
+--- a/src/routes.ts
++++ b/src/routes.ts
+@@ -526,7 +526,9 @@ import {
+   type AdminFeedbackQuestion,
+   type AdminFeedbackQuestionAnswer,
+   type AdminFeedbackQuestionV1,
++  type AdminFeedbackQuestionV2,
+   type AdminEarlierFeedbackPageV1,
++  type AdminEarlierFeedbackPageV2,
+   type AdminFeedbackDeferralReceipt,
+   EARLIER_FEEDBACK_LIMIT,
+   EARLIER_FEEDBACK_SHOWS,
+@@ -8792,14 +8794,15 @@ async function fileFeedback(
+ /**
+  * **Every open question, as the signed-in admin's Earlier tab shows it**:
+  * oldest first, as threads (plan 261008i). Each carries the admin's own
+- * replies not yet acted on, which group it is in (`questionState`, from every
++ * replies not yet acted on, and (shape 3, 261010g) those an agent has acted
++ * on, apart, which group it is in (`questionState`, from every
+  * reply and the admin's deferral), and, when it names a report **of theirs**,
+  * that report's number, first line and text. Every lookup is owner-scoped in
+  * the store, so a question about another reader's report sends `report: null`
+  * and another admin's reply or deferral is never this one's. Only the open
+  * ones: an answered question is not sent, whatever a store hands back. Each is
+  * picked field by field; the file's `refs` was never compiled, and its `acted`
+- * ids leave only as the state and as which replies are listed.
++ * ids leave only as the state and as which list each reply is in.
+  *
+  * `shape` 1 is the answer before 261008i, for a request without
+  * `questions=2`: a tab loaded before the deploy keeps working after it (F3).
+@@ -8808,16 +8811,19 @@ async function fileFeedback(
+ /** At most this many of a thread's unacted replies in one answer, the newest (F12). */
+ const THREAD_ANSWERS = 5;
+ 
+-async function questionsForAdmin(shape: 2): Promise<AdminFeedbackQuestion[]>;
++async function questionsForAdmin(shape: 3): Promise<AdminFeedbackQuestion[]>;
++async function questionsForAdmin(shape: 2): Promise<AdminFeedbackQuestionV2[]>;
+ async function questionsForAdmin(shape: 1): Promise<AdminFeedbackQuestionV1[]>;
+-async function questionsForAdmin(shape: 1 | 2): Promise<AdminFeedbackQuestion[] | AdminFeedbackQuestionV1[]> {
++async function questionsForAdmin(
++  shape: 1 | 2 | 3,
++): Promise<AdminFeedbackQuestion[] | AdminFeedbackQuestionV2[] | AdminFeedbackQuestionV1[]> {
+   const open = openFeedbackQuestions();
+   if (open.length === 0) return [];
+   const ids = open.map((question) => question.id);
+   const named = [...new Set(open.flatMap((question) => (question.report === null ? [] : [question.report])))];
+   const [answers, deferrals, reports] = await Promise.all([
+     feedbackStore.answersTo(ids),
+-    shape === 2 ? feedbackStore.deferrals(ids) : Promise.resolve([]),
++    shape === 1 ? Promise.resolve([]) : feedbackStore.deferrals(ids),
+     feedbackStore.linkedReports(named),
+   ]);
+   const reply = ({ id, body, createdAt }: AdminFeedbackQuestionAnswer) => ({ id, body, createdAt });
+@@ -8845,7 +8851,7 @@ async function questionsForAdmin(shape: 1 | 2): Promise<AdminFeedbackQuestion[]
+     const deferral = deferrals.find((one) => one.questionId === id)?.deferredAt ?? null;
+     const state = questionState({ replies, deferredAt: deferral });
+     const unacted = replies.filter((one) => !one.acted);
+-    return {
++    const thread: AdminFeedbackQuestionV2 = {
+       id,
+       title,
+       body,
+@@ -8862,6 +8868,15 @@ async function questionsForAdmin(shape: 1 | 2): Promise<AdminFeedbackQuestion[]
+       state,
+       deferredAt: state === "deferred" ? deferral : null,
+     };
++    if (shape === 2) return thread;
++    /* Shape 3 (261010g, spya-j4sg9g): the acted ones too, bounded the same way,
++       so a thread answered and asked again shows what was said. */
++    const done = replies.filter((one) => one.acted);
++    return {
++      ...thread,
++      actedAnswers: done.slice(-THREAD_ANSWERS).map(reply),
++      olderActedAnswers: Math.max(0, done.length - THREAD_ANSWERS),
++    };
+   });
+ }
+ 
+@@ -10089,11 +10104,15 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
+       /* **Threads only to a client that asks for them** (plan 261008i, F3): a
+          tab loaded before the deploy sends no `questions`, and its strict
+          check wants the six-key questions it was built against. Anything but
+-         `2` is that older client. */
+-      const answer: AdminEarlierFeedbackPage | AdminEarlierFeedbackPageV1 =
+-        query.get("questions") === "2"
+-          ? { ...envelope, questions: await questionsForAdmin(2) }
+-          : { ...envelope, questions: await questionsForAdmin(1) };
++         `2` or `3` is that older client; `2` is a tab from before 261010g,
++         whose check wants threads without the acted replies. */
++      const shape = query.get("questions");
++      const answer: AdminEarlierFeedbackPage | AdminEarlierFeedbackPageV2 | AdminEarlierFeedbackPageV1 =
++        shape === "3"
++          ? { ...envelope, questions: await questionsForAdmin(3) }
++          : shape === "2"
++            ? { ...envelope, questions: await questionsForAdmin(2) }
++            : { ...envelope, questions: await questionsForAdmin(1) };
+       send(res, 200, answer);
+     },
+   },
+diff --git a/src/types.ts b/src/types.ts
+index eded090ce..924fcfced 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -7795,11 +7795,11 @@ export interface AdminFeedbackQuestionAnswer {
+ 
+ /**
+  * **One open question an agent has put to the admin, as a thread** — part of
+- * `GET /api/admin/feedback/earlier?questions=2`. An agent wrote `title` and
++ * `GET /api/admin/feedback/earlier?questions=3`. An agent wrote `title` and
+  * `body` (a file under docs/user-feedback/questions/, compiled into the
+  * server): plain text, to be drawn as text with its line breaks kept. The
+  * file's `refs` line is for agents and is never here, and its `acted` ids
+- * reach the browser only as `state` and as which replies are listed.
++ * reach the browser only as `state` and as which list each reply is in.
+  * docs/plans/261008i-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md.
+  */
+ export interface AdminFeedbackQuestion {
+@@ -7817,7 +7817,7 @@ export interface AdminFeedbackQuestion {
+   report: { id: string; number: number; firstLine: string; body: string } | null;
+   /**
+    * This admin's replies **no agent has acted on yet**, oldest first. One that
+-   * has been acted on is quoted in `body` by the agent that acted on it.
++   * has been acted on is in `actedAnswers` instead.
+    */
+   answers: AdminFeedbackQuestionAnswer[];
+   /**
+@@ -7825,6 +7825,14 @@ export interface AdminFeedbackQuestion {
+    * most the newest five, so one page stays bounded (GPT Sol's plan review, F12).
+    */
+   olderAnswers: number;
++  /**
++   * This admin's replies **an agent has acted on**, at most the newest five,
++   * oldest first, and how many older ones were not sent. Without them a thread
++   * answered, acted on and asked again looked exactly like one never answered
++   * (spya-j4sg9g, plan 261010g). They never change `state`.
++   */
++  actedAnswers: AdminFeedbackQuestionAnswer[];
++  olderActedAnswers: number;
+   /** Which group the thread is in: src/feedback-question-values.ts § `questionState`. */
+   state: FeedbackQuestionState;
+   /** ISO: when this admin deferred it, while it is deferred; otherwise null. */
+@@ -7868,7 +7876,19 @@ export interface AdminEarlierFeedbackPage {
+   questions: AdminFeedbackQuestion[];
+ }
+ 
+-/** The same answer to a request without `questions=2`: the shape before 261008i (F3). */
++/**
++ * **A question as a server before 261010g sends it**, and as the new server
++ * still sends it to `questions=2`, so a tab from before that deploy keeps
++ * working after it: no acted replies.
++ */
++export type AdminFeedbackQuestionV2 = Omit<AdminFeedbackQuestion, "actedAnswers" | "olderActedAnswers">;
++
++/** The same answer to `questions=2`: the shape before 261010g. */
++export interface AdminEarlierFeedbackPageV2 extends Omit<AdminEarlierFeedbackPage, "questions"> {
++  questions: AdminFeedbackQuestionV2[];
++}
++
++/** The same answer to a request without `questions=2` or `3`: the shape before 261008i (F3). */
+ export interface AdminEarlierFeedbackPageV1 extends Omit<AdminEarlierFeedbackPage, "questions"> {
+   questions: AdminFeedbackQuestionV1[];
+ }
+diff --git a/src/web/FeedbackEarlier.tsx b/src/web/FeedbackEarlier.tsx
+index 2f141007f..cacf83241 100644
+--- a/src/web/FeedbackEarlier.tsx
++++ b/src/web/FeedbackEarlier.tsx
+@@ -298,7 +298,21 @@ function isAnswerReceipt(value: unknown): value is { answer: AdminFeedbackQuesti
+   return Object.keys(receipt).join() === "answer" && isQuestionAnswer(receipt.answer);
+ }
+ 
+-const QUESTION_KEYS = ["answers", "asked", "body", "deferredAt", "id", "olderAnswers", "report", "state", "title"];
++const QUESTION_KEYS = [
++  "actedAnswers",
++  "answers",
++  "asked",
++  "body",
++  "deferredAt",
++  "id",
++  "olderActedAnswers",
++  "olderAnswers",
++  "report",
++  "state",
++  "title",
++];
++/** A thread as a server before 261010g sends it: no acted replies. */
++const V2_QUESTION_KEYS = QUESTION_KEYS.filter((key) => key !== "actedAnswers" && key !== "olderActedAnswers");
+ const LEGACY_QUESTION_KEYS = ["answer", "asked", "body", "id", "report", "title"];
+ 
+ /**
+@@ -317,9 +331,10 @@ export type AdminThreadsPage = Omit<AdminEarlierFeedbackPage, "questions"> & { q
+  * **A server from before 261008i answers in the six-key shape** — a rollback,
+  * or the minutes of a deploy (F3). Each such question becomes a thread before
+  * the strict check: its newest reply as the only one, *being considered* if
+- * there is one, never deferred, no report text. Only a question with exactly
+- * the six old keys is mapped; anything else reaches the check as it came, and
+- * fails there.
++ * there is one, never deferred, no report text. **A server from before
++ * 261010g answers threads without the acted replies**, which become none.
++ * Only a question with exactly the old keys of either is mapped; anything
++ * else reaches the check as it came, and fails there.
+  */
+ function withLegacyQuestions(value: unknown): unknown {
+   if (typeof value !== "object" || value === null) return value;
+@@ -330,13 +345,17 @@ function withLegacyQuestions(value: unknown): unknown {
+     questions: answer.questions.map((question: unknown) => {
+       if (typeof question !== "object" || question === null) return question;
+       const old = question as Record<string, unknown>;
+-      if (Object.keys(old).sort().join() !== LEGACY_QUESTION_KEYS.join()) return question;
++      const keys = Object.keys(old).sort().join();
++      if (keys === V2_QUESTION_KEYS.join()) return { ...old, actedAnswers: [], olderActedAnswers: 0 };
++      if (keys !== LEGACY_QUESTION_KEYS.join()) return question;
+       const { answer: newest, report, ...rest } = old;
+       return {
+         ...rest,
+         report: typeof report === "object" && report !== null ? { ...report, body: null } : report,
+         answers: newest === null ? [] : [newest],
+         olderAnswers: 0,
++        actedAnswers: [],
++        olderActedAnswers: 0,
+         state: newest === null ? "waiting" : "responded",
+         deferredAt: null,
+       };
+@@ -378,6 +397,7 @@ function isQuestion(value: unknown): value is ThreadQuestion {
+   if (typeof value !== "object" || value === null) return false;
+   const question = value as Record<string, unknown>;
+   const answers = question.answers;
++  const acted = question.actedAnswers;
+   return (
+     Object.keys(question).sort().join() === QUESTION_KEYS.join() &&
+     isFeedbackQuestionId(question.id) &&
+@@ -388,6 +408,10 @@ function isQuestion(value: unknown): value is ThreadQuestion {
+     Array.isArray(answers) && answers.every(isQuestionAnswer) &&
+     new Set(answers.map((one: AdminFeedbackQuestionAnswer) => one.id)).size === answers.length &&
+     Number.isSafeInteger(question.olderAnswers) && (question.olderAnswers as number) >= 0 &&
++    Array.isArray(acted) && acted.every(isQuestionAnswer) &&
++    /* A reply is acted on or not, never both. */
++    new Set([...answers, ...acted].map((one: AdminFeedbackQuestionAnswer) => one.id)).size === answers.length + acted.length &&
++    Number.isSafeInteger(question.olderActedAnswers) && (question.olderActedAnswers as number) >= 0 &&
+     FEEDBACK_QUESTION_STATES.some((state) => state === question.state) &&
+     /* A time exactly when it says deferred, so the group and the line under it agree. */
+     (question.state === "deferred"
+@@ -653,13 +677,21 @@ export function withLocal(
+ ): ThreadQuestion {
+   const mine = replies.sent[question.id];
+   const deferral = replies.deferrals[question.id];
+-  const sent = mine !== undefined && mine.at > startedAt ? mine : null;
++  /* A receipt the server already lists as acted on says nothing new: an
++     idempotent retry can hand back a reply an agent has since acted on, and
++     laying it over would draw it twice and call the thread being considered
++     (GPT Sol, 261010g P1). */
++  const acted = (one: AdminFeedbackQuestionAnswer) => question.actedAnswers.some((known) => known.id === one.id);
++  const sent = mine !== undefined && mine.at > startedAt && !mine.value.every(acted) ? mine : null;
+   const set = deferral !== undefined && deferral.at > startedAt ? deferral : null;
+   if (sent === null && set === null) return question;
+   const answers =
+     sent === null
+       ? question.answers
+-      : [...question.answers, ...sent.value.filter((one) => !question.answers.some((known) => known.id === one.id))];
++      : [
++          ...question.answers,
++          ...sent.value.filter((one) => !acted(one) && !question.answers.some((known) => known.id === one.id)),
++        ];
+   if (set !== null && (sent === null || set.at > sent.at)) {
+     return set.value !== null
+       ? { ...question, answers, state: "deferred", deferredAt: set.value }
+@@ -761,12 +793,13 @@ type ReadAnswer = { detail: "plain"; page: EarlierFeedbackPage } | { detail: "ad
+  * One read of one filter of one list: the answer checked, or why there is
+  * none. `absent` is the admin route answering 404, and only that: a server
+  * from before the route (a rollback, or the minutes of a deploy). The admin
+- * route is asked for threads (`questions=2`); a server that ignores that
+- * answers in the older shape, which `withLegacyQuestions` maps (F3).
++ * route is asked for threads with acted replies (`questions=3`); a server
++ * that ignores that answers in an older shape, which `withLegacyQuestions`
++ * maps (F3).
+  */
+ async function read(ask: EarlierAsk): Promise<ReadAnswer | "failed" | "absent"> {
+   if (ask.detail === "admin") {
+-    const query = new URLSearchParams(ask.show === "all" ? { questions: "2" } : { show: ask.show, questions: "2" });
++    const query = new URLSearchParams(ask.show === "all" ? { questions: "3" } : { show: ask.show, questions: "3" });
+     const res = await apiFetch(`${ADMIN_PATH}?${query}`);
+     if (res.status === 404) return "absent";
+     if (!res.ok) return "failed";
+@@ -1378,6 +1411,33 @@ const GROUP_WORD: Record<FeedbackQuestionState, string> = {
+   deferred: "Deferred",
+ };
+ 
++/** How many of the admin's replies to it an agent has acted on, sent or not. */
++const actedCount = (question: ThreadQuestion): number => question.actedAnswers.length + question.olderActedAnswers;
++
++/**
++ * The state word in a thread. A waiting thread an agent has already acted on
++ * is not the same as one never answered, and said the same thing until
++ * spya-j4sg9g ("I could swear I have posted a reply … multiple times").
++ */
++function stateWord(question: ThreadQuestion): string {
++  return question.state === "waiting" && actedCount(question) > 0 ? "Needs a decision again" : GROUP_WORD[question.state];
++}
++
++/** One reply of the admin's, as a thread lists it. */
++function ReplyLine({ answer, acted, now }: { answer: AdminFeedbackQuestionAnswer; acted: boolean; now: number }) {
++  return (
++    <div className="fb-question-answer-one" data-acted={acted || undefined}>
++      <p className="fb-earlier-meta">
++        <span className="fb-earlier-shipped">You replied</span>
++        {" · "}
++        <time dateTime={answer.createdAt}>{when(answer.createdAt, now)}</time>
++        {acted ? " · acted on" : null}
++      </p>
++      <p className="fb-question-answer-body">{answer.body}</p>
++    </div>
++  );
++}
++
+ /**
+  * `q-k3m9qt · about #301 (spya-mdp0em)`: the ids Greg and a terminal share
+  * (`spya-krvuc9`). `feedback-questions.ts --show q-…` prints the file;
+@@ -1427,6 +1487,9 @@ function ThreadContents({
+             <span className="fb-thread-title">{question.title}</span>
+             <span className="fb-earlier-meta">
+               <ThreadIds question={question} /> · asked {dayOf(question.asked) ?? question.asked}
++              {actedCount(question) > 0
++                ? ` · you've replied ${actedCount(question) + question.answers.length + question.olderAnswers}×`
++                : null}
+             </span>
+           </button>
+         </li>
+@@ -1568,7 +1631,7 @@ function ThreadView({
+         <p className="fb-earlier-meta">
+           <ThreadIds question={question} /> · asked {dayOf(question.asked) ?? question.asked} ·{" "}
+           <span className={question.state === "waiting" ? "fb-earlier-waiting" : "fb-earlier-unshipped"}>
+-            {GROUP_WORD[question.state]}
++            {stateWord(question)}
+           </span>
+         </p>
+         <h4 className="fb-question-title">{question.title}</h4>
+@@ -1587,6 +1650,28 @@ function ThreadView({
+             <p className="fb-earlier-body">{question.report.body}</p>
+           </details>
+         )}
++        {question.actedAnswers.length === 0 ? null : (
++          /* What he said that an agent has acted on (261010g): before
++             spya-j4sg9g it was only quoted inside the question, usually
++             under the shut Details, so the thread looked unanswered. */
++          <div className="fb-question-answer" data-acted="true">
++            {question.olderActedAnswers > 0 ? (
++              <p className="fb-earlier-meta">
++                And {question.olderActedAnswers} earlier {question.olderActedAnswers === 1 ? "reply" : "replies"} acted
++                on, not shown here.
++              </p>
++            ) : null}
++            {question.actedAnswers.map((answer) => (
++              <ReplyLine key={answer.id} answer={answer} acted now={now} />
++            ))}
++            <p className="fb-earlier-note">
++              {question.state === "waiting"
++                ? "An agent acted on what you said and kept this open, so it is asking something more."
++                : "An agent acted on what you said."}{" "}
++              What happened next is written in the question{details === null ? "" : ", under Details"}.
++            </p>
++          </div>
++        )}
+         {question.answers.length === 0 ? null : (
+           <div className="fb-question-answer">
+             {question.olderAnswers > 0 ? (
+@@ -1595,14 +1680,7 @@ function ThreadView({
+               </p>
+             ) : null}
+             {question.answers.map((answer) => (
+-              <div key={answer.id} className="fb-question-answer-one">
+-                <p className="fb-earlier-meta">
+-                  <span className="fb-earlier-shipped">You replied</span>
+-                  {" · "}
+-                  <time dateTime={answer.createdAt}>{when(answer.createdAt, now)}</time>
+-                </p>
+-                <p className="fb-question-answer-body">{answer.body}</p>
+-              </div>
++              <ReplyLine key={answer.id} answer={answer} acted={false} now={now} />
+             ))}
+           </div>
+         )}
+diff --git a/tests/feedback-dialog.test.tsx b/tests/feedback-dialog.test.tsx
+index 690f30d89..78a880a50 100644
+--- a/tests/feedback-dialog.test.tsx
++++ b/tests/feedback-dialog.test.tsx
+@@ -1892,13 +1892,13 @@ describe("the Earlier tab", () => {
+   /* docs/plans/261007d-…: for an admin the tab says what became of each report,
+      numbers them, and carries the note's one-line comment. Reshaped by
+      docs/plans/261008i-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md:
+-     the read asks for threads (`questions=2`), an admin's dialog reads Needs a
++     the read asks for threads (`questions=3`), an admin's dialog reads Needs a
+      decision as soon as it opens, and Earlier opens there when a thread waits. */
+   describe("for an admin", () => {
+     const ADMIN_PATH = "/api/admin/feedback/earlier";
+-    /** The admin route for one filter, as the client asks it: `show` first, then `questions=2` (F3). */
++    /** The admin route for one filter, as the client asks it: `show` first, then `questions=3` (F3, 261010g). */
+     const url = (which?: string) =>
+-      which === undefined ? `${ADMIN_PATH}?questions=2` : `${ADMIN_PATH}?show=${which}&questions=2`;
++      which === undefined ? `${ADMIN_PATH}?questions=3` : `${ADMIN_PATH}?show=${which}&questions=3`;
+     const ALL_URL = url();
+     const WAITING_URL = url("waiting");
+     const ADMIN_COUNTS = { all: 5, open: 1, waiting: 1, aside: 2, shipped: 1 };
+@@ -2157,7 +2157,7 @@ describe("the Earlier tab", () => {
+     describe("questions an agent has asked", () => {
+       const ANSWERS_PATH = "/api/admin/feedback/answers";
+       const DEFERRALS_PATH = "/api/admin/feedback/deferrals";
+-      /** A question as the server sends it when asked `questions=2` (src/types.ts § AdminFeedbackQuestion). */
++      /** A question as the server sends it when asked `questions=3` (src/types.ts § AdminFeedbackQuestion). */
+       const Q1 = {
+         id: "q-aaaaaa",
+         title: "One switch or two?",
+@@ -2166,6 +2166,8 @@ describe("the Earlier tab", () => {
+         report: { id: "spya-a2b2c3", number: 214, firstLine: "One switch or two?", body: "One switch or two?\nI keep <b>pressing</b> both." },
+         answers: [] as unknown[],
+         olderAnswers: 0,
++        actedAnswers: [] as unknown[],
++        olderActedAnswers: 0,
+         state: "waiting",
+         deferredAt: null as string | null,
+       };
+@@ -2177,6 +2179,8 @@ describe("the Earlier tab", () => {
+         report: null,
+         answers: [] as unknown[],
+         olderAnswers: 0,
++        actedAnswers: [] as unknown[],
++        olderActedAnswers: 0,
+         state: "waiting",
+         deferredAt: null as string | null,
+       };
+@@ -2574,6 +2578,67 @@ describe("the Earlier tab", () => {
+         expect(replyBoxes()).toHaveLength(1);
+       });
+ 
++      /* 261010g (spya-j4sg9g): replies an agent has acted on are listed too,
++         and a waiting thread that has them does not look never answered. */
++      describe("replies an agent has acted on", () => {
++        const FIRST = { id: "spya-ac7edz", body: "A, with the risk written down.", createdAt: "2026-10-09T10:00:00.000Z" };
++        const SECOND = { id: "spya-ac7ed3", body: "A. I think it's fine.", createdAt: "2026-10-09T19:38:00.000Z" };
++        const askedAgain = {
++          ...Q1,
++          body: "Background first.\n\nDetails\nWhat happened to your replies.",
++          actedAnswers: [FIRST, SECOND],
++          olderActedAnswers: 1,
++        };
++
++        it("lists them as acted on, says Needs a decision again, and counts them on the contents row", async () => {
++          await openWaiting({ ...ADMIN_REPORTS, questions: [askedAgain, Q2] }, { ...WAITING, questions: [askedAgain, Q2] });
++          expect(inGroup("waiting")).toEqual(["q-aaaaaa", "q-bbbbbb"]);
++          expect(row("q-aaaaaa").textContent).toContain("you've replied 3×");
++          expect(row("q-bbbbbb").textContent).not.toContain("replied");
++          click(row("q-aaaaaa"));
++          const shown = thread().querySelector('.fb-question-answer[data-acted="true"]');
++          expect([...(shown?.querySelectorAll(".fb-question-answer-body") ?? [])].map((p) => p.textContent)).toEqual([
++            FIRST.body,
++            SECOND.body,
++          ]);
++          expect(shown?.textContent).toContain("You replied · ");
++          expect(shown?.textContent).toContain(" · acted on");
++          expect(shown?.textContent).toContain("And 1 earlier reply acted on, not shown here.");
++          expect(shown?.textContent).toContain("kept this open, so it is asking something more.");
++          expect(shown?.textContent).toContain("What happened next is written in the question, under Details.");
++          expect(thread().querySelector(".fb-earlier-meta")?.textContent).toContain("Needs a decision again");
++          /* Still a thread that needs a decision: the state and the pager are unchanged. */
++          expect(thread().querySelector(".fb-question")?.getAttribute("data-state")).toBe("waiting");
++          expect(place()).toBe("1 of 2 needing a decision");
++          expect(replyBoxes()).toHaveLength(1);
++        });
++
++        it("does not point at Details when the question has none", async () => {
++          const plain = { ...askedAgain, body: "It stands alone.", olderActedAnswers: 0 };
++          await openThread("q-aaaaaa", { ...ADMIN_REPORTS, questions: [plain, Q2] }, { ...WAITING, questions: [plain, Q2] });
++          const shown = thread().querySelector('.fb-question-answer[data-acted="true"]');
++          expect(shown?.textContent).toContain("What happened next is written in the question.");
++          expect(shown?.textContent).not.toContain("earlier reply");
++        });
++
++        it("reads a server from before 261010g, whose threads have no acted replies", async () => {
++          const { actedAnswers: _a, olderActedAnswers: _o, ...v2 } = Q1;
++          const { actedAnswers: _b, olderActedAnswers: _p, ...v2b } = Q2;
++          await openWaiting({ ...ADMIN_REPORTS, questions: [v2, v2b] }, { ...WAITING, questions: [v2, v2b] });
++          expect(panelOf("Earlier").textContent).not.toContain("[fb-list]");
++          expect(rows()).toEqual(["q-aaaaaa", "q-bbbbbb"]);
++          click(row("q-aaaaaa"));
++          expect(thread().querySelector('[data-acted="true"]')).toBeNull();
++          expect(thread().querySelector(".fb-earlier-meta")?.textContent).not.toContain("again");
++        });
++
++        it("refuses a reply listed as both acted on and not", async () => {
++          const both = { ...Q1, answers: [FIRST], actedAnswers: [FIRST], state: "responded" };
++          await openWaiting({ ...ADMIN_REPORTS, questions: [both, Q2] }, { ...WAITING, questions: [both, Q2] });
++          expect(panelOf("Earlier").textContent).toContain("[fb-list]");
++        });
++      });
++
+       /* F3, the other direction: a server from before 261008i ignores
+          `questions=2` and answers in the six-key shape, which the client maps. */
+       it("reads an older server's six-key questions: its reply as the one reply, being considered, and no report text", async () => {
+diff --git a/tests/feedback-route.test.ts b/tests/feedback-route.test.ts
+index c6e5fa917..0c85546fa 100644
+--- a/tests/feedback-route.test.ts
++++ b/tests/feedback-route.test.ts
+@@ -892,6 +892,26 @@ describe("questions for the admin, and replies to them", () => {
+     ]);
+   });
+ 
++  /* Plan 261010g (spya-j4sg9g): a client that asks `questions=3` also gets
++     the replies an agent has acted on, so a thread answered and asked again
++     does not look like one never answered. Shape 2 stays exactly as it was. */
++  it("sends acted replies apart to a client that asks for shape 3, and shape 2 without them", async () => {
++    newestAnswer = [
++      { id: "spya-act3d0", questionId: "q-bbbbbb", body: "First go", createdAt: "2026-10-07T07:00:00.000Z" },
++      { id: "spya-repzyy", questionId: "q-bbbbbb", body: "Yes, do it", createdAt: "2026-10-07T08:00:00.000Z" },
++    ];
++    const three = ((await get(`${EARLIER}?questions=3`)).body as Sent).questions;
++    const b3 = three.find((one) => one.id === "q-bbbbbb");
++    expect(b3?.actedAnswers).toEqual([{ id: "spya-act3d0", body: "First go", createdAt: "2026-10-07T07:00:00.000Z" }]);
++    expect(b3?.olderActedAnswers).toBe(0);
++    expect(b3?.answers).toEqual([{ id: "spya-repzyy", body: "Yes, do it", createdAt: "2026-10-07T08:00:00.000Z" }]);
++    expect(three.find((one) => one.id === "q-aaaaaa")?.actedAnswers).toEqual([]);
++    const two = ((await get(THREADS)).body as Sent).questions;
++    expect(Object.keys(two[1] ?? {}).sort()).toEqual([
++      "answers", "asked", "body", "deferredAt", "id", "olderAnswers", "report", "state", "title",
++    ]);
++  });
++
+   it("sends at most five unacted replies a thread, the newest, and counts the rest (F12)", async () => {
+     newestAnswer = Array.from({ length: 7 }, (_, i) => ({
+       id: `spya-rep00${i}`,
+diff --git a/tests/feedback-thread-with-local.test.ts b/tests/feedback-thread-with-local.test.ts
+new file mode 100644
+index 000000000..f0620c200
+--- /dev/null
++++ b/tests/feedback-thread-with-local.test.ts
+@@ -0,0 +1,43 @@
++/**
++ * `withLocal`, the receipts of a reply this page sent laid over the server's
++ * thread, against the replies an agent has acted on (plan 261010g, GPT Sol's
++ * plan review P1): an idempotent retry can hand back a reply the server
++ * already lists as acted on, which must not be drawn twice or move the thread
++ * to *being considered*.
++ */
++import { describe, expect, it } from "vitest";
++import { withLocal, type ThreadQuestion } from "../src/web/FeedbackEarlier.js";
++
++const ACTED = { id: "spya-ac7edz", body: "A", createdAt: "2026-10-09T23:45:00.000Z" };
++const NEW = { id: "spya-a9b2c4", body: "And one more.", createdAt: "2026-10-10T08:00:00.000Z" };
++const WAITING: ThreadQuestion = {
++  id: "q-aaaaaa",
++  title: "One switch or two?",
++  body: "Background.",
++  asked: "2026-10-09",
++  report: null,
++  answers: [],
++  olderAnswers: 0,
++  actedAnswers: [ACTED],
++  olderActedAnswers: 0,
++  state: "waiting",
++  deferredAt: null,
++};
++const STARTED = 100;
++
++describe("withLocal and acted replies", () => {
++  it("ignores a receipt the server already lists as acted on", () => {
++    const merged = withLocal(WAITING, STARTED, { sent: { "q-aaaaaa": { value: [ACTED], at: STARTED + 1 } }, deferrals: {} });
++    expect(merged.answers).toEqual([]);
++    expect(merged.state).toBe("waiting");
++  });
++
++  it("still lays over a new reply sent beside an acted one", () => {
++    const merged = withLocal(WAITING, STARTED, {
++      sent: { "q-aaaaaa": { value: [ACTED, NEW], at: STARTED + 1 } },
++      deferrals: {},
++    });
++    expect(merged.answers).toEqual([NEW]);
++    expect(merged.state).toBe("responded");
++  });
++});

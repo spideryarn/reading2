@@ -8805,10 +8805,11 @@ async function fileFeedback(
  * ids leave only as the state and as which list each reply is in.
  *
  * `shape` 1 is the answer before 261008i, for a request without
- * `questions=2`: a tab loaded before the deploy keeps working after it (F3).
+ * `questions=2` or `questions=3`: a tab loaded before the deploy keeps
+ * working after it (F3).
  * Six keys, the newest reply of any kind, the report without its text.
  */
-/** At most this many of a thread's unacted replies in one answer, the newest (F12). */
+/** At most this many replies in either of a thread's lists, the newest (F12, 261010g). */
 const THREAD_ANSWERS = 5;
 
 async function questionsForAdmin(shape: 3): Promise<AdminFeedbackQuestion[]>;
@@ -8860,8 +8861,7 @@ async function questionsForAdmin(
         linked === undefined
           ? null
           : { id: linked.id, number: linked.number, firstLine: linked.firstLine, body: linked.body },
-      /* What an agent has acted on is quoted in the body already (261008i, decision 2). */
-      /* The newest few, with a count of the rest (F12): every reply is still
+      /* The unacted newest few, with a count of the rest (F12): every reply is still
          stored, and `--answers` prints them all. */
       answers: unacted.slice(-THREAD_ANSWERS).map(reply),
       olderAnswers: Math.max(0, unacted.length - THREAD_ANSWERS),

@@ -2621,6 +2621,17 @@ describe("the Earlier tab", () => {
           expect(shown?.textContent).not.toContain("earlier reply");
         });
 
+        it("counts acted and unacted replies, including the older ones not sent", async () => {
+          const mixed = {
+            ...askedAgain,
+            answers: [REPLIED],
+            olderAnswers: 2,
+            state: "responded" as const,
+          };
+          await openWaiting({ ...ADMIN_REPORTS, questions: [mixed, Q2] }, { ...WAITING, questions: [mixed, Q2] });
+          expect(row("q-aaaaaa").textContent).toContain("you've replied 6×");
+        });
+
         it("reads a server from before 261010g, whose threads have no acted replies", async () => {
           const { actedAnswers: _a, olderActedAnswers: _o, ...v2 } = Q1;
           const { actedAnswers: _b, olderActedAnswers: _p, ...v2b } = Q2;
@@ -3350,10 +3361,23 @@ describe("the Earlier tab", () => {
         ["a reply with a field more", { ...WAITING, questions: [{ ...Q1, answers: [{ ...REPLIED, environment: "production" }] }] }],
         ["answers that are not a list", { ...WAITING, questions: [{ ...Q1, answers: REPLIED }] }],
         ["older replies that are not a count", { ...WAITING, questions: [{ ...Q1, olderAnswers: -1 }] }],
+        ["an acted reply that is not valid", { ...WAITING, questions: [{ ...Q1, actedAnswers: [{ ...REPLIED, createdAt: "soon" }] }] }],
+        ["the same acted reply twice", { ...WAITING, questions: [{ ...Q1, actedAnswers: [REPLIED, REPLIED] }] }],
+        ["older acted replies that are not a count", { ...WAITING, questions: [{ ...Q1, olderActedAnswers: -1 }] }],
         ["a state it does not know", { ...WAITING, questions: [{ ...Q1, state: "answered" }] }],
         ["deferred without a time", { ...WAITING, questions: [{ ...Q1, state: "deferred", deferredAt: null }] }],
         ["a deferral time on a waiting question", { ...WAITING, questions: [{ ...Q1, deferredAt: "2026-10-08T07:00:00.000Z" }] }],
         ["an agent-only field on a question", { ...WAITING, questions: [{ ...Q1, refs: "qi-8qvg5gwv" }] }],
+        [
+          "a server before 261010g's question with a field more",
+          {
+            ...WAITING,
+            questions: [{
+              ...((({ actedAnswers: _a, olderActedAnswers: _o, ...v2 }) => v2)(Q2)),
+              refs: "qi-8qvg5gwv",
+            }],
+          },
+        ],
         [
           "an older server's question with a field more",
           {

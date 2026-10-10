@@ -40,4 +40,24 @@ describe("withLocal and acted replies", () => {
     expect(merged.answers).toEqual([NEW]);
     expect(merged.state).toBe("responded");
   });
+
+  it("lets a deferral stand when the only later receipt is ignored as already acted on", () => {
+    const merged = withLocal(WAITING, STARTED, {
+      sent: { "q-aaaaaa": { value: [ACTED], at: STARTED + 2 } },
+      deferrals: { "q-aaaaaa": { value: "2026-10-10T07:00:00.000Z", at: STARTED + 1 } },
+    });
+    expect(merged.answers).toEqual([]);
+    expect(merged.state).toBe("deferred");
+    expect(merged.deferredAt).toBe("2026-10-10T07:00:00.000Z");
+  });
+
+  it("compares a mixed receipt with a deferral because its new reply is not ignored", () => {
+    const merged = withLocal(WAITING, STARTED, {
+      sent: { "q-aaaaaa": { value: [ACTED, NEW], at: STARTED + 2 } },
+      deferrals: { "q-aaaaaa": { value: "2026-10-10T07:00:00.000Z", at: STARTED + 1 } },
+    });
+    expect(merged.answers).toEqual([NEW]);
+    expect(merged.state).toBe("responded");
+    expect(merged.deferredAt).toBeNull();
+  });
 });

@@ -7841,8 +7841,9 @@ export interface AdminFeedbackQuestion {
 
 /**
  * **A question as a server before 261008i sends it**, and as the new server
- * still sends it to a request without `questions=2`, so a tab from before the
- * deploy keeps working after it (F3). Six keys, the newest reply only.
+ * still sends it to a request without `questions=2` or `questions=3`, so a
+ * tab from before the deploy keeps working after it (F3). Six keys, the newest
+ * reply only.
  */
 export interface AdminFeedbackQuestionV1 {
   id: string;

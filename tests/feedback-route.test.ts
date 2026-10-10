@@ -175,8 +175,20 @@ vi.mock("../src/feedback-questions.generated.js", () => ({
     { id: "q-bbbbbb", title: "A question about nothing filed", report: null, asked: "2026-10-06", body: "Stands alone." },
     { id: "q-cccccc", title: "About a reader's report", report: "spya-n0tm1n", asked: "2026-10-07", body: "The body says it all." },
   ],
-  /* q-bbbbbb's first reply has been acted on (plan 261008i). */
-  FEEDBACK_QUESTION_ACTED: { "q-aaaaaa": [], "q-bbbbbb": ["spya-act3d0"], "q-cccccc": [] },
+  /* q-bbbbbb's first replies have been acted on (plans 261008i and 261010g). */
+  FEEDBACK_QUESTION_ACTED: {
+    "q-aaaaaa": [],
+    "q-bbbbbb": [
+      "spya-act3d0",
+      "spya-act3d1",
+      "spya-act3d2",
+      "spya-act3d3",
+      "spya-act3d4",
+      "spya-act3d5",
+      "spya-act3d6",
+    ],
+    "q-cccccc": [],
+  },
 }));
 
 vi.mock("../src/store/index.js", async (importActual) => {
@@ -928,6 +940,26 @@ describe("questions for the admin, and replies to them", () => {
       "reply 6",
     ]);
     expect(first?.olderAnswers).toBe(2);
+  });
+
+  it("sends at most five acted replies a thread, the newest in oldest-first order, and counts the rest", async () => {
+    newestAnswer = Array.from({ length: 7 }, (_, i) => ({
+      id: `spya-act3d${i}`,
+      questionId: "q-bbbbbb",
+      body: `acted reply ${i}`,
+      createdAt: `2026-10-07T0${i}:00:00.000Z`,
+    }));
+    const questions = ((await get(`${EARLIER}?questions=3`)).body as Sent).questions;
+    const acted = questions.find((one) => one.id === "q-bbbbbb");
+    expect(((acted?.actedAnswers ?? []) as { body: string }[]).map((one) => one.body)).toEqual([
+      "acted reply 2",
+      "acted reply 3",
+      "acted reply 4",
+      "acted reply 5",
+      "acted reply 6",
+    ]);
+    expect(acted?.olderActedAnswers).toBe(2);
+    expect(acted?.answers).toEqual([]);
   });
 
   it("sends every open question, oldest first, with the admin's own report and newest reply", async () => {
