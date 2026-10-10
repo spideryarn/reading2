@@ -131,8 +131,8 @@ const meta = { title: "A piece", slug: "piece" } as Meta;
 const blocks: Block[] = [];
 const ctx = { slug: "piece", meta, blocks, power: "standard" as const };
 
-const found = (citations: Bibliography, over: { stale?: boolean; outdated?: boolean } = {}) => ({
-  bibliography: citations,
+const found = (bibliography: Bibliography, over: { stale?: boolean; outdated?: boolean } = {}) => ({
+  bibliography,
   stale: over.stale ?? false,
   outdated: over.outdated ?? false,
 });
@@ -475,10 +475,10 @@ describe("bibliographyOutcome — what goes back to the model", () => {
 
   it("an outdated list is announced even when there are no rows to show", () => {
     const empty = bibliographyOutcome(found(list([]), { outdated: true }), "");
-    expect(empty.content).toMatch(/older version of the citations step/);
+    expect(empty.content).toMatch(/older version of the Bibliography step/);
 
     const noMatch = bibliographyOutcome(found(list(THREE), { outdated: true }), "bicycles");
-    expect(noMatch.content).toMatch(/older version of the citations step/);
+    expect(noMatch.content).toMatch(/older version of the Bibliography step/);
   });
 
   it("a stale list emits no rows (Sol F5)", () => {
@@ -492,7 +492,7 @@ describe("bibliographyOutcome — what goes back to the model", () => {
   it("an outdated list is announced above the rows, and still shown", () => {
     const out = bibliographyOutcome(found(list(THREE), { outdated: true }), "");
     const open = out.content.indexOf("<<<UNTRUSTED");
-    expect(out.content.slice(0, open)).toMatch(/older version of the citations step/);
+    expect(out.content.slice(0, open)).toMatch(/older version of the Bibliography step/);
     expect(out.content.slice(open)).toContain("Minds, Brains");
     const current = bibliographyOutcome(found(list(THREE)), "");
     expect(current.content).not.toMatch(/older version of the citations step/);
@@ -569,7 +569,7 @@ describe("runTool(\"article_citations\") — the load, and its four answers", ()
   it("an outdated list says so and still lists", async () => {
     store.loadBibliography = async () => found(list(THREE), { outdated: true });
     const out = await runTool("article_citations", {}, ctx);
-    expect(out.content).toMatch(/older version of the citations step/);
+    expect(out.content).toMatch(/older version of the Bibliography step/);
     expect(out.content).toContain("Minds, Brains");
   });
 });

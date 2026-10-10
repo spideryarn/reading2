@@ -129,7 +129,7 @@ const WORKS = [
 ];
 
 function bibliographyOwner(): UseBibliography {
-  const citations: Bibliography = {
+  const bibliography: Bibliography = {
     version: "test",
     generator: "test",
     slug: "a-piece",
@@ -141,7 +141,7 @@ function bibliographyOwner(): UseBibliography {
   };
   return {
     status: "ready",
-    bibliography: citations,
+    bibliography,
     stale: false,
     outdated: false,
     slug: "a-piece",

@@ -67,7 +67,9 @@ Each of these was a way the first design was wrong
   ([ai-gateway.md § `durationMs`](ai-gateway.md#durationms-is-per-call-and-three-different-ways-of-adding-it-up-are-wrong)).
   The script compares cache use inside one wire only.
 - **"Mode or task", not "mode".** A pipeline step is usually a mode; `chat` or `dig-deeper-search`
-  is a task with no mode to its name. `taskOf` is the one rule, shared with the metadata page.
+  is a task with no mode to its name. `taskOf` is the one rule, shared with the metadata page, and
+  reads [`currentLedgerName`](../../src/step-order.ts) so append-only rows stored under a retired
+  job or step name are grouped under the current one.
 - **The model is the one that answered**, falling back to the one asked for.
 - **A row with an article id is that article. A row with only a recorded slug is not claimed to
   be one article**: a deleted article's slug can be minted again.

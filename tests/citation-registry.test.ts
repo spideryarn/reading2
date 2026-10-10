@@ -96,7 +96,7 @@ describe("which rows are looked up", () => {
       reg,
     );
     expect(reg.asked).toEqual([]);
-    expect(out.citations.citations[0]?.registry).toBeUndefined();
+    expect(out.bibliography.citations[0]?.registry).toBeUndefined();
   });
 });
 
@@ -104,7 +104,7 @@ describe("what an answer puts on the row", () => {
   it("keeps a found record whose title agrees", async () => {
     const reg = fake({ "doi:10.5555/attention": { kind: "found", record: record("doi:10.5555/attention", "Attention is all you need") } });
     const out = await attachCitationRegistry(list([ATTENTION]), reg);
-    expect(out.citations.citations[0]?.registry).toEqual({
+    expect(out.bibliography.citations[0]?.registry).toEqual({
       kind: "found",
       source: "crossref",
       title: "Attention is all you need",
@@ -127,7 +127,7 @@ describe("what an answer puts on the row", () => {
 
     it("puts the count and the moment it was read on a found Crossref row, and counts it", async () => {
       const out = await attached({ citedByCount: 357, citedByCountReadAt: READ });
-      expect(out.citations.citations[0]?.registry).toMatchObject({
+      expect(out.bibliography.citations[0]?.registry).toMatchObject({
         kind: "found",
         source: "crossref",
         citedBy: { count: 357, readAt: READ },
@@ -137,29 +137,29 @@ describe("what an answer puts on the row", () => {
 
     it("keeps a zero: Crossref recording none is an answer", async () => {
       const out = await attached({ citedByCount: 0, citedByCountReadAt: READ });
-      expect(out.citations.citations[0]?.registry).toMatchObject({ citedBy: { count: 0, readAt: READ } });
+      expect(out.bibliography.citations[0]?.registry).toMatchObject({ citedBy: { count: 0, readAt: READ } });
       expect(out.counts.counted).toBe(1);
     });
 
     it("adds nothing when Crossref gave no count, or the moment is missing", async () => {
       for (const over of [{ citedByCountReadAt: READ }, { citedByCount: 357 }, {}] as Partial<WorkRecord>[]) {
         const out = await attached(over);
-        expect(out.citations.citations[0]?.registry).toMatchObject({ kind: "found" });
-        expect(out.citations.citations[0]?.registry).not.toHaveProperty("citedBy");
+        expect(out.bibliography.citations[0]?.registry).toMatchObject({ kind: "found" });
+        expect(out.bibliography.citations[0]?.registry).not.toHaveProperty("citedBy");
         expect(out.counts).toMatchObject({ found: 1, counted: 0 });
       }
     });
 
     it("never puts a count on a DataCite record, whatever the record carries", async () => {
       const out = await attached({ source: "datacite", citedByCount: 357, citedByCountReadAt: READ });
-      expect(out.citations.citations[0]?.registry).toMatchObject({ kind: "found", source: "datacite" });
-      expect(out.citations.citations[0]?.registry).not.toHaveProperty("citedBy");
+      expect(out.bibliography.citations[0]?.registry).toMatchObject({ kind: "found", source: "datacite" });
+      expect(out.bibliography.citations[0]?.registry).not.toHaveProperty("citedBy");
       expect(out.counts.counted).toBe(0);
     });
 
     it("never puts a count on a conflict: that is another work's count", async () => {
       const out = await attached({ citedByCount: 357, citedByCountReadAt: READ }, "Soil microbiomes of the Atacama desert");
-      expect(out.citations.citations[0]?.registry).toEqual({ kind: "conflict", source: "crossref" });
+      expect(out.bibliography.citations[0]?.registry).toEqual({ kind: "conflict", source: "crossref" });
       expect(out.counts).toMatchObject({ conflict: 1, counted: 0 });
     });
   });
@@ -172,7 +172,7 @@ describe("what an answer puts on the row", () => {
       },
     });
     const out = await attachCitationRegistry(list([ATTENTION]), reg);
-    expect(out.citations.citations[0]?.registry).toEqual({ kind: "conflict", source: "datacite" });
+    expect(out.bibliography.citations[0]?.registry).toEqual({ kind: "conflict", source: "datacite" });
     expect(out.counts.conflict).toBe(1);
   });
 
@@ -217,8 +217,8 @@ describe("what an answer puts on the row", () => {
         },
       });
       const out = await attachCitationRegistry(list([SANTORO, THOMPSON]), reg);
-      expect(out.citations.citations.map((r) => r.registry?.kind)).toEqual(["found", "found"]);
-      expect(out.citations.citations[0]?.registry).toMatchObject({
+      expect(out.bibliography.citations.map((r) => r.registry?.kind)).toEqual(["found", "found"]);
+      expect(out.bibliography.citations[0]?.registry).toMatchObject({
         title: "One-shot Learning with Memory-Augmented Neural Networks",
       });
     });
@@ -226,14 +226,14 @@ describe("what an answer puts on the row", () => {
     it("is still a conflict when the label's author disagrees", async () => {
       const reg = fake({ "arxiv:1605.06065": { kind: "found", record: santoroRecord({ authors: [{ family: "Graves" }] }) } });
       const out = await attachCitationRegistry(list([SANTORO]), reg);
-      expect(out.citations.citations[0]?.registry).toEqual({ kind: "conflict", source: "datacite" });
+      expect(out.bibliography.citations[0]?.registry).toEqual({ kind: "conflict", source: "datacite" });
     });
 
     it("is still a conflict when the label's year disagrees", async () => {
       const reg = fake({ "arxiv:1605.06065": { kind: "found", record: santoroRecord({ year: 2019 }) } });
       const { year: _rowYear, ...noRowYear } = SANTORO;
       const out = await attachCitationRegistry(list([noRowYear]), reg);
-      expect(out.citations.citations[0]?.registry).toEqual({ kind: "conflict", source: "datacite" });
+      expect(out.bibliography.citations[0]?.registry).toEqual({ kind: "conflict", source: "datacite" });
     });
 
     it("is a conflict for a mistyped DOI whose real title disagrees, whatever the authors", async () => {
@@ -247,7 +247,7 @@ describe("what an answer puts on the row", () => {
       });
       const reg = fake({ "doi:10.5555/slow": { kind: "found", record: santoroRecord({ id: "doi:10.5555/slow" as WorkId, doi: "10.5555/slow" }) } });
       const out = await attachCitationRegistry(list([row]), reg);
-      expect(out.citations.citations[0]?.registry).toEqual({ kind: "conflict", source: "datacite" });
+      expect(out.bibliography.citations[0]?.registry).toEqual({ kind: "conflict", source: "datacite" });
     });
 
     it("does not attach a same-surname same-year record when the article gives only a label", async () => {
@@ -271,7 +271,7 @@ describe("what an answer puts on the row", () => {
         },
       });
       const out = await attachCitationRegistry(list([row]), reg);
-      expect(out.citations.citations[0]?.registry).toBeUndefined();
+      expect(out.bibliography.citations[0]?.registry).toBeUndefined();
       expect(out.counts).toMatchObject({ found: 0, conflict: 0, unconfirmed: 1 });
     });
   });
@@ -282,7 +282,7 @@ describe("what an answer puts on the row", () => {
       "doi:10.1000/editorial": { kind: "found", record: record("doi:10.1000/editorial", "Editorial") },
     });
     const out = await attachCitationRegistry(list([row]), reg);
-    expect(out.citations.citations[0]?.registry).toBeUndefined();
+    expect(out.bibliography.citations[0]?.registry).toBeUndefined();
     expect(out.counts).toMatchObject({ found: 0, conflict: 0, unconfirmed: 1 });
   });
 
@@ -294,7 +294,7 @@ describe("what an answer puts on the row", () => {
       },
     });
     const out = await attachCitationRegistry(list([ATTENTION]), reg);
-    expect(out.citations.citations[0]?.registry).toEqual({ kind: "conflict", source: "crossref" });
+    expect(out.bibliography.citations[0]?.registry).toEqual({ kind: "conflict", source: "crossref" });
   });
 
   it("refuses a same-title answer returned under another identifier", async () => {
@@ -304,7 +304,7 @@ describe("what an answer puts on the row", () => {
         record: record("doi:10.5555/somewhere-else", "Attention Is All You Need"),
       }),
     });
-    expect(out.citations.citations[0]?.registry).toBeUndefined();
+    expect(out.bibliography.citations[0]?.registry).toBeUndefined();
     expect(out.counts.unavailable).toBe(1);
   });
 
@@ -320,15 +320,15 @@ describe("what an answer puts on the row", () => {
         return id === "doi:10.1000/two" ? { kind: "not-found" } : { kind: "unavailable", why: "busy" };
       },
     });
-    expect(out.citations.citations.map((w) => w.registry)).toEqual([undefined, undefined, undefined]);
-    expect(out.citations.citations.map((w) => "registry" in w)).toEqual([false, false, false]);
+    expect(out.bibliography.citations.map((w) => w.registry)).toEqual([undefined, undefined, undefined]);
+    expect(out.bibliography.citations.map((w) => "registry" in w)).toEqual([false, false, false]);
     expect(out.counts).toMatchObject({ asked: 3, notFound: 1, unavailable: 2, found: 0 });
   });
 
   it("clears an earlier revision's registry rather than keeping it", async () => {
     const stale = { ...ATTENTION, registry: { kind: "conflict" as const, source: "crossref" as const } };
     const out = await attachCitationRegistry(list([stale]), fake({}));
-    expect("registry" in (out.citations.citations[0] ?? {})).toBe(false);
+    expect("registry" in (out.bibliography.citations[0] ?? {})).toBe(false);
   });
 
   it("keeps at most REGISTRY_AUTHORS_KEPT authors and counts the rest", async () => {
@@ -337,7 +337,7 @@ describe("what an answer puts on the row", () => {
       "doi:10.5555/attention": { kind: "found", record: record("doi:10.5555/attention", "Attention Is All You Need", { authors: many }) },
     });
     const out = await attachCitationRegistry(list([ATTENTION]), reg);
-    const r = out.citations.citations[0]?.registry;
+    const r = out.bibliography.citations[0]?.registry;
     expect(r?.kind).toBe("found");
     if (r?.kind !== "found") return;
     expect(r.authors).toHaveLength(REGISTRY_AUTHORS_KEPT);
@@ -356,7 +356,7 @@ describe("what an answer puts on the row", () => {
         }),
       },
     }));
-    const registry = out.citations.citations[0]?.registry;
+    const registry = out.bibliography.citations[0]?.registry;
     expect(registry?.kind).toBe("found");
     if (registry?.kind !== "found") return;
     expect(registry.title.length).toBeLessThanOrEqual(300);
@@ -413,7 +413,7 @@ describe("how many, and how fast", () => {
       },
     });
     expect(asked).toEqual(["doi:10.1000/b0"]);
-    expect(out.citations.citations).toHaveLength(5);
+    expect(out.bibliography.citations).toHaveLength(5);
     expect(out.counts).toMatchObject({ asked: 1, notFound: 1, overBudget: 4, overCap: 0 });
   });
 });

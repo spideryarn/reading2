@@ -163,11 +163,11 @@ where the source usually keeps it
 `pdf-` is a document the
 pipeline could not read: too long, locked, or damaged. `web-` is the page in the reader's browser
 failing on its own account — `[web-unexpected]`, below — and `net-` is the browser not reaching the
-server at all (`[net-down]`, `COULD_NOT_REACH`). `cite-` is Citations' *Dig deeper* refusing
+server at all (`[net-down]`, `COULD_NOT_REACH`). `cite-` is Bibliography's *Dig deeper* refusing
 ([bibliography.md](bibliography.md#dig-deeper-a-closer-look-at-one-work-on-demand)). `dig-` is *Dig deeper*'s shared half:
 `[dig-no-search]` when the web search it promises did not run, in any of its three modes, and
 `[dig-resting]` when the glossary's and comments' shared daily allowance is spent across every
-reader — Citations' own is `[cite-investigate-resting]`
+reader — Bibliography's own is `[cite-investigate-resting]`
 ([glossary.md § Digging deeper into a term](glossary.md#digging-deeper-into-a-term)).
 
 **The `mic-` family is the exception to the paragraph after next.** Its
@@ -492,7 +492,7 @@ calls `describeFetchFailure`.
 
 **Eleven more catches joined on 2026-10-07**
 ([261007a K4](../plans/261007a-ui-sweep-k4-failure-sentences-and-panel-states.md)): the four
-kept-answer streams (Glossary's two, Citations' *Investigate*, the quiz's mark), Diagram's two
+kept-answer streams (Glossary's two, Bibliography's *Investigate*, the quiz's mark), Diagram's two
 reads, Skim's purpose box, *View the original*, the bar's tag commands, the admin's cost read and
 the export download. Three things that work settled:
 

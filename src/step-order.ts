@@ -201,9 +201,8 @@ export const STEP_ORDER = [
  *
  * `trajectory` was Skim's step until 2026-10-01 (plan 261001r); `hierarchy` was
  * Structure's until 2026-10-02 (plan 261002b); `citations` was Bibliography's
- * until 2026-10-09 (plan 261009w). The ledger has its own table, `RENAMED` in
- * src/cost-categories.ts, because it also renames jobs; `currentLedgerName`
- * there reads both.
+ * until 2026-10-09 (plan 261009w). The ledger also renames jobs, so
+ * `currentLedgerName` below reads this table together with `RETIRED_JOBS`.
  *
  * **Plan 261009w renamed without rewriting `jobs`** (expand and contract): a
  * job the old code queued keeps `citations` in `jobs.steps` and `jobs.reset`

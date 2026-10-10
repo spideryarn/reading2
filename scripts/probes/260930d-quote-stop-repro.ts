@@ -37,8 +37,8 @@ import { createQuoteGuard } from "../../src/investigate-quote-guard.js";
 const BUDGET = 0.8;
 
 async function oneRun(slug: string, id: string): Promise<number> {
-  const { bibliography: citations } = await loadBibliography(slug);
-  const current = citations.citations.find((w) => w.id === id);
+  const { bibliography } = await loadBibliography(slug);
+  const current = bibliography.citations.find((w) => w.id === id);
   if (!current) throw new Error(`no citation ${id} in ${slug}`);
   const { investigation: _earlier, ...work } = current;
   const article = await loadArticle(slug);
@@ -117,8 +117,8 @@ async function main(): Promise<void> {
     if (mode === "list") {
       const slug = args[0];
       if (!slug) throw new Error("list <slug>");
-      const { bibliography: citations } = await loadBibliography(slug);
-      for (const c of citations.citations)
+      const { bibliography } = await loadBibliography(slug);
+      for (const c of bibliography.citations)
         console.log(`${c.id}\t${c.linkFrom}\t${c.lookup?.state ?? "-"}\t${c.title}\t| ${c.authors ?? ""} | ${c.year ?? ""}`);
       return;
     }

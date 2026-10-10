@@ -27,13 +27,13 @@
  * caller then honours.
  *
  * **A Crossref record also carries Crossref's citation count and the moment it
- * was read** (plan 261005i), for the Citations row. A record cached before the
+ * was read** (plan 261005i), for the Bibliography row. A record cached before the
  * count was kept is asked about once more, by any caller, and a failed ask
  * leaves it due again: so during a Crossref outage such a record is
  * `unavailable` to every caller until one ask succeeds.
  *
- * Nothing calls this from a route or a step yet: stages 3, 5 and 6 of the plan
- * are the callers.
+ * Bibliography's registry pass and per-work lookup are callers; an uploaded
+ * paper can use the same lookup while finding its canonical page.
  */
 
 import { ARXIV_ID_SHAPE, DOI_SHAPE, identityOf } from "./cited-in-spideryarn.js";
@@ -47,7 +47,7 @@ import { CONTACT_EMAIL } from "./site-text.js";
 
 /**
  * `doi:<lower-cased doi>` or `arxiv:<lower-cased id, no version>` — the same
- * spelling `keysOf` in src/bibliography.ts gives a work's `idKey`, so a Citations
+ * spelling `keysOf` in src/bibliography.ts gives a work's `idKey`, so a Bibliography
  * row's key is already a `WorkId` once it has been through `parseWorkId`.
  *
  * Branded, so a string that has not been parsed cannot reach `lookupWork` — a

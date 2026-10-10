@@ -84,9 +84,9 @@ import type { StepName } from "./types.js";
  * (docs/plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md).
  * The three answers, the same for both: **one** metered call a press, and no
  * web search — each step is a single `streamMessage` with no tools
- * (`generateFaq`, `generateBibliography`); Citations' per-row *Find it* is the
+ * (`generateFaq`, `generateBibliography`); Bibliography's per-row *Find it* is the
  * search, and it is its own route that a press here never reaches. **No
- * prerequisite** beyond the article itself; the one refusal is Citations'
+ * prerequisite** beyond the article itself; the one refusal is Bibliography's
  * `previousBibliographyFrom`, which throws before the call if the list already
  * there is unreadable, rather than minting fresh ids over it. And **safe to
  * publish over a good list**, draft-then-publish: an answer that validation

@@ -1,5 +1,5 @@
 /**
- * **Citations' kept *Dig deeper* (was *Investigate*) answer, on the client** —
+ * **Bibliography's kept *Dig deeper* (was *Investigate*) answer, on the client** —
  * the answer and the sentence that says what was read.
  * docs/plans/260930a-citations-investigate-one-work-on-demand.md § UI; the
  * server is src/citation-investigate.ts and the hook half is

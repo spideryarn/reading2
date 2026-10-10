@@ -1,5 +1,5 @@
 /**
- * Pipeline stage — the **citations**: every work the piece cites, where it
+ * Pipeline stage — the **Bibliography**: every work the piece cites, where it
  * cites it, and a link out. docs/plans/260911g-citations-mode.md is the design
  * and GPT Sol's review of it; this file is stage 1 of that plan.
  *
@@ -174,12 +174,12 @@ export function inputFingerprint(
 
 /** Does this artefact still describe the article, tree and metadata? */
 export function isStale(
-  citations: Bibliography,
+  bibliography: Bibliography,
   blocks: readonly BlockFingerprint[],
   tree: Tree,
   meta: MetaFingerprintWithUrl | null,
 ): boolean {
-  return citations.sourceHash !== inputFingerprint(blocks, tree, meta);
+  return bibliography.sourceHash !== inputFingerprint(blocks, tree, meta);
 }
 
 export function emptyDrops(): CitationDrops {
@@ -1202,17 +1202,17 @@ export function pageNamesTitle(page: { title?: string; excerpt?: string }, title
  * find for that id is stored (a re-run can turn a searched row into a DOI row
  * and inherit its id). The artefact itself is never changed.
  */
-export function attachFinds(citations: Bibliography, finds: ReadonlyMap<string, CitationFind>): Bibliography {
-  if (finds.size === 0) return citations;
+export function attachFinds(bibliography: Bibliography, finds: ReadonlyMap<string, CitationFind>): Bibliography {
+  if (finds.size === 0) return bibliography;
   let changed = false;
-  const works = citations.citations.map((work) => {
+  const works = bibliography.citations.map((work) => {
     const find = finds.get(work.id);
     if (!find || work.linkFrom !== "search") return work;
     changed = true;
     const { url, ...found } = find;
     return { ...work, url, linkFrom: "web" as const, found };
   });
-  return changed ? { ...citations, citations: works } : citations;
+  return changed ? { ...bibliography, citations: works } : bibliography;
 }
 
 /**
@@ -1230,13 +1230,13 @@ export function attachFinds(citations: Bibliography, finds: ReadonlyMap<string, 
  * model hash; the found link, if any, stays.
  */
 export function attachLookups(
-  citations: Bibliography,
+  bibliography: Bibliography,
   finds: ReadonlyMap<string, CitationFind>,
   contextHashOf: (work: CitedWork) => string | readonly string[],
 ): Bibliography {
-  if (finds.size === 0) return citations;
+  if (finds.size === 0) return bibliography;
   let changed = false;
-  const works = citations.citations.map((work) => {
+  const works = bibliography.citations.map((work) => {
     const lookup = finds.get(work.id)?.lookup;
     if (!lookup) return work;
     const expected = contextHashOf(work);
@@ -1246,7 +1246,7 @@ export function attachLookups(
     changed = true;
     return { ...work, lookup };
   });
-  return changed ? { ...citations, citations: works } : citations;
+  return changed ? { ...bibliography, citations: works } : bibliography;
 }
 
 /** Anchor text that says nothing about which work it is. */
@@ -1857,13 +1857,13 @@ export interface Coverage {
   works: number;
 }
 
-export function coverageOf(blocks: readonly Block[], citations: Bibliography): Coverage {
+export function coverageOf(blocks: readonly Block[], bibliography: Bibliography): Coverage {
   const byId = new Map(blocks.map((b) => [b.id as string, b]));
   const notes = new Set(blocks.map((b) => b.noteId).filter((n): n is string => Boolean(n)));
   const refs = blocks.filter((b) => !b.noteId && b.role === "reference");
   const notesReached = new Set<string>();
   const refsReached = new Set<string>();
-  for (const c of citations.citations) {
+  for (const c of bibliography.citations) {
     for (const p of [...(c.reference ? [c.reference] : []), ...c.mentions]) {
       const block = byId.get(p.blockId);
       if (block?.noteId) notesReached.add(block.noteId);
@@ -1875,7 +1875,7 @@ export function coverageOf(blocks: readonly Block[], citations: Bibliography): C
     notesReached: notesReached.size,
     references: refs.length,
     referencesReached: refsReached.size,
-    works: citations.citations.length,
+    works: bibliography.citations.length,
   };
 }
 

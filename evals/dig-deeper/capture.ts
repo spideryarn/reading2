@@ -272,8 +272,8 @@ export async function captureExample(example: Example, deps: CaptureDeps): Promi
 
   /* `prepare()`'s inputs again, to give the guard what production gave it —
      and checked against what production actually sent. */
-  const { bibliography: citations } = await deps.loadBibliography(example.slug);
-  const row = citations.citations.find((w) => w.id === example.entryId);
+  const { bibliography } = await deps.loadBibliography(example.slug);
+  const row = bibliography.citations.find((w) => w.id === example.entryId);
   if (!row) throw new Error(`${example.id}: no cited work ${example.entryId}`);
   const { investigation: _earlier, ...work } = row;
   const text = new Map(article.blocks.map((b) => [b.id as string, b.text]));

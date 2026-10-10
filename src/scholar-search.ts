@@ -2,7 +2,7 @@
  * **A Google Scholar search for a work, as an address** — and the first
  * author's name that narrows it.
  *
- * Two callers: Citations, which links a reference it could find no address for
+ * Two callers: Bibliography, which links a reference it could find no address for
  * (src/bibliography.ts § `linkFor`), and Debate's Reception, which ends with *Who
  * cites it: search Google Scholar* (src/web/DebatePanel.tsx). A search, never a
  * guessed address — the rule plan 261003f set for author links.

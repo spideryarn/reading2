@@ -6,7 +6,7 @@
  * Stage 2 transcribes a PDF's bibliography and then deliberately does not
  * render it (`RENDERED` in src/pdf.ts — Greg's v1 call), so an article made
  * from a PDF has a `References` heading and nothing under it. A numbered paper
- * then gives the Citations model `TV episodes [8]` and nothing to say what `[8]`
+ * then gives the Bibliographyl `TV episodes [8]` and nothing to say what `[8]`
  * is, and every row comes back with no authors, no year and a title the model
  * made up to describe the cite.
  *

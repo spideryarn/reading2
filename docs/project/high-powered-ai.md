@@ -95,9 +95,9 @@ Simple is not part of the default ingest and already uses Opus whenever it is re
 
 - **Every task on the capable tier except Simple moves**, for that article only: the pipeline stages
   (structure, headings, gist, glossary, quotes, ideas, timeline, quiz, FAQ, sketch, illustrated,
-  skim, debate, citations) and the calls made while you read it (chat; explain — a comment's
+  skim, debate, bibliography) and the calls made while you read it (chat; explain — a comment's
   first answer and *Try again*, and the glossary's *Look up* box; search; quiz marking; referee;
-  Citations' stand-alone *Look it up*; live conversation's search tool). A *Dig deeper* press does
+  Bibliography's stand-alone *Look it up*; live conversation's search tool). A *Dig deeper* press does
   not move with it — the next point.
   A developer's explicit per-task environment override still wins, so a deliberate model comparison
   stays pinned. [`TASK_TIER` and `resolveModel` in `src/models.ts`](../../src/models.ts) are the
@@ -107,14 +107,14 @@ Simple is not part of the default ingest and already uses Opus whenever it is re
   not, at about $0.05 a press more: `ALWAYS_HIGH_POWER` in `src/models.ts`,
   [261001p](../plans/261001p-simple-on-opus-with-and-without-the-fidelity-guard.md).
 - ***Dig deeper* is always on Opus, and is not charged as the switch is.** The glossary's, a
-  comment's and Citations' *Dig deeper* send `DIG_DEEPER_MODEL`
+  comment's and Bibliography's *Dig deeper* send `DIG_DEEPER_MODEL`
   ([`src/dig-deeper.ts`](../../src/dig-deeper.ts)) directly, switch on or off — for Citations that
   is the quick check's verdict, the paper's passages and the answer, everything the reader reads.
   Directly, not through `resolveModel`, so a per-task environment override does not put it back on
   Sonnet either. Greg asked for the bigger model whenever a reader wants to know more about one
   thing ([glossary.md § Digging deeper into a term](glossary.md#digging-deeper-into-a-term)). A press
   costs the reader nothing from their article allowance; it is bounded instead by an allowance of
-  presses — `DIG_DEEPER_RATE_POLICY` for the glossary and comments, Citations' own
+  presses — `DIG_DEEPER_RATE_POLICY` for the glossary and comments, Bibliography's own
   `INVESTIGATE_RATE_POLICY`. Its quick-tier search step does not move either.
 - **The quick tier and fixed-model calls do not move.** That includes link summaries, quiz-verdict
   classification, PDF reading and figure location, embeddings, dictation, shelf topics, the live

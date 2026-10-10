@@ -1357,7 +1357,7 @@ That is what happens, and this section is the one place that says so.
   to paste the original address (`isOwnReadingPage`,
   [`src/own-reading-page.ts`](../../src/own-reading-page.ts)). Our reading page is an app, not the
   piece, so there was never anything there to import.
-- **In Citations, a link to a work already here can go to a stranger's public copy rather than your
+- **In Bibliography, a link to a work already here can go to a stranger's public copy rather than your
   own**, when theirs was matched by DOI or arXiv id and yours only by title
   ([bibliography.md](bibliography.md)). Between equally sure matches, yours wins.
 

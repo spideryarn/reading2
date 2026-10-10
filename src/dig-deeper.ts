@@ -1,7 +1,7 @@
 /**
  * ***Dig deeper*** — the one action behind every "tell me more about this one
  * thing" button: the glossary's (was *Check the web*) and a comment's (was
- * *Search the web*), and Citations' *Investigate* next
+ * *Search the web*), and Bibliography's *Investigate* next
  * (docs/plans/261001p-dig-deeper-one-action-always-searches-bigger-model.md).
  *
  * > if it says "Check the Web", then it always should … always use a bigger

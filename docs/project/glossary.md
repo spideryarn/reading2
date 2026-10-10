@@ -773,11 +773,11 @@ searching to the model, which on anything it thought it knew chose not to. Asked
 
 There were three such places, and they are now one action, **Dig deeper**: this button, a comment's
 re-ask (*Search the web* until then — [comments.md § pushing back](comments.md#pushing-back)) and
-Citations' *Investigate* ([bibliography.md § Dig deeper](bibliography.md#dig-deeper-a-closer-look-at-one-work-on-demand)).
+Bibliography's *Investigate* ([bibliography.md § Dig deeper](bibliography.md#dig-deeper-a-closer-look-at-one-work-on-demand)).
 Glossary and Citations say *Digging deeper…* while it runs and *Dig deeper again* over a kept
 answer; a comment hides the button while it runs and keeps calling the re-ask *Dig deeper*. The
 shared half is [`src/dig-deeper.ts`](../../src/dig-deeper.ts) — steps 1 and 2 below and the model;
-step 3 is the glossary's and a comment's, and Citations' is
+step 3 is the glossary's and a comment's, and Bibliography's is
 [its own](bibliography.md#dig-deeper-a-closer-look-at-one-work-on-demand). A press:
 
 1. **Runs a web search, forced by code rather than left to the model.** `searchFirst` makes one
@@ -1191,7 +1191,7 @@ this panel's and a comment's, which share one — takes the `dig-deeper` allowan
 (`DIG_DEEPER_RATE_POLICY` in [`src/dig-deeper.ts`](../../src/dig-deeper.ts): so many an hour and a
 day per reader, two at once, and a global fuse across every reader a day). It is taken after every
 refusal that costs nothing and before anything that does, so a refused press is an ordinary JSON 429,
-or a 503 carrying `[dig-resting]`, and changes nothing. Citations' Dig deeper keeps its own allowance
+or a 503 carrying `[dig-resting]`, and changes nothing. Bibliography's Dig deeper keeps its own allowance
 ([bibliography.md](bibliography.md#dig-deeper-a-closer-look-at-one-work-on-demand)); a comment's first
 answer, the tick-box, spends none.
 

@@ -10,7 +10,7 @@
  *
  * docs/plans/261009j-a-public-copy-offered-at-import.md.
  *
- * **No new ownerless read.** The candidates are Citations'
+ * **No new ownerless read.** The candidates are Bibliography's
  * (src/store/pg-cited-in-spideryarn.ts § `citedCandidatesQuery`), whose `where`
  * is the whole defence: public and not archived, openable, a stranger's title
  * only as extracted, and a stranger's address only as `publicSourceUrl` passes

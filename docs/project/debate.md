@@ -246,11 +246,13 @@ How it works, and what to know before changing it:
 [bibliography.md § Ask in chat](bibliography.md#ask-in-chat-a-conversation-about-one-work)). What they
 changed here:
 
-- **`ThreadOrigin` has two more shapes**, `{ mode: "glossary" | "citations", itemId, quote }`.
+- **`ThreadOrigin` has two more shapes**, `{ mode: "glossary" | "bibliography", itemId, quote }`.
+  A row stored with the former `citations` word is read as `bibliography` during the rename window.
   Those have a durable id, so they are matched by the mode and the id alone and the name is only a
   snapshot. A claim is still matched by its block and its exact words.
 - **The database says what each is made of**: `chat_threads_origin_item` requires the id and the
-  name and forbids a block and a lens on those two modes, as `chat_threads_origin_debate` does for
+  name and forbids a block and a lens on those two modes (`citations` is also admitted during the
+  rename window), as `chat_threads_origin_debate` does for
   a claim and an angle. `summary` is still reserved, with no shape.
 - **Only a claim's block is checked against the article.** The route never looks an item's id up.
 - **The mark is one component**, `OriginChatMark` in

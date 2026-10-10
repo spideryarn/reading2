@@ -3,7 +3,7 @@
  * docs/project/touch.md: a finger's first tap opens the card (and the card
  * says "Tap again to do it."), the second tap acts; a mouse click acts at once.
  *
- * Written for Citations' two paid buttons, *Look it up* and *Investigate*,
+ * Written for Bibliography's two paid buttons, *Look it up* and *Investigate*,
  * where one tap on a phone both opened the card and spent the money (plan
  * 260930a § Review log, Browser check). It mirrors the shelf row's shape
  * (ShelfEntry.tsx § `armed` / `ActionTip`: an `armed` state with `byTouch`,

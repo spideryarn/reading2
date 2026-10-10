@@ -2662,7 +2662,7 @@ export function Reader({
     }),
     [chatSummaries, checkClaimInChat, debateThroughLensInChat, openClaimChat],
   );
-  /* The same three things for Glossary's entries and Citations' rows
+  /* The same three things for Glossary's entries and Bibliography's rows
      (OriginChat.tsx § `ItemChats`). **The raw `chatSummaries`**, not `chats`
      below, which is filtered to the conversations anchored to a passage and
      so holds none of these. The way back is the claim's own handler. */
@@ -3630,7 +3630,7 @@ export function Reader({
             onOpenKey={setOpenTimelineKey}
           />
         ) : null;
-      /* **Sources, since 2026-10-09** — Citations' band and Debate's under
+      /* **Sources, since 2026-10-09** — Bibliography's band and Debate's under
          one chip row (SourcesMode.tsx). **The owner/visitor pair**, each
          half since 2026-09-29: a visitor's rows arrive with every address
          re-judged by `publicCitationUrl` (src/public/dto.ts §
@@ -4758,7 +4758,7 @@ export function Reader({
            the enforcement is that there is nothing here. */
         termActions={glossaryRead}
         /* **Ask in chat on a term's card and on a cited work's** — the
-           Glossary band's and the Citations rows' own senders, so a chat
+           Glossary band's and the Bibliography rows' own senders, so a chat
            started from a card records the same origin as one started in the
            band. Each card had *Dig deeper* there until 2026-10-09 (plans
            261002c, 261004b, 261009k). Null for a visitor, who has no chat. */

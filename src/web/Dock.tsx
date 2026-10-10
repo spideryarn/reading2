@@ -985,16 +985,16 @@ const MODES_UI = [
   /* **Sources, last of the critical run and before the input run, where
      Debate stood**, since 2026-10-09: Citations and Debate in one button, with
      Bibliography, Reception and Claims as its chips. Greg (spya-vcvxu5): *"let's
-     move this out of experimental, this combined mode"*. Citations' list is
+     move this out of experimental, this combined mode"*. Bibliography's list is
      the piece's own references, Debate's is the web's, and Referee beside it
      is somebody weighing the piece: the run reads it critically.
 
      Debate's place, at the far end of the outward run, because most of what
-     the mode adds is **not in the article at all**. Its icon is Citations'
+     the mode adds is **not in the article at all**. Its icon is Bibliography's
      `BookText` (mode-icons.ts), because the button opens on Bibliography;
      Debate's `Globe` stays on Reception's search button.
      docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md;
-     Citations' row: docs/plans/260911g-citations-mode.md; Debate's:
+     Bibliography's row: docs/plans/260911g-citations-mode.md; Debate's:
      docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md. */
   {
     mode: "sources",

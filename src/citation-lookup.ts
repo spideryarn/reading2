@@ -1,6 +1,6 @@
 /**
  * **What a lookup may say about a cited work, and what it may not** — the pure
- * rules behind Citations' *Look it up*. docs/plans/260929g-check-a-cited-paper-supports-the-claim.md
+ * rules behind Bibliography's *Look it up*. docs/plans/260929g-check-a-cited-paper-supports-the-claim.md
  * § The tweak / 2 and § After the second plan review (R-1…R-7).
  *
  * The one call in src/citation-find.ts runs a web search for the work, points

@@ -5016,7 +5016,7 @@ export interface CitedWork {
 export type RegistrySource = "crossref" | "datacite";
 
 /**
- * **A registry's record, as a row keeps it** — Citations' and Debate's
+ * **A registry's record, as a row keeps it** — Bibliography's and Debate's
  * (plan 261001a stages 5 and 6). Public metadata about a public identifier.
  * Never read straight off a stored row on the client: nothing revalidates
  * stored JSON, so read it through a guard.
@@ -5044,7 +5044,7 @@ export interface RegistryCitedBy {
 }
 
 /**
- * Citations' registry field: a record whose title agrees, or the fact that it
+ * Bibliography's registry field: a record whose title agrees, or the fact that it
  * does not. `citedBy` is on the `found` arm alone, and not on `RegistryWork`:
  * a conflict's record is another work, whose count is not this row's, and
  * Debate's rows do not ask.

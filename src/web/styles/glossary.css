@@ -39,7 +39,7 @@
 
    **Every band's order row but Search's.** Quotes had a copy of these rules
    under `.quotes-rank*` until 2026-10-07 (plan 261007a § K5); its row carries
-   these classes now, as Citations', FAQ's and Debate's always did. Search's
+   these classes now, as Bibliography's, FAQ's and Debate's always did. Search's
    row keeps its own look and class (search.css § `.srch-sort`). */
 .gloss-sort {
   display: flex;

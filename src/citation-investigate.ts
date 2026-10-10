@@ -1,5 +1,5 @@
 /**
- * **Dig deeper into one cited work, on demand** — Citations mode's *Dig
+ * **Dig deeper into one cited work, on demand** — Bibliography's *Dig
  * deeper* (*Investigate* until plan 261001p stage 2; the code keeps the old
  * name), `POST /api/bibliography/:slug/:id/investigate`.
  * docs/plans/260930a-citations-investigate-one-work-on-demand.md is the spec;
@@ -928,8 +928,8 @@ export function makeInvestigateCitation(
   const stallMs = deps.stallMs ?? INVESTIGATE_STALL_MS;
 
   return async function investigateCitation(slug, entryId, profile) {
-    const { bibliography: citations } = await deps.reader.loadBibliography(slug);
-    const listed = citations.citations.find((w) => w.id === entryId);
+    const { bibliography } = await deps.reader.loadBibliography(slug);
+    const listed = bibliography.citations.find((w) => w.id === entryId);
     if (!listed) throw httpError(404, `No cited work "${entryId}" in "${slug}".`);
     /* Named: the narrowing above does not reach into the generators. */
     const row: CitedWork = listed;

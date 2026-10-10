@@ -261,8 +261,8 @@ async function setWhy(why: string): Promise<void> {
     .select({ bibliography: articleRevisions.bibliography })
     .from(articleRevisions)
     .where(eq(articleRevisions.id, revision));
-  const citations = rev?.bibliography as Bibliography;
-  const next = { ...citations, citations: citations.citations.map((w) => (w.id === WORK ? { ...w, why } : w)) };
+  const bibliography = rev?.bibliography as Bibliography;
+  const next = { ...bibliography, citations: bibliography.citations.map((w) => (w.id === WORK ? { ...w, why } : w)) };
   await getDb().update(articleRevisions).set({ bibliography: next }).where(eq(articleRevisions.id, revision));
 }
 
@@ -283,7 +283,7 @@ beforeAll(async () => {
     url: "https://arxiv.org/abs/2001.08361",
     linkFrom: "arxiv",
   };
-  const citations: Bibliography = {
+  const bibliography: Bibliography = {
     version: "citations/4",
     generator: "test",
     slug: SLUG,
@@ -293,7 +293,7 @@ beforeAll(async () => {
     generatedAt: "2026-09-30T00:00:00.000Z",
     elapsedMs: 1,
   };
-  await getDb().update(articleRevisions).set({ bibliography: citations }).where(eq(articleRevisions.id, await currentRevision()));
+  await getDb().update(articleRevisions).set({ bibliography }).where(eq(articleRevisions.id, await currentRevision()));
 }, 120_000);
 
 afterAll(async () => {

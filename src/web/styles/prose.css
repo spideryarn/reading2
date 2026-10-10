@@ -288,7 +288,7 @@ td.text.has-hit[data-hues].block-flash-still {
 }
 td.text mark.hit.passage-flash { animation: passage-flash var(--flash-ms) ease-out; }
 td.text mark.hit.passage-flash-still { background-color: var(--highlight-wash); }
-/* And on a citation's words, Citations' *first cited* jump (rows.ts §
+/* And on a citation's words, Bibliography's *first cited* jump (rows.ts §
    `citePassageKey`, plan 260930i). A cite mark has no background of its own —
    its channel is the underline — so the wash simply fades to nothing.
 

@@ -904,15 +904,15 @@ export function BibliographyPanel({
   useRenderCount("BibliographyPanel");
   /* `null` for a visitor, and every owner-only thing below is behind it. */
   const owner = access.kind === "owner" ? access.owner : null;
-  const citations = access.kind === "owner" ? access.owner.bibliography : access.bibliography;
-  const all: readonly ShownWork[] = citations?.citations ?? NO_WORKS;
+  const bibliography = access.kind === "owner" ? access.owner.bibliography : access.bibliography;
+  const all: readonly ShownWork[] = bibliography?.citations ?? NO_WORKS;
   const bar = chosenBar ?? CITATION_BAR_DEFAULT;
   /* One answer for the order in force, passed down, so the list, the pressed
      button and the slider's presence cannot disagree. */
   const order = effectiveOrder(all, chosenOrder);
   const shown = orderWorks(all, order, bar);
   /* A visitor's list arrived with the page, so it is ready by construction. */
-  const ready = citations !== null && (owner === null || owner.status === "ready");
+  const ready = bibliography !== null && (owner === null || owner.status === "ready");
   /* A forced run has finished and its result is not here yet: the forced
      button gives way to a read, never to a second paid run — IdeasPanel.tsx §
      `run` is the sibling. rewrite-hold.ts. */
@@ -924,10 +924,10 @@ export function BibliographyPanel({
     (owner.job || owner.starting || owner.failed || (waiting && !owner.error));
   /* Empty with fewer than two works or two orders, and then there is no order
      row and an empty head row holds the top of the band instead. */
-  const orders = citations && all.length > 1 ? orderOptions(all) : [];
+  const orders = bibliography && all.length > 1 ? orderOptions(all) : [];
 
   /* **Bring the focused work into view** — `Props.focus`. Lowering the bar is
-     Citations' one extra step; the shared focus effect waits for that later
+     Bibliography's one extra step; the shared focus effect waits for that later
      render, then lands and consumes the request exactly as the other item
      modes do (item-focus.ts). */
   const list = useRef<HTMLOListElement>(null);
@@ -957,7 +957,7 @@ export function BibliographyPanel({
   const about =
     ready && all.length > 0 ? (
       <>
-        {citations.capped && <p>{CAPPED_NOTE}</p>}
+        {bibliography.capped && <p>{CAPPED_NOTE}</p>}
         <p>{INFLUENCE_NOTE}</p>
         {owner !== null && <p>{INFLUENCE_WEB_NOTE}</p>}
         <p>{CITED_BY_NOTE}</p>
@@ -1013,7 +1013,7 @@ export function BibliographyPanel({
       /* Pinned under the scroller, and **only a job's status now**. The two
          sentences about the whole list that were here went behind the (i) on
          2026-10-01 — Greg: *"at the bottom, there's an explanation of what
-         citations mode is, and that could be inside an information icon
+         Bibliography mode is, and that could be inside an information icon
          tooltip"* (`spya-nca765`, plan 261001l).
 
          **No re-run here.** The first draft had *Find them again* in this foot,
@@ -1033,7 +1033,7 @@ export function BibliographyPanel({
 
       {/* Only in the order it belongs to: a number that means nothing in the
           other three would be furniture. */}
-      {citations && order === "prioritised" && (
+      {bibliography && order === "prioritised" && (
         <BarSlider works={all} bar={bar} moved={chosenBar !== null} onBar={onBar} />
       )}
 
@@ -1044,7 +1044,7 @@ export function BibliographyPanel({
       {/* **A visitor with no list stored**: Sources opened on Reception's
           or Claims' artefact (visitor.ts § POLICY, `any-artefact`), so
           Bibliography says it has nothing rather than drawing a blank band. */}
-      {access.kind === "visitor" && citations === null && <p className="gloss-quiet">{BIBLIOGRAPHY_NONE_SHARED}</p>}
+      {access.kind === "visitor" && bibliography === null && <p className="gloss-quiet">{BIBLIOGRAPHY_NONE_SHARED}</p>}
 
       {owner?.status === "none" && (
         <div className="gloss-empty">

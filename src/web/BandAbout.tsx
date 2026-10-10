@@ -2,7 +2,7 @@
  * **A band's (i): the sentences about the whole band, behind an icon in its
  * top-right corner.** Greg asked for the same move three times — FAQ's promise,
  * 2026-09-30 (SPIDERYARN-READING2-62): *"move this text … into a tooltip, e.g.
- * behind an `(i)` icon"*; Citations' two notes the same day (`spya-nca765`):
+ * behind an `(i)` icon"*; Bibliography's two notes the same day (`spya-nca765`):
  * *"that could be inside an information icon tooltip"*; and then every mode,
  * 2026-10-01 (`spya-ucu35y`): *"Move this into a tooltip for a (i) icon in the
  * top-right … Each mode should have such an (i) icon"*.

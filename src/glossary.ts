@@ -282,7 +282,7 @@ function text(value: unknown): string {
 /**
  * Is this name or alias a citation written with "et al."?
  *
- * **A cited work is not a term**: Citations lists those (Greg, 2026-10-03,
+ * **A cited work is not a term**: Bibliography lists those (Greg, 2026-10-03,
  * spya-zn97q5, on an entry named "Saha et al."). The prompt is what tells a
  * citation from a work the piece discusses, and it is only a request. This is
  * a mechanical backstop for the reported author-label shape, so `toEntries`

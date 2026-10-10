@@ -83,7 +83,7 @@ A press calls `openOrigin` in [`Reader.tsx`](../../src/web/reader/Reader.tsx), o
 | Origin | The press | What the reader sees |
 |---|---|---|
 | Glossary | `openTermInGlossary` (`?term=`, the gate lowered if it hides the entry) and a focus | the entry open, its row scrolled into view |
-| Citations (Sources › Bibliography) | the focus (`citeFocus`) and `showBand`, on Bibliography | the row scrolled into view, the bar lowered if needed |
+| Bibliography | the focus (`citeFocus`) and `showBand`, on Bibliography | the row scrolled into view, the bar lowered if needed |
 | Ideas | one push of `mode=ideas&idea=`, and a focus | the idea open, its row in view; not the row press, which jumps the prose |
 | Debate, a claim | one push of `mode=sources&sources=claims` that clears `?bears=` and `?debatethread=`, and a focus | the claim's row in view, an older search's claim unfolded |
 | Debate, an angle | one push of `mode=sources&sources=reception` | the angles box |

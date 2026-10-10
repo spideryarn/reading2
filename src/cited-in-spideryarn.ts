@@ -1,5 +1,5 @@
 /**
- * **Is a cited work already an article here?** The pure half of Citations'
+ * **Is a cited work already an article here?** The pure half of Bibliography's
  * *In your library* / *On the public shelf* link — SPIDERYARN-READING2-5R,
  * docs/plans/260930b-citations-say-when-a-cited-work-is-already-in-spideryarn.md.
  *

@@ -189,19 +189,19 @@ async function stored(slugs: string[]): Promise<void> {
     let lists = 0;
     for (const slug of slugs) {
       /* Only "no list was made" is skipped; a failed read must not print as an empty corpus. */
-      let citations: Awaited<ReturnType<typeof store.loadBibliography>>;
+      let found: Awaited<ReturnType<typeof store.loadBibliography>>;
       try {
-        citations = await store.loadBibliography(slug);
+        found = await store.loadBibliography(slug);
       } catch (err) {
         if (err instanceof BibliographyListNotFound) continue;
         throw err;
       }
-      const works = citations.bibliography.citations;
+      const works = found.bibliography.citations;
       if (works.length === 0) continue;
       lists++;
       const influences = works.map((w) => w.influence);
       all.push(...influences);
-      console.log(`${tallyLine(slug, tally(influences))}\t${citations.bibliography.version}`);
+      console.log(`${tallyLine(slug, tally(influences))}\t${found.bibliography.version}`);
     }
     if (lists === 0) console.log("(no stored citations list among these articles)");
     else console.log(tallyLine(`ALL (${lists} lists)`, tally(all)));
@@ -361,7 +361,7 @@ async function main(): Promise<void> {
     if (slugs.length === 0) throw new Error("compare needs at least one slug");
     compare(a, b, slugs);
   } else {
-    throw new Error("usage: citations-influence.ts stored [slug …] | run --arm=<name> --run=<n> <slug …> | compare --a=<arm>-<run> --b=<arm>-<run> <slug …>");
+    throw new Error("usage: bibliography-influence.ts stored [slug …] | run --arm=<name> --run=<n> <slug …> | compare --a=<arm>-<run> --b=<arm>-<run> <slug …>");
   }
 }
 

@@ -132,14 +132,14 @@ async function main(): Promise<void> {
     for (const slug of slugs) {
       /* Only "no list was made" is skipped: a failed read is not an empty
          corpus, and must not print as one (GPT Sol's plan review, P5). */
-      let citations: Awaited<ReturnType<typeof store.loadBibliography>>;
+      let found: Awaited<ReturnType<typeof store.loadBibliography>>;
       try {
-        citations = await store.loadBibliography(slug);
+        found = await store.loadBibliography(slug);
       } catch (err) {
         if (err instanceof BibliographyListNotFound) continue;
         throw err;
       }
-      const works = citations.bibliography.citations;
+      const works = found.bibliography.citations;
       if (works.length === 0) continue;
       lists++;
       const { blocks, meta } = await store.loadArticle(slug);

@@ -75,7 +75,7 @@ to it means changing the token and its import.
   (`articleTitleVoice`). Every payload that draws a title says which (`titleOverridden` on the
   shelf entry, the owner's article, the unread paper and a library search hit), decided beside the
   code that chose the title. **Where a payload cannot say** — one saved in the browser before the
-  flag existed, or Citations' "in your library" match — the title stays in the app's face rather
+  flag existed, or Bibliography's "in your library" match — the title stays in the app's face rather
   than guessing: "author" would put the reader's own words in the author's face.
 - **The shelf's blurb is the model's gist, or the article's own excerpt where there is none.** The
   server currently infers which by equality (`gistVoiceOf` in
@@ -145,7 +145,7 @@ you add text that is not the app's own, put it in its voice at the same time.**
   voiced.
 - **A section title inside one of our sentences**: ReturnChip's "back to …" and BlockLinkCard's
   section line. Voicing them means splitting the string into markup.
-- **Citations' "in your library" match titles** (above): `CitedInSpideryarn` does not carry the
+- **Bibliography's "in your library" match titles** (above): `CitedInSpideryarn` does not carry the
   rename flag yet —
   [261002f § 6](../plans/261002f-the-three-faces-for-everyone-and-every-surface-voiced.md).
 - **Sketch's SVG labels and Illustrated's painted captions** (§ How to put an element in its voice,
@@ -156,4 +156,3 @@ The audit that found what was missing, with file:line and where each string come
 [261002b-voices-trawl.md](../plans/261002b-voices-trawl.md) for the reading view, and
 [261002f](../plans/261002f-the-three-faces-for-everyone-and-every-surface-voiced.md) for the pages
 outside it.
-

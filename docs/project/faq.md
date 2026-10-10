@@ -143,7 +143,7 @@ no way to ask for another; with none stored they are told nobody has built one (
 
 ## Deferred
 
-A written short answer; questions the piece leaves open; inherited question ids; moving the Glossary's and Citations' sliders onto the shared
+A written short answer; questions the piece leaves open; inherited question ids; moving the Glossary's and Bibliography's sliders onto the shared
 [`ThresholdSlider`](../../src/web/ThresholdSlider.tsx) (plan 260929g); *Ask about this*, a
 per-row button into an anchored Chat; marks in the prose and a `?faq=` selection; the reader's
 profile shaping the questions; real FAQs from readers' own comments. Each is in the

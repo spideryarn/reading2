@@ -3,7 +3,7 @@ select a.id, a.owner_id, a.slug, a.created_at, a.archived_at, a.fixture, a.visib
        r.id as revision_id, r.title, r.created_at as revision_created_at, r.fetched_at, r.raw_content_type,
        r.source, r.extract_method, r.pages, r.word_count, r.block_count, r.raw_sha256, r.raw_source_sha256,
        r.raw_source_kind, r.raw_byte_count, r.final_url is not null as has_url,
-       r.citations is not null as has_citations
+       r.bibliography is not null as has_bibliography
 from spideryarn.articles a
 left join spideryarn.article_revisions r on r.id = a.current_revision_id
 order by a.created_at
@@ -11,17 +11,17 @@ order by a.created_at
 select s.revision_id, s.step_name, s.implementation_version, s.prompt_version, s.model, s.status, s.finished_at
 from spideryarn.revision_step_runs s
 join spideryarn.articles a on a.current_revision_id = s.revision_id
-where s.step_name in ('fetch','extract','blocks','citations')
+where s.step_name in ('fetch','extract','blocks','bibliography')
 -- name: blocks
 select b.article_id, b.block_id, b.ordinal, b.tag, b.kind, b.role, b.treatment, b.note_id, b.text, b.html
 from spideryarn.revision_blocks b
 join spideryarn.articles a on a.current_revision_id = b.revision_id
 order by b.article_id, b.ordinal
--- name: citations
-select a.id as article_id, r.citations
+-- name: bibliography
+select a.id as article_id, r.bibliography
 from spideryarn.articles a
 join spideryarn.article_revisions r on r.id = a.current_revision_id
-where r.citations is not null
+where r.bibliography is not null
 -- name: comments
 select article_id, id, owner_id, block_id, quote, start, status, body is not null and body <> '' as has_body,
        answer is not null as has_answer, colour, thread_id, created_at

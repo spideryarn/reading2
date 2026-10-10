@@ -583,7 +583,7 @@ interface Props {
    *
    * The whole list, in every mode, since 2026-09-16
    * (SPIDERYARN-READING2-3M) — and the whole list rather than the part above the
-   * threshold bar, because `?citebar=` is reachable only from Citations mode
+   * threshold bar, because `?citebar=` is reachable only from Bibliography
    * while these marks are visible from every one of them. `citeMarks` in
    * annotate.ts has the argument.
    *

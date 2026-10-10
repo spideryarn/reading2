@@ -1,6 +1,6 @@
 /**
  * **What *Investigate* sends about one cited work, and the fingerprint over
- * it** — the pure half of Citations' *Investigate*, so src/store/pg.ts can
+ * it** — the pure half of Bibliography's *Investigate*, so src/store/pg.ts can
  * recompute the fingerprint at read time without pulling the model call in
  * (src/citation-lookup.ts has the same split, for the same reason).
  * docs/plans/260930a-citations-investigate-one-work-on-demand.md § Staleness.
@@ -200,17 +200,17 @@ export function investigateContextHash(
  * the row the call is made from — a searched row's link is the found page.
  */
 export function attachInvestigations(
-  citations: Bibliography,
+  bibliography: Bibliography,
   stored: ReadonlyMap<string, CitationInvestigation>,
   contextHashOf: (work: CitedWork) => string,
 ): Bibliography {
-  if (stored.size === 0) return citations;
+  if (stored.size === 0) return bibliography;
   let changed = false;
-  const works = citations.citations.map((work) => {
+  const works = bibliography.citations.map((work) => {
     const investigation = stored.get(work.id);
     if (!investigation || investigation.contextHash !== contextHashOf(work)) return work;
     changed = true;
     return { ...work, investigation };
   });
-  return changed ? { ...citations, citations: works } : citations;
+  return changed ? { ...bibliography, citations: works } : bibliography;
 }

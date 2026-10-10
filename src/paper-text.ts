@@ -4,7 +4,7 @@
  *   readPaperText("https://arxiv.org/abs/1706.03762")
  *     → { kind: "read", format: "pdf", text: "Attention Is All You Need …", … }
  *
- * Two callers: the support check in Citations mode (plan 260929g, which reads
+ * Two callers: the support check in Bibliography (plan 260929g, which reads
  * the paper to see whether it says what the article cites it for) and fb5h's
  * canonical link for an upload, which wants the scholarly meta tags. Both are
  * in a request path with a reader waiting, so this is one attempt, one

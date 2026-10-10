@@ -1705,7 +1705,7 @@ svg.band-waiting-ghost { flex: none; }
 .band-about.on { color: var(--highlight-ink); background: var(--surface-raised); }
 .band-about:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 /* Wider than a control's card (20rem): the (i) carries the mode's two catalog
-   paragraphs and then its own, and Citations' card ran to 834px at 20rem — off
+   paragraphs and then its own, and Bibliography's card ran to 834px at 20rem — off
    the bottom of an 800px window (browser check, plan 261001m). */
 .band-about-card { max-width: min(28rem, calc(100vw - 1.75rem)); }
 .band-about-card p { margin: 0; }

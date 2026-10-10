@@ -107,9 +107,9 @@ async function run(n: number, slug: string, names: string[]): Promise<void> {
   /* The ledger closes, and its writes land, before `closeDb` below. */
   await withLedger("eval", () => runAsOwner(environmentOwnerId(), async () => {
     const article = await store.loadArticle(slug);
-    const { bibliography: citations } = await store.loadBibliography(slug);
+    const { bibliography } = await store.loadBibliography(slug);
     /* Every name resolved before the first paid call. */
-    const works = names.map((name) => pickWork(citations.citations, name));
+    const works = names.map((name) => pickWork(bibliography.citations, name));
     const text = new Map(article.blocks.map((b) => [b.id as string, b.text]));
 
     for (const work of works) {
@@ -204,7 +204,7 @@ async function main(): Promise<void> {
   const n = Number(args.find((a) => a.startsWith("--run="))?.slice("--run=".length));
   const [slug, ...names] = args.filter((a) => !a.startsWith("--"));
   if (!Number.isInteger(n) || n < 1 || !slug || names.length === 0) {
-    throw new Error("usage: citations-influence-dig.ts --run=<n> <slug> <work id or title words> [more …]   (PAID: about 1–4¢ a work)");
+    throw new Error("usage: bibliography-influence-dig.ts --run=<n> <slug> <work id or title words> [more …]   (PAID: about 1–4¢ a work)");
   }
   await run(n, slug, names);
 }

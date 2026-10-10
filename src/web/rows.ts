@@ -97,7 +97,7 @@ export function rowsForBlockIds(blockIds: readonly string[]): (HTMLElement | nul
  *
  * **A cited work is the second key shape** (plan 260930i, SPIDERYARN-READING2-6J):
  * `citePassageKey(id)` finds the `mark.cite` fragments whose `data-cite` list
- * names that work, so Citations' *first cited* jump centres on and flashes the
+ * names that work, so Bibliography's *first cited* jump centres on and flashes the
  * words that cite it rather than the paragraph. Here, not at each caller, so
  * the scroll and the flash still find a passage by one rule.
  */

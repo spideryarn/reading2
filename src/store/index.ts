@@ -601,7 +601,7 @@ export const citationInvestigationStore: CitationInvestigationStore = guarded(
 );
 
 /**
- * Citations' *Investigate*: one streamed, web-searching answer about one cited
+ * Bibliography's *Investigate*: one streamed, web-searching answer about one cited
  * work, kept. Built here out of the parts, as `lookUpTerm` is: the reader seam
  * decides ownership (a stranger's slug is a 404), the allowance bounds the
  * presses, the finds are both written (its first step, *Look it up* —

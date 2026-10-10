@@ -2,7 +2,7 @@
  * **The articles a cited work could be matched to: the reader's own, and public
  * ones — never anybody else's private article, not even its existence.**
  *
- * The read half of Citations' *In your library* / *On the public shelf* link,
+ * The read half of Bibliography's *In your library* / *On the public shelf* link,
  * SPIDERYARN-READING2-5R,
  * docs/plans/260930b-citations-say-when-a-cited-work-is-already-in-spideryarn.md.
  * The matching is src/cited-in-spideryarn.ts; this file only decides which

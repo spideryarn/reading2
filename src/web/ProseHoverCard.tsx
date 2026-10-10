@@ -226,7 +226,7 @@ function HoverCard({
    * mode can find the work it belongs to.
    *
    * Empty for a visitor, because Reader.tsx takes it only from the owner's
-   * read (`owner?.citations`). That is a choice in Reader, not a property of
+   * read (`owner?.bibliography`). That is a choice in Reader, not a property of
    * the data: a visitor's band has its own public projection since 260929c
    * (src/web/visitor.ts), so the owner-only *parts* of a row are gated here
    * by name too — see `showInSpideryarn` (docs/project/bibliography.md § Who
@@ -366,7 +366,7 @@ function HoverCard({
    */
   onAskTerm?: AskAboutTerm | null;
   /**
-   * ***Ask in chat* on a cited work's card** — the Citations rows' own sender.
+   * ***Ask in chat* on a cited work's card** — Bibliography rows' own sender.
    * Greg, 2026-10-03 (report `spya-c2qmbg`): *"What I was hoping is that it
    * would have a button for dig deeper in the tooltip."* Plan 261004b; it
    * became *Ask in chat* on 2026-10-09 (plan 261009k). `null` or absent for a
@@ -2058,7 +2058,7 @@ function clip(text: string, max: number): string {
  * ## The provenance is `sourceOf`, not a second opinion
  *
  * The band's own function, imported rather than reimplemented, and that is the
- * whole point. Citations mode has one safety property — **every address a row
+ * whole point. Bibliography has one safety property — **every address a row
  * presents as the work's own was in the article, and code found it** — and it is
  * kept by drawing a `search` row *as a search*: the title is not a link, and the
  * one link says so. A card that quietly drew the Scholar query as the work's
@@ -2074,7 +2074,7 @@ function clip(text: string, max: number): string {
  *   number with nothing to compare it against.
  * - **A kept *Dig deeper* answer.** The verdict's short version is here
  *   (`CiteCardReading`); the long reading stays on the row, which has the room.
- * - **A selected row in Citations mode.** There is no `?cite=`.
+ * - **A selected row in Bibliography.** There is no `?cite=`.
  *
  * ## And one thing that was not here until 2026-10-04: a button
  *

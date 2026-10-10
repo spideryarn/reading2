@@ -939,7 +939,7 @@ export async function exportArticle(
     await put("citation_finds", "citation-finds.json", { finds });
   }
 
-  /* Citations' *Investigate*, keyed by entry id for the finds' reason. Column
+  /* Bibliography's *Investigate*, keyed by entry id for the finds' reason. Column
      for column, fingerprint included, so the rollback keeps an answer the read
      path would no longer attach. */
   if (rows.citationInvestigations.length) {

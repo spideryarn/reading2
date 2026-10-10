@@ -1,7 +1,7 @@
 /**
  * **The same question as run.ts and answers.ts, for every other prompt that
  * writes words a reader reads**: arc, tweets, ideas, quotes' reasons,
- * citations' why, illustrated, quiz, FAQ, labels, sketch, timeline, quiz-mark,
+ * Bibliography's why, illustrated, quiz, FAQ, labels, sketch, timeline, quiz-mark,
  * search, Learn, chat's "?" help turn and the referee's claims.
  * docs/plans/260926a-plainer-summaries-and-glossary.md § Stage 3, "Measuring
  * it, per kind". Debate and live are not here; the plan says why.
@@ -61,7 +61,7 @@
  * | generator | key |
  * |---|---|
  * | quotes | the quote's own text (the article's words) |
- * | citations | the cited work's title, lower-cased |
+ * | bibliography | the cited work's title, lower-cased |
  * | labels | the block id |
  * | quiz-mark | the fixed case (`MARK_CASES`) |
  * | search | the fixed query and the block the hit is in |
@@ -93,7 +93,7 @@ const GENERATORS = [
   "tweets",
   "ideas",
   "quotes",
-  "citations",
+  "bibliography",
   "sketch",
   "illustrated",
   "quiz",
@@ -120,7 +120,7 @@ export const PROMPT_FILES: Record<Generator, string[]> = {
   tweets: ["tweets.ts"],
   ideas: ["ideas.ts"],
   quotes: ["quotes.ts"],
-  citations: ["citations.ts"],
+  bibliography: ["bibliography.ts"],
   sketch: ["sketch.ts"],
   illustrated: ["illustrated.ts"],
   quiz: ["quiz.ts"],
@@ -393,9 +393,9 @@ async function generate(arm: string, only: Set<Generator> | null): Promise<void>
         usageOf(run),
       );
     },
-    citations: async () => {
+    bibliography: async () => {
       const run = await generateBibliography({ power: "standard", article, previous: null, referenceList: null });
-      write("citations", run.bibliography.citations.map((c) => ({ key: norm(c.title), field: "why", text: c.why, context: c.title })), usageOf(run));
+      write("bibliography", run.bibliography.citations.map((c) => ({ key: norm(c.title), field: "why", text: c.why, context: c.title })), usageOf(run));
     },
     sketch: async () => {
       const run = await generateSketch({ power: "standard", article, profile: null });

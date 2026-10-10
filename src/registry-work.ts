@@ -1,5 +1,5 @@
 /**
- * **A registry's record as a Citations or Debate row keeps it, and the guards
+ * **A registry's record as a Bibliography or Debate row keeps it, and the guards
  * that read one back** — plan 261001a stages 5 and 6
  * (docs/plans/261001a-citations-read-the-cited-paper-and-a-shared-bibliographic-lookup.md).
  *
@@ -49,7 +49,7 @@ export function isCitedByCount(value: unknown): value is number {
 }
 
 /**
- * A citation count in words, for the Citations row and for chat's row alike.
+ * A citation count in words, for the Bibliography row and for chat's row alike.
  * **Zero is *no citations recorded*, not *cited 0 times***: Crossref counts
  * only citations from works whose publishers deposit their reference lists,
  * so zero is a statement about its records.
@@ -131,7 +131,7 @@ function readCitedBy(value: unknown): RegistryCitedBy | null {
 }
 
 /**
- * Citations' field read back: `found` through `readRegistryWork`, `conflict` with its source, else null.
+ * Bibliography's field read back: `found` through `readRegistryWork`, `conflict` with its source, else null.
  *
  * **A count is kept only beside a Crossref record.** The step writes no other
  * shape, but nothing revalidates a stored row, and every reader labels the

@@ -5047,7 +5047,7 @@ export const glossaryLookups = spideryarn.table(
 );
 
 /**
- * **A cited work's own page, found on the web** — Citations mode's *Find it*,
+ * **A cited work's own page, found on the web** — Bibliography's *Find it*,
  * docs/plans/260911g-citations-mode.md § Stage 3. `glossary_lookups`' shape
  * exactly: reader state, one row per `(article, entry)`, apart from the
  * artefact and attached to the entry at read time (src/store/pg.ts §
@@ -5164,7 +5164,7 @@ export const citationFinds = spideryarn.table(
 );
 
 /**
- * **One cited work, looked into on demand** — Citations mode's *Investigate*,
+ * **One cited work, looked into on demand** — Bibliography's *Investigate*,
  * docs/plans/260930a-citations-investigate-one-work-on-demand.md,
  * src/citation-investigate.ts. `citation_finds`' shape: reader state, one row
  * per `(article, entry)`, overwritten by a second press, attached to the entry

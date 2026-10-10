@@ -123,8 +123,8 @@ async function setWhy(id: string, why: string): Promise<void> {
     .select({ bibliography: articleRevisions.bibliography })
     .from(articleRevisions)
     .where(eq(articleRevisions.id, row.revision));
-  const citations = rev?.bibliography as Bibliography;
-  const next = { ...citations, citations: citations.citations.map((w) => (w.id === id ? { ...w, why } : w)) };
+  const bibliography = rev?.bibliography as Bibliography;
+  const next = { ...bibliography, citations: bibliography.citations.map((w) => (w.id === id ? { ...w, why } : w)) };
   await db.update(articleRevisions).set({ bibliography: next }).where(eq(articleRevisions.id, row.revision));
 }
 
@@ -148,7 +148,7 @@ function work(over: Partial<CitedWork> & Pick<CitedWork, "id">, at: BlockId): Ci
 beforeAll(async () => {
   article = await scratchArticleInPg(SLUG, { ownerId: TEST_OWNER });
   const first = article.blocks[0]?.id as BlockId;
-  const citations: Bibliography = {
+  const bibliography: Bibliography = {
     version: "citations/2",
     generator: "test",
     slug: SLUG,
@@ -167,7 +167,7 @@ beforeAll(async () => {
     .from(articles)
     .where(eq(articles.id, article.articleId));
   if (!row?.revision) throw new Error("the scratch article has no current revision");
-  await db.update(articleRevisions).set({ bibliography: citations }).where(eq(articleRevisions.id, row.revision));
+  await db.update(articleRevisions).set({ bibliography }).where(eq(articleRevisions.id, row.revision));
   /* A find stored against the row whose article gave a DOI — what a re-run
      that turned a searched row into a DOI row and inherited its id leaves.
      Through the real store, as every find is written. */

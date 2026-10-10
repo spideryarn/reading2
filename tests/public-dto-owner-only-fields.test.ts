@@ -308,7 +308,7 @@ function work(over: Omit<Partial<CitedWork>, "entry"> & { entry?: unknown }): Ci
 }
 
 function cited(works: CitedWork[], blocks: Block[] = BLOCKS) {
-  const citations: Bibliography = {
+  const bibliography: Bibliography = {
     version: "citations/4",
     generator: "g",
     slug: "piece",
@@ -318,7 +318,7 @@ function cited(works: CitedWork[], blocks: Block[] = BLOCKS) {
     generatedAt: "2026-09-30T10:00:00.000Z",
     elapsedMs: 1,
   };
-  return publicArticle({ ...NONE, blocks, bibliography: citations }).bibliography?.citations ?? [];
+  return publicArticle({ ...NONE, blocks, bibliography }).bibliography?.citations ?? [];
 }
 
 /**

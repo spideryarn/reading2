@@ -31,8 +31,8 @@ read. A visitor's lists come in their payload.
 The column keeps no copy of these lists: it reads them every time it opens, and while it is open
 it re-reads them when this tab's job engine announces a completion for them — the same feed each
 band listens to, through
-`useStepFinished` (`src/web/useStepJob.ts`), which is quiet and adds no polling. Citations comes
-through the Reader's shared read instead, which listens the same way, so an announced Citations
+`useStepFinished` (`src/web/useStepJob.ts`), which is quiet and adds no polling. Bibliography comes
+through the Reader's shared read instead, which listens the same way, so an announced Bibliography
 completion after the reader has left its band reaches the margin too (as do Glossary's and Quotes'
 reads, for the prose marks). Greg had asked for missing modes to be run when Marginalia opens, if a later
 one would otherwise be missed; it would not be, so it is not
@@ -50,7 +50,7 @@ one would otherwise be missed; it would not be, so it is not
   ([experimental-features.md](experimental-features.md#what-is-behind-it-today)).
 - **Each part's Socratic question**, beside the part's first real paragraph.
 - **An idea stamp** ("assumes", "introduces") where each idea first occurs.
-- **Other modes' items, shut by default**: FAQ questions, Timeline's dated events, Debate's claim rows, Citations and comments
+- **Other modes' items, shut by default**: FAQ questions, Timeline's dated events, Debate's claim rows, Bibliography works and comments
   (the owner's on a shared article; a bookmark with no words stays a mark in the gutter). Each block gets at most one line of each kind.
   One item shows its title; several show a count ("3 works"). Pressing the line opens the supporting
   quote and remaining-passage count for FAQ, the source quote and bearing for Debate, the byline and
@@ -75,7 +75,7 @@ one would otherwise be missed; it would not be, so it is not
   | FAQ | the question's earliest answering passage that is still there | the quoted words must still be in that block |
   | Timeline | the passage that dates the event: where its date was read from, or the earliest mention that holds the article's own phrase for when | only events the piece dates. A date with no year counts, and shows the article's words as the band does (*"On July 7"*). An untimed event or any other date we could not read stays in the band. A date we did read always carries its year, because the margin has no head to say it once ([261003f](../plans/261003f-marginalia-relation-words-and-timeline-events.md)) |
 | Debate (Sources › Claims) | the block of the claim a row answers | the claim's words must still be in that block. Whole-article rows have no block, so they stay in the band |
-  | Citations (Sources › Bibliography) | the earliest block that cites the work | **owner only**, and only from a fresh list, because the prose's citation marks are owner-only ([bibliography.md](bibliography.md)) |
+  | Bibliography | the earliest block that cites the work | **owner only**, and only from a fresh list, because the prose's citation marks are owner-only ([bibliography.md](bibliography.md)) |
   | Comments | the comment's block | a referee note (one with a `criterionId`) and a bare bookmark are left out |
   | Questions | the block the chat is anchored to | **owner only** (a visitor's payload has no chats); in the same line as that block's comments |
 

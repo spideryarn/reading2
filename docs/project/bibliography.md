@@ -639,8 +639,8 @@ Greg's words and the shared half). The code and the route keep the old name
 (`makeInvestigateCitation`, `POST /api/bibliography/:slug/:id/investigate`).
 
 **A dig outlives the band** (2026-10-04, plan 261004b). The press's state
-lives on the article's citations read, not in the band, so the prose card can start one from any
-mode; leaving Citations mid-answer no longer stops the reading. Its draft or result remains
+lives on the article's Bibliography read, not in the band, so the prose card can start one from any
+mode; leaving Bibliography mid-answer no longer stops the reading. Its draft or result remains
 available when the reader comes back; a replacement list clears the old press's failure and
 no-match note once the press has finished. Leaving the article still stops the reading; the
 server finishes and stores the answer either way.
@@ -938,7 +938,7 @@ behind, and the owner's *Look it up* results kept private (SPIDERYARN-READING2-5
 
 ## Deferred
 
-Selecting a work to mark every passage that cites it (`?cite=`), and with it an *In Citations* foot
+Selecting a work to mark every passage that cites it (`?cite=`), and with it an *In Bibliography* foot
 button on the hover card that starts nothing; marking every occurrence of a
 mention in its block rather than only an unambiguous one; joining the citation section to the *link*
 and *note* cards, so a work cited by a hyperlink or a footnote marker gets it too; *Find more* past
@@ -962,7 +962,7 @@ code keeps of it) ·
 [`annotate.ts`](../../src/web/annotate.ts) § `citeMarks` (the prose marks) ·
 [`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx) § `CiteCard` (the card).
 
-The tests are the `tests/citation*.test.ts(x)` and `tests/citations*.test.ts(x)` files, one per
+The tests are the `tests/citation*.test.ts(x)` and `tests/bibliography*.test.ts(x)` files, one per
 piece above (for instance [`bibliography.test.ts`](../../tests/bibliography.test.ts),
 [`citation-marks.test.ts`](../../tests/citation-marks.test.ts),
 [`bibliography-panel.test.tsx`](../../tests/bibliography-panel.test.tsx)). The probe behind the

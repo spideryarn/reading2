@@ -1,5 +1,5 @@
 /**
- * **Citations rows carry the registry's record** — plan 261001a stage 5
+ * **Bibliography rows carry the registry's record** — plan 261001a stage 5
  * (docs/plans/261001a-citations-read-the-cited-paper-and-a-shared-bibliographic-lookup.md).
  *
  * At the end of the `bibliography` step, every row whose link is a DOI or arXiv
@@ -209,9 +209,9 @@ export async function safeLookup(lookup: LookupWork, id: WorkId): Promise<Lookup
  * asked in list order, so the cap keeps the first eighty.
  */
 export async function attachCitationRegistry(
-  citations: Bibliography,
+  bibliography: Bibliography,
   deps: RegistryDeps,
-): Promise<{ citations: Bibliography; counts: RegistryCounts }> {
+): Promise<{ bibliography: Bibliography; counts: RegistryCounts }> {
   const counts: RegistryCounts = {
     identified: 0,
     asked: 0,
@@ -224,7 +224,7 @@ export async function attachCitationRegistry(
     overCap: 0,
     overBudget: 0,
   };
-  const ids = citations.citations.map((work) => rowWorkId(work));
+  const ids = bibliography.citations.map((work) => rowWorkId(work));
   const distinct: WorkId[] = [];
   for (const id of ids) {
     if (id === null) continue;
@@ -248,7 +248,7 @@ export async function attachCitationRegistry(
   }
   counts.asked = results.started;
 
-  const rows = citations.citations.map((work, i): CitedWork => {
+  const rows = bibliography.citations.map((work, i): CitedWork => {
     const { registry: _previous, ...rest } = work;
     const id = ids[i];
     if (id === null || id === undefined) return rest;
@@ -269,5 +269,5 @@ export async function attachCitationRegistry(
     if (registry.kind === "found" && registry.citedBy !== undefined) counts.counted++;
     return { ...rest, registry };
   });
-  return { citations: { ...citations, citations: rows }, counts };
+  return { bibliography: { ...bibliography, citations: rows }, counts };
 }

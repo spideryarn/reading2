@@ -27,8 +27,8 @@ A grep for `trajector` outside the historical folders should find only these, ea
 - **The input-hash namespace `"trajectory-input\n"`** in `skimInputHash`. Changing it changes every
   hash, so every stored route would read stale.
 - **The cost ledger.** `ai_calls` is append-only, so its historical rows keep `purpose` /
-  `step_name` `'trajectory'`; a legacy alias in [`src/cost-categories.ts`](../../src/cost-categories.ts)
-  counts them with `skim`.
+  `step_name` `'trajectory'`; [`currentLedgerName`](../../src/step-order.ts) counts them with `skim`
+  wherever the ledger is read.
 - **Step and prompt-version aliases**: `trajectory → skim` in `src/step-order.ts` and
   `src/feedback-payload.ts`, and `#mode-trajectory` in the help page's anchors
   ([`help-anchors.ts`](../../src/web/help/help-anchors.ts)). The prompt tag is `skim/N` since

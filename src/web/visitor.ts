@@ -318,7 +318,7 @@ const POLICY: Record<Mode, VisitorPolicy> = {
   referee: { kind: "owners-only" },
   /**
    * **Sources, since 2026-10-09: open when any one of its artefacts is
-   * stored** — Citations' list, Debate's Reception search or Claims' list
+   * stored** — Bibliography's list, Debate's Reception search or Claims' list
    * (`debate` is set by either of the last two, public-artefacts.ts §
    * `artefactsIn`). GPT Sol's F3 on plan 261009l: one key could not say it,
    * so the policy shape is `any-artefact`. A sub-mode whose own artefact is
@@ -345,7 +345,7 @@ const POLICY: Record<Mode, VisitorPolicy> = {
     noun: "a Bibliography, a Reception search or a Claims list",
   },
   /**
-   * **An artefact mode since 2026-09-29**, for Citations' reason above: it was
+   * **An artefact mode since 2026-09-29**, for Bibliography's reason above: it was
    * `owners-only` for the cost of *asking* for an FAQ, which a visitor never
    * pays. The visitor gets `VisitorFaqBand`, which mounts no `useFaq`; no
    * profile is in this stage. SPIDERYARN-READING2-56,

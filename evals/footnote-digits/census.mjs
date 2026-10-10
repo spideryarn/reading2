@@ -97,7 +97,7 @@ for (const a of snap.articles) {
     arch: a.archived_at ? "A" : "", method: a.extract_method ?? a.source ?? "?", ct: (a.raw_content_type ?? "").slice(0, 16),
     extV: ext ? `${ext.implementation_version ?? ""}/${ext.prompt_version ?? ""}` : "", extAt: ext?.finished_at?.slice(0, 10) ?? "",
     blocks: blocks.length, cand: n, linked, supOnly, bare, stray, noteRefs: noteRefsTotal, noteBlocks, refBlocks,
-    cites: a.has_citations ? "y" : "",
+    cites: a.has_bibliography ? "y" : "",
   });
 }
 writeFileSync(new URL("fd-candidates.json", dir), JSON.stringify(candidates));

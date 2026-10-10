@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 
-import { readArm } from "../evals/plain-words/artefacts.js";
+import { PROMPT_FILES, readArm } from "../evals/plain-words/artefacts.js";
 import { formerName, storedResult } from "../evals/stored-result.js";
 
 const RESULTS = path.resolve(import.meta.dirname, "..", "evals", "results");
@@ -31,6 +31,7 @@ describe("formerName", () => {
     expect(formerName("learning.json")).toBe(null);
     expect(formerName("quiz.json")).toBe(null);
     expect(formerName("re-learn.json")).toBe(null);
+    expect(formerName("bibliography.json")).toBe("citations.json");
   });
 });
 
@@ -38,6 +39,11 @@ describe("storedResult", () => {
   it("reads a run saved under the old name when the new one is absent", () => {
     const old = touch("remember-explore.old-run.json");
     expect(storedResult(path.join(dir, "learn-explore.old-run.json"))).toBe(old);
+  });
+
+  it("reads a Bibliography arm saved under its former Citations name", () => {
+    const old = touch("citations.json");
+    expect(storedResult(path.join(dir, "bibliography.json"))).toBe(old);
   });
 
   it("prefers the new name when both exist", () => {
@@ -67,11 +73,24 @@ describe("storedResult", () => {
 });
 
 describe("the plain-words arms saved before the rename", () => {
+  it("runs the active generator from Bibliography's current source file", () => {
+    expect(PROMPT_FILES).toHaveProperty("bibliography", ["bibliography.ts"]);
+    expect(PROMPT_FILES).not.toHaveProperty("citations");
+  });
+
   it("reads the Learn generator from the file that calls itself `remember`", () => {
     const old = path.join(RESULTS, "plain-words", "artefacts", "after", "remember.json");
     expect(existsSync(old), "the saved arm this test reads has gone").toBe(true);
     const { files, missing } = readArm("after");
     expect(missing).not.toContain("learn");
     expect(files.get("learn")?.items.length).toBeGreaterThan(0);
+  });
+
+  it("reads the Bibliography generator from the file that calls itself `citations`", () => {
+    const old = path.join(RESULTS, "plain-words", "artefacts", "after", "citations.json");
+    expect(existsSync(old), "the saved arm this test reads has gone").toBe(true);
+    const { files, missing } = readArm("after");
+    expect(missing).not.toContain("bibliography");
+    expect(files.get("bibliography")?.items.length).toBeGreaterThan(0);
   });
 });

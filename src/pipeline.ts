@@ -5590,7 +5590,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       const registryStarted = Date.now();
       const registered = await attachCitationRegistry(run.bibliography, citationRegistryDeps);
       const registryMs = Date.now() - registryStarted;
-      run.bibliography = registered.citations;
+      run.bibliography = registered.bibliography;
       const rows = run.bibliography.citations;
       const linkFrom = { doi: 0, arxiv: 0, article: 0, search: 0, web: 0 };
       for (const c of rows) linkFrom[c.linkFrom]++;

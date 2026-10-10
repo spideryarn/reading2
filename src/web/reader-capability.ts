@@ -69,7 +69,7 @@ export type ReaderCapability =
        * Here for the reason `quotes` is, one feature later: since 2026-09-16
        * the works the piece cites are marked in the prose in **every** mode
        * (SPIDERYARN-READING2-3M), so the list is a standing property of the
-       * article rather than something citations mode fetches for itself.
+       * article rather than something Bibliography fetches for itself.
        *
        * **And there is no visitor arm for it**, which is the difference from
        * `glossary` and `quotes`. Since 260929c a visitor's *band* reads a

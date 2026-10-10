@@ -807,7 +807,7 @@ Two shared shells have since been built on those pieces:
 - **Server: [`src/stream-run.ts`](../../src/stream-run.ts) § `runStream`** — one streamed call from
   the clocks to the verdict: the deadline, the stall clock, the `openRouterStream` loop, citations,
   usage and `classifyEnd`. What an ending *means* stays with the caller. `explainStream` and
-  Citations' *Dig deeper* ([`src/citation-investigate.ts`](../../src/citation-investigate.ts)) run on
+  Bibliography's *Dig deeper* ([`src/citation-investigate.ts`](../../src/citation-investigate.ts)) run on
   it.
 - **Client: [`src/web/lib/sse.ts`](../../src/web/lib/sse.ts) § `readAnswerStream`** — `begin`,
   `delta`s, then exactly one `done` or `error`, with a body that simply stops treated as a failure.
@@ -931,7 +931,7 @@ Both from Greg, 2026-08-26, on the same weak answer.
 > allowance) is untouched until Greg decides (the plan's D5).
 
 **Dig deeper** (*"Search the web"* until 2026-10-01) — *"maybe add the 'Web search' button to do a
-deeper web search"*. From 2026-10-01 it was the glossary's and Citations' action too, under one
+deeper web search"*. From 2026-10-01 it was the glossary's and Bibliography's action too, under one
 name, and does what that name promises: a web search forced by code, the reader's other articles
 searched beside it, and the answer written by the high-power model whatever the article's switch
 says. What a press does, why, and Greg's words are in

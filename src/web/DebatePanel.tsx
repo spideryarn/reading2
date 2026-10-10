@@ -2300,7 +2300,7 @@ function ClaimsList({
                 {group.rows.length}
               </span>
               {/* The shared mark (OriginChat.tsx), which Glossary's entries and
-                  Citations' rows draw too. Its press does not fold the claim. */}
+                  Bibliography's rows draw too. Its press does not fold the claim. */}
               {chats && chat && (
                 <OriginChatMark
                   chat={chat}

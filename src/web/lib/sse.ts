@@ -237,7 +237,7 @@ function parseFrame(frame: string): ServerEvent | null {
 /**
  * **A streamed, kept answer's terminal contract, in one function** — written
  * for the glossary's two streams (the box and *Check the web*, src/web/useGlossary.ts)
- * and moved here unchanged when Citations' *Investigate* needed the same one
+ * and moved here unchanged when Bibliography's *Investigate* needed the same one
  * (src/web/useBibliography.ts, plan 260930a stage 2). The quiz's mark
  * (src/web/useQuiz.ts § `mark`) had a hand-written copy, `readMark`, until
  * 2026-10-04; `readRun` in src/web/useMirror.ts still is one.
@@ -267,7 +267,7 @@ export async function readAnswerStream<T>(
     delta(text: string): void;
     done(data: unknown): T | undefined;
     /**
-     * Any other named frame before the end — Citations' *Investigate* sends
+     * Any other named frame before the end — Bibliography's *Investigate* sends
      * `stage` and `lookup` (plan 260930d). Ignored when absent, as before.
      */
     other?(name: string, data: unknown): void;

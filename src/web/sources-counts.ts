@@ -11,7 +11,7 @@
  *
  * What each number counts is unchanged from the two modes:
  *
- * - **Bibliography**: the works cited, every one — the number Citations' (i)
+ * - **Bibliography**: the works cited, every one — the number Bibliography's (i)
  *   gave ("12 works cited"), not the rows its threshold leaves.
  * - **Reception**: the rows about the piece, through the thread the reader
  *   picked (`?debatethread=`), as Debate's segment counted them.

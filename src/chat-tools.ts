@@ -1882,8 +1882,8 @@ const CITATION_ROW_GAP = "\n\n";
  * `why` is what makes "which of these are about thermodynamics?" answerable,
  * and it is Greg's *"based on their summary"* (3F).
  */
-export function citationRows(citations: Bibliography, query = ""): CitationListing {
-  const all = citations.citations;
+export function citationRows(bibliography: Bibliography, query = ""): CitationListing {
+  const all = bibliography.citations;
   const needle = fold(query.trim());
   const matching =
     needle === ""
@@ -1935,7 +1935,7 @@ function bibliographyResult(
         label,
         detail: "out of date",
         content:
-          "A citations list exists for this article, but it was made from an older version of the " +
+          "A Bibliography list exists for this article, but it was made from an older version of the " +
           "article and does not describe the one the reader has open, so none of it is shown. Do not " +
           "cite from it; answer from the article itself, which is in front of you.",
       },
@@ -1943,18 +1943,18 @@ function bibliographyResult(
     };
   }
 
-  const { bibliography: citations } = found;
-  const listing = citationRows(citations, q);
+  const { bibliography } = found;
+  const listing = citationRows(bibliography, q);
   const { rows, citationCounts, matched, total, cut } = listing;
   const outdated = found.outdated
-    ? "This list was made by an older version of the citations step. It still describes this article, but the app would write it differently today."
+    ? "This list was made by an older version of the Bibliography step. It still describes this article, but the app would write it differently today."
     : null;
   /* **What N means when the list is capped** (GPT Sol F5). The model that made
      the list said it left works out, so its length is a fact about the list and
      not about the article, and a model told "the article cites 80 works" will
      repeat it. Drawn only from `capped`, never inferred from the length — the
      panel's rule (docs/project/bibliography.md § The orders). */
-  const capped = citations.capped
+  const capped = bibliography.capped
     ? `The model that made it said the article cites more than it kept, so the list may leave works out: ${total} is the number in the stored list, not how many works the article cites.`
     : null;
 
@@ -1967,7 +1967,7 @@ function bibliographyResult(
         detail: "none",
         content: [
           outdated,
-          citations.capped
+          bibliography.capped
             ? nothing(
                 "work is stored in this article's citations list. The stored list contains zero rows; because it is capped, do not infer that the article cites no works",
               )

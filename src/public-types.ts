@@ -723,7 +723,7 @@ export interface PublicCitedWork {
 export type PublicCitationRegistry = Extract<CitationRegistry, { kind: "found" }>;
 
 /**
- * **The Citations list, as a visitor gets it** — since 2026-09-29, the third
+ * **The Bibliography list, as a visitor gets it** — since 2026-09-29, the third
  * mode plan 260929c moved off `owners-only` (SPIDERYARN-READING2-56).
  *
  * `capped` crosses for `PublicQuotes.discarded`'s reason: the panel prints it

@@ -26,7 +26,7 @@
  * identifier is not looked up.
  *
  * Attached after the model's answer, so the stamp and `PROMPT_VERSION` are
- * untouched; existing debates get it on a re-run. As in Citations, a one-minute
+ * untouched; existing debates get it on a re-run. As in Bibliography, a one-minute
  * budget stops new lookups from making the pipeline step unbounded.
  */
 import { parseWorkId, type LookupResult, type WorkId } from "./bibliographic.js";
@@ -44,7 +44,7 @@ import { titleNamesWork } from "./citation-lookup.js";
 import { registryWorkOf } from "./registry-work.js";
 import type { ClaimDebateRow, Debate, DirectDebateRow, RegistryWork } from "./types.js";
 
-/** The same registry Citations uses — one lookup, one cache. */
+/** The same registry Bibliography uses — one lookup, one cache. */
 export const debateRegistryDeps: RegistryDeps = citationRegistryDeps;
 
 /** Words a publisher puts between `/doi/` and the DOI. Anything else there and the path is not read. */

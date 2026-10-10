@@ -737,12 +737,12 @@ function bothBibliographyKeys(list: PublicBibliography): { bibliography: PublicB
 }
 
 function publicBibliographyList(
-  citations: Bibliography,
+  bibliography: Bibliography,
   blockText: ReadonlyMap<string, string>,
 ): PublicBibliography {
   return {
-    citations: citations.citations.map((work) => publicCitedWork(work, blockText)),
-    capped: citations.capped,
+    citations: bibliography.citations.map((work) => publicCitedWork(work, blockText)),
+    capped: bibliography.capped,
   };
 }
 

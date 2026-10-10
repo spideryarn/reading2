@@ -341,7 +341,7 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      end in this code, or it would read as authored. */
   "live-upstream": "retry",
   "jb-slot-held": "bug",
-  /* Citations' *Investigate* — src/citation-investigate.ts. */
+  /* Bibliography's *Investigate* — src/citation-investigate.ts. */
   "cite-quoted": "retry",
   "cite-no-extract": "retry",
   "cite-unfinished": "retry",
@@ -5334,7 +5334,7 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
   search: "The questions you have put to this piece, in your words, and the passages they found.",
   learn: "What you said you took from the piece, and the quizzes on it.",
   referee: "Your peer-review pass over the piece: your criteria, and what it found against them.",
-  /* Citations' row and Debate's until 2026-10-09, in the sub-modes' order.
+  /* Bibliography's row and Debate's until 2026-10-09, in the sub-modes' order.
      "The model found", because the bibliography is its reading — a work cited
      only by name in running text is on it only if the model noticed it — while
      the links are not the model's: each is one the article gave, or a search
@@ -6627,7 +6627,7 @@ export const NOTHING_TO_MANAGE: ReaderFacingFailure = {
 };
 
 /* ------------------------------------------------ citations: find it --
-   Citations mode's *Find it on the web*, one searched row at a time —
+   Bibliography's *Find it on the web*, one searched row at a time —
    src/citation-find.ts, docs/plans/260911g-citations-mode.md § Stage 3. A
    failed call uses the house failures above (`providerHttpFailure`,
    `tookTooLong`, `PROVIDER_UNREADABLE`); these two are the outcomes that are
@@ -6651,7 +6651,7 @@ export const CITATION_NO_MATCH =
 export const CITATION_LOOKUP_NO_MATCH =
   "No page the search found was clearly this work's own, so nothing was read from it. The article's own link is still there.";
 
-/* --------------------------------------------- Citations' *Investigate* --
+/* --------------------------------------------- Bibliography's *Investigate* --
    src/citation-investigate.ts, docs/plans/260930a-citations-investigate-one-work-on-demand.md.
    Every one of these reaches the reader as the whole of what they see in place
    of the answer: the client replaces the streamed text on an error. */
@@ -6740,7 +6740,7 @@ export const DIG_DEEPER_NO_SEARCH: ReaderFacingFailure = {
 };
 
 /**
- * Citations' *Dig deeper* (was *Investigate*) refused by its allowance
+ * Bibliography's *Dig deeper* (was *Investigate*) refused by its allowance
  * (`INVESTIGATE_RATE_POLICY`) — one sentence per reason. "On a cited work",
  * because this allowance is not the glossary's and comments' one
  * (`DIG_DEEPER_BUSY` above): a dig running there does not refuse this.

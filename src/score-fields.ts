@@ -6,7 +6,7 @@
  * and the FAQ asks for the same two, under the same names, since 2026-09-29
  * (docs/plans/260929g-faq-difficulty-centrality-and-a-threshold.md). One
  * validator and one counter, here, rather than a copy per stage: the Glossary's
- * lived in src/glossary.ts until then. Quotes and Citations score other axes and
+ * lived in src/glossary.ts until then. Quotes and Bibliography score other axes and
  * keep their own.
  *
  * ## Absent versus rejected

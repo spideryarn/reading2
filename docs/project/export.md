@@ -34,7 +34,7 @@ file-by-file list, and the thing to edit when the layout changes.
     content/          revision.json, stamped.html, extracted.html, blocks.json,
                       block-identities.json, assets.json
     augmentations/    tree, glossary, glossary-lookups, glossary-hidden, ideas, quotes, timeline,
-                      quiz, sketch, illustrated, arc, tweets, labels, citations, citation-finds,
+                      quiz, sketch, illustrated, arc, tweets, labels, bibliography, citation-finds,
                       citation-investigations, faq, relations, skim, crossrefs, simple-summary,
                       reading-time, comments, chat, searches, referee-claims, referee-criteria,
                       tags (your own, since 261003d), quiz-attempts (your answers and the

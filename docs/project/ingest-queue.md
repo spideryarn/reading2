@@ -340,7 +340,7 @@ reviews and the real-page eval. Four things are worth knowing:
   `upload_source_guesses` first, fenced by a token and capped at two attempts, so a second tab or a
   reload gets the stored answer rather than a second search; the paid call is bounded by its own
   allowance bucket, as *Find it*'s is.
-- **The search is Citations' and the page read is too** — `findWorkPage` in
+- **The search is Bibliography's and the page read is too** — `findWorkPage` in
   [`src/citation-find.ts`](../../src/citation-find.ts) and `readPaperText` in
   [`src/paper-text.ts`](../../src/paper-text.ts). The model only points at a search result.
 - **Code decides whether the page is this paper** —
@@ -757,7 +757,7 @@ no job. The add page stops on the choice: **Read the public copy (free)**, a lin
 own copy**, which posts again with `ownCopy: true` and is the ordinary paid add. The link's hover
 card and the MCP tool offer the same two. *Add a private copy to your shelf* on a public article has
 already chosen, so it marks the address (`src/web/own-copy-intent.ts`) and the add page sends
-`ownCopy` at once. Which public articles count is Citations' ownerless read, reused unchanged —
+`ownCopy` at once. Which public articles count is Bibliography's ownerless read, reused unchanged —
 [261009j](../plans/261009j-a-public-copy-offered-at-import.md).
 
 **The add box stopped being an `<input type="url">` for this.** The browser will not submit one

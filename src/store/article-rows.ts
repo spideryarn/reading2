@@ -197,14 +197,14 @@ export const ARTICLE_TABLE_COVERAGE = {
     rollback: { exported: true, into: "glossary-lookups.json" },
     bundle: { exported: true, into: "augmentations/glossary-lookups.json" },
   },
-  /* Citations mode's *Find it* — the pages found for searched works, reader
+  /* Bibliography's *Find it* — the pages found for searched works, reader
      state beside the `bibliography` artefact exactly as `glossary_lookups` sits
      beside the glossary. docs/plans/260911g-citations-mode.md § Stage 3. */
   citation_finds: {
     rollback: { exported: true, into: "citation-finds.json" },
     bundle: { exported: true, into: "augmentations/citation-finds.json" },
   },
-  /* Citations' *Investigate* — one kept answer per cited work, reader state
+  /* Bibliography's *Investigate* — one kept answer per cited work, reader state
      beside the `bibliography` artefact exactly as `citation_finds` is.
      docs/plans/260930a-citations-investigate-one-work-on-demand.md. */
   citation_investigations: {

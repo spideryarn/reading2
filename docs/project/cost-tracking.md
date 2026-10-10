@@ -119,7 +119,9 @@ The audit behind it is in
 answering only for an article the administrator owns — [admin.md](admin.md#one-articles-cost-and-only-your-own)
 says why) returns the article's rows grouped by scope, job and step, each with the category
 [`src/cost-categories.ts`](../../src/cost-categories.ts) gives it — the same words `npm run cost`
-uses. [`src/web/ArticleCost.tsx`](../../src/web/ArticleCost.tsx) draws it.
+uses. Because the ledger is append-only, renamed jobs and steps keep their old stored words;
+[`currentLedgerName`](../../src/step-order.ts) maps those words to their current name for the
+category, cube and article view. [`src/web/ArticleCost.tsx`](../../src/web/ArticleCost.tsx) draws it.
 
 - **It is keyed on the article's id**, with one fallback: a row written without an id because the
   lookup failed while this article existed is matched on the owner's slug, but only if it happened

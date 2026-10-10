@@ -1712,7 +1712,7 @@ export interface RefereeHiddenCheckStore {
  * reporting success. A row per term cannot do that.
  */
 /**
- * Where Citations mode's *Find it* keeps a page it found — one row per
+ * Where Bibliography's *Find it* keeps a page it found — one row per
  * `(article, entry id)`, the glossary lookups' shape and for their reason.
  * Only a kept find is saved; the read half is `loadBibliography`, which attaches
  * each row to its entry. src/citation-find.ts, src/store/pg-citation-finds.ts.
@@ -1728,7 +1728,7 @@ export interface CitationFindStore {
 }
 
 /**
- * **Where Citations' *Investigate* keeps an answer** — one row per `(article,
+ * **Where Bibliography's *Investigate* keeps an answer** — one row per `(article,
  * entry)`, overwritten by a second press. The read half is `loadBibliography`,
  * which attaches a row only while its fingerprint matches. Owner-scoped.
  * src/store/pg-citation-investigations.ts.
@@ -3109,7 +3109,7 @@ export type PreviewClaim =
  * things: `link-preview-fetch` bounds how much of somebody else's server a
  * reader's pointer may ask for, and `link-summary-fill` bounds how much money it
  * may spend. A reader who has hovered a hundred cold links has done nothing
- * wrong by the second measure. Citations' `citation-investigate` bounds its
+ * wrong by the second measure. Bibliography's `citation-investigate` bounds its
  * whole press, including the lookup (src/citation-investigate.ts), separately
  * from a reader summarising links.
  * `shelf-topics` is the model scoring a reader's candidate topics
@@ -3124,7 +3124,7 @@ export type RateBucket =
   | "link-summary-fill"
   | "shelf-topics"
   | "upload-source-guess"
-  /* Citations' *Investigate* — a streamed, web-searching answer over the whole
+  /* Bibliography's *Investigate* — a streamed, web-searching answer over the whole
      article, several times *Find it*'s cost a press, so its own allowance
      (src/citation-investigate.ts § `INVESTIGATE_RATE_POLICY`). */
   | "citation-investigate"

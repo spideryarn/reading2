@@ -292,10 +292,10 @@ A mode that shows nothing generated — Plain, Search — stops here.
 Nothing checks these. Each was asked of a particular mode and later implemented by the other named
 modes; each item points to the mode doc that holds its machinery.
 
-- **Generated Glossary, Quotes and Citations items are marked in the main text in every mode.**
+- **Generated Glossary, Quotes and Bibliography items are marked in the main text in every mode.**
   Asked first of
   the Glossary (Greg, 2026-08-26: *"Glossary entries should always be underlined in the verbatim
-  text column, even outside Glossary mode"*), then of Quotes, then of Citations:
+  text column, even outside Glossary mode"*), then of Quotes, then of what is now Bibliography:
 
   > And (just as we do with quotes and glossary), once generated, we should always visually
   > indicate Citations somehow in the main text (with tooltip/clickable, that pops up a panel for
@@ -323,7 +323,7 @@ modes; each item points to the mode doc that holds its machinery.
   [glossary.md § The threshold, and whose it is](glossary.md#the-threshold-and-whose-it-is) and
   [faq.md § A few big questions first](faq.md#a-few-big-questions-first-and-a-threshold).
 - **A mode whose items are anchored to blocks is a candidate for Marginalia**, shut by default.
-  Asked when FAQ, Citations, Debate and comments went there:
+  Asked when FAQ, Bibliography, Debate and comments went there:
 
   > And make a note in new-mode.md and/or docs for Annotation mode that we should keep an eye out
   > for where new mode-items might be useful to include/display in Annotations mode.
@@ -349,7 +349,7 @@ So `description` is the mode in one fragment — it is also what the command bar
 the name, which is why it stays short — and `how` is the half a press would not have told them. For
 the current modes that is almost always one of three things: **it reads something already built**
 (Structure), **its content is a model pass over the article, written once and
-stored** (Summary's plain-words levels, Glossary, Ideas, Quotes, Timeline, Debate, Citations, FAQ, Skim and Diagram's Sketch
+stored** (Summary's plain-words levels, Glossary, Ideas, Quotes, Timeline, Debate, Bibliography, FAQ, Skim and Diagram's Sketch
 or Illustrated picture — the artefact-backed surfaces a press on the reading view can start paying
 for, `MODE_TARGET` in [`activation.ts`](../../src/web/activation.ts)),
 or **it waits on the reader's own words** (Search, Chat, Referee, Learn). Plain is the remaining
@@ -574,7 +574,7 @@ or `articleWithIds` prefix, add it to `ArticleStage`, then give it a row in `STA
 `ARTICLE_RENDERER` ([`src/models.ts`](../../src/models.ts)); once it is in that union, the compiler
 asks for both. Same effort and renderer mean one group. Choose them for what the mode writes, never
 to join a group, and say in the row's comment which group that puts it in, or that it is alone. If its
-bytes cannot share — Citations' whole-document rendering and Illustrated's fenced rendering are the
+bytes cannot share — Bibliography's whole-document rendering and Illustrated's fenced rendering are the
 examples — leave it out of `ArticleStage` and say why there instead. Expect a group to save almost
 nothing: modes are separate jobs, and an ordinary stage marks its article only when another group
 member is in that same job. **If the mode makes several calls over one article itself**, it owns a
@@ -643,9 +643,11 @@ red by themselves. These do not all, and `debate` is the specimen each was check
 - [`src/db/schema.ts`](../../src/db/schema.ts) § `chat_threads_origin_mode`, `chat_threads_origin_debate`,
   `chat_threads_origin_lens_debate_only` — the mode as a chat's origin, with `ORIGIN_MODES` in
   [`src/types.ts`](../../src/types.ts). *The CHECK is loud at write time; the rows need an `UPDATE`.*
-- [`src/cost-categories.ts`](../../src/cost-categories.ts) § `JOB_DISPOSITION` (compiler) and
-  § `RENAMED` — `ai_calls.purpose` and `ai_calls.step_name` are append-only and are **not** rewritten,
-  so the old job/step name gets a row in `RENAMED`. *Silent if forgotten.*
+- [`src/cost-categories.ts`](../../src/cost-categories.ts) § `JOB_DISPOSITION` (compiler), and
+  [`src/step-order.ts`](../../src/step-order.ts) § `currentLedgerName` — `ai_calls.purpose` and
+  `ai_calls.step_name` are append-only and are **not** rewritten, so the old job/step name gets a
+  row in `RETIRED_STEPS` or `RETIRED_JOBS`. The one canonicalizer is shared by every ledger reader.
+  *Silent if forgotten.*
 - Same schema § `feedback` — the saved URL and diagnostics (`article.mode`, `job.step`)
   keep old names as evidence. Incoming stale-tab names are normalised in
   [`src/feedback-payload.ts`](../../src/feedback-payload.ts); stored reports are not rewritten.

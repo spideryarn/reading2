@@ -1,5 +1,5 @@
 /**
- * **Find one cited work's own page on the web** — Citations mode's *Find it*,
+ * **Find one cited work's own page on the web** — Bibliography's *Find it*,
  * which since plan 260930d is the first step of the one *Investigate / Dig
  * deeper* press (src/citation-investigate.ts) and has no route of its own:
  * `POST /api/bibliography/:slug/:id/find` was deleted on 2026-10-04.
@@ -51,7 +51,7 @@
  *
  * ## Look it up: the same call also reads the result's extract
  *
- * Citations' lookup (`runCitationLookup`) sends `LOOKUP_SYSTEM` rather than
+ * Bibliography's lookup (`runCitationLookup`) sends `LOOKUP_SYSTEM` rather than
  * `FIND_SYSTEM`: the same one search and the same URL answer, plus — when the
  * model names the work's page — its reading of **that result's search
  * extract** against what the article uses the work for. The URL rules above
@@ -166,7 +166,7 @@ export const FIND_SYSTEM = [
 
 /**
  * **The work to look for, as the caller knows it** — a cited work as an
- * article gives it (Citations' *Find it*), or an uploaded paper looking for
+ * article gives it (Bibliography's *Find it*), or an uploaded paper looking for
  * its own canonical page. Only the title is required; the rest narrows the
  * search.
  */
@@ -485,7 +485,7 @@ export interface FoundWorkPage {
  * **Search the web for one work and judge the answer — the shared core**, with
  * no route, no allowance and no store: each caller brings its own bound on
  * presses and decides what to keep. Its callers are outside this file — an
- * uploaded paper looking for its canonical page is one. Citations' own lookup,
+ * uploaded paper looking for its canonical page is one. Bibliography's own lookup,
  * `runCitationLookup` below, shares `sendAndRead` rather than calling this.
  *
  * The rules are `readFind`'s and are all code: the URL must be one the search

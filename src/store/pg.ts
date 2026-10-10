@@ -3427,13 +3427,13 @@ const rawPgArticleReader: ArticleReader = {
            rather than left to `default: true`, the arm that has caught
            `ideas`, `sketch` and `timeline` in turn. */
         case "bibliography": {
-          const citations = revision.bibliography as Bibliography | null;
-          if (!citations || !tree || blocks.length === 0) return false;
+          const bibliography = revision.bibliography as Bibliography | null;
+          if (!bibliography || !tree || blocks.length === 0) return false;
           return sameStamp(
             {
-              inputHash: citations.sourceHash,
-              promptVersion: citations.version,
-              model: citations.generator,
+              inputHash: bibliography.sourceHash,
+              promptVersion: bibliography.version,
+              model: bibliography.generator,
             },
             {
               inputHash: bibliographyFingerprint(blocks, tree, citedFingerprint),
@@ -4248,7 +4248,7 @@ const rawPgArticleReader: ArticleReader = {
   },
 
   /**
-   * The citations on their own — the Postgres half of `loadBibliography`.
+   * The Bibliography on its own — the Postgres half of `loadBibliography`.
    *
    * The cited head and the tree, like `loadIdeas`, because this stage sends
    * `articleWithIds`. **A 404 is the ordinary case** (the step is off
@@ -4259,8 +4259,8 @@ const rawPgArticleReader: ArticleReader = {
     requireSlug(slug);
     const found = await currentRevision(slug, "bibliography");
     if (!found) throw notFound(slug);
-    const citations = found.revision.bibliography as Bibliography | null;
-    if (!citations || !Array.isArray(citations.citations)) {
+    const bibliography = found.revision.bibliography as Bibliography | null;
+    if (!bibliography || !Array.isArray(bibliography.citations)) {
       throw new BibliographyListNotFound();
     }
     /* **Finds are attached HERE, at the read seam** — `loadGlossary`'s rule for
@@ -4291,7 +4291,7 @@ const rawPgArticleReader: ArticleReader = {
        In production Sonnet and Opus share a generation and these are the same
        hash; the second matters only while a Find-only override is active. */
     const standaloneFindModel = modelFor("citation-find", "standard");
-    const withLookups = attachLookups(citations, finds, (work) => {
+    const withLookups = attachLookups(bibliography, finds, (work) => {
       const context = lookupContext(work, (id) => text.get(id));
       return [
         lookupContextHash(context, standaloneFindModel),
@@ -4355,8 +4355,8 @@ const rawPgArticleReader: ArticleReader = {
          a find changes nothing about which article the list describes. */
       stale:
         !tree ||
-        bibliographyIsStale(citations, blocks, tree, citedMetaFingerprintOf(found.revision)),
-      outdated: citations.version !== BIBLIOGRAPHY_PROMPT_VERSION,
+        bibliographyIsStale(bibliography, blocks, tree, citedMetaFingerprintOf(found.revision)),
+      outdated: bibliography.version !== BIBLIOGRAPHY_PROMPT_VERSION,
     };
   },
 
