@@ -1,6 +1,6 @@
 You are the code reviewer for one stage in the Spideryarn repo (this working directory). Read CLAUDE.md, then the plan
-docs/plans/261010g-mcp-draft-gift-and-remote-tool-list-without-the-asking-tools.md (including its "Plan review" section,
-which says how your earlier plan-review findings were answered), then the diff: docs/plans/261010g-code-review.diff
+docs/plans/261010i-mcp-draft-gift-and-remote-tool-list-without-the-asking-tools.md (including its "Plan review" section,
+which says how your earlier plan-review findings were answered), then the diff: docs/plans/261010i-code-review.diff
 (it is `git diff HEAD`; the plan files themselves are new and untracked).
 
 What was built:

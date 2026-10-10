@@ -5,13 +5,15 @@
  * letters (`a` and `c` used, `b` free) and the roll past `z`. Both produce a
  * plausible-looking filename, so nothing downstream would object.
  */
-import { existsSync } from "node:fs";
+import { existsSync, mkdtempSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
 import {
   DIRS,
+  claimPlanFilename,
   datePrefix,
   letterAt,
   nextPlanFilename,
@@ -106,6 +108,34 @@ describe("datePrefix", () => {
     // reader would name, whatever the machine's offset.
     expect(datePrefix(new Date(2026, 7, 31))).toBe("260831");
     expect(datePrefix(new Date(2026, 0, 5))).toBe("260105");
+  });
+});
+
+describe("claimPlanFilename", () => {
+  const base = () => ({
+    dirKey: "plans",
+    existing: ["260831a-one.md"],
+    reservationFile: path.join(mkdtempSync(path.join(os.tmpdir(), "planname-")), "spideryarn-plan-names"),
+    date: "260831",
+  });
+
+  it("gives two callers who see the same files different letters", () => {
+    const b = base();
+    expect(claimPlanFilename({ ...b, description: "first", ext: ".md" })).toBe("260831b-first.md");
+    expect(claimPlanFilename({ ...b, description: "second", ext: ".md" })).toBe("260831c-second.md");
+  });
+
+  it("skips letters used on origin/dev", () => {
+    const b = base();
+    const got = claimPlanFilename({ ...b, others: ["docs/plans/260831b-x.md"], description: "y", ext: ".md" });
+    expect(got).toBe("260831c-y.md");
+  });
+
+  it("keeps reservations per directory", () => {
+    const b = base();
+    claimPlanFilename({ ...b, description: "p", ext: ".md" });
+    const got = claimPlanFilename({ ...b, dirKey: "research", existing: [], description: "r", ext: ".md" });
+    expect(got).toBe("260831a-r.md");
   });
 });
 

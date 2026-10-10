@@ -60,6 +60,7 @@ import {
   STEP_NAME as FEEDBACK_STEP,
 } from "./feedback-shipped-emails.js";
 import { LockHeldError, takeLockFile } from "./lockfile.js";
+import { releaseLockPath } from "./release-lock.js";
 import { forceRemoveThrowawayWorktree } from "./worktree-admin.js";
 import {
   assetUrlsIn,
@@ -82,7 +83,6 @@ import {
   migrationState,
   parseDeployArgs,
   postApplyProblems,
-  RELEASE_LOCK_FILE,
   servingUnrecorded,
   missingGateFixtures,
   readLogQuery,
@@ -101,6 +101,7 @@ import {
 import { storageBucketProblems } from "./storage-buckets.js";
 import { agreeingWithExit, rerunVerdict, testOutcomeFrom, TEST_OUTCOME_VERSION } from "../tools/fleet/test-outcome.js";
 import { TEST_OUTCOME_FILE_ENV } from "./vitest-outcome-reporter.js";
+import { deployTestWorkers } from "../vitest-admission.js";
 import {
   deployFullRun,
   firstCarryingNotes,
@@ -332,21 +333,6 @@ async function vercelApi<T>(pathAndQuery: string): Promise<T> {
 /* ------------------------------------------------------------------ */
 
 /**
- * The `.git` every worktree shares, as an absolute path.
- *
- * `git rev-parse --git-common-dir` answers relatively (`.git`) in the primary
- * checkout and absolutely in a worktree, so it is resolved against `ROOT` either
- * way rather than trusted to be one or the other.
- */
-function gitCommonDir(): string {
-  const out = execFileSync("git", ["rev-parse", "--git-common-dir"], {
-    cwd: ROOT,
-    encoding: "utf8",
-  }).trim();
-  return path.resolve(ROOT, out);
-}
-
-/**
  * **Two deploys at once is not hypothetical here.** Several agents work this
  * tree, and two overlapping runs would each capture a different sha, both find
  * the same pending migrations, and both try to apply them — drizzle takes no
@@ -364,7 +350,7 @@ function takeLock(): () => void {
      workaround: the lock exists to stop two deploys overlapping *anywhere*, and
      one lock per worktree would have let a worktree and the primary deploy at
      the same time — the exact race the comment above describes. */
-  const file = path.join(gitCommonDir(), RELEASE_LOCK_FILE);
+  const file = releaseLockPath(ROOT);
 
   /* **The claim is atomic** — see scripts/lockfile.ts. This used to be
      `if (!existsSync(file)) return claim()` followed by an `openSync(file, "w")`
@@ -1197,7 +1183,12 @@ function gatesAt(sha: string): void {
           "--reporter=./scripts/vitest-outcome-reporter.ts",
           ...files,
         ],
-        { cwd: wt, env: { [TEST_OUTCOME_FILE_ENV]: outcomePath } },
+        /* Half the machine rather than the box's crowded-machine 2, while every
+           other run on the box sees this deploy's lock and takes one worker
+           (vitest-admission.ts § deployTestWorkers; plan 261010j). Set here, as
+           an explicit override, because that is what exempts this run from the
+           yield it would otherwise make to its own lock. */
+        { cwd: wt, env: { [TEST_OUTCOME_FILE_ENV]: outcomePath, VITEST_MAX_WORKERS: String(deployTestWorkers()) } },
       );
     const readOutcome = () => (existsSync(outcomePath) ? readFileSync(outcomePath, "utf8") : null);
 

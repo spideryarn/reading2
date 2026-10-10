@@ -219,7 +219,7 @@ export function useAdminAuthorGifts(): UseAdminAuthorGifts {
   const send = useCallback(
     async (gift: AdminAuthorGift): Promise<SendAnswer> => {
       if (gift.email === null) return { kind: "refused", message: "That gift has no address yet. Add one, then send it." };
-      /* What the confirmation showed, so an edit since (an agent's) is refused, not sent (261010g). */
+      /* What the confirmation showed, so an edit since (an agent's) is refused, not sent (261010i). */
       const expected: AuthorGiftSendExpected = {
         email: gift.email,
         recipientName: gift.recipientName,

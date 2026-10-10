@@ -94,7 +94,7 @@ export interface AdminAuthorGift {
 /**
  * What `POST /api/admin/author-gifts` answers (R2-F2): `202` with
  * `created: true` and the first lookup's id for a new gift; `201` with
- * `lookupId: null` for a new gift made with `lookup: false` (261010g); `200`
+ * `lookupId: null` for a new gift made with `lookup: false` (261010i); `200`
  * with `created: false` for one that already existed, whose link, lookups and
  * fields it did not touch.
  */
@@ -119,7 +119,7 @@ export interface AuthorLookupStarted {
 
 /**
  * **What the *Send* confirmation showed** — the body of `POST
- * /api/admin/author-gifts/:id/send`, `{ expected }` (261010g, Sol's F1): the
+ * /api/admin/author-gifts/:id/send`, `{ expected }` (261010i, Sol's F1): the
  * voucher's fields exactly as the list gave them. *Send* goes ahead only while
  * the gift still holds these, so an edit landing after the page drew it (an
  * agent's, through MCP) is a `409`, not an email to an address nobody read.

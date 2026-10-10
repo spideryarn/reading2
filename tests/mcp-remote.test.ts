@@ -363,7 +363,7 @@ describe("the tools, through the SDK's client", () => {
     }
   });
 
-  /* Plan 261010g § D2: a tool that could only refuse here is not listed, so a
+  /* Plan 261010i § D2: a tool that could only refuse here is not listed, so a
      model does not plan around it; called anyway, it is unknown and writes nothing. */
   it("the asking tools are not listed, and calling one anyway writes nothing", async () => {
     const client = await connect("admin-app");
@@ -402,7 +402,7 @@ describe("the tools, through the SDK's client", () => {
     }
   });
 
-  /* Plan 261010g § D1: gifting from here is a draft Greg sends from /admin/vouchers. */
+  /* Plan 261010i § D1: gifting from here is a draft Greg sends from /admin/vouchers. */
   it("draft_author_gift saves a filled-in draft and sends nothing", async () => {
     const client = await connect("admin-app");
     try {

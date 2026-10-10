@@ -9910,7 +9910,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
               409,
               parsed.value.options.makeLink
                 ? "That article's private link was turned off while its gift was being drafted. Try again."
-                : /* An agent's draft never makes the link (261010g): the rights tick is the person's. */
+                : /* An agent's draft never makes the link (261010i): the rights tick is the person's. */
                   "That article is private and has no private link, and a draft made this way does not make one. " +
                     "Turn its private link on from the article's page (which asks you to confirm you may share it), then draft again.",
             );
@@ -9924,7 +9924,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
         send(res, 200, { id: answer.id, status: answer.status, created: false } satisfies AuthorGiftEnsured);
         return;
       }
-      /* A gift made already filled in, with no lookup asked for (261010g):
+      /* A gift made already filled in, with no lookup asked for (261010i):
          201, and nothing runs after the response. */
       if (answer.lookupId === null) {
         send(res, 201, { id: answer.id, status: "draft", created: true, lookupId: null } satisfies AuthorGiftEnsured);
@@ -9989,7 +9989,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     handler: async ({ request: { req, res } }, captures) => {
       const [, id = ""] = captures;
       if (!isUuid(id)) throw httpError(400, "id must be a uuid");
-      /* What the confirmation showed (261010g, Sol's F1); the page always sends it. */
+      /* What the confirmation showed (261010i, Sol's F1); the page always sends it. */
       const parsed = parseSendAuthorGift(await readBody(req));
       if (!parsed.ok) throw httpError(400, parsed.message);
       const answer = await pgAuthorGiftStore.sendAuthorGift(id, { expected: parsed.value.expected });

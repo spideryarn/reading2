@@ -205,14 +205,6 @@ export function deployBranchProblem(branch: string): string | null {
 }
 
 /**
- * The lock a deploy holds, in the shared git directory — and `release-notes.ts`
- * holds it too, for `prepare` and `promote`, so that notes are never planned
- * against a history that a deploy finishing underneath them is about to
- * promote onto (GPT Sol on 261001q, round 2, finding 4).
- */
-export const RELEASE_LOCK_FILE = "spideryarn-deploy.lock";
-
-/**
  * **Do this candidate's own release notes cover everything it ships?**
  * docs/plans/261001q, and docs/project/changelog.md § The pending release.
  *

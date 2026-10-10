@@ -667,18 +667,20 @@ pane before anything else, and do not send it again. **"Sent" means the keys wer
 pressed, not that the session read it**: this dashboard has no check after Enter that the text
 became a turn (mindstone's has; see below).
 
-Three refusals that are not bugs in `tell`, and are the dashboard's own:
+Two refusals that are not bugs in `tell`, and are the dashboard's own:
 
 - **A session started a moment ago is not in the list yet.** The dashboard refreshes about once a
   minute; `tell` says so and stops, rather than waiting.
-- **A session nobody has typed into yet is refused `input-not-empty`.** Its input box holds Claude
-  Code's grey hint (`Try "create a util…"`), and the route cannot tell that from somebody's draft.
-  One started with `new-claude -p` has had its first turn and takes messages. Seen 2026-10-10.
 - **A Claude started by name (`claude --resume Overseer`) is refused `no-claude-in-pane`.** The route
   trusts a pane only when its `claude` command line carries the conversation's uuid (`--session-id`
   or `--resume <uuid>`), and a name is not one. That was how the Overseer was running on 2026-10-09,
   so `tell-overseer` and the dashboard's own box were both refused until it is restarted by uuid —
   which is what [`resume-overseer`](#bringing-the-overseer-back-by-uuid) does.
+
+Until 2026-10-10 there was a third: a box holding only Claude Code's dim ghost suggestion (`carry
+on`) or its first-run hint (`Try "create a util…"`) was refused `input-not-empty`, because the route
+read the pane without attributes and took the dim text for a draft. It now reads them, and types
+over a ghost — [postmortem 261010b](../postmortems/261010b-ghost-suggestion-read-as-typed-input.md).
 
 ### Bringing the Overseer back, by uuid
 

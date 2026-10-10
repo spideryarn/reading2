@@ -114,7 +114,7 @@ this one, not your browser) and deletes the file. A running server notices on it
 | `update_gift_voucher` | admin: edit or revoke; **changing the address re-sends, and asks you first** |
 | `retry_gift_voucher_email` | admin: re-send a failed email; **asks you first** |
 | `list_author_gifts` | admin: the draft gifts for authors, with their notes and lookups (no private link key) — [admin.md § Author gifts](admin.md#author-gifts-a-draft-voucher-for-an-articles-author) |
-| `draft_author_gift` | admin: **saves an unsent gift** for one of your own articles, already filled in (address, name, note to them, size, notes), for you to review and press *Send* on `/admin/vouchers`. Sends nothing, so it does not ask, and works remotely. Never makes the private link: the article must already be public or have one. No web search unless `look_up_author: true`. One per article; an existing one is left alone ([261010g](../plans/261010g-mcp-draft-gift-and-remote-tool-list-without-the-asking-tools.md)) |
+| `draft_author_gift` | admin: **saves an unsent gift** for one of your own articles, already filled in (address, name, note to them, size, notes), for you to review and press *Send* on `/admin/vouchers`. Sends nothing, so it does not ask, and works remotely. Never makes the private link: the article must already be public or have one. No web search unless `look_up_author: true`. One per article; an existing one is left alone ([261010i](../plans/261010i-mcp-draft-gift-and-remote-tool-list-without-the-asking-tools.md)) |
 | `update_author_gift` | admin: edit a draft gift's notes, address, name, note to them or size; **replaces** the notes; sends nothing, so it does not ask. There is no tool that sends one |
 
 **"Asks you first" is a macOS dialog the MCP server itself opens**, naming the exact gift or
@@ -179,7 +179,7 @@ account ([261007p](../plans/261007p-mcp-remote-sign-in-with-oauth.md)).
   (`remoteTools()` in `tools.ts`). Left out rather than listed with "not available here", because
   models plan around whatever they are offered; a new asking tool is left out unless it declares a
   `remote` form. Gifting from there is `draft_author_gift`, then *Send* on the site
-  ([261010g](../plans/261010g-mcp-draft-gift-and-remote-tool-list-without-the-asking-tools.md)).
+  ([261010i](../plans/261010i-mcp-draft-gift-and-remote-tool-list-without-the-asking-tools.md)).
 - **What the token can do at Supabase** is more than the tools, and is written up in
   [security-map.md](security-map.md#and-since-2026-10-07-an-ai-apps-token-which-opens-one-route).
 

@@ -1,5 +1,5 @@
 You are reviewing a plan, read-only, in the Spideryarn repo (this working directory). Read CLAUDE.md, then the plan
-docs/plans/261010g-mcp-draft-gift-and-remote-tool-list-without-the-asking-tools.md, then the code it touches:
+docs/plans/261010i-mcp-draft-gift-and-remote-tool-list-without-the-asking-tools.md, then the code it touches:
 src/mcp/tools.ts, src/mcp/server.ts, src/mcp/remote.ts, src/store/pg-author-gifts.ts (ensureAuthorGift, parseEnsureAuthorGift,
 parseAuthorGiftPatch, sendAuthorGift), the author-gift routes in src/routes.ts (search ADMIN_AUTHOR_GIFTS_PATH),
 src/admin-author-gifts.ts, src/web/AdminAuthorGifts.tsx (the Send confirmation), src/web/AddPage.tsx and

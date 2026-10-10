@@ -55,7 +55,7 @@
  * Sending mail, publishing and handing over a private link need the owner's
  * approval, which is a dialog on their Mac; a server on Vercel cannot show
  * one. So the list served here is `remoteTools()`, which leaves those tools
- * out so a model does not plan around them (plan 261010g § D2), and the
+ * out so a model does not plan around them (plan 261010i § D2), and the
  * approver throws `CannotAsk` with the page to use, whatever the OS, should
  * one ever be reached (Sol F8: a remote request served during Mac development
  * must refuse too).
@@ -214,7 +214,7 @@ async function serveMcp(r: RemoteMcpRequest): Promise<void> {
     api: inProcessApi(who.claims, r.handleApi, lifetime.signal),
     ctx: { identity: async () => ({ userId: who.userId, email: who.email }) },
     approver: REMOTE_APPROVER,
-    /* Without the tools that could only refuse here (261010g § D2). */
+    /* Without the tools that could only refuse here (261010i § D2). */
     tools: remoteTools(),
   });
   const transport = new WebStandardStreamableHTTPServerTransport({
@@ -296,7 +296,7 @@ async function readBytes(req: IncomingMessage): Promise<Buffer> {
 
 /**
  * **No one can be asked from here.** The asking tools are not even listed
- * (`remoteTools`, 261010g § D2); this is the backstop, should one ever be
+ * (`remoteTools`, 261010i § D2); this is the backstop, should one ever be
  * reached: it refuses, naming the page that does the same job with the owner
  * present. Unconditional: never chosen by the host's OS.
  */

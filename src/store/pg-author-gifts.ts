@@ -114,7 +114,7 @@ const NOTES_STAMP_SEEN = sql`date_trunc('milliseconds', ${authorGifts.notesUpdat
 export type EnsureAnswer =
   /**
    * A new gift, its private link if it needed one, and its first lookup,
-   * pending — or no lookup at all when the caller asked for none (261010g).
+   * pending — or no lookup at all when the caller asked for none (261010i).
    */
   | { readonly kind: "created"; readonly id: string; readonly lookupId: string | null }
   /** The article already had one. Nothing was touched — not the link, not the lookups (R2-F2). */
@@ -127,13 +127,13 @@ export type EnsureAnswer =
   | { readonly kind: "refused"; readonly reason: StarterRefusal };
 
 /**
- * **What a new gift starts with** (plan 261010g § D1) — an agent drafting a
+ * **What a new gift starts with** (plan 261010i § D1) — an agent drafting a
  * gift it already knows the address for, through `draft_author_gift`. Applied
  * only by the insert that makes the gift: an existing gift is never changed
  * here. `lookup: false` makes no lookup row, so nothing is searched.
  * `makeLink: false` never makes the private link: the person did not tick
  * the rights box, so a private article without one is refused `link-off`
- * (Sol's F2 on 261010g — the share-link event records that tick).
+ * (Sol's F2 on 261010i — the share-link event records that tick).
  */
 export interface EnsureOptions {
   readonly makeLink: boolean;
@@ -256,7 +256,7 @@ async function giftOfArticle(articleId: string): Promise<{ id: string; status: A
 /**
  * **What `POST /api/admin/author-gifts` may carry**: `{ slug, rightsConfirmed:
  * true }`, and optionally `lookup` (default true) and `draft`, the fields a
- * new gift starts with (261010g). The tick is the private link's rights
+ * new gift starts with (261010i). The tick is the private link's rights
  * tick-box, which the share-link route asks for too; an unknown key is a 400,
  * so a misspelt field is not silently a default.
  */
@@ -267,7 +267,7 @@ export function parseEnsureAuthorGift(
   const unknown = Object.keys(body).filter((key) => !["slug", "rightsConfirmed", "makeLink", "lookup", "draft"].includes(key));
   if (unknown.length > 0) return { ok: false, message: `Unexpected field: ${unknown.join(", ")}.` };
   /* Exactly one of the two: the person's tick, which lets a link be made, or
-     `makeLink: false`, which never makes one (an agent's draft, 261010g F2). */
+     `makeLink: false`, which never makes one (an agent's draft, 261010i F2). */
   const noLink = "makeLink" in body;
   if (noLink && (body.makeLink !== false || "rightsConfirmed" in body)) {
     return { ok: false, message: "makeLink may only be false, and goes without rightsConfirmed." };
@@ -1008,7 +1008,7 @@ export interface SendDeps {
 export async function sendAuthorGift(id: string, deps: SendDeps = {}): Promise<SendAnswer> {
   const db = getDb();
   const { expected } = deps;
-  /* What the confirmation showed must still be the row (261010g, Sol's F1).
+  /* What the confirmation showed must still be the row (261010i, Sol's F1).
      Stored values, compared exactly: the page sends back what it was given. */
   const unchanged = expected
     ? sql`${authorGifts.email} is not distinct from ${expected.email}

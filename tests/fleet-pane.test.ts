@@ -2,7 +2,7 @@
  * What a blocked session is asking — tools/fleet/pane.ts.
  *
  * EVERY FIXTURE UNDER tests/fixtures/fleet-panes/ IS A REAL CAPTURE, taken with
- * `tmux capture-pane -p` on the box, with one declared exception
+ * `tmux capture-pane -p` (or `-p -e` for attributed fixtures) on the box, with one declared exception
  * (`dialog-loop-cloud-schedule.txt`, reproduced verbatim from the live capture
  * recorded in docs/plans/260907e-agent-fleet-dashboard.md on 2026-09-07 — the
  * modal did not reappear on this build, and inventing a plausible one would have
