@@ -46,6 +46,8 @@ export const DISPLAY_NAME: Record<string, string> = {
      High-powered AI switched on. */
   "claude-opus-5-5": "claude-opus-5-5",
   "anthropic/claude-opus-5.5": "claude-opus-5-5",
+  /* The general web-page authors pass (`FRONT_MATTER_AUTHORS_MODEL`). */
+  "anthropic/claude-haiku-5.5": "claude-haiku-5-5",
   "openai/gpt-5.6-luna": "gpt-5.6-luna",
   "voyageai/voyage-4": "voyage-4",
   /* `google/gemini-3.1-flash-lite` was here for dictation until 2026-09-07 and

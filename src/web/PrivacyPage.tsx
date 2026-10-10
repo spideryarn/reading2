@@ -526,6 +526,9 @@ export function PrivacyPage() {
           none of the text, and to judge how hard an article is to read so that its reading time can
           allow for it, for which it is shown passages from the article, about 3,000 words at
           most;{" "}
+          <code>claude-haiku-5-5</code> to read where each author of a web page you add works, when
+          the page names its authors but not their institutions, for which it is shown the authors’
+          names and the opening of the page, about 6,000 characters at most;{" "}
           <code>gemini-3-flash-preview</code> to find a figure in a PDF when the page alone
           cannot say which picture belongs to which caption, for which it is shown images of those
           pages; <code>gemini-3.1-flash-image</code> to paint the Illustrated diagram, for which it

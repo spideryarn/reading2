@@ -892,7 +892,7 @@ export function gateMax(entries: readonly GlossaryEntry[], gate: number): number
 /**
  * The gate that would put this term on screen, or null if nothing should move.
  *
- * **"Open glossary" on a prose hover card is a deliberate request to reveal a
+ * **"Open in Glossary" on a prose hover card is a deliberate request to reveal a
  * term**, and it writes `?term=`. Once the bar hides rather than groups, doing
  * only that on a below-bar term opens the band on nothing at all — the panel
  * has been asked to select a row it is not drawing. So `App.tsx` lowers the

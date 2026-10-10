@@ -94,8 +94,11 @@ let livePhase: "idle" | "live" = "idle";
 let liveThreadId: string | null = null;
 const stopLive = vi.fn<() => Promise<void>>(() => Promise.resolve());
 
-vi.mock("../src/web/live/useLiveConversation.js", () => ({
-  useLiveConversation: () => ({
+/* GPT-Live, the engine every reader gets since 2026-10-10 (plan 261010a). A
+   call faked on Realtime would now be hung up by `useLive` itself, because with
+   Experimental off Realtime is not on offer, and that is a second `stop`. */
+vi.mock("../src/web/live/gpt-live/useGptLive.js", () => ({
+  useGptLive: () => ({
     phase: livePhase,
     threadId: liveThreadId,
     stop: stopLive,

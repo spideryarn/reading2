@@ -440,7 +440,13 @@ is the panel's own `sourceOf`, so a `search` row is drawn here as a search exact
 two surfaces disagreeing about whether an address is the work's own would teach a reader something
 false. Not in the card, each deliberately: the score bars (the card says meaning, the band says
 numbers), a kept *Dig deeper* answer (the row has the room), and a selected row in the mode (it
-needs `?cite=`).
+needs `?cite=`). What it has instead, since 2026-10-10, is ***Open in Sources***, which opens
+Bibliography with the work's row brought into view (Reader's `openBibliographyWork`, a one-shot
+focus rather than a selection). Greg, report `spya-zux9w6`: *"Citation tooltips should include a
+link to take you to the citations mode, just like I think quotes do"* —
+[tooltips.md § Every card on a mode's mark has a way into its
+mode](tooltips.md#every-card-on-a-modes-mark-has-a-way-into-its-mode), plan
+[261010e](../plans/261010e-every-annotation-card-opens-its-mode.md).
 
 **From the card, back to every passage that cites the work**, since 2026-10-09. Greg, report
 `spya-tsd470`:

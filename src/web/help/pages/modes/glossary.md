@@ -31,8 +31,8 @@ someone else’s shared article you see the glossary already made, but cannot ad
 
 ![The Glossary panel: a box to look up a term, ways to order the list, a threshold slider, and entries for Cargo Cult Science, Esalen Institute and Uri Geller](../images/mode-glossary.png "The Glossary panel: every term in the order you choose, with a slider to hide the less important ones.")
 
-Clicking an underlined word does nothing: point at it for the card, and use the card’s **Open
-glossary** button for the full entry. On a touchscreen, tap once for the card and again for the
+Clicking an underlined word does nothing: point at it for the card, and use the card’s **Open in
+Glossary** button for the full entry. On a touchscreen, tap once for the card and again for the
 entry. Press <kbd>G</kbd> in a paragraph to jump to its terms.
 
 In an entry:

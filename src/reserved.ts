@@ -50,6 +50,12 @@
 
 /** Every attribute we write into a document we did not write. */
 export const RESERVED_ATTRS = {
+  /**
+   * src/front-matter-authors.ts — a short-lived mark on text the source page
+   * hid, written before DOM preparation can remove the evidence and removed
+   * before Readability sees the document.
+   */
+  hidden: "data-spya-hidden",
   /** src/notes.ts — on the one container every note is moved into. */
   notesContainer: "data-spya-notes",
   /** src/notes.ts — on a note's body. The value is its noteId. */

@@ -1,0 +1,537 @@
+
+## arxiv 1706.03762v7 (arxiv-html) — 26 records, 5901 chars
+  before:
+    Ashish Vaswani — Google Brain
+    Noam Shazeer — Google Brain
+    Niki Parmar — Google Research
+    Jakob Uszkoreit — Google Research
+    Llion Jones — Google Research
+    Aidan N. Gomez — University of Toronto
+    Łukasz Kaiser — Google Brain
+    Illia Polosukhin
+  haiku#1 ($0.0006, 4613 ms, 3030 in / 633 out):
+    Ashish Vaswani — Google Brain
+    Noam Shazeer — Google Brain
+    Niki Parmar — Google Research
+    Jakob Uszkoreit — Google Research
+    Llion Jones — Google Research
+    Aidan N. Gomez — University of Toronto
+    Łukasz Kaiser — Google Brain
+    Illia Polosukhin
+  haiku#2 ($0.0007, 5000 ms, 3030 in / 794 out):
+    Ashish Vaswani — Google Brain
+    Noam Shazeer — Google Brain
+    Niki Parmar — Google Research
+    Jakob Uszkoreit — Google Research
+    Llion Jones — Google Research
+    Aidan N. Gomez — University of Toronto
+    Łukasz Kaiser — Google Brain
+    Illia Polosukhin
+  haiku#3 ($0.0007, 4694 ms, 3030 in / 753 out):
+    Ashish Vaswani — Google Brain
+    Noam Shazeer — Google Brain
+    Niki Parmar — Google Research
+    Jakob Uszkoreit — Google Research
+    Llion Jones — Google Research
+    Aidan N. Gomez — University of Toronto
+    Łukasz Kaiser — Google Brain
+    Illia Polosukhin
+
+## arxiv 2605.20355v1 (arxiv-html) — 25 records, 5857 chars
+  before:
+    Megha Srivastava — Stanford University, Stanford, CA, USA
+    Jonathan Ouyang — University of California Los Angeles, Los Angeles, CA, USA
+    Eric Zhou — University of California Los Angeles, Los Angeles, CA, USA
+    Andrew Silva — Toyota Research Institute, Los Altos, CA, USA
+    Emily Sumner — Toyota Research Institute, Los Altos, CA, USA
+    Dorsa Sadigh — Stanford University, Stanford, CA, USA
+    Yuchen Cui — University of California Los Angeles, Los Angeles, CA, USA
+    Deepak Gopinath — Toyota Research Institute, Los Altos, CA, USA
+    Guy Rosman — Toyota Research Institute, Los Altos, CA, USA
+  haiku#1 ($0.0006, 3203 ms, 3052 in / 688 out):
+    Megha Srivastava — Stanford University, Stanford, CA, USA
+    Jonathan Ouyang — University of California Los Angeles, Los Angeles, CA, USA
+    Eric Zhou — University of California Los Angeles, Los Angeles, CA, USA
+    Andrew Silva — Toyota Research Institute, Los Altos, CA, USA
+    Emily Sumner — Toyota Research Institute, Los Altos, CA, USA
+    Dorsa Sadigh — Stanford University, Stanford, CA, USA
+    Yuchen Cui — University of California Los Angeles, Los Angeles, CA, USA
+    Deepak Gopinath — Toyota Research Institute, Los Altos, CA, USA
+    Guy Rosman — Toyota Research Institute, Los Altos, CA, USA
+  haiku#2 ($0.0006, 3162 ms, 3052 in / 674 out):
+    Megha Srivastava — Stanford University, Stanford, CA, USA
+    Jonathan Ouyang — University of California Los Angeles, Los Angeles, CA, USA
+    Eric Zhou — University of California Los Angeles, Los Angeles, CA, USA
+    Andrew Silva — Toyota Research Institute, Los Altos, CA, USA
+    Emily Sumner — Toyota Research Institute, Los Altos, CA, USA
+    Dorsa Sadigh — Stanford University, Stanford, CA, USA
+    Yuchen Cui — University of California Los Angeles, Los Angeles, CA, USA
+    Deepak Gopinath — Toyota Research Institute, Los Altos, CA, USA
+    Guy Rosman — Toyota Research Institute, Los Altos, CA, USA
+  haiku#3 ($0.0006, 3350 ms, 3052 in / 683 out):
+    Megha Srivastava — Stanford University, Stanford, CA, USA
+    Jonathan Ouyang — University of California Los Angeles, Los Angeles, CA, USA
+    Eric Zhou — University of California Los Angeles, Los Angeles, CA, USA
+    Andrew Silva — Toyota Research Institute, Los Altos, CA, USA
+    Emily Sumner — Toyota Research Institute, Los Altos, CA, USA
+    Dorsa Sadigh — Stanford University, Stanford, CA, USA
+    Yuchen Cui — University of California Los Angeles, Los Angeles, CA, USA
+    Deepak Gopinath — Toyota Research Institute, Los Altos, CA, USA
+    Guy Rosman — Toyota Research Institute, Los Altos, CA, USA
+
+## arxiv 2608.13566 (arxiv-html) — 24 records, 5897 chars
+  before:
+    Egor Shibaev — Code Modelling Research, JetBrains Research, Munich, Germany | Constructor University, Bremen, Germany
+    Vera Kudrevskaia — Code Modelling Research, JetBrains Research, Munich, Germany | Constructor University, Bremen, Germany
+    Timur Galimzyanov — Code Modelling Research, JetBrains Research, Munich, Germany
+    Mikhail Evtikhiev — Code Modelling Research, JetBrains Research, Paphos, Cyprus
+    Ana Terna — Code Modelling Research, JetBrains Research, Amsterdam, The Netherlands
+    Rastislav Rabatin — Code Modelling Research, JetBrains Research, London, United Kingdom
+    Timur Kudashev — Code Modelling Research, JetBrains Research, Munich, Germany | Constructor University, Bremen, Germany
+    Timofey Bryksin — Code Modelling Research, JetBrains Research, Paphos, Cyprus
+    Arina Puchkova — Code Modelling Research, JetBrains Research, Munich, Germany
+    Patrik Bartak — Code Modelling Research, JetBrains Research, Amsterdam, The Netherlands
+    Egor Bogomolov — Code Modelling Research, JetBrains Research, Amsterdam, The Netherlands
+    Sergey Titov — Code Modelling Research, JetBrains Research, Amsterdam, The Netherlands
+  haiku#1 ($0.0007, 3212 ms, 3202 in / 660 out):
+    Egor Shibaev — Code Modelling Research, JetBrains Research, Munich, Germany | Constructor University, Bremen, Germany
+    Vera Kudrevskaia — Code Modelling Research, JetBrains Research, Munich, Germany | Constructor University, Bremen, Germany
+    Timur Galimzyanov — Code Modelling Research, JetBrains Research, Munich, Germany
+    Mikhail Evtikhiev — Code Modelling Research, JetBrains Research, Paphos, Cyprus
+    Ana Terna — Code Modelling Research, JetBrains Research, Amsterdam, The Netherlands
+    Rastislav Rabatin — Code Modelling Research, JetBrains Research, London, United Kingdom
+    Timur Kudashev — Code Modelling Research, JetBrains Research, Munich, Germany | Constructor University, Bremen, Germany
+    Timofey Bryksin — Code Modelling Research, JetBrains Research, Paphos, Cyprus
+    Arina Puchkova — Code Modelling Research, JetBrains Research, Munich, Germany
+    Patrik Bartak — Code Modelling Research, JetBrains Research, Amsterdam, The Netherlands
+    Egor Bogomolov — Code Modelling Research, JetBrains Research, Amsterdam, The Netherlands
+    Sergey Titov — Code Modelling Research, JetBrains Research, Amsterdam, The Netherlands
+  haiku#2 ($0.0007, 3233 ms, 3202 in / 660 out):
+    Egor Shibaev — Code Modelling Research, JetBrains Research, Munich, Germany | Constructor University, Bremen, Germany
+    Vera Kudrevskaia — Code Modelling Research, JetBrains Research, Munich, Germany | Constructor University, Bremen, Germany
+    Timur Galimzyanov — Code Modelling Research, JetBrains Research, Munich, Germany
+    Mikhail Evtikhiev — Code Modelling Research, JetBrains Research, Paphos, Cyprus
+    Ana Terna — Code Modelling Research, JetBrains Research, Amsterdam, The Netherlands
+    Rastislav Rabatin — Code Modelling Research, JetBrains Research, London, United Kingdom
+    Timur Kudashev — Code Modelling Research, JetBrains Research, Munich, Germany | Constructor University, Bremen, Germany
+    Timofey Bryksin — Code Modelling Research, JetBrains Research, Paphos, Cyprus
+    Arina Puchkova — Code Modelling Research, JetBrains Research, Munich, Germany
+    Patrik Bartak — Code Modelling Research, JetBrains Research, Amsterdam, The Netherlands
+    Egor Bogomolov — Code Modelling Research, JetBrains Research, Amsterdam, The Netherlands
+    Sergey Titov — Code Modelling Research, JetBrains Research, Amsterdam, The Netherlands
+  haiku#3 ($0.0007, 3133 ms, 3202 in / 660 out):
+    Egor Shibaev — Code Modelling Research, JetBrains Research, Munich, Germany | Constructor University, Bremen, Germany
+    Vera Kudrevskaia — Code Modelling Research, JetBrains Research, Munich, Germany | Constructor University, Bremen, Germany
+    Timur Galimzyanov — Code Modelling Research, JetBrains Research, Munich, Germany
+    Mikhail Evtikhiev — Code Modelling Research, JetBrains Research, Paphos, Cyprus
+    Ana Terna — Code Modelling Research, JetBrains Research, Amsterdam, The Netherlands
+    Rastislav Rabatin — Code Modelling Research, JetBrains Research, London, United Kingdom
+    Timur Kudashev — Code Modelling Research, JetBrains Research, Munich, Germany | Constructor University, Bremen, Germany
+    Timofey Bryksin — Code Modelling Research, JetBrains Research, Paphos, Cyprus
+    Arina Puchkova — Code Modelling Research, JetBrains Research, Munich, Germany
+    Patrik Bartak — Code Modelling Research, JetBrains Research, Amsterdam, The Netherlands
+    Egor Bogomolov — Code Modelling Research, JetBrains Research, Amsterdam, The Netherlands
+    Sergey Titov — Code Modelling Research, JetBrains Research, Amsterdam, The Netherlands
+
+## arxiv 2610.01658v1 (arxiv-html) — 40 records, 4938 chars
+  before:
+    Kais Hamza — School of Mathematics, Monash University, VIC 3800, Australia
+    Laurent Tournier — Université Sorbonne Paris Nord, LAGA, CNRS, UMR 7539, F-93430, Villetaneuse, France
+  haiku#1 ($0.0005, 2580 ms, 3895 in / 284 out):
+    Kais Hamza — School of Mathematics, Monash University, VIC 3800, Australia
+    Laurent Tournier — Université Sorbonne Paris Nord, LAGA, CNRS, UMR 7539, F-93430, Villetaneuse, France
+  haiku#2 ($0.0005, 1318 ms, 3895 in / 124 out):
+    Kais Hamza — School of Mathematics, Monash University, VIC 3800, Australia
+    Laurent Tournier — Université Sorbonne Paris Nord, LAGA, CNRS, UMR 7539, F-93430, Villetaneuse, France
+  haiku#3 ($0.0005, 1945 ms, 3895 in / 299 out):
+    Kais Hamza — School of Mathematics, Monash University, VIC 3800, Australia
+    Laurent Tournier — Université Sorbonne Paris Nord, LAGA, CNRS, UMR 7539, F-93430, Villetaneuse, France
+
+## arxiv 2610.01988v1 (arxiv-html) — 17 records, 5752 chars
+  before:
+    Adamu Issifu — CFisUC, Department of Physics, University of Coimbra, 3004-516 Coimbra, Portugal | Departamento de Física, Instituto Tecnológico de Aeronáutica, DCTA, 12228-900, São José dos Campos, SP, Brazil | Laboratório de Computação Científica Avançada e Modelamento (Lab-CCAM), Brazil
+    Orlando Oliveira — CFisUC, Department of Physics, University of Coimbra, 3004-516 Coimbra, Portugal
+    Tobias Frederico — Departamento de Física, Instituto Tecnológico de Aeronáutica, DCTA, 12228-900, São José dos Campos, SP, Brazil | Laboratório de Computação Científica Avançada e Modelamento (Lab-CCAM), Brazil
+  haiku#1 ($0.0008, 4449 ms, 3129 in / 966 out):
+    Adamu Issifu — CFisUC, Department of Physics, University of Coimbra, 3004-516 Coimbra, Portugal | Departamento de Física, Instituto Tecnológico de Aeronáutica, DCTA, 12228-900, São José dos Campos, SP, Brazil | Laboratório de Computação Científica Avançada e Modelamento (Lab-CCAM), Brazil
+    Orlando Oliveira — CFisUC, Department of Physics, University of Coimbra, 3004-516 Coimbra, Portugal
+    Tobias Frederico — Departamento de Física, Instituto Tecnológico de Aeronáutica, DCTA, 12228-900, São José dos Campos, SP, Brazil | Laboratório de Computação Científica Avançada e Modelamento (Lab-CCAM), Brazil
+  haiku#2 ($0.0009, 5034 ms, 3129 in / 1143 out):
+    Adamu Issifu — CFisUC, Department of Physics, University of Coimbra, 3004-516 Coimbra, Portugal | Departamento de Física, Instituto Tecnológico de Aeronáutica, DCTA, 12228-900, São José dos Campos, SP, Brazil | Laboratório de Computação Científica Avançada e Modelamento (Lab-CCAM), Brazil
+    Orlando Oliveira — CFisUC, Department of Physics, University of Coimbra, 3004-516 Coimbra, Portugal
+    Tobias Frederico — Departamento de Física, Instituto Tecnológico de Aeronáutica, DCTA, 12228-900, São José dos Campos, SP, Brazil | Laboratório de Computação Científica Avançada e Modelamento (Lab-CCAM), Brazil
+  haiku#3 ($0.0007, 4039 ms, 3129 in / 851 out):
+    Adamu Issifu — CFisUC, Department of Physics, University of Coimbra, 3004-516 Coimbra, Portugal | Departamento de Física, Instituto Tecnológico de Aeronáutica, DCTA, 12228-900, São José dos Campos, SP, Brazil | Laboratório de Computação Científica Avançada e Modelamento (Lab-CCAM), Brazil
+    Orlando Oliveira — CFisUC, Department of Physics, University of Coimbra, 3004-516 Coimbra, Portugal
+    Tobias Frederico — Departamento de Física, Instituto Tecnológico de Aeronáutica, DCTA, 12228-900, São José dos Campos, SP, Brazil | Laboratório de Computação Científica Avançada e Modelamento (Lab-CCAM), Brazil
+
+## arxiv 2610.03261v1 (arxiv-html) — 23 records, 5831 chars
+  before:
+    Elena Morotti — Department of Computer Science and Engineerin University of Bologna Bologna, 40126, Italy
+    Davide Evangelista — Department of Computer Science and Engineering University of Bologna Bologna, 40126, Italy
+    Elena Loli Piccolomini — Department of Computer Science and Engineering University of Bologna Bologna, 40126, Italy
+  haiku#1 ($0.0004, 2095 ms, 3330 in / 175 out):
+    refused: an affiliation could not be shown to be that author's
+  haiku#2 ($0.0004, 1355 ms, 3330 in / 176 out):
+    Elena Morotti — Department of Computer Science and Engineerin University of Bologna Bologna, 40126, Italy
+    Davide Evangelista — Department of Computer Science and Engineering University of Bologna Bologna, 40126, Italy
+    Elena Loli Piccolomini — Department of Computer Science and Engineering University of Bologna Bologna, 40126, Italy
+  haiku#3 ($0.0004, 2078 ms, 3330 in / 176 out):
+    Elena Morotti — Department of Computer Science and Engineerin University of Bologna Bologna, 40126, Italy
+    Davide Evangelista — Department of Computer Science and Engineering University of Bologna Bologna, 40126, Italy
+    Elena Loli Piccolomini — Department of Computer Science and Engineering University of Bologna Bologna, 40126, Italy
+
+## arxiv 2610.08392 (arxiv-html) — 18 records, 5391 chars
+  before:
+    Ilya Auslender — Department of Physics, University of Trento, Italy
+    Yasaman Heydari — Department of Physics, University of Trento, Italy
+    Asiye Malkoç — Department of Cellular, Computational and Integrative Biology, University of Trento, Italy
+    Clara Zaccaria — Department of Physics, University of Trento, Italy
+    Yuri Bozzi — Center for Mind/ Brain Sciences, University of Trento, Italy
+    Lorenzo Pavesi — Department of Physics, University of Trento, Italy
+  haiku#1 ($0.0006, 3273 ms, 2803 in / 605 out):
+    Ilya Auslender — Department of Physics, University of Trento, Italy
+    Yasaman Heydari — Department of Physics, University of Trento, Italy
+    Asiye Malkoç — Department of Cellular, Computational and Integrative Biology, University of Trento, Italy
+    Clara Zaccaria — Department of Physics, University of Trento, Italy
+    Yuri Bozzi — Center for Mind/ Brain Sciences, University of Trento, Italy
+    Lorenzo Pavesi — Department of Physics, University of Trento, Italy
+  haiku#2 ($0.0006, 2946 ms, 2803 in / 576 out):
+    Ilya Auslender — Department of Physics, University of Trento, Italy
+    Yasaman Heydari — Department of Physics, University of Trento, Italy
+    Asiye Malkoç — Department of Cellular, Computational and Integrative Biology, University of Trento, Italy
+    Clara Zaccaria — Department of Physics, University of Trento, Italy
+    Yuri Bozzi — Center for Mind/ Brain Sciences, University of Trento, Italy
+    Lorenzo Pavesi — Department of Physics, University of Trento, Italy
+  haiku#3 ($0.0006, 3368 ms, 2803 in / 560 out):
+    Ilya Auslender — Department of Physics, University of Trento, Italy
+    Yasaman Heydari — Department of Physics, University of Trento, Italy
+    Asiye Malkoç — Department of Cellular, Computational and Integrative Biology, University of Trento, Italy
+    Clara Zaccaria — Department of Physics, University of Trento, Italy
+    Yuri Bozzi — Center for Mind/ Brain Sciences, University of Trento, Italy
+    Lorenzo Pavesi — Department of Physics, University of Trento, Italy
+
+## arxiv 2610.08750 (arxiv-html) — 19 records, 5296 chars
+  before:
+    Jose Eduardo Escrig Molina
+    Daniel Probst
+  haiku#1 ($0.0005, 4091 ms, 2832 in / 524 out):
+    Jose Eduardo Escrig Molina — Bioinformatics Group | Bioprocess Engineering Group | Wageningen Unversity Wageningen, the Netherlands
+    Daniel Probst — Bioinformatics Group | Wageningen Unversity Wageningen, the Netherlands
+  haiku#2 ($0.0006, 3753 ms, 2832 in / 585 out):
+    Jose Eduardo Escrig Molina — Bioinformatics Group | Bioprocess Engineering Group | Wageningen Unversity | Wageningen, the Netherlands
+    Daniel Probst — Bioinformatics Group | Wageningen Unversity | Wageningen, the Netherlands
+  haiku#3 ($0.0005, 3377 ms, 2832 in / 463 out):
+    Jose Eduardo Escrig Molina — Bioinformatics Group | Bioprocess Engineering Group | Wageningen Unversity Wageningen, the Netherlands
+    Daniel Probst — Bioinformatics Group | Wageningen Unversity Wageningen, the Netherlands
+
+## arxiv 2610.08781 (arxiv-html) — 0 records, 0 chars
+  before:
+    (none)
+  not handed over: the page declares no authors
+
+## arxiv 2610.08785 (arxiv-html) — 22 records, 5596 chars
+  before:
+    Kevin Zhang — EECS, MIT, Cambridge MA, USA
+    Stephen Bates
+  haiku#1 ($0.0004, 1851 ms, 3190 in / 91 out):
+    Kevin Zhang — EECS, MIT, Cambridge MA, USA
+    Stephen Bates — EECS, MIT, Cambridge MA, USA
+  haiku#2 ($0.0004, 1177 ms, 3190 in / 91 out):
+    Kevin Zhang — EECS, MIT, Cambridge MA, USA
+    Stephen Bates — EECS, MIT, Cambridge MA, USA
+  haiku#3 ($0.0004, 1622 ms, 3190 in / 222 out):
+    Kevin Zhang — EECS, MIT, Cambridge MA, USA
+    Stephen Bates — EECS, MIT, Cambridge MA, USA
+
+## arxiv 2610.08790 (arxiv-html) — 20 records, 5953 chars
+  before:
+    Jiraphon Yenphraphai
+    Fang Li
+    Tianshuo Xu
+    Depu Meng
+    Quentin Herau
+    Yihan Hu
+    Raymond A. Yeh
+    Wei Zhan
+  haiku#1 ($0.0004, 2048 ms, 3113 in / 220 out):
+    refused: no affiliation is printed for the declared names
+  haiku#2 ($0.0004, 1951 ms, 3113 in / 186 out):
+    refused: no affiliation is printed for the declared names
+  haiku#3 ($0.0004, 1589 ms, 3113 in / 225 out):
+    refused: no affiliation is printed for the declared names
+
+## arxiv 2610.10761 (arxiv-html) — 36 records, 5960 chars
+  before:
+    Mary Letey — Applied Mathematics, Harvard University | Kempner Institute, Harvard University
+    Arman Rysmakhanov — Williams College | Applied Mathematics, Harvard University
+    Yue M. Lu — Applied Mathematics, Harvard University
+    Cengiz Pehlevan — Applied Mathematics, Harvard University | Kempner Institute, Harvard University
+    Jacob A. Zavatone-Veth — Center for Brain Science, Harvard University | Society of Fellows, Harvard University
+  haiku#1 ($0.0007, 3374 ms, 3783 in / 702 out):
+    Mary Letey — Applied Mathematics, Harvard University | Kempner Institute, Harvard University
+    Arman Rysmakhanov — Williams College | Applied Mathematics, Harvard University
+    Yue M. Lu — Applied Mathematics, Harvard University
+    Cengiz Pehlevan — Applied Mathematics, Harvard University | Kempner Institute, Harvard University
+    Jacob A. Zavatone-Veth — Center for Brain Science, Harvard University | Society of Fellows, Harvard University
+  haiku#2 ($0.0005, 1893 ms, 3783 in / 253 out):
+    Mary Letey — Applied Mathematics, Harvard University | Kempner Institute, Harvard University
+    Arman Rysmakhanov — Williams College | Applied Mathematics, Harvard University
+    Yue M. Lu — Applied Mathematics, Harvard University
+    Cengiz Pehlevan — Applied Mathematics, Harvard University | Kempner Institute, Harvard University
+    Jacob A. Zavatone-Veth — Center for Brain Science, Harvard University | Society of Fellows, Harvard University
+  haiku#3 ($0.0005, 1540 ms, 3783 in / 253 out):
+    Mary Letey — Applied Mathematics, Harvard University | Kempner Institute, Harvard University
+    Arman Rysmakhanov — Williams College | Applied Mathematics, Harvard University
+    Yue M. Lu — Applied Mathematics, Harvard University
+    Cengiz Pehlevan — Applied Mathematics, Harvard University | Kempner Institute, Harvard University
+    Jacob A. Zavatone-Veth — Center for Brain Science, Harvard University | Society of Fellows, Harvard University
+
+## arxiv 2610.10548 (arxiv-html) — 0 records, 0 chars
+  before:
+    (none)
+  not handed over: the page declares no authors
+
+## jstatsoft (journal) — 13 records, 1036 chars
+  before:
+    Hadley Wickham
+  haiku#1 ($0.0001, 1884 ms, 1271 in / 32 out):
+    refused: no affiliation is printed for the declared names
+  haiku#2 ($0.0001, 1658 ms, 1271 in / 32 out):
+    refused: no affiliation is printed for the declared names
+  haiku#3 ($0.0001, 1594 ms, 1271 in / 32 out):
+    refused: no affiliation is printed for the declared names
+
+## plos ioannidis (journal) — 40 records, 5491 chars
+  before:
+    (none)
+  haiku#1 ($0.0003, 1748 ms, 2966 in / 106 out):
+    refused: no affiliation is printed for the declared names
+  haiku#2 ($0.0003, 1380 ms, 2966 in / 106 out):
+    refused: no affiliation is printed for the declared names
+  haiku#3 ($0.0003, 1227 ms, 2966 in / 84 out):
+    refused: no affiliation is printed for the declared names
+
+## acl anthology (journal) — 40 records, 1627 chars
+  before:
+    Emily M. Bender
+    Alexander Koller
+  haiku#1 ($0.0002, 1485 ms, 1957 in / 53 out):
+    refused: no affiliation is printed for the declared names
+  haiku#2 ($0.0002, 1490 ms, 1957 in / 53 out):
+    refused: no affiliation is printed for the declared names
+  haiku#3 ($0.0002, 1541 ms, 1957 in / 53 out):
+    refused: no affiliation is printed for the declared names
+
+## frontiers (journal) — 0 records, 0 chars
+  before:
+    Andrew D Wilson — School of Social, Psychological and Communication Sciences, Leeds Metropolitan University, Leeds, United Kingdom
+    Sabrina Golonka — School of Social, Psychological and Communication Sciences, Leeds Metropolitan University, Leeds, United Kingdom
+  not handed over: the page declares affiliations
+
+## noema seth (blog) — 22 records, 5940 chars
+  before:
+    Anil Seth
+  haiku#1 ($0.0006, 3199 ms, 2935 in / 515 out):
+    Anil Seth — Centre for Consciousness Science at the University of Sussex | Canadian Institute for Advanced Research Program on Brain, Mind and Consciousness
+  haiku#2 ($0.0005, 2550 ms, 2935 in / 463 out):
+    Anil Seth — Centre for Consciousness Science at the University of Sussex | Canadian Institute for Advanced Research Program on Brain, Mind and Consciousness
+  haiku#3 ($0.0005, 2260 ms, 2935 in / 435 out):
+    Anil Seth — Centre for Consciousness Science at the University of Sussex | Canadian Institute for Advanced Research Program on Brain, Mind and Consciousness
+
+## paulgraham greatwork (blog) — 0 records, 0 chars
+  before:
+    (none)
+  not handed over: the page declares no authors
+
+## gwern scaling (blog) — 31 records, 5899 chars
+  before:
+    Gwern
+  haiku#1 ($0.0003, 1400 ms, 3134 in / 28 out):
+    refused: no affiliation is printed for the declared names
+  haiku#2 ($0.0003, 1045 ms, 3134 in / 28 out):
+    refused: no affiliation is printed for the declared names
+  haiku#3 ($0.0003, 1102 ms, 3134 in / 28 out):
+    refused: no affiliation is printed for the declared names
+
+## wikipedia spider silk (blog) — 0 records, 0 chars
+  before:
+    (none)
+  not handed over: the page declares no authors
+
+## simonwillison 2024 (blog) — 0 records, 0 chars
+  before:
+    (none)
+  not handed over: the page declares no authors
+
+## substack: could not read (HTTP 500)
+
+## distill attention (blog) — 0 records, 0 chars
+  before:
+    Chris Olah — Google Brain
+    Shan Carter — Google Brain
+  not handed over: the page declares affiliations
+
+## pdf arxiv 1502 (pdf) — 16 records, 5770 chars
+  before:
+    Sergey Ioffe — Google Inc
+    Christian Szegedy — Google Inc
+  haiku#1 ($0.0004, 1721 ms, 3220 in / 67 out):
+    Sergey Ioffe — Google Inc
+    Christian Szegedy — Google Inc
+  haiku#2 ($0.0004, 1492 ms, 3220 in / 67 out):
+    Sergey Ioffe — Google Inc
+    Christian Szegedy — Google Inc
+  haiku#3 ($0.0004, 1718 ms, 3220 in / 67 out):
+    Sergey Ioffe — Google Inc
+    Christian Szegedy — Google Inc
+
+## pdf arxiv 2010 (pdf) — 15 records, 5827 chars
+  before:
+    Alexey Dosovitskiy — Google Research, Brain Team
+    Lucas Beyer — Google Research, Brain Team
+    Alexander Kolesnikov — Google Research, Brain Team
+    Dirk Weissenborn — Google Research, Brain Team
+    Xiaohua Zhai — Google Research, Brain Team
+    Thomas Unterthiner — Google Research, Brain Team
+    Mostafa Dehghani — Google Research, Brain Team
+    Matthias Minderer — Google Research, Brain Team
+    Georg Heigold — Google Research, Brain Team
+    Sylvain Gelly — Google Research, Brain Team
+    Jakob Uszkoreit — Google Research, Brain Team
+    Neil Houlsby — Google Research, Brain Team
+  haiku#1 ($0.0006, 2776 ms, 3214 in / 595 out):
+    Alexey Dosovitskiy — Google Research, Brain Team
+    Lucas Beyer — Google Research, Brain Team
+    Alexander Kolesnikov — Google Research, Brain Team
+    Dirk Weissenborn — Google Research, Brain Team
+    Xiaohua Zhai — Google Research, Brain Team
+    Thomas Unterthiner — Google Research, Brain Team
+    Mostafa Dehghani — Google Research, Brain Team
+    Matthias Minderer — Google Research, Brain Team
+    Georg Heigold — Google Research, Brain Team
+    Sylvain Gelly — Google Research, Brain Team
+    Jakob Uszkoreit — Google Research, Brain Team
+    Neil Houlsby — Google Research, Brain Team
+  haiku#2 ($0.0007, 3289 ms, 3214 in / 668 out):
+    Alexey Dosovitskiy — Google Research, Brain Team
+    Lucas Beyer — Google Research, Brain Team
+    Alexander Kolesnikov — Google Research, Brain Team
+    Dirk Weissenborn — Google Research, Brain Team
+    Xiaohua Zhai — Google Research, Brain Team
+    Thomas Unterthiner — Google Research, Brain Team
+    Mostafa Dehghani — Google Research, Brain Team
+    Matthias Minderer — Google Research, Brain Team
+    Georg Heigold — Google Research, Brain Team
+    Sylvain Gelly — Google Research, Brain Team
+    Jakob Uszkoreit — Google Research, Brain Team
+    Neil Houlsby — Google Research, Brain Team
+  haiku#3 ($0.0006, 3205 ms, 3214 in / 616 out):
+    Alexey Dosovitskiy — Google Research, Brain Team
+    Lucas Beyer — Google Research, Brain Team
+    Alexander Kolesnikov — Google Research, Brain Team
+    Dirk Weissenborn — Google Research, Brain Team
+    Xiaohua Zhai — Google Research, Brain Team
+    Thomas Unterthiner — Google Research, Brain Team
+    Mostafa Dehghani — Google Research, Brain Team
+    Matthias Minderer — Google Research, Brain Team
+    Georg Heigold — Google Research, Brain Team
+    Sylvain Gelly — Google Research, Brain Team
+    Jakob Uszkoreit — Google Research, Brain Team
+    Neil Houlsby — Google Research, Brain Team
+
+## pdf nihms (pdf) — 17 records, 5958 chars
+  before:
+    Evangelia G. Chrysikou — Department of Psychology, University of Kansas
+    Matthew J. Weber — Department of Psychology, Center for Cognitive Neuroscience, University of Pennsylvania
+    Sharon L. Thompson-Schill — Department of Psychology, Center for Cognitive Neuroscience, University of Pennsylvania
+  haiku#1 ($0.0005, 2670 ms, 3137 in / 353 out):
+    refused: an affiliation was not printed word for word
+  haiku#2 ($0.0005, 3021 ms, 3137 in / 442 out):
+    refused: an affiliation was not printed word for word
+  haiku#3 ($0.0004, 1406 ms, 3137 in / 169 out):
+    refused: an affiliation was not printed word for word
+
+## pdf jco (pdf) — 19 records, 5309 chars
+  before:
+    M. Carolina Gutierrez — Breast Center and Departments of Pathology and Medicine, Baylor College of Medicine, Houston, TX | Academic Department of Biochemistry and Breast Unit, Royal Marsden Hospital, London, United Kingdom
+    Simone Detre — Breast Center and Departments of Pathology and Medicine, Baylor College of Medicine, Houston, TX | Academic Department of Biochemistry and Breast Unit, Royal Marsden Hospital, London, United Kingdom
+    Stephen Johnston — Breast Center and Departments of Pathology and Medicine, Baylor College of Medicine, Houston, TX | Academic Department of Biochemistry and Breast Unit, Royal Marsden Hospital, London, United Kingdom
+    Syed K. Mohsin — Breast Center and Departments of Pathology and Medicine, Baylor College of Medicine, Houston, TX | Academic Department of Biochemistry and Breast Unit, Royal Marsden Hospital, London, United Kingdom
+    Jiang Shou — Breast Center and Departments of Pathology and Medicine, Baylor College of Medicine, Houston, TX | Academic Department of Biochemistry and Breast Unit, Royal Marsden Hospital, London, United Kingdom
+    D. Craig Allred — Breast Center and Departments of Pathology and Medicine, Baylor College of Medicine, Houston, TX | Academic Department of Biochemistry and Breast Unit, Royal Marsden Hospital, London, United Kingdom
+    Rachel Schiff — Breast Center and Departments of Pathology and Medicine, Baylor College of Medicine, Houston, TX | Academic Department of Biochemistry and Breast Unit, Royal Marsden Hospital, London, United Kingdom
+    C. Kent Osborne — Breast Center and Departments of Pathology and Medicine, Baylor College of Medicine, Houston, TX | Academic Department of Biochemistry and Breast Unit, Royal Marsden Hospital, London, United Kingdom
+    Mitch Dowsett — Breast Center and Departments of Pathology and Medicine, Baylor College of Medicine, Houston, TX | Academic Department of Biochemistry and Breast Unit, Royal Marsden Hospital, London, United Kingdom
+  haiku#1 ($0.0010, 5137 ms, 3234 in / 1400 out):
+    M. Carolina Gutierrez — Breast Center and Departments of Pathology and Medicine, Baylor College of Medicine, Houston, TX | Academic Department of Biochemistry and Breast Unit, Royal Marsden Hospital, London, United Kingdom
+    Simone Detre — Breast Center and Departments of Pathology and Medicine, Baylor College of Medicine, Houston, TX | Academic Department of Biochemistry and Breast Unit, Royal Marsden Hospital, London, United Kingdom
+    Stephen Johnston — Breast Center and Departments of Pathology and Medicine, Baylor College of Medicine, Houston, TX | Academic Department of Biochemistry and Breast Unit, Royal Marsden Hospital, London, United Kingdom
+    Syed K. Mohsin — Breast Center and Departments of Pathology and Medicine, Baylor College of Medicine, Houston, TX | Academic Department of Biochemistry and Breast Unit, Royal Marsden Hospital, London, United Kingdom
+    Jiang Shou — Breast Center and Departments of Pathology and Medicine, Baylor College of Medicine, Houston, TX | Academic Department of Biochemistry and Breast Unit, Royal Marsden Hospital, London, United Kingdom
+    D. Craig Allred — Breast Center and Departments of Pathology and Medicine, Baylor College of Medicine, Houston, TX | Academic Department of Biochemistry and Breast Unit, Royal Marsden Hospital, London, United Kingdom
+    Rachel Schiff — Breast Center and Departments of Pathology and Medicine, Baylor College of Medicine, Houston, TX | Academic Department of Biochemistry and Breast Unit, Royal Marsden Hospital, London, United Kingdom
+    C. Kent Osborne — Breast Center and Departments of Pathology and Medicine, Baylor College of Medicine, Houston, TX | Academic Department of Biochemistry and Breast Unit, Royal Marsden Hospital, London, United Kingdom
+    Mitch Dowsett — Breast Center and Departments of Pathology and Medicine, Baylor College of Medicine, Houston, TX | Academic Department of Biochemistry and Breast Unit, Royal Marsden Hospital, London, United Kingdom
+  haiku#2 ($0.0010, 5582 ms, 3234 in / 1401 out):
+    M. Carolina Gutierrez — Breast Center and Departments of Pathology and Medicine, Baylor College of Medicine, Houston, TX | Academic Department of Biochemistry and Breast Unit, Royal Marsden Hospital, London, United Kingdom
+    Simone Detre — Breast Center and Departments of Pathology and Medicine, Baylor College of Medicine, Houston, TX | Academic Department of Biochemistry and Breast Unit, Royal Marsden Hospital, London, United Kingdom
+    Stephen Johnston — Breast Center and Departments of Pathology and Medicine, Baylor College of Medicine, Houston, TX | Academic Department of Biochemistry and Breast Unit, Royal Marsden Hospital, London, United Kingdom
+    Syed K. Mohsin — Breast Center and Departments of Pathology and Medicine, Baylor College of Medicine, Houston, TX | Academic Department of Biochemistry and Breast Unit, Royal Marsden Hospital, London, United Kingdom
+    Jiang Shou — Breast Center and Departments of Pathology and Medicine, Baylor College of Medicine, Houston, TX | Academic Department of Biochemistry and Breast Unit, Royal Marsden Hospital, London, United Kingdom
+    D. Craig Allred — Breast Center and Departments of Pathology and Medicine, Baylor College of Medicine, Houston, TX | Academic Department of Biochemistry and Breast Unit, Royal Marsden Hospital, London, United Kingdom
+    Rachel Schiff — Breast Center and Departments of Pathology and Medicine, Baylor College of Medicine, Houston, TX | Academic Department of Biochemistry and Breast Unit, Royal Marsden Hospital, London, United Kingdom
+    C. Kent Osborne — Breast Center and Departments of Pathology and Medicine, Baylor College of Medicine, Houston, TX | Academic Department of Biochemistry and Breast Unit, Royal Marsden Hospital, London, United Kingdom
+    Mitch Dowsett — Breast Center and Departments of Pathology and Medicine, Baylor College of Medicine, Houston, TX | Academic Department of Biochemistry and Breast Unit, Royal Marsden Hospital, London, United Kingdom
+  haiku#3 ($0.0011, 5610 ms, 3234 in / 1455 out):
+    M. Carolina Gutierrez — Breast Center and Departments of Pathology and Medicine, Baylor College of Medicine, Houston, TX | Academic Department of Biochemistry and Breast Unit, Royal Marsden Hospital, London, United Kingdom
+    Simone Detre — Breast Center and Departments of Pathology and Medicine, Baylor College of Medicine, Houston, TX | Academic Department of Biochemistry and Breast Unit, Royal Marsden Hospital, London, United Kingdom
+    Stephen Johnston — Breast Center and Departments of Pathology and Medicine, Baylor College of Medicine, Houston, TX | Academic Department of Biochemistry and Breast Unit, Royal Marsden Hospital, London, United Kingdom
+    Syed K. Mohsin — Breast Center and Departments of Pathology and Medicine, Baylor College of Medicine, Houston, TX | Academic Department of Biochemistry and Breast Unit, Royal Marsden Hospital, London, United Kingdom
+    Jiang Shou — Breast Center and Departments of Pathology and Medicine, Baylor College of Medicine, Houston, TX | Academic Department of Biochemistry and Breast Unit, Royal Marsden Hospital, London, United Kingdom
+    D. Craig Allred — Breast Center and Departments of Pathology and Medicine, Baylor College of Medicine, Houston, TX | Academic Department of Biochemistry and Breast Unit, Royal Marsden Hospital, London, United Kingdom
+    Rachel Schiff — Breast Center and Departments of Pathology and Medicine, Baylor College of Medicine, Houston, TX | Academic Department of Biochemistry and Breast Unit, Royal Marsden Hospital, London, United Kingdom
+    C. Kent Osborne — Breast Center and Departments of Pathology and Medicine, Baylor College of Medicine, Houston, TX | Academic Department of Biochemistry and Breast Unit, Royal Marsden Hospital, London, United Kingdom
+    Mitch Dowsett — Breast Center and Departments of Pathology and Medicine, Baylor College of Medicine, Houston, TX | Academic Department of Biochemistry and Breast Unit, Royal Marsden Hospital, London, United Kingdom
+
+## pdf entropy (pdf) — 13 records, 5309 chars
+  before:
+    Ehren L. Newman — Department of Psychological and Brain Sciences, Indiana University, Bloomington, IN 47405, USA
+    Thomas F. Varley — Department of Psychological and Brain Sciences, Indiana University, Bloomington, IN 47405, USA
+    Vibin K. Parakkattu — Department of Psychological and Brain Sciences, Indiana University, Bloomington, IN 47405, USA
+    Samantha P. Sherrill — Brighton and Sussex Medical School, University of Sussex, Brighton BN1 9RH, UK
+    John M. Beggs — Department of Physics, Indiana University, Bloomington, IN 47405, USA
+  haiku#1 ($0.0005, 2722 ms, 2649 in / 501 out):
+    Ehren L. Newman — Department of Psychological and Brain Sciences, Indiana University, Bloomington, IN 47405, USA
+    Thomas F. Varley — Department of Psychological and Brain Sciences, Indiana University, Bloomington, IN 47405, USA
+    Vibin K. Parakkattu — Department of Psychological and Brain Sciences, Indiana University, Bloomington, IN 47405, USA
+    Samantha P. Sherrill — Brighton and Sussex Medical School, University of Sussex, Brighton BN1 9RH, UK
+    John M. Beggs — Department of Physics, Indiana University, Bloomington, IN 47405, USA
+  haiku#2 ($0.0006, 3494 ms, 2649 in / 643 out):
+    Ehren L. Newman — Department of Psychological and Brain Sciences, Indiana University, Bloomington, IN 47405, USA
+    Thomas F. Varley — Department of Psychological and Brain Sciences, Indiana University, Bloomington, IN 47405, USA
+    Vibin K. Parakkattu — Department of Psychological and Brain Sciences, Indiana University, Bloomington, IN 47405, USA
+    Samantha P. Sherrill — Brighton and Sussex Medical School, University of Sussex, Brighton BN1 9RH, UK
+    John M. Beggs — Department of Physics, Indiana University, Bloomington, IN 47405, USA
+  haiku#3 ($0.0006, 3696 ms, 2649 in / 632 out):
+    Ehren L. Newman — Department of Psychological and Brain Sciences, Indiana University, Bloomington, IN 47405, USA
+    Thomas F. Varley — Department of Psychological and Brain Sciences, Indiana University, Bloomington, IN 47405, USA
+    Vibin K. Parakkattu — Department of Psychological and Brain Sciences, Indiana University, Bloomington, IN 47405, USA
+    Samantha P. Sherrill — Brighton and Sussex Medical School, University of Sussex, Brighton BN1 9RH, UK
+    John M. Beggs — Department of Physics, Indiana University, Bloomington, IN 47405, USA
+
+## pdf gdl (pdf) — 40 records, 5387 chars
+  before:
+    Michael M. Bronstein — Imperial College London / USI IDSIA / Twitter
+    Joan Bruna — New York University
+    Taco Cohen — Qualcomm AI Research. Qualcomm AI Research is an initiative of Qualcomm Technologies, Inc
+    Petar Veličković — DeepMind
+  haiku#1 ($0.0006, 3102 ms, 3741 in / 546 out):
+    refused: an affiliation was not printed word for word
+  haiku#2 ($0.0007, 3284 ms, 3741 in / 574 out):
+    refused: an affiliation was not printed word for word
+  haiku#3 ($0.0006, 2667 ms, 3741 in / 421 out):
+    refused: an affiliation was not printed word for word
+
+## totals
+  haiku: 66 calls, $0.0344, mean $0.0005

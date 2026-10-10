@@ -433,6 +433,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
   "spya-vafkvw": "shipped",
   "spya-vbeyse": "shipped",
   "spya-vc6pnm": "shipped",
+  "spya-vfk2zh": "shipped",
   "spya-vgwt4z": "declined",
   "spya-vj7wv0": "shipped",
   "spya-vn72ww": "shipped",
@@ -526,6 +527,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
   "spya-zn97q5": "shipped",
   "spya-zper0p": "shipped",
   "spya-zuk4f7": "shipped",
+  "spya-zux9w6": "shipped",
   "spya-zv8dc6": "shipped",
   "spya-zw479b": "shipped",
 };
@@ -580,6 +582,7 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
   "spya-ucftjt": "All three parts shipped: Help in the bar and as pages, Ask about Spideryarn on the Help pages, and a guide in Chat. The Help chatbot stays signed-in only for now, as you chose.",
   "spya-us5kzc": "Set aside: this was a test of the Feedback button on the day it shipped, so there was nothing to build.",
   "spya-v322fd": "You chose A on 2026-10-05: the private link is built (stage 1). Stages 2 and 3, comments for people with the link and named email addresses, are written up and not built (qi-6jwj562v and qi-mgxnj233).",
+  "spya-vfk2zh": "Replaced. Affiliations now come from one cheap Haiku call on any site, held to the page's words: same as before on 9 of 13 arXiv papers, better on 2, wrong on none, ~$0.0005.",
   "spya-vgwt4z": "No change: the Send button already had a spinner, in production since 2026-09-01, and a test now pins it. You decided against adding a minimum time on screen (2026-09-06).",
   "spya-vzj8fc": "A recording left on one article is no longer offered on another; Chat, passage chat and the command bar had the same gap, all fixed. The microphone now has a card: why talk, the 15-minute limit, and press Stop twice.",
   "spya-wm5gu2": "Skim and More now sit in Structure and Summary's group, and Comments sits with Marginalia, after it. On a phone More is now almost on screen, but the bar still scrolls sideways.",
@@ -592,4 +595,5 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
   "spya-za2tse": "Needs a decision is now threads: a contents, one thread at a time with a reply box, Defer for now, the ids, your report shut, a shortcut beside the tabs. Check the reply box on your iPhone.",
   "spya-zdkqx4": "spya-x0rfs2: the bar is fixed; the quieter open stop Greg chose in q-u04sye is on dev as an experiment",
   "spya-zuk4f7": "Both stages shipped: Debate asks for work that cites the piece, and OpenAlex supplies its count and list of citing papers.",
+  "spya-zux9w6": "The citation, glossary and quote cards now each end in Open in Sources / Glossary / Quotes. Cards on comments, chat anchors and search-style highlights are queued as their own piece of work.",
 };
