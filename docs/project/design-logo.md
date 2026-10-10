@@ -320,13 +320,16 @@ nothing for a large group of readers ([silent-success.md](../reusable/silent-suc
 1. **Drive it off the class, never off `:hover`.** The class is added three ways: a hover, a long
    press, and `/design` applying it directly. A `:hover` rule serves one of them.
 2. **Never select `.logo-text`.** Only the corner copy has it. See above.
-3. **Return to the resting state at 100%**, so removing the class cannot strand the wordmark
-   mid-gesture — and so the reduced-motion freeze is harmless. `animation-fill-mode: forwards` is
-   allowed only where the 100% frame is a still you would be happy to ship, which exactly two of
-   these rely on and say so. **A pseudo-element needs its resting `transform` declared statically**,
-   not only in its keyframes: the guard fills nothing, so a thread whose `scaleY(0)` lives only at
-   `0%` reverts to no transform at all and hangs at full length beside something at rest. That has
-   happened three times in this one file and is now a test.
+3. **Return to the resting state at 100%**, so a complete loop — including a loader draw held to
+   its boundary — can lose its class without a snap. This does not soften a hover cut off
+   mid-gesture; only keeping its excursion small does that. Under reduced motion the shortened
+   animation finishes rather than freezes, then its base style and fill mode decide the still.
+   `animation-fill-mode: forwards` is allowed only where the 100% frame is a still you would be
+   happy to ship, which exactly two of these rely on and say so. **A pseudo-element needs its
+   resting `transform` declared statically**, not only in its keyframes: the guard fills nothing,
+   so a thread whose `scaleY(0)` lives only at `0%` reverts to no transform at all and hangs at full
+   length beside something at rest. That has happened three times in this one file and is now a
+   test.
 4. **Do not change the element's box.** The dock copy is in a flex row that reflows; the corner copy
    is `position: fixed` over pages that reserved no space for it. Transforms, opacity, filters,
    masks and absolutely-positioned pseudo-elements only.

@@ -983,7 +983,9 @@
    5.7px; the apex 5px. GPT Sol's plan review caught the first draft at 9px.
 
    The footprint is warm rather than dark because the bar is dark: a shadow
-   there would be invisible. */
+   there would be invisible.
+
+   Reduced motion: base style, with the footprint invisible. */
 .spya-hop .logo-image {
   transform-origin: 50% 100%;
   animation: spya-hop 1.6s infinite;
@@ -1032,7 +1034,9 @@
    superscript asterisk before the word — a footnote mark — holds there, then
    unfurls back into a spider with a little overshoot. GPT Sol's: the mark
    already contains its second form, and the asterisk is the oldest compact
-   promise that there is a source worth following. */
+   promise that there is a source worth following.
+
+   Reduced motion: base style. */
 .spya-asterisk .logo-image {
   animation: spya-asterisk 1.8s cubic-bezier(0.3, 0, 0.2, 1) infinite;
 }
@@ -1056,7 +1060,9 @@
    `50% + 4px` about the mark's centre puts that point at `85.4% + 2.8px`.
    The ring is 4px clear of the mark and the swell 18%, so the found spider
    stays inside the lens; at 3px and 25% its legs poked through it (browser
-   check, 2026-10-10). */
+   check, 2026-10-10).
+
+   Reduced motion: base style, with the lens invisible and off to the side. */
 .spya-magnifier .logo-image {
   animation: spya-magnify 2s ease-in-out infinite;
 }
@@ -1110,7 +1116,9 @@
    instead of passing edge-on. The mark is nearly symmetric, which is what
    lets the mirror read as the spider turning rather than the logo changing.
 
-   ±3px is inside the corner's 9.6px padding and the 6.4px gap to the word. */
+   ±3px is inside the corner's 9.6px padding and the 6.4px gap to the word.
+
+   Reduced motion: base style. */
 .spya-pacing .logo-image {
   transform-origin: 50% 70%;
   animation: spya-pacing 3s ease-in-out infinite;
@@ -1144,7 +1152,9 @@
    line; three lines; then home. The mascot doing what the app is for, slowly
    and in order, and on a phone, where only the spider is drawn.
 
-   Paired stops hold each tick; the sweep back is the one quick move. */
+   Paired stops hold each tick; the sweep back is the one quick move.
+
+   Reduced motion: base style. */
 .spya-lines .logo-image {
   transform-origin: 50% 60%;
   animation: spya-lines 2.4s ease-in-out infinite;
@@ -1174,23 +1184,27 @@
    **Hover only**: on the empty loading page a grey spider reads as an
    error (LogoLoader.tsx § LOADER_EXCLUDED).
 
-   The individual `rotate`, `translate` and `scale` properties, so the flip
-   and the bounce are separate channels and 360° is reachable — a `transform`
-   list from `none` to `rotate(360deg)` would interpolate to no movement at
-   all. They compose with The Settle's `transform`, which is never on at the
-   same time. 360° is visually the base style, so the end cannot snap. */
+   **Every stop writes the same `translate rotate scale` list**, so the flip
+   and bounce stay separate numeric channels and the intermediate 180° stop
+   makes 360° reachable — a direct `none` to `rotate(360deg)` would interpolate
+   to no movement. Keeping them in `transform` also overrides any last fraction
+   of The Settle's 220ms exit if the reader leaves and re-enters immediately;
+   individual properties would compose with that old transition. 360° is
+   visually the base style, so the end cannot snap.
+
+   Reduced motion: base style. */
 .spya-dead .logo-image {
   transform-origin: 50% 60%;
   animation: spya-dead 2.2s 1;
 }
 @keyframes spya-dead {
-  0% { rotate: 0deg; translate: 0 0; scale: 1; filter: none; }
-  8% { rotate: 0deg; translate: 0 -2px; scale: 1.05; filter: none; }
-  20% { rotate: 180deg; translate: 0 1px; scale: 1.06 0.9; filter: grayscale(0.7) brightness(0.85); }
-  26%, 50% { rotate: 180deg; translate: 0 0; scale: 1; filter: grayscale(0.7) brightness(0.85); }
-  53% { rotate: 187deg; }
-  56% { rotate: 180deg; }
-  78%, 100% { rotate: 360deg; translate: 0 0; scale: 1; filter: none; }
+  0% { transform: translate(0, 0) rotate(0deg) scale(1); filter: none; }
+  8% { transform: translate(0, -2px) rotate(0deg) scale(1.05); filter: none; }
+  20% { transform: translate(0, 1px) rotate(180deg) scale(1.06, 0.9); filter: grayscale(0.7) brightness(0.85); }
+  26%, 50% { transform: translate(0, 0) rotate(180deg) scale(1); filter: grayscale(0.7) brightness(0.85); }
+  53% { transform: translate(0, 0) rotate(187deg) scale(1); }
+  56% { transform: translate(0, 0) rotate(180deg) scale(1); }
+  78%, 100% { transform: translate(0, 0) rotate(360deg) scale(1); filter: none; }
 }
 
 /* -- 21. Semaphore --------------------------------------------------------
@@ -1226,7 +1240,9 @@
    own pixels and need no colour to match.
 
    Two keyframes rather than one with a delay, so the loader can hold whole
-   loops of both (tests/logo-loader.test.tsx). */
+   loops of both (tests/logo-loader.test.tsx).
+
+   Reduced motion: the reconstructed resting spider described above. */
 @supports (clip-path: polygon(evenodd, 0 0, 100% 0, 0 100%)) {
   .spya-semaphore .logo-image {
     clip-path: polygon(evenodd,
@@ -1353,7 +1369,9 @@
    whole muddle was drawn warming — no flash at all (browser check,
    2026-10-10). So 54% names the resting ink and the snap goes from it in 4%;
    80% names it again. The 0% and 100% stops still name nothing, so the ends
-   take the letter's own value (tests/logo-animation § resting colour). */
+   take the letter's own value (tests/logo-animation § resting colour).
+
+   Reduced motion: base style. */
 .spya-click .logo-letter:nth-child(1)  { --r: 2.5deg;  --dy: -1; }
 .spya-click .logo-letter:nth-child(2)  { --r: -3deg;   --dy: 0.5; }
 .spya-click .logo-letter:nth-child(3)  { --r: 2deg;    --dy: 1; }
@@ -1395,7 +1413,9 @@
    made into one fabric. Proposed by two of the four lists.
 
    No stagger, so the whole word splits at once: that is what separates it
-   from Pluck's travelling wave and Sag's curve. */
+   from Pluck's travelling wave and Sag's curve.
+
+   Reduced motion: base style. */
 .spya-shed .logo-letter:nth-child(odd)  { --shed: 1; }
 .spya-shed .logo-letter:nth-child(even) { --shed: -1; }
 .spya-shed .logo-letter {
@@ -1432,7 +1452,9 @@
    `clip-path` rather than `scaleX`: a scaled arch squashes, a clipped one
    draws. Its resting clip hides it, and its 100% frame — wiped from the
    other side — hides it too, so the guard's still and any cut-off are
-   invisible. */
+   invisible.
+
+   Reduced motion: base style, with the arc clipped away. */
 .spya-xref .logo-letter:nth-child(6)::after {
   content: "";
   position: absolute;
@@ -1467,7 +1489,9 @@
 
    No 0% or 100% stop, so the ends take the letter's resting ink; the stops
    between peaks name `--wordmark-ink`. The hover loops; the loader runs it
-   once and holds through the last letter's delay (LogoLoader.tsx). */
+   once and holds through the last letter's delay (LogoLoader.tsx).
+
+   Reduced motion: base style throughout the stagger and after it. */
 .spya-skim .logo-letter { --p1: 0; --p2: 0; --p3: 1; }
 .spya-skim .logo-letter:nth-child(1),
 .spya-skim .logo-letter:nth-child(7),
@@ -1509,7 +1533,9 @@
    synthesised one is a different face on every platform. Skewed about the
    baseline (roughly 72% down the letter's box), so the feet stay put.
 
-   Once per hover; the loader holds it for the stagger plus the run. */
+   Once per hover; the loader holds it for the stagger plus the run.
+
+   Reduced motion: base style. */
 .spya-tex .logo-letter {
   transform-origin: 50% 72%;
   animation: spya-tex 1.4s cubic-bezier(0.3, 0, 0.2, 1) 1;

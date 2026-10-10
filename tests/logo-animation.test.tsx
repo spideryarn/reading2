@@ -240,6 +240,22 @@ describe("the two rules the stylesheet is written under", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("keeps Played Dead from composing with Settle's transform transition", () => {
+    /* Settle's 220ms exit can still be running when a quick re-hover starts the
+       next draw. Independent translate/rotate/scale properties would compose
+       with that old `transform`; animating one complete transform list instead
+       overrides it. Every stop names the list so the browser never has to fall
+       back to the underlying, possibly still-transitioning value. */
+    const stops = keyframeStops(RULES).filter((stop) => stop.animation === "spya-dead");
+    expect(stops.length).toBeGreaterThan(0);
+    for (const stop of stops) {
+      expect(stop.body, stop.selectors.join(", ")).toMatch(/(?:^|;)\s*transform\s*:/);
+      expect(stop.body, stop.selectors.join(", ")).not.toMatch(
+        /(?:^|;)\s*(?:translate|rotate|scale)\s*:/,
+      );
+    }
+  });
+
   it("never writes the letters' resting colour into a keyframe's ends", () => {
     /* **The resting colour is the letter rule's, and a keyframe must name its token.**
        Until 2026-10-02 the corner and the Dock drew the name orange and the

@@ -1686,7 +1686,7 @@ function ControlsAcrossModes() {
  * than 2,807: no route, no props, no per-animation component, no reference
  * "original" beside each one. It maps the registry and puts the class on.
  *
- * It exists because the alternative is worse. Fourteen animations that fire on
+ * It exists because the alternative is worse. Twenty-seven animations that fire on
  * hover, one at random, cannot otherwise be compared — you cannot get two of
  * them on screen together, you cannot get the one you are working on twice in a
  * row, and the only way to see a particular one is to keep hovering until chance
@@ -1721,7 +1721,7 @@ function LogoAnimations() {
   /* Bumped by the replay button, and used as the grid's `key` so React
      rebuilds the cells rather than updating them. Re-mounting is what restarts
      a one-shot animation: re-applying a class the element already has does not,
-     and half of these run once and stop by design. */
+     and some of these run once and stop by design. */
   const [take, setTake] = useState(0);
   /* **The classes go on a frame after the cells exist, and that is not a
      nicety.** Three of the set are CSS *transitions* rather than keyframes
@@ -1748,7 +1748,7 @@ function LogoAnimations() {
         One of these is picked at random whenever a reader hovers or long-presses the wordmark, in
         the corner and in the reading view's bottom bar alike — <code>useLogoAnimation</code> in
         src/web/logo-animation.ts, keyframes in src/web/styles/logo-animations.css, and the design
-        in docs/project/design-logo.md. Half of them run once and stop, so use{" "}
+        in docs/project/design-logo.md. Some of them run once and stop, so use{" "}
         <em>Play again</em> to see those; the loops need no help.
       </p>
       <div className="design-panel">
