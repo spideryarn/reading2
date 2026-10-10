@@ -1825,6 +1825,7 @@ describe("the band, walked", () => {
     expect(host.querySelector("#state")?.getAttribute("data-open")).toBe(published[0]!.key);
     expect(control?.blockId).toBe(B[2]);
     expect(control?.door).toEqual({ kind: "next", cue: "Look for the headline comparison." });
+    expect(control?.hasPrevious).toBe(false);
   });
 
   it("steps by replacing the entry, and scrolls the stop to the top", async () => {
@@ -1837,6 +1838,7 @@ describe("the band, walked", () => {
     expect(param("stop")).toBe(Q[0]);
     expect(history.length, "a step must not push").toBe(before);
     expect(scrolled).toEqual([B[0]]);
+    expect(control?.hasPrevious).toBe(true);
     /* The end of Gist: no wrap, and the key goes back to the browser. */
     let took = true;
     await act(async () => {
@@ -2106,6 +2108,7 @@ describe("the band, walked", () => {
       expect([param("depth"), param("stop"), current()]).toEqual(["2", Q[2], Q[2]]);
       expect(host.querySelector(".skim-depth.on")?.textContent).toContain("More");
       expect(text(".band-head")).toContain("Stop 1 of 2");
+      expect(control?.hasPrevious, "a carried stop first in More still has no previous stop in More").toBe(false);
       expect(scrolled, "the reader is already there").toEqual([]);
       expect(flashed).toEqual([]);
       /* The door is More's now: on to More's own stop. */

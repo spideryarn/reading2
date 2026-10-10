@@ -203,7 +203,7 @@ export const MAX_QUOTE_PROMPT_CHARS = 1200;
  */
 export const DEPTH_CAPS = [7, 15, 36] as const;
 
-/** With at least this many offered quotes, the three passes must strictly grow (Sol F2). */
+/** From this many offered quotes, all three passes exist and Most must be longer than More. */
 export const GROWTH_MIN_QUOTES = 8;
 
 /**
@@ -220,9 +220,9 @@ const EFFORT: Effort = "low";
  * The answer budget in tokens: a base for the JSON around the list, plus per
  * stop the label, the depth, the longest `again` there is (`[2, 3]` — what
  * took the allowance from 60 characters to 80 at `skim/9`) and a cue at the
- * cap, at a conservative three characters a token — for every quote the list can hold, because the prompt
- * says depth 3 should include nearly all of them and a model may list past the
- * cap. Undersizing does not degrade: it throws `truncationFailure`.
+ * cap, at a conservative three characters a token — for every quote the list
+ * can hold, because a model may list past the target and the cap. Undersizing
+ * does not degrade: it throws `truncationFailure`.
  * tests/skim.test.ts builds the largest permitted answer and checks it
  * fits.
  */
@@ -267,8 +267,17 @@ export function emptyDrops(): SkimDrops {
  * whether a tie is worth that is his call — q-vzd2xt.
  */
 export function targetsFor(q: number): { gist: number; more: number; most: number } {
+  if (q <= 0) return { gist: 0, more: 0, most: 0 };
   const gist = Math.max(1, Math.min(5, Math.ceil(q / 5)));
   const rest = Math.max(0, q - gist);
+  /* A short route may omit its later passes, but every pass it does offer must
+     still be at least as long as the offered one before it. Splitting the
+     remainder evenly gives 1/1/0 through 2/2/3 for q=2…7; the one remaining
+     stop at q=2 belongs to More rather than opening a gap at depth 2. */
+  if (q < GROWTH_MIN_QUOTES) {
+    const more = rest === 1 ? 1 : Math.floor(rest / 2);
+    return { gist, more, most: rest - more };
+  }
   /* Below half of the rest, so Most has more; at least Gist when that fits. */
   const below = Math.floor((rest - 1) / 2);
   const more = Math.max(Math.min(1, rest), Math.min(10, Math.max(gist, Math.round(0.4 * rest)), below));
@@ -974,7 +983,7 @@ export function growthFailure(
  * there are finitely many of both. Rule 6 never demotes (Sol F8) because that
  * would bloat a deeper pass past its cap; a move here lowers a shallower
  * cumulative count and leaves the deepest unchanged, so every cap still holds,
- * and room for carrying only grows in the pass a stop moves into.
+ * and room for carrying never shrinks in the pass a stop moves into.
  *
  * Whatever it cannot fix — a pass of one stop as long as the next — is left
  * for `growthFailure`, and the job fails as before.
@@ -1161,10 +1170,11 @@ WHAT YOU DECIDE
    3 = MOST: nearly everything else worth stopping at.
    The reader walks each pass on its own and expects a deeper pass never to
    be SHORTER than the one before: MORE walks at least as many stops as GIST,
-   and MOST more than MORE, counting the stops carried into each. So follow
-   the targets for each pass's own stops, and carry a stop into MORE only
-   while MORE stays shorter than MOST. When a target is 0 because few quotes
-   were offered, that pass may be absent.
+   and MOST at least as many as MORE, counting the stops carried into each.
+   With eight or more quotes, all three passes are offered and MOST must be
+   longer than MORE. So follow the targets for each pass's own stops, and carry
+   a stop into MORE only while those size rules still hold. When a target is 0
+   because few quotes were offered, that pass may be absent.
 
    And "again" for each stop: the deeper passes it is ALSO walked in. The
    reader walks one pass at a time. A pass is its own stops (the ones whose
@@ -1306,9 +1316,9 @@ RULES
 - Each quote is at most one entry in the list, never two. "again" is how a
   stop appears in more than one pass.
 - There is at most one offered quote from any paragraph.
-- The route should normally include nearly all the quotes: those not at depth
-  1 or 2 go at depth 3. Leave one out only if it adds nothing a stop already
-  gives.
+- Use about as many quotes in all as the three targets add up to. Those chosen
+  for neither depth 1 nor depth 2 go at depth 3. Prefer leaving out a quote
+  that adds nothing a chosen stop already gives.
 - The user message gives a target for each depth: how many stops of its own
   that pass has. Aim near it. A carried stop is not counted in the target.
 

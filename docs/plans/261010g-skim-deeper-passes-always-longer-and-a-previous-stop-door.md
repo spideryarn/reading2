@@ -155,3 +155,14 @@ narrow window) stays with the forward buttons. `SkimControl` gains `hasPrevious`
   retake (help-page.md).
 - **Stage 3** — skim.md, postmortem
   [261010a](../postmortems/261010a-a-check-guarding-a-walk-that-had-changed-under-it.md), the note.
+- **Browser check** (Sonnet subagent, Playwright on the box): the door on desktop, ‹ Previous stop
+  stepping back, the end-of-pass door, a phone width wrapping to two rows with no sideways scroll,
+  and dark mode — all as intended; screenshots `261010g-shot-*.png`.
+- **Code review (GPT Sol)**, [261010g-skim-code-review-sol.md](261010g-skim-code-review-sol.md),
+  fixes applied by Sol and checked here: targets below eight quotes no longer contradicted the rule
+  (`targetsFor(6)` was 2/1/3; 0 asked for a Gist stop); the prompt's "Most longer than More" said
+  only from eight quotes, and "nearly all the quotes" became "about as many as the targets add up
+  to" (the same thing below ~40 quotes, where the measurement ran; above, the 36-stop cap already
+  ruled); two old tests that judged growth on cumulative counts now use `passSizes`; type docs;
+  `hasPrevious` pinned. Left: `scripts/eval/skim-diversity.ts` still calls nesting "today" — a
+  historical eval, kept as it was.

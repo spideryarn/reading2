@@ -1352,12 +1352,12 @@ export interface QuotesResponse {
    to keep, and a re-run simply replaces it. */
 
 /**
- * The pass a stop belongs to. **The model plans the passes as nesting** (depth
- * *d* covering every stop with `depth ≤ d`, which is what `Skim.visible`
- * counts). **The reader walks a pass as the stops first placed there plus any
- * earlier stops whose `again` names it** — plan 261003l, `walkedIn` in
- * src/web/skim-route.ts. Before `skim/9`, there were no carried stops, so each
- * pass was only its own (plan 260929e).
+ * The first, shallowest pass a stop is placed in. The cumulative caps count
+ * every stop with `depth ≤ d`, which is what `Skim.visible` records, but that
+ * is allocation arithmetic rather than pass membership. **The reader walks a
+ * pass as the stops first placed there plus any earlier stops whose `again`
+ * names it** — plan 261003l, `walkedIn` in src/skim-passes.ts. Before `skim/9`,
+ * there were no carried stops, so each pass was only its own (plan 260929e).
  */
 export type SkimDepth = 1 | 2 | 3;
 
@@ -1447,14 +1447,14 @@ export interface SkimDrops {
    */
   overCarried?: number;
   /**
-   * `again` entries dropped so that a deeper pass walks more stops than the
-   * one before it — `growPasses` in src/skim.ts, since `skim/12`
+   * `again` entries dropped so no pass is shorter than the one before it and
+   * Most is longer than More — `growPasses` in src/skim.ts, since `skim/12`
    * (docs/plans/261010g-skim-deeper-passes-always-longer-and-a-previous-stop-door.md).
    * The stop is kept. Absent before, read it as 0.
    */
   shrinkCarried?: number;
   /**
-   * Stops moved one pass deeper for the same reason, once no carried entry
+   * Stops moved one pass deeper for the same rule, once no carried entry
    * was left to drop — the least important own stop of the pass that was
    * too long. The stop is kept, in its place in the route. Absent before
    * `skim/12`, read it as 0.

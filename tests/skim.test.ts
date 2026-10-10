@@ -464,7 +464,8 @@ describe("validating the model's route", () => {
     expect(one).toEqual([{ quoteId: qid(0), depth: 1, role: null, cue: CUE }]);
     expect(d.badAgain).toBe(1);
     expect(visibleCounts(one)).toEqual([1, 1, 1]);
-    expect(growthFailure(visibleCounts(one), 5)).toBeNull();
+    expect(passSizes(one)).toEqual([1, 0, 0]);
+    expect(growthFailure(passSizes(one), 5)).toBeNull();
 
     /* Depth 3 has a stop of its own and depth 2 does not: 3 stays, 2 goes. */
     const d2 = emptyDrops();
@@ -545,7 +546,7 @@ describe("validating the model's route", () => {
     expect(d.duplicate).toBe(1);
   });
 
-  it("leaves the counts, the caps and the growth rule on `depth` alone: a carried stop counts once", () => {
+  it("leaves cumulative caps on `depth`, but judges growth on the passes actually walked", () => {
     const d = emptyDrops();
     const plain = validateRoute(goodRoute, quotesOf(10), emptyDrops());
     const withAgain = validateRoute(
@@ -556,7 +557,8 @@ describe("validating the model's route", () => {
     expect(withAgain.map((s) => [s.quoteId, s.depth])).toEqual(plain.map((s) => [s.quoteId, s.depth]));
     expect(visibleCounts(withAgain)).toEqual(visibleCounts(plain));
     expect(visibleCounts(withAgain)).toEqual([2, 5, 10]);
-    expect(growthFailure(visibleCounts(withAgain), 10)).toBeNull();
+    expect(passSizes(withAgain)).toEqual([2, 5, 8]);
+    expect(growthFailure(passSizes(withAgain), 10)).toBeNull();
     expect(d.badAgain).toBe(0);
     expect(d.overCap).toBe(0);
 
@@ -862,20 +864,26 @@ describe("the empty outcomes", () => {
 describe("what the prompt is given", () => {
   it("sizes the targets from the number of quotes", () => {
     /* Each pass's OWN count (spya-nbmce7): the reader walks a pass on its own. */
+    expect(targetsFor(0)).toEqual({ gist: 0, more: 0, most: 0 });
     expect(targetsFor(11)).toEqual({ gist: 3, more: 3, most: 5 });
     expect(targetsFor(20)).toEqual({ gist: 4, more: 6, most: 10 });
     expect(targetsFor(30)).toEqual({ gist: 5, more: 10, most: 15 });
     expect(targetsFor(100)).toEqual({ gist: 5, more: 10, most: 21 });
     expect(targetsFor(3)).toEqual({ gist: 1, more: 1, most: 1 });
+    expect(targetsFor(6)).toEqual({ gist: 2, more: 2, most: 2 });
   });
 
-  it("asks for passes that never shrink and a Most longer than More, within the caps", () => {
-    for (let q = 8; q <= MAX_QUOTES_TOTAL; q++) {
+  it("asks for passes that never shrink at every size, and a Most longer than More from eight", () => {
+    for (let q = 1; q <= MAX_QUOTES_TOTAL; q++) {
       const t = targetsFor(q);
-      expect(t.gist, `q=${q}`).toBeGreaterThanOrEqual(1);
-      /* More may equal Gist (q-vzd2xt); Most is always longer than More. */
-      expect(t.gist, `q=${q}`).toBeLessThanOrEqual(t.more);
-      expect(t.more, `q=${q}`).toBeLessThan(t.most);
+      const offered = [t.gist, t.more, t.most].filter((n) => n > 0);
+      expect(offered[0], `q=${q}`).toBeGreaterThanOrEqual(1);
+      expect(offered.some((n, i) => i > 0 && n < offered[i - 1]!), `q=${q}`).toBe(false);
+      /* More may equal Gist (q-vzd2xt); from eight, Most must beat More. */
+      if (q >= 8) {
+        expect(t.gist, `q=${q}`).toBeLessThanOrEqual(t.more);
+        expect(t.more, `q=${q}`).toBeLessThan(t.most);
+      }
       expect(t.gist + t.more + t.most, `q=${q}`).toBeLessThanOrEqual(q);
       expect(t.gist, `q=${q}`).toBeLessThanOrEqual(DEPTH_CAPS[0]);
       expect(t.gist + t.more, `q=${q}`).toBeLessThanOrEqual(DEPTH_CAPS[1]);
@@ -964,9 +972,11 @@ describe("what the prompt is given", () => {
     expect(SKIM_SYSTEM).not.toMatch(/The passes nest/);
     expect(SKIM_SYSTEM).toMatch(/neither required nor forbidden/);
     expect(SKIM_SYSTEM).toMatch(/Do not carry everything/);
-    /* skim/12: each pass longer than the one before, as walked (spya-nbmce7). */
+    /* skim/12: no pass shorter; Most longer than More, as walked (spya-nbmce7). */
     expect(SKIM_SYSTEM).toMatch(/never to\s+be SHORTER than the one before/);
+    expect(SKIM_SYSTEM).toMatch(/With eight or more quotes[\s\S]*MOST must be\s+longer than MORE/);
     expect(SKIM_SYSTEM).toMatch(/When a target is 0[\s\S]*that pass may be absent/);
+    expect(SKIM_SYSTEM).toMatch(/Use about as many quotes in all as the three targets add up to/);
     /* The targets are each pass's own stops since skim/12, and the user
        message says a carried stop is not counted in them. */
     const prompt = renderPrompt({ input: inputOf(quotesOf(10)), profile: null });

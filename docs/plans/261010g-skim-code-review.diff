@@ -1,0 +1,1135 @@
+diff --git a/src/feedback-endings.generated.ts b/src/feedback-endings.generated.ts
+index ebd677852..5ef5bf5a9 100644
+--- a/src/feedback-endings.generated.ts
++++ b/src/feedback-endings.generated.ts
+@@ -147,6 +147,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
+   "spya-gcdwps": "shipped",
+   "spya-gdv6dk": "shipped",
+   "spya-ger3a3": "shipped",
++  "spya-gm858u": "shipped",
+   "spya-gmtt4b": "shipped",
+   "spya-gnq9fb": "shipped",
+   "spya-gnvstb": "shipped",
+@@ -263,6 +264,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
+   "spya-n7hvm0": "shipped",
+   "spya-n8cuqq": "shipped",
+   "spya-n8pgy2": "shipped",
++  "spya-nbmce7": "shipped",
+   "spya-nca765": "shipped",
+   "spya-ng89zf": "shipped",
+   "spya-nhddz6": "shipped",
+@@ -308,6 +310,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
+   "spya-pukg0x": "shipped",
+   "spya-puyb6d": "shipped",
+   "spya-q2qb7q": "shipped",
++  "spya-q2w7yt": "shipped",
+   "spya-q3dfmw": "shipped",
+   "spya-q4mud4": "shipped",
+   "spya-q59jex": "shipped",
+@@ -553,6 +556,7 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
+   "spya-eqjfgv": "Comments were already left out; the one gap, a short post, is fixed. Keeping them folded away instead is a question for you: comments inside the article would be read by every mode as the author's.",
+   "spya-exhqqr": "The hang wasn't reproduced, so the three ways Send could do nothing are closed instead: Send now works while the microphone is on, and a send gives up after a minute. And an unsent report now survives a reload.",
+   "spya-frpy22": "Needs a decision is now threads: a contents, one thread at a time with a reply box, Defer for now, the ids, your report shut, a shortcut beside the tabs. Check the reply box on your iPhone.",
++  "spya-gm858u": "spya-nbmce7: Most now always longer than More; whether More must also beat Gist is q-vzd2xt",
+   "spya-gqq38u": "Saved now: the opinions are kept with the article and dated, and come back on reload. The rule is in database.md, and the plan lists what else we still throw away (Mirror is the one worth doing next).",
+   "spya-gxbwug": "Rotation fixed: the page can no longer be wider than the screen mid-turn, which is what made Safari zoom out. The keyboard case is queued; if it recurs, open the article with ?probe=1 and send the trace.",
+   "spya-h5aypq": "Researched what a peer reviewer needs and drew the line between Sources and Referee; the guide offers Referee to referees. You answered q-fkq30v: Promises and starter criteria are queued first.",
+@@ -569,6 +573,7 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
+   "spya-n50aft": "Every version of an arXiv paper is now one article, and the shelf you already have matches too. The cost: pasting v2 while you hold v1 gives you v1.",
+   "spya-n7hvm0": "Needs a decision is now threads: a contents, one thread at a time with a reply box, Defer for now, the ids, your report shut, a shortcut beside the tabs. Check the reply box on your iPhone.",
+   "spya-n8cuqq": "Shipped: dictation runs fifteen minutes and warns before it stops, and Feedback now takes 20,000 characters, a full fifteen minutes of non-stop speech.",
++  "spya-nbmce7": "spya-nbmce7: Most now always longer than More; whether More must also beat Gist is q-vzd2xt",
+   "spya-nhhd0x": "arXiv papers no longer bring in the TeX LaTeXML could not convert, such as \"\\hohsettheme\" and \"hohRose\". About one paper in nine had some. The article you saw stays as it is.",
+   "spya-nnr8ha": "You chose not now (q-wux4k7, 2026-10-08). Browser zoom, Cmd or Ctrl with +, already scales everything, so no setting was built.",
+   "spya-nsrkju": "Sharing on the Add page is reshaped and reworded after five persona critiques. The confirmation panel, two privacy sentences and the rest of the page are queued (qi-krppt8r9).",
+@@ -576,6 +581,7 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
+   "spya-pqae7m": "Quotes in Skim, and the article's words wherever a mode shows them, now draw formulas as maths and keep italics, bold and sub/superscripts, as the paragraph does. Links show as plain words there.",
+   "spya-pqaftb": "The guide now offers up to three next steps as buttons, and for a private link, sharing or archiving a button that takes you to where you do it. Still to come: sharing in a dialog over the page, and archive on the press (qi-ddvxcsdv).",
+   "spya-q2qb7q": "Box health, the worktree sweep and the dashboard refresh are now systemd timers that survive a reboot. You said yes to the feedback sweep timer (q-rh49ck); the Overseer switches it on.",
++  "spya-q2w7yt": "spya-nbmce7: Most now always longer than More; whether More must also beat Gist is q-vzd2xt",
+   "spya-qpgvq9": "spya-x0rfs2: the bar is fixed; the quieter open stop Greg chose in q-u04sye is on dev as an experiment",
+   "spya-qxufp9": "Declined: one model call writes the article's tree and these summaries together, and Structure, the shelf and hover cards need the tree as soon as the article opens. Deferring them means splitting that stage.",
+   "spya-s6qhzv": "The guide greets you in the chat, takes Live, has a Guide row in the bar, and offers to save your reason and About you on your press. Since then it also offers buttons for a private link, sharing and archiving (261009u).",
+diff --git a/src/feedback-questions.generated.ts b/src/feedback-questions.generated.ts
+index 2b78debf5..1e2cca516 100644
+--- a/src/feedback-questions.generated.ts
++++ b/src/feedback-questions.generated.ts
+@@ -39,6 +39,7 @@ export const FEEDBACK_QUESTION_STATUS: Readonly<Record<string, FeedbackQuestionS
+   "q-tyvutf": "answered",
+   "q-u04sye": "answered",
+   "q-vvhb55": "answered",
++  "q-vzd2xt": "open",
+   "q-w2740x": "answered",
+   "q-wux4k7": "answered",
+   "q-xd9es7": "open",
+@@ -50,10 +51,12 @@ export const FEEDBACK_QUESTION_STATUS: Readonly<Record<string, FeedbackQuestionS
+ export const FEEDBACK_OPEN_QUESTIONS: readonly CompiledFeedbackQuestion[] = [
+   { id: "q-xd9es7", title: "A filter on which kinds of note Marginalia shows: now, or not yet?", report: "spya-thpsnd", asked: "2026-10-08", body: "Should Marginalia, the column of notes to the right of the article, get a filter so you can say which kinds of note it shows?\n\nA. Not yet (recommended). Leave the column as it is. Each paragraph gets at most one line of each kind, and most kinds start shut, so it is rarely crowded. Look again if it starts to feel busy.\n\nB. A row of switches at the top of the column, one per kind of note: Ideas, FAQ, Timeline, Debate, Citations, Comments. Remembered on this device. About a day of work. Costs one more row of controls in a column that is narrow already.\n\nRecommended: A.\n\nDetails\n\nWhere this came from. On 3 Oct you asked for fewer modes, and suggested putting Glossary, Ideas and Quotes inside Marginalia, \"so that you could say, I only want...\" those notes. Two smaller ideas were proposed instead. One was a single bar button for the list modes; that was answered on 7 Oct by the More button, which now holds Quotes, Glossary, FAQ, Ideas and Timeline. This is the other one, and it was never asked in a way you could answer here.\n\nWhy not put the list modes inside Marginalia. Marginalia is a column beside the article, not a band below it, and it is hidden on a phone. Moving Glossary, Ideas and Quotes into it would take them away on a phone.\n\nWhat Marginalia shows today. A relation word (so, but, vs) where the argument turns; a pinned line saying which part you are in; each part's question; a stamp where an idea first appears; and, shut until pressed, lines from FAQ, Timeline, Debate, Citations and comments, each from a mode that has already run. Glossary terms are marked in the article itself, not in the column, so \"only glossary notes\" would not be one of the switches.\n\nYour three other follow-ups from that report are settled: Tweets is Summary's Thread; the Simple summary level has gone; and More gathers the list modes." },
+   { id: "q-t3j8hj", title: "May an unattended agent build 2B, the guide saving your words without a press?", report: null, asked: "2026-10-10", body: "You chose 2B on q-dqh7t6: when the guide offers to save your Why you're reading or About you, and the words are a quote of your own message, it saves them straight away with an Undo, instead of waiting for you to press Save. Nothing is built yet, because this loosens a security rule: today nothing a model proposes ever writes without your press. An agent working with nobody watching may not loosen a security rule on a reply alone, so the question is who may build it.\n\nA. Yes: the Overseer may give this build to an unattended agent now, on two conditions: the words are saved only if they appear word for word in a message you typed in that conversation, and the security notes are updated in the same change. GPT Sol reviews the plan and the code. Gives up: you will not watch it being built.\n\nB. No: build it only in a session you are watching.\n\nC. Drop 2B and keep the press, as built.\n\nRecommended: A. With the word-for-word check, the worst a planted instruction in an article could do is save words you yourself typed, and Undo puts the old ones back.\n\nDetails\n\nBackground. On 9 October the guide learned to offer to save two things you tell it: why you are reading this article, and something about yourself (About you, on your profile). It shows the words on a card under its answer, with a Save button and an Undo. Both are fed into later AI prompts, so what is saved there shapes every later answer.\n\nQuestion q-dqh7t6 asked whether that save should stay a press. The recommendation was to keep the press, for two reasons: the press is the one moment you see the words before they go into every future prompt, and an article's own text could try to steer which words the guide offers. You replied 2B on 10 October: save without the press when the words are a quote of your own message.\n\nThe security rule. Our security notes (security-map.md, the row for chat buttons) say that anything a model proposes that writes, spends or leaves the article still needs your press, so a planted instruction can at worst move you around the article. 2B is the first exception. Our feedback rules say an unattended agent does not change such a rule even on your reply, which is why q-xh4y0s asked the same thing about a different build, and you answered A there.\n\nWhat would decide it. Whether you are happy for the exception to be built and reviewed without you watching, given the word-for-word check. The work is queued as qi-wm5nsweg and held until you answer." },
++  { id: "q-vzd2xt", title: "Skim: should More always have more stops than Gist, even if Gist gets shorter on short articles?", report: "spya-nbmce7", asked: "2026-10-10", body: "Your report: Most had fewer stops than More. That is fixed: Most now always has more stops than More, and no pass has fewer than the one before. One choice is left. On short articles (about 11 to 13 quotes), More can still have the SAME number of stops as Gist, for example 3 / 3 / 5.\n\nA. Leave it: More may equal Gist, never fewer. Gist keeps 3 stops on short articles. (What is built now.)\nB. Make More always longer than Gist too. On short articles Gist drops to 2 stops, e.g. 2 / 4 / 5. Measured, the Gist then covered noticeably fewer of the article's key ideas (20 of 49, against 24 to 25).\n\nRecommendation: A. Your report was about a deeper level having fewer stops, which A already rules out, and B costs the Gist the most.\n\nDetails\n\nWhat you reported (2026-10-09, Skim on Attention Is All You Need): \"the most detailed skim submode has fewer steps than the middle one\", and a re-run \"seemed to have more this time\".\n\nWhy it happened: a check that the levels grow was written when More used to include all of Gist's stops. Since late September each level shows only its own new stops (plus a few carried over), and the check was still counting the old way. So nothing stopped Most being shorter. 8 of the 29 routes in production had a level no longer than the one before.\n\nWhat was built (on dev, not deployed): the check now counts each level as you walk it; the AI is asked for per-level numbers that do not shrink; and if its answer still has a deeper level shorter, the route is fixed before it is saved, by dropping a carried-over stop or moving the least important stop one level deeper. Measured on six articles, two runs each: the old version broke the rule in 6 of 12 runs, the new one in 0 of 12.\n\nWhat each option means in use, for an article with 11 quotes:\nA: Gist 3 stops, More 3 new stops (plus any carried over), Most 5.\nB: Gist 2 stops, More 4, Most 5. Three levels that each grow do not fit into 11 quotes any other way, so Gist has to give.\n\nWhat it costs: A means pressing \"More detail\" can occasionally give you the same number of stops as Gist (different ones). B means a thinner Gist on short pieces. On longer articles (14+ quotes) the two are the same.\n\nRoutes planned before this keep their old shape until re-planned (Metadata, re-run Skim).\n\nReply \"A\" or \"B\"; anything else, say so." },
+ ];
+ 
+ /** Each open question's replies an agent has acted on, by id. The server only: never sent. */
+ export const FEEDBACK_QUESTION_ACTED: Readonly<Record<string, readonly string[]>> = {
+   "q-xd9es7": [],
+   "q-t3j8hj": [],
++  "q-vzd2xt": [],
+ };
+diff --git a/src/help-corpus.generated.json b/src/help-corpus.generated.json
+index d7d71a062..b760fcfe7 100644
+--- a/src/help-corpus.generated.json
++++ b/src/help-corpus.generated.json
+@@ -307,7 +307,7 @@
+   "summary": "A route through the piece's quotes, a little deeper each time round.",
+   "keywords": "skimming quick read route spiral trajectory stops depth gist more most tour fast overview spiral route trajectory skim read speed read quick read preview scan skim",
+   "experimental": false,
+-  "body": "## In short\n\nSkim picks out a handful of passages which, read on their own, give you a good sense of what the\npiece is about. Think of it as an alternative to a summary that keeps you in the article: every stop\nis a passage from the article, in place, sometimes with a short question to read it with. Along the way it\nshows what Glossary and Ideas have already found at each stop, such as an unfamiliar term explained.\nGo round quickly with a few stops, then again in more detail, then again in more.\n\n(Picture: Pressing the right arrow twice: the outlined passage in the article moves to the next stop each time, with Next stop and the next cue beneath it. Caption: Each press of → or Next stop moves to the next stop, and the article scrolls to it.)\n\n## How it works\n\nA route through the piece's quotes, a little deeper each time round.\n\nA short model call over the article's Quotes and its key Ideas — never the rest of its prose — puts the Quotes in an order and gives each a depth, so each pass covers as many of the Ideas as the quotes reach, shaped by your profile if you have one. When there are no Quotes or Ideas yet, they are made first; finding the Ideas is the longer part.\n\n## When to use it\n\nWhen you need the shape of a paper fast but do not want a summary in place of the text: every stop\nis a passage from the article, in place, in context. **Gist** is a handful of stops, **More** about a\ndozen, **Most** a larger share of the piece. The order is planned for you — the results first, say,\nthen a quick look at the methods — not the article’s. Only whoever added the article can plan a\nroute; visitors to a shared article can walk one already planned.\n\n## Reading it\n\n(Picture: A Skim stop: the route’s stops on the left with the current one open, and its passage highlighted in the article on the right, with Next stop below. Caption: A stop on the route: the question to read it with, the passage marked in place, and Next stop to move on.)\n\n- <kbd>‹</kbd> <kbd>›</kbd> at the top, or <kbd>←</kbd> <kbd>→</kbd> while reading, step from stop\n  to stop. **Next stop ›**, in the text under the current stop, does the same, and at the end of a\n  pass becomes **More detail ›**.\n- Some stops have a short question above the quote, written by AI, to read it with: what the quote\n  refers to, what it settles, or why it matters — never what it found. A stop whose quote stands on\n  its own has none.\n- A deeper pass has its own new stops and may keep earlier ones where the new ones lean on them.\n  When a route has any, small dots under each stop’s number show which passes it is in, shallowest\n  first: more than one filled, and you may have read it already.\n- Under the current stop, a card gathers what other modes have already found there: **Terms it\n  uses** and **Ideas it bears on**.\n- The dot beside each row shows how far through the article that stop is, so you can see the route\n  jump about.\n- **Reading for:** at the top is what you said you want from this article; the route is planned\n  around it. **Edit** changes it."
++  "body": "## In short\n\nSkim picks out a handful of passages which, read on their own, give you a good sense of what the\npiece is about. Think of it as an alternative to a summary that keeps you in the article: every stop\nis a passage from the article, in place, sometimes with a short question to read it with. Along the way it\nshows what Glossary and Ideas have already found at each stop, such as an unfamiliar term explained.\nGo round quickly with a few stops, then again in more detail, then again in more.\n\n(Picture: Pressing the right arrow twice: the outlined passage in the article moves to the next stop each time, with Next stop and the next cue beneath it. Caption: Each press of → or Next stop moves to the next stop, and the article scrolls to it.)\n\n## How it works\n\nA route through the piece's quotes, a little deeper each time round.\n\nA short model call over the article's Quotes and its key Ideas — never the rest of its prose — puts the Quotes in an order and gives each a depth, so each pass covers as many of the Ideas as the quotes reach, shaped by your profile if you have one. When there are no Quotes or Ideas yet, they are made first; finding the Ideas is the longer part.\n\n## When to use it\n\nWhen you need the shape of a paper fast but do not want a summary in place of the text: every stop\nis a passage from the article, in place, in context. **Gist** is a handful of stops, **More** about a\ndozen, **Most** a larger share of the piece. The order is planned for you — the results first, say,\nthen a quick look at the methods — not the article’s. Only whoever added the article can plan a\nroute; visitors to a shared article can walk one already planned.\n\n## Reading it\n\n(Picture: A Skim stop: the route’s stops on the left with the current one open, and its passage highlighted in the article on the right, with Next stop below. Caption: A stop on the route: the question to read it with, the passage marked in place, and Next stop to move on.)\n\n- <kbd>‹</kbd> <kbd>›</kbd> at the top, or <kbd>←</kbd> <kbd>→</kbd> while reading, step from stop\n  to stop. **Next stop ›**, in the text under the current stop, does the same, and at the end of a\n  pass becomes **More detail ›**. **‹ Previous stop**, on the left under it, goes back one.\n- Some stops have a short question above the quote, written by AI, to read it with: what the quote\n  refers to, what it settles, or why it matters — never what it found. A stop whose quote stands on\n  its own has none.\n- A deeper pass has its own new stops and may keep earlier ones where the new ones lean on them.\n  When a route has any, small dots under each stop’s number show which passes it is in, shallowest\n  first: more than one filled, and you may have read it already.\n- Under the current stop, a card gathers what other modes have already found there: **Terms it\n  uses** and **Ideas it bears on**.\n- The dot beside each row shows how far through the article that stop is, so you can see the route\n  jump about.\n- **Reading for:** at the top is what you said you want from this article; the route is planned\n  around it. **Edit** changes it."
+  },
+  {
+   "anchor": "mode-marginalia",
+diff --git a/src/skim-passes.ts b/src/skim-passes.ts
+new file mode 100644
+index 000000000..19b459778
+--- /dev/null
++++ b/src/skim-passes.ts
+@@ -0,0 +1,68 @@
++/**
++ * **Which stops each pass of a Skim route walks — the one definition**, shared
++ * by the band (src/web/skim-route.ts re-exports it) and the server's growth
++ * rule (src/skim.ts § `passSizes`, `growPasses`), so that what the route is
++ * checked against is what the reader walks. Until plan 261010g the server
++ * checked cumulative counts instead, and a route whose More walked 5 stops and
++ * Most 4 passed (spya-nbmce7). Pure: types only.
++ */
++import type { SkimDepth, SkimStop } from "./types.js";
++
++/** The three depths, shallowest first. */
++export const DEPTHS: readonly SkimDepth[] = [1, 2, 3];
++
++/** `walkedIn`, with the offered depths already in hand — one scan per pass, not per stop. */
++function inPass(stop: SkimStop, depth: SkimDepth, offered: readonly SkimDepth[]): boolean {
++  if (stop.depth === depth) return true;
++  return offered.includes(depth) && (stop.again?.includes(depth) ?? false);
++}
++
++/**
++ * **Whether a stop is walked in a pass — the one definition** (plan 261003l).
++ * It is when the stop was first placed at that depth, or when its `again` names
++ * the depth **and the route offers it** (`offeredDepths`). The second half is
++ * Sol's plan-review F1: a carried stop does not make a pass, so an `again`
++ * naming a depth nothing is first placed at is ignored here, as `validateRoute`
++ * (src/skim.ts) drops it before it is stored.
++ */
++export function walkedIn(stops: readonly SkimStop[], stop: SkimStop, depth: SkimDepth): boolean {
++  return inPass(stop, depth, offeredDepths(stops));
++}
++
++/**
++ * The stops a pass walks, in route order: the ones first placed at that depth,
++ * and any shallower stop carried into it (`walkedIn`). A carried stop keeps its
++ * one place in the order.
++ */
++export function passRoute(
++  stops: readonly SkimStop[],
++  depth: SkimDepth,
++): SkimStop[] {
++  const offered = offeredDepths(stops);
++  return stops.filter((s) => inPass(s, depth, offered));
++}
++
++/** How many stops a pass walks — its own and the carried ones. */
++export function passCount(stops: readonly SkimStop[], depth: SkimDepth): number {
++  const offered = offeredDepths(stops);
++  return stops.reduce((n, s) => (inPass(s, depth, offered) ? n + 1 : n), 0);
++}
++
++/**
++ * **The depths with a stop first placed there**, shallowest first. A short
++ * spiral is allowed on an article with few quotes (the plan's growth rule), so
++ * a depth can have none, and a pass with nothing to walk is not a choice worth
++ * a button.
++ *
++ * **Any stop of its own is enough** — a deeper pass no bigger than the one
++ * before it is still a pass of stops the reader has not stood at (Sol, plan
++ * 260929e review F1: a real route's passes are 2 / 2 / 4).
++ *
++ * **A carried stop is not enough, and this does not ask `walkedIn`** (Sol, plan
++ * 261003l review F1): one Gist stop with `again: [2]` and no More stop would
++ * otherwise offer a More that is the same one stop again. `walkedIn` asks this,
++ * not the other way round.
++ */
++export function offeredDepths(stops: readonly SkimStop[]): SkimDepth[] {
++  return DEPTHS.filter((d) => stops.some((s) => s.depth === d));
++}
+diff --git a/src/skim.ts b/src/skim.ts
+index 377265c33..84587cb0b 100644
+--- a/src/skim.ts
++++ b/src/skim.ts
+@@ -68,6 +68,7 @@ import { isBody } from "./block-policy.js";
+ import { blockIndex, sectionNodesOf, sectionPathOf } from "./section-path.js";
+ import { budgetFor } from "./token-budget.js";
+ import { plainWords } from "./plain-words.js";
++import { passCount } from "./skim-passes.js";
+ import {
+   type Block,
+   type Ideas,
+@@ -160,8 +161,19 @@ export type {
+  * test, and forbids asking what the quote does not answer. An empty cue is
+  * `noCue`, not `badCue`. The input hash is unchanged, as at `skim/10`.
+  * docs/plans/261009j-skim-question-optional-and-the-border.md.
++ *
++ * `skim/12`, 2026-10-10: **no pass is shorter than the one before, and Most
++ * is longer than More, as walked.** Greg's report spya-nbmce7: Most walked 4 stops after More's 5. The
++ * targets were cumulative, the shape from when the passes nested, and the
++ * growth rule judged cumulative counts, so neither saw the walk. Now the
++ * targets are each pass's own stops (`targetsFor`), section 2 says a reader
++ * expects no deeper pass to be shorter, counting what is carried in, the
++ * growth rule judges `passSizes`, and `growPasses` repairs a route that still
++ * does not grow. The input hash is unchanged; the version alone makes a stored
++ * route outdated, which is not announced.
++ * docs/plans/261010g-skim-deeper-passes-always-longer-and-a-previous-stop-door.md.
+  */
+-export const PROMPT_VERSION = "skim/11";
++export const PROMPT_VERSION = "skim/12";
+ 
+ /**
+  * **A cue is a sentence or two, not a paragraph about the passage**: an
+@@ -238,13 +250,30 @@ export function emptyDrops(): SkimDrops {
+  * **Targets, not rules** — what the prompt asks for at each depth, from *q*,
+  * the number of quotes. Hypotheses to measure (Sol F10), not product constants;
+  * the caps above are the only hard numbers.
++ *
++ * **Each pass's own stops, not cumulative counts**, since `skim/12`. Until then
++ * these were "at depth 1; at depth 1 or 2; in all", the shape from when the
++ * passes nested; read as passes, 11 quotes asked for Gist 3, More 3, Most 5, so
++ * a model on target walked a More no longer than its Gist (spya-nbmce7, plan
++ * 261010g). Now, wherever there are quotes enough (`GROWTH_MIN_QUOTES` and up,
++ * which tests/skim.test.ts checks to the cap), More is at least Gist and Most
++ * is more than More: Gist is the old target; More is about 40% of the rest,
++ * kept below half of it; Most is everything left, within the cumulative cap.
++ *
++ * **More may equal Gist**, on purpose. Making More strictly longer too was
++ * built and measured (docs/investigations/261010a-skim-per-pass-targets-and-walked-growth.md):
++ * at 11–13 quotes it forces a two-stop Gist, which covered 4–5 fewer of 49
++ * Ideas across six articles. Greg reported a deeper pass with FEWER stops;
++ * whether a tie is worth that is his call — q-vzd2xt.
+  */
+ export function targetsFor(q: number): { gist: number; more: number; most: number } {
+-  return {
+-    gist: Math.min(5, Math.ceil(q / 5)),
+-    more: Math.min(12, Math.ceil(q / 2)),
+-    most: Math.min(DEPTH_CAPS[2], q),
+-  };
++  const gist = Math.max(1, Math.min(5, Math.ceil(q / 5)));
++  const rest = Math.max(0, q - gist);
++  /* Below half of the rest, so Most has more; at least Gist when that fits. */
++  const below = Math.floor((rest - 1) / 2);
++  const more = Math.max(Math.min(1, rest), Math.min(10, Math.max(gist, Math.round(0.4 * rest)), below));
++  const most = Math.max(0, Math.min(DEPTH_CAPS[2] - gist - more, rest - more));
++  return { gist, more, most };
+ }
+ 
+ /* ------------------------------------------------------ what it is given -- */
+@@ -872,30 +901,138 @@ export function visibleCounts(stops: readonly SkimStop[]): [number, number, numb
+ }
+ 
+ /**
+- * **The passes must grow (Sol F2)**, or the reader presses *More* and gets the
+- * same route again. `null` when they do; otherwise the reason, with the counts.
++ * **How many stops each pass walks**, as the reader walks it — `passCount`
++ * from src/skim-passes.ts, the one definition the band uses too: a pass's own
++ * stops and the ones carried into it, and nothing for a pass no stop is first
++ * placed at.
++ */
++export function passSizes(stops: readonly SkimStop[]): [number, number, number] {
++  return [passCount(stops, 1), passCount(stops, 2), passCount(stops, 3)];
++}
++
++/**
++ * **The passes must grow (Sol F2)**, or the reader presses *More* and gets
++ * less. `null` when they do; otherwise the reason, with the sizes.
++ *
++ * **Judged on the passes as walked** (`passSizes`) since `skim/12`. It used to
++ * judge the cumulative counts — stops at depth ≤ 1, ≤ 2, ≤ 3 — which was what
++ * the reader saw while the passes nested; from 260929e each pass walks only
++ * its own stops (and, from 261003l, a few carried in), and the check went on
++ * guarding the old walk. A route with cumulative 3 < 7 < 11 walked Gist 3,
++ * More 5, Most 4 (spya-nbmce7, plan 261010g).
+  *
+- * With at least `GROWTH_MIN_QUOTES` offered quotes: `1 ≤ c₁ < c₂ < c₃`. With
+- * fewer, a shorter spiral is allowed — `c₁ ≥ 1` and never shrinking (which the
+- * nesting guarantees) — and the band shows only the depths that add something.
++ * With at least `GROWTH_MIN_QUOTES` offered quotes, all three passes and
++ * `1 ≤ w₁ ≤ w₂ < w₃`: Most always walks more than More, and More at least as
++ * many as Gist — `targetsFor` says why More may equal Gist (q-vzd2xt). With
++ * fewer, a shorter spiral is allowed — Gist has a stop, a pass may be absent,
++ * and no offered pass is shorter than the offered one before it.
+  */
+ export function growthFailure(
+-  counts: readonly [number, number, number],
++  sizes: readonly [number, number, number],
+   offered: number,
+ ): string | null {
+-  const [c1, c2, c3] = counts;
+-  const said = `${c1} stops at Gist, ${c2} at More and ${c3} at Most`;
+-  if (c1 < 1) return `The route has no stop at the first depth (${said}).`;
+-  if (c1 > c2 || c2 > c3) return `The route shrinks as it deepens (${said}).`;
+-  if (offered >= GROWTH_MIN_QUOTES && !(c1 < c2 && c2 < c3)) {
++  const [w1, w2, w3] = sizes;
++  const said = `${w1} stops in Gist, ${w2} in More and ${w3} in Most`;
++  if (w1 < 1) return `The route has no stop at the first depth (${said}).`;
++  const walked = sizes.filter((w) => w > 0);
++  if (walked.some((w, i) => i > 0 && w < walked[i - 1]!)) {
++    return `The route shrinks as it deepens (${said}).`;
++  }
++  if (offered >= GROWTH_MIN_QUOTES && !(w2 >= 1 && w2 < w3)) {
+     return (
+-      `With ${offered} quotes, each depth has to add stops to the one before it, and this ` +
+-      `route does not (${said}).`
++      `With ${offered} quotes, the route needs all three passes and Most has to be longer ` +
++      `than More, and this route does not (${said}).`
+     );
+   }
+   return null;
+ }
+ 
++/**
++ * **Make no pass shorter than the one before, and Most longer than More,
++ * where the model's route does not** — rule 9, after `validateRoute`'s eight,
++ * since `skim/12` (plan 261010g); the rule itself is `growthFailure`'s. The
++ * prompt asks for it; this is the backstop, so that More is never longer
++ * than Most by luck of the draw (spya-nbmce7: Gist 3, More 5, Most 4, and a
++ * re-run that happened to grow).
++ *
++ * For each adjacent pair of offered passes, shallow pair first, while the
++ * shallower walks more than the deeper — or, for More and Most with at least
++ * `GROWTH_MIN_QUOTES` quotes, as many:
++ *
++ * 1. drop a stop's `again` entry into the shallower pass, the latest in route
++ *    order first — a carried stop is an extra, and the stop is kept
++ *    (`shrinkCarried`);
++ * 2. with none left, move the shallower pass's **least important own stop**
++ *    one pass deeper — lowest quote priority (`priorityOf`, what the prompt
++ *    shows; none is lowest), the latest on a tie — keeping
++ *    its place in the route and any `again` deeper than its new depth
++ *    (`shrinkMoved`). Never the last stop of a pass, so no pass is emptied and
++ *    no `again` loses the pass it names.
++ *
++ * Then round again, since a stop moved into More can make it as long as Most.
++ * It ends: every step removes a carried entry or moves a stop deeper, and
++ * there are finitely many of both. Rule 6 never demotes (Sol F8) because that
++ * would bloat a deeper pass past its cap; a move here lowers a shallower
++ * cumulative count and leaves the deepest unchanged, so every cap still holds,
++ * and room for carrying only grows in the pass a stop moves into.
++ *
++ * Whatever it cannot fix — a pass of one stop as long as the next — is left
++ * for `growthFailure`, and the job fails as before.
++ */
++export function growPasses(
++  stops: readonly SkimStop[],
++  quotes: readonly Quote[],
++  dropped: SkimDrops,
++): SkimStop[] {
++  /* The priority the prompt shows (`priorityOf`); none is the lowest, as `collapseQuotes` ranks it. */
++  const byId = new Map(quotes.map((q) => [q.id, q]));
++  const importance = (id: string) => {
++    const q = byId.get(id);
++    return (q && priorityOf(q)) ?? Number.NEGATIVE_INFINITY;
++  };
++  const strict = quotes.length >= GROWTH_MIN_QUOTES;
++  const route = stops.map((s) => ({ ...s }));
++  const tooLong = (a: SkimDepth, b: SkimDepth, sizes: readonly number[]) =>
++    strict && a === 2 && b === 3 ? sizes[1]! >= sizes[2]! : sizes[a - 1]! > sizes[b - 1]!;
++
++  /** The first pair of adjacent offered passes that does not grow, shallow first. */
++  const failing = (): [SkimDepth, SkimDepth] | null => {
++    const sizes = passSizes(route);
++    const offered = ([1, 2, 3] as const).filter((d) => sizes[d - 1]! > 0);
++    for (let i = 0; i + 1 < offered.length; i++) {
++      const [a, b] = [offered[i]!, offered[i + 1]!];
++      if (tooLong(a, b, sizes)) return [a, b];
++    }
++    return null;
++  };
++
++  for (let pair = failing(); pair !== null; pair = failing()) {
++    const [shallow, deep] = pair;
++    const s = [...route].reverse().find((r) => r.again?.includes(shallow) ?? false);
++    if (s !== undefined) {
++      const again = s.again!.filter((d) => d !== shallow);
++      if (again.length > 0) s.again = again;
++      else delete s.again;
++      dropped.shrinkCarried = (dropped.shrinkCarried ?? 0) + 1;
++      continue;
++    }
++    const own = route.filter((s) => s.depth === shallow);
++    if (own.length <= 1) break;
++    const least = own.reduce((low, s) =>
++      importance(s.quoteId) <= importance(low.quoteId) ? s : low,
++    );
++    /* One pass deeper is `deep` itself only when no pass lies between them;
++       a pass is offered only when a stop is first placed there, so a stop
++       moved past an absent pass would offer it — move it to `deep`. */
++    least.depth = deep;
++    const again = least.again?.filter((d) => d > deep) ?? [];
++    if (again.length > 0) least.again = again;
++    else delete least.again;
++    dropped.shrinkMoved = (dropped.shrinkMoved ?? 0) + 1;
++  }
++  return route;
++}
++
+ /**
+  * The artefact, from what the model said plus what survived validation.
+  *
+@@ -932,7 +1069,7 @@ export function buildSkim(
+     );
+   }
+   const d = opts.dropped;
+-  const stops = validateRoute(parsed.stops, opts.quotes, d);
++  const stops = growPasses(validateRoute(parsed.stops, opts.quotes, d), opts.quotes, d);
+   if (stops.length === 0) {
+     throw new Error(
+       `The model named ${parsed.stops.length} stops and none of them survived, so there is ` +
+@@ -943,12 +1080,14 @@ export function buildSkim(
+     );
+   }
+   const visible = visibleCounts(stops);
+-  const failure = growthFailure(visible, opts.quotes.length);
++  const failure = growthFailure(passSizes(stops), opts.quotes.length);
+   if (failure) {
+     throw new Error(
+       `${failure} Nothing was written. Dropped: ${d.collapsed} same-block quotes before the call, ` +
+         `${d.unknownQuote} unknown, ${d.malformed} malformed, ${d.duplicate} duplicates, ` +
+-        `${d.sameBlock} on one block, ${d.overCap} over a cap.`,
++        `${d.sameBlock} on one block, ${d.overCap} over a cap; moved ${d.shrinkMoved ?? 0} ` +
++        `stops a pass deeper and dropped ${d.shrinkCarried ?? 0} carried entries to make the ` +
++        "passes grow.",
+     );
+   }
+   return {
+@@ -1020,9 +1159,12 @@ WHAT YOU DECIDE
+    1 = GIST: the few stops that give the gist on their own;
+    2 = MORE: go round again, in more detail — the stops that fill in how and why;
+    3 = MOST: nearly everything else worth stopping at.
+-   Each pass must ADD stops of its own when its target is larger than the one
+-   before it. When two adjacent targets are the same because only one or two
+-   quotes were offered, that pass may be absent.
++   The reader walks each pass on its own and expects a deeper pass never to
++   be SHORTER than the one before: MORE walks at least as many stops as GIST,
++   and MOST more than MORE, counting the stops carried into each. So follow
++   the targets for each pass's own stops, and carry a stop into MORE only
++   while MORE stays shorter than MOST. When a target is 0 because few quotes
++   were offered, that pass may be absent.
+ 
+    And "again" for each stop: the deeper passes it is ALSO walked in. The
+    reader walks one pass at a time. A pass is its own stops (the ones whose
+@@ -1164,10 +1306,11 @@ RULES
+ - Each quote is at most one entry in the list, never two. "again" is how a
+   stop appears in more than one pass.
+ - There is at most one offered quote from any paragraph.
+-- Depth 3 should normally include nearly all the quotes. Leave one out only if
+-  it adds nothing a stop already gives.
+-- The user message gives a target for each depth. Aim near it. The targets
+-  count each stop once, at its depth; a carried stop does not count again.
++- The route should normally include nearly all the quotes: those not at depth
++  1 or 2 go at depth 3. Leave one out only if it adds nothing a stop already
++  gives.
++- The user message gives a target for each depth: how many stops of its own
++  that pass has. Aim near it. A carried stop is not counted in the target.
+ 
+ OUTPUT
+ 
+@@ -1244,8 +1387,8 @@ export function renderPromptParts(opts: {
+   const who = profileSection(opts.profile);
+   const prompt = `Plan the route through these ${count} quotes.
+ 
+-Targets: about ${t.gist} at depth 1; about ${t.more} at depth 1 or 2; about ${t.most} in all.
+-Each stop counts once, at its depth: a stop carried into a deeper pass with "again" does not count again.
++Targets, each pass's own stops: about ${t.gist} at depth 1; about ${t.more} at depth 2; about ${t.most} at depth 3.
++A stop carried into a deeper pass with "again" is not counted in that pass's target.
+ ${who ? `\n${who}\n` : ""}
+ === THE KEY IDEAS ===
+ 
+diff --git a/src/types.ts b/src/types.ts
+index eded090ce..87da7dfae 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -1446,6 +1446,20 @@ export interface SkimDrops {
+    * stops as it may — `maxCarried` in src/skim.ts. The stop is kept.
+    */
+   overCarried?: number;
++  /**
++   * `again` entries dropped so that a deeper pass walks more stops than the
++   * one before it — `growPasses` in src/skim.ts, since `skim/12`
++   * (docs/plans/261010g-skim-deeper-passes-always-longer-and-a-previous-stop-door.md).
++   * The stop is kept. Absent before, read it as 0.
++   */
++  shrinkCarried?: number;
++  /**
++   * Stops moved one pass deeper for the same reason, once no carried entry
++   * was left to drop — the least important own stop of the pass that was
++   * too long. The stop is kept, in its place in the route. Absent before
++   * `skim/12`, read it as 0.
++   */
++  shrinkMoved?: number;
+   /** Stops past a cumulative cap, dropped in route order — never demoted. */
+   overCap: number;
+ }
+diff --git a/src/web/SkimPanel.tsx b/src/web/SkimPanel.tsx
+index fb1bde1ea..018c7c8ae 100644
+--- a/src/web/SkimPanel.tsx
++++ b/src/web/SkimPanel.tsx
+@@ -1204,11 +1204,17 @@ function TermChip({
+  */
+ export function SkimDoor({
+   door,
++  onPrevious,
+   onNext,
+   onDeeper,
+   onRoute,
+ }: {
+   door: DoorView | null;
++  /**
++   * *‹ Previous stop*, on the left — `null` on stop 1 of a pass, where there
++   * is none (spya-gm858u, plan 261010g). The same step ← takes.
++   */
++  onPrevious: (() => void) | null;
+   onNext(): void;
+   onDeeper(): void;
+   /** Bring the band back — offered only while it has stepped aside. */
+@@ -1218,34 +1224,53 @@ export function SkimDoor({
+   return (
+     <div className="skim-door">
+       <div className="skim-door-row">
+-        {onRoute && (
+-          <button type="button" className="skim-door-btn quiet" onClick={onRoute}>
+-            <Route size={14} />
+-            All stops
+-          </button>
++        {/* Back on the left, the way on on the right — Greg: "the previous
++            step is on the left-hand side and the next step is on the right,
++            as it already is." */}
++        {onPrevious && (
++          <div className="skim-door-back">
++            <StepTip
++              head="Previous stop"
++              what="Back one stop along the route."
++              keyName="←"
++              placement="top"
++            >
++              <button type="button" className="skim-door-btn" onClick={onPrevious}>
++                ‹ Previous stop
++              </button>
++            </StepTip>
++          </div>
+         )}
+-        {door?.kind === "next" && (
+-          <StepTip
+-            head="Next stop"
+-            what="On to the next stop along the route."
+-            keyName="→"
+-            placement="top"
+-          >
+-            <button type="button" className="skim-door-btn" onClick={onNext}>
+-              Next stop ›
++        <div className="skim-door-on">
++          {onRoute && (
++            <button type="button" className="skim-door-btn quiet" onClick={onRoute}>
++              <Route size={14} />
++              All stops
+             </button>
+-          </StepTip>
+-        )}
+-        {door?.kind === "end" && door.deeper && (
+-          <button
+-            type="button"
+-            className="skim-door-btn"
+-            title={`Go on to ${door.deeper}: the next pass, in more detail`}
+-            onClick={onDeeper}
+-          >
+-            More detail ›
+-          </button>
+-        )}
++          )}
++          {door?.kind === "next" && (
++            <StepTip
++              head="Next stop"
++              what="On to the next stop along the route."
++              keyName="→"
++              placement="top"
++            >
++              <button type="button" className="skim-door-btn" onClick={onNext}>
++                Next stop ›
++              </button>
++            </StepTip>
++          )}
++          {door?.kind === "end" && door.deeper && (
++            <button
++              type="button"
++              className="skim-door-btn"
++              title={`Go on to ${door.deeper}: the next pass, in more detail`}
++              onClick={onDeeper}
++            >
++              More detail ›
++            </button>
++          )}
++        </div>
+       </div>
+       {/* Where the door leads: the next stop's cue, small and muted — or, at
+           the end of a pass, which pass has ended. */}
+diff --git a/src/web/help/pages/modes/skim.md b/src/web/help/pages/modes/skim.md
+index 9aed9fcd3..5e2d2a1ae 100644
+--- a/src/web/help/pages/modes/skim.md
++++ b/src/web/help/pages/modes/skim.md
+@@ -27,7 +27,7 @@ route; visitors to a shared article can walk one already planned.
+ 
+ - <kbd>‹</kbd> <kbd>›</kbd> at the top, or <kbd>←</kbd> <kbd>→</kbd> while reading, step from stop
+   to stop. **Next stop ›**, in the text under the current stop, does the same, and at the end of a
+-  pass becomes **More detail ›**.
++  pass becomes **More detail ›**. **‹ Previous stop**, on the left under it, goes back one.
+ - Some stops have a short question above the quote, written by AI, to read it with: what the quote
+   refers to, what it settles, or why it matters — never what it found. A stop whose quote stands on
+   its own has none.
+diff --git a/src/web/modes/skim/SkimMode.tsx b/src/web/modes/skim/SkimMode.tsx
+index a90e496db..56b2c0331 100644
+--- a/src/web/modes/skim/SkimMode.tsx
++++ b/src/web/modes/skim/SkimMode.tsx
+@@ -77,6 +77,12 @@ export interface SkimControl {
+   blockId: BlockId | null;
+   /** What the door after it offers — `DoorView`. */
+   door: DoorView | null;
++  /**
++   * Whether the door offers *‹ Previous stop*: the current stop is not the
++   * first of its pass (spya-gm858u, plan 261010g). On stop 1, ← goes to stop
++   * 1's passage again, which is a different job, so the door draws nothing.
++   */
++  hasPrevious: boolean;
+   /**
+    * ← / →. `false` at the end of the pass, which does not wrap. ← on the first
+    * stop goes to the first stop's block again (Greg, SPIDERYARN-READING2-4K).
+@@ -581,6 +587,9 @@ function useSkimMode({
+   const passLabel = depth === null ? "" : DEPTH_LABEL[depth];
+   const deeperLabel = door?.kind === "end" && door.deeper ? DEPTH_LABEL[door.deeper.depth] : null;
+   const passSize = route.length;
++  /* By index in the pass, not from `step(-1)`, which answers `true` on stop 1
++     too (it goes to stop 1's passage again) — Sol, plan review F7. */
++  const hasPrevious = current !== null && route.findIndex((s) => s.quoteId === current.quoteId) > 0;
+   const doorView = useMemo<DoorView | null>(
+     () =>
+       doorKind === null
+@@ -658,11 +667,12 @@ function useSkimMode({
+         : {
+             blockId: stopBlock,
+             door: doorView,
++            hasPrevious,
+             step: stableStep,
+             advance: stableAdvance,
+             deeper: stableDeeper,
+           },
+-    [current, stopBlock, doorView, stableStep, stableAdvance, stableDeeper],
++    [current, stopBlock, doorView, hasPrevious, stableStep, stableAdvance, stableDeeper],
+   );
+   useLayoutEffect(() => {
+     onControl(control);
+diff --git a/src/web/reader/Reader.tsx b/src/web/reader/Reader.tsx
+index 6dbda9661..e9461ec9a 100644
+--- a/src/web/reader/Reader.tsx
++++ b/src/web/reader/Reader.tsx
+@@ -2041,6 +2041,7 @@ export function Reader({
+       node: (
+         <SkimDoor
+           door={skimControl.door}
++          onPrevious={skimControl.hasPrevious ? () => skimControl.step(-1) : null}
+           onNext={skimControl.advance}
+           onDeeper={skimControl.deeper}
+           onRoute={bandBack ? () => setBandAway(false) : null}
+diff --git a/src/web/skim-route.ts b/src/web/skim-route.ts
+index 4a807269e..f32ada650 100644
+--- a/src/web/skim-route.ts
++++ b/src/web/skim-route.ts
+@@ -29,10 +29,13 @@
+  * docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
+  * § The mode (client) is where the other rules below were first specified.
+  */
++import { DEPTHS, offeredDepths, passCount, passRoute, walkedIn } from "../skim-passes.js";
+ import type { Block, BlockId, SkimDepth, SkimStop } from "../types.js";
+ 
+-/** The three depths, shallowest first. */
+-export const DEPTHS: readonly SkimDepth[] = [1, 2, 3];
++/* The pass definitions are shared with the server's growth rule (src/skim.ts
++   § `passSizes`), so they live in src/skim-passes.ts; re-exported here for the
++   client's existing imports. */
++export { DEPTHS, offeredDepths, passCount, passRoute, walkedIn };
+ 
+ /** What the depth control calls each pass — the Opus arbiter's labels. */
+ export const DEPTH_LABEL: Record<SkimDepth, string> = {
+@@ -41,62 +44,6 @@ export const DEPTH_LABEL: Record<SkimDepth, string> = {
+   3: "Most",
+ };
+ 
+-/** `walkedIn`, with the offered depths already in hand — one scan per pass, not per stop. */
+-function inPass(stop: SkimStop, depth: SkimDepth, offered: readonly SkimDepth[]): boolean {
+-  if (stop.depth === depth) return true;
+-  return offered.includes(depth) && (stop.again?.includes(depth) ?? false);
+-}
+-
+-/**
+- * **Whether a stop is walked in a pass — the one definition** (plan 261003l).
+- * It is when the stop was first placed at that depth, or when its `again` names
+- * the depth **and the route offers it** (`offeredDepths`). The second half is
+- * Sol's plan-review F1: a carried stop does not make a pass, so an `again`
+- * naming a depth nothing is first placed at is ignored here, as `validateRoute`
+- * (src/skim.ts) drops it before it is stored.
+- */
+-export function walkedIn(stops: readonly SkimStop[], stop: SkimStop, depth: SkimDepth): boolean {
+-  return inPass(stop, depth, offeredDepths(stops));
+-}
+-
+-/**
+- * The stops a pass walks, in route order: the ones first placed at that depth,
+- * and any shallower stop carried into it (`walkedIn`). A carried stop keeps its
+- * one place in the order.
+- */
+-export function passRoute(
+-  stops: readonly SkimStop[],
+-  depth: SkimDepth,
+-): SkimStop[] {
+-  const offered = offeredDepths(stops);
+-  return stops.filter((s) => inPass(s, depth, offered));
+-}
+-
+-/** How many stops a pass walks — its own and the carried ones. */
+-export function passCount(stops: readonly SkimStop[], depth: SkimDepth): number {
+-  const offered = offeredDepths(stops);
+-  return stops.reduce((n, s) => (inPass(s, depth, offered) ? n + 1 : n), 0);
+-}
+-
+-/**
+- * **The depths with a stop first placed there**, shallowest first. A short
+- * spiral is allowed on an article with few quotes (the plan's growth rule), so
+- * a depth can have none, and a pass with nothing to walk is not a choice worth
+- * a button.
+- *
+- * **Any stop of its own is enough** — a deeper pass no bigger than the one
+- * before it is still a pass of stops the reader has not stood at (Sol, plan
+- * 260929e review F1: a real route's passes are 2 / 2 / 4).
+- *
+- * **A carried stop is not enough, and this does not ask `walkedIn`** (Sol, plan
+- * 261003l review F1): one Gist stop with `again: [2]` and no More stop would
+- * otherwise offer a More that is the same one stop again. `walkedIn` asks this,
+- * not the other way round.
+- */
+-export function offeredDepths(stops: readonly SkimStop[]): SkimDepth[] {
+-  return DEPTHS.filter((d) => stops.some((s) => s.depth === d));
+-}
+-
+ /**
+  * The depth to draw: the one asked for if it is offered, else the deepest
+  * offered depth below it, else the shallowest offered — and Gist when nothing
+@@ -185,8 +132,7 @@ export function stepStop(
+  * a pass with no stops.
+  */
+ export function firstStopOf(stops: readonly SkimStop[], depth: SkimDepth): string | null {
+-  const offered = offeredDepths(stops);
+-  return stops.find((s) => inPass(s, depth, offered))?.quoteId ?? null;
++  return passRoute(stops, depth)[0]?.quoteId ?? null;
+ }
+ 
+ /**
+diff --git a/src/web/styles/skim.css b/src/web/styles/skim.css
+index b1d9e7514..a9fa4fd4a 100644
+--- a/src/web/styles/skim.css
++++ b/src/web/styles/skim.css
+@@ -365,11 +365,22 @@
+   font-family: var(--font-author);
+   font-size: var(--reading-size);
+ }
++/* Back on the left, the way on on the right (spya-gm858u, plan 261010g): the
++   row spans the door's measure, and the forward group keeps to the right even
++   when there is no back button, or it wraps under one on a narrow window. */
+ .skim-door-row {
++  display: flex;
++  align-self: stretch;
++  justify-content: space-between;
++  flex-wrap: wrap;
++  gap: 0.5rem;
++}
++.skim-door-on {
+   display: flex;
+   justify-content: flex-end;
+   flex-wrap: wrap;
+   gap: 0.5rem;
++  margin-left: auto;
+ }
+ /* **Where the door leads**: the next stop's cue, small and muted, so it reads
+    as a signpost rather than as the author's words or a summary — or, at the
+diff --git a/tests/skim-panel.test.tsx b/tests/skim-panel.test.tsx
+index dce559082..11d27b34f 100644
+--- a/tests/skim-panel.test.tsx
++++ b/tests/skim-panel.test.tsx
+@@ -1458,6 +1458,7 @@ describe("the door in the prose", () => {
+   const door = (props: Partial<Parameters<typeof SkimDoor>[0]>) =>
+     createElement(SkimDoor, {
+       door: null,
++      onPrevious: null,
+       onNext: () => {},
+       onDeeper: () => {},
+       onRoute: null,
+@@ -1513,6 +1514,53 @@ describe("the door in the prose", () => {
+     await act(async () => root.render(door({})));
+     expect(host.innerHTML).toBe("");
+   });
++
++  /* spya-gm858u, Greg 2026-10-09: "perhaps add a previous step as well as a
++     next step in the article text … the previous step is on the left-hand side
++     and the next step is on the right, as it already is." */
++  it("offers the previous stop on the left, the way on on the right", async () => {
++    let prev = 0;
++    let next = 0;
++    await act(async () =>
++      root.render(
++        door({
++          door: { kind: "next", cue: null },
++          onPrevious: () => void prev++,
++          onNext: () => void next++,
++          onRoute: () => {},
++        }),
++      ),
++    );
++    const left = [...host.querySelectorAll<HTMLButtonElement>(".skim-door-back button")];
++    const right = [...host.querySelectorAll<HTMLButtonElement>(".skim-door-on button")];
++    expect(left.map((b) => b.textContent)).toEqual(["‹ Previous stop"]);
++    expect(right.map((b) => b.textContent)).toEqual(["All stops", "Next stop ›"]);
++    await act(async () => left[0]!.click());
++    expect([prev, next]).toEqual([1, 0]);
++  });
++
++  it("offers no previous stop on stop 1 of a pass", async () => {
++    await act(async () => root.render(door({ door: { kind: "next", cue: null }, onPrevious: null })));
++    expect(host.querySelector(".skim-door-back")).toBeNull();
++    expect([...host.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["Next stop ›"]);
++  });
++
++  it("keeps the previous stop at the end of a pass, beside More detail or alone at the deepest", async () => {
++    await act(async () =>
++      root.render(
++        door({ door: { kind: "end", pass: "Gist", count: 3, deeper: "More" }, onPrevious: () => {} }),
++      ),
++    );
++    expect([...host.querySelectorAll("button")].map((b) => b.textContent)).toEqual([
++      "‹ Previous stop",
++      "More detail ›",
++    ]);
++    await act(async () =>
++      root.render(door({ door: { kind: "end", pass: "Most", count: 3, deeper: null }, onPrevious: () => {} })),
++    );
++    expect([...host.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["‹ Previous stop"]);
++    expect(text(".skim-door-cue")).toBe("End of Most — 3 stops.");
++  });
+ });
+ 
+ /* **A shortcut is named on its control's card** — Greg, 2026-09-30
+@@ -1580,13 +1628,30 @@ describe("the step controls name their keys", () => {
+ 
+   it("the door's Next stop names → too", async () => {
+     await act(async () =>
+-      root.render(createElement(SkimDoor, { door: { kind: "next", cue: null }, onNext: () => {}, onDeeper: () => {}, onRoute: null })),
++      root.render(createElement(SkimDoor, { door: { kind: "next", cue: null }, onPrevious: null, onNext: () => {}, onDeeper: () => {}, onRoute: null })),
+     );
+     await hover(host.querySelector("button")!);
+     expect(tip()).toContain("While reading, press →");
+     expect(tip()).toContain("On to the next stop along the route.");
+   });
+ 
++  it("the door's Previous stop names ←", async () => {
++    await act(async () =>
++      root.render(
++        createElement(SkimDoor, {
++          door: { kind: "next", cue: null },
++          onPrevious: () => {},
++          onNext: () => {},
++          onDeeper: () => {},
++          onRoute: null,
++        }),
++      ),
++    );
++    await hover(host.querySelector(".skim-door-back button")!);
++    expect(tip()).toContain("While reading, press ←");
++    expect(tip()).toContain("Back one stop along the route.");
++  });
++
+   /* 73 kept the head's own (i) in one group with the depth buttons. Since
+      2026-10-01 the (i) is the band's, so the head has none, and the depths
+      are the group's only content. */
+diff --git a/tests/skim.test.ts b/tests/skim.test.ts
+index 984b064c9..4581b6e8d 100644
+--- a/tests/skim.test.ts
++++ b/tests/skim.test.ts
+@@ -35,7 +35,9 @@ import {
+   buildSkim,
+   collapseQuotes,
+   emptyDrops,
++  growPasses,
+   growthFailure,
++  passSizes,
+   ideaLabelOf,
+   inAbstract,
+   isAbstractTitle,
+@@ -587,7 +589,7 @@ describe("validating the model's route", () => {
+         { stops: [carried(0, 1, [2, 3]), carried(1, 1, [2, 3]), stop(2, 3)] },
+         buildOpts(quotesOf(10)),
+       ),
+-    ).toThrow(/each depth has to add stops/);
++    ).toThrow(/the route needs all three passes/);
+   });
+ 
+   it("writes `again` into the artefact, beside counts that are still of first-placed stops", () => {
+@@ -645,12 +647,175 @@ describe("validating the model's route", () => {
+ 
+ /* ------------------------------------------------------------ the growth -- */
+ 
++describe("the passes must grow as WALKED (spya-nbmce7)", () => {
++  const carried = (n: number, depth: unknown, again: unknown) => ({ ...stop(n, depth), again });
++  /** A quote with an importance, so the repair's "least important" is pinned. */
++  const weighted = (n: number, importance: number): Quote => ({ ...quote(n), importance });
++
++  it("counts each pass as the reader walks it: own stops plus the ones carried in", () => {
++    const stops = validateRoute(
++      [carried(0, 1, [2]), stop(1, 1), stop(2, 2), stop(3, 3), stop(4, 3)],
++      quotesOf(10),
++      emptyDrops(),
++    );
++    expect(passSizes(stops)).toEqual([2, 2, 2]);
++    /* A pass no stop is first placed at is not offered, so it walks nothing. */
++    expect(passSizes(validateRoute([stop(0, 1), stop(1, 3)], quotesOf(5), emptyDrops()))).toEqual([1, 0, 1]);
++  });
++
++  it("repairs the reported route: Gist 3, More 5, Most 4 comes out growing", () => {
++    /* arxiv-1706-03762's skim/10 route: own 3, 4, 4 over 11 quotes, and one
++       Gist stop carried into More. Cumulative 3 < 7 < 11 passed; the walk did not. */
++    const quotes = quotesOf(11).map((_, i) => weighted(i, i === 4 ? 0.1 : i === 1 ? 0.2 : 0.5));
++    const raw = [
++      carried(0, 1, [2]),
++      stop(1, 1),
++      stop(2, 1),
++      stop(3, 2),
++      stop(4, 2),
++      stop(5, 2),
++      stop(6, 2),
++      stop(7, 3),
++      stop(8, 3),
++      stop(9, 3),
++      stop(10, 3),
++    ];
++    const kept = validateRoute(raw, quotes, emptyDrops());
++    expect(passSizes(kept)).toEqual([3, 5, 4]);
++    expect(growthFailure(passSizes(kept), 11)).not.toBeNull();
++
++    const d = emptyDrops();
++    const grown = growPasses(kept, quotes, d);
++    expect(growthFailure(passSizes(grown), 11)).toBeNull();
++    /* Nothing is lost, and the route order is the model's. */
++    expect(grown.map((s) => s.quoteId)).toEqual(kept.map((s) => s.quoteId));
++    /* The carry went first; then the least important More stop (quote 4)
++       went one pass deeper. Gist keeps its three: More may equal it (q-vzd2xt). */
++    expect(grown.find((s) => s.quoteId === qid(0))!.again).toBeUndefined();
++    expect(grown.find((s) => s.quoteId === qid(4))!.depth).toBe(3);
++    expect(grown.find((s) => s.quoteId === qid(1))!.depth).toBe(1);
++    expect(d.shrinkCarried).toBe(1);
++    expect(d.shrinkMoved).toBe(1);
++    expect(passSizes(grown)).toEqual([3, 3, 5]);
++  });
++
++  it("lets More equal Gist, and repairs a More shorter than Gist, moving the latest on a tie", () => {
++    /* Eight quotes at the old targets read as passes: 2, 2, 4 — allowed. */
++    const even = validateRoute(
++      [stop(0, 1), stop(1, 2), stop(2, 1), stop(3, 2), stop(4, 3), stop(5, 3), stop(6, 3), stop(7, 3)],
++      quotesOf(8),
++      emptyDrops(),
++    );
++    expect(growPasses(even, quotesOf(8), emptyDrops())).toEqual(even);
++    expect(growthFailure(passSizes(even), 8)).toBeNull();
++
++    const short = validateRoute(
++      [stop(0, 1), stop(1, 1), stop(2, 1), stop(3, 2), stop(4, 3), stop(5, 3), stop(6, 3), stop(7, 3)],
++      quotesOf(8),
++      emptyDrops(),
++    );
++    expect(passSizes(short)).toEqual([3, 1, 4]);
++    const d = emptyDrops();
++    const grown = growPasses(short, quotesOf(8), d);
++    expect(passSizes(grown)).toEqual([2, 2, 4]);
++    expect(grown.find((s) => s.quoteId === qid(2))!.depth).toBe(2);
++    expect(d.shrinkMoved).toBe(1);
++  });
++
++  it("keeps a moved stop's carry into a pass deeper than its new one", () => {
++    const quotes = quotesOf(8).map((_, i) => weighted(i, i === 1 ? 0.1 : 0.5));
++    const kept = validateRoute(
++      [carried(0, 1, [3]), carried(1, 1, [3]), stop(2, 1), stop(3, 2), stop(4, 3), stop(5, 3), stop(6, 3), stop(7, 3)],
++      quotes,
++      emptyDrops(),
++    );
++    expect(passSizes(kept)).toEqual([3, 1, 6]);
++    const grown = growPasses(kept, quotes, emptyDrops());
++    expect(grown.find((s) => s.quoteId === qid(1))).toMatchObject({ depth: 2, again: [3] });
++    expect(passSizes(grown)).toEqual([2, 2, 6]);
++  });
++
++  it("leaves a growing route exactly as it was, and never empties a pass to make one grow", () => {
++    const kept = validateRoute(goodRoute, quotesOf(10), emptyDrops());
++    const d = emptyDrops();
++    expect(growPasses(kept, quotesOf(10), d)).toEqual(kept);
++    expect(d.shrinkCarried ?? 0).toBe(0);
++    expect(d.shrinkMoved ?? 0).toBe(0);
++
++    /* One stop at each depth over nine quotes cannot give Most more than More
++       without emptying More: the repair stops, and the job fails as before. */
++    const flat = validateRoute([stop(0, 1), stop(1, 2), stop(2, 3)], quotesOf(9), emptyDrops());
++    const left = growPasses(flat, quotesOf(9), emptyDrops());
++    expect(passSizes(left)).toEqual([1, 1, 1]);
++    expect(growthFailure(passSizes(left), 9)).not.toBeNull();
++    expect(() => buildSkim({ stops: [stop(0, 1), stop(1, 2), stop(2, 3)] }, buildOpts(quotesOf(9)))).toThrow(
++      /Most has to be longer/,
++    );
++  });
++
++  it("with fewer than eight quotes, only stops a pass being shorter than the one before", () => {
++    const kept = validateRoute(
++      [stop(0, 1), stop(1, 2), stop(2, 2), carried(3, 1, [2]), stop(4, 3)],
++      quotesOf(6),
++      emptyDrops(),
++    );
++    expect(passSizes(kept)).toEqual([2, 3, 1]);
++    const grown = growPasses(kept, quotesOf(6), emptyDrops());
++    const sizes = passSizes(grown);
++    expect(growthFailure(sizes, 6)).toBeNull();
++    expect(sizes[1]).toBeLessThanOrEqual(sizes[2]);
++  });
++
++  it("across an absent pass, moves a stop to the next offered one, never into the gap (Sol F2)", () => {
++    /* Five quotes, Gist and Most only: moving a Gist stop to depth 2 would
++       offer a More of one, so it goes to Most. */
++    const kept = validateRoute([stop(0, 1), stop(1, 1), stop(2, 1), stop(3, 3)], quotesOf(5), emptyDrops());
++    expect(passSizes(kept)).toEqual([3, 0, 1]);
++    const grown = growPasses(kept, quotesOf(5), emptyDrops());
++    expect(passSizes(grown)).toEqual([2, 0, 2]);
++    expect(grown.find((s) => s.quoteId === qid(2))!.depth).toBe(3);
++  });
++
++  it("moves a quote with no priority before any with one, even a priority of 0 (Sol F3)", () => {
++    const quotes = quotesOf(8).map((q, i) =>
++      i === 0 ? { ...q, importance: 0 } : i === 1 ? { id: q.id, blockId: q.blockId, text: q.text } : q,
++    );
++    /* Gist 3, More 1: one Gist stop has to go. */
++    const kept = validateRoute(
++      [stop(1, 1), stop(0, 1), stop(2, 1), stop(3, 2), stop(4, 3), stop(5, 3), stop(6, 3), stop(7, 3)],
++      quotes,
++      emptyDrops(),
++    );
++    const grown = growPasses(kept, quotes, emptyDrops());
++    expect(grown.find((s) => s.quoteId === qid(1))!.depth).toBe(2);
++    expect(grown.find((s) => s.quoteId === qid(0))!.depth).toBe(1);
++  });
++
++  it("builds the reported route rather than failing it, and records what it moved", () => {
++    const raw = [
++      carried(0, 1, [2]),
++      stop(1, 1),
++      stop(2, 1),
++      ...[3, 4, 5, 6].map((n) => stop(n, 2)),
++      ...[7, 8, 9, 10].map((n) => stop(n, 3)),
++    ];
++    const skim = buildSkim({ stops: raw }, buildOpts(quotesOf(11)));
++    const [g, m, n] = passSizes(skim.stops);
++    expect(g <= m && m < n).toBe(true);
++    expect(skim.dropped.shrinkMoved).toBeGreaterThan(0);
++  });
++});
++
+ describe("the passes must grow (Sol F2)", () => {
+-  it("with eight or more quotes, asks 1 ≤ c1 < c2 < c3", () => {
++  it("with eight or more quotes, asks 1 ≤ w1 ≤ w2 < w3, as walked", () => {
+     expect(growthFailure([2, 5, 10], 10)).toBeNull();
+     expect(growthFailure([0, 5, 10], 10)).toMatch(/0/);
+-    expect(growthFailure([3, 3, 10], 10)).not.toBeNull();
++    /* More may equal Gist (q-vzd2xt) but not be shorter, and Most must beat More. */
++    expect(growthFailure([3, 3, 10], 10)).toBeNull();
++    expect(growthFailure([3, 2, 10], 10)).not.toBeNull();
+     expect(growthFailure([2, 5, 5], 8)).not.toBeNull();
++    expect(growthFailure([3, 5, 4], 11)).not.toBeNull();
++    expect(growthFailure([3, 0, 4], 11)).not.toBeNull();
+   });
+ 
+   it("with fewer, allows a shorter spiral: c1 ≥ 1 and never shrinking", () => {
+@@ -662,7 +827,7 @@ describe("the passes must grow (Sol F2)", () => {
+   it("fails the job, with the counts in the message, when the route does not grow", () => {
+     const flat = goodRoute.map((s) => ({ ...s, depth: 1 }));
+     /* Seven at depth 1 (the cap) and nothing deeper. */
+-    expect(() => buildSkim({ stops: flat }, buildOpts(quotesOf(10)))).toThrow(/7.*7.*7/s);
++    expect(() => buildSkim({ stops: flat }, buildOpts(quotesOf(10)))).toThrow(/7 stops in Gist, 0 in More and 0 in Most/);
+   });
+ 
+   it("writes the counts and the route when it does", () => {
+@@ -696,9 +861,26 @@ describe("the empty outcomes", () => {
+ 
+ describe("what the prompt is given", () => {
+   it("sizes the targets from the number of quotes", () => {
+-    expect(targetsFor(20)).toEqual({ gist: 4, more: 10, most: 20 });
+-    expect(targetsFor(100)).toEqual({ gist: 5, more: 12, most: 36 });
+-    expect(targetsFor(3)).toEqual({ gist: 1, more: 2, most: 3 });
++    /* Each pass's OWN count (spya-nbmce7): the reader walks a pass on its own. */
++    expect(targetsFor(11)).toEqual({ gist: 3, more: 3, most: 5 });
++    expect(targetsFor(20)).toEqual({ gist: 4, more: 6, most: 10 });
++    expect(targetsFor(30)).toEqual({ gist: 5, more: 10, most: 15 });
++    expect(targetsFor(100)).toEqual({ gist: 5, more: 10, most: 21 });
++    expect(targetsFor(3)).toEqual({ gist: 1, more: 1, most: 1 });
++  });
++
++  it("asks for passes that never shrink and a Most longer than More, within the caps", () => {
++    for (let q = 8; q <= MAX_QUOTES_TOTAL; q++) {
++      const t = targetsFor(q);
++      expect(t.gist, `q=${q}`).toBeGreaterThanOrEqual(1);
++      /* More may equal Gist (q-vzd2xt); Most is always longer than More. */
++      expect(t.gist, `q=${q}`).toBeLessThanOrEqual(t.more);
++      expect(t.more, `q=${q}`).toBeLessThan(t.most);
++      expect(t.gist + t.more + t.most, `q=${q}`).toBeLessThanOrEqual(q);
++      expect(t.gist, `q=${q}`).toBeLessThanOrEqual(DEPTH_CAPS[0]);
++      expect(t.gist + t.more, `q=${q}`).toBeLessThanOrEqual(DEPTH_CAPS[1]);
++      expect(t.gist + t.more + t.most, `q=${q}`).toBeLessThanOrEqual(DEPTH_CAPS[2]);
++    }
+   });
+ 
+   it("builds each quote's section path from the tree, by block index", () => {
+@@ -737,7 +919,7 @@ describe("what the prompt is given", () => {
+   });
+ 
+   it("asks for a context-free cue, not a role, under a new prompt version (Sol F18, F25)", () => {
+-    expect(PROMPT_VERSION).toBe("skim/11");
++    expect(PROMPT_VERSION).toBe("skim/12");
+     expect(MAX_CUE_CHARS).toBe(200);
+     expect(SKIM_SYSTEM).toContain(`"cue": "..."`);
+     expect(SKIM_SYSTEM).not.toContain(`"role"`);
+@@ -782,13 +964,14 @@ describe("what the prompt is given", () => {
+     expect(SKIM_SYSTEM).not.toMatch(/The passes nest/);
+     expect(SKIM_SYSTEM).toMatch(/neither required nor forbidden/);
+     expect(SKIM_SYSTEM).toMatch(/Do not carry everything/);
+-    expect(SKIM_SYSTEM).toMatch(/Each pass must ADD stops/);
+-    expect(SKIM_SYSTEM).toMatch(/When two adjacent targets are the same[\s\S]*that pass may be absent/);
+-    /* The targets are still cumulative counts of first-placed stops, and the
+-       user message says a carried stop is not counted in them. */
++    /* skim/12: each pass longer than the one before, as walked (spya-nbmce7). */
++    expect(SKIM_SYSTEM).toMatch(/never to\s+be SHORTER than the one before/);
++    expect(SKIM_SYSTEM).toMatch(/When a target is 0[\s\S]*that pass may be absent/);
++    /* The targets are each pass's own stops since skim/12, and the user
++       message says a carried stop is not counted in them. */
+     const prompt = renderPrompt({ input: inputOf(quotesOf(10)), profile: null });
+-    expect(prompt).toContain("Targets: about 2 at depth 1; about 5 at depth 1 or 2; about 10 in all.");
+-    expect(prompt).toMatch(/does not count again/);
++    expect(prompt).toContain("Targets, each pass's own stops: about 2 at depth 1; about 3 at depth 2; about 5 at depth 3.");
++    expect(prompt).toMatch(/is not counted in that pass's target/);
+   });
+ 
+   it("marks quote text as untrusted data and prevents it from closing its prompt fence", () => {
