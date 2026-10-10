@@ -280,7 +280,7 @@ export interface ToolOutcome {
    * ("offer a shorter one") leaves it unset, and so does a throw. `converse`
    * ends the turn on a round that wrote prose, yielded normally to its tools,
    * settled every call, and ended on accepted next steps (§ `ENDS_THE_TURN`;
-   * plan 261009x).
+   * plan 261010b).
    */
   settles?: true;
 }
@@ -2229,7 +2229,7 @@ async function readReaderNotes(
  * joined. Told nothing about the reply already shown, it wrote it again
  * (postmortem 261009j: 9/14 to 0/14 with this sentence). It stops a rewrite,
  * not a tail: told to stop, a model still writes "I'm done with my answer
- * above." (plan 261009x), which is why `converse` ends the turn where it can.
+ * above." (plan 261010b), which is why `converse` ends the turn where it can.
  */
 export const ALREADY_ON_SCREEN =
   "Everything you wrote before calling this tool is already on the reader's screen, as the start of your " +
@@ -2244,7 +2244,7 @@ function offerToSave(args: Record<string, unknown>, ctx: ToolContext): ToolOutco
   const field = args.field === "reason" ? "purpose" : args.field === "about_you" ? "profile" : null;
   const label = describeCall("offer_to_save", args);
   /* "Say nothing about it": told only not to claim an offer, a model whose
-     reply was done went on to explain that it had not offered (plan 261009x). */
+     reply was done went on to explain that it had not offered (plan 261010b). */
   const refuse = (why: string, settles?: true): ToolOutcome => ({
     label,
     detail: "not offered",

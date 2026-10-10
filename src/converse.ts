@@ -264,7 +264,7 @@ export const MAX_TOOL_ROUNDS = 3;
  * yielded normally to tools, ended on one of these, and every call in it
  * settled (`ToolOutcome.settles`), `converse` stops there rather than sending
  * the results back for another round. Plans docs/plans/261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md
- * and docs/plans/261009x-next-steps-end-the-turn-even-beside-an-offer-to-save.md.
+ * and docs/plans/261010b-next-steps-end-the-turn-even-beside-an-offer-to-save.md.
  */
 export const ENDS_THE_TURN: ReadonlySet<string> = new Set(["offer_next_steps"]);
 
@@ -3609,8 +3609,8 @@ export async function* converse({
        nothing asking for more, is the last round.** The model needs nothing
        back, and going round again costs a request and gets words nobody asked
        for: told to stop, a model writes "I'm done with my answer above.", and
-       before it was told, the reply again (postmortem 261009j, plan 261009x).
-       Four conditions, from GPT Sol's reviews of plans 261009u and 261009x:
+       before it was told, the reply again (postmortem 261009j, plan 261010b).
+       Four conditions, from GPT Sol's reviews of plans 261009u and 261010b:
        - **the round yielded normally to its tools**: a `max_tokens` ending can
          leave complete-looking calls after an unfinished sentence. The calls
          may still run, but they are not evidence that the reply was complete;

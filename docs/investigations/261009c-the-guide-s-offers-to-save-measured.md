@@ -61,7 +61,7 @@ call is already on screen, never write it again. The full set again after it, tw
 
 ## v4 to v6: the refused offer, and the round after the reply
 
-For [plan 261009x](../plans/261009x-next-steps-end-the-turn-even-beside-an-offer-to-save.md).
+For [plan 261010b](../plans/261010b-next-steps-end-the-turn-even-beside-an-offer-to-save.md).
 Investigation 261009d's referee eval had one answer in 14 written twice
 (`reason-says-referee#1`), where the reader's reason was already saved. The runner gained:
 `offer_next_steps` answered for real (it touches no store), which it was not before; two cases

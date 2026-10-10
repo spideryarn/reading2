@@ -245,7 +245,7 @@
  {
   "id": "mode:referee",
   "label": "Referee",
-  "description": "Reviewing this for somebody? Your criteria, its claims, and a second look at your own notes",
+  "description": "Refereeing it? What to weigh before you decide: your criteria, its claims, and a second look at your notes",
   "aliases": [
    "review",
    "reviewer",

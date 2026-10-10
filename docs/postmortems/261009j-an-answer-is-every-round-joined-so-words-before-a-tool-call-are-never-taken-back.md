@@ -65,7 +65,7 @@ answer above."* **Told to stop, a model still writes something.** So the long-te
 round that wrote prose, yielded normally to its tools, ended on accepted next steps, and whose every
 call *settled* (`ToolOutcome.settles`: nothing in the result asks anything more of the model) is now
 the last round. That took the tails to 0 in 16. Plan
-[261009x](../plans/261009x-next-steps-end-the-turn-even-beside-an-offer-to-save.md).
+[261010b](../plans/261010b-next-steps-end-the-turn-even-beside-an-offer-to-save.md).
 
 **The class, restated:** a round after a finished reply is the bug, whatever the model is told in
 it. Where the loop can know the reply is finished, it should not go round. Where it cannot (an offer

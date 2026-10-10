@@ -77,7 +77,7 @@ describe("offer_next_steps, the tool", () => {
     expect(out.steps).toBeUndefined();
     expect(out.settles).toBeUndefined();
     expect(out.content).toMatch(/Do not mention any button/);
-    /* Plan 261009x: refused after a written reply, the model wrote on. */
+    /* Plan 261010b: refused after a written reply, the model wrote on. */
     expect(out.content).toContain(ALREADY_ON_SCREEN);
   });
 
@@ -231,7 +231,7 @@ describe("converse, when the guide offers its next steps", () => {
     expect(done?.text).toBe("Start with the abstract.\n\nIt is the first section.");
   });
 
-  /* Plan 261009x: a round that wrote the reply, offered to save and offered
+  /* Plan 261010b: a round that wrote the reply, offered to save and offered
      its next steps went round again, and the round after wrote a tail ("I'm
      done with my answer above.") or, before next steps, the reply again. The
      accepted next steps, as the last call, are the model's own "my reply is

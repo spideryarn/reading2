@@ -1,37 +1,13 @@
-You are reviewing a PLAN (read-only) in the Spideryarn repo, at this worktree's root.
+You are reviewing a plan before it is built, in the Spideryarn repo (read-only review).
 
-Read docs/plans/261009x-a-round-that-wrote-the-reply-and-offered-to-save-is-the-last-round.md first.
-(That draft is now docs/plans/261009x-next-steps-end-the-turn-even-beside-an-offer-to-save.md,
-rewritten after this review.)
+Read, in this order:
+1. docs/plans/261009x-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md — the plan under review.
+2. docs/research/261009b-what-a-peer-reviewer-needs-and-where-sources-and-referee-divide.md — the research behind it (also review its product reasoning briefly: is the Sources/Referee line sound, are the "ideas for later" well ranked by evidence, is anything overstated against docs/research/261009b-peer-reviewer-web-pass-sonnet.md).
+3. The code it touches: src/guide.ts (modeWordsSection, button, experimental), src/acts-alone.ts, src/mode-catalog.ts (ModeCatalogEntry comments, referee row), src/web/reader/Reader.tsx (chipModes useMemo near `modeDoor(`), src/web/command-runners.ts (modeDoor, modeRunner), src/web/chat-commands.ts (chipFor), src/web/Dock.tsx (visibleModes), src/web/CommandBar.tsx (subModeRows), src/web/experimental-visibility.ts, src/converse.ts (GUIDE_SYSTEM), src/web/guide-acts.ts (how the page acts on an "opens at once" token), evals/guide/offers.ts.
+4. docs/project/referee-mode.md § Confidentiality and § The rules the whole mode obeys; docs/project/experimental-features.md.
 
-Evidence to check it against:
-- src/converse.ts: `ENDS_THE_TURN` (around line 262) and the turn-ending `break` near the end of the
-  round loop (search "A round that wrote its reply and then asked only for its next steps"); the
-  delta joining (search "A later round's first words start a new paragraph"); `GUIDE_SYSTEM`'s
-  SAVING WHAT THEY TELL YOU and NEXT STEPS sections (search "SAVING WHAT THEY TELL YOU").
-- src/chat-tools.ts: `offerToSave` and `offerNextSteps` (search "function offerToSave").
-- tests/guide-next-steps-tool.test.ts (describe "converse, when the guide offers its next steps"),
-  tests/guide-offer-converse.test.ts.
-- docs/postmortems/261009j-an-answer-is-every-round-joined-so-words-before-a-tool-call-are-never-taken-back.md
-- docs/plans/261009u-plan-review-sol.md (your own F1/F2 on the turn-ending rule, which this plan
-  partly reverses) and docs/plans/261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md.
-- Measurements: evals/guide/results/offers-v4-baseline.json and offers-v4-baseline-referee.json
-  (each row has `shape`: prose stretches "P" and tools in order; `repeated`). The doubled answer
-  being fixed is in the peer branch: `git show worktree-fbh5aypq-peer-review-research:evals/guide/results/referee-offer-v1.json`
-  (case reason-says-referee, run 1).
-- evals/guide/offers.ts (the runner; uncommitted edits in this worktree add the shape trace, real
-  `offer_next_steps`, and the referee-reason case).
+Context: another session is concurrently renaming the "Peer review" mode to "Sources" (docs/plans/261009s-peer-review-becomes-sources-all-the-way-down.md may not be in this tree; it owns Sources' rows and Referee's aliases).
 
-Questions I most want answered:
-1. Is the diagnosis right: that the doubled answer came from a refused `offer_to_save` after a
-   written reply, with no "already on screen" sentence in the refusal? What else could explain it?
-2. Is "prose + only offering tools ⇒ last round, whatever they returned" safe? In particular the
-   preamble risk (prose before the offer is only "Let me note that." and the real answer would come
-   after), and anything in the route/page (src/routes.ts, the web chat panel) that assumes the model
-   got to speak after an `offer_to_save`.
-3. Is reversing your 261009u F2 justified, or is there a smaller structural fix that keeps it?
-4. Anything missing from the stages or the measurement.
+Find: correctness gaps (will a Referee token actually render as a working chip and act for a reader with the experimental switch off — trace chipFor → door → modeRunner → the Dock's activators; does the "opens at once" path through guide-acts work; anything in the activators or in RefereeMode that assumes the switch is on), places the plan misses (other consumers of the chip door, the live/spoken guide, visitors, phone), whether a pure `chipDoorRows` is the right seam, whether the separate record vs a field is the right shape, prompt-injection risk (an article claiming the reader is a referee), the eval design, and anything simpler. Also: is offering a hidden mode via the guide a change to a security defence per docs/project/security-map.md? (It must not be; say if you think it is.)
 
-Write findings as a numbered list (F1, F2, …), each with severity (P1/P2/P3), the evidence, and
-what you would change. End with a one-line verdict: APPROVE, APPROVE WITH CHANGES, or REWORK.
-Do not edit any file.
+Write findings as a numbered list, each with severity (P0–P3), the file/line evidence, and a concrete fix. Be concise. End with a one-line verdict.

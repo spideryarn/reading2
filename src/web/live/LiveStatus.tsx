@@ -221,7 +221,12 @@ export function LiveStatus({ live, onRestart, blocks, onJump }: {
               <option value={chosen}>Your usual microphone (unavailable)</option>}
           </select>
         </label>}
-        <Tooltip placement="top" keepSide className="tip-soon" content={
+        {/* **Only on an engine that has the setting.** Realtime resolves a
+            placement before it asks for a ticket; GPT-Live has no noise
+            reduction to map one onto and reports `placement: null` for the
+            whole call. Offered there, the control would change nothing and
+            reconnect for it (GPT Sol, plan 261010a P3). */}
+        {live.placement !== null && <Tooltip placement="top" keepSide className="tip-soon" content={
           <ControlTip head="Noise reduction"
             what="Auto estimates whether your microphone is close to your mouth or across the room."
             how="Choose Headphones or Laptop mic to set noise reduction yourself."
@@ -243,8 +248,10 @@ export function LiveStatus({ live, onRestart, blocks, onJump }: {
               <option value="laptop">Laptop mic</option>
             </select>
           </label>
-        </Tooltip>
-        {live.phase === "live" && <p className="chat-live-advanced-note">Changing either of these during a call saves what was said and reconnects.</p>}
+        </Tooltip>}
+        {live.phase === "live" && <p className="chat-live-advanced-note">
+          {live.placement !== null ? "Changing either of these" : "Changing the microphone"} during a call saves what was said and reconnects.
+        </p>}
         {live.phase === "live" && <div className="chat-live-actions">{reconnect}</div>}
       </details>
     </section>

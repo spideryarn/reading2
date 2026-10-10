@@ -133,7 +133,7 @@ describe("what it returns", () => {
     expect(out.content).toMatch(/already their saved words/);
   });
 
-  /* Plan 261009x: the model that wrote its reply and then offered was refused
+  /* Plan 261010b: the model that wrote its reply and then offered was refused
      with no word about the reply already on screen, and went on to write more:
      a second copy (investigation 261009d), or a stray line about the refusal. */
   it("tells the model, offered or refused, that what it already wrote is on screen", async () => {

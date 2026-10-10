@@ -266,6 +266,21 @@ export function modeDoor(
   return { targets, open: through(activate), openUnarmed: through(unarmed) };
 }
 
+/**
+ * **The same executor, opening modes through another door** — the guide
+ * thread's, whose door holds the modes it may offer from behind the switch
+ * (plan 261009x; src/web/chip-door.ts § `guideDoorRows`). Everything else is
+ * the executor it was given.
+ */
+export function withModeDoor(executor: CommandExecutor, door: ModeDoor): CommandExecutor {
+  return {
+    ...executor,
+    runners: { ...executor.runners, mode: modeRunner(door) },
+    sources: { ...executor.sources, modes: door.targets },
+    openModeUnarmed: modeRunner(door, "unarmed"),
+  };
+}
+
 /** The Dock's two activators, as `modeDoor` takes them. */
 export interface ModeActivators {
   mode(command: Extract<ModeCommand, { kind: "mode" }>): void;

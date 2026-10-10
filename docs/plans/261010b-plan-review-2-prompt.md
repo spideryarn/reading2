@@ -1,7 +1,7 @@
 You are reviewing a REVISED PLAN (read-only) in the Spideryarn repo, at this worktree's root.
 
-You reviewed the first draft and said REWORK: docs/plans/261009x-plan-review-sol.md. The plan is
-now docs/plans/261009x-next-steps-end-the-turn-even-beside-an-offer-to-save.md. Read both.
+You reviewed the first draft and said REWORK: docs/plans/261010b-plan-review-sol.md. The plan is
+now docs/plans/261010b-next-steps-end-the-turn-even-beside-an-offer-to-save.md. Read both.
 
 Since your review, the runner records outcomes (your F1/F5) and two measurements were taken:
 - evals/guide/results/offers-v5-baseline-refusal.json (before any change)

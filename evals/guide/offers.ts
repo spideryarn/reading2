@@ -105,7 +105,7 @@ const CASES: readonly Case[] = [
   },
   /* The refusal provoked: the reader says again, word for word, the reason
      already saved, so an offer of it is refused as "already their saved
-     words" (plan 261009x). Nothing new, so nothing is wanted. */
+     words" (plan 261010b). Nothing new, so nothing is wanted. */
   {
     id: "repeats-saved-reason",
     question: "I've been asked to referee a longer version of this for a philosophy journal. Where should I start?",
@@ -198,7 +198,7 @@ for (const c of CASES.filter((x) => only.length === 0 || only.includes(x.id))) {
            prose each round wrote, and each tool it asked for with what it did,
            "offered", "steps", or a refusal's first words. A round with the
            reply followed by a round with more prose is the shape that wrote
-           answers twice (postmortem 261009j, plan 261009x); the length says
+           answers twice (postmortem 261009j, plan 261010b); the length says
            whether prose before an offer was the reply or a preamble. */
         const rounds: { prose: number; tools: string[] }[] = [];
         /* What each tool told the model, in call order, for the rounds. */
@@ -258,7 +258,7 @@ for (const c of CASES.filter((x) => only.length === 0 || only.includes(x.id))) {
     const repeated = writtenTwice(result.text);
     /* More prose in a round after the one that wrote the reply (300
        characters or more): a second copy, or a tail like "I'm done with my
-       answer above." (plan 261009x). An invited "you can save it with the
+       answer above." (plan 261010b). An invited "you can save it with the
        button" counts too: the card says that itself. */
     const replied = result.rounds.findIndex((x) => x.prose >= 300);
     const tail = replied >= 0 && result.rounds.slice(replied + 1).some((x) => x.prose > 0);

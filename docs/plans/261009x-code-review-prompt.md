@@ -1,34 +1,19 @@
-You are doing the CODE REVIEW of plan 261009x in the Spideryarn repo, at this worktree's root. You
-may edit files: fix what you find inside this stage (src/converse.ts, src/chat-tools.ts,
-evals/guide/offers.ts, the two test files, and the docs named below), and report anything wider for
-me to decide. Do not commit, do not run paid evals (evals/guide/*.ts call a paid model), and do not
-touch the database.
+You are reviewing built code in the Spideryarn repo, in this worktree. You MAY fix what you find inside this change (the files in the diff), then report; anything wider than this change, report only and do not edit. Do not commit, do not touch git state, do not run the paid eval (evals/guide/referee-offer.ts costs money).
 
-Read, in order:
-- docs/plans/261009x-next-steps-end-the-turn-even-beside-an-offer-to-save.md (the plan as built)
-- docs/plans/261009x-plan-review-sol.md and 261009x-plan-review-2-sol.md (your two plan reviews,
-  both REWORK; the plan says how each finding was taken)
-- docs/plans/261009x-code-review.diff (the code diff; `git diff HEAD` shows it too, plus the
-  docs: investigation 261009c § "v4 to v6", postmortem 261009j's addendum)
-- the measurements, evals/guide/results/offers-v{4,5,6}-*.json (each row: `shape` round by round
-  in the v6 files, `tail`, `repeated`, `answer`). Check the write-up's numbers and quotes against
-  them.
+Read first:
+1. docs/plans/261009x-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md — the plan, your own earlier plan review in docs/plans/261009x-plan-review-sol.md, and how each finding was handled.
+2. docs/plans/261009x-code-review.diff — the scoped diff against origin/dev (src, tests, the eval). The merge brought in another plan's work (the guide's "next steps", docs/plans/261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md, src/next-steps.ts, src/web/GuideNextSteps.tsx); this change had to integrate with it via guideModeKeys and ChatCommandsFor.
+3. Results: evals/guide/results/referee-offer-v2-merged.json and docs/investigations/261009d-the-guide-offers-referee-to-referees-measured.md.
 
 Check especially:
-1. The turn-ending condition in src/converse.ts (search "A round that wrote its reply and ended on
-   its next steps"): `settled` is filled once per call in the batch, including the abort paths
-   between tools, a tool that throws, and `noSuchTool`. Could `settled.length === wanted.length`
-   hold for a batch that was cut short? Does truncation (`max_tokens`) interact wrongly?
-2. `ToolOutcome.settles` in src/chat-tools.ts: set exactly on accepted steps, an accepted offer,
-   and the already-saved refusal; never on any other tool or outcome. Anything that copies a
-   ToolOutcome onto a stored ToolRun and would now leak `settles` into storage or the wire?
-3. The tests: is each "stops" test red against the old rule, and does each "goes round" test pin
-   what it says? Run `npx vitest run tests/guide-next-steps-tool.test.ts tests/guide-offer-to-save.test.ts tests/guide-offer-converse.test.ts`
-   and `npm run typecheck`.
-4. The runner's fetch wrapper (evals/guide/offers.ts): restored on every path; counts only model
-   requests.
-5. Whether the words in docs and comments match what the code does.
+- Is Referee truly unreachable through ordinary Chat chips, the command bar, the Dock, and visitors with the switch off, while working in a guide thread (chips AND next-step buttons)? Trace CommandChip/GuideNextSteps → useChatCommands → ChatCommandsFor → CommandExecutor.guide → withModeDoor → modeDoor → activators. Is there any other surface that renders guide answers (e.g. a chat dialog, GuideGreeting, a live/spoken guide transcript, the Metadata page) outside the Conversation wrapper and so silently gets chat's door?
+- Does `modeActsAlone` now returning false for Referee keys break anything else that reads it (OPENS_FREE_ONCE_MADE, keysOpenFree, madeLine, routes' guideMade)?
+- useMemo dependencies in Reader.tsx (chipModes now an object; chatCommands depends on it) — any identity churn that re-renders every chip or re-fires a guide act?
+- guideDoorRows dedupe and sub-mode coverage; subModeRows(…, true, …) for Learn/Diagram current-state arguments.
+- offeredBehindTheSwitch key parsing and the prototype guard.
+- Prompt wording in src/guide.ts and src/mode-catalog.ts (OFFERED_BEHIND_THE_SWITCH.audience/guidance): injection resistance, and whether the long parenthetical on Referee's line reads well to the model.
+- Tests: do they fail for the right reasons; anything important not pinned?
 
-Write your findings to the answer file as a numbered list (F1, …), each with severity P1/P2/P3,
-the evidence, and what you changed (or why you did not). List every file you edited. End with one
-line: LAND, LAND AFTER FIXES, or DO NOT LAND.
+Run `npm run typecheck` and `npx vitest run tests/guide-offers-behind-the-switch.test.ts tests/guide-offers-behind-the-switch-door.test.tsx tests/chat-command-chips-prompt.test.ts tests/guide-kind.test.ts` after any fix (the box is loaded: do not run the full suite).
+
+Write findings as a numbered list, each with severity (P0–P3), evidence (file:line), and either "fixed: <what>" or "not fixed: <why / what Greg or the author must decide>". End with a one-line verdict.

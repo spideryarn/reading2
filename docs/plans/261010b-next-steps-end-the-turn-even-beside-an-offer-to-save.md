@@ -4,7 +4,7 @@ Up: [plans.md](../project/plans.md) · Overseer queue item `qi-642ha9j9` (a bug,
 standing permission, 2026-10-09) · class:
 [postmortem 261009j](../postmortems/261009j-an-answer-is-every-round-joined-so-words-before-a-tool-call-are-never-taken-back.md)
 · measured in [investigation 261009c § v4 to v6](../investigations/261009c-the-guide-s-offers-to-save-measured.md#v4-to-v6-the-refused-offer-and-the-round-after-the-reply)
-· reviews: [plan, first](261009x-plan-review-sol.md) (REWORK), [plan, second](261009x-plan-review-2-sol.md)
+· reviews: [plan, first](261010b-plan-review-sol.md) (REWORK), [plan, second](261010b-plan-review-2-sol.md)
 
 ## The bug
 
@@ -60,8 +60,8 @@ as already saved, and `offer_next_steps` accepted.
    tell the reader you offered anything".
 
 Why this, and not "any prose round with only offering tools ends, whatever they returned" (the first
-draft; GPT Sol, [first review](261009x-plan-review-sol.md) F2 and F3, and
-[second review](261009x-plan-review-2-sol.md) F2):
+draft; GPT Sol, [first review](261010b-plan-review-sol.md) F2 and F3, and
+[second review](261010b-plan-review-2-sol.md) F2):
 
 - **Accepted next steps, last, are the model's own "my reply is done".** The prompt makes
   `offer_next_steps` "the very last thing, after your reply is complete", and `converse` already

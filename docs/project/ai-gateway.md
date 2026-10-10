@@ -38,12 +38,12 @@ was OpenAI or no live mode, and Greg's own question ("*I'd love to just have a s
 [live-conversation.md](live-conversation.md).
 
 **The exception holds two engines since 2026-10-03, and so a second endpoint and a text model.**
-GPT-Live, the experimental engine, has no browser token: `src/live.ts` itself posts the browser's
+GPT-Live — every reader's engine since 2026-10-10, Realtime the one behind Experimental — has no browser token: `src/live.ts` itself posts the browser's
 SDP offer to `/v1/live/sessions`, a request that bills fifteen seconds of voice time. And the text
 model behind its voice (`GPT_LIVE_BACKEND_MODEL`) is a chat-shaped model that would otherwise
 belong on OpenRouter — it cannot go there, because it runs inside OpenAI's session and is never a
 request of ours. Still one exception, one file, one key:
-[live-conversation.md § The second engine](live-conversation.md#the-second-engine-gpt-live-behind-experimental).
+[live-conversation.md § GPT-Live](live-conversation.md#gpt-live-and-realtime-behind-experimental).
 
 Two things about it belong here rather than there, because they are properties of *this* claim.
 **The audio never touches our server** — [`src/live.ts`](../../src/live.ts) mints a short-lived token
