@@ -36,5 +36,7 @@ browser check:
 **Not here.** The report came from the home page, which has no article and so no guide: the guide
 is one conversation per article, its owner's. A guide without an article is the larger idea already
 queued as `qi-263b6cpp`. The second half of `spya-xasbd3` (*"an easy way to get to the guide chat,
-somewhere near the top of the command bar"*) is this same change; its own session,
-`fbyf23zk-bar-suggestions-and-guide` (`qi-na7p6xy4`), is told to end that half against this commit.
+somewhere near the top of the command bar"*) is the placement alone, which `fbyf23zk` shipped in
+`ad2275a27` (plan 261010u) while this was being built. Both put the guide first; the merge
+`6e5fca4fb` keeps their placement and adds this one's name, compass and rule. The name and compass
+themselves are `74ee320c8` and `d0ceff0a5`.
