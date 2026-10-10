@@ -2043,6 +2043,18 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "seeder's copy step, as for `tests/glossary-hidden-route.test.ts`. Read off the graph, not " +
       "re-witnessed.",
   },
+  "tests/stale-notices-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran, with dismissing the older-version notices (plan 261010a, " +
+      "2026-10-10). It seeds three articles with `scratchArticleInPg` and drives `GET` and " +
+      "`POST /api/stale-notices/:slug` through `handleApi`, reading rows back out of " +
+      "`stale_notice_dismissals` — entirely Postgres. Its reach into the condemned modules is the " +
+      "seeder's copy step, as for `tests/glossary-hidden-route.test.ts`. Read off the graph, not " +
+      "re-witnessed.",
+  },
   "tests/quiz-attempts-route.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["fixture-loader"],
@@ -3039,6 +3051,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      notice's dismissal POST and the owner's GET through the route, reading the
      two `articles` columns back. No model is called. */
   "tests/skim-profile-notice-route.test.ts": "private-postgres",
+  /* Seeds three articles and drives the stale-notice dismissal POST and GET
+     through the route, reading rows back out of `stale_notice_dismissals`. No
+     model is called. */
+  "tests/stale-notices-route.test.ts": "private-postgres",
   /* Seeds three articles with a quiz each and drives the quiz mark POST and
      the owner's GET through the route, reading rows back out of
      `quiz_attempts`. The marker is a script; no model is called. */

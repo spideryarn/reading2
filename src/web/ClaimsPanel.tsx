@@ -136,6 +136,8 @@ import { ControlTip, Tooltip } from "./Tooltip.js";
 import { Button } from "@/components/ui/button";
 import { type ClaimsApi, useClaims } from "./useClaims.js";
 import { BandWaiting } from "./BandWaiting.js";
+import { StaleNotice } from "./StaleNotice.js";
+import { useStaleNotice } from "./useStaleNotices.js";
 
 /* ------------------------------------------------------------------ band -- */
 
@@ -288,6 +290,7 @@ export function ClaimsBand({
       showing={showing}
       onToggle={toggle}
       onJump={onJump}
+      slug={slug}
     />
   );
 }
@@ -311,6 +314,7 @@ export function ClaimsView({
   showing,
   onToggle,
   onJump,
+  slug = null,
 }: {
   api: ClaimsApi;
   claims: Claim[];
@@ -328,9 +332,20 @@ export function ClaimsView({
   showing: string[];
   onToggle(id: string): void;
   onJump(blockId: BlockId): void;
+  /**
+   * The article, for the stale line's × (plan 261010a). Absent in a test that
+   * renders the view alone, where the × hides nothing it could store.
+   */
+  slug?: string | null;
 }) {
   const run = api.run;
   const pending = run?.status === "pending";
+  /* The stale line's × (plan 261010a): this run, by its clock. */
+  const staleNotice = useStaleNotice({
+    slug,
+    mode: "claims",
+    identities: api.stale ? (run?.createdAt ?? null) : null,
+  });
   /* Counted from the rows themselves rather than carried alongside them, so a
      stored run from before the fail-safe existed reads as zero — which is the
      truth about it. Both surfaces count: a passage's line and a claim's own
@@ -423,9 +438,9 @@ export function ClaimsView({
 
       {claims.length > 0 && (
         <>
-          {api.stale && (
-            <p className="clm-stale">Answered about an earlier version of this paper.</p>
-          )}
+          <StaleNotice notice={staleNotice} className="clm-stale">
+            Answered about an earlier version of this paper.
+          </StaleNotice>
           {/* Said out loud, above the list, because a reader who assumes a list
               is sorted best-first reads the top of it and stops. */}
           <p className="clm-order">{DOCUMENT_ORDER_NOTE}</p>

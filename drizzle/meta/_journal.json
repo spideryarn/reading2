@@ -1317,6 +1317,20 @@
       "when": 1791601425296,
       "tag": "20261010030345_bibliography_expand",
       "breakpoints": true
+    },
+    {
+      "idx": 188,
+      "version": "7",
+      "when": 1791601465914,
+      "tag": "20261010030425_stale_notice_dismissals",
+      "breakpoints": true
+    },
+    {
+      "idx": 189,
+      "version": "7",
+      "when": 1791607574802,
+      "tag": "20261010044614_stale_notice_bibliography",
+      "breakpoints": true
     }
   ]
 }

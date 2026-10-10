@@ -1108,11 +1108,14 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
       "Explain's call on the high-power model, so `high` on the wire (wireEffort). Not measured; " +
       "a probe ran out at explain's 1,500, hence src/dig-deeper.ts § DIG_ANSWER_TOKENS.",
   },
-  search: {
-    providerDefault:
-      "Measured 2026-09-28 on an 8,290-word essay: 44 and 194 thinking tokens against a " +
-      "4,000 ceiling, about 30% used (docs/plans/260928c-referee-claims-fail-on-long-pieces.md).",
-  },
+  /* Provider default until 2026-10-10. On an 8,290-word essay it thought for
+     44 and 194 tokens (plan 260928c), but production reached 3,739 of the
+     4,000, and on a 152,000-word paper it thought for ~2,450 on two runs in
+     five and was cut off mid-JSON. At `medium`, four runs over the same queries
+     thought for none, answered in 8–10s, and returned 8–15 hits each against
+     the default's 9–19 when it did not fail. docs/plans/261010f-a-stale-referee-criterion-overflow-and-the-calls-one-notch-from-it.md,
+     and src/search.ts § `SEARCH_MAX_TOKENS` for the budget sized with it. */
+  search: { effort: "medium" },
   "referee-mirror": {
     providerDefault:
       "Not measured. It reads the referee's own comments and their passages, never the " +
@@ -1289,7 +1292,7 @@ export function effortOf(job: ChatJob): ReasoningEffort | null {
  *
  * Opus 5.5's default effort is `medium` where Sonnet 5's is `high`, so leaving
  * the default in place would make High-powered AI think *less* on every
- * provider-default job — explain, chat, search, debate, bibliography, quiz marking —
+ * provider-default job — explain, chat, debate, bibliography, quiz marking —
  * which is the opposite of the switch's promise. `high` is Sonnet's own
  * default, so no ceiling sized against Sonnet is asked for more than it was.
  * Keyed on the model sent, because the reason is that model's default. Plan
@@ -2595,13 +2598,13 @@ export async function* openRouterStream(
       else if (!options.end.terminated) end = meter.died("unfinished");
     }
     meter.finish(end);
-    warnIfThinkingAteTheCeiling(job, body, options.end, meter);
+    warnIfThinkingAteTheCeiling(job, body, options.end.finishReason, meter);
   }
 }
 
 /**
- * **One line, for every streamed chat call, when the model's thinking spent the
- * allowance.** A stream that stops on `length` having spent reasoning tokens is
+ * **One line, for every chat call, streamed or not, when the model's thinking
+ * spent the allowance.** A call that stops on `length` having spent reasoning tokens is
  * the shape of the claims bug
  * (docs/postmortems/260928b-a-lesson-kept-in-a-helper-does-not-reach-the-other-wire.md),
  * and until this line each caller's own log said `finishReason: "length"` and
@@ -2609,16 +2612,21 @@ export async function* openRouterStream(
  * A warning, not an error: the caller decides what the stop means and logs its
  * own verdict; this says which of `CHAT_REASONING`'s rows to revisit.
  *
+ * **Both wires call it** since 2026-10-10. It was written into
+ * `openRouterStream` alone, so Debate and the PDF passes, which go through
+ * `openRouterJson`, could stop on `length` after thinking with nothing saying
+ * so — postmortem 260928b's class a second time (plan 261010f).
+ *
  * Counts and names only — `logging.md`'s rule, and the job's prompt is somebody's
  * article.
  */
 function warnIfThinkingAteTheCeiling(
   job: ChatJob,
   body: AiRequestBody,
-  end: StreamEnd,
+  finishReason: string | null | undefined,
   meter: Meter,
 ): void {
-  if (end.finishReason !== "length" || !meter.reasoningTokens) return;
+  if (finishReason !== "length" || !meter.reasoningTokens) return;
   try {
     const effort = wireEffort(job, body.model);
     log("model").warn(
@@ -2646,6 +2654,13 @@ export interface JsonCall {
   answeredBy: string | null;
   /** `x-generation-id`, for reconciling this call later. */
   generationId: string | null;
+}
+
+/** `choices[0].finish_reason` of a whole chat-wire body, read without trusting its shape. */
+function finishReasonOf(json: unknown): string | undefined {
+  const choices = (json as { choices?: unknown } | null)?.choices;
+  const first = Array.isArray(choices) ? (choices[0] as { finish_reason?: unknown } | undefined) : undefined;
+  return typeof first?.finish_reason === "string" ? first.finish_reason : undefined;
 }
 
 /**
@@ -2709,6 +2724,9 @@ export async function openRouterJson(
          envelope, throws what it always threw, and its own retry decides what
          it always decided. */
       end = meter.notAnAnswer() ?? end;
+      /* The streamed wire's warning, on this one too. Only a chat-wire body
+         has `choices`; embeddings share this entry point and have none. */
+      if (wireOf(job) === "chat") warnIfThinkingAteTheCeiling(job, body, finishReasonOf(json), meter);
       return {
         json,
         answeredBy: meter.answeredBy,

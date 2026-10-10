@@ -171,6 +171,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
   "spya-hf4svm": "shipped",
   "spya-hhdj7f": "shipped",
   "spya-hkf2bs": "shipped",
+  "spya-hrfj6q": "shipped",
   "spya-hsbz0z": "shipped",
   "spya-hut48h": "shipped",
   "spya-hw8mhz": "shipped",
@@ -244,6 +245,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
   "spya-mtajjy": "shipped",
   "spya-mtsf0y": "shipped",
   "spya-mtyquy": "shipped",
+  "spya-mutgym": "shipped",
   "spya-muymup": "shipped",
   "spya-mvmpks": "shipped",
   "spya-mx423m": "shipped",
@@ -530,6 +532,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
   "spya-zux9w6": "shipped",
   "spya-zv8dc6": "shipped",
   "spya-zw479b": "shipped",
+  "spya-zz4z4c": "shipped",
 };
 
 /** One line about a report, from its note's `comment:`. An admin's Earlier tab only. */
@@ -550,6 +553,7 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
   "spya-gqq38u": "Saved now: the opinions are kept with the article and dated, and come back on reload. The rule is in database.md, and the plan lists what else we still throw away (Mirror is the one worth doing next).",
   "spya-gxbwug": "Rotation fixed: the page can no longer be wider than the screen mid-turn, which is what made Safari zoom out. The keyboard case is queued; if it recurs, open the article with ?probe=1 and send the trace.",
   "spya-h5aypq": "Researched what a peer reviewer needs, drew the line between Sources and Referee, and the guide now offers Referee as a button to a reader who says they are refereeing. Four product questions in q-fkq30v.",
+  "spya-hrfj6q": "The Referee error was a stored failure from 5 September, before the 28 September fix; a retry works now. The same overflow was live in Search on long papers, and that is fixed.",
   "spya-hwdefp": "You chose A on 2026-10-05: the private link is built (stage 1). Stages 2 and 3, comments for people with the link and named email addresses, are written up and not built (qi-6jwj562v and qi-mgxnj233).",
   "spya-j5f7yv": "Set aside as someday-maybe: a design was written, but it would have cost the owner the tailoring of their own summaries, and you chose to keep everything personalised (2026-10-01).",
   "spya-kbzzk8": "No change at the time: dictation was not on Whisper but on a Gemini model chosen in a bake-off the day before, because it takes the custom vocabulary. The evidence did not justify a swap.",
@@ -558,6 +562,7 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
   "spya-mdmqqq": "You were right, there were two. While an article loads, the centred animated wordmark is now the only one; the corner logo is gone from that screen, before the 600ms threshold and after it.",
   "spya-mdp0em": "Built as you chose (option A). The public shelf now has topic pills, kept up to date by themselves up to 20 shared articles and billed to a site account; past 20, a Rebuild button on the admin page. They appear once 8 articles are shared.",
   "spya-mq05ww": "Shipped: 22 cropped, captioned screenshots and 3 GIFs across 21 Help pages, and help-page.md says how to keep them true. Eight modes still have no picture; that is queued.",
+  "spya-mutgym": "Every \"older version of the article\" notice now has an × that holds until that thing is made again. Quiz's is left: there no answer can be marked, and the notice is the only thing saying why.",
   "spya-n50aft": "Every version of an arXiv paper is now one article, and the shelf you already have matches too. The cost: pasting v2 while you hold v1 gives you v1.",
   "spya-n7hvm0": "Needs a decision is now threads: a contents, one thread at a time with a reply box, Defer for now, the ids, your report shut, a shortcut beside the tabs. Check the reply box on your iPhone.",
   "spya-n8cuqq": "Shipped: dictation runs fifteen minutes and warns before it stops, and Feedback now takes 20,000 characters, a full fifteen minutes of non-stop speech.",
@@ -596,4 +601,5 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
   "spya-zdkqx4": "spya-x0rfs2: the bar is fixed; the quieter open stop Greg chose in q-u04sye is on dev as an experiment",
   "spya-zuk4f7": "Both stages shipped: Debate asks for work that cites the piece, and OpenAlex supplies its count and list of citing papers.",
   "spya-zux9w6": "The citation, glossary and quote cards now each end in Open in Sources / Glossary / Quotes. Cards on comments, chat anchors and search-style highlights are queued as their own piece of work.",
+  "spya-zz4z4c": "Every \"older version of the article\" notice now has an × that holds until that thing is made again. Quiz's is left: there no answer can be marked, and the notice is the only thing saying why.",
 };

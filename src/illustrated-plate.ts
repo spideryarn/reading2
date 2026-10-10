@@ -477,6 +477,12 @@ export function plateFailed(plate: IllustratedPlate, why: string): IllustratedPl
 
 export interface Illustrated {
   version: string;
+  /**
+   * When these stored plates finished generating. A rerun can reproduce the
+   * same brief and content-addressed images; this clock still makes it a new
+   * artefact for stale-notice dismissal. Absent on older paintings.
+   */
+  generatedAt?: string;
   /** The model that wrote the brief. */
   generator?: string;
   /** The model that drew the plates. */

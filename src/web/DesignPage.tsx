@@ -39,7 +39,8 @@
  */
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { Circle, Info, LoaderCircle, Search, Settings, TriangleAlert } from "lucide-react";
+import { Circle, Info, LoaderCircle, Search, Settings } from "lucide-react";
+import { DismissibleNotice, STALE_NOTICE_LABEL, STALE_NOTICE_TOOLTIP } from "./StaleNotice.js";
 import { Button } from "@/components/ui/button";
 import { builtButEmpty, providerHttpFailure, UNEXPECTED_FAILURE } from "../messages.js";
 import { JobProgress } from "./JobProgress.js";
@@ -179,6 +180,38 @@ import { type Voice, voiceClass } from "./voice.js";
  * be lost in them. Everything not named here is the inert version of itself:
  * the callbacks do nothing because there is no queue behind this page.
  */
+/**
+ * **The stale banner, with its ×** — the real markup (`DismissibleNotice`),
+ * the real words for the × (`STALE_NOTICE_TOOLTIP`, `STALE_NOTICE_LABEL`),
+ * and nothing stored: pressing it hides the specimen, and a button brings it
+ * back. Plan 261010a.
+ */
+function StaleSpecimen() {
+  const [gone, setGone] = useState(false);
+  if (gone) {
+    return (
+      <button type="button" className="gloss-quiet" onClick={() => setGone(false)}>
+        Dismissed. Show the notice again
+      </button>
+    );
+  }
+  return (
+    <DismissibleNotice
+      onDismiss={() => setGone(true)}
+      tooltip={STALE_NOTICE_TOOLTIP}
+      label={STALE_NOTICE_LABEL}
+      failed={null}
+      action={
+        <div className="gloss-run">
+          <RunButton label="Find them again" />
+        </div>
+      }
+    >
+      These terms describe an older version of the article.
+    </DismissibleNotice>
+  );
+}
+
 function RunButton({ label, job = null }: { label: string; job?: Job | null }) {
   return (
     <JobProgress
@@ -1123,17 +1156,11 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
             real='stale, beside status: "ready"'
             head={<span className="gloss-count">24 terms</span>}
             note="A banner on its own raised ground rather than a strip across the top, with the run
-                  button inside it. The triangle is the only orange on this surface."
+                  button inside it. The triangle is the only orange on this surface. The × at the
+                  end of the line sends it away until the artefact is made again — StaleNotice.tsx,
+                  one component for every mode (plan 261010a)."
           >
-            <div className="gloss-stale">
-              <p>
-                <TriangleAlert size={13} />
-                These terms describe an older version of the article.
-              </p>
-              <div className="gloss-run">
-                <RunButton label="Find them again" />
-              </div>
-            </div>
+            <StaleSpecimen />
           </BandCase>
 
           <BandCase

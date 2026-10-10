@@ -49,7 +49,7 @@
  * docs/plans/260908i-quotes-marked-in-the-prose-in-every-mode.md.
  */
 import { useLayoutEffect, useRef, useState, type ReactElement } from "react";
-import { ChevronLeft, ChevronRight, Info, Pencil, Quote as QuoteIcon, RotateCcw, TriangleAlert } from "lucide-react";
+import { ChevronLeft, ChevronRight, Info, Pencil, Quote as QuoteIcon, RotateCcw } from "lucide-react";
 import type { BlockId, Job, Quote, QuoteDrops, Quotes, QuoteStroke, QuoteTier } from "../types.js";
 import { quotesAppendOnOffer, quotesFindMoreOffered } from "./find-more.js";
 import { useFindMoreHandOff } from "./useFindMoreHandOff.js";
@@ -78,6 +78,8 @@ import {
   type ReaderRowComment,
 } from "./quote-band-rows.js";
 import { BandWaiting } from "./BandWaiting.js";
+import { StaleNotice } from "./StaleNotice.js";
+import { useStaleNotice } from "./useStaleNotices.js";
 import { Excerpt } from "./Excerpt.js";
 
 /**
@@ -690,6 +692,12 @@ export function QuotesPanel({
   const owner = access.kind === "owner" ? access.owner : null;
   const quotes = access.quotes;
   const all = quotes?.quotes ?? [];
+  /* The stale banner's × (plan 261010a): this list, by its clock. */
+  const staleNotice = useStaleNotice({
+    slug: owner?.slug ?? null,
+    mode: "quotes",
+    identities: owner?.stale ? (owner.quotes?.generatedAt ?? null) : null,
+  });
   /* **Snapped to a stop the list actually has**, so the groups, the count and
      the thumb can never disagree — and so a `?bar=` from a link, from a hand,
      or from a different article opens on a division that exists. */
@@ -1000,11 +1008,13 @@ export function QuotesPanel({
                2026-09-29 (SPIDERYARN-READING2-55, plan 260929c), and that banner
                was where a rewrite's progress, Stop and failure showed; a run
                started from Metadata would otherwise show nowhere. Idle, nothing
-               — the Ideas, Timeline, Debate and Quiz feet do the same. */
+               — the Ideas, Timeline, Debate and Quiz feet do the same. **And on
+               a stale list whose banner was sent away** (plan 261010a, GPT
+               Sol's finding 4): that banner carried the job too. */
           quotes &&
           owner?.status === "ready" &&
-          owner.outdated &&
-          !owner.stale &&
+          (owner.outdated || owner.stale) &&
+          staleNotice.showing.length === 0 &&
           (owner.job || owner.starting || owner.failed || newList) ? (
           <div className="quotes-foot">{rerun("Choose them again", true)}</div>
         ) : null}
@@ -1086,16 +1096,10 @@ export function QuotesPanel({
               this button sends rewrites it (src/quotes.ts § existingFor),
               keeping the id of any quote chosen again in exactly its words.
               SPIDERYARN-READING2-3C; docs/plans/260924d-choose-them-again-on-an-outdated-quote-list.md. */}
-          {owner?.stale ? (
-            <div className="quotes-stale">
-              <p>
-                <TriangleAlert size={13} />
-                The article has changed since these were chosen. Some of these lines may no longer
-                be in it.
-              </p>
-              {rerun("Choose them again", true)}
-            </div>
-          ) : null}
+          <StaleNotice notice={staleNotice} className="quotes-stale" action={rerun("Choose them again", true)}>
+            The article has changed since these were chosen. Some of these lines may no longer be in
+            it.
+          </StaleNotice>
           {/* **No banner for an outdated list** since 2026-09-29 — Greg
               (SPIDERYARN-READING2-55): *"it's not worth bugging the user about
               it."* It still gets no Find more (above); re-running is in

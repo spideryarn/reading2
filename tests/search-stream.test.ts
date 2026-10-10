@@ -15,7 +15,20 @@
  * final `done` event — not whatever streamed — is what a caller can trust.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MAX_HITS, findPassages, findPassagesStream, disagree, hitIdentities } from "../src/search.js";
+import {
+  MAX_HITS,
+  SEARCH_ANSWER_ROOM,
+  SEARCH_MAX_TOKENS,
+  SEARCH_STALL_MS,
+  SEARCH_THINKING_ROOM,
+  SEARCH_TIMEOUT_MS,
+  findPassages,
+  findPassagesStream,
+  disagree,
+  hitIdentities,
+} from "../src/search.js";
+import { SEARCH_ORPHAN_GRACE_MS } from "../src/routes.js";
+import { budgetFor, deadlineFor } from "../src/token-budget.js";
 import type { SearchEvent, SearchRequest, SearchResult } from "../src/search.js";
 import type { Block, Meta, SearchHit } from "../src/types.js";
 import { ANSWER_OVERFLOWED } from "../src/messages.js";
@@ -110,6 +123,31 @@ describe("switching the request to stream: true", () => {
     const body = bodyOf(fetchMock);
     expect(body.stream).toBe(true);
     expect(body.stream_options).toEqual({ include_usage: true });
+  });
+
+  /* Plan 261010f. At the provider default a search over a 152,000-word paper
+     thought for ~2,450 tokens on two runs in five and was cut off at the old
+     4,000; at `medium` it did not think at all. So: an effort, and a ceiling
+     written as answer + thinking through `budgetFor`, and a deadline that can
+     reach the whole ceiling. */
+  it("names its effort and sends a ceiling with room for the answer and some thinking", async () => {
+    fetchMock.mockResolvedValue(reply({}));
+    await findPassages(req());
+    const body = bodyOf(fetchMock);
+    expect(body.reasoning).toEqual({ effort: "medium" });
+    expect(body.provider).toEqual({ order: ["anthropic"], require_parameters: true });
+    expect(SEARCH_MAX_TOKENS).toBe(budgetFor("search", SEARCH_ANSWER_ROOM, SEARCH_THINKING_ROOM));
+    expect(body.max_tokens).toBe(SEARCH_MAX_TOKENS);
+    /* Twenty hits at ~150 tokens each, and a quarter again. */
+    expect(SEARCH_ANSWER_ROOM).toBeGreaterThanOrEqual(MAX_HITS * 150);
+    expect(SEARCH_THINKING_ROOM).toBeGreaterThanOrEqual(2 * 2_454);
+  });
+
+  it("gives the whole ceiling time to arrive, and the orphan sweep 30 s beyond that", () => {
+    expect(SEARCH_TIMEOUT_MS).toBe(deadlineFor(SEARCH_MAX_TOKENS));
+    expect(SEARCH_ORPHAN_GRACE_MS).toBe(SEARCH_TIMEOUT_MS + 30_000);
+    /* The stall clock is what catches a dead stream, and it does not move. */
+    expect(SEARCH_STALL_MS).toBe(30_000);
   });
 
   it("still asks for no tools — the question is always where in this piece", async () => {

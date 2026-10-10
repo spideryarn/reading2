@@ -161,6 +161,10 @@
    so the section still reads as the row's heading. */
 .skim-words { color: var(--ink-soft); font-size: var(--type-quote); line-height: 1.4; overflow-wrap: anywhere; }
 .skim-row.current .skim-words { color: var(--ink); }
+/* A stop whose quote has gone says so on its own row (SkimPanel.tsx §
+   `SKIM_STOP_MISSING`, plan 261010a): the banner that used to explain it can
+   be sent away. */
+.skim-missing { color: var(--ink-faint); font-size: 0.84rem; font-style: italic; }
 /* A quote may run to 1,200 characters (src/quotes.ts), so the card is wider
    than the shared 22rem and breaks an unbroken token. At that width the
    longest quote is about twenty lines, which fits any window the band is
@@ -282,22 +286,8 @@
   padding-right: calc(0.7rem + var(--band-about-room));
 }
 
-/* **The profile notice's ×** (plan 261009i), at the end of the banner's line.
-   Its size is close.css's; only the look is here, Marginalia's narrow
-   line's (`.marg-narrow-close`), so the two crosses that send a notice away
-   look alike. `margin-left: auto` keeps it at the right edge however the
-   sentence wraps. */
-.skim-notice-close {
-  flex: none;
-  margin-left: auto;
-  border: 0;
-  background: none;
-  color: var(--ink-faint);
-  cursor: pointer;
-}
-.skim-notice-close:hover { color: var(--ink); }
-.skim-notice-close:focus-visible { outline: 1px solid var(--highlight-text); outline-offset: 1px; }
-.skim-notice-failed { color: var(--ink-soft); font-size: 0.85rem; }
+/* The profile notice's × (plan 261009i) is every stale notice's now:
+   glossary.css § `.notice-close` (plan 261010a). */
 
 /* A rule above it, so the foot reads as being about the route rather than
    the last row's — bibliography.css's `.cite-foot`. */

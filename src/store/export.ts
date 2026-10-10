@@ -1019,6 +1019,18 @@ export async function exportArticle(
     });
   }
 
+  /* The "older version" notices the owner sent away, by mode — plan 261010a. */
+  if (rows.staleNoticeDismissals.length) {
+    await put("stale_notice_dismissals", "stale-notices.json", {
+      dismissals: rows.staleNoticeDismissals.map((row) => ({
+        mode: row.mode,
+        dismissedFor: row.dismissedFor,
+        createdAt: row.createdAt.toISOString(),
+        dismissedAt: row.dismissedAt.toISOString(),
+      })),
+    });
+  }
+
   logger.info({ slug, files: written.length, tables: wroteFrom.size }, "article exported");
   return { slug, files: written, tables: [...wroteFrom] };
 }

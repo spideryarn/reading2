@@ -65,7 +65,8 @@ describe("what each chat job sends about thinking", () => {
     expect(effortOf("referee-claims")).toBe("medium");
     expect(effortOf("referee-criteria")).toBe("medium");
     expect(effortOf("link-summary")).toBe("low");
-    expect(effortOf("search")).toBeNull();
+    expect(effortOf("search")).toBe("medium");
+    expect(effortOf("quiz-mark")).toBeNull();
   });
 
   for (const job of JOBS) {
@@ -80,7 +81,7 @@ describe("what each chat job sends about thinking", () => {
   it("does not let a body built at run time override the table", async () => {
     /* `AiRequestBody.reasoning` is `never`, which stops a literal. A body
        assembled from something the type never saw is stopped here. */
-    expect((await sent("search", { reasoning: { effort: "high" } })).reasoning).toBeUndefined();
+    expect((await sent("quiz-mark", { reasoning: { effort: "high" } })).reasoning).toBeUndefined();
     expect((await sent("referee-claims", { reasoning: { effort: "high" } })).reasoning).toEqual({
       effort: "medium",
     });

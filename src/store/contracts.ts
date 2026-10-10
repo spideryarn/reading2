@@ -45,6 +45,7 @@
  * divergence this migration is meant to make impossible.
  */
 
+import type { StaleNoticeMode } from "../stale-notice.js";
 import { isAdmin, type AdminUser } from "../admin.js";
 import type { HiddenCheckResult, StoredHiddenCheck } from "../referee-hidden-check-types.js";
 import type { OwnerId } from "../owner.js";
@@ -1881,6 +1882,24 @@ export interface SkimNoticeStore {
    * when it is not — a re-plan landed in between — and nothing is written.
    */
   dismissProfileNotice(slug: string, generatedAt: string, key: string): Promise<boolean>;
+}
+
+/**
+ * The "older version of the article" notices the owner sent away on one
+ * article, by mode — docs/plans/261010a-dismiss-older-version-notices.md.
+ * Both methods are owner-scoped (a stranger's slug is a 404). The identities
+ * are opaque: the route has checked their form (src/stale-notice.ts), and
+ * nothing checks that they name an artefact, since one that names nothing
+ * never matches a notice and the row is the owner's own.
+ */
+export interface StaleNoticeStore {
+  /** Every mode with something dismissed, and what. */
+  list(slug: string): Promise<Partial<Record<StaleNoticeMode, string[]>>>;
+  /**
+   * **Replace** the mode's dismissed identities with `identities`, and move
+   * `dismissed_at` forward. `created_at` stays the first dismissal's.
+   */
+  dismiss(slug: string, mode: StaleNoticeMode, identities: readonly string[]): Promise<void>;
 }
 
 /**

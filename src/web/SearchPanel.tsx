@@ -119,6 +119,9 @@ import { Button } from "@/components/ui/button";
 import { useRevealChosen } from "./useRevealChosen.js";
 import { useRenderCount } from "./perf.js";
 import { BandWaiting } from "./BandWaiting.js";
+import { StaleNotice } from "./StaleNotice.js";
+import { useStaleNotice } from "./useStaleNotices.js";
+import { searchNoticeIdentity } from "../stale-notice.js";
 import { putKeyboardAway } from "./useVisualViewport.js";
 import { isImeComposing } from "./key-chord.js";
 import { media } from "./media.js";
@@ -284,10 +287,18 @@ interface Props {
   /** The row the reader last pressed, so the list and the prose agree. */
   openKey: string | null;
   onOpen(key: string, blockId: BlockId): void;
+  /**
+   * The article, for the stale banner's × (plan 261010a), which an owner's
+   * dismissal is stored against. Visitors pass it too so their in-memory
+   * dismissal cannot leak across client-side navigation to another article.
+   * Absent only in a test that mounts the panel alone.
+   */
+  slug?: string;
 }
 
 export function SearchPanel({
   access,
+  slug,
   matcher,
   onMatcher,
   find,
@@ -455,7 +466,7 @@ export function SearchPanel({
           moved they land on the wrong ones or on nothing at all. Only for
           searches that are actually switched on — a warning about a run whose
           box is unticked is a warning about nothing on screen. */}
-      <StaleNote runs={asksTheServer(matcher) ? runs : []} active={active} own={own !== null} />
+      <StaleNote runs={asksTheServer(matcher) ? runs : []} active={active} own={own !== null} slug={slug} />
 
       <Results
         found={found}
@@ -1374,31 +1385,47 @@ function StaleNote({
   runs,
   active,
   own,
+  slug,
 }: {
   runs: SavedSearch[];
   active: string[];
   /** Whether ↺ is on the rows below — see `STALE_ASK_AGAIN`. */
   own: boolean;
+  slug: string | undefined;
 }) {
   /* `done` only. A pending run has no passages to be wrong about yet, and a
      failed one has none at all — flagging either would put a warning on a row
      that is already saying something truer about itself. */
   const stale = runs.filter((r) => active.includes(r.id) && r.status === "done" && r.stale);
-  if (stale.length === 0) return null;
+  /* **The × sends away every run it counted** (plan 261010a), each by its id
+     and the answer it holds (`searchNoticeIdentity`): a run answered again
+     keeps its id, and its new answer's notice is a new one. A run that goes
+     stale afterwards brings the banner back, counting only itself. The ⚠ on
+     each row stays: it labels the row rather than giving notice. A visitor's
+     dismissal is held for the page view. */
+  const notice = useStaleNotice({
+    slug: own ? (slug ?? null) : (slug ?? "visitor-page"),
+    mode: "search",
+    identities: stale.map(searchNoticeIdentity),
+    owner: own,
+  });
+  const count = notice.showing.length;
 
   return (
-    <div className="srch-stale">
-      <p>
-        <AlertTriangle size={13} />
-        {stale.length === 1
-          ? "This search describes an older version of the article."
-          : `${stale.length} of these searches describe an older version of the article.`}
-      </p>
-      <p className="srch-stale-hint">
-        {stale.length === 1 ? STALE_WHY : STALE_WHY_MANY}
-        {own ? " ↺ on a row puts its question back in the box." : ""}
-      </p>
-    </div>
+    <StaleNotice
+      notice={notice}
+      className="srch-stale"
+      action={
+        <p className="srch-stale-hint">
+          {count === 1 ? STALE_WHY : STALE_WHY_MANY}
+          {own ? " ↺ on a row puts its question back in the box." : ""}
+        </p>
+      }
+    >
+      {count === 1
+        ? "This search describes an older version of the article."
+        : `${count} of these searches describe an older version of the article.`}
+    </StaleNotice>
   );
 }
 

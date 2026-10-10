@@ -159,7 +159,6 @@ import {
   Star,
   ThumbsDown,
   ThumbsUp,
-  TriangleAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -289,6 +288,8 @@ import type {
   PublicIdentificationSignal,
 } from "../public-types.js";
 import { BandWaiting } from "./BandWaiting.js";
+import { StaleNotice } from "./StaleNotice.js";
+import { useStaleNotice } from "./useStaleNotices.js";
 
 /**
  * **A row as this panel draws it** — the owner's stored row and a visitor's
@@ -1089,6 +1090,12 @@ export function DebatePanel({
   const debate = access.kind === "owner" ? access.owner.debate : access.debate;
   /* A visitor's debate arrived with the page, so it is ready by construction. */
   const ready = debate !== null && (owner === null || owner.status === "ready");
+  /* Reception's stale banner's × (plan 261010a): this search, by its clock. */
+  const staleNotice = useStaleNotice({
+    slug: owner?.slug ?? null,
+    mode: "debate",
+    identities: owner?.stale ? (owner.debate?.searchedAt ?? null) : null,
+  });
   const directRows: readonly DirectRow[] = debate?.direct.rows ?? NO_DIRECT;
   const claimRows: readonly ClaimRow[] = debate?.claims.rows ?? NO_CLAIMS;
 
@@ -1371,13 +1378,15 @@ export function DebatePanel({
           running or failed. It remains the mode's one surface for progress,
           Stop, a stall warning and the failure sentence. Not on a stale
           search, whose banner carries the job; an outdated one has no banner
-          (plan 260929c), so its job shows here. */
+          (plan 260929c), so its job shows here. **While the banner shows,
+          not while stale** (plan 261010a, GPT Sol's finding 4): a dismissed
+          banner carries no job. */
       foot={
         debate &&
         owner !== null &&
         (view === "reception" || !claimsNotRun) &&
         owner.status === "ready" &&
-        !owner.stale &&
+        staleNotice.showing.length === 0 &&
         (owner.job || owner.starting || owner.failed || (waiting && !owner.error)) ? (
           <div className="dbt-again">{run("Search again", true)}</div>
         ) : null
@@ -1458,16 +1467,10 @@ export function DebatePanel({
               on an unchanged article is not stale — it is dated, which is a
               thing a reader can weigh for themselves. src/types.ts §
               `Debate.searchedAt`. */}
-          {owner?.stale ? (
-            <div className="gloss-stale">
-              <p>
-                <TriangleAlert size={13} />
-                The article has changed since this search ran, so some of these may be answering
-                something the piece no longer says.
-              </p>
-              {run("Search again", true)}
-            </div>
-          ) : null}
+          <StaleNotice notice={staleNotice} action={run("Search again", true)}>
+            The article has changed since this search ran, so some of these may be answering
+            something the piece no longer says.
+          </StaleNotice>
           {/* No banner for an outdated search (older prompt, same article) —
               Greg, 2026-09-29 (SPIDERYARN-READING2-55): *"it's not worth
               bugging the user about it."* Re-running is in Metadata. Plan
@@ -2393,9 +2396,21 @@ function OwnerListedClaims({
       />
     );
   const claims = list.status === "ready" ? (list.claimList?.claims ?? []) : null;
-  /* A job started elsewhere — Metadata, another tab — on a current list. */
+  /* The stale banner's × (plan 261010a): this list, by its clock. Checking
+     stays off on a stale list either way — the server refuses it — so the ×
+     hides a sentence, not a control. */
+  const staleNotice = useStaleNotice({
+    slug: list.slug,
+    mode: "debate-claims",
+    identities: list.stale ? (list.claimList?.generatedAt ?? null) : null,
+  });
+  /* A job started elsewhere — Metadata, another tab — while no banner carries
+     it: a current list, or a stale one whose banner was sent away (plan
+     261010a, GPT Sol's finding 4). */
   const showJob =
-    claims !== null && !list.stale && (list.job || list.starting || list.failed || (waiting && !list.error));
+    claims !== null &&
+    staleNotice.showing.length === 0 &&
+    (list.job || list.starting || list.failed || (waiting && !list.error));
 
   /* Where each check is drawn — from its stored targets, so a list made
      again, or a changed article, hides nothing that was paid for (E5). */
@@ -2442,15 +2457,9 @@ function OwnerListedClaims({
       )}
       {claims !== null && (
         <>
-          {list.stale && (
-            <div className="gloss-stale">
-              <p>
-                <TriangleAlert size={13} />
-                {DEBATE_CLAIMS_LIST_STALE}
-              </p>
-              {run(DEBATE_CLAIMS_LIST_AGAIN, true)}
-            </div>
-          )}
+          <StaleNotice notice={staleNotice} action={run(DEBATE_CLAIMS_LIST_AGAIN, true)}>
+            {DEBATE_CLAIMS_LIST_STALE}
+          </StaleNotice>
           {claims.length === 0 ? (
             <p className="gloss-quiet dbt-listed-none">{DEBATE_CLAIMS_LIST_EMPTY}</p>
           ) : (

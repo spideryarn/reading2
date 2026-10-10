@@ -4642,6 +4642,14 @@ export interface SearchRun {
    */
   kind: SearchKind;
   createdAt: string;
+  /**
+   * When the latest attempt ended (`search_runs.finished_at`). Absent while
+   * pending, and on a run finished before 2026-10-03. A run keeps its `id`
+   * when it is answered again, so this is what tells one answer from the next
+   * — the stale banner's dismissal is keyed on both (src/stale-notice.ts §
+   * `searchNoticeIdentity`, plan 261010a, GPT Sol's finding 2).
+   */
+  finishedAt?: string;
   status: "pending" | "done" | "error";
   hits: SearchHit[];
   model?: string;

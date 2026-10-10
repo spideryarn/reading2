@@ -239,6 +239,7 @@ describe("generateIllustrated", () => {
     expect(run.report.kept).toBe(3);
     expect(run.report.faults).toEqual([]);
     expect(run.illustrated.illustrator).toBe("google/gemini-3.1-flash-image");
+    expect(Date.parse(run.illustrated.generatedAt ?? ""), "the painting's generation identity").not.toBeNaN();
   });
 
   /**

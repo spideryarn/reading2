@@ -13,21 +13,26 @@
  *
  * docs/plans/260905b-pdf-front-matter-and-the-title-it-stole.md
  */
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PdfRecord } from "../src/pdf.js";
 import {
   assemble,
   type FrontMatterAnswer,
   frontMatterWindow,
   FrontMatterUnreadable,
+  FRONT_MATTER_ANSWER_ROOM,
+  FRONT_MATTER_MAX_TOKENS,
+  FRONT_MATTER_THINKING_ROOM,
   MAX_PUBLISHER_WORDS,
   MAX_SET_ASIDE_FRACTION,
+  openRouterFrontMatterReader,
   parseAnswer,
   promptFor,
   readFrontMatter,
   WINDOW_PAGES,
   withFrontMatterHidden,
 } from "../src/pdf-frontmatter.js";
+import { budgetFor } from "../src/token-budget.js";
 
 const record = (over: Partial<PdfRecord> = {}): PdfRecord => ({
   page: 1,
@@ -351,5 +356,36 @@ describe("the pass as a whole", () => {
       controller.signal,
     );
     expect(saw).toBe(controller.signal);
+  });
+});
+
+/* Plan 261010f. Production reached 1,673 of the old flat 2,000, 748 of them
+   thinking at the provider default; a cut-off answer is not JSON, and the pass
+   falls back to the title ladder without a word. The ceiling is now written as
+   answer + thinking, through `budgetFor`. */
+describe("what the front-matter pass sends", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("sends a ceiling with room for the answer and for some thinking", async () => {
+    process.env.OPENROUTER_API_KEY = "test-key";
+    const fetchMock = vi.fn(
+      async (_url: string, _init: { body: string }) =>
+        ({
+          ok: true,
+          headers: new Headers(),
+          text: async () =>
+            JSON.stringify({
+              choices: [{ message: { content: JSON.stringify({ titleIds: [], publisherIds: [], bylineIds: [] }) } }],
+            }),
+        }) as unknown as Response,
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await openRouterFrontMatterReader("test/model").ask("a prompt").catch(() => undefined);
+    const init = fetchMock.mock.calls[0]?.[1];
+    expect(JSON.parse(init?.body ?? "{}").max_tokens).toBe(FRONT_MATTER_MAX_TOKENS);
+    expect(FRONT_MATTER_MAX_TOKENS).toBe(
+      budgetFor("pdf-frontmatter", FRONT_MATTER_ANSWER_ROOM, FRONT_MATTER_THINKING_ROOM),
+    );
+    expect(FRONT_MATTER_THINKING_ROOM).toBeGreaterThanOrEqual(2 * 748);
   });
 });

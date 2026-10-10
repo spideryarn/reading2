@@ -90,6 +90,11 @@ export interface UseIllustrated {
   faults: IllustratedFault[];
   /** The Sketch moved underneath these plates — or moved underneath itself. */
   stale: boolean;
+  /**
+   * Which stored painting this is — the identity Regenerate's hold uses, and
+   * the stale notice's (plan 261010a). `null` with no painting.
+   */
+  identity: string | null;
   /** We would paint it differently now — the prompt has moved on. */
   outdated: boolean;
   /** It was painted from a Sketch drawn for a reader profile. */
@@ -224,9 +229,10 @@ interface IllustratedShown {
   illustrated: Illustrated;
   /**
    * **Which stored painting this is**, for *Paint again*'s hold
-   * (rewrite-hold.ts). `Illustrated` has no clock of its own, so this is the
-   * stored value itself, as the server sent it — useSketch.ts § `drawn` says
-   * why it is never the response beside it, nor the checked plates.
+   * (rewrite-hold.ts). This is the stored value itself, as the server sent it:
+   * that keeps its persisted `generatedAt` while also distinguishing older
+   * paintings that predate that clock. useSketch.ts § `drawn` says why it is
+   * never the response beside it, nor the checked plates.
    */
   painted: string;
   stale: boolean;
@@ -478,6 +484,7 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
     illustrated,
     faults,
     stale: shown?.stale ?? false,
+    identity: shown?.painted ?? null,
     outdated: shown?.outdated ?? false,
     profiled: shown?.profiled ?? false,
     profileChanged,

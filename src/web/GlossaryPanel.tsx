@@ -137,6 +137,8 @@ import { GlossaryKindIcon } from "./GlossaryKindIcon.js";
 import { useRenderCount } from "./perf.js";
 import { BandWaiting } from "./BandWaiting.js";
 import { Excerpt } from "./Excerpt.js";
+import { StaleNotice } from "./StaleNotice.js";
+import { useStaleNotice } from "./useStaleNotices.js";
 
 /**
  * **The owner's half of this panel** — the read's status, the job writing it,
@@ -297,6 +299,12 @@ export function GlossaryPanel({
   useRenderCount("GlossaryPanel");
   const owner = access.kind === "owner" ? access.owner : null;
   const glossary = access.glossary;
+  /* The stale banner's × (plan 261010a): this list, by its clock. */
+  const staleNotice = useStaleNotice({
+    slug: owner?.slug ?? null,
+    mode: "glossary",
+    identities: owner?.stale ? (owner.glossary?.generatedAt ?? null) : null,
+  });
   /* `effectiveSort` and not `sort`: `prioritised` is the default, so it arrives
      on glossaries whose scores cannot support it, and everything below — the
      list, the SortBar's pressed state, the numbers on each row — has to agree
@@ -582,18 +590,12 @@ export function GlossaryPanel({
 
               Stale wins when both are true — it is the one that makes the
               occurrence links wrong, and two banners stacked is a wall. */}
-          {owner?.stale ? (
-            <div className="gloss-stale">
-              <p>
-                <TriangleAlert size={13} />
-                These terms describe an older version of the article.
-              </p>
-              {/* **No run button of its own since 2026-10-03**: *Write a new
-                  list* at the top of the column is the same rewrite, and two
-                  buttons each drawing the one job's progress was a second
-                  place to look. GPT Sol's plan review of 261003c, P2. */}
-            </div>
-          ) : null}
+          {/* **No run button of its own since 2026-10-03**: *Write a new
+              list* at the top of the column is the same rewrite, and two
+              buttons each drawing the one job's progress was a second place to
+              look. GPT Sol's plan review of 261003c, P2. The × sends the
+              notice away for this list (plan 261010a). */}
+          <StaleNotice notice={staleNotice}>These terms describe an older version of the article.</StaleNotice>
           {/* **No banner for an outdated glossary** (older prompt, same
               article) — Greg, 2026-09-29 (SPIDERYARN-READING2-55): *"it's not
               worth bugging the user about it."* Plan 260929c. The run row at

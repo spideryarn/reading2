@@ -176,7 +176,8 @@ Stage 5, asked for by Greg on 2026-09-28 (his words are in the
   > — Greg, 2026-09-29
 
   **The profile-changed banner has an ×** (since 2026-10-09,
-  [261009i](../plans/261009i-skim-profile-notice-can-be-dismissed.md)), and the stale one does not:
+  [261009i](../plans/261009i-skim-profile-notice-can-be-dismissed.md)), and since 2026-10-10 the
+  stale one does too, as every mode's does ([controls.md § Every "older version" notice has an ×](controls.md#every-older-version-notice-has-an-)):
 
   > I think that's helpful, but there should be a way to dismiss it if I decide that I actually
   > don't care and I don't want to plan it again.
@@ -189,6 +190,12 @@ Stage 5, asked for by Greg on 2026-09-28 (his words are in the
   Metadata shows in the foot, as it does on a route with no banner. The other personalised modes say
   the same thing with the profile icon rather than a banner, so there is nothing of theirs to
   dismiss; Illustrated's one grey sentence was looked at and left, for the plan's reasons.
+
+  The stale banner's × is the shared one, keyed on the route's `generatedAt`. 261009i had kept it
+  undismissible because a route over Quotes that have moved can stop where nothing is; so such a
+  stop now says *"This quote is no longer in the Quotes"* on its own row and card, and the
+  explanation no longer rests on the banner
+  ([261010a](../plans/261010a-dismiss-older-version-notices.md), GPT Sol's finding 3).
 
   **Stale Quotes are chosen again first**, on the automatic run and on the banner's button, as missing
   ones always were — unforced, so current Quotes cost nothing — and the empty state says when they

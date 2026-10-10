@@ -320,8 +320,8 @@ It is exhaustive over `ChatJob`, `outgoing` sends the row, and a caller's body m
 `reasoning` of its own. A caller sizes its `max_tokens` against its row (`effortOf`), as two terms
 — answer room plus thinking room — through `budgetFor`, and its deadline through `deadlineFor`
 ([src/token-budget.ts](../../src/token-budget.ts)), so a run allowed to fill its ceiling has time
-to. `openRouterStream` warns, with the job, whenever a stream stops on `length` having spent
-reasoning tokens.
+to. The gateway warns, with the job, whenever a chat-wire call stops on `length` having spent
+reasoning tokens, whether the call streamed or returned one JSON body.
 
 What `medium` measured on the chat wire is in
 [260928c](../plans/260928c-referee-claims-fail-on-long-pieces.md): no thinking at all on some

@@ -116,7 +116,7 @@
  *
  * **The completion ceilings, and this is the one that would bite first.**
  * On the standard model explain sends `max_tokens: 1500`, chat 4,000 and search
- * 4,000. Explain sends 4,000 and chat 6,000 on the high-power model since plan
+ * 9,750. Explain sends 4,000 and chat 6,000 on the high-power model since plan
  * 261009h (`chatCeiling` in src/converse.ts and the `max_tokens` line in
  * src/explain.ts). The original figures were sized for a model whose thinking
  * is not billed against them the same way.

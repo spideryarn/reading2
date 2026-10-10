@@ -538,6 +538,11 @@ const SHARED_WITH_READER = [
   "src/web/fonts.ts",
   "src/web/useRevealChosen.ts",
   "src/web/useSlow.ts",
+  /* Arrived 2026-10-10 with the stale notice's × (plan 261010a): /design's
+     specimen draws the real banner (`DismissibleNotice`) rather than a copy.
+     Every reading band's panel already imports it, so the reader downloads
+     nothing new; its own imports (Tooltip, lucide) were already shared. */
+  "src/web/StaleNotice.tsx",
   "src/web/HighPowerSwitch.tsx",
   "src/web/IconButton.tsx",
   "src/web/JobProgress.tsx",

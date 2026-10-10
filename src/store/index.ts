@@ -77,6 +77,7 @@ import type {
   ReadingTimeStore,
   GlossaryHiddenStore,
   SkimNoticeStore,
+  StaleNoticeStore,
   QuizAttemptStore,
   FeedbackStore,
   FetchAllowanceStore,
@@ -119,6 +120,7 @@ import { pgSourceGuessStore } from "./pg-source-guesses.js";
 import { pgReadingTimeStore } from "./pg-reading-time.js";
 import { pgGlossaryHiddenStore } from "./pg-glossary-hidden.js";
 import { pgSkimNoticeStore } from "./pg-skim-notice.js";
+import { pgStaleNoticeStore } from "./pg-stale-notices.js";
 import { pgQuizAttemptStore } from "./pg-quiz-attempts.js";
 import { pgReaderStore } from "./pg-reader.js";
 import { pgRefereeClaimsStore } from "./pg-referee-claims.js";
@@ -378,6 +380,8 @@ export const readingTimeStore: ReadingTimeStore = guarded("reading-time", pgRead
 export const glossaryHiddenStore: GlossaryHiddenStore = guarded("glossary-hidden", pgGlossaryHiddenStore);
 /** The Skim profile-changed notice an owner sent away — plan 261009i. */
 export const skimNoticeStore: SkimNoticeStore = guarded("skim-notice", pgSkimNoticeStore);
+/** The "older version of the article" notices an owner sent away, by mode — plan 261010a. */
+export const staleNoticeStore: StaleNoticeStore = guarded("stale-notices", pgStaleNoticeStore);
 /** The reader's finished quiz marks, kept since 2026-10-05 — plan 261005b. */
 export const quizAttemptStore: QuizAttemptStore = guarded("quiz-attempts", pgQuizAttemptStore);
 

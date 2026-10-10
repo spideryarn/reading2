@@ -305,6 +305,19 @@ report's note, `feedback-endings.ts`), and messages to the two sessions if they 
 
 ## Log
 
+- 2026-10-10: **A second merge with `dev` brought a table that stores the old word.** Plan
+  261010a's `stale_notice_dismissals` (`drizzle/20261010030425_stale_notice_dismissals.sql`) keys a
+  dismissed "older version" notice by panel, and Bibliography's was `citations`. The two
+  migrations forked off one parent snapshot over disjoint tables, so the later snapshot was merged
+  by hand (database.md § When both are applied and disjoint), both journal entries kept in `when`
+  order. Then, by this plan's expand rule: `STALE_NOTICE_MODES` says `bibliography`, the table's
+  CHECK admits both (`drizzle/20261010044614_stale_notice_bibliography.sql`, generated after
+  `dev`'s; `STALE_NOTICE_TABLE.retiredModes` in schema.ts), and a `citations` row or a request from
+  an open tab reads as `bibliography` (`RETIRED_STALE_NOTICE_MODES`, src/stale-notice.ts; where
+  both rows exist the later dismissal wins). Red first in `tests/stale-notices-route.test.ts`.
+  **The contract also** rewrites `stale_notice_dismissals` rows from `citations` (keeping the later
+  where both exist) and narrows that CHECK, dropping `retiredModes`.
+
 - 2026-10-10: **Stage 2's migration regenerated at the merge with `dev`.** It was
   `20261009230106_bibliography_expand`, stamped before `dev`'s `20261009232510_ai_calls_run_index`,
   which the shared local database had already applied (its watermark was that migration's `when`),
@@ -401,5 +414,7 @@ several places. What changed, each a decision taken now:
 **The contract queue item** therefore lists: drop the three legacy columns, their trigger and the
 `legacy…` declarations; delete old-named step runs and the mirror trigger, narrow the CHECK; rewrite
 `jobs.steps` / `jobs.reset` and the chat origins, narrow their CHECKs; rewrite or delete old bucket
-rows, then narrow the bucket CHECK; rename the claim-check index and constraints and drop the view;
+rows, then narrow the bucket CHECK; rewrite `stale_notice_dismissals`' `citations` rows (the later
+dismissal wins where both exist) and narrow its mode CHECK (added at the second merge, § Log);
+rename the claim-check index and constraints and drop the view;
 remove the old API route aliases and the public payload's old keys. The read-side aliases may stay.
