@@ -32,7 +32,7 @@ import {
 } from "../scripts/gjd-remote-tmux.js";
 
 const b64 = (t: string) => Buffer.from(t, "utf8").toString("base64");
-const UUID = "606cb12a-ffc5-4df4-af3a-7dc881135b5f";
+const UUID = "f101b196-6746-4b73-b7ac-9d885db5b776"; // not the Overseer's real one: fixture-ids wants each uuid in one file
 const DIR = "/home/greg/code/spideryarn2";
 
 type RowOpts = { sid?: string; name?: string; role?: string; id?: string; proc?: string; legacy?: boolean };
@@ -220,7 +220,7 @@ esac
   });
 
   it("refuses a UUID changed since the listing without sending keys", () => {
-    const r = runCaptured("bash-5.2$ ", 10, "", "", 0, "00000000-0000-4000-8000-000000000001");
+    const r = runCaptured("bash-5.2$ ", 10, "", "", 0, "12dfd202-c8f9-489b-a363-4c631a7816d4");
     expect(r.status, r.out).toBe(5);
     expect(r.out).toContain("metadata changed");
     expect(r.sends).toBe("");

@@ -2,10 +2,12 @@
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
-A button on one item in a mode (a claim, a glossary entry, a cited work, an idea) starts a fresh
-chat about that item. The chat stores its **origin**: the mode, and the item by the most durable
-name it has. The item then shows a mark that reopens the chat beside the mode, Chat's list shows the
-row with the mode's icon, and the open chat has a line that goes back to the item
+A button on one item in a mode (a claim, a glossary entry, a cited work, an idea) starts a chat
+about that item. The chat stores its **origin**: the mode, and the item by the most durable name it
+has. The item then shows a mark in the button's place that reopens the chat beside the mode, and a
+second press from anywhere reopens it rather than starting another
+([§ One chat per item](#one-chat-per-item)). Chat's list shows the row with the mode's icon, and
+the open chat has a line that goes back to the item
 ([§ The way back from the chat](#the-way-back-from-the-chat)). It is an ordinary chat in every other
 way: same prompt, same tools.
 
@@ -44,7 +46,8 @@ remains.
 | Ideas | the open idea, under its passages (since 2026-10-09) | [`OriginChat.tsx`](../../src/web/OriginChat.tsx) § `AskInChatButton`, drawn by [`IdeasPanel.tsx`](../../src/web/IdeasPanel.tsx) § `IdeaRow` | [ideas.md § Asking about an idea in chat](ideas.md#asking-about-an-idea-in-chat) |
 
 The rows and the angle box draw the way back with `OriginChatMark` from the same file; a hover card
-draws no mark (it has no room, and the entry or row it opens has one). **A hover card's button is
+draws no mark (it has no room, and the entry or row it opens has one), and its button reopens the
+item's chat instead ([§ One chat per item](#one-chat-per-item)). **A hover card's button is
 the band's own sender** (`askGlossaryEntryInChat`, `askCitedWorkInChat` in `Reader.tsx`), so a chat
 started from a card records the same origin as one started in the band, and finds the same mark.
 Owner only: a visitor has no chat.
@@ -60,6 +63,39 @@ origin (`summary` is reserved in the database CHECK and not built, and since 202
 `chat_threads_origin_summary` lets it carry none of the shape columns); a chat about a passage has an
 *anchor*, not an origin; and a comment's question is linked from the comment's side
 ([comments.md](comments.md#asking-the-model-and-the-link-back)).
+
+## One chat per item
+
+> I tried clicking Ask in Chat again. I think for the same citation, and I'm 99% sure it somehow
+> created a new chat rather than resuming the existing one for that citation. […] Can we get rid
+> of the words Ask in Chat and just show the chat icon with a rich tooltip?
+>
+> — Greg, 2026-10-09 (spya-pdpnjf), in [261010s](../plans/261010s-ask-in-chat-resumes-its-thread-and-becomes-an-icon.md)
+
+Since 2026-10-10:
+
+- **The button is Chat's two bubbles**, its words in a `ControlTip` card (`AskInChatButton`, and the
+  hover cards' own). icons.md § Navigation is the rule.
+- **The item shows the button or the mark, never both.** With no chat, the button. With one,
+  `OriginChatMark` in its place: the same bubbles, the number of questions, and **the chat's gist**
+  (`ThreadSummary.gist`, the one line a small model writes after each answer,
+  [chat-tools.md](chat-tools.md); the latest answer's opening until there is one), over two lines.
+  A press opens the chat beside the mode. A claim's heading button follows the same rule.
+- **Every sender reopens before it starts** (`reopenItemChat` in `Reader.tsx`, used by `askEntry`,
+  `askWork`, `askIdea`, `checkClaim`): the item's chat is found with `threadForOrigin`, the lookup
+  the mark uses, then among the chats the band has begun that the summaries have not heard of yet
+  (`handedItemChats`, fed by `onHandoffThread`). A server-corrected id replaces the guess; a refused
+  or deleted optimistic thread, and a change of article, removes it. Found: it opens where the mark opens it, or in
+  Chat's band from Chat or Learn, and nothing is sent. This is what the hover cards and Skim's chip
+  reach, since they draw no mark.
+- **A first press still goes to Chat's band**, as before. Reopening keeps the reader in their mode.
+- **"One" is a rule of the buttons, not of the database.** Two tabs can still make two chats about
+  an item; the mark shows the newest. A reader who wants a fresh one starts a plain chat in Chat.
+- **Not the lens** (Sources › Reception's angle box, the reader's own words, where a second angle is
+  a second question) and not Summary's paragraph button, which has no origin.
+
+Tests: `has one chat`, `a prose hover card's Ask in chat, on an item that already has a chat`, and
+`reopens a chat begun moments ago` in `tests/glossary-and-bibliography-ask-in-chat.test.tsx`.
 
 ## The way back from the chat
 
@@ -158,11 +194,13 @@ In the order you would do them:
    `askAboutGlossaryEntry`, using `fencedQuote`, and `itemOrigin` (its `mode` is typed, so
    **loud**). The item's words are the article's or a model's, so they go inside the fence.
 10. **The reader and the panel.** [`src/web/reader/Reader.tsx`](../../src/web/reader/Reader.tsx):
-    a sender beside `askGlossaryEntryInChat`, and a bundle beside `entryChats`. **Silent**: build
+    a sender beside `askGlossaryEntryInChat`, wrapped in `reopenItemChat` as `askEntry` is
+    (**silent**: an unwrapped sender starts a second chat every press,
+    [§ One chat per item](#one-chat-per-item)), and a bundle beside `entryChats`. **Silent**: build
     the bundle from the raw `chatSummaries`, not `chats`, which holds only passage chats, or the
     mark never appears. In the panel, `AskInChatButton`, `threadForOrigin`
-    ([`useChatAnchors.ts`](../../src/web/useChatAnchors.ts)) and `OriginChatMark`, passed through
-    the owner's arm of `access`. The icon rule is [icons.md § A chat is two bubbles](icons.md#a-chat-is-two-bubbles).
+    ([`useChatAnchors.ts`](../../src/web/useChatAnchors.ts)) and `OriginChatMark`, one or the
+    other, passed through the owner's arm of `access`. The icon rule is [icons.md § A chat is two bubbles](icons.md#a-chat-is-two-bubbles).
 11. **The tests to copy.** `tests/thread-origin-way-back.test.ts` (the `describe.each` over
     `glossary`, `bibliography` and `ideas`: `sameOrigin`, and **the columns round trip that covers
     step 5**); `tests/chat-origin-route.test.ts` (the route, the CHECKs, the export);

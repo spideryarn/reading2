@@ -79,13 +79,17 @@ durations and delays live in the stylesheet, so
 [`tests/logo-loader.test.tsx`](../../tests/logo-loader.test.tsx) reads them from there — including
 computed staggers, pseudo-elements and conditional rules — and fails if a hold stops agreeing.
 
-**Four of the fourteen are left out**, each with its reason in `LOADER_EXCLUDED`: `spya-strain`
+**Five of the twenty-seven are left out**, each with its reason in `LOADER_EXCLUDED`: `spya-strain`
 and `spya-dawn` reach both halves (the first holds the letters while the spider hauls; the second
 masks the whole host) and would override the other track; `spya-seam` and `spya-i` hold a pose
-whose transition is scoped to their class, so leaving them snaps. The fourteenth, *Dew on the
-Thread* (2026-10-02), joined the letters track: a bead of orange along a white word is texture by
-nature. **A fifteenth hover animation fails the test until it is put in one list or the other**, and the same test reads the
-stylesheet's selectors and fails if anything in a track touches the other half.
+whose transition is scoped to their class, so leaving them snaps; and `spya-dead` (2026-10-10)
+turns the spider grey on its back, which on an empty loading page reads as an error. The
+fourteenth, *Dew on the Thread* (2026-10-02), joined the letters track: a bead of orange along a
+white word is texture by nature. Of the thirteen added on 2026-10-10, twelve joined a track — six
+each ([261010p](../plans/261010p-more-logo-animations.md)) — so the loader now draws from ten
+spider animations and twelve letter ones. **A new hover animation fails the test until it is put in
+one list or the other**, and the same test reads the stylesheet's selectors and fails if anything
+in a track touches the other half.
 
 **It is the corner's wordmark, scaled up, not a big one.** The spider's moves are fixed pixels
 tuned for the 20px mark (only the letters' are in `--logo-px`), so a wordmark drawn at 36px ran

@@ -482,6 +482,8 @@ type ConversationBandProps = {
   onHandoffTaken?: (() => void) | undefined;
   /** The fresh conversation a sent handoff opened, including a corrected id. */
   onHandoffThread?: ((handoff: ChatHandoff, threadId: string) => void) | undefined;
+  /** That optimistic conversation was refused or deleted before summaries carried it. */
+  onHandoffThreadGone?: ((handoff: ChatHandoff, threadId: string) => void) | undefined;
   /** An answer settled, including after this band has gone. */
   onSettled?: (() => void) | undefined;
   /** The article's title, for the guide's greeting (plan 261009i). Chat's band only. */
@@ -509,6 +511,7 @@ export function ConversationBand({
   handoff,
   onHandoffTaken,
   onHandoffThread,
+  onHandoffThreadGone,
   onSettled,
   onScreen,
   onOrigin,
@@ -1304,6 +1307,7 @@ export function ConversationBand({
           }
           if (origin && to) drafts.clearOrigin(confirmed);
         },
+        ...(first ? { onGone: (gone: string) => onHandoffThreadGone?.(first, gone) } : {}),
       } : {}),
       kind: sendKind,
       /* The blocks on screen are a chat's alone: the server refuses them on

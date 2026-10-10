@@ -79,7 +79,7 @@ export interface SkimControl {
   door: DoorView | null;
   /**
    * Whether the door offers *‹ Previous stop*: the current stop is not the
-   * first of its pass (spya-gm858u, plan 261010g). On stop 1, ← goes to stop
+   * first of its pass (spya-gm858u, plan 261010t). On stop 1, ← goes to stop
    * 1's passage again, which is a different job, so the door draws nothing.
    */
   hasPrevious: boolean;

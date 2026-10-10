@@ -1449,7 +1449,7 @@ export interface SkimDrops {
   /**
    * `again` entries dropped so no pass is shorter than the one before it and
    * Most is longer than More — `growPasses` in src/skim.ts, since `skim/12`
-   * (docs/plans/261010g-skim-deeper-passes-always-longer-and-a-previous-stop-door.md).
+   * (docs/plans/261010t-skim-deeper-passes-always-longer-and-a-previous-stop-door.md).
    * The stop is kept. Absent before, read it as 0.
    */
   shrinkCarried?: number;
@@ -4534,8 +4534,9 @@ export interface ChatThread {
   /**
    * **One line saying what this conversation covered**, written by a small
    * model after each finished answer (src/chat-gist.ts). For the model in the
-   * reader's other conversations (src/reader-notes.ts § `indexRow`), never
-   * drawn on screen. Absent until the first one is written.
+   * reader's other conversations (src/reader-notes.ts § `indexRow`), and since
+   * plan 261010s on an originating item's chat mark. Absent until the first one
+   * is written.
    */
   gist?: string;
   messages: ChatMessage[];
@@ -4589,6 +4590,15 @@ export interface ThreadSummary {
    * the tooltip has to render rather than a state that cannot happen.
    */
   lastLine?: string;
+  /**
+   * **What the whole conversation covered**, the small model's one line
+   * (`ChatThread.gist`, src/chat-gist.ts). Shown on the mark of an item the
+   * chat was started from, in place of `lastLine`, since plan 261010s: Greg
+   * asked that the caller mode show *"a short summary of the chat"*
+   * (spya-pdpnjf). Absent until the first gist lands, and after an edit or a
+   * delete clears it; the mark then falls back to `lastLine`.
+   */
+  gist?: string;
 }
 
 /* ---------------------------------------------------------------- search --
@@ -7382,7 +7392,8 @@ export interface Citer {
  * list.** No model made any of it, and it is not part of the stored Debate.
  * docs/plans/261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md.
  *
- * - `no-doi` — the article has no DOI on record, so nothing was asked.
+ * - `no-doi` — the article has no usable DOI, and its own address is not an arXiv page
+ *   (`citersIdOf`, src/citation-index.ts), so nothing was asked.
  * - `not-indexed` — OpenAlex has no record of the DOI.
  * - `unconfirmed` — OpenAlex's record for the DOI could not be shown to be this
  *   article: its title and one author must both agree. Not a claim that the

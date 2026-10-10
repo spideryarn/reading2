@@ -280,7 +280,9 @@ describe("withRegistryFacts", () => {
     const viaArxiv = lookupOf({ [arxiv]: { kind: "found", record: { ...record("10.48550/arxiv.1706.03762", { venue: "arXiv", ...datacite }), id: arxiv } } });
     const a = await withRegistryFacts(meta(), [arxiv], viaArxiv);
     expect(a.meta.journal).toBe("arXiv");
-    expect(a.meta.doi).toBeUndefined();
+    /* arXiv's own DataCite DOI, since 261010n: before, an arXiv import kept no DOI and
+       Reception's Cited by said "no DOI on record" for every arXiv paper (spya-sbj3yk). */
+    expect(a.meta.doi).toBe("10.48550/arxiv.1706.03762");
     const zenodo = "doi:10.5281/zenodo.1" as WorkId;
     const viaZenodo = lookupOf({ [zenodo]: { kind: "found", record: record("10.5281/zenodo.1", { venue: "Zenodo", ...datacite }) } });
     const z = await withRegistryFacts(meta(), [zenodo], viaZenodo);

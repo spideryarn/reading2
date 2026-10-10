@@ -30,6 +30,8 @@ listed here; the names under each are files in `docs/project/`.
   `marketing-overview.md` (how people come to hear about it; the hub for the docs after it) ·
   `marketing-author-gifts.md` · `marketing-talks.md` · `marketing-podcasts.md` ·
   `marketing-bloggers.md` ·
+  `reading-research-overview.md` (the peer-reviewed evidence on reading and learning deeply, and
+  what it says about each mode — open it before claiming a mode helps, or changing one on a hunch) ·
   `original-version/` (the larger app this is an offshoot of) · and the five folders that hold the
   project's memory: `plans.md` · `research.md` · `investigations.md` · `postmortems.md` ·
   `tutorials.md`
@@ -107,7 +109,7 @@ listed here; the names under each are files in `docs/project/`.
   `controls.md` (one height, one radius, and the preflight we do not import) ·
   `narrow-windows.md` (rows wrap, columns are given up in JS, and the notch) · `icons.md` ·
   `loading-spinner.md` (the wordmark for a whole page waiting, `LoaderCircle` for the rest) ·
-  `design-logo.md` (the fourteen animations the wordmark plays when you point at it) ·
+  `design-logo.md` (the animations the wordmark plays when you point at it, and while an article loads) ·
   `marketing-pages.md` (the signed-out pages, and how to shoot a screenshot that shows what it
   claims to)
 - **[security-map.md](docs/project/security-map.md)** — start here for security: the untrusted

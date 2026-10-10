@@ -1,10 +1,10 @@
 # Code review: Skim deeper passes never shorter, and a previous-stop door
 
 You are reviewing, and fixing, the code built from plan
-docs/plans/261010g-skim-deeper-passes-always-longer-and-a-previous-stop-door.md (read it, including
+docs/plans/261010t-skim-deeper-passes-always-longer-and-a-previous-stop-door.md (read it, including
 its Log, which says how the built rule differs from the planned one: Gist <= More < Most, More may
-equal Gist). Your plan-stage review is docs/plans/261010g-skim-plan-review-sol.md. The scoped diff
-is docs/plans/261010g-skim-code-review.diff (commit 2a681247b against 262f9f674); the measurement is
+equal Gist). Your plan-stage review is docs/plans/261010t-skim-plan-review-sol.md. The scoped diff
+is docs/plans/261010t-skim-code-review.diff (commit 2a681247b against 262f9f674); the measurement is
 docs/investigations/261010a-skim-per-pass-targets-and-walked-growth.md.
 
 Files: src/skim-passes.ts (new, shared), src/skim.ts (targetsFor, passSizes, growthFailure,

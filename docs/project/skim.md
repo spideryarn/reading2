@@ -137,7 +137,8 @@ v2, the scrapbook, is built on top of that:
   - The owner's card has *Ask in chat*, *Hide* and *Open in Glossary* (*Dig deeper* where *Ask in chat*
     is, until 2026-10-09, plan 261009k). A visitor's has *Open in Glossary* alone. A reader whose
     Glossary control is hidden gets no *Open in Glossary* (and, until then, no *Dig deeper*, because
-    a dig's answer was drawn in Glossary); *Ask in chat* goes to Chat, so it stays.
+    a dig's answer was drawn in Glossary); *Ask in chat* stays because it can start the term's chat
+    or reopen it beside Skim.
   - The card scrolls inside half the window's height, so the buttons under a long entry can be
     reached on a short screen (`.skim-term-card` in
     [`skim.css`](../../src/web/styles/skim.css)).
@@ -581,7 +582,7 @@ other thing he offered — and the pips on the prose's door.
 
 **A deeper pass is never shorter, and Most is longer than More, as walked** — Greg, 2026-10-09,
 reports spya-nbmce7 and spya-q2w7yt, plan
-[261010g](../plans/261010g-skim-deeper-passes-always-longer-and-a-previous-stop-door.md):
+[261010t](../plans/261010t-skim-deeper-passes-always-longer-and-a-previous-stop-door.md):
 
 > Levels of the skim mode were supposed to get more and more detailed, and yet in this case it
 > seems as though the most detailed skim submode has fewer steps than the middle one.

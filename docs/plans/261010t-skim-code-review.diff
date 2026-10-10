@@ -98,7 +98,7 @@ index 000000000..19b459778
 + * **Which stops each pass of a Skim route walks — the one definition**, shared
 + * by the band (src/web/skim-route.ts re-exports it) and the server's growth
 + * rule (src/skim.ts § `passSizes`, `growPasses`), so that what the route is
-+ * checked against is what the reader walks. Until plan 261010g the server
++ * checked against is what the reader walks. Until plan 261010t the server
 + * checked cumulative counts instead, and a route whose More walked 5 stops and
 + * Most 4 passed (spya-nbmce7). Pure: types only.
 + */
@@ -188,7 +188,7 @@ index 377265c33..84587cb0b 100644
 + * growth rule judges `passSizes`, and `growPasses` repairs a route that still
 + * does not grow. The input hash is unchanged; the version alone makes a stored
 + * route outdated, which is not announced.
-+ * docs/plans/261010g-skim-deeper-passes-always-longer-and-a-previous-stop-door.md.
++ * docs/plans/261010t-skim-deeper-passes-always-longer-and-a-previous-stop-door.md.
   */
 -export const PROMPT_VERSION = "skim/11";
 +export const PROMPT_VERSION = "skim/12";
@@ -204,7 +204,7 @@ index 377265c33..84587cb0b 100644
 + * these were "at depth 1; at depth 1 or 2; in all", the shape from when the
 + * passes nested; read as passes, 11 quotes asked for Gist 3, More 3, Most 5, so
 + * a model on target walked a More no longer than its Gist (spya-nbmce7, plan
-+ * 261010g). Now, wherever there are quotes enough (`GROWTH_MIN_QUOTES` and up,
++ * 261010t). Now, wherever there are quotes enough (`GROWTH_MIN_QUOTES` and up,
 + * which tests/skim.test.ts checks to the cap), More is at least Gist and Most
 + * is more than More: Gist is the old target; More is about 40% of the rest,
 + * kept below half of it; Most is everything left, within the cumulative cap.
@@ -255,7 +255,7 @@ index 377265c33..84587cb0b 100644
 + * the reader saw while the passes nested; from 260929e each pass walks only
 + * its own stops (and, from 261003l, a few carried in), and the check went on
 + * guarding the old walk. A route with cumulative 3 < 7 < 11 walked Gist 3,
-+ * More 5, Most 4 (spya-nbmce7, plan 261010g).
++ * More 5, Most 4 (spya-nbmce7, plan 261010t).
   *
 - * With at least `GROWTH_MIN_QUOTES` offered quotes: `1 ≤ c₁ < c₂ < c₃`. With
 - * fewer, a shorter spiral is allowed — `c₁ ≥ 1` and never shrinking (which the
@@ -297,7 +297,7 @@ index 377265c33..84587cb0b 100644
 +/**
 + * **Make no pass shorter than the one before, and Most longer than More,
 + * where the model's route does not** — rule 9, after `validateRoute`'s eight,
-+ * since `skim/12` (plan 261010g); the rule itself is `growthFailure`'s. The
++ * since `skim/12` (plan 261010t); the rule itself is `growthFailure`'s. The
 + * prompt asks for it; this is the backstop, so that More is never longer
 + * than Most by luck of the draw (spya-nbmce7: Gist 3, More 5, Most 4, and a
 + * re-run that happened to grow).
@@ -463,7 +463,7 @@ index eded090ce..87da7dfae 100644
 +  /**
 +   * `again` entries dropped so that a deeper pass walks more stops than the
 +   * one before it — `growPasses` in src/skim.ts, since `skim/12`
-+   * (docs/plans/261010g-skim-deeper-passes-always-longer-and-a-previous-stop-door.md).
++   * (docs/plans/261010t-skim-deeper-passes-always-longer-and-a-previous-stop-door.md).
 +   * The stop is kept. Absent before, read it as 0.
 +   */
 +  shrinkCarried?: number;
@@ -493,7 +493,7 @@ index fb1bde1ea..018c7c8ae 100644
    door: DoorView | null;
 +  /**
 +   * *‹ Previous stop*, on the left — `null` on stop 1 of a pass, where there
-+   * is none (spya-gm858u, plan 261010g). The same step ← takes.
++   * is none (spya-gm858u, plan 261010t). The same step ← takes.
 +   */
 +  onPrevious: (() => void) | null;
    onNext(): void;
@@ -602,7 +602,7 @@ index a90e496db..56b2c0331 100644
    door: DoorView | null;
 +  /**
 +   * Whether the door offers *‹ Previous stop*: the current stop is not the
-+   * first of its pass (spya-gm858u, plan 261010g). On stop 1, ← goes to stop
++   * first of its pass (spya-gm858u, plan 261010t). On stop 1, ← goes to stop
 +   * 1's passage again, which is a different job, so the door draws nothing.
 +   */
 +  hasPrevious: boolean;
@@ -746,7 +746,7 @@ index b1d9e7514..a9fa4fd4a 100644
    font-family: var(--font-author);
    font-size: var(--reading-size);
  }
-+/* Back on the left, the way on on the right (spya-gm858u, plan 261010g): the
++/* Back on the left, the way on on the right (spya-gm858u, plan 261010t): the
 +   row spans the door's measure, and the forward group keeps to the right even
 +   when there is no back button, or it wraps under one on a narrow window. */
  .skim-door-row {

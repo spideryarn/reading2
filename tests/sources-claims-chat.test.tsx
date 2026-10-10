@@ -8,7 +8,8 @@
  *   and nothing else. It spends nothing: what happens next is Chat's.
  * - The mark is derived from the reading view's thread summaries
  *   (`threadForOrigin`), so nothing is stored on the claim. It shows how many
- *   exchanges there were and the opening of the latest answer.
+ *   exchanges there were and the chat's gist (the latest answer's opening
+ *   until a gist exists).
  * - Both sit inside the claim's `<summary>`, and a press on either must not
  *   fold the claim.
  * - A visitor's panel has no handler to be given, and draws neither.
@@ -219,12 +220,13 @@ describe("the owner's claims", () => {
     expect(marks()).toHaveLength(0);
   });
 
-  it("draw a mark on the claim a chat was started from: its exchanges and the latest answer's opening", () => {
+  it("draw a mark on the claim a chat was started from: its exchanges and its gist", () => {
     paintOwner([
       summary({
         id: "spya-aaa222",
         origin: { mode: "sources-claims", blockId: BLOCK, quote: FIRST },
         turns: 2,
+        gist: "Why the answer depends on the flour.",
         lastLine: "The strongest reply is that it depends on the flour.",
       }),
     ]);
@@ -234,10 +236,11 @@ describe("the owner's claims", () => {
     expect(mark.getAttribute("aria-label")).toBe(SOURCES_CLAIMS_OPEN_CLAIM_CHAT);
     expect(mark.querySelector(".origin-chat-count")?.textContent).toBe("2");
     const line = mark.querySelector(".origin-chat-line");
-    expect(line?.textContent).toBe("The strongest reply is that it depends on the flour.");
+    expect(line?.textContent).toBe("Why the answer depends on the flour.");
+    expect(line?.classList.contains("origin-chat-gist")).toBe(true);
     expect(line?.classList.contains("voice-ai"), "a model's words, in the model's face").toBe(true);
-    /* The button to start another stays. */
-    expect(checkButtons()).toHaveLength(2);
+    /* The mark stands in that claim's button place; the other claim still asks. */
+    expect(checkButtons()).toHaveLength(1);
   });
 
   it("say so when the chat has no finished answer yet", () => {

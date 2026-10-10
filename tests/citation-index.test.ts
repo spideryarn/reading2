@@ -344,7 +344,38 @@ describe("citersOf", () => {
     expect(await citersOf({ title: TITLE, byline: "Michael Levin" }, h.deps)).toEqual({ kind: "no-doi" });
     expect(await citersOf({ ...LEVIN, doi: "not a doi" }, h.deps)).toEqual({ kind: "no-doi" });
     expect(await citersOf({ ...LEVIN, doi: "arxiv:1706.03762" }, h.deps)).toEqual({ kind: "no-doi" });
+    /* An address that names no work is not a fallback either, nor one that names a
+       DOI: the fallback is for arXiv's gap alone (GPT Sol's F4 on plan 261010n). */
+    for (const url of ["https://example.com/post", `https://doi.org/${DOI}`]) {
+      expect(await citersOf({ title: TITLE, byline: "Michael Levin", url }, h.deps)).toEqual({ kind: "no-doi" });
+    }
     expect(h.api.asked).toEqual([]);
+  });
+
+  /* Plan 261010n (spya-sbj3yk): an article imported before an agreed arXiv record put
+     its DOI on the article has none, and its address is the arXiv page. arXiv's own
+     DataCite DOI is asked about, and the answer still has to be this article's. */
+  it("with no DOI, asks about arXiv's DOI for the arXiv paper the article's own address names", async () => {
+    const arxivDoi = "10.48550/arxiv.1706.03762";
+    const h = harness({ [openAlexWorkUrl(arxivDoi)]: WORK, [CITERS_URL]: CITERS });
+    const article = { title: TITLE, byline: "Michael Levin", url: "https://arxiv.org/abs/1706.03762v7" };
+    expect((await citersOf(article, h.deps)).kind).toBe("found");
+    expect(h.api.asked).toEqual([openAlexWorkUrl(arxivDoi), CITERS_URL]);
+    expect(h.store.writes).toEqual([`doi:${arxivDoi}:found`]);
+    /* The same record, read for an article whose title is not its own, lists nothing. */
+    expect(await citersOf({ ...article, title: "A different paper altogether about memory" }, h.deps)).toEqual({
+      kind: "unconfirmed",
+    });
+    /* An article's own DOI wins over its address. */
+    const own = harness(HAPPY);
+    expect((await citersOf({ ...LEVIN, url: "https://arxiv.org/abs/1706.03762" }, own.deps)).kind).toBe("found");
+    expect(own.api.asked).toEqual([WORK_URL, CITERS_URL]);
+
+    /* A stored value that is not a DOI is not precedence: old or hand-edited
+       metadata must not hide the usable arXiv address underneath it. */
+    const invalid = harness({ [openAlexWorkUrl(arxivDoi)]: WORK, [CITERS_URL]: CITERS });
+    expect((await citersOf({ ...article, doi: "arxiv:1706.03762" }, invalid.deps)).kind).toBe("found");
+    expect(invalid.api.asked).toEqual([openAlexWorkUrl(arxivDoi), CITERS_URL]);
   });
 
   it("calls a 404 not-indexed, remembers it, and does not ask again", async () => {

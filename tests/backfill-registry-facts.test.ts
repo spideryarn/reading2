@@ -126,8 +126,9 @@ describe("buildPlan", () => {
     expect(row.sourceKind).toBe("pdf");
     expect(row.candidates).toContain("arxiv:2403.03276");
     expect(row.outcome).toBe("agreed");
-    /* An arXiv id is not a DOI the article prints, so no `doi`; the venue is the answer for arXiv. */
-    expect(row.write).toEqual({ journal: "arXiv", published_at: "2024-03-05" });
+    /* The venue is the answer for arXiv, and arXiv's DataCite DOI comes with the record
+       since 261010n: the article does not print it, but the registry agreed it is this work. */
+    expect(row.write).toEqual({ doi: "10.48550/arxiv.2403.03276", journal: "arXiv", published_at: "2024-03-05" });
   });
 
   it("a paper fetched from an arXiv address is a candidate by its address", async () => {

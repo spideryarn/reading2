@@ -182,6 +182,13 @@ describe("a thread's summary", () => {
     expect(s.turns).toBe(3);
   });
 
+  it("carries the stored conversation gist without replacing the answer fallback", () => {
+    const s = summarise({ ...thread([{ text: "The latest answer.", status: "done" }]), gist: "What the chat covered." });
+    expect(s.gist).toBe("What the chat covered.");
+    expect(s.lastLine).toBe("The latest answer.");
+    expect("gist" in summarise(thread([]))).toBe(false);
+  });
+
   it("never shows a Learn answer's hint the reader has not opened", () => {
     /* The body sits in an HTML block here, so a cut that skipped HTML made the
        hidden hint the preview. GPT Sol, plan review F3. */

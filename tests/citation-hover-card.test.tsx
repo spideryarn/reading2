@@ -277,6 +277,20 @@ function tap(target: Element): MouseEvent {
   return click;
 }
 
+/** One tap on a control already inside an open card. */
+function tapControl(target: Element): void {
+  const fire = (type: string) => {
+    const event = new MouseEvent(type, { bubbles: true, cancelable: true, detail: 1 });
+    Object.defineProperty(event, "pointerType", { value: "touch" });
+    target.dispatchEvent(event);
+  };
+  act(() => {
+    fire("pointerdown");
+    fire("pointerup");
+    fire("click");
+  });
+}
+
 /** Rest the pointer on something for long enough to open a card. */
 function hover(target: Element): void {
   act(() => {
@@ -667,7 +681,7 @@ describe("Ask in chat from the card", () => {
     promptVersion: "1",
   };
   const button = () =>
-    [...(card()?.querySelectorAll("button") ?? [])].find((b) => /Ask in chat/.test(b.textContent ?? "")) as
+    [...(card()?.querySelectorAll("button") ?? [])].find((b) => b.getAttribute("aria-label") === ASK_WORK_IN_CHAT) as
       | HTMLButtonElement
       | undefined;
   const actions = (): CiteActions & { asked: CitedWork[] } => {
@@ -679,11 +693,25 @@ describe("Ask in chat from the card", () => {
     const a = actions();
     paint(WORKS, [], true, a);
     hover(cite(0));
-    expect(button()?.textContent?.trim()).toBe("Ask in chat");
+    expect(button()?.textContent?.trim(), "icon only").toBe("");
     expect(button()?.getAttribute("aria-label")).toBe(ASK_WORK_IN_CHAT);
     act(() => button()?.click());
     expect(a.asked.map((w) => w.id)).toEqual([TULVING.id]);
     expect(card()).toBe(null);
+  });
+
+  it("keeps the citation card open for a finger to read, then asks on the second tap", () => {
+    const a = actions();
+    paint(WORKS, [], true, a);
+    hover(cite(0));
+    const ask = button() as HTMLButtonElement;
+    tapControl(ask);
+    expect(a.asked).toEqual([]);
+    expect(card(), "the citation card stays open under its nested tooltip").not.toBeNull();
+    expect(document.body.textContent).toContain("Tap again to do it.");
+    tapControl(ask);
+    expect(a.asked.map((w) => w.id)).toEqual([TULVING.id]);
+    expect(card()).toBeNull();
   });
 
   it("draws no Dig deeper, on a work with a kept answer either", () => {

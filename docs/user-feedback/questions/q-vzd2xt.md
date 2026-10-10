@@ -4,7 +4,7 @@ report: spya-nbmce7
 status: open
 asked: 2026-10-10
 title: Skim: should More always have more stops than Gist, even if Gist gets shorter on short articles?
-refs: qi-67k544sa · SPIDERYARN-READING2-GC · docs/plans/261010g-skim-deeper-passes-always-longer-and-a-previous-stop-door.md · docs/investigations/261010a-skim-per-pass-targets-and-walked-growth.md · docs/user-feedback/261010_1800-skim-deeper-passes-never-shorter-and-a-previous-stop.md
+refs: qi-67k544sa · SPIDERYARN-READING2-GC · docs/plans/261010t-skim-deeper-passes-always-longer-and-a-previous-stop-door.md · docs/investigations/261010a-skim-per-pass-targets-and-walked-growth.md · docs/user-feedback/261010_1800-skim-deeper-passes-never-shorter-and-a-previous-stop.md
 ---
 Your report: Most had fewer stops than More. That is fixed: Most now always has more stops than More, and no pass has fewer than the one before. One choice is left. On short articles (about 11 to 13 quotes), More can still have the SAME number of stops as Gist, for example 3 / 3 / 5.
 
