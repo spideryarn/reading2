@@ -211,7 +211,18 @@ export const MAX_URL_CHARS = 2_048;
  * it is a model call and gets its own longer budget below.
  */
 export const TOOL_TIMEOUT_MS = 20_000;
-/** `search_article_meaning` runs a model over the whole article. It is slower. */
+/**
+ * `search_article_meaning` runs a model over the whole article. It is slower.
+ *
+ * **Deliberately shorter than Search's own deadline** (src/search.ts §
+ * `SEARCH_TIMEOUT_MS`, 129 s since 2026-10-10, sized so the whole 9,750-token
+ * ceiling can arrive). This is one tool inside a chat turn that has its own
+ * budget, and a tool that ate the turn would leave the reader no answer at
+ * all. Search shares its job, so it sends `medium` here too, and at `medium` a
+ * search over a 152,000-word paper finished in 8–15 s. The runs this clock
+ * used to cut short were the provider default's thinking ones, which took
+ * 27 s just to fail (plan 261010f).
+ */
 export const MEANING_TIMEOUT_MS = 45_000;
 
 /* ------------------------------------------------------------- what a run is --

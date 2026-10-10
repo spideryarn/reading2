@@ -2832,16 +2832,17 @@ if (CHAT_ORPHAN_GRACE_MS <= CHAT_TIMEOUT_MS) {
  * The same number for a meaning-search, and it is a different number because
  * the deadline it has to clear is a different deadline.
  *
- * `SEARCH_TIMEOUT_MS` is 60s (src/search.ts) — a search is one call with no
- * tool rounds, so it is bounded much tighter than a chat turn. 90s leaves the
- * same 30s of room for the article read that happens after `begin`, the write
- * that happens after the model, and two processes' clocks.
+ * **Derived since 2026-10-10**, when `SEARCH_TIMEOUT_MS` (src/search.ts) grew
+ * from a flat 60s to the time its token ceiling takes to arrive, 129s (plan
+ * 261010f). It was a flat 90s. The 30s beyond the deadline is unchanged: room
+ * for the article read that happens after `begin`, the write that happens
+ * after the model, and two processes' clocks.
  *
  * **The filesystem store ignored it entirely** until it went on 2026-09-05:
  * it errored any `pending` run this process did not start, immediately. Only
  * Postgres has other processes to be wrong about.
  */
-export const SEARCH_ORPHAN_GRACE_MS = 90_000;
+export const SEARCH_ORPHAN_GRACE_MS = SEARCH_TIMEOUT_MS + 30_000;
 
 if (SEARCH_ORPHAN_GRACE_MS <= SEARCH_TIMEOUT_MS) {
   throw new Error(

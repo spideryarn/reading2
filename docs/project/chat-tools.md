@@ -1328,7 +1328,7 @@ alone, in order.
   ask for one or two tools at a time, so the saving is small today. Revisit if that changes.
 - **A tool cannot be stopped mid-flight.** The reader's signal reaches `fetchDocument` and
   `findPassages`, so a stop does end them — but the loop only notices between tools, so a stop during
-  a 20-second meaning search waits for it. Bounded by `TOOL_TIMEOUT_MS`, not fixed by it. *"Between
+  a meaning search of up to 45 seconds waits for it. Bounded by `MEANING_TIMEOUT_MS` (`TOOL_TIMEOUT_MS` for the other tools), not fixed by it. *"Between
   tools" only became true on 2026-08-26: until then the signal was consulted after the whole batch,
   so a stop during the first of three waited for all three. And a tool now carries the turn's
   deadline as well as the reader's signal — it used to carry only the signal, so `timeoutMs` bounded

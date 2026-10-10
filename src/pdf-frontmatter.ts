@@ -57,6 +57,7 @@
  */
 import { createHash } from "node:crypto";
 import { openRouterJson } from "./ai-call.js";
+import { budgetFor } from "./token-budget.js";
 import type { PdfRecord, RecordType } from "./pdf.js";
 import { RENDERED } from "./pdf.js";
 
@@ -398,7 +399,24 @@ export interface FrontMatterReader {
   usage(): { input: number; output: number };
 }
 
-const MAX_TOKENS = 2_000;
+/**
+ * **The ceiling is answer plus thinking.** It was a flat 2,000 sized for the
+ * answer until 2026-10-10; production reached 1,673 of it, 748 of those
+ * thinking at the provider default. A cut-off answer is not JSON, and
+ * `frontMatterOrNothing` (src/pdf-read.ts) then falls back to the title ladder
+ * without a word, so the cost of being under is a worse title nobody is told
+ * about. Answer room: the old ceiling, which is about twice the longest answer
+ * seen (925). Thinking room: a little over twice the most seen. No clock is
+ * sized against it — the pass has none of its own. A ceiling, not a purchase.
+ * docs/plans/261010f-a-stale-referee-criterion-overflow-and-the-calls-one-notch-from-it.md.
+ */
+export const FRONT_MATTER_ANSWER_ROOM = 2_000;
+export const FRONT_MATTER_THINKING_ROOM = 2_000;
+export const FRONT_MATTER_MAX_TOKENS = budgetFor(
+  "pdf-frontmatter",
+  FRONT_MATTER_ANSWER_ROOM,
+  FRONT_MATTER_THINKING_ROOM,
+);
 
 export function openRouterFrontMatterReader(
   /* Required: the article's power picks it (plan 260930f), and a default here
@@ -416,7 +434,7 @@ export function openRouterFrontMatterReader(
         "pdf-frontmatter",
         {
           model,
-          max_tokens: MAX_TOKENS,
+          max_tokens: FRONT_MATTER_MAX_TOKENS,
           messages: [
             { role: "system", content: SYSTEM },
             { role: "user", content: prompt },
