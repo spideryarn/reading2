@@ -68,8 +68,13 @@ export interface AdminAuthorLookup {
 export interface AdminAuthorGift {
   readonly id: string;
   readonly status: AuthorGiftStatus;
-  /** The article, by the slug frozen at create, and its current title; null once deleted. */
-  readonly starter: { readonly slug: string; readonly title: string | null };
+  /**
+   * The article, by the slug frozen at create, and its current title; null once
+   * deleted. `linkable`: public, or its private link on, so *Send* can link it
+   * as it is. False on an agent's draft of a private article with no link,
+   * whose *Send* makes the link behind the rights tick (plan 261010r § D2).
+   */
+  readonly starter: { readonly slug: string; readonly title: string | null; readonly linkable: boolean };
   readonly email: string | null;
   readonly recipientName: string | null;
   readonly recipientNote: string | null;

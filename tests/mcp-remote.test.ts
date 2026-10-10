@@ -407,15 +407,8 @@ describe("the tools, through the SDK's client", () => {
     const client = await connect("admin-app");
     try {
       const address = `mcp-remote-draft-${RUN}@example.invalid`;
-      /* The tool never makes the link (Sol's F2): first, refused without one. */
-      const nolink = await client.callTool({ name: "draft_author_gift", arguments: { slug: mine.slug, email: address } });
-      expect(nolink.isError).toBe(true);
-      expect(textOf(nolink)).toMatch(/private link/);
-      /* Greg turns it on from the article's page. */
-      await getDb()
-        .update(articles)
-        .set({ shareToken: `MCPxREMOTExDRAFTx${RUN}`.slice(0, 22).padEnd(22, "x"), shareTokenAt: new Date() })
-        .where(eq(articles.id, mine.articleId));
+      /* The article is private with no link. The tool drafts it anyway and
+         never makes the link (Sol's F2 on 261010i); Greg's Send will (261010r). */
       const result = await client.callTool({
         name: "draft_author_gift",
         arguments: { slug: mine.slug, email: address, recipientName: "Ada", notes: "From a remote test." },
@@ -431,6 +424,13 @@ describe("the tools, through the SDK's client", () => {
             from spideryarn.author_gifts g where g.id = ${answer.id}`,
       );
       expect(rows[0]).toEqual({ email: address, notes: "From a remote test.", lookups: 0, vouchers: 0 });
+      const [link] = await getDb()
+        .select({ at: articles.shareTokenAt })
+        .from(articles)
+        .where(eq(articles.id, mine.articleId));
+      expect(link?.at).toBeNull();
+      /* And the server told the model how the gift tools fit together (D3). */
+      expect(client.getInstructions()).toMatch(/draft_author_gift/);
     } finally {
       await client.close();
     }

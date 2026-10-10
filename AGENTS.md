@@ -30,6 +30,8 @@ listed here; the names under each are files in `docs/project/`.
   `marketing-overview.md` (how people come to hear about it; the hub for the docs after it) ·
   `marketing-author-gifts.md` · `marketing-talks.md` · `marketing-podcasts.md` ·
   `marketing-bloggers.md` ·
+  `reading-research-overview.md` (the peer-reviewed evidence on reading and learning deeply, and
+  what it says about each mode — open it before claiming a mode helps, or changing one on a hunch) ·
   `original-version/` (the larger app this is an offshoot of) · and the five folders that hold the
   project's memory: `plans.md` · `research.md` · `investigations.md` · `postmortems.md` ·
   `tutorials.md`

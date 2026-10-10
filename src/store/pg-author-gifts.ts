@@ -48,7 +48,7 @@ import { spendByRun } from "./ai-calls-spend-pg.js";
 import { guardDbStore } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { ownedSlug } from "./owned-slug.js";
-import { pgShareLinkStore } from "./pg-share-link.js";
+import { ensureShareLinkForArticle } from "./pg-share-link.js";
 import { latestVoucherEmails } from "./pg-voucher-emails.js";
 import {
   type CreateVoucherAnswer,
@@ -132,8 +132,9 @@ export type EnsureAnswer =
  * only by the insert that makes the gift: an existing gift is never changed
  * here. `lookup: false` makes no lookup row, so nothing is searched.
  * `makeLink: false` never makes the private link: the person did not tick
- * the rights box, so a private article without one is refused `link-off`
- * (Sol's F2 on 261010i — the share-link event records that tick).
+ * the rights box (Sol's F2 on 261010i — the share-link event records that
+ * tick). Since 261010r a private article without one is drafted anyway, and
+ * *Send* makes the link when Greg ticks the box there.
  */
 export interface EnsureOptions {
   readonly makeLink: boolean;
@@ -195,13 +196,20 @@ export async function ensureAuthorGift(
   const resolve = deps.resolveStarter ?? resolveStarter;
   let resolved = await resolve(slug);
   if (resolved.kind === "link-off" && options.makeLink) {
-    await pgShareLinkStore.create(slug, { keepExisting: true });
+    const linked = await ensureShareLinkForArticle(slug, article.id);
+    if (linked.kind !== "ready") {
+      return { kind: "refused", reason: linked.kind === "superseded" ? "absent" : linked.kind };
+    }
     resolved = await resolve(slug);
   }
-  if (resolved.kind !== "ready") return { kind: "refused", reason: resolved.kind };
+  /* An agent's draft (`makeLink: false`) of a private article with no link is
+     made anyway, with no link: Greg's *Send* makes it, behind his rights tick
+     (plan 261010r § D1–D2). Everything else must be ready to link now. */
+  const linkLater = resolved.kind === "link-off" && !options.makeLink;
+  if (!linkLater && resolved.kind !== "ready") return { kind: "refused", reason: resolved.kind };
   /* The slug can have been freed and taken by another article between the
      reads; the gift is for the one this call found first. */
-  if (resolved.starter.articleId !== article.id) return { kind: "refused", reason: "absent" };
+  if (articleOf(resolved) !== article.id) return { kind: "refused", reason: "absent" };
 
   const made = await db.transaction(async (tx) => {
     const { draft } = options;
@@ -237,6 +245,25 @@ export async function ensureAuthorGift(
   const winner = await giftOfArticle(article.id);
   if (!winner) throw new Error("an author gift lost its insert and then could not be found");
   return { kind: "existing", ...winner };
+}
+
+/** The article a resolution found, when it found one. */
+function articleOf(resolved: StarterResolution): string | null {
+  return resolved.kind === "ready" ? resolved.starter.articleId : resolved.kind === "link-off" ? resolved.articleId : null;
+}
+
+/**
+ * **The starter, only if it is still the gift's own article** (261010r, Sol's
+ * F2). A gift keeps the slug it was made with; if that slug has since been
+ * freed and taken by another of the owner's articles, the gift must neither
+ * link nor make a link for that one. Any other article is `absent`.
+ */
+function resolveGiftStarter(articleId: string): (slug: string) => Promise<StarterResolution> {
+  return async (slug) => {
+    const resolved = await resolveStarter(slug);
+    const found = articleOf(resolved);
+    return found !== null && found !== articleId ? { kind: "absent" } : resolved;
+  };
 }
 
 async function giftOfArticle(articleId: string): Promise<{ id: string; status: AuthorGiftStatus } | null> {
@@ -609,6 +636,9 @@ export async function listAuthorGifts(): Promise<AdminAuthorGift[]> {
       gift: authorGifts,
       title: articleRevisions.title,
       articleThere: articles.id,
+      /* Whether the email can link it today: public, or its private link on.
+         Asked of the key's timestamp, never the key (261010r § D2). */
+      linkable: sql<boolean>`coalesce(${articles.visibility} = 'public' or ${articles.shareTokenAt} is not null, false)`,
       voucherExists: VOUCHER_EXISTS,
     })
     .from(authorGifts)
@@ -651,12 +681,16 @@ export async function listAuthorGifts(): Promise<AdminAuthorGift[]> {
     byGift.set(l.authorGiftId, [...(byGift.get(l.authorGiftId) ?? []), wire]);
   }
 
-  return gifts.map(({ gift, title, articleThere, voucherExists }) => {
+  return gifts.map(({ gift, title, articleThere, linkable, voucherExists }) => {
     const status = statusOf({ ...gift, voucherExists });
     return {
       id: gift.id,
       status,
-      starter: { slug: gift.starterSlug, title: articleThere === null ? null : (title ?? gift.starterSlug) },
+      starter: {
+        slug: gift.starterSlug,
+        title: articleThere === null ? null : (title ?? gift.starterSlug),
+        linkable: articleThere !== null && linkable === true,
+      },
       email: gift.email,
       recipientName: gift.recipientName,
       recipientNote: gift.recipientNote,
@@ -944,13 +978,27 @@ function matchesExpected(
   );
 }
 
-/** What `POST …/:id/send` may carry: nothing, or `{ expected }`, strictly. */
-export function parseSendAuthorGift(body: unknown): Parsed<{ readonly expected: SendExpected | null }> {
-  if (body === undefined || body === null) return { ok: true, value: { expected: null } };
+/** What `POST …/:id/send` carries, parsed. */
+export interface SendRequest {
+  readonly expected: SendExpected | null;
+  /** The person ticked "I have the right to share this" on the confirmation (261010r § D2). */
+  readonly rightsConfirmed: boolean;
+}
+
+/**
+ * What `POST …/:id/send` may carry: nothing, or `{ expected, rightsConfirmed }`,
+ * strictly. `rightsConfirmed` may only be `true`: anything else is not a tick.
+ */
+export function parseSendAuthorGift(body: unknown): Parsed<SendRequest> {
+  if (body === undefined || body === null) return { ok: true, value: { expected: null, rightsConfirmed: false } };
   if (!isPlainObject(body)) return { ok: false, message: "Expected a JSON object." };
-  const unknown = Object.keys(body).filter((key) => key !== "expected");
+  const unknown = Object.keys(body).filter((key) => key !== "expected" && key !== "rightsConfirmed");
   if (unknown.length > 0) return { ok: false, message: `Unexpected field: ${unknown.join(", ")}.` };
-  if (!("expected" in body)) return { ok: true, value: { expected: null } };
+  if ("rightsConfirmed" in body && body.rightsConfirmed !== true) {
+    return { ok: false, message: "rightsConfirmed may only be true." };
+  }
+  const rightsConfirmed = body.rightsConfirmed === true;
+  if (!("expected" in body)) return { ok: true, value: { expected: null, rightsConfirmed } };
   const e = body.expected;
   const keys = ["email", "recipientName", "recipientNote", "articles"];
   const nullableString = (v: unknown) => v === null || typeof v === "string";
@@ -975,6 +1023,7 @@ export function parseSendAuthorGift(body: unknown): Parsed<{ readonly expected: 
         recipientNote: e.recipientNote as string | null,
         articles: e.articles,
       },
+      rightsConfirmed,
     },
   };
 }
@@ -982,11 +1031,78 @@ export function parseSendAuthorGift(body: unknown): Parsed<{ readonly expected: 
 /** Seams for tests, and the confirmation's snapshot; each seam defaults to the real thing. */
 export interface SendDeps {
   readonly expected?: SendExpected | null;
+  /**
+   * The person ticked the rights box on the confirmation, so a private article
+   * with no link may have one made now (261010r § D2). Only the page sends it;
+   * no MCP tool reaches *Send*.
+   */
+  readonly rightsConfirmed?: boolean;
   readonly createVoucher?: (
     input: NewVoucher,
     createdBy: string,
     deps: Parameters<typeof createVoucher>[2],
   ) => Promise<CreateVoucherAnswer>;
+  /** The atomic, article-id-pinned link step; a seam for the slug-reuse race test. */
+  readonly ensureShareLink?: typeof ensureShareLinkForArticle;
+}
+
+/**
+ * On a new create's link-off refusal, make the gift article's link behind this
+ * request's rights tick, then retry the replay-first voucher operation.
+ */
+async function retryCreateAfterRightsLink(
+  answer: CreateVoucherAnswer,
+  options: {
+    readonly freshFreeze: boolean;
+    readonly rightsConfirmed: boolean;
+    readonly slug: string;
+    readonly articleId: string;
+    readonly giftId: string;
+    readonly attempt: string;
+    readonly createdBy: string;
+    readonly ensureLink: typeof ensureShareLinkForArticle;
+    readonly createAgain: () => Promise<CreateVoucherAnswer>;
+  },
+): Promise<CreateVoucherAnswer> {
+  if (
+    answer.kind !== "starter-refused" ||
+    answer.reason !== "link-off" ||
+    !options.freshFreeze ||
+    !options.rightsConfirmed
+  ) {
+    return answer;
+  }
+  const link = await runAsOwner(options.createdBy as OwnerId, () =>
+    options.ensureLink(options.slug, options.articleId, {
+      beforeCreate: async (tx) => {
+        /* The article is already locked. Lock the gift before writing the link
+           and prove this freeze still owns it and no concurrent retry has made
+           the voucher. That retry either waits for the new link, or wins first
+           and prevents an older request re-enabling a link turned off since. */
+        const [current] = await tx
+          .select({ sendAttempt: authorGifts.sendAttempt, voucherId: authorGifts.voucherId })
+          .from(authorGifts)
+          .where(eq(authorGifts.id, options.giftId))
+          .for("update")
+          .limit(1);
+        if (current?.sendAttempt !== options.attempt) return false;
+        /* A separate statement after any wait on the gift lock: under READ
+           COMMITTED it gets a fresh snapshot and therefore sees a voucher the
+           lock's previous holder inserted before committing. */
+        const [voucher] = await tx
+          .select({ id: billingVouchers.id })
+          .from(billingVouchers)
+          .where(eq(billingVouchers.id, current.voucherId))
+          .limit(1);
+        return voucher === undefined;
+      },
+    }),
+  );
+  const retried = await options.createAgain();
+  /* A committed concurrent voucher is still its replay. Otherwise, an attempt
+     that lost permission during the link step is superseded, not a misleading
+     instruction to make the link manually. */
+  return link.kind === "superseded" && retried.kind === "starter-refused" ? { kind: "create-refused" } : retried;
 }
 
 /**
@@ -1061,22 +1177,45 @@ export async function sendAuthorGift(id: string, deps: SendDeps = {}): Promise<S
   const create = deps.createVoucher ?? createVoucher;
   const createdBy = gift.createdBy;
   const attempt = gift.sendAttempt;
-  const answer = await runAsOwner(createdBy as OwnerId, () =>
-    create(input, createdBy, {
-      beforeCreate: async (tx) => {
-        /* Lock the gift through the voucher insert's commit. A concurrent
-           starter-refusal unfreeze then waits and sees the voucher; if it won
-           first, this stale snapshot is refused before anything is inserted. */
-        const [current] = await tx
-          .select({ sendAttempt: authorGifts.sendAttempt })
-          .from(authorGifts)
-          .where(eq(authorGifts.id, id))
-          .for("update")
-          .limit(1);
-        return current?.sendAttempt === attempt;
-      },
-    }),
-  );
+  const resolveOwn = resolveGiftStarter(gift.articleId);
+  const createOnce = () =>
+    runAsOwner(createdBy as OwnerId, () =>
+      create(input, createdBy, {
+        resolveStarter: resolveOwn,
+        beforeCreate: async (tx) => {
+          /* Lock the gift through the voucher insert's commit. A concurrent
+             starter-refusal unfreeze then waits and sees the voucher; if it won
+             first, this stale snapshot is refused before anything is inserted. */
+          const [current] = await tx
+            .select({ sendAttempt: authorGifts.sendAttempt })
+            .from(authorGifts)
+            .where(eq(authorGifts.id, id))
+            .for("update")
+            .limit(1);
+          return current?.sendAttempt === attempt;
+        },
+      }),
+    );
+
+  /* Ask create first, preserving its replay-first contract. Only a genuinely
+     new create can answer link-off. Then, only the request that freshly froze
+     the gift and carries the person's tick may make the link. The share-link
+     writer checks the article id under its row lock, so a slug reassigned
+     after resolution cannot enable a link on the replacement article. Retry
+     create even after an absent/unpublished result: a concurrent identical
+     voucher may have committed and its replay identity must still win. */
+  let answer = await createOnce();
+  answer = await retryCreateAfterRightsLink(answer, {
+    freshFreeze: frozen !== undefined,
+    rightsConfirmed: deps.rightsConfirmed === true,
+    slug: gift.starterSlug,
+    articleId: gift.articleId,
+    giftId: id,
+    attempt,
+    createdBy,
+    ensureLink: deps.ensureShareLink ?? ensureShareLinkForArticle,
+    createAgain: createOnce,
+  });
   switch (answer.kind) {
     case "created":
       logger.info({ giftId: id, voucherId: answer.id }, "author gift sent: voucher made");
