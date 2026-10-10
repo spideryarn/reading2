@@ -84,7 +84,8 @@ Since 2026-10-10:
 - **Every sender reopens before it starts** (`reopenItemChat` in `Reader.tsx`, used by `askEntry`,
   `askWork`, `askIdea`, `checkClaim`): the item's chat is found with `threadForOrigin`, the lookup
   the mark uses, then among the chats the band has begun that the summaries have not heard of yet
-  (`handedItemChats`, fed by `onHandoffThread`). Found: it opens where the mark opens it, or in
+  (`handedItemChats`, fed by `onHandoffThread`). A server-corrected id replaces the guess; a refused
+  or deleted optimistic thread, and a change of article, removes it. Found: it opens where the mark opens it, or in
   Chat's band from Chat or Learn, and nothing is sent. This is what the hover cards and Skim's chip
   reach, since they draw no mark.
 - **A first press still goes to Chat's band**, as before. Reopening keeps the reader in their mode.

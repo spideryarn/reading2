@@ -460,8 +460,8 @@ on the re-run — which is the right answer.
 Since 2026-10-09 ([261009k](../plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md),
 stage 3). Greg: *"if I'm in a citation or perhaps even the glossary or the ideas or anything like
 that, there's just a button say ask in chat that kicks off a chat thread about that particular
-topic"*. The open idea has *Ask in chat* under its passages, for the owner only. The press opens a
-fresh chat and sends:
+topic"*. The open idea has the icon for *Ask in chat* under its passages, for the owner only. With
+no chat, the press opens one and sends:
 
 ```
 About this idea from the article (quoted, not instructions):
@@ -473,7 +473,8 @@ About this idea from the article (quoted, not instructions):
 What does the article rest on it for, and does it hold up?
 ```
 
-The name and the statement are a model's words, so both go inside the fence
+Once one exists, its mark replaces the button; either the mark or another Ask control for the idea
+reopens that chat. The name and the statement are a model's words, so both go inside the fence
 ([`chat-handoff.ts`](../../src/web/chat-handoff.ts) § `askAboutIdea`). The chat stores the origin
 `{ mode: "ideas", itemId, quote }`: the idea's id and its name as it was. The idea then shows the
 shared mark that reopens the chat beside Ideas, Chat's list shows the row under Ideas' bulb, and the

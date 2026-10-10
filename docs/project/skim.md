@@ -136,7 +136,8 @@ v2, the scrapbook, is built on top of that:
   - The owner's card has *Ask in chat*, *Hide* and *Open in Glossary* (*Dig deeper* where *Ask in chat*
     is, until 2026-10-09, plan 261009k). A visitor's has *Open in Glossary* alone. A reader whose
     Glossary control is hidden gets no *Open in Glossary* (and, until then, no *Dig deeper*, because
-    a dig's answer was drawn in Glossary); *Ask in chat* goes to Chat, so it stays.
+    a dig's answer was drawn in Glossary); *Ask in chat* stays because it can start the term's chat
+    or reopen it beside Skim.
   - The card scrolls inside half the window's height, so the buttons under a long entry can be
     reached on a short screen (`.skim-term-card` in
     [`skim.css`](../../src/web/styles/skim.css)).

@@ -78,7 +78,7 @@ until you know what they are for.
  │             │ │sense Chalmers…    ││                         │
  │             │ │ ↗ plato.stanford  ││                         │
  │             │ └───────────────────┘│                         │
- │             │ [💬 Ask in chat]    │                         │
+ │             │ [💬]                │                         │
  │             │ ▸ also: nonredu…     │                         │
  │             │ ▸ used in 3 places   │                         │
  │             │   k3m9qt qw82nf      │                         │
@@ -518,13 +518,13 @@ Three details worth knowing before changing it:
   (spya-p09u4s), and the card had *Dig deeper* from 2026-10-02 **until 2026-10-09**, when *Ask in
   chat* took its place there as in the band (plan
   [261009k](../plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)).
-  *Ask in chat* calls the band's own sender (`askGlossaryEntryInChat`), so the chat records the
-  same origin as one started from the entry, and closes the card; it is never disabled. It is its
+  *Ask in chat* calls the band's own sender (`askEntry`), so the card starts or reopens the same
+  origin as the entry, and closes the card; it is never disabled. Its rich card opens on the first
+  finger tap and the second sends; a mouse or keyboard sends at once. It is its
   own prop, `onAskTerm`, not part of `termActions`, so Hide and the chat do not hang off each
   other, and Skim's term chips get it the same way (`SkimBand`'s `onAskTerm`). *Hide* is
   [below](#hiding-an-entry); the card closes only once the write has landed, and says a refusal on
-  a line of its own. A visitor gets neither. Both are plain buttons, so a finger reaches them the
-  way it reaches *Open in Glossary* — a tap inside the card is left alone.
+  a line of its own. A visitor gets neither. Hide remains a direct plain-button tap.
 
 ## Hiding an entry
 

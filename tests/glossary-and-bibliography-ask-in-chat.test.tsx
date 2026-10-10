@@ -591,10 +591,14 @@ const composer = (): HTMLTextAreaElement | null =>
 const dialog = (): HTMLElement | null => document.querySelector<HTMLElement>(".chat-dialog");
 const marks = () => [...host.querySelectorAll<HTMLButtonElement>(".mode-band button.origin-chat")];
 
-async function send(): Promise<void> {
-  const box = composer() as HTMLTextAreaElement;
+async function tap(button: HTMLButtonElement): Promise<void> {
   await act(async () => {
-    box.form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    const down = new MouseEvent("pointerdown", { bubbles: true, cancelable: true });
+    Object.defineProperty(down, "pointerType", { value: "touch" });
+    button.dispatchEvent(down);
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 });
+    Object.defineProperty(click, "pointerType", { value: "touch" });
+    button.dispatchEvent(click);
   });
   await settle();
 }
@@ -625,6 +629,21 @@ const digDeeper = (): HTMLButtonElement[] =>
   );
 
 describe("Ask in chat on a Glossary entry", () => {
+  it("lets a finger read the icon's card before a second tap sends", async () => {
+    who.set(OWNER);
+    await open(`?mode=glossary&term=${QUOTED}`);
+    await until(() => entryButton() !== null, "the open entry's Ask in chat");
+    const button = entryButton() as HTMLButtonElement;
+    await tap(button);
+    expect(param("mode"), "the first tap only reveals").toBe("glossary");
+    expect(chatPosts()).toHaveLength(0);
+    expect(button.getAttribute("aria-expanded")).toBe("true");
+    expect(document.body.textContent).toContain("Tap again to do it.");
+    await tap(button);
+    await until(() => param("mode") === "chat" && composer() !== null, "Chat after the second tap");
+    expect(chatPosts()).toHaveLength(1);
+  });
+
   it("starts a fresh chat that records the entry, and the entry shows the way back", async () => {
     who.set(OWNER);
     await open(`?mode=glossary&term=${QUOTED}&thread=${STORED.id}`);
@@ -919,7 +938,7 @@ describe.each(["glossary", "bibliography", "ideas"] as const)("a %s entry's chat
   });
 
   /* The first Send is the press itself. */
-  it("resends the origin after the press's own send is refused and a mode change", async () => {
+  it("forgets a refused handoff, so pressing the item again starts a real chat", async () => {
     who.set(OWNER);
     await open(search);
     refuseNextSend = true;
@@ -929,23 +948,18 @@ describe.each(["glossary", "bibliography", "ideas"] as const)("a %s entry's chat
     expect(server).toHaveLength(1);
     await visit(mode);
     expect(marks()).toHaveLength(0);
-    await visit("chat");
-    await until(() => composer() !== null, "the recovered composer");
-    expect(param("thread")).toBe(firstId);
-    const box = composer() as HTMLTextAreaElement;
-    await act(async () => {
-      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(box, "Please try again.");
-      box.dispatchEvent(new Event("input", { bubbles: true }));
-    });
+    await until(() => button() !== null, "Ask in chat again");
     nextAnswer = "The retried question's answer.";
-    await send();
+    await act(async () => button()?.click());
+    await until(() => param("mode") === "chat" && param("thread") !== firstId, "a new conversation");
+    const retriedId = param("thread") as string;
     expect(chatPosts()).toHaveLength(2);
     expect(chatPosts().map((r) => (r.body as { origin?: unknown }).origin)).toEqual([origin, origin]);
-    expect(server.find((t) => t.id === firstId)?.origin).toEqual(origin);
+    expect(server.find((t) => t.id === retriedId)?.origin).toEqual(origin);
     await visit(mode);
     await until(() => marks().length === 1, "the retried chat's mark");
     await act(async () => marks()[0]?.click());
-    await until(() => param("thread") === firstId && dialog() !== null, "the retried conversation");
+    await until(() => param("thread") === retriedId && dialog() !== null, "the retried conversation");
   });
 
   /* Until plan 261010g this held the opposite: a second press started a

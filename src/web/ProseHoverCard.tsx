@@ -77,6 +77,7 @@ import { readingMinutes } from "../reading-time.js";
 import { entryProse } from "./GlossaryPanel.js";
 import { ASK_ENTRY_IN_CHAT, ASK_IN_CHAT_CARD_HOW, ASK_IN_CHAT_WHAT, ASK_WORK_IN_CHAT } from "./OriginChat.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
+import { useTapReveal } from "./useTapReveal.js";
 /* **The band's own provenance function, not a second opinion.** `sourceOf`
    decides whether a row has an address or only a search, and it is total over
    `linkFrom` — so importing it is what stops this card and the band teaching a
@@ -143,6 +144,41 @@ import {
   type NoteMarker,
 } from "./notes-view.js";
 import { articleTitleVoice, gistVoice, voiceClass } from "./voice.js";
+
+/** The hover card's icon-only Ask control, including touch's reveal-then-send rule. */
+function CardAskInChat({ label, className, onAsk }: { label: string; className: string; onAsk(): void }) {
+  const reveal = useTapReveal(true);
+  return (
+    <Tooltip
+      placement="bottom"
+      className="tip-soon"
+      open={reveal.open}
+      onOpenChange={reveal.onOpenChange}
+      content={
+        <ControlTip
+          head={label}
+          what={ASK_IN_CHAT_WHAT}
+          how={ASK_IN_CHAT_CARD_HOW}
+          tap={reveal.tap}
+        />
+      }
+    >
+      <button
+        type="button"
+        className={className}
+        aria-label={label}
+        aria-expanded={reveal.open}
+        onPointerDown={reveal.onPointerDown}
+        onPointerCancel={reveal.onPointerCancel}
+        onClick={(event) => {
+          if (reveal.commit(event)) onAsk();
+        }}
+      >
+        <MessagesSquare size={12} aria-hidden="true" />
+      </button>
+    </Tooltip>
+  );
+}
 
 /** What the pointer found: a term, a citation, a link, or several over the same words. */
 interface Hit {
@@ -2271,23 +2307,14 @@ function CiteCard({
         {(onAsk || onOpen) && (
           <span className="prose-card-acts">
             {onAsk && (
-              <Tooltip
-                placement="bottom"
-                className="tip-soon"
-                content={<ControlTip head={ASK_WORK_IN_CHAT} what={ASK_IN_CHAT_WHAT} how={ASK_IN_CHAT_CARD_HOW} />}
-              >
-                <button
-                  type="button"
-                  className="prose-card-act prose-card-cite-ask"
-                  aria-label={ASK_WORK_IN_CHAT}
-                  onClick={() => {
-                    onAsk(work);
-                    onClose();
-                  }}
-                >
-                  <MessagesSquare size={12} aria-hidden="true" />
-                </button>
-              </Tooltip>
+              <CardAskInChat
+                label={ASK_WORK_IN_CHAT}
+                className="prose-card-act prose-card-cite-ask"
+                onAsk={() => {
+                  onAsk(work);
+                  onClose();
+                }}
+              />
             )}
             {onOpen && <OpenInMode mode="sources" onPress={onOpen} />}
           </span>
@@ -2412,9 +2439,8 @@ function CiteCardReading({ work }: { work: CitedWork }) {
 }
 
 /**
- * **Start a fresh chat about this entry and send its first question** — the
- * Glossary band's sender (`askGlossaryEntryInChat` in Reader.tsx), so a chat
- * started from a card records the same origin as one started from the entry.
+ * **Start or reopen this entry's chat** — the Glossary band's sender
+ * (`askEntry` in Reader.tsx), so the card and entry resolve the same origin.
  */
 export type AskAboutTerm = (entry: Pick<GlossaryEntry, "id" | "name">) => void;
 
@@ -2565,29 +2591,19 @@ export function TermCard({
               of its own whole, rather than *Hide* parting from *Ask in chat* or
               *Open in Glossary* landing alone (GPT Sol, plan review of 261003h). */}
           <span className="prose-card-acts">
-            {/* The owner's two verbs, beside the way out. Plain buttons, like
-                that one: a tap inside the card is left entirely alone by the touch
-                path (useHoverCard.ts § "Inside the card"), so they work on a
-                finger as it does. */}
+            {/* The owner's two verbs, beside the way out. Hide remains a plain
+                button like that one; Ask owns a nested tooltip, whose first
+                finger tap reveals its card and whose second sends. */}
             {/* Chat's two bubbles (icons.md § A chat is two bubbles), in the
                 card's own button rather than the band's `AskInChatButton`: the
                 row's other two are `.prose-card-act`, and a 32px outline Button
                 among them would be a second kind of thing. */}
             {onAsk && (
-              <Tooltip
-                placement="bottom"
-                className="tip-soon"
-                content={<ControlTip head={ASK_ENTRY_IN_CHAT} what={ASK_IN_CHAT_WHAT} how={ASK_IN_CHAT_CARD_HOW} />}
-              >
-                <button
-                  type="button"
-                  className="prose-card-act prose-card-term-ask"
-                  aria-label={ASK_ENTRY_IN_CHAT}
-                  onClick={ask}
-                >
-                  <MessagesSquare size={12} aria-hidden="true" />
-                </button>
-              </Tooltip>
+              <CardAskInChat
+                label={ASK_ENTRY_IN_CHAT}
+                className="prose-card-act prose-card-term-ask"
+                onAsk={ask}
+              />
             )}
             {actions && (
             <button

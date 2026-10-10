@@ -944,7 +944,7 @@ export type ReceptionAndClaimsAccess =
  */
 export interface ReceptionAndClaimsChats {
   summaries: readonly ThreadSummary[];
-  /** Start a fresh chat about this claim. Goes to Chat and sends the question: one press, one model call (plan 261006j). */
+  /** Start this claim's chat, or reopen it when another surface reaches this sender. */
   onCheck(origin: ClaimOrigin): void;
   /**
    * Start a fresh chat that looks at the debate from this angle, the reader's
@@ -2245,7 +2245,7 @@ function ReceptionList({
  * wears Chat's icon from the bar, because it takes the reader into Chat
  * (docs/project/icons.md). The mark is the shared `OriginChatMark`
  * (OriginChat.tsx); it sits on a line of its own under the claim, so the
- * latest answer's opening has room.
+ * chat's gist (or latest-answer fallback) has room.
  */
 function ClaimsList({
   groups,
@@ -2728,7 +2728,7 @@ function ListedClaims({
               <p className="rcp-group-claim rcp-listed-head">
                 <span className="rcp-group-quote">“<Excerpt blockId={claim.blockId} words={claim.quote} />”</span>
                 <BlockRef id={claim.blockId} onJump={onJump} />
-                {chats && (
+                {chats && !chat && (
                   <Tooltip placement="top" content={<TipNote>{SOURCES_CLAIM_CHECK_CLAIM}</TipNote>}>
                     <Button
                       type="button"

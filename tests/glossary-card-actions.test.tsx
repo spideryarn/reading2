@@ -19,11 +19,12 @@
  * 2. An owner's card draws both buttons; a visitor's draws neither. No card
  *    draws *Dig deeper*.
  * 3. *Ask in chat* calls the band's sender with the entry, and closes the
- *    card. It is never disabled: a chat needs no passage.
+ *    card. It is never disabled: a chat needs no passage. A finger's first
+ *    tap reveals its explanation; the second sends without closing the outer
+ *    card in between.
  * 4. *Hide* awaits the write and closes the card only on success; a refusal is
  *    a line inside the card, and the card stays.
- * 5. Both are ordinary buttons a finger reaches: a touch tap inside the card is
- *    left alone (useHoverCard.ts § "Inside the card").
+ * 5. *Hide* remains an ordinary one-tap button under a finger.
  */
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -182,7 +183,7 @@ const card = () => document.querySelector(".prose-card");
 const mark = () => host.querySelector("mark.term") as HTMLElement;
 const button = (label: string) =>
   [...(card()?.querySelectorAll<HTMLButtonElement>(".prose-card-act") ?? [])].find((b) =>
-    b.textContent?.includes(label),
+    label === "Ask in chat" ? b.getAttribute("aria-label") === ASK_ENTRY_IN_CHAT : b.textContent?.includes(label),
   );
 
 describe("the one visible list", () => {
@@ -254,12 +255,18 @@ describe("the card's owner actions", () => {
     expect(card()).toBeNull();
   });
 
-  it("works under a finger, as the card's other buttons do", () => {
+  it("lets a finger read the nested card before the second tap sends", () => {
     const actions = actionsWith();
     paint([TERM], actions);
     hover(mark());
-    touchPress(button("Ask in chat") as HTMLButtonElement);
+    const ask = button("Ask in chat") as HTMLButtonElement;
+    touchPress(ask);
+    expect(actions.ask).not.toHaveBeenCalled();
+    expect(card(), "the term card stays open under its nested tooltip").not.toBeNull();
+    expect(document.body.textContent).toContain("Tap again to do it.");
+    touchPress(ask);
     expect(actions.ask).toHaveBeenCalledWith(expect.objectContaining({ id: TERM.id }));
+    expect(card()).toBeNull();
   });
 
   it("is not disabled on a term the article never quotes: a chat needs no passage", () => {

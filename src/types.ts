@@ -4520,8 +4520,9 @@ export interface ChatThread {
   /**
    * **One line saying what this conversation covered**, written by a small
    * model after each finished answer (src/chat-gist.ts). For the model in the
-   * reader's other conversations (src/reader-notes.ts § `indexRow`), never
-   * drawn on screen. Absent until the first one is written.
+   * reader's other conversations (src/reader-notes.ts § `indexRow`), and since
+   * plan 261010g on an originating item's chat mark. Absent until the first one
+   * is written.
    */
   gist?: string;
   messages: ChatMessage[];

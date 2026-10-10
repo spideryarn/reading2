@@ -28,6 +28,7 @@ import type {
   ChatInput,
   ChatState,
   OpId,
+  Operation,
   Registering,
   SpokenOperation,
   HintOutcome,
@@ -237,6 +238,12 @@ export class ChatController {
   #onThreadId = new Map<OpId, (id: string) => void>();
   /** Draft bookkeeping, unlike navigation, must finish even after detach. */
   #onConfirmed = new Map<OpId, (id: string) => void>();
+  /**
+   * New item chats whose caller still needs to hear if the optimistic thread
+   * disappears. Keyed by thread rather than operation so it survives a
+   * refusal's repair and a later delete (plan 261010g).
+   */
+  #onGone = new Map<string, (id: string) => void>();
   /** Article-level completion work survives the composer's detach. */
   #onSettled: (() => void) | undefined;
   /**
@@ -312,10 +319,49 @@ export class ChatController {
     event: Extract<ChatInput, { type: "turn.started" }>,
     onThreadId?: (id: string) => void,
     onConfirmed?: (id: string) => void,
+    onGone?: (id: string) => void,
   ): void {
     if (onThreadId) this.#onThreadId.set(event.op.id, onThreadId);
     if (onConfirmed) this.#onConfirmed.set(event.op.id, onConfirmed);
+    if (onGone) this.#onGone.set(event.op.threadId, onGone);
     this.dispatch(event);
+  }
+
+  /** Keep the removal listener on the server's corrected name for a new thread. */
+  #moveGoneAfter(event: ChatEvent, operation: Operation | undefined): void {
+    if (event.type !== "turn.began" || operation?.kind !== "turn" || operation.threadId === event.begun.threadId) return;
+    const onGone = this.#onGone.get(operation.threadId);
+    if (!onGone) return;
+    this.#onGone.delete(operation.threadId);
+    this.#onGone.set(event.begun.threadId, onGone);
+  }
+
+  /** Retire optimistic item handoffs once their thread definitively leaves this controller. */
+  #retireGone(event: ChatEvent, operation: Operation | undefined, state: ChatState): void {
+    /* A first turn refused before `begin` is only a local failed draft. It is
+       still kept in Chat so the reader's question is not lost, but it is not
+       the stored item chat that Reader's optimistic bridge promises. */
+    if (event.type === "turn.failed" && operation?.kind === "turn" && !operation.began) {
+      const onGone = this.#onGone.get(operation.threadId);
+      if (onGone) {
+        this.#onGone.delete(operation.threadId);
+        onGone(operation.threadId);
+      }
+    }
+    /* A refused retry or edit is not known to be absent until its repair has
+       answered. A delete likewise keeps an operation while it is unresolved.
+       Only once neither a drawn thread nor an operation names the id is it
+       safe to retire Reader's optimistic origin→thread bridge. */
+    for (const [threadId, onGone] of this.#onGone) {
+      const exists = this.#current.threads.some((thread) => thread.id === threadId);
+      const pending = [...state.operations.values()].some(
+        (candidate) => "threadId" in candidate && candidate.threadId === threadId,
+      );
+      if (!exists && !pending) {
+        this.#onGone.delete(threadId);
+        onGone(threadId);
+      }
+    }
   }
 
   /**
@@ -370,6 +416,7 @@ export class ChatController {
     if (event.type === "turn.started" && state !== before.state && state.operations.has(event.op.id)) {
       this.#startedThreadIds.set(event.op.id, event.op.threadId);
     }
+    this.#moveGoneAfter(event, operation);
     /* A lost stream or refused write is still being reconciled. Its recovery
        or repair will notify when it finishes, including after detach. */
     const handedOver = event.type === "turn.disconnected" && state.operations.has(event.recovery.id)
@@ -415,6 +462,7 @@ export class ChatController {
       }
     }
     for (const command of commands) this.#perform(command);
+    this.#retireGone(event, operation, state);
     if (finished) this.#onSettled?.();
     return state;
   };

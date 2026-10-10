@@ -1007,8 +1007,9 @@ export function Reader({
     ) => {
       setChatHandoff({
         slug,
-        /* Every *Ask in chat* starts a fresh chat, whatever is open there — the
-           guide included (`ChatHandoff`, plan 261007j). */
+        /* Every handoff that reaches here starts a fresh chat, whatever is
+           open there — the guide included (`ChatHandoff`, plan 261007j).
+           Item senders first try `reopenItemChat` below. */
         target: "chat",
         question,
         send: then === "send",
@@ -1149,10 +1150,12 @@ export function Reader({
    * otherwise start a second chat. The band names the thread here as it
    * sends, and again if the server corrects the id; an entry goes once the
    * summaries carry that id, and from then on they are the record.
-   */
+  */
   const handedItemChats = useRef<{ origin: ThreadOrigin; id: string }[]>([]);
+  const handedItemChatsSlug = useRef(slug);
   const handoffThread = useCallback(
     (taken: ChatHandoff, id: string) => {
+      if (taken.slug !== slug) return;
       if (taken.target === "chat" && taken.sourceCommentId) owner?.comments.noteThread(taken.sourceCommentId, id);
       const origin = taken.target === "chat" ? taken.origin : undefined;
       if (origin) {
@@ -1162,8 +1165,20 @@ export function Reader({
         ];
       }
     },
-    [owner],
+    [owner, slug],
   );
+  const handoffThreadGone = useCallback((taken: ChatHandoff, id: string) => {
+    if (taken.slug !== slug) return;
+    const origin = taken.target === "chat" ? taken.origin : undefined;
+    if (!origin) return;
+    handedItemChats.current = handedItemChats.current.filter(
+      (handed) => handed.id !== id || !sameOrigin(handed.origin, origin),
+    );
+  }, [slug]);
+  useEffect(() => {
+    if (handedItemChatsSlug.current !== slug) handedItemChats.current = [];
+    handedItemChatsSlug.current = slug;
+  }, [slug]);
   /* **And a handoff chat mode never took does not wait for the next visit.** The
      band takes it in the commit that switches mode, so this is the case where
      the switch did not happen, or the reader was elsewhere before it could —
@@ -3478,6 +3493,7 @@ export function Reader({
               handoff={chatHandoff}
               onHandoffTaken={handoffTaken}
               onHandoffThread={handoffThread}
+              onHandoffThreadGone={handoffThreadGone}
               onSettled={refreshChats}
               onOrigin={openOrigin}
               articleTitle={article.meta.title}

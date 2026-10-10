@@ -171,6 +171,38 @@ describe("a card with `interactive`", () => {
     expect(anchor()).toBeNull();
   });
 
+  it("keeps the containing card open when Tab reaches a nested tooltip trigger", async () => {
+    act(() =>
+      root.render(
+        <TooltipGroup delay={{ open: 240, close: 90 }}>
+          <Tooltip
+            interactive={{ label: "About this mode" }}
+            content={
+              <Tooltip content="Ask about this in chat" placement="bottom">
+                <button type="button" className="nested-trigger">Ask</button>
+              </Tooltip>
+            }
+          >
+            <button type="button" className="trigger">i</button>
+          </Tooltip>
+        </TooltipGroup>,
+      ),
+    );
+    await act(async () => trigger().focus());
+    await settle();
+    const guardAfterTrigger = host.querySelector('.trigger ~ [data-type="outside"]') as HTMLElement;
+    await act(async () => guardAfterTrigger.focus());
+    await settle();
+    expect(document.activeElement).toBe(document.querySelector(".nested-trigger"));
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    await act(async () =>
+      document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })),
+    );
+    await settle();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.activeElement).toBe(trigger());
+  });
+
   it("puts nothing in the tab order when it is not interactive", async () => {
     draw(false);
     await act(async () => trigger().focus());

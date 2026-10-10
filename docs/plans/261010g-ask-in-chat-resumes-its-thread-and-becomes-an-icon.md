@@ -165,3 +165,22 @@ Stage 2 lands separately, after Stage 1, so a problem in one does not hold the o
 ## Review
 
 GPT Sol on this plan (read-only), and on each stage's code.
+
+## Log
+
+- **Plan review** (GPT Sol, read-only): eight findings. F1 (a chat begun moments ago), F3 (the
+  first-press/reopen asymmetry, now chosen and said), F4 (a rich card, not `title`, on the hover
+  cards) and F5 (the gist already exists) changed Stage 1 as written above. F2 softened "one chat
+  per item" to a rule of the buttons. F6–F8 are why Stage 2 was deferred.
+- **Code review** (GPT Sol, fixing in the stage): a second Claims list (`ListedClaims`) still drew
+  both the check button and the mark; a refused first send or a deleted chat left a phantom entry
+  that Ask would reopen (`onGone` in src/web/chat/controller.ts, `onHandoffThreadGone`); touch
+  could not read the icon's card before sending (`useTapReveal`, first tap shows, second sends);
+  seven prose-card tests and the help pages still named the old words. Not fixed: the Help
+  screenshots for Glossary and Sources show the labelled button and want reshooting.
+- **A regression found in the wider suite**: tabbing from Skim's term chip into its card closed the
+  card, because the card's Ask now carries a nested tooltip.
+- **Browser** (Sonnet subagent, Playwright on the box, `vb-spya-vu3xen`): the icon and its card,
+  the press, *Back to …*, the mark in the button's place, the mark and the hover card both opening
+  the same thread (`spya-yuwnah`) with no new row in Chat's list, the card staying open under its
+  tooltip, and 390px. No console errors. Screenshots `261010g-shot-1`…`6`.

@@ -4,8 +4,9 @@
  * Bibliography's rows and Ideas' rows (since plan 261009k), so they are one
  * design and not four copies.
  *
- * - `OriginChatMark` is the way back: the chat's count of questions and how
- *   its latest answer begins. A press opens that chat beside the mode. It was
+ * - `OriginChatMark` is the way back: the chat's count of questions and its
+ *   gist (the latest answer's opening until one exists). A press opens that
+ *   chat beside the mode. It was
  *   drawn inline in ReceptionAndClaimsPanel.tsx § `ClaimsList` until 2026-10-06
  *   (plan docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md, D4).
  * - `AskInChatButton` is Glossary's and Bibliography's *Ask in chat*, beside Dig
@@ -28,6 +29,7 @@ import { Button } from "@/components/ui/button";
 
 import type { CitedWork, GlossaryEntry, Idea, ThreadSummary } from "../types.js";
 import { ControlTip, TipNote, Tooltip } from "./Tooltip.js";
+import { useTapReveal } from "./useTapReveal.js";
 
 /**
  * What a panel's rows need to start a chat about one of them and to find the
@@ -36,7 +38,7 @@ import { ControlTip, TipNote, Tooltip } from "./Tooltip.js";
 export interface ItemChats<Item> {
   /** The reading view's thread summaries, which `Reader` owns and keeps current. */
   summaries: readonly ThreadSummary[];
-  /** Start a fresh chat about this item and send its first question. */
+  /** Start this item's chat, or reopen the one it already has. */
   onAsk(item: Item): void;
   /** Open a conversation already started from an item, beside the mode. */
   onOpen(threadId: string): void;
@@ -159,7 +161,9 @@ export function OriginChatMark({
  * Never disabled: a chat needs no passage and no finished lookup. **The
  * press sends the question** (since 2026-10-06, Greg's ask in
  * docs/plans/261006j-ask-in-chat-sends-the-question.md), so it is one model
- * call, and the card says so.
+ * call, and the card says so. A finger gets that card on its first tap and
+ * sends on the second (`useTapReveal`); a mouse click and keyboard activation
+ * send at once.
  */
 export function AskInChatButton({
   label,
@@ -172,16 +176,39 @@ export function AskInChatButton({
   className: string;
   onAsk(): void;
 }) {
+  const reveal = useTapReveal(true);
   return (
     <Tooltip
       placement="bottom"
       className="tip-soon"
-      content={<ControlTip head={label} what={ASK_IN_CHAT_WHAT} how={ASK_IN_CHAT_HOW} press={ASK_IN_CHAT_SAYS} />}
+      open={reveal.open}
+      onOpenChange={reveal.onOpenChange}
+      content={
+        <ControlTip
+          head={label}
+          what={ASK_IN_CHAT_WHAT}
+          how={ASK_IN_CHAT_HOW}
+          press={ASK_IN_CHAT_SAYS}
+          tap={reveal.tap}
+        />
+      }
     >
       {/* **The run buttons' Button, at their height** (plan 261007m S2):
           `outline`, and `icon-sm` is `sm`'s 32px square, so it still reads as
           one of them where it sits beside one. */}
-      <Button type="button" variant="outline" size="icon-sm" className={className} aria-label={label} onClick={onAsk}>
+      <Button
+        type="button"
+        variant="outline"
+        size="icon-sm"
+        className={className}
+        aria-label={label}
+        aria-expanded={reveal.open}
+        onPointerDown={reveal.onPointerDown}
+        onPointerCancel={reveal.onPointerCancel}
+        onClick={(event) => {
+          if (reveal.commit(event)) onAsk();
+        }}
+      >
         <MessagesSquare size={14} aria-hidden="true" />
       </Button>
     </Tooltip>

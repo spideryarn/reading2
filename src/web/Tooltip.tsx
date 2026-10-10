@@ -328,7 +328,10 @@ export function Tooltip({
     // Keyboard parity: the spine's bands are real buttons, so tabbing through
     // them should show the same detail hovering does.
     useFocus(context, { enabled }),
-    useDismiss(context, { enabled }),
+    /* Escape closes the containing interactive card as well as a descriptive
+       tooltip opened from one of its controls; otherwise the inner listener
+       consumes the key and leaves the card open (plan 261010g). */
+    useDismiss(context, { enabled, bubbles: { escapeKey: true } }),
     useRole(context, { role: interactive ? "dialog" : "tooltip" }),
   ]);
   const { getReferenceProps, getFloatingProps } = interactions;
@@ -443,7 +446,11 @@ export function Tooltip({
             })}
           >
             <div className={`tooltip${className ? ` ${className}` : ""}`} style={styles}>
-              {content}
+              {/* Delay groups are exclusive: opening one member closes the
+                  previous one. A tooltip inside an interactive card is its
+                  child, not its replacement, so give descendants their own
+                  group (Skim's term card, plan 261010g). */}
+              {interactive ? <FloatingDelayGroup delay={DELAY}>{content}</FloatingDelayGroup> : content}
               {/* fill and stroke are PROPS, not CSS. FloatingArrow needs the
                   values itself: given a strokeWidth it draws a second, clipped
                   path for the border and paints the seam where the arrow meets
