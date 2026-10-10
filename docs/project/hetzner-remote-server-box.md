@@ -31,7 +31,8 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
 **The CLI**
 
 - [`scripts/gjd-remote.ts`](../../scripts/gjd-remote.ts) — all of it: `ls`, `new-claude`,
-  `new-shell`, `resume`, `resume-all`, `kill`, `claim-overseer`, `release-overseer`, `log`,
+  `new-shell`, `resume`, `resume-all`, `kill`, `claim-overseer`, `release-overseer`,
+  `tell-overseer`, `tell`, `log`,
   `doctor`, `provision`, `clone`, `setup`, `push-env`, `upload`, `resolve`, `ssh`, `tunnel`,
   `forget-key`. `--help` is long on purpose.
 - [`scripts/gjd-remote-repo.ts`](../../scripts/gjd-remote-repo.ts) — which repo you are standing in,
@@ -627,6 +628,81 @@ says `shell`. There is no `CLAUDE_SESSION_ID` in that session, so there is no uu
 way to tell that Claude from anyone else's. The row is dim and sorts last, so the cost is small, and
 the alternative is a state that means "there might be a Claude in here somewhere". Start it with
 `new-claude` and it is tracked properly.
+
+## Sending a session a line from the laptop
+
+```
+gjd-remote tell-overseer "deploy when the readiness check is green"
+gjd-remote tell <session> "rebase is banned here — merge instead"
+gjd-remote tell -p "hello" -- -dash-leading-session
+gjd-remote tell-overseer -p - <<'EOF'
+anything, `backticked` or $(quoted) — but still ONE line
+EOF
+```
+
+`tell-overseer` finds whoever holds the claim with `claimFromSnapshot`; `tell` takes a session's
+**exact** name, and refuses one that matches only when case is ignored, naming the session it
+probably meant. Either way it does what the dashboard's own message box does, through the same door:
+reads `/api/state` on the box and posts the row's identity and the text to `/api/steer/message` as
+speaker `greg`, so every check that route makes still applies — one line only, nothing typed while a
+dialog is open or the input box has text in it — and the answer printed is the server's own
+sentence, with terminal control characters escaped. It is not a `tmux send-keys`, which would be
+shorter and would skip all of them. The message goes down ssh's stdin; neither ssh nor curl gets the
+text in its arguments. The command you type can still appear in local process arguments and shell
+history, and the dashboard's tmux transport uses arguments to type it. Curl's config and proxies are
+disabled for these loopback requests. For text starting with `-`, put `--` before it; `--port N`
+goes before that separator if the dashboard uses a port other than 8787. For a name starting
+with `-`, put options before `--` and the name after it, as above. Code:
+[`scripts/gjd-remote-tell.ts`](../../scripts/gjd-remote-tell.ts).
+
+`tell` refuses failed collections and snapshots more than five minutes old, measuring age with
+the box's clock. The route re-checks pane/session ids, pane pid and the conversation uuid in
+Claude's launch arguments, **not the live name**. If a session is renamed after collection, a
+message to its old name can still reach that original session until the list refreshes, even if
+another session now has that name. An in-process `/resume` is also invisible to launch arguments.
+See the guards and their limits in [`tools/fleet/steer.ts`](../../tools/fleet/steer.ts).
+
+**Exit 0 is sent, 1 is refused with nothing typed, and 2 is uncertain** — look at the session's
+pane before anything else, and do not send it again. **"Sent" means the keys were typed and Enter
+pressed, not that the session read it**: this dashboard has no check after Enter that the text
+became a turn (mindstone's has; see below).
+
+Three refusals that are not bugs in `tell`, and are the dashboard's own:
+
+- **A session started a moment ago is not in the list yet.** The dashboard refreshes about once a
+  minute; `tell` says so and stops, rather than waiting.
+- **A session nobody has typed into yet is refused `input-not-empty`.** Its input box holds Claude
+  Code's grey hint (`Try "create a util…"`), and the route cannot tell that from somebody's draft.
+  One started with `new-claude -p` has had its first turn and takes messages. Seen 2026-10-10.
+- **A Claude started by name (`claude --resume Overseer`) is refused `no-claude-in-pane`.** The route
+  trusts a pane only when its `claude` command line carries the conversation's uuid (`--session-id`
+  or `--resume <uuid>`), and a name is not one. That was how the Overseer was running on 2026-10-09,
+  so `tell-overseer` and the dashboard's own box were both refused until it is restarted by uuid.
+
+Proven end to end on 2026-10-10: a throwaway session started with a prompt was sent a line by
+`tell`, showed it as `[Greg, via the fleet dashboard] …`, and answered it.
+
+### Borrowed from `mindstone-fleet`, and why it stays a separate tool
+
+`mindstone-fleet` (Greg's work tool, `fleet-overseer-landing-board`) descends from this code and has
+grown further. **We keep the two separate** (Greg, 2026-10-10: *"That's really for work though, so
+maybe it's better to keep them separate … but borrow the best bits"*): its useful commands run
+scripts out of the Mindstone checkout on its box, its default host is the work box — one forgotten
+`FLEET_HOST=` would put Spideryarn keys on a client machine — and it updates itself from a work repo.
+
+Borrowed, keeping it simple: `tell <name>` beside `tell-overseer`, `-p -` for the text, and the three
+exits. **Not borrowed, each for a stated reason** — candidates if a need shows up:
+
+- **Delivered vs queued vs uncertain** (mindstone's `steer.ts` checks after Enter that the text
+  became a turn). The most valuable of these, and a port into this dashboard's `tools/fleet/steer.ts`,
+  not the CLI — its own plan.
+- **Long messages handed off as a file** on the box, with a pointer typed instead. Could be done from
+  the CLI alone; nobody has needed it yet.
+- **Waiting up to 75 s for a just-started session** to appear in the dashboard's list. Polling plus a
+  tmux-server pin to be safe; the refusal sentence says what to do instead.
+- **A box-health gate on `new-claude`**, **pre-answering launch dialogs** for unattended runs,
+  **`--tab`**, **`session go`**, **`overseer up`** (which starts the Overseer by uuid, and would fix
+  the refusal above), and the multi-person, multi-box machinery, which is for a team.
 
 ## Sessions nobody made on purpose
 

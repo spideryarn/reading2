@@ -249,7 +249,7 @@ const putHighPowerFor =
 
 /**
  * ***For the author…*'s one request** — `POST /api/admin/author-gifts`
- * (plan 261009u § D9, R2-F2), **made for one reader** like the one above.
+ * (plan 261010c § D9, R2-F2), **made for one reader** like the one above.
  * `202` is a new gift (its web search starts after the response), `200` one
  * that was already there; both are a success. The token is looked up inside
  * this call, which the controller awaits and catches (Sol's F12).
@@ -1215,7 +1215,7 @@ export function AddPage({
   }, [share, link, highPowerAlive]);
 
   /**
-   * ***For the author…*, for an administrator** — plan 261009u § D9. One
+   * ***For the author…*, for an administrator** — plan 261010c § D9. One
    * controller per reader and per add (keyed by `wanted`: it is armed before
    * there is a slug), in a registry the session change empties, like the two
    * sharing controllers above, and the epoch read above looks it up again.
@@ -1306,7 +1306,7 @@ export function AddPage({
 
   /**
    * **Both exits to the article, as one transition** — the automatic one at
-   * completion and every button the reader presses (plan 261009u § Revision
+   * completion and every button the reader presses (plan 261010c § Revision
    * 3, R2-F8). Callers have checked the fences; this takes the once-guard.
    *
    * Not armed — every reader but an administrator who confirmed *For the
@@ -1385,7 +1385,7 @@ export function AddPage({
     const sharingUnsettled =
       (sharing !== null && shareUnsettled(sharing.get())) ||
       (linking !== null && linkUnsettled(linking.get())) ||
-      /* *For the author…*'s confirmation is a question too (plan 261009u § D9). */
+      /* *For the author…*'s confirmation is a question too (plan 261010c § D9). */
       giftRef.current?.unsettled() === true;
     /* **A repeat paste never leaves by itself**: nothing was imported, and
        opening at once would show the reader nothing they could notice. Greg

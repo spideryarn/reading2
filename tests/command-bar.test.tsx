@@ -631,7 +631,7 @@ const GENERATES: Record<Mode, boolean> = {
   ideas: true,
   quotes: true,
   timeline: true,
-  "peer-review": true,
+  sources: true,
   diagram: true,
   faq: true,
   skim: true,
@@ -1339,7 +1339,7 @@ describe("the rows that are not modes", () => {
        `tweets again` is one of its words (rerun-commands.ts), and a typed-only
        row comes after the sub-modes (plan 261002c). Summary's own row is not
        offered for this word at all. */
-    expect(listed()).toEqual(["Thread", "Thread › Run again"]);
+    expect(listed()).toEqual(["Thread", "Summary › Thread › Run again"]);
     expect(rows()[0]?.dataset.kind).toBe("submode");
     expect(rows()[0]?.querySelector(".cmdbar-generates")?.textContent).toBe(GENERATES_MARKER);
     press("Enter");

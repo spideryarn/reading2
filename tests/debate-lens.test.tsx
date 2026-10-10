@@ -20,7 +20,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { checksOwner, claimListOwner } from "./helpers/debate-claims-owner.js";
-import { peerReviewHead } from "./helpers/peer-review-head.js";
+import { sourcesHead } from "./helpers/sources-head.js";
 import type { BlockId, ClaimDebateRow, Debate, DebateCounts, ThreadSummary } from "../src/types.js";
 import type { PublicDebate } from "../src/public-types.js";
 import type { UseDebate } from "../src/web/useDebate.js";
@@ -133,7 +133,7 @@ function paintOwner(summaries: ThreadSummary[] = [], over: Partial<UseDebate> = 
   act(() => {
     root.render(
       createElement(DebatePanel, {
-        head: peerReviewHead({ view: "reception", onView: () => {}, ownerSlug: null }),
+        head: sourcesHead({ view: "reception", onView: () => {}, ownerSlug: null }),
         ...shared,
         access: {
           kind: "owner",
@@ -218,7 +218,7 @@ describe("the owner's box", () => {
     expect(DEBATE_LENS_LABEL).toBe("Look at the debate from an angle");
     expect(input?.maxLength, "the cap the server refuses over").toBe(600);
     expect(send()?.textContent).toContain(DEBATE_LENS_SEND);
-    /* Under Peer review's chip row, the band's header since 2026-10-09, and
+    /* Under Sources' chip row, the band's header since 2026-10-09, and
        above the list rather than after it. */
     const chips = host.querySelector(".band-head .dbt-views") as Element;
     expect(input && chips && input.compareDocumentPosition(chips) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();

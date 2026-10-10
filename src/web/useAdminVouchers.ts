@@ -84,7 +84,7 @@ export interface UseAdminVouchers {
   /**
    * Read now, and again four seconds later — for a voucher made elsewhere on
    * the page whose email went after the answer (an author gift's *Send*, plan
-   * 261009u).
+   * 261010c).
    */
   reloadAfterEmail: () => void;
 }

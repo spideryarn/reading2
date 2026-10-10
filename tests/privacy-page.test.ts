@@ -107,15 +107,29 @@ describe("the privacy page", () => {
        The regex is anchored on the `export const` so a mention in a comment
        cannot satisfy it. */
     const live = readFileSync(path.join(ROOT, "src/live.ts"), "utf8");
-    const ids = [...live.matchAll(/export const LIVE_(?:MODEL|TRANSCRIBER) = "([^"]+)"/g)].map(
-      (m) => m[1] as string,
-    );
-    /* A positive control on the extraction itself: if the shape of those two
-       declarations ever changes, `ids` goes empty and the assertion below
-       passes over nothing at all — silent success, and the page would stop
-       being checked without a test going red. docs/reusable/silent-success.md. */
-    expect(ids).toHaveLength(2);
+    /* Both engines' models: Realtime's `LIVE_MODEL` and `LIVE_TRANSCRIBER`, and
+       GPT-Live's voice and the backend behind it, which is every reader's
+       engine since 2026-10-10 (plan 261010a). */
+    const declarations = [
+      ...live.matchAll(/^export const ((?:GPT_)?LIVE_(?:MODEL|TRANSCRIBER|BACKEND_MODEL)) = "([^"]+)";$/gm),
+    ].map((m) => [m[1] as string, m[2] as string] as const);
+    /* A positive control on the extraction itself: if the shape of those four
+       declarations ever changes, the names differ and the assertion below
+       fails rather than checking fewer ids silently. docs/reusable/silent-success.md. */
+    expect(declarations.map(([name]) => name).sort()).toEqual([
+      "GPT_LIVE_BACKEND_MODEL",
+      "GPT_LIVE_MODEL",
+      "LIVE_MODEL",
+      "LIVE_TRANSCRIBER",
+    ]);
+    const ids = declarations.map(([, id]) => id);
     expect(ids.filter((id) => !PAGE.includes(id))).toEqual([]);
+    /* `gpt-6-luna` is on the page for other jobs too, so presence alone says
+       nothing about live conversation. Hold both pairs and the Experimental
+       qualification together, rather than accepting four names anywhere. */
+    expect(PAGE.replace(/\{" "\}/g, " ").replace(/\s+/g, " ")).toContain(
+      "<code>gpt-live-1</code> for the live voice mode, with <code>gpt-6-luna</code> behind it, which is shown the article and looks things up in it while you talk; or, if you choose it under Experimental features, <code>gpt-realtime-2.1</code> with <code>gpt-live-transcribe</code> instead.",
+    );
   });
 
   it("says a bug report may carry the reader's own article, and no longer that it never does", () => {
@@ -194,7 +208,7 @@ describe("the privacy page", () => {
   });
 
   it("dates the privacy notice to the latest disclosure change", () => {
-    expect(PAGE).toContain('const LAST_UPDATED = "9 October 2026"');
+    expect(PAGE).toContain('const LAST_UPDATED = "10 October 2026"');
   });
 
   it("says the public shelf's topics are named from shared titles and summaries only", () => {

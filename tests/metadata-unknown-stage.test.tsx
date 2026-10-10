@@ -20,6 +20,7 @@ import { act, Component, createElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Article } from "../src/types.js";
+import { stepName } from "../src/web/step-names.js";
 
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
@@ -165,7 +166,9 @@ describe("a stage row on the Metadata page", () => {
   it("draws a stage this copy knows (the control)", async () => {
     const page = await pageWithStage("fetch");
     expect(page.caught).toBeNull();
-    expect(page.text).toContain("Some stage");
+    // Named as the reader meets it, not by the server's label (plan 261009x).
+    expect(page.text).toContain(stepName("fetch"));
+    expect(page.text).not.toContain("Some stage");
     expect(host.querySelector(".lucide-download")).not.toBeNull();
   });
 

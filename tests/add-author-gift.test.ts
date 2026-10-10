@@ -1,6 +1,6 @@
 /**
  * The add page's *For the author…* controller — src/web/add-author-gift.ts,
- * plan docs/plans/261009u-author-gift-draft-voucher-from-the-add-page.md § D9
+ * plan docs/plans/261010c-author-gift-draft-voucher-from-the-add-page.md § D9
  * and § Revision 3, R2-F8. Every answer `POST /api/admin/author-gifts` can
  * give, driven through an injected request, without React. What only the page
  * can get wrong (the two exits, the recheck after the await) is

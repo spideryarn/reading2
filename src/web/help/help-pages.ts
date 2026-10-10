@@ -71,7 +71,7 @@ import modeIdeasMd from "./pages/modes/ideas.md?raw";
 import modeLearnMd from "./pages/modes/learn.md?raw";
 import modeQuotesMd from "./pages/modes/quotes.md?raw";
 import modeTimelineMd from "./pages/modes/timeline.md?raw";
-import modePeerReviewMd from "./pages/modes/peer-review.md?raw";
+import modeSourcesMd from "./pages/modes/sources.md?raw";
 import modeStructureMd from "./pages/modes/structure.md?raw";
 import modeFaqMd from "./pages/modes/faq.md?raw";
 import modeSkimMd from "./pages/modes/skim.md?raw";
@@ -127,7 +127,7 @@ export const HELP_MODE_FILES: Record<Mode, string> = {
   learn: modeLearnMd,
   quotes: modeQuotesMd,
   timeline: modeTimelineMd,
-  "peer-review": modePeerReviewMd,
+  sources: modeSourcesMd,
   structure: modeStructureMd,
   faq: modeFaqMd,
   skim: modeSkimMd,

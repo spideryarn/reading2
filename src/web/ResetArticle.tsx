@@ -51,42 +51,8 @@ import { Button } from "@/components/ui/button";
 import { JobProgress } from "./JobProgress.js";
 import { useJobs } from "./useJobs.js";
 import { SKETCH_WAIT } from "./sketch-cost.js";
+import { stepName } from "./step-names.js";
 import type { StepFailure } from "./useStepJob.js";
-
-/**
- * **What a reader calls each extra.**
- *
- * Only the names live here. *Which* steps are extras is `RESET_ROLE` in
- * src/reset-role.ts — the same leaf the server acts on — and this map is keyed
- * by the `ExtraStep` read off it, so a new extra is a compile error here until
- * somebody names it, and a step that stops being one is an excess key.
- */
-export const RESET_EXTRA_NAME: Record<ExtraStep, string> = {
-  arc: "Arc",
-  tweets: "Thread",
-  glossary: "Glossary",
-  quotes: "Quotes",
-  skim: "Skim",
-  ideas: "Ideas",
-  timeline: "Timeline",
-  quiz: "Quiz",
-  faq: "FAQ",
-  relations: "Relation words",
-  sketch: "Sketch",
-  illustrated: "Illustrated",
-  /* Peer review's sub-modes since 2026-10-09 (plan 261009l); the steps keep
-     their stored names. */
-  debate: "Reception",
-  "debate-claims": "Claims list",
-  citations: "Bibliography",
-  crossrefs: "Cross-references",
-  simple: "Simple summary",
-};
-
-/** A step's reader-facing name if it is an extra, and its step name otherwise. */
-function extraName(step: StepName): string {
-  return isExtra(step) ? RESET_EXTRA_NAME[step] : step;
-}
 
 /** Extras with no row of their own in Metadata's *AI processing* section. */
 const METADATA_RERUN_STEP_SET = new Set<StepName>(METADATA_RERUN_STEPS);
@@ -450,7 +416,8 @@ function ResetOnlyRegeneration({
 }) {
   const step = job.steps[0]?.name;
   if (!step || !isExtra(step)) return null;
-  const name = extraName(step);
+  /* Named as everywhere else on the page — step-names.ts, plan 261009x. */
+  const name = stepName(step);
 
   if (job.status === "error" || job.status === "cancelled") {
     return (
@@ -486,12 +453,12 @@ function ResetOnlyRegeneration({
  * The row: its name and button, what it does, the checkbox — and, after one
  * press, the confirm that says what is kept, what is lost, and what it costs.
  * The first row of *AI processing*'s re-run card since 2026-09-30, above the
- * modes, rather than a subheading and a card of its own (Greg,
+ * individual re-run rows, rather than a subheading and a card of its own (Greg,
  * SPIDERYARN-READING2-65: *"amalgamate the "Start the whole article again" into
  * the run-it-again section above, e.g. as a button at the top"*).
  *
  * **Two clicks, inline, no `window.confirm`** — and the only control in that
- * section that still asks. The mode rows lost their confirm the same day
+ * section that still asks. The individual rows lost their confirm the same day
  * (Greg, SPIDERYARN-READING2-64, `RerunRow` in Metadata.tsx), because all it
  * guarded there was one of our model calls. This one guards the reader's own
  * things: it removes every generated extra and can move comments to *no longer
@@ -510,7 +477,7 @@ export function ResetArticle({
   slug: string;
   /**
    * What the heading line starts with — the chip and the name, drawn by
-   * Metadata.tsx so this row and the mode rows under it share one `Chip`.
+   * Metadata.tsx so this row and the re-run rows under it share one `Chip`.
    */
   lead: ReactNode;
   /** Null until the metadata request lands; the extras are read off its stages. */
@@ -556,14 +523,14 @@ export function ResetArticle({
        run and is still a non-null column, which is what the reset route reads. */
     .filter((stage) => stage.ranAt !== null && isExtra(stage.step))
     .map((stage) => stage.step);
-  const names = extras.map(extraName);
+  const names = extras.map((step) => stepName(step));
   const regenerate = again && extras.length > 0;
   const lookUps = extras.includes("glossary") || extras.includes("citations");
 
   const failedAsking = failed?.retry ? { ...failed, retry: () => setPending("retry") } : failed;
 
   /* The run button, or nothing while the confirm stands in its place. At the
-     right-hand end of the heading line, where every mode row below keeps its
+     right-hand end of the heading line, where every re-run row below keeps its
      own. */
   const control = asking ? null : (
     <div className="tw:ml-auto tw:flex tw:flex-wrap tw:items-center tw:justify-end tw:gap-2">
@@ -630,7 +597,7 @@ export function ResetArticle({
 
       {job !== null && regenerating.length > 0 ? (
         <p role="status" className="tw:m-0 tw:text-xs tw:text-ink-faint">
-          Then, one after another: {listed(regenerating.map(extraName))}.
+          Then, one after another: {listed(regenerating.map((step) => stepName(step)))}.
         </p>
       ) : null}
 

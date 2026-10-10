@@ -1,6 +1,6 @@
 /**
  * **For the author…, chosen while the article is being added** — the add
- * page's admin-only control, docs/plans/261009u-author-gift-draft-voucher-from-the-add-page.md
+ * page's admin-only control, docs/plans/261010c-author-gift-draft-voucher-from-the-add-page.md
  * § D9 and § Revision 3, R2-F8. `AddAuthorGift.tsx` draws it.
  *
  * Confirmed (with the private link's rights tick), it ticks High-powered AI

@@ -245,11 +245,11 @@
  {
   "id": "mode:referee",
   "label": "Referee",
-  "description": "Reviewing this for somebody? Your criteria, its claims, and a second look at your own notes",
+  "description": "Refereeing it? What to weigh before you decide: your criteria, its claims, and a second look at your notes",
   "aliases": [
    "review",
    "reviewer",
-   "peer reviewer",
+   "for peer reviewers",
    "referee report",
    "assess",
    "assessment"
@@ -264,11 +264,11 @@
   ]
  },
  {
-  "id": "mode:peer-review",
-  "label": "Peer review",
+  "id": "mode:sources",
+  "label": "Sources",
   "description": "What this piece cites, and what others say about it",
   "aliases": [
-   "sources",
+   "peer review",
    "literature",
    "further reading"
   ],
@@ -673,13 +673,13 @@
   ]
  },
  {
-  "id": "submode:peer-review:bibliography",
+  "id": "submode:sources:bibliography",
   "label": "Bibliography",
   "description": "What this piece cites: the works in its bibliography, each with a link",
   "aliases": [
-   "Peer review",
-   "Bibliography Peer review",
-   "Peer review Bibliography",
+   "Sources",
+   "Bibliography Sources",
+   "Sources Bibliography",
    "Bibliography mode",
    "citations",
    "references",
@@ -699,13 +699,13 @@
   ]
  },
  {
-  "id": "submode:peer-review:reception",
+  "id": "submode:sources:reception",
   "label": "Reception",
   "description": "What others say about this piece: replies, reviews, and work that cites it",
   "aliases": [
-   "Peer review",
-   "Reception Peer review",
-   "Peer review Reception",
+   "Sources",
+   "Reception Sources",
+   "Sources Reception",
    "Reception mode",
    "debate",
    "debate reception",
@@ -730,13 +730,13 @@
   ]
  },
  {
-  "id": "submode:peer-review:claims",
+  "id": "submode:sources:claims",
   "label": "Claims",
   "description": "What others say about each claim it makes: the claims it rests on, with the works it cites beside each",
   "aliases": [
-   "Peer review",
-   "Claims Peer review",
-   "Peer review Claims",
+   "Sources",
+   "Claims Sources",
+   "Sources Claims",
    "Claims mode",
    "debate claims"
   ],
@@ -1129,7 +1129,7 @@
  },
  {
   "id": "action:rerun-tweets",
-  "label": "Thread › Run again",
+  "label": "Summary › Thread › Run again",
   "description": "Written again from scratch; free, and what is here stays until it succeeds",
   "aliases": [
    "rerun thread",
@@ -1496,7 +1496,7 @@
  },
  {
   "id": "action:rerun-quiz",
-  "label": "Quiz › Run again",
+  "label": "Learn › Quiz › Run again",
   "description": "Written again from scratch; free, and what is here stays until it succeeds",
   "aliases": [
    "rerun quiz",
@@ -1621,7 +1621,7 @@
  },
  {
   "id": "action:rerun-sketch",
-  "label": "Sketch › Run again",
+  "label": "Diagram › Sketch › Run again",
   "description": "One model call, about a minute",
   "aliases": [
    "rerun sketch",
@@ -1723,7 +1723,7 @@
  },
  {
   "id": "action:rerun-debate",
-  "label": "Reception › Run again",
+  "label": "Sources › Reception › Run again",
   "description": "One model call that searches the web, plus one search-free call to find themes when it keeps enough sources",
   "aliases": [
    "rerun reception",
@@ -1823,7 +1823,7 @@
  },
  {
   "id": "action:rerun-citations",
-  "label": "Bibliography › Run again",
+  "label": "Sources › Bibliography › Run again",
   "description": "Written again from scratch; free, and what is here stays until it succeeds",
   "aliases": [
    "rerun bibliography",
@@ -1925,16 +1925,16 @@
  },
  {
   "id": "action:rerun-simple",
-  "label": "Simple summary › Run again",
+  "label": "Summary › Brief and Fuller › Run again",
   "description": "Written again from scratch; free, and what is here stays until it succeeds",
   "aliases": [
-   "rerun simple summary",
-   "re-run simple summary",
-   "regenerate simple summary",
-   "redo simple summary",
-   "refresh simple summary",
-   "simple summary again",
-   "run simple summary again",
+   "rerun brief and fuller",
+   "re-run brief and fuller",
+   "regenerate brief and fuller",
+   "redo brief and fuller",
+   "refresh brief and fuller",
+   "brief and fuller again",
+   "run brief and fuller again",
    "rerun simple",
    "re-run simple",
    "regenerate simple",
@@ -1942,6 +1942,13 @@
    "refresh simple",
    "simple again",
    "run simple again",
+   "rerun simple summary",
+   "re-run simple summary",
+   "regenerate simple summary",
+   "redo simple summary",
+   "refresh simple summary",
+   "simple summary again",
+   "run simple summary again",
    "rerun summary",
    "re-run summary",
    "regenerate summary",
@@ -1962,7 +1969,21 @@
    "redo summarize",
    "refresh summarize",
    "summarize again",
-   "run summarize again"
+   "run summarize again",
+   "rerun brief",
+   "re-run brief",
+   "regenerate brief",
+   "redo brief",
+   "refresh brief",
+   "brief again",
+   "run brief again",
+   "rerun fuller",
+   "re-run fuller",
+   "regenerate fuller",
+   "redo fuller",
+   "refresh fuller",
+   "fuller again",
+   "run fuller again"
   ],
   "kind": "action",
   "generates": true,

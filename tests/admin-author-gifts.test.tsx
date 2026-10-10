@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * **Author gifts on `/admin/vouchers`, actually rendered** — plan
- * docs/plans/261009u-author-gift-draft-voucher-from-the-add-page.md, stage 3
+ * docs/plans/261010c-author-gift-draft-voucher-from-the-add-page.md, stage 3
  * (§ D7, D10, Revision 3's R2-F2 and R2-F7). src/web/AdminAuthorGifts.tsx.
  *
  * Only the Supabase SDK and `fetch` are stubbed, as in

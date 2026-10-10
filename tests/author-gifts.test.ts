@@ -1,7 +1,7 @@
 /**
  * **Author gifts** — a draft of a gift voucher for the author of one of the
  * administrator's own articles, which becomes a voucher only when *Send* is
- * pressed. docs/plans/261009u-author-gift-draft-voucher-from-the-add-page.md,
+ * pressed. docs/plans/261010c-author-gift-draft-voucher-from-the-add-page.md,
  * stage 1: the tables, the store and the routes, with no AI.
  *
  * Most of what is here is about what must **not** happen, because the feature

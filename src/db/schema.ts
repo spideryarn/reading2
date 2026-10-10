@@ -6813,7 +6813,7 @@ export const billingVoucherEmails = spideryarn.table(
  * administrator's own articles** — made from the add page or `/admin/vouchers`,
  * filled in by a web-search lookup, and turned into an ordinary voucher only
  * when the administrator presses *Send*.
- * docs/plans/261009u-author-gift-draft-voucher-from-the-add-page.md (D1);
+ * docs/plans/261010c-author-gift-draft-voucher-from-the-add-page.md (D1);
  * src/store/pg-author-gifts.ts is the only writer.
  *
  * **A draft is not a voucher.** It lives here rather than in `billing_vouchers`
@@ -6922,7 +6922,7 @@ export const authorGifts = spideryarn.table(
 
 /**
  * **One web-search lookup for an author gift, and what it found** — one row
- * per run (plan 261009u, D5). src/store/pg-author-gifts.ts is the only writer.
+ * per run (plan 261010c, D5). src/store/pg-author-gifts.ts is the only writer.
  *
  * **Pending, claimed, finished.** `beginLookup` inserts it pending (`outcome`
  * null) under the gift's lock; the after-response task claims it by setting

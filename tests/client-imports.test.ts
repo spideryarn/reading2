@@ -46,6 +46,11 @@ const SHARED = new Set([
      told to write and what happens cannot drift. Imports nothing. See
      src/acts-alone.ts and plan 261007p. */
   "acts-alone.js",
+  /* What one of the guide's next steps may be: the server's tool checks the
+     model's steps with it and the page checks the stored run again, so the
+     two cannot disagree. Imports only types. See src/next-steps.ts and plan
+     261009u. */
+  "next-steps.js",
   /* The rules a Debate synthesis keeps — work identity, caps, lengths — which
      the server applies to the model's answer and the panel applies again to
      the stored one, so the two cannot drift. Imports `types.js` and `ids.js`
@@ -296,7 +301,7 @@ const SHARED = new Set([
      `billing-plan.js` — a wire contract with an end on each side. */
   "admin-vouchers.js",
   /* One author gift as /admin/vouchers' *Author gifts* draws it (plan
-     261009u). Types and three constants, no imports: the same wire-contract
+     261010c). Types and three constants, no imports: the same wire-contract
      argument as `admin-vouchers.js`. */
   "admin-author-gifts.js",
   /* The `/admin/costs` wire shape and the pure filter, group and pivot over

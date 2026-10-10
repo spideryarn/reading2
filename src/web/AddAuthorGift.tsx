@@ -3,7 +3,7 @@
  * High-powered AI box. It draws an `AuthorGiftAtAddController`
  * (src/web/add-author-gift.ts), which holds the state; the page sends the
  * request as it leaves (AddPage.tsx § `leave`).
- * docs/plans/261009u-author-gift-draft-voucher-from-the-add-page.md § D9.
+ * docs/plans/261010c-author-gift-draft-voucher-from-the-add-page.md § D9.
  *
  * **The button opens a question; it makes nothing**, like *Create a private
  * link* beside it (AddShareLink.tsx): four plain lines on what will happen,

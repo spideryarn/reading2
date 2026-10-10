@@ -2,7 +2,7 @@
  * **An author gift as `/admin/vouchers` sees it** — the wire contract between
  * the routes under `/api/admin/author-gifts` (src/store/pg-author-gifts.ts
  * builds it) and the page that draws it.
- * docs/plans/261009u-author-gift-draft-voucher-from-the-add-page.md.
+ * docs/plans/261010c-author-gift-draft-voucher-from-the-add-page.md.
  *
  * A flat module with no imports, for src/admin-vouchers.ts's reason: the
  * browser may not import from src/store/, even a type

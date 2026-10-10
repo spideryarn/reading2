@@ -110,6 +110,9 @@ const PINNED_ANCHORS = [
   /* 2026-10-09: Citations and Debate became Peer review (plan 261009l).
      `mode-citations` and `mode-debate` above are aliases now (RETIRED_MODES). */
   "mode-peer-review",
+  /* 2026-10-09, later: Peer review became Sources (plan 261009w).
+     `mode-peer-review` above is an alias now (RETIRED_MODES). */
+  "mode-sources",
 ];
 
 const LIVE = new Set<string>(HELP_ANCHORS);
@@ -227,6 +230,9 @@ describe("what an address under /help shows", () => {
   it("is moved for a retired mode's page and for a question asked for as a page", () => {
     expect(resolveHelpPage("mode-trajectory")).toEqual({ kind: "moved", to: "mode-skim" });
     expect(resolveHelpPage("mode-remember")).toEqual({ kind: "moved", to: "mode-learn" });
+    for (const old of ["mode-peer-review", "mode-citations", "mode-debate"]) {
+      expect(resolveHelpPage(old), old).toEqual({ kind: "moved", to: "mode-sources" });
+    }
     expect(resolveHelpPage("faq-older-profile")).toEqual({ kind: "moved", to: "faq-older-profile" });
   });
 
@@ -440,7 +446,7 @@ describe("a page", () => {
     }
   });
 
-  it("describes Peer review's article-bound Claims list separately from its optional web checks", () => {
+  it("describes Sources' article-bound Claims list separately from its optional web checks", () => {
     mountAt("/help/ai-words");
     expect(host.textContent).toContain("Claims list comes from the article");
     expect(host.textContent).not.toContain("Reception and Claims are entirely about what the rest of the web says");
@@ -449,7 +455,7 @@ describe("a page", () => {
     expect(host.textContent).toContain("Claims list itself comes from the article");
     expect(host.textContent).not.toContain("Reception and Claims are all about what the rest of the web says");
 
-    mountAt("/help/mode-peer-review");
+    mountAt("/help/mode-sources");
     expect(host.textContent).toContain("Bibliography is usually prepared in the background when the article is added");
     expect(host.textContent).not.toContain("Each view is made the first time you choose it");
   });
@@ -809,6 +815,10 @@ describe("arriving", () => {
       ["/help#mode-trajectory", "/help/mode-skim", MODE_LABEL.skim],
       ["/help/mode-trajectory", "/help/mode-skim", MODE_LABEL.skim],
       ["/help/mode-remember", "/help/mode-learn", MODE_LABEL.learn],
+      /* Peer review until 2026-10-09 (plan 261009w), and Citations and Debate before it. */
+      ["/help/mode-peer-review", "/help/mode-sources", "Sources"],
+      ["/help/mode-citations", "/help/mode-sources", "Sources"],
+      ["/help/mode-debate", "/help/mode-sources", "Sources"],
       ["/help/#spine", "/help/spine", "Reading the spine"],
     ])("%s becomes %s, in place", (old, now, title) => {
       history.replaceState(null, "", old);

@@ -226,7 +226,7 @@ describe("each tool calls the route it claims", () => {
       args: { id: VOUCHER, revoked: true, note: null },
       expect: [{ method: "PATCH", path: `/api/admin/vouchers/${VOUCHER}`, body: { revoked: true, note: null } }],
     },
-    /* Plan 261009u § D6: the author gifts' two rows, neither of which asks. */
+    /* Plan 261010c § D6: the author gifts' two rows, neither of which asks. */
     { tool: "list_author_gifts", expect: [{ method: "GET", path: "/api/admin/author-gifts" }] },
     /* An append needs nothing read first; a replace reads the gift's stamp and
        sends it, so the server can refuse it if the notes moved on (Sol's C7). */

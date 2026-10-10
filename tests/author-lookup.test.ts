@@ -1,6 +1,6 @@
 /**
  * **The author gift's lookup** — src/author-lookup.ts, plan
- * docs/plans/261009u-author-gift-draft-voucher-from-the-add-page.md § D4, D5.
+ * docs/plans/261010c-author-gift-draft-voucher-from-the-add-page.md § D4, D5.
  *
  * A model that types an address from memory looks exactly like one that found
  * it, so every rule that decides what fills the draft is code, and each has a

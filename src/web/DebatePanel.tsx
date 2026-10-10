@@ -49,11 +49,11 @@
  * everything on screen.
  * docs/plans/261003o-debate-reception-and-claims-sub-modes-and-a-tidier-panel.md.
  *
- * **Since 2026-10-09 they are two of Peer review's three sub-modes**
- * (`?peer-review=`), after Bibliography, which is the Citations panel. This
+ * **Since 2026-10-09 they are two of Sources' three sub-modes**
+ * (`?sources=`), after Bibliography, which is the Citations panel. This
  * panel draws Reception or Claims under the chip row the mode hands it as
- * `head` (PeerReviewMode.tsx § `PeerReviewViews`), and the chips' numbers and
- * this panel's lists come out of the same selectors (peer-review-counts.ts).
+ * `head` (SourcesMode.tsx § `SourcesViews`), and the chips' numbers and
+ * this panel's lists come out of the same selectors (sources-counts.ts).
  * The panel keeps its stored name until the deep rename
  * (docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md § Stage 3).
  *
@@ -259,8 +259,8 @@ import { citerUrl } from "../citer-link.js";
 import { KEY_ROLE_LABEL, keyByRow, shownInThread, type Thread, threadsOf } from "./debate-threads.js";
 import { readStoredSynthesis } from "../debate-synthesis.js";
 import type { DebateView } from "./params.js";
-import { PEER_REVIEW_SUB_MODES } from "./sub-modes.js";
-import { claimsSelection, listedClaims, receptionSelection } from "./peer-review-counts.js";
+import { SOURCES_SUB_MODES } from "./sub-modes.js";
+import { claimsSelection, listedClaims, receptionSelection } from "./sources-counts.js";
 import { MODE_LABEL } from "../title-text.js";
 import { hiddenNote, type ThresholdNoun, type ThresholdResult } from "./threshold.js";
 import { JobProgress } from "./JobProgress.js";
@@ -326,7 +326,7 @@ const SEARCH_NAME: Record<"direct" | "claims", string> = {
 /** Reception's line for a visitor when no search is stored: the owner's empty state, without the button. */
 export const DEBATE_NONE_SHARED = "Nobody has asked the web about this one yet.";
 
-/** The two of Peer review's sub-modes this panel draws, in chip order. */
+/** The two of Sources' sub-modes this panel draws, in chip order. */
 const DEBATE_PANEL_VIEWS: readonly DebateView[] = ["reception", "claims"];
 
 /** The search behind each sub-mode — the artefact's own key for its group. */
@@ -951,7 +951,7 @@ export interface DebateClaimChats {
    * the press is what starts the web search.
    */
   onLens(lens: string): void;
-  /** Open a conversation already started from a claim or an angle, beside Peer review. */
+  /** Open a conversation already started from a claim or an angle, beside Sources. */
   onOpen(threadId: string): void;
 }
 
@@ -977,8 +977,8 @@ export const DEBATE_ANGLES_SHOWN = 3;
 interface Props {
   access: DebateAccess;
   /**
-   * **Peer review's chip row**, drawn as this band's header (PeerReviewMode.tsx
-   * § `PeerReviewViews`). The mode's, not this panel's, so Bibliography's panel
+   * **Sources' chip row**, drawn as this band's header (SourcesMode.tsx
+   * § `SourcesViews`). The mode's, not this panel's, so Bibliography's panel
    * draws the same row and switching sub-mode does not move it.
    */
   head: ReactNode;
@@ -993,8 +993,8 @@ interface Props {
    */
   onJump(id: BlockId): void;
   /**
-   * Which of Peer review's sub-modes this panel draws — Reception or Claims,
-   * from `?peer-review=` (Bibliography is the other panel's).
+   * Which of Sources' sub-modes this panel draws — Reception or Claims,
+   * from `?sources=` (Bibliography is the other panel's).
    */
   view: DebateView;
   /** Move to the other sub-mode: the empty Reception's way on to Claims. */
@@ -1103,7 +1103,7 @@ export function DebatePanel({
    * the address selects** (`threadsWithin`): a thread with no stored row in a
    * sub-mode is not offered there and narrows nothing there.
    *
-   * **The selections are peer-review-counts.ts's**, the same functions the
+   * **The selections are sources-counts.ts's**, the same functions the
    * chip row counts with, so the number on a chip and the list under it are
    * one derivation (GPT Sol's F4 on plan 261009l).
    */
@@ -1112,7 +1112,7 @@ export function DebatePanel({
     [debate],
   );
   /* `threadsOf(readStoredSynthesis(…))` is `debateThreads`, which the chip
-     row counts with (peer-review-counts.ts). */
+     row counts with (sources-counts.ts). */
   const threads = useMemo(() => threadsOf(synthesis), [synthesis]);
   const keyRows = useMemo(() => keyByRow(synthesis), [synthesis]);
 
@@ -1183,7 +1183,7 @@ export function DebatePanel({
    * chip's count is the list's length when there is one: the list is what
    * Claims is now, and the legacy rows under it are an older search's. With no
    * list, the count is those legacy rows, as before (`claimsCount`,
-   * peer-review-counts.ts).
+   * sources-counts.ts).
    */
   const listOwner = access.kind === "owner" ? access.claimList : null;
   const listed: readonly ListedClaim[] | null = listedClaims(
@@ -1303,7 +1303,7 @@ export function DebatePanel({
         <p>{headCount(rows)} on screen.</p>
         {DEBATE_PANEL_VIEWS.map((v) => (
           <p key={v}>
-            {PEER_REVIEW_SUB_MODES[v].label}: {PEER_REVIEW_SUB_MODES[v].description}.
+            {SOURCES_SUB_MODES[v].label}: {SOURCES_SUB_MODES[v].description}.
           </p>
         ))}
         {foot.map((line) => (
@@ -1346,15 +1346,15 @@ export function DebatePanel({
   return (
     <ModeSurface
       ref={surface}
-      label={MODE_LABEL["peer-review"]}
-      feature="gloss dbt peer-review"
-      mode="peer-review"
+      label={MODE_LABEL.sources}
+      feature="gloss dbt sources"
+      mode="sources"
       about={about}
-      /* **Peer review's chip row, the one header that cannot come out
+      /* **Sources' chip row, the one header that cannot come out
           empty** (plan 261008i § 5, GPT Sol's F9): Claims has its own list
           and must be reachable before any search is, while one loads and when
           one failed. Each chip's count is its own list's
-          (peer-review-counts.ts), so the number and the list under it cannot
+          (sources-counts.ts), so the number and the list under it cannot
           disagree. It was the globe and an `<h2>Debate</h2>` until
           2026-10-09, with Reception | Claims as the body's first row; the
           mode's name is the Dock's to say (docs/project/mode.md § The client). */
@@ -1431,7 +1431,7 @@ export function DebatePanel({
         </div>
       )}
 
-      {/* **A visitor on Reception with no search stored**: Peer review opened
+      {/* **A visitor on Reception with no search stored**: Sources opened
           on another sub-mode's artefact (visitor.ts § POLICY, `any-artefact`),
           so this one says it has nothing rather than drawing a blank band.
           GPT Sol's F3 on plan 261009l. */}
@@ -1605,7 +1605,7 @@ export function DebatePanel({
  *
  * **The list is the way back**, one line per chat started from an angle,
  * newest first, found in the reading view's thread summaries (`lensThreads`).
- * A line opens its chat beside Peer review, as a claim's mark does. The newest
+ * A line opens its chat beside Sources, as a claim's mark does. The newest
  * `DEBATE_ANGLES_SHOWN` and then *Show all*, so a reader with many does not
  * have to scroll past them to reach the debate on a phone.
  *

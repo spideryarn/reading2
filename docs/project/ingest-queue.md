@@ -698,7 +698,7 @@ the page, the completion, the source and the reader are all still the same befor
 refusal or a lost answer keeps the page, says so with a link to `/admin/vouchers`, and offers
 **Open the article anyway**. An open confirmation counts as unsettled, as the sharing one does.
 `tests/add-author-gift.test.ts` and `tests/add-page-author-gift.test.tsx`; the plan is
-[261009u](../plans/261009u-author-gift-draft-voucher-from-the-add-page.md).
+[261010c](../plans/261010c-author-gift-draft-voucher-from-the-add-page.md).
 
 ### The three traps in a page whose whole job is one effect
 

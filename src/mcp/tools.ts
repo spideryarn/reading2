@@ -777,7 +777,7 @@ export const TOOLS: readonly Tool[] = [
     },
   }),
 
-  /* **Author gifts** — plan 261009u § D6. Greg wanted the notes reachable "perhaps
+  /* **Author gifts** — plan 261010c § D6. Greg wanted the notes reachable "perhaps
      via MCP", so an agent can read the drafts and add what it found. Neither tool
      reaches the outside world, so neither asks; *Send* is deliberately not a tool
      (it sends mail), and stays a button on /admin/vouchers. */

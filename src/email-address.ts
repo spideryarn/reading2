@@ -3,7 +3,7 @@
  * with no imports, so a module that has no business loading the database
  * (src/author-lookup.ts, which checks an address a model reported against the
  * search results) can use the same rules the voucher tables enforce.
- * docs/plans/261009u-author-gift-draft-voucher-from-the-add-page.md, D4.
+ * docs/plans/261010c-author-gift-draft-voucher-from-the-add-page.md, D4.
  */
 
 /**

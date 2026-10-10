@@ -952,7 +952,7 @@ export type Task =
   | "dig-deeper-search"
   /**
    * **Who wrote an article, and how to reach them** — the author gift's one
-   * lookup (src/author-lookup.ts, plan 261009u D4). Admin-only, pressed by an
+   * lookup (src/author-lookup.ts, plan 261010c D4). Admin-only, pressed by an
    * administrator for one article at a time, run after the response. Chat
    * wire because `openrouter:web_search` is a server tool there and nowhere
    * else; its own job so `/admin/costs` and the gift's row can say what a

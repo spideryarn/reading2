@@ -75,10 +75,14 @@ decode, the map and the client-side join.
 
 ## Q12 — Which live-conversation engine survives? <a id="q12"></a>
 
-Live conversation has two engines: OpenAI Realtime, which every reader gets, and GPT-Live, offered
-beside it with Experimental features on
-([live-conversation.md § The second engine](live-conversation.md#the-second-engine-gpt-live-behind-experimental)).
-They were built side by side to be compared, and the comparison ends:
+Live conversation has two engines: GPT-Live, which every reader gets, and OpenAI Realtime, offered
+from an arrow on the Live button with Experimental features on
+([live-conversation.md § GPT-Live](live-conversation.md#gpt-live-and-realtime-behind-experimental)).
+**Which one is the default is answered** — GPT-Live, Greg's call on 2026-10-09 (report
+`spya-t858ug`, plan
+[261010a](../plans/261010a-gpt-live-is-the-live-engine-for-everyone-realtime-from-an-arrow-on-the-live-button.md)),
+with Realtime kept choosable. What is still open is whether Realtime is then deleted. They were
+built side by side to be compared, and the comparison ends:
 
 > But eventually I think we only want one.
 >

@@ -134,28 +134,37 @@ that conversation too**, which the privacy page says
 ([privacy.md](privacy.md#an-administrators-ai-assistant-can-look-up-accounts)). Both came with
 [261007o](../plans/261007o-mcp-private-link-and-admin-user-tools.md).
 
-## From Claude on the web or a phone (built, switched off)
+## From ChatGPT, Claude on the web, or any MCP app (switching on, 2026-10-09)
 
 The same tools are also served at `https://www.spideryarn.com/api/mcp`, for an AI app that cannot
-start a program on your Mac. Claude signs in with OAuth: it sends you to `/oauth/consent`, you
-press *Allow*, and it gets a token from Supabase's OAuth server for your account
-([261007p](../plans/261007p-mcp-remote-sign-in-with-oauth.md)).
+start a program on your Mac: ChatGPT (desktop included), Claude on the web or a phone, Cursor,
+Goose. The app signs in with OAuth: it registers itself with Supabase, sends you to
+`/oauth/consent`, you press *Allow*, and it gets a token from Supabase's OAuth server for your
+account ([261007p](../plans/261007p-mcp-remote-sign-in-with-oauth.md)).
 
-- **Off until Greg switches it on.** It accepts only the token of the one AI app whose id is in
-  `MCP_OAUTH_CLIENT_ID`; unset, it refuses everyone. Before switching on, run the spike in
-  [261007p § What landed](../plans/261007p-mcp-remote-sign-in-with-oauth.md#what-landed-stage-1)
-  against the local stack: it has not been run against a real OAuth server. Switching on: Supabase dashboard,
-  Authentication → OAuth Server on (dynamic registration **off**) and Authentication → OAuth Apps,
-  one confidential app with redirect `https://claude.ai/api/mcp/auth_callback`; its id into Vercel
-  as `MCP_OAUTH_CLIENT_ID`; deploy; then in Claude, Settings → Connectors → *Add custom connector*,
-  the address above, *Use your own OAuth client*, its id and secret.
+> I'd hoped that all we'd need is an MCP URL and then any app that can deal with MCPs like Cursor
+> or Goose or whatever would work with it
+>
+> — Greg, 2026-10-09
+
+- **Any app, with just the URL.** Supabase's OAuth server and its dynamic client registration are
+  on in production (Greg, 2026-10-09), and `MCP_OAUTH_CLIENT_ID=*` admits any app Supabase
+  registered. A comma-separated list of hand-registered ids also works; `*` anywhere in the
+  list admits all clients, and unset or empty refuses everyone. Greg accepted Sol F6: anyone
+  can register an app called "Claude" with their own callback and trick you into pressing
+  *Allow*. Administrator-only limits who can use the route; it does not protect the
+  administrator who approves a malicious app. Revisit this before readers get the route
+  ([261009a](../research/261009a-one-click-mcp-install-for-claude-and-chatgpt.md)).
+- **Adding it:** in ChatGPT, chatgpt.com/plugins → **+** → *Add custom MCP server*, the address
+  above, Authentication *OAuth*; it discovers the rest. In Claude, Settings → Connectors → *Add
+  custom connector*, or the prefill link in 261009a. In Claude Code,
+  `claude mcp add --transport http spideryarn https://www.spideryarn.com/api/mcp`, then `/mcp`.
+- **Tested** headless against the local stack by
+  [`scripts/mcp-oauth-spike.ts`](../../scripts/mcp-oauth-spike.ts), results in
+  [261007p § What landed](../plans/261007p-mcp-remote-sign-in-with-oauth.md#what-landed-stage-1).
 - **Administrator only**, for now.
-- **Not one click, as designed.** Claude has a link that opens *Add custom connector* already filled
-  in, but this setup also requires a client id and secret. `MCP_OAUTH_CLIENT_ID` accepts exactly one
-  id; adding a separate ChatGPT client or using dynamically registered clients needs a change to
-  that gate, not just a Supabase setting. Both apps support static clients, so dynamic registration
-  is an option for easier setup, not a requirement for supporting both:
-  [261009a § The decision this leaves](../research/261009a-one-click-mcp-install-for-claude-and-chatgpt.md#the-decision-this-leaves-gregs).
+- **Other browser origins still refuse.** The origin gate remains the site's own, Claude's and
+  ChatGPT's; other apps must call without an `Origin` header, as server-side clients normally do.
 - **The asking tools refuse there**: no dialog can be shown on your Mac from a server, so gifts,
   publishing and private links are done in the Mac app or on the site.
 - **What the token can do at Supabase** is more than the tools, and is written up in

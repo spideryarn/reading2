@@ -345,7 +345,7 @@ export interface RunSpend {
 /**
  * **What each of these collectors spent**, by `run_id` — for a feature that
  * stores its own run's id and wants its cost back from the one home cost has
- * (an author gift's lookups, plan 261009u D5). The same three pockets and the
+ * (an author gift's lookups, plan 261010c D5). The same three pockets and the
  * same unpriced rule as every other read here, so it cannot drift from
  * `/admin/costs`. A run with no rows is absent from the map, not zero.
  *

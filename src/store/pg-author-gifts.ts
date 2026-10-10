@@ -1,7 +1,7 @@
 /**
  * **Author gifts** — the draft of a gift voucher for the author of one of the
  * administrator's own articles, and the web-search lookups that fill it in.
- * docs/plans/261009u-author-gift-draft-voucher-from-the-add-page.md; the
+ * docs/plans/261010c-author-gift-draft-voucher-from-the-add-page.md; the
  * tables are `author_gifts` and `author_lookups` (src/db/schema.ts).
  *
  * Called only from the routes under `/api/admin/author-gifts`, behind the

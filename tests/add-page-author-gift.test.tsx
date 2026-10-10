@@ -2,7 +2,7 @@
 /**
  * ***For the author…* on the add page** — src/web/AddAuthorGift.tsx over
  * src/web/add-author-gift.ts, wired into src/web/AddPage.tsx;
- * docs/plans/261009u-author-gift-draft-voucher-from-the-add-page.md § D9 and
+ * docs/plans/261010c-author-gift-draft-voucher-from-the-add-page.md § D9 and
  * § Revision 3, R2-F8.
  *
  * The controller is driven without React in tests/add-author-gift.test.ts.

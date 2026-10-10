@@ -155,7 +155,7 @@ beforeEach(() => {
       return json(answer.status, answer.body);
     }
     if (url.startsWith("/api/library")) return json(200, { articles: shelfAnswer });
-    /* The *Author gifts* section's own read (plan 261009u); its suite is tests/admin-author-gifts.test.tsx. */
+    /* The *Author gifts* section's own read (plan 261010c); its suite is tests/admin-author-gifts.test.tsx. */
     if (url === "/api/admin/author-gifts") return json(200, { gifts: [] });
     return json(200, { vouchers: listAnswer });
   }) as typeof fetch;

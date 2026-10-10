@@ -871,7 +871,7 @@ Since 2026-10-10 the page has a second section above the voucher table, **Author
 voucher drafted for the author of one of the administrator's own articles, saved and **never sent
 until the administrator presses Send**. Greg's request and the marketing reason are
 [marketing-author-gifts.md](marketing-author-gifts.md); the plan, its two reviews and every
-decision are [261009u](../plans/261009u-author-gift-draft-voucher-from-the-add-page.md).
+decision are [261010c](../plans/261010c-author-gift-draft-voucher-from-the-add-page.md).
 
 **A draft is not a voucher.** It is a row of `author_gifts` (one per article, for good), and it
 becomes a voucher only on *Send*, through the same `createVoucher` the create form uses, with an id

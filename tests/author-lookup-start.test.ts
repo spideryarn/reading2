@@ -1,6 +1,6 @@
 /**
  * **The after-response author lookup, end to end against Postgres** —
- * src/author-lookup-start.ts. docs/plans/261009u-author-gift-draft-voucher-from-the-add-page.md,
+ * src/author-lookup-start.ts. docs/plans/261010c-author-gift-draft-voucher-from-the-add-page.md,
  * D4 and R2-F5/F6.
  *
  * What must hold, because each is money or a stranger's address:

@@ -192,7 +192,7 @@ const VOICES_BY_MODE: Record<Mode, readonly string[] | { noModelText: string }> 
   timeline: [".tl-label"],
   /* Citations' and Debate's classes until 2026-10-09: Bibliography's, then
      Reception's and Claims'. */
-  "peer-review": [
+  sources: [
     ".cite-why",
     ".cite-does",
     ".prose-card-cite-does-text",

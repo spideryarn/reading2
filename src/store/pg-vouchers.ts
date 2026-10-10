@@ -689,7 +689,7 @@ export function parseVoucherPatch(body: unknown): Parsed<VoucherPatch> {
 
 /* The field parsers below are exported for src/store/pg-author-gifts.ts: an
    author gift is a voucher's draft, so it takes the voucher's rules from here
-   rather than a copy of them (plan 261009u). */
+   rather than a copy of them (plan 261010c). */
 export function isPlainObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }

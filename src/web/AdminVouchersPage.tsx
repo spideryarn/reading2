@@ -1008,7 +1008,7 @@ function VoucherRow({
 }
 
 /**
- * The voucher form, then *Author gifts* (plan 261009u), sharing one read of
+ * The voucher form, then *Author gifts* (plan 261010c), sharing one read of
  * the administrator's shelf for their two article pickers.
  */
 function SignedInForms({

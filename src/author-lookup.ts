@@ -1,7 +1,7 @@
 /**
  * **Who wrote this article, and how could Greg reach them?** — the author
  * gift's one web-search lookup. Plan
- * docs/plans/261009u-author-gift-draft-voucher-from-the-add-page.md § D4, D5,
+ * docs/plans/261010c-author-gift-draft-voucher-from-the-add-page.md § D4, D5,
  * and § Revision 3, which wins where they disagree.
  *
  * Pure apart from the one model call, which is injectable: this file builds the

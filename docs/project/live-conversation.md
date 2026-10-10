@@ -26,14 +26,14 @@ reader can read the whole thing back a week later. That is the requirement every
 
 - [§ The controls must say what is happening](#the-controls-must-say-what-is-happening) — the Live button's states and wording
 - [§ Where the pieces are](#where-the-pieces-are) — which file does what; start here to find code
-- [§ The default model, and why it is not GPT-Live](#the-default-model-and-why-it-is-not-gpt-live) — the engine choice
+- [§ The default engine is GPT-Live](#the-default-engine-is-gpt-live-by-gregs-call) — Greg's call, what it gave up, and what it costs
 - [§ The audio never touches our server](#the-audio-never-touches-our-server) — the privacy and cost shape
 - [§ The meter](#the-meter) — what the usage meter counts and shows
 - [§ The three orderings, and why each is a rule](#the-three-orderings-and-why-each-is-a-rule) — why turns can land out of order
 - [§ The write, and the one guard that is also the idempotency](#the-write-and-the-one-guard-that-is-also-the-idempotency) — how a spoken turn is saved once
 - [§ What a spoken row carries that a typed one does not](#what-a-spoken-row-carries-that-a-typed-one-does-not) — extra fields on a spoken message
 - [§ Three things that are not obvious and cost an afternoon each](#three-things-that-are-not-obvious-and-cost-an-afternoon-each) — gotchas before debugging
-- [§ The second engine: GPT-Live, behind Experimental](#the-second-engine-gpt-live-behind-experimental) — the other engine and its switch
+- [§ GPT-Live, and Realtime behind Experimental](#gpt-live-and-realtime-behind-experimental) — the arrow, the pinning, and how GPT-Live works
 - [§ The lifecycle, which is the most failure-prone part](#the-lifecycle-which-is-the-most-failure-prone-part) — connect, hang up, resume; where it breaks
 - [§ In the guide](#in-the-guide) — the spoken guide: its prompt, its tools, and the kind the page sends
 - [§ What is not built](#what-is-not-built) — known gaps
@@ -114,7 +114,7 @@ empty conversation — SPIDERYARN-READING2-70,
 | [`src/web/live/exchanges.ts`](../../src/web/live/exchanges.ts) | Realtime only. Turns a stream of events into conversation turns. Read its header before touching anything about ordering. |
 | [`src/web/live/wiring.ts`](../../src/web/live/wiring.ts) | The requests a session makes of our own server *before* it has anything to write, behind one seam. |
 | [`src/web/live/mic-placement.ts`](../../src/web/live/mic-placement.ts) | Where the microphone is, which is what noise reduction wants to know. |
-| [`src/web/live/LiveButton.tsx`](../../src/web/live/LiveButton.tsx) | The one button: Live, Cancel or Hang up — and, with Experimental on, the engine choice beside it. |
+| [`src/web/live/LiveButton.tsx`](../../src/web/live/LiveButton.tsx) | The one button: Live, Cancel or Hang up — and, with Experimental on, the arrow joined to it that chooses the engine. |
 | [`src/web/live/LiveStatus.tsx`](../../src/web/live/LiveStatus.tsx) | The state pill, connecting steps, input level, notices, errors with Try again, and the Advanced disclosure (device, noise reduction, Reconnect). |
 | [`src/web/live/LiveTail.tsx`](../../src/web/live/LiveTail.tsx), [`tail.ts`](../../src/web/live/tail.ts) | The unsaved words, in the thread after the saved turns, grouped by exchange. |
 | [`src/web/live/stall.ts`](../../src/web/live/stall.ts) | Which stall a live session is in, if any — the pure rules behind the notice and **Reconnect**. |
@@ -129,27 +129,37 @@ became a turn in a conversation. GPT Sol refused the first version of the second
 that shipped is the one it recommended instead. The second engine is
 [261003a](../plans/261003a-gpt-live-alongside-realtime-for-live-conversation.md).
 
-## The default model, and why it is not GPT-Live
+## The default engine is GPT-Live, by Greg's call
 
-`gpt-realtime-2.1` (`LIVE_MODEL` in [`src/live.ts`](../../src/live.ts)) at **low reasoning
-effort**, with a spoken prompt that asks for one or two sentences, no pleasantries, and thinking
-only when the question needs it — Greg's "instant mode" and "quick back and forth" (2026-09-29).
+Every reader's call is on `gpt-live-1` (`GPT_LIVE_MODEL` in [`src/live.ts`](../../src/live.ts)),
+a voice front end with `gpt-6-luna` behind it (`GPT_LIVE_BACKEND_MODEL`) holding the article and
+the tools. Realtime — `gpt-realtime-2.1` (`LIVE_MODEL`) at **low reasoning effort**, one model that
+listens and answers — is still there, chosen from the arrow on the Live button with Experimental
+features on ([§ GPT-Live, and Realtime behind Experimental](#gpt-live-and-realtime-behind-experimental)).
 
-OpenAI's newer `gpt-live-1` (GA 2026-09-10) is a different architecture rather than a newer model:
-a voice front end that hands thinking and tools to a separate backend model, with a 16k-token cap
-on its own instructions (too small for most articles), no turn ids, and per-minute billing. Measured
-on 2026-10-02 it was about a quarter of the cost per turn and much quicker on follow-ups, but a real
-answer about the article came about two seconds *later*, usually behind "Checking." — and moving to
-it rewrites the three orderings below, the meter and the browser handshake. Not now; the numbers
-and the four conditions that would change the answer are in
-[261002r](../investigations/261002r-gpt-live-spike.md).
+> Let's make Live the default and keep real-time only for Experimental Features. In other words,
+> for people who have Experimental Features turned off, they won't see that dropdown and it'll
+> always be in Live mode.
+>
+> — Greg, 2026-10-09 (report `spya-t858ug`)
 
-**That is the answer for the default engine, and it stands**: a reader who has not switched
-Experimental features on gets Realtime and nothing else. The question is re-asked in use rather than
-on paper — GPT-Live is built beside it as a second engine, behind that switch:
-[§ The second engine](#the-second-engine-gpt-live-behind-experimental).
+**It was the other way round until 2026-10-10, and the reason is still true.** Measured on
+2026-10-02, GPT-Live cost about a quarter as much per turn and answered chat-style follow-ups in
+1.3 s rather than 6.6, but a real answer about the article came about two seconds *later* (5.2 s
+against 3.0), usually behind "Checking." —
+[261002r](../investigations/261002r-gpt-live-spike.md). Two of the spike's four conditions have
+since been met (the handshake through our server, and an idle cap for a meter that bills silence);
+the latency and the filler have not been re-measured. Greg's report made the call anyway. What every
+reader gave up by it — no Tap to talk, no noise-reduction placement, Listening and Speaking as
+estimates — is under § GPT-Live, and the trade-off is
+[261010a](../plans/261010a-gpt-live-is-the-live-engine-for-everyone-realtime-from-an-arrow-on-the-live-button.md).
 
-The same measurement found where today's wait actually is, and it is not reasoning (low effort was
+**The money is shaped differently, not just smaller.** GPT-Live bills about $0.05 for every minute
+a session is open, silence included; Realtime bills per token and nothing while nobody speaks. A
+20-minute session with five questions measured about $1.00 against $0.25. The two-minute idle cap
+is what keeps a reader who has gone quiet to read from paying the far end of that.
+
+On Realtime, the same measurement found where the wait actually is, and it is not reasoning (low effort was
 no faster than the default): the model calls `show_passage` before its first word (~1.2 s, and
 telling it not to changed nothing), and `semantic_vad` waits up to several seconds after a hesitant
 question. Neither is fixed yet.
@@ -317,7 +327,7 @@ wrong. That is why each has a test that has been watched to fail.
 
 They are the Realtime engine's. GPT-Live has no item ids, no seed acknowledgements and no turn
 boundaries, so it keeps the same three promises by other means —
-[§ The second engine](#the-second-engine-gpt-live-behind-experimental).
+[§ GPT-Live](#gpt-live-and-realtime-behind-experimental).
 
 **1. The transcription of what you said arrives after the answer to it.** Not an edge case — the
 ordinary case whenever anybody talks over the model. So order comes from OpenAI's own item ids, and
@@ -438,7 +448,7 @@ The transcriber invented the whole vocabulary list during a pause with backgroun
 model alone fixed that and dropped jargon recovery from 4/4 to 2/4, because `gpt-live-transcribe`
 ignores `prompt`. Only building the second eval caught it. Both live in [`evals/live/`](../../evals/live/).
 
-## The second engine: GPT-Live, behind Experimental
+## GPT-Live, and Realtime behind Experimental
 
 Two engines sit behind one `LiveApi`, and **one of them will be deleted**. Asked whether to move to
 GPT-Live or fix Realtime:
@@ -458,14 +468,15 @@ deleting the loser is deleting files. Which one survives is Greg's to decide, in
 findings are in [261003a](../plans/261003a-gpt-live-alongside-realtime-for-live-conversation.md);
 what is below is what you would otherwise have to reverse-engineer.
 
-**Choosing, and pinning.** With Experimental features on, a select beside the Live button offers
-*Realtime* or *GPT-Live (new)*, remembered per browser. With the switch off there is no choice and
-the engine is Realtime. Three things are kept apart — the remembered preference, the engine the
-next start would use, and the engine that owns the call in progress — and the owner does not move
-until its hang-up has finished; turning Experimental off mid-call ends a GPT-Live call by the
-ordinary hang-up. The rules are the headers of [`engine.ts`](../../src/web/live/engine.ts) and
-[`useLive.ts`](../../src/web/live/useLive.ts). `DEFAULT_EXPERIMENTAL_ENGINE` is the one constant
-that decides what a switched-on reader gets before choosing.
+**Choosing, and pinning.** With Experimental features on, a small arrow joined to the right of the
+Live button opens a menu of *GPT-Live* and *Realtime*, remembered per browser; it is disabled
+during a call. With the switch off there is no arrow and the engine is GPT-Live. (Until 2026-10-10
+it was a separate select, and the default was Realtime — § The default engine.) Three things are
+kept apart — the remembered preference, the engine the next start would use, and the engine that
+owns the call in progress — and the owner does not move until its hang-up has finished; turning
+Experimental off mid-call ends a Realtime call by the ordinary hang-up. The rules are the headers of
+[`engine.ts`](../../src/web/live/engine.ts) and [`useLive.ts`](../../src/web/live/useLive.ts).
+`DEFAULT_ENGINE` is the one constant that decides what every reader gets.
 
 **The shape.** GPT-Live is a voice model that listens and speaks, with a text model behind it (the
 *backend*) that it hands questions to — a *delegation* — and which is the one that calls tools.
@@ -573,7 +584,7 @@ reader who refuses the microphone costs nothing. Hang-up still gives the device 
 waits for the fragments to stop, sends `session.close`, and waits briefly for `session.closed`,
 which carries the final billed seconds. When OpenAI ends the call instead, the panel has a sentence
 for each reason it gives. Of the stalls, only the microphone, the connection and no-reply exist
-(§ The second engine), plus a delegation still running after a minute; there is no Tap to talk.
+(§ GPT-Live), plus a delegation still running after a minute; there is no Tap to talk.
 
 **Every one of those endings names itself** to the session journal; the current reasons live beside
 `endedBecause` in each hook ([`useLiveConversation.ts`](../../src/web/live/useLiveConversation.ts),
@@ -598,9 +609,10 @@ What differs is what the session is told and given, on both engines:
   the reading, not the piece; why they are reading first; modes named, never pressed, since a
   voice has no buttons.
 - **The tools** are the typed guide's article tools (`GUIDE_TOOLS`) plus `show_passage`, without
-  the typed guide's `offer_to_save` (a card with a button, which a voice has nowhere to put;
+  the typed guide's `offer_to_save` or `offer_next_steps` (a card or a row of buttons, which a voice has nowhere to put;
   `LIVE_SERVER_TOOLS` refuses it too, and a spoken turn's stored runs never carry an offer,
-  [261009q](../plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md)). The page says the
+  [261009q](../plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md) and
+  [261009u](../plans/261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md)). The page says the
   session's kind on every `/live-tool` call and the route hands it to `runTool`, so the guide's gate
   (`toolsFor`) applies to a spoken guide as it does to a typed one. The model chooses only a name.
 - **The kind** is the stored thread's; for a guide that exists only in the tab, the page sends it

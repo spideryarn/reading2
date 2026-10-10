@@ -1,6 +1,6 @@
 /**
  * **The pieces `/admin/vouchers` draws twice** — once in the voucher create
- * form, once in *Author gifts* (src/web/AdminAuthorGifts.tsx, plan 261009u
+ * form, once in *Author gifts* (src/web/AdminAuthorGifts.tsx, plan 261010c
  * D10) — so the two read as one page and cannot drift apart (controls.md §
  * Controls that do the same job look the same).
  *

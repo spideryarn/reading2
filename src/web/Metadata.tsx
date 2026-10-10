@@ -308,6 +308,7 @@ import { ResetArticle } from "./ResetArticle.js";
 /* The labels and notes the command bar shares — that file's header says why
    they are not here. */
 import { RERUN_COST_NOTE, RERUN_LABEL } from "./rerun-commands.js";
+import { stepName, stepWhat } from "./step-names.js";
 import { useOrderedRead, type ArtefactRead } from "./useOrderedRead.js";
 import { useStepJob } from "./useStepJob.js";
 import { articleTitleVoice, voiceClass, withVoice } from "./voice.js";
@@ -1389,13 +1390,13 @@ export function Metadata({
             perhaps also amalgamate "What we did to it" and "Re-run AI
             processing""*. The stage rows came out of *Technical details*,
             with the error rule they carry. Before that:
-            One section for both ways of asking again — a mode at a time, or
+            One section for both ways of asking again — one generated result at a time, or
             the whole article — just above Archive, shut until opened. Greg,
             2026-09-29 (SPIDERYARN-READING2-4Z): *"We have both a "Generate it
             again" and "Start this article again". Let's somehow amalgamate
             them … Perhaps this section should be default-collapsed … And maybe
             position it above "Archive this article"."* It is also, since the
-            same morning, the only place a standing redo lives: the modes keep
+            same morning, the only place a standing redo lives: the reading modes keep
             only the button inside their out-of-date banner.
             docs/plans/260929b-one-place-to-re-run-ai-processing.md. */}
         <RerunSection
@@ -1630,8 +1631,8 @@ function SharingCard({
  * One section since 2026-09-29, when Greg asked for *Generate it again* and
  * *Start this article again* to be amalgamated, shut by default and moved above
  * Archive — docs/plans/260929b-one-place-to-re-run-ai-processing.md. Since
- * 2026-09-30 the reset is the first row of the modes' own card rather than a
- * subheading and a card under it, and the mode rows run on one press —
+ * 2026-09-30 the reset is the first row of the re-run card rather than a
+ * subheading and a card under it, and the individual rows run on one press —
  * docs/plans/260930e-metadata-run-it-without-a-confirm-and-start-again-in-the-rerun-section.md.
  * ./ResetArticle.tsx is the reset's control.
  *
@@ -1646,9 +1647,9 @@ function SharingCard({
  * ## A section of its own, not a button on each stage row
  *
  * The stage rows below the re-run menu answer a different question, and only
- * one of the two lists is a menu: `StageRecord` is a **record** — all sixteen
- * stages, when each last wrote, no controls — while the first list is the modes
- * you can ask for. Interleaving them would put an eligibility branch inside
+ * one of the two lists is a menu: `StageRecord` is a **record** — every pipeline
+ * stage, when each last wrote, no controls — while the first list is the
+ * generated results you can ask for again. Interleaving them would put an eligibility branch inside
  * `StageRow` and rows with a button beside rows that cannot have one.
  *
  * It is also where a reader can find it. The dimmed *"Re-run a stage"*
@@ -1741,7 +1742,8 @@ function RerunSection({
       )}
       {/* **High-powered AI**, for the owner of the article — switching it on counts
           as one more article against their allowance (plan 260930k). First in
-          the section, above the rows it changes the model for (all but Simple):
+          the section, above the rows it changes the model for (all but
+          Summary's Brief and Fuller):
           switching it re-runs nothing, and the rows below are how you ask. */}
       <HighPowerSwitch slug={slug} since={provenance?.highPowerSince} onChanged={onFinished} />
       {/* Two facts and no third. **It does not say anything is out of date** —
@@ -1751,7 +1753,7 @@ function RerunSection({
           are not one speed, so a *"takes a minute or two"* here would be wrong
           about the Sketch, which says its own wait beside its name. */}
       <p className="tw:mt-0 tw:mb-3 tw:text-xs tw:text-ink-faint">
-        Ask for any mode to be written again. It costs you nothing, and what is here now stays
+        Ask for any of these to be written again. It costs you nothing, and what is here now stays
         until the new run succeeds.
       </p>
       <div className={`${CARD} tw:divide-y tw:divide-border tw:overflow-hidden`}>
@@ -1759,9 +1761,9 @@ function RerunSection({
             2026-09-30 — Greg, SPIDERYARN-READING2-65: *"amalgamate the "Start
             the whole article again" into the run-it-again section above, e.g.
             as a button at the top"*. It was a subheading and a second card
-            under the modes. First because it is the widest press here, and
-            the one a reader who has come to start over is looking for; the
-            intro line above is about the modes, and this row says what it does
+            under the individual rows. First because it is the widest press here,
+            and the one a reader who has come to start over is looking for; the
+            intro line above is about those rows, and this row says what it does
             in its own. Still behind the experimental switch. */}
         {reset && (
           <div className="tw:px-4 tw:py-3">
@@ -1873,12 +1875,13 @@ function StageRecord({
   );
 }
 
-/* `RERUN_LABEL` and `RERUN_COST_NOTE` live in ./rerun-commands.ts since
+/* `RERUN_LABEL` and `RERUN_COST_NOTE` are exported by ./rerun-commands.ts since
    2026-10-02, because the command bar's *Run again* rows name the same steps and
    cannot import them from here (this file imports the Dock, the Dock the bar —
    GPT Sol's F8 on docs/plans/261002c-commands-do-more-and-an-interface-model-vision.md).
-   What stays here is the glossary's verdict-driven override, below, which is a
-   fact about this article rather than about the step. */
+   Since 2026-10-09 its labels are derived from step-names.ts rather than owned
+   there. What stays here is the glossary's verdict-driven override, below,
+   which is a fact about this article rather than about the step. */
 
 /**
  * **What a reader might type looking for *AI processing*** — the section where
@@ -1909,7 +1912,7 @@ const WHOLE_ARTICLE_KEYWORDS = "over reset whole";
 
 /*
  * **`RERUN_COST_NOTE` (now in ./rerun-commands.ts): the four rows for which
- * "another model call" is not the whole story**, said under the mode's name,
+ * "another model call" is not the whole story**, said under the step's reader-facing name,
  * before the press, because nothing else on this page says it.
  *
  * Until 2026-09-30 these were the four special sentences in an inline confirm
@@ -1921,7 +1924,7 @@ const WHOLE_ARTICLE_KEYWORDS = "over reset whole";
  * (GPT Sol's two code reviews). The old confirm, and the *Find more terms*
  * label, promised the append every time.
  *
- * **No dollar figure, since 2026-09-30.** The Sketch's and Debate's notes
+ * **No dollar figure, since 2026-09-30.** The Sketch's and Reception's notes
  * named a price until Greg ruled that what AI processing costs us is for the
  * administrator alone — *"i don't want any regular users to know how much AI
  * processing of their articles costs"* — and the administrator reads the real
@@ -1966,7 +1969,7 @@ const GLOSSARY_RUN: Record<
 };
 
 /**
- * One row: the mode's name, and a button that runs it.
+ * One row: the result's reader-facing name, and a button that runs its step.
  *
  * **A component per row rather than a loop of hooks**, because each row owns its
  * own `useStepJob` and `provenance` is null before the fetch lands — a `.map` of
@@ -2073,13 +2076,20 @@ function RerunRow({
          same argument `data-section` on this page's headings makes.
 
          **It is not what tells the buttons apart**: every actionable control in
-         the row carries the mode's name in its own `aria-label` (`about`,
+         the row carries the step's reader-facing name in its own `aria-label` (`about`,
          below), and the tests assert on those. */
       data-rerun-step={step}
       className="tw:flex tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-2 tw:px-4 tw:py-3 tw:text-sm"
     >
       <Chip icon={Icon} />
       <span className="tw:text-foreground">{RERUN_LABEL[step]}</span>
+      {/* **What it is**, under its name, so a row that is not a mode — the
+          arc, the relation words — says what pressing it remakes. Greg,
+          2026-10-09 (`spya-u62q09`), plan 261009x. The same faint line as the
+          note below, and placed by the same rule. */}
+      <span className="tw:order-last tw:-mt-1 tw:basis-full tw:pl-9 tw:text-xs tw:text-ink-faint">
+        {stepWhat(step)}
+      </span>
       {/* **On its own line under the name, at every width** — `order-last` and
           `basis-full` in a wrapping row, indented by the chip and its gap
           (24px + 12px) so it sits under the name. Beside the name, a 390px
@@ -2116,7 +2126,7 @@ function RerunRow({
              its own, so it says the neutral thing rather than guessing a verb
              — the pipeline's own are *Writing the arc*, *Finding the terms*,
              *Drawing the argument*, and none of those generalises. */
-          runningLabel={`Working on the ${RERUN_LABEL[step].toLowerCase()}`}
+          runningLabel={`Working on ${RERUN_LABEL[step]}`}
         />
       </div>
     </div>
@@ -3770,6 +3780,7 @@ function StageRow({
   now: number;
 }) {
   const { step, label, outputs, done } = stage;
+  const what = stepWhat(step);
   // `stage.ranAt` / `stage.bytes` are read off the object below rather than
   // destructured here, so a reader of `<Wrote>` can see which they are.
   const Icon = stageIcon(step);
@@ -3777,13 +3788,18 @@ function StageRow({
     <div className={`tw:px-4 tw:py-3 ${done ? "" : "tw:opacity-60"}`}>
       <div className="tw:flex tw:items-center tw:gap-3">
         <Chip icon={Icon} />
-        {/* **The English name first, the key beside it.** Until 2026-09-03 the
+        {/* **The reader's name first, the key beside it.** Until 2026-09-03 the
             row led with `step` — `arc`, `tweets`, `blocks` — and showed the
             human label *only when the stage had not run*, so the rows you could
-            read were the ones with nothing in them. The key still earns its
-            place: it is what `npm run <step> <slug>` takes, and this is the
-            page you have open when you are about to type that. */}
-        <span className="tw:text-sm tw:text-foreground">{label}</span>
+            read were the ones with nothing in them. Until 2026-10-09 that name
+            was the pipeline's present-tense label (*Writing the thread*), which
+            matched neither the re-run row above nor the button that shows it;
+            it is now the mode's (*Summary › Thread*), and the line under it
+            says what it is — plan 261009x. A step this copy has never heard of
+            keeps the server's label. The key still earns its place: it is what
+            `npx tsx scripts/stage.ts <step> <slug>` takes, and this is the page
+            you have open when you are about to type that. */}
+        <span className="tw:text-sm tw:text-foreground">{stepName(step, label)}</span>
         <span className="tw:font-mono tw:text-xs tw:text-ink-faint">{step}</span>
         {/* `done &&` is load-bearing. The generator string comes off the tree
             and the arc, which are in hand because the article loaded — so a structure
@@ -3806,13 +3822,13 @@ function StageRow({
           {done ? "ran" : "not run"}
         </span>
       </div>
-      {/* Indented to the chip's width so the files hang under the stage name
-          rather than under its icon. */}
+      {/* Indented to the chip's width so the explanation and files hang under
+          the stage name rather than under its icon. */}
       <div className="tw:mt-1.5 tw:flex tw:flex-wrap tw:items-baseline tw:gap-x-3 tw:gap-y-1 tw:pl-9 tw:text-xs tw:text-ink-faint">
-        {/* Only for a stage that ran. A not-run stage's line is now blank — its
-            label moved up to be the row's name, and listing the files it would
-            have written reads as a list of things that are missing rather than
-            as a thing that has not happened yet. */}
+        {/* The explanation belongs to every known stage. Files belong only to a
+            stage that ran: listing what a not-run stage would have written reads
+            as a list of missing things rather than work that has not happened. */}
+        {what && <span className="tw:basis-full">{what}</span>}
         {done && (
           <span className="tw:min-w-0 tw:font-mono tw:break-all">{outputs.join(" · ")}</span>
         )}

@@ -11,7 +11,7 @@
  *   POST /api/jobs { slug, steps: ["debate-claims"] }
  *
  * and in the app a press on the Claims chip asks for it (src/web/activation.ts
- * § `activationForPeerReview`). Arriving on Claims by a link, Back, a reload or a
+ * § `activationForSources`). Arriving on Claims by a link, Back, a reload or a
  * last-view restore only reads.
  *
  * ## What it is, and what it is not

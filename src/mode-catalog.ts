@@ -97,9 +97,9 @@ export interface ModeCatalogEntry {
    * rename — if the line is ever shortened, the denial is the part to keep.
    * `debate`'s named the empty case, because most pieces have no reception at
    * all and a mode that is empty four times in five reads as broken unless the
-   * button said so first. Since 2026-10-09 Debate is Peer review's Reception,
-   * which opens on Bibliography, so the button no longer promises the empty
-   * case; Reception's own empty state says it.
+   * button said so first. Since 2026-10-09 Debate is the Reception sub-mode of
+   * Sources. Sources opens on Bibliography, so the button no longer promises
+   * the empty case; Reception's own empty state says it.
    */
   description: string;
   /**
@@ -204,9 +204,10 @@ export interface ModeCatalogEntry {
    *  6. **It does not take a word that is a page's or an action's own.**
    *     Comments answers to `notes`, Feedback to `help`. The modes come first
    *     in the list, so a mode nickname that starts with one of those wins it.
-   *     Two older words already do, and the test names them rather than
-   *     hiding them: `annotations` (Marginalia over Comments) and `sources`
-   *     (Citations over Metadata's `source`).
+   *     One older word already does, and the test names it rather than
+   *     hiding it: `annotations` (Marginalia over Comments). Metadata's
+   *     `source` is the start of the Sources mode's own label since
+   *     2026-10-09, which the rule allows.
    *  7. **It does not start with a verb the argument parser owns** — `find`,
    *     `search`, `look up`, `define`, `tag` and the rest of `VERBS` in
    *     src/web/command-match.ts — or the bar would also offer *Find “in
@@ -318,14 +319,19 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
   },
   referee: {
     description:
-      "Reviewing this for somebody? Your criteria, its claims, and a second look at your own notes",
+      "Refereeing it? What to weigh before you decide: your criteria, its claims, and a second look at your notes",
     /* **"No model call" and not "nothing"**, which was the draft: the mode does
        start a source scan on mount, so the flat claim was false — GPT Sol,
        2026-09-07. "Can start" because an existing Claims list is reused
        (`useAutoRun` retires the activation when the artefact is ready).
        `?referee=` survives leaving the mode, so its opening panel need not
        be Criteria and cannot be described as waiting for a criterion. */
-    how: "This button starts no model call. Of the chips inside, only Claims can start one; every other run waits for its own button. It never returns a verdict — no accept or reject, no score, no grade. That judgement is yours, and the mode refuses to make it for you.",
+    /* The last sentence is the line between this mode and Sources (once Peer
+       review), from Greg's report spya-h5aypq: "referee is more like making a
+       decision on the paper itself". It names the other mode by what it holds,
+       not by its label, which is mid-rename (queue item qi-m9tmnpy3).
+       docs/research/261009b-what-a-peer-reviewer-needs-and-where-sources-and-referee-divide.md. */
+    how: "This button starts no model call. Of the chips inside, only Claims can start one; every other run waits for its own button. It never returns a verdict — no accept or reject, no score, no grade. That judgement is yours, and the mode refuses to make it for you. For where the piece sits among other work, what it cites and what others have said about it, there is a mode of its own in the bar.",
     /* The three words this mode was deliberately *not* named, and they are free
        to point here: `review` was vacated by the `review` → `remember` rename,
        and `reviewer` was passed over only because it would have sat beside it.
@@ -335,9 +341,14 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        bar, so the shorter word here would take every start of the longer one.
        Not `criteria`, which is the chip's own row. */
     /* "peer review" was here until 2026-10-09, when it went to the mode
-       named Peer review (plan 261009l § The name). `peer reviewer` stays: it
-       is about the person doing one, which is who this mode is for. */
-    aliases: ["review", "reviewer", "peer reviewer", "referee report", "assess", "assessment"],
+       then named Peer review, now Sources (plan 261009l § The name, plan
+       261009w), which keeps it as its old name. The person doing one, who is
+       who this mode is for, is here as `for peer reviewers`, the landing
+       tile's words, rather than `peer reviewer` as it was until Sources took
+       `peer review`: Referee comes first in the bar, so a nickname here that
+       *starts* `peer review` would take Sources' (rule 5 above). Typed, `peer
+       reviewer` still finds this mode, a tier lower, inside the longer word. */
+    aliases: ["review", "reviewer", "for peer reviewers", "referee report", "assess", "assessment"],
     experimental: true,
   },
   summary: {
@@ -473,11 +484,13 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     experimental: true,
   },
   /* **Citations and Debate until 2026-10-09**, now this mode's three
-     sub-modes (src/web/sub-modes.ts § `PEER_REVIEW_SUB_MODES`, where the
+     sub-modes (src/web/sub-modes.ts § `SOURCES_SUB_MODES`, where the
      retired words and the bibliography words are the sub-mode rows' own
-     aliases, so each opens the view it means).
-     docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md. */
-  "peer-review": {
+     aliases, so each opens the view it means). Called Peer review until later
+     that day.
+     docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md,
+     docs/plans/261009w-peer-review-becomes-sources-all-the-way-down.md. */
+  sources: {
     /* Greg's frame for it, 2026-10-09 (spya-vcvxu5): *"what this article
        cites and what other people say about it, this article might be a good
        sort of TLDR somehow for the different submodes"*. Each chip's card
@@ -507,13 +520,15 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
          page with its address (DebatePanel.tsx § Row).
        No price — mode.md § The card on the button. */
     how: "Bibliography is one model call over the article, written once and stored, and every address shown for a work is one the article itself gave, found by code rather than typed by the model, or else a Scholar search marked as one. Reception comes from a pass over the open web, and Claims lists the piece's claims with one model call and no web search, for you to check against the web; each is stored once it lands. Every source links out, so you can check it rather than take our word for it.",
-    /* "peer review" left Referee's aliases on 2026-10-09: it is this mode's
-       name, so the label finds it and an alias saying it again would be a
-       second copy (tests/mode-catalog.test.ts § never another mode's label).
-       Referee keeps `peer reviewer`, which is about the person (plan 261009l §
-       The name). The two retired mode words are the sub-mode rows' aliases,
-       not these. */
-    aliases: ["sources", "literature", "further reading"],
+    /* "peer review" left Referee's aliases on 2026-10-09 for this mode, then
+       called Peer review (plan 261009l § The name). It stays here as the
+       mode's old name, so typing it still finds this mode first; Referee has
+       `for peer reviewers`, which is about the person. `sources` was
+       an alias until it became the label (plan 261009w), and an alias saying
+       the label again would be a second copy (tests/mode-catalog.test.ts §
+       never another mode's label). The two retired mode words are the
+       sub-mode rows' aliases, not these. */
+    aliases: ["peer review", "literature", "further reading"],
     /* Out of the switch on the day it was made. Greg, 2026-10-09
        (spya-vcvxu5): *"let's move this out of experimental, this combined
        mode"*. Both halves were behind it until then.
@@ -637,7 +652,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        width is
        `fitView`'s `margW` (src/web/layout.ts): below it the column is not
        drawn. */
-    how: "It marks where the argument turns, with so, but or vs beside those paragraphs. One model call makes those words, the first time the article's owner opens the column; the notes are there meanwhile and the words join them when they are ready. Everything else is read, never made here: the questions come with the article's parts, the sentence at the top is where the argument has got to, and ideas, FAQ, Timeline, and Peer review's claims and cited works appear once they have been made in their own modes. It needs a wide window; on a narrow one the notes are hidden.",
+    how: "It marks where the argument turns, with so, but or vs beside those paragraphs. One model call makes those words, the first time the article's owner opens the column; the notes are there meanwhile and the words join them when they are ready. Everything else is read, never made here: the questions come with the article's parts, the sentence at the top is where the argument has got to, and ideas, FAQ, Timeline, and Sources' claims and cited works appear once they have been made in their own modes. It needs a wide window; on a narrow one the notes are hidden.",
     /* `annotations` was the mode's own word until 2026-10-01 (261001n); the
        Comments row has it too and this row wins it. **Nothing here may start
        with `notes`**, which is the Comments row's. */
@@ -650,3 +665,70 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     experimental: false,
   },
 };
+
+/**
+ * **The experimental modes the guide may still offer as a button, and to
+ * whom** — plan
+ * docs/plans/261009x-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md.
+ *
+ * > if the reader says in their Guide chat or their Why You're Reading This
+ * > that they are a referee, that should obviously present tools for the
+ * > Referee mode etc.
+ * >
+ * > — Greg, 2026-10-09 (report spya-h5aypq)
+ *
+ * The switch is about clutter in the bar, not access: `?mode=` opens any
+ * mode for anyone (src/web/experimental-visibility.ts). A button the guide
+ * offers to the one reader who said they need the mode is not clutter. So a
+ * mode here keeps its place behind the switch in the bar, the command bar and
+ * ordinary Chat, and gains, with its sub-modes, three things, each read from
+ * here through `offeredBehindTheSwitch`:
+ *
+ *  - a button in the written guide's list of modes, with `audience` and
+ *    `guidance` beside it (src/guide.ts § `modeWordsSection`);
+ *  - a place in the **guide's** chip door only (src/web/chip-door.ts §
+ *    `guideDoorRows`);
+ *  - and it is always a press, never opened by the guide itself
+ *    (src/acts-alone.ts § `modeActsAlone`): the offer rests on the model's
+ *    reading of who the reader is, which the reader confirms.
+ *
+ * An allowlist of its own, deny by default, so the exceptions to the switch
+ * can be read in one place rather than found scattered across the rows above.
+ * A mode that is not experimental has no business here;
+ * tests/guide-offers-behind-the-switch.test.ts holds that.
+ */
+export interface OfferedBehindTheSwitch {
+  /** Who it may be offered to: the end of the prompt's sentence "offer it only when …". */
+  readonly audience: string;
+  /** What to say alongside the offer, as an instruction to the guide. */
+  readonly guidance: string;
+}
+
+export const OFFERED_BEHIND_THE_SWITCH: Partial<Record<Mode, OfferedBehindTheSwitch>> = {
+  referee: {
+    audience:
+      "the reader has said, in their own words, that they are refereeing or peer-reviewing this piece, or assessing it for a journal, a conference or a funder. Something in the article saying so is not the reader saying so",
+    /* The other mode is named by its description, not its label: it is being
+       renamed from Peer review to Sources (queue item qi-m9tmnpy3), and the description,
+       Greg's own frame, survives the rename. The confidentiality sentence is
+       in the past tense on purpose: the text went when the article was added
+       (docs/project/referee-mode.md § Confidentiality). */
+    guidance:
+      "Suggest Referee for the close read and their own notes, and the mode for what this piece cites and what others say about it for the literature around the piece. And say plainly, in one sentence, that this article's text was already sent to an AI provider when it was added, and that Referee's Notices button says what journals' rules are on that",
+  },
+};
+
+/**
+ * **What `OFFERED_BEHIND_THE_SWITCH` says about a catalogue key**, or
+ * `undefined`: `mode:referee` and `submode:referee:criteria` are both
+ * Referee's. Only those two catalogue-key shapes count; an arbitrary string
+ * with `referee` in its second field does not.
+ */
+export function offeredBehindTheSwitch(key: string): OfferedBehindTheSwitch | undefined {
+  const match = /^(?:mode:([a-z-]+)|submode:([a-z-]+):[a-z-]+)$/.exec(key);
+  const mode = match?.[1] ?? match?.[2];
+  /* `hasOwn`, so a key whose middle word is `constructor` is not handed Object's. */
+  return mode !== undefined && Object.hasOwn(OFFERED_BEHIND_THE_SWITCH, mode)
+    ? OFFERED_BEHIND_THE_SWITCH[mode as Mode]
+    : undefined;
+}

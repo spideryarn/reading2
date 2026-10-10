@@ -1,6 +1,6 @@
 /**
  * **The after-response lookup for an author gift** — the seam between the
- * routes and the one web-search call. docs/plans/261009u-author-gift-draft-voucher-from-the-add-page.md,
+ * routes and the one web-search call. docs/plans/261010c-author-gift-draft-voucher-from-the-add-page.md,
  * D4 and R2-F5/F6.
  *
  * The routes in src/routes.ts hand `startAuthorLookup` to `afterResponse` with

@@ -81,11 +81,14 @@ import type {
   CitedWork,
   Comment,
   Meta,
+  NextStep,
   SaveOffer,
   ThreadKind,
   ToolRun,
 } from "./types.js";
 import { MAX_PROFILE_CHARS, MAX_PURPOSE_CHARS, normaliseProfileText } from "./types.js";
+import { guideModeKeys } from "./guide.js";
+import { checkNextSteps, MAX_ASK_CHARS, MAX_NEXT_STEPS, MAX_SEARCH_CHARS } from "./next-steps.js";
 import type { ModelPower } from "./models.js";
 import { isSearchable } from "./block-policy.js";
 import { FetchFailure, fetchDocument } from "./fetch.js";
@@ -267,6 +270,19 @@ export interface ToolOutcome {
   content: string;
   /** `offer_to_save`'s offer, copied onto the stored run (`ToolRun.offer`). No other tool sets it. */
   offer?: SaveOffer;
+  /** `offer_next_steps`'s steps, copied onto the stored run (`ToolRun.steps`). No other tool sets it. */
+  steps?: NextStep[];
+  /**
+   * **Once the reply is written, the model needs nothing back from this
+   * result.** Set only by the two offering tools, and only on an outcome that
+   * asks nothing of the model: steps accepted, an offer made, an offer refused
+   * because the words are already saved. A refusal that asks for something
+   * ("offer a shorter one") leaves it unset, and so does a throw. `converse`
+   * ends the turn on a round that wrote prose, yielded normally to its tools,
+   * settled every call, and ended on accepted next steps (§ `ENDS_THE_TURN`;
+   * plan 261010b).
+   */
+  settles?: true;
 }
 
 /* ----------------------------------------------------------- the definitions --
@@ -609,8 +625,73 @@ export const OFFER_TO_SAVE_TOOL: FunctionTool = {
   },
 };
 
-/** What `toolsFor("guide")` offers a typed guide: its article tools, then the offer. Built once, for the cached prefix. */
-const GUIDE_TYPED_TOOLS: FunctionTool[] = [...GUIDE_TOOLS, OFFER_TO_SAVE_TOOL];
+/**
+ * **The guide offers its next steps as buttons** — plan
+ * docs/plans/261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md.
+ * Greg, 2026-10-09 (`spya-pqaftb`): *"maybe three would be about right.
+ * Probably the LLM should suggest them as the language"*.
+ *
+ * Like `offer_to_save` it runs nothing: the steps are checked
+ * (src/next-steps.ts) and put on the run, and the page draws them under the
+ * answer as buttons the reader presses (src/web/GuideNextSteps.tsx). A step
+ * that shares or archives only takes the reader to the one place that does it.
+ *
+ * **It ends the turn** when it is a round's last call, that round wrote prose
+ * and yielded normally to its tools, and every call in it settled — accepted
+ * steps, and any `offer_to_save` beside them made or refused as already saved (`ToolOutcome.settles`;
+ * src/converse.ts § `ENDS_THE_TURN`): the model needs nothing back.
+ *
+ * Guide only, typed only, for `offer_to_save`'s reason.
+ */
+export const OFFER_NEXT_STEPS_TOOL: FunctionTool = {
+  type: "function",
+  function: {
+    name: "offer_next_steps",
+    description:
+      `Show the reader up to ${MAX_NEXT_STEPS} next steps as buttons under your answer. This does ` +
+      "nothing by itself: each button is pressed by the reader. Call it once, as the very last " +
+      "thing in your answer, after your reply is complete.",
+    parameters: {
+      type: "object",
+      properties: {
+        steps: {
+          type: "array",
+          maxItems: MAX_NEXT_STEPS,
+          description: "The buttons, most useful first.",
+          items: {
+            type: "object",
+            properties: {
+              kind: {
+                type: "string",
+                enum: ["ask", "mode", "search", "share", "archive"],
+                description:
+                  "ask: words the reader could send you next, in their own voice. mode: open a mode. " +
+                  "search: a quick search of this article for some words, which the reader can edit " +
+                  "first. share: take them to where they make a private link or make it public. " +
+                  "archive: take them to where they archive this article.",
+              },
+              words: {
+                type: "string",
+                description: `For ask (at most ${MAX_ASK_CHARS} characters) and search (at most ${MAX_SEARCH_CHARS}).`,
+              },
+              mode: {
+                type: "string",
+                description:
+                  "For mode: the key in its button token under WHAT SPIDERYARN CAN SHOW THEM, decoded, " +
+                  "e.g. submode:summary:brief.",
+              },
+            },
+            required: ["kind"],
+          },
+        },
+      },
+      required: ["steps"],
+    },
+  },
+};
+
+/** What `toolsFor("guide")` offers a typed guide: its article tools, then the two offers. Built once, for the cached prefix. */
+const GUIDE_TYPED_TOOLS: FunctionTool[] = [...GUIDE_TOOLS, OFFER_TO_SAVE_TOOL, OFFER_NEXT_STEPS_TOOL];
 
 /**
  * The tools of ours a conversation of this kind is offered.
@@ -721,6 +802,9 @@ export function describeCall(name: string, args: Record<string, unknown>): strin
        text, which the card shows and this row would repeat. */
     case "offer_to_save":
       return args.field === "about_you" ? "offered to update About you" : "offered to save why you're reading";
+    /* Never drawn: the buttons are its result (ChatPanel.tsx § `ToolStrip`). */
+    case "offer_next_steps":
+      return "offered next steps";
     default:
       return `tried ${name}`;
   }
@@ -2138,16 +2222,34 @@ async function readReaderNotes(
 }
 
 /**
+ * **Said at the end of every result of the two offering tools, offered or
+ * refused.** A model that wrote its whole reply and then called one of them
+ * may still go round again (when `converse` does not end the turn: see
+ * `ToolOutcome.settles`), and the reader's answer is every round's text
+ * joined. Told nothing about the reply already shown, it wrote it again
+ * (postmortem 261009j: 9/14 to 0/14 with this sentence). It stops a rewrite,
+ * not a tail: told to stop, a model still writes "I'm done with my answer
+ * above." (plan 261010b), which is why `converse` ends the turn where it can.
+ */
+export const ALREADY_ON_SCREEN =
+  "Everything you wrote before calling this tool is already on the reader's screen, as the start of your " +
+  "answer: never write any of it again. If your reply was already complete, stop here; otherwise continue " +
+  "from where you left off.";
+
+/**
  * `offer_to_save`: the words checked as the store would check them, and handed
  * back as an offer. Never a store read or write — see `OFFER_TO_SAVE_TOOL`.
  */
 function offerToSave(args: Record<string, unknown>, ctx: ToolContext): ToolOutcome {
   const field = args.field === "reason" ? "purpose" : args.field === "about_you" ? "profile" : null;
   const label = describeCall("offer_to_save", args);
-  const refuse = (why: string): ToolOutcome => ({
+  /* "Say nothing about it": told only not to claim an offer, a model whose
+     reply was done went on to explain that it had not offered (plan 261010b). */
+  const refuse = (why: string, settles?: true): ToolOutcome => ({
     label,
     detail: "not offered",
-    content: `Nothing was offered: ${why} Do not tell the reader you offered anything.`,
+    content: `Nothing was offered: ${why} Say nothing to the reader about offering or saving it. ${ALREADY_ON_SCREEN}`,
+    ...(settles ? { settles } : {}),
   });
   if (field === null) return refuse(`field must be "reason" or "about_you".`);
   const text = typeof args.text === "string" ? normaliseProfileText(args.text) : null;
@@ -2161,21 +2263,52 @@ function offerToSave(args: Record<string, unknown>, ctx: ToolContext): ToolOutco
   if (basis === undefined) {
     return refuse("what is saved now could not be read, so there is no safe value to replace.");
   }
-  if (basis === text) return refuse("those are already their saved words, exactly.");
+  /* The one refusal that asks nothing of the model: there is nothing to
+     offer, and nothing to do instead. The case that wrote answers twice. */
+  if (basis === text) return refuse("those are already their saved words, exactly.", true);
   return {
     label,
     detail: "",
+    settles: true,
     content:
       "The reader now sees these words under your answer, with a button to save them. Nothing is saved " +
       "unless they press it, so do not say it is saved: say in a few words that they can save it with " +
       "the button under your answer. On a later turn, WHO IS READING THIS shows what is saved. " +
-      /* Measured (plan 261009q, browser pass): a model that wrote its whole
-         reply and then called this wrote it all again after the result, and
-         the reader's answer is every round's text joined. */
-      "Everything you wrote before calling this tool is already on the reader's screen, as the start of " +
-      "your answer: never write any of it again. If your reply was already complete, stop here; otherwise " +
-      "continue from where you left off.",
+      ALREADY_ON_SCREEN,
     offer: { field, text, basis },
+  };
+}
+
+/** The keys a `mode` step may name, from the catalogue: computed once. */
+const MODE_KEYS = guideModeKeys();
+
+/**
+ * `offer_next_steps`: the steps checked (src/next-steps.ts) and handed back to
+ * be drawn. Runs none of them — see `OFFER_NEXT_STEPS_TOOL`.
+ */
+function offerNextSteps(args: Record<string, unknown>): ToolOutcome {
+  const label = describeCall("offer_next_steps", args);
+  const { steps, problems } = checkNextSteps(args.steps, MODE_KEYS);
+  const dropped = problems.length === 0 ? "" : ` Left out: ${problems.join("; ")}.`;
+  if (steps.length === 0) {
+    return {
+      label,
+      detail: "not offered",
+      content: `No buttons were shown.${dropped} Do not mention any button. ${ALREADY_ON_SCREEN}`,
+    };
+  }
+  return {
+    label,
+    detail: "",
+    /* Not "write nothing more": beside an `offer_to_save` that still wants
+       an answer, the model is owed a word about that card (GPT Sol's F2 on
+       plan 261009u). And "accepted", not "sees": whether a mode can open here
+       is the page's call. */
+    content:
+      `${steps.length} next step${steps.length === 1 ? " was" : "s were"} accepted, to show as buttons under your answer.${dropped} ` +
+      `Do not mention these buttons. ${ALREADY_ON_SCREEN}`,
+    steps,
+    settles: true,
   };
 }
 
@@ -2239,6 +2372,8 @@ export async function runTool(
       return readReaderNotes(args, ctx);
     case "offer_to_save":
       return offerToSave(args, ctx);
+    case "offer_next_steps":
+      return offerNextSteps(args);
     default:
       return noSuchTool(name, ctx.kind);
   }

@@ -1,7 +1,7 @@
 /**
  * **The author gifts, and the writes** — the data layer of `/admin/vouchers`'
  * *Author gifts* (src/web/AdminAuthorGifts.tsx). Plan
- * docs/plans/261009u-author-gift-draft-voucher-from-the-add-page.md, § D10
+ * docs/plans/261010c-author-gift-draft-voucher-from-the-add-page.md, § D10
  * and Revision 3.
  *
  * Shaped like useAdminVouchers.ts: one `GET /api/admin/author-gifts`, and

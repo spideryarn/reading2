@@ -383,7 +383,7 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     methods: ["POST"],
     witnesses: ["/api/admin/voucher-emails/w1/retry"],
   },
-  /* Author gifts, 261009u — the list and ensure share one literal; then one
+  /* Author gifts, 261010c — the list and ensure share one literal; then one
      gift, its lookups and its Send, beside the vouchers they become. */
   {
     match: { kind: "literal", path: "/api/admin/author-gifts" },
@@ -1035,7 +1035,7 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
    topic pills' status and Rebuild (plan 261008j); 104 with Skim's profile
    notice dismissal (plan 261009i); 105 with deleting a chat question and what
    follows it (plan 261009o); 109 with author gifts' list and ensure (one
-   literal), one gift, its lookups and its Send (plan 261009u). */
+   literal), one gift, its lookups and its Send (plan 261010c). */
 const EXPECTED_MATCHER_COUNT = 109;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
    with the admin's earlier feedback; 118 with their replies to questions; 119
@@ -1046,7 +1046,7 @@ const EXPECTED_MATCHER_COUNT = 109;
    and Rebuild (plan 261008j); 128 with Skim's profile notice dismissal (plan
    261009i); 129 with deleting a chat question and what follows it (plan
    261009o); 134 with author gifts' list, ensure, lookups, edit and Send (plan
-   261009u). */
+   261010c). */
 const EXPECTED_GUARD_COUNT = 134;
 
 /* ------------------------------------------------------------- the source read */
@@ -2206,7 +2206,7 @@ describe("the authenticated API's route contract", () => {
         "PATCH regex /^\\/api\\/admin\\/vouchers\\/([\\w-]+)$/",
         // voucher email Retry, 261001p — beside the voucher routes
         "POST regex /^\\/api\\/admin\\/voucher-emails\\/([\\w-]+)\\/retry$/",
-        // author gifts, 261009u — beside the vouchers they become
+        // author gifts, 261010c — beside the vouchers they become
         "GET literal /api/admin/author-gifts",
         "POST literal /api/admin/author-gifts",
         "POST regex /^\\/api\\/admin\\/author-gifts\\/([\\w-]+)\\/lookups$/",

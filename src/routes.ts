@@ -5894,7 +5894,7 @@ async function runRefereeClaims(slug: string, res: ServerResponse): Promise<void
 }
 
 /* ------------------------------------------ debate's reader claim checks --
-   The reader ticks claims in Peer review's Claims, or types one, and presses Check:
+   The reader ticks claims in Sources' Claims, or types one, and presses Check:
    one web search over them all, stored as a check. Plan
    docs/plans/261008i-debate-claims-picked-by-the-reader.md § 3;
    src/store/pg-debate-claim-checks.ts; src/debate.ts § `generateClaimCheck`. */
@@ -9157,7 +9157,7 @@ async function serveApi(
      * **The MCP tools for an AI app, and the third thing before the gate** —
      * plan 261007p. `requireUser` refuses an OAuth token everywhere (its
      * `[auth-oauth-token]`), so this route checks its own: the same claims,
-     * plus the one client it accepts and the administrator only. Exact paths,
+     * plus the clients `MCP_OAUTH_CLIENT_ID` admits and the administrator only. Exact paths,
      * like the webhook's. `handleApi` is handed in because each tool calls the
      * routes below in-process, as the verified person, through this same
      * function. src/mcp/remote.ts.
@@ -9470,7 +9470,7 @@ const JOBS_PATH = "/api/jobs";
 const SHARE_LINK_PATTERN = /^\/api\/article\/([\w.%-]+)\/share-link$/;
 /* Gift vouchers: GET lists, POST creates (261001m). */
 const ADMIN_VOUCHERS_PATH = "/api/admin/vouchers";
-/* Author gifts: GET lists, POST ensures one for an article (261009u). */
+/* Author gifts: GET lists, POST ensures one for an article (261010c). */
 const ADMIN_AUTHOR_GIFTS_PATH = "/api/admin/author-gifts";
 
 /**
@@ -9767,7 +9767,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
   /* **Author gifts** — a draft of a gift voucher for the author of one of the
      administrator's own articles, filled in by a web-search lookup after the
      response, and turned into a voucher only by *Send*.
-     docs/plans/261009u-author-gift-draft-voucher-from-the-add-page.md;
+     docs/plans/261010c-author-gift-draft-voucher-from-the-add-page.md;
      src/store/pg-author-gifts.ts, through its guarded store. Under
      `/api/admin/`, so the namespace gate refuses everybody else before any of
      this runs (D8).
@@ -11586,7 +11586,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
    *
    * **No experimental gate.** Debate had none on the server even while its
    * bar button was behind the switch, and since 2026-10-09 this is Reception
-   * inside Peer review, which is offered to everyone. GPT Sol's F4.
+   * inside Sources, which is offered to everyone. GPT Sol's F4.
    *
    * **The identity is the imported one, not the shelf's**: a reader's rename
    * would fail the title check on a correct DOI (F2).

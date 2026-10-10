@@ -59,6 +59,17 @@ working, and a shared URL shows two people **the same band**, whatever their swi
 one Diagram chip against five. A gate
 that redirected or 404'd would turn a preference into a broken link.
 
+**One named exception reaches past the bar: the guide may offer Referee to a referee.** Since
+2026-10-09, a mode in `OFFERED_BEHIND_THE_SWITCH`
+([`src/mode-catalog.ts`](../../src/mode-catalog.ts)) gets a button in the written guide's list of
+modes and a place in the guide's chip door, with its sub-modes, whatever the switch says. It is
+offered only to the audience the record names, and it is always a press. Referee is the only one.
+The bar, the Dock, the command bar and ordinary Chat still hide it. That follows from the rule
+above: the switch is about clutter, and a button offered to the one reader who said they need it is
+not clutter.
+[referee-mode.md § Who the guide offers it to](referee-mode.md#who-the-guide-offers-it-to-since-2026-10-09);
+plan [261009x](../plans/261009x-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md).
+
 **Hiding never deletes.** Turning the switch off must not remove an artefact, a note or a
 generated answer. Whatever the reader made while it was on is still there when it goes back on.
 
@@ -217,7 +228,7 @@ since Diagram itself went in on 2026-09-29, only matter to somebody who reaches 
 four on 2026-09-03
 ([260903c](../plans/260903c-gate-unpolished-modes-behind-experimental-features.md)), Debate joined
 them on 2026-09-05, Remember came out on 2026-10-05 leaving its Explore part behind, Marginalia went in on 2026-10-01 and came out on 2026-10-05, Quotes came out on 2026-09-06, Structure, which went in on 2026-09-06, came
-out on 2026-09-10, Citations joined on 2026-09-11, Hierarchy went in on 2026-09-12 and was removed on 2026-09-29, Skim came and went on 2026-09-28, Diagram — whole, not only four pictures — went in on 2026-09-29, and Citations and Debate came out together on 2026-10-09 as Peer review; each row is a required
+out on 2026-09-10, Citations joined on 2026-09-11, Hierarchy went in on 2026-09-12 and was removed on 2026-09-29, Skim came and went on 2026-09-28, Diagram — whole, not only four pictures — went in on 2026-09-29, and Citations and Debate came out together on 2026-10-09 as Sources; each row is a required
 `experimental: boolean` in `MODE_CATALOG` ([`mode-catalog.ts`](../../src/mode-catalog.ts) — it was
 on the `MODES_UI` row in [`Dock.tsx`](../../src/web/Dock.tsx) until 2026-09-07), so mode fifteen
 cannot be added without somebody deciding which side of the line it is on.
@@ -236,7 +247,7 @@ Everything a mode is *not* is derivable from `MODES` ([`src/modes.ts`](../../src
 | [Diagram](diagram.md) | Greg, 2026-09-29 (SPIDERYARN-READING2-4R): *"Move all of Diagram mode into the 'Experimental features'. It's just not good enough yet."* It had been in everybody's bar since 2026-09-04 with only the Sketch showing; now the mode goes, and inside it a switched-on reader still gets all five pictures ([260929c](../plans/260929c-mode-bar-order-and-groups-experimental-switch-gutter-icons-diagram-behind-the-switch-reading-time-line-explained.md)). |
 | [Debate](../plans/260905f-debate-mode-what-the-web-says-about-this-piece.md) | Two metered web searches a run, up to ~$0.27 and rising with article length — the dearest mode press in the bar — and no live run has happened yet, so nothing about what a real list looks like is known. Its content is also the only thing in the band that is not in the article at all, and what the panel can prove about a row stops well short of what a reader will read into it. |
 
-**Citations and Debate came out on 2026-10-09, as one mode: [Peer review](peer-review.md).**
+**Citations and Debate came out on 2026-10-09, as one mode: [Sources](sources.md).**
 Citations had been behind the switch since 2026-09-11 (*a new mode on an unmeasured prompt: four
 local runs, and on a long bibliography a list capped at 80 and chosen by the model*), and Debate
 since 2026-09-05 (*the dearest press in the bar, and the only content in the band not in the
@@ -251,7 +262,7 @@ What that costs: every reader's bar has one more button; Bibliography (the `cita
 queued on every import, one model call that was not paid before; and Reception's web search, the
 dearest press in the app, is a chip any owner can press. Its search still runs only on a press of
 its own chip, never on arrival and never on import
-([peer-review.md § What a press buys](peer-review.md#what-a-press-buys)).
+([sources.md § What a press buys](sources.md#what-a-press-buys)).
 
 **[Reading time](reading-time.md) was behind it from 2026-09-16 and came out on 2026-10-05** — an
 area chart down the spine of where the reader has spent longer. Both the recording and the drawing
@@ -299,16 +310,21 @@ The reasoning, the patterns looked at and
 what was deferred (one line per heading level, a thinner bar) are
 [261002h](../plans/261002h-headings-breadcrumb-at-the-top-of-the-reading-view.md).
 
-**And the choice of voice engine for a Live conversation, since 2026-10-03** — a select beside the
-Live button, *Realtime* or *GPT-Live (new)*. Switched off, there is no choice and a call is on
-Realtime, as it always was. It is behind the switch because GPT-Live is a second implementation
-built to be compared with the first and then for one of them to be deleted, on a provider API three
-weeks old: its answers about the article come from a second model the voice has to remember to ask,
-and none of that has been tried with a real microphone. Readers who have not asked for unfinished
-things keep the engine that works. **Here the switch is stricter than "hidden, not unreachable"**:
-off, the client starts no GPT-Live call whatever choice was remembered, and turning it off mid-call
-ends one by the ordinary hang-up. That is the client's rule; the `live-session` route is not gated.
-[live-conversation.md § The second engine](live-conversation.md#the-second-engine-gpt-live-behind-experimental).
+**And the choice of voice engine for a Live conversation, since 2026-10-03** — since 2026-10-10 a
+small arrow joined to the right of the Live button, opening *GPT-Live* or *Realtime*. Switched off,
+there is no arrow and a call is on GPT-Live, every reader's engine:
+
+> Let's make Live the default and keep real-time only for Experimental Features.
+>
+> — Greg, 2026-10-09 (report `spya-t858ug`)
+
+Until then it was the other way round — a select beside the button, Realtime for everyone and
+GPT-Live behind the switch while it was new
+([261010a](../plans/261010a-gpt-live-is-the-live-engine-for-everyone-realtime-from-an-arrow-on-the-live-button.md)
+has why it moved). **Here the switch is stricter than "hidden, not unreachable"**: off, the client
+starts no Realtime call whatever choice was remembered, and turning it off mid-call ends one by the
+ordinary hang-up. That is the client's rule; neither live route is gated.
+[live-conversation.md § GPT-Live](live-conversation.md#gpt-live-and-realtime-behind-experimental).
 
 **And one control on the Metadata page: *Start this article again*** — a block inside *AI
 processing* rather than a section of its own: a reset, and optionally the modes made again. The

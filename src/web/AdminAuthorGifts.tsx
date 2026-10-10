@@ -6,7 +6,7 @@
  * Greg, 2026-10-09: *"it would create a gift voucher that's ready and
  * populated but hasn't been sent. … And so then it would be easy for me to then
  * say, okay, great, I'm gonna click send on the gift voucher."* Plan
- * docs/plans/261009u-author-gift-draft-voucher-from-the-add-page.md (§
+ * docs/plans/261010c-author-gift-draft-voucher-from-the-add-page.md (§
  * Revision 3 wins); docs/project/admin.md § `/admin/vouchers`.
  *
  * Each gift says where it has got to in plain words, where its address and

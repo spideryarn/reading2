@@ -222,7 +222,7 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   /* An uploaded paper looking for its own page on the web, fired once when
      its owner opens it — src/source-guess.ts. Request scope, owner-triggered. */
   "upload-source-guess": "interactive request work",
-  /* The author gift's lookup — src/author-lookup.ts, plan 261009u. Pressed by
+  /* The author gift's lookup — src/author-lookup.ts, plan 261010c. Pressed by
      an administrator for one article; run after the response in a collector
      of its own, attributed to the request's owner and the article. */
   "author-lookup": "interactive request work",

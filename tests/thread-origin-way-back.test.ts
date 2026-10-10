@@ -89,11 +89,11 @@ describe("a conversation started from a claim is not its block's chat", () => {
 });
 
 describe("threadSource", () => {
-  it("says a conversation with a stored origin was started from a claim in Peer review's Claims, with the claim's words", () => {
+  it("says a conversation with a stored origin was started from a claim in Sources' Claims, with the claim's words", () => {
     expect(threadSource({ kind: "chat", origin: CLAIM })).toEqual({
-      from: "peer-review",
-      mode: "peer-review",
-      label: "Started from a claim in Peer review › Claims",
+      from: "sources",
+      mode: "sources",
+      label: "Started from a claim in Sources › Claims",
       quote: "RNA can transfer a memory",
     });
   });
@@ -102,11 +102,11 @@ describe("threadSource", () => {
     expect(threadSource({ kind: "chat" })).toBeNull();
   });
 
-  it("says a lens conversation was started from an angle in Peer review's Reception, with the reader's words", () => {
+  it("says a lens conversation was started from an angle in Sources' Reception, with the reader's words", () => {
     expect(threadSource({ kind: "chat", origin: LENS })).toEqual({
-      from: "peer-review",
-      mode: "peer-review",
-      label: "Started from an angle in Peer review › Reception",
+      from: "sources",
+      mode: "sources",
+      label: "Started from an angle in Sources › Reception",
       quote: "how it relates to Smith 2019",
       voice: "reader",
     });

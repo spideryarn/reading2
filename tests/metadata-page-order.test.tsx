@@ -35,6 +35,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Article, Meta } from "../src/types.js";
+import { stepName } from "../src/web/step-names.js";
 
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
@@ -383,7 +384,7 @@ describe("the two identifiers the owner did not recognise", () => {
 
     expect(path?.closest("[hidden]"), "opening did not show the stage rows").toBeNull();
     /* And the other branch of the row, so this covers both shapes of stage. */
-    expect(section?.textContent).toContain("Reading the text out");
+    expect(section?.textContent).toContain(stepName("extract"));
   });
 });
 
