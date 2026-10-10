@@ -5,7 +5,7 @@
  * whose § GPT Sol's plan review is where most of the rules below come from.
  *
  * ```
- * no DOI on the article ───────────────────────────► no-doi          (nothing asked)
+ * no DOI on the article, nor in its own address ───► no-doi          (nothing asked)
  * a row fresher than 7 days ───────────────────────► that row, checked against the article
  * else ask OpenAlex, each request in its own polite turn:
  *   1. works/doi:<doi>              404 ► not-indexed (remembered)
@@ -53,6 +53,7 @@ import {
   type WorkAuthor,
   type WorkId,
   coolAfter,
+  doiFor,
   inServiceTurn,
   list,
   parseWorkId,
@@ -94,7 +95,27 @@ const MAX_KIND = 40;
  * article was imported with, never a reader's rename**, which would fail a
  * correct DOI (the route reads it with `loadArticleIdentity`).
  */
-export type ArticleIdentity = Pick<Meta, "title" | "byline" | "authors" | "doi">;
+export type ArticleIdentity = Pick<Meta, "title" | "byline" | "authors" | "doi" | "url">;
+
+/**
+ * **The DOI to ask about**: the article's own, or else the one its own address
+ * names — an arxiv.org page, whose DOI is arXiv's at DataCite (`doiFor`).
+ *
+ * The address is the fallback for articles imported before an agreed arXiv
+ * record put its DOI on the article (plan 261010n, report spya-sbj3yk): until
+ * then every arXiv paper said "no DOI". It is no looser than `meta.doi`, because
+ * the answer is checked against the title and an author on every way out.
+ */
+export function citersIdOf(article: ArticleIdentity): WorkId | null {
+  if (article.doi) {
+    const own = parseWorkId(article.doi);
+    return own?.startsWith("doi:") ? own : null;
+  }
+  /* Only an arXiv page: the gap this closes is arXiv's, and an address that is a
+     DOI's own (doi.org) gets its DOI put on the article at import (GPT Sol's F4). */
+  const named = article.url ? parseWorkId(article.url) : null;
+  return named?.startsWith("arxiv:") ? parseWorkId(doiFor(named)) : null;
+}
 
 /** The work a DOI resolves to at OpenAlex, in OpenAlex's own words. */
 export interface CitedTarget {
@@ -384,10 +405,8 @@ function answerFor(article: ArticleIdentity, stored: FetchedCiters, fetchedAt: s
  * `unavailable`.
  */
 export async function citersOf(article: ArticleIdentity, deps: CitersDeps = {}): Promise<CitersResult> {
-  const id = article.doi ? parseWorkId(article.doi) : null;
-  /* An arXiv id is not asked about: OpenAlex is asked by DOI, and an agreed
-     arXiv record does not put a DOI on the article today. */
-  if (id === null || !id.startsWith("doi:")) return { kind: "no-doi" };
+  const id = citersIdOf(article);
+  if (id === null) return { kind: "no-doi" };
   const d = await resolveDeps(deps);
   const started = Date.now();
   const done = (result: CitersResult, from: "cache" | "openalex" | "stale"): CitersResult => {

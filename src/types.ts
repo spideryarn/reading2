@@ -7368,7 +7368,8 @@ export interface Citer {
  * list.** No model made any of it, and it is not part of the stored Debate.
  * docs/plans/261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md.
  *
- * - `no-doi` — the article has no DOI on record, so nothing was asked.
+ * - `no-doi` — the article has no DOI, and its own address is not an arXiv page
+ *   (`citersIdOf`, src/citation-index.ts), so nothing was asked.
  * - `not-indexed` — OpenAlex has no record of the DOI.
  * - `unconfirmed` — OpenAlex's record for the DOI could not be shown to be this
  *   article: its title and one author must both agree. Not a claim that the

@@ -237,7 +237,10 @@ export async function withRegistryFacts(
       asked,
       meta: {
         ...rest,
-        ...(meta.doi === undefined && id.startsWith("doi:") ? { doi: record.doi } : {}),
+        /* An arXiv id's record carries arXiv's own DataCite DOI (`10.48550/arxiv.<id>`),
+           agreed by the same test, so it is the article's DOI too: without it Cited
+           by had nothing to ask OpenAlex with (plan 261010n). */
+        ...(meta.doi === undefined ? { doi: record.doi } : {}),
         ...(journal !== undefined ? { journal } : {}),
         ...(day !== undefined ? { publishedAt: day } : {}),
         ...(year !== undefined ? { publishedYear: year } : {}),

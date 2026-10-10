@@ -732,7 +732,7 @@
  {
   "id": "submode:sources:claims",
   "label": "Claims",
-  "description": "What others say about each claim it makes: the claims it rests on, with the works it cites beside each",
+  "description": "The claims this piece rests on, quoted from it: pick some to check against the web",
   "aliases": [
    "Sources",
    "Claims Sources",

@@ -202,7 +202,9 @@ import {
   RECEPTION_THREADS_FAILED,
   sourcesClaimsHandoff,
   sourcesClaimsUnverified,
+  sourcesClaimsNoneSuggested,
   receptionResponsesUnverified,
+  receptionResponsesNoneSuggested,
   receptionWithheldOnSharedLink,
   receptionRegistryNote,
   receptionWorkFieldsNote,
@@ -745,8 +747,9 @@ const ORDER_OPTION: Record<ReceptionOrder, { label: string; title: string }> = {
 };
 
 /**
- * **What one search says when it kept no rows**, and it is two sentences rather
- * than one.
+ * **What one search says when it kept no rows**, and it is three sentences
+ * rather than one: no pages came back; pages came back and the AI put none
+ * forward; the AI put some forward and none survived our checks (plan 261010n).
  *
  * Collapsing them is the single thing most worth getting right in this panel
  * (docs/reusable/silent-success.md). *The search came back with no pages* and
@@ -778,9 +781,17 @@ export function emptyGroupNote(counts: ReceptionCounts, group: "direct" | "claim
   if (counts.returnedSources === 0) {
     return group === "direct" ? RECEPTION_RESPONSES_NONE : SOURCES_CLAIMS_NONE;
   }
+  /* **The AI put nothing forward**: nothing was checked, so this must not say a
+     check failed. Until plan 261010n it shared the next case's sentence, and
+     Greg could not tell what it meant (spya-qtk3q2). */
+  if (counts.reportedRows === 0) {
+    return group === "direct"
+      ? receptionResponsesNoneSuggested(counts.returnedSources)
+      : sourcesClaimsNoneSuggested(counts.returnedSources);
+  }
   return group === "direct"
-    ? receptionResponsesUnverified(counts.returnedSources)
-    : sourcesClaimsUnverified(counts.returnedSources);
+    ? receptionResponsesUnverified(counts.returnedSources, counts.reportedRows)
+    : sourcesClaimsUnverified(counts.returnedSources, counts.reportedRows);
 }
 
 /**

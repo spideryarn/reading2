@@ -373,7 +373,9 @@ export interface ArticleReader {
 
   /**
    * **What the article was imported as: its title, its authors and its DOI** —
-   * for checking an outside record against it (src/citation-index.ts).
+   * for checking an outside record against it (src/citation-index.ts). And its
+   * address (`finalUrl`), which names an arXiv paper's DOI when the article
+   * carries none (`citersIdOf`, plan 261010n).
    *
    * **The title is the revision's own, never the reader's rename.** `loadArticle`
    * puts its meta through `titleFor`, so a renamed paper's title is the
@@ -384,7 +386,7 @@ export interface ArticleReader {
    * Owner-scoped like every read here: somebody else's slug is the same 404 as
    * one that does not exist.
    */
-  loadArticleIdentity(slug: string): Promise<Pick<Meta, "title" | "byline" | "authors" | "doi">>;
+  loadArticleIdentity(slug: string): Promise<Pick<Meta, "title" | "byline" | "authors" | "doi" | "url">>;
 
   /**
    * Every work the piece cites, plus whether the list still describes the
