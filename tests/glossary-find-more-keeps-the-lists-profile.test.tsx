@@ -278,7 +278,8 @@ describe("where the run row is, and what it says", () => {
   it("on a stale list, the banner says so and the one run button is the top row's", async () => {
     await mount(owner(glossary(null), { stale: true }));
     expect(host.querySelector(".gloss-stale")).not.toBeNull();
-    expect(host.querySelector(".gloss-stale button")).toBeNull();
+    /* Its only button is the × that sends it away (plan 261010a). */
+    expect(host.querySelector(".gloss-stale button:not(.notice-close)")).toBeNull();
     expect(moreButton()?.textContent).toMatch(/write a new list/i);
   });
 

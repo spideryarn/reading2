@@ -298,6 +298,7 @@ describe("an article with no metadata", () => {
        `tree.slug` — they agree on this fixture, so this only says the field was
        stamped at all. src/sketch.ts says why the two are not the same claim. */
     expect(run.sketch.slug).toBe(withoutMeta.slug);
+    expect(Date.parse(run.sketch.generatedAt ?? ""), "the picture's generation identity").not.toBeNaN();
     expect((JSON.parse(sent[0]!) as { output_config: unknown }).output_config).toEqual({
       effort: "low",
       format: { type: "json_schema", schema: SKETCH_OUTPUT_SCHEMA },

@@ -206,8 +206,27 @@ add its siblings when a second row needs one.
 [`styles/close.css`](../../src/web/styles/close.css), imported straight after `shell.css` so each
 component's own rule wins on everything *but* size — and so those rules must not set a width, a
 height or a padding, which [`tests/close-cross.test.ts`](../../tests/close-cross.test.ts) checks
-for each of the seven. In px, because the app supports a 12px root.
+for each of the eight. In px, because the app supports a 12px root.
 ([261002i](../plans/261002i-ipad-touch-targets-shelf-card-actions-on-the-bottom-row-bigger-close-crosses-a-visible-band-scrollbar.md))
+
+### Every "older version" notice has an ×
+
+> Look for all of those and in each case make sure there is a way for me to dismiss them if I don't
+> want to rerun it.
+>
+> — Greg, 2026-10-09 (`spya-mutgym`)
+
+Every banner that says an artefact describes an older version of the article is drawn by one
+component, [`StaleNotice.tsx`](../../src/web/StaleNotice.tsx): the ⚠, the sentence, a `close-x` ×
+at the end of its line, and the mode's own run button below. The × sends the notice away **until
+the artefact is made again** — the dismissal is keyed on the artefact's own clock
+([`src/stale-notice.ts`](../../src/stale-notice.ts)), stored per article and mode in
+`stale_notice_dismissals` for an owner, and held for the page view for a visitor
+([`useStaleNotices.ts`](../../src/web/useStaleNotices.ts)). A foot that hid a job while the banner
+carried it hides it only while the banner is showing. **Quiz's banner has no ×**: a stale quiz
+refuses every mark, and the banner is the only explanation of the disabled box.
+[`tests/stale-notice-guard.test.ts`](../../tests/stale-notice-guard.test.ts) fails a stale banner
+drawn any other way. [261010a](../plans/261010a-dismiss-older-version-notices.md).
 
 **`.tap-target` is the same idea for a control of any size**:
 [`styles/tap-target.css`](../../src/web/styles/tap-target.css), imported straight after

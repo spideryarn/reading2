@@ -78,6 +78,7 @@ import {
 import { StallReached } from "./call-failure.js";
 import { ProviderRefused, classifyEnd, openRouterStream } from "./ai-call.js";
 import { hitExtractor } from "./search-hits-stream.js";
+import { budgetFor, deadlineFor } from "./token-budget.js";
 import { plainWords } from "./plain-words.js";
 import { objectEnd, stripFence } from "./parse-json.js";
 import {
@@ -102,18 +103,6 @@ import {
 export const defaultModel = (power: ModelPower): string => modelFor("search", power);
 
 /**
- * How long to wait before giving up.
- *
- * Shorter than explain.ts's ninety seconds because there is no web search to
- * wait for — the whole call is one pass over an article that is already in the
- * prompt. A deadline exists at all for the same reason it does there: `fetch`
- * has none of its own, and without one a request that never comes back leaves
- * the run `pending` on disk and a spinner on screen for as long as the tab is
- * open.
- */
-export const SEARCH_TIMEOUT_MS = 60_000;
-
-/**
  * How long a *silent* stream is allowed to stay silent.
  *
  * Shorter than explain.ts's forty-five seconds because there is no web search
@@ -121,7 +110,7 @@ export const SEARCH_TIMEOUT_MS = 60_000;
  * already sitting in the prompt, with no tool round-trip to leave a gap. A
  * separate clock from the deadline above for the same reason explain.ts keeps
  * one: "slow" and "dead" are different failures, and a connection that died
- * mid-answer should not sit on the full sixty seconds before anyone is told.
+ * mid-answer should not sit on the whole deadline before anyone is told.
  */
 export const SEARCH_STALL_MS = 30_000;
 
@@ -141,6 +130,43 @@ export const SEARCH_STALL_MS = 30_000;
  * the honest answer is the strongest twenty.
  */
 export const MAX_HITS = 20;
+
+/**
+ * **`max_tokens` is thinking plus answer**, and until 2026-10-10 this call sent
+ * a flat 4,000 sized for the answer alone, with thinking left to the provider.
+ * On a 152,000-word paper a broad search thought for ~2,450 tokens on two runs
+ * in five and was cut off mid-JSON (`[ai-overflowed]`); at `medium`, eight runs
+ * over the same queries thought for none and answered in 8–15 s. Production
+ * had reached 3,739 of the 4,000. The effort is `CHAT_REASONING`'s row for
+ * this job (src/ai-call.ts), which the gateway sends; these are the two terms
+ * sized against it. docs/plans/261010f-a-stale-referee-criterion-overflow-and-the-calls-one-notch-from-it.md,
+ * and docs/plans/260928c-referee-claims-fail-on-long-pieces.md for the class.
+ *
+ * Answer room: `MAX_HITS` at ~150 tokens a hit (criteria's measured rate for the
+ * same quote-and-a-sentence row), and a quarter again. An estimate, not a bound.
+ *
+ * Thinking room: `medium` is not "no thinking" — claims at `medium` thought for
+ * 1,207 on one short paper — so a reservation of a little over twice the most
+ * the provider default spent here. A ceiling, not a purchase.
+ */
+export const SEARCH_ANSWER_ROOM = Math.ceil(MAX_HITS * 150 * 1.25);
+export const SEARCH_THINKING_ROOM = 6_000;
+export const SEARCH_MAX_TOKENS = budgetFor("search", SEARCH_ANSWER_ROOM, SEARCH_THINKING_ROOM);
+
+/**
+ * How long to wait before giving up: long enough for the whole ceiling to
+ * arrive (src/token-budget.ts § `deadlineFor`), which is 129 s.
+ *
+ * It was a flat 60 s until 2026-10-10, when the ceiling above grew to make
+ * room for thinking, and a deadline the allowance cannot fit inside is the
+ * limit that fails next (plan 260928c, F1). Measured at `medium`, a search
+ * over the longest local paper finished in 8–15 s, so this fires only on a run
+ * still moving at the end of an unusually long answer. A *dead* stream is the
+ * stall clock's job, below, and that has not moved. A deadline exists at all
+ * because `fetch` has none of its own, and without one a request that never
+ * comes back leaves the run `pending` and a spinner on screen.
+ */
+export const SEARCH_TIMEOUT_MS = deadlineFor(SEARCH_MAX_TOKENS);
 
 const SYSTEM = `You are helping a reader find passages in an article they are reading. They
 have described what they are looking for. Find it.
@@ -595,12 +621,11 @@ export async function* findPassagesStream({
   let answered = false;
   const request = {
     model,
-    /* Room for twenty hits, each carrying a quote and a sentence. Set with
-       MAX_HITS in mind rather than picked round: a ceiling too low truncates
-       the JSON mid-object, and a truncated object is not a short list, it is
-       a parse error — which `parseHits` reports as one rather than as an
-       empty result. */
-    max_tokens: 4000,
+    /* Room for twenty hits and some thinking — `SEARCH_MAX_TOKENS` above. A
+       ceiling too low truncates the JSON mid-object, and a truncated object is
+       not a short list, it is a parse error — which `parseHits` reports as one
+       rather than as an empty result. */
+    max_tokens: SEARCH_MAX_TOKENS,
     // No tools. See the header: the question is always "where in this
     // piece", and no page on the web can answer it.
     messages,

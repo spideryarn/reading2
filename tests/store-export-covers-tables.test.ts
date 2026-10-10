@@ -663,6 +663,14 @@ function fixtures(): Record<RollbackTable | BundledTable, Fixture> {
         },
       ]);
     },
+    /* Straight into the table, as the route would write it. Plan 261010a. */
+    stale_notice_dismissals: async () => {
+      await db.insert(schema.staleNoticeDismissals).values({
+        articleId: ARTICLE_ID,
+        mode: "glossary",
+        dismissedFor: [sentinel("stale_notice_dismissals")],
+      });
+    },
   };
 }
 
@@ -774,6 +782,7 @@ const COLUMNS_LEFT_OUT: Record<BundledTable, Readonly<Record<string, string>>> =
   glossary_hidden_entries: {},
   article_tags: {},
   quiz_attempts: {},
+  stale_notice_dismissals: {},
 };
 
 /** A property of `value`, or `undefined` if it is not an object. */
@@ -817,6 +826,7 @@ const ROWS_IN: Record<BundledTable, (parsed: unknown) => unknown[]> = {
   glossary_hidden_entries: (parsed) => listAt(parsed, "entries"),
   article_tags: (parsed) => listAt(parsed, "tags"),
   quiz_attempts: (parsed) => listAt(parsed, "attempts"),
+  stale_notice_dismissals: (parsed) => listAt(parsed, "dismissals"),
 };
 
 /** Every key any of these rows carries. */
@@ -862,6 +872,7 @@ await pgReady({
     "spideryarn.glossary_hidden_entries",
     "spideryarn.article_tags",
     "spideryarn.quiz_attempts",
+    "spideryarn.stale_notice_dismissals",
   ],
 });
 

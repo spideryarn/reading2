@@ -661,6 +661,10 @@ a.crit-jump.block-ref:hover { color: var(--ink); opacity: 1; text-decoration: no
 /* Both of these are quiet lines rather than warnings: one says the paper has
    moved since the run, the other says what the order means. Neither is a fault. */
 .clm-stale, .clm-order { margin: 0; font-size: 0.81rem; color: var(--ink-faint); }
+/* The stale line is StaleNotice.tsx's markup since plan 261010a — ⚠, the
+   words, and the × at the end of the line — and stays a quiet line. */
+.clm-stale p { display: flex; align-items: center; gap: 0.35rem; margin: 0; }
+.clm-stale svg { flex: none; }
 
 .clm-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.55rem; }
 .clm-row { border-top: 1px solid var(--rule); padding: 0.45rem 0 0; }

@@ -231,7 +231,7 @@ So Summary's band has two presses that rewrite, and each is drawn only when its 
 |---|---|---|
 | is current | no press | no press |
 | was written with an older prompt (*outdated*) or model only | no press, and no notice | no press |
-| was written from an older version of the article (*stale*) | the notice, and *Write it again* | no press |
+| was written from an older version of the article (*stale*) | the notice, with its × ([controls.md](controls.md#every-older-version-notice-has-an-)), and *Write it again* | no press |
 | was written for a profile the reader has since changed | *Write it again* under the paragraphs | *Regenerate* |
 | both | the notice, and one *Write it again* | *Regenerate* |
 

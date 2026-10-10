@@ -49,7 +49,7 @@
  * Still no marks in the prose and no `?faq=` selection — `selectPassages`
  * answers `NOTHING` (src/web/reader/passages.ts).
  */
-import { BadgeQuestionMark, TriangleAlert } from "lucide-react";
+import { BadgeQuestionMark } from "lucide-react";
 import type { BlockId, FaqDropped, FaqQuestion } from "../types.js";
 import type { UseFaq } from "./useFaq.js";
 import type { PublicFaq } from "../public-types.js";
@@ -77,6 +77,8 @@ import { RewriteWaiting } from "./RewriteWaiting.js";
 import { ThresholdSlider } from "./ThresholdSlider.js";
 import { BandWaiting } from "./BandWaiting.js";
 import { Excerpt } from "./Excerpt.js";
+import { StaleNotice } from "./StaleNotice.js";
+import { useStaleNotice } from "./useStaleNotices.js";
 
 /** What a deliberate `questions: []` is drawn as — a real answer, with no retry. */
 export const FAQ_NONE = "The model found no questions worth asking this piece.";
@@ -148,6 +150,12 @@ export function FaqPanel({ access, order: chosenOrder, onOrder, bar: chosenBar, 
   const owner = access.kind === "owner" ? access.owner : null;
   const faq = access.kind === "owner" ? access.owner.faq : access.faq;
   const questions = faq?.questions ?? NO_QUESTIONS;
+  /* The stale banner's × (plan 261010a): this list, by its clock. */
+  const staleNotice = useStaleNotice({
+    slug: owner?.slug ?? null,
+    mode: "faq",
+    identities: owner?.stale ? (owner.faq?.generatedAt ?? null) : null,
+  });
   /* One answer for the order in force, passed down, so the list, the pressed
      button, the slider and the bars on each row cannot disagree. */
   const order = effectiveOrder(questions, chosenOrder);
@@ -164,7 +172,9 @@ export function FaqPanel({ access, order: chosenOrder, onOrder, bar: chosenBar, 
   const showJob =
     owner !== null &&
     ready &&
-    !owner.stale &&
+    /* While the banner shows, not while stale: a dismissed banner carries no
+       job (plan 261010a, GPT Sol's finding 4). */
+    staleNotice.showing.length === 0 &&
     (owner.job || owner.starting || owner.failed || (waiting && !owner.error));
 
   /**
@@ -235,15 +245,9 @@ export function FaqPanel({ access, order: chosenOrder, onOrder, bar: chosenBar, 
         <>
           {/* Stale wins when both are true: it is the one that can make a
               passage's jump land somewhere else. */}
-          {owner?.stale ? (
-            <div className="gloss-stale">
-              <p>
-                <TriangleAlert size={13} />
-                These describe an older version of the article.
-              </p>
-              {run("Find them again", true)}
-            </div>
-          ) : null}
+          <StaleNotice notice={staleNotice} action={run("Find them again", true)}>
+            These describe an older version of the article.
+          </StaleNotice>
           {/* No banner for an outdated list (older prompt, same article) —
               Greg, 2026-09-29 (SPIDERYARN-READING2-55): *"it's not worth
               bugging the user about it."* Re-running is in Metadata. Plan

@@ -55,7 +55,7 @@
  * It also paints no lane down the spine. That is on the deferred list with the
  * marks, deliberately, so the first version is one thing.
  */
-import { Clock, TriangleAlert } from "lucide-react";
+import { Clock } from "lucide-react";
 import type { BlockId, Dating, Timeline, TimelineEvent, TimelineModality, When } from "../types.js";
 import type { PublicTimeline } from "../public-types.js";
 import type { UseTimeline } from "./useTimeline.js";
@@ -76,6 +76,8 @@ import { AboutMade } from "./BandAbout.js";
 import { useRenderCount } from "./perf.js";
 import { BandWaiting } from "./BandWaiting.js";
 import { Excerpt } from "./Excerpt.js";
+import { StaleNotice } from "./StaleNotice.js";
+import { useStaleNotice } from "./useStaleNotices.js";
 
 /**
  * **How few events before this stops calling itself a timeline.**
@@ -375,6 +377,12 @@ export function TimelinePanel({
   const timeline: Timeline | PublicTimeline | null =
     access.kind === "owner" ? access.owner.timeline : access.timeline;
   const events = timeline?.events ?? [];
+  /* The stale banner's × (plan 261010a): this timeline, by its clock. */
+  const staleNotice = useStaleNotice({
+    slug: owner?.slug ?? null,
+    mode: "timeline",
+    identities: owner?.stale ? (owner.timeline?.generatedAt ?? null) : null,
+  });
   const years = yearsOf(events);
   /* One year across the whole list, so the rows drop it and the head says it
      once. See `yearsOf`. */
@@ -468,11 +476,13 @@ export function TimelinePanel({
           timeline. Without it, a run started from Metadata disappears from
           this mode along with its Stop control and any eventual failure. Not
           on a stale timeline, whose banner carries the job; an outdated one
-          has no banner (plan 260929c), so its job shows here. */
+          has no banner (plan 260929c), so its job shows here. **While the
+          banner shows, not while stale** (plan 261010a, GPT Sol's finding 4):
+          a dismissed banner carries no job. */
       foot={
         timeline &&
         owner?.status === "ready" &&
-        !owner.stale &&
+        staleNotice.showing.length === 0 &&
         (owner.job || owner.starting || owner.failed || (waiting && !owner.error)) ? (
           <div className="tl-again">{run("Read it again", true)}</div>
         ) : null
@@ -511,15 +521,9 @@ export function TimelinePanel({
               twenty-four temporal expressions are year-less — so a publisher
               re-dating a post changes almost every row here and not one word
               anywhere else. src/timeline.ts § inputFingerprint. */}
-          {owner?.stale ? (
-            <div className="gloss-stale">
-              <p>
-                <TriangleAlert size={13} />
-                This describes an older version of the article.
-              </p>
-              {run("Read it again", true)}
-            </div>
-          ) : null}
+          <StaleNotice notice={staleNotice} action={run("Read it again", true)}>
+            This describes an older version of the article.
+          </StaleNotice>
           {/* No banner for an outdated timeline (older prompt, same article) —
               Greg, 2026-09-29 (SPIDERYARN-READING2-55): *"it's not worth
               bugging the user about it."* Re-running is in Metadata. Plan

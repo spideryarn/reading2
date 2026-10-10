@@ -50,6 +50,7 @@ import {
   readingTimeStore,
   glossaryHiddenStore,
   skimNoticeStore,
+  staleNoticeStore,
   quizAttemptStore,
   loadArticle,
   loadGlossary,
@@ -425,6 +426,7 @@ import { keysOpenFree, type MadeArtefact } from "./acts-alone.js";
 import { type GuideExperience, experienceOf } from "./guide.js";
 import { panelRunKind } from "./glossary.js";
 import { profileNoticeKey, routeProfileIsStale } from "./skim.js";
+import { parseStaleNoticeDismissal, type StaleNoticesResponse } from "./stale-notice.js";
 import {
   type ArticleStage,
   articlePower,
@@ -2832,16 +2834,17 @@ if (CHAT_ORPHAN_GRACE_MS <= CHAT_TIMEOUT_MS) {
  * The same number for a meaning-search, and it is a different number because
  * the deadline it has to clear is a different deadline.
  *
- * `SEARCH_TIMEOUT_MS` is 60s (src/search.ts) — a search is one call with no
- * tool rounds, so it is bounded much tighter than a chat turn. 90s leaves the
- * same 30s of room for the article read that happens after `begin`, the write
- * that happens after the model, and two processes' clocks.
+ * **Derived since 2026-10-10**, when `SEARCH_TIMEOUT_MS` (src/search.ts) grew
+ * from a flat 60s to the time its token ceiling takes to arrive, 129s (plan
+ * 261010f). It was a flat 90s. The 30s beyond the deadline is unchanged: room
+ * for the article read that happens after `begin`, the write that happens
+ * after the model, and two processes' clocks.
  *
  * **The filesystem store ignored it entirely** until it went on 2026-09-05:
  * it errored any `pending` run this process did not start, immediately. Only
  * Postgres has other processes to be wrong about.
  */
-export const SEARCH_ORPHAN_GRACE_MS = 90_000;
+export const SEARCH_ORPHAN_GRACE_MS = SEARCH_TIMEOUT_MS + 30_000;
 
 if (SEARCH_ORPHAN_GRACE_MS <= SEARCH_TIMEOUT_MS) {
   throw new Error(
@@ -9542,6 +9545,8 @@ const SHELF_TAGS_PATTERN = /^\/api\/library\/([\w.%-]+)\/tags$/;
 const READING_TIME_PATTERN = /^\/api\/reading-time\/([\w.%-]+)$/;
 /* Hiding a glossary entry: PUT hides, DELETE shows it again — two rows, one path. */
 const GLOSSARY_HIDDEN_PATTERN = /^\/api\/glossary\/([\w.%-]+)\/hidden\/([\w.%-]+)$/;
+/* The "older version" notices the owner sent away: GET lists, POST replaces one mode's — plan 261010a. */
+const STALE_NOTICES_PATTERN = /^\/api\/stale-notices\/([\w.%-]+)$/;
 /* No slug, and that is the whole shape of it: this one is about the reader
    rather than about an article. */
 const READER_PATH = "/api/reader";
@@ -11728,6 +11733,40 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
      can still go. Never spends. The read is `GET /api/glossary/:slug`, which
      attaches `hidden: true`. No collision with `/:id/lookup` (POST, one more
      segment) or `/ask` (one segment). */
+  /* **The "older version of the article" notices the owner sent away** —
+     docs/plans/261010a-dismiss-older-version-notices.md (Greg, 2026-10-09,
+     `spya-mutgym`). GET answers `{ dismissed: { [mode]: identities } }`; POST
+     takes `{ mode, identities }` (src/stale-notice.ts §
+     `parseStaleNoticeDismissal`), **replaces** that mode's list, moves
+     `dismissed_at` forward and answers 204. Owner-only through
+     `articleIdForOwned` in the store, so a stranger's slug is a 404 on both.
+     The identities are not checked against the artefacts: one that names
+     nothing never matches a notice. Never spends. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: STALE_NOTICES_PATTERN,
+    article: "first-capture",
+    handler: async ({ request: { res } }, captures) => {
+      const body: StaleNoticesResponse = { dismissed: await staleNoticeStore.list(slugPart(captures, 1)) };
+      send(res, 200, body);
+    },
+  },
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: STALE_NOTICES_PATTERN,
+    article: "first-capture",
+    handler: async ({ request: { req, res } }, captures) => {
+      const slug = slugPart(captures, 1);
+      const parsed = parseStaleNoticeDismissal(await readBody(req));
+      if (typeof parsed === "string") throw httpError(400, parsed);
+      await staleNoticeStore.dismiss(slug, parsed.mode, parsed.identities);
+      res.statusCode = 204;
+      res.end();
+    },
+  },
+
   {
     kind: "pattern",
     method: "PUT",

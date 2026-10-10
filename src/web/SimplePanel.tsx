@@ -29,7 +29,7 @@
  * docs/project/mode.md has the rule.
  */
 import { Fragment, type ReactNode } from "react";
-import { MessagesSquare, TriangleAlert, Sprout } from "lucide-react";
+import { MessagesSquare, Sprout } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   type BlockId,
@@ -47,6 +47,8 @@ import { RewriteWaiting } from "./RewriteWaiting.js";
 import { TipNote, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useRenderCount } from "./perf.js";
 import { BandWaiting } from "./BandWaiting.js";
+import { StaleNotice } from "./StaleNotice.js";
+import { useStaleNotice } from "./useStaleNotices.js";
 
 /** A visitor on a public article whose owner never asked for one. */
 export const SIMPLE_NONE_VISITOR = "Nobody has made a plain-words version of this one yet.";
@@ -105,10 +107,18 @@ export function SimplePanel({
      failed, and — since the paragraphs are written for the reader — once the
      reader has changed their profile, so *Write it again* picks up the new one
      (the quiz's rule; the badge in the row says why, in its card). */
+  /* The stale banner's × (plan 261010a): this summary, by its clock. */
+  const staleNotice = useStaleNotice({
+    slug: owner?.slug ?? null,
+    mode: "simple",
+    identities: owner?.stale ? (owner.simple?.generatedAt ?? null) : null,
+  });
   const showJob =
     owner !== null &&
     ready &&
-    !owner.stale &&
+    /* While the banner shows, not while stale: a dismissed banner carries no
+       job (plan 261010a, GPT Sol's finding 4). */
+    staleNotice.showing.length === 0 &&
     (owner.job || owner.starting || owner.failed || owner.profileChanged || owner.rewriting);
   /* A rewrite has finished and its paragraphs are not here yet: the forced
      button gives way to a read, never to a second paid run. rewrite-hold.ts. */
@@ -177,15 +187,9 @@ export function SimplePanel({
           {/* Stale: the article moved, so a door may open on the wrong room.
               Outdated (an older prompt, same article) is deliberately silent —
               Greg, 2026-09-29, SPIDERYARN-READING2-55. */}
-          {owner?.stale ? (
-            <div className="gloss-stale">
-              <p>
-                <TriangleAlert size={13} />
-                This describes an older version of the article.
-              </p>
-              {run("Write it again", true)}
-            </div>
-          ) : null}
+          <StaleNotice notice={staleNotice} action={run("Write it again", true)}>
+            This describes an older version of the article.
+          </StaleNotice>
           <TooltipGroup delay={{ open: 350, close: 120 }} timeoutMs={500}>
             <div className="simple-paras">
               {/* Keyed on the words: the list is replaced whole on a re-run and

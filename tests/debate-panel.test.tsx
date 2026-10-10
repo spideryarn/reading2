@@ -46,7 +46,8 @@
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { forgetStaleNotices } from "../src/web/useStaleNotices.js";
 import type {
   BlockId,
   ClaimDebateRow,
@@ -1646,12 +1647,26 @@ describe("searchedAt is displayed provenance, not staleness", () => {
     expect(card()).toMatch(/Searched by .*2026/);
   });
 
-  it("says something different when the article has moved underneath it", () => {
-    paint(owner({ stale: true }));
-    /* Both, and they are not the same sentence: the search is still dated, and
-       the article changing is a separate fact with its own banner. */
-    expect(card()).toContain("Searched by");
-    expect(text()).toContain("The article has changed");
+  it("says something different when the article has moved underneath it", async () => {
+    /* The banner waits until the reader's dismissals are known (plan
+       261010a), so the read is answered — with none — and let land. */
+    forgetStaleNotices();
+    vi.stubGlobal("fetch", async () =>
+      new Response(JSON.stringify({ dismissed: {} }), { headers: { "content-type": "application/json" } }),
+    );
+    try {
+      paint(owner({ stale: true }));
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      /* Both, and they are not the same sentence: the search is still dated, and
+         the article changing is a separate fact with its own banner. */
+      expect(card()).toContain("Searched by");
+      expect(text()).toContain("The article has changed");
+    } finally {
+      vi.unstubAllGlobals();
+      forgetStaleNotices();
+    }
   });
 });
 

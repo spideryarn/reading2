@@ -278,7 +278,8 @@ reader has since **cleared** is run plainly, so it rewrites. A rewrite keeps the
 added (they are outside the document) and, when the article has not changed, the ids of terms it
 finds again under the same name; a
 term it does not find again goes, with whatever was attached to it, and the tooltip says so. The
-stale banner says the article has moved and leaves the button to this row.
+stale banner says the article has moved and leaves the button to this row; its × sends it away
+until the list is made again ([controls.md § Every "older version" notice has an ×](controls.md#every-older-version-notice-has-an-)).
 [261003c](../plans/261003c-glossary-find-more-at-the-top-and-metadata-press-closes.md).
 
 ## The two bugs this feature is shaped around

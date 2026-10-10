@@ -100,6 +100,7 @@ function toRun(row: typeof searchRuns.$inferSelect): SearchRun {
     criterion: row.criterion,
     kind: row.kind,
     createdAt: row.createdAt.toISOString(),
+    ...(row.finishedAt === null ? {} : { finishedAt: row.finishedAt.toISOString() }),
     status: row.status as SearchRun["status"],
     hits: row.hits as SearchHit[],
     ...(row.model === null ? {} : { model: row.model }),

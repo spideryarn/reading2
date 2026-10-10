@@ -724,6 +724,12 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/glossary/w1/hidden/w2"],
   },
   {
+    /* The "older version" notices the owner sent away — plan 261010a. Owner only, no model. */
+    match: { kind: "regex", source: "^\\/api\\/stale-notices\\/([\\w.%-]+)$", flags: "" },
+    methods: ["GET", "POST"],
+    witnesses: ["/api/stale-notices/w1"],
+  },
+  {
     match: { kind: "regex", source: "^\\/api\\/sketch\\/([\\w.%-]+)$", flags: "" },
     methods: ["GET"],
     witnesses: ["/api/sketch/w1"],
@@ -1035,8 +1041,9 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
    topic pills' status and Rebuild (plan 261008j); 104 with Skim's profile
    notice dismissal (plan 261009i); 105 with deleting a chat question and what
    follows it (plan 261009o); 109 with author gifts' list and ensure (one
-   literal), one gift, its lookups and its Send (plan 261010c). */
-const EXPECTED_MATCHER_COUNT = 109;
+   literal), one gift, its lookups and its Send (plan 261010c); 110 with the
+   dismissed "older version" notices (plan 261010a). */
+const EXPECTED_MATCHER_COUNT = 110;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
    with the admin's earlier feedback; 118 with their replies to questions; 119
    with the Help pages' chatbot; 120 with Hidden text's Opus check; 121 with the
@@ -1046,8 +1053,9 @@ const EXPECTED_MATCHER_COUNT = 109;
    and Rebuild (plan 261008j); 128 with Skim's profile notice dismissal (plan
    261009i); 129 with deleting a chat question and what follows it (plan
    261009o); 134 with author gifts' list, ensure, lookups, edit and Send (plan
-   261010c). */
-const EXPECTED_GUARD_COUNT = 134;
+   261010c); 136 with the dismissed "older version" notices' GET and POST
+   (plan 261010a). */
+const EXPECTED_GUARD_COUNT = 136;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2297,6 +2305,9 @@ describe("the authenticated API's route contract", () => {
         // reading time, 260916c
         "GET regex /^\\/api\\/reading-time\\/([\\w.%-]+)$/",
         "POST regex /^\\/api\\/reading-time\\/([\\w.%-]+)$/",
+        // the "older version" notices sent away, 261010a
+        "GET regex /^\\/api\\/stale-notices\\/([\\w.%-]+)$/",
+        "POST regex /^\\/api\\/stale-notices\\/([\\w.%-]+)$/",
         // hiding a glossary entry, 261002c
         "PUT regex /^\\/api\\/glossary\\/([\\w.%-]+)\\/hidden\\/([\\w.%-]+)$/",
         "DELETE regex /^\\/api\\/glossary\\/([\\w.%-]+)\\/hidden\\/([\\w.%-]+)$/",
