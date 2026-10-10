@@ -252,6 +252,7 @@ export function FeedbackHost({ children, readerId }: { children: ReactNode; read
           about which article a report is against. */}
       <FeedbackDialog
         key={readerId}
+        readerId={readerId}
         open={open}
         prefill={prefill}
         /* Cosmetic, as everywhere in the client: it picks which list the

@@ -130,6 +130,7 @@ import { imageFileFromDrop, imageFileFromPaste, screenshotFromFile } from "./fee
 import { apiFetch, failure } from "./lib/api.js";
 import { keepDictation } from "./dictation-keep.js";
 import { useReaderTranscriber } from "./dictation-upload.js";
+import { forgetFeedbackDraft, readFeedbackDraft, saveFeedbackDraft } from "./feedback-draft.js";
 import { noteFeedbackDraft } from "./safe-to-reload.js";
 import { Toast, type ToastMessage } from "./Toast.js";
 import { useCopy } from "./useCopy.js";
@@ -195,7 +196,16 @@ interface Props {
    * which says what became of each report. Not a gate; the server's is.
    */
   admin?: boolean;
+  /**
+   * **Whose draft this is**, for the copy kept in this browser so a reload
+   * does not lose it (feedback-draft.ts). `FeedbackHost` passes it, and keys
+   * the dialog on it, so a change of reader is a fresh dialog. Absent: no copy.
+   */
+  readerId?: string;
 }
+
+/** How long after the last keystroke the draft is saved to the browser. */
+const DRAFT_SAVE_MS = 1000;
 
 /**
  * **There is no `sent` stage, since 2026-09-29.** A successful send shuts the
@@ -400,7 +410,7 @@ function useDraftHeld(...held: boolean[]): void {
   }, [any]);
 }
 
-export function FeedbackDialog({ open, onClose, where, prefill = null, admin = false }: Props) {
+export function FeedbackDialog({ open, onClose, where, prefill = null, admin = false, readerId }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   /** The one box. `useDictationField` needs it to find the caret. */
   const box = useRef<HTMLTextAreaElement>(null);
@@ -411,8 +421,12 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
   /** Which actual opening is on screen; a late request may outlive its own one. */
   const opening = useRef(0);
 
-  const [body, setBody] = useState("");
-  const [kind, setKind] = useState<FeedbackKind | null>(null);
+  /* **A draft saved before a reload comes back**, read once as the dialog
+     mounts (a page load, or a change of reader), and before the prefill effect
+     below, which then adds to it as it would to any draft. Plan 261010f. */
+  const [restored] = useState(() => (readerId === undefined ? null : readFeedbackDraft(readerId)));
+  const [body, setBody] = useState(restored?.body ?? "");
+  const [kind, setKind] = useState<FeedbackKind | null>(restored?.kind ?? null);
   const [consented, setConsented] = useState(false);
   const [shot, setShot] = useState<Shot | null>(null);
   const [shotProblem, setShotProblem] = useState<string | null>(null);
@@ -488,6 +502,27 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
    * describes as deliberately not fixed.
    */
   const attempted = useRef<{ id: string; report: string } | null>(null);
+
+  /**
+   * **The draft, copied to this browser a second after it last changed**, so a
+   * page that hangs or reloads does not take it (feedback-draft.ts; Greg,
+   * spya-exhqqr). Under this report's id, which is how a tab knows the record
+   * is its own to remove: an emptied box removes only its own, and a filed
+   * report removes its own in `send`. A restored draft carries this tab's fresh
+   * id, never the saved one, so two tabs that restore one draft cannot share an
+   * id and have the second send answered as a duplicate.
+   */
+  const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (readerId === undefined) return;
+    const timer = setTimeout(() => {
+      draftTimer.current = null;
+      if (body.trim() === "") forgetFeedbackDraft(readerId, reportId);
+      else saveFeedbackDraft(readerId, reportId, { body, kind });
+    }, DRAFT_SAVE_MS);
+    draftTimer.current = timer;
+    return () => clearTimeout(timer);
+  }, [readerId, reportId, body, kind]);
 
   /**
    * **`useLayoutEffect`, not `useEffect`, and that is Greg's "it should happen
@@ -1025,6 +1060,14 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
          was away. Its success still files that report, advances its id and keeps
          any newer words, but it must not close the opening they are using now. */
       closeOpening(openingAtSend);
+      /* The browser's copy of what was just filed goes, and a save still
+         pending for it must not put it back. Words typed since are saved again
+         under the next report's id by the effect above. */
+      if (readerId !== undefined) {
+        if (draftTimer.current !== null) clearTimeout(draftTimer.current);
+        draftTimer.current = null;
+        forgetFeedbackDraft(readerId, mine);
+      }
       const finished = bodyRef.current === body;
       discard(!finished);
       /* **The dictation's message goes with the report it was about.** This
@@ -1063,6 +1106,7 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
     showSendFailure,
     closeOpening,
     discard,
+    readerId,
   ]);
 
   const copy = useCallback(() => {

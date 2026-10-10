@@ -368,6 +368,14 @@ dropped when a session merely lapses, unlike the offline article copy, because t
 silent loss the copy exists to prevent. The promise beside the button is about our servers and is
 unchanged; `/privacy` names the device copy in its paragraph on what the browser keeps.
 
+**Since 2026-10-10 an unsent Feedback report is kept the same way**, in `localStorage` under
+`spya.feedbackDraft.<reader>`: its words and kind, never the screenshot or the diagnostics tick-box.
+It goes when that report is sent, when the reader presses **Sign out**, and is dropped rather than
+offered back once a week old. Greg's report `spya-exhqqr`, after a page hung with a report half
+written; [feedback.md](feedback.md) and plan
+[261010f](../plans/261010f-feedback-dialog-send-after-dictation-and-a-saved-draft.md). `/privacy`
+says so in the same paragraph, one clause after the dictation copy's.
+
 ## Deleting an article, for good
 
 **Added 2026-09-07**, when the shelf stopped being the only ending an article has.

@@ -394,6 +394,19 @@ button and strip take `done="save"`; the command bar presses Enter (below). The 
   refuse there too; Feedback checks `open`.
 - **Do not offer it while the done action would refuse.** The annotate box passes `onDone` only
   once its comments have loaded, so a press is never taken and then dropped.
+- **A second press after a fast ending still sends.** Words can land inside the 600 ms, and the
+  ending then reaches idle before the second press does; that press used to start the microphone
+  again, quietly. Now, on a box with `onDone`, a press within `DOUBLE_PRESS_MS` of Stop runs the
+  done action if that ending delivered words for the same `doneKey`, and is an ordinary press
+  otherwise (after a failure, trying again at once is what the reader wants). Since 2026-10-10,
+  [261010f](../plans/261010f-feedback-dialog-send-after-dictation-and-a-saved-draft.md).
+- **The box's own button can ask for it too: `finishThenDone()`.** Feedback's Send, pressed while
+  the microphone is on or its words are on their way, stops the microphone and sends once the words
+  land, under every rule above. The wish is recorded *before* the stop, because on Safari a stop can
+  end the session in the same turn, and it is withdrawn whenever a new session starts (the hook
+  restarts by itself on a change of microphone). Greg's iPad report `spya-t9qu3v`: Send, greyed but
+  still reading "Send" while the microphone was on, did nothing. Tests:
+  `tests/dictation-finish-then-done.test.tsx`.
 
 **The command bar takes it too, and there it presses Enter** — Greg, 2026-10-05, on the question
 the plan left open:
@@ -483,7 +496,11 @@ tell it from a broken app. GPT Sol found four boxes in that state on 2026-09-04,
 promising Send in the chat composer: chat, the comment follow-up, the annotate box and the quiz
 answer all guarded `readOnly` alone or lit a button the guard would refuse. Every box that *sends* now does both —
 chat, the comment follow-up, annotate, quiz and Feedback — and
-`tests/the-enter-key-really-sends.test.tsx` presses two of them while armed. The profile boxes are
+`tests/the-enter-key-really-sends.test.tsx` presses two of them while armed. **Feedback, since
+2026-10-10, goes one better than disabled**: its Send stays live while the microphone is busy, and
+a press then calls the field's `finishThenDone()` — stop, and send when the words land — so the
+press does something and the strip says what
+([§ A double press on Stop also sends](#a-double-press-on-stop-also-sends)). The profile boxes are
 the exception on purpose: ⌘+Enter there saves prose to a field the arriving transcript will overwrite
 a second later, and the next blur saves it again, so there is nothing to lose.
 

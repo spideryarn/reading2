@@ -33,6 +33,8 @@ const lists: string[] = [];
 let listAnswer: (input: string) => Promise<Response>;
 /** Whether the dialog is mounted for an admin: the cosmetic flag FeedbackHost passes (261007d). */
 let asAdmin = false;
+/** The reader `show` mounts for, which turns on the draft kept for a reload (261010f). */
+let readerForMount: string | undefined;
 
 vi.mock("../src/web/lib/api.js", () => ({
   apiFetch: async (input: string, init?: RequestInit) => {
@@ -192,6 +194,7 @@ function show(open: boolean) {
         onClose: () => {},
         where: { url: "https://www.spideryarn.com/read/a-piece?q=footnotes", slug: "a-piece" },
         admin: asAdmin,
+        ...(readerForMount === undefined ? {} : { readerId: readerForMount }),
       }),
     );
   });
@@ -347,6 +350,7 @@ beforeEach(() => {
   lists.length = 0;
   listAnswer = page({ reports: [], more: false, counts: NONE });
   asAdmin = false;
+  readerForMount = undefined;
   carried = null;
   finishShot = null;
 });
@@ -1157,6 +1161,153 @@ describe("the feedback dialog", () => {
  * contract, and it is why the assertion is written against the target rather
  * than against a pixel.
  */
+describe("the draft kept for a reload", () => {
+  /* Greg, spya-exhqqr: the page hung with a report half written. The words and
+     the kind are copied to this browser a second after they last change, and
+     come back when the page loads again. Plan 261010f, stage 2. */
+  const KEY = "spya.feedbackDraft.reader-a";
+  /* jsdom's storage is shadowed by Node's own global here, so a map stands in
+     (tests/last-view-app-reader-change.test.tsx does the same). `refuse` makes
+     every verb throw, as a blocked or full storage does. */
+  const kept = new Map<string, string>();
+  let refuse = false;
+  const no = () => {
+    if (refuse) throw new Error("SecurityError");
+  };
+  const storage = {
+    getItem: (key: string) => (no(), kept.get(key) ?? null),
+    setItem: (key: string, value: string) => (no(), void kept.set(key, value)),
+    removeItem: (key: string) => (no(), void kept.delete(key)),
+    clear: () => kept.clear(),
+  };
+  const saved = () => JSON.parse(kept.get(KEY) ?? "null") as { body: string; kind: string | null; id: string } | null;
+  const later = async (ms: number) => {
+    await act(async () => {
+      vi.advanceTimersByTime(ms);
+    });
+  };
+  /** A reload: the page goes and a new one mounts the dialog afresh. */
+  const reload = () => {
+    act(() => root.unmount());
+    host.remove();
+    mount();
+  };
+
+  beforeEach(() => {
+    kept.clear();
+    refuse = false;
+    vi.stubGlobal("localStorage", storage);
+    readerForMount = "reader-a";
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("saves the words and the kind a second after they last changed, and not before", async () => {
+    mount();
+    type("Half a report");
+    pick("A problem");
+    await later(900);
+    expect(saved()).toBeNull();
+    await later(100);
+    expect(saved()).toMatchObject({ body: "Half a report", kind: "problem" });
+  });
+
+  it("brings them back after a reload, as a new report", async () => {
+    mount();
+    type("Half a report");
+    pick("A suggestion");
+    await later(1000);
+    const before = saved()?.id;
+    reload();
+    expect(firstBox().value).toBe("Half a report");
+    send();
+    await act(async () => {});
+    expect(body()).toMatchObject({ body: "Half a report", kind: "suggestion" });
+    /* A fresh id, so two tabs that restore one draft cannot share one and have
+       the second answered as a duplicate. */
+    expect(idOf(0)).not.toBe(before);
+  });
+
+  it("forgets the draft once it is filed, even with a save still pending", async () => {
+    mount();
+    type("Filed");
+    await later(1000);
+    expect(saved()?.body).toBe("Filed");
+    /* A last sentence, and Send before its save is due. */
+    type("Filed straight away");
+    send();
+    await act(async () => {});
+    await later(2000);
+    expect(saved(), "the pending save did not put it back").toBeNull();
+    reload();
+    expect(firstBox().value).toBe("");
+  });
+
+  it("leaves another tab's draft alone when this one files", async () => {
+    mount();
+    type("This tab's words");
+    await later(1000);
+    kept.set(KEY, JSON.stringify({ body: "the other tab's", kind: null, id: "spya-other1", at: Date.now() }));
+    send();
+    await act(async () => {});
+    expect(saved()?.body).toBe("the other tab's");
+  });
+
+  it("removes its own record when the box is emptied, and only its own", async () => {
+    mount();
+    type("Something");
+    await later(1000);
+    type("");
+    await later(1000);
+    expect(saved()).toBeNull();
+    kept.set(KEY, JSON.stringify({ body: "the other tab's", kind: null, id: "spya-other1", at: Date.now() }));
+    type("x");
+    type("");
+    await later(1000);
+    expect(saved()?.body).toBe("the other tab's");
+  });
+
+  it("does not bring back a draft more than a week old", () => {
+    kept.set(
+      KEY,
+      JSON.stringify({ body: "old words", kind: null, id: "spya-old111", at: Date.now() - 8 * 24 * 60 * 60 * 1000 }),
+    );
+    mount();
+    expect(firstBox().value).toBe("");
+    expect(saved()).toBeNull();
+  });
+
+  it("is another reader's business, not this one's", () => {
+    kept.set(
+      "spya.feedbackDraft.reader-b",
+      JSON.stringify({ body: "b's words", kind: null, id: "spya-bbbbbb", at: Date.now() }),
+    );
+    mount();
+    expect(firstBox().value).toBe("");
+  });
+
+  it("still opens when the browser refuses storage", async () => {
+    refuse = true;
+    mount();
+    type("Words");
+    await later(1000);
+    send();
+    await act(async () => {});
+    expect(posts).toHaveLength(1);
+  });
+
+  it("keeps nothing for a dialog with no reader", async () => {
+    readerForMount = undefined;
+    mount();
+    type("Words");
+    await later(1000);
+    expect(kept.size).toBe(0);
+  });
+});
+
 describe("the backdrop", () => {
   it("closes on a press whose target is the dialog itself", () => {
     const dialog = mountControlled();

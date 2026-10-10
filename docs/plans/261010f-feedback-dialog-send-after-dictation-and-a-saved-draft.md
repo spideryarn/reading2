@@ -149,3 +149,24 @@ or blocked `localStorage` costs the copy, never the dialog.
 Stage 1 and 2 tests red then green; `npm test`, `npm run typecheck`; GPT Sol on the plan and the
 code; [feedback.md](../project/feedback.md) and [dictation.md](../project/dictation.md) say what
 changed; pushed to `dev`; note in `docs/user-feedback/` naming both reports.
+
+## What landed
+
+- **Stage 1** as planned: `finishThenDone()` and the fast-ending second press in
+  `useDictationField.ts` (`tests/dictation-finish-then-done.test.tsx`, seven tests, red first; the
+  fast-ending one reproduced the quiet restart in jsdom); Send's new `disabled` and refusal order,
+  the 60 s deadline and the edited-retry id in `FeedbackDialog.tsx` (`tests/feedback-dialog.test.tsx`,
+  two tests rewritten and three added, red first). The withdrawal-on-`opening` effect was checked by
+  removing it: its test goes red.
+- **Stage 2** as planned: `src/web/feedback-draft.ts`, the dialog's restore, save and removal,
+  `FeedbackHost` passing `readerId`, and **Sign out** removing it. Nine tests; the two race guards
+  (removal of a filed draft with a save pending, removal of only our own record) each go red when
+  taken out. The first version of the pending-save test passed with its guard removed, because no
+  save had landed before Send; it now saves first.
+- **Words on screen**: `/privacy`'s paragraph on what the browser keeps gained one sentence, after
+  the dictation copy's: *"A Feedback report you have started and not sent is kept the same way, so a
+  page that reloads doesn’t lose it; it is deleted once you send it or sign out, and is not offered
+  back after a week."* `LAST_UPDATED` was already today's date.
+- An accident on the way, for the record: a scripted edit to this file replaced an empty slice and
+  wrote the paragraph between every character (8.5 MB). `tests/docs-size-cap.test.ts` caught it, and
+  the text was recovered exactly by deleting every copy of the inserted paragraph.
