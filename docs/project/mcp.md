@@ -113,6 +113,8 @@ this one, not your browser) and deletes the file. A running server notices on it
 | `create_gift_voucher` | admin: **sends the gift email; asks you first** |
 | `update_gift_voucher` | admin: edit or revoke; **changing the address re-sends, and asks you first** |
 | `retry_gift_voucher_email` | admin: re-send a failed email; **asks you first** |
+| `list_author_gifts` | admin: the draft gifts for authors, with their notes and lookups (no private link key) — [admin.md § Author gifts](admin.md#author-gifts-a-draft-voucher-for-an-articles-author) |
+| `update_author_gift` | admin: edit a draft gift's notes, address, name, note to them or size; **replaces** the notes; sends nothing, so it does not ask. There is no tool that sends one |
 
 **"Asks you first" is a macOS dialog the MCP server itself opens**, naming the exact gift or
 article, with *Approve* and *Cancel*. Nothing is sent unless you press *Approve* within two minutes.
@@ -132,31 +134,37 @@ that conversation too**, which the privacy page says
 ([privacy.md](privacy.md#an-administrators-ai-assistant-can-look-up-accounts)). Both came with
 [261007o](../plans/261007o-mcp-private-link-and-admin-user-tools.md).
 
-## From Claude on the web or a phone (built, switched off)
+## From ChatGPT, Claude on the web, or any MCP app (switching on, 2026-10-09)
 
 The same tools are also served at `https://www.spideryarn.com/api/mcp`, for an AI app that cannot
-start a program on your Mac, including ChatGPT Desktop. The app signs in with OAuth: it sends you to `/oauth/consent`, you
-press *Allow*, and it gets a token from Supabase's OAuth server for your account
-([261007p](../plans/261007p-mcp-remote-sign-in-with-oauth.md)).
+start a program on your Mac: ChatGPT (desktop included), Claude on the web or a phone, Cursor,
+Goose. The app signs in with OAuth: it registers itself with Supabase, sends you to
+`/oauth/consent`, you press *Allow*, and it gets a token from Supabase's OAuth server for your
+account ([261007p](../plans/261007p-mcp-remote-sign-in-with-oauth.md)).
 
-- **Off until Greg switches it on.** It accepts only tokens whose app id is in the comma-separated
-  `MCP_OAUTH_CLIENT_ID` list (spaces and empty entries ignored); with no ids, it refuses everyone.
-  Register each app by hand, with dynamic registration **off**. Before switching on, run
-  [`scripts/mcp-oauth-spike.ts`](../../scripts/mcp-oauth-spike.ts), the spike in
-  [261007p § What landed](../plans/261007p-mcp-remote-sign-in-with-oauth.md#what-landed-stage-1)
-  against the local stack: it has not been run against a real OAuth server. Switching on: Supabase dashboard,
-  Authentication → OAuth Server on (dynamic registration **off**) and Authentication → OAuth Apps,
-  a confidential app per connector, with its exact callback (Claude's is
-  `https://claude.ai/api/mcp/auth_callback`); their ids into Vercel
-  as `MCP_OAUTH_CLIENT_ID`, separated by commas; deploy; then in Claude, Settings → Connectors → *Add custom connector*,
-  the address above, *Use your own OAuth client*, its id and secret.
+> I'd hoped that all we'd need is an MCP URL and then any app that can deal with MCPs like Cursor
+> or Goose or whatever would work with it
+>
+> — Greg, 2026-10-09
+
+- **Any app, with just the URL.** Supabase's OAuth server and its dynamic client registration are
+  on in production (Greg, 2026-10-09), and `MCP_OAUTH_CLIENT_ID=*` admits any app Supabase
+  registered. A comma-separated list of hand-registered ids also works; `*` anywhere in the
+  list admits all clients, and unset or empty refuses everyone. Greg accepted Sol F6: anyone
+  can register an app called "Claude" with their own callback and trick you into pressing
+  *Allow*. Administrator-only limits who can use the route; it does not protect the
+  administrator who approves a malicious app. Revisit this before readers get the route
+  ([261009a](../research/261009a-one-click-mcp-install-for-claude-and-chatgpt.md)).
+- **Adding it:** in ChatGPT, chatgpt.com/plugins → **+** → *Add custom MCP server*, the address
+  above, Authentication *OAuth*; it discovers the rest. In Claude, Settings → Connectors → *Add
+  custom connector*, or the prefill link in 261009a. In Claude Code,
+  `claude mcp add --transport http spideryarn https://www.spideryarn.com/api/mcp`, then `/mcp`.
+- **Tested** headless against the local stack by
+  [`scripts/mcp-oauth-spike.ts`](../../scripts/mcp-oauth-spike.ts), results in
+  [261007p § What landed](../plans/261007p-mcp-remote-sign-in-with-oauth.md#what-landed-stage-1).
 - **Administrator only**, for now.
-- **Not one click, as designed.** Claude has a link that opens *Add custom connector* already filled
-  in, but this setup also requires a client id and secret. Greg approved separate hand-registered
-  Claude and ChatGPT clients on 2026-10-09; dynamic registration remains a separate decision.
-  Both apps support static clients, so dynamic registration is an option for easier setup,
-  not a requirement for supporting both:
-  [261009a § The decision this leaves](../research/261009a-one-click-mcp-install-for-claude-and-chatgpt.md#the-decision-this-leaves-gregs).
+- **Other browser origins still refuse.** The origin gate remains the site's own, Claude's and
+  ChatGPT's; other apps must call without an `Origin` header, as server-side clients normally do.
 - **The asking tools refuse there**: no dialog can be shown on your Mac from a server, so gifts,
   publishing and private links are done in the Mac app or on the site.
 - **What the token can do at Supabase** is more than the tools, and is written up in

@@ -127,7 +127,7 @@ The four older ones:
   that moves the width.
 - **A glossary term in the prose**, since 2026-08-27 — the dotted underlines
   ([glossary.md](glossary.md)). First tap opens the hover card, second goes to glossary mode with
-  that term selected, which is what the card's **Open glossary** button does. Before this the
+  that term selected, which is what the card's **Open in Glossary** button does. Before this the
   underline was a line with nothing behind it on an iPad, because the card was hover-only.
   [260827ak-touch-glossary-card.md](../plans/260827ak-touch-glossary-card.md) has the design and the event sequence,
   which is the whole of the difficulty; the short version is that it is decided at `pointerup`
@@ -790,7 +790,7 @@ exactly as it was — it was never unmounted, so a Chat draft, a half-typed Quiz
 query are all still there. Pressing the mode's own button in the Dock does the same. While the pill
 shows, the *back to ⟨section⟩* chip does not: "back" means the band.
 
-**So does anything outside the band that names it as a destination**: *Open glossary* on a term's
+**So does anything outside the band that names it as a destination**: *Open in Glossary* on a term's
 card in the prose (and, until plan 261009k, *Dig deeper* on a term's or a citation's card; their
 *Ask in chat* now goes to Chat), the command bar's glossary commands, a question opened from the Comments drawer while Chat is the mode. Each can name a band
 whose mode is already set, which on its own reveals nothing, so they all go through one callback,

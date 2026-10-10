@@ -477,6 +477,10 @@ const SPEAKER_PREFIX: Record<Speaker, string> = {
   // instruction.
   dashboard:
     "[The fleet dashboard, reporting an event. Nobody is asking you for anything: a person started a new session from the web UI, and this is the record of it.] ",
+  // A scheduled systemd job on the box (box-health, worktree-sweep), plan
+  // 261010d. It reports a measurement and, at most, names the runbook step; it
+  // is never Greg and never a session, and the prefix says both.
+  box: "[A scheduled job on the box -- not Greg, not a session. It reports what it measured; what to do about it is your runbook's call.] ",
 };
 
 /** What actually goes to `sendMessage` for a spoken action. */

@@ -2,7 +2,7 @@
  * **The Bibliography expand migration, against the old code's statements and
  * the new code's** — plan
  * docs/plans/261009w-peer-review-becomes-sources-all-the-way-down.md § The
- * database, Stage 2, and drizzle/20261009230106_bibliography_expand.sql.
+ * database, Stage 2, and drizzle/20261010030345_bibliography_expand.sql.
  *
  * `npm run deploy` applies the migration, then waits for Vercel: for those
  * minutes production runs the pre-rename code against the new schema, and

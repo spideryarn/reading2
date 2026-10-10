@@ -74,7 +74,9 @@ above are unchanged; only the moment is earlier. The build is
   so a mode step that starts before the switch commits uses the standard model; later steps read
   the setting again. A late tick, or labels ending quickly after failure or cancellation, can leave
   very little time for the switch to commit. A tick in the last second is still sent at completion,
-  and the navigation to the article does not wait for it.
+  and the navigation to the article does not wait for it. (An administrator's armed *For the
+  author…* does make the exit wait, for its own request, not for this switch:
+  [ingest-queue.md § The add page](ingest-queue.md#the-add-page).)
 - **It is a page's intent**: a tab closed before the job is claimed
   sends nothing, and the article imports on Sonnet. (*Generate the main modes* was one too until
   2026-10-04; it is the reader's setting now.) An import that fails after the switch keeps the

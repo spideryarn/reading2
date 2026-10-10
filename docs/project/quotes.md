@@ -447,7 +447,10 @@ Greg, in two feedback reports:
   [261006j](../plans/261006j-the-card-on-a-quote-in-the-prose-says-what-a-quote-is.md)); then
   both raw scores, drawn and printed (this card is where the rows' numbers live — never the `max`
   composite); the reason, in the model's face; ‹ › to the quote before or after it **down the
-  page**; and *open Quotes*, which selects it and opens the band on its row. **Pointer only.** A
+  page**; and *Open in Quotes*, which selects it and opens the band on its row — drawn in Quotes
+  mode too since 2026-10-10, and the same control every mode's card ends in
+  ([tooltips.md § Every card on a mode's mark has a way into its
+  mode](tooltips.md#every-card-on-a-modes-mark-has-a-way-into-its-mode)). **Pointer only.** A
   tap on a bare quote still selects its paragraph (TableView's `NOT_A_BLOCK_SELECTION`, the reason
   above), and a quote is not a tab stop — a quote that is also a term, a citation or inside a link
   gets the card through those, as before. **It waits 600ms rather than 320ms** before opening on a

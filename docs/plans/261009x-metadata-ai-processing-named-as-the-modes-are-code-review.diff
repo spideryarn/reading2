@@ -1,0 +1,582 @@
+diff --git a/src/reset-role.ts b/src/reset-role.ts
+index 606fd1a13..6f8ee9045 100644
+--- a/src/reset-role.ts
++++ b/src/reset-role.ts
+@@ -34,8 +34,8 @@
+  * docs/plans/260928a-reset-and-regenerate-article-stage2-review-sol.md asked
+  * for one. So the classification is here, importing `STEP_ORDER` and a type
+  * and nothing else, src/reset.ts re-exports it beside the database half, and
+- * the browser keeps only what a reader calls each extra
+- * (`RESET_EXTRA_NAME` in src/web/ResetArticle.tsx, keyed by `ExtraStep`).
++ * the browser names each extra as it names every step (src/web/step-names.ts,
++ * which replaced `RESET_EXTRA_NAME` on 2026-10-09).
+  */
+ 
+ import { STEP_ORDER } from "./step-order.js";
+diff --git a/src/web/Metadata.tsx b/src/web/Metadata.tsx
+index b53950c0a..81ffa893d 100644
+--- a/src/web/Metadata.tsx
++++ b/src/web/Metadata.tsx
+@@ -308,6 +308,7 @@ import { ResetArticle } from "./ResetArticle.js";
+ /* The labels and notes the command bar shares — that file's header says why
+    they are not here. */
+ import { RERUN_COST_NOTE, RERUN_LABEL } from "./rerun-commands.js";
++import { stepName, stepWhat } from "./step-names.js";
+ import { useOrderedRead, type ArtefactRead } from "./useOrderedRead.js";
+ import { useStepJob } from "./useStepJob.js";
+ import { articleTitleVoice, voiceClass, withVoice } from "./voice.js";
+@@ -2080,6 +2081,13 @@ function RerunRow({
+     >
+       <Chip icon={Icon} />
+       <span className="tw:text-foreground">{RERUN_LABEL[step]}</span>
++      {/* **What it is**, under its name, so a row that is not a mode — the
++          arc, the relation words — says what pressing it remakes. Greg,
++          2026-10-09 (`spya-u62q09`), plan 261009u. The same faint line as the
++          note below, and placed by the same rule. */}
++      <span className="tw:order-last tw:-mt-1 tw:basis-full tw:pl-9 tw:text-xs tw:text-ink-faint">
++        {stepWhat(step)}
++      </span>
+       {/* **On its own line under the name, at every width** — `order-last` and
+           `basis-full` in a wrapping row, indented by the chip and its gap
+           (24px + 12px) so it sits under the name. Beside the name, a 390px
+@@ -3770,6 +3778,7 @@ function StageRow({
+   now: number;
+ }) {
+   const { step, label, outputs, done } = stage;
++  const what = stepWhat(step);
+   // `stage.ranAt` / `stage.bytes` are read off the object below rather than
+   // destructured here, so a reader of `<Wrote>` can see which they are.
+   const Icon = stageIcon(step);
+@@ -3777,13 +3786,18 @@ function StageRow({
+     <div className={`tw:px-4 tw:py-3 ${done ? "" : "tw:opacity-60"}`}>
+       <div className="tw:flex tw:items-center tw:gap-3">
+         <Chip icon={Icon} />
+-        {/* **The English name first, the key beside it.** Until 2026-09-03 the
++        {/* **The reader's name first, the key beside it.** Until 2026-09-03 the
+             row led with `step` — `arc`, `tweets`, `blocks` — and showed the
+             human label *only when the stage had not run*, so the rows you could
+-            read were the ones with nothing in them. The key still earns its
+-            place: it is what `npm run <step> <slug>` takes, and this is the
+-            page you have open when you are about to type that. */}
+-        <span className="tw:text-sm tw:text-foreground">{label}</span>
++            read were the ones with nothing in them. Until 2026-10-09 that name
++            was the pipeline's present-tense label (*Writing the thread*), which
++            matched neither the re-run row above nor the button that shows it;
++            it is now the mode's (*Summary › Thread*), and the line under it
++            says what it is — plan 261009u. A step this copy has never heard of
++            keeps the server's label. The key still earns its place: it is what
++            `npx tsx scripts/stage.ts <step> <slug>` takes, and this is the page
++            you have open when you are about to type that. */}
++        <span className="tw:text-sm tw:text-foreground">{stepName(step, label)}</span>
+         <span className="tw:font-mono tw:text-xs tw:text-ink-faint">{step}</span>
+         {/* `done &&` is load-bearing. The generator string comes off the tree
+             and the arc, which are in hand because the article loaded — so a structure
+@@ -3813,6 +3827,7 @@ function StageRow({
+             label moved up to be the row's name, and listing the files it would
+             have written reads as a list of things that are missing rather than
+             as a thing that has not happened yet. */}
++        {what && <span className="tw:basis-full">{what}</span>}
+         {done && (
+           <span className="tw:min-w-0 tw:font-mono tw:break-all">{outputs.join(" · ")}</span>
+         )}
+diff --git a/src/web/ResetArticle.tsx b/src/web/ResetArticle.tsx
+index eb9f25882..0f97003e9 100644
+--- a/src/web/ResetArticle.tsx
++++ b/src/web/ResetArticle.tsx
+@@ -51,43 +51,9 @@ import { Button } from "@/components/ui/button";
+ import { JobProgress } from "./JobProgress.js";
+ import { useJobs } from "./useJobs.js";
+ import { SKETCH_WAIT } from "./sketch-cost.js";
++import { stepName } from "./step-names.js";
+ import type { StepFailure } from "./useStepJob.js";
+ 
+-/**
+- * **What a reader calls each extra.**
+- *
+- * Only the names live here. *Which* steps are extras is `RESET_ROLE` in
+- * src/reset-role.ts — the same leaf the server acts on — and this map is keyed
+- * by the `ExtraStep` read off it, so a new extra is a compile error here until
+- * somebody names it, and a step that stops being one is an excess key.
+- */
+-export const RESET_EXTRA_NAME: Record<ExtraStep, string> = {
+-  arc: "Arc",
+-  tweets: "Thread",
+-  glossary: "Glossary",
+-  quotes: "Quotes",
+-  skim: "Skim",
+-  ideas: "Ideas",
+-  timeline: "Timeline",
+-  quiz: "Quiz",
+-  faq: "FAQ",
+-  relations: "Relation words",
+-  sketch: "Sketch",
+-  illustrated: "Illustrated",
+-  /* Peer review's sub-modes since 2026-10-09 (plan 261009l); the steps keep
+-     their stored names. */
+-  debate: "Reception",
+-  "debate-claims": "Claims list",
+-  citations: "Bibliography",
+-  crossrefs: "Cross-references",
+-  simple: "Simple summary",
+-};
+-
+-/** A step's reader-facing name if it is an extra, and its step name otherwise. */
+-function extraName(step: StepName): string {
+-  return isExtra(step) ? RESET_EXTRA_NAME[step] : step;
+-}
+-
+ /** Extras with no row of their own in Metadata's *AI processing* section. */
+ const METADATA_RERUN_STEP_SET = new Set<StepName>(METADATA_RERUN_STEPS);
+ const RESET_ONLY_PROGRESS = extraSteps().filter((step) => !METADATA_RERUN_STEP_SET.has(step));
+@@ -450,7 +416,8 @@ function ResetOnlyRegeneration({
+ }) {
+   const step = job.steps[0]?.name;
+   if (!step || !isExtra(step)) return null;
+-  const name = extraName(step);
++  /* Named as everywhere else on the page — step-names.ts, plan 261009u. */
++  const name = stepName(step);
+ 
+   if (job.status === "error" || job.status === "cancelled") {
+     return (
+@@ -556,7 +523,7 @@ export function ResetArticle({
+        run and is still a non-null column, which is what the reset route reads. */
+     .filter((stage) => stage.ranAt !== null && isExtra(stage.step))
+     .map((stage) => stage.step);
+-  const names = extras.map(extraName);
++  const names = extras.map((step) => stepName(step));
+   const regenerate = again && extras.length > 0;
+   const lookUps = extras.includes("glossary") || extras.includes("citations");
+ 
+@@ -630,7 +597,7 @@ export function ResetArticle({
+ 
+       {job !== null && regenerating.length > 0 ? (
+         <p role="status" className="tw:m-0 tw:text-xs tw:text-ink-faint">
+-          Then, one after another: {listed(regenerating.map(extraName))}.
++          Then, one after another: {listed(regenerating.map((step) => stepName(step)))}.
+         </p>
+       ) : null}
+ 
+diff --git a/src/web/rerun-commands.ts b/src/web/rerun-commands.ts
+index 0cc76fae9..cb5dff4cd 100644
+--- a/src/web/rerun-commands.ts
++++ b/src/web/rerun-commands.ts
+@@ -30,43 +30,21 @@ import type { Mode } from "../modes.js";
+ import { METADATA_RERUN_STEPS, type MetadataRerunStep } from "../rerun-steps.js";
+ import { MODE_LABEL } from "../title-text.js";
+ import { SKETCH_WAIT } from "./sketch-cost.js";
++import { stepName } from "./step-names.js";
+ import { PEER_REVIEW_SUB_MODES } from "./sub-modes.js";
+ 
+ export { METADATA_RERUN_STEPS, type MetadataRerunStep };
+ 
+ /**
+- * The reader-facing name of each — a noun, not the present-tense label the
+- * stage rows carry.
+- *
+- * `Record<MetadataRerunStep, string>`, so a new member of the list is a
+- * typecheck failure here rather than a blank row.
++ * The reader-facing name of each — the mode or sub-mode that shows what it
++ * makes, as step-names.ts § `stepName` writes it (`Glossary`,
++ * `Summary › Thread`), and never a second list of names for the same steps.
++ * Until 2026-10-09 this was that second list, and it said *Thread* where the
++ * button says *Summary › Thread* — plan 261009u.
+  */
+-export const RERUN_LABEL: Record<MetadataRerunStep, string> = {
+-  arc: "Arc",
+-  tweets: "Thread",
+-  glossary: "Glossary",
+-  quotes: "Quotes",
+-  ideas: "Ideas",
+-  timeline: "Timeline",
+-  quiz: "Quiz",
+-  faq: "FAQ",
+-  /* Not a mode, so no `MODE_LABEL` to borrow: the small words Marginalia draws
+-     beside a paragraph (so, but, vs). */
+-  relations: "Relation words",
+-  sketch: "Sketch",
+-  skim: "Skim",
+-  /* Peer review's sub-modes, whose steps keep the old names until the deep
+-     rename (plan 261009l § Stage 3): Debate's step is Reception's search,
+-     Citations' is Bibliography's list. Claims' list has no row here. */
+-  debate: PEER_REVIEW_SUB_MODES.reception.label,
+-  citations: PEER_REVIEW_SUB_MODES.bibliography.label,
+-  /* Not a mode, so no `MODE_LABEL` to borrow: the links it draws in the prose. */
+-  crossrefs: "Cross-references",
+-  /* Summary's plain-words lengths, which this one step writes together. Named
+-     for the step, as src/web/ResetArticle.tsx names it; Simple was also a level
+-     a reader could choose until 2026-10-03. */
+-  simple: "Simple summary",
+-};
++export const RERUN_LABEL: Readonly<Record<MetadataRerunStep, string>> = Object.fromEntries(
++  METADATA_RERUN_STEPS.map((step) => [step, stepName(step)]),
++) as Record<MetadataRerunStep, string>;
+ 
+ /**
+  * **The four rows for which "another model call" is not the whole story**,
+@@ -134,7 +112,11 @@ const RERUN_ALSO_CALLED: Partial<Record<MetadataRerunStep, readonly string[]>> =
+   /* `summary` and the mode's two spellings, written here because Summary is
+      not this step's `RERUN_MODE` (above): `rerun summary` writes the
+      plain-words lengths again and never a thread. */
+-  simple: ["simple", "summary", "summarise", "summarize"],
++  simple: [
++    "simple", "simple summary", "summary", "summarise", "summarize",
++    /* Its two sub-modes by name, which its label names as a pair. */
++    "brief", "fuller",
++  ],
+   /* The Tweets mode's name and aliases, kept when the mode went on 2026-10-03
+      so `rerun tweets` still forces the thread. Not `x`: `rerun x` is too
+      little to hang a paid run on. */
+@@ -170,8 +152,14 @@ const RERUN_PHRASES: readonly ((name: string) => string)[] = [
+ /** Every name the step answers to, lower-case and without repeats. */
+ function rerunNames(step: MetadataRerunStep): readonly string[] {
+   const mode = RERUN_MODE[step];
++  const label = RERUN_LABEL[step];
+   const names = [
+-    RERUN_LABEL[step],
++    /* **The last part of a `Mode › Sub` path, and never the whole of it.**
++       Nobody types the arrow, and the whole path would put the parent's name
++       at the front of a phrase: `rerun peer review › bibliography` answers
++       `rerun peer review`, which must pick neither paid run (GPT Sol's F8 on
++       plan 261009l). Plan 261009u. */
++    label.split(" › ").at(-1) ?? label,
+     ...(mode === undefined ? [] : [MODE_LABEL[mode], ...MODE_CATALOG[mode].aliases]),
+     ...(RERUN_ALSO_CALLED[step] ?? []),
+   ].map((n) => n.toLowerCase());
+diff --git a/src/web/step-names.ts b/src/web/step-names.ts
+new file mode 100644
+index 000000000..2fcb1c84c
+--- /dev/null
++++ b/src/web/step-names.ts
+@@ -0,0 +1,112 @@
++/**
++ * **What each pipeline step is called where the reader meets what it makes** —
++ * the mode or sub-mode that shows it, or, for a step that is not one, a short
++ * noun and a line saying what it is and where it shows.
++ *
++ * Greg, 2026-10-09, on the Metadata page (`spya-u62q09`): *"Can you make sure
++ * that the AI processing sections here map to whatever we're calling the nodes,
++ * or have a clear explanation of what they are?"* Until then that section named
++ * one step three ways — `RERUN_LABEL`'s *Thread*, the pipeline's *Writing the
++ * thread*, the key `tweets` — and none of them was *Summary › Thread*, the name
++ * on the button. docs/plans/261009u-metadata-ai-processing-named-as-the-modes-are.md.
++ *
++ * **Read from the tables that own the names, never copied.** A mode's name is
++ * `MODE_LABEL`'s and its line the mode catalogue's; a sub-mode's are
++ * sub-modes.ts's, written `Mode › Sub` as the command bar writes it
++ * (command-runners.ts). So a rename of a mode or a sub-mode renames these rows
++ * with it, and only the steps that are neither carry words of their own here.
++ *
++ * `Record<StepName, …>`, so a new step is a compile error here rather than a
++ * row with no name.
++ */
++import { MODE_CATALOG } from "../mode-catalog.js";
++import type { Mode } from "../modes.js";
++import { MODE_LABEL } from "../title-text.js";
++import type { StepName } from "../types.js";
++import { ownLabel } from "./lib/own-label.js";
++import { subModeWords, type SubMode } from "./sub-modes.js";
++
++type StepPlace =
++  /** A mode of its own shows what it makes. */
++  | { readonly mode: Mode }
++  /** A sub-mode does. */
++  | { readonly sub: SubMode }
++  /** Neither: named here, and said where it shows. */
++  | { readonly name: string; readonly what: string };
++
++const STEP_PLACE: Record<StepName, StepPlace> = {
++  fetch: { name: "Source", what: "The page or PDF, downloaded from where it lives" },
++  metadata: {
++    name: "Title and abstract",
++    what: "The title, authors and abstract, read off a paper's first pages",
++  },
++  extract: { name: "Article text", what: "The article's own text, taken out of the page around it" },
++  /* *Blocks* because At a glance counts them by that word, a few rows up. */
++  blocks: {
++    name: "Blocks",
++    what: "The text cut into paragraphs, headings, quotes and figures, each with the id everything else points at",
++  },
++  structure: { mode: "structure" },
++  labels: {
++    name: "Paragraph labels",
++    what: "A few words naming each paragraph, shown down the spine and in Structure",
++  },
++  assets: { name: "Figures", what: "The article's own images, copied so they keep loading" },
++  arc: {
++    name: "Arc",
++    what: "One sentence per part saying where the argument stands, shown in Structure and Marginalia",
++  },
++  tweets: { sub: { mode: "summary", view: "thread" } },
++  glossary: { mode: "glossary" },
++  quotes: { mode: "quotes" },
++  skim: { mode: "skim" },
++  ideas: { mode: "ideas" },
++  timeline: { mode: "timeline" },
++  quiz: { sub: { mode: "learn", view: "quiz" } },
++  faq: { mode: "faq" },
++  relations: {
++    name: "Relation words",
++    what: "The small words Marginalia puts beside a paragraph where the argument turns (so, but, vs)",
++  },
++  sketch: { sub: { mode: "diagram", view: "sketch" } },
++  illustrated: { sub: { mode: "diagram", view: "illustrated" } },
++  debate: { sub: { mode: "peer-review", view: "reception" } },
++  "debate-claims": { sub: { mode: "peer-review", view: "claims" } },
++  citations: { sub: { mode: "peer-review", view: "bibliography" } },
++  crossrefs: {
++    name: "Cross-references",
++    what: "Links in the prose from a claim to the passage it rests on",
++  },
++  /* One step writes both of Summary's plain-words lengths, so it is named for
++     the two of them rather than borrowing either sub-mode's name. */
++  simple: {
++    name: `${MODE_LABEL.summary} › Brief and Fuller`,
++    what: "The piece in plain words, short and longer",
++  },
++};
++
++/**
++ * The reader's name for the step: `Glossary`, `Summary › Thread`, `Arc`.
++ *
++ * **A string, not a `StepName`**, because the record rows draw whatever the
++ * server sent, and a server newer than this copy can send a step it has never
++ * heard of — `tests/metadata-unknown-stage.test.tsx`. Such a step, or a key
++ * like `__proto__`, gets `fallback` (the server's own label) rather than a
++ * lookup up the prototype chain.
++ */
++export function stepName(step: string, fallback: string = step): string {
++  const place = ownLabel(STEP_PLACE, step);
++  if (place === undefined) return fallback;
++  if ("mode" in place) return MODE_LABEL[place.mode];
++  if ("sub" in place) return `${MODE_LABEL[place.sub.mode]} › ${subModeWords(place.sub).label}`;
++  return place.name;
++}
++
++/** One line saying what the step makes; empty for a step this copy does not know. */
++export function stepWhat(step: string): string {
++  const place = ownLabel(STEP_PLACE, step);
++  if (place === undefined) return "";
++  if ("mode" in place) return MODE_CATALOG[place.mode].description;
++  if ("sub" in place) return subModeWords(place.sub).description;
++  return place.what;
++}
+diff --git a/tests/command-bar.test.tsx b/tests/command-bar.test.tsx
+index 7bc6d84fa..460237a3c 100644
+--- a/tests/command-bar.test.tsx
++++ b/tests/command-bar.test.tsx
+@@ -1339,7 +1339,7 @@ describe("the rows that are not modes", () => {
+        `tweets again` is one of its words (rerun-commands.ts), and a typed-only
+        row comes after the sub-modes (plan 261002c). Summary's own row is not
+        offered for this word at all. */
+-    expect(listed()).toEqual(["Thread", "Thread › Run again"]);
++    expect(listed()).toEqual(["Thread", "Summary › Thread › Run again"]);
+     expect(rows()[0]?.dataset.kind).toBe("submode");
+     expect(rows()[0]?.querySelector(".cmdbar-generates")?.textContent).toBe(GENERATES_MARKER);
+     press("Enter");
+diff --git a/tests/command-match-rerun-and-find.test.ts b/tests/command-match-rerun-and-find.test.ts
+index 47fc3cf58..e4d6db1f1 100644
+--- a/tests/command-match-rerun-and-find.test.ts
++++ b/tests/command-match-rerun-and-find.test.ts
+@@ -73,11 +73,28 @@ describe("the Run again rows", () => {
+   it("keeps `rerun tweets` on the thread now that Tweets is not a mode", () => {
+     for (const query of ["rerun tweets", "regenerate thread", "redo tweet thread", "twitter again"]) {
+       const ranked = rankCommands(query, LIST);
+-      expect(labels(ranked)[0], query).toBe("Thread › Run again");
++      expect(labels(ranked)[0], query).toBe("Summary › Thread › Run again");
+       expect(ranked[0], query).toMatchObject({ kind: "action", id: "rerun-tweets" });
+     }
+   });
+ 
++  /* Since 2026-10-09 a sub-mode's row is labelled `Mode › Sub`, and nobody
++     types the arrow: the sub-mode's own name has to find it alone (plan
++     261009u, GPT Sol's P2 on its review). */
++  it("finds a `Mode › Sub` row by the sub-mode's name alone", () => {
++    const cases = {
++      "rerun quiz": "rerun-quiz",
++      "rerun sketch": "rerun-sketch",
++      "rerun reception": "rerun-debate",
++      "rerun bibliography": "rerun-citations",
++      "rerun brief": "rerun-simple",
++      "rerun fuller": "rerun-simple",
++    };
++    for (const [query, id] of Object.entries(cases)) {
++      expect(rankCommands(query, LIST)[0], query).toMatchObject({ kind: "action", id });
++    }
++  });
++
+   it("keeps the retired Social nickname on the thread's re-run row (F5)", () => {
+     for (const query of ["rerun social", "regenerate social", "social again"]) {
+       const ranked = rankCommands(query, LIST);
+@@ -104,8 +121,8 @@ describe("the Run again rows", () => {
+      review's for both would make `rerun peer review` pick one paid run at
+      random. */
+   it("labels Citations' and Debate's re-runs by their sub-modes, and keeps the old words", () => {
+-    expect(rerunWords("citations").label).toBe("Bibliography › Run again");
+-    expect(rerunWords("debate").label).toBe("Reception › Run again");
++    expect(rerunWords("citations").label).toBe("Peer review › Bibliography › Run again");
++    expect(rerunWords("debate").label).toBe("Peer review › Reception › Run again");
+     for (const query of ["rerun bibliography", "rerun citations", "regenerate references", "citations again"]) {
+       const ranked = rankCommands(query, LIST);
+       expect(ranked[0], query).toMatchObject({ kind: "action", id: "rerun-citations" });
+diff --git a/tests/metadata-page-order.test.tsx b/tests/metadata-page-order.test.tsx
+index 3fa1c4bdb..9c94e179c 100644
+--- a/tests/metadata-page-order.test.tsx
++++ b/tests/metadata-page-order.test.tsx
+@@ -35,6 +35,7 @@ import { act, createElement } from "react";
+ import { createRoot, type Root } from "react-dom/client";
+ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+ import type { Article, Meta } from "../src/types.js";
++import { stepName } from "../src/web/step-names.js";
+ 
+ vi.mock("../src/web/lib/supabase.js", () => ({
+   supabase: {
+@@ -383,7 +384,7 @@ describe("the two identifiers the owner did not recognise", () => {
+ 
+     expect(path?.closest("[hidden]"), "opening did not show the stage rows").toBeNull();
+     /* And the other branch of the row, so this covers both shapes of stage. */
+-    expect(section?.textContent).toContain("Reading the text out");
++    expect(section?.textContent).toContain(stepName("extract"));
+   });
+ });
+ 
+diff --git a/tests/metadata-reset-section.test.tsx b/tests/metadata-reset-section.test.tsx
+index 4d1aac085..675f0923a 100644
+--- a/tests/metadata-reset-section.test.tsx
++++ b/tests/metadata-reset-section.test.tsx
+@@ -541,7 +541,7 @@ describe("the Start this article again section", () => {
+     await open();
+ 
+     expect(button("Start again")).toBeUndefined();
+-    expect(card()?.textContent).toContain("Then, one after another: FAQ and Bibliography.");
++    expect(card()?.textContent).toContain("Then, one after another: FAQ and Peer review › Bibliography.");
+   });
+ 
+   it("reads the metadata again when the reset finishes", async () => {
+diff --git a/tests/metadata-unknown-stage.test.tsx b/tests/metadata-unknown-stage.test.tsx
+index b62b218f1..5da33d9ab 100644
+--- a/tests/metadata-unknown-stage.test.tsx
++++ b/tests/metadata-unknown-stage.test.tsx
+@@ -20,6 +20,7 @@ import { act, Component, createElement, type ReactNode } from "react";
+ import { createRoot, type Root } from "react-dom/client";
+ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+ import type { Article } from "../src/types.js";
++import { stepName } from "../src/web/step-names.js";
+ 
+ vi.mock("../src/web/lib/supabase.js", () => ({
+   supabase: {
+@@ -165,7 +166,9 @@ describe("a stage row on the Metadata page", () => {
+   it("draws a stage this copy knows (the control)", async () => {
+     const page = await pageWithStage("fetch");
+     expect(page.caught).toBeNull();
+-    expect(page.text).toContain("Some stage");
++    // Named as the reader meets it, not by the server's label (plan 261009u).
++    expect(page.text).toContain(stepName("fetch"));
++    expect(page.text).not.toContain("Some stage");
+     expect(host.querySelector(".lucide-download")).not.toBeNull();
+   });
+ 
+diff --git a/tests/reset-extra-names.test.ts b/tests/reset-extra-names.test.ts
+deleted file mode 100644
+index 6bc79efd2..000000000
+--- a/tests/reset-extra-names.test.ts
++++ /dev/null
+@@ -1,33 +0,0 @@
+-/**
+- * **The browser names exactly the extras the server drops.**
+- *
+- * Since Sol's F14 (docs/plans/260928a-reset-and-regenerate-article-stage2-review-sol.md)
+- * there is one classification, `RESET_ROLE` in src/reset-role.ts, and the
+- * reset section (src/web/ResetArticle.tsx) derives which steps are extras from
+- * it, keeping only their reader-facing names in `RESET_EXTRA_NAME`, keyed by
+- * `ExtraStep`. So drift is first a compile error: a new extra is a missing key
+- * and a step that stops being one is an excess key.
+- *
+- * This is the runtime half, for what the compiler cannot see — a cast, a
+- * spread, or a key added through some route that widens the literal. A step
+- * the server drops that the page does not name would be regenerated without
+- * the reader being told it would be lost; a name the page offers for a step the
+- * server keeps would be a promise nothing honours.
+- */
+-import { describe, expect, it } from "vitest";
+-
+-import { extraSteps } from "../src/reset-role.js";
+-import { STEP_ORDER } from "../src/step-order.js";
+-import { RESET_EXTRA_NAME } from "../src/web/ResetArticle.js";
+-
+-describe("the reset section's names for the extras", () => {
+-  it("names exactly the steps a reset drops", () => {
+-    const named = STEP_ORDER.filter((step) => Object.hasOwn(RESET_EXTRA_NAME, step));
+-    expect(named).toEqual(extraSteps());
+-    expect(Object.keys(RESET_EXTRA_NAME).sort()).toEqual([...extraSteps()].sort());
+-  });
+-
+-  it("gives every extra a name a reader can read", () => {
+-    for (const step of extraSteps()) expect(RESET_EXTRA_NAME[step].trim(), step).not.toBe("");
+-  });
+-});
+diff --git a/tests/step-names.test.ts b/tests/step-names.test.ts
+new file mode 100644
+index 000000000..47b3f70a9
+--- /dev/null
++++ b/tests/step-names.test.ts
+@@ -0,0 +1,60 @@
++/**
++ * src/web/step-names.ts — every step named as the reader meets it, and the
++ * names read from the tables that own them rather than copied
++ * (docs/plans/261009u-metadata-ai-processing-named-as-the-modes-are.md).
++ */
++import { describe, expect, it } from "vitest";
++import { MODE_CATALOG } from "../src/mode-catalog.js";
++import { STEP_ORDER } from "../src/step-order.js";
++import { MODE_LABEL } from "../src/title-text.js";
++import { stepName, stepWhat } from "../src/web/step-names.js";
++import { DIAGRAM_SUB_MODES, LEARN_SUB_MODES, PEER_REVIEW_SUB_MODES, SUMMARY_SUB_MODES } from "../src/web/sub-modes.js";
++
++describe("stepName and stepWhat", () => {
++  it("give every step a name and a line", () => {
++    for (const step of STEP_ORDER) {
++      expect(stepName(step).trim(), step).not.toBe("");
++      expect(stepWhat(step).trim(), step).not.toBe("");
++    }
++  });
++
++  it("name a sub-mode's step `Mode › Sub`, as the command bar does", () => {
++    expect(stepName("tweets")).toBe(`${MODE_LABEL.summary} › ${SUMMARY_SUB_MODES.thread.label}`);
++    expect(stepName("quiz")).toBe(`${MODE_LABEL.learn} › ${LEARN_SUB_MODES.quiz.label}`);
++    expect(stepName("sketch")).toBe(`${MODE_LABEL.diagram} › ${DIAGRAM_SUB_MODES.sketch.label}`);
++    expect(stepName("debate")).toBe(
++      `${MODE_LABEL["peer-review"]} › ${PEER_REVIEW_SUB_MODES.reception.label}`,
++    );
++    expect(stepName("citations")).toBe(
++      `${MODE_LABEL["peer-review"]} › ${PEER_REVIEW_SUB_MODES.bibliography.label}`,
++    );
++    expect(stepWhat("tweets")).toBe(SUMMARY_SUB_MODES.thread.description);
++  });
++
++  it("name a mode's step by the mode, with the catalogue's line", () => {
++    expect(stepName("glossary")).toBe(MODE_LABEL.glossary);
++    expect(stepWhat("faq")).toBe(MODE_CATALOG.faq.description);
++  });
++
++  /* The report's own complaint: two different modes' steps read *Writing the
++     questions* and *Finding the questions*. No two steps may share a name. */
++  it("never gives two steps one name", () => {
++    const names = STEP_ORDER.map((step) => stepName(step));
++    expect(new Set(names).size).toBe(names.length);
++  });
++
++  /* A server newer than this copy can send a step it has never heard of. */
++  it("keeps the server's label for a step it does not know, prototype keys included", () => {
++    for (const step of ["a-step-from-a-newer-server", "__proto__", "constructor", "toString"]) {
++      expect(stepName(step, "Some stage"), step).toBe("Some stage");
++      expect(stepWhat(step), step).toBe("");
++    }
++  });
++
++  it("names the non-mode steps where the reader sees them", () => {
++    expect(stepWhat("arc")).toMatch(/Structure.*Marginalia/);
++    expect(stepWhat("relations")).toMatch(/Marginalia/);
++    expect(stepName("blocks")).toBe("Blocks");
++    expect(stepName("simple")).toBe(`${MODE_LABEL.summary} › Brief and Fuller`);
++  });
++});

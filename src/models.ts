@@ -501,6 +501,21 @@ export const READING_DIFFICULTY_MODEL = "deepseek/deepseek-v4.1-flash";
 export const TITLE_TIDY_MODEL = "deepseek/deepseek-v4.1-flash";
 
 /**
+ * **What reads any web page's authors and affiliations off the top of the
+ * page** (src/front-matter-authors.ts), held to the page's words by code.
+ * Greg, 2026-10-09 (spya-vfk2zh): a cheap general pass rather than a rule per
+ * site, *"especially a cheapish one like DeepSeek 4.1 Flash or Haiku 5.5"*.
+ *
+ * Haiku, not DeepSeek, though both cost about $0.0005 a page: on the
+ * measurement DeepSeek twice split a shared, unmarked line of institutions
+ * between authors by what it seemed to know about them, which the page did not
+ * say; Haiku's misses were refusals. On no tier, so High-powered AI does not
+ * move it. Route `front-matter-authors` in src/ai-call.ts.
+ * docs/plans/261010d-a-general-authors-pass-for-every-web-page.md § Measured.
+ */
+export const FRONT_MATTER_AUTHORS_MODEL = "anthropic/claude-haiku-5.5";
+
+/**
  * **What writes the one-line gist of a conversation** after each answer, so a
  * later conversation about the same article can see what an earlier one
  * covered (src/chat-gist.ts, plan
@@ -835,8 +850,8 @@ export type Task =
    * publisher's** — the second look at a PDF's front matter, and the only
    * `Task` that reads a PDF at all.
    *
-   * A `Task` rather than a fourth `NonTaskAiJob` because it *is* a tier
-   * decision: the three non-task jobs each have one fixed model for a reason
+   * A `Task` rather than a `NonTaskAiJob` because it *is* a tier decision:
+   * non-task jobs each have one fixed model for a reason
    * that is not about reasoning (vision, vectors, speech), and this one is a
    * judgment about a hard call on a page. It is on `chat`, not `messages`,
    * because it is a small structured call and joins the request-path group.
@@ -950,23 +965,34 @@ export type Task =
    * answer it feeds.
    */
   | "dig-deeper-search"
+  /**
+   * **Who wrote an article, and how to reach them** — the author gift's one
+   * lookup (src/author-lookup.ts, plan 261010c D4). Admin-only, pressed by an
+   * administrator for one article at a time, run after the response. Chat
+   * wire because `openrouter:web_search` is a server tool there and nowhere
+   * else; its own job so `/admin/costs` and the gift's row can say what a
+   * lookup costs. **Always standard power**: it is not one of the article's
+   * modes, so the article's High-powered AI does not move it — the caller
+   * passes `"standard"` explicitly.
+   */
+  | "author-lookup"
   | "link-summary";
 
 /**
- * **The three model calls that are not a `Task`** — and the type exists so that
+ * **The model calls that are not a `Task`** — and the type exists so that
  * "not on a tier" cannot go on meaning "not counted".
  *
  * `Task` is a judgment about how much reasoning a job needs, which is why
  * transcribing a PDF, turning a paragraph into a vector and turning a reader's
  * voice into words are all excluded from it; the comment on `Task` argues that
  * at length and it is still right. But **the bill does not care about tiers.**
- * Every one of these three spends real money, and a spend record keyed on `Task`
+ * Every one of these spends real money, and a spend record keyed on `Task`
  * would have had nowhere to put them — which is exactly how they would have
  * stayed missing from a total that looked complete.
  *
  * `NON_TASK_MODELS` below is typed against this rather than against `string`, so
  * the inventory the profile page shows and the jobs the meter can name are the
- * same three by construction.
+ * same set by construction.
  */
 export type NonTaskAiJob =
   | "pdf"
@@ -988,6 +1014,9 @@ export type NonTaskAiJob =
   /* **An imported title, lightly tidied** — src/title-tidy-model.ts, on
      `TITLE_TIDY_MODEL` below. */
   | "title-tidy"
+  /* **Any web page's authors and affiliations, off the top of the page** —
+     src/front-matter-authors.ts, on `FRONT_MATTER_AUTHORS_MODEL` below. */
+  | "front-matter-authors"
   /* **A conversation's one-line gist**, written after each answer —
      src/chat-gist.ts, on `CHAT_GIST_MODEL` below. */
   | "chat-gist"
@@ -1235,6 +1264,11 @@ export const TASK_TIER: Record<Task, Tier> = {
   "citation-find": "capable",
   /* `citation-find`'s tier and its reason: the same prompt, the same pick. */
   "upload-source-guess": "capable",
+  /* Capable, for `citation-find`'s reason: the job is weighing a handful of
+     search results and saying which, if any, names the author and an address.
+     Code checks every URL and the address against the results; a shallow pick
+     is an empty draft Greg fills by hand. */
+  "author-lookup": "capable",
   /* Explain's tier, because it is explain's kind of work: prose about the
      article, with web search, that a reader reads as it arrives. */
   "citation-investigate": "capable",
@@ -1498,6 +1532,8 @@ export const TASK_WIRE: Record<Task, Wire> = {
   "citation-find": "chat",
   /* Chat, for `citation-find`'s reason: it is the same web-search call. */
   "upload-source-guess": "chat",
+  /* Chat, for `citation-find`'s reason — the web-search server tool. */
+  "author-lookup": "chat",
   /* Chat, for `citation-find`'s reason — the web-search server tool — and
      because a reader watches it stream. */
   "citation-investigate": "chat",
@@ -1521,10 +1557,10 @@ export function wireFor(task: Task): Wire {
 }
 
 /**
- * **Which protocol each paying job speaks** — `TASK_WIRE` plus the three that
- * are not tasks.
+ * **Which protocol each paying job speaks** — `TASK_WIRE` plus the jobs in the
+ * other `AiJob` categories.
  *
- * Spread rather than retyped, so the ten rows have one home and cannot drift
+ * Spread rather than retyping the task rows, so they have one home and cannot drift
  * from it. `Record<AiJob, Wire>` again, for the reason `TASK_WIRE` gives: a job
  * nobody assigned fails to compile rather than quietly getting a default and
  * then being reported however the default implies.
@@ -1541,6 +1577,8 @@ export const AI_JOB_WIRE: Record<AiJob, Wire> = {
   "reading-difficulty": "chat",
   /* A strict JSON schema back, on chat/completions. src/title-tidy-model.ts. */
   "title-tidy": "chat",
+  /* A strict JSON schema back, on chat/completions. src/front-matter-authors.ts. */
+  "front-matter-authors": "chat",
   /* A strict JSON schema back, on chat/completions. src/chat-gist.ts. */
   "chat-gist": "chat",
   /* Explain's wire: it is an explain call with a different job name. */
@@ -1631,6 +1669,9 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
      running the real feature against another model. */
   "citation-find": "SPIDERYARN_CITATION_FIND_MODEL",
   "upload-source-guess": "SPIDERYARN_UPLOAD_SOURCE_GUESS_MODEL",
+  /* Every chat-wire task has one (tests/models.test.ts); for a comparison run
+     of whether another model finds the author as often. */
+  "author-lookup": "SPIDERYARN_AUTHOR_LOOKUP_MODEL",
   "citation-investigate": "SPIDERYARN_CITATION_INVESTIGATE_MODEL",
   /* Plan 261001a says this runs on the quick check's model, not merely its
      tier. Share the override too: otherwise setting the quick check's model
@@ -1775,10 +1816,9 @@ export { DISPLAY_NAME, displayName } from "./model-names.js";
  * **The model calls this app makes that are not a `Task`**, in the shape the
  * profile page wants them.
  *
- * Three of them, and none belongs on a tier — a tier is a judgment about how
- * much *reasoning* a job needs, and these transcribe a PDF, turn a paragraph
- * into a vector, and turn a reader's voice into words. `PDF_READER_MODEL`,
- * `EMBEDDING_MODEL` and `DICTATION_MODEL` say why, each where it lives.
+ * None belongs on a tier — a tier is a reusable judgment about how much
+ * *reasoning* a task needs, while each of these has a fixed model chosen for
+ * its own protocol, latency, measurement or product constraint.
  *
  * They are here anyway, because "not a tier decision" and "not worth telling
  * the reader about" are different claims, and a page called *what's running*
@@ -1804,6 +1844,7 @@ export const NON_TASK_MODELS: readonly {
   { job: "paper-metadata", id: PAPER_METADATA_MODEL, provider: "openrouter" },
   { job: "reading-difficulty", id: READING_DIFFICULTY_MODEL, provider: "openrouter" },
   { job: "title-tidy", id: TITLE_TIDY_MODEL, provider: "openrouter" },
+  { job: "front-matter-authors", id: FRONT_MATTER_AUTHORS_MODEL, provider: "openrouter" },
   { job: "chat-gist", id: CHAT_GIST_MODEL, provider: "openrouter" },
   { job: "search-quick", id: QUICK_SEARCH_MODEL, provider: "openrouter" },
   { job: "command-pick", id: COMMAND_PICK_MODEL, provider: "openrouter" },

@@ -517,7 +517,7 @@ describe("what a tap must not disturb", () => {
     expect(card()).toBe(null);
   });
 
-  /* The card's own foot carries "Open glossary" and, on a link, "open in a
+  /* The card's own foot carries "Open in Glossary" and, on a link, "open in a
      new tab". A tap on either must reach it rather than closing the panel out
      from under the finger. */
   it("leaves a tap inside the card to the card", () => {

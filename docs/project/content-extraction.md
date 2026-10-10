@@ -301,7 +301,7 @@ everything it makes is sanitised afterwards like the rest of the page.
 | a plot as `<object type="image/svg+xml">` | a caption over nothing | an `<img>`. SVG is still not hosted: [article-images.md](article-images.md) leaves it linked to arXiv |
 | a code listing as a `<div>` per line | a paragraph per line | one `<pre>` |
 | a boxed passage as an SVG frame round a `foreignObject` | an empty block | the passage's own blocks |
-| authors in the title block, none in the metadata | Readability's guess: a cited author, or "and" | the paper's authors, names only, through `metaAuthors` ([`src/meta-authors.ts`](../../src/meta-authors.ts)); right on 12 of 19 live pages and refused on the rest, 2026-10-07 ([261007d](../plans/261007d-front-matter-folded-by-default-and-arxiv-html-authors.md) § Stage 2 says why a rule cannot read affiliations). **Each name's affiliations** are read on import by the PDF path's authors pass (one call on the `pdf-frontmatter` model, about half a cent), held to the title block's own words, and the names must come back exactly as the markup has them, or the names stay alone ([`src/arxiv-affiliations.ts`](../../src/arxiv-affiliations.ts), [261009m](../plans/261009m-arxiv-html-affiliations-by-the-authors-pass.md)) |
+| authors in the title block, none in the metadata | Readability's guess: a cited author, or "and" | the paper's authors, names only, through `metaAuthors` ([`src/meta-authors.ts`](../../src/meta-authors.ts)); right on 12 of 19 live pages and refused on the rest, 2026-10-07 ([261007d](../plans/261007d-front-matter-folded-by-default-and-arxiv-html-authors.md) § Stage 2 says why a rule cannot read affiliations). **Each name's affiliations** come from the general pass every web page gets (below, § `meta.authors`), reading the rewritten rows; nothing arXiv-specific. From 2026-10-09 to the same day's [261010d](../plans/261010d-a-general-authors-pass-for-every-web-page.md) they came from an arXiv-only call on Sonnet ([261009m](../plans/261009m-arxiv-html-affiliations-by-the-authors-pass.md)) |
 | the title block itself: each author's affiliation, email and `\thanks` note in a pop-up CSS hides | one paragraph of every author fused, with `thanks:`, `footnotemark: 1` and `Affiliation:` as text; and Readability **deleting** the first short author element it took for the byline | one row per author (name, then each contact on its own line), each note once, numbered, and a name carrying the numbers of the notes it shares; one line of names when nobody has details. The page's nodes are moved, a word check and the link targets checked before the swap, and an unproved `\footnotemark` refuses. 16 of 20 live pages, 2026-10-09 ([261009d](../plans/261009d-arxiv-html-title-block-tidied-at-import.md)) |
 | a macro it could not expand, as its name in `<span class="ltx_ERROR undefined">`, and the macro's argument as ordinary text | `\hohsettheme` then `hohRose` above the title; `phases\ucitedagotto2005.` mid-sentence; `\bmsection` before a funding statement. 9 of 79 papers, 2026-10-09 | the report gone, a space where it would join two words, `\sep` a semicolon between keyword phrases. The argument stays, unless it is a name from the TeX source (`hohRose`, a .bib file's name) or a citation key after a `…cite` macro, which go too ([261009f](../plans/261009f-latex-undefined-macros-leave-the-page.md)) |
 
@@ -816,7 +816,18 @@ institutions the source declares for them — the `citation_author_institution` 
 `citation_author` on a web page, or, for a PDF, what a small authors call copied off the front page,
 with the footnote markers cut away by rule (the `Smith1` fix). A PDF's names and affiliations are the page's
 own characters, found where the model pointed, never the model's text
-([`src/pdf-authors.ts`](../../src/pdf-authors.ts)). Stored only when it accounts for the whole
+([`src/pdf-authors.ts`](../../src/pdf-authors.ts)). **On any web page whose metadata names its authors without their institutions** —
+`citation_author` with no `citation_author_institution`, `dc.creator`, or an arXiv paper's LaTeXML
+markup — one cheap call (Haiku 5.5, about $0.0005) reads the institutions off the page's opening:
+its visible text from the main heading on, read before Readability, which drops short author rows.
+Code holds the answer to the page: the declared names come back exactly, every affiliation is the
+page's exact words, and each is provably that author's (printed in their own row, after a marker on
+their name, or, unmarked, given to everyone it could belong to). Anything less, and the names stay
+alone. A page that declares nobody is not asked: a model choosing a blog's author from its prose
+could put a quoted person over a correct byline
+([`src/front-matter-authors.ts`](../../src/front-matter-authors.ts),
+[261010d](../plans/261010d-a-general-authors-pass-for-every-web-page.md), which measured it on arXiv
+HTML, journals, blogs and PDFs). Stored only when it accounts for the whole
 byline, and then the byline is derived from it, so the two never disagree. For a PDF whose names
 all verify but an affiliation does not, since 2026-09-30 the byline is those names and no list is
 stored — until then the byline fell back to the record with its markers

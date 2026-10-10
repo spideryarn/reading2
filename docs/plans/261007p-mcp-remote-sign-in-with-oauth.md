@@ -50,7 +50,9 @@ authorization code with PKCE, tokens and refresh. We write three things: the con
 
 **Amendment, 2026-10-09:** Greg approved a hand-registered client per AI app, so Claude and
 ChatGPT can both connect. `MCP_OAUTH_CLIENT_ID` now accepts a comma-separated list, ignoring
-spaces and empty entries; no entries still means off. Dynamic registration remains off.
+spaces and empty entries; no entries still means off. Later the same evening Greg turned dynamic
+registration on in production, so any MCP app works with just the URL, and `*` in the list admits
+any app Supabase registered; the route stays administrator-only ([mcp.md](../project/mcp.md)).
 F7's explicit origin allowlist now also admits exactly `https://chatgpt.com`: this extends trust
 to that approved provider, while hostile suffixes, `null`, configured resource addresses and
 the verified client-id/admin checks keep the same boundary. The single-client wording below

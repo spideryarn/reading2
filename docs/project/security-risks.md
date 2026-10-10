@@ -294,8 +294,12 @@ scheduled sweep. One to three days.
 ### R14
 
 **If remote MCP is enabled, its token can change the account's password at Supabase.** Medium. The
-route is switched off while `MCP_OAUTH_CLIENT_ID` has no nonempty client ids. The comma-separated
-list permits multiple hand-registered apps; it does not narrow a token's authority at Supabase.
+route is switched off while `MCP_OAUTH_CLIENT_ID` has no nonempty client ids. Since 2026-10-09
+dynamic registration is on and the list may contain `*`, so the app holding the token may be one
+anybody registered (a phished *Allow*). Greg accepted this F6 phishing risk while the route is
+administrator-only; that gate does not protect the administrator's account after malicious consent.
+Neither the list nor `*` narrows a token's authority at Supabase. The local spike confirmed the token can
+`PUT /auth/v1/user` ([261007p § What landed](../plans/261007p-mcp-remote-sign-in-with-oauth.md#what-landed-stage-1)).
 Once issued, an AI app's OAuth token is an ordinary sign-in at Supabase, so
 whoever holds it could change the password unless *secure password change* is on
 ([security-map.md § An AI app's token](security-map.md#and-since-2026-10-07-an-ai-apps-token-which-opens-one-route),

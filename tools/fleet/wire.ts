@@ -61,8 +61,13 @@
  * a coordinator's proposal and Greg's instruction are indistinguishable unless
  * the text says which it is. A model's recommendation must not mint its own
  * approval.
+ *
+ * `box` (2026-10-10, plan 261010d) is a scheduled job on the box — box health,
+ * the daily worktree sweep — telling the Overseer what it measured. Its own arm
+ * rather than `dashboard`, whose prefix says a person started a session; the
+ * message route is the only one that accepts it (`parseMessageSpeaker`).
  */
-export type Speaker = "greg" | "overseer" | "dashboard";
+export type Speaker = "greg" | "overseer" | "dashboard" | "box";
 
 /*
  * **`dashboard` IS A REPORT, NEVER AN INSTRUCTION, AND THE ARM SPLITS IF THAT

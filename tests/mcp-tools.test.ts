@@ -88,6 +88,35 @@ const DEFAULT_ROUTES: Routes = {
   "GET /api/library": { body: { articles: [shelfEntry("on-tools", "On Tools")] } },
   "GET /api/library?archived=1": { body: { articles: [shelfEntry("old-one", "Old One")] } },
   "GET /api/admin/vouchers": { body: { vouchers: [adminVoucher] } },
+  "GET /api/admin/author-gifts": {
+    body: {
+      gifts: [
+        {
+          id: VOUCHER,
+          status: "draft",
+          starter: { slug: "on-tools", title: "On Tools" },
+          email: null,
+          recipientName: "Ann Author",
+          recipientNote: null,
+          articles: 20,
+          notes: "GIFT-NOTES-abc",
+          /* A route regression must not make an unrecognised credential part of
+             an MCP answer. The tool has its own allow-list boundary. */
+          privateLinkKey: "SENTINEL-PRIVATE-LINK-KEY",
+          notesUpdatedAt: "2026-10-09T00:00:00Z",
+          emailLookupId: null,
+          nameLookupId: null,
+          createdAt: "2026-10-09T00:00:00Z",
+          createdBy: USER,
+          updatedAt: "2026-10-09T00:00:00Z",
+          sendStartedAt: null,
+          discardedAt: null,
+          voucherId: null,
+          lookups: [],
+        },
+      ],
+    },
+  },
 };
 
 class StubApprover implements Approver {
@@ -197,6 +226,44 @@ describe("each tool calls the route it claims", () => {
       args: { id: VOUCHER, revoked: true, note: null },
       expect: [{ method: "PATCH", path: `/api/admin/vouchers/${VOUCHER}`, body: { revoked: true, note: null } }],
     },
+    /* Plan 261010c § D6: the author gifts' two rows, neither of which asks. */
+    { tool: "list_author_gifts", expect: [{ method: "GET", path: "/api/admin/author-gifts" }] },
+    /* An append needs nothing read first; a replace reads the gift's stamp and
+       sends it, so the server can refuse it if the notes moved on (Sol's C7). */
+    {
+      tool: "update_author_gift",
+      args: { id: VOUCHER, append_notes: "Found her address on her lab page." },
+      expect: [
+        {
+          method: "PATCH",
+          path: `/api/admin/author-gifts/${VOUCHER}`,
+          body: { appendNotes: "Found her address on her lab page." },
+        },
+      ],
+    },
+    {
+      tool: "update_author_gift",
+      args: { id: VOUCHER, notes: "The whole new text." },
+      expect: [
+        { method: "GET", path: "/api/admin/author-gifts" },
+        {
+          method: "PATCH",
+          path: `/api/admin/author-gifts/${VOUCHER}`,
+          body: { notes: "The whole new text.", notesBase: "2026-10-09T00:00:00Z" },
+        },
+      ],
+    },
+    {
+      tool: "update_author_gift",
+      args: { id: VOUCHER, email: null, recipientName: "Ann Author", articles: 30 },
+      expect: [
+        {
+          method: "PATCH",
+          path: `/api/admin/author-gifts/${VOUCHER}`,
+          body: { email: null, recipientName: "Ann Author", articles: 30 },
+        },
+      ],
+    },
   ];
 
   for (const c of cases) {
@@ -250,6 +317,59 @@ describe("each tool calls the route it claims", () => {
     const names = TOOLS.map((t) => t.name);
     expect(names).not.toContain("get_allowance");
     expect(names.filter((n) => /private_link|share_link/.test(n))).toEqual(["create_private_link"]);
+  });
+
+  /* Unlike a voucher's notes, an author gift's are the point (Greg, 2026-10-09:
+     "either I (perhaps via MCP) or the agent can add stuff to"), so they are listed. */
+  it("list_author_gifts lists the notes, with the article's plain link and no key", async () => {
+    const h = await harness();
+    const result = await h.call("list_author_gifts");
+    const { gifts } = result.json() as { gifts: { notes: string; starter: Record<string, unknown> }[] };
+    expect(gifts[0]?.notes).toBe("GIFT-NOTES-abc");
+    expect(gifts[0]?.starter).toEqual({ slug: "on-tools", title: "On Tools", link: `${SITE}/read/on-tools` });
+    expect(result.text).not.toContain("key=");
+    expect(result.text).not.toContain("SENTINEL-PRIVATE-LINK-KEY");
+  });
+
+  it("update_author_gift takes a replace or an append, not both, and sends nothing for both", async () => {
+    const h = await harness();
+    const result = await h.call("update_author_gift", { id: VOUCHER, notes: "a", append_notes: "b" });
+    expect(result.isError).toBe(true);
+    expect(h.seen).toEqual([]);
+  });
+
+  it("update_author_gift's replace of a gift the list does not have sends no PATCH", async () => {
+    const h = await harness({ "GET /api/admin/author-gifts": { body: { gifts: [] } } });
+    const result = await h.call("update_author_gift", { id: VOUCHER, notes: "a" });
+    expect(result.isError).toBe(true);
+    expect(h.seen.map((s) => s.method)).toEqual(["GET"]);
+  });
+
+  it("update_author_gift's answer is allow-listed, and its description steers agents to append", async () => {
+    const h = await harness({
+      [`PATCH /api/admin/author-gifts/${VOUCHER}`]: {
+        body: { ok: true, notesUpdatedAt: "2026-10-10T00:00:00.000Z", privateLinkKey: "SENTINEL-PRIVATE-LINK-KEY" },
+      },
+    });
+    const result = await h.call("update_author_gift", { id: VOUCHER, append_notes: "b" });
+    expect(result.json()).toEqual({ ok: true, notesUpdatedAt: "2026-10-10T00:00:00.000Z" });
+    const description = TOOLS.find((t) => t.name === "update_author_gift")?.description ?? "";
+    expect(description).toMatch(/append_notes/);
+    expect(description).toMatch(/rather than/i);
+  });
+
+  it("update_author_gift with nothing to change sends nothing", async () => {
+    const h = await harness();
+    const result = await h.call("update_author_gift", { id: VOUCHER });
+    expect(result.isError).toBe(true);
+    expect(h.seen).toEqual([]);
+  });
+
+  it("there is no tool that sends an author gift", () => {
+    expect(TOOLS.map((t) => t.name).filter((n) => /author_gift/.test(n))).toEqual([
+      "list_author_gifts",
+      "update_author_gift",
+    ]);
   });
 
   it("list_gift_vouchers leaves out the notes and the claimant's usage (Sol F17)", async () => {
@@ -310,6 +430,21 @@ describe("the site's refusals come back as readable tool errors", () => {
     const result = await h.call("list_gift_vouchers");
     expect(result.isError).toBe(true);
     expect(result.text).toBe("Spideryarn refused: Admins only. (this tool is for Spideryarn admins only)");
+  });
+
+  it("the author gift tools are admin-only too, and say so on a 403", async () => {
+    const h = await harness({
+      "GET /api/admin/author-gifts": { status: 403, body: { error: "Admins only." } },
+      [`PATCH /api/admin/author-gifts/${VOUCHER}`]: { status: 403, body: { error: "Admins only." } },
+    });
+    for (const [name, args] of [
+      ["list_author_gifts", {}],
+      ["update_author_gift", { id: VOUCHER, notes: "x" }],
+    ] as const) {
+      const result = await h.call(name, args);
+      expect(result.isError).toBe(true);
+      expect(result.text).toBe("Spideryarn refused: Admins only. (this tool is for Spideryarn admins only)");
+    }
   });
 
   it("a 402 names the free-article limit", async () => {
@@ -665,6 +800,7 @@ describe("no token reaches a result", () => {
         make_article_public: { slug: "on-tools" },
         create_gift_voucher: { email: "a@example.com", articles: 1, idempotency_key: "k" },
         update_gift_voucher: { id: VOUCHER, articles: 2 },
+        update_author_gift: { id: VOUCHER, notes: "n" },
         retry_gift_voucher_email: { voucherId: VOUCHER },
       };
       await h.call(t.name, args[t.name] ?? {});

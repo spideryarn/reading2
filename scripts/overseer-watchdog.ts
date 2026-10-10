@@ -49,10 +49,8 @@
  *       ticking) but `lastGoodSnapshotAt` is older than ITS OWN threshold, or
  *       still `null` (never once heard from the dashboard). The daemon is up
  *       and writing checkpoints on schedule while its register goes stale
- *       underneath it — GPT Sol's S10, verified: `provision.sh` enables
- *       `overseer.service` and nothing enables `fleet-dashboard.service`, so a
- *       box rebuilt from that file comes up in exactly this state, ticking
- *       happily forever with nothing to report.
+ *       underneath it — the dashboard may be stopped, crash-looping or
+ *       unreachable even though provisioning enables it for the next boot.
  *   (d) `unreadable`    — a checkpoint is present and this build cannot parse
  *       it (bad JSON, missing field, or — the one worth naming — a `schema`
  *       this build does not know). The daemon may well be alive; this cannot
@@ -208,8 +206,8 @@ export function assessWatchdog(
       state: "deaf",
       detail:
         `pid ${pid} is alive and ticking (${ticks} ticks) but lastGoodSnapshotAt is null -- it has never once ` +
-        "heard from the fleet dashboard. Check `systemctl is-active fleet-dashboard`: provision.sh enables " +
-        "overseer.service but does not enable fleet-dashboard.service, so a freshly provisioned box lands here.",
+        "heard from the fleet dashboard. Check `systemctl is-active fleet-dashboard`: provisioning enables it, " +
+        "but a stopped, crash-looping or unreachable dashboard still lands here.",
     };
   }
   const snapshotAgeMs = nowMs - Date.parse(lastGoodSnapshotAt);

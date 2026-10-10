@@ -763,6 +763,7 @@ describe("the rate limiter", () => {
     const second = await post(routes, fakeReq({ body: JSON.stringify(messageBody()) }));
     expect(second.status).toBe(429);
     expect(second.json.code).toBe("rate-limited");
+    expect(second.json.delivery).toBe("none");
     expect(second.headers["retry-after"]).toBeDefined();
     // The real assertion: the second one never reached the delivery module.
     expect(calls).toHaveLength(1);

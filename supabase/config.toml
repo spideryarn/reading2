@@ -569,8 +569,10 @@ enabled = false
 enabled = true
 # Path for OAuth consent flow UI
 authorization_url_path = "/oauth/consent"
-# Allow dynamic client registration. Off: one client, registered by hand (plan 261007p, Sol F6).
-allow_dynamic_registration = false
+# Allow dynamic client registration. On, as production is since Greg turned it on (2026-10-09),
+# so any MCP client works with just the URL; the route is administrator-only meanwhile
+# (docs/research/261009a-one-click-mcp-install-for-claude-and-chatgpt.md; Sol F6 is the risk).
+allow_dynamic_registration = true
 
 [edge_runtime]
 enabled = true

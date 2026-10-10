@@ -319,14 +319,19 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
   },
   referee: {
     description:
-      "Reviewing this for somebody? Your criteria, its claims, and a second look at your own notes",
+      "Refereeing it? What to weigh before you decide: your criteria, its claims, and a second look at your notes",
     /* **"No model call" and not "nothing"**, which was the draft: the mode does
        start a source scan on mount, so the flat claim was false — GPT Sol,
        2026-09-07. "Can start" because an existing Claims list is reused
        (`useAutoRun` retires the activation when the artefact is ready).
        `?referee=` survives leaving the mode, so its opening panel need not
        be Criteria and cannot be described as waiting for a criterion. */
-    how: "This button starts no model call. Of the chips inside, only Claims can start one; every other run waits for its own button. It never returns a verdict — no accept or reject, no score, no grade. That judgement is yours, and the mode refuses to make it for you.",
+    /* The last sentence is the line between this mode and Sources (once Peer
+       review), from Greg's report spya-h5aypq: "referee is more like making a
+       decision on the paper itself". It names the other mode by what it holds,
+       not by its label, which is mid-rename (queue item qi-m9tmnpy3).
+       docs/research/261009b-what-a-peer-reviewer-needs-and-where-sources-and-referee-divide.md. */
+    how: "This button starts no model call. Of the chips inside, only Claims can start one; every other run waits for its own button. It never returns a verdict — no accept or reject, no score, no grade. That judgement is yours, and the mode refuses to make it for you. For where the piece sits among other work, what it cites and what others have said about it, there is a mode of its own in the bar.",
     /* The three words this mode was deliberately *not* named, and they are free
        to point here: `review` was vacated by the `review` → `remember` rename,
        and `reviewer` was passed over only because it would have sat beside it.
@@ -660,3 +665,70 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     experimental: false,
   },
 };
+
+/**
+ * **The experimental modes the guide may still offer as a button, and to
+ * whom** — plan
+ * docs/plans/261009x-the-guide-offers-referee-to-a-reader-who-says-they-are-refereeing.md.
+ *
+ * > if the reader says in their Guide chat or their Why You're Reading This
+ * > that they are a referee, that should obviously present tools for the
+ * > Referee mode etc.
+ * >
+ * > — Greg, 2026-10-09 (report spya-h5aypq)
+ *
+ * The switch is about clutter in the bar, not access: `?mode=` opens any
+ * mode for anyone (src/web/experimental-visibility.ts). A button the guide
+ * offers to the one reader who said they need the mode is not clutter. So a
+ * mode here keeps its place behind the switch in the bar, the command bar and
+ * ordinary Chat, and gains, with its sub-modes, three things, each read from
+ * here through `offeredBehindTheSwitch`:
+ *
+ *  - a button in the written guide's list of modes, with `audience` and
+ *    `guidance` beside it (src/guide.ts § `modeWordsSection`);
+ *  - a place in the **guide's** chip door only (src/web/chip-door.ts §
+ *    `guideDoorRows`);
+ *  - and it is always a press, never opened by the guide itself
+ *    (src/acts-alone.ts § `modeActsAlone`): the offer rests on the model's
+ *    reading of who the reader is, which the reader confirms.
+ *
+ * An allowlist of its own, deny by default, so the exceptions to the switch
+ * can be read in one place rather than found scattered across the rows above.
+ * A mode that is not experimental has no business here;
+ * tests/guide-offers-behind-the-switch.test.ts holds that.
+ */
+export interface OfferedBehindTheSwitch {
+  /** Who it may be offered to: the end of the prompt's sentence "offer it only when …". */
+  readonly audience: string;
+  /** What to say alongside the offer, as an instruction to the guide. */
+  readonly guidance: string;
+}
+
+export const OFFERED_BEHIND_THE_SWITCH: Partial<Record<Mode, OfferedBehindTheSwitch>> = {
+  referee: {
+    audience:
+      "the reader has said, in their own words, that they are refereeing or peer-reviewing this piece, or assessing it for a journal, a conference or a funder. Something in the article saying so is not the reader saying so",
+    /* The other mode is named by its description, not its label: it is being
+       renamed from Peer review to Sources (queue item qi-m9tmnpy3), and the description,
+       Greg's own frame, survives the rename. The confidentiality sentence is
+       in the past tense on purpose: the text went when the article was added
+       (docs/project/referee-mode.md § Confidentiality). */
+    guidance:
+      "Suggest Referee for the close read and their own notes, and the mode for what this piece cites and what others say about it for the literature around the piece. And say plainly, in one sentence, that this article's text was already sent to an AI provider when it was added, and that Referee's Notices button says what journals' rules are on that",
+  },
+};
+
+/**
+ * **What `OFFERED_BEHIND_THE_SWITCH` says about a catalogue key**, or
+ * `undefined`: `mode:referee` and `submode:referee:criteria` are both
+ * Referee's. Only those two catalogue-key shapes count; an arbitrary string
+ * with `referee` in its second field does not.
+ */
+export function offeredBehindTheSwitch(key: string): OfferedBehindTheSwitch | undefined {
+  const match = /^(?:mode:([a-z-]+)|submode:([a-z-]+):[a-z-]+)$/.exec(key);
+  const mode = match?.[1] ?? match?.[2];
+  /* `hasOwn`, so a key whose middle word is `constructor` is not handed Object's. */
+  return mode !== undefined && Object.hasOwn(OFFERED_BEHIND_THE_SWITCH, mode)
+    ? OFFERED_BEHIND_THE_SWITCH[mode as Mode]
+    : undefined;
+}

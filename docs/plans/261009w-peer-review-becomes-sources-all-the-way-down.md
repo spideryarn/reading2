@@ -305,6 +305,18 @@ report's note, `feedback-endings.ts`), and messages to the two sessions if they 
 
 ## Log
 
+- 2026-10-10: **Stage 2's migration regenerated at the merge with `dev`.** It was
+  `20261009230106_bibliography_expand`, stamped before `dev`'s `20261009232510_ai_calls_run_index`,
+  which the shared local database had already applied (its watermark was that migration's `when`),
+  so the migrator would have skipped ours in silence ([database.md § A watermark is not a
+  ledger](../project/database.md#a-watermark-is-not-a-ledger)). Rebuilt as
+  `drizzle/20261010030345_bibliography_expand.sql` on top of `dev`'s chain: `npm run db:generate`
+  produced the same generated statements, and the file's text is otherwise unchanged (header and
+  hand-written part). `db:chain` clean, `db:generate -- --allow-empty` says no schema changes, and
+  it applied locally. The Stage 2 review prompt keeps the old name; it records what was reviewed.
+  The merge also took `dev`'s step-names.ts (plan 261009x) with its `citations` row renamed
+  `bibliography`, so the re-run label is now *Sources › Bibliography*.
+
 - 2026-10-09: **Stage 1 landed on `dev`** (68d9ed837, Sol's fixes, merge bb1f594ef). Built by an
   Opus subagent; red first on 53 old-address rows, 3 last-view rows (F7) and 6 help-page rows. One
   decision the plan did not make: **Referee's alias `peer reviewer` became `for peer reviewers`**

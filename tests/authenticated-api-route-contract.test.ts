@@ -383,6 +383,28 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     methods: ["POST"],
     witnesses: ["/api/admin/voucher-emails/w1/retry"],
   },
+  /* Author gifts, 261010c — the list and ensure share one literal; then one
+     gift, its lookups and its Send, beside the vouchers they become. */
+  {
+    match: { kind: "literal", path: "/api/admin/author-gifts" },
+    methods: ["GET", "POST"],
+    witnesses: ["/api/admin/author-gifts"],
+  },
+  {
+    match: { kind: "regex", source: "^\\/api\\/admin\\/author-gifts\\/([\\w-]+)\\/lookups$", flags: "" },
+    methods: ["POST"],
+    witnesses: ["/api/admin/author-gifts/w1/lookups"],
+  },
+  {
+    match: { kind: "regex", source: "^\\/api\\/admin\\/author-gifts\\/([\\w-]+)$", flags: "" },
+    methods: ["PATCH"],
+    witnesses: ["/api/admin/author-gifts/w1"],
+  },
+  {
+    match: { kind: "regex", source: "^\\/api\\/admin\\/author-gifts\\/([\\w-]+)\\/send$", flags: "" },
+    methods: ["POST"],
+    witnesses: ["/api/admin/author-gifts/w1/send"],
+  },
   {
     match: { kind: "literal", path: "/api/admin/feedback" },
     methods: ["GET"],
@@ -1030,8 +1052,9 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
    notice dismissal (plan 261009i); 105 with deleting a chat question and what
    follows it (plan 261009o); 107 with Bibliography's old GET and investigate
    paths kept beside its new ones for one deploy (plan 261009w, removed by its
-   contract). */
-const EXPECTED_MATCHER_COUNT = 107;
+   contract); 111 with author gifts' list and ensure (one literal), one gift,
+   its lookups and its Send (plan 261010c). */
+const EXPECTED_MATCHER_COUNT = 111;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
    with the admin's earlier feedback; 118 with their replies to questions; 119
    with the Help pages' chatbot; 120 with Hidden text's Opus check; 121 with the
@@ -1040,8 +1063,9 @@ const EXPECTED_MATCHER_COUNT = 107;
    GET and POST (plan 261008i); 127 with the public shelf topic pills' status
    and Rebuild (plan 261008j); 128 with Skim's profile notice dismissal (plan
    261009i); 129 with deleting a chat question and what follows it (plan
-   261009o); 131 with Bibliography's two old paths (plan 261009w). */
-const EXPECTED_GUARD_COUNT = 131;
+   261009o); 131 with Bibliography's two old paths (plan 261009w); 136 with
+   author gifts' list, ensure, lookups, edit and Send (plan 261010c). */
+const EXPECTED_GUARD_COUNT = 136;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2200,6 +2224,12 @@ describe("the authenticated API's route contract", () => {
         "PATCH regex /^\\/api\\/admin\\/vouchers\\/([\\w-]+)$/",
         // voucher email Retry, 261001p — beside the voucher routes
         "POST regex /^\\/api\\/admin\\/voucher-emails\\/([\\w-]+)\\/retry$/",
+        // author gifts, 261010c — beside the vouchers they become
+        "GET literal /api/admin/author-gifts",
+        "POST literal /api/admin/author-gifts",
+        "POST regex /^\\/api\\/admin\\/author-gifts\\/([\\w-]+)\\/lookups$/",
+        "PATCH regex /^\\/api\\/admin\\/author-gifts\\/([\\w-]+)$/",
+        "POST regex /^\\/api\\/admin\\/author-gifts\\/([\\w-]+)\\/send$/",
         "GET literal /api/admin/feedback",
         // an admin's own earlier reports, 261007d — beside the list across owners
         "GET literal /api/admin/feedback/earlier",

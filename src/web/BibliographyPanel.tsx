@@ -871,10 +871,11 @@ interface Props {
   onJump(id: BlockId, passage?: string): void;
   /**
    * **One work to bring into view, once** — something outside the band has
-   * just opened it for this work: the prose card's *Dig deeper* from plan
-   * 261004b until 2026-10-09, and from plan 261009k stage 2 a chat's way back. Not a selection: the row has
-   * no selected state and there is no `?cite=`. `n` tells two presses on the
-   * same work apart. The panel lowers the bar if it is hiding the row
+   * just opened it for this work: a chat's way back since plan 261009k stage 2,
+   * and the prose card's *Open in Sources* since plan 261010e. (The card had
+   * *Dig deeper* from plan 261004b until 2026-10-09.) Not a selection: the row
+   * has no selected state and there is no `?cite=`. `n` tells two presses on
+   * the same work apart. The panel lowers the bar if it is hiding the row
    * (`barToReveal`), scrolls to the row once it is drawn, and calls
    * `onFocusTaken` so that coming back to the band later does not scroll again.
    */

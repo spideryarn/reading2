@@ -65,7 +65,7 @@ import type { Speaker } from "../tools/fleet/wire.js";
  * added — the loop that renders every action for every speaker was iterating
  * two of three.
  */
-const EVERY_SPEAKER = ["greg", "overseer", "dashboard"] as const satisfies readonly Speaker[];
+const EVERY_SPEAKER = ["greg", "overseer", "dashboard", "box"] as const satisfies readonly Speaker[];
 
 /** Compile-time proof that `EVERY_SPEAKER` names every arm, not merely valid ones. */
 type EverySpeakerIsComplete = Exclude<Speaker, (typeof EVERY_SPEAKER)[number]> extends never
@@ -241,7 +241,8 @@ describe("every spoken message can actually be delivered", () => {
   });
 
   it("says nothing is being asked, when nothing is", () => {
-    // `dashboard` reports an event; the other two ask for something. If this
+    // `dashboard` reports an event; the person/coordinator speakers ask for
+    // something. If this
     // arm ever carries an instruction the prefix is false and the arm splits —
     // see `Speaker` in wire.ts. This test is what makes that a decision rather
     // than a drift.
@@ -261,6 +262,15 @@ describe("every spoken message can actually be delivered", () => {
     // And both still carry the instruction itself.
     expect(renderSpoken(cont, "greg")).toContain(cont.text);
     expect(fromOverseer).toContain(cont.text);
+  });
+
+  it("attributes a box report to a scheduled job without lending it Greg's authority", () => {
+    const out = renderMessage("disk use crossed its alarm threshold", "box");
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.text).toContain("scheduled job on the box");
+    expect(out.text).toContain("not Greg");
+    expect(out.text).toContain("runbook's call");
   });
 
   it("leaves a slash command unprefixed, because a prefix would stop it running", () => {

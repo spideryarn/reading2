@@ -686,6 +686,16 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
+  /* **The author gift's lookup** (src/author-lookup.ts) — `citation-find`'s
+     policy for its reason: it sends `openrouter:web_search`, and a fallback
+     that dropped the tool would answer from memory. Caught there too — no
+     result, no URL kept, no address "seen" — but the draft would say *found
+     nothing* for a search that never ran. */
+  "author-lookup": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { order: ["anthropic"], require_parameters: true },
+  },
   /* **Bibliography's *Investigate*** (src/citation-investigate.ts) — explain's
      route and both of its reasons: the article is a cached first part, so the
      `order` pin keeps it landing on the prefix it wrote, and the request pins
@@ -936,6 +946,16 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
       allow_fallbacks: true,
     },
   },
+  /* **Any web page's authors and affiliations** (src/front-matter-authors.ts).
+     `pdf-frontmatter`'s route: the model is Anthropic's, and the answer is a
+     strict JSON schema an upstream that dropped `response_format` would not
+     honour. What it sends is the opening of a page a reader added, which the
+     capable tier already sends to the same upstream in full. */
+  "front-matter-authors": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { order: ["anthropic"], require_parameters: true },
+  },
   /* **A conversation's one-line gist** (src/chat-gist.ts). `title-tidy`'s
      route, copied for a sharper reason: what it sends is the reader's own
      conversation, so every endpoint is a zero-retention one. A refusal costs
@@ -1160,6 +1180,11 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
   "upload-source-guess": {
     providerDefault: "Not measured. One uploaded paper's title and a web search, not the article.",
   },
+  "author-lookup": {
+    providerDefault:
+      "Not measured. An article's two ends and up to three web searches, a short JSON answer out; " +
+      "its ceiling is src/author-lookup.ts § ANSWER_TOKENS.",
+  },
   "citation-investigate": {
     providerDefault:
       "Not measured. Explain's shape over the whole article with a few web searches; " +
@@ -1208,6 +1233,14 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
      the eval ran at:
      docs/investigations/261005b-title-tidying-rule-against-a-small-model.md. */
   "title-tidy": { effort: "none" },
+  /* Left at the default because the default is what the eval measured, on
+     `pdf-frontmatter`'s route: 50–1,600 output tokens, 1.6–6 s, about $0.0005
+     a page. Matching names to institutions by markers is where it thinks. */
+  "front-matter-authors": {
+    providerDefault:
+      "Measured 2026-10-09 by the eval that chose the model: 50–1,600 output tokens, 1.6–6 s, " +
+      "~$0.0005 a page (plan 261010d). Unmeasured at any named effort.",
+  },
   /* One line describing a conversation. Nobody waits on it, but thinking
      would spend the 300-token ceiling before the answer began. */
   "chat-gist": { effort: "none" },

@@ -1,0 +1,1 @@
+CREATE INDEX "ai_calls_run" ON "spideryarn"."ai_calls" USING btree ("run_id");

@@ -1133,6 +1133,11 @@ once, queued in the same transaction as the event. A failed send changes neither
 the claim. There is no expiry; revoking is the only way to invalidate one.
 [email.md § Gift voucher emails](email.md#gift-voucher-emails).
 
+**A voucher drafted for an article's author is not a voucher until it is sent.** Since 2026-10-10 an
+*author gift* waits in its own table and becomes a `billing_vouchers` row only when the
+administrator presses *Send*, through `createVoucher` — so nothing above sees a draft:
+[admin.md § Author gifts](admin.md#author-gifts-a-draft-voucher-for-an-articles-author).
+
 ## Billing is a Postgres feature
 
 Quota is enforced on every run, since 2026-09-05 — it was `SPIDERYARN_STORE=postgres` and not

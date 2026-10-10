@@ -223,6 +223,10 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   /* An uploaded paper looking for its own page on the web, fired once when
      its owner opens it — src/source-guess.ts. Request scope, owner-triggered. */
   "upload-source-guess": "interactive request work",
+  /* The author gift's lookup — src/author-lookup.ts, plan 261010c. Pressed by
+     an administrator for one article; run after the response in a collector
+     of its own, attributed to the request's owner and the article. */
+  "author-lookup": "interactive request work",
   /* Bibliography's *Investigate* — src/citation-investigate.ts. A reader presses it. */
   "citation-investigate": "interactive request work",
   /* The paper's passages, inside the same *Investigate* press. */
@@ -275,6 +279,9 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   /* An imported title, tidied inside `extract` or the bulk import's
      `metadata` step. src/title-tidy-model.ts. */
   "title-tidy": "step-driven",
+  /* A web page's authors and affiliations, read inside `extract`.
+     src/front-matter-authors.ts. */
+  "front-matter-authors": "step-driven",
   /* A conversation's one-line gist, written after a chat answer is stored and
      its response sent — request scope, owner-attributed, triggered by the
      reader's question. src/chat-gist.ts. */

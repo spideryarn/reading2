@@ -118,18 +118,18 @@ import { DEFAULT_HIGHLIGHT, isPristineHighlight, spansOverlap } from "../fresh-h
 import type { CommentsApi } from "../useComments.js";
 import { mintId } from "../../ids.js";
 import { Masthead } from "../Masthead.js";
-import { Dock, useActivateMode, useActivateSubMode, visibleModes } from "../Dock.js";
+import { Dock, useActivateMode, useActivateSubMode } from "../Dock.js";
 import { gateToReveal, PRIORITY_GATE } from "../GlossaryPanel.js";
 import { ProseHoverCard, type QuoteCardSource } from "../ProseHoverCard.js";
 import type { CiteFocus } from "../BibliographyPanel.js";
 import { claimFocusKey, focusesLeft, focusOn, focusTaken, type ItemFocus } from "../item-focus.js";
 import { shownEntries } from "../glossary-shown.js";
 import { editArticleTags } from "../article-tags.js";
-import { chatExecutor, type ModeCommand, modeDoor, readingExecutor, type TagsControl } from "../command-runners.js";
-import { modeCommand } from "../command-match.js";
+import { chatExecutor, type ModeCommand, modeDoor, readingExecutor, type TagsControl, withModeDoor } from "../command-runners.js";
+import { chipDoorRows, guideDoorRows } from "../chip-door.js";
 import { type FindMoreMode, glossaryAppendOnOffer, quotesAppendOnOffer } from "../find-more.js";
 import { ChatCommands } from "../CommandChip.js";
-import { findHref, subModeRows } from "../CommandBar.js";
+import { findHref } from "../CommandBar.js";
 import { buildNoteIndex, type NoteMarker, type NoteReturn } from "../notes-view.js";
 import {
   blockHues,
@@ -169,7 +169,6 @@ import {
   returnToSubMode,
   type SubMode,
   subModeParams,
-  subModeWords,
 } from "../sub-modes.js";
 import { isMarginaliaModeWord } from "../../modes.js";
 import { arrivalTarget, clearArrivalAnchor, isBlockOnScreen, scrollToBlock } from "../scroll.js";
@@ -1443,13 +1442,11 @@ export function Reader({
   const works: readonly CitedWork[] = owner?.bibliography.bibliography?.citations ?? NO_WORKS;
 
   /**
-   * **Open Citations on one row** — a one-shot the band hands back once the
+   * **Open Bibliography on one row** — a one-shot the band hands back once the
    * row is in view (BibliographyPanel.tsx § `Props.focus`); state rather than a
-   * URL parameter because nothing about it should survive a reload. The prose
-   * card's *Dig deeper* set it from plan 261004b until 2026-10-09, when that
-   * button became *Ask in chat* (plan 261009k), which goes to Chat instead.
-   * Since then a chat's way back to its item sets it (`openOrigin` below, plan
-   * 261009k stage 2); Glossary, Ideas and Debate have the same shape (item-focus.ts).
+   * URL parameter because nothing about it should survive a reload. A chat's
+   * way back and, since plan 261010e, a citation card's *Open in Sources* set
+   * it; Glossary, Ideas and Debate have the same shape (item-focus.ts).
    */
   const [citeFocus, setCiteFocus] = useState<CiteFocus | null>(null);
   /* Only the request that was served: a second press may have replaced it. */
@@ -1468,7 +1465,7 @@ export function Reader({
   );
 
   /**
-   * Point at a term in the prose and press "Open glossary": open the band on
+   * Point at a term in the prose and press "Open in Glossary": open the band on
    * that entry.
    *
    * The `?term=` subscription that `GlossaryBand` deliberately keeps to itself
@@ -1483,7 +1480,7 @@ export function Reader({
    * be opened.**
    *
    * Since 2026-09-03 the prioritised glossary hides what is below the gate
-   * rather than grouping it, so pressing "Open glossary" on a low-scoring
+   * rather than grouping it, so pressing "Open in Glossary" on a low-scoring
    * term would take the reader to a band with no such row in it — the panel
    * asked to select something it is not drawing. `gateToReveal` answers the
    * gate that puts it back, and null when the current one already shows it.
@@ -1610,7 +1607,8 @@ export function Reader({
   /**
    * **One row to bring into view in Glossary, Ideas and Sources' Claims**,
    * once each — `citeFocus` above is Bibliography's (src/web/item-focus.ts). Only
-   * the way back from a chat sets them (`openOrigin` below). One piece of
+   * an opener outside the list sets them: a chat's way back (`openOrigin`
+   * below), and for Glossary the prose card since plan 261010e. One piece of
    * state per band, so a request for one band cannot be spent by another.
    */
   const [termFocus, setTermFocus] = useState<ItemFocus | null>(null);
@@ -1619,6 +1617,20 @@ export function Reader({
   const ideaFocusTaken = useCallback((taken: ItemFocus) => setIdeaFocus(focusTaken(taken)), []);
   const [claimFocus, setClaimFocus] = useState<ItemFocus | null>(null);
   const claimFocusTaken = useCallback((taken: ItemFocus) => setClaimFocus(focusTaken(taken)), []);
+  /**
+   * **Open Glossary on one term and bring its row into view** — the prose
+   * card's *Open in Glossary* and its second tap, and a chat's way back to a
+   * term. `openTermInGlossary` alone selects the entry (`?term=`) but asks no
+   * band to scroll, so on a long glossary the row could be off-screen (plan
+   * 261010e).
+   */
+  const openTermAndLand = useCallback(
+    (id: string) => {
+      openTermInGlossary(id);
+      setTermFocus(focusOn(id));
+    },
+    [openTermInGlossary],
+  );
   /**
    * A focus belongs to one visit to its list. If the reader leaves while the
    * list is still loading (or while a filter is being lowered), its panel
@@ -1674,16 +1686,23 @@ export function Reader({
    * 261009l). The move is one pushed entry naming the mode and the sub-mode
    * (Bibliography is the absent default), so a reader on Reception or Claims
    * lands on the list the focus is for. Called by a chat's way back to a
-   * cited work, and by Claims' *Cited in this paragraph* (that plan's
-   * Stage 2).
+   * cited work, by Claims' *Cited in this paragraph* (that plan's Stage 2),
+   * and by a citation card's *Open in Sources*.
+   *
+   * If Bibliography is already the visible list and no conversation is open,
+   * only restore the band and focus the row. A same-value pushed write creates
+   * an empty Back step (`showBand` has the same guard); the card can reach this
+   * case whenever a narrow band has stepped aside (plan 261010e code review).
    */
   const openBibliographyWork = useCallback(
     (workId: string) => {
       setBandAway(false);
       setCiteFocus(focusOn(workId));
-      void setSourcesWay({ mode: "sources", sources: null, thread: null }, { history: "push" });
+      if (mode !== "sources" || sourcesView !== "bibliography" || thread !== null) {
+        void setSourcesWay({ mode: "sources", sources: null, thread: null }, { history: "push" });
+      }
     },
-    [setSourcesWay],
+    [mode, sourcesView, thread, setSourcesWay],
   );
   const [, setIdeaWay] = useQueryStates({
     mode: modeParam,
@@ -1718,8 +1737,7 @@ export function Reader({
           /* `?term=` and the gate lowered if it hides the entry. The thread is
              cleared in the same tick, which nuqs sends as one entry. */
           void setThread(null);
-          openTermInGlossary(origin.itemId);
-          setTermFocus(focusOn(origin.itemId));
+          openTermAndLand(origin.itemId);
           return;
         /* Bibliography's cited work (its origin said `citations` until 2026-10-09,
            plan 261009w; the server reads that word as this one). */
@@ -1758,7 +1776,7 @@ export function Reader({
         }
       }
     },
-    [openTermInGlossary, openBibliographyWork, setIdeaWay, setSourcesWay, setThread],
+    [openTermAndLand, openBibliographyWork, setIdeaWay, setSourcesWay, setThread],
   );
   /**
    * **The quotes, and they are not a state at all** — since 2026-09-08.
@@ -1991,15 +2009,16 @@ export function Reader({
     return {
       listed,
       byKey,
-      inQuotesMode: mode === "quotes",
       generatedAt: quoteSource?.generatedAt,
       onGo: (quote) => goToQuote(quote, jumpTo),
+      /* `showBand`, not `setMode` (plan 261010e): the card's button is drawn
+         in Quotes mode too now, where a band stepped aside must come back. */
       onOpenInQuotes: (quote) => {
         revealQuote(quote.id);
-        void setMode("quotes");
+        showBand("quotes");
       },
     };
-  }, [allQuotes, proseMarked, mode, goToQuote, jumpTo, revealQuote, setMode, quoteSource?.generatedAt]);
+  }, [allQuotes, proseMarked, goToQuote, jumpTo, revealQuote, showBand, quoteSource?.generatedAt]);
   useArrowNav(
     nav,
     article.blocks,
@@ -2885,15 +2904,11 @@ export function Reader({
     });
   /**
    * **The modes a chat chip may open, and how** (plan 261007j, GPT Sol's F3):
-   * the command bar's mode and sub-mode rows, from the same two functions the
-   * Dock and the bar call — `visibleModes` with this page's switch, mode and
-   * margin, then `subModeRows`. One deliberate subtraction: those functions
-   * keep an experimental mode already open (or a retained experimental
-   * sub-mode) visible as the reader's way out after the switch is turned off.
-   * That escape hatch must not make a model-written token a way *into* the
-   * hidden feature, so the proposal rows remove every experimental target while
-   * the switch is off. The press is the Dock's own pair of activators, through
-   * `modeActivators` (set below, beside `onDockMode`).
+   * two doors, chat's and the guide's, whose rows are src/web/chip-door.ts §
+   * `chipDoorRows` and § `guideDoorRows` (the guide's adds the modes it may
+   * offer from behind the switch, plan 261009x). The press is the Dock's own
+   * pair of activators, through `modeActivators` (set below, beside
+   * `onDockMode`).
    */
   const modeActivators = useRef<{
     mode(next: Mode): void;
@@ -2903,31 +2918,21 @@ export function Reader({
   } | null>(null);
   const chipModes = useMemo(() => {
     if (!isOwner) return undefined;
-    const reachable = visibleModes(experimental.on, mode, marginOpen).map((m) => m.mode);
-    const rows = [
-      ...reachable.map(modeCommand),
-      ...subModeRows(reachable, experimental.on, {
-        diagram: subNav.diagram,
-        learn: mode === "learn" ? subNav.learn : undefined,
-      }),
-    ]
-      .filter((c): c is ModeCommand => c.kind === "mode" || c.kind === "submode")
-      .filter(
-        (c) =>
-          experimental.on ||
-          (c.kind === "mode" ? !MODE_CATALOG[c.mode].experimental : !subModeWords(c.sub).experimental),
+    const nav = { diagram: subNav.diagram, learn: mode === "learn" ? subNav.learn : undefined };
+    const rows = chipDoorRows({ experimentalOn: experimental.on, mode, marginOpen, subNav: nav });
+    const door = (of: readonly ModeCommand[]) =>
+      modeDoor(
+        of,
+        {
+          mode: (c) => modeActivators.current?.mode(c.mode),
+          sub: (c) => modeActivators.current?.sub(c.sub),
+        },
+        {
+          mode: (c) => modeActivators.current?.modeUnarmed(c.mode),
+          sub: (c) => modeActivators.current?.subUnarmed(c.sub),
+        },
       );
-    return modeDoor(
-      rows,
-      {
-        mode: (c) => modeActivators.current?.mode(c.mode),
-        sub: (c) => modeActivators.current?.sub(c.sub),
-      },
-      {
-        mode: (c) => modeActivators.current?.modeUnarmed(c.mode),
-        sub: (c) => modeActivators.current?.subUnarmed(c.sub),
-      },
-    );
+    return { chat: door(rows), guide: door(guideDoorRows(rows, nav)) };
   }, [isOwner, experimental.on, mode, marginOpen, subNav.diagram, subNav.learn]);
   const moreTerms = owner !== null && glossaryAppendOnOffer(owner.glossary) && dockDraws("glossary");
   const moreQuotes = owner !== null && quotesAppendOnOffer(owner.quotes) && dockDraws("quotes");
@@ -2960,8 +2965,9 @@ export function Reader({
         askGuide: isOwner ? askTheGuide : undefined,
         /* The bar's *Guide* row: the owner's, as the guide is. */
         openGuide: isOwner ? openTheGuide : undefined,
-        /* A chat chip's `mode` proposal: the owner's, as Chat is (`chipModes`). */
-        modes: chipModes,
+        /* A chat chip's `mode` proposal: the owner's, as Chat is (`chipModes`).
+           Chat's door; a guide thread's chips get the guide's, below. */
+        modes: chipModes?.chat,
       }),
     [
       slug,
@@ -3002,13 +3008,18 @@ export function Reader({
    *
    * The find reads the address at the press, not at the render: it carries
    * `?at=`, which the reader's scrolling rewrites.
+   *
+   * Each carries a `guide` twin whose mode door is the guide's (plan 261009x):
+   * ChatPanel.tsx § `Conversation` hands it to a guide thread's chips.
    */
   const chatCommands = useMemo(() => {
     const find = (words: string) => navigate(findHref(slug, carriedSearch(window.location.search), words));
-    const forJump = (jump: (blockId: BlockId) => void) =>
-      chatExecutor({ reading: executor, blocks: article.blocks, jump, tags: tagsControl, find });
+    const forJump = (jump: (blockId: BlockId) => void) => {
+      const chat = chatExecutor({ reading: executor, blocks: article.blocks, jump, tags: tagsControl, find });
+      return chipModes === undefined ? chat : { ...chat, guide: withModeDoor(chat, chipModes.guide) };
+    };
     return { band: forJump(bandJump), dialog: forJump(jumpTo) };
-  }, [slug, executor, article.blocks, tagsControl, bandJump, jumpTo]);
+  }, [slug, executor, chipModes, article.blocks, tagsControl, bandJump, jumpTo]);
 
   /**
    * ## Selecting applies the highlight, and the box customises or removes it
@@ -3451,6 +3462,8 @@ export function Reader({
             glossary={artefacts.glossary}
             onJump={bandJump}
             onSelected={setTerm}
+            focus={termFocus}
+            onFocusTaken={termFocusTaken}
           />
         ) : null;
       /* **One structural band with two faces, and it owns its own hooks.**
@@ -4764,10 +4777,13 @@ export function Reader({
            261002c, 261004b, 261009k). Null for a visitor, who has no chat. */
         onAskTerm={owner ? askGlossaryEntryInChat : null}
         onAskCitedWork={owner ? askCitedWorkInChat : null}
+        /* *Open in Sources* on a cited work's card: Bibliography, its row in
+           view (plan 261010e). Owner only, as the marks are. */
+        onOpenCitedWork={owner ? openBibliographyWork : null}
         quotes={quoteCard}
         blockText={blockText}
         notes={notes}
-        onOpenTerm={openTermInGlossary}
+        onOpenTerm={openTermAndLand}
         onJump={jumpTo}
         onFollowNote={followNote}
       />

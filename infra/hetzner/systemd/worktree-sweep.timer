@@ -1,0 +1,20 @@
+# Runs worktree-sweep.service once a day.
+# docs/plans/261010d-standing-jobs-survive-a-reboot.md.
+#
+# @USER@ is substituted at install time by infra/hetzner/provision.sh.
+# tests/systemd-units.test.ts compares these bytes against the heredoc in that
+# script.
+[Unit]
+Description=Timer for worktree-sweep.service
+Documentation=file:///home/@USER@/code/spideryarn2/docs/project/worktrees.md
+
+[Timer]
+# 06:30 in the box's own timezone, before the Overseer's renewal at 06:43.
+OnCalendar=*-*-* 06:30:00
+# Unlike the interval timers here, this one is OnCalendar=, so Persistent= does
+# work: a box that was off at 06:30 runs the sweep shortly after it boots.
+Persistent=true
+Unit=worktree-sweep.service
+
+[Install]
+WantedBy=timers.target

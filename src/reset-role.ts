@@ -4,8 +4,9 @@
  *
  * A reset puts an article back "as if it had just been imported for the first
  * time" (Greg, 2026-09-28): the import steps run again over the stored copy,
- * and everything a *mode* made and stored on the revision is dropped from the
- * new draft. docs/plans/260928a-reset-and-regenerate-article.md is the design;
+ * and every generated extra stored on the revision is dropped from the new
+ * draft. Some extras belong to modes; others are things such as the arc and
+ * cross-references. docs/plans/260928a-reset-and-regenerate-article.md is the design;
  * this file is the one place that says which step is which.
  *
  * ## Three roles
@@ -15,9 +16,9 @@
  * - **`successor`** — `labels`. Not dropped by hand: a forced `structure`
  *   writes a pending manifest and the reset's publication buys the free labels
  *   job exactly as any import's does.
- * - **`extra`** — everything a mode makes on demand. Dropped from the reset's
- *   draft, columns and step-run rows both; queued again after publication when
- *   the reader asked.
+ * - **`extra`** — stored generated results outside a fresh import. Dropped from
+ *   the reset's draft, columns and step-run rows both; queued again after
+ *   publication when the reader asked.
  *
  * Exhaustive over `StepName` rather than a list of extras, so a step added to
  * the pipeline is a compile error here until somebody decides what a reset
@@ -34,8 +35,8 @@
  * docs/plans/260928a-reset-and-regenerate-article-stage2-review-sol.md asked
  * for one. So the classification is here, importing `STEP_ORDER` and a type
  * and nothing else, src/reset.ts re-exports it beside the database half, and
- * the browser keeps only what a reader calls each extra
- * (`RESET_EXTRA_NAME` in src/web/ResetArticle.tsx, keyed by `ExtraStep`).
+ * the browser names each extra as it names every step (src/web/step-names.ts,
+ * which replaced `RESET_EXTRA_NAME` on 2026-10-09).
  */
 
 import { STEP_ORDER } from "./step-order.js";
@@ -79,7 +80,7 @@ export const RESET_ROLE = {
   sketch: "extra",
   illustrated: "extra",
   debate: "extra",
-  /* Made by a press on Debate's Claims, off DEFAULT_INGEST_STEPS, a whole
+  /* Made by a press on Sources' Claims, off DEFAULT_INGEST_STEPS, a whole
      column: the modes' shape, though it is a sub-mode's list rather than a
      mode of its own. */
   "debate-claims": "extra",

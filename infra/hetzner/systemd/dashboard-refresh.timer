@@ -1,0 +1,19 @@
+# Runs dashboard-refresh.service once an hour.
+# docs/plans/261010d-standing-jobs-survive-a-reboot.md.
+#
+# @USER@ is substituted at install time by infra/hetzner/provision.sh.
+# tests/systemd-units.test.ts compares these bytes against the heredoc in that
+# script.
+[Unit]
+Description=Timer for dashboard-refresh.service
+Documentation=file:///home/@USER@/code/spideryarn2/scripts/overseer-tools/README.md
+
+[Timer]
+OnBootSec=15min
+# An hour after the previous run STARTED. A slow npm install cannot overlap the
+# next: systemd does not start a oneshot that is still running.
+OnUnitActiveSec=1h
+Unit=dashboard-refresh.service
+
+[Install]
+WantedBy=timers.target

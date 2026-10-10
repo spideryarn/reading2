@@ -1300,8 +1300,22 @@
     {
       "idx": 185,
       "version": "7",
-      "when": 1791586866666,
-      "tag": "20261009230106_bibliography_expand",
+      "when": 1791583519221,
+      "tag": "20261009220519_author_gifts",
+      "breakpoints": true
+    },
+    {
+      "idx": 186,
+      "version": "7",
+      "when": 1791588310580,
+      "tag": "20261009232510_ai_calls_run_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 187,
+      "version": "7",
+      "when": 1791601425296,
+      "tag": "20261010030345_bibliography_expand",
       "breakpoints": true
     }
   ]

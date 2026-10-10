@@ -2303,6 +2303,275 @@ WantedBy=timers.target
 BOX_TIDY_TIMER_UNIT
 # <<< box-tidy
 
+# >>> the box's repeating jobs (docs/plans/261010d-standing-jobs-survive-a-reboot.md)
+# Box health every ten minutes, the worktree sweep daily, the dashboard refresh
+# hourly. Each is a oneshot service run by its timer from the primary checkout,
+# like the watchdog. The feedback sweep every three hours is the fourth pair:
+# installed, and NOT enabled, because it runs Claude and so spends money on a
+# clock -- Greg's call (plan 261010d). The eight heredocs below are the
+# checked-in files under infra/hetzner/systemd/, byte for byte:
+# tests/systemd-units.test.ts holds them equal.
+install_unit box-health.service <<'BOX_HEALTH_SERVICE_UNIT'
+# Box health: disk, memory, swap and load, every ten minutes from
+# box-health.timer. scripts/box-health.ts; plan
+# docs/plans/261010d-standing-jobs-survive-a-reboot.md.
+#
+# One journal line per check every run (`journalctl -u box-health`). The
+# Overseer hears only when the set of alarms changes, and once a day while
+# one lasts, through the fleet dashboard's steer route as speaker `box`.
+#
+# A SYSTEM unit with User=@USER@, not a systemd USER unit, for the reason
+# overseer.service gives: a user unit does not start at boot without lingering.
+# Type=oneshot and no Restart=, like the watchdog: the timer decides when this
+# runs again, which is also what brings it back after an OOM kill. No [Install]
+# section: only the timer is ever enabled.
+#
+# @USER@ is substituted at install time by infra/hetzner/provision.sh.
+# tests/systemd-units.test.ts compares these bytes against the heredoc in that
+# script.
+[Unit]
+Description=Box health -- disk, memory, swap and load; tells the Overseer when an alarm starts or ends
+Documentation=file:///home/@USER@/code/spideryarn2/docs/plans/261010d-standing-jobs-survive-a-reboot.md
+
+[Service]
+Type=oneshot
+User=@USER@
+Group=@USER@
+
+# The PRIMARY checkout, never a worktree -- a worktree is deleted by normal
+# tidying, and an ExecStart inside one is a check that disappears with it.
+WorkingDirectory=/home/@USER@/code/spideryarn2
+Environment=HOME=/home/@USER@
+# What was last said to the Overseer: /var/lib/box-health/box-health.json, made
+# by systemd and owned by @USER@. On the ROOT disk on purpose: nothing is posted
+# that cannot first be recorded, so a state file on /home would let a full /home
+# silence the alarm about /home.
+StateDirectory=box-health
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# The checkout's own tsx, not `npx tsx`, which can fetch SOME tsx from the network.
+ExecStart=/home/@USER@/code/spideryarn2/node_modules/.bin/tsx scripts/box-health.ts
+TimeoutStartSec=5min
+BOX_HEALTH_SERVICE_UNIT
+install_unit box-health.timer <<'BOX_HEALTH_TIMER_UNIT'
+# Runs box-health.service every ten minutes.
+# docs/plans/261010d-standing-jobs-survive-a-reboot.md.
+#
+# @USER@ is substituted at install time by infra/hetzner/provision.sh.
+# tests/systemd-units.test.ts compares these bytes against the heredoc in that
+# script.
+[Unit]
+Description=Timer for box-health.service
+Documentation=file:///home/@USER@/code/spideryarn2/docs/plans/261010d-standing-jobs-survive-a-reboot.md
+
+[Timer]
+# Soon after boot, so a box that came back unhealthy says so within minutes.
+OnBootSec=5min
+# Ten minutes after the previous run STARTED (measured on box-tidy.timer, which
+# has the same shape). Runs never overlap: systemd does not start a oneshot that
+# is still running.
+OnUnitActiveSec=10min
+Unit=box-health.service
+
+[Install]
+WantedBy=timers.target
+BOX_HEALTH_TIMER_UNIT
+install_unit worktree-sweep.service <<'WORKTREE_SWEEP_SERVICE_UNIT'
+# The daily worktree sweep: `npm run worktree:sweep -- --remove`, run by
+# worktree-sweep.timer. scripts/worktree-sweep-daily.ts; plan
+# docs/plans/261010d-standing-jobs-survive-a-reboot.md.
+#
+# Removes every worktree whose work has landed on dev, each one re-checked by
+# the single-tree removal (Greg's permission, 2026-10-09, quoted in
+# scripts/worktree-sweep.ts). Tells the Overseer only about trees somebody has
+# to judge; the full report is `journalctl -u worktree-sweep`.
+#
+# A SYSTEM unit with User=@USER@, not a user unit -- see box-health.service.
+# Type=oneshot, no Restart=, no [Install]: only the timer is enabled.
+#
+# NO AmbientCapabilities=, unlike box-tidy.service, on purpose: those make a
+# process's own /proc entries unreadable to the user's other processes, and
+# scripts/worktree-inuse.ts lets that past only for box-tidy, by name. Without
+# them this reads /proc exactly as an agent's shell running the same command.
+#
+# @USER@ is substituted at install time by infra/hetzner/provision.sh.
+# tests/systemd-units.test.ts compares these bytes against the heredoc in that
+# script.
+[Unit]
+Description=Worktree sweep -- removes landed worktrees daily; tells the Overseer about the rest
+Documentation=file:///home/@USER@/code/spideryarn2/docs/project/worktrees.md
+# It fetches dev before it judges anything.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=@USER@
+Group=@USER@
+
+# The PRIMARY checkout: a worktree is what this deletes.
+WorkingDirectory=/home/@USER@/code/spideryarn2
+# HOME explicitly: the fetch finds its credential helper in ~/.gitconfig.
+Environment=HOME=/home/@USER@
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+# Under the primary-checkout lock dashboard-refresh.service also takes, so the
+# sweep never removes trees while the refresh is merging into the primary or
+# reinstalling its node_modules. Half an hour's wait, then a failed run.
+ExecStart=/usr/bin/flock -w 1800 /home/@USER@/.overseer/primary-checkout.lock /home/@USER@/code/spideryarn2/node_modules/.bin/tsx scripts/worktree-sweep-daily.ts
+
+# It fetches and walks every tree on a busy box. Behind the sessions for CPU.
+Nice=10
+TimeoutStartSec=1h
+WORKTREE_SWEEP_SERVICE_UNIT
+install_unit worktree-sweep.timer <<'WORKTREE_SWEEP_TIMER_UNIT'
+# Runs worktree-sweep.service once a day.
+# docs/plans/261010d-standing-jobs-survive-a-reboot.md.
+#
+# @USER@ is substituted at install time by infra/hetzner/provision.sh.
+# tests/systemd-units.test.ts compares these bytes against the heredoc in that
+# script.
+[Unit]
+Description=Timer for worktree-sweep.service
+Documentation=file:///home/@USER@/code/spideryarn2/docs/project/worktrees.md
+
+[Timer]
+# 06:30 in the box's own timezone, before the Overseer's renewal at 06:43.
+OnCalendar=*-*-* 06:30:00
+# Unlike the interval timers here, this one is OnCalendar=, so Persistent= does
+# work: a box that was off at 06:30 runs the sweep shortly after it boots.
+Persistent=true
+Unit=worktree-sweep.service
+
+[Install]
+WantedBy=timers.target
+WORKTREE_SWEEP_TIMER_UNIT
+install_unit dashboard-refresh.service <<'DASHBOARD_REFRESH_SERVICE_UNIT'
+# The hourly dashboard refresh: merge origin/dev into the primary checkout, and
+# restart the fleet dashboard only when what it is built from changed.
+# scripts/overseer-tools/dashboard-refresh.sh, whose header says why; plan
+# docs/plans/261010d-standing-jobs-survive-a-reboot.md.
+#
+# It was a tmux loop until 2026-10-10, which a reboot ended. It also keeps the
+# primary checkout current, which the other units here run their code from.
+#
+# A SYSTEM unit with User=@USER@, not a user unit -- see box-health.service.
+# Type=oneshot, no Restart=, no [Install]: only the timer is enabled.
+# NOT NoNewPrivileges=: the restart is `sudo -n systemctl restart
+# fleet-dashboard` (scripts/fleet-restart.ts), which that setting would refuse.
+#
+# @USER@ is substituted at install time by infra/hetzner/provision.sh.
+# tests/systemd-units.test.ts compares these bytes against the heredoc in that
+# script.
+[Unit]
+Description=Dashboard refresh -- keeps the primary checkout on dev and the fleet dashboard on what it holds
+Documentation=file:///home/@USER@/code/spideryarn2/scripts/overseer-tools/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=@USER@
+Group=@USER@
+WorkingDirectory=/home/@USER@/code/spideryarn2
+# HOME explicitly: the script's state and log are under ~/.overseer, and the
+# fetch finds its credential helper in ~/.gitconfig.
+Environment=HOME=/home/@USER@
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+# Under the primary-checkout lock worktree-sweep.service also takes; see there.
+ExecStart=/usr/bin/flock -w 1800 /home/@USER@/.overseer/primary-checkout.lock /bin/bash /home/@USER@/code/spideryarn2/scripts/overseer-tools/dashboard-refresh.sh
+# npm install and a dashboard rebuild can be slow on a busy box.
+TimeoutStartSec=45min
+DASHBOARD_REFRESH_SERVICE_UNIT
+install_unit dashboard-refresh.timer <<'DASHBOARD_REFRESH_TIMER_UNIT'
+# Runs dashboard-refresh.service once an hour.
+# docs/plans/261010d-standing-jobs-survive-a-reboot.md.
+#
+# @USER@ is substituted at install time by infra/hetzner/provision.sh.
+# tests/systemd-units.test.ts compares these bytes against the heredoc in that
+# script.
+[Unit]
+Description=Timer for dashboard-refresh.service
+Documentation=file:///home/@USER@/code/spideryarn2/scripts/overseer-tools/README.md
+
+[Timer]
+OnBootSec=15min
+# An hour after the previous run STARTED. A slow npm install cannot overlap the
+# next: systemd does not start a oneshot that is still running.
+OnUnitActiveSec=1h
+Unit=dashboard-refresh.service
+
+[Install]
+WantedBy=timers.target
+DASHBOARD_REFRESH_TIMER_UNIT
+install_unit feedback-sweep.service <<'FEEDBACK_SWEEP_SERVICE_UNIT'
+# One feedback sweep: Claude Opus, unattended, under the box's default Claude
+# login, following docs/project/feedback-reports.md. Run by
+# feedback-sweep.timer every three hours. scripts/overseer-tools/feedback-sweep-once.sh;
+# plan docs/plans/261010d-standing-jobs-survive-a-reboot.md.
+#
+# THIS SPENDS MONEY ON A CLOCK, so it is installed but enabled only on Greg's
+# word (question in docs/user-feedback/questions/). Until then the same body
+# runs as the tmux loop feedback-sweep-loop.sh -- never both at once.
+#
+# A SYSTEM unit with User=@USER@, not a user unit -- see box-health.service.
+# Type=oneshot, no Restart=, no [Install]: only the timer is enabled. A sweep
+# that fails exits non-zero, and box-health tells the Overseer.
+#
+# What it needs that provisioning does not restore: the Claude login in
+# ~/.claude (with its signed-in Sentry MCP server), and GitHub credentials
+# for the pushes a sweep makes. /home is the persistent volume, so both outlive
+# a rebuilt server; a new volume needs them again by hand.
+#
+# @USER@ is substituted at install time by infra/hetzner/provision.sh.
+# tests/systemd-units.test.ts compares these bytes against the heredoc in that
+# script.
+[Unit]
+Description=Feedback sweep -- one unattended Claude run over the feedback queue (spends money)
+Documentation=file:///home/@USER@/code/spideryarn2/docs/project/feedback-reports.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=@USER@
+Group=@USER@
+WorkingDirectory=/home/@USER@/code/spideryarn2
+# HOME explicitly: Claude's login, the credential helper in ~/.gitconfig and
+# the debrief directory are all under it.
+Environment=HOME=/home/@USER@
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+# The Overseer's working directory, outside /tmp, where it reads the debriefs.
+Environment=OVERSEER_SCRATCH=/home/@USER@/.overseer/scratch
+ExecStart=/bin/bash /home/@USER@/code/spideryarn2/scripts/overseer-tools/feedback-sweep-once.sh
+# run-claude stops the sweep at 150 minutes; this is the backstop above it.
+TimeoutStartSec=3h
+FEEDBACK_SWEEP_SERVICE_UNIT
+install_unit feedback-sweep.timer <<'FEEDBACK_SWEEP_TIMER_UNIT'
+# Runs feedback-sweep.service every three hours.
+# docs/plans/261010d-standing-jobs-survive-a-reboot.md. Enabled only on Greg's
+# word -- see feedback-sweep.service.
+#
+# @USER@ is substituted at install time by infra/hetzner/provision.sh.
+# tests/systemd-units.test.ts compares these bytes against the heredoc in that
+# script.
+[Unit]
+Description=Timer for feedback-sweep.service
+Documentation=file:///home/@USER@/code/spideryarn2/docs/project/feedback-reports.md
+
+[Timer]
+# The first sweep half an hour after boot -- or at once, when the timer is first
+# started on a box that has been up longer than that.
+OnBootSec=30min
+# Three hours after the previous sweep ENDED (OnUnitInactiveSec=, not
+# OnUnitActiveSec=, which counts from the start): the tmux loop's `sleep 10800`
+# after each sweep, which can itself take 150 minutes.
+OnUnitInactiveSec=3h
+Unit=feedback-sweep.service
+
+[Install]
+WantedBy=timers.target
+FEEDBACK_SWEEP_TIMER_UNIT
+# <<< the box's repeating jobs
+
 # /tmp AGES OUT AFTER 7 DAYS, not systemd's 30. The file's own comments say what
 # is kept longer and why; infra/hetzner/tmpfiles.d/tmp.conf is the readable copy
 # and tests/systemd-units.test.ts holds the two equal. Same name as the packaged
@@ -2457,27 +2726,35 @@ case "$fleet_ip" in
 esac
 
 systemctl daemon-reload
-# THE OVERSEER AND ITS WATCHDOG. The fleet dashboard's unit is installed and
-# deliberately left disabled: the page is up under scripts/tmux-job.ts and its
-# owner asked to read the unit before it is ever switched on. Enabling it here
-# would mean two supervisors racing for :8787 at the next boot, and the
-# loser's failure looks exactly like a crash. Enable it by hand once the tmux
-# job is stopped.
+# THE OVERSEER, ITS WATCHDOG AND THE FLEET DASHBOARD. `enable` alone, not
+# `--now`: this only makes them survive the NEXT boot, the same restraint
+# overseer.service's own comment explains -- provisioning does not know a live
+# box's running state and has no business restarting it.
 #
-# The watchdog has no such conflict -- it is a oneshot check, not a second
-# supervisor for anything already running -- so it is enabled alongside the
-# Overseer it watches. `enable` alone, not `--now`: this only makes both
-# survive the NEXT boot, the same restraint overseer.service's own comment
-# explains -- provisioning does not know a live box's running state and has
-# no business restarting it.
+# The dashboard was installed and left disabled until 2026-10-10, while the page
+# ran under scripts/tmux-job.ts and two supervisors would have raced for :8787.
+# That tmux job is gone -- the live box has run the unit, enabled, since -- and
+# the box's scheduled jobs reach the Overseer through the dashboard's steer
+# route (plan 261010d), so a rebuilt box without it would be one whose alarms
+# have nowhere to go. GPT Sol's plan review, finding 4.
 systemctl enable overseer.service
 systemctl enable overseer-watchdog.timer
-echo "overseer + watchdog timer enabled; fleet-dashboard installed but NOT enabled (its owner's call)"
+systemctl enable fleet-dashboard.service
+echo "overseer, watchdog timer and fleet-dashboard enabled for the next boot"
 # The tidy IS started here, unlike the two above. It supervises nothing, so
 # there is no second copy of anything for it to race, and a box whose disk is
 # filling should not wait for a reboot to start being tidied.
 systemctl enable --now box-tidy.timer
 echo "box-tidy timer enabled and started"
+# The box's repeating jobs: enabled for the next boot, NOT started, the same
+# restraint as the watchdog's. All three run code from the primary checkout,
+# which provisioning does not create, and the dashboard refresh merges into it.
+# A rebuilt box starts them by hand once the checkout is ready
+# (infra/hetzner/README.md, the rebuild sequence). feedback-sweep.timer is left
+# alone here in both directions: enabling it starts paid work, so it is a
+# person's step, and a re-run must not disable one somebody enabled.
+systemctl enable box-health.timer worktree-sweep.timer dashboard-refresh.timer
+echo "box-health, worktree-sweep and dashboard-refresh timers enabled for the next boot (not started); feedback-sweep installed, enablement unchanged"
 
 echo "=== ssh ==="
 systemctl start apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true
@@ -2834,6 +3111,7 @@ check "tailscaled running"       'systemctl is-active tailscaled | grep -qx acti
 # way to a normal boot, and it is the one thing a user unit could never show.
 check "overseer unit installed"  'test -f /etc/systemd/system/overseer.service'
 check "overseer enabled"         'systemctl is-enabled overseer.service | grep -qx enabled'
+check "fleet-dashboard enabled"  'systemctl is-enabled fleet-dashboard.service | grep -qx enabled'
 check "overseer starts at boot"  'test -L /etc/systemd/system/multi-user.target.wants/overseer.service'
 check "overseer runs as $USER_NAME" 'systemctl show -p User --value overseer.service | grep -qx '"$USER_NAME"''
 check "overseer restarts always" 'systemctl show -p Restart --value overseer.service | grep -qx always'
@@ -2858,6 +3136,12 @@ check "box-tidy units parse"      'systemd-analyze verify /etc/systemd/system/bo
 check "box-tidy timer enabled"    'test -L /etc/systemd/system/timers.target.wants/box-tidy.timer'
 check "box-tidy timer running"    'systemctl is-active box-tidy.timer | grep -qx active'
 check "box-tidy runs as $USER_NAME" 'systemctl show -p User --value box-tidy.service | grep -qx '"$USER_NAME"''
+check "box-health timer enabled"  'test -L /etc/systemd/system/timers.target.wants/box-health.timer'
+check "worktree-sweep timer enabled" 'test -L /etc/systemd/system/timers.target.wants/worktree-sweep.timer'
+check "dashboard-refresh timer enabled" 'test -L /etc/systemd/system/timers.target.wants/dashboard-refresh.timer'
+check "repeating job units run as $USER_NAME" 'for unit in box-health worktree-sweep dashboard-refresh feedback-sweep; do systemctl show -p User --value "$unit.service" | grep -qx '"$USER_NAME"' || exit 1; done'
+check "repeating jobs use the primary checkout" 'for unit in box-health worktree-sweep dashboard-refresh feedback-sweep; do out=$(systemctl show -p WorkingDirectory --value "$unit.service") || exit 1; test "$out" = /home/'"$USER_NAME"'/code/spideryarn2 || exit 1; done'
+check "repeating job commands come from the primary checkout" 'for unit in box-health worktree-sweep dashboard-refresh feedback-sweep; do out=$(systemctl show -p ExecStart --value "$unit.service") || exit 1; case "$out" in *"/home/'"$USER_NAME"'/code/spideryarn2/"*) ;; *) exit 1 ;; esac; done'
 check "gh installed from GitHub's repo" 'gh --version && apt-cache policy gh | grep -q "cli.github.com"'
 check "pngquant installed"        'command -v pngquant'
 # cat-config also prints ignored duplicates. Require exactly one /tmp entry,
@@ -2868,13 +3152,11 @@ check "/tmp ages out after 7 days" 'set -o pipefail; systemd-tmpfiles --cat-conf
 # The Overseer's key file is a person's step, not provisioning's, so its absence
 # is not a failure here; a copy anybody can read is.
 check "overseer key file, if present, is root 0600" '! test -e /etc/overseer-secrets.env || test "$(stat -c %u:%a /etc/overseer-secrets.env)" = 0:600'
-# The dashboard's unit is installed and NOT enabled -- see the comment where it
-# is written. So there is no boot-symlink check here, deliberately: it would be
-# red on a correctly-provisioned box, and a red check nobody expects to be green
-# is how a report stops being read. What is asserted is that systemd can PARSE
-# the file, so the day somebody enables it there is nothing left to discover.
+# The dashboard is a boot service: the repeating jobs deliver through it, so a
+# rebuilt box must not come up with an alarm path that has no listener.
 check "fleet dashboard unit installed" 'test -f /etc/systemd/system/fleet-dashboard.service'
 check "fleet dashboard unit parses"    'systemd-analyze verify /etc/systemd/system/fleet-dashboard.service'
+check "fleet dashboard enabled"        'test -L /etc/systemd/system/multi-user.target.wants/fleet-dashboard.service'
 check "fleet dashboard runs as $USER_NAME" 'systemctl show -p User --value fleet-dashboard.service | grep -qx '"$USER_NAME"''
 check "fleet dashboard restarts always" 'systemctl show -p Restart --value fleet-dashboard.service | grep -qx always'
 check "fleet dashboard ExecStart is in the primary checkout" 'out=$(systemctl show -p ExecStart --value fleet-dashboard.service); case "$out" in *"/home/'"$USER_NAME"'/code/spideryarn2/"*worktrees*) false ;; *"/home/'"$USER_NAME"'/code/spideryarn2/"*) true ;; *) false ;; esac'

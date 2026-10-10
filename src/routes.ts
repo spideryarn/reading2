@@ -367,6 +367,15 @@ import {
 } from "./store/pg-voucher-emails.js";
 import type { VoucherCreated, VoucherUpdated } from "./admin-vouchers.js";
 import {
+  AUTHOR_GIFT_NOTES_MAX,
+  type AuthorGiftEnsured,
+  type AuthorGiftPatched,
+  type AuthorGiftSent,
+  type AuthorLookupStarted,
+} from "./admin-author-gifts.js";
+import { startAuthorLookup } from "./author-lookup-start.js";
+import { parseAuthorGiftPatch, parseEnsureAuthorGift, pgAuthorGiftStore } from "./store/pg-author-gifts.js";
+import {
   chargeAndSwitchOnHighPower,
   refuseUploadWithoutQuota,
   withMinimalSlot,
@@ -9191,7 +9200,7 @@ async function serveApi(
      * **The MCP tools for an AI app, and the third thing before the gate** —
      * plan 261007p. `requireUser` refuses an OAuth token everywhere (its
      * `[auth-oauth-token]`), so this route checks its own: the same claims,
-     * plus the one client it accepts and the administrator only. Exact paths,
+     * plus the clients `MCP_OAUTH_CLIENT_ID` admits and the administrator only. Exact paths,
      * like the webhook's. `handleApi` is handed in because each tool calls the
      * routes below in-process, as the verified person, through this same
      * function. src/mcp/remote.ts.
@@ -9504,6 +9513,8 @@ const JOBS_PATH = "/api/jobs";
 const SHARE_LINK_PATTERN = /^\/api\/article\/([\w.%-]+)\/share-link$/;
 /* Gift vouchers: GET lists, POST creates (261001m). */
 const ADMIN_VOUCHERS_PATH = "/api/admin/vouchers";
+/* Author gifts: GET lists, POST ensures one for an article (261010c). */
+const ADMIN_AUTHOR_GIFTS_PATH = "/api/admin/author-gifts";
 
 /**
  * **Why a voucher's starter article was refused**, in the administrator's
@@ -9725,6 +9736,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       const answer = await pgVoucherStore.createVoucher(parsed.value, user.id);
       if (answer.kind === "conflict") throw httpError(409, "A different voucher already has that id.");
       if (answer.kind === "starter-refused") throw starterRefused(answer.reason);
+      if (answer.kind === "create-refused") throw httpError(500, "This voucher create was unexpectedly refused.");
       res.setHeader("Cache-Control", "private, no-store");
       if (answer.kind === "replayed") {
         send(res, 200, { id: answer.id, email: "replayed" } satisfies VoucherCreated);
@@ -9792,6 +9804,158 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       await afterResponse("voucher email: retry", () => deliverReservedVoucherEmail(id, attempts));
       res.setHeader("Cache-Control", "private, no-store");
       send(res, 202, { id, email: "sending" });
+    },
+  },
+
+  /* **Author gifts** — a draft of a gift voucher for the author of one of the
+     administrator's own articles, filled in by a web-search lookup after the
+     response, and turned into a voucher only by *Send*.
+     docs/plans/261010c-author-gift-draft-voucher-from-the-add-page.md;
+     src/store/pg-author-gifts.ts, through its guarded store. Under
+     `/api/admin/`, so the namespace gate refuses everybody else before any of
+     this runs (D8).
+
+     **Where the lookup's spend goes.** These routes spend nothing themselves:
+     the lookup is `startAuthorLookup` (src/author-lookup-start.ts) after the
+     response, when the request's collector is already closed, so it opens a
+     collector of its own with the article's slug as its attribution (R2-F6).
+     That is the handler attributing its own spend, hence `"handler"` on the
+     two rows that start one. */
+  {
+    kind: "exact",
+    method: "GET",
+    path: ADMIN_AUTHOR_GIFTS_PATH,
+    article: "none",
+    handler: async ({ request: { res } }) => {
+      /* Addresses, and notes about other people. */
+      res.setHeader("Cache-Control", "private, no-store");
+      send(res, 200, { gifts: await pgAuthorGiftStore.listAuthorGifts() });
+    },
+  },
+  {
+    kind: "exact",
+    method: "POST",
+    path: ADMIN_AUTHOR_GIFTS_PATH,
+    article: "handler",
+    handler: async ({ user, request: { req, res } }) => {
+      const parsed = parseEnsureAuthorGift(await readBody(req));
+      if (!parsed.ok) throw httpError(400, parsed.message);
+      /* Ensure, nothing more (R2-F2): an existing gift is answered as it
+         stands, and only a new one makes the link and its first lookup. */
+      const answer = await pgAuthorGiftStore.ensureAuthorGift(parsed.value.slug, user.id);
+      res.setHeader("Cache-Control", "private, no-store");
+      if (answer.kind === "refused") {
+        switch (answer.reason) {
+          case "absent":
+            throw httpError(400, "That article is not one of yours.");
+          case "unpublished":
+            throw httpError(409, "That article has nothing to read yet. Draft its gift once it is on your shelf.");
+          case "link-off":
+            throw httpError(409, "That article's private link was turned off while its gift was being drafted. Try again.");
+          default: {
+            const never: never = answer.reason;
+            throw httpError(500, `unknown refusal ${String(never)}`);
+          }
+        }
+      }
+      if (answer.kind === "existing") {
+        send(res, 200, { id: answer.id, status: answer.status, created: false } satisfies AuthorGiftEnsured);
+        return;
+      }
+      /* Registered only now, after the gift and its pending lookup committed. */
+      const lookupId = answer.lookupId;
+      await afterResponse("author gift: lookup", () => startAuthorLookup(lookupId));
+      send(res, 202, { id: answer.id, status: "draft", created: true, lookupId } satisfies AuthorGiftEnsured);
+    },
+  },
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/admin\/author-gifts\/([\w-]+)\/lookups$/,
+    article: "handler",
+    handler: async ({ request: { res } }, captures) => {
+      const [, id = ""] = captures;
+      if (!isUuid(id)) throw httpError(400, "id must be a uuid");
+      const answer = await pgAuthorGiftStore.beginLookup(id);
+      if (answer.kind === "not-found") throw httpError(404, "There is no such author gift.");
+      if (answer.kind === "running") throw httpError(409, "A lookup for this gift is already running. Wait for it to finish.");
+      if (answer.kind === "not-draft") {
+        throw httpError(409, "That gift has been sent or discarded, so a lookup could change nothing.");
+      }
+      const lookupId = answer.lookupId;
+      await afterResponse("author gift: lookup", () => startAuthorLookup(lookupId));
+      res.setHeader("Cache-Control", "private, no-store");
+      send(res, 202, { lookupId } satisfies AuthorLookupStarted);
+    },
+  },
+  {
+    kind: "pattern",
+    method: "PATCH",
+    pattern: /^\/api\/admin\/author-gifts\/([\w-]+)$/,
+    article: "none",
+    handler: async ({ request: { req, res } }, captures) => {
+      const [, id = ""] = captures;
+      if (!isUuid(id)) throw httpError(400, "id must be a uuid");
+      const parsed = parseAuthorGiftPatch(await readBody(req));
+      if (!parsed.ok) throw httpError(400, parsed.message);
+      const answer = await pgAuthorGiftStore.patchAuthorGift(id, parsed.value);
+      if (answer.kind === "not-found") throw httpError(404, "There is no such author gift.");
+      if (answer.kind === "frozen") {
+        throw httpError(409, "That gift is being sent or has been sent, so only its notes can change.");
+      }
+      if (answer.kind === "notes-moved") {
+        throw httpError(409, "The notes changed since you opened them; reload and try again.");
+      }
+      if (answer.kind === "notes-full") {
+        throw httpError(409, `The notes are full (${AUTHOR_GIFT_NOTES_MAX.toLocaleString("en-GB")} characters), so nothing was added. Shorten them first.`);
+      }
+      res.setHeader("Cache-Control", "private, no-store");
+      send(res, 200, { ok: true, notesUpdatedAt: answer.notesUpdatedAt } satisfies AuthorGiftPatched);
+    },
+  },
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/admin\/author-gifts\/([\w-]+)\/send$/,
+    article: "none",
+    handler: async ({ request: { res } }, captures) => {
+      const [, id = ""] = captures;
+      if (!isUuid(id)) throw httpError(400, "id must be a uuid");
+      const answer = await pgAuthorGiftStore.sendAuthorGift(id);
+      switch (answer.kind) {
+        case "not-found":
+          throw httpError(404, "There is no such author gift.");
+        case "no-address":
+          throw httpError(409, "That gift has no address yet. Add one, then send it.");
+        case "discarded":
+          throw httpError(409, "That gift has been discarded. Restore it first.");
+        case "starter-refused":
+          /* The freeze was released: fix the article, then press Send again. */
+          throw starterRefused(answer.reason);
+        case "superseded":
+          throw httpError(409, "A newer change replaced this Send attempt. Check the gift, then press Send again.");
+        case "conflict":
+          throw httpError(500, "That gift's voucher id belongs to a different voucher.");
+        case "created":
+        case "replayed": {
+          /* After either (R2-F1): a replay whose email is still queued is a
+             send that died before its after-response work ran. The email's
+             reservation makes scheduling it twice harmless. */
+          const delivery = answer.delivery;
+          if (delivery) await afterResponse("voucher email: gift", () => sendQueuedVoucherEmail(delivery));
+          res.setHeader("Cache-Control", "private, no-store");
+          send(
+            res,
+            answer.kind === "created" ? 201 : 200,
+            { voucherId: answer.voucherId, email: answer.kind === "created" ? "queued" : "replayed" } satisfies AuthorGiftSent,
+          );
+          return;
+        }
+        default: {
+          const never: never = answer;
+          throw httpError(500, `unknown send answer ${String(never)}`);
+        }
+      }
     },
   },
 

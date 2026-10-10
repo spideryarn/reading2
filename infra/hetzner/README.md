@@ -503,16 +503,19 @@ value is written here or anywhere in the repo; each line names where one lives.
    the header of
    [`scripts/overseer-tools/daemon-launch.sh`](../../scripts/overseer-tools/daemon-launch.sh),
    after `sudo systemctl disable --now overseer`.
-9. **The Overseer session and its loops.** Start the session and claim the role
-   ([overseer.md](../../docs/project/overseer.md)), give it a working directory outside `/tmp`,
-   and start the loops from
-   [`scripts/overseer-tools/`](../../scripts/overseer-tools/README.md) with `scripts/tmux-job.ts`:
-   `feedback-sweep-loop.sh`, `dashboard-refresh-loop.sh`, and `npx tsx scripts/readiness-loop.ts`
-   ([readiness.md](../../docs/project/readiness.md)). **`OVERSEER_SCRATCH` has to be inside the
-   job's command**, because a tmux job gets the tmux server's environment and not your shell's:
-   `npx tsx scripts/tmux-job.ts env OVERSEER_SCRATCH=<dir> bash scripts/overseer-tools/feedback-sweep-loop.sh`.
-   Check each loop's log under `logs/tmux-jobs/` a minute later; a loop that could not find its
-   directory has already exited.
+9. **The Overseer session, its timers and its one loop.** Start the session and claim the role
+   ([overseer.md](../../docs/project/overseer.md)), with `~/.overseer/scratch` as its working
+   directory. Then start the timers provisioning enabled for the next boot:
+   `sudo systemctl start box-health.timer worktree-sweep.timer dashboard-refresh.timer`, and — once
+   Greg has said the feedback sweep may run unattended — `sudo systemctl enable --now feedback-sweep.timer`
+   ([hetzner-remote-server-box.md § The repeating jobs, on timers](../../docs/project/hetzner-remote-server-box.md#the-repeating-jobs-on-timers)).
+   Until he has, the sweep is the tmux loop:
+   `npx tsx scripts/tmux-job.ts env OVERSEER_SCRATCH=$HOME/.overseer/scratch bash scripts/overseer-tools/feedback-sweep-loop.sh`
+   (**`OVERSEER_SCRATCH` has to be inside the job's command**: a tmux job gets the tmux server's
+   environment, not your shell's). The readiness loop is still tmux:
+   `npx tsx scripts/readiness-loop.ts` under `scripts/tmux-job.ts`
+   ([readiness.md](../../docs/project/readiness.md)). Check each loop's log under `logs/tmux-jobs/`
+   a minute later; a loop that could not find its directory has already exited.
    **Then create the session's scheduled jobs** from
    [`scripts/overseer-tools/standing-jobs.md`](../../scripts/overseer-tools/standing-jobs.md);
    no systemd unit does this for you.
