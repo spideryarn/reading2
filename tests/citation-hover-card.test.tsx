@@ -732,6 +732,8 @@ describe("Open in Sources from the card", () => {
     hover(cite(0));
     const acts = open()?.parentElement;
     expect(open()?.classList.contains("prose-card-open")).toBe(true);
+    expect(open()?.getAttribute("type")).toBe("button");
+    expect(open()?.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
     expect(acts?.classList.contains("prose-card-acts"), "Ask in chat and Open in Sources are one group").toBe(true);
     expect(acts?.lastElementChild).toBe(open());
   });

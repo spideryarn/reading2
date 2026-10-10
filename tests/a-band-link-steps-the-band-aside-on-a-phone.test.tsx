@@ -628,29 +628,83 @@ describe("Skim, which jumps on opening", () => {
   });
 });
 
+/* Plan 261010d: the quote card now uses `showBand`, not a bare mode setter,
+   and remains available while Quotes itself is open. These are the two
+   history-sensitive cases the component-only card test cannot see. */
+describe("the quote card's way into Quotes", () => {
+  async function openQuoteCard(): Promise<HTMLButtonElement> {
+    const mark = host.querySelector("mark.hit[data-quote]");
+    expect(mark, "the prose must carry the quote mark").not.toBeNull();
+    await act(async () => {
+      const event = new MouseEvent("pointerover", { bubbles: true, clientX: 10, clientY: 10 });
+      Object.defineProperty(event, "pointerType", { value: "mouse" });
+      mark?.dispatchEvent(event);
+      await new Promise((go) => setTimeout(go, 650));
+    });
+    const button = [...document.querySelectorAll<HTMLButtonElement>(".prose-card button")]
+      .find((candidate) => candidate.textContent?.includes("Open in Quotes"));
+    expect(button, "the quote card did not offer Quotes").toBeDefined();
+    return button!;
+  }
+
+  it("changes mode and selection in one pushed history entry", async () => {
+    await open(PHONE);
+    await until(() => host.querySelector("mark.hit[data-quote]") !== null, "the quote mark was not drawn");
+    const openQuotes = await openQuoteCard();
+    const pushed = vi.spyOn(history, "pushState");
+
+    await act(async () => openQuotes.click());
+    await until(
+      () => param("mode") === "quotes" && param("quote") === QUOTE_ID,
+      "Quotes did not open on its row",
+    );
+
+    expect(pushed, "the quote and mode became separate Back steps").toHaveBeenCalledTimes(1);
+  });
+
+  it("is still present in Quotes and restores its stepped-aside band without an empty history step", async () => {
+    await open(PHONE, `?mode=quotes&quote=${QUOTE_ID}`);
+    const link = host.querySelector<HTMLAnchorElement>(
+      `.quotes-row a.block-ref[data-block-link="${BAND_TARGET}"]`,
+    );
+    expect(link, "the quote row must provide its passage jump").not.toBeNull();
+    await act(async () => link?.click());
+    await until(() => reader().classList.contains("band-away"), "the quote jump did not step aside");
+
+    const openQuotes = await openQuoteCard();
+    const pushed = vi.spyOn(history, "pushState");
+    await act(async () => openQuotes.click());
+    await settle();
+
+    expect(reader().classList.contains("band-away"), "Open in Quotes left the band hidden").toBe(false);
+    expect(pushed, "restoring the current Quotes band added an empty Back step").not.toHaveBeenCalled();
+  });
+});
 
 /* Plan 261004b: a card could start another dig while its own mode was already
    open but stepped aside, and changing the URL to the same mode had to reveal
    it. Since plan 261009k the card's button is *Ask in chat*, which goes to
    Chat: what is pinned now is that it starts no dig, and that the band it
    lands in is not left hidden. */
-describe("the citation card's Ask in chat lands in a band that is drawn", () => {
-  it.each([PHONE, 600])("goes to Chat from a stepped-aside Citations band at %ipx", async (width) => {
-    const id = "spya-c2qmbg";
-    const citation = {
-      id, key: "work:plain", title: "The plain point", why: "Where the point comes from.",
-      mentions: [{ blockId: FIRST, quote: "The first point", start: 0 }],
-      citedAt: [FIRST], firstCited: FIRST, citedInBody: true,
-      url: "https://example.com/point", linkFrom: "article", relevance: 0.8,
-    };
+describe("the citation card's actions from a stepped-aside Sources band", () => {
+  const id = "spya-c2qmbg";
+  const citation = {
+    id, key: "work:plain", title: "The plain point", why: "Where the point comes from.",
+    mentions: [{ blockId: FIRST, quote: "The first point", start: 0 }],
+    citedAt: [FIRST], firstCited: FIRST, citedInBody: true,
+    url: "https://example.com/point", linkFrom: "article", relevance: 0.8,
+  };
+  const citationsReply = () => json({
+    citations: { version: "test", generator: "test", slug: SLUG, sourceHash: "hash",
+      generatedAt: "2026-10-04T00:00:00.000Z", elapsedMs: 1, capped: false,
+      citations: [citation] }, stale: false, outdated: false,
+  });
+
+  it.each([PHONE, 600])("Ask in chat goes to a band that is drawn at %ipx", async (width) => {
     let digs = 0;
     vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
-      if (url === `/api/citations/${SLUG}`) return Promise.resolve(json({
-        citations: { version: "test", generator: "test", slug: SLUG, sourceHash: "hash",
-          generatedAt: "2026-10-04T00:00:00.000Z", elapsedMs: 1, capped: false,
-          citations: [citation] }, stale: false, outdated: false,
-      }));
+      if (url === `/api/citations/${SLUG}`) return Promise.resolve(citationsReply());
       if (url === `/api/citations/${SLUG}/${id}/investigate`) {
         digs += 1;
         return Promise.resolve(json({ error: "Test refusal" }, 429));
@@ -659,7 +713,9 @@ describe("the citation card's Ask in chat lands in a band that is drawn", () => 
     });
     await open(width, "?mode=sources");
     expect(reader().classList.contains("band-covers")).toBe(true);
-    const link = host.querySelector<HTMLAnchorElement>(`.cite-item a.block-ref[data-block-link="${FIRST}"]`);
+    const link = host.querySelector<HTMLAnchorElement>(
+      `.cite-item a.block-ref[data-block-link="${FIRST}"]`,
+    );
     expect(link, "the citation row must provide its passage jump").not.toBeNull();
     await act(async () => link?.click());
     await until(() => reader().classList.contains("band-away"), "the citation jump did not step aside");
@@ -679,6 +735,60 @@ describe("the citation card's Ask in chat lands in a band that is drawn", () => 
     expect(document.querySelector(".prose-card")).toBeNull();
     expect(param("mode")).toBe("chat");
     expect(reader().classList.contains("band-away"), "the chat landed in a hidden band").toBe(false);
+  });
+
+  it("Open in Sources restores Bibliography, lands its row, and adds no empty history step", async () => {
+    vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === `/api/citations/${SLUG}`) return Promise.resolve(citationsReply());
+      return Promise.resolve(reply(url, init?.method ?? "GET"));
+    });
+    await open(PHONE, "?mode=sources");
+    const link = host.querySelector<HTMLAnchorElement>(`.cite-item a.block-ref[data-block-link="${FIRST}"]`);
+    expect(link, "the citation row must provide its passage jump").not.toBeNull();
+    await act(async () => link?.click());
+    await until(() => reader().classList.contains("band-away"), "the citation jump did not step aside");
+
+    const mark = host.querySelector("mark.cite");
+    expect(mark, "the prose must carry the citation mark").not.toBeNull();
+    await act(async () => {
+      const event = new MouseEvent("pointerover", { bubbles: true, clientX: 10, clientY: 10 });
+      Object.defineProperty(event, "pointerType", { value: "mouse" });
+      mark?.dispatchEvent(event);
+    });
+    await until(
+      () => [...document.querySelectorAll<HTMLButtonElement>(".prose-card button")]
+        .some((button) => button.textContent?.includes("Open in Sources")),
+      "the citation card did not offer Sources",
+    );
+
+    const landed: Element[] = [];
+    const had = Object.getOwnPropertyDescriptor(Element.prototype, "scrollIntoView");
+    Element.prototype.scrollIntoView = function (this: Element) {
+      landed.push(this);
+    };
+    const pushed = vi.spyOn(history, "pushState");
+    try {
+      const openSources = [...document.querySelectorAll<HTMLButtonElement>(".prose-card button")]
+        .find((button) => button.textContent?.includes("Open in Sources"));
+      await act(async () => openSources?.click());
+      await settle();
+    } finally {
+      if (had) Object.defineProperty(Element.prototype, "scrollIntoView", had);
+      else delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    }
+
+    expect(param("mode")).toBe("sources");
+    expect(param("sources")).toBeNull();
+    expect(
+      reader().classList.contains("band-away"),
+      "Open in Sources left Bibliography hidden",
+    ).toBe(false);
+    expect(
+      landed.some((el) => el.getAttribute("data-citation-id") === id),
+      "the cited work's row was not landed",
+    ).toBe(true);
+    expect(pushed, "restoring the current Bibliography added an empty Back step").not.toHaveBeenCalled();
   });
 });
 

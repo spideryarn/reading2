@@ -2268,24 +2268,24 @@ function CiteCard({
             band's own sender, so the chat records the same origin as a press
             on the row would. The card closes on either press. */}
         {(onAsk || onOpen) && (
-        <span className="prose-card-acts">
-        {onAsk && (
-          <button
-            type="button"
-            className="prose-card-act prose-card-cite-ask"
-            aria-label={ASK_WORK_IN_CHAT}
-            title={`${ASK_WORK_IN_CHAT}. ${ASK_IN_CHAT_SAYS}`}
-            onClick={() => {
-              onAsk(work);
-              onClose();
-            }}
-          >
-            <MessagesSquare size={10} aria-hidden="true" />
-            {ASK_IN_CHAT}
-          </button>
-        )}
-        {onOpen && <OpenInMode mode="sources" onPress={onOpen} />}
-        </span>
+          <span className="prose-card-acts">
+            {onAsk && (
+              <button
+                type="button"
+                className="prose-card-act prose-card-cite-ask"
+                aria-label={ASK_WORK_IN_CHAT}
+                title={`${ASK_WORK_IN_CHAT}. ${ASK_IN_CHAT_SAYS}`}
+                onClick={() => {
+                  onAsk(work);
+                  onClose();
+                }}
+              >
+                <MessagesSquare size={10} aria-hidden="true" />
+                {ASK_IN_CHAT}
+              </button>
+            )}
+            {onOpen && <OpenInMode mode="sources" onPress={onOpen} />}
+          </span>
         )}
       </p>
     </div>
@@ -2545,43 +2545,42 @@ export function TermCard({
       {/* No foot at all with nothing to put in it: a visitor in Skim with no
           Glossary to open, on a term with no link. */}
       {(entry.url || actions || onAsk || onOpen) && (
-      <p className="prose-card-foot prose-card-foot-wraps prose-card-term-foot">
-        {entry.url && (
-          /* `noreferrer` as well as `noopener`, as in the panel: the article's
-             own URL is a reading history and a model-supplied link should not be
-             handed ours. The scheme was checked server-side by `safeUrl`. */
-          <a className="prose-card-link" href={entry.url} target="_blank" rel="noopener noreferrer">
-            <ExternalLink size={10} />
-            {hostOf(entry.url)}
-          </a>
-        )}
-        {/* **The three buttons are one group that never breaks**, pushed right.
-            When a link beside them leaves no room, the group moves to a line
-            of its own whole, rather than *Hide* parting from *Ask in chat* or
-            *Open in Glossary* landing alone (GPT Sol, plan review of 261003h). */}
-        <span className="prose-card-acts">
-        {/* The owner's two verbs, beside the way out. Plain buttons, like
-            that one: a tap inside the card is left entirely alone by the touch
-            path (useHoverCard.ts § "Inside the card"), so they work on a
-            finger as it does. */}
-        {/* Chat's two bubbles (icons.md § A chat is two bubbles), in the
-            card's own button rather than the band's `AskInChatButton`: the
-            row's other two are `.prose-card-act`, and a 32px outline Button
-            among them would be a second kind of thing. */}
-        {onAsk && (
-          <button
-            type="button"
-            className="prose-card-act prose-card-term-ask"
-            aria-label={ASK_ENTRY_IN_CHAT}
-            title={`${ASK_ENTRY_IN_CHAT}. ${ASK_IN_CHAT_SAYS}`}
-            onClick={ask}
-          >
-            <MessagesSquare size={10} aria-hidden="true" />
-            {ASK_IN_CHAT}
-          </button>
-        )}
-        {actions && (
-          <>
+        <p className="prose-card-foot prose-card-foot-wraps prose-card-term-foot">
+          {entry.url && (
+            /* `noreferrer` as well as `noopener`, as in the panel: the article's
+               own URL is a reading history and a model-supplied link should not be
+               handed ours. The scheme was checked server-side by `safeUrl`. */
+            <a className="prose-card-link" href={entry.url} target="_blank" rel="noopener noreferrer">
+              <ExternalLink size={10} />
+              {hostOf(entry.url)}
+            </a>
+          )}
+          {/* **The three buttons are one group that never breaks**, pushed right.
+              When a link beside them leaves no room, the group moves to a line
+              of its own whole, rather than *Hide* parting from *Ask in chat* or
+              *Open in Glossary* landing alone (GPT Sol, plan review of 261003h). */}
+          <span className="prose-card-acts">
+            {/* The owner's two verbs, beside the way out. Plain buttons, like
+                that one: a tap inside the card is left entirely alone by the touch
+                path (useHoverCard.ts § "Inside the card"), so they work on a
+                finger as it does. */}
+            {/* Chat's two bubbles (icons.md § A chat is two bubbles), in the
+                card's own button rather than the band's `AskInChatButton`: the
+                row's other two are `.prose-card-act`, and a 32px outline Button
+                among them would be a second kind of thing. */}
+            {onAsk && (
+              <button
+                type="button"
+                className="prose-card-act prose-card-term-ask"
+                aria-label={ASK_ENTRY_IN_CHAT}
+                title={`${ASK_ENTRY_IN_CHAT}. ${ASK_IN_CHAT_SAYS}`}
+                onClick={ask}
+              >
+                <MessagesSquare size={10} aria-hidden="true" />
+                {ASK_IN_CHAT}
+              </button>
+            )}
+            {actions && (
             <button
               type="button"
               className="prose-card-act"
@@ -2595,17 +2594,16 @@ export function TermCard({
               <Trash2 size={10} />
               Hide
             </button>
-          </>
-        )}
-        {/* The way out to the full entry. Without it the underline is a
-            dead end: the mark itself stays inert to a click, because pressing
-            prose has always meant selecting it. It said "in the glossary" until
-            2026-10-03; Greg asked for a label that says what pressing it does.
-            *Open glossary* until plan 261010d, which made it every card's
-            `OpenInMode`. */}
-        {onOpen && <OpenInMode mode="glossary" onPress={onOpen} />}
-        </span>
-      </p>
+            )}
+            {/* The way out to the full entry. Without it the underline is a
+                dead end: the mark itself stays inert to a click, because pressing
+                prose has always meant selecting it. It said "in the glossary" until
+                2026-10-03; Greg asked for a label that says what pressing it does.
+                *Open glossary* until plan 261010d, which made it every card's
+                `OpenInMode`. */}
+            {onOpen && <OpenInMode mode="glossary" onPress={onOpen} />}
+          </span>
+        </p>
       )}
       {hideFailed && <p className="prose-card-text prose-card-failed">{hideFailed}</p>}
     </div>

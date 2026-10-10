@@ -376,15 +376,14 @@
    261009k. The same quiet button as `.prose-card-open`,
    with the same padding-as-target reasoning above, minus the push to the right.
 
-   **The term's foot wraps, and only the term's — and only in one place.** A
+   **The term and citation feet wrap through this one shared rule.** A term's
    link, *Ask in chat*, *Hide* and *Open in Glossary* can be wider than the
-   card, so the three buttons are one group that does not break
-   (`.prose-card-acts`) and the foot wraps between the link and the group:
-   the link on its line, the buttons together on the next. The citation's foot
-   took the same shape in plan 261010d, when *Open in Sources* joined *Ask in
-   chat* beside the work's source line. Every other card's foot is two short
-   things and stays as it was. No row gap: each button's own
-   padding is the tap target and already spaces two lines. */
+   card, so the buttons are one group that does not break (`.prose-card-acts`)
+   and the foot wraps between the link and the group: the link on its line, the
+   buttons together on the next. The citation took the same shape in plan
+   261010d, when *Open in Sources* joined *Ask in chat* beside the work's source
+   line. Every other card's foot is two short things and stays as it was. No row
+   gap: each button's own padding is the tap target and already spaces two lines. */
 .prose-card-foot-wraps {
   flex-wrap: wrap;
   gap: 0 0.9rem;
@@ -524,19 +523,6 @@
     padding: 0;
   }
 }
-/* The owner's button (*Ask in chat*; *Dig deeper* from plan 261004b until plan
-   261009k) makes the foot three things, wider than the card with a long host,
-   so this foot wraps as the term's does: the two facts on their line and the
-   button, pushed right, on the next when it has to be. */
-.prose-card-cite-foot {
-  flex-wrap: wrap;
-  gap: 0 0.9rem;
-}
-.prose-card-cite-ask {
-  margin-left: auto;
-  white-space: nowrap;
-}
-
 /* Under `why`: we have not read the work, or found only a page matching its
    title. The band's sentence (CitationsPanel.tsx § readNoteOf), as quiet as the
    foot's facts. Plan 260929g stage 1. */

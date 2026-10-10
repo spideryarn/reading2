@@ -1442,13 +1442,11 @@ export function Reader({
   const works: readonly CitedWork[] = owner?.citations.citations?.citations ?? NO_WORKS;
 
   /**
-   * **Open Citations on one row** — a one-shot the band hands back once the
+   * **Open Bibliography on one row** — a one-shot the band hands back once the
    * row is in view (CitationsPanel.tsx § `Props.focus`); state rather than a
-   * URL parameter because nothing about it should survive a reload. The prose
-   * card's *Dig deeper* set it from plan 261004b until 2026-10-09, when that
-   * button became *Ask in chat* (plan 261009k), which goes to Chat instead.
-   * Since then a chat's way back to its item sets it (`openOrigin` below, plan
-   * 261009k stage 2); Glossary, Ideas and Debate have the same shape (item-focus.ts).
+   * URL parameter because nothing about it should survive a reload. A chat's
+   * way back and, since plan 261010d, a citation card's *Open in Sources* set
+   * it; Glossary, Ideas and Debate have the same shape (item-focus.ts).
    */
   const [citeFocus, setCiteFocus] = useState<CiteFocus | null>(null);
   /* Only the request that was served: a second press may have replaced it. */
@@ -1609,7 +1607,8 @@ export function Reader({
   /**
    * **One row to bring into view in Glossary, Ideas and Sources' Claims**,
    * once each — `citeFocus` above is Bibliography's (src/web/item-focus.ts). Only
-   * the way back from a chat sets them (`openOrigin` below). One piece of
+   * an opener outside the list sets them: a chat's way back (`openOrigin`
+   * below), and for Glossary the prose card since plan 261010d. One piece of
    * state per band, so a request for one band cannot be spent by another.
    */
   const [termFocus, setTermFocus] = useState<ItemFocus | null>(null);
@@ -1687,16 +1686,23 @@ export function Reader({
    * 261009l). The move is one pushed entry naming the mode and the sub-mode
    * (Bibliography is the absent default), so a reader on Reception or Claims
    * lands on the list the focus is for. Called by a chat's way back to a
-   * cited work, and by Claims' *Cited in this paragraph* (that plan's
-   * Stage 2).
+   * cited work, by Claims' *Cited in this paragraph* (that plan's Stage 2),
+   * and by a citation card's *Open in Sources*.
+   *
+   * If Bibliography is already the visible list and no conversation is open,
+   * only restore the band and focus the row. A same-value pushed write creates
+   * an empty Back step (`showBand` has the same guard); the card can reach this
+   * case whenever a narrow band has stepped aside (plan 261010d code review).
    */
   const openBibliographyWork = useCallback(
     (workId: string) => {
       setBandAway(false);
       setCiteFocus(focusOn(workId));
-      void setSourcesWay({ mode: "sources", sources: null, thread: null }, { history: "push" });
+      if (mode !== "sources" || sourcesView !== "bibliography" || thread !== null) {
+        void setSourcesWay({ mode: "sources", sources: null, thread: null }, { history: "push" });
+      }
     },
-    [setSourcesWay],
+    [mode, sourcesView, thread, setSourcesWay],
   );
   const [, setIdeaWay] = useQueryStates({
     mode: modeParam,
