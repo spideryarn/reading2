@@ -1563,6 +1563,58 @@ describe("one owner's article, asked for by another", { timeout: 20_000 }, () =>
     }
   });
 
+  it("does not share an addendum to a report, nor let another account add to one (261010o)", async () => {
+    /* `feedback_addenda` is keyed by owner, and its report by `(owner_id,
+       report_id)`: one admin's addendum must not come back under another
+       account, and another account naming the report id finds no report. */
+    const { pgFeedbackStore } = await import("../src/store/pg-feedback.js");
+    const { feedback, feedbackAddenda } = await import("../src/db/schema.js");
+    const reportId = mintId();
+    const addendumId = mintId();
+    const none = { shipped: [], declined: [], awaiting: [] };
+    const as = <T>(owner: OwnerId, body: () => Promise<T>) =>
+      runInRequest(async () => {
+        setRequestOwner(owner);
+        return body();
+      });
+    try {
+      await as(theEnvironmentsOwner, () =>
+        pgFeedbackStore.submit({
+          id: reportId,
+          reporterEmail: "isolation@example.invalid",
+          body: "the report",
+          kind: null,
+          consented: false,
+          url: null,
+          slug: null,
+          buildCommit: null,
+          environment: "test",
+          requestVercelId: null,
+          diagnostics: null,
+          screenshot: null,
+        }),
+      );
+      const mine = await as(theEnvironmentsOwner, () =>
+        pgFeedbackStore.submitAddendum({ id: addendumId, reportId, body: "only mine to read", environment: "test" }, none),
+      );
+      expect(mine.kind).toBe("created");
+      /* The outsider naming the report id finds no report of theirs. */
+      expect(
+        await as(OUTSIDER, () =>
+          pgFeedbackStore.submitAddendum({ id: mintId(), reportId, body: "not theirs", environment: "test" }, none),
+        ),
+      ).toEqual({ kind: "missing" });
+      const theirs = await as(OUTSIDER, () => pgFeedbackStore.listMineByStatus(50, none, "all"));
+      expect(JSON.stringify(theirs)).not.toContain("only mine to read");
+      /* The positive control: the owner reads it back with the report. */
+      const back = await as(theEnvironmentsOwner, () => pgFeedbackStore.listMineByStatus(50, none, "all"));
+      expect(back.reports.find((one) => one.id === reportId)?.addenda.map((one) => one.id)).toEqual([addendumId]);
+    } finally {
+      await getDb().delete(feedbackAddenda).where(eq(feedbackAddenda.reportId, reportId));
+      await getDb().delete(feedback).where(eq(feedback.id, reportId));
+    }
+  });
+
   it("does not share a deferral of a question (261008i)", async () => {
     /* `feedback_question_deferrals` is keyed by owner: one admin's "not now"
        must not move another account's thread. */

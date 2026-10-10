@@ -7794,6 +7794,36 @@ export interface AdminEarlierFeedback extends Omit<EarlierFeedback, "shipped"> {
   comment: string | null;
   /** ISO: when an admin pressed Ignore on it, or null. What the row says when there is no comment. */
   ignoredAt: string | null;
+  /**
+   * **What the admin has added to it since**, oldest first, whatever its
+   * status now: an addendum written while a report was open stays shown after
+   * it ships. Their own words, to be drawn in the reader's face. All of one
+   * report's addenda together are at most `MAX_FEEDBACK_BODY_CHARS`.
+   * A server from before plan 261010o sends no key: none, and no box.
+   * docs/plans/261010o-addendum-to-an-earlier-feedback-report.md.
+   */
+  addenda: AdminFeedbackAddendum[];
+}
+
+/** One addendum to an admin's own earlier report, as the Earlier tab shows it. */
+export interface AdminFeedbackAddendum {
+  /** The browser-minted `spya-` id it was sent with. */
+  id: string;
+  body: string;
+  /** ISO. */
+  createdAt: string;
+}
+
+/**
+ * Which statuses take an addendum: every report not yet shipped or set aside
+ * (plan 261010o, F8). The store refuses the others under the report's row lock;
+ * the dialog shows the box only on these.
+ */
+export const ADDENDUM_STATUSES = ["open", "waiting"] as const satisfies readonly EarlierFeedbackStatus[];
+
+/** What `POST /api/admin/feedback/addenda` answers with: the stored addendum, on a 201 and on a 200 alike. */
+export interface AdminFeedbackAddendumReceipt {
+  addendum: AdminFeedbackAddendum;
 }
 
 /**

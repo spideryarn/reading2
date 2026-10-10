@@ -50,6 +50,7 @@ import { and, asc, desc, eq, inArray, isNotNull, isNull, type SQL, sql } from "d
 import { getDb } from "../db/client.js";
 import {
   feedback as feedbackTable,
+  feedbackAddenda as addendaTable,
   feedbackQuestionAnswers as answersTable,
   feedbackQuestionDeferrals as deferralsTable,
 } from "../db/schema.js";
@@ -57,7 +58,10 @@ import { feedbackPageAt, feedbackPageLabel } from "../feedback-page.js";
 import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
 import {
+  ADDENDUM_STATUSES,
   EARLIER_FEEDBACK_STATUSES,
+  MAX_FEEDBACK_BODY_CHARS,
+  type AdminFeedbackAddendum,
   type EarlierFeedbackStatus,
   type FeedbackDiagnosticsPayload,
   type FeedbackEnvironment,
@@ -75,6 +79,9 @@ import {
   type FeedbackStore,
   type FeedbackSubmission,
   type FeedbackAnswerSubmission,
+  type FeedbackAddendumSubmission,
+  type NewFeedbackAddendum,
+  type StoredFeedbackAddendum,
   type LinkedFeedbackReport,
   type NewFeedback,
   type NewFeedbackAnswer,
@@ -278,6 +285,18 @@ const ANSWER_COLUMNS = {
 
 function toAnswer(row: { id: string; questionId: string; body: string; createdAt: Date }): StoredFeedbackAnswer {
   return { id: row.id, questionId: row.questionId, body: row.body, createdAt: row.createdAt.toISOString() };
+}
+
+/** The four fields of an addendum that are the caller's to read back. */
+const ADDENDUM_COLUMNS = {
+  id: addendaTable.id,
+  reportId: addendaTable.reportId,
+  body: addendaTable.body,
+  createdAt: addendaTable.createdAt,
+};
+
+function toAddendum(row: { id: string; reportId: string; body: string; createdAt: Date }): StoredFeedbackAddendum {
+  return { id: row.id, reportId: row.reportId, body: row.body, createdAt: row.createdAt.toISOString() };
 }
 
 /** The three fields of a deferral the caller reads back; never the environment. */
@@ -530,12 +549,31 @@ const rawPgFeedbackStore: FeedbackStore = {
         .groupBy(sql`1`);
       const counts: Record<EarlierFeedbackStatus, number> = { open: 0, waiting: 0, aside: 0, shipped: 0 };
       for (const row of counted) counts[toStatus(row.status)] = row.reports;
+      const page = rows.slice(0, limit);
+      /* **The page's addenda, in the same snapshot** (plan 261010o), so a
+         report and what was added to it are one moment. Oldest first, the id
+         breaking a tie; the owner predicate is always there, and the report
+         one beside it. */
+      const addenda = new Map<string, AdminFeedbackAddendum[]>();
+      if (page.length > 0) {
+        const added = await tx
+          .select(ADDENDUM_COLUMNS)
+          .from(addendaTable)
+          .where(and(eq(addendaTable.ownerId, owner), inArray(addendaTable.reportId, page.map((row) => row.id))))
+          .orderBy(asc(addendaTable.createdAt), asc(addendaTable.id));
+        for (const row of added) {
+          const list = addenda.get(row.reportId) ?? [];
+          list.push({ id: row.id, body: row.body, createdAt: row.createdAt.toISOString() });
+          addenda.set(row.reportId, list);
+        }
+      }
       return {
-        reports: rows.slice(0, limit).map((row) => ({
+        reports: page.map((row) => ({
           ...toMine(row),
           number: row.number,
           status: toStatus(row.status),
           ignoredAt: row.ignoredAt === null ? null : row.ignoredAt.toISOString(),
+          addenda: addenda.get(row.id) ?? [],
         })),
         more: rows.length > limit,
         counts,
@@ -581,6 +619,94 @@ const rawPgFeedbackStore: FeedbackStore = {
     }
     logger.info({ id: input.id, repeat: true }, "feedback question already answered with this reply");
     return { kind: "duplicate", answer: toAnswer(existing) };
+  },
+
+  async submitAddendum(input: NewFeedbackAddendum, endings: FeedbackEndingIds): Promise<FeedbackAddendumSubmission> {
+    const ownerId = currentOwnerId();
+    /* **One transaction, and the order is the design** (plan 261010o, F3). */
+    return getDb().transaction(async (tx) => {
+      /* The stored row under this id, judged: the same addendum again is the
+         retry it looks like, anything else a different one. The key is
+         `(owner_id, id)`, so a row found is this owner's by construction. */
+      const already = async (): Promise<FeedbackAddendumSubmission | null> => {
+        const [existing] = await tx
+          .select(ADDENDUM_COLUMNS)
+          .from(addendaTable)
+          .where(and(eq(addendaTable.ownerId, ownerId), eq(addendaTable.id, input.id)));
+        if (!existing) return null;
+        if (existing.reportId !== input.reportId || existing.body !== input.body) {
+          logger.warn({ id: input.id }, "feedback addendum refused: its id is already another addendum");
+          return { kind: "conflict" };
+        }
+        logger.info({ id: input.id, report: input.reportId, repeat: true }, "feedback addendum already stored");
+        return { kind: "duplicate", addendum: toAddendum(existing) };
+      };
+      /* 1. **A stored row first**, so a retry of an addendum already kept is a
+         200 even if the report has closed since: it is the same row. */
+      const first = await already();
+      if (first) return first;
+      /* 2. **The owner's report, locked.** None is `missing`, which never says
+         whether another owner has that id. Ignore's update waits here. */
+      const [parent] = await tx
+        .select({ status: statusOf(endings) })
+        .from(feedbackTable)
+        .where(and(eq(feedbackTable.ownerId, ownerId), eq(feedbackTable.id, input.reportId)))
+        .for("update");
+      if (!parent) {
+        logger.info({ id: input.id, report: input.reportId }, "feedback addendum refused: no such report of the caller's");
+        return { kind: "missing" };
+      }
+      /* A copy of this same retry that held the lock first has committed by
+         now; look again, so it is a duplicate and not counted against the cap. */
+      const second = await already();
+      if (second) return second;
+      /* 3. **Still taking addenda**, by the list's own expression. */
+      const status = toStatus(parent.status);
+      if (!(ADDENDUM_STATUSES as readonly EarlierFeedbackStatus[]).includes(status)) {
+        logger.info({ id: input.id, report: input.reportId, status }, "feedback addendum refused: report closed");
+        return { kind: "closed", status };
+      }
+      /* 4. **The aggregate cap** (F1): all of one report's addenda together at
+         most `MAX_FEEDBACK_BODY_CHARS`, counted as the route counts a body
+         (UTF-16 units), so a report and its addenda are at most twice a
+         report and the list's byte budget stays bounded. Under the lock, so
+         two at once cannot both fit. */
+      const bodies = await tx
+        .select({ body: addendaTable.body })
+        .from(addendaTable)
+        .where(and(eq(addendaTable.ownerId, ownerId), eq(addendaTable.reportId, input.reportId)));
+      const used = bodies.reduce((sum, row) => sum + row.body.length, 0);
+      if (used + input.body.length > MAX_FEEDBACK_BODY_CHARS) {
+        logger.info(
+          { id: input.id, report: input.reportId, used, chars: input.body.length },
+          "feedback addendum refused: report full",
+        );
+        return { kind: "full" };
+      }
+      /* 5. Insert. `on conflict do nothing` and look again, as `submitAnswer`
+         does, so nothing here ever meets a raw uniqueness error. */
+      const [created] = await tx
+        .insert(addendaTable)
+        .values({
+          id: input.id,
+          ownerId,
+          reportId: input.reportId,
+          body: input.body,
+          environment: input.environment,
+        })
+        .onConflictDoNothing({ target: [addendaTable.ownerId, addendaTable.id] })
+        .returning(ADDENDUM_COLUMNS);
+      if (created) {
+        /* Lengths and ids, never the words (docs/project/logging.md). */
+        logger.info({ id: input.id, report: input.reportId, chars: input.body.length }, "feedback addendum added");
+        return { kind: "created", addendum: toAddendum(created) };
+      }
+      const third = await already();
+      /* Rows here are never deleted, so a conflict with nothing to find is a
+         bug to hear about, not an outcome to pick a status for. */
+      if (!third) throw new Error("feedback addendum conflicted with a row that cannot be read");
+      return third;
+    }, { isolationLevel: "read committed" });
   },
 
   async answersTo(questionIds: readonly string[]): Promise<StoredFeedbackAnswer[]> {

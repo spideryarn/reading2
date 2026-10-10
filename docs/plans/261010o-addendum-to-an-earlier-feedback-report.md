@@ -6,7 +6,7 @@ Up: [feedback.md § What became of each report](../project/feedback.md#what-beca
 stage 2 (the reply box and `feedback_question_answers`) · report `spya-saz0yw` (#541,
 SPIDERYARN-READING2-GP) · queue item `qi-7n9nyz3k` · session `fbsaz0yw-addendum-to-earlier-report`
 
-Status as of 2026-10-10: **plan, before review.**
+Status as of 2026-10-10: **plan, reviewed once by GPT Sol (REVISE, eight findings, all taken: § What the plan review changed).** Building.
 
 ## What Greg asked for
 
@@ -180,3 +180,38 @@ shows two unrelated reports. Greg asked for it to be *on* the earlier report.
 A second simpler option: **no uncovered-addenda listing**, only print addenda with the report.
 Passed over because the addendum Greg most needs seen is the one he writes after the sweep has
 already taken the report — exactly the case printing-with-the-report misses, silently.
+
+## What the plan review changed
+
+GPT Sol, [261010o-addendum-plan-review-sol.md](261010o-addendum-plan-review-sol.md), REVISE. All
+eight taken; where they contradict the sections above, this section wins.
+
+- **F1 (P1) Bounded addenda.** All of one report's addenda together are at most
+  `MAX_FEEDBACK_BODY_CHARS` (20,000) characters, checked under the parent row's lock, so a report
+  plus its addenda is at most twice a report and `prefixWithinBytes`'s "always keeps the first
+  item" stays bounded. Past it, 409 *"This report has as much added to it as it can take."* Test:
+  the largest permitted report-plus-addenda item.
+- **F2 (P1) Typed coverage.** Addenda coverage is its own set, never the report set. A note says
+  `addenda: spya-…`; a queue item's `source` says `addendum:spya-…` (the prefix is required; a bare
+  `spya-` there only ever covers a report). An addendum id shared by two owners is listed as
+  ambiguous, as a report id is. Tests: an addendum whose id equals its parent's, and a duplicate id
+  across owners.
+- **F3 (P1) The race, closed properly.** In one transaction: an existing row under this id is the
+  idempotent answer (200 / 409); otherwise `select … for update` the owner's parent row — none is a
+  404 ("no such report of yours", never whether another owner has it); then `statusOf` on that row
+  — closed is a 409; then the aggregate check; then the insert. Ignore's update waits on the lock.
+- **F4 (P1) Scripts before the deploy.** `feedback-reporter.ts` and `feedback-unswept.ts` probe
+  `to_regclass('spideryarn.feedback_addenda')` in their read-only transaction, as
+  `feedback-questions.ts` does for replies, and say *addenda: not deployed* and carry on.
+- **F5 (P1) Everything keyed by report.** Drafts, retry ids, local receipts and the dictation keeper
+  (`feedback-addendum:${report.id}`), as replies are keyed by question.
+- **F6 (P1) The handoff, mechanically.** `feedback-unswept.ts` prints, for each uncovered addendum,
+  the parent's number and id and, when a queue item covers the parent, that item's id and its
+  `dispatchedTo` session. The sweep sends the addendum there and covers it only on an
+  acknowledgement; otherwise it queues `addendum:spya-…` with the parent's id for the next agent.
+- **F7 (P2) Request bytes.** The route reads with the answers route's six-bytes-a-character
+  envelope limit; test a maximum-length, heavily escaped body.
+- **F8 (P2) Which statuses.** **Open and Needs a decision** — every report that has not been shipped
+  or set aside. The premise for leaving *Needs a decision* out was wrong: some waiting reports have
+  no question, and a reply to a question is not more of the report. This replaces "Open only" above
+  and the first deferred item.

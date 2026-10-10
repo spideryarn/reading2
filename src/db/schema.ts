@@ -6369,6 +6369,74 @@ export const feedbackQuestionDeferrals = spideryarn.table(
   ],
 );
 
+/**
+ * **More words an admin added to one of their own earlier reports** — one row
+ * an addendum, written only by `POST /api/admin/feedback/addenda`, read by the
+ * admin's Earlier tab (under the report's own words) and by
+ * `scripts/feedback-reporter.ts` and `scripts/feedback-unswept.ts` (for agents).
+ * docs/plans/261010o-addendum-to-an-earlier-feedback-report.md.
+ *
+ * > Make it possible for me to add a reply as a kind of addendum to any
+ * > earlier open feedback reports.
+ * >
+ * > — Greg, 2026-10-10 (`spya-saz0yw`)
+ *
+ * **A table of its own**, not a column on `feedback` and not rows of
+ * `feedback_question_answers`: a reply belongs to a question, an addendum to a
+ * report, and one table for both would be a nullable `question_id` beside a
+ * nullable `report_id`. Not a report either: never mirrored, never rate-capped,
+ * never in the endings map. Append-only; rows are never deleted.
+ *
+ * **The composite foreign key is what makes "own reports only" a key** rather
+ * than a good intention (docs/project/sql.md): the row is written under the
+ * signed-in owner, so an addendum to a report id that is not that owner's own
+ * cannot exist. `restrict`, so an addendum is never silently lost with its
+ * report.
+ */
+export const feedbackAddenda = spideryarn.table(
+  "feedback_addenda",
+  {
+    /** Client-minted, and the idempotency key, exactly as `feedback.id` is. */
+    id: text("id").notNull(),
+    /** `auth.users(id)`. FK in the migration by hand, as with every other `owner_id`. */
+    ownerId: uuid("owner_id").notNull(),
+    /** The report it adds to: `feedback.id`, under the same owner. */
+    reportId: text("report_id").notNull(),
+    /** What the admin typed or said. Plain text. */
+    body: text("body").notNull(),
+    /** Which deployment wrote the row, asked of the server, as `feedback_question_answers.environment`. */
+    environment: text("environment").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    /** The composite key is the idempotency key, as on `feedback`. */
+    primaryKey({ columns: [t.ownerId, t.id] }),
+    foreignKey({
+      name: "feedback_addenda_feedback_fk",
+      columns: [t.ownerId, t.reportId],
+      foreignColumns: [feedback.ownerId, feedback.id],
+    }).onDelete("restrict"),
+    check("feedback_addenda_id_format", sql`${t.id} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`),
+    check("feedback_addenda_report_id_format", sql`${t.reportId} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`),
+    /* `feedback_environment`'s list, written out for the reason given there. */
+    check(
+      "feedback_addenda_environment",
+      sql`${t.environment} in ('production', 'preview', 'development', 'test')`,
+    ),
+    /* Non-empty and under a ceiling that only catches a runaway, in
+       `feedback_body_shape`'s style. The product's limit is the route's: all of
+       one report's addenda together at most `MAX_FEEDBACK_BODY_CHARS`
+       (src/types.ts), checked under the report's row lock in
+       src/store/pg-feedback.ts § `submitAddendum`. */
+    check(
+      "feedback_addenda_body_shape",
+      sql`length(btrim(${t.body})) > 0 and length(${t.body}) <= 1000000`,
+    ),
+    /** The Earlier list's and the scripts' lookup: a report's addenda. */
+    index("feedback_addenda_owner_report_idx").on(t.ownerId, t.reportId),
+  ],
+);
+
 /* ----------------------------------------------------------- checkpoints -- */
 
 /**
