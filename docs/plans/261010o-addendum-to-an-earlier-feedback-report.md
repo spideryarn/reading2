@@ -6,7 +6,7 @@ Up: [feedback.md § What became of each report](../project/feedback.md#what-beca
 stage 2 (the reply box and `feedback_question_answers`) · report `spya-saz0yw` (#541,
 SPIDERYARN-READING2-GP) · queue item `qi-7n9nyz3k` · session `fbsaz0yw-addendum-to-earlier-report`
 
-Status as of 2026-10-10: **plan, reviewed once by GPT Sol (REVISE, eight findings, all taken: § What the plan review changed).** Building.
+Status as of 2026-10-10: **built and on `dev`.** Plan review: GPT Sol, REVISE, eight findings, all taken (§ What the plan review changed). Code review: GPT Sol, APPROVE-WITH-FIXES (§ What the code review found).
 
 ## What Greg asked for
 
@@ -215,3 +215,31 @@ eight taken; where they contradict the sections above, this section wins.
   or set aside. The premise for leaving *Needs a decision* out was wrong: some waiting reports have
   no question, and a reply to a question is not more of the report. This replaces "Open only" above
   and the first deferred item.
+
+## What landed
+
+- **Stage 1** (`76424a883`): `feedback_addenda` (migration `drizzle/20261010190341_feedback_addenda.sql`),
+  `submitAddendum`, `POST /api/admin/feedback/addenda`, `addenda` on the admin Earlier list, and the
+  scripts. One deviation: the store looks for an existing row twice, before and after taking the
+  parent's lock, so four concurrent copies of one retry are one created and three duplicates rather
+  than a false "full".
+- **Stage 2** (`7b1e0b2be`): the reply box's shared parts moved to `src/web/FeedbackSendBox.tsx`,
+  used by the reply box and the new `AddendumBox` (`src/web/FeedbackAddendum.tsx`). Deviations: a
+  box holding words stays open whatever else is opened, even after its report closes, so a draft is
+  never a reload hold nobody can see; *Cancel* throws the words away; the box unmounts on a pill
+  change (the draft is kept in the hook, and an interrupted recording is offered back by its
+  per-report keeper, which the code review checked).
+
+## What the code review found
+
+GPT Sol, [261010o-addendum-code-review-sol.md](261010o-addendum-code-review-sol.md),
+APPROVE-WITH-FIXES.
+
+- **C1 (P1), fixed by the reviewer**: the uncovered-addenda line found the parent's queue item by
+  report id alone, and report ids are unique only per owner, so a collision could name another
+  reader's session. The line now says when the parent id is shared and names no session.
+- **C2 (P2), reported, not fixed here**: the compiled endings map is keyed by report id alone, so
+  two owners sharing an id would share a status, and the addendum gate would follow it. It is the
+  existing endings format's limit, older than this work, and needs a six-character browser-minted
+  id to collide between two owners; widening the format is its own change. Not queued: the
+  existing `feedback-unswept.ts` already lists every id two owners share as ambiguous.

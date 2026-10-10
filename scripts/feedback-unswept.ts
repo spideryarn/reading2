@@ -488,12 +488,14 @@ export function showSql(table = "spideryarn.feedback", by: "id" | "number" = "id
  * **Every addendum the listing needs, without its words**: those written
  * since `--since`, and every addendum to a report filed since then (for its
  * `+N addenda`). Each with its parent's number and mark, and how many owners
- * hold its id across the whole table. `table` and `reports` are parameters
+ * hold the addendum id and the parent report id across the whole tables.
+ * `table` and `reports` are parameters
  * only so a test can point them at copies.
  */
 export function addendaListSql(table = "spideryarn.feedback_addenda", reports = "spideryarn.feedback"): string {
   return `select a.id, a.owner_id, a.report_id, a.environment, a.created_at,
                  f.number as report_number, f.ignored_at as report_ignored_at,
+                 (select count(*)::int from ${reports} as same_report where same_report.id = f.id) as report_id_occurrences,
                  (select count(*)::int from ${table} as same_id where same_id.id = a.id) as id_occurrences
             from ${table} as a
             join ${reports} as f on f.owner_id = a.owner_id and f.id = a.report_id
@@ -510,6 +512,8 @@ export interface ListedAddendum {
   createdAt: Date;
   reportNumber: number | null;
   reportIgnoredAt: Date | null;
+  /** Parent reports under this id across every owner: more than one makes a queue-source match ambiguous. */
+  reportIdOccurrences: number;
   /** Rows under this id across every owner: more than one makes coverage by id ambiguous. */
   idOccurrences: number;
 }
@@ -522,6 +526,7 @@ interface StoredListedAddendum extends QueryResultRow {
   created_at: Date;
   report_number: number | null;
   report_ignored_at: Date | null;
+  report_id_occurrences: number;
   id_occurrences: number;
 }
 
@@ -533,6 +538,7 @@ export const toListedAddendum = (r: StoredListedAddendum): ListedAddendum => ({
   createdAt: r.created_at,
   reportNumber: r.report_number,
   reportIgnoredAt: r.report_ignored_at,
+  reportIdOccurrences: r.report_id_occurrences,
   idOccurrences: r.id_occurrences,
 });
 
@@ -559,7 +565,12 @@ export function addendaCount(addenda: readonly ListedAddendum[], row: { id: stri
  * to, so the sweep can hand the addendum to that session. No words.
  */
 export function renderUnsweptAddendum(addendum: ListedAddendum, entries: readonly QueueEntry[]): string {
-  const covering = entriesCovering(entries, addendum.reportId);
+  /* A bare report id in a queue source cannot identify an owner. Never send
+     an addendum to a session chosen through that id when two owners share it:
+     it may be the other reader's session. The globally unique report number
+     on this line gives the sweep enough context to queue the addendum instead. */
+  const parentAmbiguous = addendum.reportIdOccurrences > 1;
+  const covering = parentAmbiguous ? [] : entriesCovering(entries, addendum.reportId);
   return [
     ...(addendum.environment === "production"
       ? []
@@ -568,11 +579,16 @@ export function renderUnsweptAddendum(addendum: ListedAddendum, entries: readonl
     addendum.createdAt.toISOString(),
     `to ${addendum.reportNumber === null ? "" : `#${addendum.reportNumber} `}${addendum.reportId}`,
     ...(addendum.idOccurrences > 1 ? [`id shared by ${addendum.idOccurrences} owners; coverage is ambiguous`] : []),
+    ...(parentAmbiguous
+      ? [`parent report id shared by ${addendum.reportIdOccurrences} owners; queue handoff is ambiguous`]
+      : []),
     ...(addendum.reportIgnoredAt === null
       ? []
       : [`report ignored by an admin ${addendum.reportIgnoredAt.toISOString()}`]),
     covering.length === 0
-      ? "report queued by no item"
+      ? parentAmbiguous
+        ? "report queued by no unambiguous item"
+        : "report queued by no item"
       : covering
           .map(
             (entry) =>

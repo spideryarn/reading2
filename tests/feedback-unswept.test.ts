@@ -321,6 +321,7 @@ describe("addenda nothing covers (261010o)", () => {
       createdAt: new Date("2026-10-10T09:12:00Z"),
       reportNumber: 541,
       reportIgnoredAt: null,
+      reportIdOccurrences: 1,
       idOccurrences: 1,
       ...over,
     };
@@ -395,6 +396,19 @@ describe("addenda nothing covers (261010o)", () => {
     ).toContain("report queued as qi-q, not dispatched");
   });
 
+  it("does not hand an addendum to another owner's session when its parent report id is shared", () => {
+    const entries = [
+      { id: "qi-other", source: "spya-saz0yw", dispatchedTo: "another-readers-session" },
+    ];
+    const sharedParent = {
+      ...addendum("spya-bbbbbb"),
+      reportIdOccurrences: 2,
+    } as ListedAddendum;
+    const line = renderUnsweptAddendum(sharedParent, entries);
+    expect(line).toContain("parent report id shared by 2 owners; queue handoff is ambiguous");
+    expect(line).not.toContain("another-readers-session");
+  });
+
   it("puts a row not written in production first on its line, loudly", () => {
     const line = renderUnsweptAddendum(addendum("spya-bbbbbb", { environment: "development" }), []);
     expect(line.startsWith("! NOT WRITTEN IN PRODUCTION (environment: development)")).toBe(true);
@@ -443,6 +457,7 @@ describe("addenda nothing covers (261010o)", () => {
                   created_at: new Date("2026-10-10T09:12:00Z"),
                   report_number: 541,
                   report_ignored_at: null,
+                  report_id_occurrences: 1,
                   id_occurrences: 1,
                 },
               ]

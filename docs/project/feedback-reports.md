@@ -127,6 +127,9 @@ and the session it was dispatched to. For each:
 
 - **Its report's session is live**: `SendMessage` it the addendum's id and the `--show` command, and
   ask it to name the addendum in its note. Covered once it does, not when the message is sent.
+- **The line says the parent report id is shared by two owners**: do not send it to a session found
+  by that id — it may be the other reader's session. Queue the addendum instead, including the
+  globally unique report number in the item text.
 - **Otherwise**, queue it with `--source "addendum:spya-… spya-<report id>"`. The `addendum:`
   prefix is the only way a source covers an addendum, and an id written with it never covers a
   report: the two coverage sets are kept apart because both ids have the same shape.
