@@ -20,7 +20,7 @@ const overseer = {
   name: "Overseer",
   paneId: "%2517",
   panePid: 4039570,
-  claudeSessionId: "606cb12a-ffc5-4df4-af3a-7dc881135b5f",
+  claudeSessionId: "ef6b0847-b508-4f47-95b9-e8423294a3b3",
   status: { kind: "working" },
   role: { kind: "overseer" },
 };
@@ -42,7 +42,7 @@ describe("overseerTarget", () => {
       body: {
         paneId: "%2517",
         sessionId: "$2514",
-        claudeSessionId: "606cb12a-ffc5-4df4-af3a-7dc881135b5f",
+        claudeSessionId: "ef6b0847-b508-4f47-95b9-e8423294a3b3",
         panePid: 4039570,
         status: { kind: "working" },
         text: "hello",
