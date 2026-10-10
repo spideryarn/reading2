@@ -18,7 +18,7 @@
  *    article never says and cannot see a name given to the wrong work. Every
  *    flag is listed under its article to be read by hand.
  *
- *   npx tsx evals/citations-say-less.ts [slug …] [--rows=N]
+ *   npx tsx evals/bibliography-say-less.ts [slug …] [--rows=N]
  */
 import { loadEnvLocal } from "../src/env.js";
 import { isMain } from "../src/is-main.js";
@@ -26,7 +26,7 @@ import type { CitedWork } from "../src/types.js";
 import type { Block } from "../src/types.js";
 import { capEntry } from "../src/citation-entry.js";
 import type { NumberedReferenceList } from "../src/citation-reference-list.js";
-import { emptyDrops, noScoreDrops, toDrafts } from "../src/citations.js";
+import { emptyDrops, noScoreDrops, toDrafts } from "../src/bibliography.js";
 
 /** Replay the actual draft reader, including HTML entries and the PDF list. */
 export function replayGuard(works: readonly CitedWork[], blocks: readonly Block[], list: NumberedReferenceList | null) {
@@ -120,7 +120,7 @@ async function main(): Promise<void> {
   const { environmentOwnerId, runAsOwner } = await import("../src/owner.js");
   const store = await import("../src/store/index.js");
   const { closeDb } = await import("../src/db/client.js");
-  const { CitationsListNotFound } = await import("../src/store/citations-list-not-found.js");
+  const { BibliographyListNotFound } = await import("../src/store/bibliography-list-not-found.js");
   const args = process.argv.slice(2);
   const rows = Number(args.find((a) => a.startsWith("--rows="))?.slice(7) ?? 0);
   let slugs = args.filter((a) => !a.startsWith("--"));
@@ -132,14 +132,14 @@ async function main(): Promise<void> {
     for (const slug of slugs) {
       /* Only "no list was made" is skipped: a failed read is not an empty
          corpus, and must not print as one (GPT Sol's plan review, P5). */
-      let citations: Awaited<ReturnType<typeof store.loadCitations>>;
+      let citations: Awaited<ReturnType<typeof store.loadBibliography>>;
       try {
-        citations = await store.loadCitations(slug);
+        citations = await store.loadBibliography(slug);
       } catch (err) {
-        if (err instanceof CitationsListNotFound) continue;
+        if (err instanceof BibliographyListNotFound) continue;
         throw err;
       }
-      const works = citations.citations.citations;
+      const works = citations.bibliography.citations;
       if (works.length === 0) continue;
       lists++;
       const { blocks, meta } = await store.loadArticle(slug);

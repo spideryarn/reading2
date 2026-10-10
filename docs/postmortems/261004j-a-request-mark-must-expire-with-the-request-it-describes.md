@@ -60,7 +60,7 @@ These are reported runner results, not database-backed evidence.
 [useSourceGuess](../../src/web/useSourceGuess.ts) also records a slug before requesting, but does
 not invalidate its pending reply through `useOrderedRead`; it does not reproduce this deadlock.
 The raw-DOI URL constructors in [source-guess](../../src/source-guess.ts),
-[paper-evidence](../../src/paper-evidence.ts) and [citations](../../src/citations.ts) share a separate
+[paper-evidence](../../src/paper-evidence.ts) and [citations](../../src/bibliography.ts) share a separate
 encoding defect found in this review. Those pre-existing sites are outside this stage and were
 reported separately, without edits.
 

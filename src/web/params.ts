@@ -665,7 +665,7 @@ export const gateParam = createParser<number>({
    prose (`gateToReveal`). So a citations bar written to `?gate=` would arrive in
    the Glossary as its threshold — a `(2r + i) / 3` read as a `difficulty ×
    centrality` — and lower or raise it behind the reader's back. Quotes made the
-   same call for the same reason (`rank`, `bar`). docs/project/citations.md. */
+   same call for the same reason (`rank`, `bar`). docs/project/bibliography.md. */
 
 /**
  * How the list of cited works is ordered — `?citeby=`.
@@ -694,12 +694,12 @@ export const citeOrderParam = createParser<CiteOrder>({
 
 /**
  * How high a work has to score to stay on screen in the prioritised order —
- * `?citebar=`, `priorityOf` in CitationsPanel.tsx on 0–1: weighted when both
+ * `?citebar=`, `priorityOf` in BibliographyPanel.tsx on 0–1: weighted when both
  * scores are known, relevance alone when influence is unknown.
  *
  * **No default, deliberately**, for `gateParam`'s reason: absent means nobody
  * has touched it, which the panel resolves to `CITATION_BAR_DEFAULT`
- * (CitationsPanel.tsx), so the default stays one number in one file. `replace`
+ * (BibliographyPanel.tsx), so the default stays one number in one file. `replace`
  * and debounced, because a range input fires on every pixel of a drag.
  */
 export const citeBarParam = createParser<number>({
@@ -1422,7 +1422,7 @@ export function learnInSearch(search: string): LearnView {
  *
  * **Writing it never spends.** Each sub-mode's work starts on its owner's
  * press and only then — the mode's button, the sub-mode's command-bar row or
- * its chip: a press landing on Bibliography arms the `citations` list, on
+ * its chip: a press landing on Bibliography arms the `bibliography` list, on
  * Reception the `debate` search, on Claims the `debate-claims` list
  * (activation.ts § `activationForSources`). Back, a pasted link and a
  * last-view restore arrive here and buy nothing.

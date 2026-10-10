@@ -199,7 +199,7 @@ export const GROWTH_MIN_QUOTES = 8;
  * this is not an `ArticleStage`: it sends no article, so it shares no cached
  * prefix with the stages in that table. Low because the input is small and the
  * job is judgment about a list, not reading. `SPIDERYARN_PIPELINE_EFFORT`
- * still overrides it, as it does for `citations`, through the same checked
+ * still overrides it, as it does for `bibliography`, through the same checked
  * reader (src/models.ts § `pipelineEffortOverride`).
  */
 const EFFORT: Effort = "low";

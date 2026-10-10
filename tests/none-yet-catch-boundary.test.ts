@@ -4,12 +4,12 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ArtefactNotMadeYet } from "../src/store/artefact-not-made-yet.js";
-import { CitationsListNotFound } from "../src/store/citations-list-not-found.js";
+import { BibliographyListNotFound } from "../src/store/bibliography-list-not-found.js";
 import { NONE_YET_AS_NULL_HEADER } from "../src/types.js";
 import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
 
 const stores = vi.hoisted(() => ({
-  loadQuiz: vi.fn(), loadCrossrefs: vi.fn(), loadCitations: vi.fn(),
+  loadQuiz: vi.fn(), loadCrossrefs: vi.fn(), loadBibliography: vi.fn(),
   loadSimpleSummary: vi.fn(), loadIdeas: vi.fn(), loadFaq: vi.fn(), loadTimeline: vi.fn(),
   loadDebate: vi.fn(), loadGlossary: vi.fn(), loadQuotes: vi.fn(), loadSkim: vi.fn(),
   attempts: vi.fn(), candidates: vi.fn(), profile: vi.fn(),
@@ -19,7 +19,7 @@ vi.mock("../src/store/index.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/store/index.js")>();
   const { guardDbStore } = await import("../src/store/db-errors.js");
   const loads = guardDbStore("none-yet-test", {
-    loadQuiz: stores.loadQuiz, loadCrossrefs: stores.loadCrossrefs, loadCitations: stores.loadCitations,
+    loadQuiz: stores.loadQuiz, loadCrossrefs: stores.loadCrossrefs, loadBibliography: stores.loadBibliography,
     loadSimpleSummary: stores.loadSimpleSummary, loadIdeas: stores.loadIdeas, loadFaq: stores.loadFaq,
     loadTimeline: stores.loadTimeline, loadDebate: stores.loadDebate, loadGlossary: stores.loadGlossary,
     loadQuotes: stores.loadQuotes, loadSkim: stores.loadSkim,
@@ -38,7 +38,7 @@ const SLUG = "catch-boundary";
 const RESPONSES = {
   quiz: { quiz: { slug: SLUG, batchId: "batch", questions: [] }, stale: false, outdated: false },
   crossrefs: { crossrefs: { slug: SLUG, links: [] }, stale: false, outdated: false },
-  citations: { citations: { slug: SLUG, citations: [] }, stale: false, outdated: false },
+  bibliography: { bibliography: { slug: SLUG, citations: [] }, stale: false, outdated: false },
   simple: { simpleSummary: { slug: SLUG, profileHash: null }, stale: false, outdated: false },
   ideas: { ideas: { slug: SLUG, ideas: [] }, stale: false, outdated: false },
   faq: { faq: { slug: SLUG, questions: [] }, stale: false, outdated: false },
@@ -48,7 +48,7 @@ const RESPONSES = {
   quotes: { quotes: { slug: SLUG, quotes: [] }, stale: false, outdated: false },
 };
 const READS = [
-  ["quiz", stores.loadQuiz], ["crossrefs", stores.loadCrossrefs], ["citations", stores.loadCitations],
+  ["quiz", stores.loadQuiz], ["crossrefs", stores.loadCrossrefs], ["bibliography", stores.loadBibliography],
   ["simple", stores.loadSimpleSummary], ["ideas", stores.loadIdeas], ["faq", stores.loadFaq],
   ["timeline", stores.loadTimeline], ["debate", stores.loadDebate], ["glossary", stores.loadGlossary],
   ["quotes", stores.loadQuotes],
@@ -89,7 +89,7 @@ describe.each(READS)("%s catch boundary", (kind, load) => {
   });
 
   it("preserves the typed absence through guardDbStore and sends JSON null", async () => {
-    load.mockRejectedValue(kind === "citations" ? new CitationsListNotFound() : new ArtefactNotMadeYet("none yet"));
+    load.mockRejectedValue(kind === "bibliography" ? new BibliographyListNotFound() : new ArtefactNotMadeYet("none yet"));
     const res = await get(kind);
     expect(res.status).toBe(200);
     expect(res.body).toBe("null");
@@ -140,11 +140,11 @@ it("a quiz kept-answer failure, even a typed absence, leaves the questions with 
   expect(JSON.parse(res.body)).toMatchObject({ ...RESPONSES.quiz, attempts: null });
 });
 
-it("a citations matching failure, even a typed absence, leaves the list", async () => {
+it("a bibliography matching failure, even a typed absence, leaves the list", async () => {
   stores.candidates.mockRejectedValue(new ArtefactNotMadeYet("not a citations absence"));
-  const res = await get("citations");
+  const res = await get("bibliography");
   expect(res.status).toBe(200);
-  expect(JSON.parse(res.body)).toMatchObject(RESPONSES.citations);
+  expect(JSON.parse(res.body)).toMatchObject(RESPONSES.bibliography);
 });
 
 it("a profile failure after a successful quiz load remains a failure", async () => {

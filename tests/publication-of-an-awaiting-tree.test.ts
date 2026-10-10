@@ -84,7 +84,7 @@ const MODES: StepName[][] = [
   ["ideas"],
   ["simple"],
   /* Sources' Bibliography, queued since 2026-10-09 (plan 261009l § On import). */
-  ["citations"],
+  ["bibliography"],
   ["crossrefs"],
   ["quotes", "ideas", "skim"],
 ];

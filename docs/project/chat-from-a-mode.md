@@ -39,8 +39,8 @@ remains.
 | Sources › Reception | the angle box (a *lens*: the reader's words, no item) | [`DebatePanel.tsx`](../../src/web/DebatePanel.tsx) § `Angles` | [debate.md § Look at the debate from an angle](debate.md#look-at-the-debate-from-an-angle) |
 | Glossary | the open entry, in Dig deeper's place | [`OriginChat.tsx`](../../src/web/OriginChat.tsx) § `AskInChatButton` | [glossary.md § Asking about an entry in chat](glossary.md#asking-about-an-entry-in-chat) |
 | Glossary | a term's hover card in the prose, and Skim's term chip (which draws the same card), in Dig deeper's place | [`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx) § `TermCard` (`onAskTerm`) | [glossary.md § The hover card](glossary.md#the-hover-card) |
-| Sources › Bibliography | the open row, in Dig deeper's place | [`OriginChat.tsx`](../../src/web/OriginChat.tsx) § `AskInChatButton` | [citations.md § Ask in chat](citations.md#ask-in-chat-a-conversation-about-one-work) |
-| Sources › Bibliography | a cited work's hover card in the prose, in Dig deeper's place | [`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx) § `CiteCard` (`onAskCitedWork`) | [citations.md § Marked in the prose](citations.md#marked-in-the-prose-in-every-mode) |
+| Sources › Bibliography | the open row, in Dig deeper's place | [`OriginChat.tsx`](../../src/web/OriginChat.tsx) § `AskInChatButton` | [bibliography.md § Ask in chat](bibliography.md#ask-in-chat-a-conversation-about-one-work) |
+| Sources › Bibliography | a cited work's hover card in the prose, in Dig deeper's place | [`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx) § `CiteCard` (`onAskCitedWork`) | [bibliography.md § Marked in the prose](bibliography.md#marked-in-the-prose-in-every-mode) |
 | Ideas | the open idea, under its passages (since 2026-10-09) | [`OriginChat.tsx`](../../src/web/OriginChat.tsx) § `AskInChatButton`, drawn by [`IdeasPanel.tsx`](../../src/web/IdeasPanel.tsx) § `IdeaRow` | [ideas.md § Asking about an idea in chat](ideas.md#asking-about-an-idea-in-chat) |
 
 The rows and the angle box draw the way back with `OriginChatMark` from the same file; a hover card
@@ -106,7 +106,7 @@ at once, and the mode opens on its list. That is best effort and said so: the ch
 in Chat's list.
 
 Tests: the `the way back from a chat to its item` block in
-`tests/glossary-and-citations-ask-in-chat.test.tsx`, one per origin, a plain chat, a pending
+`tests/glossary-and-bibliography-ask-in-chat.test.tsx`, one per origin, a plain chat, a pending
 origin, and an item that has gone.
 
 ## Adding it to another mode
@@ -122,16 +122,20 @@ In the order you would do them:
    what is missing. Miss it and the first press gets a 400 from the route.
 3. **`sameOrigin`**, same file: how the item finds its chat again. **Loud** (`never`).
 4. **The database.** [`src/db/schema.ts`](../../src/db/schema.ts) § `chat_threads_origin_mode`
-   lists the allowed words (today `debate`, `summary`, `glossary`, `citations`, `ideas`). **Loud**:
+   lists the allowed words (today `debate`, `summary`, `glossary`, `bibliography`, `ideas`, and
+   `citations`, Bibliography's word until 2026-10-09, still admitted until plan 261009w's contract
+   migration). **Loud**:
    a word not listed is refused on insert, which the reader sees as a failed first question.
-   `chat_threads_origin_item` names `glossary`, `citations` and `ideas` one by one. **Silent**: a new
+   `chat_threads_origin_item` names `glossary`, `bibliography` (and `citations`) and `ideas` one by
+   one. **Silent**: a new
    id-shaped mode left out of it may store half a shape, which then reads back as no origin
    (step 5). Both are a migration: [database.md § A new migration, in five lines](database.md#a-new-migration-in-five-lines);
    copy `drizzle/20261009085926_chat_thread_origin_ideas.sql`, which is the latest.
 5. **The columns, both ways.** [`src/thread-origin.ts`](../../src/thread-origin.ts).
    `originColumns` is **loud** (`never`). **`originFromColumns` is silent, and this is the one to
-   remember**: it reads a string out of the database, tests for `glossary`, `citations`, `ideas`
-   and `debate` by hand, and returns no origin for anything else (the `return {}` near its end). Miss it
+   remember**: it reads a string out of the database, reads a retired word as its successor
+   (`RETIRED_ORIGIN_MODES` in src/types.ts), tests for `glossary`, `bibliography`, `ideas` and
+   `debate` by hand, and returns no origin for anything else (the `return {}` near its end). Miss it
    and the chat is saved with its origin, reads back as a plain chat, and the item never shows its
    mark. Nothing fails. The export ([`src/store/export.ts`](../../src/store/export.ts)) and the
    test seeder call this file, so they need no edit and inherit the same hole. The check that
@@ -160,11 +164,11 @@ In the order you would do them:
     ([`useChatAnchors.ts`](../../src/web/useChatAnchors.ts)) and `OriginChatMark`, passed through
     the owner's arm of `access`. The icon rule is [icons.md § A chat is two bubbles](icons.md#a-chat-is-two-bubbles).
 11. **The tests to copy.** `tests/thread-origin-way-back.test.ts` (the `describe.each` over
-    `glossary`, `citations` and `ideas`: `sameOrigin`, and **the columns round trip that covers
+    `glossary`, `bibliography` and `ideas`: `sameOrigin`, and **the columns round trip that covers
     step 5**); `tests/chat-origin-route.test.ts` (the route, the CHECKs, the export);
     `tests/chat-origin-transaction.test.ts`'s `describe.each` (a renamed snapshot, another item,
     another mode); `tests/chat-handoff.test.ts` (the fence, and a long name cut);
-    `tests/thread-source.test.ts`; `tests/glossary-and-citations-ask-in-chat.test.tsx` (the press,
+    `tests/thread-source.test.ts`; `tests/glossary-and-bibliography-ask-in-chat.test.tsx` (the press,
     the mark, the line back and where it lands, in a rendered reader). Add the new mode to each
     list and watch it go red first.
 12. **The docs.** A section in the mode's own doc, a row in the table above, and the `chatfrom`
@@ -176,7 +180,7 @@ In the order you would do them:
 - [chat-tools.md § Chat's list shows every conversation about the article](chat-tools.md#chats-list-shows-every-conversation-about-the-article):
   the icons, the filter, and what a press on a row does.
 - [debate.md](debate.md#check-a-claim-in-chat), [glossary.md](glossary.md#asking-about-an-entry-in-chat),
-  [citations.md](citations.md#ask-in-chat-a-conversation-about-one-work),
+  [bibliography.md](bibliography.md#ask-in-chat-a-conversation-about-one-work),
   [ideas.md](ideas.md#asking-about-an-idea-in-chat): what each mode's button does for the reader.
 - [comments.md](comments.md) and [export.md](export.md): the neighbours that link to a chat or
   carry one out.

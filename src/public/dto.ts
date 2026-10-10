@@ -60,7 +60,7 @@ import type {
   BlockKind,
   Citation,
   CitationPlace,
-  Citations,
+  Bibliography,
   CitedWork,
   ClaimDebateRow,
   Comment,
@@ -113,7 +113,7 @@ import { readCitationRegistry, readRegistryWork } from "../registry-work.js";
 import type {
   PublicArticle,
   PublicBlock,
-  PublicCitations,
+  PublicBibliography,
   PublicCitedWork,
   PublicCrossrefs,
   PublicCitationRegistry,
@@ -728,14 +728,18 @@ function publicEntry(work: CitedWork, blockText: ReadonlyMap<string, string>): {
 }
 
 /**
- * **The Citations list** — the works, and `capped` because the panel prints it.
- * src/public-types.ts § `PublicCitations`. `blockText` is this payload's own
+ * **The Bibliography** — the works, and `capped` because the panel prints it.
+ * src/public-types.ts § `PublicBibliography`. `blockText` is this payload's own
  * blocks, which `publicEntry` checks an entry against.
  */
-function publicCitationList(
-  citations: Citations,
+function bothBibliographyKeys(list: PublicBibliography): { bibliography: PublicBibliography; citations: PublicBibliography } {
+  return { bibliography: list, citations: list };
+}
+
+function publicBibliographyList(
+  citations: Bibliography,
   blockText: ReadonlyMap<string, string>,
-): PublicCitations {
+): PublicBibliography {
   return {
     citations: citations.citations.map((work) => publicCitedWork(work, blockText)),
     capped: citations.capped,
@@ -1299,7 +1303,7 @@ export function publicArticle(row: {
   skim: Skim | null;
   faq: Faq | null;
   simpleSummary: SimpleSummary | null;
-  citations: Citations | null;
+  bibliography: Bibliography | null;
   debate: Debate | null;
   /** Debate's claims list, or `null` for none made. */
   debateClaims: DebateClaimList | null;
@@ -1379,7 +1383,10 @@ export function publicArticle(row: {
     ...(isUsableSimpleSummary(row.simpleSummary)
       ? { simpleSummary: publicSimpleSummary(row.simpleSummary) }
       : {}),
-    ...(row.citations !== null ? { citations: publicCitationList(row.citations, blockText) } : {}),
+    /* Under both keys, the same object, for one deploy: `citations` is the
+       one a public tab loaded before 2026-10-09 reads (`PublicArticle.citations`;
+       plan 261009w F1, removed by its contract). */
+    ...(row.bibliography !== null ? bothBibliographyKeys(publicBibliographyList(row.bibliography, blockText)) : {}),
     /* The article's own address goes in with it: a direct row can carry it in
        its witness and its `linked` signal, and it is judged there by the policy
        `publicMeta` above applies to it. */

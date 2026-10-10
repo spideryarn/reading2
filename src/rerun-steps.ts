@@ -79,20 +79,20 @@ import type { StepName } from "./types.js";
  * refuses without Quotes, and says so in the row; and a route that planned is
  * safe to publish over the old one, draft-then-publish.
  *
- * **`faq` and `citations` joined the same day**, when their out-of-date banner
+ * **`faq` and `bibliography` (then `citations`) joined the same day**, when their out-of-date banner
  * went — it was their only redo
  * (docs/plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md).
  * The three answers, the same for both: **one** metered call a press, and no
  * web search — each step is a single `streamMessage` with no tools
- * (`generateFaq`, `generateCitations`); Citations' per-row *Find it* is the
+ * (`generateFaq`, `generateBibliography`); Citations' per-row *Find it* is the
  * search, and it is its own route that a press here never reaches. **No
  * prerequisite** beyond the article itself; the one refusal is Citations'
- * `previousCitationsFrom`, which throws before the call if the list already
+ * `previousBibliographyFrom`, which throws before the call if the list already
  * there is unreadable, rather than minting fresh ids over it. And **safe to
  * publish over a good list**, draft-then-publish: an answer that validation
- * empties throws and writes nothing (`buildFaq`, `buildCitations`); only the
+ * empties throws and writes nothing (`buildFaq`, `buildBibliography`); only the
  * model's own empty list is kept, as a real answer. A work found again keeps
- * its id (`keysOf` in src/citations.ts), and with it any link *Find it* stored.
+ * its id (`keysOf` in src/bibliography.ts), and with it any link *Find it* stored.
  * Both modes were behind the experimental switch when these rows arrived;
  * Bibliography is now inside Sources and outside it. Metadata's rows remain
  * independent of that switch, as Timeline's, Quiz's and Reception's are — the
@@ -127,7 +127,7 @@ export const METADATA_RERUN_STEPS = [
   "sketch",
   "skim",
   "debate",
-  "citations",
+  "bibliography",
   /* **Joined on 2026-09-30 with the step**, the one way to make cross-references
      for an article already on the shelf (the after-import box covers new ones).
      The three answers: **one** metered call a press — a single

@@ -169,7 +169,7 @@ describe("which steps are queued", () => {
          its default sub-mode. Not `debate` (Reception's paid web search) nor
          `debate-claims`: each runs on the press of its own chip (plan 261009l
          § On import). */
-      "citations",
+      "bibliography",
       "crossrefs",
     ]);
     expect(modeStep("summary")).toBeNull();
@@ -232,7 +232,7 @@ describe("what each job asks for", () => {
       ["ideas"],
       ["simple"],
       ["quotes", "ideas", "skim"],
-      ["citations"],
+      ["bibliography"],
       ["crossrefs"],
     ]);
   });
@@ -241,7 +241,7 @@ describe("what each job asks for", () => {
     /* `crossrefs` sorts after Skim in `STEP_ORDER` and reads nothing, so it
        goes before it. The publication stamps them in this order. */
     const { together, after } = autoModePosts();
-    expect(together).toEqual([["tweets"], ["glossary"], ["quotes"], ["ideas"], ["simple"], ["citations"], ["crossrefs"]]);
+    expect(together).toEqual([["tweets"], ["glossary"], ["quotes"], ["ideas"], ["simple"], ["bibliography"], ["crossrefs"]]);
     expect(after).toEqual([["quotes", "ideas", "skim"]]);
   });
 

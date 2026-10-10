@@ -42,7 +42,7 @@ export function focusTaken(taken: ItemFocus): (now: ItemFocus | null) => ItemFoc
 
 /**
  * **Land on the focused row once the band has drawn it**, then hand the
- * request back. The three steps `CitationsPanel` takes, said once:
+ * request back. The three steps `BibliographyPanel` takes, said once:
  *
  * - nothing happens until the band's list is `ready` (a list still loading
  *   answers nothing yet);

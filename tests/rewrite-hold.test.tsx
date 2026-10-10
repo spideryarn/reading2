@@ -251,7 +251,7 @@ const { useQuotesRead } = await import("../src/web/useQuotes.js");
 const { TimelineBand } = await import("../src/web/modes/timeline/TimelineMode.js");
 const { FaqBand } = await import("../src/web/modes/faq/FaqMode.js");
 const { SourcesBand } = await import("../src/web/modes/sources/SourcesMode.js");
-const { useCitationsRead } = await import("../src/web/useCitations.js");
+const { useBibliographyRead } = await import("../src/web/useBibliography.js");
 const { SkimBand } = await import("../src/web/modes/skim/SkimMode.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
 const { useFreshReads, useRewriteHold } = await import("../src/web/rewrite-hold.js");
@@ -275,8 +275,8 @@ function GlossaryOuter({ show }: { show: boolean }) {
 }
 
 /* Quotes and Sources' Bibliography read above their band too, for the
-   marks in the prose (useQuotes.ts § `useQuotesRead`, useCitations.ts §
-   `useCitationsRead`). Sources' band holds Reception's and Claims' reads
+   marks in the prose (useQuotes.ts § `useQuotesRead`, useBibliography.ts §
+   `useBibliographyRead`). Sources' band holds Reception's and Claims' reads
    itself, in every sub-mode (SourcesMode.tsx), so all three of its cases
    mount the one band, on the sub-mode their `search` names. */
 function QuotesOuter({ show }: { show: boolean }) {
@@ -286,11 +286,11 @@ function QuotesOuter({ show }: { show: boolean }) {
     : null;
 }
 function SourcesOuter({ show }: { show: boolean }) {
-  const read = useCitationsRead(SLUG);
+  const read = useBibliographyRead(SLUG);
   return show
     ? createElement(SourcesBand, {
         slug: SLUG,
-        citationsRead: read,
+        bibliographyRead: read,
         onJump: noop,
         blockOrder: new Map(BLOCKS.map((b, i) => [b.id, i])),
         publishedAt: undefined,
@@ -733,8 +733,8 @@ const ROWS: Row[] = [
     /* The real owner wrapper keeps Bibliography's read mounted in Claims so
        C1 can join the claim's paragraph to the work cited there. */
     also: {
-      "/api/citations/": {
-        citations: {
+      "/api/bibliography/": {
+        bibliography: {
           ...stamp("old", false),
           citations: [
             {
@@ -770,11 +770,11 @@ const ROWS: Row[] = [
   },
   {
     name: "Citations",
-    hook: "useCitations.ts",
-    step: "citations",
-    path: "/api/citations/",
+    hook: "useBibliography.ts",
+    step: "bibliography",
+    path: "/api/bibliography/",
     body: (which, { stale }) => ({
-      citations: {
+      bibliography: {
         ...stamp(which, false),
         citations: [
           {

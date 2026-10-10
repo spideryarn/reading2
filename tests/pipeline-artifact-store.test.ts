@@ -102,9 +102,9 @@ import {
   PROMPT_VERSION as DEBATE_VERSION,
 } from "../src/debate.js";
 import {
-  inputFingerprint as citationsFingerprint,
-  PROMPT_VERSION as CITATIONS_VERSION,
-} from "../src/citations.js";
+  inputFingerprint as bibliographyFingerprint,
+  PROMPT_VERSION as BIBLIOGRAPHY_VERSION,
+} from "../src/bibliography.js";
 import {
   emptyDropped as emptyFaqDropped,
   inputFingerprint as faqFingerprint,
@@ -262,7 +262,7 @@ const QUIZ_SOURCE_HASH = quizFingerprint(BLOCKS, TREE, META);
 const DEBATE_SOURCE_HASH = debateFingerprint(BLOCKS, TREE, META);
 /* `citations` is `articleWithIdsFingerprint` once more, over every block —
    computed through its own module for the same reason as the three above. */
-const CITATIONS_SOURCE_HASH = citationsFingerprint(BLOCKS, TREE, META);
+const BIBLIOGRAPHY_SOURCE_HASH = bibliographyFingerprint(BLOCKS, TREE, META);
 /* `faq` is `articleWithIdsFingerprint` again, over the body — computed through
    its own module for the same reason. */
 const FAQ_SOURCE_HASH = faqFingerprint(BLOCKS, TREE, META);
@@ -632,11 +632,11 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
   });
   /* **An EMPTY list**, like `timeline`'s events: an article that cites no work
      is a real answer, and `SHAPE.citations` accepts it. */
-  store.plant(SLUG, "citations", "citations", {
+  store.plant(SLUG, "bibliography", "bibliography", {
     generator: CAPABLE_MODEL,
     slug: SLUG,
-    sourceHash: CITATIONS_SOURCE_HASH,
-    version: CITATIONS_VERSION,
+    sourceHash: BIBLIOGRAPHY_SOURCE_HASH,
+    version: BIBLIOGRAPHY_VERSION,
     citations: [],
     capped: false,
     generatedAt: new Date().toISOString(),

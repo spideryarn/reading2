@@ -65,7 +65,7 @@ const AVAILABLE: PublicArtefacts = {
   skim: true,
   faq: true,
   simpleSummary: true,
-  citations: true,
+  bibliography: true,
   debate: true,
 };
 const SHARING: ArticleSharing = {

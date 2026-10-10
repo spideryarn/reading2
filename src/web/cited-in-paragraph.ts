@@ -22,7 +22,7 @@
  * the whole piece — not their order inside this paragraph.
  */
 import type { BlockId } from "../types.js";
-import { shortAuthors } from "./CitationsPanel.js";
+import { shortAuthors } from "./BibliographyPanel.js";
 
 /** The fields of a cited work the line reads — the owner's `CitedWork` and a visitor's `PublicCitedWork` both have them. */
 export interface CitableWork {

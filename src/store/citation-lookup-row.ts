@@ -1,6 +1,6 @@
 /**
  * **A `CitationLookup` as `citation_finds` columns, and back** — the write
- * half is src/store/pg-citation-finds.ts, the read half `loadCitations` in
+ * half is src/store/pg-citation-finds.ts, the read half `loadBibliography` in
  * src/store/pg.ts. One file so the two cannot disagree about a column.
  *
  * The read is strict, as the CHECKs are: a row whose columns do not make a
@@ -89,7 +89,7 @@ export function lookupFromRow(
 }
 
 /**
- * **One whole `citation_finds` row as a `CitationFind`** — `loadCitations`
+ * **One whole `citation_finds` row as a `CitationFind`** — `loadBibliography`
  * reads every row this way, and *Investigate* reads one (`load` in
  * src/store/pg-citation-finds.ts). One function, so the two cannot disagree.
  */

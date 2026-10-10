@@ -3,7 +3,7 @@
  * the answer and the sentence that says what was read.
  * docs/plans/260930a-citations-investigate-one-work-on-demand.md § UI; the
  * server is src/citation-investigate.ts and the hook half is
- * src/web/useCitations.ts § `investigate`.
+ * src/web/useBibliography.ts § `investigate`.
  *
  * **Kept answers only, since 2026-10-09.** The row's *Dig deeper* button, the
  * wait, the words arriving and the failure went with plan 261009k (Greg: *"we
@@ -12,7 +12,7 @@
  * server half and the hook's `investigate` stay until Greg decides about them
  * (the plan's D5).
  *
- * Its own file rather than more of CitationsPanel.tsx because it is one
+ * Its own file rather than more of BibliographyPanel.tsx because it is one
  * self-contained thing on a row. Owner-only, and not on the hover card
  * (ProseHoverCard.tsx § CiteCard draws `readNoteOf` and stops).
  *

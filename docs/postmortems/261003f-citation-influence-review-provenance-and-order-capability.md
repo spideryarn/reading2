@@ -10,7 +10,7 @@ established. A separate GPT Sol agent traced the causes and reviewed the fixes r
 
 The list reader maps explicit `null`, a missing influence and a rejected influence to the same
 absent stored field (`influenceCounting`, `scoreCounting`, `readDraft` in
-[`src/citations.ts`](../../src/citations.ts)). The row and chat then said every absent value meant
+[`src/citations.ts`](../../src/bibliography.ts)). The row and chat then said every absent value meant
 the model was not confident it knew the work. That claims a cause the saved state cannot prove,
 including for old lists. Help also said every low score meant confidently minor, although old
 prompts explicitly assigned low numbers to unknown works. These explanations arrived in
@@ -20,7 +20,7 @@ The narrow fix keeps the planned storage contract: explain that no usable score 
 state the new prompt's rule separately. Qualify low-score meaning by new versus old lists. A
 future feature that needs the precise reason must save it; wording cannot recover discarded
 provenance. See the score comments in [`src/types.ts`](../../src/types.ts), the copy in
-[`CitationsPanel.tsx`](../../src/web/CitationsPanel.tsx), and
+[`CitationsPanel.tsx`](../../src/web/BibliographyPanel.tsx), and
 [`chat-tools.ts`](../../src/chat-tools.ts).
 
 ## Capability and selected order drift apart
@@ -51,7 +51,7 @@ order on an all-unknown list.
 The review regressions were observed red before implementation changes: `Tests 5 failed | 123
 skipped (128)` for URL selection, absent-score explanations and touch; a separate run established
 the context and Help claims (`Tests 3 failed | 94 skipped (97)`). They are in
-[`citations-panel.test.tsx`](../../tests/citations-panel.test.tsx) and
+[`citations-panel.test.tsx`](../../tests/bibliography-panel.test.tsx) and
 [`chat-citations-tool.test.ts`](../../tests/chat-citations-tool.test.ts).
 
 ## What would have caught this, ranked

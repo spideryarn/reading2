@@ -28,7 +28,7 @@ vi.mock("../src/store/index.js", async () => {
     commentStore: { ...actual.commentStore, load: spy("commentStore.load") },
     librarySearch: { ...actual.librarySearch, searchLibrary: spy("librarySearch.searchLibrary") },
     loadArticle: spy("loadArticle"),
-    loadCitations: spy("loadCitations"),
+    loadBibliography: spy("loadBibliography"),
     loadGlossary: async () => {
       calls.store.push("loadGlossary");
       return null;

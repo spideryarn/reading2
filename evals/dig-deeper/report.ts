@@ -22,6 +22,7 @@
  * - **First press** — run 1 where it was cold (read < 10% of the prefix),
  *   measured; else reconstructed as its cost + prefix × (write − read price).
  */
+import { currentLedgerName } from "../../src/step-order.js";
 import { ANCHOR_ARM, type Arm, armFamily, armById, familyOf, priceOf, readPrice, writePrice } from "./arms.js";
 import { judgeById } from "./judges.js";
 import type { AnswerCell, CallObs } from "./answer.js";
@@ -270,7 +271,7 @@ export function armRow(inp: ReportInputs, armId: string): ArmRow {
       examples.flatMap((e) => {
         const cap = inp.captures.get(e);
         if (!cap || cap.shared.some((s) => s.usd === null)) return [];
-        const calls = repeatPress && citationRepeatSkipsLookup(cap) ? cap.shared.filter((s) => s.job !== "citations-find") : cap.shared;
+        const calls = repeatPress && citationRepeatSkipsLookup(cap) ? cap.shared.filter((s) => currentLedgerName(s.job) !== "citation-find") : cap.shared;
         return [calls.reduce((n, s) => n + (s.usd ?? 0), 0)];
       }),
     );

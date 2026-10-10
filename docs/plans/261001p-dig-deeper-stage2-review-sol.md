@@ -3,7 +3,7 @@ Verdict: LAND AFTER FIXES — the P1 defect is fixed; one non-blocking pricing i
 ### Findings
 
 **F15 — P1 — FIXED — Dig deeper lookups disappeared under a standalone Find model override.**  
-[src/store/pg.ts:3821](/home/greg/code/spideryarn2/.claude/worktrees/go-deeper/src/store/pg.ts:3821), [src/citations.ts:931](/home/greg/code/spideryarn2/.claude/worktrees/go-deeper/src/citations.ts:931)
+[src/store/pg.ts:3821](/home/greg/code/spideryarn2/.claude/worktrees/go-deeper/src/store/pg.ts:3821), [src/citations.ts:931](/home/greg/code/spideryarn2/.claude/worktrees/go-deeper/src/bibliography.ts:931)
 
 Dig deeper stored the lookup fingerprint using `DIG_DEEPER_MODEL`, but the shared read side recomputed only standalone Find’s configured model. With `SPIDERYARN_CITATIONS_FIND_MODEL` set, the saved verdict disappeared on reload and a subsequent press repeated the lookup.
 

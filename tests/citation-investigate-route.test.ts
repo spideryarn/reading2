@@ -1,6 +1,6 @@
 /**
  * **Investigate, through the route and Postgres** —
- * `POST /api/citations/:slug/:id/investigate`, src/citation-investigate.ts,
+ * `POST /api/bibliography/:slug/:id/investigate`, src/citation-investigate.ts,
  * docs/plans/260930a-citations-investigate-one-work-on-demand.md.
  *
  * The rules are tests/citation-investigate.test.ts, with the runner and the
@@ -31,8 +31,8 @@ import { modelFor } from "../src/models.js";
 import { EVAL_OWNER_ID, runAsOwner } from "../src/owner.js";
 import type {
   BlockId,
-  Citations,
-  CitationsResponse,
+  Bibliography,
+  BibliographyResponse,
   CitedWork,
   FindCitationResponse,
   InvestigateCitationDone,
@@ -258,12 +258,12 @@ async function currentRevision(): Promise<string> {
 async function setWhy(why: string): Promise<void> {
   const revision = await currentRevision();
   const [rev] = await getDb()
-    .select({ citations: articleRevisions.citations })
+    .select({ bibliography: articleRevisions.bibliography })
     .from(articleRevisions)
     .where(eq(articleRevisions.id, revision));
-  const citations = rev?.citations as Citations;
+  const citations = rev?.bibliography as Bibliography;
   const next = { ...citations, citations: citations.citations.map((w) => (w.id === WORK ? { ...w, why } : w)) };
-  await getDb().update(articleRevisions).set({ citations: next }).where(eq(articleRevisions.id, revision));
+  await getDb().update(articleRevisions).set({ bibliography: next }).where(eq(articleRevisions.id, revision));
 }
 
 beforeAll(async () => {
@@ -283,7 +283,7 @@ beforeAll(async () => {
     url: "https://arxiv.org/abs/2001.08361",
     linkFrom: "arxiv",
   };
-  const citations: Citations = {
+  const citations: Bibliography = {
     version: "citations/4",
     generator: "test",
     slug: SLUG,
@@ -293,7 +293,7 @@ beforeAll(async () => {
     generatedAt: "2026-09-30T00:00:00.000Z",
     elapsedMs: 1,
   };
-  await getDb().update(articleRevisions).set({ citations }).where(eq(articleRevisions.id, await currentRevision()));
+  await getDb().update(articleRevisions).set({ bibliography: citations }).where(eq(articleRevisions.id, await currentRevision()));
 }, 120_000);
 
 afterAll(async () => {
@@ -379,12 +379,12 @@ async function until(ready: () => boolean, ms = 20_000): Promise<void> {
   }
 }
 
-const investigateUrl = (id = WORK) => `/api/citations/${SLUG}/${id}/investigate`;
+const investigateUrl = (id = WORK) => `/api/bibliography/${SLUG}/${id}/investigate`;
 
 async function listed(): Promise<CitedWork | undefined> {
-  const call = serve("GET", `/api/citations/${SLUG}`);
+  const call = serve("GET", `/api/bibliography/${SLUG}`);
   await handleApi(call.req, call.res, acceptAny);
-  return (JSON.parse(call.body()) as CitationsResponse).citations.citations.find((w) => w.id === WORK);
+  return (JSON.parse(call.body()) as BibliographyResponse).bibliography.citations.find((w) => w.id === WORK);
 }
 
 async function storedAnswer(): Promise<string | undefined> {
@@ -395,7 +395,7 @@ async function storedAnswer(): Promise<string | undefined> {
   return row?.answer;
 }
 
-describe("POST /api/citations/:slug/:id/investigate", () => {
+describe("POST /api/bibliography/:slug/:id/investigate", () => {
   it("streams, writes `done` only once stored, and a fresh read has it on the row", async () => {
     const stub = provider("Does it back the claim?\n");
     const call = serve("POST", investigateUrl());
@@ -512,8 +512,8 @@ describe("POST /api/citations/:slug/:id/investigate", () => {
   it("looks the work up first, streams stage and lookup frames, and reads with the page it stored", async () => {
     /* Standalone Find keeps this override; Dig deeper ignores it. The lookup
        Dig deeper writes must still reattach on the shared read side. */
-    const previous = process.env.SPIDERYARN_CITATIONS_FIND_MODEL;
-    process.env.SPIDERYARN_CITATIONS_FIND_MODEL = "test/standalone-find-override";
+    const previous = process.env.SPIDERYARN_CITATION_FIND_MODEL;
+    process.env.SPIDERYARN_CITATION_FIND_MODEL = "test/standalone-find-override";
     try {
       const stub = provider("Does it back the claim?\n", FOUND_LOOKUP);
       const call = serve("POST", investigateUrl());
@@ -556,8 +556,8 @@ describe("POST /api/citations/:slug/:id/investigate", () => {
       expect(again.lookups()).toBe(0);
       expect(frames(second.body()).some((f) => f.name === "lookup")).toBe(false);
     } finally {
-      if (previous === undefined) delete process.env.SPIDERYARN_CITATIONS_FIND_MODEL;
-      else process.env.SPIDERYARN_CITATIONS_FIND_MODEL = previous;
+      if (previous === undefined) delete process.env.SPIDERYARN_CITATION_FIND_MODEL;
+      else process.env.SPIDERYARN_CITATION_FIND_MODEL = previous;
     }
   });
 });
@@ -695,7 +695,7 @@ describe("a press that finds the work's influence on the web", () => {
 
 /* Plan 261003m stage 2: the web influence is stored on the press's own row,
    through its two CHECKs (drizzle/20261003202922_citation_investigation_influence.sql),
-   and read back by `loadCitations`. Its own entry id. */
+   and read back by `loadBibliography`. Its own entry id. */
 describe("the store's CHECKs on the web influence", () => {
   const ENTRY = "spya-nfwnc2";
   const BASE = {

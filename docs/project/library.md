@@ -1359,7 +1359,7 @@ That is what happens, and this section is the one place that says so.
   piece, so there was never anything there to import.
 - **In Citations, a link to a work already here can go to a stranger's public copy rather than your
   own**, when theirs was matched by DOI or arXiv id and yours only by title
-  ([citations.md](citations.md)). Between equally sure matches, yours wins.
+  ([bibliography.md](bibliography.md)). Between equally sure matches, yours wins.
 
 The two-reader import, sharing, deletion, upload, billing, private-link and per-reader-state cases
 run with two accounts against Postgres:

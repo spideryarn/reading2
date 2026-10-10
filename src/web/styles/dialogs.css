@@ -414,7 +414,7 @@
    happens to a draft were 25 to 29px tall on an iPad (browser check,
    2026-10-03): Discard beside Save at that size is a mis-tap that throws words
    away. `--control-h-lg` is the house touch height (docs/project/controls.md
-   § The numbers); `pointer: coarse` as footnotes.css and citations.css use it. */
+   § The numbers); `pointer: coarse` as footnotes.css and bibliography.css use it. */
 @media (pointer: coarse) {
   .annotate-actions button {
     min-height: var(--control-h-lg);

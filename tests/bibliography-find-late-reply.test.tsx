@@ -27,7 +27,7 @@
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { BlockId, CitationLookup, Citations, CitedWork, FindCitationResponse } from "../src/types.js";
+import type { BlockId, CitationLookup, Bibliography, CitedWork, FindCitationResponse } from "../src/types.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -55,7 +55,7 @@ const SEARCHED = work({});
 const NOW_A_DOI = work({ url: "https://doi.org/10.1000/xyz", linkFrom: "doi" });
 const WEB = "https://example.org/searched.pdf";
 
-function artefact(row: CitedWork): Citations {
+function artefact(row: CitedWork): Bibliography {
   return {
     version: "test",
     generator: "test",
@@ -154,7 +154,7 @@ vi.mock("../src/web/lib/api.js", () => ({
       });
       return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
     }
-    if (input === `/api/citations/${SLUG}`) {
+    if (input === `/api/bibliography/${SLUG}`) {
       const snapshot = listed;
       if (holdGet) {
         holdGet = false;
@@ -162,7 +162,7 @@ vi.mock("../src/web/lib/api.js", () => ({
           releaseGet = go;
         });
       }
-      return json({ citations: artefact(snapshot), stale: false, outdated: false });
+      return json({ bibliography: artefact(snapshot), stale: false, outdated: false });
     }
     throw new Error(`the test made an unexpected request: ${input}`);
   },
@@ -188,32 +188,32 @@ vi.mock("../src/web/useJobs.js", () => ({
   },
 }));
 
-const { useCitations, useCitationsRead } = await import("../src/web/useCitations.js");
+const { useBibliography, useBibliographyRead } = await import("../src/web/useBibliography.js");
 
-let hook: ReturnType<typeof useCitations> | null = null;
-let readHook: ReturnType<typeof useCitationsRead> | null = null;
+let hook: ReturnType<typeof useBibliography> | null = null;
+let readHook: ReturnType<typeof useBibliographyRead> | null = null;
 /**
  * **Both halves of the hook, wired together the way the app wires them** —
  * since 2026-09-16, when the read split out so the prose could have the list
  * (docs/plans/260916b-…).
  *
  * The patch this file is about now crosses that seam: `find` POSTs down here
- * and calls `CitationsRead.applyFound` up there, where the list lives. So the
+ * and calls `BibliographyRead.applyFound` up there, where the list lives. So the
  * F14 guard — *only a row that is still a search is ever upgraded* — moved with
- * it, and a test that kept calling `useCitations` alone would no longer be
+ * it, and a test that kept calling `useBibliography` alone would no longer be
  * testing the thing it was written for. Driving the pair is the point: unit
  * tests with a stubbed read cannot see whether the two are joined up correctly.
  *
- * One component rather than the app's two (`OwnedReader` and `CitationsBand`),
+ * One component rather than the app's two (`OwnedReader` and `BibliographyBand`),
  * which is the one liberty taken here: the hooks and the seam between them are
  * real, the component boundary is not. What that boundary buys — the job
  * subscription and the activation owner dying with the band — is not what this
  * file is about.
  */
 function Harness(): ReactElement | null {
-  const read = useCitationsRead(SLUG);
+  const read = useBibliographyRead(SLUG);
   readHook = read;
-  hook = useCitations(SLUG, read);
+  hook = useBibliography(SLUG, read);
   return null;
 }
 
@@ -253,7 +253,7 @@ async function open(expected: CitedWork["linkFrom"] = "search"): Promise<void> {
     root.render(createElement(Harness));
   });
   await flush();
-  expect(hook?.citations?.citations[0]?.linkFrom).toBe(expected);
+  expect(hook?.bibliography?.citations[0]?.linkFrom).toBe(expected);
 }
 
 /**
@@ -288,16 +288,16 @@ describe("a find whose reply arrives after the list was found again", () => {
     /* The re-run finishes mid-find: same id, and now a DOI. */
     listed = NOW_A_DOI;
     await act(async () => {
-      onFinished?.({ slug: SLUG, status: "done", steps: [{ name: "citations" }] });
+      onFinished?.({ slug: SLUG, status: "done", steps: [{ name: "bibliography" }] });
     });
     await flush();
     /* The refresh really landed — without this the test passes on a hook whose
        `onFinished` was never wired to the read. */
-    expect(hook?.citations?.citations[0]?.linkFrom).toBe("doi");
+    expect(hook?.bibliography?.citations[0]?.linkFrom).toBe("doi");
 
     await answer(pending);
 
-    const row = hook?.citations?.citations[0];
+    const row = hook?.bibliography?.citations[0];
     expect(row?.linkFrom).toBe("doi");
     expect(row?.url).toBe("https://doi.org/10.1000/xyz");
     expect(row?.found).toBeUndefined();
@@ -312,7 +312,7 @@ describe("a find whose reply arrives after the list was found again", () => {
     const pending = await press();
     await answer(pending);
 
-    const row = hook?.citations?.citations[0];
+    const row = hook?.bibliography?.citations[0];
     expect(row?.linkFrom).toBe("web");
     expect(row?.url).toBe(WEB);
     expect(row?.found?.host).toBe("example.org");
@@ -326,14 +326,14 @@ describe("a find whose reply arrives after the list was found again", () => {
     /* The re-run lands mid-press: same id, still a search, a different `why`. */
     listed = work({ why: "A different use, written by the new list." });
     await act(async () => {
-      onFinished?.({ slug: SLUG, status: "done", steps: [{ name: "citations" }] });
+      onFinished?.({ slug: SLUG, status: "done", steps: [{ name: "bibliography" }] });
     });
     await flush();
-    expect(hook?.citations?.citations[0]?.why).toBe("A different use, written by the new list.");
+    expect(hook?.bibliography?.citations[0]?.why).toBe("A different use, written by the new list.");
 
     await answer(pending);
 
-    const row = hook?.citations?.citations[0];
+    const row = hook?.bibliography?.citations[0];
     expect(row?.linkFrom).toBe("web");
     expect(row?.url).toBe(WEB);
     expect(row?.lookup).toBeUndefined();
@@ -349,7 +349,7 @@ describe("a find whose reply arrives after the list was found again", () => {
     passage = "The citing passage was edited while the lookup was running.";
     await answer(pending);
 
-    const row = hook?.citations?.citations[0];
+    const row = hook?.bibliography?.citations[0];
     expect(row?.linkFrom).toBe("web");
     expect(row?.lookup).toBeUndefined();
   });
@@ -370,7 +370,7 @@ describe("a find whose reply arrives after the list was found again", () => {
 
     const pendingFind = await press();
     await answer(pendingFind);
-    expect(hook?.citations?.citations[0]?.linkFrom).toBe("web");
+    expect(hook?.bibliography?.citations[0]?.linkFrom).toBe("web");
 
     await act(async () => {
       releaseGet?.();
@@ -378,7 +378,7 @@ describe("a find whose reply arrives after the list was found again", () => {
     });
     await flush();
 
-    const row = hook?.citations?.citations[0];
+    const row = hook?.bibliography?.citations[0];
     expect(row?.linkFrom).toBe("web");
     expect(row?.url).toBe(WEB);
     expect(row?.lookup?.state).toBe("assessed");
@@ -394,7 +394,7 @@ describe("Look it up on a row the article linked", () => {
     const pending = await press();
     await answer(pending);
 
-    const row = hook?.citations?.citations[0];
+    const row = hook?.bibliography?.citations[0];
     expect(row?.linkFrom).toBe("doi");
     expect(row?.url).toBe("https://doi.org/10.1000/linked");
     expect(row?.found).toBeUndefined();

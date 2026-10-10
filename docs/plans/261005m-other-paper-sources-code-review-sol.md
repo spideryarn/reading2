@@ -32,7 +32,7 @@ Checks:
 
 Files changed:
 
-- [src/citations.ts](/var/tmp/spideryarn-worktrees/fbayettj-other-paper-sources/src/citations.ts)
-- [tests/citations.test.ts](/var/tmp/spideryarn-worktrees/fbayettj-other-paper-sources/tests/citations.test.ts)
+- [src/citations.ts](/var/tmp/spideryarn-worktrees/fbayettj-other-paper-sources/src/bibliography.ts)
+- [tests/citations.test.ts](/var/tmp/spideryarn-worktrees/fbayettj-other-paper-sources/tests/bibliography.test.ts)
 
 VERDICT: ship with the fixes I made

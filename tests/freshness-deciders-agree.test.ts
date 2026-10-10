@@ -159,7 +159,7 @@ const CASES: Partial<Record<StepName, readonly Field[]>> = {
   skim: ["inputHash", "promptVersion", "model"],
   debate: ["inputHash", "promptVersion", "model"],
   "debate-claims": ["inputHash", "promptVersion", "model"],
-  citations: ["inputHash", "promptVersion", "model"],
+  bibliography: ["inputHash", "promptVersion", "model"],
   crossrefs: ["inputHash", "promptVersion", "model"],
 };
 
@@ -340,7 +340,7 @@ function minimal(step: StepName): Artefact {
       return { ...made, relations: {} };
     case "debate-claims":
       return { ...made, claims: [] };
-    case "citations":
+    case "bibliography":
       return { ...made, citations: [] };
     case "crossrefs":
       return { ...made, links: [] };
@@ -837,7 +837,7 @@ describe("when the article itself moves, every step gets the same answer from bo
     "sketch",
     "debate",
     "debate-claims",
-    "citations",
+    "bibliography",
     "crossrefs",
   ];
   const without = (steps: readonly StepName[], ...drop: StepName[]) =>

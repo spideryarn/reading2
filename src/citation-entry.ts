@@ -1,6 +1,6 @@
 /**
  * **A cited work's `entry`, as text** — the cap and the one shape an entry is
- * built in, shared by the Citations stage (src/citations.ts) and the public DTO
+ * built in, shared by the Citations stage (src/bibliography.ts) and the public DTO
  * (src/public/dto.ts § `publicCitedWork`). Plan 261001b.
  *
  * The DTO needs it to tell the two kinds of entry apart. One taken from the

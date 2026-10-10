@@ -1,7 +1,7 @@
 # Citations: order the cited works by publication date
 
 Admin suggestion, report `spya-xpxmjn`, Overseer queue item `qi-5e2wzg9m`. Owning doc:
-[citations.md](../project/citations.md) § The orders, and the bar.
+[citations.md](../project/bibliography.md) § The orders, and the bar.
 
 > In Citations mode, add a `sort` option for publication-date.
 >

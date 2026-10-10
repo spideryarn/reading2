@@ -60,7 +60,7 @@ const { environmentOwnerId, runAsOwner } = await import("../src/owner.js");
 const { costStore } = await import("../src/store/ai-calls.js");
 const { collectSpend } = await import("../src/ai-spend.js");
 const { log } = await import("../src/log.js");
-const { wordsOf } = await import("../src/citations.js");
+const { wordsOf } = await import("../src/bibliography.js");
 const { readPaperText } = await import("../src/paper-text.js");
 const { defaultFind, defaultFirstPages, identityOf, isAnUpload, workToFind, GUESS_TIMEOUT_MS } = await import(
   "../src/source-guess-run.js"

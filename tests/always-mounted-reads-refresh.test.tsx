@@ -47,7 +47,7 @@ vi.mock("../src/web/lib/api.js", async () => {
   return { ...real, apiFetch, fetchOk: async (url: string, init?: RequestInit) => apiFetch(url, init) };
 });
 
-const { useCitationsRead } = await import("../src/web/useCitations.js");
+const { useBibliographyRead } = await import("../src/web/useBibliography.js");
 const { useGlossaryRead } = await import("../src/web/useGlossary.js");
 const { useQuotesRead } = await import("../src/web/useQuotes.js");
 const { useQuizRead } = await import("../src/web/useQuiz.js");
@@ -55,7 +55,7 @@ const { jobEngine } = await import("../src/web/jobEngine.js");
 const { useStepJob } = await import("../src/web/useStepJob.js");
 
 const READS = [
-  ["citations", useCitationsRead],
+  ["bibliography", useBibliographyRead],
   ["glossary", useGlossaryRead],
   ["quotes", useQuotesRead],
   ["quiz", useQuizRead],

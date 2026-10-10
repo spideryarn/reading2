@@ -455,7 +455,7 @@
 }
 
 /* "In your library" on the card (plan 261001i): the band's `.cite-here`
-   (citations.css), with the by-line's gap under it so it does not run into the
+   (bibliography.css), with the by-line's gap under it so it does not run into the
    label of the part below. */
 .prose-card-body > .cite-here { margin: -0.2rem 0 0.4rem; }
 
@@ -536,7 +536,7 @@
 }
 
 /* Under `why`: we have not read the work, or found only a page matching its
-   title. The band's sentence (CitationsPanel.tsx § readNoteOf), as quiet as the
+   title. The band's sentence (BibliographyPanel.tsx § readNoteOf), as quiet as the
    foot's facts. Plan 260929g stage 1. */
 .prose-card-cite-read {
   margin: 0.2rem 0 0;

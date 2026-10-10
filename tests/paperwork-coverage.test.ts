@@ -76,7 +76,7 @@ describe("the paperwork rule is the default for every whole-article prompt", () 
   it("finds the whole-article prompts it is meant to find", () => {
     /* A scan that finds nothing passes everything. */
     const found = all.filter((f) => facts(sources.get(f)!).wholeArticle);
-    for (const f of ["src/sketch.ts", "src/quiz.ts", "src/glossary.ts", "src/citations.ts", "src/arc.ts"]) {
+    for (const f of ["src/sketch.ts", "src/quiz.ts", "src/glossary.ts", "src/bibliography.ts", "src/arc.ts"]) {
       expect(found, f).toContain(f);
     }
   });

@@ -518,7 +518,7 @@ export function useQuizRead(slug: string): QuizRead {
   /* A run that finishes after the reader left the Learn band still reaches the
      questions in the prose. This read was hoisted two days before its three
      siblings were given the line (e039d2acd) and was missed until 2026-10-06.
-     useCitations.ts § An always-mounted read is not an always-fresh read. */
+     useBibliography.ts § An always-mounted read is not an always-fresh read. */
   useStepFinished(slug, "quiz", refresh);
 
   /* The opening read. Everything after it goes through `reload`, which does not

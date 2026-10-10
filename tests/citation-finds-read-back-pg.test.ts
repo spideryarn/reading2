@@ -1,7 +1,7 @@
 /**
- * **A stored find, read back through `GET /api/citations/:slug` — in Postgres.**
+ * **A stored find, read back through `GET /api/bibliography/:slug` — in Postgres.**
  * src/citation-find.ts § `runCitationLookup`, src/store/pg-citation-finds.ts,
- * and the read half in `loadCitations` (`attachFinds`, `attachLookups`).
+ * and the read half in `loadBibliography` (`attachFinds`, `attachLookups`).
  *
  * The rules about *what* is kept are tests/citation-find.test.ts, with the
  * model and the store injected. What only the real composition can show is
@@ -18,7 +18,7 @@
  *    and keeps the link.
  *
  * Until 2026-10-04 this file was tests/citation-find-route.test.ts and wrote its
- * finds through `POST /api/citations/:slug/:id/find`. That route is deleted
+ * finds through `POST /api/bibliography/:slug/:id/find`. That route is deleted
  * (no caller since plan 260930d); the lookup is now driven the way its one
  * caller drives it — `runCitationLookup` with `DIG_DEEPER_MODEL`, as
  * *Investigate* does (src/citation-investigate.ts) — so the fingerprints on the
@@ -37,7 +37,7 @@ import { closeDb, getDb } from "../src/db/client.js";
 import { articleRevisions, articles, citationFinds } from "../src/db/schema.js";
 import { DIG_DEEPER_MODEL } from "../src/dig-deeper.js";
 import { loadEnvLocal } from "../src/env.js";
-import type { BlockId, Citations, CitationsResponse, CitedWork, FindCitationResponse } from "../src/types.js";
+import type { BlockId, Bibliography, BibliographyResponse, CitedWork, FindCitationResponse } from "../src/types.js";
 import { acceptAny, asTestOwner, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
@@ -120,12 +120,12 @@ async function setWhy(id: string, why: string): Promise<void> {
     .where(eq(articles.id, article?.articleId ?? ""));
   if (!row?.revision) throw new Error("the scratch article has no current revision");
   const [rev] = await db
-    .select({ citations: articleRevisions.citations })
+    .select({ bibliography: articleRevisions.bibliography })
     .from(articleRevisions)
     .where(eq(articleRevisions.id, row.revision));
-  const citations = rev?.citations as Citations;
+  const citations = rev?.bibliography as Bibliography;
   const next = { ...citations, citations: citations.citations.map((w) => (w.id === id ? { ...w, why } : w)) };
-  await db.update(articleRevisions).set({ citations: next }).where(eq(articleRevisions.id, row.revision));
+  await db.update(articleRevisions).set({ bibliography: next }).where(eq(articleRevisions.id, row.revision));
 }
 
 function work(over: Partial<CitedWork> & Pick<CitedWork, "id">, at: BlockId): CitedWork {
@@ -148,7 +148,7 @@ function work(over: Partial<CitedWork> & Pick<CitedWork, "id">, at: BlockId): Ci
 beforeAll(async () => {
   article = await scratchArticleInPg(SLUG, { ownerId: TEST_OWNER });
   const first = article.blocks[0]?.id as BlockId;
-  const citations: Citations = {
+  const citations: Bibliography = {
     version: "citations/2",
     generator: "test",
     slug: SLUG,
@@ -167,7 +167,7 @@ beforeAll(async () => {
     .from(articles)
     .where(eq(articles.id, article.articleId));
   if (!row?.revision) throw new Error("the scratch article has no current revision");
-  await db.update(articleRevisions).set({ citations }).where(eq(articleRevisions.id, row.revision));
+  await db.update(articleRevisions).set({ bibliography: citations }).where(eq(articleRevisions.id, row.revision));
   /* A find stored against the row whose article gave a DOI — what a re-run
      that turned a searched row into a DOI row and inherited its id leaves.
      Through the real store, as every find is written. */
@@ -223,9 +223,9 @@ async function request(method: string, url: string): Promise<{ status: number; b
 }
 
 async function listed(id: string): Promise<CitedWork | undefined> {
-  const got = await request("GET", `/api/citations/${SLUG}`);
+  const got = await request("GET", `/api/bibliography/${SLUG}`);
   expect(got.status).toBe(200);
-  return (got.body as CitationsResponse).citations.citations.find((w) => w.id === id);
+  return (got.body as BibliographyResponse).bibliography.citations.find((w) => w.id === id);
 }
 
 /**
@@ -255,7 +255,7 @@ async function lookUp(id: string, reply: unknown): Promise<FindCitationResponse>
   );
 }
 
-describe("a stored find, read back through GET /api/citations/:slug", () => {
+describe("a stored find, read back through GET /api/bibliography/:slug", () => {
   it("keeps the search result's page, and a fresh read shows it on the entry", async () => {
     expect(await listed(SEARCHED)).toMatchObject({ linkFrom: "search" });
 

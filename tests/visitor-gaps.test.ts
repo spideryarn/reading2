@@ -72,7 +72,7 @@ const NOTHING_BUILT: PublicArtefacts = {
   skim: false,
   faq: false,
   simpleSummary: false,
-  citations: false,
+  bibliography: false,
   debate: false,
 };
 const EVERYTHING_BUILT: PublicArtefacts = {
@@ -86,7 +86,7 @@ const EVERYTHING_BUILT: PublicArtefacts = {
   skim: true,
   faq: true,
   simpleSummary: true,
-  citations: true,
+  bibliography: true,
   debate: true,
 };
 
@@ -121,7 +121,7 @@ function only(built: keyof PublicArtefacts): PublicArtefacts {
     skim: built === "skim",
     faq: built === "faq",
     simpleSummary: built === "simpleSummary",
-    citations: built === "citations",
+    bibliography: built === "bibliography",
     debate: built === "debate",
   };
 }
@@ -369,9 +369,9 @@ describe("what a visitor is told, mode by mode", () => {
     );
     /* And one at a time, so a mode reading the wrong flag shows up. Citations'
        and Debate's flags both open Sources since 2026-10-09. */
-    const MODE_OF = { citations: "sources", debate: "sources" } as const;
-    for (const built of ["glossary", "ideas", "quotes", "timeline", "skim", "faq", "citations", "debate"] as const) {
-      const mode: Mode = built === "citations" || built === "debate" ? MODE_OF[built] : built;
+    const MODE_OF = { bibliography: "sources", debate: "sources" } as const;
+    for (const built of ["glossary", "ideas", "quotes", "timeline", "skim", "faq", "bibliography", "debate"] as const) {
+      const mode: Mode = built === "bibliography" || built === "debate" ? MODE_OF[built] : built;
       expect([...markedModes(only(built)).keys()], built).not.toContain(mode);
     }
   });
@@ -388,7 +388,7 @@ describe("what a visitor is told, mode by mode", () => {
   it("opens Sources on any one of its artefacts, and names them when there is none", () => {
     const withFlags = (citations: boolean, debate: boolean): PublicArtefacts => ({
       ...NOTHING_BUILT,
-      citations,
+      bibliography: citations,
       debate,
     });
     expect(visitorGap("sources", withFlags(true, false)), "citations only").toBeNull();
@@ -547,7 +547,7 @@ describe("what the payload says it has", () => {
       skim: false,
       faq: false,
       simpleSummary: false,
-      citations: false,
+      bibliography: false,
       debate: false,
     });
     expect(

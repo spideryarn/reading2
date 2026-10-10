@@ -12,7 +12,7 @@ Up: [plans.md](../project/plans.md). The feature: [glossary.md](../project/gloss
 
 A paper the article cites ("Saha et al.") does not get a glossary entry, and is not underlined in
 the prose as a glossary term. Cited works already have their own mode, Citations
-([citations.md](../project/citations.md)), which lists every one and marks each in the prose.
+([citations.md](../project/bibliography.md)), which lists every one and marks each in the prose.
 
 ## Why it happens
 

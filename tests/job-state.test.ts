@@ -215,7 +215,7 @@ const EXPECTED_THRESHOLD_MS: Record<StepName, number> = {
   debate: 180_000,
   /* Unmeasured: the fallback. */
   "debate-claims": 180_000,
-  citations: 180_000,
+  bibliography: 180_000,
   crossrefs: 180_000,
   simple: 180_000,
 };

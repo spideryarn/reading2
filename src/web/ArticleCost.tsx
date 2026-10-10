@@ -29,7 +29,7 @@ import {
 } from "../admin.js";
 import { CARD } from "./card.js";
 import { taskOf } from "../cost-cube.js";
-import { currentStepName } from "../step-order.js";
+import { currentLedgerName } from "../step-order.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 
@@ -42,7 +42,7 @@ export type ArticleCostLoad =
 export function lineName(line: ArticleCostLine): string {
   // The append-only ledger keeps old names; only their presentation changes.
   const name = taskOf(line);
-  const job = currentStepName(line.job);
+  const job = currentLedgerName(line.job);
   /* Historical labels calls ran inside the structure step. Keep that detail
      so the two kinds of calls remain distinguishable. */
   const detail = line.stepName && job !== name ? ` · ${job}` : "";

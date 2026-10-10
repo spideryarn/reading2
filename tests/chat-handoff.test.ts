@@ -262,8 +262,8 @@ describe("the messages a glossary entry and a cited work pre-fill", () => {
       itemId: "spya-ttm222",
       quote: "qualia",
     });
-    expect(itemOrigin("citations", "spya-ttm333", "A work")).toEqual({
-      mode: "citations",
+    expect(itemOrigin("bibliography", "spya-ttm333", "A work")).toEqual({
+      mode: "bibliography",
       itemId: "spya-ttm333",
       quote: "A work",
     });

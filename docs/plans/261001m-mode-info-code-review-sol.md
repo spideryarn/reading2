@@ -23,7 +23,7 @@ Verdict: approve after fixes. No remaining P0/P1 findings found.
 
 - [mode-catalog.ts:256](/home/greg/code/spideryarn2/.claude/worktrees/fb8h-mode-info-icon/src/mode-catalog.ts:256) — Search omitted that meaning searches are retained; Remember omitted that replies point to supporting passages. Added both promised explanations.
 
-- Stale old-placement documentation was corrected in [faq.md:91](/home/greg/code/spideryarn2/.claude/worktrees/fb8h-mode-info-icon/docs/project/faq.md:91), [citations.md:171](/home/greg/code/spideryarn2/.claude/worktrees/fb8h-mode-info-icon/docs/project/citations.md:171), and [trajectory.md:166](/home/greg/code/spideryarn2/.claude/worktrees/fb8h-mode-info-icon/docs/project/trajectory.md:166).
+- Stale old-placement documentation was corrected in [faq.md:91](/home/greg/code/spideryarn2/.claude/worktrees/fb8h-mode-info-icon/docs/project/faq.md:91), [citations.md:171](/home/greg/code/spideryarn2/.claude/worktrees/fb8h-mode-info-icon/docs/project/bibliography.md:171), and [trajectory.md:166](/home/greg/code/spideryarn2/.claude/worktrees/fb8h-mode-info-icon/docs/project/trajectory.md:166).
 
 The audit found no visitor provenance leaks, fabricated authors, lost live failures/actions, missing mode icons, dead named CSS helpers, or regression in Diagram’s screen-reader status announcement.
 

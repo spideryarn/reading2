@@ -94,7 +94,7 @@ export const NOUN: Record<keyof PublicArtefacts, string> = {
   skim: "a skim route",
   faq: "an FAQ",
   simpleSummary: "a plain-words summary",
-  citations: "a list of citations",
+  bibliography: "a bibliography",
   debate: "a debate",
   sketch: "a sketch",
 };
@@ -137,8 +137,8 @@ export function notBuiltGap(what: keyof PublicArtefacts): VisitorGap {
  *    that flag is set is a fact about *this piece*, not about the mode.
  *  - `any-artefact` carries several, for a mode whose sub-modes show one
  *    each: any one stored opens it. Its noun is the reader-facing names of
- *    those sub-modes, not the storage keys — Sources' keys deliberately
- *    remain `citations` and `debate`.
+ *    those sub-modes, not the storage keys (Sources': `bibliography` and
+ *    `debate`).
  */
 type VisitorPolicy =
   | { kind: "available" }
@@ -334,14 +334,14 @@ const POLICY: Record<Mode, VisitorPolicy> = {
    * pass for Bibliography or Claims; one metered web search for Reception or
    * a claim check) and nothing to do with *showing* them.
    * Greg, SPIDERYARN-READING2-56: a stored mode on a public article is shown.
-   * The visitor gets `VisitorSourcesBand`, which mounts no `useCitations`,
+   * The visitor gets `VisitorSourcesBand`, which mounts no `useBibliography`,
    * `useDebate` or job, draws no *Find it* and starts no search.
    * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md,
    * docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md.
    */
   sources: {
     kind: "any-artefact",
-    keys: ["citations", "debate"],
+    keys: ["bibliography", "debate"],
     noun: "a Bibliography, a Reception search or a Claims list",
   },
   /**

@@ -2,7 +2,7 @@
 
 Two admin suggestions about Citations mode, batched as Overseer queue item `qi-ye7ytftw`
 (SPIDERYARN-READING2-7W, report `spya-ac5msa`; SPIDERYARN-READING2-7X, report `spya-e2yzkf`).
-Owning doc: [citations.md](../project/citations.md); the flash is
+Owning doc: [citations.md](../project/bibliography.md); the flash is
 [`src/web/flash.ts`](../../src/web/flash.ts) and `prose.css` § the flash on arrival.
 
 > In the new version of Citations mode, it sometimes shows the same thing twice, e.g.

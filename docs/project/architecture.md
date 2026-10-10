@@ -320,7 +320,7 @@ heads exist today and the list grows as stages arrive:
 | function | stages | what its head prints |
 |---|---|---|
 | `articleFingerprint` | `arc`, `glossary`, `quotes` (and a `tweets` thread stored before its prompt sent block ids) | `TITLE:`, `BY:`, `PUBLISHED IN:` (`articleText`) |
-| `articleWithIdsFingerprint` | `tweets`, `ideas`, `sketch`, `quiz`, `faq`, `debate`, `citations` | those three **and `URL:`** (`articleWithIds`) |
+| `articleWithIdsFingerprint` | `tweets`, `ideas`, `sketch`, `quiz`, `faq`, `debate`, `bibliography` | those three **and `URL:`** (`articleWithIds`) |
 | `datedArticleFingerprint` | `timeline` | those four **and the publication date**, which is its reference frame |
 
 The last two also hash the synthetic `TITLE: <tree.slug>` their stages fall back to when there is

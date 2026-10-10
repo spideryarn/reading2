@@ -549,7 +549,7 @@ repeated once, after ten seconds), and which of the two ways is wanted.
 **A Hugging Face or alphaXiv page is the arXiv paper**, not a source of its own: it resolves to
 exactly what the arXiv link resolves to, so it is the same article, and its source link afterwards
 opens arXiv. The three other places that ask "is this an arXiv paper?" ask the registry's
-`arxivIdOf` too (`identityOf` in `src/cited-in-spideryarn.ts`, `keysOf` in `src/citations.ts`,
+`arxivIdOf` too (`identityOf` in `src/cited-in-spideryarn.ts`, `keysOf` in `src/bibliography.ts`,
 `arxivPdfUrl` in `src/paper-text.ts`), so a work an article cites by its Hugging Face page matches
 the arXiv article on the shelf and is read from arXiv's PDF.
 

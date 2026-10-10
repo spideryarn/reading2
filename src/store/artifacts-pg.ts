@@ -69,6 +69,7 @@ import {
   revisionStepRuns,
 } from "../db/schema.js";
 import { blockOf } from "./block-rows.js";
+import { ACTIVE_REVISION_COLUMNS, type ActiveRevisionRow } from "./revision-columns.js";
 import { siteFor } from "./artifact-storage.js";
 import { CONTENT_TYPE } from "./blobs.js";
 import type { DocumentKind, RawManifest } from "../fetch.js";
@@ -168,12 +169,12 @@ export { STORAGE, siteFor, type Site } from "./artifact-storage.js";
 
 /* ---------------------------------------------------------- reassembly -- */
 
-/** The revision columns a `read` may need, selected as one row. */
-type RevisionRow = typeof articleRevisions.$inferSelect;
+/** The revision columns a `read` may need, selected as one row: never a legacy one (src/store/revision-columns.ts). */
+type RevisionRow = ActiveRevisionRow;
 
 async function revisionRow(exec: Executor, revisionId: string): Promise<RevisionRow | undefined> {
   const [row] = await exec
-    .select()
+    .select(ACTIVE_REVISION_COLUMNS)
     .from(articleRevisions)
     .where(eq(articleRevisions.id, revisionId))
     .limit(1);

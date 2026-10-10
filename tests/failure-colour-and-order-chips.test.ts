@@ -38,7 +38,7 @@ import { parseSource, walkAst } from "./helpers/ts-ast.js";
 const ORDER_CALLERS = [
   { mode: "Glossary", file: "src/web/GlossaryPanel.tsx", label: "Order the terms by" },
   { mode: "Quotes", file: "src/web/QuotesPanel.tsx", label: "Order the quotes by" },
-  { mode: "Citations", file: "src/web/CitationsPanel.tsx", label: "Order the citations by" },
+  { mode: "Citations", file: "src/web/BibliographyPanel.tsx", label: "Order the citations by" },
   { mode: "FAQ", file: "src/web/FaqPanel.tsx", label: "Order the questions by" },
   { mode: "Debate", file: "src/web/DebatePanel.tsx", label: "Order the sources by" },
 ] as const;

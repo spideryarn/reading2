@@ -28,7 +28,7 @@ The four requested docs are accurate after tightening the Dismiss wording:
 - [`feedback.md`](/home/greg/code/spideryarn2/.claude/worktrees/greg-answers-261002/docs/project/feedback.md:460)
 - [`ingest-queue.md`](/home/greg/code/spideryarn2/.claude/worktrees/greg-answers-261002/docs/project/ingest-queue.md:2060)
 - [`summaries.md`](/home/greg/code/spideryarn2/.claude/worktrees/greg-answers-261002/docs/project/summaries.md:88)
-- [`citations.md`](/home/greg/code/spideryarn2/.claude/worktrees/greg-answers-261002/docs/project/citations.md:467)
+- [`citations.md`](/home/greg/code/spideryarn2/.claude/worktrees/greg-answers-261002/docs/project/bibliography.md:467)
 
 ### Findings
 

@@ -324,7 +324,7 @@ async function generate(arm: string, only: Set<Generator> | null): Promise<void>
   const { generateTweets } = await import("../../src/tweets.js");
   const { generateIdeas } = await import("../../src/ideas.js");
   const { generateQuotes } = await import("../../src/quotes.js");
-  const { generateCitations } = await import("../../src/citations.js");
+  const { generateBibliography } = await import("../../src/bibliography.js");
   const { generateSketch } = await import("../../src/sketch.js");
   const { generateIllustrated } = await import("../../src/illustrated.js");
   const { generateQuiz } = await import("../../src/quiz.js");
@@ -394,8 +394,8 @@ async function generate(arm: string, only: Set<Generator> | null): Promise<void>
       );
     },
     citations: async () => {
-      const run = await generateCitations({ power: "standard", article, previous: null, referenceList: null });
-      write("citations", run.citations.citations.map((c) => ({ key: norm(c.title), field: "why", text: c.why, context: c.title })), usageOf(run));
+      const run = await generateBibliography({ power: "standard", article, previous: null, referenceList: null });
+      write("citations", run.bibliography.citations.map((c) => ({ key: norm(c.title), field: "why", text: c.why, context: c.title })), usageOf(run));
     },
     sketch: async () => {
       const run = await generateSketch({ power: "standard", article, profile: null });

@@ -57,7 +57,7 @@ export function noDifficultyCentralityDrops(): DifficultyCentralityDrops {
  *
  * Call it only where an item is about to be kept, so an item the stage refuses
  * for some other reason never contributes a missing score. The twin of
- * `scoreCounting` in src/quotes.ts and src/citations.ts, over other axes.
+ * `scoreCounting` in src/quotes.ts and src/bibliography.ts, over other axes.
  */
 export function scoreCounting(
   value: unknown,

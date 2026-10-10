@@ -3,7 +3,7 @@
  * **Six catches that used to print a raw exception now say a reader's
  * sentence**, and the stream reader they share throws errors of the right class.
  *
- * `useGlossary` (*Dig deeper* and the ask box), `useCitations` (*Investigate*),
+ * `useGlossary` (*Dig deeper* and the ask box), `useBibliography` (*Investigate*),
  * `useQuiz` (the mark), `useProjection` and `useSimilar` each put
  * `(err as Error).message` on screen for anything but a stall, so Safari's
  * "Load failed" and a JavaScript bug's own words reached a reader. They go
@@ -41,7 +41,7 @@ import { act, createElement, type ReactElement, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ENDED_UNFINISHED, PAGE_FAULT } from "../src/messages.js";
-import type { BlockId, Citations, CitedWork, GlossaryEntry, GlossaryResponse, Quiz } from "../src/types.js";
+import type { BlockId, Bibliography, CitedWork, GlossaryEntry, GlossaryResponse, Quiz } from "../src/types.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -89,7 +89,7 @@ vi.mock("../src/web/useJobs.js", () => ({
 }));
 
 const { useGlossary, useGlossaryRead } = await import("../src/web/useGlossary.js");
-const { useCitations, useCitationsRead } = await import("../src/web/useCitations.js");
+const { useBibliography, useBibliographyRead } = await import("../src/web/useBibliography.js");
 const { useQuiz, useQuizRead } = await import("../src/web/useQuiz.js");
 const { useProjection } = await import("../src/web/useProjection.js");
 const { useSimilar } = await import("../src/web/useSimilar.js");
@@ -141,7 +141,7 @@ const WORK: CitedWork = {
   linkFrom: "doi",
 };
 
-const CITATIONS: Citations = {
+const BIBLIOGRAPHY: Bibliography = {
   version: "test",
   generator: "test",
   slug: SLUG,
@@ -270,7 +270,7 @@ beforeEach(() => {
       return post(url);
     }
     if (url === `/api/glossary/${SLUG}`) return json(GLOSSARY);
-    if (url === `/api/citations/${SLUG}`) return json({ citations: CITATIONS, stale: false, outdated: false });
+    if (url === `/api/bibliography/${SLUG}`) return json({ bibliography: BIBLIOGRAPHY, stale: false, outdated: false });
     if (url === `/api/quiz/${SLUG}`) return json({ quiz: QUIZ, stale: false, outdated: false });
     return json({ jobs: [] });
   });
@@ -364,7 +364,7 @@ const SITES = {
     refusesADone: true,
   }),
   "Citations' Investigate": site({
-    use: () => useCitations(SLUG, useCitationsRead(SLUG)),
+    use: () => useBibliography(SLUG, useBibliographyRead(SLUG)),
     ready: (h) => h.status === "ready",
     press: (h) => h.investigate(WORK_ID),
     failure: (h) => h.investigateFailed?.message,

@@ -255,6 +255,16 @@ export interface PublicArticle extends PublicArtefactSet {
   tree: Tree;
   arc?: Arc;
   /**
+   * **`bibliography` above under its old key, for one deploy** — the same
+   * object, never a different list. Bibliography's payload key was
+   * `citations` until 2026-10-09; a public tab loaded before the rename reads
+   * that one, and must not be told the list is gone (plan 261009w, F1).
+   * Nothing in this tree reads it. **Removed by the contract**, the plan's
+   * Overseer queue item, with the test in
+   * tests/public-dto-owner-only-fields.test.ts that holds it equal.
+   */
+  citations?: PublicBibliography;
+  /**
    * **The owner's comments — a required array, unlike every artefact above.**
    *
    * The optional keys in `PublicArtefactSet` answer *did anybody build one of
@@ -423,7 +433,7 @@ export interface PublicArtefactSet {
   skim?: PublicSkim;
   faq?: PublicFaq;
   simpleSummary?: PublicSimpleSummary;
-  citations?: PublicCitations;
+  bibliography?: PublicBibliography;
   debate?: PublicDebate;
   debateClaims?: PublicDebateClaimList;
   sketch?: PublicSketch;
@@ -721,7 +731,7 @@ export type PublicCitationRegistry = Extract<CitationRegistry, { kind: "found" }
  * pipeline facts do not: `version`, `generator`, `slug`, `sourceHash`,
  * `generatedAt`, `elapsedMs`. No profile is in this stage.
  */
-export interface PublicCitations {
+export interface PublicBibliography {
   citations: PublicCitedWork[];
   capped: boolean;
 }

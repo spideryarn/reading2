@@ -1,5 +1,5 @@
 /**
- * The deterministic half of the citations stage — src/citations.ts.
+ * The deterministic half of the citations stage — src/bibliography.ts.
  *
  * What is pinned here is everything either side of the model call, and above
  * all the one safety property: **every link a row presents as the work's own
@@ -46,13 +46,13 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => {
 });
 
 import {
-  buildCitations,
-  CITATIONS_OUTPUT_SCHEMA,
+  buildBibliography,
+  BIBLIOGRAPHY_OUTPUT_SCHEMA,
   type Draft,
   emptyDrops,
   ENTRY_CAP,
   markerNumbers,
-  generateCitations,
+  generateBibliography,
   idsByKey,
   keysOf,
   linkFor,
@@ -65,13 +65,13 @@ import {
   systemPrompt,
   toDrafts,
   verifyEntry,
-} from "../src/citations.js";
+} from "../src/bibliography.js";
 import { plainWords } from "../src/plain-words.js";
 import { validateAnthropicJsonSchema, validateOpenAiJsonSchema } from "../src/messages-structured-output.js";
 import { type NumberedReferenceList, referenceListFrom } from "../src/citation-reference-list.js";
 import type { Block, Tree } from "../src/types.js";
 import { REF_ATTR } from "../src/notes.js";
-import { replayGuard } from "../evals/citations-say-less.js";
+import { replayGuard } from "../evals/bibliography-say-less.js";
 
 function block(id: string, text: string, over: Partial<Block> = {}): Block {
   return {
@@ -101,7 +101,7 @@ function build(
   const drops = emptyDrops();
   const scores = noScoreDrops();
   const run = () =>
-    buildCitations(
+    buildBibliography(
       { capped: false, works, ...extra },
       { power: "standard", slug: "t", blocks, sourceHash: "h.h", elapsedMs: 1, inherit: null, drops, scores },
     );
@@ -554,7 +554,7 @@ describe("every place is verified against the article", () => {
   it("an article that cites nothing is an empty list, and `{}` is a failure", () => {
     expect(build([], [body]).rows).toEqual([]);
     expect(() =>
-      buildCitations({}, {
+      buildBibliography({}, {
         power: "standard",
         slug: "t", blocks: [body], sourceHash: "h", elapsedMs: 1, inherit: null,
         drops: emptyDrops(), scores: noScoreDrops(),
@@ -682,7 +682,7 @@ describe("one row per work, and ids that survive a re-run", () => {
     const first = build([full], BLOCKS).citations;
     const inherit = idsByKey(first);
     const drops = emptyDrops();
-    const second = buildCitations(
+    const second = buildBibliography(
       {
         works: [
           full,
@@ -725,7 +725,7 @@ describe("one row per work, and ids that survive a re-run", () => {
       ],
     };
     const inherit = idsByKey(previous, { blocks: [body], referenceList: null });
-    const second = buildCitations(
+    const second = buildBibliography(
       { works: [raw] },
       {
         power: "standard",
@@ -842,7 +842,7 @@ describe("influence: a number when the model is confident, null when it is not",
 });
 
 describe("the list's answer schema", () => {
-  const work = CITATIONS_OUTPUT_SCHEMA.properties.works.items;
+  const work = BIBLIOGRAPHY_OUTPUT_SCHEMA.properties.works.items;
 
   it("requires influence on every row, as a number or null", () => {
     expect(work.required).toContain("influence");
@@ -852,7 +852,7 @@ describe("the list's answer schema", () => {
   });
 
   it("passes Anthropic's validator whole, and the required-nullable field passes OpenAI's stricter one", () => {
-    expect(() => validateAnthropicJsonSchema(CITATIONS_OUTPUT_SCHEMA)).not.toThrow();
+    expect(() => validateAnthropicJsonSchema(BIBLIOGRAPHY_OUTPUT_SCHEMA)).not.toThrow();
     /* The list schema has optional fields (authors, year, …) and goes on the
        Messages wire, so only the new field's shape is put to the chat subset. */
     expect(() =>
@@ -953,17 +953,17 @@ function tree(): Tree {
   } as unknown as Tree;
 }
 
-describe("generateCitations", () => {
+describe("generateBibliography", () => {
   it("inherits a unique legacy search row's id after dropping its unsupported author and year", async () => {
     const body = block("spya-b00001", "The Bitter Lesson is cited here.");
     const raw = { title: "The Bitter Lesson", authors: "Sutton", year: "2019", why: "x", ...scored, mentions: [{ block: body.id, quote: "The Bitter Lesson" }] };
     const previous = build([raw], [block(body.id, `${body.text} Sutton (2019).`)]).citations;
     answer = JSON.stringify({ works: [raw] });
     stop = "end_turn";
-    const run = await generateCitations({ power: "standard", article: { blocks: [body], tree: tree(), meta: null } as never, previous, referenceList: null });
-    expect(run.citations.citations[0]?.id).toBe(previous.citations[0]?.id);
-    expect(run.citations.citations[0]?.authors).toBeUndefined();
-    expect(run.citations.citations[0]?.year).toBeUndefined();
+    const run = await generateBibliography({ power: "standard", article: { blocks: [body], tree: tree(), meta: null } as never, previous, referenceList: null });
+    expect(run.bibliography.citations[0]?.id).toBe(previous.citations[0]?.id);
+    expect(run.bibliography.citations[0]?.authors).toBeUndefined();
+    expect(run.bibliography.citations[0]?.year).toBeUndefined();
   });
 
   it("writes the artefact, stamped, from a stubbed answer", async () => {
@@ -972,12 +972,12 @@ describe("generateCitations", () => {
       capped: false,
       works: [{ title: "Silk", why: "Its model.", ...scored, reference: { block: "spya-n00001", quote: "Porter, D. (2005)" } }],
     });
-    const run = await generateCitations({ power: "standard", article: { blocks: BLOCKS, tree: tree(), meta: null } as never, previous: null, referenceList: null });
-    expect(run.citations.version).toBe(PROMPT_VERSION);
-    expect(run.citations.citations).toHaveLength(1);
+    const run = await generateBibliography({ power: "standard", article: { blocks: BLOCKS, tree: tree(), meta: null } as never, previous: null, referenceList: null });
+    expect(run.bibliography.version).toBe(PROMPT_VERSION);
+    expect(run.bibliography.citations).toHaveLength(1);
     expect(run.coverage).toEqual({ notes: 1, notesReached: 1, references: 1, referencesReached: 0, works: 1 });
     expect(sent?.output_config?.effort).toBe("medium");
-    expect(sent?.output_config?.format).toEqual({ type: "json_schema", schema: CITATIONS_OUTPUT_SCHEMA });
+    expect(sent?.output_config?.format).toEqual({ type: "json_schema", schema: BIBLIOGRAPHY_OUTPUT_SCHEMA });
   });
 
   describe("SPIDERYARN_PIPELINE_EFFORT at this call site", () => {
@@ -994,7 +994,7 @@ describe("generateCitations", () => {
         capped: false,
         works: [{ title: "Silk", why: "Its model.", ...scored, reference: { block: "spya-n00001", quote: "Porter, D. (2005)" } }],
       });
-      return generateCitations({ power: "standard", article: { blocks: BLOCKS, tree: tree(), meta: null } as never, previous: null, referenceList: null });
+      return generateBibliography({ power: "standard", article: { blocks: BLOCKS, tree: tree(), meta: null } as never, previous: null, referenceList: null });
     };
     const withEnv = async (value: string | undefined, body: () => Promise<void>) => {
       const before = process.env[NAME];
@@ -1036,7 +1036,7 @@ describe("generateCitations", () => {
     stop = "max_tokens";
     answer = '{"works": [{"title": "Si';
     await expect(
-      generateCitations({ power: "standard", article: { blocks: BLOCKS, tree: tree(), meta: null } as never, previous: null, referenceList: null }),
+      generateBibliography({ power: "standard", article: { blocks: BLOCKS, tree: tree(), meta: null } as never, previous: null, referenceList: null }),
     ).rejects.toThrow(/ran past its/);
     stop = "end_turn";
   });
@@ -1082,7 +1082,7 @@ describe("an entry in a PDF's reference list", () => {
 
   function withList(works: unknown[]) {
     const drops = emptyDrops();
-    const citations = buildCitations(
+    const citations = buildBibliography(
       { capped: false, works },
       {
         power: "standard",
@@ -1184,7 +1184,7 @@ describe("an entry in a PDF's reference list", () => {
     };
     const body = block("spya-b00002", "The two editions differ [1,2].");
     const drops = emptyDrops();
-    const out = buildCitations(
+    const out = buildBibliography(
       {
         works: [
           { ...sameFields, mentions: [{ block: body.id, quote: "differ [1,2]" }], entry: 1 },
@@ -1239,7 +1239,7 @@ describe("an entry in a PDF's reference list", () => {
     };
     const body = block("spya-b00003", "This follows the earlier account [1].");
     const drops = emptyDrops();
-    const out = buildCitations(
+    const out = buildBibliography(
       {
         works: [
           {
@@ -1318,7 +1318,7 @@ describe("a DOI or arXiv id in a PDF's reference-list entry", () => {
     inherit: Map<string, string> | null = null,
     referenceList: NumberedReferenceList = { entries: new Map([[8, entry8]]) },
   ) {
-    return buildCitations(
+    return buildBibliography(
       { capped: false, works: [chen] },
       {
         power: "standard",
@@ -1445,7 +1445,7 @@ describe("a DOI or arXiv id in a PDF's reference-list entry", () => {
   it("…but not when two rows this run share that work's title, author and year", () => {
     const before = run(CHEN);
     const inherit = idsByKey(before);
-    const out = buildCitations(
+    const out = buildBibliography(
       {
         capped: false,
         works: [
@@ -1479,7 +1479,7 @@ describe("a DOI or arXiv id in a PDF's reference-list entry", () => {
 
   it("…and neither a search nor DOI row inherits when both share the old work key", () => {
     const before = run(CHEN);
-    const out = buildCitations(
+    const out = buildBibliography(
       {
         capped: false,
         works: [
@@ -1535,7 +1535,7 @@ describe("a DOI or arXiv id in a PDF's reference-list entry", () => {
       ...oldA,
       citations: [...oldA.citations, oldB],
     };
-    const out = buildCitations(
+    const out = buildBibliography(
       {
         capped: false,
         works: [
@@ -1654,7 +1654,7 @@ describe("glued and superscript cites", () => {
 
     function paired(entry: number, blocks: Block[]) {
       const drops = emptyDrops();
-      const citations = buildCitations(
+      const citations = buildBibliography(
         {
           capped: false,
           works: [
@@ -1840,7 +1840,7 @@ describe("glued and superscript cites", () => {
   });
 });
 
-describe("generateCitations with a reference list", () => {
+describe("generateBibliography with a reference list", () => {
   it("sends the list after the article, and not when there is none", async () => {
     answer = JSON.stringify({ capped: false, works: [] });
     const blocks = [block("spya-b00001", "Nothing cited here at all.")];
@@ -1848,11 +1848,11 @@ describe("generateCitations with a reference list", () => {
     const list: NumberedReferenceList = {
       entries: new Map([[1, "1. Chen, J. et al. (2017) Shared memories."]]),
     };
-    await generateCitations({ power: "standard", article, previous: null, referenceList: list });
+    await generateBibliography({ power: "standard", article, previous: null, referenceList: list });
     const texts = (sent?.system ?? []).map((b) => b.text);
     expect(texts).toHaveLength(3);
     expect(texts[1]).toContain("<reference-list>\n[1] Chen, J. et al. (2017) Shared memories.\n</reference-list>");
-    await generateCitations({ power: "standard", article, previous: null, referenceList: null });
+    await generateBibliography({ power: "standard", article, previous: null, referenceList: null });
     expect((sent?.system ?? []).map((b) => b.text).some((t) => t.includes("<reference-list>"))).toBe(false);
   });
 });

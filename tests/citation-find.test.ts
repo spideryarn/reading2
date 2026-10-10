@@ -12,10 +12,10 @@
  * No network and no database: the model call and the store are injected, and
  * the lookup is driven as its one caller drives it — `runCitationLookup`, the
  * first step of *Investigate* (src/citation-investigate.ts). The route these
- * cases used to go through, `POST /api/citations/:slug/:id/find`, was deleted on
+ * cases used to go through, `POST /api/bibliography/:slug/:id/find`, was deleted on
  * 2026-10-04 with its own wrapper's cases (the 404s, its allowance, its model
  * choice); Investigate's equivalents are tests/citation-investigate.test.ts.
- * The Postgres half — a stored find read back through `GET /api/citations/:slug`,
+ * The Postgres half — a stored find read back through `GET /api/bibliography/:slug`,
  * the article-given link winning — is tests/citation-finds-read-back-pg.test.ts.
  */
 import { describe, expect, it } from "vitest";
@@ -36,9 +36,9 @@ import {
   runCitationLookup,
 } from "../src/citation-find.js";
 import { lookupContext } from "../src/citation-lookup.js";
-import { attachFinds, pageNamesTitle } from "../src/citations.js";
+import { attachFinds, pageNamesTitle } from "../src/bibliography.js";
 import { CITATION_LOOKUP_NO_MATCH, CITATION_NO_MATCH, providerHttpFailure } from "../src/messages.js";
-import type { Article, CitationFind, Citations, CitedWork, BlockId } from "../src/types.js";
+import type { Article, CitationFind, Bibliography, CitedWork, BlockId } from "../src/types.js";
 
 /* Real ids: `ID_PATTERN` rejects `1`, `i`, `l` and `o`. */
 const WORK_ID = "spya-w2rk3a";
@@ -69,7 +69,7 @@ function work(over: Partial<CitedWork> = {}): CitedWork {
   };
 }
 
-function list(works: CitedWork[]): Citations {
+function list(works: CitedWork[]): Bibliography {
   return {
     version: "citations/2",
     generator: "test",

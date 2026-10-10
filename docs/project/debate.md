@@ -243,7 +243,7 @@ How it works, and what to know before changing it:
 
 **A glossary entry and a cited work are callers too, since 2026-10-06**
 ([glossary.md § Asking about an entry in chat](glossary.md#asking-about-an-entry-in-chat),
-[citations.md § Ask in chat](citations.md#ask-in-chat-a-conversation-about-one-work)). What they
+[bibliography.md § Ask in chat](bibliography.md#ask-in-chat-a-conversation-about-one-work)). What they
 changed here:
 
 - **`ThreadOrigin` has two more shapes**, `{ mode: "glossary" | "citations", itemId, quote }`.
@@ -487,7 +487,7 @@ Tests: `tests/debate*.test.ts(x)` — [`debate.test.ts`](../../tests/debate.test
 [`debate-threads.test.ts`](../../tests/debate-threads.test.ts) for the orders and threads; the
 evaluation's scorer is [`debate-eval-score.test.ts`](../../tests/debate-eval-score.test.ts).
 
-Related: [citations.md](citations.md) shares the bibliographic lookup
+Related: [bibliography.md](bibliography.md) shares the bibliographic lookup
 ([`src/bibliographic.ts`](../../src/bibliographic.ts)) and names Debate's residual risk;
 [experimental-features.md](experimental-features.md) is the switch it sat behind until 2026-10-09; and
 [security.md § A third untrusted party](security.md#a-third-untrusted-party-what-the-model-returns)

@@ -11,7 +11,7 @@
    **Everything the mark needs to look right anywhere is here.** A caller's
    sheet adds placement only: debate.css puts it on its own line of the
    claim's heading, past the disclosure triangle. This sheet loads before
-   debate.css and citations.css so those placements win without a fight. */
+   debate.css and bibliography.css so those placements win without a fight. */
 .origin-chat {
   display: flex;
   align-items: center;

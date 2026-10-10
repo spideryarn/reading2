@@ -56,7 +56,7 @@
  */
 import { createHash } from "node:crypto";
 
-import { firstAuthor } from "./citations.js";
+import { firstAuthor } from "./bibliography.js";
 import { doiOfUrl } from "./doi-url.js";
 import { generationKey } from "./models.js";
 import { findQuote } from "./quote-match.js";

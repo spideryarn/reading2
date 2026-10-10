@@ -1,11 +1,21 @@
-# Citations — every work the piece cites, with a link out
+# Bibliography — every work the piece cites, with a link out
 
 **Since 2026-10-09 this is [Sources](sources.md)' Bibliography**, the first of its three
-sub-modes and the one it opens on; an old `?mode=citations` lands there. The mode, its address and
-its chip row are [sources.md](sources.md)'s; this page keeps the depth on the list itself.
-The stored names — the `citations` step, column and route, `CitationsPanel`, the `cite-` CSS — keep
-the word until the name is confirmed (plan
-[261009l § Stage 3](../plans/261009l-peer-review-mode-merges-citations-and-debate.md#stage-3-held-for-greg-the-stored-names)).
+sub-modes and the one it opens on; an old `?mode=citations` lands there. It was the Citations mode
+until then, and this page was `citations.md`. The mode, its address and its chip row are
+[sources.md](sources.md)'s; this page keeps the depth on the list itself.
+
+**The stored names took the sub-mode's word the same day** (plan
+[261009w](../plans/261009w-peer-review-becomes-sources-all-the-way-down.md), Stage 2): the step and
+job `bibliography`, the column `article_revisions.bibliography`, the route `/api/bibliography/:slug`
+(and `/:id/investigate`), `src/bibliography.ts`, `BibliographyPanel`, `useBibliography`, the root CSS
+class `.bibliography`, the export file `bibliography.json`, the chat origin `bibliography`, and the
+find-it job `citation-find` (`SPIDERYARN_CITATION_FIND_MODEL`). **What kept `citations`**, on
+purpose: the list inside the artefact (`Bibliography.citations`, one entry per cited work), the
+prompt version tag `citations/6`, the `cite-` CSS on a row, and everything that is a *web* citation
+in chat or a comment. Until the contract migration the old column, step name, route and origin word
+are still accepted alongside the new ones, so a tab or a worker from before the deploy keeps working;
+the plan's § The database says what each alias is and what removes it.
 
 A mode in the band between the spine and the prose. It answers *what does this piece lean on, and
 where do I find it*: the works the article cites — through a bibliography, footnotes, or a name in
@@ -171,12 +181,12 @@ number, with a moment that parses, and otherwise drops the count and keeps the r
 **Every address a row presents as the work's own was in the article, and code found it.** The model
 never writes a URL we keep: a DOI or arXiv id in the reference's text or hrefs, else one of the
 article's own anchors whose text is the title or the mention, else — and on every ambiguity — a
-**Google Scholar search**. `linkFor` in [`src/citations.ts`](../../src/citations.ts) is the order;
+**Google Scholar search**. `linkFor` in [`src/bibliography.ts`](../../src/bibliography.ts) is the order;
 the plan says why a link to the wrong work is worse than a search.
 
 The row always says which. An address shows its host and its rule (*doi.org · DOI in the article*); a
 search is drawn as a search — the title is not a link, and the one link says *search Scholar*.
-`sourceOf` in [`CitationsPanel.tsx`](../../src/web/CitationsPanel.tsx) is total over `linkFrom`.
+`sourceOf` in [`BibliographyPanel.tsx`](../../src/web/BibliographyPanel.tsx) is total over `linkFrom`.
 
 ## What we have read of the work, said on every row
 
@@ -191,7 +201,7 @@ cites it.* After *Look it up* it names what was read, which is only ever a searc
 of a matching page, and never the work itself. Once *Dig deeper* has read the paper itself
 (§ [Dig deeper](#dig-deeper-a-closer-look-at-one-work-on-demand)), the line says that instead,
 with the host, the length and the day. `readNoteOf` in
-[`CitationsPanel.tsx`](../../src/web/CitationsPanel.tsx) is the one source of that line for both
+[`BibliographyPanel.tsx`](../../src/web/BibliographyPanel.tsx) is the one source of that line for both
 surfaces, total over `linkFrom` and the lookup's state. The design and its two plan reviews are
 [260929g](../plans/260929g-check-a-cited-paper-supports-the-claim.md).
 
@@ -212,7 +222,7 @@ drew it; measured on 194 stored rows that was 2,143 words of paraphrase, about 1
 ([the investigation](../investigations/261003d-what-a-citations-row-says-and-where-it-came-from.md)).
 
 **Now `why` is drawn only beside something that was checked against it** (`showsWhy` in
-[`CitationsPanel.tsx`](../../src/web/CitationsPanel.tsx)): in the band, once the row has a
+[`BibliographyPanel.tsx`](../../src/web/BibliographyPanel.tsx)): in the band, once the row has a
 quick-check verdict or a *Dig deeper* answer; on the hover card, once it has the verdict, since the
 card draws no *Dig deeper* answer. There it is the claim under test, still labelled *what the article
 uses it for* — the verdict reads *supports what the article uses it for*, which says nothing without
@@ -220,7 +230,7 @@ it. Marginalia's opened note never draws it, and shows the article's own referen
 visitor has neither a verdict nor an answer, so never sees it.
 
 **Authors and a year the article never gives are dropped**, by code, when the list is made
-(`locateInArticle` in [`src/citations.ts`](../../src/citations.ts)). The prompt asks for both *as the
+(`locateInArticle` in [`src/bibliography.ts`](../../src/bibliography.ts)). The prompt asks for both *as the
 article gives them*; one stored row in 194 had an author from the model's memory instead (*The
 Bitter Lesson · Sutton*, in an essay that never names Sutton). Every word of the authors must be a
 word of the article's text or its PDF reference list, and a bare four-digit year must be in it
@@ -270,7 +280,7 @@ near the start, since on a few words the paragraph's 1.2 s was too faint to spot
 **A PDF's reference list is read from its text layer.** Stage 2 does not render a PDF's
 bibliography (`RENDERED` in [`pdf.ts`](../../src/pdf.ts)), so before this the stage saw `[8]` and
 nothing to say what it was, and the model described the cite instead of naming the work (*"Study on
-recall of TV episodes"*). Now the `citations` step reads the stored PDF with `pass0`, strips running
+recall of TV episodes"*). Now the `bibliography` step reads the stored PDF with `pass0`, strips running
 headers, and [`citation-reference-list.ts`](../../src/citation-reference-list.ts) splits the text
 under the bibliography heading **at the list's own numbers**. The model sees the list after the
 article, one `[n] entry` a line, and names each work's entry **by number**. Code keeps it only if:
@@ -475,7 +485,7 @@ and opened the Citations mode with that row scrolled into view
 the chat records the same origin as one started from the row, and the card closes. It is the
 card's own `onAskCitedWork` prop, owner only. *search Scholar* stays beside it on a row with no
 link. The glossary card's is the same shape. The one-shot that opened Citations on a row
-(`citeFocus`, `CitationsPanel` § `Props.focus`, which lowers the bar if it hides the row) stays in
+(`citeFocus`, `BibliographyPanel` § `Props.focus`, which lowers the bar if it hides the row) stays in
 `Reader` for the way back from a chat to its row (that plan's stage 2).
 
 **A finger gets the card on the first tap.** `mark.cite` is in `tapSelector` and in
@@ -500,7 +510,7 @@ Feedback button (SPIDERYARN-READING2-75):
 > both worlds?
 
 Everything below still describes that step — the call, its identity rule, its checked quotes, its
-store. Its own route, `POST /api/citations/:slug/:id/find`, stayed for a tab opened before the
+store. Its own route, `POST /api/bibliography/:slug/:id/find`, stayed for a tab opened before the
 change and was deleted on 2026-10-04; the step is `runCitationLookup` in
 [`src/citation-find.ts`](../../src/citation-find.ts), called by the press. Where this section says
 *Look it up*, read *the quick check*.
@@ -529,11 +539,11 @@ finding F4:
   typed is refused however right it looks;
 - what is stored is the **annotation's** URL and title, never the model's;
 - the result must name the work: its title matches (`namesTitle`), or its excerpt carries the
-  title's words as a run (`pageNamesTitle` in [`src/citations.ts`](../../src/citations.ts)).
+  title's words as a run (`pageNamesTitle` in [`src/bibliography.ts`](../../src/bibliography.ts)).
 
 Anything else stores nothing, the row says no page was clearly the work's own, and the Scholar
 search stays. A kept page is a row in `citation_finds`, keyed `(article, entry id)` like the
-glossary's lookups and attached at read time by `loadCitations` (`attachFinds`), so it survives the
+glossary's lookups and attached at read time by `loadBibliography` (`attachFinds`), so it survives the
 list being found again. It is drawn as `linkFrom: "web"`, *found on the web*, with the host — and
 only a `search` row is ever upgraded, so a link the article gave always wins.
 
@@ -611,7 +621,7 @@ which brings its own job id and allowance and judges the page more strictly than
 > (`KeptInvestigation` in [`CitationInvestigation.tsx`](../../src/web/CitationInvestigation.tsx)),
 > and so are a kept link and a kept *from the web* influence. Nothing new fills those fields: what
 > is lost, said plainly, is in that plan's D1. The route, `src/citation-investigate.ts`,
-> `useCitations`' `investigate` and the allowance are untouched until Greg decides (the plan's
+> `useBibliography`' `investigate` and the allowance are untouched until Greg decides (the plan's
 > D5). The rest of this section is how it worked and how kept answers were made.
 
 Asked for through the Feedback button on 2026-09-30 (SPIDERYARN-READING2-5Q), following 5G:
@@ -626,7 +636,7 @@ footer reads *Researched <date> · Dig deeper again*. It was **Investigate** unt
 it became the same action as the glossary's and a comment's: always a web search, and always the
 bigger model ([glossary.md § Digging deeper into a term](glossary.md#digging-deeper-into-a-term) has
 Greg's words and the shared half). The code and the route keep the old name
-(`makeInvestigateCitation`, `POST /api/citations/:slug/:id/investigate`).
+(`makeInvestigateCitation`, `POST /api/bibliography/:slug/:id/investigate`).
 
 **A dig outlives the band** (2026-10-04, plan 261004b). The press's state
 lives on the article's citations read, not in the band, so the prose card can start one from any
@@ -640,8 +650,8 @@ looks again). While the panel is mounted, a change in the last dug work's priori
 if the prioritised order would hide it. Other orders leave their dormant bar alone, and moving
 the slider alone does not trigger this reveal. This does not guarantee visibility when a dig
 finishes with the band closed: the panel's last-work ref is gone, and the saved bar still applies
-on return. See `CitationsPanel`'s two reveal effects in
-[`src/web/CitationsPanel.tsx`](../../src/web/CitationsPanel.tsx).
+on return. See `BibliographyPanel`'s two reveal effects in
+[`src/web/BibliographyPanel.tsx`](../../src/web/BibliographyPanel.tsx).
 
 One press, in order:
 
@@ -664,7 +674,7 @@ One press, in order:
 
 **Every call whose output the reader reads is on `DIG_DEEPER_MODEL`** — the quick check's verdict,
 the paper's passages and the answer — whatever the article's
-[High-powered AI](high-powered-ai.md) switch says, and whatever `SPIDERYARN_CITATIONS_FIND_MODEL` or
+[High-powered AI](high-powered-ai.md) switch says, and whatever `SPIDERYARN_CITATION_FIND_MODEL` or
 `SPIDERYARN_CITATION_INVESTIGATE_MODEL` is set to. Only the search step is on the quick tier, and it
 writes nothing the reader reads. Nothing runs for every row. The design, its two plan reviews, the
 probe and the code reviews are
@@ -765,7 +775,7 @@ number being read without hiding the answers beside them. **`CITATION_INVESTIGAT
 bumped**, because the streamed answer's prompt did not change; an answer kept before this has no
 influence, and *Dig deeper again* looks for one. The streamed answer is not told the number.
 
-**It rarely finds one, measured.** The probe (`evals/citations-influence-dig.ts`, 2026-10-03) ran
+**It rarely finds one, measured.** The probe (`evals/bibliography-influence-dig.ts`, 2026-10-03) ran
 the press's own search and this call on 13 works, most of them well known: **none was filled in**.
 For 10 no page's title named the work, so no call was made; for 3 the work's own page came back
 and said nothing about its standing, because a search for a work returns the work, and an abstract
@@ -812,7 +822,7 @@ paper's 25 seconds, the passages call, the influence call, the answer — plus a
 `INVESTIGATE_MAX_TOTAL_RESULTS` and `INVESTIGATE_MAX_CHARACTERS`
 ([`citation-investigate.ts`](../../src/citation-investigate.ts)) — separate from the forced
 search's `DIG_MAX_RESULTS`. On the gateway a press can record up to five jobs: `dig-deeper-search`,
-`citations-find` when the quick check runs, `citation-paper-passages` when the paper's passages are
+`citation-find` when the quick check runs, `citation-paper-passages` when the paper's passages are
 picked, `citation-influence` when a page of the search is about the work, and
 `citation-investigate` for the streamed answer.
 
@@ -827,7 +837,7 @@ a line under the row's controls shows how many questions were asked and how the 
 begins, and pressing it opens that conversation beside Sources' Bibliography. Chat's list
 marks the conversation with Sources' icon. A visitor has neither the button nor the line.
 
-It is the Glossary's button with a different origin, `{ mode: "citations", itemId, quote }`: the
+It is the Glossary's button with a different origin, `{ mode: "bibliography", itemId, quote }` (`citations` until 2026-10-09, still read): the
 work's id, which a re-run inherits by its key, and a snapshot of its title. Matched by the mode and
 the id alone, so a reworded title keeps the line. Everything else, and Greg's words, are in
 [glossary.md § Asking about an entry in chat](glossary.md#asking-about-an-entry-in-chat); the
@@ -880,8 +890,8 @@ three things 260930b deferred:
   for matching here.
 
 It does not change *what we have read*: a copy here is not a reading of the work, so the row still
-says we have not read it. It is attached in the owner's `GET /api/citations` only — not in
-`loadCitations`, which chat, *Look it up* and *Dig deeper* also call — and never stored.
+says we have not read it. It is attached in the owner's `GET /api/bibliography` only — not in
+`loadBibliography`, which chat, *Look it up* and *Dig deeper* also call — and never stored.
 
 ## Chat can read it
 
@@ -893,7 +903,7 @@ experimental switch never governed the reader's own derived data (and since 2026
 governs this mode's screen either), so the tool is not behind it. [chat-tools.md](chat-tools.md) has the tool. Each row's influence is the effective one
 (§ [A row](#a-row)): where *Dig deeper* found one on the web, the row gives that number and says it
 is *an AI estimate from the web, from a page on* that host, and our words outside the fence say
-what that means. The page's words and its address are not in the row. `loadCitations` attaches the
+what that means. The page's words and its address are not in the row. `loadBibliography` attaches the
 owner's kept answers, so the tool needed no wider read. Crossref counts appear outside the article's
 fence as *Row 2: cited 357 times (Crossref’s count, read 2026-10-04)*, built by code from the number
 and the day `readCitationRegistry` let through. The displayed row number ties each count to its
@@ -936,11 +946,11 @@ the cap; a citation count for a row Crossref does not hold (DataCite's `citation
 
 ## The code
 
-[`src/citations.ts`](../../src/citations.ts) (the stage) ·
+[`src/bibliography.ts`](../../src/bibliography.ts) (the stage) ·
 [`citation-reference-list.ts`](../../src/citation-reference-list.ts) (a PDF's numbered list) ·
-[`useCitations.ts`](../../src/web/useCitations.ts) (`useCitationsRead` is the half `OwnedReader`
+[`useBibliography.ts`](../../src/web/useBibliography.ts) (`useBibliographyRead` is the half `OwnedReader`
 mounts) ·
-[`CitationsPanel.tsx`](../../src/web/CitationsPanel.tsx) ·
+[`BibliographyPanel.tsx`](../../src/web/BibliographyPanel.tsx) ·
 [`CitationInvestigation.tsx`](../../src/web/CitationInvestigation.tsx) (a kept Dig deeper answer on its row) ·
 [`citation-influence.ts`](../../src/citation-influence.ts) (Dig deeper's influence call and what
 code keeps of it) ·
@@ -948,15 +958,15 @@ code keeps of it) ·
 [`cited-in-spideryarn.ts`](../../src/cited-in-spideryarn.ts) and
 [`pg-cited-in-spideryarn.ts`](../../src/store/pg-cited-in-spideryarn.ts) (already an article here) ·
 [`SourcesMode.tsx`](../../src/web/modes/sources/SourcesMode.tsx) (the band, since 2026-10-09; it was `CitationsMode.tsx`) ·
-[`citations.css`](../../src/web/styles/citations.css) ·
+[`bibliography.css`](../../src/web/styles/bibliography.css) ·
 [`annotate.ts`](../../src/web/annotate.ts) § `citeMarks` (the prose marks) ·
 [`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx) § `CiteCard` (the card).
 
 The tests are the `tests/citation*.test.ts(x)` and `tests/citations*.test.ts(x)` files, one per
-piece above (for instance [`citations.test.ts`](../../tests/citations.test.ts),
+piece above (for instance [`bibliography.test.ts`](../../tests/bibliography.test.ts),
 [`citation-marks.test.ts`](../../tests/citation-marks.test.ts),
-[`citations-panel.test.tsx`](../../tests/citations-panel.test.tsx)). The probe behind the
-influence numbers is [`evals/citations-influence-dig.ts`](../../evals/citations-influence-dig.ts).
+[`bibliography-panel.test.tsx`](../../tests/bibliography-panel.test.tsx)). The probe behind the
+influence numbers is [`evals/bibliography-influence-dig.ts`](../../evals/bibliography-influence-dig.ts).
 
 ---
 

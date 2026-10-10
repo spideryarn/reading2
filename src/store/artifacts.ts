@@ -44,7 +44,7 @@
 import type {
   Arc,
   Block,
-  Citations,
+  Bibliography,
   Crossrefs,
   SimpleSummary,
   Debate,
@@ -110,7 +110,7 @@ export type ArtifactKind =
   | "sketch"
   | "illustrated"
   | "debate"
-  | "citations"
+  | "bibliography"
   | "crossrefs"
   | "simple";
 
@@ -237,10 +237,10 @@ export interface ArtifactMap {
    */
   debate: Debate;
   /**
-   * Every work the piece cites — `Citations`, src/types.ts, written by the
-   * `citations` step. docs/plans/260911g-citations-mode.md.
+   * Every work the piece cites — `Bibliography`, src/types.ts, written by the
+   * `bibliography` step. docs/plans/260911g-citations-mode.md.
    */
-  citations: Citations;
+  bibliography: Bibliography;
   /**
    * Links between the article's own blocks — `Crossrefs`, src/types.ts,
    * written by the `crossrefs` step.
@@ -487,9 +487,9 @@ export const SHAPE: Record<ArtifactKind, ShapeCheck> = {
   /* A `citations` array, and **an EMPTY one is usable** — `timeline`'s call,
      not `quotes`'. A blog post that links nothing and names no source cites
      no work, and that is a real answer the panel has a sentence for;
-     `buildCitations` throws only when the model named works and every one of
+     `buildBibliography` throws only when the model named works and every one of
      them was dropped. */
-  citations: { field: "citations", ok: isArray },
+  bibliography: { field: "citations", ok: isArray },
   /* A `links` array, and **an EMPTY one is usable**, as `faq`'s is: a piece
      with nothing worth linking is a real answer. `buildCrossrefs` throws on a
      missing list and on one validation empties, so neither reaches here. */
@@ -643,9 +643,9 @@ export const BASELINE: Partial<Record<ArtifactKind, BaselineRule>> = {
   timeline: { hashField: "sourceHash", itemsField: "events", idField: "id", keyField: null },
   /* `keyField: "key"` — the dedupe key is **stored on each row** (`doi:…`,
      `arxiv:…`, `url:…` or `work:…`), so inheritance reads a field rather
-     than recomputing one from whatever version of src/citations.ts wrote the
-     artefact. src/citations.ts § `keysOf`. */
-  citations: { hashField: "sourceHash", itemsField: "citations", idField: "id", keyField: "key" },
+     than recomputing one from whatever version of src/bibliography.ts wrote the
+     artefact. src/bibliography.ts § `keysOf`. */
+  bibliography: { hashField: "sourceHash", itemsField: "citations", idField: "id", keyField: "key" },
 };
 
 /** A hash we could compare — see `BaselineRule` for why the test is this weak. */
@@ -1042,7 +1042,7 @@ export const STAMP_SOURCE: Record<StepName, ArtifactKind | null> = {
      in v1, and `readBaseline` throws for a kind with no row precisely so that
      nothing can half-inherit. */
   debate: "debate",
-  citations: "citations",
+  bibliography: "bibliography",
   /* **And deliberately NO `BASELINE` row**: nothing addresses a link, so a
      re-run simply replaces the list. */
   crossrefs: "crossrefs",

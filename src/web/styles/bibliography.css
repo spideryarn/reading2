@@ -1,5 +1,5 @@
-/* ------------------------------------------------------------ citations mode --
-   Every work the piece cites. `.citations` is `.gloss` with a class beside it,
+/* ------------------------------------------------------------ bibliography --
+   Every work the piece cites. `.bibliography` is `.gloss` with a class beside it,
    like `.timeline`, so the band shell, the order buttons (`.gloss-sort`), the
    threshold (`.gloss-gate`), the empty, stale and error states and the
    scroller and list (`.tl-scroll`, `.tl-list`, `.tl-item`) all come from
@@ -9,7 +9,7 @@
 
    Loaded after timeline.css and debate.css; it sets no property those two set
    on the same element, so its place in the cascade decides nothing between
-   them. CitationsPanel.tsx, docs/project/citations.md. */
+   them. BibliographyPanel.tsx, docs/project/bibliography.md. */
 
 .cite-item { padding: 0.45rem 0; }
 
@@ -48,7 +48,7 @@
   font-size: 0.83rem;
 }
 /* A by-line with more behind it — the full authors, the reference entry
-   (CitationsPanel.tsx § `ByLine`). `help`, as `mark.cite` is: the card is the
+   (BibliographyPanel.tsx § `ByLine`). `help`, as `mark.cite` is: the card is the
    affordance and a click does nothing. */
 .cite-by-more {
   cursor: help;
@@ -155,7 +155,7 @@
 .cite-foot { padding: 0.4rem 0.7rem 0; border-top: 1px solid var(--rule); }
 
 /* ---- after *Look it up* ----------------------------------------------------
-   Under an assessed row (CitationsPanel.tsx § LookupReading): the verdict, each
+   Under an assessed row (BibliographyPanel.tsx § LookupReading): the verdict, each
    quote from the search extract, and what the work does. Quiet, like the lines
    around it — the row is still the article's citation first. The quotes wear
    Debate's solid rule down the left (debate.css § `.dbt-quote`), the mark this

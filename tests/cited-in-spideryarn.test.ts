@@ -16,7 +16,7 @@ import {
   matchOf,
   withCitedInSpideryarn,
 } from "../src/cited-in-spideryarn.js";
-import type { BlockId, Citations, CitedWork } from "../src/types.js";
+import type { BlockId, Bibliography, CitedWork } from "../src/types.js";
 
 const BLOCK = "spya-b2dy3k" as BlockId;
 const TITLE = "Scaling Laws for Neural Language Models";
@@ -309,17 +309,17 @@ describe("withCitedInSpideryarn", () => {
   it("adds the match to the matched row only, and leaves the response otherwise alone", () => {
     const matched = work({ id: "spya-aaaaaa" });
     const other = work({ id: "spya-bbbbbb", title: "Nothing like it at all today" });
-    const citations = { citations: [matched, other] } as unknown as Citations;
-    const found = { citations, stale: false, outdated: false };
+    const citations = { citations: [matched, other] } as unknown as Bibliography;
+    const found = { bibliography: citations, stale: false, outdated: false };
     const out = withCitedInSpideryarn(found, [candidate({ slug: "mine-spya-cccccc", matchTitle: TITLE })]);
     expect(out.stale).toBe(false);
-    expect(out.citations.citations[0]?.inSpideryarn).toEqual({
+    expect(out.bibliography.citations[0]?.inSpideryarn).toEqual({
       slug: "mine-spya-cccccc",
       whose: "yours",
       matchedBy: "title",
       title: TITLE,
     });
-    expect(out.citations.citations[1]?.inSpideryarn).toBeUndefined();
-    expect(found.citations.citations[0]?.inSpideryarn).toBeUndefined();
+    expect(out.bibliography.citations[1]?.inSpideryarn).toBeUndefined();
+    expect(found.bibliography.citations[0]?.inSpideryarn).toBeUndefined();
   });
 });

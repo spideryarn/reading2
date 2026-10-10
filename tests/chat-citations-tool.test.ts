@@ -4,10 +4,10 @@
  * docs/plans/260913b-chat-and-comment-questions-reach-for-the-web-and-the-citations-list.md
  * § Stage 2, and the GPT Sol review beside it (F5, F6, F7, F9).
  *
- * Two halves. **The formatter** (`citationRows`, `citationsOutcome`) is
+ * Two halves. **The formatter** (`citationRows`, `bibliographyOutcome`) is
  * arithmetic over an artefact and tested as such, the way `articleLinks` is in
  * tests/chat-tools.test.ts. **The load** goes through `runTool` with the store's
- * `loadCitations` replaced, because the ways it can answer — a list, the
+ * `loadBibliography` replaced, because the ways it can answer — a list, the
  * store's typed missing-list 404, another failure (including another 404), or
  * a stale list — are what the plan's review said the first draft would have got
  * wrong, and none of them needs Postgres to show.
@@ -26,7 +26,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const store = vi.hoisted(() => ({
-  loadCitations: null as null | ((slug: string) => Promise<unknown>),
+  loadBibliography: null as null | ((slug: string) => Promise<unknown>),
   calls: [] as string[],
 }));
 
@@ -36,27 +36,27 @@ vi.mock("../src/store/index.js", async () => {
   );
   return {
     ...actual,
-    loadCitations: async (slug: string) => {
+    loadBibliography: async (slug: string) => {
       store.calls.push(slug);
-      if (!store.loadCitations) throw new Error("test did not set loadCitations");
-      return store.loadCitations(slug);
+      if (!store.loadBibliography) throw new Error("test did not set loadBibliography");
+      return store.loadBibliography(slug);
     },
   };
 });
 
 import {
   CHAT_TOOLS,
-  CITATIONS_CHARS,
+  BIBLIOGRAPHY_CHARS,
   MAX_CITATION_ROWS,
   MAX_LINK_BLOCKS,
   TOOL_NAMES,
   citationRows,
-  citationsOutcome,
+  bibliographyOutcome,
   describeCall,
   runTool,
 } from "../src/chat-tools.js";
-import type { Block, CitedWork, Citations, Meta } from "../src/types.js";
-import { CitationsListNotFound } from "../src/store/citations-list-not-found.js";
+import type { Block, CitedWork, Bibliography, Meta } from "../src/types.js";
+import { BibliographyListNotFound } from "../src/store/bibliography-list-not-found.js";
 import { INFLUENCE_VERSION } from "../src/citation-effective-influence.js";
 
 const work = (over: Partial<CitedWork> = {}): CitedWork => ({
@@ -77,7 +77,7 @@ const work = (over: Partial<CitedWork> = {}): CitedWork => ({
   ...over,
 });
 
-const list = (works: CitedWork[], over: Partial<Citations> = {}): Citations => ({
+const list = (works: CitedWork[], over: Partial<Bibliography> = {}): Bibliography => ({
   version: "test",
   generator: "test",
   slug: "piece",
@@ -131,14 +131,14 @@ const meta = { title: "A piece", slug: "piece" } as Meta;
 const blocks: Block[] = [];
 const ctx = { slug: "piece", meta, blocks, power: "standard" as const };
 
-const found = (citations: Citations, over: { stale?: boolean; outdated?: boolean } = {}) => ({
-  citations,
+const found = (citations: Bibliography, over: { stale?: boolean; outdated?: boolean } = {}) => ({
+  bibliography: citations,
   stale: over.stale ?? false,
   outdated: over.outdated ?? false,
 });
 
 beforeEach(() => {
-  store.loadCitations = null;
+  store.loadBibliography = null;
   store.calls = [];
 });
 
@@ -223,7 +223,7 @@ describe("citationRows — the formatter, as arithmetic", () => {
     });
 
     it("tells the model, outside the fence, what a web estimate is", () => {
-      const out = citationsOutcome(found(list(THREE)), "");
+      const out = bibliographyOutcome(found(list(THREE)), "");
       const ours = out.content.slice(0, out.content.indexOf("<<<UNTRUSTED"));
       expect(ours).toMatch(/an AI estimate from the web/);
       expect(ours).toMatch(/Dig deeper/);
@@ -246,7 +246,7 @@ describe("citationRows — the formatter, as arithmetic", () => {
         ...over,
       }) as Registry;
     const rowWith = (r: Registry | undefined) =>
-      citationsOutcome(found(list([r === undefined ? THREE[2]! : { ...THREE[2]!, registry: r }])), "").content;
+      bibliographyOutcome(found(list([r === undefined ? THREE[2]! : { ...THREE[2]!, registry: r }])), "").content;
 
     it("adds the number, its source and the day for a row that has one, while keeping its scores", () => {
       expect(rowWith(registry(357))).toContain(
@@ -275,7 +275,7 @@ describe("citationRows — the formatter, as arithmetic", () => {
     });
 
     it("tells the model, outside the fence, what the count is and is not", () => {
-      const out = citationsOutcome(found(list(THREE)), "");
+      const out = bibliographyOutcome(found(list(THREE)), "");
       const ours = out.content.slice(0, out.content.indexOf("<<<UNTRUSTED"));
       expect(ours).toMatch(/Crossref/);
       expect(ours).toMatch(/real count/);
@@ -285,7 +285,7 @@ describe("citationRows — the formatter, as arithmetic", () => {
 
     it("keeps each concrete count outside the article fence and ties it to the displayed row", () => {
       const counted = { ...THREE[2]!, registry: registry(357) };
-      const out = citationsOutcome(found(list([THREE[0]!, counted])), "");
+      const out = bibliographyOutcome(found(list([THREE[0]!, counted])), "");
       const open = out.content.indexOf("<<<UNTRUSTED");
       const ours = out.content.slice(0, open);
       const article = out.content.slice(open);
@@ -293,7 +293,7 @@ describe("citationRows — the formatter, as arithmetic", () => {
       expect(article).toContain("Row 2:\n“The Thermodynamics of Computation”");
       expect(article).not.toContain("cited 357 times");
       expect(ours).not.toContain(counted.title);
-      const filtered = citationsOutcome(found(list([THREE[0]!, counted])), "Thermodynamics");
+      const filtered = bibliographyOutcome(found(list([THREE[0]!, counted])), "Thermodynamics");
       expect(filtered.content.slice(0, filtered.content.indexOf("<<<UNTRUSTED"))).toContain(
         "Row 1: cited 357 times (Crossref’s count, read 2026-10-04)",
       );
@@ -307,16 +307,16 @@ describe("citationRows — the formatter, as arithmetic", () => {
       expect(shown.cut).toBe(true);
       expect(shown.rows.length).toBeGreaterThan(0);
       expect(shown.citationCounts).toHaveLength(shown.rows.length);
-      expect(shown.rows.join("\n\n").length + shown.citationCounts.join("\n").length + 1).toBeLessThanOrEqual(CITATIONS_CHARS);
+      expect(shown.rows.join("\n\n").length + shown.citationCounts.join("\n").length + 1).toBeLessThanOrEqual(BIBLIOGRAPHY_CHARS);
       expect(shown.citationCounts.at(-1)).toContain(`Row ${shown.rows.length}:`);
       expect(citationRows(list(many), "nothing matches").citationCounts).toEqual([]);
-      const stale = citationsOutcome({ ...found(list(many)), stale: true }, "");
+      const stale = bibliographyOutcome({ ...found(list(many)), stale: true }, "");
       expect(stale.content).not.toContain("Crossref’s count, read");
     });
   });
 
   it("tells the model what unknown means, in our own words outside the fence", () => {
-    const out = citationsOutcome(found(list(THREE)), "");
+    const out = bibliographyOutcome(found(list(THREE)), "");
     const ours = out.content.slice(0, out.content.indexOf("<<<UNTRUSTED"));
     expect(ours).toMatch(/influence unknown/);
     expect(ours).toMatch(/not confident/);
@@ -382,16 +382,16 @@ describe("citationRows — the formatter, as arithmetic", () => {
     const out = citationRows(list(many));
     expect(out.rows.length).toBeLessThan(20);
     expect(out.rows.length).toBeLessThan(MAX_CITATION_ROWS);
-    expect(out.rows.join("\n").length).toBeLessThanOrEqual(CITATIONS_CHARS);
+    expect(out.rows.join("\n").length).toBeLessThanOrEqual(BIBLIOGRAPHY_CHARS);
     expect(out.cut).toBe(true);
     // Whole rows: each one still ends with where the article cites it.
     for (const r of out.rows) expect(r).toContain("spya-cit001");
   });
 
   it("keeps the first row inside the character cap too", () => {
-    const out = citationRows(list([work({ why: "y".repeat(CITATIONS_CHARS * 2) })]));
+    const out = citationRows(list([work({ why: "y".repeat(BIBLIOGRAPHY_CHARS * 2) })]));
     expect(out.rows).toHaveLength(1);
-    expect(out.rows.join("\n\n").length).toBeLessThanOrEqual(CITATIONS_CHARS);
+    expect(out.rows.join("\n\n").length).toBeLessThanOrEqual(BIBLIOGRAPHY_CHARS);
     expect(out.rows[0]).toContain("spya-cit001");
     expect(out.cut).toBe(false);
   });
@@ -407,9 +407,9 @@ describe("citationRows — the formatter, as arithmetic", () => {
   });
 });
 
-describe("citationsOutcome — what goes back to the model", () => {
+describe("bibliographyOutcome — what goes back to the model", () => {
   it("fences the rows and keeps our sentences outside the fence", () => {
-    const out = citationsOutcome(found(list(THREE)), "");
+    const out = bibliographyOutcome(found(list(THREE)), "");
     const open = out.content.indexOf("<<<UNTRUSTED ARTICLE CITATIONS");
     const close = out.content.indexOf("<<<END UNTRUSTED ARTICLE CITATIONS>>>");
     expect(open).toBeGreaterThan(0);
@@ -426,12 +426,12 @@ describe("citationsOutcome — what goes back to the model", () => {
   });
 
   it("when the list is capped, never calls N the article's total (Sol F5)", () => {
-    const out = citationsOutcome(found(list(THREE, { capped: true })), "");
+    const out = bibliographyOutcome(found(list(THREE, { capped: true })), "");
     const head = out.content.slice(0, out.content.indexOf("<<<UNTRUSTED"));
     expect(head).toContain("3 works in the stored list");
     expect(head).toMatch(/may leave works out/);
     expect(head).toMatch(/not how many works the article cites/);
-    const plain = citationsOutcome(found(list(THREE)), "");
+    const plain = bibliographyOutcome(found(list(THREE)), "");
     expect(plain.content).not.toMatch(/may leave works out/);
   });
 
@@ -439,7 +439,7 @@ describe("citationsOutcome — what goes back to the model", () => {
     const many = Array.from({ length: MAX_CITATION_ROWS + 5 }, (_, i) =>
       work({ id: `cw-c${i}`, key: `c${i}`, title: `Work ${i}`, why: "short." }),
     );
-    const out = citationsOutcome(found(list(many)), "");
+    const out = bibliographyOutcome(found(list(many)), "");
     const head = out.content.slice(0, out.content.indexOf("<<<UNTRUSTED"));
     expect(head).toContain(`${MAX_CITATION_ROWS + 5} works in the stored list`);
     expect(head).toContain(`Showing the first ${MAX_CITATION_ROWS}`);
@@ -447,42 +447,42 @@ describe("citationsOutcome — what goes back to the model", () => {
   });
 
   it("with a query, says how many of the stored list matched", () => {
-    const out = citationsOutcome(found(list(THREE)), "thermodynamics");
+    const out = bibliographyOutcome(found(list(THREE)), "thermodynamics");
     expect(out.content).toContain("1 of the 3 works in the stored list matches that");
     expect(out.detail).toBe("1 work");
     expect(out.label).toBe("looked through the citations for “thermodynamics”");
   });
 
   it("a query that matches nothing is a complete answer, and names the total", () => {
-    const out = citationsOutcome(found(list(THREE)), "bicycles");
+    const out = bibliographyOutcome(found(list(THREE)), "bicycles");
     expect(out.content).toContain("complete answer, not an error");
     expect(out.content).toContain("3 works");
     expect(out.content).not.toContain("<<<UNTRUSTED");
   });
 
   it("an empty list is an article that cites nothing, not a missing list", () => {
-    const out = citationsOutcome(found(list([])), "");
+    const out = bibliographyOutcome(found(list([])), "");
     expect(out.content).toContain("complete answer, not an error");
     expect(out.content).not.toMatch(/has been made for this article/);
   });
 
   it("an empty capped list still says the model reported omitted works", () => {
-    const out = citationsOutcome(found(list([], { capped: true })), "");
+    const out = bibliographyOutcome(found(list([], { capped: true })), "");
     expect(out.content).toMatch(/said the article cites more than it kept/);
     expect(out.content).toMatch(/0 is the number in the stored list/);
     expect(out.content).not.toMatch(/made and found none/);
   });
 
   it("an outdated list is announced even when there are no rows to show", () => {
-    const empty = citationsOutcome(found(list([]), { outdated: true }), "");
+    const empty = bibliographyOutcome(found(list([]), { outdated: true }), "");
     expect(empty.content).toMatch(/older version of the citations step/);
 
-    const noMatch = citationsOutcome(found(list(THREE), { outdated: true }), "bicycles");
+    const noMatch = bibliographyOutcome(found(list(THREE), { outdated: true }), "bicycles");
     expect(noMatch.content).toMatch(/older version of the citations step/);
   });
 
   it("a stale list emits no rows (Sol F5)", () => {
-    const out = citationsOutcome(found(list(THREE), { stale: true }), "");
+    const out = bibliographyOutcome(found(list(THREE), { stale: true }), "");
     expect(out.content).toMatch(/older version of the article/);
     expect(out.content).not.toContain("Minds, Brains");
     expect(out.content).not.toContain("<<<UNTRUSTED");
@@ -490,18 +490,18 @@ describe("citationsOutcome — what goes back to the model", () => {
   });
 
   it("an outdated list is announced above the rows, and still shown", () => {
-    const out = citationsOutcome(found(list(THREE), { outdated: true }), "");
+    const out = bibliographyOutcome(found(list(THREE), { outdated: true }), "");
     const open = out.content.indexOf("<<<UNTRUSTED");
     expect(out.content.slice(0, open)).toMatch(/older version of the citations step/);
     expect(out.content.slice(open)).toContain("Minds, Brains");
-    const current = citationsOutcome(found(list(THREE)), "");
+    const current = bibliographyOutcome(found(list(THREE)), "");
     expect(current.content).not.toMatch(/older version of the citations step/);
   });
 });
 
 describe("runTool(\"article_citations\") — the load, and its four answers", () => {
   it("reads the list for the article the reader has open", async () => {
-    store.loadCitations = async () => found(list(THREE));
+    store.loadBibliography = async () => found(list(THREE));
     const out = await runTool("article_citations", {}, ctx);
     expect(store.calls).toEqual(["piece"]);
     expect(out.detail).toBe("3 works");
@@ -510,7 +510,7 @@ describe("runTool(\"article_citations\") — the load, and its four answers", ()
   });
 
   it("passes the query through", async () => {
-    store.loadCitations = async () => found(list(THREE));
+    store.loadBibliography = async () => found(list(THREE));
     const out = await runTool("article_citations", { query: "Seth" }, ctx);
     expect(out.detail).toBe("1 work");
     expect(out.content).toContain("Being You");
@@ -518,8 +518,8 @@ describe("runTool(\"article_citations\") — the load, and its four answers", ()
   });
 
   it("the missing-list 404 says no list was made, and does not pretend to have read one", async () => {
-    store.loadCitations = async () => {
-      throw new CitationsListNotFound();
+    store.loadBibliography = async () => {
+      throw new BibliographyListNotFound();
     };
     const out = await runTool("article_citations", {}, ctx);
     expect(out.content).toContain("citations list has been made for this article");
@@ -529,7 +529,7 @@ describe("runTool(\"article_citations\") — the load, and its four answers", ()
   });
 
   it("a different 404 is a read failure, not proof that no citations list was made", async () => {
-    store.loadCitations = async () => {
+    store.loadBibliography = async () => {
       throw Object.assign(new Error("article disappeared"), { status: 404 });
     };
     const out = await runTool("article_citations", {}, ctx);
@@ -540,7 +540,7 @@ describe("runTool(\"article_citations\") — the load, and its four answers", ()
   });
 
   it("any other failure says the list could not be read — never that it is absent (Sol F7)", async () => {
-    store.loadCitations = async () => {
+    store.loadBibliography = async () => {
       throw Object.assign(new Error("connection terminated"), { code: "57P01" });
     };
     const out = await runTool("article_citations", {}, ctx);
@@ -552,7 +552,7 @@ describe("runTool(\"article_citations\") — the load, and its four answers", ()
   });
 
   it("a non-404 status is still a failure, not an absence", async () => {
-    store.loadCitations = async () => {
+    store.loadBibliography = async () => {
       throw Object.assign(new Error("boom"), { status: 500 });
     };
     const out = await runTool("article_citations", {}, ctx);
@@ -560,14 +560,14 @@ describe("runTool(\"article_citations\") — the load, and its four answers", ()
   });
 
   it("a stale list comes back as a non-error outcome with no rows", async () => {
-    store.loadCitations = async () => found(list(THREE), { stale: true });
+    store.loadBibliography = async () => found(list(THREE), { stale: true });
     const out = await runTool("article_citations", {}, ctx);
     expect(out.detail).toBe("out of date");
     expect(out.content).not.toContain("Minds, Brains");
   });
 
   it("an outdated list says so and still lists", async () => {
-    store.loadCitations = async () => found(list(THREE), { outdated: true });
+    store.loadBibliography = async () => found(list(THREE), { outdated: true });
     const out = await runTool("article_citations", {}, ctx);
     expect(out.content).toMatch(/older version of the citations step/);
     expect(out.content).toContain("Minds, Brains");

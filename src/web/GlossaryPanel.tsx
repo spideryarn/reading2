@@ -231,7 +231,7 @@ export type GlossaryAccess =
        * arm because a visitor has no chat: with `chats?: never` below, a
        * visitor's panel cannot be handed one. Optional, so a panel drawn
        * without it (most tests) has no button; that `Reader` passes it is
-       * held by tests/glossary-and-citations-ask-in-chat.test.tsx.
+       * held by tests/glossary-and-bibliography-ask-in-chat.test.tsx.
        */
       chats?: GlossaryEntryChats;
     }

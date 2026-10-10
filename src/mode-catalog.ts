@@ -495,14 +495,14 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        two modes' cards were checked in (docs/project/mode.md § The card on
        the button):
        - Bibliography, "one model call … written once and then stored": the
-         `citations` step, one messages-wire call over `articleWithIds`,
-         written to the `citations` column (src/citations.ts, src/pipeline.ts §
+         `bibliography` step, one messages-wire call over `articleWithIds`,
+         written to the `bibliography` column (src/bibliography.ts, src/pipeline.ts §
          STEPS). "Every address … is one the article gave, found by code":
-         `linkFor` in src/citations.ts derives DOI → arXiv → a title-matching
+         `linkFor` in src/bibliography.ts derives DOI → arXiv → a title-matching
          anchor → a mention anchor from the article's own text and hrefs; a URL
          the model writes is counted in `CitationDrops.modelUrls` and never
          read. "Otherwise a Scholar search": `linkFrom: "search"`, labelled on
-         the row (CitationsPanel.tsx § Source).
+         the row (BibliographyPanel.tsx § Source).
        - Reception, "a pass over the open web … stored once it lands": the
          `debate` step since `debate/7` (2026-10-08) is one pass, for
          Reception only (src/debate.ts). "A pass" rather than "a search",

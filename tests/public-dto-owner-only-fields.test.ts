@@ -18,7 +18,7 @@ import type {
   Block,
   BlockId,
   CitedWork,
-  Citations,
+  Bibliography,
   ClaimDebateRow,
   Crossrefs,
   Debate,
@@ -111,7 +111,7 @@ const NONE = {
   skim: null,
   faq: null,
   simpleSummary: null,
-  citations: null,
+  bibliography: null,
   debate: null,
   debateClaims: null,
   crossrefs: null,
@@ -308,7 +308,7 @@ function work(over: Omit<Partial<CitedWork>, "entry"> & { entry?: unknown }): Ci
 }
 
 function cited(works: CitedWork[], blocks: Block[] = BLOCKS) {
-  const citations: Citations = {
+  const citations: Bibliography = {
     version: "citations/4",
     generator: "g",
     slug: "piece",
@@ -318,8 +318,39 @@ function cited(works: CitedWork[], blocks: Block[] = BLOCKS) {
     generatedAt: "2026-09-30T10:00:00.000Z",
     elapsedMs: 1,
   };
-  return publicArticle({ ...NONE, blocks, citations }).citations?.citations ?? [];
+  return publicArticle({ ...NONE, blocks, bibliography: citations }).bibliography?.citations ?? [];
 }
+
+/**
+ * **The visitor's payload carries the list under both keys, for one deploy**
+ * (plan 261009w, F1): `bibliography`, which this code reads, and `citations`,
+ * which a public tab loaded before the rename reads. The same object, so the
+ * two cannot say different things. Removed by the contract (the plan's queue
+ * item), with this test.
+ */
+describe("the Bibliography under its old public key", () => {
+  it("is the same list under `citations` as under `bibliography`", () => {
+    const list: Bibliography = {
+      version: "citations/6",
+      generator: "g",
+      slug: "piece",
+      sourceHash: "h",
+      citations: [work({})],
+      capped: false,
+      generatedAt: "2026-09-30T10:00:00.000Z",
+      elapsedMs: 1,
+    };
+    const built = publicArticle({ ...NONE, blocks: BLOCKS, bibliography: list });
+    expect(built.bibliography).toBeDefined();
+    expect(built.citations).toEqual(built.bibliography);
+  });
+
+  it("is absent under both when there is no list", () => {
+    const built = publicArticle({ ...NONE, blocks: BLOCKS });
+    expect("bibliography" in built).toBe(false);
+    expect("citations" in built).toBe(false);
+  });
+});
 
 describe("a cited work's reference entry (6K)", () => {
   const blockEntry = entryOfText(REF.text)!;
@@ -445,7 +476,7 @@ describe("all four at once", () => {
         [ROW_A, ROW_B, ROW_C],
         made([THEME_AB], [{ rowId: ROW_A.id, role: "responds", why: "It replies." }]),
       ),
-      citations: {
+      bibliography: {
         version: "citations/4",
         generator: "g",
         slug: "piece",
@@ -466,7 +497,7 @@ describe("all four at once", () => {
     /* Each of the four is really present, so the sweep is not vacuous. */
     expect(built.debate?.claims.rows[0]?.bears).toBe("directly");
     expect(built.debate?.synthesis?.kind).toBe("made");
-    expect(built.citations?.citations[0]?.entry).toBe(blockEntry);
+    expect(built.bibliography?.citations[0]?.entry).toBe(blockEntry);
     expect(built.crossrefs?.links).toHaveLength(1);
 
     const json = JSON.stringify(built);

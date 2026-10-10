@@ -17,10 +17,10 @@ function position(body: string, name: string): number {
 }
 
 describe("the Stage 5/6 pipeline wiring", () => {
-  it("enriches Citations after generation and before returning the artefact", () => {
-    const body = STEPS.citations.run.toString();
-    expect(position(body, "generateCitations")).toBeLessThan(position(body, "attachCitationRegistry"));
-    expect(position(body, "attachCitationRegistry")).toBeLessThan(position(body, "parts: { citations"));
+  it("enriches the Bibliography after generation and before returning the artefact", () => {
+    const body = STEPS.bibliography.run.toString();
+    expect(position(body, "generateBibliography")).toBeLessThan(position(body, "attachCitationRegistry"));
+    expect(position(body, "attachCitationRegistry")).toBeLessThan(position(body, "parts: { bibliography"));
   });
 
   it("enriches Debate after its searches and before returning the artefact", () => {

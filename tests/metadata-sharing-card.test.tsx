@@ -267,7 +267,7 @@ const ALL_BUILT: PublicArtefacts = {
   skim: true,
   faq: true,
   simpleSummary: true,
-  citations: true,
+  bibliography: true,
   debate: true,
 };
 
@@ -342,7 +342,7 @@ describe("the sharing card, on the page that owns it", () => {
         skim: false,
         faq: false,
         simpleSummary: false,
-        citations: false,
+        bibliography: false,
         debate: false,
       } satisfies PublicArtefacts,
     };
@@ -703,7 +703,7 @@ describe("the sharing card, on the page that owns it", () => {
         skim: false,
         faq: false,
         simpleSummary: false,
-        citations: false,
+        bibliography: false,
         debate: false,
         /* Annotated like `ALL_BUILT` above and for the same reason: an untyped
            literal here goes a field short the day another artefact is added,

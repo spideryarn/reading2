@@ -264,7 +264,7 @@ describe("every Run again phrase, typed in full", () => {
   it("includes the new nicknames, so the check above is about them", () => {
     expect(rerunWords("glossary").aliases).toContain("rerun jargon");
     /* Bibliography's words since 2026-10-09 (plan 261009l, GPT Sol's F8). */
-    expect(rerunWords("citations").aliases).toContain("references again");
+    expect(rerunWords("bibliography").aliases).toContain("references again");
     expect(rerunWords("debate").aliases).toContain("rerun critiques");
   });
 });

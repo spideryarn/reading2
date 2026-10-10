@@ -18,10 +18,10 @@
  *
  * **A `search` row is drawn as a search, and never as the work's address.**
  * That is the one safety property Citations mode has
- * (docs/project/citations.md § The one safety property): the model never
+ * (docs/project/bibliography.md § The one safety property): the model never
  * supplies a URL we keep, and where we could not be sure the row offers a
  * Google Scholar *search* rather than a link that might be to the wrong paper.
- * The band already holds that property (tests/citations-panel.test.tsx). This
+ * The band already holds that property (tests/bibliography-panel.test.tsx). This
  * card is a second surface drawing the same fact, and two surfaces drawing
  * provenance differently is exactly the failure worth pinning — a reader who
  * learns the rule from the band and meets a different one here has been taught
@@ -43,7 +43,7 @@ import {
   citeReadAssessed,
   citeReadNotIdentified,
   verdictText,
-} from "../src/web/CitationsPanel.js";
+} from "../src/web/BibliographyPanel.js";
 import { CITED_AT_JUMPS_SHOWN, ProseHoverCard } from "../src/web/ProseHoverCard.js";
 import { annotateHtml, citeMarks, termMarks } from "../src/web/annotate.js";
 import { ASK_WORK_IN_CHAT } from "../src/web/OriginChat.js";

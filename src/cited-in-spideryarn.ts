@@ -33,9 +33,9 @@
  *   positively agree. The weakest, and the row says so.
  */
 
-import { firstAuthor, keyWords, keysOf } from "./citations.js";
+import { firstAuthor, keyWords, keysOf } from "./bibliography.js";
 import { ARXIV_ID_PATTERN, arxivIdOf } from "./paper-sources.js";
-import type { Citations, CitedInSpideryarn, CitedMatchedBy, CitedWork } from "./types.js";
+import type { Bibliography, CitedInSpideryarn, CitedMatchedBy, CitedWork } from "./types.js";
 import { sameTarget } from "./urls.js";
 
 /** Fewer words than this and a title needs its authors to agree before it is evidence. */
@@ -222,20 +222,20 @@ function better(
 }
 
 /**
- * The owner's citations response with `inSpideryarn` on each matched row.
+ * The owner's bibliography response with `inSpideryarn` on each matched row.
  * Read-time only, like `lookup` and `investigation`: never stored.
  */
-export function withCitedInSpideryarn<R extends { citations: Citations }>(
+export function withCitedInSpideryarn<R extends { bibliography: Bibliography }>(
   found: R,
   candidates: readonly CitedCandidate[],
 ): R {
-  const matches = matchCited(found.citations.citations, candidates);
+  const matches = matchCited(found.bibliography.citations, candidates);
   if (matches.size === 0) return found;
   return {
     ...found,
-    citations: {
-      ...found.citations,
-      citations: found.citations.citations.map((work) => {
+    bibliography: {
+      ...found.bibliography,
+      citations: found.bibliography.citations.map((work) => {
         const match = matches.get(work.id);
         return match === undefined ? work : { ...work, inSpideryarn: match };
       }),

@@ -132,11 +132,11 @@ import {
   PROMPT_VERSION as DEBATE_PROMPT_VERSION,
 } from "./debate.js";
 import {
-  generateCitations,
-  inputFingerprint as citationsFingerprint,
-  PROMPT_VERSION as CITATIONS_PROMPT_VERSION,
-  previousCitationsFrom,
-} from "./citations.js";
+  generateBibliography,
+  inputFingerprint as bibliographyFingerprint,
+  PROMPT_VERSION as BIBLIOGRAPHY_PROMPT_VERSION,
+  previousBibliographyFrom,
+} from "./bibliography.js";
 import { ownIdsOfPdf, withRegistryFacts } from "./article-registry.js";
 import { rateReadingDifficulty, ratingParagraphs } from "./reading-difficulty.js";
 import { lookupWork, type LookupResult, type WorkId } from "./bibliographic.js";
@@ -648,7 +648,7 @@ export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
   /* A model call over the whole article that nothing else reads, so the
      positional cascade would buy it for nothing; and it replaces rather than
      appends. docs/plans/260911g-citations-mode.md. */
-  "citations",
+  "bibliography",
   /* The same two reasons as `faq`: it reads the blocks, the tree and the
      metadata, nothing else in the pipeline reads what it writes, so the
      positional cascade would buy a model call for nothing. Its `stamp` compares
@@ -1879,7 +1879,7 @@ function beginIllustratedPlates(
 }
 
 /**
- * **A PDF article's reference list, for the Citations stage** — plan 260930i
+ * **A PDF article's reference list, for the Bibliography stage** — plan 260930i
  * (SPIDERYARN-READING2-6K). Stage 2 does not render a PDF's bibliography, so
  * without this the stage sees `[8]` and nothing to say what it is.
  *
@@ -1921,7 +1921,7 @@ async function pdfReferenceList(
     plog.warn(
       {
         slug: ctx.slug,
-        step: "citations",
+        step: "bibliography",
         /* A parser error can repeat document text in its message. Log only a
            class (and our own bounded reason), never a stranger's PDF. */
         why:
@@ -1931,7 +1931,7 @@ async function pdfReferenceList(
               ? err.name
               : typeof err,
       },
-      `citations ${ctx.slug}: could not read the PDF's reference list; going on without it`,
+      `bibliography ${ctx.slug}: could not read the PDF's reference list; going on without it`,
     );
     return { list: null, state: "unreadable", ms: Date.now() - started };
   }
@@ -5547,13 +5547,14 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       };
     },
   },
-  /* Stage 5o — the citations: every work the piece cites, where, and a link
+  /* Stage 5o — the bibliography (the `citations` step until 2026-10-09, plan
+     261009w): every work the piece cites, where, and a link
      the article itself gave. Off DEFAULT_INGEST_STEPS like every stage after
      `arc`. docs/plans/260911g-citations-mode.md. */
-  citations: {
-    name: "citations",
+  bibliography: {
+    name: "bibliography",
     label: "Finding what it cites",
-    produces: ["citations"],
+    produces: ["bibliography"],
     /**
      * The blocks (every one — the notes and the bibliography are this stage's
      * input), the tree and the **cited** head, which prints a `URL:` line.
@@ -5563,18 +5564,18 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       const article = await tryReadArticle(ctx.slug, store);
       if (!article) return null;
       return {
-        inputHash: citationsFingerprint(article.blocks, article.tree, article.meta),
-        promptVersion: CITATIONS_PROMPT_VERSION,
+        inputHash: bibliographyFingerprint(article.blocks, article.tree, article.meta),
+        promptVersion: BIBLIOGRAPHY_PROMPT_VERSION,
         model: CAPABLE_MODEL,
       };
     },
     async run(ctx, store) {
       /* The store, not a path — the ids are what stage 3's web lookups are
          keyed on, so a read that quietly answered `null` would orphan every
-         one of them. `previousCitationsFrom` refuses an unreadable baseline. */
-      const previous = await previousCitationsFrom(store, ctx.slug);
+         one of them. `previousBibliographyFrom` refuses an unreadable baseline. */
+      const previous = await previousBibliographyFrom(store, ctx.slug);
       const referenceList = await pdfReferenceList(ctx, store);
-      const run = await generateCitations({
+      const run = await generateBibliography({
         article: await readArticle(ctx.slug, store),
         previous,
         referenceList: referenceList.list,
@@ -5587,17 +5588,17 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          kept only where the titles agree. After the list is built, so it is in
          neither the stamp nor the prompt; it never fails the step. */
       const registryStarted = Date.now();
-      const registered = await attachCitationRegistry(run.citations, citationRegistryDeps);
+      const registered = await attachCitationRegistry(run.bibliography, citationRegistryDeps);
       const registryMs = Date.now() - registryStarted;
-      run.citations = registered.citations;
-      const rows = run.citations.citations;
+      run.bibliography = registered.citations;
+      const rows = run.bibliography.citations;
       const linkFrom = { doi: 0, arxiv: 0, article: 0, search: 0, web: 0 };
       for (const c of rows) linkFrom[c.linkFrom]++;
       const linked = rows.length - linkFrom.search - linkFrom.web;
       plog.info(
         {
           slug: ctx.slug,
-          step: "citations",
+          step: "bibliography",
           model: run.model,
           inputTokens: run.inputTokens,
           outputTokens: run.outputTokens,
@@ -5607,7 +5608,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           answerTokens: run.answerTokens,
           ms: run.elapsedMs,
           works: rows.length,
-          capped: run.citations.capped,
+          capped: run.bibliography.capped,
           /* Which rule gave each link. `search` is the one to watch: a run
              where it is nearly everything on an article full of DOIs is the
              derivation failing, and nothing on screen would say so. */
@@ -5649,10 +5650,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           ...run.drops,
           ...run.scores,
         },
-        `citations ${ctx.slug}: ${rows.length} works (${linked} linked from the article)`,
+        `bibliography ${ctx.slug}: ${rows.length} works (${linked} linked from the article)`,
       );
       return {
-        parts: { citations: run.citations },
+        parts: { bibliography: run.bibliography },
         detail: `${rows.length} ${rows.length === 1 ? "work" : "works"}, ${linked} linked`,
       };
     },

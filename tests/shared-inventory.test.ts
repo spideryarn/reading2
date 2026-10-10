@@ -44,7 +44,7 @@ const NOTHING: PublicArtefacts = {
   skim: false,
   faq: false,
   simpleSummary: false,
-  citations: false,
+  bibliography: false,
   debate: false,
 };
 const EVERYTHING: PublicArtefacts = {
@@ -58,7 +58,7 @@ const EVERYTHING: PublicArtefacts = {
   skim: true,
   faq: true,
   simpleSummary: true,
-  citations: true,
+  bibliography: true,
   debate: true,
 };
 
@@ -99,8 +99,8 @@ const FLAG = {
   faq: "faq",
   /* Citations and Debate are one row since 2026-10-09, Sources', which
      either flag moves (visitor.ts § POLICY, `any-artefact`). Keyed here by
-     the citations flag; the debate flag is the test after the sweep. */
-  sources: "citations",
+     the bibliography flag; the debate flag is the test after the sweep. */
+  sources: "bibliography",
 } as const satisfies Record<string, keyof PublicArtefacts>;
 const ROWS = Object.keys(FLAG) as (keyof typeof FLAG)[];
 
@@ -395,7 +395,7 @@ const WIRE_ROW = {
      `publicCitedWork`), which is invisible to this table. */
   faq: "faq",
   /* Sources' Bibliography since 2026-10-09 (plan 261009l). */
-  citations: "sources",
+  bibliography: "sources",
   /* Simple, from the day it was built (2026-09-30): a sub-mode of Summary, so
      Summary's row. docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
   simpleSummary: "summary",
@@ -436,6 +436,9 @@ const WIRE_ROW = {
      prose between its own passages, so they are the text's row, whose sentence
      says so. */
   crossrefs: "text",
+  /* `bibliography` under its old key, the same object, for one deploy (plan
+     261009w F1; removed by its contract). Sources' row, as `bibliography`'s. */
+  citations: "sources",
 } satisfies Record<keyof PublicArticle, string>;
 
 describe("the list against the wire", () => {
@@ -460,7 +463,7 @@ describe("reading the flags off the wire", () => {
       skim: true,
       faq: true,
       simpleSummary: true,
-      citations: true,
+      bibliography: true,
       debate: true,
     };
     expect([...ARTEFACT_KEYS].sort()).toEqual(Object.keys(probe).sort());
@@ -540,7 +543,7 @@ describe("what counts as shareable", () => {
       skim: null,
       faq: null,
       simpleSummary: null,
-      citations: null,
+      bibliography: null,
       debate: null,
       debateClaims: null,
       glossary: STALE,
@@ -561,7 +564,7 @@ describe("what counts as shareable", () => {
       skim: null,
       faq: null,
       simpleSummary: null,
-      citations: null,
+      bibliography: null,
       debate: null,
       debateClaims: {
         version: "debate-claims/1",
@@ -593,7 +596,7 @@ describe("what counts as shareable", () => {
       skim: null,
       faq: null,
       simpleSummary: null,
-      citations: null,
+      bibliography: null,
       debate: null,
       debateClaims: null,
       glossary: { ...STALE, entries: [] },
@@ -609,7 +612,7 @@ describe("what counts as shareable", () => {
       skim: null,
       faq: null,
       simpleSummary: null,
-      citations: null,
+      bibliography: null,
       debate: null,
       debateClaims: null,
       glossary: null,
@@ -647,7 +650,7 @@ describe("what counts as shareable", () => {
           ],
         },
       },
-      citations: null,
+      bibliography: null,
       debate: null,
       debateClaims: null,
       glossary: null,
@@ -690,7 +693,7 @@ describe("what counts as shareable", () => {
           ],
         },
       } as unknown as SimpleSummary,
-      citations: null,
+      bibliography: null,
       debate: null,
       debateClaims: null,
       glossary: null,

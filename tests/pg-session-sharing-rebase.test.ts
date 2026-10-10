@@ -606,4 +606,83 @@ describe("mode jobs sharing an article", () => {
     expect(row?.ideas).toEqual(ideasSaying("somebody's ideas"));
     expect(row?.quotes).toEqual(quotesSaying("the quotes job"));
   });
+
+  /* ------------------------------------------------------------------ 5 -- */
+
+  /**
+   * **Bibliography's step under both its spellings** — plan 261009w, Stage 2.
+   * Until the contract migration a `bibliography` run row has a `citations`
+   * twin, kept equal by a trigger, so the pre-rename code reading or writing
+   * the old name sees the same run. The rebase's run comparison names the
+   * other sharing steps by their *new* names, so without reading their old
+   * spellings too it would call the twin a non-sharing step's row that moved
+   * and refuse the ordinary case: a Bibliography published beside a Quotes
+   * job. Positive control 4's shape, with Bibliography as the other mode.
+   */
+  mine("carries the job onto an outside Bibliography publication, whose run has both spellings", async () => {
+    const slug = `${SLUG_PREFIX}bibliography`;
+    await articleFromARealJob(slug);
+    const listSaying = (who: string) => ({ citations: [], capped: false, sourceHash: who });
+    /* The base already has a Bibliography, so both of its rows are in the
+       draft the Quotes job copies. */
+    await publishFromOutside(slug, async (id) => {
+      await db().update(articleRevisions).set({ bibliography: listSaying("first") as never }).where(
+        eq(articleRevisions.id, id),
+      );
+      await stepRun(id, "bibliography", "first-input");
+    });
+    const quotes = await claimWithSession(slug, ["quotes"]);
+
+    const outside = await publishFromOutside(slug, async (id) => {
+      await db().update(articleRevisions).set({ bibliography: listSaying("second") as never }).where(
+        eq(articleRevisions.id, id),
+      );
+      await stepRun(id, "bibliography", "second-input");
+    });
+    /* The fixture is what it says: the outside publication's run is under both names. */
+    expect((await runRow(outside, "citations" as StepName))?.inputHash).toBe("second-input");
+
+    expect((await finish(quotes, "quotes", { quotes: quotesSaying("the quotes job") })).kind).toBe("ended");
+    const published = (await currentRevisionOf(slug)) as string;
+    expect(published).not.toBe(outside);
+    const row = await revision(published);
+    expect(row?.basedOnRevisionId).toBe(outside);
+    expect(row?.bibliography).toEqual(listSaying("second"));
+    expect(row?.quotes).toEqual(quotesSaying("the quotes job"));
+    expect((await runRow(published, "bibliography"))?.inputHash).toBe("second-input");
+    expect((await runRow(published, "citations" as StepName))?.inputHash).toBe("second-input");
+  });
+
+  /**
+   * **The real `beginStepRun` and `finishStepRun`, seen under the old name.**
+   * A Bibliography job's lease is a `citations` lease to the pre-rename code,
+   * so neither version starts a second run beside the other's, and the row the
+   * job finishes is finished under both names.
+   */
+  mine("mirrors a Bibliography job's lease and its ending onto the old step name", async () => {
+    const slug = `${SLUG_PREFIX}bibliography-lease`;
+    await articleFromARealJob(slug);
+    const job = await claimWithSession(slug, ["bibliography"]);
+    const draft = (await jobRow(job.jobId))?.draftRevisionId as string;
+    await job.session.beginStep(slug, "bibliography");
+    const lease = await runRow(draft, "citations" as StepName);
+    expect(lease?.status).toBe("running");
+    expect(lease?.attemptId).toBe(job.attempt);
+
+    const ended = await job.session.commit(
+      contextFor(slug),
+      fakeStep("bibliography"),
+      job.attempt,
+      { detail: "fixture", parts: { bibliography: { citations: [], capped: false } } as unknown as ArtifactParts },
+      { kind: "end", jobId: job.jobId, attempt: job.attempt, ending: { status: "done", steps: job.steps } },
+    );
+    expect(ended.kind).toBe("ended");
+    const published = (await currentRevisionOf(slug)) as string;
+    const current = await runRow(published, "bibliography");
+    const old = await runRow(published, "citations" as StepName);
+    expect(current?.status).toBe("done");
+    expect(old?.status).toBe("done");
+    expect(old?.inputHash).toBe(current?.inputHash);
+    expect(old?.attemptId).toBe(current?.attemptId);
+  });
 });

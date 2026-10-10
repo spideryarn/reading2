@@ -668,11 +668,27 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/citers/w1"],
   },
   {
+    match: { kind: "regex", source: "^\\/api\\/bibliography\\/([\\w.%-]+)$", flags: "" },
+    methods: ["GET"],
+    witnesses: ["/api/bibliography/w1"],
+  },
+  {
+    /* Bibliography's old path, for one deploy (plan 261009w F1; removed by its contract). */
     match: { kind: "regex", source: "^\\/api\\/citations\\/([\\w.%-]+)$", flags: "" },
     methods: ["GET"],
     witnesses: ["/api/citations/w1"],
   },
   {
+    match: {
+      kind: "regex",
+      source: "^\\/api\\/bibliography\\/([\\w.%-]+)\\/([\\w.%-]+)\\/investigate$",
+      flags: "",
+    },
+    methods: ["POST"],
+    witnesses: ["/api/bibliography/w1/w2/investigate"],
+  },
+  {
+    /* Its old path, for one deploy, as above. */
     match: {
       kind: "regex",
       source: "^\\/api\\/citations\\/([\\w.%-]+)\\/([\\w.%-]+)\\/investigate$",
@@ -1012,8 +1028,10 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
    101 with that plan's claim checks (its stage 3); 103 with the public shelf
    topic pills' status and Rebuild (plan 261008j); 104 with Skim's profile
    notice dismissal (plan 261009i); 105 with deleting a chat question and what
-   follows it (plan 261009o). */
-const EXPECTED_MATCHER_COUNT = 105;
+   follows it (plan 261009o); 107 with Bibliography's old GET and investigate
+   paths kept beside its new ones for one deploy (plan 261009w, removed by its
+   contract). */
+const EXPECTED_MATCHER_COUNT = 107;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
    with the admin's earlier feedback; 118 with their replies to questions; 119
    with the Help pages' chatbot; 120 with Hidden text's Opus check; 121 with the
@@ -1022,8 +1040,8 @@ const EXPECTED_MATCHER_COUNT = 105;
    GET and POST (plan 261008i); 127 with the public shelf topic pills' status
    and Rebuild (plan 261008j); 128 with Skim's profile notice dismissal (plan
    261009i); 129 with deleting a chat question and what follows it (plan
-   261009o). */
-const EXPECTED_GUARD_COUNT = 129;
+   261009o); 131 with Bibliography's two old paths (plan 261009w). */
+const EXPECTED_GUARD_COUNT = 131;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2260,8 +2278,12 @@ describe("the authenticated API's route contract", () => {
         "POST regex /^\\/api\\/skim\\/([\\w.%-]+)\\/profile-notice-dismissal$/",
         "GET regex /^\\/api\\/debate\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/citers\\/([\\w.%-]+)$/",
+        "GET regex /^\\/api\\/bibliography\\/([\\w.%-]+)$/",
+        // Bibliography's old path, for one deploy (plan 261009w)
         "GET regex /^\\/api\\/citations\\/([\\w.%-]+)$/",
-        // Citations' Investigate, 260930a (Find it, its sibling POST, went 2026-10-04)
+        // Bibliography's Investigate, 260930a (Find it, its sibling POST, went 2026-10-04)
+        "POST regex /^\\/api\\/bibliography\\/([\\w.%-]+)\\/([\\w.%-]+)\\/investigate$/",
+        // and its old path, for one deploy (plan 261009w)
         "POST regex /^\\/api\\/citations\\/([\\w.%-]+)\\/([\\w.%-]+)\\/investigate$/",
         "POST regex /^\\/api\\/source-guess\\/([\\w.%-]+)$/",
         // reading time, 260916c

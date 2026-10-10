@@ -740,7 +740,7 @@ const READING_TIME = `/api/reading-time/${SLUG}`;
  * `OwnedReader` calls the hooks in — recorded rather than sorted away, like the
  * orderings in `CHAT` below.
  *
- * **`/api/citations/` is the fifth, new on 2026-09-16, and it is the same story
+ * **`/api/bibliography/` is the fifth, new on 2026-09-16, and it is the same story
  * one feature later** (SPIDERYARN-READING2-3M,
  * docs/plans/260916b-citations-marked-in-the-prose-and-a-clearer-find-it-button.md):
  * the works a piece cites are now marked in the prose in every mode, so the
@@ -753,8 +753,8 @@ const READING_TIME = `/api/reading-time/${SLUG}`;
  * band has to read the list somehow, so a gate either costs two states and two
  * requests or does not hold — and hiding a *control* behind that switch is not
  * the same as making an existing `?mode=citations` URL half-work. One cheap GET
- * per owned article view, and no model call. src/web/useCitations.ts §
- * CitationsRead.
+ * per owned article view, and no model call. src/web/useBibliography.ts §
+ * BibliographyRead.
  *
  * It appears once, not twice, for the reason the quotes' line gives, and if it
  * ever doubles the same de-duplication has broken.
@@ -778,7 +778,7 @@ const READING_VIEW: Shape[] = [
   GET(`/api/chat/${SLUG}?summary=1`),
   GET(`/api/glossary/${SLUG}`),
   GET(`/api/quotes/${SLUG}`),
-  GET(`/api/citations/${SLUG}`),
+  GET(`/api/bibliography/${SLUG}`),
   GET(`/api/quiz/${SLUG}`),
   GET(`/api/crossrefs/${SLUG}`),
   GET(`/api/arc/${SLUG}`),
@@ -831,7 +831,7 @@ const CHAT: Shape[] = [
   GET(`/api/chat/${SLUG}?summary=1`),
   GET(`/api/glossary/${SLUG}`),
   GET(`/api/quotes/${SLUG}`),
-  GET(`/api/citations/${SLUG}`),
+  GET(`/api/bibliography/${SLUG}`),
   GET(`/api/quiz/${SLUG}`),
   GET(`/api/crossrefs/${SLUG}`),
   GET(`/api/arc/${SLUG}`),

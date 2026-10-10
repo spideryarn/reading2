@@ -159,7 +159,7 @@ const { useGlossary } = await import("../src/web/useGlossary.js");
 const { useDebate } = await import("../src/web/useDebate.js");
 const { useDebateClaims } = await import("../src/web/useDebateClaims.js");
 const { useCiters } = await import("../src/web/useCiters.js");
-const { useCitations, useCitationsRead } = await import("../src/web/useCitations.js");
+const { useBibliography, useBibliographyRead } = await import("../src/web/useBibliography.js");
 const { useFaq } = await import("../src/web/useFaq.js");
 const { useSkim } = await import("../src/web/useSkim.js");
 const { useSketch } = await import("../src/web/useSketch.js");
@@ -253,7 +253,7 @@ function QuotesBand({ slug }: { slug: string }): ReactElement {
  * stays green.
  */
 function SourcesBand({ slug, view }: { slug: string; view: SourcesView }): ReactElement {
-  const bibliography = useCitations(slug, useCitationsRead(slug), view === "bibliography");
+  const bibliography = useBibliography(slug, useBibliographyRead(slug), view === "bibliography");
   const reception = useDebate(slug, view === "reception");
   /* Claims' own list and press (plan 261008i stage 2). */
   const claims = useDebateClaims(slug, view === "claims");
@@ -713,8 +713,8 @@ describe("a press", () => {
     await press("Sources");
     await settle();
 
-    expect(artefactGets("citations").length).toBeGreaterThan(0);
-    expect(posts).toEqual([{ slug: "constitution", steps: ["citations"] }]);
+    expect(artefactGets("bibliography").length).toBeGreaterThan(0);
+    expect(posts).toEqual([{ slug: "constitution", steps: ["bibliography"] }]);
   });
 
   /* The fourth positive control, and the dearest. See SourcesBand above. */

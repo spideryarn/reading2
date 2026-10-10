@@ -1,10 +1,10 @@
 No P0 findings. I fixed one runtime issue and strengthened two weak test areas.
 
-1. **P1 — screen readers heard the folded citation twice.** [CitationsPanel.tsx](/home/greg/code/spideryarn2/.claude/worktrees/fb7w-7x-citations-dup-line-and-flash/src/web/CitationsPanel.tsx:1095)
+1. **P1 — screen readers heard the folded citation twice.** [CitationsPanel.tsx](/home/greg/code/spideryarn2/.claude/worktrees/fb7w-7x-citations-dup-line-and-flash/src/web/BibliographyPanel.tsx:1095)
 
-   The title link was described by both Tooltip’s generated `aria-describedby` content and a second hidden copy. I removed the duplicate and hid only the visually repeated author–year heading from assistive technology. Full authors remain available when the visible title is shortened. Updated [citations.md](/home/greg/code/spideryarn2/.claude/worktrees/fb7w-7x-citations-dup-line-and-flash/docs/project/citations.md:26).
+   The title link was described by both Tooltip’s generated `aria-describedby` content and a second hidden copy. I removed the duplicate and hid only the visually repeated author–year heading from assistive technology. Full authors remain available when the visible title is shortened. Updated [citations.md](/home/greg/code/spideryarn2/.claude/worktrees/fb7w-7x-citations-dup-line-and-flash/docs/project/bibliography.md:26).
 
-2. **P2 — interaction tests could miss real-device regressions.** [citations-panel.test.tsx](/home/greg/code/spideryarn2/.claude/worktrees/fb7w-7x-citations-dup-line-and-flash/tests/citations-panel.test.tsx:654)
+2. **P2 — interaction tests could miss real-device regressions.** [citations-panel.test.tsx](/home/greg/code/spideryarn2/.claude/worktrees/fb7w-7x-citations-dup-line-and-flash/tests/bibliography-panel.test.tsx:654)
 
    Added checks for:
 

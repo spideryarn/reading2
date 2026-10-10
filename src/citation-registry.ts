@@ -2,7 +2,7 @@
  * **Citations rows carry the registry's record** — plan 261001a stage 5
  * (docs/plans/261001a-citations-read-the-cited-paper-and-a-shared-bibliographic-lookup.md).
  *
- * At the end of the `citations` step, every row whose link is a DOI or arXiv
+ * At the end of the `bibliography` step, every row whose link is a DOI or arXiv
  * address is looked up through stage 1's `lookupWork` (src/bibliographic.ts) —
  * at most `MAX_REGISTRY_LOOKUPS`, two at a time, the cache first because
  * `lookupWork` reads it first. What it may add, and nothing else:
@@ -31,7 +31,7 @@ import { doiFor, lookupWork, parseWorkId, type LookupResult, type WorkId, type W
 import { tokens } from "./citation-lookup.js";
 import { registryIdentifiesCitation } from "./paper-evidence.js";
 import { registryWorkOf } from "./registry-work.js";
-import type { CitationRegistry, Citations, CitedWork } from "./types.js";
+import type { CitationRegistry, Bibliography, CitedWork } from "./types.js";
 
 /** At most this many rows are looked up per run — `MAX_CITATIONS` today, named so a raise there does not raise this. */
 export const MAX_REGISTRY_LOOKUPS = 80;
@@ -209,9 +209,9 @@ export async function safeLookup(lookup: LookupWork, id: WorkId): Promise<Lookup
  * asked in list order, so the cap keeps the first eighty.
  */
 export async function attachCitationRegistry(
-  citations: Citations,
+  citations: Bibliography,
   deps: RegistryDeps,
-): Promise<{ citations: Citations; counts: RegistryCounts }> {
+): Promise<{ citations: Bibliography; counts: RegistryCounts }> {
   const counts: RegistryCounts = {
     identified: 0,
     asked: 0,

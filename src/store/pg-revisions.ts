@@ -90,7 +90,7 @@ import {
 import { currentOwnerId } from "../owner.js";
 import { renderProfile } from "../profile.js";
 import { hashBlocks } from "../source-hash.js";
-import { currentStepName } from "../step-order.js";
+import { currentStepName, withRetiredSpellings } from "../step-order.js";
 import { checkTree } from "../tree-invariants.js";
 import { awaitingStructure, type Block, type JobReset, type OwnerId, type StepName, type Tree } from "../types.js";
 import { deriveLibraryScalars } from "../library-scalars.js";
@@ -127,8 +127,11 @@ type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
  * - `derive` — recomputed at publish, from the blocks and the tree.
  * - `carry` — copied from the current published revision, and overwritten by
  *   whichever step owns it if that step runs.
+ * - `mirror` — never copied, because a trigger keeps it equal to another
+ *   column: a renamed column's old name during an expand and contract (plan
+ *   261009w), which the pre-rename code may still be reading.
  */
-export type RevisionColumnPolicy = "mint" | "derive" | "carry";
+export type RevisionColumnPolicy = "mint" | "derive" | "carry" | "mirror";
 
 /**
  * Every column of `article_revisions`, and what happens to it. **Exhaustive.**
@@ -431,19 +434,20 @@ export const REVISION_CARRY_POLICY: Record<
      paragraphs) are as true as they were. Minting would empty the band and
      orphan every stage-3 lookup keyed on these ids until somebody paid for the
      call again. */
-  citations: "carry",
-};
+  bibliography: "carry",
 
-const MINTED = new Set(
-  (Object.keys(REVISION_CARRY_POLICY) as (keyof typeof REVISION_CARRY_POLICY)[]).filter(
-    (k) => REVISION_CARRY_POLICY[k] === "mint",
-  ),
-);
-const DERIVED = new Set(
-  (Object.keys(REVISION_CARRY_POLICY) as (keyof typeof REVISION_CARRY_POLICY)[]).filter(
-    (k) => REVISION_CARRY_POLICY[k] === "derive",
-  ),
-);
+  /* ---- MIRROR: never copied; a trigger fills it -------------------------- */
+
+  /**
+   * **Bibliography's column before plan 261009w renamed it** (`citations`). The
+   * expand migration's trigger, `article_revisions_mirror_renamed`, keeps it
+   * equal to `bibliography` on every insert and update, so copying it as well
+   * would be a second writer of the same fact: the draft gets `bibliography`
+   * by `carry` above, and the trigger gives it this. Dropped by the contract
+   * migration, with this entry.
+   */
+  legacyCitations: "mirror",
+};
 
 /**
  * The columns a new draft copies, read off the schema rather than listed.
@@ -465,7 +469,9 @@ function carriedColumns(): (keyof typeof articleRevisions.$inferSelect)[] {
         `— a new column must not be carried or dropped by accident.`,
     );
   }
-  return declared.filter((name) => !MINTED.has(name) && !DERIVED.has(name));
+  /* Only `carry`: `mint`, `derive` and `mirror` (plan 261009w) are each
+     written some other way. */
+  return declared.filter((name) => REVISION_CARRY_POLICY[name] === "carry");
 }
 
 /* --------------------------------------------------- the derived scalars -- */
@@ -2969,10 +2975,14 @@ export async function rebaseSharingDraftIn(
     STEP_RUN_CARRIED_COLUMNS.map((name) => sql.identifier(name)),
     sql`, `,
   );
+  /* With each one's retired spellings: during plan 261009w's expand and
+     contract, Bibliography's run has a `citations` twin kept equal by a
+     trigger, and excluding only the new name would compare that twin as a
+     non-sharing step's row and refuse the ordinary case. */
   const runsOf = (id: string) => sql`
     select ${runColumns} from ${revisionStepRuns}
      where ${revisionStepRuns.revisionId} = ${id}::uuid
-       and not (${revisionStepRuns.stepName} = any(${stepArray(untouchedSharing)}))`;
+       and not (${revisionStepRuns.stepName} = any(${stepArray(withRetiredSpellings(untouchedSharing))}))`;
   const blocksOf = (id: string) => sql`
     select ${blockColumns} from ${revisionBlocks} where ${revisionBlocks.revisionId} = ${id}::uuid`;
 
@@ -3071,7 +3081,7 @@ export async function rebaseSharingDraftIn(
 }
 
 /** Step names as a bound `text[]` parameter — never spliced into the SQL. */
-function stepArray(steps: readonly StepName[]): SQL {
+function stepArray(steps: readonly string[]): SQL {
   return sql`${`{${steps.join(",")}}`}::text[]`;
 }
 

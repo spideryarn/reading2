@@ -249,10 +249,10 @@ const READS = [
      returned citation is compared against to keep the article out of its own
      debate. src/debate.ts § `inputFingerprint`. */
   "debate",
-  /* Added 2026-09-11 with the `citations` stage. `CITED_FINGERPRINT_COLUMNS`,
+  /* Added 2026-09-11 with the `citations` stage (`bibliography` since 2026-10-09). `CITED_FINGERPRINT_COLUMNS`,
      like `ideas`: it sends `articleWithIds`, over every block.
      docs/plans/260911g-citations-mode.md. */
-  "citations",
+  "bibliography",
   /* Added 2026-09-16 with the `faq` stage. `CITED_FINGERPRINT_COLUMNS`, like
      `quiz`: it sends `articleWithIds` over the body and the skeleton.
      docs/plans/260916d-faq-mode.md. */

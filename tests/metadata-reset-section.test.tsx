@@ -536,7 +536,7 @@ describe("the Start this article again section", () => {
 
   it("recovers the server's regeneration list with an active reset after reload", async () => {
     await act(async () =>
-      jobEngine.receive([resetJob("job-reset", "running", ["faq", "citations"])]),
+      jobEngine.receive([resetJob("job-reset", "running", ["faq", "bibliography"])]),
     );
     await open();
 
@@ -626,14 +626,14 @@ describe("the Start this article again section", () => {
   it("does not show one multi-step job once for every planned extra", async () => {
     const combined: Job = {
       ...oneStepJob("job-combined", "faq", "running"),
-      steps: ["faq", "citations"].map((name) => ({
+      steps: ["faq", "bibliography"].map((name) => ({
         name: name as StepName,
         label: `Doing ${name}`,
         status: "pending" as const,
       })),
     };
     await act(async () =>
-      jobEngine.receive([resetJob("job-reset", "done", ["faq", "citations"]), combined]),
+      jobEngine.receive([resetJob("job-reset", "done", ["faq", "bibliography"]), combined]),
     );
     await open();
 

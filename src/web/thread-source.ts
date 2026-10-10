@@ -54,9 +54,9 @@ export type SourcedThread = Pick<ChatThread, "kind"> & Partial<Pick<ChatThread, 
  * **Sources' three origins**, each under the mode's icon and its
  * `sources` filter, and each tooltip naming the sub-mode it came from
  * (GPT Sol's F5 on plan 261009l). A stored origin keeps its old mode word as
- * data — `citations` for a cited work, `debate` for a claim or an angle —
- * until the deep rename (that plan § Stage 3); this file is where it is read
- * as the new mode.
+ * data — `debate` for a claim or an angle (a cited work's `citations` is read
+ * as `bibliography` by the server since plan 261009w) — until Stage 3 of plan
+ * 261009w; this file is where it is read as the new mode.
  */
 const SOURCES_IN = `${MODE_LABEL.sources} ›`;
 /** What the tooltip says for a chat started from one of Claims' claims. */
@@ -126,7 +126,7 @@ export function threadSource(thread: SourcedThread): ThreadSource | null {
       /* The quote is the entry's name as it was when the chat started. */
       case "glossary":
         return { from: "glossary", mode: "glossary", label: SOURCE_GLOSSARY_ENTRY, quote: origin.quote };
-      case "citations":
+      case "bibliography":
         return { from: "sources", mode: "sources", label: SOURCE_CITED_WORK, quote: origin.quote };
       case "ideas":
         return { from: "ideas", mode: "ideas", label: SOURCE_IDEA, quote: origin.quote };
@@ -231,9 +231,9 @@ export function originBack(origin: ThreadOrigin): OriginBackWords {
       const modeLabel = MODE_LABEL[origin.mode];
       return { mode: origin.mode, modeLabel, quote, text: `Back to ${what} in ${modeLabel}` };
     }
-    case "citations":
+    case "bibliography":
     case "debate": {
-      const view = origin.mode === "citations" ? "bibliography" : isLensOrigin(origin) ? "reception" : "claims";
+      const view = origin.mode === "bibliography" ? "bibliography" : isLensOrigin(origin) ? "reception" : "claims";
       const modeLabel = SOURCES_SUB_MODES[view].label;
       return { mode: "sources", view, modeLabel, quote, text: `Back to ${what} in ${modeLabel}` };
     }

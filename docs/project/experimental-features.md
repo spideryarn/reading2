@@ -247,7 +247,7 @@ out of the switch in one reply:
 >
 > — Greg, 2026-10-09 (spya-vcvxu5, to q-xf2xvb)
 
-What that costs: every reader's bar has one more button; Bibliography (the `citations` step) is
+What that costs: every reader's bar has one more button; Bibliography (the `bibliography` step) is
 queued on every import, one model call that was not paid before; and Reception's web search, the
 dearest press in the app, is a chip any owner can press. Its search still runs only on a press of
 its own chip, never on arrival and never on import

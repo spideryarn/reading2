@@ -133,7 +133,7 @@ const NONE: PublicArtefacts = {
   skim: false,
   faq: false,
   simpleSummary: false,
-  citations: false,
+  bibliography: false,
   debate: false,
 };
 const ALL: PublicArtefacts = {
@@ -147,7 +147,7 @@ const ALL: PublicArtefacts = {
   skim: true,
   faq: true,
   simpleSummary: true,
-  citations: true,
+  bibliography: true,
   debate: true,
 };
 

@@ -12,7 +12,7 @@ import { useQueryState } from "nuqs";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { publicArticle } from "../src/public/dto.js";
-import type { PublicCitations, PublicDebate, PublicDebateClaimList } from "../src/public-types.js";
+import type { PublicBibliography, PublicDebate, PublicDebateClaimList } from "../src/public-types.js";
 import type { BlockId, Debate, Tree } from "../src/types.js";
 import { VisitorSourcesBand } from "../src/web/modes/sources/SourcesMode.js";
 import { modeParam } from "../src/web/params.js";
@@ -83,7 +83,7 @@ function publish(debate: Debate): PublicDebate {
     headingTitle: null, finalUrl: "https://example.org/piece",
     blocks: [], tree: { rootId: "spya-root", nodes: {} } as unknown as Tree,
     arc: null, assets: null, glossary: null, ideas: null, quotes: null, tweets: null,
-    timeline: null, skim: null, faq: null, simpleSummary: null, citations: null, debate, debateClaims: null,
+    timeline: null, skim: null, faq: null, simpleSummary: null, bibliography: null, debate, debateClaims: null,
     crossrefs: null, crossrefsFresh: false, comments: [], searches: [], sketch: null,
     navLabelStatus: "ready", sourceGuess: null,
     sharedBy: "public",
@@ -93,7 +93,7 @@ function publish(debate: Debate): PublicDebate {
 }
 
 let debate: PublicDebate;
-let citations: PublicCitations | null;
+let citations: PublicBibliography | null;
 let claimList: PublicDebateClaimList | null;
 let openedWorks: string[];
 let host: HTMLDivElement;
@@ -106,7 +106,7 @@ function Page() {
   if (route.kind !== "read") return createElement("p", null, "not found");
   if (mode !== "sources") return createElement("p", null, `band: ${mode}`);
   return createElement(VisitorSourcesBand, {
-    citations, debate, claimList, onJump: () => {}, blockOrder: new Map([[BLOCK, 0]]),
+    bibliography: citations, debate, claimList, onJump: () => {}, blockOrder: new Map([[BLOCK, 0]]),
     publishedAt: undefined, articleTitle: "The shared piece", onOpenWork: (workId) => openedWorks.push(workId),
   });
 }

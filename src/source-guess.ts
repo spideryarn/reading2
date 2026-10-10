@@ -23,7 +23,7 @@
  * And a candidate whose own identifier contradicts the upload's is a no
  * whatever else agrees (`conflicts`, below).
  */
-import { identifiersIn, wordsOf } from "./citations.js";
+import { identifiersIn, wordsOf } from "./bibliography.js";
 import { doiUrl } from "./doi-url.js";
 import type { PaperMeta, PaperText } from "./paper-text.js";
 import type { Author, SearchEvidence } from "./types.js";

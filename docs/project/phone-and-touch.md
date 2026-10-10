@@ -215,7 +215,7 @@ existing question already answers it.
 | the bottom bar's fit | `dock-fit.ts`, `styles/dock-fit.css` | measured, not a breakpoint |
 | **a phone**, as a device | `small-screen-hint.ts` § `isPhone` | a coarse pointer and a small *screen*, not window, so rotating does not change the answer |
 | **iOS**, by `navigator.userAgent` | `install-hint.ts`, `InstallHint.tsx` | the Add to Home Screen hint; other engine checks use different signals (`userAgentData` or `navigator.vendor`) |
-| size for a finger | `@media (pointer: coarse)` in `narrow-window.css` § a coarse pointer, and in `footnotes`, `glossary`, `citations`, `quotes`, `referee` | primary pointer only |
+| size for a finger | `@media (pointer: coarse)` in `narrow-window.css` § a coarse pointer, and in `footnotes`, `glossary`, `bibliography`, `quotes`, `referee` | primary pointer only |
 | rules a touchscreen laptop needs too | `@media (any-pointer: coarse)` in `narrow-window.css` (the 16px field, `touch-action` on the prose), `close.css`, `summary.css`, `gutter.css` | |
 | hover-only styling and touch fallbacks | `@media (hover: hover)` / `(hover: none)` in `gutter`, `prose`, `quotes`, `glossary`, `debate`, `chat-actions` | the glossary, Quotes and gutter guards also stop iOS's post-tap `:hover` from looking selected |
 | tap against hover, in JS | `useHoverCard.ts`, `useTapReveal.ts`, `Spine.tsx`, `BlockGutter.tsx` | `pointerType`, with `detail` as the fallback: since iOS 18.2 a finger's click can say `mouse` |

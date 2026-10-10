@@ -26,7 +26,7 @@ export function titleFromOrigin(origin: ThreadOrigin): string {
       return isLensOrigin(origin) ? titleFrom(`Angle: ${origin.lens}`) : titleFrom(`Claim: ${origin.quote}`);
     case "glossary":
       return titleFrom(`Glossary: ${origin.quote}`);
-    case "citations":
+    case "bibliography":
       return titleFrom(`Cited work: ${origin.quote}`);
     case "ideas":
       return titleFrom(`Idea: ${origin.quote}`);

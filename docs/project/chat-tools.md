@@ -111,7 +111,7 @@ and this file does not change.
 | `read_web_page` | Fetch a page and read its main text | Web search gives snippets. This gives the piece. "What does the study he cites actually say?" |
 | `article_links` | The hyperlinks **this** article contains: which blocks each sits in, the author's words for it, where it goes | The address behind a link is the one thing about this article the prompt does not carry. Without it the model has a fetching tool and nothing to point it at — see [The links the prompt does not carry](#the-links-the-prompt-does-not-carry) |
 | `article_glossary` | This article's [glossary](glossary.md), if one has been generated | So an answer about a term agrees with what the app has already told the reader, rather than quietly contradicting it |
-| `article_citations` | The works **this** article cites, from its stored [citations](citations.md) list if one has been made: what the piece uses each for, where it cites it, and the link with where that link came from. An optional `query` narrows it | So a question about a work, author or study the piece leans on — or a web search about one — starts from the right paper rather than from a guess. Reads the list and never makes one. See [§ The citations list](#the-citations-list-one-more-tool) |
+| `article_citations` | The works **this** article cites, from its stored [citations](bibliography.md) list if one has been made: what the piece uses each for, where it cites it, and the link with where that link came from. An optional `query` narrows it | So a question about a work, author or study the piece leans on — or a web search about one — starts from the right paper rather than from a guess. Reads the list and never makes one. See [§ The citations list](#the-citations-list-one-more-tool) |
 | `reader_notes` | The reader's own comments, highlights and bookmarks on **this** article, and a list of their other conversations about it. Given a conversation's id as `thread`, that conversation | The reader's own thinking about the piece is the one thing about this article the prompt does not hold. **Typed Chat only**: it is not in `CHAT_TOOLS`. Since 2026-10-08 the list of other conversations, each with a line on what it covered, also comes with every Chat question, so the model knows when one is worth opening. See [§ The reader's notes](#the-readers-notes-the-one-tool-not-every-conversation-gets) |
 
 **Eight of the nine are `CHAT_TOOLS`**, the list every kind of conversation but the guide, and
@@ -239,17 +239,17 @@ twelve mutations across the two rounds ([silent-success.md](../reusable/silent-s
 >
 > — Greg, 2026-09-12
 
-`article_citations` reads the article's stored [citations](citations.md) list — never makes one —
+`article_citations` reads the article's stored [citations](bibliography.md) list — never makes one —
 so a question about a work the piece leans on, or a web search about its author, starts from the
 right paper. The optional `query` matches the title, authors, year and the *used for* line, which is
 Greg's *"search the citations … based on their summary"*. The code is `citationRows` and
-`citationsOutcome` in [`src/chat-tools.ts`](../../src/chat-tools.ts), pure so they can be tested as
+`bibliographyOutcome` in [`src/chat-tools.ts`](../../src/chat-tools.ts), pure so they can be tested as
 arithmetic ([`tests/chat-citations-tool.test.ts`](../../tests/chat-citations-tool.test.ts)).
 
 Four decisions, each from GPT Sol's plan review
 ([260913b](../plans/260913b-chat-and-comment-questions-reach-for-the-web-and-the-citations-list.md)):
 
-- **Only the store's `CitationsListNotFound` means "there is no list".** Any other failure — a
+- **Only the store's `BibliographyListNotFound` means "there is no list".** Any other failure — a
   dropped connection, or a 404 because the article itself has gone — says the list *could not be
   read*. A bare `status === 404` could not tell those apart, which the code review reproduced (Sol
   F13); the glossary tool's catch-all, which calls every database error "no glossary", is the thing
@@ -577,7 +577,7 @@ From 2026-10-01 it showed chats only.
 A chat started from an item in a mode (`ThreadOrigin` in [`src/types.ts`](../../src/types.ts)) is
 written up where it is built: [debate.md § Check a claim in chat](debate.md#check-a-claim-in-chat),
 [glossary.md § Asking about an entry in chat](glossary.md#asking-about-an-entry-in-chat),
-[citations.md § Ask in chat](citations.md#ask-in-chat-a-conversation-about-one-work),
+[bibliography.md § Ask in chat](bibliography.md#ask-in-chat-a-conversation-about-one-work),
 [ideas.md § Asking about an idea in chat](ideas.md#asking-about-an-idea-in-chat).
 
 Tests: `tests/thread-source.test.ts`, `tests/chat-lists-every-conversation.test.tsx` (the band),

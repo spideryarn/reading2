@@ -34,7 +34,7 @@ import type {
   Arc,
   Block,
   BlockId,
-  Citations,
+  Bibliography,
   CitationRegistry,
   ClaimDebateRow,
   Debate,
@@ -73,7 +73,7 @@ const NO_ARTEFACTS = {
   skim: null,
   faq: null,
   simpleSummary: null,
-  citations: null,
+  bibliography: null,
   debate: null,
   debateClaims: null,
   /* Cross-references (plan 261001b): none built, and so nothing to be fresh. */
@@ -1455,7 +1455,7 @@ describe("the artefacts a shared link carries", () => {
    * stage 3). `key` embeds the credentialled address too, and `found` is set on
    * a row the way the owner's read attaches it: neither may cross.
    */
-  const CITATIONS: Citations = {
+  const BIBLIOGRAPHY: Bibliography = {
     version: "citations/4",
     generator: "some-model",
     slug: "noema",
@@ -1660,7 +1660,7 @@ describe("the artefacts a shared link carries", () => {
     skim: SKIM,
     faq: FAQ,
     simpleSummary: SIMPLE,
-    citations: CITATIONS,
+    bibliography: BIBLIOGRAPHY,
     debate: null,
     debateClaims: CLAIM_LIST,
     comments: [],
@@ -2313,7 +2313,7 @@ describe("the artefacts a shared link carries", () => {
    * work would show up as `key` and `found…` here.
    */
   it("carries each cited work without its key or the owner's finds", () => {
-    expect(pathsUnder("citations")).toEqual(
+    expect(pathsUnder("bibliography")).toEqual(
       [
         "capped",
         "citations",
@@ -2352,22 +2352,22 @@ describe("the artefacts a shared link carries", () => {
         "citations[].year",
       ].sort(),
     );
-    const json = JSON.stringify(built.citations);
+    const json = JSON.stringify(built.bibliography);
     expect(json).not.toContain("found.example");
     expect(json).not.toContain('"key"');
     expect(json).not.toContain("citation registry extra must not cross");
     /* A found registry record crosses; a conflict does not (plan 261001a stage 5). */
-    expect(built.citations?.citations[0]?.registry?.kind).toBe("found");
-    expect(built.citations?.citations.find((w) => w.id === "w-cred")?.registry).toBeUndefined();
+    expect(built.bibliography?.citations[0]?.registry?.kind).toBe("found");
+    expect(built.bibliography?.citations.find((w) => w.id === "w-cred")?.registry).toBeUndefined();
     expect(json).not.toContain("conflict");
     /* Crossref's count crosses with its day and nothing else; a DataCite record keeps its metadata and loses a count. */
-    expect(built.citations?.citations[0]?.registry?.citedBy).toEqual({ count: 357, readAt: "2026-10-04T12:00:00.000Z" });
+    expect(built.bibliography?.citations[0]?.registry?.citedBy).toEqual({ count: 357, readAt: "2026-10-04T12:00:00.000Z" });
     expect(json).not.toContain("cited-by extra must not cross");
-    const datacite = built.citations?.citations.find((w) => w.id === "w-private")?.registry;
+    const datacite = built.bibliography?.citations.find((w) => w.id === "w-private")?.registry;
     expect(datacite).toMatchObject({ kind: "found", source: "datacite", title: "A work on a private host" });
     expect(datacite).not.toHaveProperty("citedBy");
     expect(json).not.toContain("424242");
-    expect(built.citations?.capped).toBe(true);
+    expect(built.bibliography?.capped).toBe(true);
   });
 
   /**
@@ -2391,7 +2391,7 @@ describe("the artefacts a shared link carries", () => {
     ]) {
       expect(json, sentinel).not.toContain(sentinel);
     }
-    expect(built.citations?.citations.find((w) => w.id === "w-clean")).not.toHaveProperty("lookup");
+    expect(built.bibliography?.citations.find((w) => w.id === "w-clean")).not.toHaveProperty("lookup");
   });
 
   /** **Nor does the owner's *Investigate*** (plan 260930a § The route, the store, the limits). */
@@ -2422,22 +2422,22 @@ describe("the artefacts a shared link carries", () => {
     ]) {
       expect(json, sentinel).not.toContain(sentinel);
     }
-    expect(built.citations?.citations.find((w) => w.id === "w-clean")).not.toHaveProperty("investigation");
+    expect(built.bibliography?.citations.find((w) => w.id === "w-clean")).not.toHaveProperty("investigation");
   });
 
   /* Plan 261003m stage 2, GPT Sol's F6: the owner's row draws the web number
      through `effectiveInfluence`; the list's own field is never overwritten,
      so the visitor's row carries the list's 0.7 and reads as the list's. */
   it("carries the list's own influence, never the one Dig deeper found on the web", () => {
-    const owners = CITATIONS.citations.find((w) => w.id === "w-clean");
+    const owners = BIBLIOGRAPHY.citations.find((w) => w.id === "w-clean");
     expect(owners && effectiveInfluence(owners), "the fixture's web influence is live for the owner").toMatchObject({
       value: 0.31,
       from: "web",
     });
-    const visitors = built.citations?.citations.find((w) => w.id === "w-clean");
+    const visitors = built.bibliography?.citations.find((w) => w.id === "w-clean");
     expect(visitors?.influence).toBe(0.7);
     expect(visitors && effectiveInfluence(visitors)).toEqual({ value: 0.7, from: "list" });
-    expect(JSON.stringify(built.citations)).not.toContain("0.31");
+    expect(JSON.stringify(built.bibliography)).not.toContain("0.31");
   });
 
   /**
@@ -2449,7 +2449,7 @@ describe("the artefacts a shared link carries", () => {
   it("carries no cited work's reference entry, anywhere", () => {
     const json = JSON.stringify(built);
     expect(json).not.toContain("entry sentinel from the reference list");
-    expect(built.citations?.citations.find((w) => w.id === "w-clean")).not.toHaveProperty("entry");
+    expect(built.bibliography?.citations.find((w) => w.id === "w-clean")).not.toHaveProperty("entry");
   });
 
   /** Nor the owner's read-time link to another article (plan 260930b). */
@@ -2458,7 +2458,7 @@ describe("the artefacts a shared link carries", () => {
     expect(json).not.toContain('"inSpideryarn"');
     expect(json).not.toContain("private-match-spya-g8h9j2");
     expect(json).not.toContain("private matched-title sentinel");
-    expect(built.citations?.citations.find((w) => w.id === "w-clean")).not.toHaveProperty("inSpideryarn");
+    expect(built.bibliography?.citations.find((w) => w.id === "w-clean")).not.toHaveProperty("inSpideryarn");
   });
 
   /**
@@ -2472,7 +2472,7 @@ describe("the artefacts a shared link carries", () => {
     expect(json).not.toContain("user:pw");
     expect(json).not.toContain("192.168.0.1");
     expect(json).not.toContain("owners-find.example");
-    const byId = new Map((built.citations?.citations ?? []).map((w) => [w.id, w]));
+    const byId = new Map((built.bibliography?.citations ?? []).map((w) => [w.id, w]));
     expect([...byId.keys()]).toEqual(["w-clean", "w-cred", "w-private", "w-web"]);
     expect(byId.get("w-clean")?.url).toBe("https://doi.org/10.1/abc");
     /* Even the source label must not reveal that the owner ran Find it. */
@@ -2549,7 +2549,7 @@ describe("the artefacts a shared link carries", () => {
       skim: null,
       faq: null,
       simpleSummary: null,
-      citations: null,
+      bibliography: null,
       debate: null,
       debateClaims: null,
       crossrefs: null,
@@ -2590,7 +2590,7 @@ describe("the artefacts a shared link carries", () => {
       assets: null,
       ...NO_ARTEFACTS,
     });
-    for (const key of ["glossary", "ideas", "tweets", "skim", "faq", "simpleSummary", "citations", "debate", "debateClaims"]) {
+    for (const key of ["glossary", "ideas", "tweets", "skim", "faq", "simpleSummary", "bibliography", "debate", "debateClaims"]) {
       expect(key in bare, key).toBe(false);
     }
   });

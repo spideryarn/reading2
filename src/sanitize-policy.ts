@@ -41,7 +41,7 @@ import { RESERVED_ATTRS } from "./reserved.js";
  *   reserved.ts's rule, not this file's.
  * - **two addresses a publisher wrote**: gwern's `data-url-original` and
  *   `data-href-mobile`, the real link behind an archive copy, which
- *   src/citations.ts reads off the sanitised block. Nothing in the browser reads
+ *   src/bibliography.ts reads off the sanitised block. Nothing in the browser reads
  *   either.
  *
  * Adding a name here is the one way to let an article carry it, so

@@ -147,10 +147,10 @@ const REGISTRY: Row[] = [
   { file: "quotes.css", selector: ".quotes-text", role: "item" },
   { file: "quotes.css", selector: ".quotes-prov", role: "meta" },
   // Citations
-  { file: "citations.css", selector: ".cite-title", role: "item" },
-  { file: "citations.css", selector: ".cite-quote blockquote", role: "quote" },
-  { file: "citations.css", selector: ".cite-why", role: "body" },
-  { file: "citations.css", selector: ".cite-meta", role: "meta" },
+  { file: "bibliography.css", selector: ".cite-title", role: "item" },
+  { file: "bibliography.css", selector: ".cite-quote blockquote", role: "quote" },
+  { file: "bibliography.css", selector: ".cite-why", role: "body" },
+  { file: "bibliography.css", selector: ".cite-meta", role: "meta" },
   // Debate
   { file: "debate.css", selector: ".dbt-title", role: "item" },
   { file: "debate.css", selector: ".dbt-quote", role: "quote" },

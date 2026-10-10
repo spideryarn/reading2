@@ -9,7 +9,7 @@
  * slicing the string. docs/plans/261004j-encode-dois-in-link-addresses.md.
  *
  * **This file imports nothing**, so the browser can use it and so can
- * src/citations.ts, which src/bibliographic.ts already reaches by way of
+ * src/bibliography.ts, which src/bibliographic.ts already reaches by way of
  * src/cited-in-spideryarn.ts.
  */
 

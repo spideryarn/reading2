@@ -72,13 +72,13 @@ const DELEGATED_MODE_STEPS: Partial<Record<Mode, readonly StepName[]>> = {
   summary: ["simple", "tweets"],
   /* **Sources, since 2026-10-09: Bibliography's list, and only that.**
      Its press is delegated by sub-mode (activation.ts §
-     `activationForSources`). `citations` is the default sub-mode's, and
+     `activationForSources`). `bibliography` is the default sub-mode's, and
      Claims' line of works (plan 261009l § Stage 2) reads it. Not `debate`,
      Reception's web search, the dearest press in the app and often empty; not
      `debate-claims`, which serves a sub-mode many readers will not open. Each
      runs on the press of its chip. One model call per import that was not
      paid before (plan 261009l § On import). */
-  sources: ["citations"],
+  sources: ["bibliography"],
 };
 
 /**

@@ -238,7 +238,7 @@ function parseFrame(frame: string): ServerEvent | null {
  * **A streamed, kept answer's terminal contract, in one function** — written
  * for the glossary's two streams (the box and *Check the web*, src/web/useGlossary.ts)
  * and moved here unchanged when Citations' *Investigate* needed the same one
- * (src/web/useCitations.ts, plan 260930a stage 2). The quiz's mark
+ * (src/web/useBibliography.ts, plan 260930a stage 2). The quiz's mark
  * (src/web/useQuiz.ts § `mark`) had a hand-written copy, `readMark`, until
  * 2026-10-04; `readRun` in src/web/useMirror.ts still is one.
  *

@@ -104,24 +104,24 @@ describe("the Run again rows", () => {
      name (or Peer review, its old one) for both would make `rerun sources`
      pick one paid run at random. */
   it("labels Citations' and Debate's re-runs by their sub-modes, and keeps the old words", () => {
-    expect(rerunWords("citations").label).toBe("Bibliography › Run again");
+    expect(rerunWords("bibliography").label).toBe("Bibliography › Run again");
     expect(rerunWords("debate").label).toBe("Reception › Run again");
     for (const query of ["rerun bibliography", "rerun citations", "regenerate references", "citations again"]) {
       const ranked = rankCommands(query, LIST);
-      expect(ranked[0], query).toMatchObject({ kind: "action", id: "rerun-citations" });
+      expect(ranked[0], query).toMatchObject({ kind: "action", id: "rerun-bibliography" });
       expect(ranked, query).not.toContainEqual(expect.objectContaining({ id: "rerun-debate" }));
     }
     for (const query of ["rerun reception", "rerun debate", "redo critiques", "debate again"]) {
       const ranked = rankCommands(query, LIST);
       expect(ranked[0], query).toMatchObject({ kind: "action", id: "rerun-debate" });
-      expect(ranked, query).not.toContainEqual(expect.objectContaining({ id: "rerun-citations" }));
+      expect(ranked, query).not.toContainEqual(expect.objectContaining({ id: "rerun-bibliography" }));
     }
   });
 
   it("`rerun sources` and `rerun peer review` pick neither of its paid runs", () => {
     for (const query of ["rerun sources", "rerun peer review", "regenerate peer review", "peer review again"]) {
       const ids = rankCommands(query, LIST).map((c) => (c.kind === "action" ? c.id : ""));
-      expect(ids, query).not.toContain("rerun-citations");
+      expect(ids, query).not.toContain("rerun-bibliography");
       expect(ids, query).not.toContain("rerun-debate");
     }
   });

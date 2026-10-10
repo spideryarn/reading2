@@ -1557,7 +1557,7 @@ describe("the upstream that is written down", () => {
     const sent = stubTransport(() => streamed(...parts));
     const { report } = await collectSpend(async () => {
       for await (const _ of openRouterStream(
-        "citations-find",
+        "citation-find",
         { model: "anthropic/claude-sonnet-5", messages: [], tools },
         { signal: new AbortController().signal, onActivity: noop, end: end() },
       )) {
@@ -1578,7 +1578,7 @@ describe("the upstream that is written down", () => {
         }) as unknown as Response,
     );
     const { report } = await collectSpend(() =>
-      openRouterJson("citations-find", {
+      openRouterJson("citation-find", {
         model: "anthropic/claude-sonnet-5",
         messages: [],
         tools,

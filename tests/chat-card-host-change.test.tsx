@@ -75,7 +75,7 @@ const owner = {
   comments: { comments: [], loaded: true, loadError: null, error: null, create: () => {} },
   chatAnchors: { summaries: threads.map((t) => ({ ...t, turns: 1 })), add: () => {}, drop: () => {} },
   glossary: { ...emptyRead, glossary: null }, quotes: { ...emptyRead, quotes: null },
-  citations: { ...emptyRead, citations: null }, quiz: { ...emptyRead, quiz: null },
+  bibliography: { ...emptyRead, bibliography: null }, quiz: { ...emptyRead, quiz: null },
   crossrefs: null, arc: { arc: null },
   readingTime: { levels: new Map(), reach: new Map(), status: "loaded", setCounting: () => {}, timeFor: () => null },
 } as unknown as ReaderCapability;

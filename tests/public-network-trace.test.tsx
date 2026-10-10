@@ -1438,7 +1438,7 @@ describe("a signed-out browser on a shared document", () => {
     await remount();
     served = {
       ...ARTICLE,
-      citations: {
+      bibliography: {
         citations: [
           {
             id: "w1",

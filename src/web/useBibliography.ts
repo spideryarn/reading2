@@ -4,17 +4,17 @@
  *
  * `useTimeline`'s shape exactly, because the artefact's contract is the
  * timeline's: one model pass over the article, stored once, **replaced** on a
- * re-run (src/citations.ts inherits ids across it), and two staleness facts —
+ * re-run (src/bibliography.ts inherits ids across it), and two staleness facts —
  * no profile is in this stage's stamp, so there is no `profileChanged`.
  *
- * The read half is `GET /api/citations/:slug`; the write half is a **job**
+ * The read half is `GET /api/bibliography/:slug`; the write half is a **job**
  * (docs/project/ingest-queue.md). The ordering of reads is
  * src/web/useOrderedRead.ts's, the job is src/web/useStepJob.ts's, and pressing
  * the mode with nothing there starts it through src/web/useAutoRun.ts — so this
  * file is only the parse, the "none yet" branch and the verbs.
  *
  * The third verb is **`investigate`** (plan 260930a): one streamed, billed
- * press about one work, `POST /api/citations/:slug/:id/investigate`, SSE — the
+ * press about one work, `POST /api/bibliography/:slug/:id/investigate`, SSE — the
  * glossary's *Check the web* shape. **Since plan 260930d it is also *Look it
  * up***, which had its own verb (`find`, `POST …/find`) until then: the press
  * looks the work up first when the row has no current reading, and that
@@ -24,11 +24,11 @@
  *
  * ## Two hooks since 2026-09-16, not one
  *
- * This said *"Mounted by `CitationsBand` alone, never hoisted: nothing outside
+ * This said *"Mounted by `BibliographyBand` alone, never hoisted: nothing outside
  * the band reads the list (no marks in the prose in v1)"*. That parenthesis is
  * what changed: the citations are now marked in the prose in every mode
  * (SPIDERYARN-READING2-3M), so a reader who never opens the band needs the
- * list. `CitationsRead` below carries the whole argument — what moved up, what
+ * list. `BibliographyRead` below carries the whole argument — what moved up, what
  * deliberately did not, and why the one write that crosses the seam is
  * `applyFound` rather than a refetch.
  *
@@ -38,14 +38,14 @@
  * split, one feature earlier, with the two bugs that hoisting everything would
  * have been.
  *
- * docs/project/citations.md, docs/plans/260911g-citations-mode.md,
+ * docs/project/bibliography.md, docs/plans/260911g-citations-mode.md,
  * docs/plans/260916b-citations-marked-in-the-prose-and-a-clearer-find-it-button.md.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   CitationInvestigation,
-  Citations,
-  CitationsResponse,
+  Bibliography,
+  BibliographyResponse,
   CitationWebInfluence,
   CitedWork,
   FindCitationResponse,
@@ -64,7 +64,7 @@ import { describeFetchFailure } from "./lib/describe-failure.js";
 import { MalformedReply, ReaderFacingError } from "./lib/reader-facing.js";
 import { readAnswerStream } from "./lib/sse.js";
 
-type CitationsStatus = "loading" | "none" | "ready" | "error";
+type BibliographyStatus = "loading" | "none" | "ready" | "error";
 
 /**
  * What the last press's lookup said, on the row it was pressed on, when it
@@ -135,9 +135,9 @@ export interface CitationDig {
   investigate(id: string): Promise<void>;
 }
 
-export interface UseCitations extends CitationDig {
-  status: CitationsStatus;
-  citations: Citations | null;
+export interface UseBibliography extends CitationDig {
+  status: BibliographyStatus;
+  bibliography: Bibliography | null;
   /** The article moved under this list — blocks, sections or the cited head. */
   stale: boolean;
   /** The article is the same and the current prompt would write this differently. */
@@ -163,7 +163,7 @@ export interface UseCitations extends CitationDig {
   /**
    * The forced run — the stale banner's button and Metadata's row. It replaces
    * the list, keeping each work's id where its dedupe key still matches.
-   * `citations` is in FORCE_ONLY_WHEN_NAMED (src/pipeline.ts), so forcing it
+   * `bibliography` is in FORCE_ONLY_WHEN_NAMED (src/pipeline.ts), so forcing it
    * does not sweep in the steps before it.
    */
   regenerate(): Promise<void>;
@@ -192,8 +192,8 @@ export interface UseCitations extends CitationDig {
  *
  * | | mounted by | what it is |
  * |---|---|---|
- * | `useCitationsRead` | `OwnedReader`, always | one `GET /api/citations/:slug` |
- * | `useCitations` | `SourcesBand` (`CitationsBand` until 2026-10-09), in Sources | the job poll, the auto-run, the verbs, `find` |
+ * | `useBibliographyRead` | `OwnedReader`, always | one `GET /api/bibliography/:slug` |
+ * | `useBibliography` | `SourcesBand` (`BibliographyBand` until 2026-10-09), in Sources | the job poll, the auto-run, the verbs, `find` |
  *
  * **Hoisting the whole hook instead would be two bugs**, and neither is
  * hypothetical — both were found on the quotes version of this move, by a GPT
@@ -237,12 +237,12 @@ export interface UseCitations extends CitationDig {
  * landing during a read can arm another repair read (`patchEntry`).
  *
  * It is a **staleness** gap and not a disagreement: the panel and the prose
- * read the same `CitationsRead`, so they are stale together and can never show
+ * read the same `BibliographyRead`, so they are stale together and can never show
  * different lists.
  */
-export interface CitationsRead extends CitationDig {
-  status: CitationsStatus;
-  citations: Citations | null;
+export interface BibliographyRead extends CitationDig {
+  status: BibliographyStatus;
+  bibliography: Bibliography | null;
   stale: boolean;
   outdated: boolean;
   error: string | null;
@@ -273,7 +273,7 @@ export interface CitationsRead extends CitationDig {
    * the same lesson. **And only a row that is still a search**, which is the
    * server's own rule (`attachFinds`): a re-run landing inside the find can give
    * the same id a link the article gave, and that always wins. GPT Sol F14;
-   * tests/citations-find-late-reply.test.tsx.
+   * tests/bibliography-find-late-reply.test.tsx.
    *
    * A read already in flight is the opposite ordering hazard: it may have read
    * the old Scholar row before the POST stored this link, then land afterwards
@@ -289,7 +289,7 @@ export interface CitationsRead extends CitationDig {
    * The caller therefore refreshes and lets `attachLookups` be the one authority
    * for attaching it. A found frame first removes the old lookup and
    * investigation, because the server has replaced the find they came from;
-   * only that read may put either back. tests/citations-find-late-reply.test.tsx.
+   * only that read may put either back. tests/bibliography-find-late-reply.test.tsx.
    */
   applyFound(id: string, found: FoundPatch): void;
   /** Hide lookup-derived fields while a replacement lookup is in flight. */
@@ -310,9 +310,9 @@ export interface FoundPatch {
   link: Pick<CitedWork, "url" | "linkFrom" | "found">;
 }
 
-export function useCitationsRead(slug: string): CitationsRead {
-  const [status, setStatus] = useState<CitationsStatus>("loading");
-  const [citations, setCitations] = useState<Citations | null>(null);
+export function useBibliographyRead(slug: string): BibliographyRead {
+  const [status, setStatus] = useState<BibliographyStatus>("loading");
+  const [bibliography, setBibliography] = useState<Bibliography | null>(null);
   const [stale, setStale] = useState(false);
   const [outdated, setOutdated] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -341,16 +341,16 @@ export function useCitationsRead(slug: string): CitationsRead {
            (`NONE_YET_AS_NULL_HEADER`, src/types.ts). A 404 is still read the
            same way, for a server that has not heard of the header — the
            minutes of a deploy. */
-        const res = await apiFetch(`/api/citations/${encodeURIComponent(slug)}`, {
+        const res = await apiFetch(`/api/bibliography/${encodeURIComponent(slug)}`, {
           headers: { [NONE_YET_AS_NULL_HEADER]: "1" },
         });
         if (!current()) return;
-        const loaded = res.status === 404 ? null : await readJson<CitationsResponse | null>(res);
+        const loaded = res.status === 404 ? null : await readJson<BibliographyResponse | null>(res);
         if (!current()) return;
         if (loaded === null) {
           /* The ordinary case, not a fault: nobody has asked for this
              article's citations yet, and the panel's button is for that. */
-          setCitations(null);
+          setBibliography(null);
           setStale(false);
           setOutdated(false);
           landed(started, res, null);
@@ -361,13 +361,13 @@ export function useCitationsRead(slug: string): CitationsRead {
         }
         /* Only an explicit null means none yet. Validate before publishing so
            a broken revalidation leaves the list already on screen intact. */
-        if (!loaded?.citations || !Array.isArray(loaded.citations.citations)) {
+        if (!loaded?.bibliography || !Array.isArray(loaded.bibliography.citations)) {
           /* A `MalformedReply`, so the reader gets `PAGE_FAULT`, as for every
              other malformed artefact (tests/read-error-matrix.test.tsx). */
-          throw new MalformedReply("the citations reply has no list");
+          throw new MalformedReply("the bibliography reply has no list");
         }
-        setCitations(loaded.citations);
-        landed(started, res, loaded.citations.generatedAt);
+        setBibliography(loaded.bibliography);
+        landed(started, res, loaded.bibliography.generatedAt);
         setStale(loaded.stale);
         setOutdated(loaded.outdated);
         setError(null);
@@ -390,16 +390,16 @@ export function useCitationsRead(slug: string): CitationsRead {
   const { reload, refresh } = useOrderedRead(load);
   /* A run that finishes after the reader left the band still reaches the prose
      and the margin — § An always-mounted read is not an always-fresh read. */
-  useStepFinished(slug, "citations", refresh);
+  useStepFinished(slug, "bibliography", refresh);
 
   /* The way out of a failed read, and never a generation verb — useFaq.ts §
      `retryRead`. Works already on screen stay there while a failed
      revalidation is tried again; only the opening error returns to loading. */
   const retryRead = useCallback(async () => {
     setError(null);
-    if (citations === null) setStatus("loading");
+    if (bibliography === null) setStatus("loading");
     await reload();
-  }, [citations, reload]);
+  }, [bibliography, reload]);
 
   /* The opening read. Everything after it goes through `reload`, which does not
      return `status` to `loading` — including `SourcesBand`'s own mount
@@ -410,7 +410,7 @@ export function useCitationsRead(slug: string): CitationsRead {
 
   const applyFound = useCallback(
     (id: string, found: FoundPatch) => {
-      setCitations((current) =>
+      setBibliography((current) =>
         current
           ? {
               ...current,
@@ -423,7 +423,7 @@ export function useCitationsRead(slug: string): CitationsRead {
   );
 
   const detachDerived = useCallback((id: string) => {
-    setCitations((current) =>
+    setBibliography((current) =>
       current
         ? {
             ...current,
@@ -438,7 +438,7 @@ export function useCitationsRead(slug: string): CitationsRead {
   }, []);
 
   const applyInvestigation = useCallback((id: string, investigation: CitationInvestigation) => {
-    setCitations((current) =>
+    setBibliography((current) =>
       current
         ? {
             ...current,
@@ -475,7 +475,7 @@ export function useCitationsRead(slug: string): CitationsRead {
    *   the link fields (`applyFound`, and only on a searched row), and a re-read
    *   lets the server attach the lookup by its fingerprint, which the client
    *   cannot check because the row carries block ids, not their text.
-   *   tests/citations-find-late-reply.test.tsx.
+   *   tests/bibliography-find-late-reply.test.tsx.
    * - **A lookup that landed survives a failed reading** (P-4): the failure
    *   records it, and the row says the quick check was kept.
    */
@@ -488,8 +488,8 @@ export function useCitationsRead(slug: string): CitationsRead {
      press's local failure or no-match into the replacement list. Ordinary
      revalidation keeps the generation and therefore keeps these results.
      Let a live press finish before clearing its notes; never stop its stream. */
-  const resultGeneration = useRef(citations?.generatedAt);
-  const generation = citations?.generatedAt;
+  const resultGeneration = useRef(bibliography?.generatedAt);
+  const generation = bibliography?.generatedAt;
   useEffect(() => {
     if (investigating || resultGeneration.current === generation) return;
     resultGeneration.current = generation;
@@ -498,8 +498,8 @@ export function useCitationsRead(slug: string): CitationsRead {
   }, [generation, investigating]);
   /* What is stored on each row at the moment of a press, read without making
      `investigate` change identity every time the list does. */
-  const citationsNow = useRef(citations);
-  citationsNow.current = citations;
+  const bibliographyNow = useRef(bibliography);
+  bibliographyNow.current = bibliography;
 
   const investigate = useCallback(
     async (id: string) => {
@@ -507,7 +507,7 @@ export function useCitationsRead(slug: string): CitationsRead {
       const controller = new AbortController();
       investigateLive.current = controller;
       const mine = () => investigateLive.current === controller;
-      const previousWork = citationsNow.current?.citations.find((w) => w.id === id);
+      const previousWork = bibliographyNow.current?.citations.find((w) => w.id === id);
       const previousAt = previousWork?.investigation?.at ?? null;
       const previousLookupAt = previousWork?.lookup?.at ?? null;
       setInvestigating(id);
@@ -545,7 +545,7 @@ export function useCitationsRead(slug: string): CitationsRead {
 
       try {
         const res = await apiFetch(
-          `/api/citations/${encodeURIComponent(slug)}/${encodeURIComponent(id)}/investigate`,
+          `/api/bibliography/${encodeURIComponent(slug)}/${encodeURIComponent(id)}/investigate`,
           { method: "POST", signal: controller.signal },
         );
         if (!res.ok || !res.body) {
@@ -619,7 +619,7 @@ export function useCitationsRead(slug: string): CitationsRead {
 
   return {
     status,
-    citations,
+    bibliography,
     stale,
     outdated,
     error,
@@ -655,13 +655,13 @@ function patchFound(w: CitedWork, { link }: FoundPatch): CitedWork {
  * stays mounted for Bibliography's count, and spends a press only when its own
  * sub-mode is showing (useAutoRun.ts § `enabled`).
  *
- * `read` comes from `useCitationsRead` in `OwnedReader` — see its docstring for
+ * `read` comes from `useBibliographyRead` in `OwnedReader` — see its docstring for
  * why the fetch moved up there, and what this hook still has to do on mount.
  */
-export function useCitations(slug: string, read: CitationsRead, enabled = true): UseCitations {
+export function useBibliography(slug: string, read: BibliographyRead, enabled = true): UseBibliography {
   const {
     status,
-    citations,
+    bibliography,
     stale,
     outdated,
     error,
@@ -691,7 +691,7 @@ export function useCitations(slug: string, read: CitationsRead, enabled = true):
 
   /* `refresh`, not `reload`: a finished job has just written a new list, and a
      request already in flight read the old one. */
-  const queue = useStepJob(slug, "citations", refresh, "watches-queue");
+  const queue = useStepJob(slug, "bibliography", refresh, "watches-queue");
 
   /* Two verbs, split on `force`. useIdeas.ts has why. */
   const ensure = useCallback(async () => {
@@ -703,8 +703,8 @@ export function useCitations(slug: string, read: CitationsRead, enabled = true):
      alone, so only a run that rewrote the list reads as a replacement. */
   const hold = useRewriteHold({
     slug,
-    step: "citations",
-    identity: citations?.generatedAt ?? null,
+    step: "bibliography",
+    identity: bibliography?.generatedAt ?? null,
     queue,
     fresh: read.fresh,
     refresh,
@@ -721,11 +721,11 @@ export function useCitations(slug: string, read: CitationsRead, enabled = true):
      2026-10-09 this hook stays mounted in all three of Sources'
      sub-modes, so a press that lands on Reception or Claims is retired
      unspent, as useDebate.ts and useDebateClaims.ts do for theirs. */
-  const auto = useAutoRun(slug, "citations", status, ensure, reload, enabled);
+  const auto = useAutoRun(slug, "bibliography", status, ensure, reload, enabled);
 
   return {
     status,
-    citations,
+    bibliography,
     stale,
     outdated,
     slug,

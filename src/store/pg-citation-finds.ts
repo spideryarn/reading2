@@ -1,6 +1,6 @@
 /**
  * Where Citations mode's *Find it* keeps a page it found — the write half. The
- * read half is `loadCitations` in src/store/pg.ts, which attaches each row to
+ * read half is `loadBibliography` in src/store/pg.ts, which attaches each row to
  * its entry, exactly as glossary lookups are attached in `loadGlossary`.
  *
  * `glossary_lookups`' shape (src/store/pg-lookups.ts has the argument): one

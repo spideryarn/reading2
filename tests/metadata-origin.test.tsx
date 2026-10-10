@@ -172,7 +172,7 @@ async function visitor(meta: Partial<Meta>, sourceGuess?: SourceGuess) {
           skim: false,
           faq: false,
           simpleSummary: false,
-          citations: false,
+          bibliography: false,
           debate: false,
         },
         signedIn: false,

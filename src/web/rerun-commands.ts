@@ -55,11 +55,11 @@ export const RERUN_LABEL: Record<MetadataRerunStep, string> = {
   relations: "Relation words",
   sketch: "Sketch",
   skim: "Skim",
-  /* Sources' sub-modes, whose steps keep the old names until the deep
-     rename (plan 261009l § Stage 3): Debate's step is Reception's search,
-     Citations' is Bibliography's list. Claims' list has no row here. */
+  /* Sources' sub-modes. Bibliography's step took its sub-mode's name on
+     2026-10-09 (plan 261009w); Debate's is still Reception's search until
+     that plan's Stage 3. Claims' list has no row here. */
   debate: SOURCES_SUB_MODES.reception.label,
-  citations: SOURCES_SUB_MODES.bibliography.label,
+  bibliography: SOURCES_SUB_MODES.bibliography.label,
   /* Not a mode, so no `MODE_LABEL` to borrow: the links it draws in the prose. */
   crossrefs: "Cross-references",
   /* Summary's plain-words lengths, which this one step writes together. Named
@@ -144,7 +144,7 @@ const RERUN_ALSO_CALLED: Partial<Record<MetadataRerunStep, readonly string[]>> =
      two modes had, which are the sub-mode rows' own aliases now
      (sub-modes.ts § `SOURCES_SUB_MODES`). Never `sources` or `peer review`:
      plan 261009l, GPT Sol's F8. */
-  citations: SOURCES_SUB_MODES.bibliography.aliases ?? [],
+  bibliography: SOURCES_SUB_MODES.bibliography.aliases ?? [],
   debate: SOURCES_SUB_MODES.reception.aliases ?? [],
 };
 

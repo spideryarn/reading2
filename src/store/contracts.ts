@@ -91,7 +91,7 @@ import type {
   ShelfState,
   ArcFound,
   DebateFound,
-  CitationsFound,
+  BibliographyFound,
   IdeasFound,
   IllustratedFound,
   SketchFound,
@@ -391,7 +391,7 @@ export interface ArticleReader {
    * like the timeline's: no profile is in this stage's stamp. **Owner-only in
    * v1**, and there is no public twin. docs/plans/260911g-citations-mode.md.
    */
-  loadCitations(slug: string): Promise<CitationsFound>;
+  loadBibliography(slug: string): Promise<BibliographyFound>;
 
   /**
    * The arc, plus whether it still describes the article.
@@ -1714,7 +1714,7 @@ export interface RefereeHiddenCheckStore {
 /**
  * Where Citations mode's *Find it* keeps a page it found — one row per
  * `(article, entry id)`, the glossary lookups' shape and for their reason.
- * Only a kept find is saved; the read half is `loadCitations`, which attaches
+ * Only a kept find is saved; the read half is `loadBibliography`, which attaches
  * each row to its entry. src/citation-find.ts, src/store/pg-citation-finds.ts.
  */
 export interface CitationFindStore {
@@ -1729,7 +1729,7 @@ export interface CitationFindStore {
 
 /**
  * **Where Citations' *Investigate* keeps an answer** — one row per `(article,
- * entry)`, overwritten by a second press. The read half is `loadCitations`,
+ * entry)`, overwritten by a second press. The read half is `loadBibliography`,
  * which attaches a row only while its fingerprint matches. Owner-scoped.
  * src/store/pg-citation-investigations.ts.
  */

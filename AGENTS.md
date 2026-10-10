@@ -64,7 +64,7 @@ listed here; the names under each are files in `docs/project/`.
   `timeline.md` (when the piece says these things happened) ·
   `sources.md` (what the piece cites and what others say about it: Citations and Debate as one
   mode, Sources, since 2026-10-09; briefly called Peer review) ·
-  `citations.md` (the works the piece cites, and where each link came from) ·
+  `bibliography.md` (the works the piece cites, and where each link came from) ·
   `faq.md` (the questions a careful reader would ask, answered only by the piece's own passages) ·
   `skim.md` (skim a paper at increasing depth: a route through its quotes, walked three times; it
   was Trajectory until 2026-10-01, and `?mode=trajectory` still opens it) ·

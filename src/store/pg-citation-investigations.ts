@@ -1,6 +1,6 @@
 /**
  * **Where Citations' *Investigate* keeps an answer** — the write half. The read
- * half is `loadCitations` in src/store/pg.ts; the column mapping both use is
+ * half is `loadBibliography` in src/store/pg.ts; the column mapping both use is
  * src/store/citation-investigation-row.ts.
  * docs/plans/260930a-citations-investigate-one-work-on-demand.md.
  *

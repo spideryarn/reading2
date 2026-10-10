@@ -1966,7 +1966,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
     reason:
       "Arrived after the witness ran, with Citations' Investigate, stage 1 (2026-09-30). It seeds " +
       "one article with `scratchArticleInPg`, writes a citations artefact onto its revision, and " +
-      "drives `POST /api/citations/:slug/:id/investigate` through `handleApi` against a stubbed, " +
+      "drives `POST /api/bibliography/:slug/:id/investigate` through `handleApi` against a stubbed, " +
       "streamed provider, reading the stored answer back through the citations GET — entirely " +
       "Postgres. Its reach into the condemned modules is the seeder's copy step and the spend " +
       "ledger, as for `tests/citation-finds-read-back-pg.test.ts`. Read off the graph, not re-witnessed.",
@@ -2063,7 +2063,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "Arrived after the witness ran, with `200 null` for an artefact not made yet (plan " +
       "261006g, 2026-10-06). It seeds two articles with `scratchArticleInPg`, one with its quiz " +
       "removed from the clone, and drives `GET /api/quiz/:slug`, `/api/crossrefs/:slug` and " +
-      "`/api/citations/:slug` through `handleApi` — entirely Postgres. Its reach into the " +
+      "`/api/bibliography/:slug` through `handleApi` — entirely Postgres. Its reach into the " +
       "condemned modules is the seeder's copy step, as for " +
       "`tests/quiz-attempts-route.test.ts`. Read off the graph, not re-witnessed.",
   },
@@ -2804,6 +2804,8 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      tables are ownerless and this file resets all three between cases, which a
      shared database must never have done to it mid-run. */
   "tests/bibliographic-pg.test.ts": "private-postgres",
+  /* Plan 261009w Stage 2: the expand migration against the old code's and the new code's statements. */
+  "tests/bibliography-expand-pg.test.ts": "private-postgres",
   "tests/billing-admission.test.ts": "private-postgres",
   "tests/billing-checkout.test.ts": "private-postgres",
   /* Stage 3b's, arriving from this worktree rather than from `dev`, and caught

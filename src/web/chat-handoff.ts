@@ -21,7 +21,7 @@
  * React StrictMode. A prop has none of those problems, which is the argument
  * for the change rather than a happy accident.
  */
-import { type CitationsOrigin, type GlossaryOrigin, type IdeasOrigin, originName } from "../types.js";
+import { type BibliographyOrigin, type GlossaryOrigin, type IdeasOrigin, originName } from "../types.js";
 
 /**
  * How much of a paragraph to show when the reader has not picked out a phrase.
@@ -297,10 +297,10 @@ export function askAboutIdea(idea: { name: string; statement: string }): string 
  * ordinary one, with no mark on the entry.
  */
 export function itemOrigin(
-  mode: "glossary" | "citations" | "ideas",
+  mode: "glossary" | "bibliography" | "ideas",
   itemId: string,
   name: string,
-): GlossaryOrigin | CitationsOrigin | IdeasOrigin | undefined {
+): GlossaryOrigin | BibliographyOrigin | IdeasOrigin | undefined {
   const quote = originName(name);
   return quote === "" ? undefined : { mode, itemId, quote };
 }

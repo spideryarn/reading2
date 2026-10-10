@@ -87,7 +87,7 @@ export interface ThresholdResult<T> {
  *    whose *influence* alone is missing is **not** one of these since
  *    2026-10-03: the model now says "unknown" whenever it is not confident it
  *    knows the work, which is common, so that row arrives here with a score,
- *    its relevance alone (`priorityOf` in CitationsPanel.tsx; plan 261003m).
+ *    its relevance alone (`priorityOf` in BibliographyPanel.tsx; plan 261003m).
  *    That is the same arithmetic as assuming its influence equals its
  *    relevance, which is not neutral and is said so there.
  *

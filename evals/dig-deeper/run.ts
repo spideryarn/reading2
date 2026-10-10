@@ -201,7 +201,7 @@ async function openStore(): Promise<Store> {
       loadGlossary: (slug) => store.loadGlossary(slug),
       library: (query, limit, opts) => store.librarySearch.searchLibrary(query, limit, opts),
       investigateDeps: store.investigateCitationDeps,
-      loadCitations: (slug) => store.loadCitations(slug),
+      loadBibliography: (slug) => store.loadBibliography(slug),
       loadFind: (slug, id) => store.citationFindStore.load(slug, id),
       commit: commit(),
     },

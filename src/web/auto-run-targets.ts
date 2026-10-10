@@ -59,7 +59,7 @@ type StepAutoRunTarget = StepTarget<
      docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2. */
   | "debate-claims"
   /* Every work the piece cites — docs/plans/260911g-citations-mode.md. */
-  | "citations"
+  | "bibliography"
   /* The questions a careful reader would put to the piece —
      docs/plans/260916d-faq-mode.md. */
   | "faq"

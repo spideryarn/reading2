@@ -75,7 +75,7 @@ one would otherwise be missed; it would not be, so it is not
   | FAQ | the question's earliest answering passage that is still there | the quoted words must still be in that block |
   | Timeline | the passage that dates the event: where its date was read from, or the earliest mention that holds the article's own phrase for when | only events the piece dates. A date with no year counts, and shows the article's words as the band does (*"On July 7"*). An untimed event or any other date we could not read stays in the band. A date we did read always carries its year, because the margin has no head to say it once ([261003f](../plans/261003f-marginalia-relation-words-and-timeline-events.md)) |
 | Debate (Sources › Claims) | the block of the claim a row answers | the claim's words must still be in that block. Whole-article rows have no block, so they stay in the band |
-  | Citations (Sources › Bibliography) | the earliest block that cites the work | **owner only**, and only from a fresh list, because the prose's citation marks are owner-only ([citations.md](citations.md)) |
+  | Citations (Sources › Bibliography) | the earliest block that cites the work | **owner only**, and only from a fresh list, because the prose's citation marks are owner-only ([bibliography.md](bibliography.md)) |
   | Comments | the comment's block | a referee note (one with a `criterionId`) and a bare bookmark are left out |
   | Questions | the block the chat is anchored to | **owner only** (a visitor's payload has no chats); in the same line as that block's comments |
 

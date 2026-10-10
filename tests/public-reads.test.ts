@@ -214,7 +214,7 @@ describe("the public revision read", () => {
       "timeline",
       "skim",
       "faq",
-      "citations",
+      "bibliography",
       "debate",
       "simple_summary",
     ]) {

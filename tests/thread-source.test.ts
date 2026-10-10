@@ -83,7 +83,7 @@ describe("threadSource", () => {
       quote: "qualia",
     });
     expect(
-      threadSource(t("chat", { origin: { mode: "citations", itemId: "spya-ttm333", quote: "Consciousness Explained" } })),
+      threadSource(t("chat", { origin: { mode: "bibliography", itemId: "spya-ttm333", quote: "Consciousness Explained" } })),
     ).toEqual({
       from: "sources",
       mode: "sources",
@@ -137,7 +137,7 @@ describe("the filter", () => {
 
   it("puts a glossary chat under its word, and a cited-work chat under Sources' with the claims", () => {
     const g = { id: "g", ...t("chat", { origin: { mode: "glossary", itemId: "spya-ttm222", quote: "qualia" } }) };
-    const c = { id: "c2", ...t("chat", { origin: { mode: "citations", itemId: "spya-ttm333", quote: "A work" } }) };
+    const c = { id: "c2", ...t("chat", { origin: { mode: "bibliography", itemId: "spya-ttm333", quote: "A work" } }) };
     const i = { id: "i", ...t("chat", { origin: { mode: "ideas", itemId: "spya-idd222", quote: "An idea" } }) };
     expect(sourcesIn([...all, c, g])).toEqual(["chats", "sources", "glossary", "learn", "passage"]);
     expect(sourcesIn([...all, i, c, g])).toEqual(["chats", "sources", "glossary", "ideas", "learn", "passage"]);
@@ -193,7 +193,7 @@ describe("originBack", () => {
     expect(originBack({ mode: "glossary", itemId: "spya-ttm222", quote: "qualia" }).text).toBe(
       "Back to “qualia” in Glossary",
     );
-    expect(originBack({ mode: "citations", itemId: "spya-ttm333", quote: "A work" })).toMatchObject({
+    expect(originBack({ mode: "bibliography", itemId: "spya-ttm333", quote: "A work" })).toMatchObject({
       mode: "sources",
       view: "bibliography",
       text: "Back to “A work” in Bibliography",

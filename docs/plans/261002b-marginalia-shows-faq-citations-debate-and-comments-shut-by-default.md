@@ -61,7 +61,7 @@ drawn, as for Ideas; a note naming a block the article no longer has is skipped.
 
 **Visitors** get FAQ and Debate from their payload (`artefacts.faq`, `artefacts.debate`) and the
 owner's public comments, as they already get Ideas. **Citations stay owner-only**, matching the
-prose marks' decision ([citations.md § Who sees it](../project/citations.md)): the margin is not the
+prose marks' decision ([citations.md § Who sees it](../project/bibliography.md)): the margin is not the
 place to quietly reverse it.
 
 **The head** (spya-rczgjb): a hairline rule under it in `--rule-strong` (plain `--rule` was too faint

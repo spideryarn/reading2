@@ -33,7 +33,7 @@ its source and the date it was read, alongside the model's influence.
 - [`src/registry-work.ts`](../../src/registry-work.ts) § `readCitationRegistry` is the one guard a
   stored row is read through, by the panel and by the public projection
   ([`src/public/dto.ts`](../../src/public/dto.ts) § `publicCitationRegistry`).
-- [`src/web/CitationsPanel.tsx`](../../src/web/CitationsPanel.tsx) draws the row's quiet line: the
+- [`src/web/CitationsPanel.tsx`](../../src/web/BibliographyPanel.tsx) draws the row's quiet line: the
   relevance and influence bars, or the words *influence unknown*.
 
 ## What changes
@@ -133,7 +133,7 @@ bibliographic_records            lookupWork's result carries
    citation count", gains a sentence saying the count shown on some rows is Crossref's, for works
    with a DOI. `/help` likewise ([help-page.md](../project/help-page.md)). Chat's
    `article_citations` tool adds the count, its source and the day to a row that has one, outside
-   the untrusted fence as our own words. [citations.md](../project/citations.md) gets a section and
+   the untrusted fence as our own words. [citations.md](../project/bibliography.md) gets a section and
    loses the item from § Deferred; [database.md](../project/database.md) if it lists the columns.
 
 7. **The bar and the orders do not change.** `priorityOf`, the threshold, the influence order and

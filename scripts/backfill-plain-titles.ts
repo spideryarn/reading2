@@ -64,7 +64,7 @@ const TARGETS: readonly Target[] = [
   { table: "citation_finds", column: "title", kind: "text", key: ["article_id", "entry_id"] },
   { table: "link_previews", column: "title", kind: "text", key: ["target"] },
   { table: "article_revisions", column: "debate", kind: "json", key: ["id"] },
-  { table: "article_revisions", column: "citations", kind: "json", key: ["id"] },
+  { table: "article_revisions", column: "bibliography", kind: "json", key: ["id"] },
   { table: "chat_messages", column: "citations", kind: "json", key: ["article_id", "thread_id", "id"] },
   { table: "comments", column: "citations", kind: "json", key: ["article_id", "id"] },
   { table: "glossary_lookups", column: "citations", kind: "json", key: ["article_id", "entry_id"] },

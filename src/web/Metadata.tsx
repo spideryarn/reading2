@@ -400,9 +400,9 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
      rather than a new import. docs/plans/261008i-debate-claims-picked-by-the-reader.md. */
   "debate-claims": MessagesSquare,
   /* A link: what the row is for is the address of each work the piece cites.
-     Reused rather than a new import — the Citations panel is stage 2 of
+     Reused rather than a new import — the Bibliography panel is stage 2 of
      docs/plans/260911g-citations-mode.md, and may choose its own glyph. */
-  citations: Link2,
+  bibliography: Link2,
   /* The arrow the block-link card already draws for a jump (ProseHoverCard.tsx):
      what a cross-reference does is take you to another block of the piece.
      docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */

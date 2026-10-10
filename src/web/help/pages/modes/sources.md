@@ -11,7 +11,7 @@ since. Sources shows both. **Bibliography** lists what this piece cites, with a 
 so you can check what others say about each one. Every source links out, so you can check it rather
 than take our word for it.
 
-![The Bibliography view: a threshold slider hiding 7 of 58 citations, then two works, each with its bars and an Ask in chat button](../images/mode-citations.png "Bibliography, prioritised: each work with what we have read of it, its two bars, and where the piece first cites it.")
+![The Bibliography view: a threshold slider hiding 7 of 58 citations, then two works, each with its bars and an Ask in chat button](../images/mode-bibliography.png "Bibliography, prioritised: each work with what we have read of it, its two bars, and where the piece first cites it.")
 
 ## When to use it
 

@@ -4,7 +4,7 @@
  *
  * ```
  *  ┌ Bibliography 42 │ Reception 3 │ Claims 8 ┐                 (i)
- *  │ CitationsPanel, as the Citations mode drew it  ← Bibliography (default)
+ *  │ BibliographyPanel, as the Citations mode drew it  ← Bibliography (default)
  *  │ DebatePanel, as the Debate mode drew it        ← Reception, Claims
  * ```
  *
@@ -37,9 +37,10 @@
  * opens the mode for a visitor (visitor.ts § POLICY); a sub-mode with nothing
  * stored says so inside the band.
  *
- * The stored names under it — the `citations`, `debate` and `debate-claims`
- * steps, columns and routes, the panels' file names and CSS — are renamed
- * after the sub-modes in later stages of plan 261009w.
+ * The stored names under it are renamed after the sub-modes in stages of plan
+ * 261009w: Bibliography's (`citations` until then) in Stage 2; the `debate`
+ * and `debate-claims` steps, columns and routes, and their panels' file names
+ * and CSS, in Stage 3.
  * docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md,
  * docs/plans/261009w-peer-review-becomes-sources-all-the-way-down.md,
  * docs/project/sources.md.
@@ -48,7 +49,7 @@
 import { useQueryState } from "nuqs";
 import { useRef } from "react";
 import type { BlockId } from "../../../types.js";
-import type { PublicCitations, PublicDebate, PublicDebateClaimList } from "../../../public-types.js";
+import type { PublicBibliography, PublicDebate, PublicDebateClaimList } from "../../../public-types.js";
 import {
   bearsParam,
   citeBarParam,
@@ -64,12 +65,12 @@ import { armActivationForSubMode } from "../../activation.js";
 import { ControlTip, Tooltip, TooltipGroup } from "../../Tooltip.js";
 import { useRevealChosen } from "../../useRevealChosen.js";
 import { useRenderCount } from "../../perf.js";
-import { useCitations, type CitationsRead } from "../../useCitations.js";
+import { useBibliography, type BibliographyRead } from "../../useBibliography.js";
 import { useDebate } from "../../useDebate.js";
 import { useDebateClaims } from "../../useDebateClaims.js";
 import { useDebateChecks } from "../../useDebateChecks.js";
 import { useCiters } from "../../useCiters.js";
-import { type CiteFocus, CitationsPanel } from "../../CitationsPanel.js";
+import { type CiteFocus, BibliographyPanel } from "../../BibliographyPanel.js";
 import { type DebateClaimChats, DebatePanel } from "../../DebatePanel.js";
 import type { CitedWorkChats } from "../../OriginChat.js";
 import type { ItemFocus } from "../../item-focus.js";
@@ -86,11 +87,11 @@ import { checkedSources, listedClaims, type SourcesCounts, sourcesCounts } from 
  * must die with the band so a press cannot be spent after the reader has
  * left. The citations' opening read is the exception, mounted once in
  * `OwnedReader` because the prose marks citations in every mode
- * (useCitations.ts § `useCitationsRead`).
+ * (useBibliography.ts § `useBibliographyRead`).
  */
 export function SourcesBand({
   slug,
-  citationsRead,
+  bibliographyRead,
   onJump,
   blockOrder,
   publishedAt,
@@ -104,8 +105,8 @@ export function SourcesBand({
   onOpenWork,
 }: {
   slug: string;
-  /** Bibliography's opening read, shared with the prose (useCitations.ts § `useCitationsRead`). */
-  citationsRead: CitationsRead;
+  /** Bibliography's opening read, shared with the prose (useBibliography.ts § `useBibliographyRead`). */
+  bibliographyRead: BibliographyRead;
   /** `passage` is Bibliography's: `citePassageKey(work.id)` when a row names the citing words. */
   onJump(id: BlockId, passage?: string): void;
   /** Each block's position in the article, for Claims' article order (DebatePanel § Props). */
@@ -114,11 +115,11 @@ export function SourcesBand({
   publishedAt: unknown;
   /** The article's title, for Reception's *Who cites it* search (DebatePanel § Props). */
   articleTitle: string | null;
-  /** A chat about one cited work (CitationsPanel § `CitationsAccess`). */
+  /** A chat about one cited work (BibliographyPanel § `BibliographyAccess`). */
   workChats?: CitedWorkChats;
   /** A claim's chat and an angle's (DebatePanel § `DebateClaimChats`). */
   claimChats: DebateClaimChats;
-  /** One work to bring into view in Bibliography, once (CitationsPanel § `Props.focus`). */
+  /** One work to bring into view in Bibliography, once (BibliographyPanel § `Props.focus`). */
   citeFocus: CiteFocus | null;
   onCiteFocusTaken(focus: CiteFocus): void;
   /** One claim to bring into view in Claims, once (DebatePanel § `Props.focus`). */
@@ -129,7 +130,7 @@ export function SourcesBand({
 }) {
   useRenderCount("SourcesBand");
   const [view, setView] = useQueryState("sources", sourcesParam);
-  const citations = useCitations(slug, citationsRead, view === "bibliography");
+  const bibliography = useBibliography(slug, bibliographyRead, view === "bibliography");
   const debate = useDebate(slug, view === "reception");
   /* Claims' own list and its own press (activation.ts § `activationForSources`). */
   const claimList = useDebateClaims(slug, view === "claims");
@@ -144,7 +145,7 @@ export function SourcesBand({
   const debateControls = useDebateControls();
 
   const counts = sourcesCounts({
-    works: citations.citations?.citations ?? null,
+    works: bibliography.bibliography?.citations ?? null,
     debate: debate.debate,
     listed: listedClaims({ kind: "owner", status: claimList.status, claimList: claimList.claimList }),
     checked: claimList.status === "ready" ? checkedSources(checks.checks, claimList.claimList) : 0,
@@ -155,8 +156,8 @@ export function SourcesBand({
 
   if (view === "bibliography")
     return (
-      <CitationsPanel
-        access={{ kind: "owner", owner: citations, ...(workChats ? { chats: workChats } : {}) }}
+      <BibliographyPanel
+        access={{ kind: "owner", owner: bibliography, ...(workChats ? { chats: workChats } : {}) }}
         head={head}
         {...citeControls}
         onJump={onJump}
@@ -177,7 +178,7 @@ export function SourcesBand({
       articleTitle={articleTitle}
       focus={claimFocus}
       onFocusTaken={onClaimFocusTaken}
-      citedIn={citedInOf(citations.citations?.citations ?? null, onOpenWork)}
+      citedIn={citedInOf(bibliography.bibliography?.citations ?? null, onOpenWork)}
     />
   );
 }
@@ -204,7 +205,7 @@ function citedInOf(works: readonly CitableWork[] | null, onOpen: (workId: string
  * visitor has them all.
  */
 export function VisitorSourcesBand({
-  citations,
+  bibliography,
   debate,
   claimList,
   onJump,
@@ -215,7 +216,7 @@ export function VisitorSourcesBand({
   onCiteFocusTaken,
   onOpenWork,
 }: {
-  citations: PublicCitations | null;
+  bibliography: PublicBibliography | null;
   debate: PublicDebate | null;
   /** Claims' list, read-only — `PublicDebateClaimList`, src/public-types.ts. */
   claimList: PublicDebateClaimList | null;
@@ -235,7 +236,7 @@ export function VisitorSourcesBand({
   const citeControls = useCitationControls();
   const debateControls = useDebateControls();
   const counts = sourcesCounts({
-    works: citations?.citations ?? null,
+    works: bibliography?.citations ?? null,
     debate,
     listed: listedClaims({ kind: "visitor", claimList }),
     checked: 0,
@@ -245,8 +246,8 @@ export function VisitorSourcesBand({
   const head = <SourcesViews view={view} counts={counts} ownerSlug={null} onView={setView} />;
   if (view === "bibliography")
     return (
-      <CitationsPanel
-        access={{ kind: "visitor", citations }}
+      <BibliographyPanel
+        access={{ kind: "visitor", bibliography }}
         head={head}
         {...citeControls}
         onJump={onJump}
@@ -265,7 +266,7 @@ export function VisitorSourcesBand({
       blockOrder={blockOrder}
       articleYear={yearOf(publishedAt)}
       articleTitle={articleTitle}
-      citedIn={citedInOf(citations?.citations ?? null, onOpenWork)}
+      citedIn={citedInOf(bibliography?.citations ?? null, onOpenWork)}
     />
   );
 }

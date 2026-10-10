@@ -11,7 +11,7 @@
  * Plan docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md, D1;
  * the lens is docs/plans/261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md, A.
  */
-import { isLensOrigin, type ThreadOrigin } from "./types.js";
+import { currentOriginMode, isLensOrigin, type ThreadOrigin } from "./types.js";
 
 /** The five columns, as a row holds them. */
 export interface OriginColumns {
@@ -40,7 +40,7 @@ export function originColumns(origin: ThreadOrigin | undefined): OriginColumns {
         ? { ...NO_ORIGIN, originMode: "debate", originLens: origin.lens }
         : { ...NO_ORIGIN, originMode: "debate", originBlockId: origin.blockId, originQuote: origin.quote };
     case "glossary":
-    case "citations":
+    case "bibliography":
     case "ideas":
       /* An id and a snapshot of the name; no block, no lens. */
       return { ...NO_ORIGIN, originMode: origin.mode, originItemId: origin.itemId, originQuote: origin.quote };
@@ -64,11 +64,14 @@ export function originColumns(origin: ThreadOrigin | undefined): OriginColumns {
  */
 export function originFromColumns(row: OriginColumns): { origin?: ThreadOrigin } {
   const { originItemId: itemId, originBlockId: blockId, originQuote: quote, originLens: lens } = row;
-  if (row.originMode === "glossary" || row.originMode === "citations" || row.originMode === "ideas") {
+  /* A cited work's row written before 2026-10-09 says `citations`; it is read
+     as `bibliography` (`RETIRED_ORIGIN_MODES`, plan 261009w). */
+  const mode = currentOriginMode(row.originMode);
+  if (mode === "glossary" || mode === "bibliography" || mode === "ideas") {
     if (itemId === null || quote === null || blockId !== null || lens !== null) return {};
-    return { origin: { mode: row.originMode, itemId, quote } };
+    return { origin: { mode, itemId, quote } };
   }
-  if (row.originMode !== "debate") return {};
+  if (mode !== "debate") return {};
   if (blockId !== null && quote !== null && lens === null) {
     return { origin: { mode: "debate", blockId, quote } };
   }

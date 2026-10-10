@@ -16,7 +16,7 @@ import {
 } from "../src/citation-registry.js";
 import { debateRegistryDeps } from "../src/debate-registry.js";
 import { REGISTRY_AUTHORS_KEPT } from "../src/registry-work.js";
-import type { BlockId, Citations, CitedWork } from "../src/types.js";
+import type { BlockId, Bibliography, CitedWork } from "../src/types.js";
 
 const AT = "spya-k3m9qt" as BlockId;
 
@@ -32,7 +32,7 @@ function work(over: Partial<CitedWork> & Pick<CitedWork, "id" | "title" | "url" 
   };
 }
 
-function list(rows: CitedWork[]): Citations {
+function list(rows: CitedWork[]): Bibliography {
   return {
     version: "citations/4",
     generator: "m",
@@ -40,7 +40,7 @@ function list(rows: CitedWork[]): Citations {
     sourceHash: "h",
     citations: rows,
     capped: false,
-  } as Citations;
+  } as Bibliography;
 }
 
 function record(id: string, title: string, over: Partial<WorkRecord> = {}): WorkRecord {

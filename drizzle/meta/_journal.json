@@ -1296,6 +1296,13 @@
       "when": 1791561101908,
       "tag": "20261009155141_revision_pdf_quality",
       "breakpoints": true
+    },
+    {
+      "idx": 185,
+      "version": "7",
+      "when": 1791586866666,
+      "tag": "20261009230106_bibliography_expand",
+      "breakpoints": true
     }
   ]
 }

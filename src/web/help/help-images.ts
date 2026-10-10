@@ -41,7 +41,7 @@ import commentMarginPng from "./pages/images/comment-margin.png";
 import glossaryCardPng from "./pages/images/glossary-card.png";
 import gutterPng from "./pages/images/gutter.png";
 import helpModeInfoPng from "./pages/images/help-mode-info.png";
-import modeCitationsPng from "./pages/images/mode-citations.png";
+import modeBibliographyPng from "./pages/images/mode-bibliography.png";
 import modeChatPng from "./pages/images/mode-chat.png";
 import modeDebatePng from "./pages/images/mode-debate.png";
 import modeFaqPng from "./pages/images/mode-faq.png";
@@ -273,8 +273,8 @@ export const HELP_IMAGES: Readonly<Record<string, HelpImage>> = {
     window: "1440×900 at 2×",
     taken: "2026-10-07",
   },
-  "mode-citations.png": {
-    src: modeCitationsPng,
+  "mode-bibliography.png": {
+    src: modeBibliographyPng,
     w: 1088,
     h: 860,
     shows: "?mode=sources (Bibliography, prioritised), the chip row and the band alone; clip x12 y44 w544 h430 CSS, cropped after the second work.",

@@ -58,7 +58,7 @@ const { handleApi } = await import("../src/routes.js");
 const ROUTES = [
   "quiz",
   "crossrefs",
-  "citations",
+  "bibliography",
   "simple",
   "ideas",
   "faq",

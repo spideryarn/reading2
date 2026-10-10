@@ -22,7 +22,7 @@
  * - No other owner's slug: `articleSlug` is the administrator's own only.
  */
 
-import { currentStepName } from "./step-order.js";
+import { currentLedgerName } from "./step-order.js";
 
 /* ------------------------------------------------------------ the shapes -- */
 
@@ -169,7 +169,7 @@ export function estimatedCashNanos(t: MoneyPockets): number {
  * are jobs, not modes.
  */
 export function taskOf(row: { job: string; stepName: string | null }): string {
-  return currentStepName(row.stepName ?? row.job);
+  return currentLedgerName(row.stepName ?? row.job);
 }
 
 /** The model that answered, else the one asked for. */

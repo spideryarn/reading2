@@ -138,10 +138,10 @@ import { renderProfile } from "../profile.js";
 import {
   attachFinds,
   attachLookups,
-  inputFingerprint as citationsFingerprint,
-  isStale as citationsAreStale,
-  PROMPT_VERSION as CITATIONS_PROMPT_VERSION,
-} from "../citations.js";
+  inputFingerprint as bibliographyFingerprint,
+  isStale as bibliographyIsStale,
+  PROMPT_VERSION as BIBLIOGRAPHY_PROMPT_VERSION,
+} from "../bibliography.js";
 import {
   inputFingerprint as sketchFingerprint,
   isStale as sketchIsStale,
@@ -193,9 +193,9 @@ import type {
   Author,
   StageState,
   Block,
-  Citations,
+  Bibliography,
   CitationFind,
-  CitationsFound,
+  BibliographyFound,
   Debate,
   DebateFound,
   Faq,
@@ -239,7 +239,7 @@ import { structureCurrency, metaRawSha256, sameStamp } from "./artifacts.js";
 import type { ArtifactMap } from "./artifacts.js";
 import type { ArticleReader, RawSource } from "./contracts.js";
 import { ArtefactNotMadeYet } from "./artefact-not-made-yet.js";
-import { CitationsListNotFound } from "./citations-list-not-found.js";
+import { BibliographyListNotFound } from "./bibliography-list-not-found.js";
 import { guardDbStore } from "./db-errors.js";
 import { postgresBlobStore } from "./blobs.js";
 import { readRawDocument } from "./raw-document.js";
@@ -553,7 +553,7 @@ type RevisionReader =
   | "sketch"
   | "illustrated"
   | "debate"
-  | "citations"
+  | "bibliography"
   | "faq"
   | "relations"
   | "debateClaims"
@@ -605,7 +605,7 @@ const REVISION_READ_POLICY: Record<
     article: "value", library: "value", metadata: "value", publish: "value",
     tweets: "value", glossary: "value", quotes: "value", ideas: "value",
     sketch: "value", arc: "value", timeline: "value", quiz: "value", rawSource: "value",
-    illustrated: "value", debate: "value", assets: "value", citations: "value", faq: "value",
+    illustrated: "value", debate: "value", assets: "value", bibliography: "value", faq: "value",
     relations: "value", skim: "value", crossrefs: "value", simpleSummary: "value",
     debateClaims: "value",
   },
@@ -647,9 +647,9 @@ const REVISION_READ_POLICY: Record<
     /* Pass B sends `articleWithIds`, so this stage is judged on the cited head
        exactly as `ideas`, `sketch`, `timeline` and `quiz` are. */
     debate: "value",
-    /* `citations` sends `articleWithIds` too, so it is judged on the cited
+    /* `bibliography` sends `articleWithIds` too, so it is judged on the cited
        head and the outline, as `ideas` is. */
-    citations: "value",
+    bibliography: "value",
     /* `faq` sends `articleWithIds` over the body, byte-identical to `ideas`,
        so it is judged on the cited head and the outline as `ideas` is. */
     faq: "value",
@@ -674,9 +674,9 @@ const REVISION_READ_POLICY: Record<
     /* Pass B sends `articleWithIds`, so this stage is judged on the cited head
        exactly as `ideas`, `sketch`, `timeline` and `quiz` are. */
     debate: "value",
-    /* `citations` sends `articleWithIds` too, so it is judged on the cited
+    /* `bibliography` sends `articleWithIds` too, so it is judged on the cited
        head and the outline, as `ideas` is. */
-    citations: "value",
+    bibliography: "value",
     /* `faq` sends `articleWithIds` over the body, byte-identical to `ideas`,
        so it is judged on the cited head and the outline as `ideas` is. */
     faq: "value",
@@ -701,9 +701,9 @@ const REVISION_READ_POLICY: Record<
     /* Pass B sends `articleWithIds`, so this stage is judged on the cited head
        exactly as `ideas`, `sketch`, `timeline` and `quiz` are. */
     debate: "value",
-    /* `citations` sends `articleWithIds` too, so it is judged on the cited
+    /* `bibliography` sends `articleWithIds` too, so it is judged on the cited
        head and the outline, as `ideas` is. */
-    citations: "value",
+    bibliography: "value",
     /* `faq` sends `articleWithIds` over the body, byte-identical to `ideas`,
        so it is judged on the cited head and the outline as `ideas` is. */
     faq: "value",
@@ -780,9 +780,9 @@ const REVISION_READ_POLICY: Record<
        read that could not see the column would compute the same fingerprint
        every other article has. */
     debate: "value",
-    /* `citations` sends `articleWithIds` too, so it is judged on the cited
+    /* `bibliography` sends `articleWithIds` too, so it is judged on the cited
        head and the outline, as `ideas` is. */
-    citations: "value",
+    bibliography: "value",
     /* `faq` sends `articleWithIds` over the body, byte-identical to `ideas`,
        so it is judged on the cited head and the outline as `ideas` is. */
     faq: "value",
@@ -842,9 +842,9 @@ const REVISION_READ_POLICY: Record<
        re-sectioned article's debate current while the filesystem store called
        it stale. */
     debate: "value",
-    /* `citations` sends `articleWithIds` too, so it is judged on the cited
+    /* `bibliography` sends `articleWithIds` too, so it is judged on the cited
        head and the outline, as `ideas` is. */
-    citations: "value",
+    bibliography: "value",
     /* `faq` hashes the outline too: the skeleton is in its user message. */
     faq: "value",
     /* FAQ's fingerprint exactly, so the outline too. */
@@ -982,9 +982,14 @@ const REVISION_READ_POLICY: Record<
   /* Its own reader and the metadata page, and not the library — the call
      `quotes`, `timeline` and `debate` make. `isCurrent` needs the column for
      its arm. */
-  citations: { metadata: "value", citations: "value" },
+  bibliography: { metadata: "value", bibliography: "value" },
+  /* **No read takes it.** Bibliography's column before plan 261009w, kept
+     equal to `bibliography` by a trigger only for the pre-rename code during
+     the deploy; dropped by the contract migration (src/db/schema.ts §
+     `legacyCitations`). */
+  legacyCitations: {},
   /* Its own reader and the metadata page, and not the library — the call
-     `quiz` and `citations` make. `isCurrent` needs the column for its arm. */
+     `quiz` and `bibliography` make. `isCurrent` needs the column for its arm. */
   faq: { metadata: "value", faq: "value" },
   /* Its own reader and the metadata page, and not the library — the call
      `faq` makes. `isCurrent` needs the column for its arm. **And no public
@@ -1321,7 +1326,7 @@ export const REVISION_PROJECTIONS = {
        whose job is to say otherwise. */
     debate: articleRevisions.debate,
     /* For `isCurrent`'s arm, as `debate` above. */
-    citations: articleRevisions.citations,
+    bibliography: articleRevisions.bibliography,
     /* For `isCurrent`'s arm, as `debate` above. */
     faq: articleRevisions.faq,
     /* For `isCurrent`'s arm, as `debate` above. */
@@ -1404,9 +1409,9 @@ export const REVISION_PROJECTIONS = {
     ...CITED_FINGERPRINT_COLUMNS,
   },
   /* The cited set, like `ideas`: `articleWithIds` prints a `URL:` line. */
-  citations: {
+  bibliography: {
     id: articleRevisions.id,
-    citations: articleRevisions.citations,
+    bibliography: articleRevisions.bibliography,
     ...CITED_FINGERPRINT_COLUMNS,
   },
   /* The cited set, like `ideas` and `quiz`: `articleWithIds` prints a `URL:` line. */
@@ -2039,7 +2044,7 @@ export const STEP_STORAGE: Record<StepName, string[]> = {
   illustrated: ["article_revisions.illustrated"],
   debate: ["article_revisions.debate"],
   "debate-claims": ["article_revisions.debate_claims"],
-  citations: ["article_revisions.citations"],
+  bibliography: ["article_revisions.bibliography"],
   faq: ["article_revisions.faq"],
   relations: ["article_revisions.relations"],
   skim: ["article_revisions.skim"],
@@ -2762,7 +2767,7 @@ export function shareableArtefacts(revision: {
   skim: Skim | null;
   faq: Faq | null;
   simpleSummary: SimpleSummary | null;
-  citations: Citations | null;
+  bibliography: Bibliography | null;
   debate: Debate | null;
   /** Claims' list: on its own it opens Sources to a visitor (plan 261009l § Visitors). */
   debateClaims: DebateClaimList | null;
@@ -2784,7 +2789,7 @@ export function shareableArtefacts(revision: {
       revision.simpleSummary && isUsableSimpleSummary(revision.simpleSummary)
         ? revision.simpleSummary
         : null,
-    citations: revision.citations,
+    bibliography: revision.bibliography,
     /* **Debate is on a shared link when either of its artefacts is**: a claims
        list made with no Reception search stored is still the visitor's to read
        (src/public/dto.ts § `publicDebateClaimList`, the same `claims` test). */
@@ -2805,7 +2810,7 @@ export function shareableArtefacts(revision: {
     skim: present.skim !== null,
     faq: present.faq !== null,
     simpleSummary: present.simpleSummary !== null,
-    citations: present.citations !== null,
+    bibliography: present.bibliography !== null,
     debate: present.debate !== null,
   };
 }
@@ -3421,8 +3426,8 @@ const rawPgArticleReader: ArticleReader = {
         /* The same shape as `quiz`, over the same cited head — written out
            rather than left to `default: true`, the arm that has caught
            `ideas`, `sketch` and `timeline` in turn. */
-        case "citations": {
-          const citations = revision.citations as Citations | null;
+        case "bibliography": {
+          const citations = revision.bibliography as Bibliography | null;
           if (!citations || !tree || blocks.length === 0) return false;
           return sameStamp(
             {
@@ -3431,8 +3436,8 @@ const rawPgArticleReader: ArticleReader = {
               model: citations.generator,
             },
             {
-              inputHash: citationsFingerprint(blocks, tree, citedFingerprint),
-              promptVersion: CITATIONS_PROMPT_VERSION,
+              inputHash: bibliographyFingerprint(blocks, tree, citedFingerprint),
+              promptVersion: BIBLIOGRAPHY_PROMPT_VERSION,
               model: CAPABLE_MODEL,
             },
           );
@@ -3692,7 +3697,7 @@ const rawPgArticleReader: ArticleReader = {
           skim: revision.skim as Skim | null,
           faq: revision.faq as Faq | null,
           simpleSummary: revision.simpleSummary as SimpleSummary | null,
-          citations: revision.citations as Citations | null,
+          bibliography: revision.bibliography as Bibliography | null,
           debate: revision.debate as Debate | null,
           debateClaims: revision.debateClaims as DebateClaimList | null,
         }),
@@ -4243,20 +4248,20 @@ const rawPgArticleReader: ArticleReader = {
   },
 
   /**
-   * The citations on their own — the Postgres half of `loadCitations`.
+   * The citations on their own — the Postgres half of `loadBibliography`.
    *
    * The cited head and the tree, like `loadIdeas`, because this stage sends
    * `articleWithIds`. **A 404 is the ordinary case** (the step is off
    * `DEFAULT_INGEST_STEPS`); an EMPTY list is a 200 — an article that cites
-   * nothing — as `SHAPE.citations` decides at the store boundary.
+   * nothing — as `SHAPE.bibliography` decides at the store boundary.
    */
-  async loadCitations(slug: string): Promise<CitationsFound> {
+  async loadBibliography(slug: string): Promise<BibliographyFound> {
     requireSlug(slug);
-    const found = await currentRevision(slug, "citations");
+    const found = await currentRevision(slug, "bibliography");
     if (!found) throw notFound(slug);
-    const citations = found.revision.citations as Citations | null;
+    const citations = found.revision.bibliography as Bibliography | null;
     if (!citations || !Array.isArray(citations.citations)) {
-      throw new CitationsListNotFound();
+      throw new BibliographyListNotFound();
     }
     /* **Finds are attached HERE, at the read seam** — `loadGlossary`'s rule for
        its lookups, and for its reason: forgetting it would not fail, it would
@@ -4285,7 +4290,7 @@ const rawPgArticleReader: ArticleReader = {
        lookup with `DIG_DEEPER_MODEL`, so accept both current policies here.
        In production Sonnet and Opus share a generation and these are the same
        hash; the second matters only while a Find-only override is active. */
-    const standaloneFindModel = modelFor("citations-find", "standard");
+    const standaloneFindModel = modelFor("citation-find", "standard");
     const withLookups = attachLookups(citations, finds, (work) => {
       const context = lookupContext(work, (id) => text.get(id));
       return [
@@ -4345,13 +4350,13 @@ const rawPgArticleReader: ArticleReader = {
     }
     const tree = found.revision.tree as Tree | null;
     return {
-      citations: withInvestigations,
+      bibliography: withInvestigations,
       /* Judged on the artefact as stored — `sourceHash` is the article's, and
          a find changes nothing about which article the list describes. */
       stale:
         !tree ||
-        citationsAreStale(citations, blocks, tree, citedMetaFingerprintOf(found.revision)),
-      outdated: citations.version !== CITATIONS_PROMPT_VERSION,
+        bibliographyIsStale(citations, blocks, tree, citedMetaFingerprintOf(found.revision)),
+      outdated: citations.version !== BIBLIOGRAPHY_PROMPT_VERSION,
     };
   },
 

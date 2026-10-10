@@ -300,7 +300,7 @@
 .skim-notice-failed { color: var(--ink-soft); font-size: 0.85rem; }
 
 /* A rule above it, so the foot reads as being about the route rather than
-   the last row's — citations.css's `.cite-foot`. */
+   the last row's — bibliography.css's `.cite-foot`. */
 .skim-foot { padding: 0.4rem 0.7rem 0; border-top: 1px solid var(--rule); }
 /* **Plan it again**: quiet, and in the foot so a thirty-stop list does not
    have to be scrolled to reach it — `.ideas-again`, `.tl-again`. */

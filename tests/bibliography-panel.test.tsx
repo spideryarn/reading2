@@ -2,16 +2,16 @@
 /**
  * Citations mode's panel: the five orders, the bar, and the one thing a row
  * must never blur — whether its link is an address the article gave or a
- * search we built. docs/project/citations.md, src/web/CitationsPanel.tsx.
+ * search we built. docs/project/bibliography.md, src/web/BibliographyPanel.tsx.
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { helpModeReadingWords, helpWords } from "./helpers/help-words.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MODE_CATALOG } from "../src/mode-catalog.js";
-import type { PublicCitations } from "../src/public-types.js";
-import type { BlockId, Citations, CitedWork, InvestigatedPaper, Job } from "../src/types.js";
-import type { UseCitations } from "../src/web/useCitations.js";
+import type { PublicBibliography } from "../src/public-types.js";
+import type { BlockId, Bibliography, CitedWork, InvestigatedPaper, Job } from "../src/types.js";
+import type { UseBibliography } from "../src/web/useBibliography.js";
 import type { CiteOrder } from "../src/web/params.js";
 import { citePassageKey } from "../src/web/rows.js";
 import { INFLUENCE_VERSION } from "../src/citation-effective-influence.js";
@@ -20,7 +20,7 @@ import { DELAY } from "../src/web/Tooltip.js";
 
 const {
   CAPPED_NOTE,
-  CITATIONS_NONE,
+  BIBLIOGRAPHY_NONE,
   CITE_NOT_READ,
   CITE_DOES_LABEL,
   CITE_PAGE_FOUND,
@@ -30,7 +30,7 @@ const {
   CITATION_BAR_DEFAULT,
   CITED_BY_NOTE,
   CITING_WORDS_MAX,
-  CitationsPanel,
+  BibliographyPanel,
   citedByLine,
   citedByNote,
   INFLUENCE_NOTE,
@@ -60,7 +60,7 @@ const {
   sourceOf,
   verdictText,
   visibleWorks,
-} = await import("../src/web/CitationsPanel.js");
+} = await import("../src/web/BibliographyPanel.js");
 
 /* Real ids: `ID_PATTERN` rejects `1`, `i`, `l` and `o`. docs/project/block-ids.md. */
 const FIRST = "spya-k3m9qt" as BlockId;
@@ -99,7 +99,7 @@ const RUNNING: Job = {
   status: "running",
   createdAt: "2026-09-29T00:00:00.000Z",
   startedAt: "2026-09-29T00:00:01.000Z",
-  steps: [{ name: "citations", label: "Finding the citations", status: "running" }],
+  steps: [{ name: "bibliography", label: "Finding the citations", status: "running" }],
 };
 
 const titles = (ws: CitedWork[]) => ws.map((w) => w.title);
@@ -286,7 +286,7 @@ describe("the date order", () => {
 
   it("draws the list in that order, presses date, and shows no threshold", async () => {
     const scored = [...LIST, CENTRAL, FAMOUS];
-    await draw(owner({ citations: artefact(scored) }), null, () => {}, "date");
+    await draw(owner({ bibliography: artefact(scored) }), null, () => {}, "date");
     const drawn = [...host.querySelectorAll<HTMLElement>("[data-citation-id]")].map((el) => el.dataset.citationId);
     expect(drawn).toEqual(orderWorks(scored, "date").map((w) => w.id));
     expect(drawn[0]).toBe(OLD.id);
@@ -331,11 +331,11 @@ describe("the date order", () => {
   });
 
   it("offers the button only when some work has a year", async () => {
-    await draw(owner({ citations: artefact([UNDATED, BLANK, CENTRAL]) }));
+    await draw(owner({ bibliography: artefact([UNDATED, BLANK, CENTRAL]) }));
     const labels = () => [...host.querySelectorAll(".gloss-sort-btn")].map((b) => b.textContent);
     expect(labels(), "the order row is drawn, so its missing button means something").toContain("relevance");
     expect(labels()).not.toContain("date");
-    await draw(owner({ citations: artefact([UNDATED, OLD]) }));
+    await draw(owner({ bibliography: artefact([UNDATED, OLD]) }));
     expect(labels()).toContain("date");
   });
 });
@@ -384,7 +384,7 @@ afterEach(async () => {
   vi.useRealTimers();
 });
 
-function artefact(citations: CitedWork[], capped = false): Citations {
+function artefact(citations: CitedWork[], capped = false): Bibliography {
   return {
     version: "test",
     generator: "test",
@@ -397,10 +397,10 @@ function artefact(citations: CitedWork[], capped = false): Citations {
   };
 }
 
-function owner(over: Partial<UseCitations> = {}): UseCitations {
+function owner(over: Partial<UseBibliography> = {}): UseBibliography {
   return {
     status: "ready",
-    citations: artefact(WORKS),
+    bibliography: artefact(WORKS),
     stale: false,
     outdated: false,
     slug: "a-piece",
@@ -427,14 +427,14 @@ function owner(over: Partial<UseCitations> = {}): UseCitations {
 }
 
 async function draw(
-  o: UseCitations,
+  o: UseBibliography,
   bar: number | null = null,
   onJump: (id: BlockId, passage?: string) => void = () => {},
   order: CiteOrder = "prioritised",
 ) {
   await act(async () =>
     root.render(
-      createElement(CitationsPanel, {
+      createElement(BibliographyPanel, {
         head: null,
         access: { kind: "owner", owner: o },
         order,
@@ -447,12 +447,12 @@ async function draw(
   );
 }
 
-async function drawVisitor(citations: PublicCitations, order: CiteOrder = "prioritised") {
+async function drawVisitor(citations: PublicBibliography, order: CiteOrder = "prioritised") {
   await act(async () =>
     root.render(
-      createElement(CitationsPanel, {
+      createElement(BibliographyPanel, {
         head: null,
-        access: { kind: "visitor", citations },
+        access: { kind: "visitor", bibliography: citations },
         order,
         onOrder: () => {},
         bar: null,
@@ -540,7 +540,7 @@ async function cardFor(el: Element): Promise<Card> {
   };
 }
 
-describe("CitationsPanel", () => {
+describe("BibliographyPanel", () => {
   it("links the title to the article's address, in a new tab", async () => {
     await draw(owner());
     const a = row(CENTRAL.id).querySelector(".cite-title a");
@@ -559,7 +559,7 @@ describe("CitationsPanel", () => {
       url: "https://scholar.google.com/scholar?q=Searched",
       linkFrom: "search",
     });
-    await draw(owner({ citations: artefact([searched, PASSING]) }));
+    await draw(owner({ bibliography: artefact([searched, PASSING]) }));
     const r = row(searched.id);
     expect(r.querySelector(".cite-title a")).toBeNull();
     const links = [...r.querySelectorAll("a[target=_blank]")];
@@ -582,7 +582,7 @@ describe("CitationsPanel", () => {
       url: "https://scholar.google.com/scholar?q=Searched",
       linkFrom: "search",
     });
-    await draw(owner({ citations: artefact([searched, PASSING, { ...CENTRAL, investigation: INVESTIGATION }]) }));
+    await draw(owner({ bibliography: artefact([searched, PASSING, { ...CENTRAL, investigation: INVESTIGATION }]) }));
     expect(host.querySelector(".cite-investigate, .cite-inv-again")).toBeNull();
     expect(host.querySelector(".mode-band, .cite-list")?.textContent ?? "").not.toMatch(/Dig deeper|Digging deeper/);
     expect(MODE_CATALOG.sources.how).not.toMatch(/Dig deeper/);
@@ -599,12 +599,12 @@ describe("CitationsPanel", () => {
        unknown, so it no longer carries the "not scored" title; a row with no
        relevance still does. */
     expect(row(UNKNOWN.id).getAttribute("title")).toBeNull();
-    await draw(owner({ citations: artefact([...WORKS, BARE]) }));
+    await draw(owner({ bibliography: artefact([...WORKS, BARE]) }));
     expect(row(BARE.id).getAttribute("title")).toContain("Not scored");
   });
 
   it("says `influence unknown` in words where a row has a relevance and no influence", async () => {
-    await draw(owner({ citations: artefact([...WORKS, BARE]) }));
+    await draw(owner({ bibliography: artefact([...WORKS, BARE]) }));
     const unknown = row(UNKNOWN.id).querySelector(".cite-influence-unknown");
     expect(unknown?.textContent).toBe("influence unknown");
     /* After the relevance bar, on the quiet line; never a bar at zero. */
@@ -631,7 +631,7 @@ describe("CitationsPanel", () => {
 
   it("a visitor's row says it too", async () => {
     const { key: _key, ...shared } = UNKNOWN;
-    await drawVisitor({ capped: false, citations: [shared] } as PublicCitations);
+    await drawVisitor({ capped: false, citations: [shared] } as PublicBibliography);
     expect(row(UNKNOWN.id).querySelector(".cite-influence-unknown")?.textContent).toBe("influence unknown");
     /* The owner's sentence, which a visitor never had. */
     const card = await cardFor(row(UNKNOWN.id).querySelector(".cite-influence-unknown")!);
@@ -643,8 +643,8 @@ describe("CitationsPanel", () => {
     const low = { ...UNKNOWN, id: "spya-u3k4n5", relevance: 0.2 };
     const list = [low, UNKNOWN, BARE];
     for (const visitor of [false, true]) {
-      if (visitor) await drawVisitor({ capped: false, citations: list } as PublicCitations);
-      else await draw(owner({ citations: artefact(list) }));
+      if (visitor) await drawVisitor({ capped: false, citations: list } as PublicBibliography);
+      else await draw(owner({ bibliography: artefact(list) }));
       const slider = host.querySelector<HTMLInputElement>("#cite-bar")!;
       expect(slider.value).toBe("0.25");
       expect(slider.max).toBe("0.6");
@@ -659,8 +659,8 @@ describe("CitationsPanel", () => {
     const low = { ...UNKNOWN, id: "spya-u3k4n5", relevance: 0.2 };
     const list = [low, UNKNOWN, BARE];
     for (const visitor of [false, true]) {
-      if (visitor) await drawVisitor({ capped: false, citations: list } as PublicCitations, "influence");
-      else await draw(owner({ citations: artefact(list) }), null, undefined, "influence");
+      if (visitor) await drawVisitor({ capped: false, citations: list } as PublicBibliography, "influence");
+      else await draw(owner({ bibliography: artefact(list) }), null, undefined, "influence");
       expect([...host.querySelectorAll(".cite-item")].map((r) => r.getAttribute("data-citation-id"))).toEqual(list.map((w) => w.id));
       expect(host.querySelector('.gloss-sort-btn[aria-pressed="true"]')?.textContent).toBe("first cited");
       expect(host.querySelector("#cite-bar")).toBeNull();
@@ -668,7 +668,7 @@ describe("CitationsPanel", () => {
   });
 
   it("does not invent why an old or rejected score is absent, and qualifies threshold advice outside prioritised", async () => {
-    await draw(owner({ citations: { ...artefact([UNKNOWN, CENTRAL]), version: "citations/5" } }), null, undefined, "document");
+    await draw(owner({ bibliography: { ...artefact([UNKNOWN, CENTRAL]), version: "citations/5" } }), null, undefined, "document");
     const card = await cardFor(row(UNKNOWN.id).querySelector(".cite-influence-unknown")!);
     expect(card.body).toMatch(/no usable.*score/i);
     expect(card.body).not.toMatch(/The model was not confident|so it gave no score/);
@@ -676,7 +676,7 @@ describe("CitationsPanel", () => {
   });
 
   it("opens an unknown-influence explanation on touch, including an iPad's mouse click, and dismisses on scroll", async () => {
-    await draw(owner({ citations: artefact([UNKNOWN]) }));
+    await draw(owner({ bibliography: artefact([UNKNOWN]) }));
     const label = row(UNKNOWN.id).querySelector(".cite-influence-unknown")!;
     await press(label, "touch", "mouse");
     expect(document.querySelector('[role="tooltip"]')?.textContent).toMatch(/no usable.*score/i);
@@ -764,7 +764,7 @@ describe("CitationsPanel", () => {
     expect(INFLUENCE_WEB_NOTE).toMatch(/an AI estimate/);
     expect(INFLUENCE_WEB_NOTE).not.toMatch(/dig deeper/i);
     expect(INFLUENCE_NOTE).not.toMatch(/dig deeper/i);
-    await draw(owner({ citations: artefact(WORKS, true) }));
+    await draw(owner({ bibliography: artefact(WORKS, true) }));
     text = await card();
     expect(text).toContain(CAPPED_NOTE);
     expect(CAPPED_NOTE).toBe(
@@ -773,14 +773,14 @@ describe("CitationsPanel", () => {
   });
 
   it("treats a piece that cites nothing as an answer, with no retry", async () => {
-    await draw(owner({ citations: artefact([]) }));
-    expect(host.textContent).toContain(CITATIONS_NONE);
+    await draw(owner({ bibliography: artefact([]) }));
+    expect(host.textContent).toContain(BIBLIOGRAPHY_NONE);
     expect(host.textContent).not.toContain("Find them again");
     expect(host.textContent).not.toContain(INFLUENCE_NOTE);
   });
 
   it("offers to find them when nobody has", async () => {
-    await draw(owner({ status: "none", citations: null }));
+    await draw(owner({ status: "none", bibliography: null }));
     expect(host.textContent).toContain("Find the citations");
     expect(host.querySelector(".gloss-sort")).toBeNull();
   });
@@ -795,7 +795,7 @@ describe("CitationsPanel", () => {
       citedAt: [],
       citedInBody: false,
     });
-    await draw(owner({ citations: artefact([CENTRAL, listed]) }));
+    await draw(owner({ bibliography: artefact([CENTRAL, listed]) }));
     expect(row(CENTRAL.id).querySelector(".cite-first")?.textContent).toContain("first cited");
     expect(row(CENTRAL.id).querySelector(".block-ref")?.textContent).toBe("k3m9qt");
     expect(row(listed.id).querySelector(".cite-first")?.textContent).toContain("only in the references");
@@ -813,7 +813,7 @@ describe("CitationsPanel", () => {
       mentions: [{ blockId: FIRST, quote: "TV episodes [8]", start: 40 }],
     });
     const jumps: [BlockId, string | undefined][] = [];
-    await draw(owner({ citations: artefact([cited]) }), null, (id, passage) => jumps.push([id, passage]));
+    await draw(owner({ bibliography: artefact([cited]) }), null, (id, passage) => jumps.push([id, passage]));
     const link = row(cited.id).querySelector<HTMLAnchorElement>(".cite-first .block-ref");
     expect(link?.textContent).toBe("“TV episodes [8]”");
     await act(async () => link?.dispatchEvent(new MouseEvent("click", { bubbles: true, button: 0 })));
@@ -829,7 +829,7 @@ describe("CitationsPanel", () => {
       mentions: [{ blockId: LATER, quote: "a footnote's words", start: 0 }],
     });
     const jumps: [BlockId, string | undefined][] = [];
-    await draw(owner({ citations: artefact([viaNote]) }), null, (id, passage) => jumps.push([id, passage]));
+    await draw(owner({ bibliography: artefact([viaNote]) }), null, (id, passage) => jumps.push([id, passage]));
     const link = row(viaNote.id).querySelector<HTMLAnchorElement>(".cite-first .block-ref");
     expect(link?.textContent).toBe("k3m9qt");
     await act(async () => link?.dispatchEvent(new MouseEvent("click", { bubbles: true, button: 0 })));
@@ -864,7 +864,7 @@ describe("a by-line that repeats the title", () => {
     const entry = "Bartlett, F. C. (1932). Remembering: A study in experimental and social psychology. CUP.";
     const label = work({ id: "spya-b2a3r4", title: "Bartlett (1932)", authors: "Bartlett", year: "1932", entry, relevance: 0.9, influence: 0.9 });
     const titled = work({ id: "spya-t2i3t4", title: "Remembering", authors: "Bartlett", year: "1932", relevance: 0.9, influence: 0.9 });
-    await draw(owner({ citations: artefact([label, titled]) }));
+    await draw(owner({ bibliography: artefact([label, titled]) }));
     expect(row(label.id).querySelector(".cite-by")).toBeNull();
     expect(row(titled.id).querySelector(".cite-by")?.textContent).toBe("Bartlett · 1932");
     /* The entry is where an author–year work's real title lives: kept. */
@@ -938,7 +938,7 @@ describe("a by-line that repeats the title", () => {
       relevance: 0.9,
       influence: 0.9,
     });
-    await draw(owner({ citations: artefact([plain, filled, shortened]) }));
+    await draw(owner({ bibliography: artefact([plain, filled, shortened]) }));
     expect(row(plain.id).querySelector(".cite-by")).toBeNull();
     expect(row(plain.id).querySelector(".cite-title a")?.getAttribute("title")).toContain("opens doi.org");
     expect(row(filled.id).querySelector(".cite-by")?.textContent).toContain("from Crossref");
@@ -951,7 +951,7 @@ describe("a by-line that repeats the title", () => {
   it("on a finger, the first tap on the title shows the card and the second follows the link", async () => {
     const entry = "Bartlett, F. C. (1932). Remembering. CUP.";
     const label = work({ id: "spya-b2a3r5", title: "Bartlett (1932)", authors: "Bartlett", year: "1932", entry, relevance: 0.9, influence: 0.9 });
-    await draw(owner({ citations: artefact([label]) }));
+    await draw(owner({ bibliography: artefact([label]) }));
     const link = row(label.id).querySelector(".cite-title a") as HTMLAnchorElement;
     const tap = async () => {
       await act(async () => {
@@ -982,7 +982,7 @@ describe("a by-line that repeats the title", () => {
       relevance: 0.9,
       influence: 0.9,
     });
-    await draw(owner({ citations: artefact([label]) }));
+    await draw(owner({ bibliography: artefact([label]) }));
     const link = row(label.id).querySelector(".cite-title a") as HTMLAnchorElement;
 
     const keyboard = new MouseEvent("click", { bubbles: true, cancelable: true, detail: 0 });
@@ -1031,7 +1031,7 @@ describe("the by-line", () => {
       influence: 0.9,
     });
     const bare = work({ id: "spya-b2r3e4", title: "Bare", authors: "Tulving", year: "1983", relevance: 0.9, influence: 0.9 });
-    await draw(owner({ citations: artefact([listed, bare]) }));
+    await draw(owner({ bibliography: artefact([listed, bare]) }));
     const by = row(listed.id).querySelector(".cite-by");
     expect(by?.classList.contains("cite-by-more")).toBe(true);
     expect(by?.textContent).toBe(`Chen et al. · 2017 — ${entry}`);
@@ -1083,7 +1083,7 @@ describe("the by-line", () => {
       relevance: 0.9,
       influence: 0.9,
     });
-    await draw(owner({ citations: artefact([listed]) }));
+    await draw(owner({ bibliography: artefact([listed]) }));
     const by = row(listed.id).querySelector(".cite-by");
     expect(by?.querySelector(".sr-only")?.textContent).toContain("Porter, Vollrath, Shao");
   });
@@ -1161,7 +1161,7 @@ describe("what a row says we have read", () => {
        Dig deeper answer opens "Does it back the claim?": each needs the claim
        beside it. */
     const dug = work({ id: "spya-d2g3h4", title: "Dug", why: "The distinct claim checked by Dig deeper.", relevance: 0.9, influence: 0.9, investigation: INVESTIGATION });
-    await draw(owner({ citations: artefact([LOOKED, dug, CENTRAL]) }));
+    await draw(owner({ bibliography: artefact([LOOKED, dug, CENTRAL]) }));
     for (const w of [LOOKED, dug]) {
       const why = row(w.id).querySelector(".cite-why");
       expect(why?.querySelector(".cite-why-label")?.textContent).toContain(CITE_WHY_LABEL);
@@ -1175,7 +1175,7 @@ describe("what a row says we have read", () => {
        server half's, left in place (plan 261009k, D5). A row draws only what
        is kept. */
     await draw(owner({
-      citations: artefact([CENTRAL, FAMOUS]),
+      bibliography: artefact([CENTRAL, FAMOUS]),
       investigating: FAMOUS.id,
       investigateStage: "searching",
       investigateDraft: { id: CENTRAL.id, text: "discarded answer" },
@@ -1189,7 +1189,7 @@ describe("what a row says we have read", () => {
   });
 
   it("says only that a page matching the title was found, never that it is the paper", async () => {
-    await draw(owner({ citations: artefact([FOUND, CENTRAL]) }));
+    await draw(owner({ bibliography: artefact([FOUND, CENTRAL]) }));
     const said = row(FOUND.id).querySelector(".cite-read")?.textContent ?? "";
     expect(said).toBe(CITE_PAGE_FOUND);
     expect(said).toMatch(/not read/i);
@@ -1209,11 +1209,11 @@ describe("what a row says we have read", () => {
   it("says it to a visitor too, whose list never carries a Find it result", async () => {
     await act(async () =>
       root.render(
-        createElement(CitationsPanel, {
+        createElement(BibliographyPanel, {
           head: null,
           access: {
             kind: "visitor",
-            citations: {
+            bibliography: {
               capped: false,
               citations: [
                 {
@@ -1329,7 +1329,7 @@ describe("what a row says after Look it up", () => {
   });
 
   it("draws an assessed row's verdict and quotes, each labelled as the extract's and the AI's", async () => {
-    await draw(owner({ citations: artefact([LOOKED, CENTRAL]) }));
+    await draw(owner({ bibliography: artefact([LOOKED, CENTRAL]) }));
     const r = row(LOOKED.id);
     expect(r.querySelector(".cite-read")?.textContent).toBe(citeReadAssessed(310, "arxiv.org"));
 
@@ -1357,7 +1357,7 @@ describe("what a row says after Look it up", () => {
 
   it("never reads not-in-extract as the work not supporting it", async () => {
     const quiet = work({ id: "spya-u2v3w4", title: "Quiet", relevance: 0.9, influence: 0.9, lookup: NOT_IN_EXTRACT });
-    await draw(owner({ citations: artefact([quiet]) }));
+    await draw(owner({ bibliography: artefact([quiet]) }));
     const r = row(quiet.id);
     const said = r.querySelector(".cite-verdict-text")?.textContent ?? "";
     expect(said).toBe(verdictText("not-in-extract"));
@@ -1378,7 +1378,7 @@ describe("what a row says after Look it up", () => {
       influence: 0.9,
       lookup: { ...LOOKUP_BASE, state: "no-extract" },
     });
-    await draw(owner({ citations: artefact([none]) }));
+    await draw(owner({ bibliography: artefact([none]) }));
     const r = row(none.id);
     expect(r.querySelector(".cite-read")?.textContent).toBe(citeReadNoExtract("arxiv.org"));
     expect(r.querySelector(".cite-lookup")).toBeNull();
@@ -1391,7 +1391,7 @@ describe("what a row says after Look it up", () => {
     let pressed = 0;
     await draw(
       owner({
-        citations: artefact([CENTRAL, LOOKED]),
+        bibliography: artefact([CENTRAL, LOOKED]),
         investigate: async () => {
           pressed++;
         },
@@ -1443,7 +1443,7 @@ const INVESTIGATION: NonNullable<CitedWork["investigation"]> = {
 
 describe("a kept Dig deeper answer", () => {
   it("is drawn on the owner's row, with no Dig deeper and no Dig deeper again", async () => {
-    await draw(owner({ citations: artefact([{ ...CENTRAL, investigation: INVESTIGATION }, FAMOUS]) }));
+    await draw(owner({ bibliography: artefact([{ ...CENTRAL, investigation: INVESTIGATION }, FAMOUS]) }));
     const r = row(CENTRAL.id);
     expect(r.querySelector(".cite-inv .cite-inv-text")?.textContent).toBe(
       "The abstract on arxiv.org says the model does this.",
@@ -1456,11 +1456,11 @@ describe("a kept Dig deeper answer", () => {
   it("is on no visitor row", async () => {
     await act(async () =>
       root.render(
-        createElement(CitationsPanel, {
+        createElement(BibliographyPanel, {
           head: null,
           access: {
             kind: "visitor",
-            citations: {
+            bibliography: {
               capped: false,
               citations: [
                 {
@@ -1490,7 +1490,7 @@ describe("a kept Dig deeper answer", () => {
   });
 
   it("folds a kept answer to its first part, and opens to every part, what was read, the sources and the date", async () => {
-    await draw(owner({ citations: artefact([{ ...CENTRAL, investigation: INVESTIGATION }]) }));
+    await draw(owner({ bibliography: artefact([{ ...CENTRAL, investigation: INVESTIGATION }]) }));
     const r = row(CENTRAL.id);
     expect([...r.querySelectorAll(".cite-inv-lead")].map((n) => n.textContent)).toEqual(["Does it back the claim?"]);
     expect(r.querySelector(".cite-inv-prov")).toBeNull();
@@ -1521,7 +1521,7 @@ describe("a kept Dig deeper answer", () => {
   });
 
   it("on a looked-up row with no matching extract, says so rather than 'could not confirm'", async () => {
-    await draw(owner({ citations: artefact([{ ...LOOKED, investigation: INVESTIGATION }]) }));
+    await draw(owner({ bibliography: artefact([{ ...LOOKED, investigation: INVESTIGATION }]) }));
     const r = row(LOOKED.id);
     await act(async () => r.querySelector<HTMLButtonElement>(".cite-inv-toggle")?.click());
     const prov = r.querySelector(".cite-inv-prov")?.textContent ?? "";
@@ -1549,7 +1549,7 @@ describe("a kept Dig deeper answer", () => {
       readAt: "2026-10-01T12:00:00.000Z",
       passages: [{ chunk: "c7", page: 4, text: "The loss scales as a power-law with model size.", bears: "supports" }],
     };
-    await draw(owner({ citations: artefact([{ ...CENTRAL, investigation: { ...INVESTIGATION, paper } }]) }));
+    await draw(owner({ bibliography: artefact([{ ...CENTRAL, investigation: { ...INVESTIGATION, paper } }]) }));
     const r = row(CENTRAL.id);
     expect(r.querySelector(".cite-inv .cite-lookup-label")?.textContent).toBe(`${INVESTIGATION_LABEL_WITH_PAPER}:`);
     expect(r.querySelector(".cite-inv .cite-quote"), "passages show only when opened").toBeNull();
@@ -1574,7 +1574,7 @@ describe("a kept Dig deeper answer", () => {
       { state: "not-confirmed", requestedUrl: "https://arxiv.org/pdf/1", finalUrl: "https://arxiv.org/pdf/1", host: "arxiv.org", readAt: AT },
       { state: "identity-conflict", requestedUrl: "https://doi.org/10.1/z", host: "doi.org", readAt: AT },
     ] as InvestigatedPaper[]) {
-      await draw(owner({ citations: artefact([{ ...CENTRAL, investigation: { ...INVESTIGATION, paper } }]) }));
+      await draw(owner({ bibliography: artefact([{ ...CENTRAL, investigation: { ...INVESTIGATION, paper } }]) }));
       const r = row(CENTRAL.id);
       expect(r.querySelector(".cite-inv .cite-lookup-label")?.textContent).toBe(`${INVESTIGATION_LABEL}:`);
       /* The same row re-rendered keeps its open state from the last turn. */
@@ -1597,7 +1597,7 @@ describe("a kept Dig deeper answer", () => {
       readAt: AT,
       passages: [],
     };
-    await draw(owner({ citations: artefact([{ ...CENTRAL, investigation: { ...INVESTIGATION, paper: none } }]) }));
+    await draw(owner({ bibliography: artefact([{ ...CENTRAL, investigation: { ...INVESTIGATION, paper: none } }]) }));
     const r = row(CENTRAL.id);
     const toggle = r.querySelector<HTMLButtonElement>(".cite-inv-toggle");
     if (toggle?.getAttribute("aria-expanded") !== "true") await act(async () => toggle?.click());
@@ -1614,7 +1614,7 @@ describe("a kept Dig deeper answer", () => {
         { url: "https://safe.example/paper", title: "<b>Source title</b>" },
       ],
     };
-    await draw(owner({ citations: artefact([{ ...CENTRAL, investigation: unsafe }]) }));
+    await draw(owner({ bibliography: artefact([{ ...CENTRAL, investigation: unsafe }]) }));
     const r = row(CENTRAL.id);
     expect(r.querySelector("img, b")).toBeNull();
     expect(r.querySelector(".cite-inv-text")?.textContent).toContain("<img src=x onerror=alert(1)>");
@@ -1669,7 +1669,7 @@ describe("a row whose work is already an article here", () => {
       ...CENTRAL,
       inSpideryarn: { slug: "my-copy-spya-a2b3c4", whose: "yours", matchedBy: "doi", title: "My copy" },
     });
-    await draw(owner({ citations: artefact([owned, FAMOUS]) }));
+    await draw(owner({ bibliography: artefact([owned, FAMOUS]) }));
     const a = row(owned.id).querySelector<HTMLAnchorElement>(".cite-here a");
     expect(a?.textContent).toBe("In your library");
     expect(a?.getAttribute("href")).toBe("/read/my-copy-spya-a2b3c4");
@@ -1688,7 +1688,7 @@ describe("a row whose work is already an article here", () => {
       ...CENTRAL,
       inSpideryarn: { slug: "theirs-spya-d5e6f7", whose: "public", matchedBy: "title", title: "Central, as shared" },
     });
-    await draw(owner({ citations: artefact([shared]) }));
+    await draw(owner({ bibliography: artefact([shared]) }));
     const line = row(shared.id).querySelector(".cite-here");
     expect(line?.querySelector("a")?.textContent).toBe("On the public shelf");
     expect(line?.querySelector(".cite-here-how")?.textContent).toContain("matched by title");
@@ -1704,7 +1704,7 @@ describe("a row whose work is already an article here", () => {
       ...FAMOUS,
       inSpideryarn: { slug: "pdf-spya-p5q6r7", whose: "yours", matchedBy: "guessed-id", title: "My PDF" },
     });
-    await draw(owner({ citations: artefact([archived, uploaded]) }));
+    await draw(owner({ bibliography: artefact([archived, uploaded]) }));
     expect(row(archived.id).querySelector(".cite-here a")?.textContent).toBe("In your library · archived");
     const a = row(uploaded.id).querySelector<HTMLAnchorElement>(".cite-here a");
     expect(a?.textContent).toBe("In your library");
@@ -1719,7 +1719,7 @@ describe("a row whose work is already an article here", () => {
     /* PublicCitedWork cannot name this field. The cast models a wire payload
        that violated that type, so the panel's visitor arm is independently
        pinned rather than trusting a compile-time promise about JSON. */
-    const citations = { citations: [leaked], capped: false } as unknown as PublicCitations;
+    const citations = { citations: [leaked], capped: false } as unknown as PublicBibliography;
     await drawVisitor(citations);
     expect(row(leaked.id).querySelector(".cite-here")).toBeNull();
     expect(host.textContent).not.toContain("Private copy");
@@ -1787,7 +1787,7 @@ describe("an influence Dig deeper found on the web", () => {
   });
 
   it("says *from the web* beside the bar, and nothing of the kind on a row with the list's own or none", async () => {
-    await draw(owner({ citations: artefact([DUG, FAMOUS, UNKNOWN, DUG_STALE]) }), 0);
+    await draw(owner({ bibliography: artefact([DUG, FAMOUS, UNKNOWN, DUG_STALE]) }), 0);
     const meta = row(DUG.id).querySelector(".cite-meta")!;
     const bars = meta.querySelector(".score-bars")!;
     expect(bars.querySelectorAll(".score-bar")).toHaveLength(2);
@@ -1805,7 +1805,7 @@ describe("an influence Dig deeper found on the web", () => {
   });
 
   it("its card says an AI estimate from web evidence, the host, the page's words and the day", async () => {
-    await draw(owner({ citations: artefact([DUG]) }), 0);
+    await draw(owner({ bibliography: artefact([DUG]) }), 0);
     const card = await cardFor(row(DUG.id).querySelector(".cite-influence-web")!);
     const said = `${card.head} ${card.body}`;
     expect(said).toContain("an AI estimate from web evidence");
@@ -1816,7 +1816,7 @@ describe("an influence Dig deeper found on the web", () => {
   });
 
   it("marks the quoted words as the page's, inside our sentence", async () => {
-    await draw(owner({ citations: artefact([DUG]) }), 0);
+    await draw(owner({ bibliography: artefact([DUG]) }), 0);
     const label = row(DUG.id).querySelector(".cite-influence-web")!;
     await press(label, "mouse");
     const quote = document.querySelector('[role="tooltip"] q.cite-influence-quote');
@@ -1826,7 +1826,7 @@ describe("an influence Dig deeper found on the web", () => {
   });
 
   it("opens by touch and by keyboard focus's click, and closes on scroll", async () => {
-    await draw(owner({ citations: artefact([DUG]) }), 0);
+    await draw(owner({ bibliography: artefact([DUG]) }), 0);
     const label = row(DUG.id).querySelector(".cite-influence-web")!;
     expect(label.tagName).toBe("BUTTON");
     await press(label, "touch", "mouse");
@@ -1837,7 +1837,7 @@ describe("an influence Dig deeper found on the web", () => {
   });
 
   it("offers the influence order when the only influence on the list came from the web", async () => {
-    await draw(owner({ citations: artefact([UNKNOWN, DUG]) }), 0, undefined, "influence");
+    await draw(owner({ bibliography: artefact([UNKNOWN, DUG]) }), 0, undefined, "influence");
     const labels = [...host.querySelectorAll(".gloss-sort-btn")].map((b) => b.textContent);
     expect(labels).toContain("influence");
     expect(host.querySelector('.gloss-sort-btn[aria-pressed="true"]')?.textContent).toBe("influence");
@@ -1846,7 +1846,7 @@ describe("an influence Dig deeper found on the web", () => {
 
   it("a visitor's row, which never has a Dig deeper answer, draws the list's own", async () => {
     const { key: _key, investigation: _inv, ...shared } = DUG_KNOWN;
-    await drawVisitor({ capped: false, citations: [shared] } as PublicCitations);
+    await drawVisitor({ capped: false, citations: [shared] } as PublicBibliography);
     expect(row(DUG_KNOWN.id).querySelector(".cite-influence-web")).toBeNull();
     expect(row(DUG_KNOWN.id).querySelector(".score-bars")?.getAttribute("aria-label")).toContain("(the model's memory) 10 out of 100");
   });
@@ -1884,7 +1884,7 @@ describe("Crossref's citation count on a row (plan 261005i)", () => {
   });
 
   it("draws it on the quiet line beside the scores, as words and never a bar", async () => {
-    await draw(owner({ citations: artefact([counted(12_480, { influence: 0.9 }), CENTRAL]) }));
+    await draw(owner({ bibliography: artefact([counted(12_480, { influence: 0.9 }), CENTRAL]) }));
     const line = said();
     expect(line?.textContent).toBe("cited 12,480 times · Crossref");
     const meta = row("spya-c2t3d4").querySelector(".cite-meta")!;
@@ -1898,21 +1898,21 @@ describe("Crossref's citation count on a row (plan 261005i)", () => {
   });
 
   it("sits alongside *influence unknown* rather than answering it", async () => {
-    await draw(owner({ citations: artefact([counted(357)]) }));
+    await draw(owner({ bibliography: artefact([counted(357)]) }));
     expect(row("spya-c2t3d4").querySelector(".cite-influence-unknown")?.textContent).toBe("influence unknown");
     expect(said()?.textContent).toBe("cited 357 times · Crossref");
   });
 
   it("says once, and says zero as Crossref recording none", async () => {
-    await draw(owner({ citations: artefact([counted(1)]) }));
+    await draw(owner({ bibliography: artefact([counted(1)]) }));
     expect(said()?.textContent).toBe("cited once · Crossref");
-    await draw(owner({ citations: artefact([counted(0)]) }));
+    await draw(owner({ bibliography: artefact([counted(0)]) }));
     expect(said()?.textContent).toBe("no citations recorded · Crossref");
     expect(row("spya-c2t3d4").textContent).not.toContain("cited 0 times");
   });
 
   it("gives the day it was read and what the number leaves out, in the card", async () => {
-    await draw(owner({ citations: artefact([counted(357)]) }));
+    await draw(owner({ bibliography: artefact([counted(357)]) }));
     const card = await cardFor(said()!);
     const text = `${card.head} ${card.body}`;
     expect(text).toContain("Crossref’s count on 4 October 2026.");
@@ -1923,7 +1923,7 @@ describe("Crossref's citation count on a row (plan 261005i)", () => {
   });
 
   it("opens that card for a finger, and closes it on scroll", async () => {
-    await draw(owner({ citations: artefact([counted(357)]) }));
+    await draw(owner({ bibliography: artefact([counted(357)]) }));
     await press(said()!, "touch", "mouse");
     expect(document.querySelector('[role="tooltip"]')?.textContent).toContain("4 October 2026");
     expect(said()?.getAttribute("aria-expanded")).toBe("true");
@@ -1934,7 +1934,7 @@ describe("Crossref's citation count on a row (plan 261005i)", () => {
 
   it("is drawn for a visitor too: a public count of a public DOI", async () => {
     const { key: _key, ...shared } = counted(357);
-    await drawVisitor({ capped: false, citations: [shared] } as PublicCitations);
+    await drawVisitor({ capped: false, citations: [shared] } as PublicBibliography);
     expect(said()?.textContent).toBe("cited 357 times · Crossref");
   });
 
@@ -1948,7 +1948,7 @@ describe("Crossref's citation count on a row (plan 261005i)", () => {
       undefined,
     ] as (Registry | undefined)[]) {
       const { registry: _none, ...bare } = counted(357);
-      await draw(owner({ citations: artefact([registry === undefined ? bare : { ...bare, registry }]) }));
+      await draw(owner({ bibliography: artefact([registry === undefined ? bare : { ...bare, registry }]) }));
       expect(said(), JSON.stringify(registry)).toBeNull();
       expect(row("spya-c2t3d4").textContent).not.toMatch(/cited \d|no citations recorded/);
     }
@@ -1969,9 +1969,9 @@ describe("Crossref's citation count on a row (plan 261005i)", () => {
     for (const visitor of [false, true]) {
       if (visitor) {
         const { key: _key, ...shared } = counted(357);
-        await drawVisitor({ capped: false, citations: [shared] } as PublicCitations);
+        await drawVisitor({ capped: false, citations: [shared] } as PublicBibliography);
       } else {
-        await draw(owner({ citations: artefact([counted(357)]) }));
+        await draw(owner({ bibliography: artefact([counted(357)]) }));
       }
       const about = host.querySelector<HTMLButtonElement>(".mode-band > .band-about");
       expect(about, "no (i) to open").not.toBeNull();
@@ -2014,7 +2014,7 @@ describe("opening the band on one work", () => {
     try {
       await act(async () =>
         root.render(
-          createElement(CitationsPanel, {
+          createElement(BibliographyPanel, {
             head: null,
             access: { kind: "owner", owner: owner() },
             order: "prioritised",
@@ -2065,9 +2065,9 @@ describe("opening the band on one work", () => {
     let taken = 0;
     await act(async () =>
       root.render(
-        createElement(CitationsPanel, {
+        createElement(BibliographyPanel, {
           head: null,
-          access: { kind: "owner", owner: owner({ status: "loading", citations: null }) },
+          access: { kind: "owner", owner: owner({ status: "loading", bibliography: null }) },
           order: "prioritised",
           onOrder: () => {},
           bar: null,

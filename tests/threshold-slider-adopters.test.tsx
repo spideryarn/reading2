@@ -19,9 +19,9 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { BlockId, Citations, CitedWork, Glossary, GlossaryEntry } from "../src/types.js";
+import type { BlockId, Bibliography, CitedWork, Glossary, GlossaryEntry } from "../src/types.js";
 import type { GlossaryOwner } from "../src/web/GlossaryPanel.js";
-import type { UseCitations } from "../src/web/useCitations.js";
+import type { UseBibliography } from "../src/web/useBibliography.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -39,7 +39,7 @@ vi.mock("../src/web/lib/supabase.js", () => ({
 }));
 
 const { GlossaryPanel } = await import("../src/web/GlossaryPanel.js");
-const { CitationsPanel } = await import("../src/web/CitationsPanel.js");
+const { BibliographyPanel } = await import("../src/web/BibliographyPanel.js");
 
 const BLOCK = "spya-k3m9qt" as BlockId;
 const noop = () => {};
@@ -128,8 +128,8 @@ const WORKS = [
   work("spya-g8h9j2", "Passing", 0.2, 0.2),
 ];
 
-function citationsOwner(): UseCitations {
-  const citations: Citations = {
+function bibliographyOwner(): UseBibliography {
+  const citations: Bibliography = {
     version: "test",
     generator: "test",
     slug: "a-piece",
@@ -141,7 +141,7 @@ function citationsOwner(): UseCitations {
   };
   return {
     status: "ready",
-    citations,
+    bibliography: citations,
     stale: false,
     outdated: false,
     slug: "a-piece",
@@ -199,12 +199,12 @@ async function drawGlossary(gate: number | null, onGate: (gate: number | null) =
   );
 }
 
-async function drawCitations(bar: number | null, onBar: (bar: number | null) => void = noop): Promise<void> {
+async function drawBibliography(bar: number | null, onBar: (bar: number | null) => void = noop): Promise<void> {
   await act(async () =>
     root.render(
-      createElement(CitationsPanel, {
+      createElement(BibliographyPanel, {
         head: null,
-        access: { kind: "owner", owner: citationsOwner() },
+        access: { kind: "owner", owner: bibliographyOwner() },
         order: "prioritised",
         onOrder: noop,
         bar,
@@ -323,7 +323,7 @@ describe("Citations' threshold row", () => {
     "How high a work has to score to stay on screen: two parts relevance to one part influence, or relevance alone where the influence is unknown. Left shows more works, right fewer.";
 
   it("at its default: every attribute, the count, the foot line, and no reset", async () => {
-    await drawCitations(null);
+    await drawBibliography(null);
     expect(rowAsDrawn()).toEqual({
       shape: SHAPE,
       head: HEAD,
@@ -344,7 +344,7 @@ describe("Citations' threshold row", () => {
   });
 
   it("once moved: the reader's value, the panel's own count and note for it, and a reset to the default", async () => {
-    await drawCitations(0.6);
+    await drawBibliography(0.6);
     expect(rowAsDrawn()).toMatchObject({
       head: [...HEAD, "button.gloss-gate-reset"],
       max: "0.8",
@@ -357,19 +357,19 @@ describe("Citations' threshold row", () => {
   });
 
   it("a value past the data's top stretches the track to hold it, and says everything is hidden", async () => {
-    await drawCitations(0.95);
+    await drawBibliography(0.95);
     expect(rowAsDrawn()).toMatchObject({ max: "0.95", value: "0.95", shown: "0.95 · 0 of 3" });
     expect(rowAsDrawn().note).toBe("All 3 citations are hidden by this threshold. Drag the slider left to show them.");
   });
 
   it("nothing hidden still has a foot line", async () => {
-    await drawCitations(0);
+    await drawBibliography(0);
     expect(rowAsDrawn()).toMatchObject({ shown: "0.00 · 3 of 3", note: "Nothing is hidden by this threshold." });
   });
 
   it("a drag calls back with the number, and the reset with null", async () => {
     const onBar = vi.fn();
-    await drawCitations(0.6, onBar);
+    await drawBibliography(0.6, onBar);
     await dragTo("cite-bar", 0.4);
     expect(onBar.mock.calls).toEqual([[0.4]]);
     await act(async () => host.querySelector<HTMLButtonElement>(".gloss-gate-reset")!.click());

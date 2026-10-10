@@ -5338,7 +5338,7 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
      "The model found", because the bibliography is its reading — a work cited
      only by name in running text is on it only if the model noticed it — while
      the links are not the model's: each is one the article gave, or a search
-     that says it is one (src/citations.ts § linkFor). Reception is current;
+     that says it is one (src/bibliography.ts § linkFor). Reception is current;
      claim sources can only be present on a legacy artefact, so neither half
      implies a current press searched for claims or found anything. */
   sources:

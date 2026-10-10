@@ -10,7 +10,7 @@ Citations marked in the prose (SPIDERYARN-READING2-3M,
 [260916b](../plans/260916b-citations-marked-in-the-prose-and-a-clearer-find-it-button.md)) did not
 appear — on one article. On the next article they did. Nothing in the data told the two apart: the
 panel listed all 42 works from the same response the prose was drawing nothing from, which is the one
-disagreement [`useCitations.ts`](../../src/web/useCitations.ts) states outright cannot happen, since
+disagreement [`useCitations.ts`](../../src/web/useBibliography.ts) states outright cannot happen, since
 *"the panel and the prose read the same `CitationsRead`"*.
 
 Every test passed. Sixty-odd of them, including nine written specifically for the marks, one of which

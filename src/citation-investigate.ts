@@ -1,7 +1,7 @@
 /**
  * **Dig deeper into one cited work, on demand** — Citations mode's *Dig
  * deeper* (*Investigate* until plan 261001p stage 2; the code keeps the old
- * name), `POST /api/citations/:slug/:id/investigate`.
+ * name), `POST /api/bibliography/:slug/:id/investigate`.
  * docs/plans/260930a-citations-investigate-one-work-on-demand.md is the spec;
  * SPIDERYARN-READING2-5Q is why.
  *
@@ -153,7 +153,7 @@ import type {
   Block,
   Citation,
   CitationInvestigation,
-  CitationsFound,
+  BibliographyFound,
   CitedWork,
   FindCitationResponse,
   InvestigatedPaper,
@@ -768,7 +768,7 @@ export interface CitationInvestigationWriter {
 export interface InvestigateCitationDeps {
   /** Owner-scoped reads: a stranger's slug is a 404. */
   readonly reader: {
-    loadCitations(slug: string): Promise<CitationsFound>;
+    loadBibliography(slug: string): Promise<BibliographyFound>;
     loadArticle(slug: string): Promise<Article>;
   };
   /**
@@ -894,7 +894,7 @@ function influenceLogFields(outcome: InfluenceOutcome): Record<string, string | 
 /**
  * **What the forced search is told it is looking for**: the work as the
  * article gives it — title, authors, year, and its own link when the article
- * gave one. Exported so the influence probe (evals/citations-influence-dig.ts)
+ * gave one. Exported so the influence probe (evals/bibliography-influence-dig.ts)
  * aims its search exactly as a press does.
  */
 export function digSubject(context: InvestigateContext): string {
@@ -928,7 +928,7 @@ export function makeInvestigateCitation(
   const stallMs = deps.stallMs ?? INVESTIGATE_STALL_MS;
 
   return async function investigateCitation(slug, entryId, profile) {
-    const { citations } = await deps.reader.loadCitations(slug);
+    const { bibliography: citations } = await deps.reader.loadBibliography(slug);
     const listed = citations.citations.find((w) => w.id === entryId);
     if (!listed) throw httpError(404, `No cited work "${entryId}" in "${slug}".`);
     /* Named: the narrowing above does not reach into the generators. */
@@ -990,7 +990,7 @@ export function makeInvestigateCitation(
           /* Its verdict is on the row for the reader to read, so it is Dig
              deeper's model whatever the article's switch says (plan 261001p
              stage 2, Sol F3). The lookup's fingerprint hashes the model's
-             generation, which Opus shares with Sonnet. `loadCitations` accepts
+             generation, which Opus shares with Sonnet. `loadBibliography` accepts
              this fixed Dig deeper hash as well as standalone Find's configured
              hash, so the saved verdict also reattaches while a Find-only model
              override is active. */
@@ -1017,10 +1017,10 @@ export function makeInvestigateCitation(
      * have just stored the find that makes the matched branch. So the row is
      * re-resolved (gone → stop), the find loaded fresh, and only then the
      * matched page, the request, the quotes the guard allows and the
-     * fingerprint are built — the same inputs `loadCitations` will hash.
+     * fingerprint are built — the same inputs `loadBibliography` will hash.
      */
     async function prepare() {
-      const { citations: fresh } = await deps.reader.loadCitations(slug);
+      const { bibliography: fresh } = await deps.reader.loadBibliography(slug);
       const current = fresh.citations.find((w) => w.id === entryId);
       if (!current) throw new Error(CITATION_INVESTIGATE_GONE.message);
       /* This press replaces whatever was attached at read time. */

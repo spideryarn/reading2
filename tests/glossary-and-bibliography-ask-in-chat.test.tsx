@@ -51,7 +51,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type Article,
   type ChatThread,
-  type Citations,
+  type Bibliography,
   type Debate,
   type Glossary,
   type Ideas,
@@ -220,7 +220,7 @@ const GLOSSARY: Glossary = {
   elapsedMs: 1,
 };
 
-const CITATIONS: Citations = {
+const BIBLIOGRAPHY: Bibliography = {
   version: "test",
   generator: "test",
   slug: SLUG,
@@ -260,7 +260,7 @@ const CITATIONS: Citations = {
   capped: false,
   generatedAt: "2026-09-01T09:00:00.000Z",
   elapsedMs: 1,
-} as Citations;
+} as Bibliography;
 
 /* The id alphabet has no `i`, `l`, `o` or `1`, so `?idea=` would refuse an
    id spelled with one. */
@@ -354,7 +354,7 @@ const ARTICLE: PublicArticle = {
   navLabelStatus: "ready",
   sharedBy: "public",
   glossary: { entries: GLOSSARY.entries },
-  citations: { citations: CITATIONS.citations, capped: false },
+  bibliography: { citations: BIBLIOGRAPHY.citations, capped: false },
   ideas: { ideas: IDEAS.ideas },
 } as PublicArticle;
 
@@ -405,7 +405,7 @@ let server: ChatThread[] = [];
 let nextAnswer = "";
 let minted = 0;
 let refuseNextSend = false;
-let citationsMayReply: Promise<void> | null = null;
+let bibliographyMayReply: Promise<void> | null = null;
 /** Ids the fake mints; the id alphabet has no `i`, `l`, `o` or `1`. */
 const mint = (): string => `spya-srv${"abcdefgh"[minted++ % 8]}22`;
 
@@ -487,7 +487,7 @@ function reply(url: string, method: string, body: unknown): Response {
   if (url === `/api/chat/${SLUG}`) return json({ threads: server });
   if (url.startsWith("/api/glossary/"))
     return json({ glossary: GLOSSARY, stale: false, outdated: false, profileChanged: false });
-  if (url.startsWith("/api/citations/")) return json({ citations: CITATIONS, stale: false, outdated: false });
+  if (url.startsWith("/api/bibliography/")) return json({ bibliography: BIBLIOGRAPHY, stale: false, outdated: false });
   if (url.startsWith("/api/ideas/"))
     return json({ ideas: IDEAS, stale: false, outdated: false, profileChanged: false });
   if (url === `/api/debate/${SLUG}`) return json({ debate: DEBATE, stale: false, outdated: false });
@@ -516,7 +516,7 @@ beforeEach(() => {
   nextAnswer = "";
   minted = 0;
   refuseNextSend = false;
-  citationsMayReply = null;
+  bibliographyMayReply = null;
   who.set(null);
   activation.resetActivations();
   resetExperimental();
@@ -531,8 +531,8 @@ beforeEach(() => {
       body = String(init?.body);
     }
     trace.push({ url, method, body });
-    if (url.startsWith("/api/citations/") && citationsMayReply !== null) {
-      return citationsMayReply.then(() => reply(url, method, body));
+    if (url.startsWith("/api/bibliography/") && bibliographyMayReply !== null) {
+      return bibliographyMayReply.then(() => reply(url, method, body));
     }
     return Promise.resolve(reply(url, method, body));
   });
@@ -692,7 +692,7 @@ describe("Ask in chat on a Glossary entry", () => {
     server.push(
       startedFrom("spya-srvz22", { mode: "glossary", itemId: QUOTED, quote: "the raw feels" }, "An older answer."),
       /* The same id under the other mode is a cited work's chat, not this entry's. */
-      startedFrom("spya-srvy22", { mode: "citations", itemId: UNQUOTED, quote: "A work" }, "Not the term's."),
+      startedFrom("spya-srvy22", { mode: "bibliography", itemId: UNQUOTED, quote: "A work" }, "Not the term's."),
     );
     await open(`?mode=glossary&term=${QUOTED}`);
     await until(() => marks().length === 1, "the mark");
@@ -795,7 +795,7 @@ describe("Ask in chat on a cited work", () => {
     expect(sent.threadId).toBe(fresh);
     expect(sent.question).toBe(seed);
     expect(sent.origin, "exactly the work that was pressed: its id and its title").toEqual({
-      mode: "citations",
+      mode: "bibliography",
       itemId: WORK,
       quote: WORK_TITLE,
     });
@@ -839,7 +839,7 @@ describe("Ask in chat on a cited work", () => {
   it("still marks a work whose chat was started under an older title", async () => {
     who.set(OWNER);
     server.push(
-      startedFrom("spya-srvz22", { mode: "citations", itemId: WORK, quote: "Consciousness explained (1st ed.)" }, "An older answer."),
+      startedFrom("spya-srvz22", { mode: "bibliography", itemId: WORK, quote: "Consciousness explained (1st ed.)" }, "An older answer."),
       startedFrom("spya-srvy22", { mode: "glossary", itemId: BARE_WORK, quote: "a term" }, "Not the work's."),
     );
     await open("?mode=sources");
@@ -858,16 +858,16 @@ describe("Ask in chat on a cited work", () => {
   });
 });
 
-describe.each(["glossary", "citations", "ideas"] as const)("a %s entry's chat across visits", (mode) => {
-  const itemId = { glossary: QUOTED, citations: WORK, ideas: IDEA }[mode];
-  const quote = { glossary: "qualia", citations: WORK_TITLE, ideas: IDEA_NAME }[mode];
+describe.each(["glossary", "bibliography", "ideas"] as const)("a %s entry's chat across visits", (mode) => {
+  const itemId = { glossary: QUOTED, bibliography: WORK, ideas: IDEA }[mode];
+  const quote = { glossary: "qualia", bibliography: WORK_TITLE, ideas: IDEA_NAME }[mode];
   const origin = { mode, itemId, quote };
-  /* Citations is Sources' Bibliography since 2026-10-09 (plan 261009l). */
-  const word = (m: "chat" | typeof mode) => (m === "citations" ? "sources" : m);
-  const search = `?mode=${word(mode)}${{ glossary: `&term=${QUOTED}`, citations: "", ideas: `&idea=${IDEA}` }[mode]}`;
-  const button = () => ({ glossary: entryButton, citations: () => workButton(WORK), ideas: ideaButton })[mode]();
+  /* Bibliography is Sources' Bibliography since 2026-10-09 (plan 261009l). */
+  const word = (m: "chat" | typeof mode) => (m === "bibliography" ? "sources" : m);
+  const search = `?mode=${word(mode)}${{ glossary: `&term=${QUOTED}`, bibliography: "", ideas: `&idea=${IDEA}` }[mode]}`;
+  const button = () => ({ glossary: entryButton, bibliography: () => workButton(WORK), ideas: ideaButton })[mode]();
 
-  async function visit(next: "chat" | "glossary" | "citations" | "ideas"): Promise<void> {
+  async function visit(next: "chat" | "glossary" | "bibliography" | "ideas"): Promise<void> {
     const params = new URLSearchParams(location.search);
     params.set("mode", word(next));
     if (next !== "chat") params.delete("thread");
@@ -1119,7 +1119,7 @@ describe("the way back from a chat to its item", () => {
   });
 
   it("goes back to a cited work: its row brought into view", async () => {
-    const line = await openChatFrom({ mode: "citations", itemId: WORK, quote: WORK_TITLE });
+    const line = await openChatFrom({ mode: "bibliography", itemId: WORK, quote: WORK_TITLE });
     expect(line.textContent).toBe(`Back to “${WORK_TITLE}” in Bibliography`);
     await act(async () => line.click());
     await until(() => param("mode") === "sources" && scrolled.length > 0, "Citations, on the row");
@@ -1130,11 +1130,11 @@ describe("the way back from a chat to its item", () => {
   });
 
   it("does not replay an unfinished focus when Citations is visited later", async () => {
-    let letCitationsReply!: () => void;
-    citationsMayReply = new Promise<void>((resolve) => {
-      letCitationsReply = resolve;
+    let letBibliographyReply!: () => void;
+    bibliographyMayReply = new Promise<void>((resolve) => {
+      letBibliographyReply = resolve;
     });
-    const line = await openChatFrom({ mode: "citations", itemId: WORK, quote: WORK_TITLE });
+    const line = await openChatFrom({ mode: "bibliography", itemId: WORK, quote: WORK_TITLE });
     await act(async () => line.click());
     await until(() => param("mode") === "sources", "Citations, while its list is loading");
     expect(scrolled, "there is no row to land on yet").toEqual([]);
@@ -1144,8 +1144,8 @@ describe("the way back from a chat to its item", () => {
     await act(async () => history.back());
     await until(() => param("mode") === "chat" && param("thread") === CHAT, "the chat again");
     await act(async () => {
-      letCitationsReply();
-      await citationsMayReply;
+      letBibliographyReply();
+      await bibliographyMayReply;
     });
     await settle();
 

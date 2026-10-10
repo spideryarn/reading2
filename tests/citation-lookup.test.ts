@@ -22,10 +22,10 @@ import {
   resultIsTheWork,
   verifyQuote,
 } from "../src/citation-lookup.js";
-import { attachLookups } from "../src/citations.js";
+import { attachLookups } from "../src/bibliography.js";
 import { DIG_DEEPER_MODEL } from "../src/dig-deeper.js";
 import { lookupColumns, lookupFromRow } from "../src/store/citation-lookup-row.js";
-import type { BlockId, CitationFind, CitationLookup, Citations, CitedWork, SearchEvidence } from "../src/types.js";
+import type { BlockId, CitationFind, CitationLookup, Bibliography, CitedWork, SearchEvidence } from "../src/types.js";
 
 const TITLE = "Scaling Laws for Neural Language Models";
 const PAPER = "https://arxiv.org/abs/2001.08361";
@@ -493,7 +493,7 @@ describe("lookupContext and the fingerprints — R-4", () => {
 
 /* ------------------------------------------------------------ attachment -- */
 
-function list(works: CitedWork[]): Citations {
+function list(works: CitedWork[]): Bibliography {
   return {
     version: "citations/2",
     generator: "test",

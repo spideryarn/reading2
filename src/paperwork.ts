@@ -125,7 +125,7 @@ ABOUT research funding — it is content, and the usual rules apply.${kind === "
  * docs/plans/261003d-paperwork-in-every-whole-piece-mode.md § Which modes.
  */
 export const PAPERWORK_EXEMPT: Record<string, string> = {
-  "src/citations.ts": "the reference list is what it reads; the paperwork is its content",
+  "src/bibliography.ts": "the reference list is what it reads; the paperwork is its content",
   "src/citation-investigate.ts": "investigates one citation, which lives in the reference list",
   "src/converse.ts": "chat, Learn, the tutorial and Explore answer the reader, who may ask who funded it",
   "src/live.ts": "talks with the reader, who may ask about the authors or the funding",

@@ -27,7 +27,7 @@ import { generationKey } from "./models.js";
    so no cycle at run time. pdf.js is loaded lazily there (src/pdf.ts), so the
    store's read path does not pay for it. */
 import { PAPER_SELECTION_VERSION } from "./paper-evidence.js";
-import type { CitationFind, Citations, CitationInvestigation, CitedWork, Meta } from "./types.js";
+import type { CitationFind, Bibliography, CitationInvestigation, CitedWork, Meta } from "./types.js";
 
 /**
  * **Bump when the prompt (`INVESTIGATE_SYSTEM`, src/citation-investigate.ts),
@@ -200,10 +200,10 @@ export function investigateContextHash(
  * the row the call is made from — a searched row's link is the found page.
  */
 export function attachInvestigations(
-  citations: Citations,
+  citations: Bibliography,
   stored: ReadonlyMap<string, CitationInvestigation>,
   contextHashOf: (work: CitedWork) => string,
-): Citations {
+): Bibliography {
   if (stored.size === 0) return citations;
   let changed = false;
   const works = citations.citations.map((work) => {

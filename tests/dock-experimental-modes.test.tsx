@@ -442,7 +442,7 @@ const NOTHING_SHARED: PublicArtefacts = {
   skim: false,
   faq: false,
   simpleSummary: false,
-  citations: false,
+  bibliography: false,
   debate: false,
 };
 const EVERYTHING_SHARED: PublicArtefacts = {
@@ -456,7 +456,7 @@ const EVERYTHING_SHARED: PublicArtefacts = {
   skim: true,
   faq: true,
   simpleSummary: true,
-  citations: true,
+  bibliography: true,
   debate: true,
 };
 

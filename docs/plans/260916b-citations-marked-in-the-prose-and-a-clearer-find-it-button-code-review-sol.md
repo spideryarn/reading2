@@ -1,10 +1,10 @@
 The build is broadly right. I found three P1s and one P2; all four are fixed. Full findings are in [the review output](/home/greg/code/spideryarn2/.claude/worktrees/fb3k3m-citations-marks-and-find-it/docs/plans/260916b-citations-marked-in-the-prose-and-a-clearer-find-it-button-code-review-sol.md).
 
-1. **P1** — An older citations GET could erase a successful *Find it* patch. [useCitations.ts:249](/home/greg/code/spideryarn2/.claude/worktrees/fb3k3m-citations-marks-and-find-it/src/web/useCitations.ts:249). Fixed with `armRefresh()` and a regression test.
+1. **P1** — An older citations GET could erase a successful *Find it* patch. [useCitations.ts:249](/home/greg/code/spideryarn2/.claude/worktrees/fb3k3m-citations-marks-and-find-it/src/web/useBibliography.ts:249). Fixed with `armRefresh()` and a regression test.
 
 2. **P1** — A citation inside an internal article link swallowed every subsequent touch tap. [ProseHoverCard.tsx:451](/home/greg/code/spideryarn2/.claude/worktrees/fb3k3m-citations-marks-and-find-it/src/web/ProseHoverCard.tsx:451). Fixed: the second tap now jumps, after note/glossary precedence.
 
-3. **P1** — The tooltip said the Scholar fallback remained “either way,” contradicting successful replacement. [CitationsPanel.tsx:613](/home/greg/code/spideryarn2/.claude/worktrees/fb3k3m-citations-marks-and-find-it/src/web/CitationsPanel.tsx:613). Fixed in code, test, and documentation.
+3. **P1** — The tooltip said the Scholar fallback remained “either way,” contradicting successful replacement. [CitationsPanel.tsx:613](/home/greg/code/spideryarn2/.claude/worktrees/fb3k3m-citations-marks-and-find-it/src/web/BibliographyPanel.tsx:613). Fixed in code, test, and documentation.
 
 4. **P2** — Bibliography-only works said “cited in 0 paragraphs.” [ProseHoverCard.tsx:1695](/home/greg/code/spideryarn2/.claude/worktrees/fb3k3m-citations-marks-and-find-it/src/web/ProseHoverCard.tsx:1695). Fixed to say “only in the references.”
 

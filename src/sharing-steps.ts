@@ -30,7 +30,7 @@
  * `illustrated` paints the `sketch`, and `skim` routes through the
  * `quotes` and the `ideas`. Five steps read their *own* previous column
  * (`glossary` and `quotes` append on *Find more*; `ideas`, `timeline` and
- * `citations` lend their ids forward) — that is covered by never letting one
+ * `bibliography` lend their ids forward) — that is covered by never letting one
  * step be made twice at once, so it needs no entry.
  *
  * `labels` is deliberately not one: it rewrites `tree` and `nav_label_status`
@@ -96,7 +96,7 @@ export const STEP_SHARING = {
   debate: { column: "debate", reads: [] },
   /* Reads the article only — not the stored Debate — and writes its own column. */
   "debate-claims": { column: "debateClaims", reads: [] },
-  citations: { column: "citations", reads: [] },
+  bibliography: { column: "bibliography", reads: [] },
   crossrefs: { column: "crossrefs", reads: [] },
   simple: { column: "simpleSummary", reads: [] },
 } as const satisfies Record<StepName, "exclusive" | SharingPolicy>;

@@ -23,7 +23,7 @@ vi.mock("../src/store/index.js", async () => {
     ...actual,
     loadArticle: spy("loadArticle"),
     loadGlossary: spy("loadGlossary"),
-    loadCitations: spy("loadCitations"),
+    loadBibliography: spy("loadBibliography"),
   };
 });
 

@@ -85,7 +85,7 @@ const { apiFetch, NONE_YET_AS_NULL } = await import("../src/web/lib/api.js");
 const NONE_YET_READS = [
   "quiz",
   "crossrefs",
-  "citations",
+  "bibliography",
   "simple",
   "ideas",
   "faq",
@@ -101,6 +101,16 @@ const NONE_YET_READS = [
   "illustrated",
   "arc",
 ] as const;
+
+/**
+ * **Old read paths still served, and for how long.** An expand and contract
+ * rename (plan 261009w, F1) keeps the old GET answering for one deploy, for a
+ * tab loaded before the rename, and that tab still sends the none-yet header,
+ * so the old path wraps its read too. Each entry names what removes it.
+ */
+const RETIRED_READ_PATHS: Readonly<Record<string, string>> = {
+  citations: "Bibliography's path until 2026-10-09; removed by plan 261009w's contract",
+};
 
 function assertNoneYetInventory(source: string, offlinePattern = NONE_YET_AS_NULL): void {
   /* Use actual call locations: comments must not stand in for a wrapper, and
@@ -144,7 +154,10 @@ function assertNoneYetInventory(source: string, offlinePattern = NONE_YET_AS_NUL
     (calls.length ? wrapped : plain).push(name);
   }
   expect(wrapped, "every helper call must belong to a recognised GET route").toHaveLength(helperCalls.length);
-  expect(wrapped.sort()).toEqual([...NONE_YET_READS].sort());
+  expect(wrapped.sort()).toEqual([...NONE_YET_READS, ...Object.keys(RETIRED_READ_PATHS)].sort());
+  /* The client never asks an old path, so the offline pattern below is the
+     current names only. */
+  for (const old of Object.keys(RETIRED_READ_PATHS)) wrapped.splice(wrapped.indexOf(old), 1);
 
   /* Membership probes alone never see an extra alternative. Check the whole
      expression too, while permitting the names in any order. */

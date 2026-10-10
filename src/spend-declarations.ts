@@ -149,7 +149,7 @@ export const DECLARATIONS: readonly Declaration[] = [
     since: "2026-10-01",
     account: "openrouter",
     file: "scripts/probes/261001g-exa-upstream-probe.mjs",
-    job: "citations-find",
+    job: "citation-find",
     wire: "chat",
     metered: false,
     why: "The seam is what is being measured: the probe reads each frame's raw `provider` and `openrouter_metadata` and the generation record, which `openRouterStream` and `openRouterJson` consume before a caller sees them, to find out whether the upstream label or the routing is wrong.",

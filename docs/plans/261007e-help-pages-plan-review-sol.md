@@ -33,7 +33,7 @@ The plan deletes `help-topics.tsx`, `help-modes.tsx`, and `help-faq.tsx`, but on
 - [`annotate-dialog-copy.test.tsx`](</var/tmp/spideryarn-worktrees/fbucftjt-help-pages-and-help-icon/tests/annotate-dialog-copy.test.tsx:21>)
 - [`dictation-double-stop-sends.test.tsx`](</var/tmp/spideryarn-worktrees/fbucftjt-help-pages-and-help-icon/tests/dictation-double-stop-sends.test.tsx:51>)
 - [`command-bar-double-stop.test.tsx`](</var/tmp/spideryarn-worktrees/fbucftjt-help-pages-and-help-icon/tests/command-bar-double-stop.test.tsx:67>)
-- [`citations-panel.test.tsx`](</var/tmp/spideryarn-worktrees/fbucftjt-help-pages-and-help-icon/tests/citations-panel.test.tsx:10>)
+- [`citations-panel.test.tsx`](</var/tmp/spideryarn-worktrees/fbucftjt-help-pages-and-help-icon/tests/bibliography-panel.test.tsx:10>)
 - [`search-thorough-duration-copy.test.ts`](</var/tmp/spideryarn-worktrees/fbucftjt-help-pages-and-help-icon/tests/search-thorough-duration-copy.test.ts:20>)
 - [`public-readable-sharing-page.test.tsx`](</var/tmp/spideryarn-worktrees/fbucftjt-help-pages-and-help-icon/tests/public-readable-sharing-page.test.tsx:548>)
 - [`spine-reading.test.ts`](</var/tmp/spideryarn-worktrees/fbucftjt-help-pages-and-help-icon/tests/spine-reading.test.ts:476>)

@@ -29,7 +29,7 @@ import { useSlow } from "../useSlow.js";
 import { useArc } from "../useArc.js";
 import { useGlossaryRead } from "../useGlossary.js";
 import { useQuotesRead } from "../useQuotes.js";
-import { useCitationsRead } from "../useCitations.js";
+import { useBibliographyRead } from "../useBibliography.js";
 import { useQuizRead } from "../useQuiz.js";
 import { useCrossrefs } from "../useCrossrefs.js";
 import type { SavedSearch } from "../useSearch.js";
@@ -623,19 +623,19 @@ function OwnedReader({
    * rather than only being listed in the band
    * (docs/plans/260916b-…, SPIDERYARN-READING2-3M).
    *
-   * `useCitationsRead` is the opening GET plus `applyFound` and
+   * `useBibliographyRead` is the opening GET plus `applyFound` and
    * `applyInvestigation`, and nothing else.
-   * `SourcesBand` (`CitationsBand` until 2026-10-09) layers `useStepJob`, `useAutoRun` and the POST that is
+   * `SourcesBand` (`BibliographyBand` until 2026-10-09) layers `useStepJob`, `useAutoRun` and the POST that is
    * *Find it on the web* on top of it — and those stay down there for the two
    * reasons the Quotes comment above gives, which apply here unchanged.
    *
    * **Unconditional.** Citations was behind the experimental switch until it
    * became Sources' Bibliography on 2026-10-09; even then, gating this
    * read would only have made its old address half-work. The band has to read
-   * the same list, so the saving was never real. src/web/useCitations.ts
-   * § CitationsRead.
+   * the same list, so the saving was never real. src/web/useBibliography.ts
+   * § BibliographyRead.
    */
-  const citations = useCitationsRead(slug);
+  const bibliography = useBibliographyRead(slug);
   /**
    * **The quiz, for the same reason and by the same split** — since 2026-09-30,
    * when its questions started being drawn in the prose in every mode
@@ -695,7 +695,7 @@ function OwnedReader({
           chatAnchors,
           glossary,
           quotes,
-          citations,
+          bibliography,
           quiz,
           crossrefs,
           arc,

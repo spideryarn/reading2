@@ -79,7 +79,7 @@ export function readingHarnessOwner(): Extract<ReaderCapability, { kind: "owner"
     chatAnchors: { summaries: [], add: noop, drop: noop },
     glossary: { ...emptyRead, glossary: null },
     quotes: { ...emptyRead, quotes: null },
-    citations: { ...emptyRead, citations: null },
+    bibliography: { ...emptyRead, bibliography: null },
     quiz: { ...emptyRead, quiz: null },
     crossrefs: null,
     arc: { arc: null },

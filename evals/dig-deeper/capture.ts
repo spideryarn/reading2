@@ -122,7 +122,7 @@ export interface CaptureDeps {
   library: NonNullable<Parameters<typeof searchFirst>[0]["library"]>;
   /** Production's investigate deps (src/store/index.ts § investigateCitationDeps). */
   investigateDeps: Parameters<typeof makeInvestigateCitation>[0];
-  loadCitations: Parameters<typeof makeInvestigateCitation>[0]["reader"]["loadCitations"];
+  loadBibliography: Parameters<typeof makeInvestigateCitation>[0]["reader"]["loadBibliography"];
   loadFind: Parameters<typeof makeInvestigateCitation>[0]["finds"]["load"];
   commit: string;
 }
@@ -272,7 +272,7 @@ export async function captureExample(example: Example, deps: CaptureDeps): Promi
 
   /* `prepare()`'s inputs again, to give the guard what production gave it —
      and checked against what production actually sent. */
-  const { citations } = await deps.loadCitations(example.slug);
+  const { bibliography: citations } = await deps.loadBibliography(example.slug);
   const row = citations.citations.find((w) => w.id === example.entryId);
   if (!row) throw new Error(`${example.id}: no cited work ${example.entryId}`);
   const { investigation: _earlier, ...work } = row;

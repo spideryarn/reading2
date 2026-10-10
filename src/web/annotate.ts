@@ -989,7 +989,7 @@ export function termMarks(
    The third kind this file finds for itself, and the only one that arrives
    with the article's own characters in hand. A term arrives as spellings and
    has to be matched; a comment arrives with an anchor; a citation arrives as a
-   verified slice of the block it was found in (src/citations.ts § verifyPlace),
+   verified slice of the block it was found in (src/bibliography.ts § verifyPlace),
    which makes this the simplest of the three and the one with the sharpest
    failure mode. */
 

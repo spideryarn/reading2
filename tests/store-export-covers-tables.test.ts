@@ -733,6 +733,9 @@ const COLUMNS_LEFT_OUT: Record<BundledTable, Readonly<Record<string, string>>> =
   },
   article_revisions: {
     id: "An internal uuid. `basedOnRevisionId` is kept because lineage is a fact about the piece.",
+    legacyCitations:
+      "Bibliography's column before plan 261009w, kept equal to `bibliography` by a trigger only " +
+      "until the contract migration drops it; the same list is augmentations/bibliography.json (F6).",
     stampedHtml: "Written whole as content/stamped.html — the one file a reader opens.",
     extractedHtml: "Written whole as content/extracted.html.",
     assets: "Written whole as content/assets.json, the image manifest.",
@@ -743,7 +746,7 @@ const COLUMNS_LEFT_OUT: Record<BundledTable, Readonly<Record<string, string>>> =
     ideas: "Written whole as augmentations/ideas.json.",
     quotes: "Written whole as augmentations/quotes.json.",
     timeline: "Written whole as augmentations/timeline.json.",
-    citations: "Written whole as augmentations/citations.json.",
+    bibliography: "Written whole as augmentations/bibliography.json.",
     quiz: "Written whole as augmentations/quiz.json.",
     faq: "Written whole as augmentations/faq.json.",
     relations: "Written whole as augmentations/relations.json.",

@@ -26,7 +26,7 @@ Recommended change: scope the promise precisely: “The displayed words are veri
 
 Evidence: The plan explicitly copies `validateOccurrences` ([plan:88](/home/greg/code/spideryarn2/.claude/worktrees/faq-mode/docs/plans/260916d-faq-mode.md:88)). That calls default, forgiving `findQuote` and retains the model’s string. The matcher documents this as a known gap: forgiving mode can accept `fall a part` for `fall apart`, and displayed quotations must use `"spaced"` and store the article slice ([quote-match.ts:238](/home/greg/code/spideryarn2/.claude/worktrees/faq-mode/src/quote-match.ts:238)).
 
-Recommended change: use the Citations discipline: `findQuote(block.text, quote, undefined, "spaced")`, then store `block.text.slice(start, end)` ([citations.ts:244](/home/greg/code/spideryarn2/.claude/worktrees/faq-mode/src/citations.ts:244)). Add a regression where split-word text is rejected and curly punctuation is accepted but replaced with the article’s exact characters. `articleWithIds` remains the right renderer; Quotes’ global location strategy is unnecessary unless unique relocation is deliberately added and counted.
+Recommended change: use the Citations discipline: `findQuote(block.text, quote, undefined, "spaced")`, then store `block.text.slice(start, end)` ([citations.ts:244](/home/greg/code/spideryarn2/.claude/worktrees/faq-mode/src/bibliography.ts:244)). Add a regression where split-word text is rejected and curly punctuation is accepted but replaced with the article’s exact characters. `articleWithIds` remains the right renderer; Quotes’ global location strategy is unnecessary unless unique relocation is deliberately added and counted.
 
 ### F5 — P2 — The density heuristic encourages summary-shaped padding
 

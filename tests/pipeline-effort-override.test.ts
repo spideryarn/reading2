@@ -4,7 +4,7 @@
  *
  * Until 2026-10-04 three places read the variable with an unchecked cast,
  * `process.env.SPIDERYARN_PIPELINE_EFFORT as Effort | undefined`: `effortFor`,
- * src/citations.ts and src/skim.ts. A cast checks nothing at run time, so a
+ * src/bibliography.ts and src/skim.ts. A cast checks nothing at run time, so a
  * typo (`hgih`) went to the provider as the effort, and an empty string did
  * too, because `"" ?? fallback` is `""`.
  *
@@ -14,7 +14,7 @@
  * it was one.
  *
  * This file is the helper and `effortFor`. The other two call sites are tested
- * where their stubs are: tests/citations.test.ts and tests/skim.test.ts, each
+ * where their stubs are: tests/bibliography.test.ts and tests/skim.test.ts, each
  * for its own fallback.
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";

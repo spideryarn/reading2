@@ -76,8 +76,8 @@ import { jsdom } from "./jsdom-lazy.js";
 import type {
   Block,
   ChatThread,
-  Citations,
-  CitationsFound,
+  Bibliography,
+  BibliographyFound,
   CitedWork,
   Comment,
   Meta,
@@ -100,11 +100,11 @@ import {
   commentStore,
   librarySearch,
   loadArticle,
-  loadCitations,
+  loadBibliography,
   loadGlossary,
 } from "./store/index.js";
 import { readerNotesDigest, threadTranscript } from "./reader-notes.js";
-import { CitationsListNotFound } from "./store/citations-list-not-found.js";
+import { BibliographyListNotFound } from "./store/bibliography-list-not-found.js";
 import { effectiveInfluence } from "./citation-effective-influence.js";
 import { citedByWords, readCitationRegistry, REGISTRY_NAME } from "./registry-work.js";
 import { errorFields, log, since } from "./log.js";
@@ -175,7 +175,7 @@ export const MAX_CITATION_ROWS = 25;
  * typical row is 250–400 characters, so on a real list this usually binds
  * before the row cap does.
  */
-export const CITATIONS_CHARS = 6_000;
+export const BIBLIOGRAPHY_CHARS = 6_000;
 /** How many blocks either side of a library passage `read_library_passage` may pull. */
 export const MAX_AROUND = 3;
 
@@ -1726,7 +1726,7 @@ async function readGlossary(ctx: ToolContext): Promise<ToolOutcome> {
 }
 
 /* ------------------------------------------------------- article_citations --
-   The stored citations list (src/citations.ts, docs/project/citations.md),
+   The stored citations list (src/bibliography.ts, docs/project/bibliography.md),
    read and never made. The formatter is two pure functions so the arithmetic
    is testable without a store; `readCitations` is only the load and its
    failures. tests/chat-citations-tool.test.ts. */
@@ -1747,7 +1747,7 @@ export interface CitationListing {
 
 /**
  * Where a row's link came from, in words — total over `CitationLinkFrom`, and
- * the same five facts `sourceOf` in src/web/CitationsPanel.tsx draws. The model
+ * the same five facts `sourceOf` in src/web/BibliographyPanel.tsx draws. The model
  * needs this more than a reader does: a Scholar search presented as "the paper"
  * is a link it will cite as the paper.
  */
@@ -1818,7 +1818,7 @@ function boundedCitationField(value: string, max = 400): string {
  * **The row's influence, through the one read path** (plan 261003m stage 2,
  * GPT Sol's F6): the number a kept *Dig deeper* answer read from the web when
  * the row has a current one, else the list's own, else unknown — what the
- * panel draws (src/citation-effective-influence.ts). `loadCitations` attaches
+ * panel draws (src/citation-effective-influence.ts). `loadBibliography` attaches
  * the owner's kept answers, so chat sees them. A web number says so and names
  * the host; the page's words and its address stay out of the row.
  */
@@ -1882,7 +1882,7 @@ const CITATION_ROW_GAP = "\n\n";
  * `why` is what makes "which of these are about thermodynamics?" answerable,
  * and it is Greg's *"based on their summary"* (3F).
  */
-export function citationRows(citations: Citations, query = ""): CitationListing {
+export function citationRows(citations: Bibliography, query = ""): CitationListing {
   const all = citations.citations;
   const needle = fold(query.trim());
   const matching =
@@ -1901,7 +1901,7 @@ export function citationRows(citations: Citations, query = ""): CitationListing 
     const attribution = count === null ? null : `${label} ${count}`;
     const cost = row.length + (rows.length > 0 ? CITATION_ROW_GAP.length : 0)
       + (attribution === null ? 0 : attribution.length + 1);
-    if (spent + cost > CITATIONS_CHARS && rows.length > 0) break;
+    if (spent + cost > BIBLIOGRAPHY_CHARS && rows.length > 0) break;
     spent += cost;
     rows.push(row);
     if (attribution !== null) citationCounts.push(attribution);
@@ -1919,8 +1919,8 @@ function works(n: number): string {
  * tested without a store. The `listed` counts are for `readCitations`' log line
  * and stay off the `ToolOutcome`, which is stored on the chat message.
  */
-function citationsResult(
-  found: CitationsFound,
+function bibliographyResult(
+  found: BibliographyFound,
   query: string,
 ): { outcome: ToolOutcome; listed: { total: number; matched: number; shown: number } | null } {
   const q = query.trim();
@@ -1943,7 +1943,7 @@ function citationsResult(
     };
   }
 
-  const { citations } = found;
+  const { bibliography: citations } = found;
   const listing = citationRows(citations, q);
   const { rows, citationCounts, matched, total, cut } = listing;
   const outdated = found.outdated
@@ -1953,7 +1953,7 @@ function citationsResult(
      the list said it left works out, so its length is a fact about the list and
      not about the article, and a model told "the article cites 80 works" will
      repeat it. Drawn only from `capped`, never inferred from the length — the
-     panel's rule (docs/project/citations.md § The orders). */
+     panel's rule (docs/project/bibliography.md § The orders). */
   const capped = citations.capped
     ? `The model that made it said the article cites more than it kept, so the list may leave works out: ${total} is the number in the stored list, not how many works the article cites.`
     : null;
@@ -2035,16 +2035,16 @@ function citationsResult(
   };
 }
 
-/** A loaded citations list as the model's tool result. Pure; see `citationsResult`. */
-export function citationsOutcome(found: CitationsFound, query: string): ToolOutcome {
-  return citationsResult(found, query).outcome;
+/** A loaded citations list as the model's tool result. Pure; see `bibliographyResult`. */
+export function bibliographyOutcome(found: BibliographyFound, query: string): ToolOutcome {
+  return bibliographyResult(found, query).outcome;
 }
 
 /**
  * This article's citations list, if one has been made.
  *
- * **Only `CitationsListNotFound` means there is none** (GPT Sol F7).
- * `loadCitations` can also throw a 404 because the article itself disappeared;
+ * **Only `BibliographyListNotFound` means there is none** (GPT Sol F7).
+ * `loadBibliography` can also throw a 404 because the article itself disappeared;
  * status alone cannot distinguish the two. `readGlossary` above
  * catches everything as "no glossary", which turns a dropped database
  * connection into a confident false statement to the reader; this does not
@@ -2053,13 +2053,13 @@ export function citationsOutcome(found: CitationsFound, query: string): ToolOutc
  */
 async function readCitations(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolOutcome> {
   const query = typeof args.query === "string" ? args.query : "";
-  let found: CitationsFound;
+  let found: BibliographyFound;
   try {
-    found = await loadCitations(ctx.slug);
+    found = await loadBibliography(ctx.slug);
   } catch (err) {
     const label = describeCall("article_citations", args);
     const status = (err as { status?: unknown } | null)?.status;
-    if (err instanceof CitationsListNotFound) {
+    if (err instanceof BibliographyListNotFound) {
       /* The ordinary case: the step is off `DEFAULT_INGEST_STEPS`
          (src/pipeline.ts), so most articles have never had a list made. */
       return {
@@ -2089,7 +2089,7 @@ async function readCitations(args: Record<string, unknown>, ctx: ToolContext): P
         "Answer from the article itself, and if the reader asked about the list, tell them it could not be loaded.",
     };
   }
-  const { outcome, listed } = citationsResult(found, query);
+  const { outcome, listed } = bibliographyResult(found, query);
   log("model").info(
     {
       tool: "article_citations",

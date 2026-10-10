@@ -2856,11 +2856,11 @@ export interface PublicArtefacts {
    */
   simpleSummary: boolean;
   /**
-   * **The tenth, since 2026-09-29** — a stored Citations list, each work's
+   * **The tenth, since 2026-09-29** — a stored Bibliography, each work's
    * address re-judged at the boundary and the owner's *Find it* results left
    * behind. SPIDERYARN-READING2-56, plan 260929c stage 3.
    */
-  citations: boolean;
+  bibliography: boolean;
   /**
    * **The eleventh, since 2026-09-29** — a stored Debate. `owners-only` until
    * then, as a staging decision (the boundary its rows' addresses must pass was
@@ -3577,8 +3577,11 @@ export type StepName =
      *every* block — the notes and the bibliography are the whole point — where
      `ideas`, `timeline`, `quiz`, `faq` and `sketch` send the body only. Different
      bytes from every `ArticleStage`, so no row in `STAGE_EFFORT` or
-     `ARTICLE_RENDERER`; its effort is a constant in src/citations.ts. */
-  | "citations"
+     `ARTICLE_RENDERER`; its effort is a constant in src/bibliography.ts.
+
+     Called `citations` until 2026-10-09 (plan 261009w); the old name is read
+     as this one through `RETIRED_STEPS` (src/step-order.ts). */
+  | "bibliography"
   /* **Links between the article's own blocks** — a phrase in one block that
      refers to what another shows in detail. Ideas' article block, byte for byte
      up to the breakpoint, at `medium` effort: so it IS an `ArticleStage`. Not a mode: the links sit in the prose in every mode.
@@ -4318,7 +4321,7 @@ export type ChatAnchor =
  * Set on the turn that creates the thread and never again, like `anchor`.
  * Written by conditional spread, never `origin: undefined`.
  */
-export type ThreadOrigin = ClaimOrigin | LensOrigin | GlossaryOrigin | CitationsOrigin | IdeasOrigin;
+export type ThreadOrigin = ClaimOrigin | LensOrigin | GlossaryOrigin | BibliographyOrigin | IdeasOrigin;
 
 /** One of Debate's claims: the block it sits in and its words when the chat started. */
 export type ClaimOrigin = { mode: "debate"; blockId: BlockId; quote: string };
@@ -4342,8 +4345,12 @@ export type LensOrigin = { mode: "debate"; lens: string };
  */
 export type GlossaryOrigin = { mode: "glossary"; itemId: string; quote: string };
 
-/** One work the article cites: its id, and its title when the chat started. `GlossaryOrigin`'s rules. */
-export type CitationsOrigin = { mode: "citations"; itemId: string; quote: string };
+/**
+ * One work the article cites: its id, and its title when the chat started.
+ * `GlossaryOrigin`'s rules. Its mode was `citations` until 2026-10-09 (plan
+ * 261009w): `RETIRED_ORIGIN_MODES` reads that word as this one.
+ */
+export type BibliographyOrigin = { mode: "bibliography"; itemId: string; quote: string };
 
 /**
  * One of Ideas' propositions: its id, and its name when the chat started
@@ -4394,7 +4401,25 @@ export function isClaimOrigin(origin: ThreadOrigin): origin is ClaimOrigin {
 }
 
 /** The origin modes that are built. The route refuses any other. */
-export const ORIGIN_MODES = ["debate", "glossary", "citations", "ideas"] as const satisfies readonly ThreadOrigin["mode"][];
+export const ORIGIN_MODES = ["debate", "glossary", "bibliography", "ideas"] as const satisfies readonly ThreadOrigin["mode"][];
+
+/**
+ * **An origin mode's old word, and the mode it is now.** A chat started from a
+ * cited work was stored with `origin_mode = 'citations'` until 2026-10-09 (plan
+ * 261009w), and a tab loaded before that still sends it. The rows are not
+ * rewritten until the contract migration, so both readers translate through
+ * here: `originFromColumns` (src/thread-origin.ts) for a stored row, and the
+ * chat route's `parseOrigin` (src/routes.ts) for a request. Nothing writes an
+ * old word. The read may stay after the contract, as `RETIRED_STEPS` does.
+ */
+export const RETIRED_ORIGIN_MODES: Readonly<Record<string, (typeof ORIGIN_MODES)[number]>> = {
+  citations: "bibliography",
+};
+
+/** A retired origin mode's successor, or the value as it came. */
+export function currentOriginMode(mode: unknown): unknown {
+  return typeof mode === "string" && Object.hasOwn(RETIRED_ORIGIN_MODES, mode) ? RETIRED_ORIGIN_MODES[mode] : mode;
+}
 
 /**
  * Are these the same anchor? What the route's 409 and `withTurn`'s refusal
@@ -4428,7 +4453,7 @@ export function sameAnchor(stored: ChatAnchor | undefined, wanted: ChatAnchor): 
 export function sameOrigin(a: ThreadOrigin, b: ThreadOrigin): boolean {
   switch (a.mode) {
     case "glossary":
-    case "citations":
+    case "bibliography":
     case "ideas":
       return b.mode === a.mode && a.itemId === b.itemId;
     case "debate":
@@ -4849,13 +4874,13 @@ export interface TimelineResponse {
  */
 export type TimelineFound = TimelineResponse;
 
-/* -------------------------------------------------------------- citations --
-   Every work the piece cites — the `citations` column on `article_revisions`,
-   written by the `citations` step. docs/plans/260911g-citations-mode.md.
+/* -------------------------------------------------------------- bibliography --
+   Every work the piece cites — the `bibliography` column on `article_revisions`,
+   written by the `bibliography` step. docs/plans/260911g-citations-mode.md.
 
-   Here rather than in src/citations.ts for the reason every artefact's shape
+   Here rather than in src/bibliography.ts for the reason every artefact's shape
    is: the panel (stage 2) reads them, and a client module may not import a
-   stage. src/citations.ts re-exports what it needs.  */
+   stage. src/bibliography.ts re-exports what it needs.  */
 
 /**
  * Which rule gave a citation its link — drawn on the row, so a reader can
@@ -4870,7 +4895,7 @@ export type TimelineFound = TimelineResponse;
  *   wrong work is worse than a search.
  * - `web` — stage 3, *Find it on the web*; not written by stage 1.
  *
- * **The model never supplies a URL that is stored.** src/citations.ts §
+ * **The model never supplies a URL that is stored.** src/bibliography.ts §
  * `linkFor`.
  */
 export type CitationLinkFrom = "doi" | "arxiv" | "article" | "search" | "web";
@@ -4893,7 +4918,7 @@ export interface CitedWork {
   /**
    * **The dedupe key, stored so a re-run can inherit the id by it** — `doi:…`,
    * `arxiv:…`, `url:…` (an article-given link), else `work:<title>|<first
-   * author>|<year>`. src/citations.ts § `keysOf`.
+   * author>|<year>`. src/bibliography.ts § `keysOf`.
    */
   key: string;
   /** As the article gives it, ≤ 120 characters. */
@@ -4971,13 +4996,13 @@ export interface CitedWork {
   /**
    * **This work is already an article here, and one the reader may open** —
    * their own, or a public one. Attached at read time by the owner's
-   * `GET /api/citations` only (src/store/cited-in-spideryarn.ts), never stored,
+   * `GET /api/bibliography` only (src/store/cited-in-spideryarn.ts), never stored,
    * never on a visitor's list. docs/plans/260930b-citations-say-when-a-cited-work-is-already-in-spideryarn.md.
    */
   inSpideryarn?: CitedInSpideryarn;
   /**
    * **What Crossref or DataCite holds under the row's DOI or arXiv id** —
-   * written by the `citations` step after the model's list is built
+   * written by the `bibliography` step after the model's list is built
    * (src/citation-registry.ts, plan 261001a stage 5), so it is stored, unlike
    * the read-time fields above. `found` only when the registry's title agrees
    * with the article's; `conflict` when it does not — the article's identifier
@@ -5183,7 +5208,7 @@ export type InvestigatedPaper =
 export type InvestigatedPaperState = InvestigatedPaper["state"];
 
 /**
- * `POST /api/citations/:slug/:id/investigate` — SSE. Since plan 260930d,
+ * `POST /api/bibliography/:slug/:id/investigate` — SSE. Since plan 260930d,
  * first `stage` (`{ stage: "finding" }`) and one `lookup` (a
  * `FindCitationResponse`, **already stored**) when the press looks the work up,
  * then `stage` (`{ stage: "reading" }`); then any number of `delta`
@@ -5301,8 +5326,8 @@ export type CitationLookup =
 /**
  * What *Look it up* answers — `runCitationLookup` (src/citation-find.ts), sent
  * to the browser as the `lookup` frame of
- * `POST /api/citations/:slug/:id/investigate`. It was the body of
- * `POST /api/citations/:slug/:id/find` until that route was deleted on
+ * `POST /api/bibliography/:slug/:id/investigate`. It was the body of
+ * `POST /api/bibliography/:slug/:id/find` until that route was deleted on
  * 2026-10-04. **Two outcomes, and neither is an error**: a page that matched
  * and was kept, or nothing that matched — stored nowhere, and the row stays as
  * it was. A failed call fails the press, not a third outcome.
@@ -5396,7 +5421,7 @@ export interface CitationScoreDrops {
 /**
  * The most works one list holds. The prompt asks the model to keep the ones the
  * piece leans on most and to say `capped: true` when it left works out.
- * Here rather than in src/citations.ts because the panel's foot sentence names
+ * Here rather than in src/bibliography.ts because the panel's foot sentence names
  * the number.
  */
 export const MAX_CITATIONS = 80;
@@ -5404,14 +5429,14 @@ export const MAX_CITATIONS = 80;
 /**
  * Direct mentions kept per work — occurrences, not distinct paragraphs. The
  * first-cited jump needs one; the prompt and verifier both stop at three. Here
- * rather than in src/citations.ts for `MAX_CITATIONS`' reason: the hover card
+ * rather than in src/bibliography.ts for `MAX_CITATIONS`' reason: the hover card
  * says *at least* when a work has hit it, since later directly citing paragraphs
  * may not be in `citedAt`.
  */
 export const MAX_MENTIONS = 3;
 
-/** The artefact. The `citations` column on `article_revisions`. */
-export interface Citations {
+/** The artefact. The `bibliography` column on `article_revisions`. */
+export interface Bibliography {
   version: string;
   generator: string;
   slug: string;
@@ -5433,11 +5458,11 @@ export interface Citations {
 }
 
 /**
- * `GET /api/citations/:slug`. Two staleness facts, like the timeline's: no
+ * `GET /api/bibliography/:slug`. Two staleness facts, like the timeline's: no
  * profile is in this stage's stamp.
  */
-export interface CitationsResponse {
-  citations: Citations;
+export interface BibliographyResponse {
+  bibliography: Bibliography;
   /** The article moved underneath this — blocks, sections or the cited head. */
   stale: boolean;
   /** The article is the same and we would write this differently now. */
@@ -5445,7 +5470,7 @@ export interface CitationsResponse {
 }
 
 /** As `TimelineFound`: the same type, because there is no `profileChanged` to omit. */
-export type CitationsFound = CitationsResponse;
+export type BibliographyFound = BibliographyResponse;
 
 /* ------------------------------------------------------------------- quiz --
    The questions the piece can ask you back — `data/<slug>/quiz.json`, and the
@@ -6376,7 +6401,7 @@ export type CrossrefsFound = CrossrefsResponse;
 /**
  * **"If it has not been made yet, say so with `200 null`, not a 404."** A
  * request header, sent with any value, on every artefact read, `GET
- * /api/<name>/:slug`: quiz, crossrefs and citations — the three every owner's
+ * /api/<name>/:slug`: quiz, crossrefs and bibliography — the three every owner's
  * article view makes whichever mode is open — then, in plan 261006h, simple,
  * ideas, faq, timeline, debate, glossary and quotes, and in plan 261007n
  * tweets, relations, skim, sketch, illustrated and arc. The list is

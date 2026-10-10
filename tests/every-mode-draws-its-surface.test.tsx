@@ -91,7 +91,7 @@ import type {
   Article,
   BlockId,
   ChatThread,
-  Citations,
+  Bibliography,
   Debate,
   Faq,
   DebateClaimList,
@@ -385,7 +385,7 @@ const TIMELINE: Timeline = {
   elapsedMs: 1,
 };
 
-const CITATIONS: Citations = {
+const BIBLIOGRAPHY: Bibliography = {
   version: "test",
   generator: "test",
   slug: SLUG,
@@ -786,7 +786,7 @@ const EVERY_TARGET: Record<AutoRunTarget, true> = {
   debate: true,
   /* Debate's Claims list — armed one level down, by a press that lands on Claims. */
   "debate-claims": true,
-  citations: true,
+  bibliography: true,
   faq: true,
   relations: true,
   skim: true,
@@ -822,8 +822,8 @@ function artefact(url: string): Response | null {
     return has ? json({ timeline: TIMELINE, stale: false, outdated: false }) : GONE();
   if (url.startsWith("/api/debate/"))
     return has ? json({ debate: DEBATE, stale: false, outdated: false }) : GONE();
-  if (url.startsWith("/api/citations/"))
-    return has ? json({ citations: CITATIONS, stale: false, outdated: false }) : GONE();
+  if (url.startsWith("/api/bibliography/"))
+    return has ? json({ bibliography: BIBLIOGRAPHY, stale: false, outdated: false }) : GONE();
   /* Sources' Claims: the reader's checks (none), and the list. Before
      2026-10-09 nothing here opened Claims, so neither was served. */
   if (url.startsWith("/api/debate-claims/") && url.endsWith("/checks")) return json({ checks: [] });
@@ -1262,7 +1262,7 @@ const SPENDS: Record<Mode, Spend> = {
   sources: {
     kind: "delegated",
     presses: [
-      { search: "", steps: ["citations"], spends: [] },
+      { search: "", steps: ["bibliography"], spends: [] },
       { search: "?sources=reception", steps: ["debate"], spends: [] },
       { search: "?sources=claims", steps: ["debate-claims"], spends: [] },
     ],
@@ -1577,7 +1577,7 @@ const DRAWS: Record<Mode, Draws> = {
  * surface of its own.
  */
 const SOURCES_VIEWS_DRAW: readonly { search: string; where: string; says: string }[] = [
-  { search: "?mode=sources", where: ".mode-band.sources.citations", says: CITATION_TITLE },
+  { search: "?mode=sources", where: ".mode-band.sources.bibliography", says: CITATION_TITLE },
   { search: "?mode=sources&sources=reception", where: ".mode-band.sources.dbt", says: DEBATE_TITLE },
   { search: "?mode=sources&sources=claims", where: ".mode-band.sources.dbt", says: CLAIM_STATEMENT },
 ];

@@ -150,8 +150,8 @@ describe("freshness treats standard and high as one generation", () => {
   };
 
   it("lookupContextHash is the same at either power and different for another model (Sol F1)", () => {
-    const standard = lookupContextHash(LOOKUP, modelFor("citations-find", "standard"));
-    expect(lookupContextHash(LOOKUP, modelFor("citations-find", "high"))).toBe(standard);
+    const standard = lookupContextHash(LOOKUP, modelFor("citation-find", "standard"));
+    expect(lookupContextHash(LOOKUP, modelFor("citation-find", "high"))).toBe(standard);
     expect(lookupContextHash(LOOKUP, "someone/else-9")).not.toBe(standard);
   });
 

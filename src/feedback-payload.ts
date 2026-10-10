@@ -76,6 +76,7 @@ import { ARTICLE_VIEWS } from "./read-address.js";
 const RETIRED_STEPS: Readonly<Record<string, (typeof STEPS)[number]>> = {
   trajectory: "skim",
   hierarchy: "structure",
+  citations: "bibliography",
 };
 
 /** Which shape `FeedbackDiagnostics.payload` has. Stored in its own column. */
@@ -215,7 +216,7 @@ const STEPS = [
   "illustrated",
   "debate",
   "debate-claims",
-  "citations",
+  "bibliography",
   "crossrefs",
   "simple",
 ] as const;

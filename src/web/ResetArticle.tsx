@@ -78,7 +78,7 @@ export const RESET_EXTRA_NAME: Record<ExtraStep, string> = {
      their stored names. */
   debate: "Reception",
   "debate-claims": "Claims list",
-  citations: "Bibliography",
+  bibliography: "Bibliography",
   crossrefs: "Cross-references",
   simple: "Simple summary",
 };
@@ -558,7 +558,7 @@ export function ResetArticle({
     .map((stage) => stage.step);
   const names = extras.map(extraName);
   const regenerate = again && extras.length > 0;
-  const lookUps = extras.includes("glossary") || extras.includes("citations");
+  const lookUps = extras.includes("glossary") || extras.includes("bibliography");
 
   const failedAsking = failed?.retry ? { ...failed, retry: () => setPending("retry") } : failed;
 

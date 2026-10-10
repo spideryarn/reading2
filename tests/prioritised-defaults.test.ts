@@ -21,7 +21,7 @@ import type { CitedWork, GlossaryEntry, Quote } from "../src/types.js";
 import {
   CITATION_BAR_DEFAULT,
   priorityOf as citationPriority,
-} from "../src/web/CitationsPanel.js";
+} from "../src/web/BibliographyPanel.js";
 import { PRIORITY_GATE, priorityOf as termPriority } from "../src/web/GlossaryPanel.js";
 import { orderParam } from "../src/web/params.js";
 import {

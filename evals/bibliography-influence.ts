@@ -3,19 +3,19 @@
  * the number the same twice?** Plan 261003m: influence becomes a number only
  * when the model is confident it knows the work, otherwise unknown.
  *
- *   npx tsx evals/citations-influence.ts stored [slug …]                          # free
- *   npx tsx evals/citations-influence.ts run --arm=before --run=1 <slug …>        # paid: one call an article
- *   npx tsx evals/citations-influence.ts compare --a=before-1 --b=before-2 <slug …>   # free
+ *   npx tsx evals/bibliography-influence.ts stored [slug …]                          # free
+ *   npx tsx evals/bibliography-influence.ts run --arm=before --run=1 <slug …>        # paid: one call an article
+ *   npx tsx evals/bibliography-influence.ts compare --a=before-1 --b=before-2 <slug …>   # free
  *
  * **The arms are separated in time, not in code.** `run` calls production's own
- * `generateCitations` (src/citations.ts), the function the pipeline's
- * `citations` step calls, so it sends whatever prompt the checkout has: run
+ * `generateBibliography` (src/bibliography.ts), the function the pipeline's
+ * `bibliography` step calls, so it sends whatever prompt the checkout has: run
  * `before` on the commit before the prompt change and `after` on the commit
  * with it. Each result carries `PROMPT_VERSION` and a hash of `systemPrompt()`
  * so an arm run on the wrong commit shows.
  *
  * **What it writes.** Only files under `evals/results/citations-influence/`,
- * and never over one that is there. `generateCitations` returns the list and
+ * and never over one that is there. `generateBibliography` returns the list and
  * stores nothing (the step's caller does the storing). Its one database write is
  * the `ai_calls` row each call records: `run` opens the ledger with `withLedger`
  * (docs/project/cost-tracking.md). The tokens are in the result file as well.
@@ -32,7 +32,7 @@ import { loadEnvLocal } from "../src/env.js";
 import { isMain } from "../src/is-main.js";
 import type { CitedWork } from "../src/types.js";
 import type { NumberedReferenceList } from "../src/citation-reference-list.js";
-import { firstAuthor, keyWords } from "../src/citations.js";
+import { firstAuthor, keyWords } from "../src/bibliography.js";
 
 const OUT = path.join(import.meta.dirname, "results", "citations-influence");
 
@@ -180,7 +180,7 @@ async function stored(slugs: string[]): Promise<void> {
   const { environmentOwnerId, runAsOwner } = await import("../src/owner.js");
   const store = await import("../src/store/index.js");
   const { closeDb } = await import("../src/db/client.js");
-  const { CitationsListNotFound } = await import("../src/store/citations-list-not-found.js");
+  const { BibliographyListNotFound } = await import("../src/store/bibliography-list-not-found.js");
 
   await runAsOwner(environmentOwnerId(), async () => {
     if (slugs.length === 0) slugs = (await store.listArticles()).map((a) => a.slug);
@@ -189,19 +189,19 @@ async function stored(slugs: string[]): Promise<void> {
     let lists = 0;
     for (const slug of slugs) {
       /* Only "no list was made" is skipped; a failed read must not print as an empty corpus. */
-      let citations: Awaited<ReturnType<typeof store.loadCitations>>;
+      let citations: Awaited<ReturnType<typeof store.loadBibliography>>;
       try {
-        citations = await store.loadCitations(slug);
+        citations = await store.loadBibliography(slug);
       } catch (err) {
-        if (err instanceof CitationsListNotFound) continue;
+        if (err instanceof BibliographyListNotFound) continue;
         throw err;
       }
-      const works = citations.citations.citations;
+      const works = citations.bibliography.citations;
       if (works.length === 0) continue;
       lists++;
       const influences = works.map((w) => w.influence);
       all.push(...influences);
-      console.log(`${tallyLine(slug, tally(influences))}\t${citations.citations.version}`);
+      console.log(`${tallyLine(slug, tally(influences))}\t${citations.bibliography.version}`);
     }
     if (lists === 0) console.log("(no stored citations list among these articles)");
     else console.log(tallyLine(`ALL (${lists} lists)`, tally(all)));
@@ -216,7 +216,7 @@ async function run(arm: string, n: number, slugs: string[]): Promise<void> {
   const { environmentOwnerId, runAsOwner } = await import("../src/owner.js");
   const store = await import("../src/store/index.js");
   const { closeDb } = await import("../src/db/client.js");
-  const { generateCitations, systemPrompt, PROMPT_VERSION } = await import("../src/citations.js");
+  const { generateBibliography, systemPrompt, PROMPT_VERSION } = await import("../src/bibliography.js");
   const { withLedger } = await import("../src/cli-ledger.js");
 
   /* Refuse before spending anything, not after the first article. */
@@ -245,7 +245,7 @@ async function run(arm: string, n: number, slugs: string[]): Promise<void> {
         }
       }
       console.log(`${arm}-${n}: ${slug} (${PROMPT_VERSION}, prompt ${systemPromptSha256.slice(0, 12)}, ${article.blocks.length} blocks)`);
-      const result = await generateCitations({ article: { ...article, slug }, previous: null, power: "standard", referenceList });
+      const result = await generateBibliography({ article: { ...article, slug }, previous: null, power: "standard", referenceList });
       const record: Result = {
         slug,
         arm,
@@ -260,7 +260,7 @@ async function run(arm: string, n: number, slugs: string[]): Promise<void> {
           cacheRead: result.cacheReadTokens,
           cacheWrite: result.cacheWriteTokens,
         },
-        works: result.citations.citations.map(toResultWork),
+        works: result.bibliography.citations.map(toResultWork),
       };
       /* `wx`: a file that arrived since the check above is still not overwritten. */
       fs.writeFileSync(out, `${JSON.stringify(record, null, 2)}\n`, { flag: "wx" });

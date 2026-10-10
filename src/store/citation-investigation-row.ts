@@ -1,7 +1,7 @@
 /**
  * **A `CitationInvestigation` as `citation_investigations` columns, and back** —
  * the write half is src/store/pg-citation-investigations.ts, the read half
- * `loadCitations` in src/store/pg.ts. Its own file, importing nothing from
+ * `loadBibliography` in src/store/pg.ts. Its own file, importing nothing from
  * either, so src/store/pg.ts can use it without an import cycle.
  *
  * **The paper's columns (plan 261001a stage 3) are all null on an answer from

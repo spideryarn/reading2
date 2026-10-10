@@ -180,13 +180,13 @@ const MANIFEST = [
   "quotes.css",
   "timeline.css",
   /* Before the two sheets that place its mark: `.origin-chat` is complete
-     here, and debate.css and citations.css add placement only. */
+     here, and debate.css and bibliography.css add placement only. */
   "origin-chat.css",
   "debate.css",
   /* After the two `.gloss`-with-a-class-beside-it sheets it borrows from, and
-     setting nothing they set on the same element — citations.css's header. */
-  "citations.css",
-  /* After citations.css, and for its reason: `.faq` is `.gloss` with a class
+     setting nothing they set on the same element — bibliography.css's header. */
+  "bibliography.css",
+  /* After bibliography.css, and for its reason: `.faq` is `.gloss` with a class
      beside it, borrowing glossary.css and timeline.css, and setting nothing they
      set on the same element — faq.css's header. */
   "faq.css",

@@ -1,6 +1,6 @@
 /**
  * **Sources' chip row, for a test that draws one panel on its own** — the
- * header `SourcesBand` hands CitationsPanel and DebatePanel since
+ * header `SourcesBand` hands BibliographyPanel and DebatePanel since
  * 2026-10-09, built from the same selectors (sources-counts.ts), so a
  * panel test that presses a chip or reads its count is testing the row a
  * reader gets. docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md.

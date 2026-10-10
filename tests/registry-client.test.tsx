@@ -12,11 +12,11 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { checksOwner, claimListOwner } from "./helpers/debate-claims-owner.js";
 
-import type { BlockId, CitationRegistry, Citations, ClaimDebateRow, CitedWork, Debate, DebateCounts } from "../src/types.js";
-import type { UseCitations } from "../src/web/useCitations.js";
+import type { BlockId, CitationRegistry, Bibliography, ClaimDebateRow, CitedWork, Debate, DebateCounts } from "../src/types.js";
+import type { UseBibliography } from "../src/web/useBibliography.js";
 import type { UseDebate } from "../src/web/useDebate.js";
 
-const { CitationsPanel, byLineOf, registryConflictNote, workByLine } = await import("../src/web/CitationsPanel.js");
+const { BibliographyPanel, byLineOf, registryConflictNote, workByLine } = await import("../src/web/BibliographyPanel.js");
 const { readCitationRegistry, readRegistryWork } = await import("../src/registry-work.js");
 const { DebatePanel, rowWork } = await import("../src/web/DebatePanel.js");
 const { orderReceptionRows, receptionOrderOptions, rowYear } = await import("../src/web/debate-order.js");
@@ -145,8 +145,8 @@ afterEach(async () => {
   host.remove();
 });
 
-function owner(citations: CitedWork[]): UseCitations {
-  const artefact: Citations = {
+function owner(citations: CitedWork[]): UseBibliography {
+  const artefact: Bibliography = {
     version: "test",
     generator: "test",
     slug: "a-piece",
@@ -155,10 +155,10 @@ function owner(citations: CitedWork[]): UseCitations {
     capped: false,
     generatedAt: "2026-09-11T09:00:00.000Z",
     elapsedMs: 1,
-  } as Citations;
+  } as Bibliography;
   return {
     status: "ready",
-    citations: artefact,
+    bibliography: artefact,
     stale: false,
     outdated: false,
     slug: "a-piece",
@@ -180,13 +180,13 @@ function owner(citations: CitedWork[]): UseCitations {
     investigateDraft: null,
     investigateFailed: null,
     investigate: async () => {},
-  } as UseCitations;
+  } as UseBibliography;
 }
 
 async function draw(citations: CitedWork[]) {
   await act(async () =>
     root.render(
-      createElement(CitationsPanel, {
+      createElement(BibliographyPanel, {
         head: null,
         access: { kind: "owner", owner: owner(citations) },
         order: "document",

@@ -497,7 +497,7 @@ function reply(url: string, method: string): Response {
      Debate since 261006h, each of which the fall-through's `{}` is now a
      reported fault for rather than an `undefined` quietly published — and
      Tweets, Relations, Skim, Sketch and Illustrated since 261007n. */
-  if (/^\/api\/(glossary|quotes|quiz|citations|simple|faq|timeline|debate|tweets|relations|skim|sketch|illustrated)\//.test(url)) {
+  if (/^\/api\/(glossary|quotes|quiz|bibliography|simple|faq|timeline|debate|tweets|relations|skim|sketch|illustrated)\//.test(url)) {
     return new Response(null, { status: 404 });
   }
   /* **Arc too since 261007n, but as one that is there**: a missing arc starts
@@ -1529,7 +1529,7 @@ const NOTHING_AVAILABLE: PublicArtefacts = {
   skim: false,
   faq: false,
   simpleSummary: false,
-  citations: false,
+  bibliography: false,
   debate: false,
 };
 

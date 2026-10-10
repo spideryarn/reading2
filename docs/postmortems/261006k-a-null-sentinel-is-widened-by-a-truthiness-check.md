@@ -18,7 +18,7 @@ validate a parsed JSON value. The hook's state transition used that unchecked va
 absence, and cleared good state before any error could be reported.
 
 `git log -S 'if (!loaded'` and blame identify **`480d208a8`** as the introduction in both
-[`useQuiz.ts`](../../src/web/useQuiz.ts) and [`useCitations.ts`](../../src/web/useCitations.ts).
+[`useQuiz.ts`](../../src/web/useQuiz.ts) and [`useCitations.ts`](../../src/web/useBibliography.ts).
 Its intended change was replacing routine 404 replies with an opt-in null response while preserving
 the old 404 compatibility branch.
 

@@ -37,7 +37,7 @@ Files changed:
 - [src/citation-investigate.ts](/home/greg/code/spideryarn2/.claude/worktrees/citations-influence-unknown/src/citation-investigate.ts)
 - [tests/citation-influence.test.ts](/home/greg/code/spideryarn2/.claude/worktrees/citations-influence-unknown/tests/citation-influence.test.ts)
 - [tests/citation-investigate.test.ts](/home/greg/code/spideryarn2/.claude/worktrees/citations-influence-unknown/tests/citation-investigate.test.ts)
-- [docs/project/citations.md](/home/greg/code/spideryarn2/.claude/worktrees/citations-influence-unknown/docs/project/citations.md)
+- [docs/project/citations.md](/home/greg/code/spideryarn2/.claude/worktrees/citations-influence-unknown/docs/project/bibliography.md)
 - [261003m plan](/home/greg/code/spideryarn2/.claude/worktrees/citations-influence-unknown/docs/plans/261003m-citations-influence-unknown-unless-confident-and-dig-deeper-fills-it-in.md)
 - [Stage 2 review](/home/greg/code/spideryarn2/.claude/worktrees/citations-influence-unknown/docs/plans/261003m-citations-influence-code-review-2-sol.md)
 - [Postmortem](/home/greg/code/spideryarn2/.claude/worktrees/citations-influence-unknown/docs/postmortems/261003g-a-fence-covers-the-page-but-trusts-the-article-label.md)

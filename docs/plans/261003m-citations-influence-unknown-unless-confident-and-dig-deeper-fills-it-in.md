@@ -1,6 +1,6 @@
 # Citations: influence is unknown unless the model is confident, and Dig deeper fills it in
 
-Up: [plans.md](../project/plans.md) · the mode: [citations.md](../project/citations.md) · follows
+Up: [plans.md](../project/plans.md) · the mode: [citations.md](../project/bibliography.md) · follows
 [261003j](261003j-citations-say-only-what-the-bibliography-supports.md), which asked the question
 
 Each Citations row has an *influence* bar: how well known the cited work is in its own field. It

@@ -278,7 +278,7 @@ const BUDGET_CALLERS = [
   { file: "src/glossary.ts", exercised: "no: 600 + count × 340 is inline in the generator" },
   { file: "src/ideas.ts", exercised: "no: 400 + count × 420 is inline in the generator" },
   { file: "src/quotes.ts", exercised: "no: answerTokensFor(count) is exported but count is settled inside the generator" },
-  { file: "src/citations.ts", exercised: "no: answerEstimate() is a closure inside the generator" },
+  { file: "src/bibliography.ts", exercised: "no: answerEstimate() is a closure inside the generator" },
   { file: "src/faq.ts", exercised: "no: a constant answer (ANSWER_TOKENS), so it cannot refuse on length" },
   { file: "src/skim.ts", exercised: "no: a constant answer" },
   { file: "src/simple-summary.ts", exercised: "no: a constant answer" },

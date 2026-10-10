@@ -14,7 +14,7 @@
  * page of that press's web search. **The web one wins**, known or unknown,
  * because it has a source and the memory has none. It is used only while:
  *
- * - the answer is attached to the row, which `loadCitations` does only while
+ * - the answer is attached to the row, which `loadBibliography` does only while
  *   the answer's fingerprint is current; and
  * - it carries the current `INFLUENCE_VERSION`, so a later correction to the
  *   prompt or the checks drops old numbers without hiding the answers beside
@@ -24,7 +24,7 @@
  * investigation, so this returns the list's value for them.
  *
  * Browser-safe: imports types only. The bar, the threshold, the influence
- * order, whether that order is offered (src/web/CitationsPanel.tsx) and the
+ * order, whether that order is offered (src/web/BibliographyPanel.tsx) and the
  * owner's chat tool (src/chat-tools.ts) all read influence through here.
  */
 import type { CitationInvestigation } from "./types.js";

@@ -896,29 +896,29 @@ export type Task =
    * line would misreport both the money and the shape.
    */
   /**
-   * **Every work the piece cites** — src/citations.ts,
+   * **Every work the piece cites** — src/bibliography.ts,
    * docs/plans/260911g-citations-mode.md. Messages wire, capable tier: the
    * links are code's, but relevance is a reading of the whole argument.
    */
-  | "citations"
+  | "bibliography"
   /**
-   * **One cited work's own page, found on the web** — Citations mode's *Find
+   * **One cited work's own page, found on the web** — Bibliography's *Find
    * it*, src/citation-find.ts. Chat wire because `openrouter:web_search` is a
-   * server tool there and nowhere else; its own job rather than `citations`'
+   * server tool there and nowhere else; its own job rather than `bibliography`'s
    * because that one is a Messages-wire pipeline step over a whole article and
    * this is one reader-triggered search for one work, whose cost is billed
    * per search — folding them would hide the searches in the step's line.
    */
-  | "citations-find"
+  | "citation-find"
   /**
    * **An uploaded paper's own page, found on the web** — the second caller of
-   * `findWorkPage` (src/source-guess.ts). The same call as `citations-find`,
+   * `findWorkPage` (src/source-guess.ts). The same call as `citation-find`,
    * under its own name so the ledger can tell a reader pressing *Find it* from
    * an article opening and looking for itself.
    */
   | "upload-source-guess"
   /**
-   * **One cited work, looked into on demand** — Citations mode's *Investigate*,
+   * **One cited work, looked into on demand** — Bibliography's *Investigate*,
    * src/citation-investigate.ts. A streamed answer written with a few web
    * searches over the whole article, so explain's shape and explain's model;
    * its own job because one press reads the article about twice and runs its
@@ -1227,18 +1227,18 @@ export const TASK_TIER: Record<Task, Tier> = {
   debate: "capable",
   /* The same weighing as `debate`, for the claims a reader picked. */
   "debate-check": "capable",
-  citations: "capable",
+  bibliography: "capable",
   /* Capable, for `debate`'s reason: the whole job is weighing a handful of
      search results against one cited work and saying which, if any, is its
      own page. A shallow pick costs little here — code refuses a page whose
      title does not match — but a refusal is a work the reader goes without. */
-  "citations-find": "capable",
-  /* `citations-find`'s tier and its reason: the same prompt, the same pick. */
+  "citation-find": "capable",
+  /* `citation-find`'s tier and its reason: the same prompt, the same pick. */
   "upload-source-guess": "capable",
   /* Explain's tier, because it is explain's kind of work: prose about the
      article, with web search, that a reader reads as it arrives. */
   "citation-investigate": "capable",
-  /* The quick check's tier (`citations-find`), as plan 261001a says: weighing
+  /* The quick check's tier (`citation-find`), as plan 261001a says: weighing
      a few passages of a paper against one claim. Code checks every quote. */
   "citation-paper-passages": "capable",
   /* The tier of the press it runs inside. The press itself passes
@@ -1492,20 +1492,20 @@ export const TASK_WIRE: Record<Task, Wire> = {
   debate: "chat",
   /* `debate`'s reason: the web search is a chat/completions tool. */
   "debate-check": "chat",
-  citations: "messages",
+  bibliography: "messages",
   /* Chat, because `openrouter:web_search` is a server tool on chat/completions
      and does not exist on the Messages shape — `debate`'s reason. */
-  "citations-find": "chat",
-  /* Chat, for `citations-find`'s reason: it is the same web-search call. */
+  "citation-find": "chat",
+  /* Chat, for `citation-find`'s reason: it is the same web-search call. */
   "upload-source-guess": "chat",
-  /* Chat, for `citations-find`'s reason — the web-search server tool — and
+  /* Chat, for `citation-find`'s reason — the web-search server tool — and
      because a reader watches it stream. */
   "citation-investigate": "chat",
   /* Chat, the wire of the press it runs inside; no tools, one JSON answer. */
   "citation-paper-passages": "chat",
   /* Chat, for the same reason: no tools, one JSON answer, inside that press. */
   "citation-influence": "chat",
-  /* Chat, for `citations-find`'s reason — the web-search server tool — and
+  /* Chat, for `citation-find`'s reason — the web-search server tool — and
      the quick tier's only wire. */
   "dig-deeper-search": "chat",
   /* Chat, and for this one task the wire is not a free choice: it is the only
@@ -1620,7 +1620,7 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   crossrefs: null,
   simple: null,
   skim: null,
-  citations: null,
+  bibliography: null,
   /* It has one because it is on the chat wire, and every chat-wire task does —
      `REQUEST_PATH_TASKS` is derived from `TASK_WIRE`, and tests/models.test.ts
      holds each of them to an override, `debate` included. 8d523739 took it out
@@ -1629,14 +1629,14 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
      it now sits (tests/env-names-are-inventoried.test.ts). The question it is
      for — does a cheaper model pick the right page as often — is answered by
      running the real feature against another model. */
-  "citations-find": "SPIDERYARN_CITATIONS_FIND_MODEL",
+  "citation-find": "SPIDERYARN_CITATION_FIND_MODEL",
   "upload-source-guess": "SPIDERYARN_UPLOAD_SOURCE_GUESS_MODEL",
   "citation-investigate": "SPIDERYARN_CITATION_INVESTIGATE_MODEL",
   /* Plan 261001a says this runs on the quick check's model, not merely its
      tier. Share the override too: otherwise setting the quick check's model
      would quietly make the two calls diverge while the UI and plan still said
      they were the same model. The spend row remains its own job. */
-  "citation-paper-passages": "SPIDERYARN_CITATIONS_FIND_MODEL",
+  "citation-paper-passages": "SPIDERYARN_CITATION_FIND_MODEL",
   /* Shares the press's own override rather than adding a name: the call is
      only ever made with `DIG_DEEPER_MODEL` passed in (src/citation-investigate.ts),
      so this entry is never what picks its model. */
@@ -1873,7 +1873,7 @@ export type Effort = (typeof EFFORTS)[number];
  * **`SPIDERYARN_PIPELINE_EFFORT`, checked.** The whole-run override, or
  * `undefined` when it is unset or empty.
  *
- * The one place the variable is read. `effortFor` below, src/citations.ts and
+ * The one place the variable is read. `effortFor` below, src/bibliography.ts and
  * src/skim.ts each call this and supply their own fallback; until 2026-10-04
  * each of the three read `process.env.SPIDERYARN_PIPELINE_EFFORT as Effort |
  * undefined` for itself. A cast checks nothing, so a typo (`hgih`) went to the

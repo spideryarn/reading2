@@ -70,7 +70,7 @@ import {
   loadSkim,
   loadDebate,
   loadArticleIdentity,
-  loadCitations,
+  loadBibliography,
   citedCandidates,
   investigateCitation,
   guessSource,
@@ -411,6 +411,7 @@ import { placeQuoteInBlock } from "./quote-in-block.js";
 import { processSingleton } from "./process-state.js";
 import { captureFailure, setMonitoringUser } from "./monitoring.js";
 import { DEFAULT_INGEST_STEPS, isStepName, type StepName } from "./pipeline.js";
+import { currentStepName } from "./step-order.js";
 import { hashProfile, normaliseProfileText, profileIsStale, renderProfile } from "./profile.js";
 import { keysOpenFree, type MadeArtefact } from "./acts-alone.js";
 import { type GuideExperience, experienceOf } from "./guide.js";
@@ -481,6 +482,7 @@ import type {
    the guard that does the checking. Both live in types.ts because the browser
    needs the same union and cannot import src/live.ts. */
 import {
+  type BibliographyResponse,
   type GptLiveTicket,
   HIGHLIGHT_COLOURS,
   isHighlightColour,
@@ -498,6 +500,7 @@ import {
   MAX_ORIGIN_NAME_CHARS,
   MAX_VISIBLE_BLOCKS,
   ORIGIN_MODES,
+  currentOriginMode,
   sameAnchor,
   sameOrigin,
   THREAD_KINDS,
@@ -638,7 +641,7 @@ function send(res: ServerResponse, status: number, body: unknown): void {
  * asked for that.** Returns what `load` returned, or `null` once it has
  * answered — the handler's cue to stop.
  *
- * For every artefact read — quiz, crossrefs and citations first, simple,
+ * For every artefact read — quiz, crossrefs and bibliography first, simple,
  * ideas, faq, timeline, debate, glossary and quotes in plan 261006h, and
  * tweets, relations, skim, sketch, illustrated and arc in plan 261007n: "not
  * made yet" is their ordinary answer, and as a 404 it was a red line in the
@@ -652,7 +655,7 @@ function send(res: ServerResponse, status: number, body: unknown): void {
  *   function's: three of them put a document they cannot use in the same
  *   throw as no document (`loadFaq`, `loadSimpleSummary`, `loadDebate`).
  * - **Only `load`.** Give it the store read and nothing else — whatever the
- *   handler does next (quiz's kept answers, citations' matching) is outside
+ *   handler does next (quiz's kept answers, bibliography's matching) is outside
  *   this `catch`, so a failure there is never mistaken for "none yet".
  * - **`private, no-store` on every answer**, the 404 included: the body
  *   depends on a request header, and this is simpler than a `Vary` that every
@@ -2239,7 +2242,7 @@ async function streamTermLookup(slug: string, termId: string, res: ServerRespons
 
 /**
  * **Look into one cited work, a few words at a time, and keep the answer** —
- * `POST /api/citations/:slug/:id/investigate`, SSE out. Citations'
+ * `POST /api/bibliography/:slug/:id/investigate`, SSE out. Bibliography's
  * *Investigate*, docs/plans/260930a-citations-investigate-one-work-on-demand.md.
  *
  * `streamTermLookup`'s shape: the 404 and the allowance's 429/503 are decided
@@ -2257,6 +2260,34 @@ async function streamTermLookup(slug: string, termId: string, res: ServerRespons
  * reason: the answer is kept either way, so closing the band must not throw a
  * paid answer away. Nothing is read off the body — the work is found by id.
  */
+/**
+ * **A Bibliography as `GET /api/bibliography/:slug` answers it**, once the
+ * route has read it — and, for one deploy, the old `GET /api/citations/:slug`
+ * (plan 261009w), which renames the envelope's one key. Each route calls
+ * `orNullWhenNotMadeYet` itself, around the read alone, because
+ * tests/api-fetch-offline.test.ts takes its inventory of those calls route by
+ * route.
+ *
+ * **No `withProfileChanged`**, for `timeline`'s reason: this artefact is not
+ * written for a profile, so there is no third staleness fact.
+ * `BibliographyResponse` in src/types.ts has two fields.
+ */
+async function bibliographyForRoute(slug: string, found: BibliographyResponse): Promise<BibliographyResponse> {
+  /* **Which works are already articles here** — the reader's own or a public
+     one, never another reader's private article (the `where` in
+     src/store/pg-cited-in-spideryarn.ts). Here and not in `loadBibliography`,
+     which chat, *Look it up* and *Investigate* also call and none of them
+     needs. A failure costs the links, not the list.
+     docs/plans/260930b-citations-say-when-a-cited-work-is-already-in-spideryarn.md. */
+  let candidates: CitedCandidate[] = [];
+  try {
+    candidates = await citedCandidates(slug);
+  } catch (error) {
+    log("store").warn({ slug, ...errorFields(error) }, "could not match the bibliography to articles here");
+  }
+  return withCitedInSpideryarn(found, candidates);
+}
+
 async function streamCitationInvestigation(slug: string, entryId: string, res: ServerResponse): Promise<void> {
   const profile = await resolveProfile(slug);
   const { stream, release } = await investigateCitation(slug, entryId, profile);
@@ -5054,7 +5085,7 @@ function parseAnchor(anchor: unknown): ChatAnchor | undefined {
  * The `origin` field of a chat request, as a `ThreadOrigin` or nothing.
  *
  * Shape only; whether a claim's block is the article's is checked by the
- * caller, which has the article. A glossary, citations or ideas `itemId` is never
+ * caller, which has the article. A glossary, bibliography or ideas `itemId` is never
  * checked against anything. A mode that is not built is a 400, including the ones
  * the database's CHECK already lists.
  *
@@ -5064,7 +5095,11 @@ function parseAnchor(anchor: unknown): ChatAnchor | undefined {
 function parseOrigin(origin: unknown): ThreadOrigin | undefined {
   if (origin === undefined || origin === null) return undefined;
   if (typeof origin !== "object") throw httpError(400, "origin must be an object");
-  const { mode, blockId, quote, lens } = origin as Record<string, unknown>;
+  const { mode: asSent, blockId, quote, lens } = origin as Record<string, unknown>;
+  /* A tab loaded before 2026-10-09 sends a cited work's origin as
+     `citations`: read as `bibliography`, and stored as that (plan 261009w F1;
+     `RETIRED_ORIGIN_MODES`, which a stored row is read through too). */
+  const mode = currentOriginMode(asSent);
   const built = ORIGIN_MODES.find((m) => m === mode);
   if (built === undefined) {
     throw httpError(400, `origin.mode must be one of: ${ORIGIN_MODES.join(", ")}`);
@@ -5093,7 +5128,7 @@ function parseOrigin(origin: unknown): ThreadOrigin | undefined {
       return { mode: built, blockId, quote };
     }
     case "glossary":
-    case "citations":
+    case "bibliography":
     case "ideas":
       return parseItemOrigin(built, origin as Record<string, unknown>);
     /* A mode added to `ORIGIN_MODES` has to say here what it is made of. */
@@ -5111,7 +5146,7 @@ function parseOrigin(origin: unknown): ThreadOrigin | undefined {
  * which every sender cuts to (`originName` in src/types.ts), so only a
  * hand-made body meets the 413. No part of the name reaches a thrown message.
  */
-function parseItemOrigin(mode: "glossary" | "citations" | "ideas", body: Record<string, unknown>): ThreadOrigin {
+function parseItemOrigin(mode: "glossary" | "bibliography" | "ideas", body: Record<string, unknown>): ThreadOrigin {
   const { itemId, quote, blockId, lens } = body;
   if (blockId !== undefined || lens !== undefined) {
     throw httpError(400, "origin of this mode is an itemId and a quote, with no blockId and no lens");
@@ -6973,12 +7008,20 @@ export function parseJobRequest(body: unknown): {
     return { slug, readThis: true };
   }
 
+  /* A retired step name is read as its successor before it is checked —
+     `currentStepName`, the table `toJob` reads a stored job through. A tab
+     loaded before a rename still sends the old word (`citations` until
+     2026-10-09, plan 261009w F1), and refusing it would tell that reader the
+     press failed. */
   const stepList = (value: unknown, field: string): StepName[] | undefined => {
     if (value === undefined) return undefined;
-    if (!Array.isArray(value) || !value.every(isStepName)) {
+    const names = Array.isArray(value)
+      ? value.map((name: unknown) => (typeof name === "string" ? currentStepName(name) : name))
+      : value;
+    if (!Array.isArray(names) || !names.every(isStepName)) {
       throw httpError(400, `${field} must be an array of step names`);
     }
-    return value;
+    return names;
   };
   const parsedSteps = stepList(steps, "steps");
   const parsedForce = stepList(force, "force");
@@ -11444,50 +11487,65 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
   /* Every work the piece cites — docs/plans/260911g-citations-mode.md. GET
      only, and no DELETE, for the reason `ideas`, `timeline` and `debate` have
      none: the step replaces, so finding them again is
-     POST /api/jobs { slug, steps: ["citations"] }. This route never spends. */
+     POST /api/jobs { slug, steps: ["bibliography"] }. This route never spends.
+     The matching is `bibliographyForRoute` above, shared with the old path.
+     No list yet is `200 null` to a client that asks — `orNullWhenNotMadeYet`,
+     around the read alone and not the matching. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/bibliography\/([\w.%-]+)$/,
+    article: "first-capture",
+    handler: async ({ request: { req, res } }, captures) => {
+      const slug = slugPart(captures, 1);
+      const found = await orNullWhenNotMadeYet({ req, res }, () => loadBibliography(slug));
+      if (found) send(res, 200, await bibliographyForRoute(slug, found));
+    },
+  },
+
+  /* **The old path, for one deploy** — removed by the contract, plan 261009w.
+     Bibliography's route was `/api/citations/:slug` until 2026-10-09, and a
+     tab loaded before the rename still asks for it; a 404 there would tell
+     that reader the list was never made and offer to make it again (the
+     plan's F1). The same read, with the envelope the old hook reads: the
+     top-level key `citations` rather than `bibliography`, nothing else
+     changed. tests/bibliography-old-names.test.ts. */
   {
     kind: "pattern",
     method: "GET",
     pattern: /^\/api\/citations\/([\w.%-]+)$/,
     article: "first-capture",
     handler: async ({ request: { req, res } }, captures) => {
-      /* **No `withProfileChanged`**, for `timeline`'s reason: this artefact is
-         not written for a profile, so there is no third staleness fact.
-         `CitationsResponse` in src/types.ts has two fields.
-
-         No list yet is `200 null` to a client that asks —
-         `orNullWhenNotMadeYet`, around the read alone and not the matching
-         below. */
       const slug = slugPart(captures, 1);
-      const found = await orNullWhenNotMadeYet({ req, res }, () => loadCitations(slug));
+      const found = await orNullWhenNotMadeYet({ req, res }, () => loadBibliography(slug));
       if (!found) return;
-      /* **Which works are already articles here** — the reader's own or a
-         public one, never another reader's private article (the `where` in
-         src/store/pg-cited-in-spideryarn.ts). Here and not in `loadCitations`,
-         which chat, *Look it up* and *Investigate* also call and none of them
-         needs. A failure costs the links, not the list.
-         docs/plans/260930b-citations-say-when-a-cited-work-is-already-in-spideryarn.md. */
-      let candidates: CitedCandidate[] = [];
-      try {
-        candidates = await citedCandidates(slug);
-      } catch (error) {
-        log("store").warn(
-          { slug, ...errorFields(error) },
-          "could not match the citations to articles here",
-        );
-      }
-      send(res, 200, withCitedInSpideryarn(found, candidates));
+      const { bibliography, ...rest } = await bibliographyForRoute(slug, found);
+      send(res, 200, { citations: bibliography, ...rest });
     },
   },
 
-  /* **Look into one cited work on the web, and keep the answer** — Citations'
+  /* **Look into one cited work on the web, and keep the answer** — Bibliography's
      *Investigate*, docs/plans/260930a-citations-investigate-one-work-on-demand.md.
      SSE, `streamCitationInvestigation` above. Owner-only (the reader seam is
      owner-scoped), rate-limited on its own `citation-investigate` bucket after
      the free refusals (src/citation-investigate.ts § `INVESTIGATE_RATE_POLICY`).
-     Nothing is read off the body. Citations' one POST: the lookup-only
+     Nothing is read off the body. Bibliography's one POST: the lookup-only
      `…/find` beside it was deleted on 2026-10-04, several deploys after the
      last button that called it (plan 261004e § R7). */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/bibliography\/([\w.%-]+)\/([\w.%-]+)\/investigate$/,
+    article: "first-capture",
+    handler: async ({ request: { res } }, captures) => {
+      const at = slugPart(captures, 1);
+      await streamCitationInvestigation(at, slugPart(captures, 2), res);
+    },
+  },
+
+  /* **The old path, for one deploy** — removed by the contract, plan 261009w,
+     for the reason the old GET above stays. The stream's frames are the same
+     under either path, so nothing is translated. */
   {
     kind: "pattern",
     method: "POST",

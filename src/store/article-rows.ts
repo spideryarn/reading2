@@ -47,6 +47,7 @@ import {
   searchRuns,
 } from "../db/schema.js";
 import { ownedSlug } from "./owned-slug.js";
+import { ACTIVE_REVISION_COLUMNS, type ActiveRevisionRow } from "./revision-columns.js";
 
 /**
  * The handle inside a transaction — derived from `Db`, so it cannot drift from
@@ -197,14 +198,14 @@ export const ARTICLE_TABLE_COVERAGE = {
     bundle: { exported: true, into: "augmentations/glossary-lookups.json" },
   },
   /* Citations mode's *Find it* — the pages found for searched works, reader
-     state beside the `citations` artefact exactly as `glossary_lookups` sits
+     state beside the `bibliography` artefact exactly as `glossary_lookups` sits
      beside the glossary. docs/plans/260911g-citations-mode.md § Stage 3. */
   citation_finds: {
     rollback: { exported: true, into: "citation-finds.json" },
     bundle: { exported: true, into: "augmentations/citation-finds.json" },
   },
   /* Citations' *Investigate* — one kept answer per cited work, reader state
-     beside the `citations` artefact exactly as `citation_finds` is.
+     beside the `bibliography` artefact exactly as `citation_finds` is.
      docs/plans/260930a-citations-investigate-one-work-on-demand.md. */
   citation_investigations: {
     rollback: { exported: true, into: "citation-investigations.json" },
@@ -636,8 +637,8 @@ export class ArticleNotFound extends Error {
  */
 export interface ArticleRows {
   readonly article: typeof articles.$inferSelect;
-  /** The CURRENT revision only. Older ones are history — see `readArticleRows`. */
-  readonly revision: typeof articleRevisions.$inferSelect;
+  /** The CURRENT revision only, without its legacy columns (src/store/revision-columns.ts). Older ones are history — see `readArticleRows`. */
+  readonly revision: ActiveRevisionRow;
   /** **In document order.** See the ordering note on `readArticleRows`. */
   readonly blocks: readonly (typeof revisionBlocks.$inferSelect)[];
   /**
@@ -817,7 +818,7 @@ const SNAPSHOT = { isolationLevel: "repeatable read", accessMode: "read only" } 
 async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
   const found = (
     await tx
-      .select({ article: articles, revision: articleRevisions })
+      .select({ article: articles, revision: ACTIVE_REVISION_COLUMNS })
       .from(articles)
       .innerJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
       .where(ownedSlug(slug))

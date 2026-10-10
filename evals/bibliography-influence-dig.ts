@@ -4,7 +4,7 @@
  * (docs/plans/261003m-citations-influence-unknown-unless-confident-and-dig-deeper-fills-it-in.md
  * § A probe before it is called done).
  *
- *   npx tsx evals/citations-influence-dig.ts --run=1 <slug> <work id or title words> [more works …]
+ *   npx tsx evals/bibliography-influence-dig.ts --run=1 <slug> <work id or title words> [more works …]
  *
  * **PAID.** For each work: production's own forced search (`searchFirst`,
  * aimed with `digSubject` and the first citing passage, as a press aims it),
@@ -107,7 +107,7 @@ async function run(n: number, slug: string, names: string[]): Promise<void> {
   /* The ledger closes, and its writes land, before `closeDb` below. */
   await withLedger("eval", () => runAsOwner(environmentOwnerId(), async () => {
     const article = await store.loadArticle(slug);
-    const { citations } = await store.loadCitations(slug);
+    const { bibliography: citations } = await store.loadBibliography(slug);
     /* Every name resolved before the first paid call. */
     const works = names.map((name) => pickWork(citations.citations, name));
     const text = new Map(article.blocks.map((b) => [b.id as string, b.text]));

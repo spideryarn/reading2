@@ -11,13 +11,13 @@
  *
  * So this is the glossary's list with the glossary's two controls — the order
  * buttons and the threshold bar, `hiddenNote` under it — over a different row.
- * docs/project/citations.md; the design is docs/plans/260911g-citations-mode.md.
+ * docs/project/bibliography.md; the design is docs/plans/260911g-citations-mode.md.
  *
  * ## The row says where its link came from, always
  *
  * **Every address a row presents as the work's own was in the article** — a
  * DOI or arXiv id in its text or hrefs, or one of its own anchors — and code
- * found it, not the model (src/citations.ts § linkFor). Where the article gave
+ * found it, not the model (src/bibliography.ts § linkFor). Where the article gave
  * none, the row offers a **Google Scholar search** instead, and it is drawn as
  * a search: the title is not a link, and the only link is labelled *search
  * Scholar*. A reader can always tell a link the article gave from one we built,
@@ -58,9 +58,9 @@ import { citedByWords, readCitationRegistry, REGISTRY_NAME, registryAuthorsText 
 import { effectiveInfluence, type EffectiveInfluence } from "../citation-effective-influence.js";
 import { Link } from "./Link.js";
 import { readHref } from "./router.js";
-import type { PublicCitations, PublicCitedWork } from "../public-types.js";
+import type { PublicBibliography, PublicCitedWork } from "../public-types.js";
 import type { CiteOrder } from "./params.js";
-import type { UseCitations } from "./useCitations.js";
+import type { UseBibliography } from "./useBibliography.js";
 import { AboutMade } from "./BandAbout.js";
 import { BlockRef } from "./BlockRef.js";
 import { Tooltip } from "./Tooltip.js";
@@ -143,7 +143,7 @@ export const CITATION_BAR_DEFAULT = 0.25;
  * `firstCited` block, else the reference when that is where it points (a
  * bibliography-only work). `null` when neither is: a work reached through a
  * footnote's marker, whose paragraph holds a number and no quote of ours. Its
- * `quote` is the article's own characters (src/citations.ts § `verifyPlace`),
+ * `quote` is the article's own characters (src/bibliography.ts § `verifyPlace`),
  * and `citeMarks` re-finds it at render time — nothing here reads `start`.
  */
 export function citingPlaceOf(
@@ -503,7 +503,7 @@ export function orderWorks<W extends ShownWork>(
 }
 
 /** The foot line under the bar. threshold.ts § hiddenNote. */
-export function citationsNote(hidden: number, total: number): string {
+export function bibliographyNote(hidden: number, total: number): string {
   return hiddenNote(hidden, total, { one: "citation", many: "citations" });
 }
 
@@ -586,7 +586,7 @@ export function sourceOf(work: Pick<CitedWork, "url" | "linkFrom">): Source {
 /* --------------------------------------------------------------- the copy -- */
 
 /**
- * Drawn **only when the model said it left works out** (`Citations.capped`) —
+ * Drawn **only when the model said it left works out** (`Bibliography.capped`) —
  * never inferred from the list being 80 long, and "we judged" rather than a
  * claim that the ranking is a fact. docs/plans/260911g-citations-mode.md § Long
  * bibliographies.
@@ -663,7 +663,7 @@ export const INFLUENCE_UNKNOWN_NOTE =
  * offered beside it: running it again would find the same nothing and cost
  * another model call. The timeline's `TIMELINE_NO_CHRONOLOGY` rule.
  */
-export const CITATIONS_NONE = "We found no works this piece cites.";
+export const BIBLIOGRAPHY_NONE = "We found no works this piece cites.";
 
 /* ------------------------------------------- what we have and have not read --
    Plan 260929g stage 1 (docs/plans/260929g-check-a-cited-paper-supports-the-claim.md).
@@ -817,7 +817,7 @@ export function assessedOf(work: Pick<ShownWork, "lookup">): AssessedLookup | nu
 }
 
 /** Bibliography's line for a visitor when no list is stored: the owner's empty state, without the button. */
-export const CITATIONS_NONE_SHARED = "Nobody has listed the works this one cites yet.";
+export const BIBLIOGRAPHY_NONE_SHARED = "Nobody has listed the works this one cites yet.";
 
 /* -------------------------------------------------------------- the panel -- */
 
@@ -826,34 +826,34 @@ const NO_WORKS: ShownWork[] = [];
 
 /**
  * **Who is reading, and the list they get — one prop, so the two cannot
- * disagree.** The owner's arm is the whole `useCitations` read: its status,
+ * disagree.** The owner's arm is the whole `useBibliography` read: its status,
  * the job, and the verbs that spend — the run, the re-run and *Find it*. The
  * visitor's arm is the stored list off the public payload and nothing else, so
  * a visitor's panel has nothing to press that could ask the model or a search
  * provider. `owner?: never` for `TimelineAccess`'s reason. Since 2026-09-29,
  * SPIDERYARN-READING2-56, plan 260929c stage 3.
  */
-export type CitationsAccess =
+export type BibliographyAccess =
   | {
       kind: "owner";
-      owner: UseCitations;
+      owner: UseBibliography;
       /**
        * **A chat about one work**: what a row's *Ask in chat* and its mark
        * need (OriginChat.tsx § `ItemChats`; plan 261006d). On the owner's arm
        * because a visitor has no chat: with `chats?: never` below, a
        * visitor's panel cannot be handed one. Optional, so a panel drawn
        * without it (most tests) has no button; that `Reader` passes it is
-       * held by tests/glossary-and-citations-ask-in-chat.test.tsx.
+       * held by tests/glossary-and-bibliography-ask-in-chat.test.tsx.
        */
       chats?: CitedWorkChats;
     }
   /* `null` since 2026-10-09: Sources opens for a visitor on any of its
      three artefacts (visitor.ts § POLICY), so Bibliography can be open with
      no list stored, and says so (GPT Sol's F3 on plan 261009l). */
-  | { kind: "visitor"; citations: PublicCitations | null; owner?: never; chats?: never };
+  | { kind: "visitor"; bibliography: PublicBibliography | null; owner?: never; chats?: never };
 
 interface Props {
-  access: CitationsAccess;
+  access: BibliographyAccess;
   /**
    * **Sources' chip row**, drawn as this band's header (SourcesMode.tsx
    * § `SourcesViews`) — the same row the Debate panel draws for Reception
@@ -890,7 +890,7 @@ interface Props {
  */
 export type CiteFocus = ItemFocus;
 
-export function CitationsPanel({
+export function BibliographyPanel({
   access,
   head,
   order: chosenOrder,
@@ -901,10 +901,10 @@ export function CitationsPanel({
   focus = null,
   onFocusTaken,
 }: Props) {
-  useRenderCount("CitationsPanel");
+  useRenderCount("BibliographyPanel");
   /* `null` for a visitor, and every owner-only thing below is behind it. */
   const owner = access.kind === "owner" ? access.owner : null;
-  const citations = access.kind === "owner" ? access.owner.citations : access.citations;
+  const citations = access.kind === "owner" ? access.owner.bibliography : access.bibliography;
   const all: readonly ShownWork[] = citations?.citations ?? NO_WORKS;
   const bar = chosenBar ?? CITATION_BAR_DEFAULT;
   /* One answer for the order in force, passed down, so the list, the pressed
@@ -953,7 +953,7 @@ export function CitationsPanel({
      who made it — only once the list is ready and has something in it, which
      is when the foot used to draw them. In the band's corner since 2026-10-01
      (spya-ucu35y, plan 261001m); it was at the order row's end. */
-  const made = owner?.citations ?? null;
+  const made = owner?.bibliography ?? null;
   const about =
     ready && all.length > 0 ? (
       <>
@@ -989,7 +989,7 @@ export function CitationsPanel({
       runDisabled={again && owner.rewriting}
       onCancel={owner.cancel}
       label={label}
-      step="citations"
+      step="bibliography"
       icon={<BookText size={13} />}
       runningLabel="Finding…"
     />
@@ -998,7 +998,7 @@ export function CitationsPanel({
   return (
     <ModeSurface
       label={MODE_LABEL.sources}
-      feature="gloss citations sources"
+      feature="gloss bibliography sources"
       mode="sources"
       about={about}
       /* **Sources' chip row**, since 2026-10-09: Bibliography | Reception
@@ -1044,7 +1044,7 @@ export function CitationsPanel({
       {/* **A visitor with no list stored**: Sources opened on Reception's
           or Claims' artefact (visitor.ts § POLICY, `any-artefact`), so
           Bibliography says it has nothing rather than drawing a blank band. */}
-      {access.kind === "visitor" && citations === null && <p className="gloss-quiet">{CITATIONS_NONE_SHARED}</p>}
+      {access.kind === "visitor" && citations === null && <p className="gloss-quiet">{BIBLIOGRAPHY_NONE_SHARED}</p>}
 
       {owner?.status === "none" && (
         <div className="gloss-empty">
@@ -1075,7 +1075,7 @@ export function CitationsPanel({
               bugging the user about it."* Re-running is in Metadata. Plan
               260929c. */}
 
-          {all.length === 0 && <p className="gloss-quiet">{CITATIONS_NONE}</p>}
+          {all.length === 0 && <p className="gloss-quiet">{BIBLIOGRAPHY_NONE}</p>}
 
           {all.length > 0 && (
             <div className="tl-scroll">
@@ -1212,7 +1212,7 @@ function BarSlider({
       total={works.length}
       noun="citations"
       title="How high a work has to score to stay on screen: two parts relevance to one part influence, or relevance alone where the influence is unknown. Left shows more works, right fewer."
-      note={citationsNote(hiddenCount, works.length)}
+      note={bibliographyNote(hiddenCount, works.length)}
       onChange={onBar}
     />
   );
@@ -1244,7 +1244,7 @@ function WorkRow({
      id alone, so it survives a re-run that rewords the title. The name in the
      origin built here is not compared (`sameOrigin`). */
   const chat = chats
-    ? threadForOrigin(chats.summaries, { mode: "citations", itemId: work.id, quote: work.title })
+    ? threadForOrigin(chats.summaries, { mode: "bibliography", itemId: work.id, quote: work.title })
     : undefined;
   /* **No source at all when the public boundary refused the address** — a
      visitor's row whose link carried a credential or a private host. The row

@@ -13,7 +13,7 @@ import { describe, expect, it } from "vitest";
 
 import { plainTitlesIn } from "../scripts/backfill-plain-titles.js";
 import { runBlocks } from "../src/blocks.js";
-import { emptyDrops, noScoreDrops, toDrafts } from "../src/citations.js";
+import { emptyDrops, noScoreDrops, toDrafts } from "../src/bibliography.js";
 import { runExtract } from "../src/extract.js";
 import { readCitations } from "../src/referee-criteria.js";
 import { plainTitle } from "../src/html.js";

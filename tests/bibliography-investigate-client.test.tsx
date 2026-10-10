@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * **Citations' *Investigate*, the hook half** — src/web/useCitations.ts §
+ * **Citations' *Investigate*, the hook half** — src/web/useBibliography.ts §
  * `investigate`, plan 260930a stage 2.
  *
  * The promises it makes are the glossary lookup's, and each is pinned here
@@ -14,7 +14,7 @@
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { BlockId, CitationInvestigation, Citations, CitedWork, InvestigatedPaper } from "../src/types.js";
+import type { BlockId, CitationInvestigation, Bibliography, CitedWork, InvestigatedPaper } from "../src/types.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -51,7 +51,7 @@ function investigation(at: string, answer = "Does it back the claim?\nYes, says 
   };
 }
 
-function artefact(row: CitedWork): Citations {
+function artefact(row: CitedWork): Bibliography {
   return {
     version: "test",
     generator: "test",
@@ -86,7 +86,7 @@ vi.mock("../src/web/lib/api.js", async () => {
   const { ReaderFacingError } = await import("../src/web/lib/reader-facing.js");
   return {
   apiFetch: async (input: string, init?: { method?: string; signal?: AbortSignal }) => {
-    if (init?.method === "POST" && input === `/api/citations/${SLUG}/${ID}/investigate`) {
+    if (init?.method === "POST" && input === `/api/bibliography/${SLUG}/${ID}/investigate`) {
       posts++;
       signal = init.signal ?? null;
       if (reply !== "stream") return json({ error: reply.error }, reply.status);
@@ -100,13 +100,13 @@ vi.mock("../src/web/lib/api.js", async () => {
       });
       return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
     }
-    if (input === `/api/citations/${SLUG}`) {
+    if (input === `/api/bibliography/${SLUG}`) {
       gets++;
       if (getFailure) throw getFailure;
-      return json({ citations: { ...artefact(listed), generatedAt }, stale: false, outdated: false });
+      return json({ bibliography: { ...artefact(listed), generatedAt }, stale: false, outdated: false });
     }
-    if (input === "/api/citations/next-piece") {
-      return json({ citations: { ...artefact({ ...WORK, title: "The next article's work" }), slug: "next-piece" }, stale: false, outdated: false });
+    if (input === "/api/bibliography/next-piece") {
+      return json({ bibliography: { ...artefact({ ...WORK, title: "The next article's work" }), slug: "next-piece" }, stale: false, outdated: false });
     }
     throw new Error(`the test made an unexpected request: ${input}`);
   },
@@ -135,14 +135,14 @@ vi.mock("../src/web/useJobs.js", () => ({
   }),
 }));
 
-const { useCitations, useCitationsRead } = await import("../src/web/useCitations.js");
+const { useBibliography, useBibliographyRead } = await import("../src/web/useBibliography.js");
 
-let hook: ReturnType<typeof useCitations> | null = null;
+let hook: ReturnType<typeof useBibliography> | null = null;
 
-/** Both halves, wired as the app wires them (tests/citations-find-late-reply.test.tsx § Harness). */
+/** Both halves, wired as the app wires them (tests/bibliography-find-late-reply.test.tsx § Harness). */
 function Harness(): ReactElement | null {
-  const read = useCitationsRead(SLUG);
-  hook = useCitations(SLUG, read);
+  const read = useBibliographyRead(SLUG);
+  hook = useBibliography(SLUG, read);
   return null;
 }
 
@@ -191,7 +191,7 @@ async function open(): Promise<void> {
 }
 
 function row(): CitedWork | undefined {
-  return hook?.citations?.citations[0];
+  return hook?.bibliography?.citations[0];
 }
 
 describe("investigate", () => {
@@ -664,14 +664,14 @@ describe("investigate", () => {
    GPT Sol's plan review, F3: the test above unmounts both hooks together and
    cannot tell the two apart. */
 describe("the band going does not stop a dig", () => {
-  let read: ReturnType<typeof useCitationsRead> | null = null;
+  let read: ReturnType<typeof useBibliographyRead> | null = null;
 
-  function Band(props: { read: ReturnType<typeof useCitationsRead> }): ReactElement | null {
-    hook = useCitations(SLUG, props.read);
+  function Band(props: { read: ReturnType<typeof useBibliographyRead> }): ReactElement | null {
+    hook = useBibliography(SLUG, props.read);
     return null;
   }
   function Article({ band, slug = SLUG }: { band: boolean; slug?: string }): ReactElement | null {
-    read = useCitationsRead(slug);
+    read = useBibliographyRead(slug);
     return band ? createElement(Band, { read }) : null;
   }
   const paint = (band: boolean, slug = SLUG) => act(async () => root.render(createElement(Article, { band, slug })));
@@ -693,7 +693,7 @@ describe("the band going does not stop a dig", () => {
     await act(async () => { await read?.refresh(); });
     await paint(true);
     await flush();
-    expect(hook?.citations?.citations[0]?.id).toBe(ID);
+    expect(hook?.bibliography?.citations[0]?.id).toBe(ID);
     expect(hook?.investigateFailed, "a replaced list inherited a failure about the old list").toBeNull();
   });
 
@@ -736,7 +736,7 @@ describe("the band going does not stop a dig", () => {
     await paint(false, "next-piece");
     await flush();
     expect(signal?.aborted).toBe(true);
-    expect(read?.citations?.slug).toBe("next-piece");
+    expect(read?.bibliography?.slug).toBe("next-piece");
     expect(read?.investigateDraft).toBeNull();
     await act(async () => {
       push?.("stage", { stage: "finding" });
@@ -747,8 +747,8 @@ describe("the band going does not stop a dig", () => {
     });
     await act(async () => { await pressed; });
     await flush();
-    expect(read?.citations?.citations[0]?.title).toBe("The next article's work");
-    expect(read?.citations?.citations[0]?.investigation).toBeUndefined();
+    expect(read?.bibliography?.citations[0]?.title).toBe("The next article's work");
+    expect(read?.bibliography?.citations[0]?.investigation).toBeUndefined();
     expect(read?.investigating).toBeNull();
     expect(read?.investigateStage).toBeNull();
     expect(read?.investigateDraft).toBeNull();
@@ -825,11 +825,11 @@ describe("the band going does not stop a dig", () => {
     });
     await flush();
     expect(read?.investigating).toBeNull();
-    expect(read?.citations?.citations[0]?.investigation).toEqual(kept);
+    expect(read?.bibliography?.citations[0]?.investigation).toEqual(kept);
     expect(posts, "a second dig was started").toBe(1);
     await paint(true);
     await flush();
-    expect(hook?.citations?.citations[0]?.investigation).toEqual(kept);
+    expect(hook?.bibliography?.citations[0]?.investigation).toEqual(kept);
   });
 
   it("starts from the read alone, with no band mounted — the card's press", async () => {

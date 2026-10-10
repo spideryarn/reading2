@@ -183,7 +183,7 @@ describe("every environment read under src/ is literal", () => {
 
     it("leave src/models.ts's twenty-one overrides to MODEL_ENV_VAR's runtime values", () => {
       /* Sixteen entries since `citation-paper-passages` (plan 261001a), fifteen names: it
-         shares SPIDERYARN_CITATIONS_FIND_MODEL with the quick check on purpose, so the two
+         shares SPIDERYARN_CITATION_FIND_MODEL with the quick check on purpose, so the two
          always run on one model (GPT Sol's stage 3 review, C-1). Seventeen since
          `simple-check` (plan 261001i), with its own name; eighteen since
          `dig-deeper-search` (plan 261001p), likewise. Nineteen entries since

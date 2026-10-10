@@ -23,7 +23,7 @@ It was called **Peer review** for its first day; § The name says why it is Sour
 its review and what is left to build are
 [261009l](../plans/261009l-peer-review-mode-merges-citations-and-debate.md), and the rename is
 [261009w](../plans/261009w-peer-review-becomes-sources-all-the-way-down.md). The depth on each list
-stays where it was: **[citations.md](citations.md)** for Bibliography, **[debate.md](debate.md)**
+stays where it was: **[bibliography.md](bibliography.md)** for Bibliography, **[debate.md](debate.md)**
 for Reception and Claims. This page owns the merge.
 
 ## In this doc
@@ -41,7 +41,7 @@ for Reception and Claims. This page owns the merge.
 
 ```
  ┌ Bibliography 42 │ Reception 3 │ Claims 8 ┐                      (i)
- │ CitationsPanel, as the Citations mode drew it   ← Bibliography (the default)
+ │ BibliographyPanel, as the Citations mode drew it   ← Bibliography (the default)
  │ DebatePanel, as the Debate mode drew it         ← Reception, Claims
 ```
 
@@ -104,7 +104,7 @@ the bar, take it (mode-catalog.ts § `aliases`, rule 5); it ranks after Sources 
 
 **Each sub-mode buys its own work and only on a press of its own**: a press on the Sources
 button, a chip, or a command-bar row arms the work of the sub-mode it lands on (activation.ts §
-`activationForSources`): the `citations` list for Bibliography, the `debate` web search for
+`activationForSources`): the `bibliography` list for Bibliography, the `debate` web search for
 Reception, the `debate-claims` list for Claims. Every read stays mounted in all three sub-modes, so
 the chips can count, and each auto-run is gated on its own sub-mode, so a press armed for one that
 lands on another is retired unspent. A link, Back, popstate or a last-view restore never buys
@@ -156,8 +156,9 @@ line, from the same two lists in the public payload.
 
 ## Chats started from it
 
-A chat started from a cited work, a claim or an angle keeps its stored origin, `citations` or
-`debate`, as data. Chat's list shows all three under Sources' icon and one `sources` filter;
+A chat started from a cited work, a claim or an angle keeps its stored origin, `bibliography` or
+`debate`, as data (a cited work's was `citations` until 2026-10-09, and an old row is read as
+`bibliography`). Chat's list shows all three under Sources' icon and one `sources` filter;
 the tooltip names the sub-mode (*Started from a claim in Sources › Claims*), and the way back
 opens that sub-mode: a work on Bibliography with its row in view, an angle on Reception, a claim on
 Claims with its row in view ([`thread-source.ts`](../../src/web/thread-source.ts) § `originBack`,
@@ -184,10 +185,11 @@ it, rename it to a word with no clash, or rename Referee
 So the mode is Sources all the way down
 ([261009w](../plans/261009w-peer-review-becomes-sources-all-the-way-down.md)), in stages. The mode's
 own word went first: the label, the catalogue, `?mode=sources`, `?sources=`, the help page, the
-remembered view, the chat filter and every `Sources…` identifier. **The stored names still keep the
-old words until that plan's later stages**: the `citations`, `debate` and `debate-claims` steps,
-columns and routes, a chat's stored origin, `CitationsPanel` and `DebatePanel`, and the `dbt-` CSS.
-They become Bibliography, Reception and `sources-claims`, after the sub-modes they now are.
+remembered view, the chat filter and every `Sources…` identifier. Bibliography's stored names
+followed in Stage 2 ([bibliography.md](bibliography.md) lists them). **Reception's and Claims'
+still keep the old words until Stage 3**: the `debate` and `debate-claims` steps, columns and
+routes, a claim's or an angle's stored origin, `DebatePanel`, and the `dbt-` CSS. They become
+`reception` and `sources-claims`, after the sub-modes they now are.
 
 "Source" already means several other things here (`sourceHash`, the imported article's raw source,
 chat's web sources, Reception's key sources, the Storage bucket), so the mode appears only in the
@@ -199,7 +201,7 @@ forms that plan lists, and nobody renames by a blanket replace on the word.
   — the owner's band, the visitor's, and the chip row (`SourcesViews`).
 - [`src/web/sources-counts.ts`](../../src/web/sources-counts.ts) — the chips' numbers and the
   lists behind them, shared with the panels.
-- [`src/web/CitationsPanel.tsx`](../../src/web/CitationsPanel.tsx) and
+- [`src/web/BibliographyPanel.tsx`](../../src/web/BibliographyPanel.tsx) and
   [`src/web/DebatePanel.tsx`](../../src/web/DebatePanel.tsx) — the two panels; both take the chip row
   as `head`, and DebatePanel draws C1's cited works under claims.
 - [`src/web/params.ts`](../../src/web/params.ts) § `sourcesParam`; [`src/web/router.ts`](../../src/web/router.ts)

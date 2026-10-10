@@ -9,7 +9,7 @@ Report `spya-tsd470` (#503, SPIDERYARN-READING2-FE), Greg, 2026-10-09, filed fro
 > references section, or with an underline-hover-tooltip) to enable us to jump back to the place
 > where it's referenced?
 
-Up: [citations.md](../project/citations.md)
+Up: [citations.md](../project/bibliography.md)
 
 ## Do we already have it? Yes
 

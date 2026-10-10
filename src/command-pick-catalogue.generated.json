@@ -1822,7 +1822,7 @@
   ]
  },
  {
-  "id": "action:rerun-citations",
+  "id": "action:rerun-bibliography",
   "label": "Bibliography › Run again",
   "description": "Written again from scratch; free, and what is here stays until it succeeds",
   "aliases": [

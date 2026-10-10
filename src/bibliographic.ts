@@ -47,7 +47,7 @@ import { CONTACT_EMAIL } from "./site-text.js";
 
 /**
  * `doi:<lower-cased doi>` or `arxiv:<lower-cased id, no version>` — the same
- * spelling `keysOf` in src/citations.ts gives a work's `idKey`, so a Citations
+ * spelling `keysOf` in src/bibliography.ts gives a work's `idKey`, so a Citations
  * row's key is already a `WorkId` once it has been through `parseWorkId`.
  *
  * Branded, so a string that has not been parsed cannot reach `lookupWork` — a

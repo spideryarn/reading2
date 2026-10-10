@@ -47,7 +47,7 @@ const NOTHING_BUILT: PublicArtefacts = {
   skim: false,
   faq: false,
   simpleSummary: false,
-  citations: false,
+  bibliography: false,
   debate: false,
 };
 

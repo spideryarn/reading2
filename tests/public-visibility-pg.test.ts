@@ -61,7 +61,7 @@ import { citedMetaFingerprintOf } from "../src/source-hash.js";
 import { documentTitle } from "../src/title-text.js";
 import { safePublicCanonical } from "../src/urls.js";
 import { currentOwnerId, type OwnerId, runInRequest } from "../src/owner.js";
-import type { Citations, Debate, Faq, Glossary, Ideas, Skim, Tree, TweetThread } from "../src/types.js";
+import type { Bibliography, Debate, Faq, Glossary, Ideas, Skim, Tree, TweetThread } from "../src/types.js";
 
 loadEnvLocal();
 
@@ -173,7 +173,7 @@ const ARTEFACTS: {
   tweets: TweetThread;
   skim: Skim;
   faq: Faq;
-  citations: Citations;
+  bibliography: Bibliography;
   debate: Debate;
 } = {
   glossary: {
@@ -276,7 +276,7 @@ const ARTEFACTS: {
     generatedAt: "2026-02-02T00:00:00.000Z",
     elapsedMs: 1,
   },
-  citations: {
+  bibliography: {
     version: "citations/4",
     generator: "test",
     slug: SLUG,
@@ -1182,18 +1182,18 @@ describe("sharing one article", { timeout: 60_000 }, () => {
     expect(JSON.stringify(body.debate)).not.toContain("counts");
   });
 
-  it("serves the stored faq and citations, and not a credentialled address", async () => {
+  it("serves the stored faq and bibliography, and not a credentialled address", async () => {
     const r = await call("GET", `/api/public/article/${SLUG}`);
     expect(r.status).toBe(200);
     const body = r.body as {
       faq?: { questions: { question: string }[] };
-      citations?: { citations: Record<string, unknown>[]; capped: boolean };
+      bibliography?: { citations: Record<string, unknown>[]; capped: boolean };
     };
     expect(body.faq?.questions.map((q) => q.question)).toEqual([PUBLIC_QUESTION]);
-    expect(body.citations?.capped).toBe(false);
-    expect(body.citations?.citations.map((w) => w.title)).toEqual([PUBLIC_WORK]);
-    expect("url" in (body.citations?.citations[0] ?? {})).toBe(false);
-    expect("key" in (body.citations?.citations[0] ?? {})).toBe(false);
+    expect(body.bibliography?.capped).toBe(false);
+    expect(body.bibliography?.citations.map((w) => w.title)).toEqual([PUBLIC_WORK]);
+    expect("url" in (body.bibliography?.citations[0] ?? {})).toBe(false);
+    expect("key" in (body.bibliography?.citations[0] ?? {})).toBe(false);
     expect(r.text).not.toContain("hunter2");
     expect(JSON.stringify(body.faq)).not.toContain("dropped");
   });
@@ -1661,7 +1661,7 @@ describe("sharing one article", { timeout: 60_000 }, () => {
         faq: true,
         /* Not planted, so absent — the `false` is the half that matters. */
         simpleSummary: false,
-        citations: true,
+        bibliography: true,
         debate: true,
       },
     });

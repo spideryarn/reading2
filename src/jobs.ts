@@ -1054,7 +1054,7 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      ~28,400 for 80 works, which at that rate is ~225 s before the prompt, so
      240 s was a timeout waiting for the first full-cap article. 360 s leaves
      the headroom. docs/plans/260911g-citations-mode.md § Progress. */
-  citations: 360_000,
+  bibliography: 360_000,
 };
 
 /**

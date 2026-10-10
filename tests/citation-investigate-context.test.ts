@@ -22,7 +22,7 @@ import {
 import { DIG_DEEPER_MODEL } from "../src/dig-deeper.js";
 import { CAPABLE_MODEL_OPENROUTER, generationKey } from "../src/models.js";
 import { PAPER_SELECTION_VERSION } from "../src/paper-evidence.js";
-import type { BlockId, CitationInvestigation, Citations, CitedWork, Meta } from "../src/types.js";
+import type { BlockId, CitationInvestigation, Bibliography, CitedWork, Meta } from "../src/types.js";
 
 const A = "spya-aaaaaa" as BlockId;
 const B = "spya-bbbbbb" as BlockId;
@@ -102,7 +102,7 @@ const STORED = (contextHash: string): CitationInvestigation => ({
   promptVersion: CITATION_INVESTIGATE_VERSION,
 });
 
-function list(w: CitedWork): Citations {
+function list(w: CitedWork): Bibliography {
   return {
     version: "citations/4",
     generator: "g",

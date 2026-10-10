@@ -620,7 +620,7 @@ describe("Sources' three sub-modes", () => {
      `debate/7`, 2026-10-08, the search is Reception's only — plan 261008i,
      GPT Sol's F1), the claims list for Claims: one call, no search. */
   it("arms the citations for Bibliography, the `debate` search for Reception and the claims list for Claims", () => {
-    expect(subModeTarget(BIBLIOGRAPHY)).toBe("citations");
+    expect(subModeTarget(BIBLIOGRAPHY)).toBe("bibliography");
     expect(subModeGenerates(BIBLIOGRAPHY)).toBe(true);
     expect(subModeTarget(RECEPTION)).toBe("debate");
     expect(subModeGenerates(RECEPTION)).toBe(true);
@@ -636,7 +636,7 @@ describe("Sources' three sub-modes", () => {
     press("Enter");
     expect(onMode).toHaveBeenCalledWith("sources", CLAIMS);
     expect(pendingActivation("a-piece", "debate")).toBeNull();
-    expect(pendingActivation("a-piece", "citations")).toBeNull();
+    expect(pendingActivation("a-piece", "bibliography")).toBeNull();
     expect(pendingActivation("a-piece", "debate-claims")).not.toBeNull();
   });
 
@@ -653,7 +653,7 @@ describe("Sources' three sub-modes", () => {
     press("Enter");
     expect(onMode).toHaveBeenCalledWith("sources", undefined, false);
     expect(pendingActivation("a-piece", "debate")).toBeNull();
-    expect(pendingActivation("a-piece", "citations")).toBeNull();
+    expect(pendingActivation("a-piece", "bibliography")).toBeNull();
     expect(pendingActivation("a-piece", "debate-claims")).not.toBeNull();
   });
 
@@ -666,7 +666,7 @@ describe("Sources' three sub-modes", () => {
     expect(pendingActivation("a-piece", "debate")).not.toBeNull();
     /* …and never Claims' list (plan 261008i stage 2), nor the citations. */
     expect(pendingActivation("a-piece", "debate-claims")).toBeNull();
-    expect(pendingActivation("a-piece", "citations")).toBeNull();
+    expect(pendingActivation("a-piece", "bibliography")).toBeNull();
   });
 
   /* Bibliography is the default: a mode row with nothing named buys the
@@ -677,7 +677,7 @@ describe("Sources' three sub-modes", () => {
     openBar();
     type("sources");
     press("Enter");
-    expect(pendingActivation("a-piece", "citations")).not.toBeNull();
+    expect(pendingActivation("a-piece", "bibliography")).not.toBeNull();
     expect(pendingActivation("a-piece", "debate")).toBeNull();
     expect(pendingActivation("a-piece", "debate-claims")).toBeNull();
   });

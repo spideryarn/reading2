@@ -229,11 +229,11 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
             leave.
           </Tile>
           {/* Greg (the admin who filed it), 2026-09-11, SPIDERYARN-READING2-2Y,
-              the citations request in docs/project/citations.md, rephrased to
+              the citations request in docs/project/bibliography.md, rephrased to
               the reader. "Where there is one", because not every work gets an
               address (src/public/dto.ts § `publicCitationUrl`, and the
-              80-work cap in docs/project/citations.md). The orders are
-              `orderOptions` in src/web/CitationsPanel.tsx: prioritised, first
+              80-work cap in docs/project/bibliography.md). The orders are
+              `orderOptions` in src/web/BibliographyPanel.tsx: prioritised, first
               cited, relevance, influence. Sources' Bibliography since
               2026-10-09, titled with the sub-mode's name (plan 261009l). */}
           <Tile name="Bibliography." span="wide" mode="sources">

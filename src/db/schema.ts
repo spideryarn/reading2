@@ -82,7 +82,7 @@ import type {
   Author,
   Block,
   BlockKind,
-  Citations,
+  Bibliography,
   Arc,
   Citation,
   Debate,
@@ -1293,16 +1293,37 @@ export const articleRevisions = spideryarn.table(
     debateClaims: jsonb("debate_claims").$type<DebateClaimList>(),
 
     /**
-     * Every work the piece cites — `Citations`, src/types.ts, written by the
-     * `citations` step. docs/plans/260911g-citations-mode.md.
+     * Every work the piece cites — `Bibliography`, src/types.ts, written by the
+     * `bibliography` step. docs/plans/260911g-citations-mode.md.
      *
      * The WHOLE artefact, like its neighbours. `sourceHash` is
      * `articleWithIdsFingerprint` over every block (the notes and the
      * bibliography included), the tree and the cited head. No `profileHash`.
      * No foreign key from a place's `blockId` to `revision_blocks`, on the
      * argument its neighbours make.
+     *
+     * The column was `citations` until 2026-10-09 (plan 261009w), and the old
+     * one is still here below, kept equal to this one by a trigger.
      */
-    citations: jsonb("citations").$type<Citations>(),
+    bibliography: jsonb("bibliography").$type<Bibliography>(),
+
+    /**
+     * **Retired: nothing reads or writes this.** Bibliography's column before
+     * plan 261009w renamed it to `bibliography` above, by expand and contract:
+     * the migration `drizzle/20261009…_bibliography_expand.sql` added the new
+     * column, copied this one into it, and put a trigger
+     * (`article_revisions_mirror_renamed`) on the table that keeps the two
+     * equal whichever one a write names. That is what lets the pre-rename code,
+     * which still says `citations`, run against the new schema for the minutes
+     * of the deploy without losing a write in either direction.
+     *
+     * Declared only so `drizzle-kit generate` does not propose dropping it
+     * before its time. Excluded from whole-row reads (`ACTIVE_REVISION_COLUMNS`
+     * in src/store/revision-columns.ts), from the export bundle, and from the
+     * revision carry (the trigger fills it). **Dropped by the contract
+     * migration, plan 261009w's queue item**, with this declaration.
+     */
+    legacyCitations: jsonb("citations").$type<Bibliography>(),
 
     /**
      * The article's own images, and what became of each — `Assets`,
@@ -3480,8 +3501,14 @@ export const revisionStepRuns = spideryarn.table(
          literal is still a second copy kept by hand.
          `tests/db-step-constraint.test.ts` compares the last `ADD CONSTRAINT`
          in the migrations against `STEP_ORDER` in both directions, which is
-         what makes there not be a third drift. */
-      sql`${t.stepName} in ('fetch','metadata','extract','blocks','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','relations','sketch','illustrated','debate','debate-claims','citations','crossrefs','simple')`,
+         what makes there not be a third drift.
+
+         **`'citations'` is not a step any more** and is still listed, on
+         purpose: plan 261009w renamed it `bibliography` by expand and
+         contract, so through the deploy both spellings' rows exist, a trigger
+         mirroring each write onto the other. The contract migration deletes
+         the old rows and narrows this; the test names the allowance. */
+      sql`${t.stepName} in ('fetch','metadata','extract','blocks','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','relations','sketch','illustrated','debate','debate-claims','citations','bibliography','crossrefs','simple')`,
     ),
     check(
       "revision_step_runs_status",
@@ -4375,8 +4402,12 @@ export const chatThreads = spideryarn.table(
      * (docs/project/sql.md: columns over JSON). All null for every other
      * thread. Plan docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md, D1.
      *
-     * - `origin_mode`: which mode. `debate`, `glossary` and `citations` are
-     *   written; `summary` is reserved.
+     * - `origin_mode`: which mode. `debate`, `glossary`, `bibliography` and
+     *   `ideas` are written; `summary` is reserved. `citations` is a cited
+     *   work's origin as written before 2026-10-09 (plan 261009w): still
+     *   admitted, never written now, and read as `bibliography` by
+     *   `originFromColumns` (src/thread-origin.ts). The contract migration
+     *   rewrites those rows and narrows the CHECKs below.
      * - `origin_item_id`: the item's id where it has a durable one (a glossary
      *   entry, a cited work). Null for a claim, which has none. Never
      *   dereferenced, and no foreign key: the entry may be regenerated away.
@@ -4436,7 +4467,7 @@ export const chatThreads = spideryarn.table(
        article's and the quote is not empty. */
     check(
       "chat_threads_origin_mode",
-      sql`${t.originMode} is null or ${t.originMode} in ('debate','summary','glossary','citations','ideas')`,
+      sql`${t.originMode} is null or ${t.originMode} in ('debate','summary','glossary','citations','bibliography','ideas')`,
     ),
     /* No mode, no origin: the other four columns mean nothing without it. */
     check(
@@ -4457,7 +4488,7 @@ export const chatThreads = spideryarn.table(
        without the last arm being read. */
     check(
       "chat_threads_origin_item",
-      sql`${t.originMode} is null or ${t.originMode} not in ('glossary','citations','ideas') or (${t.originItemId} is not null and ${t.originQuote} is not null and ${t.originBlockId} is null and ${t.originLens} is null)`,
+      sql`${t.originMode} is null or ${t.originMode} not in ('glossary','citations','bibliography','ideas') or (${t.originItemId} is not null and ${t.originQuote} is not null and ${t.originBlockId} is null and ${t.originLens} is null)`,
     ),
     /* `summary`, which the list above reserves, has no shape of its own yet,
        so it carries none of the shape columns and cannot get one by accident
@@ -5020,7 +5051,7 @@ export const glossaryLookups = spideryarn.table(
  * docs/plans/260911g-citations-mode.md § Stage 3. `glossary_lookups`' shape
  * exactly: reader state, one row per `(article, entry)`, apart from the
  * artefact and attached to the entry at read time (src/store/pg.ts §
- * `loadCitations`), keyed on the entry id that stage 1 inherits across re-runs
+ * `loadBibliography`), keyed on the entry id that stage 1 inherits across re-runs
  * by dedupe key — so a page found once survives the list being found again.
  *
  * **Only a kept find is a row.** A search that matched nothing stores nothing;

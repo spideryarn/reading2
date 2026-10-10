@@ -382,7 +382,7 @@ const NOTHING_SHARED: PublicArtefacts = {
   skim: false,
   faq: false,
   simpleSummary: false,
-  citations: false,
+  bibliography: false,
   debate: false,
 };
 

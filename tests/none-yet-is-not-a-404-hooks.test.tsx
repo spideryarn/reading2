@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * **The three always-mounted reads ask for `200 null`, and read it as "none
- * yet"** — `useQuizRead`, `useCitationsRead`, `useCrossrefs`.
+ * yet"** — `useQuizRead`, `useBibliographyRead`, `useCrossrefs`.
  * docs/plans/261006g-none-yet-is-not-a-404-and-admin-costs-scroll-cue.md § Stage 1.
  *
  * 1. Each sends the opt-in header on its GET.
@@ -60,7 +60,7 @@ vi.mock("../src/web/lib/api.js", async () => {
 });
 
 const { useQuizRead } = await import("../src/web/useQuiz.js");
-const { useCitationsRead } = await import("../src/web/useCitations.js");
+const { useBibliographyRead } = await import("../src/web/useBibliography.js");
 const { useCrossrefs } = await import("../src/web/useCrossrefs.js");
 const { useSimple } = await import("../src/web/useSimple.js");
 const { useIdeasRead } = await import("../src/web/useIdeas.js");
@@ -137,13 +137,13 @@ describe.each(ANSWERS)("%s is none yet", (_name, reply) => {
     });
   });
 
-  it("citations: the panel's button, not an error", async () => {
-    await mount(useCitationsRead);
-    expect(asked).toEqual([{ url: `/api/citations/${SLUG}`, header: "1" }]);
-    const read = seen as { status: string; citations: unknown; error: unknown };
-    expect({ status: read.status, citations: read.citations, error: read.error }).toEqual({
+  it("bibliography: the panel's button, not an error", async () => {
+    await mount(useBibliographyRead);
+    expect(asked).toEqual([{ url: `/api/bibliography/${SLUG}`, header: "1" }]);
+    const read = seen as { status: string; bibliography: unknown; error: unknown };
+    expect({ status: read.status, bibliography: read.bibliography, error: read.error }).toEqual({
       status: "none",
-      citations: null,
+      bibliography: null,
       error: null,
     });
   });
@@ -157,7 +157,7 @@ describe.each(ANSWERS)("%s is none yet", (_name, reply) => {
 
 const READERS = [
   ["quiz", useQuizRead, { quiz: { batchId: "batch", slug: SLUG, questions: [] }, stale: false, outdated: false, profileChanged: false, attempts: [] }],
-  ["citations", useCitationsRead, { citations: { slug: SLUG, citations: [] }, stale: false, outdated: false }],
+  ["bibliography", useBibliographyRead, { bibliography: { slug: SLUG, citations: [] }, stale: false, outdated: false }],
 ] as const;
 
 function json(body: unknown): Response {

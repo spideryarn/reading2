@@ -306,7 +306,7 @@ modes; each item points to the mode doc that holds its machinery.
 
   How it was done without making every reader fetch every list:
   [260908i](../plans/260908i-quotes-marked-in-the-prose-in-every-mode.md), and
-  [citations.md § Marked in the prose, in every mode](citations.md#marked-in-the-prose-in-every-mode).
+  [bibliography.md § Marked in the prose, in every mode](bibliography.md#marked-in-the-prose-in-every-mode).
 - **The rated lists in Glossary and FAQ open in a prioritised order, with a threshold the reader
   can move.**
 

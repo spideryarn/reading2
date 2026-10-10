@@ -423,7 +423,7 @@ const REVISION_WRITTEN_ELSEWHERE = [
   "ideas",
   "quotes",
   "timeline",
-  "citations",
+  "bibliography",
   "quiz",
   "faq",
   "relations",
@@ -504,7 +504,7 @@ function augmentationFiles(rows: ArticleRows): Map<string, string> {
   at("ideas.json", revision.ideas);
   at("quotes.json", revision.quotes);
   at("timeline.json", revision.timeline);
-  at("citations.json", revision.citations);
+  at("bibliography.json", revision.bibliography);
   at("quiz.json", revision.quiz);
   at("faq.json", revision.faq);
   at("relations.json", revision.relations);
@@ -644,7 +644,7 @@ one thing that will make the rest of these files make sense.
       ideas.json           Propositions the article takes as given.
       quotes.json          Lines worth keeping.
       timeline.json        When the article says things happened.
-      citations.json       Every work the article cites, and the link the article gave for it.
+      bibliography.json    Every work the article cites, and the link the article gave for it.
       sketch.json          The diagram.
       illustrated.json     The same argument painted, and where each plate's bytes are.
       quiz.json            Questions generated from the article.
@@ -840,7 +840,7 @@ const FILE_NOTES: Readonly<Record<string, string>> = {
   "augmentations/ideas.json": "Propositions the article takes as given.",
   "augmentations/quotes.json": "Lines worth keeping.",
   "augmentations/timeline.json": "When the article says things happened.",
-  "augmentations/citations.json": "Every work the article cites, and the link the article gave for it.",
+  "augmentations/bibliography.json": "Every work the article cites, and the link the article gave for it.",
   "augmentations/quiz.json": "Questions generated from the article.",
   "augmentations/faq.json":
     "Questions a careful reader might put to the article, and the passages that respond.",
@@ -961,7 +961,7 @@ function bundleCounts(rows: ArticleRows): { readonly label: string; readonly n: 
     { label: "ideas", n: countOf(revision.ideas, "ideas") },
     { label: "quotes", n: countOf(revision.quotes, "quotes") },
     { label: "timeline events", n: countOf(revision.timeline, "events") },
-    { label: "cited works", n: countOf(revision.citations, "citations") },
+    { label: "cited works", n: countOf(revision.bibliography, "citations") },
     { label: "quiz questions", n: countOf(revision.quiz, "questions") },
     { label: "FAQ questions", n: countOf(revision.faq, "questions") },
     { label: "Debate's listed claims", n: countOf(revision.debateClaims, "claims") },

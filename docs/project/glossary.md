@@ -456,7 +456,7 @@ opened. Four things follow, and three of them are the interesting part:
   optional: `useJobs` treats its first poll as a baseline and does not announce a job that had
   already finished, so a glossary written in another tab while the band was closed has nothing
   else to bring it in. (A completion announced by this tab's engine after the reader left the band
-  is heard by the read itself — `useStepFinished`, src/web/useCitations.ts § An always-mounted read
+  is heard by the read itself — `useStepFinished`, src/web/useBibliography.ts § An always-mounted read
   is not an always-fresh read.) So the rule is not "fetch once" — it is that **`status` never goes back to
   `loading` for an article it has already answered for**. Moving to a *different* article does
   reset it, deliberately: that is a list nobody has yet.
@@ -469,7 +469,7 @@ to bring to it, the web answer if somebody has already asked for one, and a way 
 
 **It is one card with several sections, not the glossary's card**, and it has been since the
 footnote markers joined it: a term, a footnote in full, a link described, and — since 2026-09-16 — a
-work the piece cites ([citations.md](citations.md)). A phrase that is two of those draws two
+work the piece cites ([bibliography.md](bibliography.md)). A phrase that is two of those draws two
 sections, which is why the machinery below is written against `<mark>` elements in general rather
 than against `mark.term`.
 
@@ -703,7 +703,7 @@ aliases. The prompt now names both as examples of what not to do, and the re-run
 The prompt invited it: *"works … named without introduction"* earn entries, and a paper cited as
 "Saha et al." is one. Since `glossary/9` the prompt draws the line at **cited against discussed**. A
 work the piece only points at as a source, and its authors where they are named only as that
-citation, is not meant to get an entry or be an alias; [Citations](citations.md) lists them. The
+citation, is not meant to get an entry or be an alias; [Citations](bibliography.md) lists them. The
 test the prompt gives is the name's job in the piece: only there to say where a claim came from, or
 something the reader needs to know to follow it. A person the piece tells about, and a work it
 examines, still get entries, and a person it both tells about and cites keeps theirs. An idea a
@@ -773,12 +773,12 @@ searching to the model, which on anything it thought it knew chose not to. Asked
 
 There were three such places, and they are now one action, **Dig deeper**: this button, a comment's
 re-ask (*Search the web* until then — [comments.md § pushing back](comments.md#pushing-back)) and
-Citations' *Investigate* ([citations.md § Dig deeper](citations.md#dig-deeper-a-closer-look-at-one-work-on-demand)).
+Citations' *Investigate* ([bibliography.md § Dig deeper](bibliography.md#dig-deeper-a-closer-look-at-one-work-on-demand)).
 Glossary and Citations say *Digging deeper…* while it runs and *Dig deeper again* over a kept
 answer; a comment hides the button while it runs and keeps calling the re-ask *Dig deeper*. The
 shared half is [`src/dig-deeper.ts`](../../src/dig-deeper.ts) — steps 1 and 2 below and the model;
 step 3 is the glossary's and a comment's, and Citations' is
-[its own](citations.md#dig-deeper-a-closer-look-at-one-work-on-demand). A press:
+[its own](bibliography.md#dig-deeper-a-closer-look-at-one-work-on-demand). A press:
 
 1. **Runs a web search, forced by code rather than left to the model.** `searchFirst` makes one
    quick-tier call (the `dig-deeper-search` job) with `tool_choice: "required"` and the Exa engine,
@@ -1016,7 +1016,7 @@ The button and the line are shared with Debate and Citations:
 [`chat-handoff.ts`](../../src/web/chat-handoff.ts). The plan is
 [261006d](../plans/261006d-glossary-and-citations-ask-in-chat-with-origin.md); the journey through
 the whole app is held by
-[`glossary-and-citations-ask-in-chat.test.tsx`](../../tests/glossary-and-citations-ask-in-chat.test.tsx).
+[`glossary-and-bibliography-ask-in-chat.test.tsx`](../../tests/glossary-and-bibliography-ask-in-chat.test.tsx).
 
 ### Looking a term up
 
@@ -1192,7 +1192,7 @@ this panel's and a comment's, which share one — takes the `dig-deeper` allowan
 day per reader, two at once, and a global fuse across every reader a day). It is taken after every
 refusal that costs nothing and before anything that does, so a refused press is an ordinary JSON 429,
 or a 503 carrying `[dig-resting]`, and changes nothing. Citations' Dig deeper keeps its own allowance
-([citations.md](citations.md#dig-deeper-a-closer-look-at-one-work-on-demand)); a comment's first
+([bibliography.md](bibliography.md#dig-deeper-a-closer-look-at-one-work-on-demand)); a comment's first
 answer, the tick-box, spends none.
 
 **This box has no rate limit, no quota and no single-flight guard.** So **an owner with one article

@@ -98,7 +98,7 @@ import {
   sourceOf,
   verdictText,
   workByLine,
-} from "./CitationsPanel.js";
+} from "./BibliographyPanel.js";
 import { HOVER_DELAY, useHoverCard } from "./useHoverCard.js";
 
 /**
@@ -229,7 +229,7 @@ function HoverCard({
    * read (`owner?.citations`). That is a choice in Reader, not a property of
    * the data: a visitor's band has its own public projection since 260929c
    * (src/web/visitor.ts), so the owner-only *parts* of a row are gated here
-   * by name too — see `showInSpideryarn` (docs/project/citations.md § Who
+   * by name too — see `showInSpideryarn` (docs/project/bibliography.md § Who
    * sees it).
    *
    * A list rather than a `Map`, matching `entries`; `byWork` below does the
@@ -2065,7 +2065,7 @@ function clip(text: string, max: number): string {
  * address would teach a reader the opposite of what the band teaches them, from
  * the same data, two panels apart. `sourceOf` is total over `linkFrom`, so there
  * is no fifth case for this file to get wrong.
- * docs/project/citations.md § The one safety property.
+ * docs/project/bibliography.md § The one safety property.
  *
  * ## What is deliberately not here
  *
@@ -2130,7 +2130,7 @@ function CiteCard({
         {source.kind === "address" ? (
           /* `noreferrer` as well as `noopener`, as everywhere outbound here: the
              article's own URL is a reading history. The scheme was settled
-             server-side — `linkFor` in src/citations.ts builds every one of
+             server-side — `linkFor` in src/bibliography.ts builds every one of
              these from an identifier or an anchor the article itself carried. */
           <a
             className="prose-card-name"
@@ -2175,7 +2175,7 @@ function CiteCard({
 
       <div className="prose-card-part prose-card-part-why">
         {/* `why` only beside the verdict that was checked against it
-            (CitationsPanel.tsx § showsWhy, plan 261003j). The lookup alone:
+            (BibliographyPanel.tsx § showsWhy, plan 261003j). The lookup alone:
             this card draws no *Dig deeper* answer. */}
         {showsWhy({ lookup: work.lookup }) && (
           <>
@@ -2184,7 +2184,7 @@ function CiteCard({
           </>
         )}
         {/* The band's line, from the band's function: what we have read of
-            the work. CitationsPanel.tsx § what we have and have not read. */}
+            the work. BibliographyPanel.tsx § what we have and have not read. */}
         <p className="prose-card-cite-read">{readNoteOf(work)}</p>
       </div>
       <CiteCardReading work={work} />
@@ -2325,7 +2325,7 @@ function CitedAtJumps({
  * AI's reading of the extract, and **one** quote labelled as the extract's:
  * the verdict's own when it has one, otherwise `paperDoes` with the sentence it
  * bears out. The labels and the verdict's words are the band's
- * (CitationsPanel.tsx), so the two surfaces cannot say it differently. Nothing
+ * (BibliographyPanel.tsx), so the two surfaces cannot say it differently. Nothing
  * for a lookup that read nothing: the line above already says so. No button —
  * see `CiteCard` § What is deliberately not here.
  */

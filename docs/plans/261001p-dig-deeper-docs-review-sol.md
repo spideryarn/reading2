@@ -4,7 +4,7 @@ Verdict: needs correction — no P0; 10 P1, 7 P2, and 4 P3 findings. Greg’s qu
 
   Corrected wording: “Since Dig deeper, a press ignores this override: its quick check and paper-passage call use `DIG_DEEPER_MODEL`. A lookup saved by the press still attaches while this override is active. Stand-alone `POST …/find` continues to use it.”
 
-- **F20 — P1** — [citations.md:456](/home/greg/code/spideryarn2/.claude/worktrees/go-deeper/docs/project/citations.md:456) says the investigation fingerprint “covers everything sent.” Forced-search and library findings are deliberately excluded at [citation-investigate.ts:1010](/home/greg/code/spideryarn2/.claude/worktrees/go-deeper/src/citation-investigate.ts:1010), as is fetched paper content at [citation-investigate-context.ts:164](/home/greg/code/spideryarn2/.claude/worktrees/go-deeper/src/citation-investigate-context.ts:164).
+- **F20 — P1** — [citations.md:456](/home/greg/code/spideryarn2/.claude/worktrees/go-deeper/docs/project/bibliography.md:456) says the investigation fingerprint “covers everything sent.” Forced-search and library findings are deliberately excluded at [citation-investigate.ts:1010](/home/greg/code/spideryarn2/.claude/worktrees/go-deeper/src/citation-investigate.ts:1010), as is fetched paper content at [citation-investigate-context.ts:164](/home/greg/code/spideryarn2/.claude/worktrees/go-deeper/src/citation-investigate-context.ts:164).
 
   Corrected wording: “The fingerprint covers reconstructible inputs: the article, work fields and link, why and citing passages, profile, current quick-check match, prompt and paper-selection versions, and model generation. Search findings and fetched paper content are dated snapshots and are not fingerprinted.”
 
@@ -40,11 +40,11 @@ Verdict: needs correction — no P0; 10 P1, 7 P2, and 4 P3 findings. Greg’s qu
 
   Corrected wording: “…all three Dig deeper paths’ forced search (`dig-deeper-search`); glossary/comments’ answer (`dig-deeper`); and Citations’ answer (`citation-investigate`, with `citations-find` and `citation-paper-passages` when needed)…”
 
-- **F29 — P2** — [citations.md:371](/home/greg/code/spideryarn2/.claude/worktrees/go-deeper/docs/project/citations.md:371) calls the context “the first paragraph that cites it.” Code takes the first non-empty citing block at [citation-investigate-context.ts:107](/home/greg/code/spideryarn2/.claude/worktrees/go-deeper/src/citation-investigate-context.ts:107), then clips it at [dig-deeper.ts:273](/home/greg/code/spideryarn2/.claude/worktrees/go-deeper/src/dig-deeper.ts:273).
+- **F29 — P2** — [citations.md:371](/home/greg/code/spideryarn2/.claude/worktrees/go-deeper/docs/project/bibliography.md:371) calls the context “the first paragraph that cites it.” Code takes the first non-empty citing block at [citation-investigate-context.ts:107](/home/greg/code/spideryarn2/.claude/worktrees/go-deeper/src/citation-investigate-context.ts:107), then clips it at [dig-deeper.ts:273](/home/greg/code/spideryarn2/.claude/worktrees/go-deeper/src/dig-deeper.ts:273).
 
   Corrected wording: “…the first non-empty citing passage, clipped to 800 characters.”
 
-- **F30 — P2** — [citations.md:473](/home/greg/code/spideryarn2/.claude/worktrees/go-deeper/docs/project/citations.md:473) describes one `citation-investigate` job “with `citation-paper-passages` inside it.” A press can record four separate gateway jobs: the forced search at [dig-deeper.ts:370](/home/greg/code/spideryarn2/.claude/worktrees/go-deeper/src/dig-deeper.ts:370), quick check, paper passages, and streamed answer at [citation-investigate.ts:1092](/home/greg/code/spideryarn2/.claude/worktrees/go-deeper/src/citation-investigate.ts:1092).
+- **F30 — P2** — [citations.md:473](/home/greg/code/spideryarn2/.claude/worktrees/go-deeper/docs/project/bibliography.md:473) describes one `citation-investigate` job “with `citation-paper-passages` inside it.” A press can record four separate gateway jobs: the forced search at [dig-deeper.ts:370](/home/greg/code/spideryarn2/.claude/worktrees/go-deeper/src/dig-deeper.ts:370), quick check, paper passages, and streamed answer at [citation-investigate.ts:1092](/home/greg/code/spideryarn2/.claude/worktrees/go-deeper/src/citation-investigate.ts:1092).
 
   Corrected wording: “A press can record `dig-deeper-search`; `citations-find` when the quick check runs; `citation-paper-passages` when paper passages are picked; and `citation-investigate` for the streamed answer.”
 
@@ -68,7 +68,7 @@ Verdict: needs correction — no P0; 10 P1, 7 P2, and 4 P3 findings. Greg’s qu
 
   Corrected wording: “Most rows below are per-call overrides. The Dig deeper rows name exceptions whose legacy task variables are still reported by `/profile` but do not control the reader-triggered answer.”
 
-- **F36 — P3** — [citations.md:472](/home/greg/code/spideryarn2/.claude/worktrees/go-deeper/docs/project/citations.md:472) restates “8 results” and “8,000 characters each.” These values are owned by `INVESTIGATE_MAX_TOTAL_RESULTS` and `INVESTIGATE_MAX_CHARACTERS` at [citation-investigate.ts:165](/home/greg/code/spideryarn2/.claude/worktrees/go-deeper/src/citation-investigate.ts:165).
+- **F36 — P3** — [citations.md:472](/home/greg/code/spideryarn2/.claude/worktrees/go-deeper/docs/project/bibliography.md:472) restates “8 results” and “8,000 characters each.” These values are owned by `INVESTIGATE_MAX_TOTAL_RESULTS` and `INVESTIGATE_MAX_CHARACTERS` at [citation-investigate.ts:165](/home/greg/code/spideryarn2/.claude/worktrees/go-deeper/src/citation-investigate.ts:165).
 
   Corrected wording: “The answer’s optional Exa tool is pinned and bounded by `INVESTIGATE_MAX_TOTAL_RESULTS` and `INVESTIGATE_MAX_CHARACTERS`.” This should also distinguish it from the forced search’s separate bounds.
 

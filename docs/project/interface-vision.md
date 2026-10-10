@@ -70,7 +70,7 @@ anchored, so placing it costs layout, not a model call.
 |---|---|---|---|
 | Glossary terms | phrases | middle: dotted underline + card | **yes**, in every mode ([glossary.md](glossary.md)) |
 | Quotes | sentences | middle: the quote's rule | **yes**, in every mode ([quotes.md](quotes.md)) |
-| Citations | phrases | middle: citation mark | **yes** ([citations.md](citations.md)) |
+| Citations | phrases | middle: citation mark | **yes** ([bibliography.md](bibliography.md)) |
 | Cross-references | phrases | middle: underline + hover card | **yes**, owner-only ([cross-references.md](cross-references.md)) |
 | Quiz questions | paragraphs | middle: italic line after the paragraph | **yes** ([quiz.md](quiz.md)) |
 | Socratic questions, the arc | parts | right, and the right's head | **yes**, in Marginalia |

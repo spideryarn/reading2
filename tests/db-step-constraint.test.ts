@@ -32,6 +32,24 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { readJournal } from "../scripts/migration-ledger.js";
 import { STEP_ORDER } from "../src/pipeline.js";
+import { RETIRED_STEPS } from "../src/step-order.js";
+
+/**
+ * **Old step names the CHECK still admits, on purpose, and until when.**
+ *
+ * A rename done by expand and contract (plan
+ * docs/plans/261009w-peer-review-becomes-sources-all-the-way-down.md § The
+ * database) keeps the old name's rows through the deploy, mirrored onto the
+ * new name's by a trigger, so the pre-rename code still finds its runs. The
+ * CHECK has to hold both spellings for as long as that lasts. Each entry names
+ * what removes it; the contract migration deletes the old rows **before** it
+ * narrows the CHECK, and takes the entry out of this table in the same change.
+ * Every key must be a retired step (`RETIRED_STEPS`), so this cannot become a
+ * place to park a name nobody runs.
+ */
+const ADMITTED_DURING_EXPAND: Readonly<Record<string, string>> = {
+  citations: "Bibliography's step until 2026-10-09; removed by plan 261009w's contract migration",
+};
 
 const DRIZZLE = path.resolve(import.meta.dirname, "..", "drizzle");
 const CONSTRAINT = "revision_step_runs_step";
@@ -102,7 +120,9 @@ describe("the revision_step_runs step constraint", () => {
     const found = declaredSteps();
     expect(found).not.toBeNull();
     const declared = [...(found as { steps: string[] }).steps].sort();
-    const real = [...STEP_ORDER].sort();
+    /* The steps, plus the old names an expand and contract rename still
+       admits — `ADMITTED_DURING_EXPAND` below, which says when each goes. */
+    const real = [...STEP_ORDER, ...Object.keys(ADMITTED_DURING_EXPAND)].sort();
 
     /* Both directions, and the second one matters as much as the first. A step
        missing from the constraint kills a job at the insert; a name in the
@@ -115,6 +135,13 @@ describe("the revision_step_runs step constraint", () => {
        delete that step's runs before it narrows the constraint.
        `drizzle/0036_drop_summary_column.sql` does, in that order. */
     expect(declared).toEqual(real);
+  });
+
+  it("admits an old name only while it is a retired step's, never a step's own", () => {
+    for (const name of Object.keys(ADMITTED_DURING_EXPAND)) {
+      expect(Object.hasOwn(RETIRED_STEPS, name), `${name} is not in RETIRED_STEPS`).toBe(true);
+      expect((STEP_ORDER as readonly string[]).includes(name), `${name} is a step again`).toBe(false);
+    }
   });
 
   it("names the migration that would have to change, when it is wrong", () => {

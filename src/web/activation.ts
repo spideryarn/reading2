@@ -584,7 +584,7 @@ export function activationForSummary(view: SummaryView): AutoRunTarget | null {
 
 /**
  * **What a press that lands on one of Sources' sub-modes arms**: the
- * `citations` list for Bibliography, the `debate` search for Reception, and
+ * `bibliography` list for Bibliography, the `debate` search for Reception, and
  * the `debate-claims` list for Claims.
  *
  * One answer for the three places that must agree, as `activationForSummary`
@@ -608,7 +608,7 @@ export function activationForSources(view: SourcesView): AutoRunTarget {
   switch (view) {
     /* Citations' fixed target until 2026-10-09: the list of works cited. */
     case "bibliography":
-      return "citations";
+      return "bibliography";
     case "reception":
       return "debate";
     case "claims":
@@ -719,7 +719,7 @@ export function armActivationForRefereeView(slug: string, view: RefereeView): vo
  *    for Brief and Fuller, nothing for Thread (SummaryMode.tsx §
  *    `SummaryControls`, and `bandTarget` below);
  *  - Sources: `activationForSources` of the sub-mode **the row
- *    names** — `citations` for Bibliography, `debate` for Reception,
+ *    names** — `bibliography` for Bibliography, `debate` for Reception,
  *    `debate-claims` for Claims.
  *
  * `bandTarget` below gives the same answer for the band that mounts, which is

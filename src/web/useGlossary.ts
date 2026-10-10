@@ -443,7 +443,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
   }, [glossary, reload]);
 
   /* A run that finishes after the reader left the band still reaches the prose.
-     useCitations.ts § An always-mounted read is not an
+     useBibliography.ts § An always-mounted read is not an
      always-fresh read. */
   useStepFinished(slug, "glossary", refresh);
   /* An old hide completion must never call the `refresh` closure it captured,

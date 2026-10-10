@@ -189,7 +189,7 @@ asked for less motion gets the bar at once. Which mount plays it is
   Peer review for its first day. Open it for the merge: the chip row, where old `?mode=citations`,
   `?mode=debate` and `?mode=peer-review` links land, what each press buys, and which stored names
   still say the old words.
-  - **[citations.md](citations.md)** — Bibliography: every work the piece cites, each with a link
+  - **[bibliography.md](bibliography.md)** — Bibliography: every work the piece cites, each with a link
     out, ordered and thresholded the way the glossary is. Open it for the one safety property: every
     address a row shows was in the article, and a search says it is one.
   - **[debate.md](debate.md)** — Reception and Claims: what the rest of the web says about this

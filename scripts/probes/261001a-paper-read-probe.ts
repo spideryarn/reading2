@@ -64,8 +64,8 @@ import {
 } from "../../src/paper-evidence.js";
 import { runStream, type StreamRun, type StreamRunEvent } from "../../src/stream-run.js";
 import { costStore } from "../../src/store/ai-calls.js";
-import { citationFindStore, listArticles, loadArticle, loadCitations } from "../../src/store/index.js";
-import type { CitationFind, CitationsFound, CitedWork, PaperPassage } from "../../src/types.js";
+import { citationFindStore, listArticles, loadArticle, loadBibliography } from "../../src/store/index.js";
+import type { CitationFind, BibliographyFound, CitedWork, PaperPassage } from "../../src/types.js";
 
 const DEFAULT_WORKS = 12;
 const PAID_WORKS = 5;
@@ -110,14 +110,14 @@ interface Candidate {
 }
 
 async function candidatesOf(slug: string): Promise<Candidate[]> {
-  let found: CitationsFound;
+  let found: BibliographyFound;
   try {
-    found = await loadCitations(slug);
+    found = await loadBibliography(slug);
   } catch {
     return []; // no citations list
   }
   const out: Candidate[] = [];
-  for (const work of found.citations.citations) {
+  for (const work of found.bibliography.citations) {
     const hasLookup = work.lookup?.state === "assessed" || work.lookup?.state === "unreadable";
     const matched = hasLookup ? matchedPageOf(work, await citationFindStore.load(slug, work.id)) : null;
     const address = paperAddress(work.url, matched?.url ?? null);
@@ -272,13 +272,13 @@ async function paidPress(c: Candidate): Promise<PaidRow> {
   /* In-memory finds: a *Look it up* the press runs first is kept here, not saved. */
   const memoryFinds = new Map<string, CitationFind>();
   const key = (slug: string, id: string) => `${slug}\u0000${id}`;
-  const overlay = async (slug: string): Promise<CitationsFound> => {
-    const found = await loadCitations(slug);
-    const rows = found.citations.citations.map((w) => {
+  const overlay = async (slug: string): Promise<BibliographyFound> => {
+    const found = await loadBibliography(slug);
+    const rows = found.bibliography.citations.map((w) => {
       const f = memoryFinds.get(key(slug, w.id));
       return f?.lookup ? { ...w, lookup: f.lookup } : w;
     });
-    return { ...found, citations: { ...found.citations, citations: rows } };
+    return { ...found, bibliography: { ...found.bibliography, citations: rows } };
   };
 
   let evidence: PaperEvidence | null = null;
@@ -292,7 +292,7 @@ async function paidPress(c: Candidate): Promise<PaidRow> {
   let streamEndedAt: number | null = null;
 
   const deps: InvestigateCitationDeps = {
-    reader: { loadCitations: overlay, loadArticle },
+    reader: { loadBibliography: overlay, loadArticle },
     finds: {
       load: async (slug, id) => memoryFinds.get(key(slug, id)) ?? citationFindStore.load(slug, id),
       save: async (slug, id, find) => {
@@ -352,7 +352,7 @@ async function paidPress(c: Candidate): Promise<PaidRow> {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (message === CITATION_INVESTIGATE_QUOTED.message) {
-        const fresh = (await overlay(c.slug)).citations.citations.find((w) => w.id === c.work.id) ?? c.work;
+        const fresh = (await overlay(c.slug)).bibliography.citations.find((w) => w.id === c.work.id) ?? c.work;
         const { article, context } = await contextFor(c.slug, fresh);
         const matched = matchedPageOf(fresh, await deps.finds.load(c.slug, c.work.id));
         ending = `stopped by the quote guard: ${guardCause(allowedQuoteTexts(article.blocks, context, matched), rawDeltas)}`;

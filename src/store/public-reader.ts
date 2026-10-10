@@ -408,15 +408,15 @@ const PUBLIC_PROJECTIONS = {
        `publicSkim` in ../public/dto.ts.
        docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
     skim: articleRevisions.skim,
-    /* **The ninth and tenth, 2026-09-29: the FAQ and the Citations list**, two
+    /* **The ninth and tenth, 2026-09-29: the FAQ and the Bibliography**, two
        more `jsonb` columns on this row, withheld until then for the cost of
        *making* them (SPIDERYARN-READING2-56). Neither carries a profile. Every
        cited work's address is re-judged by `publicCitationUrl`, and its `key`
-       and the owner's *Find it* results stay behind — `publicCitationsList` in
+       and the owner's *Find it* results stay behind — `publicBibliographyList` in
        ../public/dto.ts. The finds are a separate table this read never joins.
        docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
     faq: articleRevisions.faq,
-    citations: articleRevisions.citations,
+    bibliography: articleRevisions.bibliography,
     /* **Simple, from the day it was built** (2026-09-30): generated output, so
        a visitor sees the stored one, and only making one is the owner's
        (docs/project/mode.md § The artefact). No profile; the stamp is
@@ -1046,7 +1046,7 @@ export const pgPublicReader: PublicArticleReader = {
         skim: found.revision.skim,
         faq: found.revision.faq,
         simpleSummary: found.revision.simpleSummary,
-        citations: found.revision.citations,
+        bibliography: found.revision.bibliography,
         debate: found.revision.debate,
         debateClaims: found.revision.debateClaims,
         crossrefs,

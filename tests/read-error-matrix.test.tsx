@@ -170,7 +170,7 @@ const SAYS = {
   debate: "The Leiden replication",
   "debate-claims": "A rig can be built before its reading is understood.",
   glossary: "Kolmogorov depth",
-  citations: "Elements of Episodic Memory",
+  bibliography: "Elements of Episodic Memory",
   quiz: "What was built before it could be explained?",
   illustrated: "The rig, painted",
   sketch: "The calibrated rig",
@@ -356,14 +356,14 @@ const BODIES: Record<string, unknown> = {
     outdated: false,
     profileChanged: false,
   },
-  citations: {
-    citations: {
+  bibliography: {
+    bibliography: {
       ...STAMP,
       citations: [
         {
           id: "spya-c7t2wd",
           key: "work:elements of episodic memory|tulving|1983",
-          title: SAYS.citations,
+          title: SAYS.bibliography,
           authors: "Tulving",
           year: "1983",
           why: "The idea the piece tests.",
@@ -552,7 +552,7 @@ const { useFaqRead } = await import("../src/web/useFaq.js");
 const { useTimelineRead } = await import("../src/web/useTimeline.js");
 const { useDebateRead } = await import("../src/web/useDebate.js");
 const { useDebateClaims } = await import("../src/web/useDebateClaims.js");
-const { useCitationsRead } = await import("../src/web/useCitations.js");
+const { useBibliographyRead } = await import("../src/web/useBibliography.js");
 const { useSimple } = await import("../src/web/useSimple.js");
 
 let host: HTMLDivElement;
@@ -672,7 +672,7 @@ const ROWS: readonly Row[] = [
   /* Claims' own read, on Claims (plan 261008i stage 2). */
   { hook: "useDebateClaims.ts", kind: "debate-claims", search: "?mode=sources&sources=claims", where: ".mode-band.dbt" },
   { hook: "useGlossary.ts", kind: "glossary", search: "?mode=glossary", where: ".mode-band.gloss" },
-  { hook: "useCitations.ts", kind: "citations", search: "?mode=sources", where: ".mode-band.citations" },
+  { hook: "useBibliography.ts", kind: "bibliography", search: "?mode=sources", where: ".mode-band.bibliography" },
   {
     hook: "useQuiz.ts",
     kind: "quiz",
@@ -1408,7 +1408,7 @@ const AFTER_NONE_READS: readonly { kind: string; use: (slug: string) => Artefact
   /* No read half of its own: the whole hook, unarmed, so nothing it mounts can spend. */
   { kind: "debate-claims", use: (slug) => useDebateClaims(slug, false) },
   { kind: "glossary", use: useGlossaryRead },
-  { kind: "citations", use: useCitationsRead },
+  { kind: "bibliography", use: useBibliographyRead },
   { kind: "quiz", use: useQuizRead },
   { kind: "illustrated", use: (slug) => useIllustrated(slug, BLOCKS) },
   { kind: "sketch", use: (slug) => useSketch(slug, BLOCKS.map((b) => b.id)) },

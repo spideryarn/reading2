@@ -1,7 +1,7 @@
 /**
  * **The numbers on Sources' three chips, and the rows behind them** —
  * pure selectors, used by the chip row (SourcesMode.tsx §
- * `SourcesViews`) and by the panels that draw the lists (CitationsPanel,
+ * `SourcesViews`) and by the panels that draw the lists (BibliographyPanel,
  * DebatePanel), so a chip's number and the list under it are one derivation
  * and cannot disagree. GPT Sol's F4 on
  * docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md: the

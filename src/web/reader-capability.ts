@@ -36,7 +36,7 @@ import type { SavedSearch } from "./useSearch.js";
 import type { PublicArtefactSet, PublicArtefacts, PublicSharedBy } from "../public-types.js";
 import type { GlossaryRead } from "./useGlossary.js";
 import type { QuotesRead } from "./useQuotes.js";
-import type { CitationsRead } from "./useCitations.js";
+import type { BibliographyRead } from "./useBibliography.js";
 import type { QuizRead } from "./useQuiz.js";
 import type { ChatAnchorsApi } from "./useChatAnchors.js";
 import type { ClientComment, CommentsApi } from "./useComments.js";
@@ -64,7 +64,7 @@ export type ReaderCapability =
        */
       quotes: QuotesRead;
       /**
-       * The opening citations read, shared with the band. `useCitationsRead`.
+       * The opening citations read, shared with the band. `useBibliographyRead`.
        *
        * Here for the reason `quotes` is, one feature later: since 2026-09-16
        * the works the piece cites are marked in the prose in **every** mode
@@ -78,7 +78,7 @@ export type ReaderCapability =
        * because this read is not on their arm. The card's owner-only parts
        * are gated by name as well (ProseHoverCard.tsx § `showInSpideryarn`).
        */
-      citations: CitationsRead;
+      bibliography: BibliographyRead;
       /**
        * The opening quiz read, shared with the band. `useQuizRead`.
        *
@@ -282,7 +282,7 @@ export const NO_TERMS: Glossary["entries"] = [];
    in Reader.tsx memoises on it by identity, and an article with no citations —
    still the ordinary case — must not hand that memo a fresh array on every
    render. There is no visitor arm to share it with: a visitor has no citations
-   at all (see `citations` on the owner arm above). */
+   at all (see `bibliography` on the owner arm above). */
 export const NO_WORKS: CitedWork[] = [];
 
 /**
@@ -315,6 +315,6 @@ export const OWNER_HAS_EVERYTHING: PublicArtefacts = {
   skim: true,
   faq: true,
   simpleSummary: true,
-  citations: true,
+  bibliography: true,
   debate: true,
 };

@@ -21,10 +21,10 @@
  * ends. So code splits the list at its own numbers — `8.`, `[8]`, `8)` at the
  * start of a line, each exactly one more than the last — and the model names an
  * entry by number, which code then checks against the `[8]` in the citing
- * words (src/citations.ts § `verifyEntry`). An author–year list has no number
+ * words (src/bibliography.ts § `verifyEntry`). An author–year list has no number
  * to check a pairing by, and is left for later.
  *
- * Pure: lines in, entries or `null` out. The pipeline's `citations` step does
+ * Pure: lines in, entries or `null` out. The pipeline's `bibliography` step does
  * the reading (src/pipeline.ts § `pdfReferenceList`), and hands this the lines
  * with the running headers and footers already taken out (`pageLines` in
  * src/pdf.ts), so a journal header repeated on every bibliography page — even

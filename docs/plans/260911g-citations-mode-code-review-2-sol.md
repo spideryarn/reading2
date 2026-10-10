@@ -3,7 +3,7 @@
 **F17 — P3 — established: the UI overstated the search bound.**
 
 - **(a)** The button tooltip and mode catalogue promised “one web search,” although the enforced boundary is one search-backed model call; the provider may perform several searches inside it. The new assertion failed against the previous copy with: `Runs one web search...`.
-- **(b)** I changed the wording to “one search-backed model call” in [CitationsPanel.tsx](/home/greg/code/spideryarn2/.claude/worktrees/citations-review-2/src/web/CitationsPanel.tsx:590) and [mode-catalog.ts](/home/greg/code/spideryarn2/.claude/worktrees/citations-review-2/src/mode-catalog.ts:417). The regression test is in [citations-panel.test.tsx](/home/greg/code/spideryarn2/.claude/worktrees/citations-review-2/tests/citations-panel.test.tsx:227).
+- **(b)** I changed the wording to “one search-backed model call” in [CitationsPanel.tsx](/home/greg/code/spideryarn2/.claude/worktrees/citations-review-2/src/web/BibliographyPanel.tsx:590) and [mode-catalog.ts](/home/greg/code/spideryarn2/.claude/worktrees/citations-review-2/src/mode-catalog.ts:417). The regression test is in [citations-panel.test.tsx](/home/greg/code/spideryarn2/.claude/worktrees/citations-review-2/tests/bibliography-panel.test.tsx:227).
 - Red first: 1 failed, 18 passed. After the fix: 19 passed. `git diff --check` is clean.
 
 No P0, P1, or P2 findings remain beyond F12, F15, and F16 below.

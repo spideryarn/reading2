@@ -2,7 +2,7 @@ The plan is broadly right, with no P0 blockers. The main architecture—citation
 
 1. **P1 — The “first rendered occurrence” conclusion is too strong, and the proposed resolver cannot currently implement it.**
 
-   [`verifyPlace`](/home/greg/code/spideryarn2/.claude/worktrees/fb3k3m-citations-marks-and-find-it/src/citations.ts:244) does omit `near`: both the named-block path at [line 262](/home/greg/code/spideryarn2/.claude/worktrees/fb3k3m-citations-marks-and-find-it/src/citations.ts:262) and relocated-block path at [line 272](/home/greg/code/spideryarn2/.claude/worktrees/fb3k3m-citations-marks-and-find-it/src/citations.ts:272) choose the first spaced match. The relocation check establishes uniqueness across blocks, not uniqueness within the chosen block.
+   [`verifyPlace`](/home/greg/code/spideryarn2/.claude/worktrees/fb3k3m-citations-marks-and-find-it/src/bibliography.ts:244) does omit `near`: both the named-block path at [line 262](/home/greg/code/spideryarn2/.claude/worktrees/fb3k3m-citations-marks-and-find-it/src/bibliography.ts:262) and relocated-block path at [line 272](/home/greg/code/spideryarn2/.claude/worktrees/fb3k3m-citations-marks-and-find-it/src/bibliography.ts:272) choose the first spaced match. The relocation check establishes uniqueness across blocks, not uniqueness within the chosen block.
 
    However, server `block.text` and browser `textContent` undergo different whitespace transformations. Therefore “first in `block.text`” does not prove that “first in rendered text” denotes the same occurrence.
 
@@ -34,7 +34,7 @@ The plan is broadly right, with no P0 blockers. The main architecture—citation
 
    Keeping the poller, auto-run, `find`, `finding`, `findNote`, slug guard, and all POST-capable operations in `CitationsBand` is correct. Nothing else in the proposed read half needs to remain band-local.
 
-   But today `find` directly patches `citations` via `setCitations` at [`useCitations.ts:197`](/home/greg/code/spideryarn2/.claude/worktrees/fb3k3m-citations-marks-and-find-it/src/web/useCitations.ts:197), including the F14 stale-result guard. After state moves into `useCitationsRead`, the band half will no longer own that setter.
+   But today `find` directly patches `citations` via `setCitations` at [`useCitations.ts:197`](/home/greg/code/spideryarn2/.claude/worktrees/fb3k3m-citations-marks-and-find-it/src/web/useBibliography.ts:197), including the F14 stale-result guard. After state moves into `useCitationsRead`, the band half will no longer own that setter.
 
    The plan should choose the seam explicitly. Simplest: after a successful paid find, call the hoisted read hook’s `refresh()`. Alternatively expose a narrow guarded `applyFoundResult`, preserving the present F14 condition. Do not hoist `find` itself.
 
@@ -48,7 +48,7 @@ The plan is broadly right, with no P0 blockers. The main architecture—citation
 
 6. **P1 — The proposed Find It tooltip contradicts an existing product decision and overpromises validation.**
 
-   The draft says “One model call” at [`plan line 295`](/home/greg/code/spideryarn2/.claude/worktrees/fb3k3m-citations-marks-and-find-it/docs/plans/260916b-citations-marked-in-the-prose-and-a-clearer-find-it-button.md:295). The existing regression test explicitly rejects user-facing “model call” language at [`citations-panel.test.tsx:227`](/home/greg/code/spideryarn2/.claude/worktrees/fb3k3m-citations-marks-and-find-it/tests/citations-panel.test.tsx:227). “Pressing it again costs the same price” is also not guaranteed because the attached search can incur variable work.
+   The draft says “One model call” at [`plan line 295`](/home/greg/code/spideryarn2/.claude/worktrees/fb3k3m-citations-marks-and-find-it/docs/plans/260916b-citations-marked-in-the-prose-and-a-clearer-find-it-button.md:295). The existing regression test explicitly rejects user-facing “model call” language at [`citations-panel.test.tsx:227`](/home/greg/code/spideryarn2/.claude/worktrees/fb3k3m-citations-marks-and-find-it/tests/bibliography-panel.test.tsx:227). “Pressing it again costs the same price” is also not guaranteed because the attached search can incur variable work.
 
    “Its own page” is stronger than the current validator. A review or discussion can pass when its title or excerpt matches the work’s title.
 

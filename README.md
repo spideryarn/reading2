@@ -119,7 +119,7 @@ enough to show a stranger by default.
 - **FAQ** *(experimental)* — the questions a careful reader would ask, each answered by the piece's
   own passages rather than by a written answer ([faq.md](docs/project/faq.md)).
 - **Citations** *(experimental)* — every work the piece cites, each with a link out
-  ([citations.md](docs/project/citations.md)).
+  ([bibliography.md](docs/project/bibliography.md)).
 - **Timeline** *(experimental)* — when the piece says things happened, showing the uncertainty
   rather than hiding it ([timeline.md](docs/project/timeline.md)).
 - **Debate** *(experimental)* — what the rest of the web says about this piece; the one mode whose

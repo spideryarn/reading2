@@ -21,7 +21,7 @@ bump. Every section it touched says so in place rather than being quietly rewrit
 reasoning that was wrong is the useful part.
 
 Two feedback reports, both from Greg, both about Citations mode
-([citations.md](../project/citations.md)). Both are admin reports, so the question is *how*, not
+([citations.md](../project/bibliography.md)). Both are admin reports, so the question is *how*, not
 *whether* — [feedback-reports.md § Who sent it](../project/feedback-reports.md).
 
 **SPIDERYARN-READING2-3M**, 2026-09-12:
@@ -83,7 +83,7 @@ not have known without reading `prose.css`.
 Every work's verified places: its `mentions` (at most 3) and its `reference`, if the article has a
 bibliography entry for it. Both are `CitationPlace` — `{ blockId, quote, start }` where `quote` is
 **the article's own characters sliced out of the block**, not the model's typing
-([`verifyPlace`](../../src/citations.ts)). That is the same provenance `Quote.text` has, which is
+([`verifyPlace`](../../src/bibliography.ts)). That is the same provenance `Quote.text` has, which is
 what makes quotes the right precedent and not merely the nearest one.
 
 A place whose words cannot be re-found in the rendered text draws **no mark**. See § The whole-block
@@ -360,7 +360,7 @@ at once.
 the list itself, through the `setCitations` that is about to move into the read hook. And that patch
 is not incidental: it carries the F14 guard, *only a row that is still a search*, so that a re-run
 landing inside a find cannot have a stale row merged back over a link the article gave
-([`tests/citations-find-late-reply.test.tsx`](../../tests/citations-find-late-reply.test.tsx) pins
+([`tests/citations-find-late-reply.test.tsx`](../../tests/bibliography-find-late-reply.test.tsx) pins
 it).
 
 **So `CitationsRead` exposes a narrow `applyFound(id, { url, linkFrom, found })`**, and `find` calls
@@ -372,7 +372,7 @@ first draft had not named it.
 ### Owner-only comes free, and the GET is unconditional
 
 `OwnedReader` is the mount, so a visitor has no `works`, hence no marks and no card section. That is
-[citations.md § Who sees it](../project/citations.md#who-sees-it) satisfied by construction rather
+[citations.md § Who sees it](../project/bibliography.md#who-sees-it) satisfied by construction rather
 than by a check, and it is what Fable asked for: a visitor must not get a half-working card, because
 the public projection these URLs would pass through is not built.
 
@@ -414,10 +414,10 @@ review finding 6:
 
 - **not "one model call"**, and not any call count. There is already a regression test forbidding
   exactly this, in the file this change touches:
-  [`tests/citations-panel.test.tsx`](../../tests/citations-panel.test.tsx) asserts the button's copy
+  [`tests/citations-panel.test.tsx`](../../tests/bibliography-panel.test.tsx) asserts the button's copy
   does **not** match `/one web search|model call/i`, because nothing bounds how many searches the
   provider runs inside the one call ([citations.md § It is one call, not one
-  search](../project/citations.md)) — and because *"a reader should not meet 'model call'"*. The
+  search](../project/bibliography.md)) — and because *"a reader should not meet 'model call'"*. The
   draft copy would have gone red on a test written to prevent precisely it.
 - **not "at the same price"**, for the same reason: the attached search is variable work.
 - **not "its own page"**, which is stronger than the validator. `namesTitle` / `pageNamesTitle`
@@ -526,4 +526,4 @@ prose and not in the band, and it is the same argument that put the glossary's u
 
 ---
 
-Up: [citations.md](../project/citations.md) · [plans.md](../project/plans.md)
+Up: [citations.md](../project/bibliography.md) · [plans.md](../project/plans.md)

@@ -646,12 +646,12 @@ describe("the citation card's Ask in chat lands in a band that is drawn", () => 
     let digs = 0;
     vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
-      if (url === `/api/citations/${SLUG}`) return Promise.resolve(json({
-        citations: { version: "test", generator: "test", slug: SLUG, sourceHash: "hash",
+      if (url === `/api/bibliography/${SLUG}`) return Promise.resolve(json({
+        bibliography: { version: "test", generator: "test", slug: SLUG, sourceHash: "hash",
           generatedAt: "2026-10-04T00:00:00.000Z", elapsedMs: 1, capped: false,
           citations: [citation] }, stale: false, outdated: false,
       }));
-      if (url === `/api/citations/${SLUG}/${id}/investigate`) {
+      if (url === `/api/bibliography/${SLUG}/${id}/investigate`) {
         digs += 1;
         return Promise.resolve(json({ error: "Test refusal" }, 429));
       }

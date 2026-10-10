@@ -859,7 +859,7 @@ describe("the top of the page: Archive, Share…, and what is shut", () => {
             skim: true,
             faq: true,
             simpleSummary: true,
-            citations: true,
+            bibliography: true,
             debate: true,
           },
         },

@@ -38,7 +38,7 @@ risk. **The re-import is a production write and comes back to Greg.**
   today's `pdf-v4`, so re-importing it is a new, paid transcription.
 - **Citations mode** pairs a work with its entry in a PDF's numbered reference list only when the
   citing words carry the number in brackets, `[8]` (`markerNumbers` in
-  [`src/citations.ts`](../../src/citations.ts)). A journal that cites with a superscript, which
+  [`src/citations.ts`](../../src/bibliography.ts)). A journal that cites with a superscript, which
   arrives as `studies206` or `rearing⁵⁷`, gives it nothing to pair on.
 
 ## What a first look found (2026-10-04, one read-only snapshot of production)

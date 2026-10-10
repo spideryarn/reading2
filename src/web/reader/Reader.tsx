@@ -121,7 +121,7 @@ import { Masthead } from "../Masthead.js";
 import { Dock, useActivateMode, useActivateSubMode, visibleModes } from "../Dock.js";
 import { gateToReveal, PRIORITY_GATE } from "../GlossaryPanel.js";
 import { ProseHoverCard, type QuoteCardSource } from "../ProseHoverCard.js";
-import type { CiteFocus } from "../CitationsPanel.js";
+import type { CiteFocus } from "../BibliographyPanel.js";
 import { claimFocusKey, focusesLeft, focusOn, focusTaken, type ItemFocus } from "../item-focus.js";
 import { shownEntries } from "../glossary-shown.js";
 import { editArticleTags } from "../article-tags.js";
@@ -1123,7 +1123,7 @@ export function Reader({
   );
   const askCitedWorkInChat = useCallback(
     (work: Pick<CitedWork, "id" | "title" | "authors" | "year">) =>
-      handToChat(askAboutCitedWork(work), "send", itemOrigin("citations", work.id, work.title)),
+      handToChat(askAboutCitedWork(work), "send", itemOrigin("bibliography", work.id, work.title)),
     [handToChat],
   );
   /* **A seventh since 2026-10-09: an idea's *Ask in chat*** (plan 261009k,
@@ -1413,10 +1413,10 @@ export function Reader({
    *
    * **The prose marks and their cards stay owner-only.** A visitor does have a
    * public projection of the list in the Citations band since 260929c, but this
-   * prose path deliberately has no `?? artefacts?.citations` fallback, unlike
+   * prose path deliberately has no `?? artefacts?.bibliography` fallback, unlike
    * `terms` above. So `works` is empty for them, and the card's owner-only
    * `inSpideryarn` line has the named `showInSpideryarn` lock as well.
-   * docs/project/citations.md § Who sees it.
+   * docs/project/bibliography.md § Who sees it.
    *
    * **Every work, not only those above the threshold bar**, which departs from
    * what quotes mode does and follows what the glossary does. `?citebar=` is
@@ -1440,11 +1440,11 @@ export function Reader({
    * `citeSelections`. Not the only lock: `showInSpideryarn` below names the
    * owner-only part of the card.
    */
-  const works: readonly CitedWork[] = owner?.citations.citations?.citations ?? NO_WORKS;
+  const works: readonly CitedWork[] = owner?.bibliography.bibliography?.citations ?? NO_WORKS;
 
   /**
    * **Open Citations on one row** — a one-shot the band hands back once the
-   * row is in view (CitationsPanel.tsx § `Props.focus`); state rather than a
+   * row is in view (BibliographyPanel.tsx § `Props.focus`); state rather than a
    * URL parameter because nothing about it should survive a reload. The prose
    * card's *Dig deeper* set it from plan 261004b until 2026-10-09, when that
    * button became *Ask in chat* (plan 261009k), which goes to Chat instead.
@@ -1721,9 +1721,9 @@ export function Reader({
           openTermInGlossary(origin.itemId);
           setTermFocus(focusOn(origin.itemId));
           return;
-        /* A stored origin keeps its old mode word as data until the deep rename
-           (plan 261009l § Stage 3); each lands on its Sources sub-mode. */
-        case "citations":
+        /* Bibliography's cited work (its origin said `citations` until 2026-10-09,
+           plan 261009w; the server reads that word as this one). */
+        case "bibliography":
           openBibliographyWork(origin.itemId);
           return;
         case "ideas":
@@ -1734,6 +1734,8 @@ export function Reader({
           setBandAway(false);
           void setIdeaWay({ mode: "ideas", idea: origin.itemId, thread: null }, { history: "push" });
           return;
+        /* A claim's or a lens's origin keeps the word `debate` until Stage 3
+           of plan 261009w; each lands on its Sources sub-mode. */
         case "debate":
           setBandAway(false);
           if (isLensOrigin(origin)) {
@@ -2075,15 +2077,15 @@ export function Reader({
   /* **Other modes' items, already stored** (report 82, plan 261002b): the
      owner's FAQ and Debate from the feed's read-only reads, a visitor's from
      their payload. **Citations are the owner's, and only a fresh list** —
-     never `artefacts.citations`, because the prose's citation marks are
-     owner-only (citations.md § Who sees it) and the margin is not the place to
+     never `artefacts.bibliography`, because the prose's citation marks are
+     owner-only (bibliography.md § Who sees it) and the margin is not the place to
      reverse that quietly. Comments are the one list both arms already share. */
   const marginaliaFaq = owner ? ownerFeed.faq : (artefacts?.faq?.questions ?? null);
   const marginaliaTimeline = owner ? ownerFeed.timeline : (artefacts?.timeline?.events ?? null);
   const marginaliaClaims = owner ? ownerFeed.claims : (artefacts?.debate?.claims.rows ?? null);
-  const marginaliaCitations =
-    owner && owner.citations.status === "ready" && !owner.citations.stale
-      ? (owner.citations.citations?.citations ?? null)
+  const marginaliaBibliography =
+    owner && owner.bibliography.status === "ready" && !owner.bibliography.stale
+      ? (owner.bibliography.bibliography?.citations ?? null)
       : null;
   /* Whether the block chat panel sits over the column rather than over the
      prose, and the room it has there — layout.ts § `chatDock`. From the same
@@ -2477,7 +2479,7 @@ export function Reader({
       /* The owner's only: a visitor's payload does not carry them (plan 261003f). */
       relations: isOwner ? ownerFeed.relations : null,
       claims: marginaliaClaims,
-      citations: marginaliaCitations,
+      citations: marginaliaBibliography,
       comments,
       /* Less the conversation drawn as a card on its block, which would
          otherwise say *Question* directly above itself (plan 261004k § 6). */
@@ -2529,7 +2531,7 @@ export function Reader({
     isOwner,
     ownerFeed.relations,
     marginaliaClaims,
-    marginaliaCitations,
+    marginaliaBibliography,
     comments,
     askedList,
     marginViewer,
@@ -3633,7 +3635,7 @@ export function Reader({
          half since 2026-09-29: a visitor's rows arrive with every address
          re-judged by `publicCitationUrl` (src/public/dto.ts §
          `publicCitedWork`, `publicDebate`), and `VisitorSourcesBand` mounts
-         no `useCitations` or `useDebate`, so nothing here can start a list or
+         no `useBibliography` or `useDebate`, so nothing here can start a list or
          a search. **Any one of the three artefacts draws the band**
          (visitor.ts § POLICY, `any-artefact`): with none, `visitorGap` said
          `not-built` and the `VisitorBand` is in the slot. No passages — every
@@ -3642,9 +3644,9 @@ export function Reader({
          docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
       case "sources":
         if (!owner)
-          return artefacts?.citations || artefacts?.debate || artefacts?.debateClaims ? (
+          return artefacts?.bibliography || artefacts?.debate || artefacts?.debateClaims ? (
             <VisitorSourcesBand
-              citations={artefacts.citations ?? null}
+              bibliography={artefacts.bibliography ?? null}
               debate={artefacts.debate ?? null}
               claimList={artefacts.debateClaims ?? null}
               onJump={bandJump}
@@ -3659,7 +3661,7 @@ export function Reader({
         return (
           <SourcesBand
             slug={slug}
-            citationsRead={owner.citations}
+            bibliographyRead={owner.bibliography}
             onJump={bandJump}
             blockOrder={blockOrder}
             publishedAt={publishedAt}

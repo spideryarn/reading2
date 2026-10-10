@@ -214,9 +214,9 @@ it("a block whose html really changes is rebuilt, and only that block", async ()
  * 2026-09-16: `citeMarksByBlock` was read inside the `proseHtml` memo and left
  * out of its dependency array, so a citations list landing after the first
  * render changed nothing on the page. The panel listed the works and the prose
- * showed none — the one disagreement `useCitations.ts` § CitationsRead says
+ * showed none — the one disagreement `useBibliography.ts` § BibliographyRead says
  * cannot happen, because "the panel and the prose read the same
- * `CitationsRead`".
+ * `BibliographyRead`".
  *
  * **It was intermittent, which is what makes it worth a test rather than a
  * glance.** Any *other* dependency changing afterwards — a comment resolving, a

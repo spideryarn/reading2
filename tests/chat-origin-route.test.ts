@@ -339,7 +339,7 @@ describe("a lens origin on the way in", () => {
  * An id and a snapshot of the name. The id is never dereferenced, so a made-up
  * one is accepted; only the shape is checked.
  */
-describe.each(["glossary", "citations", "ideas"] as const)("a %s origin on the way in", (mode) => {
+describe.each(["glossary", "bibliography", "ideas"] as const)("a %s origin on the way in", (mode) => {
   const ITEM = "spya-ttm222";
   const item = (over: Record<string, unknown> = {}) => ({ mode, itemId: ITEM, quote: "qualia", ...over });
 
@@ -402,7 +402,7 @@ describe.each(["glossary", "citations", "ideas"] as const)("a %s origin on the w
 
   it("refuses another item, the other item mode, and a claim, with a 409", async () => {
     await ask({ threadId: THREAD, question: "what more?", origin: item() });
-    const otherMode = mode === "glossary" ? "citations" : "glossary";
+    const otherMode = mode === "glossary" ? "bibliography" : "glossary";
     for (const other of [item({ itemId: "spya-ttm333" }), item({ mode: otherMode }), claim(), lens()]) {
       expect((await ask({ threadId: THREAD, question: "and now?", origin: other })).status).toBe(409);
     }
@@ -436,6 +436,48 @@ describe.each(["glossary", "citations", "ideas"] as const)("a %s origin on the w
       await rm(exported, { recursive: true, force: true });
       await rm(out, { recursive: true, force: true });
     }
+  });
+});
+
+/**
+ * **A cited work's origin as it was spelled before 2026-10-09** — plan
+ * docs/plans/261009w-peer-review-becomes-sources-all-the-way-down.md, Stage 2.
+ * Bibliography's origin mode was `citations`. The rows are not rewritten until
+ * the contract migration, and a tab open across the deploy still sends the old
+ * word (F1), so both are read as Bibliography's and the new word is written.
+ */
+describe("a cited work's origin under its old mode word", () => {
+  const ITEM = "spya-ttm222";
+  const old = { mode: "citations", itemId: ITEM, quote: "qualia" };
+  const current = { mode: "bibliography", itemId: ITEM, quote: "qualia" };
+
+  const storedMode = async () => {
+    const [row] = await getDb()
+      .select({ mode: chatThreads.originMode })
+      .from(chatThreads)
+      .where(and(eq(chatThreads.articleId, (article as ScratchArticle).articleId), eq(chatThreads.id, THREAD)));
+    return row?.mode;
+  };
+
+  it("takes the old word from a stale tab, and stores and answers it as the new", async () => {
+    const out = await ask({ threadId: THREAD, question: "what more?", origin: old });
+    expect(out.frames[0]?.event).toBe("begin");
+    expect(out.frames[0]?.data.origin).toEqual(current);
+    expect(await storedMode()).toBe("bibliography");
+    expect((await stored())?.origin).toEqual(current);
+  });
+
+  it("reads a row written with the old word as the new, and either word carries on its conversation", async () => {
+    await ask({ threadId: THREAD, question: "what more?", origin: current });
+    await getDb()
+      .update(chatThreads)
+      .set({ originMode: "citations" })
+      .where(and(eq(chatThreads.articleId, (article as ScratchArticle).articleId), eq(chatThreads.id, THREAD)));
+    expect((await stored())?.origin).toEqual(current);
+    const summaries = (await call("GET", `/api/chat/${SLUG}?summary=1`)).body?.threads as ThreadSummary[];
+    expect(summaries.find((t) => t.id === THREAD)?.origin).toEqual(current);
+    expect((await ask({ threadId: THREAD, question: "and now?", origin: old })).frames[0]?.event).toBe("begin");
+    expect((await ask({ threadId: THREAD, question: "and then?", origin: current })).frames[0]?.event).toBe("begin");
   });
 });
 
@@ -641,7 +683,7 @@ describe("the origin's columns", () => {
 
   /* Plan 261006d, D2: a glossary entry or a cited work is an id and a name,
      with no block and no lens. `summary` is still reserved and has no shape. */
-  describe.each(["glossary", "citations", "ideas"])("a %s origin", (mode) => {
+  describe.each(["glossary", "citations", "bibliography", "ideas"])("a %s origin", (mode) => {
     const good = { originMode: mode, originItemId: "spya-ttm222", originQuote: "qualia" };
 
     it("accepts an id and a name", async () => {

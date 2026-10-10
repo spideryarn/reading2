@@ -673,20 +673,20 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
      kept — but the reader would be told "no page matched" for a search that
      never ran, which `require_parameters` is what prevents. `order` for
      consistency with this wire; there is no `cache_control` to keep. */
-  "citations-find": {
+  "citation-find": {
     path: "/v1/chat/completions",
     wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
   /* **An uploaded paper looking for its own page** (src/source-guess.ts) — the
-     same request as `citations-find` through the same `findWorkPage`, so the
+     same request as `citation-find` through the same `findWorkPage`, so the
      same policy for the same reason. */
   "upload-source-guess": {
     path: "/v1/chat/completions",
     wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
-  /* **Citations' *Investigate*** (src/citation-investigate.ts) — explain's
+  /* **Bibliography's *Investigate*** (src/citation-investigate.ts) — explain's
      route and both of its reasons: the article is a cached first part, so the
      `order` pin keeps it landing on the prefix it wrote, and the request pins
      Exa and `max_characters` on the search tool, which an upstream that
@@ -1154,7 +1154,7 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
      (`link-summary`'s note) still buys about a thousand tokens of thinking;
      src/dig-deeper.ts § DIG_SEARCH_MAX_TOKENS is sized clear of it. */
   "dig-deeper-search": { effort: "low" },
-  "citations-find": {
+  "citation-find": {
     providerDefault: "Not measured. One cited work and a web search, not the article.",
   },
   "upload-source-guess": {
@@ -1256,7 +1256,7 @@ export function effortOf(job: ChatJob): ReasoningEffort | null {
  *
  * Opus 5.5's default effort is `medium` where Sonnet 5's is `high`, so leaving
  * the default in place would make High-powered AI think *less* on every
- * provider-default job — explain, chat, search, debate, citations, quiz marking —
+ * provider-default job — explain, chat, search, debate, bibliography, quiz marking —
  * which is the opposite of the switch's promise. `high` is Sonnet's own
  * default, so no ceiling sized against Sonnet is asked for more than it was.
  * Keyed on the model sent, because the reason is that model's default. Plan
@@ -1304,7 +1304,7 @@ export type ChatJob = Exclude<
   | "ideas"
   | "sketch"
   | "timeline"
-  | "citations"
+  | "bibliography"
   /* **The brief, not the plate.** `illustrated` writes the words an image model
      draws from and goes down the Messages wire like every other article-reading
      stage; `illustrate` two entries below is the picture itself, excluded for a

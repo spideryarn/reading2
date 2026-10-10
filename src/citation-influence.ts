@@ -83,7 +83,7 @@ export const INFLUENCE_TIMEOUT_MS = 20_000;
 /**
  * **The system prompt.** Its output is a number, a page number and a copy, so
  * it carries no plain-words section (src/plain-words.ts § PLAIN_WORDS_EXEMPT
- * says so). The rubric is the list's own (src/citations.ts § SYSTEM), so a
+ * says so). The rubric is the list's own (src/bibliography.ts § SYSTEM), so a
  * number from here sits on the same scale as one from there.
  *
  * Bump `INFLUENCE_VERSION` with a change here that makes an older number

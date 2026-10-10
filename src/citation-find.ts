@@ -2,8 +2,8 @@
  * **Find one cited work's own page on the web** — Citations mode's *Find it*,
  * which since plan 260930d is the first step of the one *Investigate / Dig
  * deeper* press (src/citation-investigate.ts) and has no route of its own:
- * `POST /api/citations/:slug/:id/find` was deleted on 2026-10-04.
- * docs/plans/260911g-citations-mode.md § Stage 3; docs/project/citations.md
+ * `POST /api/bibliography/:slug/:id/find` was deleted on 2026-10-04.
+ * docs/plans/260911g-citations-mode.md § Stage 3; docs/project/bibliography.md
  * § Find it on the web.
  *
  * A row whose article gave no link offers a Scholar search. The press asks a
@@ -20,7 +20,7 @@
  *    into the result set and nothing more. `readSources` in
  *    src/referee-candidates.ts is the precedent.
  * 3. **The result names the work**: its title, or its excerpt, carries the
- *    work's title words (`pageNamesTitle` in src/citations.ts). An allowed URL
+ *    work's title words (`pageNamesTitle` in src/bibliography.ts). An allowed URL
  *    can still be the wrong work — a review of it, a page about its author — and
  *    this is what refuses that (Sol F4).
  *
@@ -86,7 +86,7 @@ import {
   QUOTE_CAP,
   REFERENCE_CAP,
 } from "./citation-lookup.js";
-import { pageNamesTitle } from "./citations.js";
+import { pageNamesTitle } from "./bibliography.js";
 import { errorFields, log, since } from "./log.js";
 import {
   CITATION_LOOKUP_NO_MATCH,
@@ -506,7 +506,7 @@ export async function findWorkPage(
      would forget to ask. `model` still overrides it. */
   opts: FindOptions & { power: ModelPower },
 ): Promise<FoundWorkPage> {
-  const model = opts.model ?? modelFor("citations-find", opts.power);
+  const model = opts.model ?? modelFor("citation-find", opts.power);
   const { reading, model: used } = await sendAndRead(findRequest(work, reference, model), work.title, {
     ...opts,
     model,
@@ -529,7 +529,7 @@ async function sendAndRead(
      it again here would be a second answer that could differ. */
   opts: FindOptions & { model: string },
 ): Promise<FoundWorkPage & { json: unknown }> {
-  const send = opts.call ?? ((b, options) => openRouterJson("citations-find", b, options));
+  const send = opts.call ?? ((b, options) => openRouterJson("citation-find", b, options));
   const model = opts.model;
   const timeoutMs = opts.timeoutMs ?? FIND_TIMEOUT_MS;
   const line = opts.line ?? log("model");
@@ -590,7 +590,7 @@ export async function runCitationLookup(
    */
   model: string,
 ): Promise<FindCitationResponse> {
-  const send = deps.call ?? ((body, options) => openRouterJson("citations-find", body, options));
+  const send = deps.call ?? ((body, options) => openRouterJson("citation-find", body, options));
   const now = deps.now ?? (() => new Date().toISOString());
   const timeoutMs = deps.timeoutMs ?? FIND_TIMEOUT_MS;
 

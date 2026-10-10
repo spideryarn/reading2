@@ -486,7 +486,7 @@
 .gloss-look { margin: 0.55rem 0 0; }
 /* *Ask in chat* (OriginChat.tsx), where Dig deeper was until plan 261009k;
    it sat beside it with a left margin, which went with it. The house control
-   height for a finger, as Citations gives its own (citations.css §
+   height for a finger, as Citations gives its own (bibliography.css §
    `pointer: coarse`), so it is one height in both modes on a touch screen
    too (plan 261007m S2, GPT Sol's M2). */
 @media (pointer: coarse) {

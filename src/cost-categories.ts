@@ -55,6 +55,7 @@
 
 import type { AiJob } from "./models.js";
 import { DEFAULT_INGEST_STEPS, STEP_ORDER } from "./pipeline.js";
+import { currentLedgerName } from "./step-order.js";
 
 /**
  * The six kinds of spend, in the order a pricing conversation wants them.
@@ -194,7 +195,7 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   /* A reader's claim check: one press, one web search, in request scope —
      `POST /api/debate-claims/:slug/checks` (src/routes.ts). */
   "debate-check": "interactive request work",
-  citations: "step-driven",
+  bibliography: "step-driven",
   /* Three tasks a reader waits on with the page open. */
   explain: "interactive request work",
   chat: "interactive request work",
@@ -216,13 +217,13 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
      says how it stands to the piece being read — docs/project/links.md. It is
      request-scope, reader-triggered, and was in no category at all. */
   "link-summary": "interactive request work",
-  /* Citations mode's *Find it*: one owner-pressed web search for one cited
+  /* Bibliography's *Find it*: one owner-pressed web search for one cited
      work, in request scope — src/citation-find.ts. */
-  "citations-find": "interactive request work",
+  "citation-find": "interactive request work",
   /* An uploaded paper looking for its own page on the web, fired once when
      its owner opens it — src/source-guess.ts. Request scope, owner-triggered. */
   "upload-source-guess": "interactive request work",
-  /* Citations' *Investigate* — src/citation-investigate.ts. A reader presses it. */
+  /* Bibliography's *Investigate* — src/citation-investigate.ts. A reader presses it. */
   "citation-investigate": "interactive request work",
   /* The paper's passages, inside the same *Investigate* press. */
   "citation-paper-passages": "interactive request work",
@@ -319,24 +320,17 @@ function dispositionOf(job: string): JobDisposition | null {
 }
 
 /**
- * **Names that were renamed, not split**, and the name each row is classified
- * under. Unlike `summarise` above — split into two stages, so no one successor
- * is true — a rename is the same call under a new word, and the ledger is
- * append-only, so its old rows keep the old word for ever.
+ * **Names that were renamed, not split**, are read as their new name before a
+ * row is classified. Unlike `summarise` above — split into two stages, so no
+ * one successor is true — a rename is the same call under a new word, and the
+ * ledger is append-only, so its old rows keep the old word for ever.
  *
- * `trajectory` was the Skim mode's job and step name until 2026-10-01 (plan
- * 261001r); `hierarchy` was the Structure step's job and step name until
- * 2026-10-02 (plan 261002b).
+ * The table is `currentLedgerName` in src/step-order.ts (`RETIRED_STEPS` and
+ * `RETIRED_JOBS`), shared with the cost cube and the article's cost view. It
+ * was a second copy here, `RENAMED`, until plan 261009w (GPT Sol's F10):
+ * `trajectory` → `skim` (261001r), `hierarchy` → `structure` (261002b),
+ * `citations` → `bibliography` and `citations-find` → `citation-find` (261009w).
  */
-const RENAMED: Readonly<Record<string, string>> = {
-  trajectory: "skim",
-  hierarchy: "structure",
-};
-
-function renamed(name: string): string {
-  return Object.hasOwn(RENAMED, name) ? (RENAMED[name] ?? name) : name;
-}
-
 const DEFAULT_STEPS: ReadonlySet<string> = new Set<string>(DEFAULT_INGEST_STEPS);
 const KNOWN_STEPS: ReadonlySet<string> = new Set<string>(STEP_ORDER);
 
@@ -355,11 +349,11 @@ const KNOWN_STEPS: ReadonlySet<string> = new Set<string>(STEP_ORDER);
  * the one distinction the whole live-metering stage exists to make.
  */
 export function costCategoryOf(raw: CategoryFacts): CostCategory {
-  /* A renamed job or step reads as its new name — `RENAMED` above. */
+  /* A renamed job or step reads as its new name — `currentLedgerName`. */
   const facts: CategoryFacts = {
     scopeKind: raw.scopeKind,
-    job: renamed(raw.job),
-    stepName: raw.stepName === null ? null : renamed(raw.stepName),
+    job: currentLedgerName(raw.job),
+    stepName: raw.stepName === null ? null : currentLedgerName(raw.stepName),
   };
   if (facts.scopeKind === "eval" || facts.scopeKind === "cli") return "non-product";
   /* `null` for a job no longer in `AiJob` — `summarise`, `summary` and the other

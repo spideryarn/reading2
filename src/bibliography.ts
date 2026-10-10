@@ -4,7 +4,7 @@
  * and GPT Sol's review of it; this file is stage 1 of that plan.
  *
  * **There is no command line here.** Re-running it against one article is a
- * job: `POST /api/jobs { slug, steps: ["citations"], force: ["citations"] }`.
+ * job: `POST /api/jobs { slug, steps: ["bibliography"], force: ["bibliography"] }`.
  *
  * ## The split: what the model says, and what code decides
  *
@@ -78,7 +78,7 @@ import {
   type CitationFind,
   type CitationLinkFrom,
   type CitationPlace,
-  type Citations,
+  type Bibliography,
   type CitationScoreDrops,
   MAX_CITATIONS,
   MAX_MENTIONS,
@@ -87,7 +87,7 @@ import {
 } from "./types.js";
 
 export { MAX_CITATIONS };
-export type { CitedWork, CitationDrops, CitationPlace, Citations, CitationScoreDrops };
+export type { CitedWork, CitationDrops, CitationPlace, Bibliography, CitationScoreDrops };
 /* Preserve the former module boundary while the constant itself lives with the
    data contract the client reads. */
 export { MAX_MENTIONS };
@@ -101,7 +101,7 @@ export { MAX_MENTIONS };
 /* `citations/3`, 2026-09-28: the prompt's own plain-words wording gave way to the shared `plainWords` section, one rule for every prompt (Greg, 2026-09-28; docs/plans/260926a-plainer-summaries-and-glossary.md, stage 3). */
 /* `citations/4`, 2026-09-30: a PDF's reference list is read from its text layer and sent after the article, with an `entry` field per work, and `authors` asked for as surnames (plan 260930i, SPIDERYARN-READING2-6K).
  *
- * `citations/5`, 2026-10-02: the request gained `CITATIONS_OUTPUT_SCHEMA`;
+ * `citations/5`, 2026-10-02: the request gained `BIBLIOGRAPHY_OUTPUT_SCHEMA`;
  * the prompt text is unchanged.
  *
  * `citations/6`, 2026-10-03: `influence` is a number only when the model is
@@ -122,7 +122,7 @@ export { ENTRY_CAP } from "./citation-entry.js";
 
 /**
  * `medium`, as a constant here rather than a row in `STAGE_EFFORT`, because this
- * is not an `ArticleStage` (src/types.ts § StepName, the `citations` note): it
+ * is not an `ArticleStage` (src/types.ts § StepName, the `bibliography` note): it
  * sends every block, bibliography included, so it shares no cached prefix with
  * the stages in that table. Medium because this is careful extraction rather
  * than argument — the judgement it does make, relevance, is a reading of the
@@ -174,7 +174,7 @@ export function inputFingerprint(
 
 /** Does this artefact still describe the article, tree and metadata? */
 export function isStale(
-  citations: Citations,
+  citations: Bibliography,
   blocks: readonly BlockFingerprint[],
   tree: Tree,
   meta: MetaFingerprintWithUrl | null,
@@ -707,7 +707,7 @@ export function toDrafts(
     if (draft) out.push(draft);
   }
   /* **No cut here.** The cap counts works, and these are still rows — the
-     shorthand cite and its full entry are two of them until `buildCitations`
+     shorthand cite and its full entry are two of them until `buildBibliography`
      folds them. `keepLeanedOnMost` cuts after both folds. GPT Sol F13. */
   return out;
 }
@@ -784,7 +784,7 @@ function readDraft(
     return null;
   }
   /* A PDF list's entry, when the model named one that checks out; a
-     bibliography block's text is attached later, in `buildCitations`, once it
+     bibliography block's text is attached later, in `buildBibliography`, once it
      is known how many works claim that block (Sol F4). */
   const listed = list && w.entry !== undefined ? verifyEntry(w.entry, list, mentions, drops, glued, byId) : null;
   const said = saidFields(w, title);
@@ -794,7 +794,7 @@ function readDraft(
      the same number. */
   const entryNumber = located === null ? null : claimedEntryNumber(w.entry);
   /* Uncapped while a draft, so `linkFor` can read a DOI at the end of a long
-     entry; capped where the row is written (`buildCitations`). */
+     entry; capped where the row is written (`buildBibliography`). */
   const entry = located === null ? undefined : listed!;
   const identifierEntry = identifierEntryFor(list, entryNumber, entry);
   const fields = located ?? locateArticleFields(said, article, drops);
@@ -1202,7 +1202,7 @@ export function pageNamesTitle(page: { title?: string; excerpt?: string }, title
  * find for that id is stored (a re-run can turn a searched row into a DOI row
  * and inherit its id). The artefact itself is never changed.
  */
-export function attachFinds(citations: Citations, finds: ReadonlyMap<string, CitationFind>): Citations {
+export function attachFinds(citations: Bibliography, finds: ReadonlyMap<string, CitationFind>): Bibliography {
   if (finds.size === 0) return citations;
   let changed = false;
   const works = citations.citations.map((work) => {
@@ -1230,10 +1230,10 @@ export function attachFinds(citations: Citations, finds: ReadonlyMap<string, Cit
  * model hash; the found link, if any, stays.
  */
 export function attachLookups(
-  citations: Citations,
+  citations: Bibliography,
   finds: ReadonlyMap<string, CitationFind>,
   contextHashOf: (work: CitedWork) => string | readonly string[],
-): Citations {
+): Bibliography {
   if (finds.size === 0) return citations;
   let changed = false;
   const works = citations.citations.map((work) => {
@@ -1570,7 +1570,7 @@ function mergeBy<T extends { draft: Draft }>(
  * still means a later identifier row cannot tell which old work it is.
  */
 export function idsByKey(
-  onDisk: Citations | null,
+  onDisk: Bibliography | null,
   grounding?: { blocks: readonly Block[]; referenceList: NumberedReferenceList | null },
 ): Map<string, string> {
   /* Old search keys contain authors/year the new guard may now remove. Apply
@@ -1639,7 +1639,7 @@ function withBlockEntry(
  * The artefact, from what the model said plus what code could verify and
  * derive of it.
  */
-export function buildCitations(
+export function buildBibliography(
   parsed: { works?: unknown; capped?: unknown },
   opts: {
     slug: string;
@@ -1651,10 +1651,10 @@ export function buildCitations(
     inherit: Map<string, string> | null;
     drops: CitationDrops;
     scores: CitationScoreDrops;
-    /** A PDF's numbered reference list, or `null` — `generateCitations`'s `referenceList`. */
+    /** A PDF's numbered reference list, or `null` — `generateBibliography`'s `referenceList`. */
     referenceList?: NumberedReferenceList | null;
   },
-): Citations {
+): Bibliography {
   /* `{}` is a failed answer, not an article that cites nothing — the timeline's
      lesson (src/timeline.ts § buildTimeline). */
   if (!Array.isArray(parsed.works)) {
@@ -1857,7 +1857,7 @@ export interface Coverage {
   works: number;
 }
 
-export function coverageOf(blocks: readonly Block[], citations: Citations): Coverage {
+export function coverageOf(blocks: readonly Block[], citations: Bibliography): Coverage {
   const byId = new Map(blocks.map((b) => [b.id as string, b]));
   const notes = new Set(blocks.map((b) => b.noteId).filter((n): n is string => Boolean(n)));
   const refs = blocks.filter((b) => !b.noteId && b.role === "reference");
@@ -1882,14 +1882,14 @@ export function coverageOf(blocks: readonly Block[], citations: Citations): Cove
 /* ---------------------------------------------------------- the baseline -- */
 
 /**
- * A previous `citations` artefact this store cannot read — the sibling of
+ * A previous `bibliography` artefact this store cannot read — the sibling of
  * `TimelineBaselineUnusable`. Carrying on would mint a fresh id for every work
  * and orphan every stored stage-3 lookup, quietly.
  */
-export class CitationsBaselineUnusable extends Error {
+export class BibliographyBaselineUnusable extends Error {
   constructor(readonly slug: string) {
     super(
-      `citations "${slug}": there is a previous citations artefact and this store cannot read ` +
+      `bibliography "${slug}": there is a previous bibliography artefact and this store cannot read ` +
         "it — it will not parse, is of the wrong shape, or is past the size the store reads back.\n" +
         "Every id in it is one a stored web lookup is keyed on (docs/plans/260911g-citations-mode.md), " +
         "so carrying on would mint a fresh id for every work and orphan them, quietly.\n" +
@@ -1897,7 +1897,7 @@ export class CitationsBaselineUnusable extends Error {
         "Put it back from a backup, or delete it deliberately if this article's citations really " +
         "are starting again from nothing.",
     );
-    this.name = "CitationsBaselineUnusable";
+    this.name = "BibliographyBaselineUnusable";
   }
 }
 
@@ -1906,12 +1906,12 @@ export class CitationsBaselineUnusable extends Error {
  * table `previousIdeasFrom` (src/ideas.ts) documents, with one difference: the
  * ids are inherited whether or not `sourceHash` matches — see the header.
  */
-export async function previousCitationsFrom(
+export async function previousBibliographyFrom(
   store: Pick<ArtifactStore, "readBaseline">,
   slug: string,
-): Promise<Citations | null> {
-  const outcome = await store.readBaseline(slug, "citations", "citations");
-  if (outcome.state === "unusable") throw new CitationsBaselineUnusable(slug);
+): Promise<Bibliography | null> {
+  const outcome = await store.readBaseline(slug, "bibliography", "bibliography");
+  if (outcome.state === "unusable") throw new BibliographyBaselineUnusable(slug);
   return outcome.state === "ok" ? outcome.value : null;
 }
 
@@ -2062,7 +2062,7 @@ const citationPlaceSchema = {
 } as const;
 
 /** The prompt's list shape; place verification and score bounds remain code checks. */
-export const CITATIONS_OUTPUT_SCHEMA = {
+export const BIBLIOGRAPHY_OUTPUT_SCHEMA = {
   type: "object",
   properties: {
     capped: { type: "boolean" },
@@ -2094,13 +2094,13 @@ export const CITATIONS_OUTPUT_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-validateAnthropicJsonSchema(CITATIONS_OUTPUT_SCHEMA);
-assertNoBlockIdEnums(CITATIONS_OUTPUT_SCHEMA, ["block"]);
+validateAnthropicJsonSchema(BIBLIOGRAPHY_OUTPUT_SCHEMA);
+assertNoBlockIdEnums(BIBLIOGRAPHY_OUTPUT_SCHEMA, ["block"]);
 
 /* -------------------------------------------------------------- the call -- */
 
-export interface CitationsRun {
-  citations: Citations;
+export interface BibliographyRun {
+  bibliography: Bibliography;
   drops: CitationDrops;
   scores: CitationScoreDrops;
   coverage: Coverage;
@@ -2115,18 +2115,18 @@ export interface CitationsRun {
   elapsedMs: number;
 }
 
-export async function generateCitations(opts: {
+export async function generateBibliography(opts: {
   article: Article;
   onProgress?: (detail: string) => void;
   signal?: AbortSignal;
   cacheArticle?: boolean;
   /**
    * The citations this article already has, or `null` **only** when it has
-   * none — `previousCitationsFrom`. Required, for the reason `generateIdeas`'s
+   * none — `previousBibliographyFrom`. Required, for the reason `generateIdeas`'s
    * `previous` is: an optional parameter is what a refactor drops while every
    * run goes on reporting success and minting fresh ids.
    */
-  previous: Citations | null;
+  previous: Bibliography | null;
   /** Which capable model writes it — the article's High-powered AI setting (plan 260930f). */
   power: ModelPower;
   /**
@@ -2136,7 +2136,7 @@ export async function generateCitations(opts: {
    * and here that is every PDF's rows coming back with no authors again.
    */
   referenceList: NumberedReferenceList | null;
-}): Promise<CitationsRun> {
+}): Promise<BibliographyRun> {
   const { blocks, tree } = opts.article;
   const realMeta: Meta | null = opts.article.meta;
   /* The stub carries one field and nothing else — src/ideas.ts has the whole
@@ -2148,13 +2148,13 @@ export async function generateCitations(opts: {
   const started = Date.now();
 
   const answerTokens = answerEstimate();
-  const maxTokens = budgetFor("citations", answerTokens);
+  const maxTokens = budgetFor("bibliography", answerTokens);
   const effort = pipelineEffortOverride() ?? EFFORT;
 
   let message: Anthropic.Message;
   try {
     const call = streamMessage(
-      "citations",
+      "bibliography",
       withMessagesJsonSchema({
         max_tokens: maxTokens,
         thinking: { type: "adaptive" },
@@ -2175,7 +2175,7 @@ export async function generateCitations(opts: {
           { type: "text" as const, text: SYSTEM },
         ],
         messages: [{ role: "user", content: renderPrompt() }],
-      }, CITATIONS_OUTPUT_SCHEMA),
+      }, BIBLIOGRAPHY_OUTPUT_SCHEMA),
       { power: opts.power, ...(opts.signal ? { signal: opts.signal } : {}) },
     );
     if (opts.onProgress) {
@@ -2194,11 +2194,11 @@ export async function generateCitations(opts: {
   } catch (err) {
     throw anthropicCallFailed(err);
   }
-  const answerText = finishedText(message, "citations", maxTokens, answerTokens);
+  const answerText = finishedText(message, "bibliography", maxTokens, answerTokens);
 
   const drops = emptyDrops();
   const scores = noScoreDrops();
-  const citations = buildCitations(parseJson(answerText), {
+  const bibliography = buildBibliography(parseJson(answerText), {
     power: opts.power,
     slug: tree.slug,
     blocks,
@@ -2210,10 +2210,10 @@ export async function generateCitations(opts: {
     referenceList: opts.referenceList,
   });
   return {
-    citations,
+    bibliography,
     drops,
     scores,
-    coverage: coverageOf(blocks, citations),
+    coverage: coverageOf(blocks, bibliography),
     maxTokens,
     answerTokens,
     model: generatorFor(opts.power),

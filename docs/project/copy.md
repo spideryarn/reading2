@@ -164,7 +164,7 @@ where the source usually keeps it
 pipeline could not read: too long, locked, or damaged. `web-` is the page in the reader's browser
 failing on its own account — `[web-unexpected]`, below — and `net-` is the browser not reaching the
 server at all (`[net-down]`, `COULD_NOT_REACH`). `cite-` is Citations' *Dig deeper* refusing
-([citations.md](citations.md#dig-deeper-a-closer-look-at-one-work-on-demand)). `dig-` is *Dig deeper*'s shared half:
+([bibliography.md](bibliography.md#dig-deeper-a-closer-look-at-one-work-on-demand)). `dig-` is *Dig deeper*'s shared half:
 `[dig-no-search]` when the web search it promises did not run, in any of its three modes, and
 `[dig-resting]` when the glossary's and comments' shared daily allowance is spent across every
 reader — Citations' own is `[cite-investigate-resting]`

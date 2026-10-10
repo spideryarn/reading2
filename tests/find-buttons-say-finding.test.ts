@@ -13,7 +13,7 @@ import { describe, expect, it } from "vitest";
 
 const source = (name: string) => readFileSync(new URL(`../src/web/${name}`, import.meta.url), "utf8");
 
-describe.each(["CitationsPanel.tsx", "FaqPanel.tsx", "IdeasPanel.tsx"])("%s", (name) => {
+describe.each(["BibliographyPanel.tsx", "FaqPanel.tsx", "IdeasPanel.tsx"])("%s", (name) => {
   const text = source(name);
   it("has a run button that says Find", () => {
     expect(text).toMatch(/run\("Find (the|them) /);

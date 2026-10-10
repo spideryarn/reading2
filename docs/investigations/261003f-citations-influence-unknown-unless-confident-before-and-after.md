@@ -2,7 +2,7 @@
 
 Up: [investigations.md](../project/investigations.md) · the plan:
 [261003m](../plans/261003m-citations-influence-unknown-unless-confident-and-dig-deeper-fills-it-in.md) ·
-the mode: [citations.md](../project/citations.md)
+the mode: [citations.md](../project/bibliography.md)
 
 **The question.** The list prompt used to require an influence number on every row and sent "I do
 not know this work" to the same low number as "this work is obscure". `citations/6` asks for a

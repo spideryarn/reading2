@@ -33,7 +33,7 @@ The plan does not say that the row and article are reloaded after step 1. That l
 
 Concrete change: after step 1, reload citations and the article, re-resolve the entry id, load the current find, and only then build `matched`, the investigation request, allowed quote texts, and fingerprint. If the entry disappeared, stop.
 
-The client rule also needs spelling out. The old response did **not** apply the lookup directly: it patched only safe link fields and refreshed so the server could fingerprint and attach the lookup ([useCitations.ts:419](</home/greg/code/spideryarn2/.claude/worktrees/fb75-citations-one-button/src/web/useCitations.ts:419>)). The new `lookup` frame must preserve that rule; otherwise a rerun can transiently show a verdict judged against the old claim.
+The client rule also needs spelling out. The old response did **not** apply the lookup directly: it patched only safe link fields and refreshed so the server could fingerprint and attach the lookup ([useCitations.ts:419](</home/greg/code/spideryarn2/.claude/worktrees/fb75-citations-one-button/src/web/useBibliography.ts:419>)). The new `lookup` frame must preserve that rule; otherwise a rerun can transiently show a verdict judged against the old claim.
 
 ---
 

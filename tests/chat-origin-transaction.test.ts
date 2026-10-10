@@ -63,7 +63,7 @@ describe("origin checked against the transaction's thread snapshot", () => {
   /* Plan 261006d, D1: an entry is matched by its id, so the name sent with a
      resend may differ, and the name stored first is the one kept. An idea
      joined them in plan 261009k (GPT Sol's F7). */
-  describe.each(["glossary", "citations", "ideas"] as const)("a %s origin", (mode) => {
+  describe.each(["glossary", "bibliography", "ideas"] as const)("a %s origin", (mode) => {
     const ITEM: ThreadOrigin = { mode, itemId: "spya-ttm222", quote: "qualia" };
 
     it("accepts a resend whose name has changed, and keeps the first name", () => {
@@ -79,7 +79,7 @@ describe("origin checked against the transaction's thread snapshot", () => {
 
     it("refuses another item's id, the other mode's, and a claim", () => {
       const first = withTurn([], { threadId: ID, question: "first", origin: ITEM }, AT);
-      const otherMode = mode === "glossary" ? "citations" : "glossary";
+      const otherMode = mode === "glossary" ? "bibliography" : "glossary";
       for (const wanted of [
         { ...ITEM, itemId: "spya-ttm333" },
         { ...ITEM, mode: otherMode } as ThreadOrigin,
@@ -94,7 +94,7 @@ describe("origin checked against the transaction's thread snapshot", () => {
 
     it("names the chat after the entry, not after the seeded first message", () => {
       const made = withTurn([], { threadId: ID, question: "About this term…", origin: ITEM }, AT);
-      const named = { glossary: "Glossary: qualia", citations: "Cited work: qualia", ideas: "Idea: qualia" } as const;
+      const named = { glossary: "Glossary: qualia", bibliography: "Cited work: qualia", ideas: "Idea: qualia" } as const;
       expect(made.thread.title).toBe(named[mode]);
     });
   });

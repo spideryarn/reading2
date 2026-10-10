@@ -1,6 +1,6 @@
 # What a Citations row says, and where each word came from
 
-Up: [investigations.md](../project/investigations.md) · the mode: [citations.md](../project/citations.md)
+Up: [investigations.md](../project/investigations.md) · the mode: [citations.md](../project/bibliography.md)
 · the plan it informed: [261003j](../plans/261003j-citations-say-only-what-the-bibliography-supports.md)
 
 ## What was asked
@@ -12,7 +12,7 @@ be left — title, authors, year — really from the article?
 
 ## What was measured
 
-[`evals/citations-say-less.ts`](../../evals/citations-say-less.ts), free and deterministic: it reads
+[`evals/citations-say-less.ts`](../../evals/bibliography-say-less.ts), free and deterministic: it reads
 stored lists and calls no model. Run on 2026-10-03 over the five local articles with a stored list,
 194 rows. The raw output is
 [`evals/results/citations-say-less-261003.tsv`](../../evals/results/citations-say-less-261003.tsv).

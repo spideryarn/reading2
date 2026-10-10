@@ -380,17 +380,17 @@ describe("the AI processing section", () => {
     async (on) => {
       experimentalOn = on;
       await open();
-      for (const step of ["timeline", "quiz", "faq", "debate", "citations"]) {
+      for (const step of ["timeline", "quiz", "faq", "debate", "bibliography"]) {
         expect(row(step), `no row for ${step}`).toBeTruthy();
         expect(button(step, "Run it again"), `no button for ${step}`).toBeTruthy();
       }
       expect(row("faq")?.textContent).toContain("FAQ");
       /* Sources' Bibliography since 2026-10-09 (plan 261009l); the step keeps its name. */
-      expect(row("citations")?.textContent).toContain("Bibliography");
+      expect(row("bibliography")?.textContent).toContain("Bibliography");
     },
   );
 
-  it.each(["faq", "citations"])(
+  it.each(["faq", "bibliography"])(
     "runs the %s row on one press, forcing that step alone",
     async (step) => {
       await open();

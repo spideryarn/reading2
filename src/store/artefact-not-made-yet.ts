@@ -7,7 +7,7 @@
  * `DEFAULT_INGEST_STEPS`. Only this one may be answered as "none yet":
  * `orNullWhenNotMadeYet` in src/routes.ts turns it into `200 null` for a client
  * that asks, and chat reads its citations subclass as "no list"
- * (src/store/citations-list-not-found.ts).
+ * (src/store/bibliography-list-not-found.ts).
  *
  * It still carries `status: 404`, so a caller that does not look at the class
  * sees exactly what it saw before, and so that `guardDbStore` lets it through
@@ -25,7 +25,7 @@
  * here.**
  *
  * **All sixteen routes answer the header**: `loadQuiz`, `loadCrossrefs` and
- * `loadCitations` first (plan 261006g); `loadSimpleSummary`, `loadIdeas`,
+ * `loadBibliography` first (plan 261006g); `loadSimpleSummary`, `loadIdeas`,
  * `loadFaq`, `loadTimeline`, `loadDebate`, `loadGlossary` and `loadQuotes`
  * (plan 261006h); and `loadTweets`, `loadRelations`, `loadSkim`, `loadSketch`,
  * `loadIllustrated` and `loadArc` (plan 261007n). Without the header each is

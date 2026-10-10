@@ -30,7 +30,7 @@ import { isFolded, subscribeFold } from "../fold.js";
 import { useDebateRead } from "../useDebate.js";
 import { useStepFinished } from "../useStepJob.js";
 import { useFaqRead } from "../useFaq.js";
-import { byLineOf } from "../CitationsPanel.js";
+import { byLineOf } from "../BibliographyPanel.js";
 import { rowWork } from "../DebatePanel.js";
 import { nameOfThrown, recordLog } from "../log-buffer.js";
 import { captureClientFailure } from "../monitoring.js";

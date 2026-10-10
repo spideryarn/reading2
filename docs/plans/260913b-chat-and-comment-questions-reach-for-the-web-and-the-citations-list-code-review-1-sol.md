@@ -21,7 +21,7 @@ A deterministic marker check alone catches missing marks but cannot establish th
 
 Mutation: make `loadCitations` throw a status-404 article error. The tool confidently said no list had been made.
 
-I added a typed `CitationsListNotFound`; only that error receives the ordinary absence response. Other 404s are read failures. See [citations-list-not-found.ts](</home/greg/code/spideryarn2/.claude/worktrees/fb3d-3f-chat-tools-web-and-citations/src/store/citations-list-not-found.ts:8>) and [chat-tools.ts](</home/greg/code/spideryarn2/.claude/worktrees/fb3d-3f-chat-tools-web-and-citations/src/chat-tools.ts:1700>).
+I added a typed `CitationsListNotFound`; only that error receives the ordinary absence response. Other 404s are read failures. See [citations-list-not-found.ts](</home/greg/code/spideryarn2/.claude/worktrees/fb3d-3f-chat-tools-web-and-citations/src/store/bibliography-list-not-found.ts:8>) and [chat-tools.ts](</home/greg/code/spideryarn2/.claude/worktrees/fb3d-3f-chat-tools-web-and-citations/src/chat-tools.ts:1700>).
 
 ### F14 — P1, established and fixed: the first citation row defeated the character cap
 
@@ -88,7 +88,7 @@ Files I changed:
 
 - [src/chat-tools.ts](</home/greg/code/spideryarn2/.claude/worktrees/fb3d-3f-chat-tools-web-and-citations/src/chat-tools.ts>)
 - [src/converse.ts](</home/greg/code/spideryarn2/.claude/worktrees/fb3d-3f-chat-tools-web-and-citations/src/converse.ts>)
-- [src/store/citations-list-not-found.ts](</home/greg/code/spideryarn2/.claude/worktrees/fb3d-3f-chat-tools-web-and-citations/src/store/citations-list-not-found.ts>)
+- [src/store/citations-list-not-found.ts](</home/greg/code/spideryarn2/.claude/worktrees/fb3d-3f-chat-tools-web-and-citations/src/store/bibliography-list-not-found.ts>)
 - [src/store/pg.ts](</home/greg/code/spideryarn2/.claude/worktrees/fb3d-3f-chat-tools-web-and-citations/src/store/pg.ts>)
 - [src/web/ChatPanel.tsx](</home/greg/code/spideryarn2/.claude/worktrees/fb3d-3f-chat-tools-web-and-citations/src/web/ChatPanel.tsx>)
 - [tests/chat-citations-tool.test.ts](</home/greg/code/spideryarn2/.claude/worktrees/fb3d-3f-chat-tools-web-and-citations/tests/chat-citations-tool.test.ts>)

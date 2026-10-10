@@ -18,7 +18,7 @@ SPIDERYARN-READING2-6K:
 > section or something like that in order to get this extra information as part of the citations
 > mode generation.
 
-Owner doc: [citations.md](../project/citations.md). Read [block-ids.md](../project/block-ids.md)
+Owner doc: [citations.md](../project/bibliography.md). Read [block-ids.md](../project/block-ids.md)
 before anything that points inside a block.
 
 ## What is actually wrong on that article

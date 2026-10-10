@@ -1001,7 +1001,7 @@ function saving(
  * a file, and a missing artefact there is a missing plate.
  */
 export const NONE_YET_AS_NULL =
-  /^\/api\/(?:quiz|crossrefs|citations|simple|ideas|faq|timeline|debate|debate-claims|glossary|quotes|tweets|relations|skim|sketch|illustrated|arc)\/[^/?]+$/;
+  /^\/api\/(?:quiz|crossrefs|bibliography|simple|ideas|faq|timeline|debate|debate-claims|glossary|quotes|tweets|relations|skim|sketch|illustrated|arc)\/[^/?]+$/;
 
 /** `application/json`, whatever parameters follow it. */
 function isJson(res: Response): boolean {
@@ -1101,7 +1101,7 @@ const CACHEABLE = [
   /* With the route, as `/api/faq/` is: Debate's claims list, which Claims
      draws from — docs/plans/261008i-debate-claims-picked-by-the-reader.md. */
   "/api/debate-claims/",
-  "/api/citations/",
+  "/api/bibliography/",
   "/api/metadata/",
   "/api/tweets/",
   "/api/chat/",

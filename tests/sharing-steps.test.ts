@@ -69,7 +69,7 @@ describe("mayOverlap", () => {
   it("lets two independent mode jobs overlap", () => {
     expect(mayOverlap(job(["quotes"]), job(["ideas"]))).toBe(true);
     expect(mayOverlap(job(["tweets"]), job(["sketch"]))).toBe(true);
-    expect(mayOverlap(job(["glossary"]), job(["citations"]))).toBe(true);
+    expect(mayOverlap(job(["glossary"]), job(["bibliography"]))).toBe(true);
   });
 
   it("is symmetric", () => {
@@ -127,7 +127,7 @@ describe("the policy", () => {
     expect([...SHARING_STEPS].sort()).toEqual(
       [
         "arc", "tweets", "glossary", "quotes", "ideas", "timeline", "quiz", "faq",
-        "sketch", "illustrated", "skim", "debate", "citations", "crossrefs", "simple",
+        "sketch", "illustrated", "skim", "debate", "bibliography", "crossrefs", "simple",
         /* 2026-10-03, a whole column that reads nothing — plan 261003f. */
         "relations",
         /* 2026-10-08, the same: Debate's claims list — plan 261008i. */

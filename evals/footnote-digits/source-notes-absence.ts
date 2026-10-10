@@ -16,7 +16,7 @@
 import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
 import { splitIntoBlocks } from "../../src/blocks.js";
-import { emptyDrops, hasNotes, noScoreDrops, toDrafts } from "../../src/citations.js";
+import { emptyDrops, hasNotes, noScoreDrops, toDrafts } from "../../src/bibliography.js";
 import { canonicaliseNotes } from "../../src/notes.js";
 import type { PdfRecord } from "../../src/pdf.js";
 import { renderHtml } from "../../src/pdf-read.js";

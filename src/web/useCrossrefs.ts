@@ -11,7 +11,7 @@
  * 261001b), so a signed-out or non-owning reader makes no request for them,
  * and does not: the component that calls this is never mounted for them.
  *
- * **Unconditional**, like the other standing annotations (`useCitationsRead`,
+ * **Unconditional**, like the other standing annotations (`useBibliographyRead`,
  * `useQuotesRead`): the links are drawn in every mode, so there is no band
  * whose opening could trigger the read.
  *

@@ -1,6 +1,6 @@
 /* ------------------------------------------------------------------ faq mode --
    The questions a careful reader would put to the piece. `.faq` is `.gloss`
-   with a class beside it, like `.citations`, so the band shell, the empty, stale
+   with a class beside it, like `.bibliography`, so the band shell, the empty, stale
    and error states, and the scroller and list (`.tl-scroll`, `.tl-list`,
    `.tl-item`) come from glossary.css and timeline.css unchanged — and each
    passage's solid left rule is `.gloss-part-senseHere`, the article-provenance
@@ -8,7 +8,7 @@
    a row: the question, its passages, and the jump beside each — and the
    promise's (i), which was the foot's until SPIDERYARN-READING2-62.
 
-   Loaded after citations.css; it sets no property the sheets it borrows from set
+   Loaded after bibliography.css; it sets no property the sheets it borrows from set
    on the same element, so its place in the cascade decides nothing between
    them. FaqPanel.tsx, docs/project/faq.md. */
 
@@ -69,7 +69,7 @@
 .faq-jump:hover { border-color: var(--highlight); color: var(--highlight-ink); }
 
 /* Only a running job's progress now, with a rule above it so it reads as being
-   about the list rather than the last row's — citations.css's `.cite-foot`. */
+   about the list rather than the last row's — bibliography.css's `.cite-foot`. */
 .faq-foot { padding: 0.4rem 0.7rem 0; border-top: 1px solid var(--rule); }
 
 /* The promise's (i) is `.band-about`, in mode-band.css (`BandAbout.tsx`). */

@@ -260,7 +260,7 @@ lists both files, and an unattended run does not edit a defence.
   happens". It costs money only when an import has the box ticked or somebody presses re-run.
 - **One target per link.** A claim backed by three passages links to the most direct one.
 - **Within one article only.** Links out to other articles are
-  [citations.md](../project/citations.md)' business.
+  [citations.md](../project/bibliography.md)' business.
 
 ## Stages
 

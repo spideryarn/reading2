@@ -418,7 +418,7 @@ describe("a mode a visitor cannot have", () => {
       skim: false,
       faq: false,
       simpleSummary: false,
-      citations: false,
+      bibliography: false,
       debate: false,
     };
     const marked = markedModes(available);

@@ -135,7 +135,7 @@ imported locally with today's code and Citations run on each:
 | `s41598-023` | `pattern5,51`, `studies15` | 69 | 70 | **0** | **69** |
 | `nagel-bat`, `nihms` | author–year, footnotes | no numbered list | | | |
 
-**That is the bug.** `markerNumbers` in [`src/citations.ts`](../../src/citations.ts) read a number
+**That is the bug.** `markerNumbers` in [`src/citations.ts`](../../src/bibliography.ts) read a number
 only inside square brackets. The model's own citing words did carry the number (`reduced
 mortality.¹`), and code could not see it.
 

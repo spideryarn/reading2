@@ -178,8 +178,9 @@ export const STEP_ORDER = [
      bibliography included, so its bytes match no other stage's. Off
      `DEFAULT_INGEST_STEPS` and in `FORCE_ONLY_WHEN_NAMED` — a model call over
      the whole article that a reader asks for by pressing the mode.
-     docs/plans/260911g-citations-mode.md. */
-  "citations",
+     docs/plans/260911g-citations-mode.md. Bibliography's list; the step was
+     `citations` until 2026-10-09 (plan 261009w). */
+  "bibliography",
   /* **Last**: it sends Ideas' bytes and thinks at `medium`, which no other
      `ids` stage does. Off `DEFAULT_INGEST_STEPS` — Greg asked for import to
      be as fast as possible — and in `FORCE_ONLY_WHEN_NAMED`: a model call over
@@ -199,17 +200,67 @@ export const STEP_ORDER = [
  * `runStep`'s catch. Plan 261002b § The deploy, for the Overseer.
  *
  * `trajectory` was Skim's step until 2026-10-01 (plan 261001r); `hierarchy` was
- * Structure's until 2026-10-02 (plan 261002b). The ledger has its own table,
- * `RENAMED` in src/cost-categories.ts, because it also renames jobs.
+ * Structure's until 2026-10-02 (plan 261002b); `citations` was Bibliography's
+ * until 2026-10-09 (plan 261009w). The ledger has its own table, `RENAMED` in
+ * src/cost-categories.ts, because it also renames jobs; `currentLedgerName`
+ * there reads both.
+ *
+ * **Plan 261009w renamed without rewriting `jobs`** (expand and contract): a
+ * job the old code queued keeps `citations` in `jobs.steps` and `jobs.reset`
+ * until the contract migration rewrites them, so this row is what runs it. Job
+ * ingress (`POST /api/jobs`, src/routes.ts) reads a stale tab's old names
+ * through here too. The row may stay after the contract, as `trajectory`'s has.
  */
 export const RETIRED_STEPS: Readonly<Record<string, StepName>> = {
   trajectory: "skim",
   hierarchy: "structure",
+  citations: "bibliography",
 };
 
 /** A retired step name's successor, or the name as it came. */
 export function currentStepName(name: string): string {
   return Object.hasOwn(RETIRED_STEPS, name) ? (RETIRED_STEPS[name] ?? name) : name;
+}
+
+/**
+ * **Every name a step or a job had, and what that row is called now**, for the
+ * readers of the ledger (`ai_calls.job`, `ai_calls.step_name`), which is
+ * append-only and so keeps every old word for ever. `RETIRED_STEPS` above,
+ * because a step's job is named after the step, plus the jobs that were
+ * renamed without being steps.
+ *
+ * One table for the three readers that name a ledger row — `costCategoryOf`
+ * (src/cost-categories.ts), `taskOf` (src/cost-cube.ts) and the article's cost
+ * view (src/web/ArticleCost.tsx) — where there used to be a second copy of the
+ * step renames in src/cost-categories.ts (plan 261009w, GPT Sol's F10).
+ *
+ * `citations-find` was Bibliography's *Find it* job until 2026-10-09, named
+ * after the step rather than the file it runs (src/citation-find.ts) and the
+ * rate bucket it spends (`citation-find`), which it now matches.
+ */
+export const RETIRED_JOBS: Readonly<Record<string, string>> = {
+  "citations-find": "citation-find",
+};
+
+/** A ledger row's job or step name as it is called now, or the name as it came. */
+export function currentLedgerName(name: string): string {
+  if (Object.hasOwn(RETIRED_JOBS, name)) return RETIRED_JOBS[name] ?? name;
+  return currentStepName(name);
+}
+
+/**
+ * **The steps named, and every retired spelling of each** — for SQL that
+ * selects run rows by step name, during an expand and contract rename (plan
+ * 261009w) when `revision_step_runs` holds a renamed step's rows under both
+ * names. A comparison that excluded only the new name would read the old
+ * name's twin as some other step's row.
+ */
+export function withRetiredSpellings(steps: readonly StepName[]): string[] {
+  const named = new Set<string>(steps);
+  const retired = Object.entries(RETIRED_STEPS)
+    .filter(([, current]) => named.has(current))
+    .map(([old]) => old);
+  return [...steps, ...retired];
 }
 
 /**

@@ -201,7 +201,7 @@ export const MODES = [
      and `?mode=citations` opens it there, through `RETIRED_MODES` below. The
      step and the column keep the word (stored as `CitedWork`, because chat's
      web citations share it). docs/plans/260911g-citations-mode.md,
-     docs/project/citations.md. */
+     docs/project/bibliography.md. */
   /* 2026-09-16: the questions a careful reader would put to this piece while
      reading it, each answered by passages of the piece itself — never a
      written answer. Asked for through the Feedback button (SPIDERYARN-READING2-3A);

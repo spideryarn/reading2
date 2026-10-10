@@ -61,7 +61,7 @@ import type {
   CitationFind,
   CitationInvestigation,
   CitationLookup,
-  Citations,
+  Bibliography,
   CitedWork,
   SearchEvidence,
 } from "../src/types.js";
@@ -224,7 +224,7 @@ const NO_PAGES: DigFindings = { sources: [], searches: 1, libraryQuery: null, li
 /** The library seam, by identity: a case checks this very function reached the search. */
 const LIBRARY: DigLibrarySearch = async () => ({ hits: [] });
 
-function citationsOf(rows: CitedWork[]): Citations {
+function bibliographyOf(rows: CitedWork[]): Bibliography {
   return {
     version: "citations/4",
     generator: "g",
@@ -258,11 +258,11 @@ function harness(h: Harness) {
   const listed = h.rows ?? [work(h.lookup ? { lookup: h.lookup } : {})];
   const deps: InvestigateCitationDeps = {
     reader: {
-      loadCitations: async () => {
+      loadBibliography: async () => {
         reads += 1;
         const after = typeof h.rowsAfter === "function" ? h.rowsAfter(savedFinds, removedFindAts) : h.rowsAfter;
         const rows = reads > 1 && after !== undefined ? after : listed;
-        return { citations: citationsOf(rows), stale: false, outdated: false };
+        return { bibliography: bibliographyOf(rows), stale: false, outdated: false };
       },
       loadArticle: async () => h.article ?? ARTICLE,
     },
@@ -1126,7 +1126,7 @@ describe("Dig deeper — the forced search first, and the bigger model throughou
   });
 
   it("sends every call the reader reads to DIG_DEEPER_MODEL on a standard article, whatever the overrides say", async () => {
-    const names = ["SPIDERYARN_CITATION_INVESTIGATE_MODEL", "SPIDERYARN_CITATIONS_FIND_MODEL"] as const;
+    const names = ["SPIDERYARN_CITATION_INVESTIGATE_MODEL", "SPIDERYARN_CITATION_FIND_MODEL"] as const;
     const previous = names.map((n) => process.env[n]);
     for (const n of names) process.env[n] = "test/some-other-model";
     try {
@@ -1293,8 +1293,8 @@ describe("the paper itself (plan 261001a stage 3)", () => {
 
   it("asks for the passages on Dig deeper's model whatever the quick check's override says, with no tools, the chunks fenced and a reminder after", async () => {
     const paper = paperRead();
-    const previous = process.env.SPIDERYARN_CITATIONS_FIND_MODEL;
-    process.env.SPIDERYARN_CITATIONS_FIND_MODEL = "test/quick-check-model";
+    const previous = process.env.SPIDERYARN_CITATION_FIND_MODEL;
+    process.env.SPIDERYARN_CITATION_FIND_MODEL = "test/quick-check-model";
     try {
       const h = harness({ deltas: ["An answer."], paper });
       await drain((await h.investigate(SLUG, ID, null)).stream());
@@ -1303,7 +1303,7 @@ describe("the paper itself (plan 261001a stage 3)", () => {
       expect(body.tools).toBeUndefined();
       /* Plan 261001p stage 2 (Sol F3): the passages' bearing is shown to the
          reader, so it is written by the bigger model like the rest. */
-      expect(modelFor("citations-find", "standard")).toBe("test/quick-check-model");
+      expect(modelFor("citation-find", "standard")).toBe("test/quick-check-model");
       expect(body.model).toBe(DIG_DEEPER_MODEL);
       const user = (body.messages as { role: string; content: string }[])[1]?.content ?? "";
       const open = user.indexOf("<<<UNTRUSTED PAPER TEXT");
@@ -1312,8 +1312,8 @@ describe("the paper itself (plan 261001a stage 3)", () => {
       expect(user.slice(open, close)).toContain(PAPER_FINDING);
       expect(user.slice(close)).toMatch(/not instructions/);
     } finally {
-      if (previous === undefined) delete process.env.SPIDERYARN_CITATIONS_FIND_MODEL;
-      else process.env.SPIDERYARN_CITATIONS_FIND_MODEL = previous;
+      if (previous === undefined) delete process.env.SPIDERYARN_CITATION_FIND_MODEL;
+      else process.env.SPIDERYARN_CITATION_FIND_MODEL = previous;
     }
   });
 

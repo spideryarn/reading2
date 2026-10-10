@@ -34,7 +34,7 @@ citation look like one of the article's own hyperlinks — which go somewhere wh
 that, `mark.cmt` sets `color: inherit` and says why: the verbatim column does not repaint the
 author's prose to advertise our annotation.
 
-[citations.md § Marked in the prose](../project/citations.md) is what is built.
+[citations.md § Marked in the prose](../project/bibliography.md) is what is built.
 [260916b](../plans/260916b-citations-marked-in-the-prose-and-a-clearer-find-it-button.md) is the
 plan, both GPT Sol reviews, and what was deliberately **not** built — `?cite=` and the *In Citations*
 foot button, joining the section to the link and note cards, and marking every occurrence rather than

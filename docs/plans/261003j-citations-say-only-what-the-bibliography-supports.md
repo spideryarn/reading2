@@ -1,6 +1,6 @@
 # Citations: a row says only what the bibliography supports
 
-Up: [plans.md](../project/plans.md) · the mode: [citations.md](../project/citations.md)
+Up: [plans.md](../project/plans.md) · the mode: [citations.md](../project/bibliography.md)
 
 Greg, through the Feedback button, 2026-10-03 (`spya-zmdb7y`), on the Entropy article:
 

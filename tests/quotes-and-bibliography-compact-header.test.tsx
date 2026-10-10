@@ -12,10 +12,10 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { BlockId, Citations, CitedWork, Quote, Quotes } from "../src/types.js";
+import type { BlockId, Bibliography, CitedWork, Quote, Quotes } from "../src/types.js";
 import type { QuoteRank, CiteOrder } from "../src/web/params.js";
 import type { QuotesOwner } from "../src/web/QuotesPanel.js";
-import type { UseCitations } from "../src/web/useCitations.js";
+import type { UseBibliography } from "../src/web/useBibliography.js";
 import { sourcesHead } from "./helpers/sources-head.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -35,7 +35,7 @@ vi.mock("../src/web/lib/supabase.js", () => ({
 }));
 
 const { QuotesPanel } = await import("../src/web/QuotesPanel.js");
-const { CitationsPanel, CAPPED_NOTE, INFLUENCE_NOTE } = await import("../src/web/CitationsPanel.js");
+const { BibliographyPanel, CAPPED_NOTE, INFLUENCE_NOTE } = await import("../src/web/BibliographyPanel.js");
 
 const noop = () => {};
 const BLOCK = "spya-k3m9qt" as BlockId;
@@ -211,7 +211,7 @@ const WORKS = [
   work("spya-g8h9j2", "Passing", 0.2, 0.2),
 ];
 
-function citations(list: CitedWork[], capped = false): Citations {
+function citations(list: CitedWork[], capped = false): Bibliography {
   return {
     version: "test",
     generator: "test",
@@ -224,10 +224,10 @@ function citations(list: CitedWork[], capped = false): Citations {
   };
 }
 
-function citeOwner(c: Citations): UseCitations {
+function citeOwner(c: Bibliography): UseBibliography {
   return {
     status: "ready",
-    citations: c,
+    bibliography: c,
     stale: false,
     outdated: false,
     slug: "a-piece",
@@ -252,12 +252,12 @@ function citeOwner(c: Citations): UseCitations {
   };
 }
 
-async function mountCitations(o: UseCitations, order: CiteOrder): Promise<void> {
+async function mountBibliography(o: UseBibliography, order: CiteOrder): Promise<void> {
   await act(async () =>
     root.render(
-      createElement(CitationsPanel, {
+      createElement(BibliographyPanel, {
         /* Sources' chip row, the band's head since 2026-10-09. */
-        head: sourcesHead({ view: "bibliography", onView: noop, ownerSlug: null, works: o.citations?.citations ?? null }),
+        head: sourcesHead({ view: "bibliography", onView: noop, ownerSlug: null, works: o.bibliography?.citations ?? null }),
         access: { kind: "owner", owner: o },
         order,
         onOrder: noop,
@@ -287,20 +287,20 @@ describe("the Citations band's top and foot", () => {
      for the count — still holds: the number is on Bibliography's chip and in
      the (i), never a line on the band. */
   it("has only the chip row for a head while the order row is drawn, and the count in the (i) rather than on the band", async () => {
-    await mountCitations(citeOwner(citations(WORKS)), "prioritised");
+    await mountBibliography(citeOwner(citations(WORKS)), "prioritised");
     expect(host.querySelector(".gloss-sort"), "no order row to fold into").not.toBeNull();
     expect(head()?.querySelector(".dbt-views")).not.toBeNull();
     expect(head()?.children).toHaveLength(1);
     expect(host.textContent).not.toContain("3 works");
 
-    await mountCitations(citeOwner(citations(WORKS)), "document");
+    await mountBibliography(citeOwner(citations(WORKS)), "document");
     expect(head()?.children).toHaveLength(1);
     expect(host.textContent).not.toContain("3 works");
     expect(await citeCard()).toContain("3 works cited.");
   });
 
   it("puts the two notes behind the band's (i), and draws no foot for them", async () => {
-    await mountCitations(citeOwner(citations(WORKS, true)), "prioritised");
+    await mountBibliography(citeOwner(citations(WORKS, true)), "prioritised");
     expect(host.querySelector(".cite-foot"), "an idle list still has a foot").toBeNull();
     expect(host.textContent).not.toContain(INFLUENCE_NOTE);
 
@@ -313,7 +313,7 @@ describe("the Citations band's top and foot", () => {
   });
 
   it("says nothing about capping when the model did not cap", async () => {
-    await mountCitations(citeOwner(citations(WORKS)), "prioritised");
+    await mountBibliography(citeOwner(citations(WORKS)), "prioritised");
     const about = host.querySelector<HTMLButtonElement>(ABOUT);
     await act(async () => about?.click());
     expect(tip()).toContain(INFLUENCE_NOTE);
@@ -322,7 +322,7 @@ describe("the Citations band's top and foot", () => {
   });
 
   it("keeps an empty head row, and the count in the band's (i), when there is no order row", async () => {
-    await mountCitations(citeOwner(citations([work("spya-a2b3c4", "Only", 0.8, 0.8)])), "prioritised");
+    await mountBibliography(citeOwner(citations([work("spya-a2b3c4", "Only", 0.8, 0.8)])), "prioritised");
     expect(host.querySelector(".gloss-sort")).toBeNull();
     expect(head()).not.toBeNull();
     expect(await citeCard()).toContain("1 work cited.");
@@ -348,13 +348,13 @@ describe("the states the fold depends on", () => {
   it("keeps an empty head row while Quotes and Citations load", async () => {
     await mountQuotes({ ...quotesOwner(quotes(THREE)), status: "loading", quotes: null }, "document");
     expect(head()).not.toBeNull();
-    await mountCitations({ ...citeOwner(citations(WORKS)), status: "loading", citations: null }, "document");
+    await mountBibliography({ ...citeOwner(citations(WORKS)), status: "loading", bibliography: null }, "document");
     expect(head()).not.toBeNull();
   });
 
   it("keeps Citations' head row, and the count in the band's (i), for several unscored works that offer one order", async () => {
     const legacy = WORKS.map(({ relevance: _r, influence: _i, ...w }) => w);
-    await mountCitations(citeOwner(citations(legacy)), "document");
+    await mountBibliography(citeOwner(citations(legacy)), "document");
     expect(host.querySelector(".gloss-sort")).toBeNull();
     expect(head()).not.toBeNull();
     expect(await citeCard()).toContain("3 works cited.");
@@ -384,13 +384,13 @@ describe("the states the fold depends on", () => {
 
     await act(async () =>
       root.render(
-        createElement(CitationsPanel, {
+        createElement(BibliographyPanel, {
           head: null,
           access: {
             kind: "visitor",
             /* The public boundary narrows `linkFrom` by excluding the owner's
                private `web` result; this fixture is explicitly a DOI list. */
-            citations: {
+            bibliography: {
               citations: WORKS.map((work) => ({
                 id: work.id,
                 title: work.title,
@@ -427,8 +427,8 @@ describe("the states the fold depends on", () => {
     status: "running",
     createdAt: "2026-09-29T00:00:00.000Z",
     startedAt: "2026-09-29T00:00:01.000Z",
-    steps: [{ name: "citations", label: "Finding the citations", status: "running" }],
-  } as unknown as NonNullable<UseCitations["job"]>;
+    steps: [{ name: "bibliography", label: "Finding the citations", status: "running" }],
+  } as unknown as NonNullable<UseBibliography["job"]>;
   const FAILED = { message: "The citations could not be found.", retryable: false, retry: null };
 
   for (const [name, over] of [
@@ -437,7 +437,7 @@ describe("the states the fold depends on", () => {
   ] as const) {
     it(`shows a ${name} list's running, starting and failed job in the foot, once`, async () => {
       for (const job of [{ job: RUNNING }, { starting: true }, { failed: FAILED }]) {
-        await mountCitations({ ...citeOwner(citations(WORKS)), ...over, ...job }, "prioritised");
+        await mountBibliography({ ...citeOwner(citations(WORKS)), ...over, ...job }, "prioritised");
         expect(host.querySelectorAll(":scope > aside > .cite-foot"), JSON.stringify(Object.keys(job))).toHaveLength(1);
       }
       expect(host.querySelector(".cite-foot")?.textContent).toContain(FAILED.message);
@@ -445,7 +445,7 @@ describe("the states the fold depends on", () => {
   }
 
   it("shows a stale list's job in its banner, and not in a foot", async () => {
-    await mountCitations({ ...citeOwner(citations(WORKS)), stale: true, job: RUNNING }, "prioritised");
+    await mountBibliography({ ...citeOwner(citations(WORKS)), stale: true, job: RUNNING }, "prioritised");
     expect(host.querySelector(".cite-foot")).toBeNull();
     expect(host.querySelector(".gloss-stale")?.textContent).toContain("Stop");
   });

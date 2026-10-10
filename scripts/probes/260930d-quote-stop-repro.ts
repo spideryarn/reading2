@@ -21,7 +21,7 @@
  */
 import { loadEnvLocal } from "../../src/env.js";
 import { environmentOwnerId, runAsOwner } from "../../src/owner.js";
-import { citationFindStore, loadArticle, loadCitations } from "../../src/store/index.js";
+import { citationFindStore, loadArticle, loadBibliography } from "../../src/store/index.js";
 import { closeDb } from "../../src/db/client.js";
 import { modelFor } from "../../src/models.js";
 import { runStream } from "../../src/stream-run.js";
@@ -37,7 +37,7 @@ import { createQuoteGuard } from "../../src/investigate-quote-guard.js";
 const BUDGET = 0.8;
 
 async function oneRun(slug: string, id: string): Promise<number> {
-  const { citations } = await loadCitations(slug);
+  const { bibliography: citations } = await loadBibliography(slug);
   const current = citations.citations.find((w) => w.id === id);
   if (!current) throw new Error(`no citation ${id} in ${slug}`);
   const { investigation: _earlier, ...work } = current;
@@ -117,7 +117,7 @@ async function main(): Promise<void> {
     if (mode === "list") {
       const slug = args[0];
       if (!slug) throw new Error("list <slug>");
-      const { citations } = await loadCitations(slug);
+      const { bibliography: citations } = await loadBibliography(slug);
       for (const c of citations.citations)
         console.log(`${c.id}\t${c.linkFrom}\t${c.lookup?.state ?? "-"}\t${c.title}\t| ${c.authors ?? ""} | ${c.year ?? ""}`);
       return;

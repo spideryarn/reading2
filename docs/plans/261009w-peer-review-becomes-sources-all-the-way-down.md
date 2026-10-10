@@ -305,6 +305,20 @@ report's note, `feedback-endings.ts`), and messages to the two sessions if they 
 
 ## Log
 
+- 2026-10-09: **Stage 1 landed on `dev`** (68d9ed837, Sol's fixes, merge bb1f594ef). Built by an
+  Opus subagent; red first on 53 old-address rows, 3 last-view rows (F7) and 6 help-page rows. One
+  decision the plan did not make: **Referee's alias `peer reviewer` became `for peer reviewers`**
+  (the landing tile's words). The plan wanted Sources to gain `peer review` *and* Referee to keep
+  `peer reviewer`, but `tests/command-match-mode-aliases.test.ts` (each nickname typed in full puts
+  its own mode first) forbids it: Referee is earlier in the bar, so its alias starting "peer
+  review" would take Sources' word. Typed, "peer reviewer" still finds Referee one tier lower. The
+  alternative, dropping `peer review` from Sources, would send that phrase back to Referee. The
+  pending release notes (`changelog-pending.json`, pinned to `fade2f5d`) keep "Peer review", since
+  that commit predates the rename. GPT Sol's code review
+  ([261009w-stage-1-code-review-sol.md](261009w-stage-1-code-review-sol.md)): LAND AFTER FIXES, three
+  prose/comment fixes it made itself, nothing wider. The plan's letter moved from `261009s` to
+  `261009w` at the merge: another session landed a `261009s` first.
+
 - 2026-10-09: prior-work check: nothing on `dev` renames the mode (`git log`, `docs/plans`); the
   question file is still `open` with the reply unquoted. Inventories by three Sonnet sweeps
   (debate ≈ 7,800 lines in 460 files incl. eval corpora; citations in 371 test files; peer-review
