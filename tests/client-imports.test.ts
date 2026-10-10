@@ -124,6 +124,11 @@ const SHARED = new Set([
      F15 on the Skim build so the client copy could go; it imports types
      and nothing else. See src/section-path.ts. */
   "section-path.js",
+  /* Which stops each pass of a Skim route walks — the band walks it and the
+     server's growth rule checks routes against it, so one definition rather
+     than two that could drift. Imports types and nothing else.
+     See src/skim-passes.ts. */
+  "skim-passes.js",
   /* What the glossary's *Look up a term* box will accept — the bound, the
      screen, and the three sentences a refused term gets. On the list for the
      reason the header gives rather than for convenience: it imports nothing at

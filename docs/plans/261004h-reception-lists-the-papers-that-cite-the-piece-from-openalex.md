@@ -5,6 +5,12 @@ Up: [debate.md](../project/reception.md)
 **Status:** built (2026-10-04); § What landed. This is stage 2 of
 [261002i](261002i-debate-leads-with-who-has-cited-this-article.md), queue item `qi-aabv7jjy`.
 
+**Superseded in one respect, 2026-10-10:** the arXiv gap named below ("an arXiv preprint shows the
+`no-doi` sentence") is closed by
+[261010n](261010n-reception-says-plainly-why-it-is-empty-and-finds-an-arxiv-paper-s-doi.md): an
+agreed arXiv record puts arXiv's DataCite DOI on the article, and an article with no DOI whose own
+address is an arXiv page is asked about by that DOI.
+
 ## What Greg decided
 
 The question was [Q-citation-index] in

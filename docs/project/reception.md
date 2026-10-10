@@ -385,7 +385,7 @@ honestly finds nothing.
   runs on a fresh answer, on a cache hit and on a stale fallback alike, so a second article carrying
   the same DOI by mistake gets nothing.
 - **Every outcome has its own sentence** (`CitersResult` in `src/types.ts`, the words in
-  `src/messages.ts`): no DOI on record, not in OpenAlex, could not be confirmed, could not be
+  `src/messages.ts`): no DOI to ask with, not in OpenAlex, could not be confirmed, could not be
   reached (with Try again), too large to read, no citers yet, and the list. A short list says why
   it is short: the page limit (100, most cited first) and records that could not be shown are two
   different sentences.
@@ -399,10 +399,17 @@ honestly finds nothing.
 - **What is sent**: the article's DOI and our contact address, from the server. No key.
   [privacy.md](privacy.md) has the page's sentence.
 
+- **An arXiv paper has a DOI**, arXiv's own at DataCite (`10.48550/arxiv.<id>`), since 2026-10-10
+  ([261010n](../plans/261010n-reception-says-plainly-why-it-is-empty-and-finds-an-arxiv-paper-s-doi.md)):
+  an import whose arXiv record agrees puts it on the article, and an article with no DOI whose own
+  address is an arXiv page is asked about by that DOI (`citersIdOf`), so arXiv papers imported
+  before then get the list too. OpenAlex files the arXiv DOI under the paper's one record.
+
 Not built, each named in the plan: a visitor's view of the list; a title search when there is no
-DOI (an arXiv preprint has none on record today, so it shows the no-DOI sentence, as does an article
-imported before 2026-10-04 until its owner uses Read it again); more than one page; hiding
-self-citations; an API key.
+DOI, and a way to type one in (asked of Greg in
+[q-hbg65m](../user-feedback/questions/q-hbg65m.md)); more than one page; hiding self-citations; an
+API key. An article imported before 2026-10-04 with a DOI only a registry could supply still shows
+the no-DOI sentence until its owner uses Read it again.
 
 ## What has changed, and where each change is written up
 

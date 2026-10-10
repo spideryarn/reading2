@@ -5489,41 +5489,80 @@ export const TIMELINE_THIN =
  */
 export const RECEPTION_RESPONSES_NONE = "No page the search found responds to this piece by name.";
 
+const pagesWord = (n: number): string => (n === 1 ? "1 page" : `${n} pages`);
+const candidates = (n: number, one: string, many: string): string => (n === 1 ? `1 ${one}` : `${n} ${many}`);
+/** The end of the third form, whichever search it is about. */
+const notConfirmed = (n: number): string =>
+  `We could not confirm ${n === 1 ? "it" : "any of them"}, so nothing is listed.`;
+
 /**
- * **Pages came back, and not one of them could be checked.** The second form,
- * and a different fact from the sentence above — which is why this one carries
- * the count and that one cannot.
+ * **Pages came back, and the AI put none of them forward.** The second form the
+ * lead sentence takes: `returnedSources > 0` and `reportedRows === 0`.
+ *
+ * Nothing was checked here, and until 2026-10-10 the sentence said otherwise —
+ * *"none could be checked against the words it returned"* covered this case and
+ * the next, and Greg could not tell what it meant (spya-qtk3q2, plan 261010n).
+ *
+ * **What the counts prove, and no more** (GPT Sol's F1 on that plan): the AI's
+ * answer held no candidate. Not that it read every page, nor that it judged
+ * each one: `returnedSources` is counted from the search's own annotations,
+ * independently of the answer. So the sentence says *put none forward*.
+ *
+ * The number is `returnedSources`: **pages the search returned**, not rows the
+ * model reported. A reader told *"4 pages"* can weigh how thin the answer is.
+ */
+export function receptionResponsesNoneSuggested(pages: number): string {
+  return (
+    `The web search returned ${pagesWord(pages)}, but the AI put none forward as a response to ` +
+    "this piece by name, so nothing is listed."
+  );
+}
+
+/**
+ * **The AI put candidates forward, and not one survived our checks.** The third
+ * form: `reportedRows > 0` and no row kept.
  *
  * Every quotation is located in the *extract the search engine returned*, which
  * ran 236–4,945 characters in the Stage 0 measurements, of pages that may run to
  * tens of thousands. So a real, apt quotation that simply falls outside that
  * slice loses its row (Sol's F18). That is the right direction to fail in — we
  * lose a true row rather than admit an unchecked one — and it is emphatically
- * not the same news as *nothing came back*.
+ * not the same news as *nothing came back*. It is also the commonest loss, so
+ * the sentence names it, as *mainly*: the rest (this piece itself or a copy of
+ * it, an address the search never returned, a malformed row) are in
+ * `ReceptionLosses`.
  *
- * The number is `returnedSources`: **pages the search returned**, not rows the
- * model reported and not rows we refused. A reader told *"4 pages"* can weigh
- * how thin the answer is; told nothing, they cannot tell this sentence from the
- * one above it.
+ * `suggested` is `reportedRows`: **rows, not pages** — two rows can name one
+ * page, and a malformed row counts too (Sol's F1). Hence *possible responses*.
  */
-export function receptionResponsesUnverified(pages: number): string {
+export function receptionResponsesUnverified(pages: number, suggested: number): string {
   return (
-    `The search found ${pages} ${pages === 1 ? "page" : "pages"} that might respond to this ` +
-    `piece, but ${pages === 1 ? "it could not be checked" : "none could be checked"} against ` +
-    "the words it returned."
+    `The web search returned ${pagesWord(pages)}. The AI put forward ` +
+    `${candidates(suggested, "possible response", "possible responses")} to this piece. We list one ` +
+    "only when we can confirm it ourselves, mainly by finding the words the AI quoted in what the " +
+    `search returned from that page. ${notConfirmed(suggested)}`
   );
 }
 
-/** The same pair for the other search, which asks about the claims rather than the piece. */
+/** The same three for the other search, which asked about the claims rather than the piece. */
 export const SOURCES_CLAIMS_NONE =
   "This search did not find anyone writing about what this piece claims.";
 
-/** …and the same distinction, which is why these are four sentences and not two. */
-export function sourcesClaimsUnverified(pages: number): string {
+/** …the AI put nothing forward… */
+export function sourcesClaimsNoneSuggested(pages: number): string {
   return (
-    `The search found ${pages} ${pages === 1 ? "page" : "pages"} that might answer what this ` +
-    `piece claims, but ${pages === 1 ? "it could not be checked" : "none could be checked"} ` +
-    "against the words it returned."
+    `The web search returned ${pagesWord(pages)}, but the AI put none forward as evidence about ` +
+    "what this piece claims, so nothing is listed."
+  );
+}
+
+/** …and the AI put some forward and none survived. Its quotations are checked on both sides. */
+export function sourcesClaimsUnverified(pages: number, suggested: number): string {
+  return (
+    `The web search returned ${pagesWord(pages)}. The AI put forward ` +
+    `${candidates(suggested, "possible piece", "possible pieces")} of evidence about what this piece ` +
+    "claims. We list one only when we can confirm it ourselves, mainly by finding the words the AI " +
+    `quoted both in this piece and in what the search returned from the other page. ${notConfirmed(suggested)}`
   );
 }
 
@@ -5722,7 +5761,16 @@ export const SOURCES_CLAIM_CHECK_LIST_CHANGED =
 
 export const CITERS_HEADING = "Cited by";
 export const CITERS_LOADING = "Looking up which papers cite this piece…";
-export const CITERS_NO_DOI = "This piece has no DOI on record, so we cannot look up who cites it.";
+/**
+ * **What a DOI is, and why the list needs one**: "no DOI on record" left Greg
+ * unable to tell a lookup that failed from one never made (spya-sbj3yk, plan
+ * 261010n). It does not say where we looked, because nothing records that per
+ * article (GPT Sol's F2): an import may have asked no registry at all. The way
+ * to carry on without one, Google Scholar, is the link drawn under it.
+ */
+export const CITERS_NO_DOI =
+  "We could not list who cites this piece, because we have no DOI for it: a standard identifier " +
+  "used for research papers. Many web pages and blog posts do not have one.";
 export const CITERS_NOT_INDEXED = "OpenAlex, the index we ask, has no record of this piece.";
 /**
  * **Not "the DOI belongs to another work"**: what failed is our check that the
