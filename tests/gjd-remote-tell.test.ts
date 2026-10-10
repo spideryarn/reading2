@@ -310,13 +310,16 @@ describe("tell-overseer arguments", () => {
 describe("tell arguments", () => {
   // Exercise the real dispatch without reaching a real box. The ssh stand-in
   // records the POST body; accepting syntax alone would miss a wrong target.
+  // It is an extensionless script, which Node 26 (the box) loads as ESM and
+  // older Node as CommonJS; process.getBuiltinModule works under both, where
+  // `require` is not defined in the first.
   function run(args: string[], input = "", name = "peer") {
     const dir = mkdtempSync(path.join(tmpdir(), "gjd-tell-test-"));
     try {
       writeFileSync(path.join(dir, "state.json"), JSON.stringify(snapshot([{ ...peer, name }])));
       writeFileSync(path.join(dir, "ssh"), `#!${process.execPath}
-const fs = require("node:fs");
-const path = require("node:path");
+const fs = process.getBuiltinModule("node:fs");
+const path = process.getBuiltinModule("node:path");
 const dir = process.env.GJD_REMOTE_LOG_DIR;
 const command = process.argv.at(-1);
 if (command.includes("/api/state")) {
