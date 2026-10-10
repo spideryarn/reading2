@@ -51,6 +51,7 @@ import {
   glossaryHiddenStore,
   skimNoticeStore,
   staleNoticeStore,
+  suggestionDismissalStore,
   quizAttemptStore,
   loadArticle,
   loadGlossary,
@@ -456,7 +457,14 @@ import {
 } from "./transcribe.js";
 import { type PickAnswer, parsePickRequest } from "./command-pick.js";
 import { pickCommand } from "./command-pick-call.js";
-import { type SuggestAnswer, parseSuggestRequest, readFromHash } from "./command-suggest.js";
+import {
+  DISMISS_STALE,
+  type SuggestAnswer,
+  parseDismissRequest,
+  parseSuggestRequest,
+  readFromHash,
+  withoutDismissed,
+} from "./command-suggest.js";
 import { suggestCommands, suggestableOptions } from "./command-suggest-call.js";
 import { parseHelpChatRequest } from "./help-chat.js";
 import { admitHelpChat, askHelp } from "./help-chat-call.js";
@@ -8285,10 +8293,41 @@ async function suggestFromWhyReading(
     const outcome = await suggestCommands({ rendered, rows: parsed.request.rows }, gone.signal);
     if (!outcome.ok) throw httpError(outcome.status, outcome.failure.message);
     if (outcome.suggestions === null) return { kind: "nothing", why: "no-list" };
-    return { kind: "suggestions", readFrom: readFromHash({ profile, purpose }), ...outcome.suggestions };
+    /* What the reader dismissed under this fingerprint goes after the model
+       has answered, never into what it is sent (plan 261010u, F2). Under any
+       other fingerprint nothing is filtered (F6). */
+    const readFrom = readFromHash({ profile, purpose });
+    const kept = withoutDismissed(outcome.suggestions, await suggestionDismissalStore.forFingerprint(slug, readFrom));
+    if (kept === null) return { kind: "nothing", why: "no-list" };
+    return { kind: "suggestions", readFrom, ...kept };
   } finally {
     res.off("close", drop);
   }
+}
+
+/**
+ * **Dismissing one of the bar's suggestions** — `POST
+ * /api/command-suggest/:slug/dismiss`, plan 261010u (Greg, 2026-10-10,
+ * `spya-yf23zk`). The body is `{ readFrom, identity }`, both hashes
+ * (src/command-suggest.ts § `parseDismissRequest`): no words reach the
+ * server. Owner only, checked by name first as for `suggestFromWhyReading`,
+ * and again inside the store. Never spends.
+ */
+async function dismissSuggestion(slug: string, req: IncomingMessage): Promise<void> {
+  await ownedArticleIdentity(slug);
+  const parsed = parseDismissRequest(await readBody(req));
+  if (!parsed.ok) throw httpError(400, parsed.reason);
+  /* A late write from a list made before either profile box changed must not
+     replace dismissals already saved for the current list. Re-read the two
+     stored inputs here; the client supplies neither words nor authority. */
+  const parts = await resolveProfileParts(slug);
+  if (parts.purposeFailed) throw httpError(503, REASON_NOT_READ.message);
+  const currentReadFrom = readFromHash({
+    profile: normaliseProfileText(parts.profile),
+    purpose: normaliseProfileText(parts.purpose),
+  });
+  if (parsed.request.readFrom !== currentReadFrom) throw httpError(409, DISMISS_STALE);
+  await suggestionDismissalStore.dismiss(slug, parsed.request.readFrom, parsed.request.identity);
 }
 
 /* ------------------------------------------------------------- feedback -- */
@@ -10631,6 +10670,19 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       /* Words made from the reader's profile: never a shared cache's. */
       res.setHeader("Cache-Control", "private, no-store");
       send(res, 200, answer);
+    },
+  },
+  /* **Dismissing one of those suggestions** — plan 261010u. Answers
+     `{ ok: true }`. The pattern above takes one segment after the prefix, so
+     it never swallows this one. Never spends. */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/command-suggest\/([\w.%-]+)\/dismiss$/,
+    article: "none",
+    handler: async ({ request: { req, res } }, captures) => {
+      await dismissSuggestion(slugPart(captures, 1), req);
+      send(res, 200, { ok: true });
     },
   },
 

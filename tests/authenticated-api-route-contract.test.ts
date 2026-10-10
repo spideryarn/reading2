@@ -531,6 +531,12 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/command-suggest/w1"],
   },
   {
+    /* Dismissing one of those suggestions, as a hash — 261010u. Owner only, no model. */
+    match: { kind: "regex", source: "^\\/api\\/command-suggest\\/([\\w.%-]+)\\/dismiss$", flags: "" },
+    methods: ["POST"],
+    witnesses: ["/api/command-suggest/w1/dismiss"],
+  },
+  {
     /* Ask about Spideryarn, the Help pages' chatbot, 261007k. */
     match: { kind: "literal", path: "/api/help-chat" },
     methods: ["POST"],
@@ -1080,8 +1086,9 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
    its lookups and its Send (plan 261010c); 112 with the dismissed "older
    version" notices (plan 261010a); 115 with Reception's and the claims list's
    new paths beside their old ones, and the claim checks' new path beside its
-   old one, for one deploy (plan 261009w Stage 3, removed by its contract). */
-const EXPECTED_MATCHER_COUNT = 115;
+   old one, for one deploy (plan 261009w Stage 3, removed by its contract);
+   116 with dismissing one of the bar's suggestions (plan 261010u). */
+const EXPECTED_MATCHER_COUNT = 116;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
    with the admin's earlier feedback; 118 with their replies to questions; 119
    with the Help pages' chatbot; 120 with Hidden text's Opus check; 121 with the
@@ -1094,8 +1101,9 @@ const EXPECTED_MATCHER_COUNT = 115;
    author gifts' list, ensure, lookups, edit and Send (plan 261010c); 138 with
    the dismissed "older version" notices' GET and POST (plan 261010a); 142 with
    the new Reception GET, the new list GET and the new checks' GET and POST
-   beside their old paths (plan 261009w Stage 3). */
-const EXPECTED_GUARD_COUNT = 142;
+   beside their old paths (plan 261009w Stage 3); 143 with dismissing one of
+   the bar's suggestions (plan 261010u). */
+const EXPECTED_GUARD_COUNT = 143;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2289,6 +2297,8 @@ describe("the authenticated API's route contract", () => {
         "POST literal /api/command-pick",
         // the bar's short list from why you are reading, 261005k
         "POST regex /^\\/api\\/command-suggest\\/([\\w.%-]+)$/",
+        // dismissing one of them, 261010u
+        "POST regex /^\\/api\\/command-suggest\\/([\\w.%-]+)\\/dismiss$/",
         // Ask about Spideryarn, the Help pages' chatbot, 261007k — beside the bar's two model calls
         "POST literal /api/help-chat",
         "POST literal /api/feedback",

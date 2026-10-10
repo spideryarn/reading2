@@ -505,7 +505,22 @@ question for chat about what the web says, each with a line saying why. **Every 
 bar already had** (the quick-search row, that mode's own row with its own `generates` mark, Debate's
 lens handoff), and nothing runs without its own press, whatever the model returned. The list is
 kept for the visit in state of its own, hidden while the reader types, and dropped when *About you*
-or the reason is saved. The model is shown the reader's profile and our words for the modes, never
+or the reason is saved.
+
+**Since 2026-10-10 the bar draws at most four, the reader can dismiss one for good or fold the lot,
+and *Guide* is the first row of all**
+([261010u](../plans/261010u-bar-suggestions-capped-dismissable-collapsible-and-the-guide-at-the-top.md);
+Greg's `spya-yf23zk` and `spya-xasbd3`: *"three or four should probably be enough … it should be
+possible to dismiss some of them … and collapse them"*, *"an easy way to get to the guide chat,
+somewhere near the top"*). The four are taken in turn — a search, a mode, the question, a search — so
+the cap never costs the list its mode or its question, and a dismissed one makes room for the next.
+A dismissal (the ×, or <kbd>Delete</kbd> on the highlighted row) is stored on the server as a hash,
+for that article and for the profile as it stands, and the server leaves it out of every later
+answer until either box is edited:
+[reader-profile.md § The command bar's suggestions](reader-profile.md#the-command-bars-suggestions-the-one-exception).
+The fold line (*From why you're reading*) is a row of the list like any other; folded is remembered
+in this browser. A suggested search no longer carries the quick-search description, which said
+nothing its label did not. The model is shown the reader's profile and our words for the modes, never
 the article. That makes this the one place the profile becomes words that can leave the
 conversation: [reader-profile.md § The command bar's suggestions](reader-profile.md#the-command-bars-suggestions-the-one-exception).
 Shapes in [`src/command-suggest.ts`](../../src/command-suggest.ts), the prompt and the call in

@@ -266,6 +266,21 @@ The prompt is `SUGGEST_SYSTEM` in
 article. The list is kept in the browser for the visit and dropped when either box is saved; it is
 never stored on the server and never logged.
 
+**What is stored is what the reader dismissed, and only as a hash** (plan
+[261010u](../plans/261010u-bar-suggestions-capped-dismissable-collapsible-and-the-guide-at-the-top.md),
+Greg's `spya-yf23zk`: *"It should be possible to dismiss some of them so that they don't come up
+again"*). The table is `command_suggestion_dismissals`: one row per article, holding the
+fingerprint of the profile the list was written from (`read_from`, the same `readFromHash` the bar
+already compares) and up to 50 sixteen-hex identities (`suggestionIdentity` in
+[`src/command-suggest.ts`](../../src/command-suggest.ts): the kind, and the words case- and
+space-folded or the mode's id). **Never the words**, because the words are written from the profile
+and would outlive an edit of it. The suggest route drops a dismissed suggestion from its answer
+only while the stored fingerprint is the one it has just computed, so editing either box clears the
+slate, as it drops the list. Nothing about a dismissal is sent to the model: a paraphrase of a
+dismissed search can come back, and that was chosen over sending the model text from the profile a
+second time (GPT Sol's F2 on the plan). No undo and no page that lists them in v1; the article's
+export carries them and deleting the article deletes them.
+
 ### The rules live in `SYSTEM`, and they are always there
 
 `PROFILE_RULES` in [`src/profile.ts`](../../src/profile.ts) is appended to every profiled system prompt —

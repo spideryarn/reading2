@@ -358,10 +358,19 @@ const QUIZ_REPLY_SENTINEL = "sentinel-3f9c1e-quiz-attempts-the-mark";
 const REPLACED_ANSWER_SENTINEL = "sentinel-3f9c1e-quiz-attempts-replaced-batch-answer";
 const REPLACED_QUESTION_SENTINEL = "sentinel-3f9c1e-quiz-attempts-replaced-batch-question";
 
+/**
+ * A dismissed suggestion's identity — `command_suggestion_dismissals` holds
+ * only sixteen-hex hashes (format-checked), so its sentinel is one, and its
+ * `read_from` a second. Plan 261010u.
+ */
+const SUGGESTION_DISMISSAL_SENTINEL = "3f9c1e00d15a1550";
+const SUGGESTION_READ_FROM_SENTINEL = "3f9c1e00eead4f50";
+
 function sentinel(table: string): string {
   if (table === "block_identities") return DEPARTED_BLOCK_ID;
   if (table === "reading_time") return READING_TIME_SENTINEL;
   if (table === "glossary_hidden_entries") return HIDDEN_ENTRY_SENTINEL;
+  if (table === "command_suggestion_dismissals") return SUGGESTION_DISMISSAL_SENTINEL;
   return `sentinel-3f9c1e-${table}`;
 }
 
@@ -671,6 +680,14 @@ function fixtures(): Record<RollbackTable | BundledTable, Fixture> {
         dismissedFor: [sentinel("stale_notice_dismissals")],
       });
     },
+    /* Straight into the table, as the store would write it. Plan 261010u. */
+    command_suggestion_dismissals: async () => {
+      await db.insert(schema.commandSuggestionDismissals).values({
+        articleId: ARTICLE_ID,
+        readFrom: SUGGESTION_READ_FROM_SENTINEL,
+        dismissed: [sentinel("command_suggestion_dismissals")],
+      });
+    },
   };
 }
 
@@ -792,6 +809,7 @@ const COLUMNS_LEFT_OUT: Record<BundledTable, Readonly<Record<string, string>>> =
   article_tags: {},
   quiz_attempts: {},
   stale_notice_dismissals: {},
+  command_suggestion_dismissals: {},
 };
 
 /** A property of `value`, or `undefined` if it is not an object. */
@@ -836,6 +854,7 @@ const ROWS_IN: Record<BundledTable, (parsed: unknown) => unknown[]> = {
   article_tags: (parsed) => listAt(parsed, "tags"),
   quiz_attempts: (parsed) => listAt(parsed, "attempts"),
   stale_notice_dismissals: (parsed) => listAt(parsed, "dismissals"),
+  command_suggestion_dismissals: (parsed) => listAt(parsed, "dismissals"),
 };
 
 /** Every key any of these rows carries. */
@@ -882,6 +901,7 @@ await pgReady({
     "spideryarn.article_tags",
     "spideryarn.quiz_attempts",
     "spideryarn.stale_notice_dismissals",
+    "spideryarn.command_suggestion_dismissals",
   ],
 });
 

@@ -35,10 +35,13 @@ import {
   SUGGEST_LABEL,
   SUGGEST_NOTHING,
   SUGGEST_NO_REASON,
+  DISMISSED,
+  MAX_SUGGESTIONS_SHOWN,
   type SuggestAnswer,
   type SuggestRequest,
   lensLabel,
   readFromHash,
+  suggestionIdentity,
 } from "../src/command-suggest.js";
 import { REASON_NOT_READ } from "../src/messages.js";
 import type { ActionOutcome } from "../src/web/command-match.js";
@@ -69,6 +72,21 @@ vi.mock("../src/web/DictationStrip.js", () => ({
   DictationButton: () => null,
   DictationStrip: () => null,
 }));
+
+/* jsdom's `localStorage` is shadowed by Node's own global here (as in
+   tests/add-page-share.test.tsx): a plain map stands in, for the fold line. */
+{
+  const held = new Map<string, string>();
+  Object.defineProperty(window, "localStorage", {
+    configurable: true,
+    value: {
+      getItem: (key: string) => held.get(key) ?? null,
+      setItem: (key: string, value: string) => void held.set(key, value),
+      removeItem: (key: string) => void held.delete(key),
+      clear: () => held.clear(),
+    },
+  });
+}
 
 const { Dock } = await import("../src/web/Dock.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
@@ -106,6 +124,13 @@ let asked: {
 }[];
 /** Every other request that is not a read: a save, and anything nobody expected. */
 let written: string[];
+/** Every dismissal posted (plan 261010u), and the status the next ones are answered with. */
+let dismissals: { readFrom: string; identity: string }[];
+let dismissStatus: number;
+let dismissBody: unknown;
+let deferDismiss: boolean;
+let dismissAnswers: ((body?: unknown, status?: number) => void)[];
+let guideOpened: number;
 
 const hashNow = (): string => readFromHash({ profile: profile.profile, purpose: profile.purpose });
 
@@ -146,6 +171,13 @@ beforeEach(() => {
   deferReader = false;
   readerStatus = 200;
   readerAnswers = [];
+  dismissals = [];
+  dismissStatus = 200;
+  dismissBody = { ok: true };
+  deferDismiss = false;
+  dismissAnswers = [];
+  guideOpened = 0;
+  window.localStorage.clear();
   profile = { profile: "A statistician.", purpose: "how they handled missing data" };
   jobEngine.reset();
   vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
@@ -166,6 +198,17 @@ beforeEach(() => {
           answer: (json, status = 200) => resolve(new Response(JSON.stringify(json), { status })),
         });
       });
+    }
+    if (url === `${SUGGEST_PATH}/dismiss` && method === "POST") {
+      dismissals.push(JSON.parse(String(init?.body)) as { readFrom: string; identity: string });
+      const response = (body = dismissBody, status = dismissStatus) =>
+        new Response(JSON.stringify(status === 200 ? body : { error: "The database is busy. [x]" }), { status });
+      if (deferDismiss) {
+        return new Promise<Response>((resolve) =>
+          dismissAnswers.push((body, status) => resolve(response(body, status))),
+        );
+      }
+      return Promise.resolve(response());
     }
     if (method !== "GET") {
       written.push(`${method} ${url}`);
@@ -192,10 +235,22 @@ afterEach(async () => {
 
 const CLOSE: ActionOutcome = { kind: "close" };
 
-function executor({ lens = true, quick = true }: { lens?: boolean; quick?: boolean } = {}): CommandExecutor {
+function executor({
+  lens = true,
+  quick = true,
+  guide = false,
+}: { lens?: boolean; quick?: boolean; guide?: boolean } = {}): CommandExecutor {
   return {
     runners: {},
     sources: {},
+    ...(guide
+      ? {
+          openGuide: () => {
+            guideOpened += 1;
+            return CLOSE;
+          },
+        }
+      : {}),
     ...(quick
       ? {
           quickSearch: (words: string) => {
@@ -257,7 +312,8 @@ const listed = (): string[] => rows().map(nameOf);
 const suggested = (): HTMLElement[] => rows().filter((r) => r.classList.contains("cmdbar-row-suggested"));
 const status = (): string => dialog().querySelector(".cmdbar-status")?.textContent ?? "";
 const waiting = (): string => dialog().querySelector(".cmdbar-suggesting")?.textContent ?? "";
-const heading = (): string | null => dialog().querySelector(".cmdbar-from-why")?.textContent ?? null;
+/** The fold line's own words — *From why you're reading* — without what a press on it does. */
+const heading = (): string | null => dialog().querySelector(".cmdbar-from-why .cmdbar-name")?.textContent ?? null;
 const selectedName = (): string => nameOf(rows().find((r) => r.getAttribute("aria-selected") === "true") as HTMLElement);
 
 async function openBar(): Promise<void> {
@@ -444,16 +500,20 @@ describe("the list", () => {
     await suggestAndLand();
     expect(waiting()).toBe("");
     expect(heading()).toBe(SUGGEST_HEADING);
-    expect(suggested().map(nameOf)).toEqual([QUICK_1, QUICK_2, "Glossary", lensLabel(LENS)]);
+    /* In turn — a search, a mode, the question, a search (plan 261010u) — so a
+       cap of four never costs the list its mode or its question. */
+    expect(suggested().map(nameOf)).toEqual([QUICK_1, "Glossary", lensLabel(LENS), QUICK_2]);
     expect(suggested().map((r) => r.querySelector(".cmdbar-why")?.textContent)).toEqual([
       "Finds how gaps in the data were dealt with.",
-      "Shows the method used to fill them.",
       "Explains the terms you will meet.",
       "What others made of the method.",
+      "Shows the method used to fill them.",
     ]);
-    /* The row that asked is gone while there is a list; the ordinary rows follow. */
+    /* The row that asked is gone while there is a list; the fold line, the
+       list, then the ordinary rows. */
     expect(listed()).not.toContain(SUGGEST_LABEL);
-    expect(listed().slice(4, 6)).toEqual(["Plain", "Structure"]);
+    expect(listed()[0]).toBe(SUGGEST_HEADING);
+    expect(listed().slice(5, 7)).toEqual(["Plain", "Structure"]);
     expect(selectedName()).toBe(QUICK_1);
     expect(dialog().open).toBe(true);
   });
@@ -461,7 +521,7 @@ describe("the list", () => {
   it("sets the model's words in the model's face, and ours in ours", async () => {
     await reading();
     await suggestAndLand();
-    const [search, , , lens] = suggested();
+    const [search, , lens] = suggested();
     expect(search?.querySelector(".cmdbar-name .voice-ai")?.textContent).toBe(SEARCH_1);
     expect(lens?.querySelector(".cmdbar-name .voice-ai")?.textContent).toBe(LENS);
     expect(search?.querySelector(".cmdbar-why")?.classList.contains("voice-ai")).toBe(true);
@@ -501,7 +561,7 @@ describe("the list", () => {
         ],
       }),
     );
-    expect(suggested().map(nameOf)).toEqual([QUICK_1, QUICK_2, lensLabel(LENS)]);
+    expect(suggested().map(nameOf)).toEqual([QUICK_1, lensLabel(LENS), QUICK_2]);
   });
 
   it("survives a press and a reopening: search, shut, open, the next one — and nothing is asked again (F2)", async () => {
@@ -514,8 +574,9 @@ describe("the list", () => {
 
     await openBar();
     expect(heading()).toBe(SUGGEST_HEADING);
-    expect(suggested().map(nameOf)).toEqual([QUICK_1, QUICK_2, "Glossary", lensLabel(LENS)]);
-    press("ArrowDown");
+    expect(suggested().map(nameOf)).toEqual([QUICK_1, "Glossary", lensLabel(LENS), QUICK_2]);
+    /* A reopening starts on the first row, here the fold line. */
+    for (let i = 0; i < 4; i++) press("ArrowDown");
     expect(selectedName()).toBe(QUICK_2);
     press("Enter");
     await settle();
@@ -549,9 +610,9 @@ describe("the list", () => {
   it("hands the lens to Chat's box and sends nothing", async () => {
     await reading();
     await suggestAndLand();
-    for (let i = 0; i < 3; i++) press("ArrowDown");
+    for (let i = 0; i < 2; i++) press("ArrowDown");
     expect(selectedName()).toBe(lensLabel(LENS));
-    expect(suggested()[3]?.querySelector(".cmdbar-generates")).toBeNull();
+    expect(suggested()[2]?.querySelector(".cmdbar-generates")).toBeNull();
     press("Enter");
     await settle();
     expect(lensed).toEqual([LENS]);
@@ -564,7 +625,7 @@ describe("the list", () => {
   it("draws no lens row where the page handed in no way to Chat", async () => {
     await reading({ exec: executor({ lens: false }) });
     await suggestAndLand();
-    expect(suggested().map(nameOf)).toEqual([QUICK_1, QUICK_2, "Glossary"]);
+    expect(suggested().map(nameOf)).toEqual([QUICK_1, "Glossary", QUICK_2]);
   });
 
   it("is kept even if the bar was shut while it was on its way", async () => {
@@ -645,7 +706,7 @@ describe("a save drops the list (F3)", () => {
     await reading();
     await suggestAndLand();
     press("ArrowDown");
-    expect(selectedName()).toBe(QUICK_2);
+    expect(selectedName()).toBe("Glossary");
     await act(async () => { await saveProfile("A clinician."); });
     await settle();
     expect(selectedName()).toBe(SUGGEST_LABEL);
@@ -784,5 +845,241 @@ describe("when there is no list", () => {
     expect(heading()).toBeNull();
     expect(status()).not.toBe("");
     expect(listed()[0]).toBe(SUGGEST_LABEL);
+  });
+});
+
+/* ------------------------------------------------------------------------ *
+ * Plan 261010u — Greg, 2026-10-10 (spya-yf23zk, spya-xasbd3): four at most,  *
+ * dismissable for good, foldable, and the Guide at the top.                 *
+ * ------------------------------------------------------------------------ */
+
+const SEARCH_3 = "multiple imputation bias";
+/** The most the model may write: three searches, two modes, a question. */
+const FULL = (): SuggestAnswer =>
+  list({
+    searches: [
+      { words: SEARCH_1, why: "one" },
+      { words: SEARCH_2, why: "two" },
+      { words: SEARCH_3, why: "three" },
+    ],
+    modes: [
+      { key: GLOSSARY, why: "terms" },
+      { key: { id: "mode:structure", label: "Structure" }, why: "shape" },
+    ],
+  });
+
+describe("four at most (plan 261010u)", () => {
+  it("draws the first four in turn — search, mode, question, search — of six", async () => {
+    await reading();
+    await suggestAndLand(FULL());
+    expect(MAX_SUGGESTIONS_SHOWN).toBe(4);
+    expect(suggested().map(nameOf)).toEqual([QUICK_1, "Glossary", lensLabel(LENS), QUICK_2]);
+  });
+
+  it("a suggested search has no description line; the question keeps the one that says nothing is sent", async () => {
+    await reading();
+    await suggestAndLand();
+    const [search, , lens] = suggested();
+    expect(search?.querySelector(".cmdbar-what")).toBeNull();
+    expect(lens?.querySelector(".cmdbar-what")?.textContent).toBe(LENS_DESCRIPTION);
+  });
+});
+
+describe("dismissing one (plan 261010u)", () => {
+  it("the × takes it away, the next takes its place, the server is sent its hash and never its words", async () => {
+    await reading();
+    await suggestAndLand(FULL());
+    const first = suggested()[0];
+    act(() => first?.querySelector<HTMLElement>(".cmdbar-dismiss")?.click());
+    await settle();
+    /* The ×'s click is not the row's: nothing was searched. */
+    expect(searched).toEqual([]);
+    /* The turn is taken again over what is left: a search, a mode, the question, a search. */
+    expect(suggested().map(nameOf)).toEqual([QUICK_2, "Glossary", lensLabel(LENS), `Quick search “${SEARCH_3}”`]);
+    expect(dismissals).toEqual([{ readFrom: hashNow(), identity: suggestionIdentity("search", SEARCH_1) }]);
+    expect(JSON.stringify(dismissals)).not.toContain("missing");
+    expect(status()).toBe(DISMISSED);
+    expect(dialog().open).toBe(true);
+  });
+
+  it("Delete on the highlighted suggestion does the same, and on an ordinary row does nothing", async () => {
+    await reading();
+    await suggestAndLand(FULL());
+    expect(selectedName()).toBe(QUICK_1);
+    expect(suggested()[0]?.getAttribute("aria-keyshortcuts")).toBe("Delete");
+    press("ArrowDown");
+    press("Delete");
+    await settle();
+    expect(dismissals.map((d) => d.identity)).toEqual([suggestionIdentity("mode", "mode:glossary")]);
+    expect(suggested().map(nameOf)).toEqual([QUICK_1, "Structure", lensLabel(LENS), QUICK_2]);
+    /* Off the list, Delete is nobody's. */
+    for (let i = 0; i < 6; i++) press("ArrowDown");
+    expect(rows().find((r) => r.getAttribute("aria-selected") === "true")?.classList.contains("cmdbar-row-suggested")).toBe(false);
+    press("Delete");
+    await settle();
+    expect(dismissals).toHaveLength(1);
+  });
+
+  it("Delete still dismisses when the otherwise empty box contains only whitespace", async () => {
+    await reading();
+    await suggestAndLand();
+    type("   ");
+    expect(suggested()).toHaveLength(4);
+    press("ArrowDown");
+    expect(selectedName()).toBe(QUICK_1);
+    press("Delete");
+    await settle();
+    expect(dismissals).toHaveLength(1);
+    expect(suggested().map(nameOf)).not.toContain(QUICK_1);
+  });
+
+  it("a failed save puts the row back and says so", async () => {
+    await reading();
+    await suggestAndLand();
+    dismissStatus = 503;
+    press("Delete");
+    await settle();
+    expect(suggested().map(nameOf)).toEqual([QUICK_1, "Glossary", lensLabel(LENS), QUICK_2]);
+    expect(status()).toMatch(/^Couldn't remember that dismissal, so it's back\./);
+  });
+
+  it("preserves an ordinary highlighted row through optimistic removal and rollback", async () => {
+    await reading();
+    await suggestAndLand();
+    for (let i = 0; i < 4; i++) press("ArrowDown");
+    expect(selectedName()).toBe("Plain");
+    deferDismiss = true;
+    act(() => suggested()[0]?.querySelector<HTMLElement>(".cmdbar-dismiss")?.click());
+    await settle();
+    expect(selectedName()).toBe("Plain");
+    act(() => dismissAnswers[0]?.(undefined, 503));
+    await settle();
+    expect(selectedName()).toBe("Plain");
+  });
+
+  it("a malformed success reply is a failed save, not silent confirmation", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    await reading();
+    await suggestAndLand();
+    dismissBody = { ok: false };
+    press("Delete");
+    await settle();
+    expect(suggested().map(nameOf)).toContain(QUICK_1);
+    expect(status()).toMatch(/^Couldn't remember that dismissal, so it's back\./);
+    expect(logged).toHaveBeenCalled();
+  });
+
+  it("keeps a pending dismissal out of a same-fingerprint replacement list", async () => {
+    await reading();
+    await suggestAndLand(list({ searches: [{ words: SEARCH_1, why: "one" }], modes: [], lens: null }));
+    deferDismiss = true;
+    press("Delete");
+    await settle();
+    expect(suggested()).toEqual([]);
+    expect(listed()[0]).toBe(SUGGEST_LABEL);
+    press("Enter");
+    await settle();
+    await answer(list({ searches: [{ words: SEARCH_1, why: "one" }], modes: [], lens: null }));
+    expect(suggested()).toEqual([]);
+    expect(listed()[0]).toBe(SUGGEST_LABEL);
+    act(() => dismissAnswers[0]?.());
+    await settle();
+  });
+
+  it("does not announce an old dismissal failure over a replacement fingerprint", async () => {
+    await reading();
+    await suggestAndLand();
+    deferDismiss = true;
+    press("Delete");
+    await settle();
+    await act(async () => { await saveProfile("A clinician."); });
+    await settle();
+    press("Enter");
+    await settle();
+    await answer(list());
+    act(() => dismissAnswers[0]?.(undefined, 503));
+    await settle();
+    expect(status()).not.toMatch(/^Couldn't remember that dismissal/);
+    expect(suggested()).toHaveLength(4);
+  });
+
+  it("dismissing every one offers the row that asks again", async () => {
+    await reading();
+    await suggestAndLand();
+    for (let i = 0; i < 4; i++) {
+      press("Delete");
+      await settle();
+    }
+    expect(suggested()).toEqual([]);
+    expect(heading()).toBeNull();
+    expect(listed()[0]).toBe(SUGGEST_LABEL);
+    expect(selectedName()).toBe(SUGGEST_LABEL);
+    press("Enter");
+    await settle();
+    expect(asked).toHaveLength(2);
+    expect(openedModes).toEqual([]);
+  });
+});
+
+describe("folding the list (plan 261010u)", () => {
+  it("Enter on the fold line hides the rows, moves to Guide, and is remembered in this browser", async () => {
+    await reading({ exec: executor({ guide: true }) });
+    await openBar();
+    press("ArrowDown");
+    press("Enter");
+    await settle();
+    await answer(list());
+    press("ArrowUp");
+    expect(selectedName()).toBe(SUGGEST_HEADING);
+    press("Enter");
+    await settle();
+    expect(suggested()).toEqual([]);
+    expect(heading()).toBe(SUGGEST_HEADING);
+    expect(dialog().querySelector(".cmdbar-from-why .cmdbar-what")?.textContent).toBe(
+      "4 suggestions, hidden. Press to show.",
+    );
+    /* The disappearing rows cannot leave the active descendant on the fold
+       control: the first ordinary row is the executor's Guide. */
+    expect(selectedName()).toBe("Guide");
+    expect(listed()).not.toContain(SUGGEST_LABEL);
+    expect(window.localStorage.getItem("spya.cmdbarSuggestions.folded")).toBe("1");
+    expect(dialog().open).toBe(true);
+
+    await shutBar();
+    await openBar();
+    expect(suggested()).toEqual([]);
+    /* A click opens it again. */
+    act(() => dialog().querySelector<HTMLElement>(".cmdbar-from-why")?.click());
+    await settle();
+    expect(suggested()).toHaveLength(4);
+    expect(window.localStorage.getItem("spya.cmdbarSuggestions.folded")).toBeNull();
+  });
+});
+
+describe("the Guide at the top (plan 261010u)", () => {
+  it("is the first row on an empty box, above the row that asks and above a list", async () => {
+    await reading({ exec: executor({ guide: true }) });
+    await openBar();
+    expect(listed().slice(0, 2)).toEqual(["Guide", SUGGEST_LABEL]);
+    press("Enter");
+    await settle();
+    expect(guideOpened).toBe(1);
+    expect(dialog().open).toBe(false);
+    await openBar();
+    /* Typed, it ranks as any row does, and is not drawn twice. */
+    type("gui");
+    expect(listed()[0]).toBe("Guide");
+    expect(listed().filter((n) => n === "Guide")).toHaveLength(1);
+    type("");
+    expect(listed()[0]).toBe("Guide");
+    press("ArrowDown");
+    press("Enter");
+    await settle();
+    await answer(list());
+    expect(listed().slice(0, 2)).toEqual(["Guide", SUGGEST_HEADING]);
+    expect(listed().filter((n) => n === "Guide")).toHaveLength(1);
+    /* A fresh answer still selects its first suggestion, not the Guide. */
+    expect(selectedName()).toBe(QUICK_1);
+    expect(guideOpened).toBe(1);
   });
 });
