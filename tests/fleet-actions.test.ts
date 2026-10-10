@@ -65,7 +65,7 @@ import type { Speaker } from "../tools/fleet/wire.js";
  * added — the loop that renders every action for every speaker was iterating
  * two of three.
  */
-const EVERY_SPEAKER = ["greg", "overseer", "dashboard"] as const satisfies readonly Speaker[];
+const EVERY_SPEAKER = ["greg", "overseer", "dashboard", "box"] as const satisfies readonly Speaker[];
 
 /** Compile-time proof that `EVERY_SPEAKER` names every arm, not merely valid ones. */
 type EverySpeakerIsComplete = Exclude<Speaker, (typeof EVERY_SPEAKER)[number]> extends never

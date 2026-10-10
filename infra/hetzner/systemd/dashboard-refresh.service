@@ -1,0 +1,35 @@
+# The hourly dashboard refresh: merge origin/dev into the primary checkout, and
+# restart the fleet dashboard only when what it is built from changed.
+# scripts/overseer-tools/dashboard-refresh.sh, whose header says why; plan
+# docs/plans/261010d-standing-jobs-survive-a-reboot.md.
+#
+# It was a tmux loop until 2026-10-10, which a reboot ended. It also keeps the
+# primary checkout current, which the other units here run their code from.
+#
+# A SYSTEM unit with User=@USER@, not a user unit -- see box-health.service.
+# Type=oneshot, no Restart=, no [Install]: only the timer is enabled.
+# NOT NoNewPrivileges=: the restart is `sudo -n systemctl restart
+# fleet-dashboard` (scripts/fleet-restart.ts), which that setting would refuse.
+#
+# @USER@ is substituted at install time by infra/hetzner/provision.sh.
+# tests/systemd-units.test.ts compares these bytes against the heredoc in that
+# script.
+[Unit]
+Description=Dashboard refresh -- keeps the primary checkout on dev and the fleet dashboard on what it holds
+Documentation=file:///home/@USER@/code/spideryarn2/scripts/overseer-tools/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=@USER@
+Group=@USER@
+WorkingDirectory=/home/@USER@/code/spideryarn2
+# HOME explicitly: the script's state and log are under ~/.overseer, and the
+# fetch finds its credential helper in ~/.gitconfig.
+Environment=HOME=/home/@USER@
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+# Under the primary-checkout lock worktree-sweep.service also takes; see there.
+ExecStart=/usr/bin/flock -w 1800 /home/@USER@/.overseer/primary-checkout.lock /bin/bash /home/@USER@/code/spideryarn2/scripts/overseer-tools/dashboard-refresh.sh
+# npm install and a dashboard rebuild can be slow on a busy box.
+TimeoutStartSec=45min

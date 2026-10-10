@@ -413,4 +413,13 @@ describe("reading a receipt off the wire", () => {
     const { reconciliation: _absent, ...older } = receiptWire();
     expect(parseReceiptSummary(older)?.reconciliation).toBeNull();
   });
+
+  it("reads every speaker the server can write, box included, and refuses one it cannot", () => {
+    // `box` is a scheduled job on the box (plan 261010d). Missing here, every
+    // receipt of one of its messages would read as unreadable in the browser.
+    for (const speaker of ["greg", "overseer", "dashboard", "box"] as const) {
+      expect(parseReceiptSummary(receiptWire({ speaker }))?.speaker).toBe(speaker);
+    }
+    expect(parseReceiptSummary({ ...receiptWire(), speaker: "a-speaker-nobody-writes" })).toBeNull();
+  });
 });

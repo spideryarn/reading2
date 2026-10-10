@@ -1260,15 +1260,44 @@ installed by [`provision.sh`](../../infra/hetzner/provision.sh), which splices t
 units have to live inside it. `tests/systemd-units.test.ts` compares the two copies byte for byte,
 because two copies of a unit file is how one of them goes stale.
 
-**The fleet dashboard's unit is installed and deliberately not enabled** as of 2026-09-08: the page
-is up under a tmux job and its owner asked to read the unit before it is switched on, since two
-supervisors racing for `:8787` produce a loser whose failure looks like a crash. Its bind list is
+**The fleet dashboard's unit is enabled**, by hand on the live box and, since 2026-10-10, by
+provisioning too. From 2026-09-08 it was installed and left disabled while the page ran under a tmux
+job, since two supervisors racing for `:8787` produce a loser whose failure looks like a crash; that
+tmux job is gone, and the box's scheduled jobs now reach the Overseer through the dashboard, so a
+rebuilt box without it would be one whose alarms have nowhere to go
+([261010d](../plans/261010d-standing-jobs-survive-a-reboot.md)). Its bind list is
 `FLEET_BIND`, which the unit sets to `127.0.0.1` alone and `/etc/fleet-dashboard.env` extends with
 this box's tailnet address — provisioning writes that file from `tailscale ip -4`, removes it when
 there is no address, and [after a login you write it yourself](#after-tailscale-up-give-the-fleet-dashboard-the-address).
 The unit names no tailnet address itself, because that is a per-machine fact and a checked-in copy
 of it is one the next box cannot bind. It deliberately does not name `FLEET_ACT_ENABLED` in any
 form.
+
+### The repeating jobs, on timers
+
+> We want this to be something that's permanent and robust.
+>
+> — Greg, 2026-10-09 (`spya-q2qb7q`)
+
+Beside `box-tidy.timer` and `overseer-watchdog.timer`, four oneshot services run on timers, from the
+primary checkout, as `greg` — [plan 261010d](../plans/261010d-standing-jobs-survive-a-reboot.md):
+
+| timer | when | job | heard by the Overseer |
+|---|---|---|---|
+| `box-health` | 10 min | the dashboard's own health verdict, and whether any of the box's units has `failed` | when its alarms change; daily while one lasts |
+| `worktree-sweep` | 06:30 daily | `worktree:sweep --remove` | only trees that need judging |
+| `dashboard-refresh` | hourly | merge `origin/dev` into the primary; restart the dashboard if its inputs changed | through box-health, when it fails |
+| `feedback-sweep` | 3 h after the last | one Claude feedback sweep | through box-health, when it fails. **Installed, not enabled** until Greg says |
+
+Each exits 1 when it could not do its work, so its unit shows `failed`, and **box-health is the one
+path by which any of them reaches the Overseer** — as a line in its pane from speaker `box`, through
+the dashboard's steer route, once per change. Nothing is ever said for a run that went fine. The
+full record is the journal: `journalctl -u box-health` (or the job's name).
+
+A reboot brings them back with `timers.target`; an OOM-killed run is simply run at the next tick;
+`provision.sh` installs all eight units and enables three timers, leaving `feedback-sweep.timer`
+alone because enabling it starts paid work. The install step after a change is the same as for any
+unit, above, and is the Overseer's.
 
 ## Keeping the disks from filling
 

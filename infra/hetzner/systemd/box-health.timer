@@ -1,0 +1,21 @@
+# Runs box-health.service every ten minutes.
+# docs/plans/261010d-standing-jobs-survive-a-reboot.md.
+#
+# @USER@ is substituted at install time by infra/hetzner/provision.sh.
+# tests/systemd-units.test.ts compares these bytes against the heredoc in that
+# script.
+[Unit]
+Description=Timer for box-health.service
+Documentation=file:///home/@USER@/code/spideryarn2/docs/plans/261010d-standing-jobs-survive-a-reboot.md
+
+[Timer]
+# Soon after boot, so a box that came back unhealthy says so within minutes.
+OnBootSec=5min
+# Ten minutes after the previous run STARTED (measured on box-tidy.timer, which
+# has the same shape). Runs never overlap: systemd does not start a oneshot that
+# is still running.
+OnUnitActiveSec=10min
+Unit=box-health.service
+
+[Install]
+WantedBy=timers.target

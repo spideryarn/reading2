@@ -370,7 +370,9 @@ export type OpenReceiptJournalOptions = {
 
 export type OpenedReceiptJournal = { kind: "open"; journal: ReceiptJournal } | { kind: "refused"; why: string };
 
-const SPEAKERS: readonly Speaker[] = ["greg", "overseer", "dashboard"];
+/** Exhaustive by construction: a new `Speaker` arm does not compile until it is named here (`box` was missed once, 261010d). */
+const SPEAKER_SET: Record<Speaker, true> = { greg: true, overseer: true, dashboard: true, box: true };
+const SPEAKERS = Object.keys(SPEAKER_SET) as readonly Speaker[];
 const SESSION_OPS: readonly SessionReceiptOp[] = [
   "queued-message", "queued-action", "steer-message", "steer-answer", "enacted-session", "broadcast-recipient",
 ];

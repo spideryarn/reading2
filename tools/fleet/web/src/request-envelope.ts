@@ -46,7 +46,7 @@
  * open (the session composer remounts on a change of execution identity) loses
  * its pending envelope, and with it the Check.
  */
-import type { ReceiptSummary } from "../../wire.js";
+import type { ReceiptSummary, Speaker } from "../../wire.js";
 
 /** Injected in tests; the browser uses `Date.now()` and `crypto.getRandomValues`. */
 export type MintClock = { now?: number; fill?: (bytes: Uint8Array) => unknown };
@@ -287,7 +287,9 @@ const STATES: readonly ReceiptSummary["state"][] = [
   "plan-stopped",
 ];
 const ACTOR_KINDS: readonly ReceiptSummary["actor"]["kind"][] = ["client-claimed", "unattributed-http", "system"];
-const SPEAKERS: readonly string[] = ["greg", "overseer", "dashboard"];
+/** Exhaustive by construction, as receipt-journal.ts's: a new `Speaker` arm does not compile until it is named here. */
+const SPEAKER_SET: Record<Speaker, true> = { greg: true, overseer: true, dashboard: true, box: true };
+const SPEAKERS: readonly string[] = Object.keys(SPEAKER_SET);
 const DISPOSITIONS: readonly string[] = ["lease-abandoned", "operator-confirmed", "abandoned-unknown"];
 
 function stringOrNull(v: unknown): v is string | null {

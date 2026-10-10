@@ -1,0 +1,35 @@
+# Box health: disk, memory, swap and load, every ten minutes from
+# box-health.timer. scripts/box-health.ts; plan
+# docs/plans/261010d-standing-jobs-survive-a-reboot.md.
+#
+# One journal line per check every run (`journalctl -u box-health`). The
+# Overseer hears only when the set of alarms changes, and every six hours while
+# one lasts, through the fleet dashboard's steer route as speaker `box`.
+#
+# A SYSTEM unit with User=@USER@, not a systemd USER unit, for the reason
+# overseer.service gives: a user unit does not start at boot without lingering.
+# Type=oneshot and no Restart=, like the watchdog: the timer decides when this
+# runs again, which is also what brings it back after an OOM kill. No [Install]
+# section: only the timer is ever enabled.
+#
+# @USER@ is substituted at install time by infra/hetzner/provision.sh.
+# tests/systemd-units.test.ts compares these bytes against the heredoc in that
+# script.
+[Unit]
+Description=Box health -- disk, memory, swap and load; tells the Overseer when an alarm starts or ends
+Documentation=file:///home/@USER@/code/spideryarn2/docs/plans/261010d-standing-jobs-survive-a-reboot.md
+
+[Service]
+Type=oneshot
+User=@USER@
+Group=@USER@
+
+# The PRIMARY checkout, never a worktree -- a worktree is deleted by normal
+# tidying, and an ExecStart inside one is a check that disappears with it.
+WorkingDirectory=/home/@USER@/code/spideryarn2
+# HOME explicitly: the state file is ~/.overseer/box-health.json.
+Environment=HOME=/home/@USER@
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+# The checkout's own tsx, not `npx tsx`, which can fetch SOME tsx from the network.
+ExecStart=/home/@USER@/code/spideryarn2/node_modules/.bin/tsx scripts/box-health.ts
+TimeoutStartSec=5min

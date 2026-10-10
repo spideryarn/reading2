@@ -509,6 +509,19 @@ export function parseSpeaker(v: unknown): Parsed<Speaker> {
 }
 
 /**
+ * `parseSpeaker`, plus `box`, for `POST /api/steer/message` alone.
+ *
+ * `box` is a scheduled job on the box telling the Overseer what it measured
+ * (scripts/box-notify.ts, plan 261010d). It sends one-line reports, never a
+ * spoken action or a broadcast, so the routes that take those keep refusing it
+ * through `parseSpeaker`. Like the rest, NOT an authentication boundary.
+ */
+export function parseMessageSpeaker(v: unknown): Parsed<Speaker> {
+  if (v === "box") return { ok: true, value: "box" };
+  return parseSpeaker(v);
+}
+
+/**
  * Every `FleetStatus` kind, as a compile-time list.
  *
  * A `Record` keyed by the union, so an eighth `SessionState` arm fails to
@@ -751,7 +764,7 @@ export function parseMessageBody(raw: unknown): Parsed<MessageRequest> {
   if (declaredStatus === null) {
     return bad("status is missing or is not a status; send the one the row you tapped was showing");
   }
-  const speaker = parseSpeaker(o.speaker);
+  const speaker = parseMessageSpeaker(o.speaker);
   if (!speaker.ok) return speaker;
   // REFUSED HERE, WHILE SOMEBODY IS LOOKING AT IT, for the reason `checkText`
   // is called at enqueue next door: a message this speaker may not send should

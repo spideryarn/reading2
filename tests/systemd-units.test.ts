@@ -755,3 +755,89 @@ describe.skipIf(!hasTmpfiles)("the rules, run by systemd-tmpfiles itself", () =>
     }
   }, 20_000);
 });
+
+/**
+ * The box's repeating jobs, plan docs/plans/261010d-standing-jobs-survive-a-reboot.md.
+ * Same shape as the watchdog: a oneshot service its timer runs, from the primary
+ * checkout, as the box user, and only the timer enabled.
+ */
+const PRIMARY_LOCK = "/usr/bin/flock -w 1800 /home/@USER@/.overseer/primary-checkout.lock ";
+describe.each([
+  { name: "box-health", exec: /^ExecStart=\/home\/@USER@\/code\/spideryarn2\/node_modules\/\.bin\/tsx scripts\/box-health\.ts$/, enabled: true },
+  { name: "worktree-sweep", exec: new RegExp(`^ExecStart=${PRIMARY_LOCK.replaceAll(".", "\\.")}/home/@USER@/code/spideryarn2/node_modules/\\.bin/tsx scripts/worktree-sweep-daily\\.ts$`), enabled: true },
+  { name: "dashboard-refresh", exec: new RegExp(`^ExecStart=${PRIMARY_LOCK.replaceAll(".", "\\.")}/bin/bash /home/@USER@/code/spideryarn2/scripts/overseer-tools/dashboard-refresh\\.sh$`), enabled: true },
+  // Installed and NOT enabled: it runs Claude, which spends money on a clock, so enabling it is Greg's step.
+  { name: "feedback-sweep", exec: /^ExecStart=\/bin\/bash \/home\/@USER@\/code\/spideryarn2\/scripts\/overseer-tools\/feedback-sweep-once\.sh$/, enabled: false },
+])("the $name service and timer", ({ name, exec, enabled }) => {
+  const service = unitFromRepo(`${name}.service`);
+  const timer = unitFromRepo(`${name}.timer`);
+  const delimiter = name.toUpperCase().replaceAll("-", "_");
+
+  it("both are byte-for-byte what provision.sh will install", () => {
+    expect(heredocBody(PROVISION, `${delimiter}_SERVICE_UNIT`)).toBe(service);
+    expect(heredocBody(PROVISION, `${delimiter}_TIMER_UNIT`)).toBe(timer);
+  });
+
+  it("the service is a SYSTEM unit run as the box user, oneshot, with no Restart= and no [Install]", () => {
+    const lines = section(service, "Service");
+    expect(lines).toContain("User=@USER@");
+    expect(lines).toContain("Type=oneshot");
+    expect(lines.some((l) => l.startsWith("Restart="))).toBe(false);
+    expect(section(service, "Install")).toEqual([]);
+  });
+
+  it("runs from the primary checkout, never a worktree, with HOME set", () => {
+    const lines = section(service, "Service");
+    expect(lines.filter((l) => l.startsWith("ExecStart="))).toHaveLength(1);
+    expect(lines.find((l) => l.startsWith("ExecStart="))).toMatch(exec);
+    expect(lines).toContain("WorkingDirectory=/home/@USER@/code/spideryarn2");
+    expect(lines).toContain("Environment=HOME=/home/@USER@");
+    expect(service).not.toMatch(/worktrees\//);
+  });
+
+  it("never sets NoNewPrivileges= or capabilities", () => {
+    // dashboard-refresh restarts the dashboard with `sudo -n`, which
+    // NoNewPrivileges= refuses; and capabilities hide this process's /proc
+    // entries from worktree-inuse.ts, which knows only box-tidy by name.
+    expect(section(service, "Service").some((l) => /^(NoNewPrivileges|AmbientCapabilities|CapabilityBoundingSet)=/.test(l))).toBe(false);
+  });
+
+  it(`the timer names its service, and provisioning ${enabled ? "enables" : "does NOT enable"} it`, () => {
+    expect(section(timer, "Timer")).toContain(`Unit=${name}.service`);
+    expect(section(timer, "Install")).toContain("WantedBy=timers.target");
+    const enables = new RegExp(`^systemctl enable [^\\n]*\\b${name}\\.timer\\b`, "m");
+    if (enabled) expect(PROVISION).toMatch(enables);
+    else expect(PROVISION).not.toMatch(enables);
+    // Never the bare service: only the timer is ever enabled.
+    expect(PROVISION).not.toMatch(new RegExp(`^systemctl enable [^\\n]*\\b${name}\\.service\\b`, "m"));
+  });
+
+  it("a box that was off catches up: OnBootSec= on an interval timer, Persistent= on a calendar one", () => {
+    const lines = section(timer, "Timer");
+    if (lines.some((l) => l.startsWith("OnCalendar="))) {
+      expect(lines).toContain("Persistent=true");
+    } else {
+      expect(lines.some((l) => l.startsWith("OnBootSec="))).toBe(true);
+      expect(lines.some((l) => l.startsWith("OnUnitActiveSec=") || l.startsWith("OnUnitInactiveSec="))).toBe(true);
+    }
+  });
+
+  it("parses as a valid systemd unit, according to systemd itself", () => {
+    const analyze = spawnSync("systemd-analyze", ["--version"], { encoding: "utf8" });
+    if (analyze.status !== 0) return; // not installed here; the shape checks above still ran
+    const dir = mkdtempSync(path.join(tmpdir(), "systemd-units-verify-"));
+    try {
+      writeFileSync(path.join(dir, `${name}.timer`), timer.replaceAll("@USER@", "greg"));
+      writeFileSync(path.join(dir, `${name}.service`), service.replaceAll("@USER@", "greg"));
+      const verify = spawnSync("systemd-analyze", ["verify", path.join(dir, `${name}.timer`)], { encoding: "utf8" });
+      // As the watchdog's: syntax only, on a machine that may not be the box.
+      const complaints = `${verify.stdout}${verify.stderr}`
+        .split("\n")
+        .filter((line) => line.trim() !== "")
+        .filter((line) => !/Unit .* not found|command not found|is not a valid user|Failed to (resolve|create)|Unknown user|is not executable|No such file/i.test(line));
+      expect(complaints).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
