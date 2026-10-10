@@ -5,7 +5,7 @@
  * here rather than in `src/` because the only thing that opens one is an eval
  * and the path it writes to is gitignored. A record carries a stranger's page
  * extract and, through the answer text, sentences of the article — so
- * `output/debate-runs/` and never `evals/results/`, the same call
+ * `output/reception-runs/` and never `evals/results/`, the same call
  * `evals/summaries/` made about its judging prompts.
  *
  * ## Append, and one line at a time

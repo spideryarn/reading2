@@ -163,7 +163,7 @@ function twoPassReport(): JournalRowsReport {
         ],
       }),
     ],
-    { file: "output/debate-runs/run-one/journal.jsonl" },
+    { file: "output/reception-runs/run-one/journal.jsonl" },
   );
 }
 
@@ -187,7 +187,7 @@ function wideReport(run: string, perPass: number): JournalRowsReport {
         annotations: urls("c").map((url) => annotation(url, `extract ${url}`)),
       }),
     ],
-    { file: `output/debate-runs/${run}/journal.jsonl` },
+    { file: `output/reception-runs/${run}/journal.jsonl` },
   );
 }
 
@@ -268,7 +268,7 @@ describe("what a labeller may see", () => {
           annotations: [annotation("https://one.example/a", "extract for A")],
         }),
       ],
-      { file: "output/debate-runs/run-one/journal.jsonl" },
+      { file: "output/reception-runs/run-one/journal.jsonl" },
     );
     const sheet = buildLabelSheet([report]);
     const target = sheet.rows[0]?.target;
@@ -334,7 +334,7 @@ describe("matching a row to its frozen packet", () => {
           annotations: [annotation("https://one.example/a", "extract for A")],
         }),
       ],
-      { file: "output/debate-runs/run-one/journal.jsonl" },
+      { file: "output/reception-runs/run-one/journal.jsonl" },
     );
     const sheet = buildLabelSheet([report]);
     expect(sheet.rows).toHaveLength(1);
@@ -361,7 +361,7 @@ describe("matching a row to its frozen packet", () => {
           ],
         }),
       ],
-      { file: "output/debate-runs/run-one/journal.jsonl" },
+      { file: "output/reception-runs/run-one/journal.jsonl" },
     );
     const sheet = buildLabelSheet([report]);
     expect(sheet.rows[0]?.evidence).toHaveLength(2);
@@ -387,7 +387,7 @@ describe("matching a row to its frozen packet", () => {
           annotations: [annotation("https://one.example/a", "extract for A")],
         }),
       ],
-      { file: "output/debate-runs/run-one/journal.jsonl" },
+      { file: "output/reception-runs/run-one/journal.jsonl" },
     );
     const sheet = buildLabelSheet([report]);
     expect(sheet.rows).toHaveLength(0);
@@ -514,7 +514,7 @@ describe("what the header declares", () => {
           annotations: [annotation("https://one.example/a", "extract for A")],
         }),
       ],
-      { file: "output/debate-runs/run-one/journal.jsonl" },
+      { file: "output/reception-runs/run-one/journal.jsonl" },
     );
     expect(report.problems.length).toBeGreaterThan(0);
     const sheet = buildLabelSheet([report]);
@@ -556,7 +556,7 @@ describe("writing the sheet to a file", () => {
     temps.push(dir);
     const file = path.join(dir, "nested", "sheet.md");
     await writeSheetFile(file, renderLabelSheet(buildLabelSheet([twoPassReport()])));
-    expect(await readFile(file, "utf-8")).toContain("# Debate-mode blind labelling sheet");
+    expect(await readFile(file, "utf-8")).toContain("# Reception blind labelling sheet");
   });
 
   it("refuses even when the existing file was written by something else", async () => {

@@ -386,7 +386,7 @@ describe("synthesiseReception", () => {
       response_format: {
         type: "json_schema",
         json_schema: {
-          name: "debate_synthesis",
+          name: "reception_synthesis",
           strict: true,
           schema: {
             type: "object",

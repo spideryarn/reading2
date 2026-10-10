@@ -1,5 +1,5 @@
 /**
- * The debate, in the band between the spine and the prose — the fourteenth
+ * Reception and claims, in the band between the spine and the prose — the fourteenth
  * mode, and the only one whose content is **not in the article at all**.
  *
  * Greg, 2026-09-05, asking for it:
@@ -60,7 +60,7 @@
  *  - **Reception** draws the rows that link or quote the piece, then the ones
  *    that only name it under a heading saying so ([`reception-levels.ts`](reception-levels.ts)
  *    — a slider hid those until 2026-10-03, and with them the citing papers the
- *    search was changed to find). `?debateby=` orders within each group. It
+ *    search was changed to find). `?receptionby=` orders within each group. It
  *    ends with *Cited by* for the owner (below), and for a visitor with one
  *    link out, a Scholar search for who cites the piece.
  *  - **Claims** is always grouped by claim, in article order, most directly
@@ -78,7 +78,7 @@
  *
  * Since 2026-10-04 Reception ends with the papers that cite the piece, from
  * OpenAlex (`CitedBy` below, src/citation-index.ts). It is **not part of the
- * stored debate**: no model made it, it costs nothing, and it has its own read
+ * stored Reception**: no model made it, it costs nothing, and it has its own read
  * (src/web/useCiters.ts). So it is drawn whenever Reception is on screen —
  * before the paid search has run as well — and nothing in it can start that
  * search. It does not move Reception's count, which stays the web search's
@@ -892,7 +892,7 @@ export type ReceptionOwner = UseReception;
 export type ReceptionAndClaimsAccess =
   /* `citers` is the owner's second read, Reception's *Cited by*
      (src/web/useCiters.ts). Beside `owner` rather than on it, because it is
-     not the stored debate's and has no job: it can be on screen with no debate
+     not the stored Reception's and has no job: it can be on screen with no Reception
      at all. A visitor has none (plan 261004h). */
   /* `claimChats` is the owner's too (plan 261005i): a visitor has no chat, so
      their arm has no handler to be handed and the claims draw neither the
@@ -930,7 +930,7 @@ export type ReceptionAndClaimsAccess =
  * **A claim's chat: starting one, and the way back to one already started.**
  * Plan docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md.
  *
- * Called a *chat* throughout, never a thread: `?debatethread=` and
+ * Called a *chat* throughout, never a thread: `?receptionthread=` and
  * reception-threads.ts already use that word here for a synthesis theme.
  *
  * Nothing is stored on the claim. The conversation records the claim it was
@@ -1001,7 +1001,7 @@ interface Props {
   /** Move to the other sub-mode: the empty Reception's way on to Claims. */
   onView(view: ReceptionAndClaimsView): void;
   /**
-   * The order the reader asked for in Reception — `?debateby=`, whose parser
+   * The order the reader asked for in Reception — `?receptionby=`, whose parser
    * defaults to `prioritised` (*as found*). What is drawn is
    * `effectiveReceptionOrder` of it, which can differ (reception-order.ts). Claims
    * ignores it.
@@ -1031,8 +1031,8 @@ interface Props {
    */
   articleYear: number | null;
   /**
-   * Which thread narrows the list — `?debatethread=`, a theme id or `key`, or
-   * `null` for none (reception-threads.ts). A visitor's debate carries the
+   * Which thread narrows the list — `?receptionthread=`, a theme id or `key`, or
+   * `null` for none (reception-threads.ts). A visitor's Reception payload carries the
    * synthesis since 2026-10-01 unless the public boundary withheld a row
    * (src/public/dto.ts § `publicSynthesis`), and then there is nothing to name.
    */
@@ -1049,7 +1049,7 @@ interface Props {
    * the claim it was started from (src/web/item-focus.ts; plan 261009k,
    * stage 2). Its id is `claimFocusKey` of the claim's block and words. The
    * caller has already opened Claims and cleared `?bears=` and
-   * `?debatethread=`, which could hide it; this scrolls its row into view
+   * `?receptionthread=`, which could hide it; this scrolls its row into view
    * and unfolds an older search's claim. It does not jump the prose: on a
    * phone the band covers it, and the row's own block link does that (the
    * plan's F4). A claim no list has is handed back, and Claims shows its list.
@@ -1395,7 +1395,7 @@ export function ReceptionAndClaimsPanel({
 
       {/* **The angle box and *Your angles*, first and unconditional for the
           owner**: before any search is stored, while one is loading, on a
-          stale one. An angle is a chat and needs no stored debate (GPT Sol's
+          stale one. An angle is a chat and needs no stored Reception (GPT Sol's
           review of plan 261005k, answer 2). A visitor has no chat and gets
           neither. */}
       {access.kind === "owner" && <Angles chats={access.claimChats} />}
@@ -1836,7 +1836,7 @@ function CiterRow({ citer }: { citer: Citer }) {
 }
 
 /**
- * **Debate's categorical threshold** — the relevance bar (`?bears=`), over
+ * **Claims' categorical threshold** — the relevance bar (`?bears=`), over
  * Claims' rows. Until 2026-10-03 this drew a second one too, the
  * identification bar over the rows about the piece; reception-levels.ts says why
  * that became two headed groups instead.

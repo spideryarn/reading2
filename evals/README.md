@@ -964,7 +964,7 @@ are checked against the queue's own rule before anything is enqueued, the summar
 was nothing here*, and a run that died says so at the top rather than in its last line.
 [260905b](../docs/postmortems/260905b-the-rehearsal-reported-a-clean-run-over-zero-jobs.md).
 
-## `debate/` — does the mode's reading of a page hold up, and what did the run actually buy?
+## `reception/` — does the mode's reading of a page hold up, and what did the run actually buy?
 
 ```
 npm run eval:reception -- check                   # free: every seam, no model, no network, no database
@@ -987,7 +987,7 @@ precisely the rows that did not survive.
 
 **The runner calls `generateReception` directly and never through the queue**, so no reader's artefact
 is clobbered and no product spend row is written against a purchase nobody made. A run lands under
-`output/debate-runs/`, which is **gitignored**, for the reason `summaries/` gives about its own:
+`output/reception-runs/`, which is **gitignored**, for the reason `summaries/` gives about its own:
 a journal carries whole page extracts and, through the answer text, sentences of the article.
 
 ### Two events per attempted pass, never one record afterwards

@@ -149,8 +149,8 @@ const OLD: readonly Hand[] = [
     accept: [QUIZ, "mode:learn", "submode:learn:recall", "submode:learn:tutorial"],
     note: "Recall and Tutorial added: the hand copy left them out, and each tests understanding.",
   },
-  { id: "p12", style: "paraphrase", text: "what do other people think of this paper", accept: ["mode:debate"] },
-  { id: "p13", style: "paraphrase", text: "show me the references", accept: ["mode:citations"] },
+  { id: "p12", style: "paraphrase", text: "what do other people think of this paper", accept: ["submode:sources:reception"] },
+  { id: "p13", style: "paraphrase", text: "show me the references", accept: ["submode:sources:bibliography", "mode:sources"] },
   {
     id: "p14",
     style: "paraphrase",
@@ -225,8 +225,8 @@ const OLD: readonly Hand[] = [
   { id: "h02", style: "hard", text: "the summary is too long", accept: [BRIEF] },
   { id: "h03", style: "hard", text: "this summary is too dumbed down", accept: [FULLER] },
   { id: "h04", style: "hard", text: "make the sketch prettier", accept: ["submode:diagram:illustrated"] },
-  { id: "h05", style: "hard", text: "who has responded to this online", accept: ["mode:debate"] },
-  { id: "h06", style: "hard", text: "what papers does this build on", accept: ["mode:citations"] },
+  { id: "h05", style: "hard", text: "who has responded to this online", accept: ["submode:sources:reception"] },
+  { id: "h06", style: "hard", text: "what papers does this build on", accept: ["submode:sources:bibliography", "mode:sources"] },
   { id: "h07", style: "hard", text: "redo the thread", accept: ["action:rerun-tweets"] },
   { id: "h08", style: "hard", text: "the cross references look wrong, make them again", accept: ["action:rerun-crossrefs"] },
   { id: "h09", style: "hard", text: "make this private again", accept: [SHARE] },
@@ -314,7 +314,7 @@ const NEW: readonly Hand[] = [
   { id: "n36", style: "voice", text: "I I want to um tell you about a bug I found", accept: ["action:feedback"] },
   { id: "n37", style: "voice", text: "yeah so tag this as as um reinforcement learning", accept: [TAG], argument: "reinforcement learning" },
   { id: "n38", style: "voice", text: "uh what does what does um epistemic value mean", accept: [GLOSS, "mode:glossary"], argument: "epistemic value" },
-  { id: "n39", style: "voice", text: "let me see who's who's cited in this", accept: ["mode:citations"] },
+  { id: "n39", style: "voice", text: "let me see who's who's cited in this", accept: ["submode:sources:bibliography", "mode:sources"] },
 
   /* Rows the first 72 never asked for. */
   { id: "n40", style: "paraphrase", text: "how does this app work", accept: ["page:/help"] },
@@ -431,7 +431,7 @@ const MORE: readonly Hand[] = [
     text: "I need to revise this for an exam",
     accept: ["mode:learn", QUIZ, "submode:learn:recall", "submode:learn:tutorial"],
   },
-  { id: "m19", style: "paraphrase", text: "where's the further reading", accept: ["mode:citations"] },
+  { id: "m19", style: "paraphrase", text: "where's the further reading", accept: ["submode:sources:bibliography", "mode:sources"] },
   {
     id: "m20",
     style: "hard",
@@ -439,7 +439,7 @@ const MORE: readonly Hand[] = [
     accept: ["mode:quotes"],
     note: "Near neighbour: Quotes › Find more, which now carries `more pull quotes`.",
   },
-  { id: "m21", style: "paraphrase", text: "what criticism has this had", accept: ["mode:debate", "submode:debate:reception"] },
+  { id: "m21", style: "paraphrase", text: "what criticism has this had", accept: ["submode:sources:reception"] },
 
   /* Still *Run again* (rule 5): the list replaced, not added to. */
   { id: "m22", style: "hard", text: "these quotes are no good, start over with new ones", accept: [AGAIN_QUOTES] },
@@ -490,6 +490,14 @@ interface BlindRaw {
  * else was changed, and its `also` lists were kept as written.
  */
 const BLIND_RELABEL: Readonly<Record<string, { accept: readonly string[]; why: string }>> = {
+  b12: {
+    accept: ["submode:sources:bibliography", "mode:sources"],
+    why: "2026-10-09: Citations became Sources › Bibliography; the writer's frozen file keeps the old id.",
+  },
+  b13: {
+    accept: ["submode:sources:reception"],
+    why: "2026-10-09: Debate became Sources › Reception; the writer's frozen file keeps the old id.",
+  },
   b35: { accept: [NONE, META], why: "Rule 1: `permanently delete this article…` — writer said `none` only." },
   b39: {
     accept: [NONE, "page:/profile"],

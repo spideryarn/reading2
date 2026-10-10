@@ -1,5 +1,5 @@
 /**
- * **Debate — what the rest of the web says about this piece.**
+ * **Reception — what the rest of the web says about this piece.**
  *
  * The fourteenth mode, and the first whose content is **not in the article at
  * all**: it goes out to the open web and comes back with what other people have
@@ -36,7 +36,7 @@
  * ## One search on the press, and the claims are the reader's
  *
  * - **Pass A — direct reception.** The article's exact URL, title and byline,
- *   and nothing else to search for. The only search a press on Debate runs.
+ *   and nothing else to search for. The only search a press on Reception runs.
  * - **Pass B — the argument around the claims — no longer runs on the press**,
  *   since `debate/7` (2026-10-08). It picked three or four claims by itself and
  *   searched them; Greg asked for the reader to pick instead (q-sn37bt, plan
@@ -327,7 +327,7 @@ export const RECEPTION_FENCE = "debate";
  * that moved to a new URL is a different search. (Pass B, which sent
  * `articleWithIds` itself, stopped running at `debate/7`; the blocks still
  * decide what pass A's rows are judged against — `isCopy`, the article's own
- * words in a page — so the fingerprint is unchanged and no stored debate turns
+ * words in a page — so the fingerprint is unchanged and no stored Reception turns
  * stale over it.)
  *
  * **Not the dated set.** Neither prompt carries the publication date, so hashing
@@ -360,7 +360,7 @@ export function isStale(
 }
 
 /**
- * The debate on disk, or `null` — for the filesystem read path and the eval.
+ * The Reception artefact on disk, or `null` — for the filesystem read path and the eval.
  *
  * Every road to `null` is the same road: no file, a truncated one, a document
  * of the wrong shape. Acceptable here because there is nothing to inherit — no
@@ -1521,7 +1521,7 @@ interface ChatAnswer {
  * non-2xx arrives as a status with the body gone.
  */
 async function runPass(opts: {
-  /** Which ledger job pays — `debate` for the press, `debate-check` for a reader's check. */
+  /** Which ledger job pays — `reception` for the press, `sources-claim-check` for a reader's check. */
   job: Extract<ChatJob, "reception" | "sources-claim-check">;
   system: string;
   user: string;
@@ -1744,7 +1744,7 @@ function readPass(
     refuse(
       "answer-overflowed",
       stageFailure(ANSWER_OVERFLOWED_FIXED_ASK, {
-        authored: `the debate answer hit the ${ANSWER_TOKENS}-token ceiling`,
+        authored: `the Reception answer hit the ${ANSWER_TOKENS}-token ceiling`,
       }),
     );
   }
@@ -2054,7 +2054,7 @@ export async function synthesiseReception(opts: {
             { role: "user", content: themesPrompt(rows, keyCap(new Set(workIds(rows).values()).size)) },
           ],
         },
-        "debate_synthesis",
+        "reception_synthesis",
         RECEPTION_SYNTHESIS_OUTPUT_SCHEMA,
       ),
       ...(opts.signal ? [{ signal: opts.signal }] : []),
@@ -2063,7 +2063,7 @@ export async function synthesiseReception(opts: {
     if (!(err instanceof ProviderRefused) || wasAborted(err, opts.signal)) throw err;
     /* The status only — `ProviderRefused` carries no body (the file header §
        Logging). */
-    synthesisLog.warn({ status: err.status }, "debate synthesis call was refused");
+    synthesisLog.warn({ status: err.status }, "Reception synthesis call was refused");
     return { kind: "failed" };
   }
   const choice = (call.json as ChatAnswer | null)?.choices?.[0];
@@ -2071,7 +2071,7 @@ export async function synthesiseReception(opts: {
   if (choice?.finish_reason !== "stop") {
     synthesisLog.warn(
       { finish: choice?.finish_reason ?? null },
-      "debate synthesis did not finish cleanly",
+      "Reception synthesis did not finish cleanly",
     );
     return { kind: "failed" };
   }
@@ -2084,7 +2084,7 @@ export async function synthesiseReception(opts: {
     raw = null;
   }
   const read = readSynthesisAnswer(raw, rows);
-  if (read.kind === "failed") synthesisLog.warn("debate synthesis answer was not usable");
+  if (read.kind === "failed") synthesisLog.warn("Reception synthesis answer was not usable");
   return read;
 }
 
@@ -2199,7 +2199,7 @@ export async function admitSourcesClaimCheck(
 ): Promise<() => Promise<void>> {
   const taken = await allowance.take("sources-claim-check", SOURCES_CLAIM_CHECK_RATE_POLICY);
   if (taken.kind !== "allowed") {
-    log("model").warn({ why: taken.kind }, "debate check: allowance spent");
+    log("model").warn({ why: taken.kind }, "Sources claim check: allowance spent");
     throw checkRefusedBy(taken.kind);
   }
   const lease = taken.id;

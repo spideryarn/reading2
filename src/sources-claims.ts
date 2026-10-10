@@ -1,6 +1,6 @@
 /**
- * Pipeline stage — **debate-claims**: the claims an article rests on that
- * someone outside could argue with, listed for Debate's Claims sub-mode so the
+ * Pipeline stage — **sources-claims**: the claims an article rests on that
+ * someone outside could argue with, listed for Sources' Claims sub-mode so the
  * reader can pick which to check.
  *
  * docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2 is the design;
@@ -8,7 +8,7 @@
  *
  * **There is no command line here.** Running it against one article is a job:
  *
- *   POST /api/jobs { slug, steps: ["debate-claims"] }
+ *   POST /api/jobs { slug, steps: ["sources-claims"] }
  *
  * and in the app a press on the Claims chip asks for it (src/web/activation.ts
  * § `activationForSources`). Arriving on Claims by a link, Back, a reload or a
@@ -18,7 +18,7 @@
  *
  * - **No web search.** One Messages-wire call over the article, a few cents.
  *   The search is the check the reader asks for afterwards, one press at a
- *   time (plan § 3, a later stage). Debate's own search (src/reception.ts) is on
+ *   time (plan § 3, a later stage). Reception's own search (src/reception.ts) is on
  *   OpenRouter's chat/completions wire because it needs the web plugin; this
  *   needs nothing of the kind, so it is on the Messages wire with `faq` and
  *   `relations`, sending Ideas' article block byte for byte.

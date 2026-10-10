@@ -509,12 +509,12 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
          read. "Otherwise a Scholar search": `linkFrom: "search"`, labelled on
          the row (BibliographyPanel.tsx § Source).
        - Reception, "a pass over the open web … stored once it lands": the
-         `debate` step since `debate/7` (2026-10-08) is one pass, for
+         `reception` step since `debate/7` (2026-10-08) is one pass, for
          Reception only (src/reception.ts). "A pass" rather than "a search",
          because one pass has run 36 searches on its own (GPT Sol,
          2026-09-07).
        - Claims, "listed by one model call … with no web search": the
-         `debate-claims` step (plan 261008i § 2); a check is the reader's own
+         `sources-claims` step (plan 261008i § 2); a check is the reader's own
          press, per claim (src/reception.ts § `admitSourcesClaimCheck`).
        - "Every source links out": every Reception and checked-claim row is a
          page with its address (ReceptionAndClaimsPanel.tsx § Row).

@@ -1153,7 +1153,7 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
   },
   "sources-claim-check": {
     providerDefault:
-      "Not measured. `debate`'s call on the claims a reader picked; " +
+      "Not measured. Sources' call on the claims a reader picked; " +
       "its answer ceiling is src/reception.ts § ANSWER_TOKENS.",
   },
   "quiz-mark": {

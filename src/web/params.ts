@@ -1423,16 +1423,14 @@ export function learnInSearch(search: string): LearnView {
  * **Writing it never spends.** Each sub-mode's work starts on its owner's
  * press and only then — the mode's button, the sub-mode's command-bar row or
  * its chip: a press landing on Bibliography arms the `bibliography` list, on
- * Reception the `debate` search, on Claims the `debate-claims` list
+ * Reception the `reception` search, on Claims the `sources-claims` list
  * (activation.ts § `activationForSources`). Back, a pasted link and a
  * last-view restore arrive here and buy nothing.
  */
 export const SOURCES_VIEWS = ["bibliography", "reception", "claims"] as const;
 export type SourcesView = (typeof SOURCES_VIEWS)[number];
 /**
- * **The two sub-modes the Debate panel draws** — Reception and Claims. Named
- * for the panel, which keeps its stored name until the deep rename (plan
- * 261009l § Stage 3).
+ * **The two sub-modes the shared Sources panel draws** — Reception and Claims.
  */
 export type ReceptionAndClaimsView = Exclude<SourcesView, "bibliography">;
 
@@ -1455,10 +1453,10 @@ export function sourcesInSearch(search: string): SourcesView {
   return (asked === null ? null : sourcesParam.parse(asked)) ?? sourcesParam.defaultValue;
 }
 
-/* --------------------------------------------------------------- debate -- */
+/* ------------------------------------------------------------ Reception -- */
 
 /**
- * **How Reception's list is ordered** — `?debateby=`, since 2026-09-29
+ * **How Reception's list is ordered** — `?receptionby=` (`?debateby=` before 2026-10-09), since 2026-09-29
  * (SPIDERYARN-READING2-5P, docs/plans/260929h-debate-mode-clearer-sources-and-orders.md).
  *
  * `prioritised` (*as found*, the default and absent), `date` or `stance`. The
@@ -1519,8 +1517,8 @@ export const bearsParam = createParser<SourcesClaimsBears>({
 }).withOptions({ history: "replace" });
 
 /**
- * **Which of Debate's threads narrows the list** — `?debatethread=<theme id>` or
- * `?debatethread=key` for the key sources (plan 260930j, SPIDERYARN-READING2-6M).
+ * **Which of Reception's threads narrows the list** — `?receptionthread=<theme id>` or
+ * `?receptionthread=key` for the key sources (plan 260930j, SPIDERYARN-READING2-6M).
  *
  * Not `?thread=`, which is the open conversation and survives a mode switch
  * like every parameter. A theme id is a `mintId`, so anything that is neither
@@ -1529,7 +1527,7 @@ export const bearsParam = createParser<SourcesClaimsBears>({
  * filter* by `selectedThread` (reception-threads.ts). `replace`, like `?bears=`:
  * it narrows a list rather than moving to a new view.
  */
-/** `?debatethread=key` — the key sources. A theme is its own id, which never spells this. Here rather than in reception-threads.ts so this eager file does not pull that one into every reader's first download (tests/eager-client-graph.test.ts). */
+/** `?receptionthread=key` — the key sources. A theme is its own id, which never spells this. Here rather than in reception-threads.ts so this eager file does not pull that one into every reader's first download (tests/eager-client-graph.test.ts). */
 export const KEY_THREAD = "key";
 
 export const receptionThreadParam = createParser<string>({

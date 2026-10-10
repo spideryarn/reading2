@@ -93,7 +93,7 @@ const LIST = {
 
 const ROWS = [
   { id: "mode:skim", label: "Skim" },
-  { id: "mode:debate", label: "Debate" },
+  { id: "submode:sources:reception", label: "Sources › Reception" },
   { id: "action:archive", label: "Archive this article" },
 ];
 

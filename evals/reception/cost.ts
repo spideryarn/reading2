@@ -1,5 +1,5 @@
 /**
- * **What one debate run cost, and the four ways it is allowed to answer
+ * **What one Reception run cost, and the four ways it is allowed to answer
  * "I don't know".**
  *
  * GPT Sol's F43 on
@@ -45,7 +45,7 @@ export const EXPECTED_RECEPTION_CALLS = [1, 2] as const;
 export interface RunCost {
   /**
    * `measured` only when every contributing call was priced **and** the run's
-   * call inventory is what a debate run is.
+   * call inventory is what a Reception run is.
    */
   kind: "measured" | "not-measured";
   nanos: number;
@@ -90,19 +90,19 @@ export function costOf(
   const foreign = calls.filter((c) => c.job !== "reception");
   if (foreign.length > 0) {
     problems.push(
-      `${foreign.length} call(s) inside this run were not the debate job (${[...new Set(foreign.map((c) => c.job))].join(", ")}) — ` +
-        "this figure is not the price of a debate run",
+      `${foreign.length} call(s) inside this run were not the Reception job (${[...new Set(foreign.map((c) => c.job))].join(", ")}) — ` +
+        "this figure is not the price of a Reception run",
     );
   }
   if (opts.completed && !EXPECTED_RECEPTION_CALLS.some((count) => count === calls.length)) {
     problems.push(
-      `a completed debate run is one search call plus at most one search-free synthesis call, and this run made ${String(calls.length)} calls`,
+      `a completed Reception run is one search call plus at most one search-free synthesis call, and this run made ${String(calls.length)} calls`,
     );
   }
   const searchful = calls.filter((c) => c.job === "reception" && c.webSearches !== null && c.webSearches > 0);
   if (opts.completed && searchful.length !== 1) {
     problems.push(
-      `a completed debate run has exactly one call with server-side searches, and this run had ${String(searchful.length)}`,
+      `a completed Reception run has exactly one call with server-side searches, and this run had ${String(searchful.length)}`,
     );
   }
 

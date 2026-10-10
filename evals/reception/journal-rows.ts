@@ -53,7 +53,7 @@ import type {
 import { readJournal } from "./journal-file.js";
 
 /** **Gitignored**, and the same root `run.ts` writes to. */
-export const RUN_ROOT = "output/debate-runs";
+export const RUN_ROOT = "output/reception-runs";
 
 /** Where a named run's journal lives. Relative, resolved against the caller's cwd. */
 export function journalPath(run: string, root = RUN_ROOT): string {
@@ -149,7 +149,7 @@ export async function readJournalRows(file: string): Promise<JournalRowsReport> 
   return journalRowsOf(events, { file, malformedLines });
 }
 
-/** The same, for a run directory name under `output/debate-runs/`. */
+/** The same, for a run directory name under `output/reception-runs/`. */
 export function readRunRows(run: string, root = RUN_ROOT): Promise<JournalRowsReport> {
   return readJournalRows(journalPath(run, root));
 }

@@ -584,8 +584,8 @@ export function activationForSummary(view: SummaryView): AutoRunTarget | null {
 
 /**
  * **What a press that lands on one of Sources' sub-modes arms**: the
- * `bibliography` list for Bibliography, the `debate` search for Reception, and
- * the `debate-claims` list for Claims.
+ * `bibliography` list for Bibliography, the `reception` search for Reception, and
+ * the `sources-claims` list for Claims.
  *
  * One answer for the three places that must agree, as `activationForSummary`
  * is: the bar's delegated row, the command bar's sub-mode rows

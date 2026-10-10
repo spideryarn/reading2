@@ -362,8 +362,8 @@ describe("the file itself", () => {
   });
 
   it("builds the path a run's journal lives at", () => {
-    expect(journalPath("2026-09-06T09-24-37-cargocult", "output/debate-runs")).toBe(
-      "output/debate-runs/2026-09-06T09-24-37-cargocult/journal.jsonl",
+    expect(journalPath("2026-09-06T09-24-37-cargocult", "output/reception-runs")).toBe(
+      "output/reception-runs/2026-09-06T09-24-37-cargocult/journal.jsonl",
     );
   });
 

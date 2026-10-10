@@ -1,5 +1,5 @@
 /**
- * The debate, as the reading view sees it: what the open web said about this
+ * Reception, as the reading view sees it: what the open web said about this
  * piece, whether it still describes the article, and the one thing you can ask
  * for.
  *
@@ -181,7 +181,7 @@ export function useReceptionRead(slug: string): ReceptionRead {
          `PAGE_FAULT` (tests/read-error-matrix.test.tsx) and what is on screen
          stays. */
       if (typeof loaded?.reception !== "object" || loaded.reception === null) {
-        throw new MalformedReply("the debate reply has no debate");
+        throw new MalformedReply("the Reception reply has no reception");
       }
       setReception(loaded.reception);
       landed(started, res, loaded.reception.searchedAt);

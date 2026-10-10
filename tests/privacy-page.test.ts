@@ -257,7 +257,7 @@ describe("the privacy page", () => {
     }
     expect(prose).toContain("its DOI");
     expect(prose).toContain("when you look up the works it cites");
-    expect(prose).toContain("when you open Reception in Debate");
+    expect(prose).toContain("when you open Sources' Reception");
     expect(prose).toContain("never the article’s text, and nothing about who you are");
   });
 

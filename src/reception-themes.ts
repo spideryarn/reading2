@@ -1,5 +1,5 @@
 /**
- * **Debate's optional synthesis call: the themes the sources share, and the key sources.**
+ * **Reception's optional synthesis call: the themes the sources share, and the key sources.**
  *
  * Greg, 2026-09-30 (SPIDERYARN-READING2-6M): *"In Debate mode, I wonder if
  * there's a way to somehow highlight key themes from other people and

@@ -239,7 +239,7 @@ export function buildLabelSheet(
   };
 }
 
-/** `output/debate-runs/<run>/journal.jsonl` → `<run>`. Anything else comes back as it is. */
+/** `output/reception-runs/<run>/journal.jsonl` → `<run>`. Anything else comes back as it is. */
 function runNameOf(file: string): string {
   const base = path.basename(path.dirname(file));
   return base === "" || base === "." ? file : base;
@@ -443,7 +443,7 @@ function stratifiedOrder(entries: readonly { key: string; row: LabelRow }[], see
  */
 export function renderLabelSheet(sheet: LabelSheet): string {
   const lines: string[] = [];
-  lines.push("# Debate-mode blind labelling sheet");
+  lines.push("# Reception blind labelling sheet");
   lines.push("");
   lines.push(
     "Each entry below gives you a **target**, a **quoted passage** from an outside page, and the",

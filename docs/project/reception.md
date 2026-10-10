@@ -101,7 +101,7 @@ live.
 Since 2026-10-08 Claims opens on a list of up to eight claims the article rests on that someone
 outside could argue with, in article order
 ([261008i § 2](../plans/261008i-debate-claims-picked-by-the-reader.md)). It is its own pipeline
-step and artefact, `debate-claims` (the `debate_claims` column), made by **one model call over the
+step and artefact, `sources-claims` (the `sources_claims` column), made by **one model call over the
 article and no web search**: a few cents, where the Reception search is the dearest press in the
 app. Each claim is the article's own words, re-found in the paragraph it names and stored as the
 article's characters (the Referee rule, `findQuote` in `"spaced"` mode), with a jump to that
@@ -153,7 +153,7 @@ address drawn once. Nothing searches by itself: only these two buttons spend.
 **What stops a press spending by accident.** The press is the only trigger; the list must still
 match the article (a stale list is read-only, and the server answers 409 before anything else);
 **one check per article at a time**, held by Postgres (a partial unique index on
-`debate_claim_checks`, so two tabs pressing at once get one search and one 409); and the check's
+`sources_claim_checks`, so two tabs pressing at once get one search and one 409); and the check's
 own **allowance** (`SOURCES_CLAIM_CHECK_RATE_POLICY`, `src/reception.ts`: 10 an hour, 30 a day per reader,
 two at once, a global fuse of 100 a day), taken after every free refusal and before the model. At
 about 20 cents a check that is about $6 a day for one reader at the very worst and about $20 a day
@@ -191,8 +191,8 @@ tells you nothing either way about it.
 the checks are in a table the public reader does not read. Whether a visitor should see the checks
 of the article's own listed claims is a question for Greg in the plan.
 
-The table is `debate_claim_checks` (one row per press; [export.md](export.md) carries it). The
-routes are `GET` and `POST /api/debate-claims/:slug/checks`; the panel's half is
+The table is `sources_claim_checks` (one row per press; [export.md](export.md) carries it). The
+routes are `GET` and `POST /api/sources-claims/:slug/checks`; the panel's half is
 [`src/web/useSourcesClaimChecks.ts`](../../src/web/useSourcesClaimChecks.ts) and
 [`src/web/sources-claim-checks.ts`](../../src/web/sources-claim-checks.ts).
 
@@ -335,17 +335,17 @@ conversation, not rows in Reception or Claims with checked quotations, and a vis
 What to know before changing it:
 
 - **An angle is the origin's second shape.** `ThreadOrigin` is a claim
-  (`{ mode: "debate", blockId, quote }`) or a lens (`{ mode: "debate", lens }`). Both say
-  `mode: "debate"`, so the mode does not tell them apart: ask `isLensOrigin` in
+  (`{ mode: "sources-claims", blockId, quote }`) or a lens (`{ mode: "reception", lens }`). The
+  old spelling was `debate` for both shapes; ask `isLensOrigin` in
   [`src/types.ts`](../../src/types.ts). A claim never equals a lens, whatever their words
   (`sameOrigin`). In the database a debate origin is one shape or the other, never a mix
-  (`chat_threads_origin_debate`).
+  (`chat_threads_origin_debate`, the constraint name retained through the rename).
 - **The lens is the reader's own words**: trimmed, not empty, at most 600 characters
   (`MAX_LENS_CHARS`, the cap on *why you're reading this*). The route refuses a longer one and does
   not cut it, and refuses a body that carries a lens and any part of a claim. It never reaches an
   error message or a log.
 - **The list is found in the thread summaries**, `lensThreads` in
-  [`useChatAnchors.ts`](../../src/web/useChatAnchors.ts), so Debate stores nothing. Two chats from
+  [`useChatAnchors.ts`](../../src/web/useChatAnchors.ts), so Reception stores nothing. Two chats from
   the same words are two lines.
 - **The question is built by `askReceptionThroughLens`** in
   [`chat-handoff.ts`](../../src/web/chat-handoff.ts), with the angle between the same fences as a
@@ -468,7 +468,7 @@ Each module's header comment says what it owns and why; start with `src/receptio
 
 - [`src/reception.ts`](../../src/reception.ts) — the pipeline step: the searches, and what is kept. Its
   header opens with the one thing to understand first.
-- [`src/sources-claims.ts`](../../src/sources-claims.ts) — Claims' list: the `debate-claims` step,
+- [`src/sources-claims.ts`](../../src/sources-claims.ts) — Claims' list: the `sources-claims` step,
   its prompt and the anchoring of each claim. The panel's half is
   [`src/web/useSourcesClaims.ts`](../../src/web/useSourcesClaims.ts).
 - The reader's checks: `generateClaimCheck` and `readCheckedClaimGroup` at the foot of
@@ -500,7 +500,7 @@ Each module's header comment says what it owns and why; start with `src/receptio
   [`src/citer-link.ts`](../../src/citer-link.ts) builds a citer's link, and
   [`src/web/useCiters.ts`](../../src/web/useCiters.ts) is the panel's read, which has no job.
 
-Tests: `tests/debate*.test.ts(x)` — [`reception.test.ts`](../../tests/reception.test.ts) for the step,
+Tests: `tests/reception*.test.ts(x)` and `tests/sources-claim*.test.ts(x)` — [`reception.test.ts`](../../tests/reception.test.ts) for the step,
 [`reception-and-claims-panel.test.tsx`](../../tests/reception-and-claims-panel.test.tsx) for the panel,
 [`reception-order.test.ts`](../../tests/reception-order.test.ts) and
 [`reception-threads.test.ts`](../../tests/reception-threads.test.ts) for the orders and threads; the

@@ -4187,7 +4187,7 @@ const rawPgArticleReader: ArticleReader = {
   },
 
   /**
-   * The debate on its own — the Postgres half of `loadReception`.
+   * The Reception artefact on its own — the Postgres half of `loadReception`.
    *
    * Three inputs like `loadQuiz` above and the same **cited** head, because
    * pass B sends `articleWithIds`: the fingerprint covers the tree and the

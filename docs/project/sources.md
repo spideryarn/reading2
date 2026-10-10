@@ -66,7 +66,7 @@ There is no description line in the band ([mode.md § The client](mode.md#the-cl
 
 `?mode=sources`, and `?sources=reception` or `claims`; Bibliography is the default and is
 left off. Each sub-mode keeps its own parameters, unchanged: `?citeby=` and `?citebar=` for
-Bibliography, `?debateby=`, `?bears=` and `?debatethread=` for Reception and Claims.
+Bibliography, `?receptionby=`, `?bears=` and `?receptionthread=` for Reception and Claims.
 
 **Every old address lands on the sub-mode it meant**, through one function,
 `liftLegacySources` in [`router.ts`](../../src/web/router.ts), run on boot (`settleAddress`), on
@@ -104,8 +104,8 @@ the bar, take it (mode-catalog.ts § `aliases`, rule 5); it ranks after Sources 
 
 **Each sub-mode buys its own work and only on a press of its own**: a press on the Sources
 button, a chip, or a command-bar row arms the work of the sub-mode it lands on (activation.ts §
-`activationForSources`): the `bibliography` list for Bibliography, the `debate` web search for
-Reception, the `debate-claims` list for Claims. Every read stays mounted in all three sub-modes, so
+`activationForSources`): the `bibliography` list for Bibliography, the `reception` web search for
+Reception, the `sources-claims` list for Claims. Every read stays mounted in all three sub-modes, so
 the chips can count, and each auto-run is gated on its own sub-mode, so a press armed for one that
 lands on another is retired unspent. A link, Back, popstate or a last-view restore never buys
 anything.
@@ -156,9 +156,10 @@ line, from the same two lists in the public payload.
 
 ## Chats started from it
 
-A chat started from a cited work, a claim or an angle keeps its stored origin, `bibliography` or
-`debate`, as data (a cited work's was `citations` until 2026-10-09, and an old row is read as
-`bibliography`). Chat's list shows all three under Sources' icon and one `sources` filter;
+A chat started from a cited work, a claim or an angle keeps its stored origin as data: `bibliography`
+for a cited work, `sources-claims` for a claim, and `reception` for an angle. The old spellings were
+`citations` for a work and `debate` for both other shapes; old rows are read under the current names.
+Chat's list shows all three under Sources' icon and one `sources` filter;
 the tooltip names the sub-mode (*Started from a claim in Sources › Claims*), and the way back
 opens that sub-mode: a work on Bibliography with its row in view, an angle on Reception, a claim on
 Claims with its row in view ([`thread-source.ts`](../../src/web/thread-source.ts) § `originBack`,

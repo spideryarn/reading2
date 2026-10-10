@@ -1,10 +1,10 @@
 /**
- * **Debate's threads: the themes the sources share, and the key sources, as
+ * **Reception's threads: the themes the sources share, and the key sources, as
  * filters on the list** — plan 260930j (SPIDERYARN-READING2-6M). Pure, so the
  * panel draws what these return and a test can check it without a DOM.
  *
  * A *thread* is one button above the list. Pressing it narrows the list to its
- * rows; `?debatethread=` holds which one (url-state.md: nothing the reader can
+ * rows; `?receptionthread=` holds which one (url-state.md: nothing the reader can
  * change lives in `useState`). The key sources are a thread too, `key`, so the
  * box has one kind of button and the list one kind of filter.
  *
@@ -17,7 +17,7 @@
  * 6). Reception and Claims each draw one search's rows, and one synthesis spans
  * both. So a thread is offered in a sub-mode only when it has a **stored** row
  * there (`threadsWithin`), and one the address names that has none there
- * narrows nothing and is not drawn as selected — Greg's `debatethread=key`
+ * narrows nothing and is not drawn as selected — Greg's `receptionthread=key`
  * link, whose key sources were all on one claim, must not empty Reception.
  * *No stored row here* and *rows here hidden by the bar* are different facts
  * and stay different: the second keeps its disabled button and its sentence.
@@ -30,7 +30,7 @@ import { KEY_THREAD } from "./params.js";
 export { KEY_THREAD };
 
 export interface Thread {
-  /** What `?debatethread=` holds. */
+  /** What `?receptionthread=` holds. */
   id: string;
   kind: "key" | "theme";
   label: string;

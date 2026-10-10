@@ -1,5 +1,5 @@
 /**
- * **Debate's claims list, as the reading view sees it** — the claims the
+ * **Sources' claims list, as the reading view sees it** — the claims the
  * article rests on that someone outside could argue with, whether that still
  * describes the article, and the two things you can ask for.
  * docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2.
@@ -7,7 +7,7 @@
  * `useFaq`'s shape, because the artefact's contract is the same: one model call
  * over the article, stored once, **replaced** on a re-run, and two staleness
  * facts — no profile is in this stage's stamp. The read half is
- * `GET /api/sources-claims/:slug`; the write half is the `debate-claims` job.
+ * `GET /api/sources-claims/:slug`; the write half is the `sources-claims` job.
  *
  * ## Its own press, never Reception's
  *
@@ -15,8 +15,8 @@
  * on Claims that is still waiting for this GET is retired the moment the reader
  * moves to Reception (`enabled`), exactly as `useReception` retires a Reception
  * press that lands on Claims (useAutoRun.ts § `enabled`, GPT Sol's C1 on stage
- * 1). The two hooks spend two different targets (`debate` and
- * `debate-claims`, activation.ts § `activationForSources`), so neither press
+ * 1). The two hooks spend two different targets (`reception` and
+ * `sources-claims`, activation.ts § `activationForSources`), so neither press
  * can buy the other's work: the list is a few cents and searches nothing; the
  * Reception search goes to the open web.
  *

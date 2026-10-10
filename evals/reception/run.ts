@@ -1,5 +1,5 @@
 /**
- * **The Debate eval runner — stage A of
+ * **The Reception eval runner — stage A of
  * [260906b](../../docs/plans/260906b-an-evaluation-for-debate-mode-and-what-it-finds.md).**
  *
  * ```
@@ -52,7 +52,7 @@
  *
  * ## Where a run lands, and why it is gitignored
  *
- * `output/debate-runs/<timestamp>/`, the same call `evals/summaries/` made about
+ * `output/reception-runs/<timestamp>/`, the same call `evals/summaries/` made about
  * `output/summaries-runs/`: a journal carries whole page extracts and, through
  * the answer text, sentences of the article. **Never commit one.** What may be
  * promoted into `evals/results/debate/` by hand is a numbers file with no prose
@@ -99,7 +99,7 @@ import {
 } from "./bears.js";
 
 /** **Gitignored.** See the header. */
-const RUN_ROOT = "output/debate-runs";
+const RUN_ROOT = "output/reception-runs";
 
 /**
  * Two slugs that must never be run: `scaling-hypothesis` and every `evalcost-*`
@@ -997,7 +997,7 @@ async function commandCheck(): Promise<void> {
   results.push(
     check(
       "a call from another job inside the slice is named, not silently added",
-      foreign.problems.some((p) => p.includes("not the debate job")),
+      foreign.problems.some((p) => p.includes("not the Reception job")),
       foreign.problems.join("; "),
     ),
   );

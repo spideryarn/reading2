@@ -8,7 +8,7 @@
  * winning. No search runs, so a pass over ten debates costs cents, not dollars.
  * It calls production's own `synthesiseReception`, never a copy.
  *
- *     npx tsx evals/reception/themes.ts <debates.json> [--out <file.json>]
+ *     npx tsx evals/reception/themes.ts <receptions.json> [--out <file.json>]
  *
  * Each call is written to the local database's `ai_calls` ledger, its only
  * write there.
@@ -28,7 +28,7 @@ import type { Reception, ReceptionSynthesis } from "../../src/types.js";
 async function main(): Promise<void> {
   loadEnvLocal();
   const [file, flag, out] = process.argv.slice(2);
-  if (!file) throw new Error("usage: themes.ts <debates.json> [--out <file.json>]");
+  if (!file) throw new Error("usage: themes.ts <receptions.json> [--out <file.json>]");
   const all = JSON.parse(fs.readFileSync(file, "utf8")) as Reception[];
   const bySlug = new Map(all.map((d) => [d.slug, d]));
   const model = modelFor("reception", "standard");

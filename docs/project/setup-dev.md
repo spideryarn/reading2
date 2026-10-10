@@ -365,7 +365,7 @@ for GPT-Live, every reader's engine, and `LIVE_MODEL` for Realtime, behind Exper
 whole app through one vendor. What still varies is not the vendor but the **wire** — which protocol
 the request is written in — and that axis has its own doc: [ai-gateway.md](ai-gateway.md). The short
 version is that `PIPELINE_TASKS` names the article-reading tasks on Anthropic's Messages shape
-([`src/messages-stream.ts`](../../src/messages-stream.ts)); the pipeline's `debate` and
+([`src/messages-stream.ts`](../../src/messages-stream.ts)); the pipeline's `reception` and
 `pdf-frontmatter` tasks, like the request-path calls, speak OpenAI's chat/completions shape
 ([`src/openrouter-stream.ts`](../../src/openrouter-stream.ts)). Both go to OpenRouter.
 

@@ -6664,7 +6664,7 @@ interface ReceptionRowBase {
   bears?: SourcesClaimsBears;
   /**
    * **What Crossref or DataCite holds for the identifier this row's address
-   * carries** — written by the `debate` step after its searches
+   * carries** — written by the `reception` step after its searches
    * (src/reception-registry.ts, plan 261001a stage 6), and only when the
    * registry's title agrees with the engine's `title` for the page. The
    * by-line and the *date* order prefer it to `authors` / `publishedYear`, and
@@ -7407,10 +7407,10 @@ export type CitersResult =
  */
 export type ReceptionFound = ReceptionResponse;
 
-/* ---------------------------------------------------------- debate-claims --
+/* --------------------------------------------------------- sources-claims --
    The article's own claims, listed for the reader to pick from — the
-   `debate_claims` column on `article_revisions`, written by the
-   `debate-claims` step (src/sources-claims.ts) and drawn by Debate's Claims
+   `sources_claims` column on `article_revisions`, written by the
+   `sources-claims` step (src/sources-claims.ts) and drawn by Sources' Claims
    sub-mode. No web search: one model call over the article.
    docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2. */
 
@@ -7446,7 +7446,7 @@ export interface SourcesClaimListDropped {
   malformed: number;
 }
 
-/** The artefact. The `debate_claims` column on `article_revisions`. */
+/** The artefact. The `sources_claims` column on `article_revisions`. */
 export interface SourcesClaimList {
   version: string;
   generator: string;
@@ -7475,9 +7475,9 @@ export interface SourcesClaimListResponse {
 /** As `FaqFound`: the same type, because there is no `profileChanged` to omit. */
 export type SourcesClaimListFound = SourcesClaimListResponse;
 
-/* ------------------------------------------------------ debate claim checks --
+/* ----------------------------------------------------- Sources claim checks --
    One reader press: the ticked claims and the typed one, searched on the open
-   web in one call. The `debate_claim_checks` table, written by
+   web in one call. The `sources_claim_checks` table, written by
    `POST /api/sources-claims/:slug/checks` (src/routes.ts) and read by
    src/reception.ts § `readCheckedClaimGroup`. Owner-only: a typed claim is the
    reader's own words, and nothing here reaches the public payload.

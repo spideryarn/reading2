@@ -421,7 +421,7 @@ import { placeQuoteInBlock } from "./quote-in-block.js";
 import { processSingleton } from "./process-state.js";
 import { captureFailure, setMonitoringUser } from "./monitoring.js";
 import { DEFAULT_INGEST_STEPS, isStepName, type StepName } from "./pipeline.js";
-import { currentStepName } from "./step-order.js";
+import { currentStepName, previousClientStepName } from "./step-order.js";
 import { hashProfile, normaliseProfileText, profileIsStale, renderProfile } from "./profile.js";
 import { keysOpenFree, type MadeArtefact } from "./acts-alone.js";
 import { type GuideExperience, experienceOf } from "./guide.js";
@@ -7730,6 +7730,24 @@ function publicJob(job: Job): Omit<Job, "profile" | "ownerId" | "illustrationNot
 }
 
 /**
+ * The job list as the immediately previous browser reads it. Its hooks match a
+ * job by exact step name, so accepting an old POST name is not enough: without
+ * this response alias the job runs but its old panel loses the progress row.
+ * The current browser canonicalises this list in `jobEngine`; remove both
+ * halves with the one-deploy route aliases (plan 261009w's contract item).
+ */
+function jobForPreviousClient(job: Job) {
+  const current = publicJob(job);
+  return {
+    ...current,
+    steps: current.steps.map((step) => ({ ...step, name: previousClientStepName(step.name) })),
+    ...(current.reset
+      ? { reset: { ...current.reset, regenerate: current.reset.regenerate.map(previousClientStepName) } }
+      : {}),
+  };
+}
+
+/**
  * Which model writes what — a read of the table in src/models.ts, nothing more.
  *
  * A route rather than an import, and that is the whole reason it exists. The
@@ -12880,7 +12898,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     path: JOBS_PATH,
     article: "none",
     handler: async ({ request: { res } }) => {
-      send(res, 200, { jobs: (await listJobs()).map(publicJob) });
+      send(res, 200, { jobs: (await listJobs()).map(jobForPreviousClient) });
     },
   },
 

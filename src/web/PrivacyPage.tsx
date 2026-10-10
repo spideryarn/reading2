@@ -413,7 +413,7 @@ export function PrivacyPage() {
           >
             OpenAlex
           </a>
-          , when you open Reception in Debate on an article of yours, for the list of papers that cite it. Our
+          , when you open Sources' Reception on an article of yours, for the list of papers that cite it. Our
           server sends each one the identifier of a published work — for your article, its DOI —
           and our own contact address; never the article’s text, and nothing about who you are.
           They learn that somebody using Spideryarn asked about that work, not who.
@@ -591,7 +591,7 @@ export function PrivacyPage() {
           that is what the setting is for. They get the article, its outline, summaries (the plain-words
           Simple one included) and arc, the
           glossary, the ideas, the quotes, the timeline, the Skim route, the FAQ, the list of works
-          it cites, what the web says about it (the Debate), its stored Sketch drawing and the thread,
+          it cites, what the web says about it (Reception), its stored Sketch drawing and the thread,
           some of which
           the model wrote knowing what your profile says about you, even though the profile itself
           is not shared.{" "}

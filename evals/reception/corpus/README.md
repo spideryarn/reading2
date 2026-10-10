@@ -1,7 +1,7 @@
-# The Debate corpus — three live runs, paid for once and kept
+# The Reception corpus — three live runs, paid for once and kept
 
-**These three journals are the only replayable evidence Debate mode has**, and they are here rather
-than in `output/debate-runs/` for one reason: `output/` is gitignored scratch, and until 2026-09-08
+**These three journals are the only replayable evidence Reception has**, and they are here rather
+than in `output/reception-runs/` for one reason: `output/` is gitignored scratch, and until 2026-09-08
 these files existed in exactly one place — a worktree that was about to be deleted. `npm run
 worktree:check` is what caught it. Everything measured about the valence bug came out of these
 files, and nothing can produce them again: the searches cost real money, the web has moved on, and
@@ -9,7 +9,7 @@ the model's answers are stochastic.
 
 ## What they are
 
-Three runs of `evals/debate/run.ts` against production's `generateDebate`, all on 2026-09-06:
+Three runs of the predecessor `evals/debate/run.ts` against the then-named `generateDebate`, all on 2026-09-06:
 
 | run | article | reported rows |
 |---|---|---|
@@ -39,12 +39,12 @@ Sol's F69.
 
 ## Reading them
 
-Nothing points here by default: `RUN_ROOT` in `journal-rows.ts` is still `output/debate-runs`, which
+Nothing points here by default: `RUN_ROOT` in `journal-rows.ts` is `output/reception-runs`, which
 is where a *fresh* run belongs. Pass the root explicitly.
 
 ```ts
 import { readRunRows } from "./journal-rows.js";
-const report = await readRunRows("2026-09-06T09-24-37-cargocult-spya-rz663q", "evals/debate/corpus");
+const report = await readRunRows("2026-09-06T09-24-37-cargocult-spya-rz663q", "evals/reception/corpus");
 ```
 
 **Read `report.problems` before believing any count.** It is non-empty whenever the account is short

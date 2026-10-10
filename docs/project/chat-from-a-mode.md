@@ -85,8 +85,8 @@ A press calls `openOrigin` in [`Reader.tsx`](../../src/web/reader/Reader.tsx), o
 | Glossary | `openTermInGlossary` (`?term=`, the gate lowered if it hides the entry) and a focus | the entry open, its row scrolled into view |
 | Bibliography | the focus (`citeFocus`) and `showBand`, on Bibliography | the row scrolled into view, the bar lowered if needed |
 | Ideas | one push of `mode=ideas&idea=`, and a focus | the idea open, its row in view; not the row press, which jumps the prose |
-| Debate, a claim | one push of `mode=sources&sources=claims` that clears `?bears=` and `?debatethread=`, and a focus | the claim's row in view, an older search's claim unfolded |
-| Debate, an angle | one push of `mode=sources&sources=reception` | the angles box |
+| Sources › Claims, a claim | one push of `mode=sources&sources=claims` that clears `?bears=` and `?receptionthread=`, and a focus | the claim's row in view, an older search's claim unfolded |
+| Sources › Reception, an angle | one push of `mode=sources&sources=reception` | the angles box |
 
 **The way back lands on the item, and the item is one press from its block.** No arm jumps the
 prose: on a phone the band lies over it, and the flash would be held until the band moved (GPT

@@ -95,7 +95,7 @@ export const NOUN: Record<keyof PublicArtefacts, string> = {
   faq: "an FAQ",
   simpleSummary: "a plain-words summary",
   bibliography: "a bibliography",
-  reception: "a debate",
+  reception: "a Reception search",
   sketch: "a sketch",
 };
 
@@ -318,7 +318,7 @@ const POLICY: Record<Mode, VisitorPolicy> = {
   referee: { kind: "owners-only" },
   /**
    * **Sources, since 2026-10-09: open when any one of its artefacts is
-   * stored** — Bibliography's list, Debate's Reception search or Claims' list
+   * stored** — Bibliography's list, Sources' Reception search or Claims' list
    * (`debate` is set by either of the last two, public-artefacts.ts §
    * `artefactsIn`). GPT Sol's F3 on plan 261009l: one key could not say it,
    * so the policy shape is `any-artefact`. A sub-mode whose own artefact is

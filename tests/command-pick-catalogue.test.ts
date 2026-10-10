@@ -325,3 +325,12 @@ describe("evals/command-pick/bar-answers.generated.json", () => {
     ).toBe(true);
   });
 });
+
+describe("the command-pick eval's Sources labels", () => {
+  it("does not score a current Sources request under a retired mode id", () => {
+    const retired = new Set(["mode:citations", "mode:debate", "submode:debate:reception"]);
+    const stale = PHRASES.flatMap((phrase) => phrase.accept.filter((id) => retired.has(id)).map((id) => `${phrase.id}: ${id}`));
+
+    expect(stale).toEqual([]);
+  });
+});

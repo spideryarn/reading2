@@ -118,12 +118,10 @@ enough to show a stranger by default.
   and see where they go before you leave ([links.md](docs/project/links.md)).
 - **FAQ** *(experimental)* — the questions a careful reader would ask, each answered by the piece's
   own passages rather than by a written answer ([faq.md](docs/project/faq.md)).
-- **Citations** *(experimental)* — every work the piece cites, each with a link out
-  ([bibliography.md](docs/project/bibliography.md)).
+- **Sources** — every work the piece cites, what others say about it, and checks of the claims it rests on
+  ([sources.md](docs/project/sources.md)).
 - **Timeline** *(experimental)* — when the piece says things happened, showing the uncertainty
   rather than hiding it ([timeline.md](docs/project/timeline.md)).
-- **Debate** *(experimental)* — what the rest of the web says about this piece; the one mode whose
-  content is not drawn from the article ([reception.md](docs/project/reception.md)).
 
 **Asking**
 

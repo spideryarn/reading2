@@ -14,7 +14,7 @@
  * - **Bibliography**: the works cited, every one — the number Bibliography's (i)
  *   gave ("12 works cited"), not the rows its threshold leaves.
  * - **Reception**: the rows about the piece, through the thread the reader
- *   picked (`?debatethread=`), as Debate's segment counted them.
+ *   picked (`?receptionthread=`), as Reception's segment counted them.
  * - **Claims**: the listed claims, until the reader's checks have put
  *   sources on screen, and then those sources plus any rows an older search
  *   kept (plan 261008i § 5); with no list, the older search's rows through
@@ -35,7 +35,7 @@ import { RELEVANCE_DEFAULT, visibleClaims } from "./reception-order.js";
 import { inThread, selectedThread, type Thread, threadsOf, threadsWithin } from "./reception-threads.js";
 import type { ThresholdResult } from "./threshold.js";
 
-/** Either arm's stored debate: the owner's, or a visitor's public projection. */
+/** Either arm's stored Reception: the owner's, or a visitor's public projection. */
 type AnyReception = Reception | PublicReception;
 /* The public row types are the narrower shape, and every owner's row is one
    of them (ReceptionAndClaimsPanel.tsx § `DirectRow`). */
@@ -45,7 +45,7 @@ type ClaimRow = PublicClaimReceptionRow;
 const NO_DIRECT: readonly DirectRow[] = [];
 const NO_CLAIMS: readonly ClaimRow[] = [];
 
-/** The debate's threads, from its stored synthesis, read the one checked way (reception-synthesis.ts). */
+/** Reception's threads, from its stored synthesis, read the one checked way (reception-synthesis.ts). */
 export function receptionThreads(reception: AnyReception | null): Thread[] {
   return threadsOf(reception !== null ? readStoredSynthesis(reception) : null);
 }
@@ -131,7 +131,7 @@ export interface SourcesCountsInput {
   checked: number;
   /** `?bears=`, null for untouched. */
   relevance: SourcesClaimsBears | null;
-  /** `?debatethread=`. */
+  /** `?receptionthread=`. */
   thread: string | null;
 }
 

@@ -101,8 +101,9 @@ CREATE VIEW "spideryarn"."debate_claim_checks" AS SELECT * FROM "spideryarn"."so
 -- The view's grants are the table's, copied rather than written out: the app
 -- role reads and writes the table through the default privileges
 -- docs/project/database.md § Step three sets (which a view created by the same
--- owner also gets), and this copies whatever is actually on the table, so the
--- old code cannot be refused through the view anything it could do before.
+-- owner also gets), and this copies the table's direct grants to roles other
+-- than its owner and PUBLIC (without grant options) — production's app-role
+-- DML grants are the case it is for (GPT Sol's migration review, M3).
 DO $$
 DECLARE
   g record;
@@ -179,9 +180,10 @@ CREATE TRIGGER "article_revisions_mirror_renamed"
 -- 2. The step runs. Copied BEFORE the partner function learns the new pairs,
 --    so Stage 2's mirror trigger does not also mirror these inserts (it would
 --    find the old twin and replace it with itself, which is harmless but is a
---    second writer). `ON CONFLICT DO NOTHING` because nothing wrote the new
---    names before this migration, so a conflict would be news, not something
---    to overwrite.
+--    second writer). No `ON CONFLICT`: the CHECK this migration widens
+--    forbade the new names until now, so a conflict would be news, and it
+--    aborts the whole batch rather than being skipped (GPT Sol's migration
+--    review, M2).
 INSERT INTO "spideryarn"."revision_step_runs"
   ("revision_id", "step_name", "input_hash", "implementation_version", "prompt_version",
    "model", "status", "started_at", "finished_at", "attempt_id")
@@ -189,7 +191,7 @@ SELECT "revision_id", 'reception', "input_hash", "implementation_version", "prom
        "model", "status", "started_at", "finished_at", "attempt_id"
   FROM "spideryarn"."revision_step_runs"
  WHERE "step_name" = 'debate'
-ON CONFLICT ("revision_id", "step_name") DO NOTHING;--> statement-breakpoint
+;--> statement-breakpoint
 INSERT INTO "spideryarn"."revision_step_runs"
   ("revision_id", "step_name", "input_hash", "implementation_version", "prompt_version",
    "model", "status", "started_at", "finished_at", "attempt_id")
@@ -197,7 +199,7 @@ SELECT "revision_id", 'sources-claims', "input_hash", "implementation_version", 
        "model", "status", "started_at", "finished_at", "attempt_id"
   FROM "spideryarn"."revision_step_runs"
  WHERE "step_name" = 'debate-claims'
-ON CONFLICT ("revision_id", "step_name") DO NOTHING;--> statement-breakpoint
+;--> statement-breakpoint
 
 -- Each renamed step name's other spelling, or null: Stage 2's one list of
 -- pairs, with Stage 3's added. `revision_step_runs_mirror_renamed` (Stage 2's,

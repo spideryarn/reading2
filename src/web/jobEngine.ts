@@ -69,6 +69,7 @@
  * Recurring polls also stop dead while the tab is hidden — see `schedule`.
  */
 import type { Job, StepName } from "../types.js";
+import { currentStepName } from "../step-order.js";
 import type { AutoRunTarget } from "./auto-run-targets.js";
 import { apiFetch, readJson, statusOf } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
@@ -103,6 +104,20 @@ export interface Advanced {
   ran: StepName | null;
   busy: boolean;
   done: boolean;
+}
+
+/** Read the one-deploy job-list aliases as the names this client uses. */
+export function currentClientJob(job: Job): Job {
+  const steps = job.steps.map((step) => {
+    const name = currentStepName(step.name) as StepName;
+    return name === step.name ? step : { ...step, name };
+  });
+  const regenerate = job.reset?.regenerate.map((name) => currentStepName(name) as StepName);
+  return {
+    ...job,
+    steps,
+    ...(job.reset ? { reset: { ...job.reset, regenerate: regenerate ?? [] } } : {}),
+  };
 }
 
 /**
@@ -1046,7 +1061,7 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
 /** The browser's own wiring. Split out so `createJobEngine` stays pure. */
 function browserDeps(): JobEngineDeps {
   return {
-    listJobs: async () => (await send<{ jobs: Job[] }>("/api/jobs")).jobs,
+    listJobs: async () => (await send<{ jobs: Job[] }>("/api/jobs")).jobs.map(currentClientJob),
     advance: (id) => send<Advanced>(`/api/jobs/${id}/advance`, { method: "POST" }),
     /* `document.visibilityState` rather than the `document.hidden` boolean only
        because the string is what a test can define over jsdom's prototype

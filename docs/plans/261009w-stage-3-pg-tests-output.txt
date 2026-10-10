@@ -1,0 +1,13 @@
+
+ RUN  v4.1.11 /var/tmp/spideryarn-worktrees/fbc2qmbg-sources-rename
+
+  [private lane] spideryarn_test_261010082858_62a0940a6fc0453eb723242022a0a192 in 5.3s, leased as spideryarn-test-lease-3517871, priced reader/researcher
+(node:3518884) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  8 passed (8)
+      Tests  244 passed (244)
+   Start at  09:28:56
+   Duration  66.50s (transform 22.97s, setup 1.41s, import 44.43s, tests 19.36s, environment 2ms)
+
+  [private lane] dropped spideryarn_test_261010082858_62a0940a6fc0453eb723242022a0a192

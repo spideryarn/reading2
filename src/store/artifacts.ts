@@ -200,8 +200,8 @@ export interface ArtifactMap {
    */
   relations: Relations;
   /**
-   * The article's claims, listed for Debate's Claims to pick from —
-   * `SourcesClaimList`, src/types.ts, written by the `debate-claims` step.
+   * The article's claims, listed for Sources' Claims to pick from —
+   * `SourcesClaimList`, src/types.ts, written by the `sources-claims` step.
    * docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2.
    */
   "sources-claims": SourcesClaimList;
@@ -226,8 +226,8 @@ export interface ArtifactMap {
    */
   illustrated: Illustrated;
   /**
-   * What the rest of the web says about this piece — `Debate`, src/types.ts,
-   * written by the `debate` step.
+   * What the rest of the web says about this piece — `Reception`, src/types.ts,
+   * written by the `reception` step.
    * docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md.
    *
    * **The only artefact here whose content is not in the article**, and the

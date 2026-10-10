@@ -1,5 +1,5 @@
 /**
- * **How each of Debate's two lists is arranged, which orders Reception can
+ * **How each of Sources' two web-result lists is arranged, which orders Reception can
  * honestly offer, and the relevance bar that goes with Claims.** Pure, and
  * apart from the panel so the rules can be read and tested without a DOM —
  * faq-order.ts's reason.
@@ -18,8 +18,8 @@
  *    headed by the claim's own words (`groupByClaim`). Within a claim, the rows
  *    the AI judged to bear most directly come first (`bears`) and the ones it
  *    did not judge last, in search order. There is no order control, and
- *    `?debateby=` is ignored. The relevance bar (`?bears=`) filters these rows.
- *  - **Reception** has three orders, `?debateby=`, each applied **within** its
+ *    `?receptionby=` is ignored. The relevance bar (`?bears=`) filters these rows.
+ *  - **Reception** has three orders, `?receptionby=`, each applied **within** its
  *    two identification groups (reception-levels.ts):
  *     - **prioritised** (*as found*, the default and absent from the address) —
  *       the order the search found them in. The word in the address is from

@@ -228,6 +228,26 @@ export function currentStepName(name: string): string {
 }
 
 /**
+ * **The spelling a tab loaded before plan 261009w understands.** For one
+ * deploy, `GET /api/jobs` uses these three old names so that the old
+ * `useStepJob` can match the running job it just started. The current client
+ * reads them back through `currentStepName` at its network boundary.
+ *
+ * Deliberately not every entry in `RETIRED_STEPS`: Structure and Skim's old
+ * clients are long gone. This is a one-deploy response alias, removed with the
+ * old Sources routes by the contract queue item.
+ */
+const PREVIOUS_CLIENT_STEPS: Readonly<Record<string, string>> = {
+  bibliography: "citations",
+  reception: "debate",
+  "sources-claims": "debate-claims",
+};
+
+export function previousClientStepName(name: string): string {
+  return Object.hasOwn(PREVIOUS_CLIENT_STEPS, name) ? (PREVIOUS_CLIENT_STEPS[name] ?? name) : name;
+}
+
+/**
  * **Every name a step or a job had, and what that row is called now**, for the
  * readers of the ledger (`ai_calls.job`, `ai_calls.step_name`), which is
  * append-only and so keeps every old word for ever. `RETIRED_STEPS` above,

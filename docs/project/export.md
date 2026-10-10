@@ -40,7 +40,7 @@ file-by-file list, and the thing to edit when the layout changes.
                       tags (your own, since 261003d), quiz-attempts (your answers and the
                       mark each was given, since 261005b — every one, including answers to
                       questions that have since been rewritten; each row carries its
-                      question's words for that reason), debate-claim-checks (Debate's
+                      question's words for that reason), sources-claim-checks (Sources' Claims
                       checks of the claims you picked or typed, and what each search found,
                       since 261008i)
 

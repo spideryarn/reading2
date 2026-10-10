@@ -115,7 +115,7 @@ export interface ReceptionRegistryCounts {
 }
 
 /**
- * **The debate with each identified row's `registry` set, or cleared** — a row
+ * **The Reception artefact with each identified row's `registry` set, or cleared** — a row
  * keeps only this run's answer. Distinct addresses are asked once; the rows
  * are at most 24, so there is no cap beyond the groups' own.
  */
