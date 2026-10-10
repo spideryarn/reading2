@@ -1,10 +1,11 @@
 ---
 id: q-dqh7t6
 report: none
-status: open
+status: answered
 asked: 2026-10-09
 title: May our security notes name the guide's new buttons, and should saving stay a press?
 refs: q-w2740x · docs/plans/261009q-the-guide-offers-to-save-your-reason-and-about-you-in-your-words.md · docs/plans/261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md · docs/project/security-map.md (the chipFor row) · qi-j45yc3ck
+acted: spya-t5bfct
 ---
 Two small calls left over from your answers to q-w2740x, both built and on dev. Answer like "1A 2A". Neither is urgent.
 
@@ -25,3 +26,10 @@ What is built (on dev, not yet deployed):
 1A, the sentence I would add to the chat-buttons row of the security notes: "Two more places in the guide where a model's words become a button, both pressed by the reader: the offer to save (src/web/GuideSaveOffer.tsx), saved only on the press, only over what the field held when offered, with an Undo; and the next steps (src/web/GuideNextSteps.tsx), at most three under the latest answer: words sent as the reader's own message, a mode or quick search through the same check as the chat buttons, or a move to Metadata's sharing card or Archive button. None presses itself." It costs nothing; it keeps the list of such places complete, which is what the notes are for. 1B leaves a reviewer to find them by reading the code.
 
 2. This is the follow-up from part 1 of your reply. B would save one press, but that press is the one moment you see the words before they go into every future prompt, and an article's own text could steer which words the guide offers. B also needs a check that the words really are a quote of your own message. I would keep A.
+
+## Greg's answer, 2026-10-10 (in the Feedback dialog, reply `spya-t5bfct`)
+
+> 1A
+> 2B
+
+Settled. 1A is done: the sentence under Details is now in the chat-buttons row (chipFor) of docs/project/security-map.md, word for word. 2B is queued as qi-wm5nsweg but held, not built: saving with no press is the first model-proposed write without one, which relaxes a defence that security-map.md lists ("Anything that writes, spends or leaves the article is still a press"), and an unattended run may not change a defence on a reply alone. Whether an unattended agent may build it is asked in q-t3j8hj. (Feedback sweep, 2026-10-10.)

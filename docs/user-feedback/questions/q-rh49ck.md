@@ -1,10 +1,11 @@
 ---
 id: q-rh49ck
 report: spya-q2qb7q
-status: open
+status: answered
 asked: 2026-10-10
 title: May the three-hourly feedback sweep run as a permanent systemd timer?
 refs: qi-vyxxb5k8 · docs/plans/261010d-standing-jobs-survive-a-reboot.md · docs/user-feedback/261010_0300-the-box-s-repeating-jobs-survive-a-reboot.md · infra/hetzner/systemd/feedback-sweep.service
+acted: spya-dkj970
 ---
 The feedback sweep (an unattended Claude Opus run every three hours that reads new reports and queues them) currently lives in a tmux loop that a reboot kills. I have built it a permanent systemd timer but not switched it on, because it spends money on a clock. May I switch it on?
 
@@ -25,3 +26,9 @@ What is now built and ready for the Overseer to switch on (no question needed, n
 Why this one is a question: it is the only one that runs Claude, so it costs money each time it runs, unattended. It already does that today, every three hours, so option A does not add any spending you have not already approved; it only makes it durable. The review model (GPT Sol) argued exactly that. But the instructions for this work said a scheduled job that runs Claude is your call, so I am asking rather than assuming.
 
 What A involves for the Overseer, once you say yes: stop the tmux loop between two sweeps, then switch the timer on, which starts one sweep straight away and then one three hours after each finishes.
+
+## Greg's answer, 2026-10-10 (in the Feedback dialog, reply `spya-dkj970`)
+
+> A
+
+Settled: A. Queued for the Overseer as qi-4rnb96h3 (switch on feedback-sweep.timer, stopping the tmux loop first), beside qi-2jk2zjkv (the other three timers). The feedback sweep that read this reply may not touch systemd, so it does not switch the timer on itself. (Feedback sweep, 2026-10-10.)

@@ -1,7 +1,7 @@
 ---
 reports: spya-q2qb7q
 ending: shipped
-comment: Box health, the daily worktree sweep and the dashboard refresh are now systemd timers that survive a reboot and tell the Overseer only when it must decide. The feedback sweep timer awaits your yes (q-rh49ck).
+comment: Box health, the worktree sweep and the dashboard refresh are now systemd timers that survive a reboot. You said yes to the feedback sweep timer (q-rh49ck); the Overseer switches it on.
 ---
 # The box's repeating jobs survive a reboot
 

@@ -1,7 +1,7 @@
 ---
 reports: spya-h5aypq
 ending: shipped
-comment: Researched what a peer reviewer needs, drew the line between Sources and Referee, and the guide now offers Referee as a button to a reader who says they are refereeing. Four product questions in q-fkq30v.
+comment: Researched what a peer reviewer needs and drew the line between Sources and Referee; the guide offers Referee to referees. You answered q-fkq30v: Promises and starter criteria are queued first.
 ---
 # Peer review for someone writing a review: the research, the line between Sources and Referee, and a Referee offer from the guide
 
