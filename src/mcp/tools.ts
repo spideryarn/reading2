@@ -25,6 +25,7 @@ import type { ToolAnnotations } from "@modelcontextprotocol/server";
 import * as z from "zod";
 
 import type { AdminUser } from "../admin.js";
+import { type AdminAuthorGift, type AdminAuthorLookup, AUTHOR_GIFT_NOTES_MAX } from "../admin-author-gifts.js";
 import type { AdminVoucher } from "../admin-vouchers.js";
 import { freeArticles } from "../admin-vouchers.js";
 import { SHARING_RIGHTS_CONFIRM } from "../messages.js";
@@ -170,6 +171,50 @@ function trimVoucher(v: AdminVoucher) {
     revoked: v.revokedAt !== null,
     hasNote: v.note !== null || v.recipientNote !== null,
     giftEmail: v.emails.gift ? { status: v.emails.gift.status, retryable: v.emails.gift.retryable } : null,
+  };
+}
+
+/** One lookup, explicitly allow-listed because every field returned here enters an AI conversation. */
+function trimAuthorLookup(l: AdminAuthorLookup) {
+  return {
+    id: l.id,
+    createdAt: l.createdAt,
+    finishedAt: l.finishedAt,
+    outcome: l.outcome,
+    failure: l.failure,
+    authorName: l.authorName,
+    authorSourceUrl: l.authorSourceUrl,
+    email: l.email,
+    emailSourceUrl: l.emailSourceUrl,
+    suggestedEmail: l.suggestedEmail,
+    contactUrl: l.contactUrl,
+    searches: l.searches,
+    model: l.model,
+    cost: l.cost,
+  };
+}
+
+/** An author gift as an agent sees it. Never spread the route's object: it must not grow a private-link key by accident. */
+function trimAuthorGift(api: Api, g: AdminAuthorGift) {
+  return {
+    id: g.id,
+    status: g.status,
+    starter: { slug: g.starter.slug, title: g.starter.title, link: articleLink(api, g.starter.slug) },
+    email: g.email,
+    recipientName: g.recipientName,
+    recipientNote: g.recipientNote,
+    articles: g.articles,
+    notes: g.notes,
+    notesUpdatedAt: g.notesUpdatedAt,
+    emailLookupId: g.emailLookupId,
+    nameLookupId: g.nameLookupId,
+    createdAt: g.createdAt,
+    createdBy: g.createdBy,
+    updatedAt: g.updatedAt,
+    sendStartedAt: g.sendStartedAt,
+    discardedAt: g.discardedAt,
+    voucherId: g.voucherId,
+    lookups: g.lookups.map(trimAuthorLookup),
   };
 }
 
@@ -731,6 +776,85 @@ export const TOOLS: readonly Tool[] = [
       throw new Error("retry_gift_voucher_email must run the delivery prepared for approval");
     },
   }),
+
+  /* **Author gifts** — plan 261010c § D6. Greg wanted the notes reachable "perhaps
+     via MCP", so an agent can read the drafts and add what it found. Neither tool
+     reaches the outside world, so neither asks; *Send* is deliberately not a tool
+     (it sends mail), and stays a button on /admin/vouchers. */
+  tool({
+    name: "list_author_gifts",
+    title: "List author gifts",
+    description:
+      "Admin only. Every author gift, newest first: a draft gift voucher for the author of one of the admin's own " +
+      "articles. Each has its id, status (draft, sending, sent or discarded), the article (slug, title, link), the " +
+      "address and name and which lookup supplied each (null when typed by hand), the note to them, how many free " +
+      "articles, the admin's notes in full, and every web-search lookup with what it found, its sources and its " +
+      "cost in nano-dollars. Never a private link. Nothing can be sent from here: a gift is sent only by pressing " +
+      "Send on /admin/vouchers.",
+    input: z.strictObject({}),
+    annotations: { readOnlyHint: true, openWorldHint: false },
+    handler: async (api) => {
+      const { gifts } = await api.call<{ gifts: AdminAuthorGift[] }>("GET", "/api/admin/author-gifts");
+      return { gifts: gifts.map((g) => trimAuthorGift(api, g)) };
+    },
+  }),
+
+  tool({
+    name: "update_author_gift",
+    title: "Change an author gift's notes or draft",
+    description:
+      "Admin only. Changes an author gift: its notes, and, while it is still a draft, its address, name, note to " +
+      "them and number of free articles. Sends nothing. To add to the notes, use `append_notes`: it adds your text " +
+      "as a new paragraph under whatever is there, and cannot lose anybody else's words. Append rather than replace. " +
+      "`notes` **replaces the whole notes field**; use it only to correct or tidy them, and expect a refusal if " +
+      "somebody else wrote the notes since this tool read them (then call list_author_gifts and try again). Notes " +
+      "can change in every status, sent included; the other fields only on a draft. Changing the address or name " +
+      "marks it as typed by hand rather than found by a lookup.",
+    input: z.strictObject({
+      id: z.string().uuid().describe("The gift's id, from list_author_gifts."),
+      append_notes: z
+        .string()
+        .trim()
+        .min(1)
+        .max(AUTHOR_GIFT_NOTES_MAX)
+        .optional()
+        .describe(
+          "Preferred. A paragraph to add under the notes, e.g. what you found and where. Admins only ever see the " +
+            "notes; they are never emailed.",
+        ),
+      notes: z
+        .string()
+        .max(AUTHOR_GIFT_NOTES_MAX)
+        .nullable()
+        .optional()
+        .describe("Replaces the whole notes text (null or empty clears it). Prefer append_notes. Not with append_notes."),
+      email: z.string().min(3).nullable().optional().describe("The recipient's address, or null for none yet."),
+      recipientName: z.string().max(80).nullable().optional().describe('Their name; the email opens "Dear <name>,".'),
+      recipientNote: voucherNote.describe("A note to them, put in their email when the gift is sent."),
+      articles: z.number().int().min(1).max(1000).optional().describe("How many free articles."),
+    }),
+    /* Not idempotent: two appends add two paragraphs. */
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    handler: async (api, { id, append_notes, ...change }) => {
+      if (append_notes !== undefined && change.notes !== undefined) {
+        throw new ApiError(400, "Give append_notes (preferred) or notes, not both.");
+      }
+      const body: Record<string, unknown> = Object.fromEntries(Object.entries(change).filter(([, v]) => v !== undefined));
+      if (append_notes !== undefined) body.appendNotes = append_notes;
+      if (Object.keys(body).length === 0) throw new ApiError(400, "Nothing to change.");
+      /* A replace says which notes it is replacing (Sol's C7): the stamp as
+         listed now, so a write that lands between this read and the PATCH is
+         refused rather than overwritten. */
+      if (change.notes !== undefined) {
+        const { gifts } = await api.call<{ gifts: AdminAuthorGift[] }>("GET", "/api/admin/author-gifts");
+        const gift = gifts.find((g) => g.id === id);
+        if (!gift) throw new ApiError(404, "There is no such author gift.");
+        body.notesBase = gift.notesUpdatedAt;
+      }
+      const answer = await api.call<{ notesUpdatedAt?: unknown }>("PATCH", `/api/admin/author-gifts/${seg(id)}`, body);
+      return { ok: true, notesUpdatedAt: typeof answer.notesUpdatedAt === "string" ? answer.notesUpdatedAt : null };
+    },
+  }),
 ];
 
 /* ----------------------------------------------------- failures, in words -- */
@@ -742,6 +866,8 @@ const ADMIN_ONLY = new Set([
   "create_gift_voucher",
   "update_gift_voucher",
   "retry_gift_voucher_email",
+  "list_author_gifts",
+  "update_author_gift",
 ]);
 
 /** A failure as the sentence a tool error says. Neither source of its text can hold a token. */

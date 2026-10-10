@@ -372,8 +372,11 @@ describe("the repo's own .gitignore", () => {
    * `.claude/worktrees/` is where worktrees live. In the primary that is every
    * peer's whole checkout, and the primary is refused on its own blocker; a
    * *worktree* containing worktrees is strange enough to be worth a human look.
+   *
+   * `outreach-private/` is Greg's marketing contact lists, kept out of git on
+   * purpose, so a tree holding them may hold the only copy.
    */
-  const BLOCKS_ON_PURPOSE = new Set(["uploads", ".claude/worktrees"]);
+  const BLOCKS_ON_PURPOSE = new Set(["uploads", ".claude/worktrees", "outreach-private"]);
 
   it("gives every directory it names a verdict, or says it blocks on purpose", () => {
     const body = readFileSync(new URL("../.gitignore", import.meta.url), "utf8");

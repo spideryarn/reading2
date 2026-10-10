@@ -27,7 +27,7 @@ vi.mock("../src/store/index.js", async () => {
   };
 });
 
-import { GUIDE_TOOLS, runTool, toolsFor } from "../src/chat-tools.js";
+import { ALREADY_ON_SCREEN, GUIDE_TOOLS, runTool, toolsFor } from "../src/chat-tools.js";
 import { LIVE_SERVER_TOOLS, liveTools } from "../src/live.js";
 import { MAX_PROFILE_CHARS, MAX_PURPOSE_CHARS, type Meta, type ThreadKind } from "../src/types.js";
 
@@ -81,6 +81,7 @@ describe("what it returns", () => {
   it("offers a reason, in our field name, normalised as the store would", async () => {
     const out = await runTool("offer_to_save", { field: "reason", text: "  For journal club\r\nnext week  " }, ctx("guide"));
     expect(out.offer).toEqual({ field: "purpose", text: "For journal club\nnext week", basis: null });
+    expect(out.settles).toBe(true);
     expect(out.content).toMatch(/nothing is saved unless they press/i);
     expect(out.label).toBe("offered to save why you're reading");
     expect(calls.store).toEqual([]);
@@ -89,6 +90,7 @@ describe("what it returns", () => {
   it("offers About you", async () => {
     const out = await runTool("offer_to_save", { field: "about_you", text: "A cognitive neuroscientist." }, ctx("guide"));
     expect(out.offer).toEqual({ field: "profile", text: "A cognitive neuroscientist.", basis: null });
+    expect(out.settles).toBe(true);
     expect(out.label).toBe("offered to update About you");
   });
 
@@ -102,8 +104,10 @@ describe("what it returns", () => {
   ])("offers nothing for %s, and says why", async (_what, args) => {
     const out = await runTool("offer_to_save", args, ctx("guide"));
     expect(out.offer).toBeUndefined();
+    expect(out.settles).toBeUndefined();
     expect(out.detail).toBe("not offered");
     expect(out.content).toMatch(/nothing was offered/i);
+    expect(out.content).toContain(ALREADY_ON_SCREEN);
   });
 
   it("records what the field held when the turn read it, and refuses when it could not read it", async () => {
@@ -114,6 +118,7 @@ describe("what it returns", () => {
     expect(about.offer?.basis).toBe("A historian");
     const unread = await runTool("offer_to_save", { field: "reason", text: "x" }, { ...ctx("guide"), saved: { profile: null } });
     expect(unread.offer).toBeUndefined();
+    expect(unread.settles).toBeUndefined();
     expect(unread.content).toMatch(/what is saved now could not be read/i);
   });
 
@@ -124,7 +129,24 @@ describe("what it returns", () => {
       { ...ctx("guide"), saved: { purpose: "For journal club." } },
     );
     expect(out.offer).toBeUndefined();
+    expect(out.settles).toBe(true);
     expect(out.content).toMatch(/already their saved words/);
+  });
+
+  /* Plan 261010b: the model that wrote its reply and then offered was refused
+     with no word about the reply already on screen, and went on to write more:
+     a second copy (investigation 261009d), or a stray line about the refusal. */
+  it("tells the model, offered or refused, that what it already wrote is on screen", async () => {
+    const saved = { ...ctx("guide"), saved: { purpose: "For journal club.", profile: null } };
+    const outcomes = await Promise.all([
+      runTool("offer_to_save", { field: "about_you", text: "A historian of science." }, saved),
+      runTool("offer_to_save", { field: "reason", text: "For journal club." }, saved),
+      runTool("offer_to_save", { field: "reason", text: "x" }, { ...ctx("guide"), saved: { profile: null } }),
+    ]);
+    expect(outcomes.map((o) => o.offer === undefined)).toEqual([false, true, true]);
+    /* Offered, or nothing to offer, asks nothing more; "could not read" does. */
+    expect(outcomes.map((o) => o.settles)).toEqual([true, true, undefined]);
+    for (const o of outcomes) expect(o.content).toContain(ALREADY_ON_SCREEN);
   });
 
   it("takes text exactly at the cap", async () => {

@@ -81,6 +81,12 @@ export interface UseAdminVouchers {
   update: (id: string, patch: VoucherPatchInput) => Promise<UpdateAnswer>;
   /** Send one voucher email again, by its id. Resolves to null on success, or the server's sentence. Never rejects. */
   retry: (emailId: string) => Promise<string | null>;
+  /**
+   * Read now, and again four seconds later — for a voucher made elsewhere on
+   * the page whose email went after the answer (an author gift's *Send*, plan
+   * 261010c).
+   */
+  reloadAfterEmail: () => void;
 }
 
 const PATH = "/api/admin/vouchers";
@@ -234,5 +240,10 @@ export function useAdminVouchers(): UseAdminVouchers {
     [write, readAgainLater],
   );
 
-  return { vouchers, error, loading, reload, create, canReplay, update, retry };
+  const reloadAfterEmail = useCallback(() => {
+    void reload();
+    readAgainLater();
+  }, [reload, readAgainLater]);
+
+  return { vouchers, error, loading, reload, create, canReplay, update, retry, reloadAfterEmail };
 }

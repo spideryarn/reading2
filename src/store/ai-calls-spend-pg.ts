@@ -90,7 +90,7 @@
 
 import { createHmac } from "node:crypto";
 
-import { and, eq, gte, isNull, lt, or, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 
 import type { CostCubeGroup } from "../cost-cube.js";
 import { type Db, getDb } from "../db/client.js";
@@ -331,6 +331,44 @@ export async function productSpendByOwner(
         calls: r.calls,
         unpricedCalls: r.unpricedCalls,
       },
+    ]),
+  );
+}
+
+/** What one collector's calls cost: `spendByRun`'s answer for one `run_id`. */
+export interface RunSpend {
+  nanos: number;
+  calls: number;
+  unpricedCalls: number;
+}
+
+/**
+ * **What each of these collectors spent**, by `run_id` — for a feature that
+ * stores its own run's id and wants its cost back from the one home cost has
+ * (an author gift's lookups, plan 261010c D5). The same three pockets and the
+ * same unpriced rule as every other read here, so it cannot drift from
+ * `/admin/costs`. A run with no rows is absent from the map, not zero.
+ *
+ * Not owner-scoped: its only caller is an admin route.
+ */
+export async function spendByRun(runIds: readonly string[]): Promise<Map<string, RunSpend>> {
+  if (runIds.length === 0) return new Map();
+  const rows = await getDb()
+    .select({
+      runId: aiCalls.runId,
+      calls: CALLS,
+      creditsNanos: CREDITS,
+      byokNanos: BYOK,
+      computedNanos: COMPUTED,
+      unpricedCalls: UNPRICED_CALLS,
+    })
+    .from(aiCalls)
+    .where(inArray(aiCalls.runId, [...runIds]))
+    .groupBy(aiCalls.runId);
+  return new Map(
+    rows.map((r) => [
+      r.runId,
+      { nanos: r.creditsNanos + r.byokNanos + r.computedNanos, calls: r.calls, unpricedCalls: r.unpricedCalls },
     ]),
   );
 }

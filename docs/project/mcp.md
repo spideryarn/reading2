@@ -113,6 +113,8 @@ this one, not your browser) and deletes the file. A running server notices on it
 | `create_gift_voucher` | admin: **sends the gift email; asks you first** |
 | `update_gift_voucher` | admin: edit or revoke; **changing the address re-sends, and asks you first** |
 | `retry_gift_voucher_email` | admin: re-send a failed email; **asks you first** |
+| `list_author_gifts` | admin: the draft gifts for authors, with their notes and lookups (no private link key) — [admin.md § Author gifts](admin.md#author-gifts-a-draft-voucher-for-an-articles-author) |
+| `update_author_gift` | admin: edit a draft gift's notes, address, name, note to them or size; **replaces** the notes; sends nothing, so it does not ask. There is no tool that sends one |
 
 **"Asks you first" is a macOS dialog the MCP server itself opens**, naming the exact gift or
 article, with *Approve* and *Cancel*. Nothing is sent unless you press *Approve* within two minutes.

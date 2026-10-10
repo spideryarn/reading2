@@ -1296,6 +1296,20 @@
       "when": 1791561101908,
       "tag": "20261009155141_revision_pdf_quality",
       "breakpoints": true
+    },
+    {
+      "idx": 185,
+      "version": "7",
+      "when": 1791583519221,
+      "tag": "20261009220519_author_gifts",
+      "breakpoints": true
+    },
+    {
+      "idx": 186,
+      "version": "7",
+      "when": 1791588310580,
+      "tag": "20261009232510_ai_calls_run_index",
+      "breakpoints": true
     }
   ]
 }

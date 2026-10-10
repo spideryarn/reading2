@@ -76,7 +76,7 @@ import {
   sessionState,
   setRoleCommand,
 } from "./gjd-remote-tmux.js";
-import { DEFAULT_FLEET_PORT, overseerTarget, readTellAnswer, splitStatus, tellPostCommand } from "./gjd-remote-tell.js";
+import { DEFAULT_FLEET_PORT, overseerTarget, readTellAnswer, sessionTarget, splitStatus, tellPostCommand } from "./gjd-remote-tell.js";
 import { bootstrapProbeScript, buildProvisionRunner, cloudInitGate, provisionVerdict } from "./gjd-remote-provision.js";
 import { declaredServers, mcpVerdict } from "./gjd-remote-mcp.js";
 import {
@@ -2216,7 +2216,8 @@ function claimLine(claim: OverseerClaim): string {
 }
 
 /**
- * One line to the Overseer, through the dashboard's steer route on the box.
+ * One line to the Overseer, or to a session by name, through the dashboard's
+ * steer route on the box. `who` picks the row out of the snapshot.
  * The reasoning is in scripts/gjd-remote-tell.ts.
  *
  * Two round trips, both `curl` on the box against 127.0.0.1, where the
@@ -2226,7 +2227,9 @@ function claimLine(claim: OverseerClaim): string {
  * which is how a non-browser client opts in to `checkOrigin` — the same thing
  * tools/overseer/rule-work.ts does.
  */
-function cmdTellOverseer(text: string, port: number): void {
+type TellWho = { kind: "overseer" } | { kind: "session"; name: string };
+
+function cmdTell(who: TellWho, text: string, port: number): void {
   const base = `http://127.0.0.1:${port}`;
   const state = sshRun(`curl --disable --noproxy '*' -sS --fail --max-time 20 ${shq(`${base}/api/state`)}`);
   if (state.status !== 0) die(`could not read the dashboard at ${base} on the box: ${escapeName(lastWords(state.stderr))}`);
@@ -2236,7 +2239,8 @@ function cmdTellOverseer(text: string, port: number): void {
   } catch {
     die(`the dashboard at ${base} answered something that is not JSON`);
   }
-  const target = overseerTarget(snapshot, text);
+  const target = who.kind === "overseer" ? overseerTarget(snapshot, text) : sessionTarget(snapshot, who.name, text);
+  const pane = who.kind === "overseer" ? "the Overseer's pane" : "its pane";
   if (!target.ok) die(`not sent — ${target.why}`);
 
   // `-w` puts the status on a line of its own after the body, so a refusal's
@@ -2262,14 +2266,14 @@ function cmdTellOverseer(text: string, port: number): void {
   if (post.status !== 0) {
     uncertain(
       `the request to ${base} did not complete (${post.status}): ${escapeName(lastWords(post.stderr || ""))}\n` +
-        "  it may still have arrived — look at the Overseer's pane before sending again",
+        `  it may still have arrived — look at ${pane} before sending again`,
     );
   }
   const { httpStatus, body } = splitStatus(post.stdout || "");
   const answer = readTellAnswer(httpStatus, body);
-  appendLog({ cmd: "tell-overseer", name: target.name });
+  appendLog({ cmd: who.kind === "overseer" ? "tell-overseer" : "tell", name: target.name });
   if (answer.ok) {
-    console.log(green(`✓ sent to ${printableName(target.name)}, the Overseer`));
+    console.log(green(`✓ sent to ${printableName(target.name)}${who.kind === "overseer" ? ", the Overseer" : ""}`));
     return;
   }
   if (!answer.textMayBeInTheBox) die(`not sent to ${printableName(target.name)} — ${answer.why}`);
@@ -5491,10 +5495,17 @@ ${bold("SESSIONS")}
                           text in it. Quote the text, or the shell eats ?, * and '.
                           For text starting with -, put -- before the text.
                           Exits 0 sent, 1 refused (nothing typed), 2 uncertain —
-                          look at the pane, and do not send it again.
+                          look at the pane, and do not send it again. "Sent" means
+                          the keys were typed and Enter pressed, not that it was read.
       -p, --prompt TEXT     the text, instead of after the command (-p - reads stdin,
                             so backticks and $() need no quoting)
           --port N          the dashboard's port on the box (default 8787)
+  tell <name> <text…>     the same, to any Claude session by its exact name
+                          The dashboard's list refreshes about once a minute, so a
+                          session started a moment ago may not be in it yet.
+                          For a name starting with -, put options before -- and
+                          the name after it: tell -p "hello" -- -name
+                          Same options and exits as tell-overseer.
   log                     every session launched from here, and whether it ran
       --lost                only the ones that never started ${dim("— the reboot case")}
       --limit N             how many rows ${dim("(default 40)")}
@@ -5963,8 +5974,12 @@ async function main(): Promise<void> {
     case "release-overseer":
       return cmdRole(cmd === "claim-overseer" ? "claim" : "release", positionalName(rest));
 
-    case "tell-overseer": {
-      const usage = 'usage: gjd-remote tell-overseer [--port N] [--] "<one line of text>"   or   -p - <<\'EOF\' … EOF';
+    case "tell-overseer":
+    case "tell": {
+      const usage =
+        cmd === "tell"
+          ? 'usage: gjd-remote tell <session> [--port N] [--] "<one line of text>"   or   -p - <<\'EOF\' … EOF'
+          : 'usage: gjd-remote tell-overseer [--port N] [--] "<one line of text>"   or   -p - <<\'EOF\' … EOF';
       const { values, positionals } = (() => {
         try {
           return parseArgs({
@@ -5978,6 +5993,9 @@ async function main(): Promise<void> {
           die(usage);
         }
       })();
+      // `tell` takes the session's name first; everything after it is the text.
+      const name = cmd === "tell" ? positionals.shift() : undefined;
+      if (cmd === "tell" && (name === undefined || name === "")) die(usage);
       if (values.prompt !== undefined && positionals.length > 0) die(usage);
       // `-p -` is `new-claude`'s, borrowed from `mindstone-fleet tell`: a
       // heredoc carries backticks and `$()` that shell quoting would eat. Its
@@ -5987,7 +6005,7 @@ async function main(): Promise<void> {
       if (text.trim() === "") die(usage);
       const port = values.port === undefined ? DEFAULT_FLEET_PORT : Number(values.port);
       if (!Number.isInteger(port) || port < 1 || port > 65535) die(`--port wants a port number, not ${printableName(values.port ?? "")}`);
-      return cmdTellOverseer(text, port);
+      return cmdTell(name === undefined ? { kind: "overseer" } : { kind: "session", name }, text, port);
     }
 
     case "new-shell": {
@@ -6223,7 +6241,7 @@ async function main(): Promise<void> {
       return console.log(HELP);
 
     default: {
-      const known = ["ls", "log", "new-claude", "new-shell", "resume", "kill", "doctor", "provision", "clone", "setup", "push-env", "upload", "resolve", "ssh", "tunnel", "forget-key", "resume-all", "claim-overseer", "release-overseer", "tell-overseer"];
+      const known = ["ls", "log", "new-claude", "new-shell", "resume", "kill", "doctor", "provision", "clone", "setup", "push-env", "upload", "resolve", "ssh", "tunnel", "forget-key", "resume-all", "claim-overseer", "release-overseer", "tell-overseer", "tell"];
       // The containment clause is not decoration: `new` and `shell` were the
       // names of these two commands until 2026-08-31 and there are no aliases,
       // so the typo path is the whole migration. Two-char prefixes get `new`

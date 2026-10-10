@@ -59,7 +59,10 @@ Most of the parts already existed: High-powered AI for one article
 ([public-readable-sharing.md § A private link](public-readable-sharing.md#a-private-link-the-same-republishing-to-fewer-people)),
 and gift vouchers that can carry a starter article by private link
 ([billing.md § Gift vouchers](billing.md#gift-vouchers-extra-free-articles-given-by-email)).
-What is new is a voucher that is saved but not yet sent, the author-and-address lookup, and one
-button that does all of it. Greg asked on 2026-10-09 for it to be built now, by the Overseer rather
-than by hand first. Its plan is `docs/plans/261009u-author-gift-draft-voucher-from-the-add-page.md`, being built on
-the box as of that evening.
+What was new is a voucher that is saved but not yet sent, the author-and-address lookup, and one
+button that does all of it. **Built on 2026-10-10**, as Greg asked the day before: *For the author…*
+on the add page, and *Author gifts* on `/admin/vouchers`, where each draft waits with its notes
+until Greg presses *Send* — nothing is emailed automatically. How it works is
+[admin.md § Author gifts](admin.md#author-gifts-a-draft-voucher-for-an-articles-author); the plan,
+its reviews and every decision are
+[261010c](../plans/261010c-author-gift-draft-voucher-from-the-add-page.md).

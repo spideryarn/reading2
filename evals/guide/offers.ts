@@ -92,6 +92,28 @@ const CASES: readonly Case[] = [
     /* Its About you does not say "historian", so an update is fair either way. */
     optional: ["profile"],
   },
+  /* evals/guide/referee-offer.ts's case reason-says-referee, where one answer
+     in two came out twice (investigation 261009d): the reason is already
+     saved, so any offer is About you, and either is fair. */
+  {
+    id: "referee-reason",
+    question: "Where should I start?",
+    about: "Philosopher of mind, lecturer.",
+    why: "I've been asked to referee a longer version of this for a philosophy journal.",
+    wants: [],
+    optional: ["profile", "purpose"],
+  },
+  /* The refusal provoked: the reader says again, word for word, the reason
+     already saved, so an offer of it is refused as "already their saved
+     words" (plan 261010b). Nothing new, so nothing is wanted. */
+  {
+    id: "repeats-saved-reason",
+    question: "I've been asked to referee a longer version of this for a philosophy journal. Where should I start?",
+    about: "Philosopher of mind, lecturer.",
+    why: "I've been asked to referee a longer version of this for a philosophy journal.",
+    wants: [],
+    optional: ["profile"],
+  },
   {
     id: "nothing-new",
     question: "Where should I start?",
@@ -172,28 +194,59 @@ for (const c of CASES.filter((x) => only.length === 0 || only.includes(x.id))) {
       async () => {
         let text = "";
         let tools: ToolRun[] = [];
-        for await (const e of converse({
-          power: "standard",
-          meta,
-          blocks: sent,
-          history: [],
-          question: c.question,
-          slug: meta.slug,
-          kind: "guide",
-          profile: renderProfile({ profile: c.about, purpose: c.why }),
-          experience: "a-few",
-          saved: { purpose: c.why, profile: c.about },
-          runToolWith: async (name, args, ctx) =>
-            name === "offer_to_save"
-              ? runTool(name, args, ctx)
-              : { label: name, detail: "nothing found", content: "Nothing found. This is a complete answer, not an error." },
-        })) {
-          if (e.type === "done") {
-            text = e.text;
-            tools = e.tools ?? [];
+        /* The turn, round by round (one per request to OpenRouter): how much
+           prose each round wrote, and each tool it asked for with what it did,
+           "offered", "steps", or a refusal's first words. A round with the
+           reply followed by a round with more prose is the shape that wrote
+           answers twice (postmortem 261009j, plan 261010b); the length says
+           whether prose before an offer was the reply or a preamble. */
+        const rounds: { prose: number; tools: string[] }[] = [];
+        /* What each tool told the model, in call order, for the rounds. */
+        const said: string[] = [];
+        /* Every fetch during the turn is a model request: the offering tools
+           make none, every other tool is stubbed below, and spend is recorded
+           over Postgres. (Not matched on the provider's host, which would make
+           this file one tests/no-undeclared-spend.test.ts flags.) */
+        const realFetch = globalThis.fetch;
+        globalThis.fetch = (input, init) => {
+          rounds.push({ prose: 0, tools: [] });
+          return realFetch(input, init);
+        };
+        try {
+          for await (const e of converse({
+            power: "standard",
+            meta,
+            blocks: sent,
+            history: [],
+            question: c.question,
+            slug: meta.slug,
+            kind: "guide",
+            profile: renderProfile({ profile: c.about, purpose: c.why }),
+            experience: "a-few",
+            saved: { purpose: c.why, profile: c.about },
+            runToolWith: async (name, args, ctx) => {
+              const outcome =
+                name === "offer_to_save" || name === "offer_next_steps"
+                  ? await runTool(name, args, ctx)
+                  : { label: name, detail: "nothing found", content: "Nothing found. This is a complete answer, not an error." };
+              said.push(outcome.offer ? "offered" : outcome.steps ? "steps" : outcome.content.slice(0, 60));
+              return outcome;
+            },
+          })) {
+            const round = rounds.at(-1);
+            if (e.type === "delta" && round !== undefined) round.prose += e.text.trim().length;
+            if (e.type === "tool" && e.run.status !== "running") {
+              round?.tools.push(`${e.run.name}(${e.run.status === "done" ? (said.shift() ?? "?") : e.run.status})`);
+            }
+            if (e.type === "done") {
+              text = e.text;
+              tools = e.tools ?? [];
+            }
           }
+        } finally {
+          globalThis.fetch = realFetch;
         }
-        return { text, tools };
+        return { text, tools, rounds };
       },
       { attribution: { scopeKind: "eval", ownerId: environmentOwnerId() }, sink: (row) => costStore.record(row) },
     );
@@ -203,15 +256,39 @@ for (const c of CASES.filter((x) => only.length === 0 || only.includes(x.id))) {
     /* The answer written twice: every round's text is joined, and a model that
        wrote its reply before the call can write it again after (the browser pass). */
     const repeated = writtenTwice(result.text);
-    const ok = !repeated && JSON.stringify(fields) === JSON.stringify([...c.wants].sort());
+    /* More prose in a round after the one that wrote the reply (300
+       characters or more): a second copy, or a tail like "I'm done with my
+       answer above." (plan 261010b). An invited "you can save it with the
+       button" counts too: the card says that itself. */
+    const replied = result.rounds.findIndex((x) => x.prose >= 300);
+    const tail = replied >= 0 && result.rounds.slice(replied + 1).some((x) => x.prose > 0);
+    const shape = result.rounds.map((x, i) => `${i + 1}:[${[...(x.prose > 0 ? [`P${x.prose}`] : []), ...x.tools].join(" ")}]`).join(" ");
+    const stepsShown = result.tools.some((t) => t.steps !== undefined);
+    /* Next steps are part of the safety claim: ending early is only sound if
+       the accepted buttons survived onto the stored run. */
+    const ok = stepsShown && !repeated && !tail && JSON.stringify(fields) === JSON.stringify([...c.wants].sort());
     total++;
     if (ok) pass++;
     const scored = offers.map((o) => ({
       ...o,
       closeness: Number(closeness(o.text, `${c.question} ${o.field === "profile" ? (c.about ?? "") : ""}`).toFixed(2)),
     }));
-    rows.push({ case: c.id, run: r, ok, wants: c.wants, offers: scored, repeated, saysSaved: /\b(i've|i have) saved\b/i.test(result.text), answer: result.text });
-    console.log(`${ok ? "✓" : "✗"} ${c.id}#${r}${repeated ? " REPEATED" : ""} offers=${JSON.stringify(scored.map((o) => [o.field, o.closeness, o.text]))}`);
+    rows.push({
+      case: c.id,
+      run: r,
+      ok,
+      wants: c.wants,
+      offers: scored,
+      repeated,
+      tail,
+      stepsShown,
+      shape,
+      saysSaved: /\b(i've|i have) saved\b/i.test(result.text),
+      answer: result.text,
+    });
+    console.log(
+      `${ok ? "✓" : "✗"} ${c.id}#${r}${repeated ? " REPEATED" : ""}${tail ? " TAIL" : ""}${stepsShown ? "" : " NO-STEPS"} ${shape} offers=${JSON.stringify(scored.map((o) => [o.field, o.closeness, o.text]))}`,
+    );
   }
 }
 const out = path.join(import.meta.dirname, "results", `offers-${label}.json`);

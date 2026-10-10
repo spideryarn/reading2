@@ -91,12 +91,22 @@ import { Button } from "@/components/ui/button";
 import { withVoice } from "./voice.js";
 import { HighPowerIntent, mayHaveStartedOnStandard, type PutHighPower } from "./add-high-power.js";
 import { AddHighPower } from "./AddHighPower.js";
+import { isAdmin } from "../admin.js";
+import type { AuthorGiftEnsured } from "../admin-author-gifts.js";
+import {
+  type AuthorGiftAtAdd,
+  type AuthorGiftAtAddController,
+  authorGiftAtAddFor,
+  type PostAuthorGift,
+} from "./add-author-gift.js";
+import { AddAuthorGift, AUTHOR_GIFT_AT_ADD_OPEN_ANYWAY } from "./AddAuthorGift.js";
 import { asVisibilityState } from "./AccessSharing.js";
 import { type Probe, type ShareAtAdd, shareAtAddFor, type ShareIo, shareUnsettled } from "./add-share.js";
 import { type LinkAtAdd, linkAtAddFor, type LinkIo, linkUnsettled } from "./add-share-link.js";
 import { addSharingEpoch, subscribeAddSharing } from "./add-sharing-session.js";
 import { AddSharing } from "./AddSharing.js";
 import { asShareLinkState } from "./PrivateLink.js";
+import { MalformedReply } from "./lib/reader-facing.js";
 
 /**
  * Which of the two origins this page is starting.
@@ -182,6 +192,13 @@ type Phase =
   | { kind: "ready"; completion: Completion; opening: boolean }
   /** The article was already on the shelf: one sentence and one button. See `Completion.repeat`. */
   | { kind: "repeat"; completion: Completion }
+  /**
+   * **Leaving, and waiting for the author gift first** — an administrator
+   * who armed *For the author…* (§ `leave` in `AddPage`). The controller says
+   * whether the request is in flight or what it answered; a refusal or a lost
+   * answer stays here with *Open the article anyway*.
+   */
+  | { kind: "gift"; completion: Completion }
   | { kind: "opened" };
 
 /**
@@ -193,7 +210,9 @@ type Phase =
  * `replace`, so Back leaves the reading view for wherever the reader came from
  * rather than for a finished import.
  *
- * Callers take the once-guard (`claimed`) first; this does not check it.
+ * Called only from `leave` in `AddPage`, which takes the once-guard (`claimed`) and, for an
+ * administrator who armed *For the author…*, waits for the author gift first; and from *Open the
+ * article anyway* after that gift was refused.
  */
 function openArticle(completion: Completion, highPower: HighPowerIntent): void {
   /* **A High-powered tick in the last second is still sent**, and not waited
@@ -227,6 +246,40 @@ const putHighPowerFor =
       },
       readerId,
     ).then((r) => readJson<{ highPowerSince: string | null }>(r));
+
+/**
+ * ***For the author…*'s one request** — `POST /api/admin/author-gifts`
+ * (plan 261010c § D9, R2-F2), **made for one reader** like the one above.
+ * `202` is a new gift (its web search starts after the response), `200` one
+ * that was already there; both are a success. The token is looked up inside
+ * this call, which the controller awaits and catches (Sol's F12).
+ */
+const postAuthorGiftFor =
+  (readerId: string | null): PostAuthorGift =>
+  async (slug) => {
+    const response = await apiFetch(
+      "/api/admin/author-gifts",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug, rightsConfirmed: true }),
+      },
+      readerId,
+    );
+    const answer = await readJson<Partial<AuthorGiftEnsured>>(response);
+    if (
+      (response.status === 202 && answer.created === true && typeof answer.id === "string" && typeof answer.lookupId === "string") ||
+      (response.status === 200 && answer.created === false && typeof answer.id === "string")
+    ) {
+      return { created: answer.created };
+    }
+    throw new MalformedReply("the author-gift ensure reply was not its 200 or 202 shape");
+  };
+
+/* For `useSyncExternalStore` when there is no controller: a reader who is not an administrator. */
+const NO_GIFT: AuthorGiftAtAdd = { kind: "off" };
+const noGift = (): AuthorGiftAtAdd => NO_GIFT;
+const noSubscribe = (): (() => void) => () => {};
 
 /**
  * *Make it public*'s two requests, and what the tab remembers
@@ -1162,6 +1215,30 @@ export function AddPage({
   }, [share, link, highPowerAlive]);
 
   /**
+   * ***For the author…*, for an administrator** — plan 261010c § D9. One
+   * controller per reader and per add (keyed by `wanted`: it is armed before
+   * there is a slug), in a registry the session change empties, like the two
+   * sharing controllers above, and the epoch read above looks it up again.
+   * Nobody else gets one, so for them `leave` is what it always was.
+   */
+  const gift = isAdmin(readerId) ? authorGiftAtAddFor(readerId, wanted, postAuthorGiftFor(readerId)) : null;
+  const giftNow = useSyncExternalStore(gift?.subscribe ?? noSubscribe, gift?.get ?? noGift);
+  /* What the completion effect and the exit read: the committed screen's. */
+  const giftRef = useRef<AuthorGiftAtAddController | null>(null);
+  useLayoutEffect(() => {
+    giftRef.current = gift;
+  }, [gift]);
+  /* Whether this page is still on screen when an awaited exit answers. Set in
+     the effect, so StrictMode's mount, unmount, mount ends at true. */
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  /**
    * **The purpose session for this address and this article** (plan 261004l
    * § 1). The job's own slug, or the completion's, never one derived from the
    * address: the same rule as High-powered AI above. Render selects a candidate;
@@ -1227,13 +1304,56 @@ export function AddPage({
     };
   }, []);
 
-  /** Open it, once. Callers have checked the fences; this takes the guard. */
-  const finish = (done: Completion): void => {
+  /**
+   * **Both exits to the article, as one transition** — the automatic one at
+   * completion and every button the reader presses (plan 261010c § Revision
+   * 3, R2-F8). Callers have checked the fences; this takes the once-guard.
+   *
+   * Not armed — every reader but an administrator who confirmed *For the
+   * author…* — it is what it always was, in this tick. Armed, the author
+   * gift's request is sent and **awaited** (single-flight in the controller,
+   * so two exits send one), High-powered AI is settled before the await
+   * rather than after it, and once it answers the page checks that it is
+   * still about this completion, this address and this reader, and still on
+   * screen, before it does anything. `go` opens the article; `stay` keeps
+   * the page, with the controller's line and *Open the article anyway*;
+   * `stale` (the reader changed) does nothing.
+   */
+  const leave = (done: Completion): void => {
     claimed.current = done.key;
+    const giving = giftRef.current;
+    if (!giving?.engaged()) {
+      setPhase({ kind: "opened" });
+      openArticle(done, highPower);
+      return;
+    }
+    setPhase({ kind: "gift", completion: done });
+    void highPower.settle(done.slug);
+    const reader = readerRef.current;
+    void giving.send(done.slug).then((exit) => {
+      const same =
+        mountedRef.current &&
+        claimed.current === done.key &&
+        activeCompletionKey.current === done.key &&
+        sourceRef.current === done.source &&
+        readerRef.current === reader &&
+        giftRef.current === giving;
+      if (!same || exit !== "go") return;
+      setPhase({ kind: "opened" });
+      openArticle(done, highPower);
+    });
+  };
+
+  /** **Open the article anyway**, after the author gift was refused or lost. Opens; sends nothing more. */
+  const openAnyway = (): void => {
+    if (phase.kind !== "gift") return;
+    const done = phase.completion;
+    if (activeCompletionKey.current !== done.key || sourceRef.current !== done.source) return;
     setPhase({ kind: "opened" });
     openArticle(done, highPower);
   };
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `leave` is a fresh closure each render that reads only refs, `setPhase` and `highPower`, which is listed. Depending on it would re-run this on every render.
   useEffect(() => {
     if (completionKey === null || completionSlug === null) return;
     if (claimed.current === completionKey) return;
@@ -1264,7 +1384,9 @@ export function AddPage({
        up. GPT Sol's plan review, P2-5. */
     const sharingUnsettled =
       (sharing !== null && shareUnsettled(sharing.get())) ||
-      (linking !== null && linkUnsettled(linking.get()));
+      (linking !== null && linkUnsettled(linking.get())) ||
+      /* *For the author…*'s confirmation is a question too (plan 261010c § D9). */
+      giftRef.current?.unsettled() === true;
     /* **A repeat paste never leaves by itself**: nothing was imported, and
        opening at once would show the reader nothing they could notice. Greg
        asked for the repeat to be signalled (plan 261007k). */
@@ -1293,9 +1415,7 @@ export function AddPage({
          marked too, on purpose (Sol's item 1): the reading view asks only if
          it has no purpose. */
       if (!purposeTouchedRef.current) markAskPurpose(completionSlug);
-      claimed.current = completionKey;
-      setPhase({ kind: "opened" });
-      openArticle(finished, highPower);
+      leave(finished);
       return;
     }
     /* Otherwise wait, indefinitely. A blur saves; it is not a decision to leave. */
@@ -1318,7 +1438,7 @@ export function AddPage({
     purpose.commit();
     const now = purpose.get();
     if (!now.unsaved) {
-      finish(phase.completion);
+      leave(phase.completion);
       return;
     }
     /* The read of the stored purpose gave up, so no save can start. */
@@ -1332,7 +1452,7 @@ export function AddPage({
     const now = purposeRef.current?.session.get();
     if (!now) return;
     if (!now.unsaved) {
-      finish(phase.completion);
+      leave(phase.completion);
       return;
     }
     /* A refusal lets go: the reason is in the status line, the words are in
@@ -1343,14 +1463,14 @@ export function AddPage({
   /** A repeat's *Open the article*: nothing was imported, so there is nothing of the import's to save. */
   const openTheRepeat = (): void => {
     if (phase.kind !== "repeat" || !mayOpen(phase.completion)) return;
-    finish(phase.completion);
+    leave(phase.completion);
   };
 
   /** **Open without saving**: give the draft up, so retiring does not send it, and open. */
   const openWithoutSaving = (): void => {
     if (phase.kind !== "ready" || !mayOpen(phase.completion)) return;
     purpose.abandon();
-    finish(phase.completion);
+    leave(phase.completion);
   };
 
   /* The tab, naming what is being added — the host for an address, the filename
@@ -1684,6 +1804,18 @@ export function AddPage({
       )}
       {((!repeated && (showAutoModes || deciding)) || (repeated && highPowerNow.kind !== "off")) && (
         <AddHighPower intent={highPower} repeat={repeated} />
+      )}
+      {/* Under High-powered AI, for an administrator: drawn where that box is
+          offered, and afterwards for as long as it has something to say. */}
+      {gift && ((!repeated && (showAutoModes || deciding)) || giftNow.kind !== "off") && (
+        <AddAuthorGift gift={gift} highPower={highPower} />
+      )}
+      {phase.kind === "gift" && (giftNow.kind === "refused" || giftNow.kind === "lost") && (
+        <div data-add-author-gift-stay className="tw:mt-3">
+          <Button type="button" size="sm" onClick={openAnyway}>
+            {AUTHOR_GIFT_AT_ADD_OPEN_ANYWAY}
+          </Button>
+        </div>
       )}
       {/* Under High-powered AI, once the job has a slug to share: one row,
           shut until the reader opens it or a control has something to say

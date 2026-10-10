@@ -72,6 +72,10 @@ const PROMISES: Record<string, string> = {
   "AdminVouchersPage.tsx › Articles": "done",
   "AdminVouchersPage.tsx › Their name": "done",
   "AdminVouchersPage.tsx › Private note": "done",
+  /* An author gift's draft editor: Enter saves it, as a voucher row's does (plan 261010c). */
+  "AdminAuthorGifts.tsx › Email address": "done",
+  "AdminAuthorGifts.tsx › Articles": "done",
+  "AdminAuthorGifts.tsx › Their name": "done",
   "ChatPanel.tsx › chat-rename": "done",
   "TitleEditor.tsx › Title": "done",
   /* Enter adds the tag typed or highlighted and the box stays for the next —
@@ -120,6 +124,9 @@ const PROMISES: Record<string, string> = {
      line break (plan 261002b). */
   "AdminVouchersPage.tsx › voucher-new-recipient-note": "newline",
   "AdminVouchersPage.tsx › Note to them": "newline",
+  /* An author gift's note to them, and its notes, which can run to pages. */
+  "AdminAuthorGifts.tsx › Note to them": "newline",
+  "AdminAuthorGifts.tsx › Notes": "newline",
   "AnnotateDialog.tsx › Your comment on this passage": "newline",
   "CommentDialog.tsx › Your comment on this passage": "newline",
   "CriteriaPanel.tsx › crit-text": "newline",

@@ -260,10 +260,11 @@ export function chatCeiling(kind: ThreadKind, model: string): number {
 export const MAX_TOOL_ROUNDS = 3;
 
 /**
- * **The tools whose result the model does not need**: when a round asks for
- * these and nothing else, this round wrote prose, and every call succeeded,
- * `converse` stops there rather than sending the result back for another
- * round. Plan docs/plans/261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md.
+ * **The calls that say the reply is finished**: when a round wrote prose,
+ * yielded normally to tools, ended on one of these, and every call in it
+ * settled (`ToolOutcome.settles`), `converse` stops there rather than sending
+ * the results back for another round. Plans docs/plans/261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md
+ * and docs/plans/261010b-next-steps-end-the-turn-even-beside-an-offer-to-save.md.
  */
 export const ENDS_THE_TURN: ReadonlySet<string> = new Set(["offer_next_steps"]);
 
@@ -3504,8 +3505,10 @@ export async function* converse({
        line at a time appear and understanding what is being done on their
        behalf. Models here ask for one or two tools at a time, so the saving is
        small and the legibility is not. Revisit if that stops being true. */
-    /* Where this batch's runs start, for the turn-ending check below. */
-    const batchStart = toolRuns.length;
+    /* Per call in this batch: whether its result asks nothing more of a model
+       whose reply is written (`ToolOutcome.settles`), for the turn-ending
+       check below. */
+    const settled: boolean[] = [];
     for (const call of wanted) {
       /* **Between tools, not only after them.** A model can ask for three at
          once, and they run one at a time — so a stop landing during the first
@@ -3586,6 +3589,7 @@ export async function* converse({
         ...(outcome.steps ? { steps: outcome.steps } : {}),
       };
       toolRuns[index] = finished;
+      settled.push(!failed && outcome.settles === true);
       yield { type: "tool", index, run: finished };
 
       messages.push({ role: "tool", tool_call_id: call.id, content: outcome.content });
@@ -3601,24 +3605,31 @@ export async function* converse({
       break;
     }
 
-    /* **A round that wrote its reply and then asked only for its next steps,
-       and got them, is the last round.** The model needs nothing back, and
-       going round again costs a whole request and, measured in 261009q,
-       sometimes a second copy of the reply. Three conditions, each GPT Sol's
-       on plan 261009u (F1, F2):
+    /* **A round that wrote its reply and ended on its next steps, with
+       nothing asking for more, is the last round.** The model needs nothing
+       back, and going round again costs a request and gets words nobody asked
+       for: told to stop, a model writes "I'm done with my answer above.", and
+       before it was told, the reply again (postmortem 261009j, plan 261010b).
+       Four conditions, from GPT Sol's reviews of plans 261009u and 261010b:
+       - **the round yielded normally to its tools**: a `max_tokens` ending can
+         leave complete-looking calls after an unfinished sentence. The calls
+         may still run, but they are not evidence that the reply was complete;
        - **this round's own prose**, not the turn's: a round one that said
          "let me check…" and a round two of only the steps would otherwise end
          on the preamble;
-       - **only turn-ending tools**: with `offer_to_save` beside them, the model
-         is owed that tool's answer;
-       - **every one of them offered something**: a refused or failed offer
-         goes back to the model, which is told no button is shown. */
-    const offered = toolRuns.slice(batchStart);
+       - **ended on accepted next steps**: the prompt makes them the very last
+         call, after the reply is complete, so they are the model's own "done".
+         Prose beside an offer to save alone may be a preamble, and goes round;
+       - **every call settled** (`ToolOutcome.settles`): only the offering
+         tools ever do, and only when their result asks nothing — so a look-up,
+         a refused next step, an offer told to be shorter, or a throw all go
+         back to the model. */
     if (
+      outcome.kind === "wants-tools" &&
       roundText.trim() !== "" &&
-      wanted.every((call) => ENDS_THE_TURN.has(call.name)) &&
-      offered.length === wanted.length &&
-      offered.every((run) => run.status === "done" && run.steps !== undefined)
+      ENDS_THE_TURN.has(wanted.at(-1)?.name ?? "") &&
+      settled.length === wanted.length &&
+      settled.every(Boolean)
     ) {
       break;
     }

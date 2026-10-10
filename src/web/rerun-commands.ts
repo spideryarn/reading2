@@ -1,8 +1,10 @@
 /**
  * **The re-run steps as a reader names them** — the label and the note that
  * Metadata's *AI processing* rows draw, and the words the command bar's
- * *<label> › Run again* rows answer to. One table for both, so the row on the
- * page and the row in the bar cannot call one step two things.
+ * *<label> › Run again* rows answer to. One derivation for both, so the row
+ * on the page and the row in the bar cannot call one step two things. The names
+ * themselves come from step-names.ts; this file owns only the re-run-specific
+ * notes and search words.
  *
  * Greg, 2026-10-01 (SPIDERYARN-READING2-8D):
  *
@@ -30,47 +32,25 @@ import type { Mode } from "../modes.js";
 import { METADATA_RERUN_STEPS, type MetadataRerunStep } from "../rerun-steps.js";
 import { MODE_LABEL } from "../title-text.js";
 import { SKETCH_WAIT } from "./sketch-cost.js";
-import { SOURCES_SUB_MODES } from "./sub-modes.js";
+import { stepName } from "./step-names.js";
+import { SOURCES_SUB_MODES, SUMMARY_SUB_MODES } from "./sub-modes.js";
 
 export { METADATA_RERUN_STEPS, type MetadataRerunStep };
 
 /**
- * The reader-facing name of each — a noun, not the present-tense label the
- * stage rows carry.
- *
- * `Record<MetadataRerunStep, string>`, so a new member of the list is a
- * typecheck failure here rather than a blank row.
+ * The reader-facing name of each — the mode or sub-mode that shows what it
+ * makes, as step-names.ts § `stepName` writes it (`Glossary`,
+ * `Summary › Thread`), and never a second list of names for the same steps.
+ * Until 2026-10-09 this was that second list, and it said *Thread* where the
+ * button says *Summary › Thread* — plan 261009x.
  */
-export const RERUN_LABEL: Record<MetadataRerunStep, string> = {
-  arc: "Arc",
-  tweets: "Thread",
-  glossary: "Glossary",
-  quotes: "Quotes",
-  ideas: "Ideas",
-  timeline: "Timeline",
-  quiz: "Quiz",
-  faq: "FAQ",
-  /* Not a mode, so no `MODE_LABEL` to borrow: the small words Marginalia draws
-     beside a paragraph (so, but, vs). */
-  relations: "Relation words",
-  sketch: "Sketch",
-  skim: "Skim",
-  /* Sources' sub-modes, whose steps keep the old names until the deep
-     rename (plan 261009l § Stage 3): Debate's step is Reception's search,
-     Citations' is Bibliography's list. Claims' list has no row here. */
-  debate: SOURCES_SUB_MODES.reception.label,
-  citations: SOURCES_SUB_MODES.bibliography.label,
-  /* Not a mode, so no `MODE_LABEL` to borrow: the links it draws in the prose. */
-  crossrefs: "Cross-references",
-  /* Summary's plain-words lengths, which this one step writes together. Named
-     for the step, as src/web/ResetArticle.tsx names it; Simple was also a level
-     a reader could choose until 2026-10-03. */
-  simple: "Simple summary",
-};
+export const RERUN_LABEL: Readonly<Record<MetadataRerunStep, string>> = Object.fromEntries(
+  METADATA_RERUN_STEPS.map((step) => [step, stepName(step)]),
+) as Record<MetadataRerunStep, string>;
 
 /**
  * **The four rows for which "another model call" is not the whole story**,
- * said under the mode's name, before the press, because nothing else on the
+ * said under the step's reader-facing name, before the press, because nothing else on the
  * page says it. Metadata.tsx § `RERUN_COST_NOTE`'s old home carried the long
  * version — the confirm these replaced, why the glossary's says both outcomes,
  * and why none names a price — and `RerunRow` there is where they are drawn.
@@ -97,9 +77,9 @@ export const RERUN_COST_NOTE: Partial<Record<MetadataRerunStep, string>> = {
  * one — so its name and its nicknames can name the re-run too: `rerun terms`
  * reaches the glossary because `terms` already reaches Glossary.
  *
- * Absent for the steps that are not a mode of their own: the arc (the
- * one-sentence gist on the masthead), the quiz (a sub-mode of Learn, whose
- * own name is already the label), the sketch (one of Diagram's five pictures —
+ * Absent for the steps that are not a mode of their own: the arc (one sentence
+ * per part in Structure and Marginalia), the quiz (a sub-mode of Learn), the
+ * sketch (one of Diagram's five pictures —
  * `rerun diagram` would be a guess about which), cross-references (links in the
  * prose), and **both of Summary's steps**: the plain-words lengths and the
  * thread. Summary shows two artefacts, so borrowing its name and aliases for
@@ -134,11 +114,16 @@ const RERUN_ALSO_CALLED: Partial<Record<MetadataRerunStep, readonly string[]>> =
   /* `summary` and the mode's two spellings, written here because Summary is
      not this step's `RERUN_MODE` (above): `rerun summary` writes the
      plain-words lengths again and never a thread. */
-  simple: ["simple", "summary", "summarise", "summarize"],
+  simple: [
+    "simple", "simple summary", "summary", "summarise", "summarize",
+    /* Its two sub-modes by name, read from the same owner as the joint label. */
+    SUMMARY_SUB_MODES.brief.label, SUMMARY_SUB_MODES.fuller.label,
+  ],
   /* The Tweets mode's name and aliases, kept when the mode went on 2026-10-03
-     so `rerun tweets` still forces the thread. Not `x`: `rerun x` is too
-     little to hang a paid run on. */
-  tweets: ["tweets", "tweet thread", "twitter", "social"],
+     so `rerun tweets` still forces the thread. Read them from Thread's row so
+     a later rename reaches this one too. Not `x`: `rerun x` is too little to
+     hang a paid run on. */
+  tweets: (SUMMARY_SUB_MODES.thread.aliases ?? []).filter((alias) => alias !== "x"),
   /* **Each of Sources' re-runs answers to its own sub-mode's words** —
      the retired mode word first (`citations`, `debate`), then the nicknames the
      two modes had, which are the sub-mode rows' own aliases now
@@ -170,8 +155,14 @@ const RERUN_PHRASES: readonly ((name: string) => string)[] = [
 /** Every name the step answers to, lower-case and without repeats. */
 function rerunNames(step: MetadataRerunStep): readonly string[] {
   const mode = RERUN_MODE[step];
+  const label = RERUN_LABEL[step];
   const names = [
-    RERUN_LABEL[step],
+    /* **The last part of a `Mode › Sub` path, and never the whole of it.**
+       Nobody types the arrow, and the whole path would put the parent's name
+       at the front of a phrase: `rerun peer review › bibliography` answers
+       `rerun peer review`, which must pick neither paid run (GPT Sol's F8 on
+       plan 261009l). Plan 261009x. */
+    label.split(" › ").at(-1) ?? label,
     ...(mode === undefined ? [] : [MODE_LABEL[mode], ...MODE_CATALOG[mode].aliases]),
     ...(RERUN_ALSO_CALLED[step] ?? []),
   ].map((n) => n.toLowerCase());
