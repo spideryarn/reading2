@@ -52,7 +52,7 @@ const overseer = {
   name: "Overseer",
   paneId: "%2517",
   panePid: 4039570,
-  claudeSessionId: "ef6b0847-b508-4f47-95b9-e8423294a3b3",
+  claudeSessionId: "5b0c7e21-3a4d-4f6e-9c8b-2d1e0f9a7b64",
   status: { kind: "working" },
   role: { kind: "overseer" },
 };
