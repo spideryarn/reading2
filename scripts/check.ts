@@ -395,4 +395,16 @@ if (gateFailed) {
   }
 }
 
-process.exit(gateFailed ? 1 : 0);
+/**
+ * **Not `process.exit()`.** That call terminates the process immediately,
+ * which on a pipe (what `readiness-run.ts` spawns this into) can drop
+ * whatever of this script's own output is still queued in Node's internal
+ * write buffer rather than yet handed to the kernel — including the very
+ * summary line above that `readiness-parse.ts` requires as proof this run
+ * reached a conclusion. Reproduced: a child that writes tens of KB and then
+ * calls `process.exit(0)` into a pipe can lose everything past the last
+ * ~64 KB the kernel buffered, silently. Setting `exitCode` and letting the
+ * script fall off the end exits with the same status once Node's own event
+ * loop drains, which includes flushing stdout.
+ */
+process.exitCode = gateFailed ? 1 : 0;
