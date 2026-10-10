@@ -18,7 +18,7 @@ for Send to finish before leaving Chat, so the departure snapshot already contai
 They verified freshness at the mode boundary while assuming the write had finished there.
 
 The regression in
-[debate-check-claim-in-chat.test.tsx](../../tests/debate-check-claim-in-chat.test.tsx),
+[debate-check-claim-in-chat.test.tsx](../../tests/sources-claim-check-in-chat.test.tsx),
 `refreshes the claim after an answer that begins and finishes after leaving Chat`, holds the
 response until Debate has returned. It failed with `waited for the late answer on the claim,
 and it did not happen`. The completion-refresh fix made both tests pass.

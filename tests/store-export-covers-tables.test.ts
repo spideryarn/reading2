@@ -481,8 +481,8 @@ function fixtures(): Record<RollbackTable | BundledTable, Fixture> {
     /* A finished check whose search failed, so `error` carries the sentinel;
        every other column is set, so the bundle's every-column check sees it.
        The typed claim is the reader's words — the thing a reader keeps. */
-    debate_claim_checks: async () => {
-      await db.insert(schema.debateClaimChecks).values({
+    sources_claim_checks: async () => {
+      await db.insert(schema.sourcesClaimChecks).values({
         articleId: ARTICLE_ID,
         id: "spya-cvd234",
         ownerId: owner(),
@@ -512,7 +512,7 @@ function fixtures(): Record<RollbackTable | BundledTable, Fixture> {
         },
         webSearches: 1,
         model: "test",
-        error: sentinel("debate_claim_checks"),
+        error: sentinel("sources_claim_checks"),
         finishedAt: new Date(),
       });
     },
@@ -744,6 +744,12 @@ const COLUMNS_LEFT_OUT: Record<BundledTable, Readonly<Record<string, string>>> =
     legacyCitations:
       "Bibliography's column before plan 261009w, kept equal to `bibliography` by a trigger only " +
       "until the contract migration drops it; the same list is augmentations/bibliography.json (F6).",
+    legacyDebate:
+      "Reception's column before plan 261009w, kept equal to `reception` by a trigger only " +
+      "until the contract migration drops it; the same search is `reception` in content/revision.json (F6).",
+    legacyDebateClaims:
+      "The claims list's column before plan 261009w, kept equal to `sources_claims` by a trigger only " +
+      "until the contract migration drops it; the same list is augmentations/sources-claims.json (F6).",
     stampedHtml: "Written whole as content/stamped.html — the one file a reader opens.",
     extractedHtml: "Written whole as content/extracted.html.",
     assets: "Written whole as content/assets.json, the image manifest.",
@@ -758,7 +764,7 @@ const COLUMNS_LEFT_OUT: Record<BundledTable, Readonly<Record<string, string>>> =
     quiz: "Written whole as augmentations/quiz.json.",
     faq: "Written whole as augmentations/faq.json.",
     relations: "Written whole as augmentations/relations.json.",
-    debateClaims: "Written whole as augmentations/debate-claims.json.",
+    sourcesClaims: "Written whole as augmentations/sources-claims.json.",
     skim: "Written whole as augmentations/skim.json.",
     crossrefs: "Written whole as augmentations/crossrefs.json.",
     simpleSummary: "Written whole as augmentations/simple-summary.json.",
@@ -776,7 +782,7 @@ const COLUMNS_LEFT_OUT: Record<BundledTable, Readonly<Record<string, string>>> =
   search_runs: {},
   referee_criteria: {},
   referee_claims: {},
-  debate_claim_checks: {},
+  sources_claim_checks: {},
   referee_hidden_checks: {},
   glossary_lookups: {},
   citation_finds: {},
@@ -820,7 +826,7 @@ const ROWS_IN: Record<BundledTable, (parsed: unknown) => unknown[]> = {
   search_runs: (parsed) => listAt(parsed, "runs"),
   referee_criteria: (parsed) => listAt(parsed, "criteria"),
   referee_claims: (parsed) => [at(parsed, "run")],
-  debate_claim_checks: (parsed) => listAt(parsed, "checks"),
+  sources_claim_checks: (parsed) => listAt(parsed, "checks"),
   referee_hidden_checks: (parsed) => [at(parsed, "check")],
   glossary_lookups: (parsed) => listAt(parsed, "lookups"),
   citation_finds: (parsed) => listAt(parsed, "finds"),
@@ -866,7 +872,7 @@ await pgReady({
   tables: [
     "spideryarn.referee_criteria",
     "spideryarn.referee_claims",
-    "spideryarn.debate_claim_checks",
+    "spideryarn.sources_claim_checks",
     "spideryarn.referee_hidden_checks",
     "spideryarn.glossary_lookups",
     "spideryarn.citation_finds",
@@ -938,8 +944,8 @@ describe("what the record calls exported, both exports were watched writing", ()
       .where(eq(schema.refereeCriteria.articleId, ARTICLE_ID));
     await db.delete(schema.refereeClaims).where(eq(schema.refereeClaims.articleId, ARTICLE_ID));
     await db
-      .delete(schema.debateClaimChecks)
-      .where(eq(schema.debateClaimChecks.articleId, ARTICLE_ID));
+      .delete(schema.sourcesClaimChecks)
+      .where(eq(schema.sourcesClaimChecks.articleId, ARTICLE_ID));
     await db
       .delete(schema.refereeHiddenChecks)
       .where(eq(schema.refereeHiddenChecks.articleId, ARTICLE_ID));

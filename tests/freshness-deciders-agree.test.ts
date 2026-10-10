@@ -157,8 +157,8 @@ const CASES: Partial<Record<StepName, readonly Field[]>> = {
   sketch: ["inputHash", "promptVersion", "model"],
   illustrated: ["inputHash", "promptVersion", "model"],
   skim: ["inputHash", "promptVersion", "model"],
-  debate: ["inputHash", "promptVersion", "model"],
-  "debate-claims": ["inputHash", "promptVersion", "model"],
+  reception: ["inputHash", "promptVersion", "model"],
+  "sources-claims": ["inputHash", "promptVersion", "model"],
   bibliography: ["inputHash", "promptVersion", "model"],
   crossrefs: ["inputHash", "promptVersion", "model"],
 };
@@ -338,13 +338,13 @@ function minimal(step: StepName): Artefact {
       return { ...made, questions: [] };
     case "relations":
       return { ...made, relations: {} };
-    case "debate-claims":
+    case "sources-claims":
       return { ...made, claims: [] };
     case "bibliography":
       return { ...made, citations: [] };
     case "crossrefs":
       return { ...made, links: [] };
-    case "debate":
+    case "reception":
       return { ...made, direct: { rows: [] }, claims: { rows: [] } };
     case "sketch":
       return { ...made, scenes: [{ id: mintId(), title: "One scene" }] };
@@ -835,8 +835,8 @@ describe("when the article itself moves, every step gets the same answer from bo
     "relations",
     "simple",
     "sketch",
-    "debate",
-    "debate-claims",
+    "reception",
+    "sources-claims",
     "bibliography",
     "crossrefs",
   ];
@@ -904,7 +904,7 @@ describe("when the article itself moves, every step gets the same answer from bo
            without the section titles; `skim` lays its route over them.
            `labels` and `assets` hash the blocks alone. */
         expect(stale).toEqual(
-          inOrder([...without(READS_THE_HEAD, "relations", "simple", "debate-claims"), "skim"]),
+          inOrder([...without(READS_THE_HEAD, "relations", "simple", "sources-claims"), "skim"]),
         );
       },
     );
@@ -947,7 +947,7 @@ describe("when the article itself moves, every step gets the same answer from bo
 
 /**
  * `debate` is the one stamped step whose model the environment can change
- * (`SPIDERYARN_DEBATE_MODEL`), so both deciders have to ask the resolver
+ * (`SPIDERYARN_RECEPTION_MODEL`), so both deciders have to ask the resolver
  * rather than compare against `CAPABLE_MODEL`, the constant every neighbouring
  * arm uses and the obvious thing to copy.
  *
@@ -960,18 +960,18 @@ describe("when the article itself moves, every step gets the same answer from bo
 describe("debate, with its model overridden by the environment", () => {
   it("both call a debate that model wrote current", async () => {
     const override = "test-only/debate-override";
-    vi.stubEnv("SPIDERYARN_DEBATE_MODEL", override);
+    vi.stubEnv("SPIDERYARN_RECEPTION_MODEL", override);
     try {
       /* The premise: under the override the constant is the wrong answer. */
       expect(sameGenerator(override, CAPABLE_MODEL)).toBe(false);
-      const pair = await recordedAs("debate", { model: override }, () => ask("debate"));
+      const pair = await recordedAs("reception", { model: override }, () => ask("reception"));
       expect(pair).toEqual({ queue: true, page: true });
       /* And what was current before the override is now stale, to both. */
-      expect(await ask("debate")).toEqual({ queue: false, page: false });
+      expect(await ask("reception")).toEqual({ queue: false, page: false });
     } finally {
       vi.unstubAllEnvs();
     }
-    expect(await ask("debate")).toEqual({ queue: true, page: true });
+    expect(await ask("reception")).toEqual({ queue: true, page: true });
   });
 });
 

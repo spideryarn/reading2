@@ -27,7 +27,7 @@
  * src/routes.ts does), with three differences, all named:
  *
  * - **The article comes through the reader's `loadArticle`**, as
- *   evals/debate/run.ts does, not the pipeline's `readArticle` (which needs a
+ *   evals/reception/run.ts does, not the pipeline's `readArticle` (which needs a
  *   job's store). Blocks and tree are the same rows; `meta` is the reader's,
  *   whose title may be synthesised where the extract had none.
  * - **No reader profile and no `previous`**: every artefact is written fresh,

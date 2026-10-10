@@ -247,8 +247,8 @@ const READS = [
      B sends `articleWithIds` — and the `URL:` line is doing more here than in
      any of those three: it is what pass A asks the *web* about, and what every
      returned citation is compared against to keep the article out of its own
-     debate. src/debate.ts § `inputFingerprint`. */
-  "debate",
+     debate. src/reception.ts § `inputFingerprint`. */
+  "reception",
   /* Added 2026-09-11 with the `citations` stage (`bibliography` since 2026-10-09). `CITED_FINGERPRINT_COLUMNS`,
      like `ideas`: it sends `articleWithIds`, over every block.
      docs/plans/260911g-citations-mode.md. */
@@ -262,7 +262,7 @@ const READS = [
   "relations",
   /* Added 2026-10-08 with the `debate-claims` stage. `CITED_FINGERPRINT_COLUMNS`
      supplies its rendered head and tree fallback. docs/plans/261008i-debate-claims-picked-by-the-reader.md. */
-  "debateClaims",
+  "sourcesClaims",
   /* Added 2026-09-30 with the `crossrefs` stage. `CITED_FINGERPRINT_COLUMNS`,
      like `faq`: its article head carries the cited metadata fields.
      docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */
@@ -700,12 +700,12 @@ describe("the metadata page and the pipeline agree about which steps can be curr
   it("uses Debate claims' full outdated decider on the owner read", async () => {
     const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
     const source = await readFile(path.join(root, "src", "store", "pg.ts"), "utf-8");
-    const from = source.indexOf("async loadDebateClaims(slug: string)");
+    const from = source.indexOf("async loadSourcesClaims(slug: string)");
     const to = source.indexOf("async loadRelations(slug: string)", from);
     expect({ from: from > 0, to: to > from }, "the read-method anchors still exist").toEqual({
       from: true,
       to: true,
     });
-    expect(source.slice(from, to)).toContain("outdated: debateClaimsAreOutdated(claimList)");
+    expect(source.slice(from, to)).toContain("outdated: sourcesClaimsAreOutdated(claimList)");
   });
 });

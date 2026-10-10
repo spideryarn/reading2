@@ -64,7 +64,7 @@ leave thinking to the provider default**, which is the shape 260928c's postmorte
 
 | job | ceiling | peak output | of which thinking | used |
 |---|---|---|---|---|
-| `debate`, per pass ([src/debate.ts](../../src/debate.ts) § `ANSWER_TOKENS`) and synthesis ([src/debate-themes.ts](../../src/debate-themes.ts) § `SYNTHESIS_ANSWER_TOKENS`) | 8,000 each | 7,839 (9,296 once, across web-search rounds) | up to 7,966 | **98%** |
+| `debate`, per pass ([src/debate.ts](../../src/reception.ts) § `ANSWER_TOKENS`) and synthesis ([src/debate-themes.ts](../../src/reception-themes.ts) § `SYNTHESIS_ANSWER_TOKENS`) | 8,000 each | 7,839 (9,296 once, across web-search rounds) | up to 7,966 | **98%** |
 | `search` ([src/search.ts](../../src/search.ts), `max_tokens: 4000`) | 4,000 | 3,739 | 1,632 | **93%** |
 | `pdf-frontmatter` ([src/pdf-frontmatter.ts](../../src/pdf-frontmatter.ts) § `MAX_TOKENS`) | 2,000 | 1,673 | 748 | **84%** |
 

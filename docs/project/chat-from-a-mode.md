@@ -35,8 +35,8 @@ remains.
 
 | Mode | The button is on | Component | Owning section |
 |---|---|---|---|
-| Sources › Claims | each claim's heading (icon only) | [`DebatePanel.tsx`](../../src/web/DebatePanel.tsx) § `ClaimsList` | [debate.md § Check a claim in chat](debate.md#check-a-claim-in-chat) |
-| Sources › Reception | the angle box (a *lens*: the reader's words, no item) | [`DebatePanel.tsx`](../../src/web/DebatePanel.tsx) § `Angles` | [debate.md § Look at the debate from an angle](debate.md#look-at-the-debate-from-an-angle) |
+| Sources › Claims | each claim's heading (icon only) | [`ReceptionAndClaimsPanel.tsx`](../../src/web/ReceptionAndClaimsPanel.tsx) § `ClaimsList` | [reception.md § Check a claim in chat](reception.md#check-a-claim-in-chat) |
+| Sources › Reception | the angle box (a *lens*: the reader's words, no item) | [`ReceptionAndClaimsPanel.tsx`](../../src/web/ReceptionAndClaimsPanel.tsx) § `Angles` | [reception.md § Look at the debate from an angle](reception.md#look-at-the-debate-from-an-angle) |
 | Glossary | the open entry, in Dig deeper's place | [`OriginChat.tsx`](../../src/web/OriginChat.tsx) § `AskInChatButton` | [glossary.md § Asking about an entry in chat](glossary.md#asking-about-an-entry-in-chat) |
 | Glossary | a term's hover card in the prose, and Skim's term chip (which draws the same card), in Dig deeper's place | [`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx) § `TermCard` (`onAskTerm`) | [glossary.md § The hover card](glossary.md#the-hover-card) |
 | Sources › Bibliography | the open row, in Dig deeper's place | [`OriginChat.tsx`](../../src/web/OriginChat.tsx) § `AskInChatButton` | [bibliography.md § Ask in chat](bibliography.md#ask-in-chat-a-conversation-about-one-work) |
@@ -179,7 +179,7 @@ In the order you would do them:
 - [mode.md](mode.md): the general checklist for a mode. This doc is only the chat hand-off.
 - [chat-tools.md § Chat's list shows every conversation about the article](chat-tools.md#chats-list-shows-every-conversation-about-the-article):
   the icons, the filter, and what a press on a row does.
-- [debate.md](debate.md#check-a-claim-in-chat), [glossary.md](glossary.md#asking-about-an-entry-in-chat),
+- [reception.md](reception.md#check-a-claim-in-chat), [glossary.md](glossary.md#asking-about-an-entry-in-chat),
   [bibliography.md](bibliography.md#ask-in-chat-a-conversation-about-one-work),
   [ideas.md](ideas.md#asking-about-an-idea-in-chat): what each mode's button does for the reader.
 - [comments.md](comments.md) and [export.md](export.md): the neighbours that link to a chat or

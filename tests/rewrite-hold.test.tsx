@@ -337,8 +337,8 @@ function SkimOuter({ show }: { show: boolean }) {
 /** These modes offer their forced control on a stale banner without needing a failure. */
 const ON_THE_BANNER: Shape = { stale: true, profiled: false };
 
-const DEBATE_LOSSES = { uncited: 0, selfSource: 0, unverifiedSource: 0, directnessUnverified: 0, sourceIsCopy: 0, claimNotInBlock: 0, unknownBlockId: 0, malformed: 0 };
-const DEBATE_COUNTS = { returnedSources: 1, reportedRows: 1, keptRows: 1, omittedOverCap: 0, lost: DEBATE_LOSSES, webSearches: 1 };
+const RECEPTION_LOSSES = { uncited: 0, selfSource: 0, unverifiedSource: 0, directnessUnverified: 0, sourceIsCopy: 0, claimNotInBlock: 0, unknownBlockId: 0, malformed: 0 };
+const RECEPTION_COUNTS = { returnedSources: 1, reportedRows: 1, keptRows: 1, omittedOverCap: 0, lost: RECEPTION_LOSSES, webSearches: 1 };
 
 const summary = (show: boolean) =>
   show ? createElement(SummaryBand, { slug: SLUG, article: ARTICLE, onJump: noop }) : null;
@@ -658,13 +658,13 @@ const ROWS: Row[] = [
   },
   {
     name: "Debate",
-    hook: "useDebate.ts",
-    step: "debate",
-    path: "/api/debate/",
+    hook: "useReception.ts",
+    step: "reception",
+    path: "/api/reception/",
     /* Sources' Reception since 2026-10-09 (plan 261009l). */
     search: "?sources=reception",
     body: (which, { stale }) => ({
-      debate: {
+      reception: {
         version: "test",
         generator: "test",
         slug: SLUG,
@@ -689,9 +689,9 @@ const ROWS: Row[] = [
               ],
             },
           ],
-          counts: DEBATE_COUNTS,
+          counts: RECEPTION_COUNTS,
         },
-        claims: { rows: [], counts: { ...DEBATE_COUNTS, returnedSources: 0, reportedRows: 0, keptRows: 0 } },
+        claims: { rows: [], counts: { ...RECEPTION_COUNTS, returnedSources: 0, reportedRows: 0, keptRows: 0 } },
         elapsedMs: 1,
       },
       stale,
@@ -710,9 +710,9 @@ const ROWS: Row[] = [
      banner's *List again* is the forced verb. */
   {
     name: "Debate's claims list",
-    hook: "useDebateClaims.ts",
-    step: "debate-claims",
-    path: "/api/debate-claims/",
+    hook: "useSourcesClaims.ts",
+    step: "sources-claims",
+    path: "/api/sources-claims/",
     search: "?sources=claims",
     body: (which, { stale }) => ({
       claimList: {
@@ -1038,12 +1038,12 @@ it("releases a refused press even if the start callback rejects", async () => {
 });
 
 it("wires an owner's Bibliography through the real Sources wrapper into Claims' C1 line", async () => {
-  const claims = ROWS.find((candidate) => candidate.step === "debate-claims");
+  const claims = ROWS.find((candidate) => candidate.step === "sources-claims");
   expect(claims).toBeDefined();
   start(claims!);
   await paint();
 
-  const line = host.querySelector(".dbt-cited-here");
+  const line = host.querySelector(".rcp-cited-here");
   expect(line?.textContent).toContain("Tulving 1983");
   const work = line?.querySelector<HTMLButtonElement>("button");
   expect(work).not.toBeNull();

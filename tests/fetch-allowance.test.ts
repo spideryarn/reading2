@@ -40,7 +40,7 @@ import { PREVIEW_RATE_POLICY } from "../src/link-previews.js";
 import { SUMMARY_RATE_POLICY } from "../src/link-summary.js";
 import { FEEDBACK_NOTICE_POLICY } from "../src/feedback-notice.js";
 import { HELP_CHAT_RATE_POLICY } from "../src/help-chat-call.js";
-import { DEBATE_CHECK_RATE_POLICY } from "../src/debate.js";
+import { SOURCES_CLAIM_CHECK_RATE_POLICY } from "../src/reception.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
@@ -296,7 +296,7 @@ describe("the Help chatbot's bucket", () => {
   });
 });
 
-describe("the Debate claim check's bucket", () => {
+describe("the Sources claim check's bucket", () => {
   /**
    * Plan 261008i § 3, GPT Sol's E1. Against the real table, for the feedback
    * notice's reason: a bucket the CHECK does not know is a throw on every
@@ -304,7 +304,7 @@ describe("the Debate claim check's bucket", () => {
    */
   it("takes two checks, refuses a third while both are in flight, and allows it after", async () => {
     const ask = () =>
-      runAsOwner(ALICE, () => pgFetchAllowanceStore.take("debate-check", DEBATE_CHECK_RATE_POLICY));
+      runAsOwner(ALICE, () => pgFetchAllowanceStore.take("sources-claim-check", SOURCES_CLAIM_CHECK_RATE_POLICY));
     const first = await ask();
     const second = await ask();
     if (first.kind !== "allowed" || second.kind !== "allowed") {
@@ -313,6 +313,69 @@ describe("the Debate claim check's bucket", () => {
     expect((await ask()).kind).toBe("concurrency");
     await runAsOwner(ALICE, () => pgFetchAllowanceStore.finish(first.id));
     expect((await ask()).kind).toBe("allowed");
+  });
+
+  /**
+   * **The bucket's old word still counts against it** (plan 261009w, GPT Sol's
+   * F2). It was `debate-check` until 2026-10-09; the code deployed before the
+   * rename writes that word for the minutes of the deploy, and the last day's
+   * rows carry it after. A limiter that counted only the new word would hand
+   * every reader a fresh hour, a fresh day and a fresh fuse at the deploy.
+   */
+  describe("rows written under the old word, `debate-check`", () => {
+    const ask = (who: OwnerId = ALICE) =>
+      runAsOwner(who, () => pgFetchAllowanceStore.take("sources-claim-check", SOURCES_CLAIM_CHECK_RATE_POLICY));
+    /** One row as the pre-rename code writes it: finished unless `inFlight`. */
+    const oldRow = (who: OwnerId, opts: { inFlight?: boolean; hoursAgo?: number } = {}) =>
+      getDb()
+        .insert(rateLimitEvents)
+        .values({
+          ownerId: who,
+          bucket: "debate-check",
+          startedAt: new Date(Date.now() - (opts.hoursAgo ?? 0) * 60 * 60 * 1000 - 1_000),
+          leaseUntil: opts.inFlight ? new Date(Date.now() + 60_000) : null,
+        });
+
+    it("counts them against the hour", async () => {
+      for (let i = 0; i < SOURCES_CLAIM_CHECK_RATE_POLICY.fills; i++) await oldRow(ALICE);
+      expect((await ask()).kind).toBe("rate");
+    });
+
+    it("counts their leases against the concurrency", async () => {
+      await oldRow(ALICE, { inFlight: true });
+      await oldRow(ALICE, { inFlight: true });
+      expect((await ask()).kind).toBe("concurrency");
+    });
+
+    it("counts them against the day", async () => {
+      const daily = SOURCES_CLAIM_CHECK_RATE_POLICY.daily;
+      if (!daily) throw new Error("the claim check's policy has a day");
+      for (let i = 0; i < daily.fills; i++) await oldRow(ALICE, { hoursAgo: 2 });
+      expect((await ask()).kind).toBe("rate");
+    });
+
+    it("counts them against the fuse, across readers", async () => {
+      const daily = SOURCES_CLAIM_CHECK_RATE_POLICY.daily;
+      if (!daily) throw new Error("the claim check's policy has a day");
+      for (let i = 0; i < daily.globalFills; i++) await oldRow(BOB, { hoursAgo: 2 });
+      expect((await ask(ALICE)).kind).toBe("global");
+    });
+
+    it("sweeps them with the new word's rows once they leave the longest window", async () => {
+      await oldRow(ALICE, { hoursAgo: 48 });
+      expect((await ask()).kind).toBe("allowed");
+      const left = await getDb()
+        .select({ bucket: rateLimitEvents.bucket })
+        .from(rateLimitEvents)
+        .where(eq(rateLimitEvents.ownerId, ALICE));
+      expect(left.map((r) => r.bucket)).toEqual(["sources-claim-check"]);
+    });
+
+    it("writes the new word", async () => {
+      expect((await ask()).kind).toBe("allowed");
+      const rows = await getDb().select({ bucket: rateLimitEvents.bucket }).from(rateLimitEvents);
+      expect(rows.map((r) => r.bucket)).toEqual(["sources-claim-check"]);
+    });
   });
 });
 

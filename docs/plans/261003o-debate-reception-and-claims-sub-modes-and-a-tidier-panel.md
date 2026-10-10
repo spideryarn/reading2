@@ -1,6 +1,6 @@
 # Debate: Reception and Claims sub-modes, and a tidier panel
 
-Up: [debate.md](../project/debate.md)
+Up: [debate.md](../project/reception.md)
 
 **Status:** built and on `dev` (2026-10-04). The claims picker waits on Greg; the citation index was answered the same day and is [261004h](261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md). Report `spya-caue42`, Greg (admin), 2026-10-03, on Levin 2024,
 *Self-Improvising Memory* (Entropy 26(6), 481).

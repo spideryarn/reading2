@@ -5,7 +5,7 @@
  * ```
  *  ┌ Bibliography 42 │ Reception 3 │ Claims 8 ┐                 (i)
  *  │ BibliographyPanel, as the Citations mode drew it  ← Bibliography (default)
- *  │ DebatePanel, as the Debate mode drew it        ← Reception, Claims
+ *  │ ReceptionAndClaimsPanel, as the Debate mode drew it        ← Reception, Claims
  * ```
  *
  * Citations and Debate were two modes, both behind the experimental switch,
@@ -49,13 +49,13 @@
 import { useQueryState } from "nuqs";
 import { useRef } from "react";
 import type { BlockId } from "../../../types.js";
-import type { PublicBibliography, PublicDebate, PublicDebateClaimList } from "../../../public-types.js";
+import type { PublicBibliography, PublicReception, PublicSourcesClaimList } from "../../../public-types.js";
 import {
   bearsParam,
   citeBarParam,
   citeOrderParam,
-  debateOrderParam,
-  debateThreadParam,
+  receptionOrderParam,
+  receptionThreadParam,
   SOURCES_VIEWS,
   type SourcesView,
   sourcesParam,
@@ -66,15 +66,15 @@ import { ControlTip, Tooltip, TooltipGroup } from "../../Tooltip.js";
 import { useRevealChosen } from "../../useRevealChosen.js";
 import { useRenderCount } from "../../perf.js";
 import { useBibliography, type BibliographyRead } from "../../useBibliography.js";
-import { useDebate } from "../../useDebate.js";
-import { useDebateClaims } from "../../useDebateClaims.js";
-import { useDebateChecks } from "../../useDebateChecks.js";
+import { useReception } from "../../useReception.js";
+import { useSourcesClaims } from "../../useSourcesClaims.js";
+import { useSourcesClaimChecks } from "../../useSourcesClaimChecks.js";
 import { useCiters } from "../../useCiters.js";
 import { type CiteFocus, BibliographyPanel } from "../../BibliographyPanel.js";
-import { type DebateClaimChats, DebatePanel } from "../../DebatePanel.js";
+import { type ReceptionAndClaimsChats, ReceptionAndClaimsPanel } from "../../ReceptionAndClaimsPanel.js";
 import type { CitedWorkChats } from "../../OriginChat.js";
 import type { ItemFocus } from "../../item-focus.js";
-import { yearOf } from "../../debate-order.js";
+import { yearOf } from "../../reception-order.js";
 import type { CitableWork, CitedInParagraph } from "../../cited-in-paragraph.js";
 import { checkedSources, listedClaims, type SourcesCounts, sourcesCounts } from "../../sources-counts.js";
 
@@ -109,20 +109,20 @@ export function SourcesBand({
   bibliographyRead: BibliographyRead;
   /** `passage` is Bibliography's: `citePassageKey(work.id)` when a row names the citing words. */
   onJump(id: BlockId, passage?: string): void;
-  /** Each block's position in the article, for Claims' article order (DebatePanel § Props). */
+  /** Each block's position in the article, for Claims' article order (ReceptionAndClaimsPanel § Props). */
   blockOrder: ReadonlyMap<BlockId, number>;
   /** The article's `Meta.publishedAt`, unread — Reception's *date* marker takes its year. */
   publishedAt: unknown;
-  /** The article's title, for Reception's *Who cites it* search (DebatePanel § Props). */
+  /** The article's title, for Reception's *Who cites it* search (ReceptionAndClaimsPanel § Props). */
   articleTitle: string | null;
   /** A chat about one cited work (BibliographyPanel § `BibliographyAccess`). */
   workChats?: CitedWorkChats;
-  /** A claim's chat and an angle's (DebatePanel § `DebateClaimChats`). */
-  claimChats: DebateClaimChats;
+  /** A claim's chat and an angle's (ReceptionAndClaimsPanel § `ReceptionAndClaimsChats`). */
+  claimChats: ReceptionAndClaimsChats;
   /** One work to bring into view in Bibliography, once (BibliographyPanel § `Props.focus`). */
   citeFocus: CiteFocus | null;
   onCiteFocusTaken(focus: CiteFocus): void;
-  /** One claim to bring into view in Claims, once (DebatePanel § `Props.focus`). */
+  /** One claim to bring into view in Claims, once (ReceptionAndClaimsPanel § `Props.focus`). */
   claimFocus: ItemFocus | null;
   onClaimFocusTaken(focus: ItemFocus): void;
   /** Open Bibliography on one work — Claims' *Cited in this paragraph* (Reader.tsx § `openBibliographyWork`). */
@@ -131,26 +131,26 @@ export function SourcesBand({
   useRenderCount("SourcesBand");
   const [view, setView] = useQueryState("sources", sourcesParam);
   const bibliography = useBibliography(slug, bibliographyRead, view === "bibliography");
-  const debate = useDebate(slug, view === "reception");
+  const reception = useReception(slug, view === "reception");
   /* Claims' own list and its own press (activation.ts § `activationForSources`). */
-  const claimList = useDebateClaims(slug, view === "claims");
+  const claimList = useSourcesClaims(slug, view === "claims");
   /* The reader's claim checks (plan 261008i § 3): read on mount, posted only
      by a press on Check or Dig further. Read in every sub-mode, because the
      Claims chip's count is drawn from them. */
-  const checks = useDebateChecks(slug);
+  const checks = useSourcesClaimChecks(slug);
   /* Who cites the piece, Reception's *Cited by*: a second read with no job
      under it, so it can never start the search. Plan 261004h. */
   const citers = useCiters(slug, view === "reception");
   const citeControls = useCitationControls();
-  const debateControls = useDebateControls();
+  const receptionAndClaimsControls = useReceptionAndClaimsControls();
 
   const counts = sourcesCounts({
     works: bibliography.bibliography?.citations ?? null,
-    debate: debate.debate,
+    reception: reception.reception,
     listed: listedClaims({ kind: "owner", status: claimList.status, claimList: claimList.claimList }),
     checked: claimList.status === "ready" ? checkedSources(checks.checks, claimList.claimList) : 0,
-    relevance: debateControls.relevance,
-    thread: debateControls.thread,
+    relevance: receptionAndClaimsControls.relevance,
+    thread: receptionAndClaimsControls.thread,
   });
   const head = <SourcesViews view={view} counts={counts} ownerSlug={slug} onView={setView} />;
 
@@ -166,13 +166,13 @@ export function SourcesBand({
       />
     );
   return (
-    <DebatePanel
-      access={{ kind: "owner", owner: debate, claimList, checks, citers, claimChats }}
+    <ReceptionAndClaimsPanel
+      access={{ kind: "owner", owner: reception, claimList, checks, citers, claimChats }}
       head={head}
       onJump={onJump}
       view={view}
       onView={setView}
-      {...debateControls}
+      {...receptionAndClaimsControls}
       blockOrder={blockOrder}
       articleYear={yearOf(publishedAt)}
       articleTitle={articleTitle}
@@ -198,7 +198,7 @@ function citedInOf(works: readonly CitableWork[] | null, onOpen: (workId: string
  * Each artefact came in the page's own payload, any of them possibly absent
  * (Reader.tsx mounts this when one is there), every address already re-judged
  * at the public boundary (src/public/dto.ts § `publicCitedWork`,
- * `publicDebate`). No hook that reads the owner's lists, starts a job or a
+ * `publicReception`). No hook that reads the owner's lists, starts a job or a
  * search — a second band rather than a flag on the first, because a hook
  * cannot be called conditionally (src/web/reader-capability.ts). The
  * sub-mode, the orders, the bars and the thread are the reader's own URL, so a
@@ -206,7 +206,7 @@ function citedInOf(works: readonly CitableWork[] | null, onOpen: (workId: string
  */
 export function VisitorSourcesBand({
   bibliography,
-  debate,
+  reception,
   claimList,
   onJump,
   blockOrder,
@@ -217,9 +217,9 @@ export function VisitorSourcesBand({
   onOpenWork,
 }: {
   bibliography: PublicBibliography | null;
-  debate: PublicDebate | null;
-  /** Claims' list, read-only — `PublicDebateClaimList`, src/public-types.ts. */
-  claimList: PublicDebateClaimList | null;
+  reception: PublicReception | null;
+  /** Claims' list, read-only — `PublicSourcesClaimList`, src/public-types.ts. */
+  claimList: PublicSourcesClaimList | null;
   onJump(id: BlockId, passage?: string): void;
   blockOrder: ReadonlyMap<BlockId, number>;
   /** A visitor's meta carries no `publishedAt`, so this is `undefined` today and there is no marker. */
@@ -234,14 +234,14 @@ export function VisitorSourcesBand({
   useRenderCount("VisitorSourcesBand");
   const [view, setView] = useQueryState("sources", sourcesParam);
   const citeControls = useCitationControls();
-  const debateControls = useDebateControls();
+  const receptionAndClaimsControls = useReceptionAndClaimsControls();
   const counts = sourcesCounts({
     works: bibliography?.citations ?? null,
-    debate,
+    reception,
     listed: listedClaims({ kind: "visitor", claimList }),
     checked: 0,
-    relevance: debateControls.relevance,
-    thread: debateControls.thread,
+    relevance: receptionAndClaimsControls.relevance,
+    thread: receptionAndClaimsControls.thread,
   });
   const head = <SourcesViews view={view} counts={counts} ownerSlug={null} onView={setView} />;
   if (view === "bibliography")
@@ -256,13 +256,13 @@ export function VisitorSourcesBand({
       />
     );
   return (
-    <DebatePanel
-      access={{ kind: "visitor", debate, claimList }}
+    <ReceptionAndClaimsPanel
+      access={{ kind: "visitor", reception, claimList }}
       head={head}
       onJump={onJump}
       view={view}
       onView={setView}
-      {...debateControls}
+      {...receptionAndClaimsControls}
       blockOrder={blockOrder}
       articleYear={yearOf(publishedAt)}
       articleTitle={articleTitle}
@@ -282,16 +282,16 @@ function useCitationControls() {
 }
 
 /**
- * `?debateby=` (Reception's order, `prioritised` by default), `?bears=`
- * (Claims' relevance bar, null for untouched) and `?debatethread=` (the thread
+ * `?receptionby=` (Reception's order, `prioritised` by default), `?bears=`
+ * (Claims' relevance bar, null for untouched) and `?receptionthread=` (the thread
  * narrowing the list, plan 260930j), which both bands share. Read in every
  * sub-mode, because the Reception and Claims chips count through the bar and
  * the thread.
  */
-function useDebateControls() {
-  const [order, setOrder] = useQueryState("debateby", debateOrderParam);
+function useReceptionAndClaimsControls() {
+  const [order, setOrder] = useQueryState("receptionby", receptionOrderParam);
   const [relevance, setRelevance] = useQueryState("bears", bearsParam);
-  const [thread, setThread] = useQueryState("debatethread", debateThreadParam);
+  const [thread, setThread] = useQueryState("receptionthread", receptionThreadParam);
   return {
     order,
     onOrder: setOrder,
@@ -340,7 +340,7 @@ export function SourcesViews({
   const group = useRef<HTMLDivElement>(null);
   useRevealChosen(group, view);
   return (
-    <div ref={group} className="summ-views dbt-views" role="radiogroup" aria-label="Sources view">
+    <div ref={group} className="summ-views rcp-views" role="radiogroup" aria-label="Sources view">
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
         {SOURCES_VIEWS.map((v) => {
           const words = SOURCES_SUB_MODES[v];
@@ -369,7 +369,7 @@ export function SourcesViews({
                 }}
               >
                 {words.label}
-                {count !== null && <span className="dbt-view-count">{count.n}</span>}
+                {count !== null && <span className="rcp-view-count">{count.n}</span>}
               </button>
             </Tooltip>
           );

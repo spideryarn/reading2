@@ -79,11 +79,11 @@ export const RESET_ROLE = {
   relations: "extra",
   sketch: "extra",
   illustrated: "extra",
-  debate: "extra",
+  reception: "extra",
   /* Made by a press on Sources' Claims, off DEFAULT_INGEST_STEPS, a whole
      column: the modes' shape, though it is a sub-mode's list rather than a
      mode of its own. */
-  "debate-claims": "extra",
+  "sources-claims": "extra",
   bibliography: "extra",
   /* Made after import by the add page's box or a press on Metadata, off
      DEFAULT_INGEST_STEPS, a whole column: exactly the modes' shape, though it

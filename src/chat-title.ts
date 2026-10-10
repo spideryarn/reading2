@@ -11,7 +11,7 @@
  * into the client, and Chat's list needs to know whether a stored title is
  * exactly this cut (src/web/chat-list-row.ts). src/chat.ts re-exports it.
  */
-import { isLensOrigin, type ThreadOrigin } from "./types.js";
+import type { ThreadOrigin } from "./types.js";
 
 /**
  * The name of a conversation started from an item in a mode: the item's own
@@ -21,9 +21,11 @@ import { isLensOrigin, type ThreadOrigin } from "./types.js";
  */
 export function titleFromOrigin(origin: ThreadOrigin): string {
   switch (origin.mode) {
-    case "debate":
-      /* Two shapes under one mode: an angle the reader typed, or a claim. */
-      return isLensOrigin(origin) ? titleFrom(`Angle: ${origin.lens}`) : titleFrom(`Claim: ${origin.quote}`);
+    case "reception":
+      /* An angle the reader typed. */
+      return titleFrom(`Angle: ${origin.lens}`);
+    case "sources-claims":
+      return titleFrom(`Claim: ${origin.quote}`);
     case "glossary":
       return titleFrom(`Glossary: ${origin.quote}`);
     case "bibliography":

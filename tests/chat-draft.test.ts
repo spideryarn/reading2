@@ -116,8 +116,8 @@ describe("the other three things it holds", () => {
  * the words: typing does not touch it, and it follows the conversation's id.
  */
 describe("a conversation's pending origin", () => {
-  const CLAIM = { mode: "debate", blockId: "spya-bbbbbb", quote: "a claim" } as const;
-  const OTHER = { mode: "debate", blockId: "spya-cccccc", quote: "another claim" } as const;
+  const CLAIM = { mode: "sources-claims", blockId: "spya-bbbbbb", quote: "a claim" } as const;
+  const OTHER = { mode: "sources-claims", blockId: "spya-cccccc", quote: "another claim" } as const;
 
   it("is kept under the conversation's id, and two conversations do not share one", () => {
     const d = createChatDrafts();

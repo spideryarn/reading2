@@ -2,7 +2,7 @@
 
 - **D1 — P1, established:** claims-only public articles advertised Debate but dropped `debateClaims` while lifting the public payload, so visitors could not see the list. Fixed in [public-artefacts.ts](/var/tmp/spideryarn-worktrees/fbcaue42-debate-pick-claims/src/web/public-artefacts.ts:60), with a red-first regression test.
 
-- **D2 — P1, established:** the freshness stamp hashed the whole tree and supplement blocks although neither reaches the prompt. Renaming a section therefore falsely marked the list stale, disabled its actions, and offered an unnecessary paid rerun. Fixed in [debate-claims.ts](/var/tmp/spideryarn-worktrees/fbcaue42-debate-pick-claims/src/debate-claims.ts:114) by hashing the exact rendered body and metadata head. Your suspicion was right: it should not be purely blocks-only because the prompt also contains the head and, without metadata, the tree slug as fallback title.
+- **D2 — P1, established:** the freshness stamp hashed the whole tree and supplement blocks although neither reaches the prompt. Renaming a section therefore falsely marked the list stale, disabled its actions, and offered an unnecessary paid rerun. Fixed in [debate-claims.ts](/var/tmp/spideryarn-worktrees/fbcaue42-debate-pick-claims/src/sources-claims.ts:114) by hashing the exact rendered body and metadata head. Your suspicion was right: it should not be purely blocks-only because the prompt also contains the head and, without metadata, the tree slug as fallback title.
 
 - **D3 — P1, established:** the Postgres owner read set `outdated` from prompt version alone, ignoring model-generation drift despite the authoritative helper checking both. Fixed in [pg.ts](/var/tmp/spideryarn-worktrees/fbcaue42-debate-pick-claims/src/store/pg.ts:3989) by using `debateClaimsAreOutdated`.
 
@@ -18,13 +18,13 @@ The mode checklist, owner/visitor states, claims-without-debate path, migration/
 
 Core fixes:
 
-- [src/debate-claims.ts](/var/tmp/spideryarn-worktrees/fbcaue42-debate-pick-claims/src/debate-claims.ts)
+- [src/debate-claims.ts](/var/tmp/spideryarn-worktrees/fbcaue42-debate-pick-claims/src/sources-claims.ts)
 - [src/store/pg.ts](/var/tmp/spideryarn-worktrees/fbcaue42-debate-pick-claims/src/store/pg.ts)
 - [src/web/public-artefacts.ts](/var/tmp/spideryarn-worktrees/fbcaue42-debate-pick-claims/src/web/public-artefacts.ts)
 
 Regression tests:
 
-- [tests/debate-claims.test.ts](/var/tmp/spideryarn-worktrees/fbcaue42-debate-pick-claims/tests/debate-claims.test.ts)
+- [tests/debate-claims.test.ts](/var/tmp/spideryarn-worktrees/fbcaue42-debate-pick-claims/tests/sources-claims.test.ts)
 - [tests/visitor-gaps.test.ts](/var/tmp/spideryarn-worktrees/fbcaue42-debate-pick-claims/tests/visitor-gaps.test.ts)
 - [tests/store-revision-columns.test.ts](/var/tmp/spideryarn-worktrees/fbcaue42-debate-pick-claims/tests/store-revision-columns.test.ts)
 

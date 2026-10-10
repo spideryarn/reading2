@@ -133,7 +133,7 @@ describe("the stale notice guard", () => {
       ["BibliographyPanel.tsx", /staleNotice\.showing\.length === 0\s*&&/g, 1],
       ["Tweets.tsx", /!bannerShowing\s*&&/g, 3],
       ["QuotesPanel.tsx", /staleNotice\.showing\.length === 0\s*&&/g, 1],
-      ["DebatePanel.tsx", /staleNotice\.showing\.length === 0\s*&&/g, 2],
+      ["ReceptionAndClaimsPanel.tsx", /staleNotice\.showing\.length === 0\s*&&/g, 2],
     ];
     for (const [name, pattern, expected] of cases) {
       const code = readFileSync(path.join(WEB, name), "utf8");

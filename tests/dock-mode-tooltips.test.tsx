@@ -419,7 +419,7 @@ describe("a mode a visitor cannot have", () => {
       faq: false,
       simpleSummary: false,
       bibliography: false,
-      debate: false,
+      reception: false,
     };
     const marked = markedModes(available);
     const gapped = [...marked.keys()];

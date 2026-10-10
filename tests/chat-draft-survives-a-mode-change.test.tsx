@@ -396,7 +396,7 @@ describe("the reader is put back in the conversation the words belong to", () =>
 
   it("keeps an unopened recovered origin draft through a second mode change", async () => {
     stored = [RECALL];
-    const handoffOrigin = { mode: "debate" as const, blockId: "spya-bbbbbb", quote: "The claim" };
+    const handoffOrigin = { mode: "sources-claims" as const, blockId: "spya-bbbbbb", quote: "The claim" };
     handoff = {
       slug: SLUG,
       target: "chat" as const,

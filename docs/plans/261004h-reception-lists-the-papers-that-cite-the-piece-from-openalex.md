@@ -1,6 +1,6 @@
 # Reception lists the papers that cite the piece, from OpenAlex
 
-Up: [debate.md](../project/debate.md)
+Up: [debate.md](../project/reception.md)
 
 **Status:** built (2026-10-04); § What landed. This is stage 2 of
 [261002i](261002i-debate-leads-with-who-has-cited-this-article.md), queue item `qi-aabv7jjy`.
@@ -171,7 +171,7 @@ Where the Google Scholar link is today.
   about DOIs since 2026-10-01**; they are added in the same sentence, because the page must stay
   true of the code. None of the three is a subprocessor of reader data in the sense of the list in
   privacy.md (they are sent an identifier of a published work), and the page says which it is.
-- `/help`'s Debate entry; [debate.md](../project/debate.md); [database.md](../project/database.md)
+- `/help`'s Debate entry; [debate.md](../project/reception.md); [database.md](../project/database.md)
   where it lists tables; [security-map.md](../project/security-map.md) if it lists outside parties
   whose strings we render; 261002i's status line and 261003o's question, marked answered.
 

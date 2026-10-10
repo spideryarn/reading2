@@ -460,7 +460,7 @@ describe("the Start this article again section", () => {
   });
 
   it("states the exceptional costs of the selected extras", async () => {
-    ran.add("debate");
+    ran.add("reception");
     ran.add("sketch");
     ran.add("illustrated");
     await open();

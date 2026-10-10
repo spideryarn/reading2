@@ -340,7 +340,7 @@ interface ChatAnswer {
 export function readFind(json: unknown, title: string): FindReading | null {
   const answer = json as ChatAnswer | null;
   const choice = answer?.choices?.[0];
-  /* An allowlist on the finish, as src/debate.ts § readPass has: any ending the
+  /* An allowlist on the finish, as src/reception.ts § readPass has: any ending the
      provider chose other than `stop` is an answer that stopped early. */
   if (choice?.finish_reason !== "stop") return null;
 

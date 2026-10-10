@@ -88,11 +88,11 @@ import {
   PROMPT_VERSION as FAQ_PROMPT_VERSION,
 } from "../faq.js";
 import {
-  inputFingerprint as debateClaimsFingerprint,
-  isOutdated as debateClaimsAreOutdated,
-  isStale as debateClaimsIsStale,
-  PROMPT_VERSION as DEBATE_CLAIMS_PROMPT_VERSION,
-} from "../debate-claims.js";
+  inputFingerprint as sourcesClaimsFingerprint,
+  isOutdated as sourcesClaimsAreOutdated,
+  isStale as sourcesClaimsIsStale,
+  PROMPT_VERSION as SOURCES_CLAIMS_PROMPT_VERSION,
+} from "../sources-claims.js";
 import {
   inputFingerprint as relationsFingerprint,
   isOutdated as relationsAreOutdated,
@@ -117,11 +117,11 @@ import {
   skimInputHash,
 } from "../skim.js";
 import {
-  inputFingerprint as debateFingerprint,
-  isDebateDocument,
-  isStale as debateIsStale,
-  PROMPT_VERSION as DEBATE_PROMPT_VERSION,
-} from "../debate.js";
+  inputFingerprint as receptionFingerprint,
+  isReceptionDocument,
+  isStale as receptionIsStale,
+  PROMPT_VERSION as RECEPTION_PROMPT_VERSION,
+} from "../reception.js";
 import { lookupContext, lookupContextHash } from "../citation-lookup.js";
 import { blockOf } from "./block-rows.js";
 import { findFromRow } from "./citation-lookup-row.js";
@@ -196,12 +196,12 @@ import type {
   Bibliography,
   CitationFind,
   BibliographyFound,
-  Debate,
-  DebateFound,
+  Reception,
+  ReceptionFound,
   Faq,
   FaqFound,
-  DebateClaimList,
-  DebateClaimListFound,
+  SourcesClaimList,
+  SourcesClaimListFound,
   Relations,
   RelationsResponse,
   Crossrefs,
@@ -552,11 +552,11 @@ type RevisionReader =
   | "quiz"
   | "sketch"
   | "illustrated"
-  | "debate"
+  | "reception"
   | "bibliography"
   | "faq"
   | "relations"
-  | "debateClaims"
+  | "sourcesClaims"
   | "skim"
   | "crossrefs"
   | "simpleSummary"
@@ -605,9 +605,9 @@ const REVISION_READ_POLICY: Record<
     article: "value", library: "value", metadata: "value", publish: "value",
     tweets: "value", glossary: "value", quotes: "value", ideas: "value",
     sketch: "value", arc: "value", timeline: "value", quiz: "value", rawSource: "value",
-    illustrated: "value", debate: "value", assets: "value", bibliography: "value", faq: "value",
+    illustrated: "value", reception: "value", assets: "value", bibliography: "value", faq: "value",
     relations: "value", skim: "value", crossrefs: "value", simpleSummary: "value",
-    debateClaims: "value",
+    sourcesClaims: "value",
   },
   articleId: { publish: "value" },
   /* `publish` refuses a revision that is not still a draft. */
@@ -646,7 +646,7 @@ const REVISION_READ_POLICY: Record<
     sketch: "value", timeline: "value", quiz: "value",
     /* Pass B sends `articleWithIds`, so this stage is judged on the cited head
        exactly as `ideas`, `sketch`, `timeline` and `quiz` are. */
-    debate: "value",
+    reception: "value",
     /* `bibliography` sends `articleWithIds` too, so it is judged on the cited
        head and the outline, as `ideas` is. */
     bibliography: "value",
@@ -656,7 +656,7 @@ const REVISION_READ_POLICY: Record<
     /* `faq`'s bytes and `faq`'s fingerprint, so the same cited columns. */
     relations: "value",
     /* Debate Claims' rendered article head carries this field. */
-    debateClaims: "value",
+    sourcesClaims: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
     crossrefs: "value",
     /* `articleWithIds` over the body, so the same cited head as `crossrefs`. */
@@ -673,7 +673,7 @@ const REVISION_READ_POLICY: Record<
     sketch: "value", timeline: "value", quiz: "value",
     /* Pass B sends `articleWithIds`, so this stage is judged on the cited head
        exactly as `ideas`, `sketch`, `timeline` and `quiz` are. */
-    debate: "value",
+    reception: "value",
     /* `bibliography` sends `articleWithIds` too, so it is judged on the cited
        head and the outline, as `ideas` is. */
     bibliography: "value",
@@ -683,7 +683,7 @@ const REVISION_READ_POLICY: Record<
     /* `faq`'s bytes and `faq`'s fingerprint, so the same cited columns. */
     relations: "value",
     /* Debate Claims' rendered article head carries this field. */
-    debateClaims: "value",
+    sourcesClaims: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
     crossrefs: "value",
     /* `articleWithIds` over the body, so the same cited head as `crossrefs`. */
@@ -700,7 +700,7 @@ const REVISION_READ_POLICY: Record<
     sketch: "value", timeline: "value", quiz: "value",
     /* Pass B sends `articleWithIds`, so this stage is judged on the cited head
        exactly as `ideas`, `sketch`, `timeline` and `quiz` are. */
-    debate: "value",
+    reception: "value",
     /* `bibliography` sends `articleWithIds` too, so it is judged on the cited
        head and the outline, as `ideas` is. */
     bibliography: "value",
@@ -710,7 +710,7 @@ const REVISION_READ_POLICY: Record<
     /* `faq`'s bytes and `faq`'s fingerprint, so the same cited columns. */
     relations: "value",
     /* Debate Claims' rendered article head carries this field. */
-    debateClaims: "value",
+    sourcesClaims: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
     crossrefs: "value",
     /* `articleWithIds` over the body, so the same cited head as `crossrefs`. */
@@ -779,7 +779,7 @@ const REVISION_READ_POLICY: Record<
        and it is what `selfSource` compares every returned citation against. A
        read that could not see the column would compute the same fingerprint
        every other article has. */
-    debate: "value",
+    reception: "value",
     /* `bibliography` sends `articleWithIds` too, so it is judged on the cited
        head and the outline, as `ideas` is. */
     bibliography: "value",
@@ -789,7 +789,7 @@ const REVISION_READ_POLICY: Record<
     /* `faq`'s bytes and `faq`'s fingerprint, so the same cited columns. */
     relations: "value",
     /* Debate Claims' rendered article head carries this field. */
-    debateClaims: "value",
+    sourcesClaims: "value",
     /* Its article head, so the same cited metadata columns as `faq`. */
     crossrefs: "value",
     /* `articleWithIds` over the body, so the same cited head as `crossrefs`. */
@@ -841,7 +841,7 @@ const REVISION_READ_POLICY: Record<
        well as the paragraphs — so a blocks-only comparison would call a
        re-sectioned article's debate current while the filesystem store called
        it stale. */
-    debate: "value",
+    reception: "value",
     /* `bibliography` sends `articleWithIds` too, so it is judged on the cited
        head and the outline, as `ideas` is. */
     bibliography: "value",
@@ -850,7 +850,7 @@ const REVISION_READ_POLICY: Record<
     /* FAQ's fingerprint exactly, so the outline too. */
     relations: "value",
     /* Only for Debate Claims' fallback head when metadata has no title. */
-    debateClaims: "value",
+    sourcesClaims: "value",
     /* The top-level skeleton is in its user message, so it needs the tree. */
     crossrefs: "value",
     /* Not for a skeleton — its user message is a constant — but for the
@@ -978,9 +978,9 @@ const REVISION_READ_POLICY: Record<
      (tests/store-revision-columns.test.ts), and it cannot answer without the
      column. Falling to `default: true` is the failure that has caught `ideas`,
      `sketch` and `timeline` in turn. */
-  debate: { metadata: "value", debate: "value" },
+  reception: { metadata: "value", reception: "value" },
   /* Its own reader and the metadata page, and not the library — the call
-     `quotes`, `timeline` and `debate` make. `isCurrent` needs the column for
+     `quotes`, `timeline` and `reception` make. `isCurrent` needs the column for
      its arm. */
   bibliography: { metadata: "value", bibliography: "value" },
   /* **No read takes it.** Bibliography's column before plan 261009w, kept
@@ -988,6 +988,10 @@ const REVISION_READ_POLICY: Record<
      the deploy; dropped by the contract migration (src/db/schema.ts §
      `legacyCitations`). */
   legacyCitations: {},
+  /* Reception's and the claims list's columns before the same plan
+     (`debate`, `debate_claims`), likewise. */
+  legacyDebate: {},
+  legacyDebateClaims: {},
   /* Its own reader and the metadata page, and not the library — the call
      `quiz` and `bibliography` make. `isCurrent` needs the column for its arm. */
   faq: { metadata: "value", faq: "value" },
@@ -1001,7 +1005,7 @@ const REVISION_READ_POLICY: Record<
      read, in src/store/public-reader.ts: generated output is readable by a
      visitor by default (docs/project/mode.md § The artefact).
      docs/plans/261008i-debate-claims-picked-by-the-reader.md. */
-  debateClaims: { metadata: "value", debateClaims: "value" },
+  sourcesClaims: { metadata: "value", sourcesClaims: "value" },
   /* Its own reader and the metadata page, and not the library — the call
      `faq` makes. `isCurrent` needs the column for its arm, and
      `personalisedSteps` needs it because the route carries a `profileHash`. */
@@ -1324,7 +1328,7 @@ export const REVISION_PROJECTIONS = {
        the column that arm falls to `default: true` and a debate written against
        an article that has since moved reports itself current on the one page
        whose job is to say otherwise. */
-    debate: articleRevisions.debate,
+    reception: articleRevisions.reception,
     /* For `isCurrent`'s arm, as `debate` above. */
     bibliography: articleRevisions.bibliography,
     /* For `isCurrent`'s arm, as `debate` above. */
@@ -1332,7 +1336,7 @@ export const REVISION_PROJECTIONS = {
     /* For `isCurrent`'s arm, as `debate` above. */
     relations: articleRevisions.relations,
     /* For `isCurrent`'s arm, as `debate` above. */
-    debateClaims: articleRevisions.debateClaims,
+    sourcesClaims: articleRevisions.sourcesClaims,
     /* For `isCurrent`'s arm, as `debate` above. */
     crossrefs: articleRevisions.crossrefs,
     /* For `isCurrent`'s arm, as `debate` above. */
@@ -1403,9 +1407,9 @@ export const REVISION_PROJECTIONS = {
      its `sourceHash` covers. Not the dated set — no publication date appears in
      either prompt, so hashing one would spend up to $0.27 every time a publisher
      re-dated a post. */
-  debate: {
+  reception: {
     id: articleRevisions.id,
-    debate: articleRevisions.debate,
+    reception: articleRevisions.reception,
     ...CITED_FINGERPRINT_COLUMNS,
   },
   /* The cited set, like `ideas`: `articleWithIds` prints a `URL:` line. */
@@ -1427,9 +1431,9 @@ export const REVISION_PROJECTIONS = {
     ...CITED_FINGERPRINT_COLUMNS,
   },
   /* The cited head and tree fallback its exact-request fingerprint needs. */
-  debateClaims: {
+  sourcesClaims: {
     id: articleRevisions.id,
-    debateClaims: articleRevisions.debateClaims,
+    sourcesClaims: articleRevisions.sourcesClaims,
     ...CITED_FINGERPRINT_COLUMNS,
   },
   /* The cited head and tree its own exact-request fingerprint needs. */
@@ -2042,8 +2046,8 @@ export const STEP_STORAGE: Record<StepName, string[]> = {
      in the `sources` bucket, which is not a table and so is not listed here —
      the same shape `assets` above has. */
   illustrated: ["article_revisions.illustrated"],
-  debate: ["article_revisions.debate"],
-  "debate-claims": ["article_revisions.debate_claims"],
+  reception: ["article_revisions.reception"],
+  "sources-claims": ["article_revisions.sources_claims"],
   bibliography: ["article_revisions.bibliography"],
   faq: ["article_revisions.faq"],
   relations: ["article_revisions.relations"],
@@ -2768,9 +2772,9 @@ export function shareableArtefacts(revision: {
   faq: Faq | null;
   simpleSummary: SimpleSummary | null;
   bibliography: Bibliography | null;
-  debate: Debate | null;
+  reception: Reception | null;
   /** Claims' list: on its own it opens Sources to a visitor (plan 261009l § Visitors). */
-  debateClaims: DebateClaimList | null;
+  sourcesClaims: SourcesClaimList | null;
 }): PublicArtefacts {
   const present: Record<keyof PublicArtefacts, object | null> = {
     arc: revision.arc,
@@ -2792,11 +2796,11 @@ export function shareableArtefacts(revision: {
     bibliography: revision.bibliography,
     /* **Debate is on a shared link when either of its artefacts is**: a claims
        list made with no Reception search stored is still the visitor's to read
-       (src/public/dto.ts § `publicDebateClaimList`, the same `claims` test). */
-    debate:
-      revision.debate ??
-      (revision.debateClaims !== null && Array.isArray(revision.debateClaims.claims)
-        ? revision.debateClaims
+       (src/public/dto.ts § `publicSourcesClaimList`, the same `claims` test). */
+    reception:
+      revision.reception ??
+      (revision.sourcesClaims !== null && Array.isArray(revision.sourcesClaims.claims)
+        ? revision.sourcesClaims
         : null),
   };
   return {
@@ -2811,7 +2815,7 @@ export function shareableArtefacts(revision: {
     faq: present.faq !== null,
     simpleSummary: present.simpleSummary !== null,
     bibliography: present.bibliography !== null,
-    debate: present.debate !== null,
+    reception: present.reception !== null,
   };
 }
 
@@ -3397,29 +3401,29 @@ const rawPgArticleReader: ArticleReader = {
            Written out rather than left to `default: true`, which is the arm that
            has caught `ideas`, `sketch` and `timeline` in turn.
 
-           **`modelFor("debate")`, not `CAPABLE_MODEL`** — the one arm here of
+           **`modelFor("reception")`, not `CAPABLE_MODEL`** — the one arm here of
            which that is true. This step is on the chat wire, where
-           `SPIDERYARN_DEBATE_MODEL` can override the model, and comparing
+           `SPIDERYARN_RECEPTION_MODEL` can override the model, and comparing
            against the constant would report every run of an overridden model
            stale on this page while the step itself thought it was current.
-           `STEPS.debate.stamp` (src/pipeline.ts) resolves it the same way; two
+           `STEPS.reception.stamp` (src/pipeline.ts) resolves it the same way; two
            spellings of one model is exactly the drift this switch exists to
            refuse. */
-        case "debate": {
-          const debate = revision.debate as Debate | null;
-          if (!debate || !tree || blocks.length === 0) return false;
+        case "reception": {
+          const reception = revision.reception as Reception | null;
+          if (!reception || !tree || blocks.length === 0) return false;
           return sameStamp(
             {
-              inputHash: debate.sourceHash,
-              promptVersion: debate.version,
-              model: debate.generator,
+              inputHash: reception.sourceHash,
+              promptVersion: reception.version,
+              model: reception.generator,
             },
             {
-              inputHash: debateFingerprint(blocks, tree, citedFingerprint),
-              promptVersion: DEBATE_PROMPT_VERSION,
+              inputHash: receptionFingerprint(blocks, tree, citedFingerprint),
+              promptVersion: RECEPTION_PROMPT_VERSION,
               /* `standard` whatever the article's power: `sameStamp` compares by
                  generation, so an Opus debate is current here too (plan 260930f). */
-              model: modelFor("debate", "standard"),
+              model: modelFor("reception", "standard"),
             },
           );
         }
@@ -3477,8 +3481,8 @@ const rawPgArticleReader: ArticleReader = {
           );
         }
         /* Its exact rendered body and cited head, with the tree as title fallback. */
-        case "debate-claims": {
-          const list = revision.debateClaims as DebateClaimList | null;
+        case "sources-claims": {
+          const list = revision.sourcesClaims as SourcesClaimList | null;
           if (!list || !tree || blocks.length === 0) return false;
           return sameStamp(
             {
@@ -3487,8 +3491,8 @@ const rawPgArticleReader: ArticleReader = {
               model: list.generator,
             },
             {
-              inputHash: debateClaimsFingerprint(blocks, tree, citedFingerprint),
-              promptVersion: DEBATE_CLAIMS_PROMPT_VERSION,
+              inputHash: sourcesClaimsFingerprint(blocks, tree, citedFingerprint),
+              promptVersion: SOURCES_CLAIMS_PROMPT_VERSION,
               model: CAPABLE_MODEL,
             },
           );
@@ -3698,8 +3702,8 @@ const rawPgArticleReader: ArticleReader = {
           faq: revision.faq as Faq | null,
           simpleSummary: revision.simpleSummary as SimpleSummary | null,
           bibliography: revision.bibliography as Bibliography | null,
-          debate: revision.debate as Debate | null,
-          debateClaims: revision.debateClaims as DebateClaimList | null,
+          reception: revision.reception as Reception | null,
+          sourcesClaims: revision.sourcesClaims as SourcesClaimList | null,
         }),
       },
     };
@@ -3989,7 +3993,7 @@ const rawPgArticleReader: ArticleReader = {
   },
 
   /**
-   * Debate's claims list on its own — the Postgres half of `loadDebateClaims`.
+   * Debate's claims list on its own — the Postgres half of `loadSourcesClaims`.
    *
    * `loadFaq`'s shape: the cited head and the tree, because the fingerprint is
    * FAQ's. **A 404 is the ordinary case** (the step runs only on a press on
@@ -3997,15 +4001,15 @@ const rawPgArticleReader: ArticleReader = {
    * argue with — as `SHAPE["debate-claims"]` decides at the store boundary.
    * docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2.
    */
-  async loadDebateClaims(slug: string): Promise<DebateClaimListFound> {
+  async loadSourcesClaims(slug: string): Promise<SourcesClaimListFound> {
     requireSlug(slug);
-    const found = await currentRevision(slug, "debateClaims");
+    const found = await currentRevision(slug, "sourcesClaims");
     if (!found) throw notFound(slug);
-    const claimList = found.revision.debateClaims as DebateClaimList | null;
+    const claimList = found.revision.sourcesClaims as SourcesClaimList | null;
     if (!claimList || !Array.isArray(claimList.claims)) {
       throw new ArtefactNotMadeYet(
         `No claims list for "${slug}" yet. Make one with ` +
-          `POST /api/jobs { "slug": "${slug}", "steps": ["debate-claims"] }.`,
+          `POST /api/jobs { "slug": "${slug}", "steps": ["sources-claims"] }.`,
       );
     }
     const blocks = await blockHashInputs(found.revision.id);
@@ -4015,8 +4019,8 @@ const rawPgArticleReader: ArticleReader = {
       // Unknown counts as stale, the same way round as its neighbours.
       stale:
         !tree ||
-        debateClaimsIsStale(claimList, blocks, tree, citedMetaFingerprintOf(found.revision)),
-      outdated: debateClaimsAreOutdated(claimList),
+        sourcesClaimsIsStale(claimList, blocks, tree, citedMetaFingerprintOf(found.revision)),
+      outdated: sourcesClaimsAreOutdated(claimList),
     };
   },
 
@@ -4183,7 +4187,7 @@ const rawPgArticleReader: ArticleReader = {
   },
 
   /**
-   * The debate on its own — the Postgres half of `loadDebate`.
+   * The debate on its own — the Postgres half of `loadReception`.
    *
    * Three inputs like `loadQuiz` above and the same **cited** head, because
    * pass B sends `articleWithIds`: the fingerprint covers the tree and the
@@ -4199,7 +4203,7 @@ const rawPgArticleReader: ArticleReader = {
    * reception at all, so an artefact that honestly says so is the commonest
    * correct answer and the panel has a sentence for it. A 404 here would send
    * the reader to a POST that pays up to $0.27 for the same answer on every
-   * open. `SHAPE.debate` (src/store/artifacts.ts) makes the same call.
+   * open. `SHAPE.reception` (src/store/artifacts.ts) makes the same call.
    */
   /**
    * The Postgres half of `loadArticleIdentity`: the `article` read's own
@@ -4221,29 +4225,29 @@ const rawPgArticleReader: ArticleReader = {
     };
   },
 
-  async loadDebate(slug: string): Promise<DebateFound> {
+  async loadReception(slug: string): Promise<ReceptionFound> {
     requireSlug(slug);
-    const found = await currentRevision(slug, "debate");
+    const found = await currentRevision(slug, "reception");
     if (!found) throw notFound(slug);
 
-    const debate = found.revision.debate as Debate | null;
-    /* **The shape as well as the presence** — `isDebateDocument`, the same
-       question `SHAPE.debate` and `readDebate` ask (Sol's F29). This served any
+    const reception = found.revision.reception as Reception | null;
+    /* **The shape as well as the presence** — `isReceptionDocument`, the same
+       question `SHAPE.reception` and `readReception` ask (Sol's F29). This served any
        non-null JSONB unchecked until 2026-09-05, so a half-written document
        reached the panel here and was refused on the filesystem. */
-    if (!debate || !isDebateDocument(debate)) {
+    if (!reception || !isReceptionDocument(reception)) {
       throw new ArtefactNotMadeYet(
-        `No debate for "${slug}" yet. Build one with ` +
-          `POST /api/jobs { "slug": "${slug}", "steps": ["debate"] }.`,
+        `No Reception search for "${slug}" yet. Build one with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["reception"] }.`,
       );
     }
     const blocks = await blockHashInputs(found.revision.id);
     const tree = found.revision.tree as Tree | null;
     return {
-      debate,
+      reception,
       // Unknown counts as stale, the same way round as its neighbours.
-      stale: !tree || debateIsStale(debate, blocks, tree, citedMetaFingerprintOf(found.revision)),
-      outdated: debate.version !== DEBATE_PROMPT_VERSION,
+      stale: !tree || receptionIsStale(reception, blocks, tree, citedMetaFingerprintOf(found.revision)),
+      outdated: reception.version !== RECEPTION_PROMPT_VERSION,
     };
   },
 

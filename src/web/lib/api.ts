@@ -1001,7 +1001,7 @@ function saving(
  * a file, and a missing artefact there is a missing plate.
  */
 export const NONE_YET_AS_NULL =
-  /^\/api\/(?:quiz|crossrefs|bibliography|simple|ideas|faq|timeline|debate|debate-claims|glossary|quotes|tweets|relations|skim|sketch|illustrated|arc)\/[^/?]+$/;
+  /^\/api\/(?:quiz|crossrefs|bibliography|simple|ideas|faq|timeline|reception|sources-claims|glossary|quotes|tweets|relations|skim|sketch|illustrated|arc)\/[^/?]+$/;
 
 /** `application/json`, whatever parameters follow it. */
 function isJson(res: Response): boolean {
@@ -1069,7 +1069,7 @@ const CACHEABLE = [
   "/api/timeline/",
   "/api/relations/",
   "/api/quiz/",
-  /* Here with the route rather than with the panel, as `/api/debate/` is: the
+  /* Here with the route rather than with the panel, as `/api/reception/` is: the
      derived test asks for it the moment the route exists. */
   "/api/faq/",
   /* With the route rather than with the panel, as `/api/faq/` is —
@@ -1094,13 +1094,13 @@ const CACHEABLE = [
      and the one that costs most to lose.** It is up to $0.27 a run, the rows
      link out to pages a reader will want to open, and it is the only artefact
      here that will not simply be the same next time — the web moves. This line
-     is the second and last thing the debate step touches in `src/web/`, and it
+     is the second and last thing the reception step touches in `src/web/`, and it
      is here rather than with the panel because the derived test asks for it the
      moment the route exists. */
-  "/api/debate/",
-  /* With the route, as `/api/faq/` is: Debate's claims list, which Claims
+  "/api/reception/",
+  /* With the route, as `/api/faq/` is: the claims list, which Claims
      draws from — docs/plans/261008i-debate-claims-picked-by-the-reader.md. */
-  "/api/debate-claims/",
+  "/api/sources-claims/",
   "/api/bibliography/",
   "/api/metadata/",
   "/api/tweets/",

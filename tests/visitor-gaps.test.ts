@@ -73,7 +73,7 @@ const NOTHING_BUILT: PublicArtefacts = {
   faq: false,
   simpleSummary: false,
   bibliography: false,
-  debate: false,
+  reception: false,
 };
 const EVERYTHING_BUILT: PublicArtefacts = {
   arc: true,
@@ -87,7 +87,7 @@ const EVERYTHING_BUILT: PublicArtefacts = {
   faq: true,
   simpleSummary: true,
   bibliography: true,
-  debate: true,
+  reception: true,
 };
 
 /**
@@ -122,7 +122,7 @@ function only(built: keyof PublicArtefacts): PublicArtefacts {
     faq: built === "faq",
     simpleSummary: built === "simpleSummary",
     bibliography: built === "bibliography",
-    debate: built === "debate",
+    reception: built === "reception",
   };
 }
 
@@ -352,7 +352,7 @@ describe("what a visitor is told, mode by mode", () => {
     /* `debate` joined them on 2026-09-05 as the one entry expected to leave
        again, owners-only only until Stage 4 built the public projection its
        rows must not bypass. **It left on 2026-09-29** (plan 260929c stage 4,
-       src/web/visitor.ts § POLICY.debate). What remains is exactly
+       src/web/visitor.ts § POLICY.reception). What remains is exactly
        `OWNERS_ONLY` below, each with its reason. */
     /* `citations` joined on 2026-09-11, owners-only for Debate's reason, and
        `faq` on 2026-09-16 for the same one. **Both left on 2026-09-29** with
@@ -369,9 +369,9 @@ describe("what a visitor is told, mode by mode", () => {
     );
     /* And one at a time, so a mode reading the wrong flag shows up. Citations'
        and Debate's flags both open Sources since 2026-10-09. */
-    const MODE_OF = { bibliography: "sources", debate: "sources" } as const;
-    for (const built of ["glossary", "ideas", "quotes", "timeline", "skim", "faq", "bibliography", "debate"] as const) {
-      const mode: Mode = built === "bibliography" || built === "debate" ? MODE_OF[built] : built;
+    const MODE_OF = { bibliography: "sources", reception: "sources" } as const;
+    for (const built of ["glossary", "ideas", "quotes", "timeline", "skim", "faq", "bibliography", "reception"] as const) {
+      const mode: Mode = built === "bibliography" || built === "reception" ? MODE_OF[built] : built;
       expect([...markedModes(only(built)).keys()], built).not.toContain(mode);
     }
   });
@@ -386,10 +386,10 @@ describe("what a visitor is told, mode by mode", () => {
    * names (`citations` and `debate`).
    */
   it("opens Sources on any one of its artefacts, and names them when there is none", () => {
-    const withFlags = (citations: boolean, debate: boolean): PublicArtefacts => ({
+    const withFlags = (citations: boolean, reception: boolean): PublicArtefacts => ({
       ...NOTHING_BUILT,
       bibliography: citations,
-      debate,
+      reception,
     });
     expect(visitorGap("sources", withFlags(true, false)), "citations only").toBeNull();
     /* `debate` is set by the search or by Claims' list alone (public-artefacts.ts § artefactsIn). */
@@ -548,7 +548,7 @@ describe("what the payload says it has", () => {
       faq: false,
       simpleSummary: false,
       bibliography: false,
-      debate: false,
+      reception: false,
     });
     expect(
       artefactsIn({
@@ -595,7 +595,7 @@ describe("what the payload says it has", () => {
    * construct-rather-than-spread rule the server DTOs follow.
    */
   it("lifts the artefacts out without the article coming with them", () => {
-    const debateClaims = {
+    const sourcesClaims = {
       claims: [
         {
           id: "spya-cdm2a4",
@@ -605,8 +605,8 @@ describe("what the payload says it has", () => {
         },
       ],
     };
-    const full: PublicArticle = { ...BARE, glossary: { entries: [] }, debateClaims };
-    expect(artefactsOf(full)).toEqual({ glossary: { entries: [] }, debateClaims });
+    const full: PublicArticle = { ...BARE, glossary: { entries: [] }, sourcesClaims };
+    expect(artefactsOf(full)).toEqual({ glossary: { entries: [] }, sourcesClaims });
     expect(artefactsOf(BARE)).toEqual({});
   });
 });

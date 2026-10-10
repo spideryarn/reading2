@@ -92,7 +92,7 @@ import type {
   RefereeClaimsStore,
   RefereeHiddenCheckStore,
   RefereeCriteriaStore,
-  DebateClaimChecksStore,
+  SourcesClaimChecksStore,
   SearchStore,
   ShelfStore,
   ShelfTermsStore,
@@ -124,7 +124,7 @@ import { pgStaleNoticeStore } from "./pg-stale-notices.js";
 import { pgQuizAttemptStore } from "./pg-quiz-attempts.js";
 import { pgReaderStore } from "./pg-reader.js";
 import { pgRefereeClaimsStore } from "./pg-referee-claims.js";
-import { pgDebateClaimChecksStore } from "./pg-debate-claim-checks.js";
+import { pgSourcesClaimChecksStore } from "./pg-sources-claim-checks.js";
 import { pgRefereeHiddenCheckStore } from "./pg-referee-hidden-checks.js";
 import { pgRefereeCriteriaStore } from "./pg-referee-criteria.js";
 import { pgSearchStore } from "./pg-searches.js";
@@ -253,14 +253,14 @@ export const loadIdeas = reader.loadIdeas.bind(reader);
 export const loadTimeline = reader.loadTimeline.bind(reader);
 export const loadQuiz = reader.loadQuiz.bind(reader);
 export const loadFaq = reader.loadFaq.bind(reader);
-export const loadDebateClaims = reader.loadDebateClaims.bind(reader);
+export const loadSourcesClaims = reader.loadSourcesClaims.bind(reader);
 export const loadRelations = reader.loadRelations.bind(reader);
 export const loadCrossrefs = reader.loadCrossrefs.bind(reader);
 export const loadSimpleSummary = reader.loadSimpleSummary.bind(reader);
 export const loadSkim = reader.loadSkim.bind(reader);
 export const loadSketch = reader.loadSketch.bind(reader);
 export const loadIllustrated = reader.loadIllustrated.bind(reader);
-export const loadDebate = reader.loadDebate.bind(reader);
+export const loadReception = reader.loadReception.bind(reader);
 export const loadArticleIdentity = reader.loadArticleIdentity.bind(reader);
 export const loadBibliography = reader.loadBibliography.bind(reader);
 /* The articles a cited work may be matched to: the reader's own and public ones
@@ -354,9 +354,9 @@ export const refereeClaimsStore: RefereeClaimsStore = guarded("referee-claims", 
  * target may be the reader's own typed words — db-errors.ts is why nothing a
  * failed query says leaves it.
  */
-export const debateClaimChecksStore: DebateClaimChecksStore = guarded(
-  "debate-claim-checks",
-  pgDebateClaimChecksStore,
+export const sourcesClaimChecksStore: SourcesClaimChecksStore = guarded(
+  "sources-claim-checks",
+  pgSourcesClaimChecksStore,
 );
 
 /**

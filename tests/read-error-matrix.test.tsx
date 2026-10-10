@@ -167,8 +167,8 @@ const SAYS = {
   ideas: "Instruments outrun explanation",
   timeline: "The Vienna calibration",
   quotes: QUOTE_LINE,
-  debate: "The Leiden replication",
-  "debate-claims": "A rig can be built before its reading is understood.",
+  reception: "The Leiden replication",
+  "sources-claims": "A rig can be built before its reading is understood.",
   glossary: "Kolmogorov depth",
   bibliography: "Elements of Episodic Memory",
   quiz: "What was built before it could be explained?",
@@ -185,7 +185,7 @@ const para = (text: string, id = "spya-bbbbbb") => ({ text, ids: [id] });
 const BODIES: Record<string, unknown> = {
   /* Debate's Claims list (plan 261008i stage 2): one listed claim, whose
      AI line is what the band draws. */
-  "debate-claims": {
+  "sources-claims": {
     claimList: {
       ...STAMP,
       claims: [{ id: "spya-cdm2a4", blockId: AT.blockId, quote: AT.quote, statement: "A rig can be built before its reading is understood." }],
@@ -297,8 +297,8 @@ const BODIES: Record<string, unknown> = {
     outdated: false,
     profileChanged: false,
   },
-  debate: {
-    debate: {
+  reception: {
+    reception: {
       version: "test",
       generator: "test",
       slug: SLUG,
@@ -309,7 +309,7 @@ const BODIES: Record<string, unknown> = {
           {
             id: "spya-dbt234",
             url: "https://example.org/leiden",
-            title: SAYS.debate,
+            title: SAYS.reception,
             sourceQuote: "We could not reproduce the calibration.",
             relation: "disputes",
             lean: "leans-against",
@@ -515,12 +515,12 @@ async function reply(url: string, method: string, body: string | null): Promise<
      again* in Debate's band beside the one this file counts (plan 261004h). */
   if (url.startsWith("/api/citers/")) return json({ kind: "no-doi" });
   /* Debate's claim checks (plan 261008i stage 3): a second read beside the list, never the row under test. */
-  if (/^\/api\/debate-claims\/[^/]+\/checks$/.test(url)) return json({ checks: [] });
-  /* `debate-claims` by name: a general `[a-z-]+` would turn reading-time and the like from `{}` into a 404. */
-  const other = /^\/api\/(debate-claims|[a-z]+)\/([^/]+)$/.exec(url);
+  if (/^\/api\/sources-claims\/[^/]+\/checks$/.test(url)) return json({ checks: [] });
+  /* `sources-claims` by name: a general `[a-z-]+` would turn reading-time and the like from `{}` into a 404. */
+  const other = /^\/api\/(sources-claims|[a-z]+)\/([^/]+)$/.exec(url);
   const there = other?.[2] === undefined ? undefined : elsewhere[other[2]];
   if (there && other?.[1] && other[1] in there) return artefactResponse(other[1], there[other[1]] as Answer);
-  const kind = new RegExp(`^/api/(debate-claims|[a-z]+)/${SLUG}$`).exec(url)?.[1];
+  const kind = new RegExp(`^/api/(sources-claims|[a-z]+)/${SLUG}$`).exec(url)?.[1];
   if (kind && kind in BODIES) {
     gets[kind] = (gets[kind] ?? 0) + 1;
     /* The arc is there unless a test says otherwise: `useArc` asks for one the
@@ -550,8 +550,8 @@ const { useSketch } = await import("../src/web/useSketch.js");
 const { useIllustrated } = await import("../src/web/useIllustrated.js");
 const { useFaqRead } = await import("../src/web/useFaq.js");
 const { useTimelineRead } = await import("../src/web/useTimeline.js");
-const { useDebateRead } = await import("../src/web/useDebate.js");
-const { useDebateClaims } = await import("../src/web/useDebateClaims.js");
+const { useReceptionRead } = await import("../src/web/useReception.js");
+const { useSourcesClaims } = await import("../src/web/useSourcesClaims.js");
 const { useBibliographyRead } = await import("../src/web/useBibliography.js");
 const { useSimple } = await import("../src/web/useSimple.js");
 
@@ -668,9 +668,9 @@ const ROWS: readonly Row[] = [
   { hook: "useIdeas.ts", kind: "ideas", search: "?mode=ideas", where: ".mode-band.ideas" },
   { hook: "useTimeline.ts", kind: "timeline", search: "?mode=timeline", where: ".mode-band.timeline" },
   { hook: "useQuotes.ts", kind: "quotes", search: "?mode=quotes", where: ".mode-band.quotes" },
-  { hook: "useDebate.ts", kind: "debate", search: "?mode=sources&sources=reception", where: ".mode-band.dbt" },
+  { hook: "useReception.ts", kind: "reception", search: "?mode=sources&sources=reception", where: ".mode-band.rcp" },
   /* Claims' own read, on Claims (plan 261008i stage 2). */
-  { hook: "useDebateClaims.ts", kind: "debate-claims", search: "?mode=sources&sources=claims", where: ".mode-band.dbt" },
+  { hook: "useSourcesClaims.ts", kind: "sources-claims", search: "?mode=sources&sources=claims", where: ".mode-band.rcp" },
   { hook: "useGlossary.ts", kind: "glossary", search: "?mode=glossary", where: ".mode-band.gloss" },
   { hook: "useBibliography.ts", kind: "bibliography", search: "?mode=sources", where: ".mode-band.bibliography" },
   {
@@ -694,7 +694,7 @@ const ROWS: readonly Row[] = [
 const NOT_A_ROW: Record<string, string> = {
   "useOrderedRead.ts": "the definition itself",
   "useCiters.ts":
-    "Reception's Cited by is a section inside Debate's band, not a mode's artefact read: it has no error string at all. Every failed request is its `unavailable` outcome, with its own fixed sentence and its own Try again, checked in tests/use-citers.test.tsx and tests/debate-panel.test.tsx.",
+    "Reception's Cited by is a section inside Debate's band, not a mode's artefact read: it has no error string at all. Every failed request is its `unavailable` outcome, with its own fixed sentence and its own Try again, checked in tests/use-citers.test.tsx and tests/reception-and-claims-panel.test.tsx.",
   "useArc.ts":
     "its `error` is never drawn — Reader reads `capability.arc.arc` and nothing else of it — so there is nothing to put a button beside. Its sentence is checked below.",
   "useClaims.ts":
@@ -1404,9 +1404,9 @@ const AFTER_NONE_READS: readonly { kind: string; use: (slug: string) => Artefact
   { kind: "ideas", use: useIdeasRead },
   { kind: "timeline", use: useTimelineRead },
   { kind: "quotes", use: useQuotesRead },
-  { kind: "debate", use: useDebateRead },
+  { kind: "reception", use: useReceptionRead },
   /* No read half of its own: the whole hook, unarmed, so nothing it mounts can spend. */
-  { kind: "debate-claims", use: (slug) => useDebateClaims(slug, false) },
+  { kind: "sources-claims", use: (slug) => useSourcesClaims(slug, false) },
   { kind: "glossary", use: useGlossaryRead },
   { kind: "bibliography", use: useBibliographyRead },
   { kind: "quiz", use: useQuizRead },

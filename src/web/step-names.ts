@@ -76,8 +76,8 @@ const STEP_PLACE: Record<StepName, StepPlace> = {
   },
   sketch: { sub: { mode: "diagram", view: "sketch" } },
   illustrated: { sub: { mode: "diagram", view: "illustrated" } },
-  debate: { sub: { mode: "sources", view: "reception" } },
-  "debate-claims": { sub: { mode: "sources", view: "claims" } },
+  reception: { sub: { mode: "sources", view: "reception" } },
+  "sources-claims": { sub: { mode: "sources", view: "claims" } },
   bibliography: { sub: { mode: "sources", view: "bibliography" } },
   crossrefs: {
     name: "Cross-references",

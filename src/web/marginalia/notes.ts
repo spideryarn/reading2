@@ -27,7 +27,7 @@ import type {
   TimelineEvent,
   Tree,
 } from "../../types.js";
-import type { PublicClaimDebateRow, PublicComment } from "../../public-types.js";
+import type { PublicClaimReceptionRow, PublicComment } from "../../public-types.js";
 import { findQuote } from "../../quote-match.js";
 import { blockIndex, sectionNodesOf } from "../../section-path.js";
 import { isSupplementNode } from "../../supplement.js";
@@ -36,7 +36,7 @@ import { type AskedQuestion, type CommentKind, commentKind } from "../comment-na
 import type { Voice } from "../voice.js";
 
 /** A Debate claim row, the owner's or a visitor's — every owner row is one. */
-export type MarginClaim = PublicClaimDebateRow;
+export type MarginClaim = PublicClaimReceptionRow;
 /** A comment or bookmark, the owner's or a visitor's. */
 export type MarginComment = Comment | PublicComment;
 
@@ -83,7 +83,7 @@ export type MarginaliaNote =
       mention it — plan 261003f. */
   | { kind: "timeline"; items: { event: TimelineEvent; quote: string }[] }
   /** Pages on the web that answer a claim made in this block. */
-  | { kind: "debate"; items: MarginClaim[] }
+  | { kind: "reception"; items: MarginClaim[] }
   /** Works first cited in this block. Owner only — the caller's rule. */
   | { kind: "citation"; items: CitedWork[] }
   /** The reader's own comments on this block, and the questions they asked
@@ -121,7 +121,7 @@ type GroupedItems = Partial<{
   [K in GroupedKind["kind"]]: Extract<GroupedKind, { kind: K }>["items"];
 }>;
 /** The order the kinds are drawn in below the question and the stamps. */
-const GROUPED_ORDER = ["faq", "timeline", "debate", "citation", "comment"] as const;
+const GROUPED_ORDER = ["faq", "timeline", "reception", "citation", "comment"] as const;
 
 /** Turn the placement accumulator into the discriminated notes the renderer consumes. */
 function inGroupedOrder(grouped: ReadonlyMap<BlockId, GroupedItems>): Map<BlockId, GroupedKind[]> {
@@ -367,7 +367,7 @@ function groupedNotes(
     }
   }
   for (const row of more.claims ?? []) {
-    if (holds(row.blockId, row.claimQuote)) put(row.blockId, "debate", row);
+    if (holds(row.blockId, row.claimQuote)) put(row.blockId, "reception", row);
   }
   for (const work of more.citations ?? []) {
     const first = earliest(work.citedAt, (id) => id, () => true);

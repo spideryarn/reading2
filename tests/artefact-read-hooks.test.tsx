@@ -4,7 +4,7 @@
  * `useTimelineRead`, split out of their mode hooks for Skim's stop
  * card (Sol F22, docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
  * § Revised after GPT Sol's stage-3 plan review), and `useFaqRead` and
- * `useDebateRead`, split out for Marginalia's notes (plan 261002b).
+ * `useReceptionRead`, split out for Marginalia's notes (plan 261002b).
  *
  * The card promises that nothing on it starts a run. With the mode hooks that
  * was true only because `useAutoRun` happened not to fire for another mode's
@@ -59,8 +59,8 @@ const BODIES: Record<string, unknown> = {
     stale: false,
     outdated: true,
   },
-  debate: {
-    debate: {
+  reception: {
+    reception: {
       version: "debate/t",
       generator: "t",
       slug: "read-hooks",
@@ -92,7 +92,7 @@ vi.mock("../src/web/lib/api.js", async () => {
   const apiFetch = async (url: string, init?: RequestInit) => {
     asked.push({ url, method: init?.method ?? "GET" });
     if (url.startsWith("/api/jobs")) return new Response(JSON.stringify({ jobs: [] }), { status: 200 });
-    const kind = /^\/api\/(ideas|faq|debate|timeline)\//.exec(url)?.[1];
+    const kind = /^\/api\/(ideas|faq|reception|timeline)\//.exec(url)?.[1];
     /* A sentence the server wrote, as the real `readJson` throws one: the
        read catches say anything else as the page's own fault
        (src/web/lib/describe-failure.ts). */
@@ -114,7 +114,7 @@ vi.mock("../src/web/lib/api.js", async () => {
 const { useIdeas, useIdeasRead } = await import("../src/web/useIdeas.js");
 const faqHooks = await import("../src/web/useFaq.js");
 const { useFaq, useFaqRead } = faqHooks;
-const { useDebate, useDebateRead } = await import("../src/web/useDebate.js");
+const { useReception, useReceptionRead } = await import("../src/web/useReception.js");
 const { useTimeline, useTimelineRead } = await import("../src/web/useTimeline.js");
 const { OwnerMarginFeed } = await import("../src/web/marginalia/MarginaliaColumn.js");
 
@@ -157,7 +157,7 @@ const jobRequests = () => asked.filter((r) => r.url.startsWith("/api/jobs"));
 const READS = [
   ["ideas", useIdeasRead],
   ["faq", useFaqRead],
-  ["debate", useDebateRead],
+  ["reception", useReceptionRead],
   ["timeline", useTimelineRead],
 ] as const;
 
@@ -173,9 +173,9 @@ describe("the read hooks start no job", () => {
       await new Promise((resolve) => setTimeout(resolve, 60));
     });
     expect(asked.map((request) => request.url).sort()).toEqual([
-      "/api/debate/read-hooks",
       "/api/faq/read-hooks",
       "/api/ideas/read-hooks",
+      "/api/reception/read-hooks",
       /* Marginalia's own artefact. Its hook starts a job when the column is
          shown with none stored (tests/marginalia-relations-on-open.test.tsx);
          here there is one. */
@@ -224,7 +224,7 @@ describe("the positive control: a mode hook can reach the queue, and a read hook
   const MODES = [
     ["ideas", useIdeas, useIdeasRead],
     ["faq", useFaq, useFaqRead],
-    ["debate", useDebate, useDebateRead],
+    ["reception", useReception, useReceptionRead],
     ["timeline", useTimeline, useTimelineRead],
   ] as const;
   for (const [kind, useMode, useRead] of MODES) {

@@ -6,7 +6,7 @@
  * (D1, D4, D5, D6) and its review's F1 and F3.
  *
  * The whole app (`App` under `StrictMode`, the real nuqs adapter), for the
- * reason tests/debate-check-claim-in-chat.test.tsx gives and one more: the
+ * reason tests/sources-claim-check-in-chat.test.tsx gives and one more: the
  * chat summaries, the sender and the reopening handler travel
  * `Reader` → the owner's band → the panel → the row, and a panel test passes
  * over a prop that one of those never forwarded (F3).
@@ -52,7 +52,7 @@ import {
   type Article,
   type ChatThread,
   type Bibliography,
-  type Debate,
+  type Reception,
   type Glossary,
   type Ideas,
   MAX_ORIGIN_NAME_CHARS,
@@ -299,7 +299,7 @@ const IDEAS: Ideas = {
 /* One of Debate's claims, from an older search's rows (the legacy list), and
    the counts that search would have stored. */
 const CLAIM_QUOTE = "Qualia are the felt quality of an experience";
-const DEBATE_COUNTS = {
+const RECEPTION_COUNTS = {
   returnedSources: 1,
   reportedRows: 1,
   keptRows: 1,
@@ -316,14 +316,14 @@ const DEBATE_COUNTS = {
     malformed: 0,
   },
 };
-const DEBATE: Debate = {
+const RECEPTION: Reception = {
   version: "debate/3",
   generator: "model",
   slug: SLUG,
   sourceHash: "hash",
   elapsedMs: 1,
   searchedAt: "2026-10-03T12:00:00.000Z",
-  direct: { rows: [], counts: DEBATE_COUNTS },
+  direct: { rows: [], counts: RECEPTION_COUNTS },
   claims: {
     rows: [
       {
@@ -339,9 +339,9 @@ const DEBATE: Debate = {
         bears: "directly",
       },
     ],
-    counts: DEBATE_COUNTS,
+    counts: RECEPTION_COUNTS,
   },
-} as Debate;
+} as Reception;
 
 /** What a visitor is sent: the same lists, in the page's own payload. */
 const ARTICLE: PublicArticle = {
@@ -490,7 +490,7 @@ function reply(url: string, method: string, body: unknown): Response {
   if (url.startsWith("/api/bibliography/")) return json({ bibliography: BIBLIOGRAPHY, stale: false, outdated: false });
   if (url.startsWith("/api/ideas/"))
     return json({ ideas: IDEAS, stale: false, outdated: false, profileChanged: false });
-  if (url === `/api/debate/${SLUG}`) return json({ debate: DEBATE, stale: false, outdated: false });
+  if (url === `/api/reception/${SLUG}`) return json({ reception: RECEPTION, stale: false, outdated: false });
   if (url.startsWith("/api/comments/")) return json({ comments: [] });
   if (url === "/api/jobs") return json({ jobs: [] });
   return json({});
@@ -1170,17 +1170,17 @@ describe("the way back from a chat to its item", () => {
 
   it("goes back to one of Debate's claims: Claims open, its filters cleared, the claim in view and unfolded", async () => {
     const line = await openChatFrom(
-      { mode: "debate", blockId: "spya-bbbbbb", quote: CLAIM_QUOTE },
-      "&bears=directly&debatethread=key",
+      { mode: "sources-claims", blockId: "spya-bbbbbb", quote: CLAIM_QUOTE },
+      "&bears=directly&receptionthread=key",
     );
     expect(line.textContent).toBe(`Back to “${CLAIM_QUOTE}” in Claims`);
     await act(async () => line.click());
     await until(() => param("mode") === "sources" && scrolled.length > 0, "Claims, on the claim");
     expect(param("sources")).toBe("claims");
     expect(param("bears"), "a filter that could hide the claim is cleared").toBeNull();
-    expect(param("debatethread")).toBeNull();
+    expect(param("receptionthread")).toBeNull();
     expect(param("thread"), "the chat does not float over the item it went back to").toBeNull();
-    const claim = host.querySelector<HTMLDetailsElement>(".mode-band details.dbt-claim-group");
+    const claim = host.querySelector<HTMLDetailsElement>(".mode-band details.rcp-claim-group");
     expectLandedOn(claim);
     expect(claim?.open).toBe(true);
     await act(async () => history.back());
@@ -1189,7 +1189,7 @@ describe("the way back from a chat to its item", () => {
   });
 
   it("goes back to an angle in Debate: Reception, where the angles are", async () => {
-    const line = await openChatFrom({ mode: "debate", lens: "how it relates to Nagel" });
+    const line = await openChatFrom({ mode: "reception", lens: "how it relates to Nagel" });
     expect(line.textContent).toBe("Back to your angle in Reception");
     await act(async () => line.click());
     await until(() => param("mode") === "sources", "Sources");

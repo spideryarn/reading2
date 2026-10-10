@@ -31,7 +31,7 @@ Capture each remaining band’s relevant pre-migration shapes before editing it,
 
 **Established.** The plan and component say four panels want `foot` ([plan:107](</home/greg/code/spideryarn2/.claude/worktrees/a5-mode-surface/docs/plans/260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen.md:107>), [ModeSurface.tsx:142](</home/greg/code/spideryarn2/.claude/worktrees/a5-mode-surface/src/web/ModeSurface.tsx:142>)). There are six:
 
-- Debate’s `.dbt-again` follows `.dbt-scroll` and its CSS explicitly calls it pinned ([DebatePanel.tsx:803](</home/greg/code/spideryarn2/.claude/worktrees/a5-mode-surface/src/web/DebatePanel.tsx:803>), [debate.css:342](</home/greg/code/spideryarn2/.claude/worktrees/a5-mode-surface/src/web/styles/debate.css:342>)).
+- Debate’s `.dbt-again` follows `.dbt-scroll` and its CSS explicitly calls it pinned ([DebatePanel.tsx:803](</home/greg/code/spideryarn2/.claude/worktrees/a5-mode-surface/src/web/ReceptionAndClaimsPanel.tsx:803>), [debate.css:342](</home/greg/code/spideryarn2/.claude/worktrees/a5-mode-surface/src/web/styles/reception.css:342>)).
 - Quiz’s `.quiz-rewrite` is likewise a direct child outside `.quiz-one`, the scrolling child ([QuizPanel.tsx:503](</home/greg/code/spideryarn2/.claude/worktrees/a5-mode-surface/src/web/QuizPanel.tsx:503>)).
 
 The interface already supports both without added DOM. Stage 2 should pass all six pinned rows through `foot`, preserving their current guards.

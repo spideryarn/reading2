@@ -1282,7 +1282,7 @@ const SEARCH_TOOLS = [{ type: "openrouter:web_search", parameters: { engine: "ex
 const SEARCHING: { name: string; ask: (body?: AiRequestBody) => Promise<unknown>; good: () => Response }[] = [
   {
     name: "openRouterJson",
-    ask: (body = { model: "m", messages: [], tools: SEARCH_TOOLS }) => openRouterJson("debate", body),
+    ask: (body = { model: "m", messages: [], tools: SEARCH_TOOLS }) => openRouterJson("reception", body),
     good: whole(200, { choices: [{ message: { content: "ok" } }] }),
   },
   {
@@ -1385,7 +1385,7 @@ describe.each(SEARCHING)("$name with a web search — sent again only if it neve
 it("a web search on the default engine is sent once too", async () => {
   const t = script(droppedWith("ECONNRESET"), whole(200, { choices: [{ message: { content: "ok" } }] }));
   const run = await drive(() =>
-    openRouterJson("debate", { model: "m", messages: [], tools: [{ type: "openrouter:web_search" }] }),
+    openRouterJson("reception", { model: "m", messages: [], tools: [{ type: "openrouter:web_search" }] }),
   );
   expect(errorOf(run.outcome)).toBeInstanceOf(TypeError);
   expect(t.sent()).toBe(1);
@@ -1404,7 +1404,7 @@ it.each(SEAMS)("$name asks fetch to refuse redirects, including when retries are
 
 it("a call without a web search is still asked again after a reset", async () => {
   const t = script(droppedWith("ECONNRESET"), whole(200, { choices: [{ message: { content: "ok" } }] }));
-  const run = await drive(() => openRouterJson("debate", { model: "m", messages: [] }));
+  const run = await drive(() => openRouterJson("reception", { model: "m", messages: [] }));
   expect(errorOf(run.outcome)).toBeUndefined();
   expect(t.sent()).toBe(2);
 });

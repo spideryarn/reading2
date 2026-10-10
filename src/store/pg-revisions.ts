@@ -383,7 +383,7 @@ export const REVISION_CARRY_POLICY: Record<
      were, so a jump may land on a block that has changed. Carrying keeps the
      reader's list rather than emptying the sub-mode until they pay again.
      docs/plans/261008i-debate-claims-picked-by-the-reader.md. */
-  debateClaims: "carry",
+  sourcesClaims: "carry",
   /* **Carries, like `faq`** — a replace-on-rerun list whose `sourceHash`
      answers at read time whether the article moved underneath it. A carried
      list that no longer matches is **not drawn** (Sol F8): a link can still
@@ -425,7 +425,7 @@ export const REVISION_CARRY_POLICY: Record<
      artefact is what tells the panel so at read time. Carrying is not a claim
      that it is current, and the honest degradation is a list still worth
      reading with some of its jumps gone, at up to $0.27 a run to buy back. */
-  debate: "carry",
+  reception: "carry",
   /* **Carries, like `quotes` and `timeline`** — the other replace-on-rerun
      lists — and for their reason: a new draft keeps a list worth reading, and
      `sourceHash` answers at read time whether the article moved underneath it.
@@ -447,6 +447,10 @@ export const REVISION_CARRY_POLICY: Record<
    * migration, with this entry.
    */
   legacyCitations: "mirror",
+  /** Reception's column before plan 261009w (`debate`), mirrored the same way. */
+  legacyDebate: "mirror",
+  /** The claims list's column before plan 261009w (`debate_claims`), likewise. */
+  legacyDebateClaims: "mirror",
 };
 
 /**

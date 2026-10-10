@@ -11,7 +11,7 @@ import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
 const stores = vi.hoisted(() => ({
   loadQuiz: vi.fn(), loadCrossrefs: vi.fn(), loadBibliography: vi.fn(),
   loadSimpleSummary: vi.fn(), loadIdeas: vi.fn(), loadFaq: vi.fn(), loadTimeline: vi.fn(),
-  loadDebate: vi.fn(), loadGlossary: vi.fn(), loadQuotes: vi.fn(), loadSkim: vi.fn(),
+  loadReception: vi.fn(), loadGlossary: vi.fn(), loadQuotes: vi.fn(), loadSkim: vi.fn(),
   attempts: vi.fn(), candidates: vi.fn(), profile: vi.fn(),
 }));
 
@@ -21,7 +21,7 @@ vi.mock("../src/store/index.js", async (importOriginal) => {
   const loads = guardDbStore("none-yet-test", {
     loadQuiz: stores.loadQuiz, loadCrossrefs: stores.loadCrossrefs, loadBibliography: stores.loadBibliography,
     loadSimpleSummary: stores.loadSimpleSummary, loadIdeas: stores.loadIdeas, loadFaq: stores.loadFaq,
-    loadTimeline: stores.loadTimeline, loadDebate: stores.loadDebate, loadGlossary: stores.loadGlossary,
+    loadTimeline: stores.loadTimeline, loadReception: stores.loadReception, loadGlossary: stores.loadGlossary,
     loadQuotes: stores.loadQuotes, loadSkim: stores.loadSkim,
   });
   return {
@@ -43,14 +43,14 @@ const RESPONSES = {
   ideas: { ideas: { slug: SLUG, ideas: [] }, stale: false, outdated: false },
   faq: { faq: { slug: SLUG, questions: [] }, stale: false, outdated: false },
   timeline: { timeline: { slug: SLUG, events: [] }, stale: false, outdated: false },
-  debate: { debate: { slug: SLUG, direct: { rows: [] }, claims: { rows: [] } }, stale: false, outdated: false },
+  reception: { reception: { slug: SLUG, direct: { rows: [] }, claims: { rows: [] } }, stale: false, outdated: false },
   glossary: { glossary: { slug: SLUG, entries: [] }, stale: false, outdated: false },
   quotes: { quotes: { slug: SLUG, quotes: [] }, stale: false, outdated: false },
 };
 const READS = [
   ["quiz", stores.loadQuiz], ["crossrefs", stores.loadCrossrefs], ["bibliography", stores.loadBibliography],
   ["simple", stores.loadSimpleSummary], ["ideas", stores.loadIdeas], ["faq", stores.loadFaq],
-  ["timeline", stores.loadTimeline], ["debate", stores.loadDebate], ["glossary", stores.loadGlossary],
+  ["timeline", stores.loadTimeline], ["reception", stores.loadReception], ["glossary", stores.loadGlossary],
   ["quotes", stores.loadQuotes],
 ] as const;
 

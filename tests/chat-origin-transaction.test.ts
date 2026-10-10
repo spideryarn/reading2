@@ -4,7 +4,7 @@ import type { ThreadOrigin } from "../src/types.js";
 
 const ID = "spya-rgn222";
 const AT = "2026-10-05T10:00:00.000Z";
-const CLAIM: ThreadOrigin = { mode: "debate", blockId: "spya-bbbbbb", quote: "RNA can transfer a memory" };
+const CLAIM: ThreadOrigin = { mode: "sources-claims", blockId: "spya-bbbbbb", quote: "RNA can transfer a memory" };
 
 describe("origin checked against the transaction's thread snapshot", () => {
   it.each([undefined, { ...CLAIM, quote: "A different claim" }])(
@@ -40,13 +40,13 @@ describe("origin checked against the transaction's thread snapshot", () => {
 
   /* Plan 261005k, A: both shapes say `mode: "debate"`, so comparing modes is
      not enough, and neither is comparing a block and a quote the lens lacks. */
-  const LENS: ThreadOrigin = { mode: "debate", lens: "how it relates to Smith 2019" };
+  const LENS: ThreadOrigin = { mode: "reception", lens: "how it relates to Smith 2019" };
 
   it.each<[string, ThreadOrigin, ThreadOrigin]>([
     ["a lens for a thread another process started from a claim", CLAIM, LENS],
     ["a claim for a thread another process started from a lens", LENS, CLAIM],
-    ["a different lens", LENS, { mode: "debate", lens: "replication attempts" }],
-    ["a lens whose words are the claim's", CLAIM, { mode: "debate", lens: "RNA can transfer a memory" }],
+    ["a different lens", LENS, { mode: "reception", lens: "replication attempts" }],
+    ["a lens whose words are the claim's", CLAIM, { mode: "reception", lens: "RNA can transfer a memory" }],
   ])("refuses %s", (_name, stored, wanted) => {
     const first = withTurn([], { threadId: ID, question: "first", origin: stored }, AT);
     expect(() => withTurn(first.threads, { threadId: ID, question: "second", origin: wanted }, AT))
@@ -64,7 +64,7 @@ describe("origin checked against the transaction's thread snapshot", () => {
      resend may differ, and the name stored first is the one kept. An idea
      joined them in plan 261009k (GPT Sol's F7). */
   describe.each(["glossary", "bibliography", "ideas"] as const)("a %s origin", (mode) => {
-    const ITEM: ThreadOrigin = { mode, itemId: "spya-ttm222", quote: "qualia" };
+    const ITEM = { mode, itemId: "spya-ttm222", quote: "qualia" } satisfies ThreadOrigin;
 
     it("accepts a resend whose name has changed, and keeps the first name", () => {
       const first = withTurn([], { threadId: ID, question: "first", origin: ITEM }, AT);

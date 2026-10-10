@@ -17,7 +17,7 @@ Verdict: **refuse as written** on established P1s F35, F37, F38, F40, F41, and F
 - “The stated 10% estimate is wrong—it is at least 30%, making the warning stronger.” This can truthfully be `disputes` + `positive`.
 - “The reported figure is correct, but the article’s conclusion is morally indefensible.” This can truthfully be `corroborates` + `negative`.
 
-Mapping agreement onto a field displayed as support/criticism changes its meaning without changing its name or UI. For group one, the proposed question is also malformed: there is no “claim you quoted”; its target is the article. This contradicts the authoritative contract in the [parent plan](</home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md:168>) and [`VALENCE_APPEARANCE`](</home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/web/DebatePanel.tsx:137>).
+Mapping agreement onto a field displayed as support/criticism changes its meaning without changing its name or UI. For group one, the proposed question is also malformed: there is no “claim you quoted”; its target is the article. This contradicts the authoritative contract in the [parent plan](</home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md:168>) and [`VALENCE_APPEARANCE`](</home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/web/ReceptionAndClaimsPanel.tsx:137>).
 
 (b) Replace “The finding that was not in the debrief” and both proposed fixes with:
 
@@ -72,7 +72,7 @@ An arm can reach zero mechanical pairs while still targeting `qualifies`, `exten
 
 ### F40 — P1, established: the proposed “raw” capture is downstream of failures it claims to preserve
 
-(a) `admissible` is already derived: `collectSearchEvidence` has filtered annotations and `runPass` has removed self-sources. `runPass` also throws before returning on an unreadable response, bad finish reason, or missing search count. A sink receiving text plus `admissible` therefore cannot replay those validations or preserve a paid failed pass—the exact atomic-failure case motivating capture. See [`runPass`](</home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/debate.ts:1034>).
+(a) `admissible` is already derived: `collectSearchEvidence` has filtered annotations and `runPass` has removed self-sources. `runPass` also throws before returning on an unreadable response, bad finish reason, or missing search count. A sink receiving text plus `admissible` therefore cannot replay those validations or preserve a paid failed pass—the exact atomic-failure case motivating capture. See [`runPass`](</home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/reception.ts:1034>).
 
 (b) Replace the capture specification with:
 
@@ -80,7 +80,7 @@ An arm can reach zero mechanical pairs while still targeting `qualifies`, `exten
 
 ### F41 — P1, established: the corpus pin omits a production input
 
-(a) Debate’s production fingerprint covers blocks, tree, and cited metadata. Pass A and direct-row validation depend particularly on URL, title, and byline. Pinning only `blocks.json` and `tree.json` allows metadata to change while the corpus gate stays green, producing a different search and different directness decisions under the same corpus identity. [`inputFingerprint`](</home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/debate.ts:215>) establishes the contract.
+(a) Debate’s production fingerprint covers blocks, tree, and cited metadata. Pass A and direct-row validation depend particularly on URL, title, and byline. Pinning only `blocks.json` and `tree.json` allows metadata to change while the corpus gate stays green, producing a different search and different directness decisions under the same corpus identity. [`inputFingerprint`](</home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/reception.ts:215>) establishes the contract.
 
 (b) Replace the two-hash paragraph with:
 

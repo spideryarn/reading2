@@ -85,13 +85,13 @@ import type {
   Bibliography,
   Arc,
   Citation,
-  Debate,
-  DebateCheckCounts,
-  DebateCheckResult,
-  DebateCheckTarget,
+  Reception,
+  SourcesClaimCheckCounts,
+  SourcesClaimCheckResult,
+  SourcesClaimCheckTarget,
   Faq,
   Relations,
-  DebateClaimList,
+  SourcesClaimList,
   Crossrefs,
   SimpleSummary,
   Skim,
@@ -1244,8 +1244,8 @@ export const articleRevisions = spideryarn.table(
     illustrated: jsonb("illustrated").$type<Illustrated>(),
 
     /**
-     * What the rest of the web says about this piece — `Debate`, src/types.ts,
-     * written by the `debate` step.
+     * What the rest of the web says about this piece — `Reception`,
+     * src/types.ts, written by the `reception` step.
      * docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md.
      *
      * **The only artefact column here holding text this app did not make and
@@ -1276,21 +1276,53 @@ export const articleRevisions = spideryarn.table(
      * the same argument the glossary, the ideas, the quotes, the timeline, the
      * quiz and the sketch make: a dropped paragraph should cost that row its
      * jump rather than take a delete with it or block one.
+     *
+     * The column was `debate` until 2026-10-09 (plan 261009w), and the old one
+     * is still here below, kept equal to this one by a trigger.
      */
-    debate: jsonb("debate").$type<Debate>(),
+    reception: jsonb("reception").$type<Reception>(),
 
     /**
-     * The article's claims, listed for Debate's Claims sub-mode to pick from —
-     * `DebateClaimList`, src/types.ts, written by the `debate-claims` step.
+     * **Retired: nothing reads or writes this.** Reception's column before plan
+     * 261009w renamed it to `reception` above, by expand and contract, exactly
+     * as `legacyCitations` below: the migration
+     * `drizzle/20261010…_reception_expand.sql` added the new column, copied this
+     * one into it, and widened the trigger `article_revisions_mirror_renamed` to
+     * keep the two equal whichever one a write names.
+     *
+     * Declared only so `drizzle-kit generate` does not propose dropping it
+     * before its time. Excluded from whole-row reads (`ACTIVE_REVISION_COLUMNS`),
+     * from the export bundle, and from the revision carry (the trigger fills
+     * it). **Dropped by the contract migration, plan 261009w's queue item**,
+     * with this declaration.
+     */
+    legacyDebate: jsonb("debate").$type<Reception>(),
+
+    /**
+     * The article's claims, listed for Sources › Claims to pick from —
+     * `SourcesClaimList`, src/types.ts, written by the `sources-claims` step.
      * docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2.
      *
      * The WHOLE artefact, like its neighbours; `sourceHash` covers its rendered
      * body and cited head. **Public**, read-only, through `PUBLIC_PROJECTIONS`: model
      * output about the article, which mode.md makes a visitor's by default.
-     * A column of its own rather than a field inside `debate`, because the
+     * A column of its own rather than a field inside `reception`, because the
      * two are made by different presses and go stale on different clocks.
+     *
+     * The column was `debate_claims` until 2026-10-09 (plan 261009w), and the
+     * old one is still here below, kept equal to this one by a trigger.
      */
-    debateClaims: jsonb("debate_claims").$type<DebateClaimList>(),
+    sourcesClaims: jsonb("sources_claims").$type<SourcesClaimList>(),
+
+    /**
+     * **Retired: nothing reads or writes this.** The claims list's column
+     * before plan 261009w renamed it to `sources_claims` above, by expand and
+     * contract, as `legacyDebate` above. Declared only so `drizzle-kit
+     * generate` does not propose dropping it; excluded from whole-row reads,
+     * the export bundle and the revision carry. **Dropped by the contract
+     * migration, plan 261009w's queue item**, with this declaration.
+     */
+    legacyDebateClaims: jsonb("debate_claims").$type<SourcesClaimList>(),
 
     /**
      * Every work the piece cites — `Bibliography`, src/types.ts, written by the
@@ -2307,12 +2339,12 @@ export const refereeClaims = spideryarn.table(
   ],
 );
 
-/* -------------------------------------------------- debate claim checks -- */
+/* ------------------------------------------------- sources claim checks -- */
 
 /**
- * **A reader's claim check in Debate's Claims** — the claims they ticked and
- * the one they typed, searched on the open web in one call. `DebateClaimCheck`
- * in src/types.ts is the shape; src/store/pg-debate-claim-checks.ts is the
+ * **A reader's claim check in Sources › Claims** — the claims they ticked and
+ * the one they typed, searched on the open web in one call. `SourcesClaimCheck`
+ * in src/types.ts is the shape; src/store/pg-sources-claim-checks.ts is the
  * store; docs/plans/261008i-debate-claims-picked-by-the-reader.md § 3 is the
  * design.
  *
@@ -2337,7 +2369,7 @@ export const refereeClaims = spideryarn.table(
  * only on a `pending` row carrying it; the sweep clears it. `created_at` is
  * the lease's clock: a `pending` row older than the call's deadline plus a
  * margin is one whose process died, and the next GET marks it `error` so it
- * cannot hold the index for ever (src/store/pg-debate-claim-checks.ts §
+ * cannot hold the index for ever (src/store/pg-sources-claim-checks.ts §
  * `CHECK_ORPHAN_GRACE_MS`).
  *
  * ## `targets`, `results` and `counts` are JSONB, for `referee_claims`' reason
@@ -2345,13 +2377,25 @@ export const refereeClaims = spideryarn.table(
  * One call's wholesale output, written together, read as a unit, never edited
  * a row at a time, and never queried across: docs/project/sql.md's exception,
  * argued the way `referee_claims.claims` argues it.
+ *
+ * ## Renamed from `debate_claim_checks`, and why its constraints were not
+ *
+ * The table was `debate_claim_checks` until 2026-10-09 (plan 261009w, GPT
+ * Sol's F3). The expand migration renamed the table and left a view of the
+ * old name over it (`CREATE VIEW debate_claim_checks AS SELECT * FROM
+ * sources_claim_checks`), which the code deployed before the rename reads and
+ * writes through for the minutes of the deploy. **Every constraint and index
+ * below keeps its `debate_claim_checks_*` name**, written out as a literal so
+ * that `drizzle-kit generate` does not derive a new one from the table's name
+ * and propose renaming it: the old store recognises the one-pending violation
+ * by the index's literal name (src/store/pg-sources-claim-checks.ts accepts
+ * either). The contract migration renames them, drops the view, and these
+ * literals follow.
  */
-export const debateClaimChecks = spideryarn.table(
-  "debate_claim_checks",
+export const sourcesClaimChecks = spideryarn.table(
+  "sources_claim_checks",
   {
-    articleId: uuid("article_id")
-      .notNull()
-      .references(() => articles.id, { onDelete: "cascade" }),
+    articleId: uuid("article_id").notNull(),
     /** `mintId()`, unique within its article. */
     id: text("id").notNull(),
     /** `auth.users(id)`. FK in the migration by hand, like every other owner key. */
@@ -2360,18 +2404,18 @@ export const debateClaimChecks = spideryarn.table(
     status: text("status").notNull(),
     /** Which call may finish this row. Set while `pending`, null after. */
     attemptId: text("attempt_id"),
-    /** `DebateClaimList.sourceHash` of the list it was pressed on. Checks are drawn under that list. */
+    /** `SourcesClaimList.sourceHash` of the list it was pressed on. Checks are drawn under that list. */
     listSourceHash: text("list_source_hash").notNull(),
-    /** `CHECK_PROMPT_VERSION` in src/debate.ts when it was asked. */
+    /** `CHECK_PROMPT_VERSION` in src/reception.ts when it was asked. */
     promptVersion: text("prompt_version").notNull(),
     /** Dig further on one claim: the prompt carried the addresses it already had. */
     digFurther: boolean("dig_further").notNull().default(false),
     /** What was searched for — built by the server from stored ids. */
-    targets: jsonb("targets").$type<DebateCheckTarget[]>().notNull(),
+    targets: jsonb("targets").$type<SourcesClaimCheckTarget[]>().notNull(),
     /** One per target once `done`; `[]` otherwise. */
-    results: jsonb("results").$type<DebateCheckResult[]>().notNull().default([]),
+    results: jsonb("results").$type<SourcesClaimCheckResult[]>().notNull().default([]),
     /** What the reading dropped and why. Null until `done`. */
-    counts: jsonb("counts").$type<DebateCheckCounts>(),
+    counts: jsonb("counts").$type<SourcesClaimCheckCounts>(),
     /** The provider's own search count — the spend alarm. Null until `done`. */
     webSearches: integer("web_searches"),
     model: text("model"),
@@ -2383,7 +2427,14 @@ export const debateClaimChecks = spideryarn.table(
     finishedAt: timestamp("finished_at", { withTimezone: true }),
   },
   (t) => [
-    primaryKey({ columns: [t.articleId, t.id] }),
+    primaryKey({ name: "debate_claim_checks_article_id_id_pk", columns: [t.articleId, t.id] }),
+    /* `.references()` would name this after the table; the old name is kept
+       until the contract, as above. */
+    foreignKey({
+      name: "debate_claim_checks_article_id_articles_id_fk",
+      columns: [t.articleId],
+      foreignColumns: [articles.id],
+    }).onDelete("cascade"),
     check("debate_claim_checks_id_format", sql`${t.id} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`),
     check("debate_claim_checks_status", sql`${t.status} in ('pending','done','error')`),
     /* A pending row is the one with an attempt; nothing else has one. */
@@ -3503,12 +3554,13 @@ export const revisionStepRuns = spideryarn.table(
          in the migrations against `STEP_ORDER` in both directions, which is
          what makes there not be a third drift.
 
-         **`'citations'` is not a step any more** and is still listed, on
-         purpose: plan 261009w renamed it `bibliography` by expand and
+         **`'citations'`, `'debate'` and `'debate-claims'` are not steps any
+         more** and are still listed, on purpose: plan 261009w renamed them
+         `bibliography`, `reception` and `sources-claims` by expand and
          contract, so through the deploy both spellings' rows exist, a trigger
          mirroring each write onto the other. The contract migration deletes
          the old rows and narrows this; the test names the allowance. */
-      sql`${t.stepName} in ('fetch','metadata','extract','blocks','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','relations','sketch','illustrated','debate','debate-claims','citations','bibliography','crossrefs','simple')`,
+      sql`${t.stepName} in ('fetch','metadata','extract','blocks','structure','labels','assets','arc','tweets','glossary','quotes','skim','ideas','timeline','quiz','faq','relations','sketch','illustrated','debate','reception','debate-claims','sources-claims','citations','bibliography','crossrefs','simple')`,
     ),
     check(
       "revision_step_runs_status",
@@ -4404,12 +4456,14 @@ export const chatThreads = spideryarn.table(
      * (docs/project/sql.md: columns over JSON). All null for every other
      * thread. Plan docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md, D1.
      *
-     * - `origin_mode`: which mode. `debate`, `glossary`, `bibliography` and
-     *   `ideas` are written; `summary` is reserved. `citations` is a cited
-     *   work's origin as written before 2026-10-09 (plan 261009w): still
-     *   admitted, never written now, and read as `bibliography` by
-     *   `originFromColumns` (src/thread-origin.ts). The contract migration
-     *   rewrites those rows and narrows the CHECKs below.
+     * - `origin_mode`: which mode. `reception` (a lens), `sources-claims` (a
+     *   claim), `glossary`, `bibliography` and `ideas` are written; `summary`
+     *   is reserved. `citations` (a cited work) and `debate` (a claim or a
+     *   lens) are origins as written before 2026-10-09 (plan 261009w): still
+     *   admitted, never written now, and read as `bibliography`, and by shape
+     *   as `sources-claims` or `reception`, by `originFromColumns`
+     *   (src/thread-origin.ts). The contract migration rewrites those rows and
+     *   narrows the CHECKs below.
      * - `origin_item_id`: the item's id where it has a durable one (a glossary
      *   entry, a cited work). Null for a claim, which has none. Never
      *   dereferenced, and no foreign key: the entry may be regenerated away.
@@ -4420,7 +4474,8 @@ export const chatThreads = spideryarn.table(
      *   a model's: never logged.
      * - `origin_lens`: the angle the reader typed to look at the debate from
      *   (`LensOrigin`; plan 261005k, A). The reader's words: never logged. A
-     *   debate origin has this **or** a block and a quote, never both.
+     *   `reception` origin has this and a `sources-claims` origin a block and a
+     *   quote; an old `debate` origin has one or the other, never both.
      *
      * Written **on insert only**, like the anchor and the kind:
      * `upsertThread`'s conflict clause does not name them.
@@ -4469,20 +4524,32 @@ export const chatThreads = spideryarn.table(
        article's and the quote is not empty. */
     check(
       "chat_threads_origin_mode",
-      sql`${t.originMode} is null or ${t.originMode} in ('debate','summary','glossary','citations','bibliography','ideas')`,
+      sql`${t.originMode} is null or ${t.originMode} in ('debate','reception','sources-claims','summary','glossary','citations','bibliography','ideas')`,
     ),
     /* No mode, no origin: the other four columns mean nothing without it. */
     check(
       "chat_threads_origin_none",
       sql`${t.originMode} is not null or (${t.originItemId} is null and ${t.originBlockId} is null and ${t.originQuote} is null and ${t.originLens} is null)`,
     ),
-    /* A debate origin is one of two shapes and never a mix: a claim (a block
-       and its words, no lens) or a lens (no block, no words). Neither has an
-       id. The mapper reads anything else as no origin, so the database must
-       not hold it (plan 261005k's review, F7). */
+    /* A `debate` origin, as written before 2026-10-09, is one of two shapes
+       and never a mix: a claim (a block and its words, no lens) or a lens (no
+       block, no words). Neither has an id. The mapper reads anything else as no
+       origin, so the database must not hold it (plan 261005k's review, F7).
+       Plan 261009w split it in two, the next two checks; this one goes with
+       the contract migration, which rewrites the old rows. */
     check(
       "chat_threads_origin_debate",
       sql`${t.originMode} is distinct from 'debate' or (${t.originItemId} is null and ((${t.originBlockId} is not null and ${t.originQuote} is not null and ${t.originLens} is null) or (${t.originBlockId} is null and ${t.originQuote} is null and ${t.originLens} is not null)))`,
+    ),
+    /* Reception's lens: the angle the reader typed, no block, no words, no id. */
+    check(
+      "chat_threads_origin_reception",
+      sql`${t.originMode} is distinct from 'reception' or (${t.originItemId} is null and ${t.originBlockId} is null and ${t.originQuote} is null and ${t.originLens} is not null)`,
+    ),
+    /* A claim in Sources › Claims: the block and its words, no lens, no id. */
+    check(
+      "chat_threads_origin_sources_claims",
+      sql`${t.originMode} is distinct from 'sources-claims' or (${t.originItemId} is null and ${t.originBlockId} is not null and ${t.originQuote} is not null and ${t.originLens} is null)`,
     ),
     /* A glossary entry, a cited work or an idea is an id and a snapshot of
        its name, with no block and no lens (plan 261006d, D2; the idea is plan
@@ -4501,10 +4568,11 @@ export const chatThreads = spideryarn.table(
       "chat_threads_origin_summary",
       sql`${t.originMode} is distinct from 'summary' or (${t.originItemId} is null and ${t.originBlockId} is null and ${t.originQuote} is null)`,
     ),
-    /* Only Debate takes a lens. */
+    /* Only Reception takes a lens (and `debate`, its word before plan 261009w,
+       until the contract migration rewrites those rows and renames this). */
     check(
       "chat_threads_origin_lens_debate_only",
-      sql`${t.originLens} is null or ${t.originMode} = 'debate'`,
+      sql`${t.originLens} is null or ${t.originMode} in ('reception','debate')`,
     ),
     /* Only a chat is started from an item; the other kinds are about the
        whole article. */
@@ -5570,8 +5638,8 @@ export const STALE_NOTICE_TABLE = {
     "simple",
     "bibliography",
     "tweets",
-    "debate",
-    "debate-claims",
+    "reception",
+    "sources-claims",
     "quotes",
     "skim",
     "search",
@@ -5584,9 +5652,11 @@ export const STALE_NOTICE_TABLE = {
    * `RETIRED_STALE_NOTICE_MODES`. `citations` was Bibliography's until plan
    * 261009w, whose migration `…_stale_notice_bibliography.sql` widened the
    * check to both, because the code deployed before it writes the old word;
-   * the plan's contract drops this list.
+   * `debate` and `debate-claims` were Reception's and Claims' until the same
+   * plan's `…_reception_expand.sql` did the same for them. The plan's contract
+   * drops this list.
    */
-  retiredModes: ["citations"],
+  retiredModes: ["citations", "debate", "debate-claims"],
   maxIdentities: 50,
   maxIdentityLength: 120,
 } as const;
@@ -7782,10 +7852,14 @@ export const rateLimitEvents = spideryarn.table(
     /* `citation-find` is not in `RateBucket` (src/store/contracts.ts): its only
        spender went with POST …/find on 2026-10-04. It stays here for the rows
        already written. Removing it needs a migration that first proves no such
-       rows remain; the per-bucket sweep no longer reaches them (plan 261004h). */
+       rows remain; the per-bucket sweep no longer reaches them (plan 261004h).
+       `debate-check` is `sources-claim-check`'s word before plan 261009w, still
+       written by the code deployed before it and still counted against the new
+       word (contracts.ts § `RETIRED_RATE_BUCKETS`); the contract migration
+       rewrites or deletes those rows, then drops it from this list. */
     check(
       "rate_limit_events_bucket",
-      sql`${t.bucket} in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate', 'dig-deeper', 'feedback-notice', 'help-chat', 'debate-check')`,
+      sql`${t.bucket} in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate', 'dig-deeper', 'feedback-notice', 'help-chat', 'debate-check', 'sources-claim-check')`,
     ),
     /** Both counting queries, and the sweep, run over exactly this. */
     index("rate_limit_events_owner_bucket_started").on(t.ownerId, t.bucket, t.startedAt),

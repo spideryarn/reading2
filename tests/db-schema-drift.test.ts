@@ -280,7 +280,6 @@ describe("declaredTables", () => {
       "citation_index_lookups",
       "citation_investigations",
       "comments",
-      "debate_claim_checks",
       "feedback",
       "feedback_question_answers",
       "feedback_question_deferrals",
@@ -309,6 +308,7 @@ describe("declaredTables", () => {
       "search_runs",
       "shelf_topic_scores",
       "shelf_topic_sets",
+      "sources_claim_checks",
       "stale_notice_dismissals",
       "upload_source_guesses",
       "uploads",
@@ -402,7 +402,7 @@ describe("against a real database", () => {
          (plan 261008i); fifty-two since `import_records` the same day (plan
          261008j); fifty-three since `referee_hidden_checks`, 2026-10-09 (plan
          261009a); fifty-four since `debate_claim_checks` the same day (plan
-         261008i § 3); fifty-six since `author_gifts` and `author_lookups`,
+         261008i § 3; `sources_claim_checks` since plan 261009w); fifty-six since `author_gifts` and `author_lookups`,
          2026-10-09 (plan 261010c); fifty-seven since `stale_notice_dismissals`,
          2026-10-10 (plan 261010a). */
       expect(report.declaredTables).toBe(57);

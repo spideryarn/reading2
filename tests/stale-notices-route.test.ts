@@ -190,6 +190,26 @@ describe("GET and POST /api/stale-notices/:slug", () => {
     expect((await read(LEGACY_TAB)).body).toEqual({ dismissed: { bibliography: [FIRST] } });
   });
 
+  /* Plan 261009w's Stage 3 did the same for Reception (`debate`) and Claims
+     (`debate-claims`), through the same table of retired words. */
+  it.each([
+    ["debate", "reception"],
+    ["debate-claims", "sources-claims"],
+  ])("reads a row the old code stored as `%s` as %s's, and stores an old-word request under the new one", async (old, current) => {
+    await getDb().execute(sql`
+      insert into spideryarn.stale_notice_dismissals (article_id, mode, dismissed_for)
+      values (${legacy?.articleId ?? ""}, ${old}, array[${FIRST}])
+    `);
+    const read1 = (await read(LEGACY)).body as { dismissed: Record<string, string[]> };
+    expect(read1.dismissed[current]).toEqual([FIRST]);
+    expect(read1.dismissed).not.toHaveProperty(old);
+
+    expect((await dismiss(LEGACY_TAB, { mode: old, identities: [SECOND] })).status).toBe(204);
+    const modes = (await rowsOf(legacyTab)).map((r) => r.mode);
+    expect(modes).toContain(current);
+    expect(modes).not.toContain(old);
+  });
+
   it("is a 404 on both verbs for an article somebody else owns, and writes nothing", async () => {
     expect((await read(STRANGERS)).status).toBe(404);
     expect((await dismiss(STRANGERS, { mode: "glossary", identities: [FIRST] })).status).toBe(404);

@@ -49,6 +49,8 @@ import { RETIRED_STEPS } from "../src/step-order.js";
  */
 const ADMITTED_DURING_EXPAND: Readonly<Record<string, string>> = {
   citations: "Bibliography's step until 2026-10-09; removed by plan 261009w's contract migration",
+  debate: "Reception's step until 2026-10-09; removed by plan 261009w's contract migration",
+  "debate-claims": "Claims' list step until 2026-10-09; removed by plan 261009w's contract migration",
 };
 
 const DRIZZLE = path.resolve(import.meta.dirname, "..", "drizzle");

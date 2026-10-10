@@ -52,7 +52,7 @@ So yes: include `lean` on `extends`, and also on `unclear`. Under the present co
 
 ### F67 — P1, reasoned: the type cannot make the visible failure class impossible
 
-(a) Model JSON enters as `unknown`; enum membership is imposed at runtime ([debate.ts](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/debate.ts:796)). A future answer can legally normalize to:
+(a) Model JSON enters as `unknown`; enum membership is imposed at runtime ([debate.ts](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/reception.ts:796)). A future answer can legally normalize to:
 
 ```ts
 {
@@ -71,7 +71,7 @@ This is also how wrong-target behaviour can migrate: after stance is removed, th
 
 ### F68 — P1, established: legacy JSONB has no compatible read design
 
-(a) Stored rows all have `valence` and none has `lean`. The database reader casts JSONB to `Debate`; `isDebateDocument` validates only that two arrays exist ([types.ts](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/types.ts:3981)). The panel then accesses the categorical field directly ([DebatePanel.tsx](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/web/DebatePanel.tsx:1152)).
+(a) Stored rows all have `valence` and none has `lean`. The database reader casts JSONB to `Debate`; `isDebateDocument` validates only that two arrays exist ([types.ts](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/types.ts:3981)). The panel then accesses the categorical field directly ([DebatePanel.tsx](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/web/ReceptionAndClaimsPanel.tsx:1152)).
 
 If that becomes `LEAN_APPEARANCE[row.lean]`, every legacy row reaches the renderer with `undefined`; dereferencing `look.icon` then crashes. This exact repository already needed `lossesOf` because TypeScript did not describe old JSONB ([types.ts](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/types.ts:3877)).
 

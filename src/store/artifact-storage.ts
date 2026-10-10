@@ -32,11 +32,11 @@ export type WholeColumn =
   | "quiz"
   | "faq"
   | "relations"
-  | "debateClaims"
+  | "sourcesClaims"
   | "skim"
   | "sketch"
   | "illustrated"
-  | "debate"
+  | "reception"
   | "bibliography"
   | "crossrefs"
   | "simpleSummary";
@@ -143,8 +143,8 @@ export const STORAGE: {
   skim: { skim: { at: "column", column: "skim" } },
   sketch: { sketch: { at: "column", column: "sketch" } },
   illustrated: { illustrated: { at: "column", column: "illustrated" } },
-  debate: { debate: { at: "column", column: "debate" } },
-  "debate-claims": { "debate-claims": { at: "column", column: "debateClaims" } },
+  reception: { reception: { at: "column", column: "reception" } },
+  "sources-claims": { "sources-claims": { at: "column", column: "sourcesClaims" } },
   bibliography: { bibliography: { at: "column", column: "bibliography" } },
   crossrefs: { crossrefs: { at: "column", column: "crossrefs" } },
   /* The kind is the step's name, as every other kind here is — it is also the

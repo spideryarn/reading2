@@ -39,7 +39,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   Arc,
   BlockId,
-  Debate,
+  Reception,
   Faq,
   Glossary,
   Ideas,
@@ -148,7 +148,7 @@ function faqArtefact(): Faq {
   } as unknown as Faq;
 }
 
-function debateArtefact(): Debate {
+function receptionArtefact(): Reception {
   return {
     ...STAMP,
     version: "debate/5",
@@ -156,7 +156,7 @@ function debateArtefact(): Debate {
     direct: { rows: [] },
     claims: { rows: [{ id: "debate-1", applies: value }] },
     elapsedMs: 1,
-  } as unknown as Debate;
+  } as unknown as Reception;
 }
 
 /** A scene `readSketch` will keep whole — one node, whose label is the value. */
@@ -200,8 +200,8 @@ function bodyFor(url: string): string {
     return JSON.stringify({ thread: threadArtefact(), ...dated });
   }
   if (url.startsWith("/api/faq/")) return JSON.stringify({ faq: faqArtefact(), ...dated });
-  if (url.startsWith("/api/debate/")) {
-    return JSON.stringify({ debate: debateArtefact(), ...dated });
+  if (url.startsWith("/api/reception/")) {
+    return JSON.stringify({ reception: receptionArtefact(), ...dated });
   }
   throw new Error(`the test made an unexpected request: ${url}`);
 }
@@ -251,7 +251,7 @@ const { useArc } = await import("../src/web/useArc.js");
 const { useSketch } = await import("../src/web/useSketch.js");
 const { useTweets } = await import("../src/web/useTweets.js");
 const { useFaq } = await import("../src/web/useFaq.js");
-const { useDebate } = await import("../src/web/useDebate.js");
+const { useReception } = await import("../src/web/useReception.js");
 
 /** A job for this article, arriving in the poll as finished. */
 function finishJob(step: string): void {
@@ -341,9 +341,9 @@ function FaqHarness({ slug }: { slug: string }): ReactElement {
   return createElement("aside", null, all.faq?.questions.map((q) => q.question).join(",") ?? all.status);
 }
 
-function DebateHarness({ slug }: { slug: string }): ReactElement {
-  const all = useDebate(slug);
-  return createElement("aside", null, all.debate?.claims.rows.map((row) => row.applies).join(",") ?? all.status);
+function ReceptionHarness({ slug }: { slug: string }): ReactElement {
+  const all = useReception(slug);
+  return createElement("aside", null, all.reception?.claims.rows.map((row) => row.applies).join(",") ?? all.status);
 }
 
 interface Reader {
@@ -366,7 +366,7 @@ const READERS: Reader[] = [
   { name: "useSketch", step: "sketch", url: `/api/sketch/${SLUG}`, Harness: SketchHarness },
   { name: "useTweets", step: "tweets", url: `/api/tweets/${SLUG}`, Harness: TweetsHarness },
   { name: "useFaq", step: "faq", url: `/api/faq/${SLUG}`, Harness: FaqHarness },
-  { name: "useDebate", step: "debate", url: `/api/debate/${SLUG}`, Harness: DebateHarness },
+  { name: "useReception", step: "reception", url: `/api/reception/${SLUG}`, Harness: ReceptionHarness },
 ];
 
 let host: HTMLDivElement;

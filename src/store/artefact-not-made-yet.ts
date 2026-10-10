@@ -15,7 +15,7 @@
  *
  * Thrown by sixteen loaders in src/store/pg.ts. **"Not made" is each loader's
  * own test**, and for several it is wider than an empty column: `loadFaq`,
- * `loadSimpleSummary`, `loadDebate`, `loadRelations` and `loadSkim` throw this
+ * `loadSimpleSummary`, `loadReception`, `loadRelations` and `loadSkim` throw this
  * for a stored document they cannot use, and `loadSketch` and
  * `loadIllustrated` for one with nothing in it.
  *
@@ -26,7 +26,7 @@
  *
  * **All sixteen routes answer the header**: `loadQuiz`, `loadCrossrefs` and
  * `loadBibliography` first (plan 261006g); `loadSimpleSummary`, `loadIdeas`,
- * `loadFaq`, `loadTimeline`, `loadDebate`, `loadGlossary` and `loadQuotes`
+ * `loadFaq`, `loadTimeline`, `loadReception`, `loadGlossary` and `loadQuotes`
  * (plan 261006h); and `loadTweets`, `loadRelations`, `loadSkim`, `loadSketch`,
  * `loadIllustrated` and `loadArc` (plan 261007n). Without the header each is
  * still a 404, for a tab opened before the deploy.

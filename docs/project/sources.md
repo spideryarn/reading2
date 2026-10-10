@@ -23,7 +23,7 @@ It was called **Peer review** for its first day; § The name says why it is Sour
 its review and what is left to build are
 [261009l](../plans/261009l-peer-review-mode-merges-citations-and-debate.md), and the rename is
 [261009w](../plans/261009w-peer-review-becomes-sources-all-the-way-down.md). The depth on each list
-stays where it was: **[bibliography.md](bibliography.md)** for Bibliography, **[debate.md](debate.md)**
+stays where it was: **[bibliography.md](bibliography.md)** for Bibliography, **[reception.md](reception.md)**
 for Reception and Claims. This page owns the merge.
 
 ## In this doc
@@ -42,7 +42,7 @@ for Reception and Claims. This page owns the merge.
 ```
  ┌ Bibliography 42 │ Reception 3 │ Claims 8 ┐                      (i)
  │ BibliographyPanel, as the Citations mode drew it   ← Bibliography (the default)
- │ DebatePanel, as the Debate mode drew it         ← Reception, Claims
+ │ ReceptionAndClaimsPanel, as the Debate mode drew it         ← Reception, Claims
 ```
 
 **A wrapper, not a rewrite.** `SourcesBand` reads the sub-mode and hands one chip row to
@@ -90,7 +90,7 @@ everything that reads only the mode: the tab title, `/help/mode-citations`, `/he
 `/help/mode-peer-review`, a feedback report. `peer-review` is in last-view's `NEVER_REMEMBERED`
 beside `debate`, so a lone old `?peer-review=claims` link wins over a remembered view.
 *tests/sources-old-addresses.test.ts*, *tests/last-view.test.ts* and
-*tests/debate-navigation.test.tsx*.
+*tests/reception-navigation.test.tsx*.
 
 **In the command bar the old words find the sub-mode they meant**, as Tweets' did Summary's Thread:
 *citations* and the bibliography words (*references*, *works cited*) find Bibliography, *debate* and
@@ -188,10 +188,11 @@ So the mode is Sources all the way down
 ([261009w](../plans/261009w-peer-review-becomes-sources-all-the-way-down.md)), in stages. The mode's
 own word went first: the label, the catalogue, `?mode=sources`, `?sources=`, the help page, the
 remembered view, the chat filter and every `Sources…` identifier. Bibliography's stored names
-followed in Stage 2 ([bibliography.md](bibliography.md) lists them). **Reception's and Claims'
-still keep the old words until Stage 3**: the `debate` and `debate-claims` steps, columns and
-routes, a claim's or an angle's stored origin, `DebatePanel`, and the `dbt-` CSS. They become
-`reception` and `sources-claims`, after the sub-modes they now are.
+followed in Stage 2 ([bibliography.md](bibliography.md) lists them), and Reception's and Claims' in
+Stage 3 ([reception.md](reception.md) lists them): the `debate` step became `reception`,
+`debate-claims` became `sources-claims` and `debate-check` became `sources-claim-check`, after the
+sub-modes they now are, and a claim's and an angle's chat origin, both `debate` until then, became
+`sources-claims` and `reception`.
 
 "Source" already means several other things here (`sourceHash`, the imported article's raw source,
 chat's web sources, Reception's key sources, the Storage bucket), so the mode appears only in the
@@ -204,8 +205,8 @@ forms that plan lists, and nobody renames by a blanket replace on the word.
 - [`src/web/sources-counts.ts`](../../src/web/sources-counts.ts) — the chips' numbers and the
   lists behind them, shared with the panels.
 - [`src/web/BibliographyPanel.tsx`](../../src/web/BibliographyPanel.tsx) and
-  [`src/web/DebatePanel.tsx`](../../src/web/DebatePanel.tsx) — the two panels; both take the chip row
-  as `head`, and DebatePanel draws C1's cited works under claims.
+  [`src/web/ReceptionAndClaimsPanel.tsx`](../../src/web/ReceptionAndClaimsPanel.tsx) — the two panels; both take the chip row
+  as `head`, and ReceptionAndClaimsPanel draws C1's cited works under claims.
 - [`src/web/params.ts`](../../src/web/params.ts) § `sourcesParam`; [`src/web/router.ts`](../../src/web/router.ts)
   § `liftLegacySources`; [`src/web/activation.ts`](../../src/web/activation.ts) §
   `activationForSources`.

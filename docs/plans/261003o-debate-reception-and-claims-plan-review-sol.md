@@ -3,7 +3,7 @@ The client-only split is a reasonable v1: both searches and the claim grouping a
 1. **F1 — P1, established: “no rows” does not mean “no reception found.”**  
    Step 6 replaces several distinct outcomes with one sentence. Today, `emptyGroupNote` distinguishes no returned pages from returned pages whose quotations could not be verified. `sharedLeadNote` also distinguishes an empty search from rows withheld by the public boundary. A threshold or thread can independently empty the visible list.
 
-   Evidence: [DebatePanel.tsx:682](/home/greg/code/spideryarn2/.claude/worktrees/fbcaue42-debate-claims-and-reception/src/web/DebatePanel.tsx:682), `sharedLeadNote` at line 533, and `tests/debate-panel.test.tsx:293–424`.
+   Evidence: [DebatePanel.tsx:682](/home/greg/code/spideryarn2/.claude/worktrees/fbcaue42-debate-claims-and-reception/src/web/ReceptionAndClaimsPanel.tsx:682), `sharedLeadNote` at line 533, and `tests/debate-panel.test.tsx:293–424`.
 
    **Fix:** preserve those distinctions separately in each sub-mode. Show the negative search finding only when the stored search warrants it; otherwise explain verification failure, withholding or filtering. Add owner and visitor tests for each case.
 
@@ -33,7 +33,7 @@ The client-only split is a reasonable v1: both searches and the claim grouping a
 
    The suggested title-and-byline distinction also fails this particular counterexample: both versions have Anthropic as their byline. That limitation is explicitly recorded in `260906b`, under “What is built, and what is cut.”
 
-   Evidence: [debate-levels.ts:79](/home/greg/code/spideryarn2/.claude/worktrees/fbcaue42-debate-claims-and-reception/src/web/debate-levels.ts:79), `260906b`’s Stage P table and identification decision, and `tests/debate-panel.test.tsx:989`.
+   Evidence: [debate-levels.ts:79](/home/greg/code/spideryarn2/.claude/worktrees/fbcaue42-debate-claims-and-reception/src/web/reception-levels.ts:79), `260906b`’s Stage P table and identification decision, and `tests/debate-panel.test.tsx:989`.
 
    **Fix:** test both the newly measured genuine reply and the existing decoy before choosing the rule. Either retain `quoted`, or visibly separate title-only candidates from confirmed reception. The new positive example justifies revisiting the decision; it does not establish that the replacement is safe.
 

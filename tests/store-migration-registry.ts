@@ -344,7 +344,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
    *
    * Measured rather than reasoned, on the `tree-redundant-rung.test.ts`
    * precedent above:
-   * the witness script run with `--files tests/debate-step-registration.test.ts`
+   * the witness script run with `--files tests/reception-step-registration.test.ts`
    * reported **"ran, touched nothing"** under full instrumentation, and the
    * instrument's own `--self-check` passed immediately before — twelve control
    * files, all eight modules still hooked at method level, 24 sites. An
@@ -356,7 +356,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
    * stored `touched` map does not name this file. The guard holds the two apart
    * so the field cannot become decorative.
    */
-  "tests/debate-step-registration.test.ts": {
+  "tests/reception-step-registration.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["import-only"],
     evidence: "static-only",
@@ -2818,6 +2818,8 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/bibliographic-pg.test.ts": "private-postgres",
   /* Plan 261009w Stage 2: the expand migration against the old code's and the new code's statements. */
   "tests/bibliography-expand-pg.test.ts": "private-postgres",
+  /* Plan 261009w Stage 3: the same for Reception, Claims and the claim-check table's view. */
+  "tests/reception-expand-pg.test.ts": "private-postgres",
   "tests/billing-admission.test.ts": "private-postgres",
   "tests/billing-checkout.test.ts": "private-postgres",
   /* Stage 3b's, arriving from this worktree rather than from `dev`, and caught
@@ -2970,7 +2972,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      in SQL, and races two reservations on two connections, so it needs a
      database of its own. The allowance and the search are stubbed; no model
      is called. */
-  "tests/debate-claim-checks-routes.test.ts": "private-postgres",
+  "tests/sources-claim-checks-routes.test.ts": "private-postgres",
   "tests/comment-sweep.test.ts": "private-postgres",
   "tests/corpus-lock.test.ts": "private-postgres",
   /* 2026-09-05. Its second block drives a collector whose sink is `costStore`,
@@ -3704,7 +3706,7 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
   },
   /* Plan 261008i. `seedAuthUser` in `beforeAll`: a second reader who owns an
      article, so a check pressed on it by somebody else is refused. */
-  "tests/debate-claim-checks-routes.test.ts": {
+  "tests/sources-claim-checks-routes.test.ts": {
     "7c0de5a1-0000-4000-8000-00000000d1c5": { kind: "seeded" },
   },
   "tests/a-paper-queued-before-the-resolver.test.ts": {

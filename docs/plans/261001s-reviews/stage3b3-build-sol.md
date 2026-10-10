@@ -7,7 +7,7 @@ Implemented stage 3b part 3. No commits or state-changing Git commands were made
 - Added strict schemas to:
   - [simple-check.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/src/simple-check.ts:123), with optional `n` and `why`, plus pre-parse finish/refusal checks.
   - [citation-paper-passages.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/src/citation-paper-passages.ts:112).
-  - Debate synthesis only in [debate.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/src/debate.ts:1952) and [debate-themes.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/src/debate-themes.ts:94). Its now-unreachable fence was removed; passes A and B remain fenced and unchanged.
+  - Debate synthesis only in [debate.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/src/reception.ts:1952) and [debate-themes.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/src/reception-themes.ts:94). Its now-unreachable fence was removed; passes A and B remain fenced and unchanged.
   - [referee-mirror.ts](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/src/referee-mirror.ts:1072). Raw-delta keepalives and closed-object-on-`length` behavior remain intact.
 - Updated [skim.md](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/docs/project/skim.md:122).
 - Added or updated eight direct test files, plus the necessary stale fixtures in `debate-passes` and `simple-summary`.

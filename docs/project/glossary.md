@@ -990,7 +990,7 @@ What the owner gets:
 - **A visitor has neither** the button nor the line.
 
 It is Debate's *Check this claim in chat* with a different origin, and nearly all of it is that
-machinery: read [debate.md § Check a claim in chat](debate.md#check-a-claim-in-chat) first. What
+machinery: read [reception.md § Check a claim in chat](reception.md#check-a-claim-in-chat) first. What
 is this mode's own:
 
 - **The origin is the entry's id, and a snapshot of its name**:
@@ -1111,7 +1111,7 @@ and the two that still wait, are in
 The same route has a second sender since 2026-10-04: the button on a Summary paragraph
 ([summaries.md § Ask about a paragraph](summaries.md#ask-about-a-paragraph-since-2026-10-04)).
 And a third since 2026-10-05, the first whose conversation remembers where it was started: the
-button on a Debate claim ([debate.md § Check a claim in chat](debate.md#check-a-claim-in-chat)).
+button on a Debate claim ([reception.md § Check a claim in chat](reception.md#check-a-claim-in-chat)).
 
 Four things it has to get right, each with a test:
 

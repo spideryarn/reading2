@@ -369,7 +369,7 @@ function ResetConfirm({
           long piece); a PDF also costs one small call to re-read. The article's arc costs another
           model call when you next open the reading view.
           {regenerate ? " Most extras cost roughly one model call each." : null}
-          {regenerate && extras.includes("debate")
+          {regenerate && extras.includes("reception")
             ? " Reception uses one model call that searches the web and may use one more model call for themes."
             : null}
           {regenerate && extras.includes("sketch") ? ` Sketch takes ${SKETCH_WAIT}.` : null}

@@ -347,7 +347,7 @@ No schema. Answers `spya-hyfqkq`.
 - **A claim in your own words**, from a box in Debate › Claims. Built on 2026-10-05 as the box at
   the top of Debate, *Look at the debate from an angle*, which takes any angle and not only a
   claim: [261005k](261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md),
-  part A, and [debate.md § Look at the debate from an angle](../project/debate.md#look-at-the-debate-from-an-angle).
+  part A, and [debate.md § Look at the debate from an angle](../project/reception.md#look-at-the-debate-from-an-angle).
 - **Start the chat beside the mode**, `[Q-start-beside]`.
 - **A written summary of the thread in the caller**, `[Q-thread-summary]`.
 - **Comments in Chat's list.** A comment's question is already a chat thread and is listed (as

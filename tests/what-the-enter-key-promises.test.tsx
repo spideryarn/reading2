@@ -88,7 +88,7 @@ const PROMISES: Record<string, string> = {
   "CommandBar.tsx › Type a command": "go",
   /* Fields of the criterion form, whose submit button runs it. Not steps in a
      wizard, so `next` would be a lie about where the key goes. */
-  "DebatePanel.tsx › gloss-ask-input": "go",
+  "ReceptionAndClaimsPanel.tsx › gloss-ask-input": "go",
   "CriteriaPanel.tsx › crit-against": "go",
   "CriteriaPanel.tsx › crit-favour": "go",
   /* Enter searches — and in the two boxes that filter as you type it dismisses

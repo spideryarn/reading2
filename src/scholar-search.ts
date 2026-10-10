@@ -4,7 +4,7 @@
  *
  * Two callers: Bibliography, which links a reference it could find no address for
  * (src/bibliography.ts § `linkFor`), and Debate's Reception, which ends with *Who
- * cites it: search Google Scholar* (src/web/DebatePanel.tsx). A search, never a
+ * cites it: search Google Scholar* (src/web/ReceptionAndClaimsPanel.tsx). A search, never a
  * guessed address — the rule plan 261003f set for author links.
  *
  * **A module of its own so the browser can import it.** These lived in

@@ -92,11 +92,11 @@ import type {
   BlockId,
   ChatThread,
   Bibliography,
-  Debate,
+  Reception,
   Faq,
-  DebateClaimList,
-  DebateCounts,
-  DebateLosses,
+  SourcesClaimList,
+  ReceptionCounts,
+  ReceptionLosses,
   Glossary,
   Ideas,
   Quotes,
@@ -273,10 +273,10 @@ const IDEA_NAME = "Instruments outrun explanation";
  */
 const QUOTE_LINE = "before anybody could say what it would measure";
 const TIMELINE_LABEL = "The Vienna calibration";
-const DEBATE_APPLIES = "A replication in Leiden reached the opposite reading.";
+const RECEPTION_APPLIES = "A replication in Leiden reached the opposite reading.";
 /* The page title a Debate row leads with since 260929h — the applies paragraph
    above now sits closed behind the row's `more`, so it is not what a reader sees. */
-const DEBATE_TITLE = "The Leiden replication";
+const RECEPTION_TITLE = "The Leiden replication";
 /* A work's title, which is what a row leads with — drawn from the artefact,
    so a panel that drew its controls and no rows would not satisfy it. */
 const CITATION_TITLE = "Elements of Episodic Memory";
@@ -492,7 +492,7 @@ const SKIM: Skim = {
   elapsedMs: 1,
 };
 
-const NO_LOSSES: DebateLosses = {
+const NO_LOSSES: ReceptionLosses = {
   uncited: 0,
   selfSource: 0,
   unverifiedSource: 0,
@@ -502,7 +502,7 @@ const NO_LOSSES: DebateLosses = {
   unknownBlockId: 0,
   malformed: 0,
 };
-const COUNTS: DebateCounts = {
+const COUNTS: ReceptionCounts = {
   returnedSources: 1,
   reportedRows: 1,
   keptRows: 1,
@@ -513,7 +513,7 @@ const COUNTS: DebateCounts = {
 
 /** A listed claim's own line, the model's words under the article's (plan 261008i § 2). */
 const CLAIM_STATEMENT = "The instrument came before any account of what it measured";
-const CLAIM_LIST: DebateClaimList = {
+const CLAIM_LIST: SourcesClaimList = {
   version: "debate-claims/1",
   generator: "test",
   slug: SLUG,
@@ -531,7 +531,7 @@ const CLAIM_LIST: DebateClaimList = {
   elapsedMs: 1,
 };
 
-const DEBATE: Debate = {
+const RECEPTION: Reception = {
   version: "test",
   generator: "test",
   slug: SLUG,
@@ -542,14 +542,14 @@ const DEBATE: Debate = {
       {
         id: "spya-dbt234",
         url: "https://example.org/leiden",
-        title: DEBATE_TITLE,
+        title: RECEPTION_TITLE,
         sourceQuote: "We could not reproduce the calibration.",
         relation: "disputes",
         lean: "leans-against",
-        applies: DEBATE_APPLIES,
+        applies: RECEPTION_APPLIES,
         articleReferenceQuote: "The instrument was built",
         /* The witness is the same string as `articleReferenceQuote` — that is
-           how src/debate.ts builds a `named` signal, and a fixture that split
+           how src/reception.ts builds a `named` signal, and a fixture that split
            them would describe a row the pipeline cannot produce.
 
            **The `quoted` signal beside it is what keeps this row on screen.** The
@@ -783,9 +783,9 @@ const EVERY_TARGET: Record<AutoRunTarget, true> = {
   ideas: true,
   quotes: true,
   timeline: true,
-  debate: true,
+  reception: true,
   /* Debate's Claims list — armed one level down, by a press that lands on Claims. */
-  "debate-claims": true,
+  "sources-claims": true,
   bibliography: true,
   faq: true,
   relations: true,
@@ -820,14 +820,14 @@ function artefact(url: string): Response | null {
     return has ? json({ quotes: stamped(QUOTES), stale: false, outdated: false, profileChanged: false }) : GONE();
   if (url.startsWith("/api/timeline/"))
     return has ? json({ timeline: TIMELINE, stale: false, outdated: false }) : GONE();
-  if (url.startsWith("/api/debate/"))
-    return has ? json({ debate: DEBATE, stale: false, outdated: false }) : GONE();
+  if (url.startsWith("/api/reception/"))
+    return has ? json({ reception: RECEPTION, stale: false, outdated: false }) : GONE();
   if (url.startsWith("/api/bibliography/"))
     return has ? json({ bibliography: BIBLIOGRAPHY, stale: false, outdated: false }) : GONE();
   /* Sources' Claims: the reader's checks (none), and the list. Before
      2026-10-09 nothing here opened Claims, so neither was served. */
-  if (url.startsWith("/api/debate-claims/") && url.endsWith("/checks")) return json({ checks: [] });
-  if (url.startsWith("/api/debate-claims/"))
+  if (url.startsWith("/api/sources-claims/") && url.endsWith("/checks")) return json({ checks: [] });
+  if (url.startsWith("/api/sources-claims/"))
     return has ? json({ claimList: CLAIM_LIST, stale: false, outdated: false }) : GONE();
   if (url.startsWith("/api/faq/"))
     return has ? json({ faq: FAQ, stale: false, outdated: false }) : GONE();
@@ -1263,8 +1263,8 @@ const SPENDS: Record<Mode, Spend> = {
     kind: "delegated",
     presses: [
       { search: "", steps: ["bibliography"], spends: [] },
-      { search: "?sources=reception", steps: ["debate"], spends: [] },
-      { search: "?sources=claims", steps: ["debate-claims"], spends: [] },
+      { search: "?sources=reception", steps: ["reception"], spends: [] },
+      { search: "?sources=claims", steps: ["sources-claims"], spends: [] },
     ],
   },
   /* One model call over the article, like Ideas. */
@@ -1578,8 +1578,8 @@ const DRAWS: Record<Mode, Draws> = {
  */
 const SOURCES_VIEWS_DRAW: readonly { search: string; where: string; says: string }[] = [
   { search: "?mode=sources", where: ".mode-band.sources.bibliography", says: CITATION_TITLE },
-  { search: "?mode=sources&sources=reception", where: ".mode-band.sources.dbt", says: DEBATE_TITLE },
-  { search: "?mode=sources&sources=claims", where: ".mode-band.sources.dbt", says: CLAIM_STATEMENT },
+  { search: "?mode=sources&sources=reception", where: ".mode-band.sources.rcp", says: RECEPTION_TITLE },
+  { search: "?mode=sources&sources=claims", where: ".mode-band.sources.rcp", says: CLAIM_STATEMENT },
 ];
 
 describe("phase B — Sources' three sub-modes", () => {
@@ -1594,7 +1594,7 @@ describe("phase B — Sources' three sub-modes", () => {
         expect(band, `${view.search}: no ${view.where}`).not.toBeNull();
         expect(readable(band as Element)).toContain(view.says);
         expect((band as Element).querySelectorAll(":scope > .band-about")).toHaveLength(1);
-        const chips = (band as Element).querySelectorAll(":scope > .band-head .dbt-views [role='radio']");
+        const chips = (band as Element).querySelectorAll(":scope > .band-head .rcp-views [role='radio']");
         expect([...chips].map((c) => c.textContent?.replace(/\d+$/, ""))).toEqual(["Bibliography", "Reception", "Claims"]);
       },
       PHASE_MS,

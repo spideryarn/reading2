@@ -435,7 +435,7 @@ const EXPECTED = [
    * The callers, checked 2026-09-08: src/cli-ledger.ts's `withLedger`, which is
    * how most commands reach it; and directly in scripts/stage.ts,
    * scripts/live-spike.ts, evals/cost/run.ts, evals/cost/interactions.ts,
-   * evals/debate/run.ts, evals/deepen/run.ts and evals/illustrated/run.ts. So a
+   * evals/reception/run.ts, evals/deepen/run.ts and evals/illustrated/run.ts. So a
    * request-serving deployment is fine without it and ownerless production CLI
    * work is not, which makes promoting this a judgement about whether
    * production must support that — a product call, and not one a sweep is

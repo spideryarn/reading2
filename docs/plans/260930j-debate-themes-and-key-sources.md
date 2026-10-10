@@ -64,7 +64,7 @@ kept rows and answers two questions:
      figure"* under `responds`, which is false.
 
 **Code checks what the prompt asks for**, in one place for both sides of the wire
-([src/debate-synthesis.ts](../../src/debate-synthesis.ts) § `settleSynthesis`): every id must be a
+([src/debate-synthesis.ts](../../src/reception-synthesis.ts) § `settleSynthesis`): every id must be a
 kept row; a theme needs rows from **two different works**; a key source is one per work; roles are
 a closed set; labels and sentences have length caps; theme ids are unique spideryarn ids; extras
 past the caps are dropped. Each check drops one item. **A work** is a conservative identity: two

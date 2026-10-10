@@ -28,7 +28,7 @@ import { readerSheets, stripComments } from "./helpers/stylesheets.js";
 const SWITCHERS = [
   { mode: "Summary", file: "src/web/modes/summary/SummaryMode.tsx", group: null, button: null },
   /* Debate's Reception | Claims until 2026-10-09; Sources' three chips since. */
-  { mode: "Sources", file: "src/web/modes/sources/SourcesMode.tsx", group: "dbt-views", button: null },
+  { mode: "Sources", file: "src/web/modes/sources/SourcesMode.tsx", group: "rcp-views", button: null },
   { mode: "Structure", file: "src/web/modes/structure/StructureMode.tsx", group: "struct-views", button: "struct-view-btn" },
   { mode: "Referee", file: "src/web/modes/referee/RefereeMode.tsx", group: "ref-views", button: "ref-view-btn" },
   { mode: "Referee's criterion kind", file: "src/web/CriteriaPanel.tsx", group: "crit-kinds", button: "crit-kind-btn" },
@@ -89,7 +89,7 @@ describe("no sheet draws a second look on an old hook", () => {
     /* The modes' refinements (Skim's 36px, Search's padding, Learn's four
        chips) win by coming later, so the order is part of the contract. */
     const at = (p: string) => sheets.findIndex((s) => s.path === p);
-    for (const later of ["summary", "structure-mode", "referee", "quiz", "diagram", "search", "skim", "debate"]) {
+    for (const later of ["summary", "structure-mode", "referee", "quiz", "diagram", "search", "skim", "reception"]) {
       expect(at("src/web/styles/mode-band.css")).toBeLessThan(at(`src/web/styles/${later}.css`));
     }
   });

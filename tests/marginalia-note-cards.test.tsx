@@ -63,7 +63,7 @@ const comment = { id: "c1", body: "My thought", answer: null } as unknown as Mar
 /** One note of each kind, with the key its card should be drawn from. */
 const EACH: readonly [MarginaliaNote, MargTipKey][] = [
   [{ kind: "faq", items: [{ question, quote: "q", morePassages: 0 }] }, "faq"],
-  [{ kind: "debate", items: [claim] }, "debate"],
+  [{ kind: "reception", items: [claim] }, "reception"],
   [{ kind: "citation", items: [work] }, "citation"],
   [{ kind: "comment", items: [{ as: "comment", comment }] }, "comment-own"],
 ];
@@ -194,7 +194,7 @@ describe("the cards' words", () => {
   });
 
   it("says when Debate's displayed headline can be AI's reading rather than the page's title", () => {
-    expect(MARG_TIPS.debate.how).toMatch(/AI wrote the headline/i);
+    expect(MARG_TIPS.reception.how).toMatch(/AI wrote the headline/i);
   });
 });
 
@@ -265,7 +265,7 @@ describe("a value this copy of the app was built before", () => {
   });
 
   it("stamps the values it knows (the control)", async () => {
-    paint([{ kind: "debate", items: [claim] }, idea("assumed")]);
+    paint([{ kind: "reception", items: [claim] }, idea("assumed")]);
     expect(stamps()).toEqual(["disputes", "assumes"]);
     await openIdea();
     expect(cardLines()).toHaveLength(2);
@@ -273,13 +273,13 @@ describe("a value this copy of the app was built before", () => {
   });
 
   it.each(UNKNOWN)("stamps a lone Debate page's relation %s as the server's own word", (relation) => {
-    paint([{ kind: "debate", items: [{ ...claim, relation } as unknown as MarginClaim] }]);
+    paint([{ kind: "reception", items: [{ ...claim, relation } as unknown as MarginClaim] }]);
     expect(stamps()).toEqual([words(relation)]);
   });
 
   it.each(UNKNOWN)("stamps relation %s on one of several Debate pages", (relation) => {
     const other = { ...claim, id: "d2", relation } as unknown as MarginClaim;
-    paint([{ kind: "debate", items: [claim, other] }]);
+    paint([{ kind: "reception", items: [claim, other] }]);
     /* Each page's own stamp is inside the note, which is shut until pressed. */
     act(() => host.querySelector<HTMLButtonElement>(".marg-shut-button")?.click());
     expect(stamps()).toEqual(["Others say", "disputes", words(relation)]);

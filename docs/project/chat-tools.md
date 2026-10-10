@@ -575,7 +575,7 @@ From 2026-10-01 it showed chats only.
   [chat-from-a-mode.md § The way back from the chat](chat-from-a-mode.md#the-way-back-from-the-chat).
 
 A chat started from an item in a mode (`ThreadOrigin` in [`src/types.ts`](../../src/types.ts)) is
-written up where it is built: [debate.md § Check a claim in chat](debate.md#check-a-claim-in-chat),
+written up where it is built: [reception.md § Check a claim in chat](reception.md#check-a-claim-in-chat),
 [glossary.md § Asking about an entry in chat](glossary.md#asking-about-an-entry-in-chat),
 [bibliography.md § Ask in chat](bibliography.md#ask-in-chat-a-conversation-about-one-work),
 [ideas.md § Asking about an idea in chat](ideas.md#asking-about-an-idea-in-chat).
@@ -758,7 +758,7 @@ says nothing at all about where an answer comes from
 
 Since 2026-10-05 Debate leans on exactly this trigger: *Check this claim in chat* on a claim's
 heading starts an ordinary chat that asks whether the claim holds up, with no prompt of its own
-([debate.md § Check a claim in chat](debate.md#check-a-claim-in-chat)).
+([reception.md § Check a claim in chat](reception.md#check-a-claim-in-chat)).
 
 ### And so is asking where a passage stands, and every claim says where it came from
 
@@ -799,7 +799,7 @@ and the before-and-after numbers are in
 Since 2026-10-05 Debate's *Look at the debate from an angle* leans on this trigger's *"what do others
 say?"*: it starts an ordinary chat whose first question uses those words and also asks for a web
 search outright, with no prompt of its own
-([debate.md § Look at the debate from an angle](debate.md#look-at-the-debate-from-an-angle)).
+([reception.md § Look at the debate from an angle](reception.md#look-at-the-debate-from-an-angle)).
 
 ## The "?" says so, and the answer teaches
 

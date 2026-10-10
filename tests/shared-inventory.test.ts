@@ -45,7 +45,7 @@ const NOTHING: PublicArtefacts = {
   faq: false,
   simpleSummary: false,
   bibliography: false,
-  debate: false,
+  reception: false,
 };
 const EVERYTHING: PublicArtefacts = {
   arc: true,
@@ -59,7 +59,7 @@ const EVERYTHING: PublicArtefacts = {
   faq: true,
   simpleSummary: true,
   bibliography: true,
-  debate: true,
+  reception: true,
 };
 
 const keys = (items: InventoryItem[]): string[] => items.map((i) => i.key);
@@ -288,7 +288,7 @@ describe("the sweep over the modes", () => {
   /* The other half of Sources' row: Reception's or Claims' artefact alone
      moves it as Bibliography's does (plan 261009l, GPT Sol's F3). */
   it("moves Sources' row on the debate flag alone, and nothing else", () => {
-    const oneOn = sharedInventory({ ...NOTHING, debate: true });
+    const oneOn = sharedInventory({ ...NOTHING, reception: true });
     expect(keys(oneOn.shared)).toContain("sources");
     for (const other of ROWS) {
       if (other === "sources") continue;
@@ -400,13 +400,13 @@ const WIRE_ROW = {
      Summary's row. docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
   simpleSummary: "summary",
   /* And the Debate, the same day (plan 260929c stage 4). A row the boundary
-     refuses is withheld and counted (src/public/dto.ts § `publicDebate`),
+     refuses is withheld and counted (src/public/dto.ts § `publicReception`),
      which is invisible to this table too. */
-  debate: "sources",
+  reception: "sources",
   /* Debate's claims list, from the day it was built (2026-10-08): what
      Claims draws, so Debate's row (plan 261008i § 2), and Sources' since
      2026-10-09. */
-  debateClaims: "sources",
+  sourcesClaims: "sources",
   /* Not a mode: comments have no button in the bar and are swept by neither
      `MODES` nor `visitorGap`. Their row is the prose one that moved out of
      `NEVER_SHARED` on 2026-09-04.
@@ -439,6 +439,10 @@ const WIRE_ROW = {
   /* `bibliography` under its old key, the same object, for one deploy (plan
      261009w F1; removed by its contract). Sources' row, as `bibliography`'s. */
   citations: "sources",
+  /* `reception` and `sourcesClaims` under their old keys, likewise (plan
+     261009w F1; removed by its contract). */
+  debate: "sources",
+  debateClaims: "sources",
 } satisfies Record<keyof PublicArticle, string>;
 
 describe("the list against the wire", () => {
@@ -464,7 +468,7 @@ describe("reading the flags off the wire", () => {
       faq: true,
       simpleSummary: true,
       bibliography: true,
-      debate: true,
+      reception: true,
     };
     expect([...ARTEFACT_KEYS].sort()).toEqual(Object.keys(probe).sort());
   });
@@ -544,8 +548,8 @@ describe("what counts as shareable", () => {
       faq: null,
       simpleSummary: null,
       bibliography: null,
-      debate: null,
-      debateClaims: null,
+      reception: null,
+      sourcesClaims: null,
       glossary: STALE,
       ideas: null,
       quotes: null,
@@ -565,8 +569,8 @@ describe("what counts as shareable", () => {
       faq: null,
       simpleSummary: null,
       bibliography: null,
-      debate: null,
-      debateClaims: {
+      reception: null,
+      sourcesClaims: {
         version: "debate-claims/1",
         generator: "a-model",
         slug: "noema",
@@ -580,7 +584,7 @@ describe("what counts as shareable", () => {
       ideas: null,
       quotes: null,
     });
-    expect(listOnly.debate).toBe(true);
+    expect(listOnly.reception).toBe(true);
   });
 
   it("counts an empty one, and does not count an absent one", () => {
@@ -597,8 +601,8 @@ describe("what counts as shareable", () => {
       faq: null,
       simpleSummary: null,
       bibliography: null,
-      debate: null,
-      debateClaims: null,
+      reception: null,
+      sourcesClaims: null,
       glossary: { ...STALE, entries: [] },
       ideas: null,
       quotes: null,
@@ -613,8 +617,8 @@ describe("what counts as shareable", () => {
       faq: null,
       simpleSummary: null,
       bibliography: null,
-      debate: null,
-      debateClaims: null,
+      reception: null,
+      sourcesClaims: null,
       glossary: null,
       ideas: null,
       quotes: null,
@@ -651,8 +655,8 @@ describe("what counts as shareable", () => {
         },
       },
       bibliography: null,
-      debate: null,
-      debateClaims: null,
+      reception: null,
+      sourcesClaims: null,
       glossary: null,
       ideas: null,
       quotes: null,
@@ -694,8 +698,8 @@ describe("what counts as shareable", () => {
         },
       } as unknown as SimpleSummary,
       bibliography: null,
-      debate: null,
-      debateClaims: null,
+      reception: null,
+      sourcesClaims: null,
       glossary: null,
       ideas: null,
       quotes: null,

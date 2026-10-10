@@ -75,12 +75,12 @@ describe("a shut line", () => {
   });
 
   it("explains itself on hover, through the house card (marginalia-note-cards.test.tsx)", () => {
-    const el = draw([{ kind: "debate", items: [row] }]);
-    expect(el.querySelector(".marg-shut-button")?.getAttribute("data-marg-tip")).toBe("debate");
+    const el = draw([{ kind: "reception", items: [row] }]);
+    expect(el.querySelector(".marg-shut-button")?.getAttribute("data-marg-tip")).toBe("reception");
   });
 
   it("puts a Debate row's link beside the button, never inside it", () => {
-    const el = draw([{ kind: "debate", items: [row] }]);
+    const el = draw([{ kind: "reception", items: [row] }]);
     const button = el.querySelector<HTMLButtonElement>(".marg-shut-button");
     expect(button?.textContent).toContain("disputes");
     act(() => button?.click());
@@ -93,7 +93,7 @@ describe("a shut line", () => {
 
   it("gives two Debate rows from the same page distinct React keys", () => {
     const complaints = vi.spyOn(console, "error").mockImplementation(() => {});
-    const el = draw([{ kind: "debate", items: [row, { ...row, id: "second" }] }]);
+    const el = draw([{ kind: "reception", items: [row, { ...row, id: "second" }] }]);
     const button = el.querySelector<HTMLButtonElement>(".marg-shut-button");
     act(() => button?.click());
     expect(el.querySelectorAll(".marg-open-item")).toHaveLength(2);

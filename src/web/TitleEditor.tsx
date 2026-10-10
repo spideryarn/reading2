@@ -97,7 +97,7 @@ export function TitleEditor({
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {
           /* Enter that accepts an input method's candidate is not a save:
-             cancel the form's implicit submit (DebatePanel.tsx's lens box does
+             cancel the form's implicit submit (ReceptionAndClaimsPanel.tsx's lens box does
              the same). An ordinary Enter still uses the form. */
           if (e.key === "Enter" && isImeComposing(e)) e.preventDefault();
           if (e.key !== "Escape") return;

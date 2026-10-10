@@ -753,7 +753,7 @@ export type Task =
   /* The article's claims, listed for Debate's Claims to pick from —
      docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2. Article-reading
      like `faq`, naming block ids and quotes, so `articleWithIds`. No web search. */
-  | "debate-claims"
+  | "sources-claims"
   /* Links between the article's own blocks —
      docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md.
      Article-reading like `ideas`, naming block ids, so `articleWithIds`. */
@@ -882,15 +882,15 @@ export type Task =
    * `STAGE_EFFORT` or `ARTICLE_RENDERER`. src/types.ts § `StepName` says the
    * same thing where a reader of that union will trip over it.
    */
-  | "debate"
+  | "reception"
   /**
    * **A reader's claim check in Debate's Claims** — the ticked claims and the
-   * typed one, searched on the open web in one call (src/debate.ts §
+   * typed one, searched on the open web in one call (src/reception.ts §
    * `generateClaimCheck`; plan docs/plans/261008i-debate-claims-picked-by-the-reader.md
    * § 3). `debate`'s wire and model, its own job so the ledger files it as
    * interactive request work rather than a pipeline step.
    */
-  | "debate-check"
+  | "sources-claim-check"
   /**
    * **How the page on the far end of a hyperlink stands to the piece the reader
    * is holding** —
@@ -1213,7 +1213,7 @@ export const TASK_TIER: Record<Task, Tier> = {
   quiz: "capable",
   faq: "capable",
   relations: "capable",
-  "debate-claims": "capable",
+  "sources-claims": "capable",
   crossrefs: "capable",
   simple: "capable",
   skim: "capable",
@@ -1252,10 +1252,10 @@ export const TASK_TIER: Record<Task, Tier> = {
      worthless if the weighing is shallow. Here a shallow answer is nine
      correctly-cited pages about sourdough starters presented as critical
      reception — the exact thing Stage 0 got back, and the thing every rule in
-     src/debate.ts exists to refuse. */
-  debate: "capable",
+     src/reception.ts exists to refuse. */
+  reception: "capable",
   /* The same weighing as `debate`, for the claims a reader picked. */
-  "debate-check": "capable",
+  "sources-claim-check": "capable",
   bibliography: "capable",
   /* Capable, for `debate`'s reason: the whole job is weighing a handful of
      search results against one cited work and saying which, if any, is its
@@ -1501,7 +1501,7 @@ export const TASK_WIRE: Record<Task, Wire> = {
   quiz: "messages",
   faq: "messages",
   relations: "messages",
-  "debate-claims": "messages",
+  "sources-claims": "messages",
   crossrefs: "messages",
   simple: "messages",
   skim: "messages",
@@ -1523,9 +1523,9 @@ export const TASK_WIRE: Record<Task, Wire> = {
      a server-side tool that exists on chat/completions and not on the Messages
      shape. Every other artefact-producing step is `"messages"`. See `Task`
      above, and src/pdf-read.ts for the precedent. */
-  debate: "chat",
+  reception: "chat",
   /* `debate`'s reason: the web search is a chat/completions tool. */
-  "debate-check": "chat",
+  "sources-claim-check": "chat",
   bibliography: "messages",
   /* Chat, because `openrouter:web_search` is a server tool on chat/completions
      and does not exist on the Messages shape — `debate`'s reason. */
@@ -1654,7 +1654,7 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   quiz: null,
   faq: null,
   relations: null,
-  "debate-claims": null,
+  "sources-claims": null,
   crossrefs: null,
   simple: null,
   skim: null,
@@ -1708,11 +1708,11 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
      verified rows per dollar* across models and engines, which the plan defers
      until there is a rate to compare. A code change to run an arm would make
      the arm and the shipped path different things. */
-  debate: "SPIDERYARN_DEBATE_MODEL",
+  reception: "SPIDERYARN_RECEPTION_MODEL",
   /* Shares Debate's override rather than adding a name: a check is pass B's
      call on the reader's claims, and a comparison run of one should move
      both. */
-  "debate-check": "SPIDERYARN_DEBATE_MODEL",
+  "sources-claim-check": "SPIDERYARN_RECEPTION_MODEL",
   /* It has one because "is the cheap model good enough for this" is a question
      somebody will want to answer by running the real feature against a capable
      model for an evening rather than by editing the tier table and rebuilding.
@@ -1989,7 +1989,7 @@ export type ArticleStage =
   | "quiz"
   | "faq"
   | "relations"
-  | "debate-claims"
+  | "sources-claims"
   | "crossrefs"
   | "simple";
 
@@ -2140,7 +2140,7 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      no cached article. **NOT MEASURED**, like every effort choice not yet
      through evals/results/effort-vs-quality.md.
      docs/plans/261008i-debate-claims-picked-by-the-reader.md. */
-  "debate-claims": "high",
+  "sources-claims": "high",
   /* `medium`, the plan's call: matching a claim to the paragraph that backs it
      is reading, not the multi-step inference `ideas` and `quiz` are paid `high`
      for. **It therefore shares a cached prefix with nothing** — the same bytes
@@ -2227,7 +2227,7 @@ export const ARTICLE_RENDERER: Record<ArticleStage, "text" | "ids"> = {
   /* Every claim names a block id and quotes it, so the ids have to be on the
      page — and it sends the body only, byte-identical to `ideas` and `faq`.
      Its own schema, so no share. */
-  "debate-claims": "ids",
+  "sources-claims": "ids",
   /* Two block ids a row, so the ids have to be on the page — and the body
      only, byte-identical to `ideas`. The effort differs, so no share. */
   crossrefs: "ids",

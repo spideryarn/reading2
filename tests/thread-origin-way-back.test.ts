@@ -32,8 +32,8 @@ import {
 
 const BLOCK = "spya-bbbbbb";
 const CLAIM_WORDS = "RNA can transfer a memory";
-const CLAIM: ThreadOrigin = { mode: "debate", blockId: BLOCK, quote: CLAIM_WORDS };
-const LENS: ThreadOrigin = { mode: "debate", lens: "how it relates to Smith 2019" };
+const CLAIM: ThreadOrigin = { mode: "sources-claims", blockId: BLOCK, quote: CLAIM_WORDS };
+const LENS: ThreadOrigin = { mode: "reception", lens: "how it relates to Smith 2019" };
 
 function summary(over: Partial<ThreadSummary> & { id: string }): ThreadSummary {
   return {
@@ -127,12 +127,12 @@ describe("a lens and a claim", () => {
   it("are the same origin only as the same shape with the same words", () => {
     expect(sameOrigin(LENS, { ...LENS })).toBe(true);
     expect(sameOrigin(CLAIM, { ...CLAIM })).toBe(true);
-    expect(sameOrigin(LENS, { mode: "debate", lens: "replication attempts" })).toBe(false);
+    expect(sameOrigin(LENS, { mode: "reception", lens: "replication attempts" })).toBe(false);
     expect(sameOrigin(CLAIM, LENS)).toBe(false);
     expect(sameOrigin(LENS, CLAIM)).toBe(false);
     /* The lens's words are the claim's: still two different things. */
-    expect(sameOrigin(CLAIM, { mode: "debate", lens: CLAIM_WORDS })).toBe(false);
-    expect(sameOrigin({ mode: "debate", lens: CLAIM_WORDS }, CLAIM)).toBe(false);
+    expect(sameOrigin(CLAIM, { mode: "reception", lens: CLAIM_WORDS })).toBe(false);
+    expect(sameOrigin({ mode: "reception", lens: CLAIM_WORDS }, CLAIM)).toBe(false);
   });
 
   it("do not find each other's conversations", () => {
@@ -142,7 +142,7 @@ describe("a lens and a claim", () => {
     ];
     expect(threadForOrigin(list, CLAIM)?.id).toBe("spya-aaa333");
     expect(threadForOrigin(list, LENS)?.id).toBe("spya-aaa444");
-    expect(threadForOrigin(list, { mode: "debate", lens: CLAIM_WORDS })).toBeUndefined();
+    expect(threadForOrigin(list, { mode: "reception", lens: CLAIM_WORDS })).toBeUndefined();
   });
 
   it("a lens conversation is nobody's block chat either", () => {
@@ -238,7 +238,7 @@ describe("lensThreads", () => {
       summary({ id: "spya-aaa444", origin: LENS, updatedAt: "2026-10-05T11:00:00.000Z" }),
       summary({
         id: "spya-aaa555",
-        origin: { mode: "debate", lens: "replication attempts" },
+        origin: { mode: "reception", lens: "replication attempts" },
         updatedAt: "2026-10-05T12:00:00.000Z",
       }),
       /* The database refuses this row; the list is the floating chat's way in. */
@@ -267,14 +267,14 @@ describe("the origin's columns, both ways", () => {
   it("writes a claim as a block and a quote, with no lens", () => {
     expect(originColumns(CLAIM)).toEqual({
       ...NONE,
-      originMode: "debate",
+      originMode: "sources-claims",
       originBlockId: BLOCK,
       originQuote: CLAIM_WORDS,
     });
   });
 
   it("writes a lens as the lens, with no block and no quote", () => {
-    expect(originColumns(LENS)).toEqual({ ...NONE, originMode: "debate", originLens: "how it relates to Smith 2019" });
+    expect(originColumns(LENS)).toEqual({ ...NONE, originMode: "reception", originLens: "how it relates to Smith 2019" });
   });
 
   it("writes nothing for no origin", () => {
@@ -288,9 +288,11 @@ describe("the origin's columns, both ways", () => {
   });
 
   it("reads a row the database would refuse as no origin, never as half of one", () => {
-    const mixed = { ...NONE, originMode: "debate", originBlockId: BLOCK, originQuote: "words", originLens: "an angle" };
+    const mixed = { ...NONE, originMode: "reception", originBlockId: BLOCK, originQuote: "words", originLens: "an angle" };
     expect(originFromColumns(mixed)).toEqual({});
-    expect(originFromColumns({ ...NONE, originMode: "debate" })).toEqual({});
+    expect(originFromColumns({ ...mixed, originMode: "sources-claims" })).toEqual({});
+    expect(originFromColumns({ ...mixed, originMode: "debate" })).toEqual({});
+    expect(originFromColumns({ ...NONE, originMode: "reception" })).toEqual({});
     expect(originFromColumns({ ...NONE, originMode: "summary", originLens: "an angle" })).toEqual({});
   });
 });

@@ -16,7 +16,7 @@ Every file I changed:
 - [help-topics.tsx](/home/greg/code/spideryarn2/.claude/worktrees/fbgqj660-home-link-and-first-open-default/src/web/help/help-topics.tsx)
 - [url-state.md](/home/greg/code/spideryarn2/.claude/worktrees/fbgqj660-home-link-and-first-open-default/docs/project/url-state.md)
 - [first-open-default-wiring.test.tsx](/home/greg/code/spideryarn2/.claude/worktrees/fbgqj660-home-link-and-first-open-default/tests/first-open-default-wiring.test.tsx)
-- [debate-navigation.test.tsx](/home/greg/code/spideryarn2/.claude/worktrees/fbgqj660-home-link-and-first-open-default/tests/debate-navigation.test.tsx)
+- [debate-navigation.test.tsx](/home/greg/code/spideryarn2/.claude/worktrees/fbgqj660-home-link-and-first-open-default/tests/reception-navigation.test.tsx)
 - [First-open marker postmortem](/home/greg/code/spideryarn2/.claude/worktrees/fbgqj660-home-link-and-first-open-default/docs/postmortems/261005a-a-downstream-guard-cannot-protect-an-upstream-first-open-marker.md)
 
 **Verdict: reject `815a2608e` as committed; accept with the uncommitted fixes.**

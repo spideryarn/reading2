@@ -98,9 +98,9 @@ import {
   PROMPT_VERSION as QUIZ_VERSION,
 } from "../src/quiz.js";
 import {
-  inputFingerprint as debateFingerprint,
-  PROMPT_VERSION as DEBATE_VERSION,
-} from "../src/debate.js";
+  inputFingerprint as receptionFingerprint,
+  PROMPT_VERSION as RECEPTION_VERSION,
+} from "../src/reception.js";
 import {
   inputFingerprint as bibliographyFingerprint,
   PROMPT_VERSION as BIBLIOGRAPHY_VERSION,
@@ -116,10 +116,10 @@ import {
   PROMPT_VERSION as RELATIONS_VERSION,
 } from "../src/relations.js";
 import {
-  emptyDropped as emptyDebateClaimsDropped,
-  inputFingerprint as debateClaimsFingerprint,
-  PROMPT_VERSION as DEBATE_CLAIMS_VERSION,
-} from "../src/debate-claims.js";
+  emptyDropped as emptySourcesClaimsDropped,
+  inputFingerprint as sourcesClaimsFingerprint,
+  PROMPT_VERSION as SOURCES_CLAIMS_VERSION,
+} from "../src/sources-claims.js";
 import {
   emptyDropped as emptyCrossrefsDropped,
   inputFingerprint as crossrefsFingerprint,
@@ -259,7 +259,7 @@ const QUIZ_SOURCE_HASH = quizFingerprint(BLOCKS, TREE, META);
 /* `debate` uses the same `articleWithIdsFingerprint` again — pass B sends
    `articleWithIds` — so this is the same number a fourth time, and computed
    through its own module for the same reason. */
-const DEBATE_SOURCE_HASH = debateFingerprint(BLOCKS, TREE, META);
+const RECEPTION_SOURCE_HASH = receptionFingerprint(BLOCKS, TREE, META);
 /* `citations` is `articleWithIdsFingerprint` once more, over every block —
    computed through its own module for the same reason as the three above. */
 const BIBLIOGRAPHY_SOURCE_HASH = bibliographyFingerprint(BLOCKS, TREE, META);
@@ -269,7 +269,7 @@ const FAQ_SOURCE_HASH = faqFingerprint(BLOCKS, TREE, META);
 /* `relations` fingerprints its rendered body/head and eligible paragraph pairs. */
 const RELATIONS_SOURCE_HASH = relationsFingerprint(BLOCKS, TREE, META);
 /* `debate-claims` fingerprints the exact rendered body and cited head. */
-const DEBATE_CLAIMS_SOURCE_HASH = debateClaimsFingerprint(BLOCKS, TREE, META);
+const SOURCES_CLAIMS_SOURCE_HASH = sourcesClaimsFingerprint(BLOCKS, TREE, META);
 /* `crossrefs` fingerprints the exact article and skeleton strings it sends. */
 const CROSSREFS_SOURCE_HASH = crossrefsFingerprint(BLOCKS, TREE, META);
 /* `simple` fingerprints the exact article string it sends, through its own module. */
@@ -608,26 +608,26 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
      **Both groups are EMPTY**, like `timeline`'s events and unlike `quotes`,
      `quiz`, `sketch` and `illustrated`. Most pieces have no critical reception
      at all, so an artefact that honestly says so is the commonest correct
-     answer — `SHAPE.debate` in src/store/artifacts.ts accepts it, and this
+     answer — `SHAPE.reception` in src/store/artifacts.ts accepts it, and this
      fixture is what holds that decision to being true on both sides.
 
-     **`generator` is `modelFor("debate")`, not `CAPABLE_MODEL`.** Every other
+     **`generator` is `modelFor("reception")`, not `CAPABLE_MODEL`.** Every other
      artefact here stamps the constant; this is the one stage on the chat wire,
-     where `SPIDERYARN_DEBATE_MODEL` can override the model, and its `stamp`
+     where `SPIDERYARN_RECEPTION_MODEL` can override the model, and its `stamp`
      resolves the same way. A `CAPABLE_MODEL` here would report the step
      not-done on any machine with that variable set.
 
      **`searchedAt` and no `generatedAt`** — the two would be one instant
      written twice, so this artefact carries the one that means something to a
      reader. */
-  store.plant(SLUG, "debate", "debate", {
-    generator: modelFor("debate", "standard"),
+  store.plant(SLUG, "reception", "reception", {
+    generator: modelFor("reception", "standard"),
     slug: SLUG,
-    sourceHash: DEBATE_SOURCE_HASH,
-    version: DEBATE_VERSION,
+    sourceHash: RECEPTION_SOURCE_HASH,
+    version: RECEPTION_VERSION,
     searchedAt: new Date().toISOString(),
-    direct: { rows: [], counts: EMPTY_DEBATE_COUNTS },
-    claims: { rows: [], counts: EMPTY_DEBATE_COUNTS },
+    direct: { rows: [], counts: EMPTY_RECEPTION_COUNTS },
+    claims: { rows: [], counts: EMPTY_RECEPTION_COUNTS },
     elapsedMs: 1,
   });
   /* **An EMPTY list**, like `timeline`'s events: an article that cites no work
@@ -668,13 +668,13 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
   });
   /* **An EMPTY list**, which `SHAPE["debate-claims"]` accepts, as `faq`'s: a piece
      with no claim an outsider could argue with is a real answer. */
-  store.plant(SLUG, "debate-claims", "debate-claims", {
+  store.plant(SLUG, "sources-claims", "sources-claims", {
     generator: CAPABLE_MODEL,
     slug: SLUG,
-    sourceHash: DEBATE_CLAIMS_SOURCE_HASH,
-    version: DEBATE_CLAIMS_VERSION,
+    sourceHash: SOURCES_CLAIMS_SOURCE_HASH,
+    version: SOURCES_CLAIMS_VERSION,
     claims: [],
-    dropped: emptyDebateClaimsDropped(),
+    dropped: emptySourcesClaimsDropped(),
     generatedAt: new Date().toISOString(),
     elapsedMs: 1,
   });
@@ -749,7 +749,7 @@ function writeWholeArticle(store: MemoryArtifactStore): void {
 }
 
 /** One group's counts for a pass that ran, found pages, and kept no row from them. */
-const EMPTY_DEBATE_COUNTS = {
+const EMPTY_RECEPTION_COUNTS = {
   returnedSources: 0,
   reportedRows: 0,
   keptRows: 0,

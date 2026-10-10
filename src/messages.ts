@@ -432,7 +432,7 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "gl-cut-off": "retry",
   /* **Debate's own, and the only `db-`.** `retry` because the model choosing
      not to search, and a provider falling back to one that dropped the tool,
-     both come out differently next time. See `DEBATE_SEARCH_DID_NOT_RUN` for
+     both come out differently next time. See `RECEPTION_SEARCH_DID_NOT_RUN` for
      why a search that did not run is a *failure* rather than an empty result. */
   "db-no-search": "retry",
   /* **The four generic step failures**, `stepGaveUp` above — one per kind, and
@@ -1686,7 +1686,7 @@ export const STRUCTURE_NOT_BUILT: ReaderFacingFailure = {
 
 /**
  * **The search tool was offered and either did not run or would not account for
- * itself** — src/debate.ts, and the one failure this mode has that no other
+ * itself** — src/reception.ts, and the one failure this mode has that no other
  * stage can have.
  *
  * `retry`, and that is the right kind rather than the generous one: the model
@@ -1709,7 +1709,7 @@ export const STRUCTURE_NOT_BUILT: ReaderFacingFailure = {
  * the guess that costs nothing to make is the one that would publish a
  * fabrication.
  */
-export const DEBATE_SEARCH_DID_NOT_RUN: ReaderFacingFailure = {
+export const RECEPTION_SEARCH_DID_NOT_RUN: ReaderFacingFailure = {
   kind: "retry",
   message:
     "This mode goes out to the web, and this time the search either did not run or did not report " +
@@ -5485,9 +5485,9 @@ export const TIMELINE_THIN =
  * has to prove is that the page identifies *this* article — its address, its
  * words, or its title. A page that argues against the piece without ever having
  * heard of it is not missing from this answer; it is in the other search,
- * which since 2026-10-03 is the Claims sub-mode (`debateClaimsHandoff`).
+ * which since 2026-10-03 is the Claims sub-mode (`sourcesClaimsHandoff`).
  */
-export const DEBATE_RESPONSES_NONE = "No page the search found responds to this piece by name.";
+export const RECEPTION_RESPONSES_NONE = "No page the search found responds to this piece by name.";
 
 /**
  * **Pages came back, and not one of them could be checked.** The second form,
@@ -5506,7 +5506,7 @@ export const DEBATE_RESPONSES_NONE = "No page the search found responds to this 
  * how thin the answer is; told nothing, they cannot tell this sentence from the
  * one above it.
  */
-export function debateResponsesUnverified(pages: number): string {
+export function receptionResponsesUnverified(pages: number): string {
   return (
     `The search found ${pages} ${pages === 1 ? "page" : "pages"} that might respond to this ` +
     `piece, but ${pages === 1 ? "it could not be checked" : "none could be checked"} against ` +
@@ -5515,11 +5515,11 @@ export function debateResponsesUnverified(pages: number): string {
 }
 
 /** The same pair for the other search, which asks about the claims rather than the piece. */
-export const DEBATE_CLAIMS_NONE =
+export const SOURCES_CLAIMS_NONE =
   "This search did not find anyone writing about what this piece claims.";
 
 /** …and the same distinction, which is why these are four sentences and not two. */
-export function debateClaimsUnverified(pages: number): string {
+export function sourcesClaimsUnverified(pages: number): string {
   return (
     `The search found ${pages} ${pages === 1 ? "page" : "pages"} that might answer what this ` +
     `piece claims, but ${pages === 1 ? "it could not be checked" : "none could be checked"} ` +
@@ -5533,16 +5533,16 @@ export function debateClaimsUnverified(pages: number): string {
  * The owner's two sentences above tell *came back with nothing* from *came back
  * with pages we could not check*, off `returnedSources` — and that count is a
  * fact about our search, which does not cross to a shared link (src/public-
- * types.ts § `PublicDebateGroup`). Collapsing the two into the first would say
+ * types.ts § `PublicReceptionGroup`). Collapsing the two into the first would say
  * something false in the common case, so a visitor gets one sentence that is
  * true of both. Since 2026-09-29, plan 260929c stage 4.
  */
-export const DEBATE_RESPONSES_NONE_SHARED =
+export const RECEPTION_RESPONSES_NONE_SHARED =
   "The search kept no page that responds to this piece by name — either it found none, or none it " +
   "found could be checked against the words it returned.";
 
 /** …and the same for the search about what the piece claims. */
-export const DEBATE_CLAIMS_NONE_SHARED =
+export const SOURCES_CLAIMS_NONE_SHARED =
   "The search kept nobody writing about what this piece claims — either it found no one, or " +
   "nothing it found could be checked against the words it returned.";
 
@@ -5551,12 +5551,12 @@ export const DEBATE_CLAIMS_NONE_SHARED =
  * visitor's foot line, one per search that lost any. The public boundary drops
  * a row whose source address carries a password or names a private machine,
  * and a row whose words carry an address the boundary refused (src/public/
- * dto.ts § `publicDebate`); `n` is computed there. 260905f § What is counted:
+ * dto.ts § `publicReception`); `n` is computed there. 260905f § What is counted:
  * a shorter list with no sentence is the failure this exists to prevent.
  *
  * `search` is the panel's own name for the search, so each sentence says which.
  */
-export function debateWithheldOnSharedLink(search: string, n: number): string {
+export function receptionWithheldOnSharedLink(search: string, n: number): string {
   return (
     `${search} kept ${n} more ${n === 1 ? "result that is" : "results that are"} not shown on a ` +
     `shared link, because ${n === 1 ? "it names an address" : "they name addresses"} we do not publish.`
@@ -5566,14 +5566,14 @@ export function debateWithheldOnSharedLink(search: string, n: number): string {
 /**
  * **The heading over Reception's title-only rows** — the pages that name this
  * piece by its title and neither link nor quote it. Since 2026-10-03, when the
- * identification slider that used to hide them went (src/web/debate-levels.ts).
+ * identification slider that used to hide them went (src/web/reception-levels.ts).
  *
  * A heading in our voice, so it states only what was checked: the title was
  * found in the page's extract. It does not say the page is *not* about this
  * piece — a paper that cites it, and a published reply, both look like this —
  * and it does not say it is. That is the reader's call, from the row.
  */
-export const DEBATE_TITLE_ONLY = "Names this piece by its title only";
+export const RECEPTION_TITLE_ONLY = "Names this piece by its title only";
 
 /**
  * **The button under Reception's empty sentence, when Claims has rows** — it
@@ -5582,7 +5582,7 @@ export const DEBATE_TITLE_ONLY = "Names this piece by its title only";
  * those rows are a sub-mode away. Without it, *no page responds to this piece*
  * is a dead end on a paper whose only findings are about its claims.
  */
-export function debateClaimsHandoff(sources: number): string {
+export function sourcesClaimsHandoff(sources: number): string {
   return `See the ${sources} ${sources === 1 ? "source" : "sources"} on what it claims`;
 }
 
@@ -5594,7 +5594,7 @@ export function debateClaimsHandoff(sources: number): string {
  * sentence sits under the control, because docs/project/mode.md bans a
  * description line there.
  */
-export const DEBATE_BEFORE_SEARCH =
+export const RECEPTION_BEFORE_SEARCH =
   "One search of the open web, for what others have written about this piece. It takes about " +
   "a minute and costs real money. Many pieces have no reception at all. Searched once and kept.";
 
@@ -5603,39 +5603,39 @@ export const DEBATE_BEFORE_SEARCH =
    Since 2026-10-08 Claims draws a list of the claims the article rests on,
    made by one model call over the article and no web search, on the owner's
    press. These are its states' sentences. The sentence that stood here until
-   then, DEBATE_CLAIMS_NOT_SEARCHED, said the list was coming; the list is the
+   then, SOURCES_CLAIMS_NOT_SEARCHED, said the list was coming; the list is the
    answer to it. */
 
 /** The owner's Claims before a list is made: what *List its claims* does, before the button. */
-export const DEBATE_CLAIMS_LIST_NONE =
+export const SOURCES_CLAIMS_LIST_NONE =
   "List the claims this piece rests on that someone outside could argue with, so you can pick which " +
   "to check. One model call over the article, no web search, and it takes a few tens of seconds.";
 
 /** The button that makes the list, on the owner's Claims with none. */
-export const DEBATE_CLAIMS_LIST_RUN = "List its claims";
+export const SOURCES_CLAIMS_LIST_RUN = "List its claims";
 
 /** The button beside a stale list, which makes it again. */
-export const DEBATE_CLAIMS_LIST_AGAIN = "List again";
+export const SOURCES_CLAIMS_LIST_AGAIN = "List again";
 
 /** A visitor's Claims with no list: there is nothing to press, so it says only what is true. */
-export const DEBATE_CLAIMS_LIST_NONE_SHARED = "No list of this piece's claims has been made.";
+export const SOURCES_CLAIMS_LIST_NONE_SHARED = "No list of this piece's claims has been made.";
 
 /** A list that came back empty: a real answer, not a failure. */
-export const DEBATE_CLAIMS_LIST_EMPTY =
+export const SOURCES_CLAIMS_LIST_EMPTY =
   "No claim in this piece stood out as one someone outside could argue with.";
 
 /** The banner over a list made from an older version of the article. Read-only until made again. */
-export const DEBATE_CLAIMS_LIST_STALE =
+export const SOURCES_CLAIMS_LIST_STALE =
   "The article has changed since these claims were listed, so some may no longer be in it.";
 
 /** The label under each listed claim's statement: whose words those are. */
-export const DEBATE_CLAIMS_LIST_AI = "In the AI's words";
+export const SOURCES_CLAIMS_LIST_AI = "In the AI's words";
 
 /** The owner's Claims while the GET is in flight. */
-export const DEBATE_CLAIMS_LIST_LOADING = "Looking for the list of its claims…";
+export const SOURCES_CLAIMS_LIST_LOADING = "Looking for the list of its claims…";
 
 /** …the visitor's, and the band's (i) for both: what is true of the stored search, and only that. */
-export const DEBATE_CLAIMS_NOT_SEARCHED_SHARED = "This search did not look into what the piece claims.";
+export const SOURCES_CLAIMS_NOT_SEARCHED_SHARED = "This search did not look into what the piece claims.";
 
 /**
  * **The heading over the claim rows an older search stored** — a debate
@@ -5643,7 +5643,7 @@ export const DEBATE_CLAIMS_NOT_SEARCHED_SHARED = "This search did not look into 
  * by itself and searched them. Its rows are drawn as they always were, under
  * this, so they are not taken for claims the reader chose.
  */
-export const DEBATE_CLAIMS_EARLIER = "Claims the earlier search chose";
+export const SOURCES_CLAIMS_EARLIER = "Claims the earlier search chose";
 
 /* ---- Claims: checking the claims the reader picked (plan 261008i § 3) ----
 
@@ -5652,66 +5652,66 @@ export const DEBATE_CLAIMS_EARLIER = "Claims the earlier search chose";
    No sentence here ever carries the reader's typed claim. */
 
 /** The box for a claim of the reader's own: its accessible name, and (with an ellipsis) its placeholder. */
-export const DEBATE_CHECK_OWN_LABEL = "Check a claim of your own";
+export const SOURCES_CLAIM_CHECK_OWN_LABEL = "Check a claim of your own";
 
 /** The tooltip on Check: what one press buys. */
-export const DEBATE_CHECK_TIP =
+export const SOURCES_CLAIM_CHECK_TIP =
   "One search of the open web for what has been written about the claims you picked. It takes " +
   "about a minute and a half and costs real money.";
 
 /** Under a claim a check answered with nothing: the search said so for this claim. */
-export const DEBATE_CHECK_FOUND_NOTHING = "This search found nothing it could quote on this claim.";
+export const SOURCES_CLAIM_CHECK_FOUND_NOTHING = "This search found nothing it could quote on this claim.";
 
 /** Under a claim a check did not answer: the model left it out, so nothing is known either way. */
-export const DEBATE_CHECK_NOT_ANSWERED =
+export const SOURCES_CLAIM_CHECK_NOT_ANSWERED =
   "The search did not answer for this claim, so this says nothing about it either way. Check it again.";
 
 /** While a check is out. */
-export const DEBATE_CHECK_PENDING = "Searching the web for these claims…";
+export const SOURCES_CLAIM_CHECK_PENDING = "Searching the web for these claims…";
 
 /** Dig further's tooltip: one more search, for this claim alone, somewhere new. */
-export const DEBATE_DIG_FURTHER_TIP =
+export const SOURCES_CLAIM_CHECK_DIG_FURTHER_TIP =
   "One more web search for this claim alone, told what has been found already so it looks " +
   "elsewhere. Costs real money.";
 
 /** The heading over a typed claim's checks. The words after it are the reader's. */
-export const DEBATE_CHECK_YOUR_CLAIM = "Your claim";
+export const SOURCES_CLAIM_CHECK_YOUR_CLAIM = "Your claim";
 
 /**
  * Above the checks made against an earlier version of the article — kept,
  * because they were paid for, but read-only (GPT Sol's E5).
  */
-export const DEBATE_CHECK_EARLIER = "Checked against an earlier version of this article";
+export const SOURCES_CLAIM_CHECK_EARLIER = "Checked against an earlier version of this article";
 
 /** A check pressed while another is out — from the partial unique index. */
-export const DEBATE_CHECK_IN_FLIGHT =
+export const SOURCES_CLAIM_CHECK_IN_FLIGHT =
   "A check is already running on this article. Its answer will appear here when it lands.";
 
 /** A check pressed on a list made from an older version of the article. */
-export const DEBATE_CHECK_LIST_STALE =
+export const SOURCES_CLAIM_CHECK_LIST_STALE =
   "The article has changed since its claims were listed. List them again before checking any.";
 
 /** A check pressed with no list at all. */
-export const DEBATE_CHECK_NO_LIST = "List this piece's claims before checking any.";
+export const SOURCES_CLAIM_CHECK_NO_LIST = "List this piece's claims before checking any.";
 
 /** A check still running when the server stopped. What the sweep writes. */
-export const DEBATE_CHECK_SWEPT = "The server stopped before this check finished.";
+export const SOURCES_CLAIM_CHECK_SWEPT = "The server stopped before this check finished.";
 
-/** The check's allowance's three refusals (src/debate.ts § `admitDebateCheck`). Dig deeper keeps its own. */
-export const DEBATE_CHECK_BUSY =
+/** The check's allowance's three refusals (src/reception.ts § `admitSourcesClaimCheck`). Dig deeper keeps its own. */
+export const SOURCES_CLAIM_CHECK_BUSY =
   "Another web search you asked for is still running. Wait for it to finish, then check again.";
-export const DEBATE_CHECK_LIMITED =
+export const SOURCES_CLAIM_CHECK_LIMITED =
   "You have asked for a lot of web searches recently. Try again in a while; nothing was searched.";
 /** The 503 of the three. */
-export const DEBATE_CHECK_RESTING =
+export const SOURCES_CLAIM_CHECK_RESTING =
   "Web searches like this one have done as many as they can for today. Try again tomorrow; " +
   "nothing was searched.";
 
 /** Dig further on a claim no finished check has answered yet. */
-export const DEBATE_DIG_FURTHER_FIRST = "Check this claim before digging further into it.";
+export const SOURCES_CLAIM_CHECK_DIG_FURTHER_FIRST = "Check this claim before digging further into it.";
 
 /** Ids from a list that has since been made again: a stale tab. */
-export const DEBATE_CHECK_LIST_CHANGED =
+export const SOURCES_CLAIM_CHECK_LIST_CHANGED =
   "The list of claims has changed since this page loaded. Reload it and pick again.";
 
 /* ---- Reception's *Cited by*: the papers that cite the piece, from OpenAlex ----
@@ -5795,18 +5795,18 @@ export function citedTimes(n: number): string {
 }
 
 /** A claim row without `bears` survives every bar without clearing its judgment. */
-export const DEBATE_UNJUDGED = "Not judged for relevance by the AI";
+export const SOURCES_CLAIMS_UNJUDGED = "Not judged for relevance by the AI";
 
 /**
  * Where Debate's threads box would be, when the call that makes it failed
  * (plan 260930j). Says the list is whole, because the reader's next question is
  * whether they are missing sources, and they are not.
  */
-export const DEBATE_THREADS_FAILED =
+export const RECEPTION_THREADS_FAILED =
   "The AI could not pick out the threads these sources share this time. Every source it found is still listed below.";
 
 /** The line over *date*'s rows with no year found on the page. */
-export const DEBATE_UNDATED = "No year found on these pages";
+export const RECEPTION_UNDATED = "No year found on these pages";
 
 /**
  * The line in `more` under a row's title, authors and year when any of them is
@@ -5815,7 +5815,7 @@ export const DEBATE_UNDATED = "No year found on these pages";
  * the ones shown — *"Authors and year"* — so the engine's own title is never
  * called the AI's.
  */
-export function debateWorkFieldsNote(parts: readonly string[]): string {
+export function receptionWorkFieldsNote(parts: readonly string[]): string {
   const [first = "", ...rest] = parts;
   const last = rest.pop();
   const head = [first, ...rest].join(", ");
@@ -5833,7 +5833,7 @@ export function debateWorkFieldsNote(parts: readonly string[]): string {
  * its title agreed with the page's. `parts` names only fields actually used,
  * so a missing registry year cannot claim an extracted year as Crossref's.
  */
-export function debateRegistryNote(
+export function receptionRegistryNote(
   source: "crossref" | "datacite",
   parts: readonly ("full title" | "authors" | "year")[],
 ): string {
@@ -5859,7 +5859,7 @@ export function debateRegistryNote(
    the ⓘ card until 2026-09-29), and in both places
    the quotations it is about are *above* it. It said "below" while it sat in the
    panel head, and moving it left the word pointing at nothing. */
-export const DEBATE_EXTRACTS_ONLY =
+export const RECEPTION_EXTRACTS_ONLY =
   "Every quotation here was found in the extract the search returned for that page, not in the " +
   "whole page.";
 

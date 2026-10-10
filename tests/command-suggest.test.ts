@@ -44,7 +44,7 @@ import { MAX_LENS_CHARS } from "../src/types.js";
 
 const SKIM: PickKey = { id: "mode:skim", label: "Skim" };
 /* Debate's row until 2026-10-09; Sources' since (plan 261009l). */
-const DEBATE: PickKey = { id: "mode:sources", label: "Sources" };
+const RECEPTION: PickKey = { id: "mode:sources", label: "Sources" };
 const QUIZ: PickKey = { id: "submode:learn:quiz", label: "Quiz" };
 const ARCHIVE: PickKey = { id: "action:archive", label: "Archive this article" };
 const CHANGELOG: PickKey = { id: "page:/changelog", label: "What’s new" };
@@ -88,7 +88,7 @@ describe("suggestableOptions", () => {
 });
 
 describe("readSuggestions — the model's answer", () => {
-  const offered = [SKIM, DEBATE];
+  const offered = [SKIM, RECEPTION];
   const good = {
     searches: [
       { words: "missing data", why: "Finds how gaps were handled." },
@@ -118,7 +118,7 @@ describe("readSuggestions — the model's answer", () => {
       }),
       offered,
     );
-    expect(read?.modes).toEqual([{ key: DEBATE, why: "See the argument." }]);
+    expect(read?.modes).toEqual([{ key: RECEPTION, why: "See the argument." }]);
   });
 
   it("holds the caps, after dropping what it cannot keep", () => {
@@ -165,7 +165,7 @@ describe("readSuggestions — the model's answer", () => {
         ],
         lens: null,
       }),
-      [SKIM, DEBATE, QUIZ],
+      [SKIM, RECEPTION, QUIZ],
     );
     expect(read?.modes).toHaveLength(2);
   });
@@ -197,7 +197,7 @@ describe("readSuggestAnswer — the reply, as the browser reads it", () => {
     searches: [{ words: "missing data", why: "w" }],
     modes: [
       { key: SKIM, why: "a" },
-      { key: DEBATE, why: "not a key this browser sent" },
+      { key: RECEPTION, why: "not a key this browser sent" },
       { key: { id: "mode:skim", label: "Skimmed" }, why: "the id with another label is another row" },
     ],
     lens: { words: "replication", why: "l" },
@@ -277,7 +277,7 @@ describe("what the model is asked", () => {
   });
 
   it("is the profile and this server's lines for the modes, and nothing else", () => {
-    const [system, user] = suggestMessages(RENDERED, suggestableOptions([SKIM, DEBATE]));
+    const [system, user] = suggestMessages(RENDERED, suggestableOptions([SKIM, RECEPTION]));
     expect(system?.content).toBe(SUGGEST_SYSTEM);
     expect(user?.content).toContain(RENDERED);
     expect(user?.content).toMatch(/^mode:skim \| Skim: .+$/m);
@@ -332,7 +332,7 @@ const LIST = {
   lens: null,
 };
 
-const input = (rows: readonly PickKey[] = [SKIM, DEBATE, ARCHIVE]) => ({ rendered: RENDERED, rows });
+const input = (rows: readonly PickKey[] = [SKIM, RECEPTION, ARCHIVE]) => ({ rendered: RENDERED, rows });
 
 describe("suggestCommands", () => {
   it("asks GPT Luna once, on the chat wire, with a strict schema and no reasoning", async () => {
@@ -370,7 +370,7 @@ describe("suggestCommands", () => {
       json_schema: { schema: { properties: { modes: { items: { properties: { key: { enum: string[] } } } } } } };
     };
     expect(format.json_schema.schema.properties.modes.items.properties.key.enum).toEqual(["mode:skim", "mode:sources"]);
-    expect(result).toEqual({ ok: true, suggestions: { searches: [], modes: [{ key: DEBATE, why: "ok" }], lens: null } });
+    expect(result).toEqual({ ok: true, suggestions: { searches: [], modes: [{ key: RECEPTION, why: "ok" }], lens: null } });
   });
 
   it("makes no call when no row is a mode, or there is nothing about the reader", async () => {

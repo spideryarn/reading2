@@ -561,7 +561,7 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
-  /* **Debate — what the rest of the web says about this piece** (src/debate.ts).
+  /* **Debate — what the rest of the web says about this piece** (src/reception.ts).
      `referee-candidates`' policy, and its `require_parameters` argument holds
      here with the volume turned up.
 
@@ -578,14 +578,14 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
      for caching: neither pass sends `cache_control`, so there is no prefix here
      to keep landing on. The two passes are one request each, minutes apart from
      the next article's. */
-  debate: {
+  reception: {
     path: "/v1/chat/completions",
     wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
   /* A reader's claim check is pass B's call on the claims they picked
-     (src/debate.ts § `generateClaimCheck`), so `debate`'s route exactly. */
-  "debate-check": {
+     (src/reception.ts § `generateClaimCheck`), so `debate`'s route exactly. */
+  "sources-claim-check": {
     path: "/v1/chat/completions",
     wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
@@ -1146,15 +1146,15 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
   "pdf-frontmatter": {
     providerDefault: "Not measured. Reads a PDF's first pages, not the whole paper.",
   },
-  debate: {
+  reception: {
     providerDefault:
       "Not measured. Weighs web search results against the article, where thinking is the job; " +
-      "its answer ceiling is src/debate.ts § ANSWER_TOKENS.",
+      "its answer ceiling is src/reception.ts § ANSWER_TOKENS.",
   },
-  "debate-check": {
+  "sources-claim-check": {
     providerDefault:
       "Not measured. `debate`'s call on the claims a reader picked; " +
-      "its answer ceiling is src/debate.ts § ANSWER_TOKENS.",
+      "its answer ceiling is src/reception.ts § ANSWER_TOKENS.",
   },
   "quiz-mark": {
     providerDefault:
@@ -1353,8 +1353,8 @@ export type ChatJob = Exclude<
   | "faq"
   /* Generation, on the Messages wire like `faq`. src/relations.ts. */
   | "relations"
-  /* Generation, on the Messages wire like `faq`. src/debate-claims.ts. */
-  | "debate-claims"
+  /* Generation, on the Messages wire like `faq`. src/sources-claims.ts. */
+  | "sources-claims"
   /* Generation, on the Messages wire like `faq`. src/skim.ts. */
   | "skim"
   /* Generation, on the Messages wire like `faq`. src/crossrefs.ts. */

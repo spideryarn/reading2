@@ -62,15 +62,15 @@ import type {
   CitationPlace,
   Bibliography,
   CitedWork,
-  ClaimDebateRow,
+  ClaimReceptionRow,
   Comment,
   Crossref,
   Crossrefs,
-  Debate,
-  DirectDebateRow,
+  Reception,
+  DirectReceptionRow,
   Faq,
   FaqQuestion,
-  DebateClaimList,
+  SourcesClaimList,
   ListedClaim,
   SimpleParagraph,
   SimpleSummary,
@@ -104,11 +104,11 @@ import {
   readStoredBears,
   readStoredLean,
 } from "../types.js";
-import type { DebateSynthesis } from "../types.js";
+import type { ReceptionSynthesis } from "../types.js";
 import { dayFrame } from "../timeline-time.js";
 import { ratedDifficultyOf } from "../reading-time.js";
 import { ENTRY_CAP, entryOfText } from "../citation-entry.js";
-import { readStoredSynthesis, settleSynthesis, type SynthesisRow } from "../debate-synthesis.js";
+import { readStoredSynthesis, settleSynthesis, type SynthesisRow } from "../reception-synthesis.js";
 import { readCitationRegistry, readRegistryWork } from "../registry-work.js";
 import type {
   PublicArticle,
@@ -117,11 +117,11 @@ import type {
   PublicCitedWork,
   PublicCrossrefs,
   PublicCitationRegistry,
-  PublicClaimDebateRow,
-  PublicDebate,
-  PublicDirectDebateRow,
+  PublicClaimReceptionRow,
+  PublicReception,
+  PublicDirectReceptionRow,
   PublicFaq,
-  PublicDebateClaimList,
+  PublicSourcesClaimList,
   PublicSimpleSummary,
   PublicIdentificationSignal,
   PublicGlossary,
@@ -595,10 +595,10 @@ function publicFaq(faq: Faq): PublicFaq {
  * **Debate's claims list, rebuilt claim by claim** — since 2026-10-08 (plan
  * 261008i § 2). The article's quote and its place, the model's statement and
  * the claim's id, and nothing else: `dropped` is our checking's tally and the
- * rest is pipeline provenance. src/public-types.ts § `PublicDebateClaimList`
+ * rest is pipeline provenance. src/public-types.ts § `PublicSourcesClaimList`
  * is the argument.
  */
-function publicDebateClaimList(list: DebateClaimList): PublicDebateClaimList {
+function publicSourcesClaimList(list: SourcesClaimList): PublicSourcesClaimList {
   return {
     claims: list.claims.map(
       (c): ListedClaim => ({ id: c.id, blockId: c.blockId, quote: c.quote, statement: c.statement }),
@@ -736,6 +736,18 @@ function bothBibliographyKeys(list: PublicBibliography): { bibliography: PublicB
   return { bibliography: list, citations: list };
 }
 
+/** Reception under its key and its old one (`debate`), for one deploy — plan 261009w F1. */
+function bothReceptionKeys(reception: PublicReception): { reception: PublicReception; debate: PublicReception } {
+  return { reception, debate: reception };
+}
+
+/** The claims list under its key and its old one (`debateClaims`), for one deploy — plan 261009w F1. */
+function bothSourcesClaimsKeys(
+  list: PublicSourcesClaimList,
+): { sourcesClaims: PublicSourcesClaimList; debateClaims: PublicSourcesClaimList } {
+  return { sourcesClaims: list, debateClaims: list };
+}
+
 function publicBibliographyList(
   bibliography: Bibliography,
   blockText: ReadonlyMap<string, string>,
@@ -759,7 +771,7 @@ function publicBibliographyList(
  *   drops the whole row**, not the link: a Debate row is its source, and there
  *   is no public row type without one (260905f § Security).
  * - **A `linked` signal's `url`** is *the article's own address* as the page
- *   spelled it (src/debate.ts § `linkTo`, matched against `meta.url`, which is
+ *   spelled it (src/reception.ts § `linkTo`, matched against `meta.url`, which is
  *   `final_url`). So it gets the article's own policy, `publicSourceUrl` —
  *   what `publicMeta` publishes the masthead's address by, which also refuses
  *   a query string, because a query on an address the owner fetched can carry
@@ -784,8 +796,8 @@ function publicBibliographyList(
  * stored before 2026-09-06 has none), so a visitor's row is always in the
  * current vocabulary and never has an empty evidence list.
  */
-function publicDebate(debate: Debate, finalUrl: string | null): PublicDebate {
-  const refused = refusedAddresses(debate, finalUrl);
+function publicReception(reception: Reception, finalUrl: string | null): PublicReception {
+  const refused = refusedAddresses(reception, finalUrl);
   /** Does any of these strings contain an address the boundary refused? Decode
    * percent-escaped ASCII first as well: generated prose may quote a URL in
    * encoded form, but that does not make the capability inside it public. */
@@ -796,9 +808,9 @@ function publicDebate(debate: Debate, finalUrl: string | null): PublicDebate {
       return refused.some((address) => text.includes(address) || decoded.includes(address));
     });
 
-  const direct: PublicDirectDebateRow[] = [];
+  const direct: PublicDirectReceptionRow[] = [];
   let directWithheld = 0;
-  for (const row of debate.direct.rows) {
+  for (const row of reception.direct.rows) {
     const url = publicCitationUrl(row.url);
     const signals = identifiesOf(row);
     if (
@@ -810,38 +822,38 @@ function publicDebate(debate: Debate, finalUrl: string | null): PublicDebate {
       continue;
     }
     direct.push({
-      ...publicDebateRowBase(row, url),
+      ...publicReceptionRowBase(row, url),
       articleReferenceQuote: row.articleReferenceQuote,
       identifies: signals.map(publicSignal),
     });
   }
 
-  const claims: PublicClaimDebateRow[] = [];
+  const claims: PublicClaimReceptionRow[] = [];
   let claimsWithheld = 0;
-  for (const row of debate.claims.rows) {
+  for (const row of reception.claims.rows) {
     const url = publicCitationUrl(row.url);
     if (url === null || carriesRefused([row.url, row.title, row.sourceQuote, row.applies, row.limits, row.claimQuote])) {
       claimsWithheld += 1;
       continue;
     }
-    claims.push({ ...publicDebateRowBase(row, url), claimQuote: row.claimQuote, blockId: row.blockId });
+    claims.push({ ...publicReceptionRowBase(row, url), claimQuote: row.claimQuote, blockId: row.blockId });
   }
 
   const synthesis = publicSynthesis(
-    debate,
+    reception,
     [...direct, ...claims],
     directWithheld + claimsWithheld > 0,
     carriesRefused,
   );
   return {
-    searchedAt: debate.searchedAt,
+    searchedAt: reception.searchedAt,
     direct: { rows: direct, sourceNotPublishable: directWithheld },
     /* A debate searched at `debate/7` or later ran no claims search, and says
        so rather than crossing as an empty group, which a visitor's panel would
-       read as a search that kept nothing (src/types.ts § `DebateClaims`). It
+       read as a search that kept nothing (src/types.ts § `ReceptionClaims`). It
        has no rows, so there is nothing above for it to withhold. */
     claims:
-      debate.claims.pass === "not-run"
+      reception.claims.pass === "not-run"
         ? { pass: "not-run", rows: [] }
         : { rows: claims, sourceNotPublishable: claimsWithheld },
     ...(synthesis === undefined ? {} : { synthesis }),
@@ -872,12 +884,12 @@ function publicDebate(debate: Debate, finalUrl: string | null): PublicDebate {
  *   fail, this boundary took its answer.
  */
 function publicSynthesis(
-  debate: Debate,
+  reception: Reception,
   published: readonly SynthesisRow[],
   withheld: boolean,
   carriesRefused: (texts: readonly unknown[]) => boolean,
-): DebateSynthesis | undefined {
-  const stored = readStoredSynthesis(debate);
+): ReceptionSynthesis | undefined {
+  const stored = readStoredSynthesis(reception);
   if (stored === null) return undefined;
   switch (stored.kind) {
     case "failed":
@@ -916,7 +928,7 @@ function publicSynthesis(
  * before looking. That catches an encoded credential or signed query without
  * turning malformed `%` sequences into an exception at the public boundary.
  */
-function refusedAddresses(debate: Debate, finalUrl: string | null): string[] {
+function refusedAddresses(reception: Reception, finalUrl: string | null): string[] {
   const out = new Set<string>();
   const add = (address: string) => {
     if (address === "") return;
@@ -925,13 +937,13 @@ function refusedAddresses(debate: Debate, finalUrl: string | null): string[] {
     if (bare !== "" && bare !== address) out.add(bare);
   };
   if (finalUrl !== null && publicSourceUrl(finalUrl) === null) add(finalUrl);
-  for (const row of debate.direct.rows) {
+  for (const row of reception.direct.rows) {
     if (typeof row.url === "string" && publicCitationUrl(row.url) === null) add(row.url);
     for (const signal of identifiesOf(row)) {
       if (signal.kind === "linked" && publicSourceUrl(signal.url) === null) add(signal.url);
     }
   }
-  for (const row of debate.claims.rows) {
+  for (const row of reception.claims.rows) {
     if (typeof row.url === "string" && publicCitationUrl(row.url) === null) add(row.url);
   }
   return [...out];
@@ -969,7 +981,7 @@ function signalTexts(signal: IdentificationSignal): string[] {
 
 /**
  * One signal, rebuilt. A `linked` address goes through `publicSourceUrl` — the
- * article's own policy; `publicDebate` has why — and a refusal leaves the
+ * article's own policy; `publicReception` has why — and a refusal leaves the
  * signal without it.
  */
 function publicSignal(signal: IdentificationSignal): PublicIdentificationSignal {
@@ -996,10 +1008,10 @@ function publicSignal(signal: IdentificationSignal): PublicIdentificationSignal 
 }
 
 /** What both groups' rows carry, field by field; `url` is the one the caller already judged. */
-function publicDebateRowBase(
-  row: DirectDebateRow | ClaimDebateRow,
+function publicReceptionRowBase(
+  row: DirectReceptionRow | ClaimReceptionRow,
   url: string,
-): Omit<PublicClaimDebateRow, "claimQuote" | "blockId"> {
+): Omit<PublicClaimReceptionRow, "claimQuote" | "blockId"> {
   return {
     id: row.id,
     url,
@@ -1022,7 +1034,7 @@ function publicRegistryWork(registry: unknown): { registry?: RegistryWork } {
   return read === null ? {} : { registry: read };
 }
 
-function bearsOf(row: DirectDebateRow | ClaimDebateRow): Pick<PublicClaimDebateRow, "bears"> {
+function bearsOf(row: DirectReceptionRow | ClaimReceptionRow): Pick<PublicClaimReceptionRow, "bears"> {
   const bears = readStoredBears(row);
   return bears === null ? {} : { bears };
 }
@@ -1304,9 +1316,9 @@ export function publicArticle(row: {
   faq: Faq | null;
   simpleSummary: SimpleSummary | null;
   bibliography: Bibliography | null;
-  debate: Debate | null;
+  reception: Reception | null;
   /** Debate's claims list, or `null` for none made. */
-  debateClaims: DebateClaimList | null;
+  sourcesClaims: SourcesClaimList | null;
   /** The stored cross-references, or `null` for none built. */
   crossrefs: Crossrefs | null;
   /**
@@ -1390,12 +1402,16 @@ export function publicArticle(row: {
     /* The article's own address goes in with it: a direct row can carry it in
        its witness and its `linked` signal, and it is judged there by the policy
        `publicMeta` above applies to it. */
-    ...(row.debate !== null ? { debate: publicDebate(row.debate, row.finalUrl) } : {}),
+    /* Reception and the claims list go under both keys too, the same object,
+       for one deploy: `debate` and `debateClaims` are the ones a public tab
+       loaded before 2026-10-09 reads (plan 261009w F1, removed by its
+       contract). */
+    ...(row.reception !== null ? bothReceptionKeys(publicReception(row.reception, row.finalUrl)) : {}),
     /* `Array.isArray`, not only `!== null`: a document without its `claims`
        is what the owner's read calls none, and a visitor is not sent a list
        their panel could not draw. */
-    ...(row.debateClaims !== null && Array.isArray(row.debateClaims.claims)
-      ? { debateClaims: publicDebateClaimList(row.debateClaims) }
+    ...(row.sourcesClaims !== null && Array.isArray(row.sourcesClaims.claims)
+      ? bothSourcesClaimsKeys(publicSourcesClaimList(row.sourcesClaims))
       : {}),
     ...(row.sketch !== null ? { sketch: publicSketch(row.sketch) } : {}),
     ...(crossrefs === undefined ? {} : { crossrefs }),

@@ -366,7 +366,7 @@ describe("the two ratios", () => {
 
 describe("the floor — any hit at all", () => {
   it("hands back the extract's own characters, not the article's", () => {
-    /* The same discipline as `locate` in src/debate.ts: what is shown to a
+    /* The same discipline as `locate` in src/reception.ts: what is shown to a
        reader is the page's spelling of the passage, because that is what they
        would see if they followed the link. The two differ by one character here
        — the article's apostrophe is straight and the page's is curly — which is

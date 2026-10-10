@@ -52,7 +52,7 @@ contradictions, and built a metric, a production coercion and a stopping rule on
 refused it, and is right.** Recorded as a reversal rather than quietly removed.
 
 `relation` names the argumentative move; `valence` is drawn as **Supportive** / **Critical**
-([`VALENCE_APPEARANCE`](../../src/web/DebatePanel.tsx)) and summarises overall stance toward the
+([`VALENCE_APPEARANCE`](../../src/web/ReceptionAndClaimsPanel.tsx)) and summarises overall stance toward the
 row's target. Those genuinely diverge, one honest example per group:
 
 - **group two** — *"The stated 10% is wrong; it is at least 30%, which makes the warning stronger."*
@@ -86,7 +86,7 @@ it.
 
 ### A second prompt defect, found while checking the first
 
-[`src/debate.ts`](../../src/debate.ts) § `READING` scopes the two fields to different subjects —
+[`src/debate.ts`](../../src/reception.ts) § `READING` scopes the two fields to different subjects —
 `relation` to the outside **page**, `valence` to the **quoted passage** — so they do not even share a
 subject. Both should be about the quoted passage, which is the only thing the reader is shown and the
 only thing the row's evidence supports.
@@ -244,7 +244,7 @@ is not extended, `RELATIONS.has` / `VALENCES.has` fall through and **every row s
 ## The corpus
 
 > **The three runs we actually paid for are committed, at
-> [`evals/debate/corpus/`](../../evals/debate/corpus/README.md)** — `cargocult`, `writes` and
+> [`evals/debate/corpus/`](../../evals/reception/corpus/README.md)** — `cargocult`, `writes` and
 > `claudes-constitution`, 2026-09-06. They were in `output/debate-runs/`, which is gitignored scratch,
 > which meant they existed in exactly one place: a worktree about to be deleted. `npm run
 > worktree:check` caught it on 2026-09-08. Every number in this plan comes out of those files and

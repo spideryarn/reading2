@@ -258,7 +258,7 @@ describe("what Chat may open is only its own kind (F3)", () => {
     stored = [LEARN];
     const drafts = chatDraftsFor(SLUG);
     const was = "spya-draft2";
-    const origin = { mode: "debate" as const, blockId: "spya-bbbbbb", quote: "A claim to check" };
+    const origin = { mode: "sources-claims" as const, blockId: "spya-bbbbbb", quote: "A claim to check" };
     drafts.setDestination(was);
     drafts.setThread(was, "Check this claim");
     drafts.setOrigin(was, origin);

@@ -103,7 +103,7 @@ export function useLandOnItem({
 
 /**
  * **What a claim of Debate's is focused by**: its block and its words, the
- * pair that is its identity (`ClaimOrigin`; debate-order.ts), as one string.
+ * pair that is its identity (`ClaimOrigin`; reception-order.ts), as one string.
  * Each claim row carries it in `data-claim-key`.
  */
 export function claimFocusKey(claim: { blockId: string; quote: string }): string {

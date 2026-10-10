@@ -165,16 +165,18 @@ export const STEP_ORDER = [
      `FORCE_ONLY_WHEN_NAMED` (src/pipeline.ts) — this is the second dearest
      thing in the app at up to ~$0.27 a run, and a positional cascade that swept
      it in would spend that on somebody who pressed a button one band along.
-     docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md. */
-  "debate",
-  /* **Straight after `debate`**, the mode it serves: the article's claims,
-     listed for Debate's Claims sub-mode to pick from. One Messages call over
+     docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md.
+     Reception's search; the step was `debate` until 2026-10-09 (plan 261009w). */
+  "reception",
+  /* **Straight after `reception`**, the mode it serves: the article's claims,
+     listed for Sources › Claims to pick from. One Messages call over
      the body, `faq`'s bytes and effort and its own schema; no web search.
      Off `DEFAULT_INGEST_STEPS` and in `FORCE_ONLY_WHEN_NAMED` — a model call
      over the whole article that a reader asks for by pressing Claims.
-     docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2. */
-  "debate-claims",
-  /* **After `debate`**: it sends `articleWithIds` over every block, notes and
+     docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2. The step
+     was `debate-claims` until 2026-10-09 (plan 261009w). */
+  "sources-claims",
+  /* **After `reception`**: it sends `articleWithIds` over every block, notes and
      bibliography included, so its bytes match no other stage's. Off
      `DEFAULT_INGEST_STEPS` and in `FORCE_ONLY_WHEN_NAMED` — a model call over
      the whole article that a reader asks for by pressing the mode.
@@ -200,12 +202,14 @@ export const STEP_ORDER = [
  * `runStep`'s catch. Plan 261002b § The deploy, for the Overseer.
  *
  * `trajectory` was Skim's step until 2026-10-01 (plan 261001r); `hierarchy` was
- * Structure's until 2026-10-02 (plan 261002b); `citations` was Bibliography's
- * until 2026-10-09 (plan 261009w). The ledger also renames jobs, so
+ * Structure's until 2026-10-02 (plan 261002b); `citations` was Bibliography's,
+ * `debate` Reception's and `debate-claims` Claims' until 2026-10-09 (plan
+ * 261009w). The ledger also renames jobs, so
  * `currentLedgerName` below reads this table together with `RETIRED_JOBS`.
  *
  * **Plan 261009w renamed without rewriting `jobs`** (expand and contract): a
- * job the old code queued keeps `citations` in `jobs.steps` and `jobs.reset`
+ * job the old code queued keeps `citations` (or `debate`, `debate-claims`) in
+ * `jobs.steps` and `jobs.reset`
  * until the contract migration rewrites them, so this row is what runs it. Job
  * ingress (`POST /api/jobs`, src/routes.ts) reads a stale tab's old names
  * through here too. The row may stay after the contract, as `trajectory`'s has.
@@ -214,6 +218,8 @@ export const RETIRED_STEPS: Readonly<Record<string, StepName>> = {
   trajectory: "skim",
   hierarchy: "structure",
   citations: "bibliography",
+  debate: "reception",
+  "debate-claims": "sources-claims",
 };
 
 /** A retired step name's successor, or the name as it came. */
@@ -236,9 +242,12 @@ export function currentStepName(name: string): string {
  * `citations-find` was Bibliography's *Find it* job until 2026-10-09, named
  * after the step rather than the file it runs (src/citation-find.ts) and the
  * rate bucket it spends (`citation-find`), which it now matches.
+ * `debate-check` was a reader's claim check until the same day, named after
+ * the mode rather than the sub-mode it serves (Claims).
  */
 export const RETIRED_JOBS: Readonly<Record<string, string>> = {
   "citations-find": "citation-find",
+  "debate-check": "sources-claim-check",
 };
 
 /** A ledger row's job or step name as it is called now, or the name as it came. */

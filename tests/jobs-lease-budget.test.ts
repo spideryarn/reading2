@@ -24,8 +24,8 @@ import { PDF_FIGURES_BUDGET_MS } from "../src/collect-pdf-figures.js";
 import { DEFAULTS as FETCH_DEFAULTS, retryDelayMs } from "../src/fetch.js";
 import { DEADLINE_MARGIN_MS, LEASE_MS, STEP_BUDGET_MS } from "../src/jobs.js";
 import { SOURCES } from "../src/paper-sources.js";
-import { ANSWER_TOKENS as DEBATE_ANSWER_TOKENS } from "../src/debate.js";
-import { SYNTHESIS_ANSWER_TOKENS } from "../src/debate-themes.js";
+import { ANSWER_TOKENS as RECEPTION_ANSWER_TOKENS } from "../src/reception.js";
+import { SYNTHESIS_ANSWER_TOKENS } from "../src/reception-themes.js";
 import { ideasAnswerTokens, suggestedIdeas } from "../src/ideas.js";
 import {
   BRIEF_CAP_MS,
@@ -460,11 +460,11 @@ describe("the job lease and the platform's kill", () => {
 
   it("reserves the token time of Debate's two current calls, and less than a claim", () => {
     /* One Reception search and one optional synthesis, in sequence
-       (src/debate.ts § `generateDebate`). The search adds time no token count bounds, so this
+       (src/reception.ts § `generateReception`). The search adds time no token count bounds, so this
        is a floor and not a ceiling. */
-    const floor = deadlineFor(DEBATE_ANSWER_TOKENS) + deadlineFor(SYNTHESIS_ANSWER_TOKENS);
-    expect(STEP_BUDGET_MS.debate, `debate's two calls may run for ${floor} ms`).toBeGreaterThanOrEqual(floor);
-    expect(STEP_BUDGET_MS.debate).toBeLessThan(claimMs);
+    const floor = deadlineFor(RECEPTION_ANSWER_TOKENS) + deadlineFor(SYNTHESIS_ANSWER_TOKENS);
+    expect(STEP_BUDGET_MS.reception, `debate's two calls may run for ${floor} ms`).toBeGreaterThanOrEqual(floor);
+    expect(STEP_BUDGET_MS.reception).toBeLessThan(claimMs);
   });
 
   /**

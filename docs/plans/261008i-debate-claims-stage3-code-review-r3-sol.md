@@ -8,7 +8,7 @@ E1 — closed.
 
 E6 — closed.
 
-E7 — still open: after four failed writes, the paid answer is still discarded and the pending row is left for the sweep; the new test explicitly preserves that outcome ([routes.ts](/var/tmp/spideryarn-worktrees/fbcaue42-debate-pick-claims/src/routes.ts:5952), [debate-claim-checks-routes.test.ts](/var/tmp/spideryarn-worktrees/fbcaue42-debate-pick-claims/tests/debate-claim-checks-routes.test.ts:456)).
+E7 — still open: after four failed writes, the paid answer is still discarded and the pending row is left for the sweep; the new test explicitly preserves that outcome ([routes.ts](/var/tmp/spideryarn-worktrees/fbcaue42-debate-pick-claims/src/routes.ts:5952), [debate-claim-checks-routes.test.ts](/var/tmp/spideryarn-worktrees/fbcaue42-debate-pick-claims/tests/sources-claim-checks-routes.test.ts:456)).
 
 New findings: none.
 

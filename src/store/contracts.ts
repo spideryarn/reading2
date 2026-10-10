@@ -91,7 +91,7 @@ import type {
   SearchRun,
   ShelfState,
   ArcFound,
-  DebateFound,
+  ReceptionFound,
   BibliographyFound,
   IdeasFound,
   IllustratedFound,
@@ -100,11 +100,11 @@ import type {
   QuizKeptAnswer,
   QuizQuestionId,
   FaqFound,
-  DebateClaimListFound,
-  DebateCheckCounts,
-  DebateCheckResult,
-  DebateCheckTarget,
-  DebateClaimCheck,
+  SourcesClaimListFound,
+  SourcesClaimCheckCounts,
+  SourcesClaimCheckResult,
+  SourcesClaimCheckTarget,
+  SourcesClaimCheck,
   RelationsResponse,
   CrossrefsFound,
   SimpleSummaryFound,
@@ -309,7 +309,7 @@ export interface ArticleReader {
    * (src/store/public-reader.ts), without the staleness verdict.
    * docs/plans/261008i-debate-claims-picked-by-the-reader.md.
    */
-  loadDebateClaims(slug: string): Promise<DebateClaimListFound>;
+  loadSourcesClaims(slug: string): Promise<SourcesClaimListFound>;
 
   /**
    * How each paragraph bears on the one before it, plus whether it still
@@ -369,7 +369,7 @@ export interface ArticleReader {
    * all — so it is a 200 with a sentence, never a 404. `SHAPE.debate`
    * (src/store/artifacts.ts) makes the same call at the store boundary.
    */
-  loadDebate(slug: string): Promise<DebateFound>;
+  loadReception(slug: string): Promise<ReceptionFound>;
 
   /**
    * **What the article was imported as: its title, its authors and its DOI** —
@@ -1629,8 +1629,8 @@ export interface RefereeClaimsStore {
 export type ClaimCheckFinish =
   | {
       status: "done";
-      results: DebateCheckResult[];
-      counts: DebateCheckCounts;
+      results: SourcesClaimCheckResult[];
+      counts: SourcesClaimCheckCounts;
       webSearches: number;
       model: string;
     }
@@ -1639,27 +1639,27 @@ export type ClaimCheckFinish =
 /** What a check is when it is pressed — everything but the outcome. */
 export interface ClaimCheckBegin {
   listSourceHash: string;
-  targets: DebateCheckTarget[];
+  targets: SourcesClaimCheckTarget[];
   digFurther: boolean;
 }
 
 /**
- * **Debate's reader-picked claim checks** — src/store/pg-debate-claim-checks.ts,
+ * **Debate's reader-picked claim checks** — src/store/pg-sources-claim-checks.ts,
  * plan docs/plans/261008i-debate-claims-picked-by-the-reader.md § 3.
  *
  * Owner-scoped like every reader-state store: each method takes a slug and
  * refuses one this reader does not own with the reader's 404.
  */
-export interface DebateClaimChecksStore {
+export interface SourcesClaimChecksStore {
   /** Every check on the article, oldest first. */
-  list(slug: string): Promise<DebateClaimCheck[]>;
+  list(slug: string): Promise<SourcesClaimCheck[]>;
 
   /**
    * **The reservation**: insert a `pending` check, or throw a 409
    * (`CheckInFlight`) when the article already has one — the partial unique
    * index decides, so two presses at once cannot both get through.
    */
-  begin(slug: string, check: ClaimCheckBegin): Promise<{ check: DebateClaimCheck; attempt: string }>;
+  begin(slug: string, check: ClaimCheckBegin): Promise<{ check: SourcesClaimCheck; attempt: string }>;
 
   /**
    * **Take back a reservation nothing was spent on** — the allowance refused
@@ -1672,13 +1672,13 @@ export interface DebateClaimChecksStore {
    * Write the outcome over the `pending` check **this attempt began**. `null`
    * when it is not there to write to: the sweep ended it, or the article went.
    */
-  finish(slug: string, id: string, patch: ClaimCheckFinish, attempt: string): Promise<DebateClaimCheck | null>;
+  finish(slug: string, id: string, patch: ClaimCheckFinish, attempt: string): Promise<SourcesClaimCheck | null>;
 
   /**
    * End abandoned `pending` checks — older than the call's deadline and its
    * margin, and not one `live` says this process is running — then list.
    */
-  sweep(slug: string, live: (id: string) => boolean): Promise<DebateClaimCheck[]>;
+  sweep(slug: string, live: (id: string) => boolean): Promise<SourcesClaimCheck[]>;
 }
 
 /**
@@ -3160,11 +3160,33 @@ export type RateBucket =
      whole Help, free to the reader and so bounded here instead, with a global
      fuse (src/help-chat-call.ts § `HELP_CHAT_RATE_POLICY`, plan 261007k). */
   | "help-chat"
-  /* Debate's reader-picked claim checks — one paid web search over the
-     claims a reader ticked or typed (src/debate.ts §
-     `DEBATE_CHECK_RATE_POLICY`, plan 261008i § 3). Not Dig deeper's bucket,
-     because Dig deeper's lease is shorter than a check (GPT Sol's E1). */
-  | "debate-check";
+  /* Sources › Claims' reader-picked claim checks — one paid web search over
+     the claims a reader ticked or typed (src/reception.ts §
+     `SOURCES_CLAIM_CHECK_RATE_POLICY`, plan 261008i § 3). Not Dig deeper's
+     bucket, because Dig deeper's lease is shorter than a check (GPT Sol's E1).
+     It was `debate-check` until 2026-10-09: `RETIRED_RATE_BUCKETS` below. */
+  | "sources-claim-check";
+
+/**
+ * **A bucket's old spellings, still counted against it.** Plan
+ * docs/plans/261009w-peer-review-becomes-sources-all-the-way-down.md renamed
+ * the claim check's bucket `debate-check` → `sources-claim-check` by expand and
+ * contract (GPT Sol's F2): the code deployed before the rename writes the old
+ * word for the minutes of the deploy, and the last hour's and day's rows carry
+ * it after, so a limit that counted only the new word would hand every reader
+ * a fresh allowance at the deploy. `rate_limit_events_bucket` admits both; the
+ * limiter (src/store/pg-rate-limit.ts) counts and sweeps every spelling
+ * `bucketSpellings` gives. The contract migration rewrites or deletes the old
+ * rows before it narrows that CHECK, and this table may then go.
+ */
+export const RETIRED_RATE_BUCKETS: Readonly<Record<string, RateBucket>> = {
+  "debate-check": "sources-claim-check",
+};
+
+/** The bucket and every word it was stored under before. */
+export function bucketSpellings(bucket: RateBucket): string[] {
+  return [bucket, ...Object.keys(RETIRED_RATE_BUCKETS).filter((old) => RETIRED_RATE_BUCKETS[old] === bucket)];
+}
 
 /**
  * **How many outbound fetches one reader's pointer may cause.**

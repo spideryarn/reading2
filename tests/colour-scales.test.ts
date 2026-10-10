@@ -395,7 +395,7 @@ describe.each(
 });
 
 describe.each(THEMES)("the lean words Debate paints in --div-rg-1 and --div-rg-7, %s", (theme) => {
-  /* debate.css § `.dbt-lean-for` / `-against` use two diverging steps as the
+  /* reception.css § `.rcp-lean-for` / `-against` use two diverging steps as the
      colour of a *word*, so for those two the bar is WCAG's 4.5:1 for text
      rather than "visible". A scale retuned for swatches could drop below it
      without any swatch looking wrong. */

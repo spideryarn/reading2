@@ -29,7 +29,7 @@
  * `popstate` for everything else. One query string, one listener.
  */
 import { createParser, debounce } from "nuqs";
-import type { DebateBears, SkimDepth } from "../types.js";
+import type { SourcesClaimsBears, SkimDepth } from "../types.js";
 import { isSpideryarnId } from "../ids.js";
 import { DIAGRAMS, type DiagramKind } from "./diagram.js";
 import type { ScatterAxis, ScatterHue } from "./scatter.js";
@@ -39,8 +39,8 @@ import { searchWithout } from "./router.js";
 /* Type-only: a value import would put faq-order.ts on the reader's startup
    path (tests/eager-client-graph.test.ts). faq-order.ts § FaqOrder. */
 import type { FaqOrder } from "./faq-order.js";
-/* Type-only, for the same reason: debate-order.ts § DebateOrder. */
-import type { DebateOrder } from "./debate-order.js";
+/* Type-only, for the same reason: reception-order.ts § ReceptionOrder. */
+import type { ReceptionOrder } from "./reception-order.js";
 import type { ShelfFilter, ShelfView } from "./ShelfControls.js";
 
 /* Which article is NOT in here. It is the path — `/read/<slug>` — and has been
@@ -1434,7 +1434,7 @@ export type SourcesView = (typeof SOURCES_VIEWS)[number];
  * for the panel, which keeps its stored name until the deep rename (plan
  * 261009l § Stage 3).
  */
-export type DebateView = Exclude<SourcesView, "bibliography">;
+export type ReceptionAndClaimsView = Exclude<SourcesView, "bibliography">;
 
 export const sourcesParam = createParser<SourcesView>({
   parse: (v) => ((SOURCES_VIEWS as readonly string[]).includes(v) ? (v as SourcesView) : null),
@@ -1462,7 +1462,7 @@ export function sourcesInSearch(search: string): SourcesView {
  * (SPIDERYARN-READING2-5P, docs/plans/260929h-debate-mode-clearer-sources-and-orders.md).
  *
  * `prioritised` (*as found*, the default and absent), `date` or `stance`. The
- * panel draws what the rows can support (debate-order.ts §
+ * panel draws what the rows can support (reception-order.ts §
  * `effectiveReceptionOrder`), which is Glossary's `?sort=` arrangement. An
  * unknown value parses to the default. **Claims ignores it**: that sub-mode is
  * always grouped by claim.
@@ -1477,14 +1477,14 @@ export function sourcesInSearch(search: string): SourcesView {
  * like `?citeby=`: changing the order is a deliberate act on the view, and Back
  * should undo it.
  */
-export const DEBATE_ORDERS = ["prioritised", "date", "stance"] as const satisfies readonly DebateOrder[];
-/* And the other way: every `DebateOrder` is in the list, or this line stops compiling. */
-const _everyDebateOrderListed: Exclude<DebateOrder, (typeof DEBATE_ORDERS)[number]> extends never ? true : never =
+export const RECEPTION_ORDERS = ["prioritised", "date", "stance"] as const satisfies readonly ReceptionOrder[];
+/* And the other way: every `ReceptionOrder` is in the list, or this line stops compiling. */
+const _everyReceptionOrderListed: Exclude<ReceptionOrder, (typeof RECEPTION_ORDERS)[number]> extends never ? true : never =
   true;
-void _everyDebateOrderListed;
+void _everyReceptionOrderListed;
 
-export const debateOrderParam = createParser<DebateOrder>({
-  parse: (v) => (DEBATE_ORDERS.includes(v as DebateOrder) ? (v as DebateOrder) : null),
+export const receptionOrderParam = createParser<ReceptionOrder>({
+  parse: (v) => (RECEPTION_ORDERS.includes(v as ReceptionOrder) ? (v as ReceptionOrder) : null),
   serialize: (v) => v,
 })
   .withDefault("prioritised")
@@ -1499,7 +1499,7 @@ export const debateOrderParam = createParser<DebateOrder>({
  * judgment, and a number would read as a measurement. **No parser default**,
  * the call `?gate=`, `?bar=` and `?conf=` all make: absent is *nobody has
  * touched it*, which the panel resolves to `RELEVANCE_DEFAULT` in
- * debate-order.ts (`loosely`, which hides nothing), so the constant stays in
+ * reception-order.ts (`loosely`, which hides nothing), so the constant stays in
  * one file and *the reader chose the default* stays distinguishable from *the
  * reader chose nothing* — which is what the slider's reset button is drawn
  * from. An unknown word parses to `null`. `replace` and not debounced: there
@@ -1507,14 +1507,14 @@ export const debateOrderParam = createParser<DebateOrder>({
  * the `?mode=debate` that got you here rather than a step of the slider.
  * docs/plans/260929h-debate-mode-clearer-sources-and-orders.md F5, F7.
  */
-export const DEBATE_BEARS_WORDS = ["directly", "partly", "loosely"] as const satisfies readonly DebateBears[];
-/* And the other way: every `DebateBears` is in the list, or this stops compiling. */
-const _everyBearsListed: Exclude<DebateBears, (typeof DEBATE_BEARS_WORDS)[number]> extends never ? true : never =
+export const SOURCES_CLAIMS_BEARS_WORDS = ["directly", "partly", "loosely"] as const satisfies readonly SourcesClaimsBears[];
+/* And the other way: every `SourcesClaimsBears` is in the list, or this stops compiling. */
+const _everyBearsListed: Exclude<SourcesClaimsBears, (typeof SOURCES_CLAIMS_BEARS_WORDS)[number]> extends never ? true : never =
   true;
 void _everyBearsListed;
 
-export const bearsParam = createParser<DebateBears>({
-  parse: (v) => (DEBATE_BEARS_WORDS.includes(v as DebateBears) ? (v as DebateBears) : null),
+export const bearsParam = createParser<SourcesClaimsBears>({
+  parse: (v) => (SOURCES_CLAIMS_BEARS_WORDS.includes(v as SourcesClaimsBears) ? (v as SourcesClaimsBears) : null),
   serialize: (v) => v,
 }).withOptions({ history: "replace" });
 
@@ -1526,13 +1526,13 @@ export const bearsParam = createParser<DebateBears>({
  * like every parameter. A theme id is a `mintId`, so anything that is neither
  * that shape nor `key` parses to `null`. A well-formed id this debate does not
  * have — a link from before a re-run — gets through here and is read as *no
- * filter* by `selectedThread` (debate-threads.ts). `replace`, like `?bears=`:
+ * filter* by `selectedThread` (reception-threads.ts). `replace`, like `?bears=`:
  * it narrows a list rather than moving to a new view.
  */
-/** `?debatethread=key` — the key sources. A theme is its own id, which never spells this. Here rather than in debate-threads.ts so this eager file does not pull that one into every reader's first download (tests/eager-client-graph.test.ts). */
+/** `?debatethread=key` — the key sources. A theme is its own id, which never spells this. Here rather than in reception-threads.ts so this eager file does not pull that one into every reader's first download (tests/eager-client-graph.test.ts). */
 export const KEY_THREAD = "key";
 
-export const debateThreadParam = createParser<string>({
+export const receptionThreadParam = createParser<string>({
   parse: (v) => (v === KEY_THREAD || isSpideryarnId(v) ? v : null),
   serialize: (v) => v,
 }).withOptions({ history: "replace" });

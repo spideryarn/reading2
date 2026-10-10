@@ -26,7 +26,7 @@ import { parseJsonAnswer } from "../../src/parse-json.js";
 import type { ModelNode } from "../../src/structure.js";
 import { supplementIndex } from "../../src/supplement.js";
 import type { Block, Tree, TreeNode } from "../../src/types.js";
-import { mulberry32 } from "../debate/label-sheet.js";
+import { mulberry32 } from "../reception/label-sheet.js";
 import { priceOf } from "../dig-deeper/arms.js";
 import { type Judge, judgeById } from "../dig-deeper/judges.js";
 import { finishTree } from "./arms.js";

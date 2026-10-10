@@ -23,7 +23,7 @@ because the two pads only swapped sides.
 **It generates one thing, its own relation words** ([below](#relation-words)). Every other note
 comes from something another mode has already stored, and opening the column never runs another
 mode. The owner's lists are read through each mode's *read half*
-(`useIdeasRead`, `useFaqRead`, `useTimelineRead`, `useDebateRead`), never the full mode hook, because the full hook
+(`useIdeasRead`, `useFaqRead`, `useTimelineRead`, `useReceptionRead`), never the full mode hook, because the full hook
 can start a run on its own. `tests/artefact-read-hooks.test.tsx` checks that the read halves only
 read. A visitor's lists come in their payload.
 

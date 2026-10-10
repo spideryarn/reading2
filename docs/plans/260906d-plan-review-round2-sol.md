@@ -29,7 +29,7 @@ Keeping both contracts in one test file is reasonable; forcing them through one 
 (a) Selector identity misses equal-specificity companion classes applied to the same element. For example:
 
 - `.gloss-quiet` in slice 12 sets `padding`; `.tl-thin` in slice 33 later resets it on the same `<p>` in [`TimelinePanel.tsx`](</home/greg/code/spideryarn2/.claude/worktrees/a10-style-ownership/src/web/TimelinePanel.tsx:435>).
-- `.gloss-quiet` and `.dbt-empty` likewise compete on the same `<p>` in [`DebatePanel.tsx`](</home/greg/code/spideryarn2/.claude/worktrees/a10-style-ownership/src/web/DebatePanel.tsx:612>).
+- `.gloss-quiet` and `.dbt-empty` likewise compete on the same `<p>` in [`DebatePanel.tsx`](</home/greg/code/spideryarn2/.claude/worktrees/a10-style-ownership/src/web/ReceptionAndClaimsPanel.tsx:612>).
 
 These selectors are different and equally specific, so order—not specificity—selects the padding. This directly contradicts the plan’s “exactly the pairs” and “Specificity settles that, not order” claims.
 

@@ -17,7 +17,7 @@
  *
  * The real band and the real `useChat`, with `ChatPanel` stubbed to expose
  * the props it is handed: tests/conversation-band-handoff.test.tsx's harness.
- * What the reader sees is asked in tests/debate-check-claim-in-chat.test.tsx.
+ * What the reader sees is asked in tests/sources-claim-check-in-chat.test.tsx.
  */
 import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -67,10 +67,10 @@ vi.mock("../src/web/lib/api.js", async () => {
 const { ConversationBand } = await import("../src/web/modes/conversation/ConversationModes.js");
 
 const SLUG = "a-piece";
-const CLAIM: ThreadOrigin = { mode: "debate", blockId: "spya-bbbbbb", quote: "RNA can transfer a memory" };
-const OTHER: ThreadOrigin = { mode: "debate", blockId: "spya-cccccc", quote: "Memories survive metamorphosis" };
+const CLAIM: ThreadOrigin = { mode: "sources-claims", blockId: "spya-bbbbbb", quote: "RNA can transfer a memory" };
+const OTHER: ThreadOrigin = { mode: "sources-claims", blockId: "spya-cccccc", quote: "Memories survive metamorphosis" };
 const SEED = "Check this claim";
-const LENS: ThreadOrigin = { mode: "debate", lens: "replication attempts" };
+const LENS: ThreadOrigin = { mode: "reception", lens: "replication attempts" };
 
 /** The server names the rows, answers, and finishes. */
 function answered(threadId: string, origin?: unknown): Response {

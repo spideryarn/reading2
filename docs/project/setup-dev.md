@@ -547,14 +547,14 @@ shows the model you actually set and marks the row *set in the environment*. Rem
 | `SPIDERYARN_CITATION_INVESTIGATE_MODEL` | Bibliography's *Dig deeper* (was *Investigate*) used to take its model from this. Since 2026-10-01 the answer is always the high-power model (`DIG_DEEPER_MODEL`), so this changes what `/profile` reports for the task and nothing a reader triggers ([bibliography.md](bibliography.md#dig-deeper-a-closer-look-at-one-work-on-demand)) |
 | `SPIDERYARN_QUIZ_VERDICT_MODEL` | whether the reader got a quiz question right, judged from the finished mark and shown to nobody ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else)) — a quick-tier job. `evals/quiz.ts` prints the verdict beside a hand label on all eight marking cases, so this is the variable for asking the same question with evidence |
 | `SPIDERYARN_PDF_FRONTMATTER_MODEL` | the second look at an uploaded PDF's first pages, deciding which records are the article's title and authors and which are the publisher's (`src/pdf-frontmatter.ts`) — so `evals/pdf/titles.mts` can compare models on the shipped path |
-| `SPIDERYARN_DEBATE_MODEL` | The `debate` step (Sources' Reception) |
+| `SPIDERYARN_RECEPTION_MODEL` | The `reception` step (Sources › Reception) and a reader's claim check (`sources-claim-check`); `SPIDERYARN_DEBATE_MODEL` until 2026-10-09, set nowhere |
 | `SPIDERYARN_SIMPLE_CHECK_MODEL` | Simple's fidelity guard: each written level's paragraphs checked against the passages they cite ([summaries.md](summaries.md#simple-a-plain-words-orientation)). Its rates were measured on GPT-5.6 Luna, where it stays (`PINNED_MODEL`), so another model is a new measurement |
 | `SPIDERYARN_DIG_DEEPER_SEARCH_MODEL` | *Dig deeper*'s forced web search, run before the answer: it keeps the search's results and writes a keyword query for the reader's library (`src/dig-deeper.ts`). A quick-tier job; the answer the reader reads is always the high-power model, which this does not change |
 | `SPIDERYARN_PIPELINE_EFFORT` | the article-reading stages' effort, all at once: `low`, `medium` or `high`. Empty counts as unset; anything else stops the run with an error naming the variable, so a typo cannot pass as a measurement (`pipelineEffortOverride` in `src/models.ts`) |
 
 `MODEL_ENV_VAR` in [`src/models.ts`](../../src/models.ts) is the list this table copies — read it
 there when it matters, because the copy has missed rows more than once (the latest two,
-`SPIDERYARN_PDF_FRONTMATTER_MODEL` and `SPIDERYARN_DEBATE_MODEL`, were added on 2026-10-01). The copy
+`SPIDERYARN_PDF_FRONTMATTER_MODEL` and `SPIDERYARN_RECEPTION_MODEL`, were added on 2026-10-01). The copy
 is why two rows were missing until 2026-09-01: `quiz-mark` had been added at the quiz stage and
 `referee-mirror` an hour before this line was written, and neither arrival touched the table. A
 variable that exists and is not written down here reads as a variable that does not exist, so the

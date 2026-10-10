@@ -102,11 +102,11 @@ import {
   PROMPT_VERSION as FAQ_PROMPT_VERSION,
 } from "./faq.js";
 import {
-  DEBATE_CLAIMS_OUTPUT_SCHEMA,
-  generateDebateClaims,
-  inputFingerprint as debateClaimsFingerprint,
-  PROMPT_VERSION as DEBATE_CLAIMS_PROMPT_VERSION,
-} from "./debate-claims.js";
+  SOURCES_CLAIMS_OUTPUT_SCHEMA,
+  generateSourcesClaims,
+  inputFingerprint as sourcesClaimsFingerprint,
+  PROMPT_VERSION as SOURCES_CLAIMS_PROMPT_VERSION,
+} from "./sources-claims.js";
 import {
   RELATIONS_OUTPUT_SCHEMA,
   generateRelations,
@@ -127,10 +127,10 @@ import {
   SIMPLE_SUMMARY_OUTPUT_SCHEMA,
 } from "./simple-summary.js";
 import {
-  generateDebate,
-  inputFingerprint as debateFingerprint,
-  PROMPT_VERSION as DEBATE_PROMPT_VERSION,
-} from "./debate.js";
+  generateReception,
+  inputFingerprint as receptionFingerprint,
+  PROMPT_VERSION as RECEPTION_PROMPT_VERSION,
+} from "./reception.js";
 import {
   generateBibliography,
   inputFingerprint as bibliographyFingerprint,
@@ -141,7 +141,7 @@ import { ownIdsOfPdf, withRegistryFacts } from "./article-registry.js";
 import { rateReadingDifficulty, ratingParagraphs } from "./reading-difficulty.js";
 import { lookupWork, type LookupResult, type WorkId } from "./bibliographic.js";
 import { attachCitationRegistry, citationRegistryDeps } from "./citation-registry.js";
-import { attachDebateRegistry, debateRegistryDeps } from "./debate-registry.js";
+import { attachReceptionRegistry, receptionRegistryDeps } from "./reception-registry.js";
 import { declaredFailure, stageFailure } from "./job-failure.js";
 import { extractHtmlMetadata, extractPaperMetadata, paperMeta, paperTitle } from "./paper-metadata.js";
 import { type ResolvedPaper, resolvePaperSource } from "./paper-sources.js";
@@ -393,7 +393,7 @@ export const ARTICLE_OUTPUT_FORMAT: Readonly<Record<ArticleStage, ArticleOutputF
   quiz: jsonSchemaFormat(QUIZ_OUTPUT_SCHEMA),
   faq: jsonSchemaFormat(FAQ_OUTPUT_SCHEMA),
   relations: jsonSchemaFormat(RELATIONS_OUTPUT_SCHEMA),
-  "debate-claims": jsonSchemaFormat(DEBATE_CLAIMS_OUTPUT_SCHEMA),
+  "sources-claims": jsonSchemaFormat(SOURCES_CLAIMS_OUTPUT_SCHEMA),
   crossrefs: jsonSchemaFormat(CROSSREFS_OUTPUT_SCHEMA),
   simple: jsonSchemaFormat(SIMPLE_SUMMARY_OUTPUT_SCHEMA),
 };
@@ -639,12 +639,12 @@ export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
      stored `sourceHash` against what the store holds, so when the article
      really has moved it re-runs without being forced. And it replaces rather
      than appends. */
-  "debate",
+  "reception",
   /* It reads the body and metadata head (with the tree as a title fallback),
      nothing in the pipeline reads what it writes, and it replaces rather than
      appends. A positional cascade from a press one band along must not buy it.
      docs/plans/261008i-debate-claims-picked-by-the-reader.md. */
-  "debate-claims",
+  "sources-claims",
   /* A model call over the whole article that nothing else reads, so the
      positional cascade would buy it for nothing; and it replaces rather than
      appends. docs/plans/260911g-citations-mode.md. */
@@ -5385,10 +5385,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      which is both the safe answer and the true one: it is on chat/completions
      and shares no Anthropic cached prefix with anything.
      docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md. */
-  debate: {
-    name: "debate",
+  reception: {
+    name: "reception",
     label: "Asking the web",
-    produces: ["debate"],
+    produces: ["reception"],
     /* The Reception search is bought from the provider and cannot be fetched
        back if this window dies with it in flight, so a requeue does not buy it
        again: plan 261009l. */
@@ -5414,21 +5414,21 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       if (!article) return null;
       return {
         /* **`article.meta`, `null` and all — never a stub**, for the reason
-           `quiz` and `timeline` state above: `generateDebate` hands the
+           `quiz` and `timeline` state above: `generateReception` hands the
            fingerprint the real value, and hashing a stub head here would make every article without metadata report stale for
            ever with nothing red. */
-        inputHash: debateFingerprint(article.blocks, article.tree, article.meta),
-        promptVersion: DEBATE_PROMPT_VERSION,
-        /* `modelFor("debate")` rather than `CAPABLE_MODEL`, and it is the only
+        inputHash: receptionFingerprint(article.blocks, article.tree, article.meta),
+        promptVersion: RECEPTION_PROMPT_VERSION,
+        /* `modelFor("reception")` rather than `CAPABLE_MODEL`, and it is the only
            row here that differs: this step is on the chat wire, where
-           `SPIDERYARN_DEBATE_MODEL` can override the model — and a stamp that
+           `SPIDERYARN_RECEPTION_MODEL` can override the model — and a stamp that
            named the default while the override wrote the artefact would report
            every run stale. src/models.ts § `resolveModel`. */
-        model: modelFor("debate", ctx.power),
+        model: modelFor("reception", ctx.power),
       };
     },
     async run(ctx, store) {
-      const run = await generateDebate({
+      const run = await generateReception({
         article: await readArticle(ctx.slug, store),
         onProgress: ctx.report,
         signal: ctx.signal,
@@ -5438,16 +5438,16 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
          id gets the registry's authors and year, when its title agrees.
          After the search and outside the stamp; it never fails the step. */
       const registryStarted = Date.now();
-      const registered = await attachDebateRegistry(run.debate, debateRegistryDeps);
+      const registered = await attachReceptionRegistry(run.reception, receptionRegistryDeps);
       const registryMs = Date.now() - registryStarted;
-      run.debate = registered.debate;
+      run.reception = registered.reception;
       /* Reception only since `debate/7`: `claims` is stored `not-run`, so it
-         has no counts to log (src/types.ts § `DebateClaims`). */
-      const { direct } = run.debate;
+         has no counts to log (src/types.ts § `ReceptionClaims`). */
+      const { direct } = run.reception;
       plog.info(
         {
           slug: ctx.slug,
-          step: "debate",
+          step: "reception",
           model: run.model,
           ms: run.elapsedMs,
           /* **The alarm, and the only place a runaway shows up outside the
@@ -5476,14 +5476,14 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           registryUnavailable: registered.counts.unavailable,
           registryOverBudget: registered.counts.overBudget,
           registryMs,
-          synthesis: run.debate.synthesis?.kind ?? null,
-          themes: run.debate.synthesis?.kind === "made" ? run.debate.synthesis.themes.length : null,
-          keySources: run.debate.synthesis?.kind === "made" ? run.debate.synthesis.key.length : null,
+          synthesis: run.reception.synthesis?.kind ?? null,
+          themes: run.reception.synthesis?.kind === "made" ? run.reception.synthesis.themes.length : null,
+          keySources: run.reception.synthesis?.kind === "made" ? run.reception.synthesis.key.length : null,
         },
-        `debate ${ctx.slug}: ${direct.counts.keptRows} direct`,
+        `reception ${ctx.slug}: ${direct.counts.keptRows} direct`,
       );
       return {
-        parts: { debate: run.debate },
+        parts: { reception: run.reception },
         detail: `${direct.counts.keptRows} about this piece`,
       };
     },
@@ -5496,26 +5496,26 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      **No baseline read**, like `faq`: ids are minted per run. Nothing stored
      names a listed claim's id yet; the checks of the plan's § 3 will, and
      they are drawn only under the list they were made from. */
-  "debate-claims": {
-    name: "debate-claims",
+  "sources-claims": {
+    name: "sources-claims",
     label: "Listing its claims",
-    produces: ["debate-claims"],
+    produces: ["sources-claims"],
     /**
      * Its exact rendered body and cited head, with the **real, nullable**
      * metadata and the tree only as a fallback title. This is what
-     * `generateDebateClaims` hashes too. **No `profileHash`**.
+     * `generateSourcesClaims` hashes too. **No `profileHash`**.
      */
     stamp: async (ctx, store) => {
       const article = await tryReadArticle(ctx.slug, store);
       if (!article) return null;
       return {
-        inputHash: debateClaimsFingerprint(article.blocks, article.tree, article.meta),
-        promptVersion: DEBATE_CLAIMS_PROMPT_VERSION,
+        inputHash: sourcesClaimsFingerprint(article.blocks, article.tree, article.meta),
+        promptVersion: SOURCES_CLAIMS_PROMPT_VERSION,
         model: CAPABLE_MODEL,
       };
     },
     async run(ctx, store) {
-      const run = await generateDebateClaims({
+      const run = await generateSourcesClaims({
         article: await readArticle(ctx.slug, store),
         onProgress: ctx.report,
         signal: ctx.signal,
@@ -5526,7 +5526,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       plog.info(
         {
           slug: ctx.slug,
-          step: "debate-claims",
+          step: "sources-claims",
           model: run.model,
           inputTokens: run.inputTokens,
           outputTokens: run.outputTokens,
@@ -5539,10 +5539,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              watch: the model paraphrasing where it was told to copy. */
           ...run.dropped,
         },
-        `debate-claims ${ctx.slug}: ${claims} claims`,
+        `sources-claims ${ctx.slug}: ${claims} claims`,
       );
       return {
-        parts: { "debate-claims": run.claimList },
+        parts: { "sources-claims": run.claimList },
         detail: `${claims} ${claims === 1 ? "claim" : "claims"}`,
       };
     },

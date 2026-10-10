@@ -3,7 +3,7 @@
 
    `.tooltip` is borrowed rather than copied: annotations.css,
    column-context.css, dock.css, prose-hover-card.css, footnotes.css,
-   search.css, chat-actions.css, profile.css and debate.css each style only the
+   search.css, chat-actions.css, profile.css and reception.css each style only the
    inside of it. A change to the surface here reaches all of them. */
 
 /* --------------------------------------------------------------- tooltip --

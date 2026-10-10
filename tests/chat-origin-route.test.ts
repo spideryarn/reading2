@@ -153,11 +153,11 @@ async function call(method: "GET" | "POST", url: string, body?: unknown): Promis
 }
 
 const ask = (body: unknown) => call("POST", `/api/chat/${SLUG}`, body);
-const claim = () => ({ mode: "debate", blockId: BLOCK, quote: QUOTE });
+const claim = () => ({ mode: "sources-claims", blockId: BLOCK, quote: QUOTE });
 /* The second shape (plan 261005k, A): Debate looked at from an angle the
    reader typed. Their words, no block and no quote. */
 const LENS = "how it relates to Smith 2019";
-const lens = (words = LENS) => ({ mode: "debate", lens: words });
+const lens = (words = LENS) => ({ mode: "reception", lens: words });
 
 describe("an origin on the way in", () => {
   it("stores a claim's origin on the thread it creates, and reads it back equal", async () => {
@@ -165,7 +165,7 @@ describe("an origin on the way in", () => {
     expect(out.frames[0]?.event).toBe("begin");
     expect(out.frames[0]?.data.origin).toEqual(claim());
     const thread = await stored();
-    expect(thread?.origin).toEqual({ mode: "debate", blockId: BLOCK, quote: QUOTE });
+    expect(thread?.origin).toEqual({ mode: "sources-claims", blockId: BLOCK, quote: QUOTE });
     expect(thread?.kind, "a claim check is an ordinary chat").toBe("chat");
     expect(thread && "anchor" in thread, "and it is not anchored").toBe(false);
   });
@@ -196,15 +196,15 @@ describe("an origin on the way in", () => {
   });
 
   it.each([
-    ["something that is not an object", "debate"],
+    ["something that is not an object", "reception"],
     ["no mode", { blockId: "spya-aaaaaa", quote: "some words" }],
     ["a mode nobody has built", { mode: "summary", blockId: "spya-aaaaaa", quote: "some words" }],
     ["a mode that does not exist", { mode: "elsewhere", blockId: "spya-aaaaaa", quote: "some words" }],
-    ["a claim with no block", { mode: "debate", quote: "some words" }],
-    ["a malformed block id", { mode: "debate", blockId: "not-a-block", quote: "some words" }],
-    ["a claim with no words", { mode: "debate", blockId: "spya-aaaaaa" }],
-    ["an empty quote", { mode: "debate", blockId: "spya-aaaaaa", quote: "   " }],
-    ["a quote that is not a string", { mode: "debate", blockId: "spya-aaaaaa", quote: 7 }],
+    ["a claim with no block", { mode: "sources-claims", quote: "some words" }],
+    ["a malformed block id", { mode: "sources-claims", blockId: "not-a-block", quote: "some words" }],
+    ["a claim with no words", { mode: "sources-claims", blockId: "spya-aaaaaa" }],
+    ["an empty quote", { mode: "sources-claims", blockId: "spya-aaaaaa", quote: "   " }],
+    ["a quote that is not a string", { mode: "sources-claims", blockId: "spya-aaaaaa", quote: 7 }],
   ])("refuses %s", async (_name, origin) => {
     const out = await ask({ threadId: THREAD, question: "what?", origin });
     expect(out.status).toBe(400);
@@ -215,7 +215,7 @@ describe("an origin on the way in", () => {
     const out = await ask({
       threadId: THREAD,
       question: "what?",
-      origin: { mode: "debate", blockId: BLOCK, quote: "x".repeat(20_001) },
+      origin: { mode: "sources-claims", blockId: BLOCK, quote: "x".repeat(20_001) },
     });
     expect(out.status).toBe(413);
     expect(await threads()).toHaveLength(0);
@@ -225,7 +225,7 @@ describe("an origin on the way in", () => {
     const out = await ask({
       threadId: THREAD,
       question: "what?",
-      origin: { mode: "debate", blockId: "spya-zzzzzz", quote: "some words" },
+      origin: { mode: "sources-claims", blockId: "spya-zzzzzz", quote: "some words" },
     });
     expect(out.status).toBe(400);
     expect(await threads()).toHaveLength(0);
@@ -235,8 +235,8 @@ describe("an origin on the way in", () => {
     /* The quote is article prose and `httpError` messages are logged. */
     const secret = `${QUOTE} and a secret tail`;
     for (const origin of [
-      { mode: "debate", blockId: "spya-zzzzzz", quote: secret },
-      { mode: "debate", blockId: "not-a-block", quote: secret },
+      { mode: "sources-claims", blockId: "spya-zzzzzz", quote: secret },
+      { mode: "sources-claims", blockId: "not-a-block", quote: secret },
       { mode: "elsewhere", blockId: BLOCK, quote: secret },
     ]) {
       const out = await ask({ threadId: THREAD, question: "what?", origin });
@@ -256,9 +256,40 @@ describe("an origin on the way in", () => {
 });
 
 /**
- * **The second shape: a lens** (plan 261005k, A). Both shapes say
- * `mode: "debate"`, so which one a body is has to be decided by what it
- * carries, and a body that carries both is neither.
+ * **A tab loaded before plan 261009w's deploy** still sends a claim's and a
+ * lens's origin as `mode: "debate"`. Each is read by its shape and stored
+ * under its new word (§ After GPT Sol's plan review, F1), and a body that
+ * carries both shapes is still neither.
+ */
+describe("an old `debate` origin from a stale tab", () => {
+  it("stores a claim sent as `debate` as a Sources › Claims origin", async () => {
+    const out = await ask({ threadId: THREAD, question: "does it hold up?", origin: { ...claim(), mode: "debate" } });
+    expect(out.frames[0]?.event).toBe("begin");
+    expect((await stored())?.origin).toEqual(claim());
+    const [row] = await getDb()
+      .select({ mode: chatThreads.originMode })
+      .from(chatThreads)
+      .where(eq(chatThreads.id, THREAD));
+    expect(row?.mode, "written in the new word").toBe("sources-claims");
+  });
+
+  it("stores a lens sent as `debate` as a Reception origin", async () => {
+    const out = await ask({ threadId: THREAD, question: "what do others say?", origin: { ...lens(), mode: "debate" } });
+    expect(out.frames[0]?.event).toBe("begin");
+    expect((await stored())?.origin).toEqual(lens());
+  });
+
+  it("refuses a `debate` body that is both a lens and a claim", async () => {
+    const out = await ask({ threadId: THREAD, question: "what?", origin: { ...claim(), mode: "debate", lens: LENS } });
+    expect(out.status).toBe(400);
+    expect(await threads()).toHaveLength(0);
+  });
+});
+
+/**
+ * **The second shape: a lens** (plan 261005k, A). Both shapes said
+ * `mode: "debate"` until plan 261009w; now a lens is `reception`, and a body
+ * that carries a lens and any part of a claim is neither.
  */
 describe("a lens origin on the way in", () => {
   it("stores the lens on the thread it creates, and reads it back equal", async () => {
@@ -266,7 +297,7 @@ describe("a lens origin on the way in", () => {
     expect(out.frames[0]?.event).toBe("begin");
     expect(out.frames[0]?.data.origin).toEqual(lens());
     const thread = await stored();
-    expect(thread?.origin).toEqual({ mode: "debate", lens: LENS });
+    expect(thread?.origin).toEqual({ mode: "reception", lens: LENS });
     expect(thread?.origin && "blockId" in thread.origin, "a lens has no block").toBe(false);
     expect(thread?.kind, "a lens chat is an ordinary chat").toBe("chat");
     expect(thread && "anchor" in thread).toBe(false);
@@ -292,12 +323,12 @@ describe("a lens origin on the way in", () => {
   });
 
   it.each([
-    ["an empty lens", { mode: "debate", lens: "" }],
-    ["a lens of spaces", { mode: "debate", lens: "  \n " }],
-    ["a lens that is not a string", { mode: "debate", lens: 7 }],
-    ["a lens and a block", { mode: "debate", lens: "an angle", blockId: "spya-aaaaaa" }],
-    ["a lens and a quote", { mode: "debate", lens: "an angle", quote: "some words" }],
-    ["a lens and a whole claim", { mode: "debate", lens: "an angle", blockId: "spya-aaaaaa", quote: "some words" }],
+    ["an empty lens", { mode: "reception", lens: "" }],
+    ["a lens of spaces", { mode: "reception", lens: "  \n " }],
+    ["a lens that is not a string", { mode: "reception", lens: 7 }],
+    ["a lens and a block", { mode: "reception", lens: "an angle", blockId: "spya-aaaaaa" }],
+    ["a lens and a quote", { mode: "reception", lens: "an angle", quote: "some words" }],
+    ["a lens and a whole claim", { mode: "reception", lens: "an angle", blockId: "spya-aaaaaa", quote: "some words" }],
     ["a lens on a mode nobody has built", { mode: "summary", lens: "an angle" }],
   ])("refuses %s", async (_name, origin) => {
     const out = await ask({ threadId: THREAD, question: "what?", origin });
@@ -315,8 +346,8 @@ describe("a lens origin on the way in", () => {
     /* The lens is the reader's own words and `httpError` messages are logged. */
     const secret = "a private angle nobody should log";
     for (const origin of [
-      { mode: "debate", lens: secret, blockId: BLOCK },
-      { mode: "debate", lens: `${secret}${"x".repeat(601)}` },
+      { mode: "reception", lens: secret, blockId: BLOCK },
+      { mode: "reception", lens: `${secret}${"x".repeat(601)}` },
       { mode: "elsewhere", lens: secret },
     ]) {
       const out = await ask({ threadId: THREAD, question: "what?", origin });
@@ -533,8 +564,8 @@ describe("a thread's origin is set once", () => {
   it("refuses a different origin for a thread that already has one, with a 409", async () => {
     await ask({ threadId: THREAD, question: "does it hold up?", origin: claim() });
     for (const other of [
-      { mode: "debate", blockId: OTHER_BLOCK, quote: QUOTE },
-      { mode: "debate", blockId: BLOCK, quote: `${QUOTE} and more` },
+      { mode: "sources-claims", blockId: OTHER_BLOCK, quote: QUOTE },
+      { mode: "sources-claims", blockId: BLOCK, quote: `${QUOTE} and more` },
     ]) {
       const out = await ask({ threadId: THREAD, question: "and now?", origin: other });
       expect(out.status).toBe(409);
@@ -595,7 +626,7 @@ describe("the origin's columns", () => {
   }
 
   it("accepts a claim's three columns", async () => {
-    expect(await refusedBy({ originMode: "debate", originBlockId: BLOCK, originQuote: "words" })).toBeNull();
+    expect(await refusedBy({ originMode: "sources-claims", originBlockId: BLOCK, originQuote: "words" })).toBeNull();
   });
 
   it("refuses a mode the CHECK does not list", async () => {
@@ -609,54 +640,62 @@ describe("the origin's columns", () => {
   });
 
   it("refuses a claim without its block, without its words, or with an item id", async () => {
-    expect(await refusedBy({ originMode: "debate", originQuote: "words" })).toMatch(/chat_threads_origin_debate/);
-    expect(await refusedBy({ originMode: "debate", originBlockId: BLOCK })).toMatch(/chat_threads_origin_debate/);
+    expect(await refusedBy({ originMode: "sources-claims", originQuote: "words" })).toMatch(
+      /chat_threads_origin_sources_claims/,
+    );
+    expect(await refusedBy({ originMode: "sources-claims", originBlockId: BLOCK })).toMatch(
+      /chat_threads_origin_sources_claims/,
+    );
     expect(
       await refusedBy({
-        originMode: "debate",
+        originMode: "sources-claims",
         originBlockId: BLOCK,
         originQuote: "words",
         originItemId: "spya-aaaaaa",
       }),
-    ).toMatch(/chat_threads_origin_debate/);
+    ).toMatch(/chat_threads_origin_sources_claims/);
   });
 
   it("refuses an origin on a thread that is not a chat", async () => {
     expect(
-      await refusedBy({ kind: "explore", originMode: "debate", originBlockId: BLOCK, originQuote: "words" }),
+      await refusedBy({ kind: "explore", originMode: "sources-claims", originBlockId: BLOCK, originQuote: "words" }),
     ).toMatch(/chat_threads_origin_chat_only/);
   });
 
   it("refuses a block the article does not have", async () => {
     expect(
-      await refusedBy({ originMode: "debate", originBlockId: "spya-zzzzzz", originQuote: "words" }),
+      await refusedBy({ originMode: "sources-claims", originBlockId: "spya-zzzzzz", originQuote: "words" }),
     ).toMatch(/chat_threads_origin_identity_fk/);
   });
 
   /* Plan 261005k, A, and its review's F7: the lens is a fifth column, and a
-     debate origin is one shape or the other. */
+     lens and a claim are never mixed. Since plan 261009w a lens is `reception`
+     and a claim `sources-claims`. */
   it("accepts a plain chat, with no origin column set", async () => {
     expect(await refusedBy({})).toBeNull();
   });
 
   it("accepts a lens: a mode and the lens, and nothing else", async () => {
-    expect(await refusedBy({ originMode: "debate", originLens: "an angle" })).toBeNull();
+    expect(await refusedBy({ originMode: "reception", originLens: "an angle" })).toBeNull();
   });
 
-  it("refuses a claim and a lens mixed, whole or in part", async () => {
+  it("refuses a claim and a lens mixed, whole or in part, under either word", async () => {
     expect(
-      await refusedBy({ originMode: "debate", originBlockId: BLOCK, originQuote: "words", originLens: "an angle" }),
-    ).toMatch(/chat_threads_origin_debate/);
-    expect(await refusedBy({ originMode: "debate", originBlockId: BLOCK, originLens: "an angle" })).toMatch(
-      /chat_threads_origin_debate/,
+      await refusedBy({ originMode: "reception", originBlockId: BLOCK, originQuote: "words", originLens: "an angle" }),
+    ).toMatch(/chat_threads_origin_reception/);
+    expect(await refusedBy({ originMode: "reception", originBlockId: BLOCK, originLens: "an angle" })).toMatch(
+      /chat_threads_origin_reception/,
     );
-    expect(await refusedBy({ originMode: "debate", originQuote: "words", originLens: "an angle" })).toMatch(
-      /chat_threads_origin_debate/,
+    expect(await refusedBy({ originMode: "reception", originQuote: "words", originLens: "an angle" })).toMatch(
+      /chat_threads_origin_reception/,
     );
+    expect(
+      await refusedBy({ originMode: "sources-claims", originBlockId: BLOCK, originQuote: "words", originLens: "an angle" }),
+    ).toMatch(/chat_threads_origin_(sources_claims|lens_debate_only)/);
   });
 
-  it("refuses a debate origin that is neither a claim nor a lens", async () => {
-    expect(await refusedBy({ originMode: "debate" })).toMatch(/chat_threads_origin_debate/);
+  it("refuses a Reception origin with no lens", async () => {
+    expect(await refusedBy({ originMode: "reception" })).toMatch(/chat_threads_origin_reception/);
   });
 
   it("refuses a lens with no mode", async () => {
@@ -665,20 +704,41 @@ describe("the origin's columns", () => {
 
   it("refuses a lens with an item id", async () => {
     expect(
-      await refusedBy({ originMode: "debate", originLens: "an angle", originItemId: "spya-aaaaaa" }),
-    ).toMatch(/chat_threads_origin_debate/);
+      await refusedBy({ originMode: "reception", originLens: "an angle", originItemId: "spya-aaaaaa" }),
+    ).toMatch(/chat_threads_origin_reception/);
   });
 
-  it("refuses a lens on any mode but debate", async () => {
+  it("refuses a lens on any mode but Reception (or its old word)", async () => {
     expect(await refusedBy({ originMode: "summary", originLens: "an angle" })).toMatch(
       /chat_threads_origin_lens_debate_only/,
     );
   });
 
   it("refuses a lens on a thread that is not a chat", async () => {
-    expect(await refusedBy({ kind: "explore", originMode: "debate", originLens: "an angle" })).toMatch(
+    expect(await refusedBy({ kind: "explore", originMode: "reception", originLens: "an angle" })).toMatch(
       /chat_threads_origin_chat_only/,
     );
+  });
+
+  /* **The old word, as the code deployed before plan 261009w still writes it**
+     for the minutes of the deploy: `debate`, a claim or a lens, with the
+     shape checks it always had. The contract migration rewrites these rows. */
+  describe("a `debate` origin, as written before 2026-10-09", () => {
+    it("accepts a claim", async () => {
+      expect(await refusedBy({ originMode: "debate", originBlockId: BLOCK, originQuote: "words" })).toBeNull();
+    });
+
+    it("accepts a lens", async () => {
+      expect(await refusedBy({ originMode: "debate", originLens: "an angle" })).toBeNull();
+    });
+
+    it("refuses half a claim, a mix, or neither", async () => {
+      expect(await refusedBy({ originMode: "debate", originQuote: "words" })).toMatch(/chat_threads_origin_debate/);
+      expect(
+        await refusedBy({ originMode: "debate", originBlockId: BLOCK, originQuote: "words", originLens: "an angle" }),
+      ).toMatch(/chat_threads_origin_debate/);
+      expect(await refusedBy({ originMode: "debate" })).toMatch(/chat_threads_origin_debate/);
+    });
   });
 
   /* Plan 261006d, D2: a glossary entry or a cited work is an id and a name,
@@ -756,7 +816,7 @@ describe("db:export and the origin", () => {
         })
         .from(chatThreads)
         .where(and(eq(chatThreads.articleId, (article as ScratchArticle).articleId), eq(chatThreads.id, THREAD)));
-      expect(restored).toEqual({ mode: "debate", item: null, block: BLOCK, quote: QUOTE });
+      expect(restored).toEqual({ mode: "sources-claims", item: null, block: BLOCK, quote: QUOTE });
       expect((await stored())?.origin).toEqual(claim());
     } finally {
       globalThis.fetch = stub;
@@ -792,7 +852,7 @@ describe("db:export and the origin", () => {
         })
         .from(chatThreads)
         .where(and(eq(chatThreads.articleId, (article as ScratchArticle).articleId), eq(chatThreads.id, THREAD)));
-      expect(restored).toEqual({ mode: "debate", item: null, block: null, quote: null, lens: LENS });
+      expect(restored).toEqual({ mode: "reception", item: null, block: null, quote: null, lens: LENS });
       expect((await stored())?.origin).toEqual(lens());
     } finally {
       globalThis.fetch = stub;

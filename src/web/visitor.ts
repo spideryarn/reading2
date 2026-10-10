@@ -95,7 +95,7 @@ export const NOUN: Record<keyof PublicArtefacts, string> = {
   faq: "an FAQ",
   simpleSummary: "a plain-words summary",
   bibliography: "a bibliography",
-  debate: "a debate",
+  reception: "a debate",
   sketch: "a sketch",
 };
 
@@ -327,7 +327,7 @@ const POLICY: Record<Mode, VisitorPolicy> = {
    *
    * Each half's history: both were `owners-only` as staging decisions until
    * the public projections their rows' URLs must pass through were built —
-   * `publicCitedWork` and `publicDebate` in src/public/dto.ts, every address
+   * `publicCitedWork` and `publicReception` in src/public/dto.ts, every address
    * re-judged by `publicCitationUrl`, a refused one taking the link off a work
    * or dropping a debate row and counting it for the visitor's foot line. The
    * comments here said they spend, which is true of *making* them (one model
@@ -335,13 +335,13 @@ const POLICY: Record<Mode, VisitorPolicy> = {
    * a claim check) and nothing to do with *showing* them.
    * Greg, SPIDERYARN-READING2-56: a stored mode on a public article is shown.
    * The visitor gets `VisitorSourcesBand`, which mounts no `useBibliography`,
-   * `useDebate` or job, draws no *Find it* and starts no search.
+   * `useReception` or job, draws no *Find it* and starts no search.
    * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md,
    * docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md.
    */
   sources: {
     kind: "any-artefact",
-    keys: ["bibliography", "debate"],
+    keys: ["bibliography", "reception"],
     noun: "a Bibliography, a Reception search or a Claims list",
   },
   /**

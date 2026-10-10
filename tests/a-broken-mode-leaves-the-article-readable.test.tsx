@@ -79,12 +79,12 @@ const probe = vi.hoisted(() => {
     bandThrows: 0,
     panelThrows: 0,
     /** The Debate controller throws during its own render. */
-    throwDebate: false,
-    /** `DebatePanel` throws while the real `useDebate` hooks run above it. */
-    throwDebatePanel: false,
-    debateRenders: 0,
-    debateThrows: 0,
-    debatePanelThrows: 0,
+    throwReception: false,
+    /** `ReceptionAndClaimsPanel` throws while the real `useReception` hooks run above it. */
+    throwReceptionAndClaimsPanel: false,
+    receptionRenders: 0,
+    receptionThrows: 0,
+    receptionAndClaimsPanelThrows: 0,
     /**
      * The `useRenderCount` label that throws — each witnessed entry component
      * calls it at the start of render, so this is one switch for all of them.
@@ -113,11 +113,11 @@ const probe = vi.hoisted(() => {
       state.bandRenders = 0;
       state.bandThrows = 0;
       state.panelThrows = 0;
-      state.throwDebate = false;
-      state.throwDebatePanel = false;
-      state.debateRenders = 0;
-      state.debateThrows = 0;
-      state.debatePanelThrows = 0;
+      state.throwReception = false;
+      state.throwReceptionAndClaimsPanel = false;
+      state.receptionRenders = 0;
+      state.receptionThrows = 0;
+      state.receptionAndClaimsPanelThrows = 0;
       state.throwAt = null;
       state.labelThrows = 0;
       state.reports.length = 0;
@@ -227,7 +227,7 @@ vi.mock("../src/web/IdeasPanel.js", async (importOriginal) => {
 
 /**
  * **Debate's two throw sites**, the same shape as Ideas': the controller throws
- * before any of its hooks run, and the panel throws with the real `useDebate`
+ * before any of its hooks run, and the panel throws with the real `useReception`
  * — its read, its job poll and its `useAutoRun` — mounted above it. The second
  * is what shows the boundary encloses the controller's work and not only the
  * visible panel. docs/plans/260908f-prioritised-spideryarn-codebase-improvements.md § B.
@@ -240,9 +240,9 @@ vi.mock("../src/web/modes/sources/SourcesMode.js", async (importOriginal) => {
     /* Sources' band since 2026-10-09, which holds Debate's reads; the
        cases below open it on Reception, Debate's view (plan 261009l). */
     SourcesBand(props: Parameters<typeof actual.SourcesBand>[0]) {
-      probe.debateRenders += 1;
-      if (probe.throwDebate) {
-        probe.debateThrows += 1;
+      probe.receptionRenders += 1;
+      if (probe.throwReception) {
+        probe.receptionThrows += 1;
         throw new Error(BOOM);
       }
       return h(actual.SourcesBand, props);
@@ -250,17 +250,17 @@ vi.mock("../src/web/modes/sources/SourcesMode.js", async (importOriginal) => {
   };
 });
 
-vi.mock("../src/web/DebatePanel.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../src/web/DebatePanel.js")>();
+vi.mock("../src/web/ReceptionAndClaimsPanel.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/web/ReceptionAndClaimsPanel.js")>();
   const { createElement: h } = await import("react");
   return {
     ...actual,
-    DebatePanel(props: Parameters<typeof actual.DebatePanel>[0]) {
-      if (probe.throwDebatePanel) {
-        probe.debatePanelThrows += 1;
+    ReceptionAndClaimsPanel(props: Parameters<typeof actual.ReceptionAndClaimsPanel>[0]) {
+      if (probe.throwReceptionAndClaimsPanel) {
+        probe.receptionAndClaimsPanelThrows += 1;
         throw new Error(BOOM);
       }
-      return h(actual.DebatePanel, props);
+      return h(actual.ReceptionAndClaimsPanel, props);
     },
   };
 });
@@ -497,7 +497,7 @@ function reply(url: string, method: string): Response {
      Debate since 261006h, each of which the fall-through's `{}` is now a
      reported fault for rather than an `undefined` quietly published — and
      Tweets, Relations, Skim, Sketch and Illustrated since 261007n. */
-  if (/^\/api\/(glossary|quotes|quiz|bibliography|simple|faq|timeline|debate|tweets|relations|skim|sketch|illustrated)\//.test(url)) {
+  if (/^\/api\/(glossary|quotes|quiz|bibliography|simple|faq|timeline|reception|sources-claims|tweets|relations|skim|sketch|illustrated)\//.test(url)) {
     return new Response(null, { status: 404 });
   }
   /* **Arc too since 261007n, but as one that is there**: a missing arc starts
@@ -1132,17 +1132,17 @@ describe("the boundary will not retire a token newer than the one its render was
 
 const { navigate } = await import("../src/web/router.js");
 
-const DEBATE_FALLBACK = '[aria-label="Sources is not working"]';
+const SOURCES_FALLBACK = '[aria-label="Sources is not working"]';
 /** The article's spine (src/web/Spine.tsx), drawn in every mode, outside every band. */
 const SPINE = ".spine";
 
 /** Debate's counterpart to `containedInsideIdeas`, and it names the mode. */
-function containedInsideDebate(): void {
-  expect(probe.debateThrows + probe.debatePanelThrows, "the throwing mock never ran").toBeGreaterThan(
+function containedInsideReception(): void {
+  expect(probe.receptionThrows + probe.receptionAndClaimsPanelThrows, "the throwing mock never ran").toBeGreaterThan(
     0,
   );
   expect(text(), "the Debate fallback").toContain("[mode-render]");
-  expect(host.querySelector(DEBATE_FALLBACK), "the fallback does not name Debate").not.toBeNull();
+  expect(host.querySelector(SOURCES_FALLBACK), "the fallback does not name Debate").not.toBeNull();
   expect(text(), "the root fallback fired").not.toContain("[render]");
   expect(text(), "the exception text reached the reader").not.toContain(BOOM);
   expect(text(), "the prose went with it").toContain(PARAGRAPH);
@@ -1150,20 +1150,20 @@ function containedInsideDebate(): void {
   expect(host.querySelector(".dock-modes"), "the dock went with it").not.toBeNull();
 }
 
-function debateOn(): void {
+function receptionOn(): void {
   who.set(OWNER_A);
   experimentalSince = "2026-09-01T09:00:00.000Z";
-  notBuilt = "/api/debate/";
+  notBuilt = "/api/reception/";
 }
 
 describe("Debate that throws is replaced by a band, not by an empty page", () => {
   it("contains a throw from the controller's own render", async () => {
-    debateOn();
-    probe.throwDebate = true;
+    receptionOn();
+    probe.throwReception = true;
     await open("?mode=sources&sources=reception");
 
-    containedInsideDebate();
-    expect(probe.debateThrows, "the controller mock never threw").toBeGreaterThan(0);
+    containedInsideReception();
+    expect(probe.receptionThrows, "the controller mock never threw").toBeGreaterThan(0);
     reportedOnce("Sources");
 
     await press(MODE_LABEL.plain);
@@ -1172,58 +1172,58 @@ describe("Debate that throws is replaced by a band, not by an empty page", () =>
     expect(text()).toContain(PARAGRAPH);
   });
 
-  it("contains a throw from DebatePanel while the real controller's hooks run", async () => {
-    debateOn();
-    probe.throwDebatePanel = true;
+  it("contains a throw from ReceptionAndClaimsPanel while the real controller's hooks run", async () => {
+    receptionOn();
+    probe.throwReceptionAndClaimsPanel = true;
     await open("?mode=sources&sources=reception");
 
-    containedInsideDebate();
-    expect(probe.debatePanelThrows, "the panel mock never ran").toBeGreaterThan(0);
-    expect(probe.debateRenders, "the real controller never rendered").toBeGreaterThan(0);
+    containedInsideReception();
+    expect(probe.receptionAndClaimsPanelThrows, "the panel mock never ran").toBeGreaterThan(0);
+    expect(probe.receptionRenders, "the real controller never rendered").toBeGreaterThan(0);
     reportedOnce("Sources");
   });
 
   it("settles back to the same actionable fallback when retry fails again", async () => {
-    debateOn();
-    probe.throwDebate = true;
+    receptionOn();
+    probe.throwReception = true;
     await open("?mode=sources&sources=reception");
-    const first = probe.debateThrows;
+    const first = probe.receptionThrows;
 
     await act(async () => buttonNamed("Try Sources again").click());
     await settle();
 
-    expect(probe.debateThrows, "retry did not re-render the feature").toBeGreaterThan(first);
-    containedInsideDebate();
+    expect(probe.receptionThrows, "retry did not re-render the feature").toBeGreaterThan(first);
+    containedInsideReception();
     buttonNamed("Try Sources again");
     buttonNamed("Back to the article");
     expect(jobPosts(), "a retry is not a fresh intent to spend").toEqual([]);
   });
 
   it("comes back to a working Debate from retry, and buys nothing doing it", async () => {
-    debateOn();
-    probe.throwDebate = true;
+    receptionOn();
+    probe.throwReception = true;
     await open("?mode=sources&sources=reception");
-    containedInsideDebate();
+    containedInsideReception();
 
-    probe.throwDebate = false;
+    probe.throwReception = false;
     trace.length = 0;
     await act(async () => buttonNamed("Try Sources again").click());
     await settle();
 
     expect(text(), "the fallback outlived a successful retry").not.toContain("[mode-render]");
-    expect(trace.some((r) => r.url === `/api/debate/${SLUG}`), "the fresh Debate never read").toBe(
+    expect(trace.some((r) => r.url === `/api/reception/${SLUG}`), "the fresh Debate never read").toBe(
       true,
     );
     expect(jobPosts(), "retry minted a fresh intent to spend").toEqual([]);
   });
 
   it("returns to Plain from the fallback's own button", async () => {
-    debateOn();
-    probe.throwDebate = true;
+    receptionOn();
+    probe.throwReception = true;
     await open("?mode=sources&sources=reception");
 
     await act(async () => buttonNamed("Back to the article").click());
-    await modeAfterPress("debate");
+    await modeAfterPress("reception");
     await settle();
 
     expect(modeInUrl()).toBe("plain");
@@ -1243,12 +1243,12 @@ describe("Debate that throws is replaced by a band, not by an empty page", () =>
    * `Reader` mounted across articles.
    */
   it("does not carry its fallback to a different article", async () => {
-    debateOn();
-    probe.throwDebate = true;
+    receptionOn();
+    probe.throwReception = true;
     await open("?mode=sources&sources=reception");
-    containedInsideDebate();
+    containedInsideReception();
 
-    probe.throwDebate = false;
+    probe.throwReception = false;
     trace.length = 0;
     await act(async () => navigate(`/read/${OTHER_SLUG}?mode=sources&sources=reception`));
     await settle();
@@ -1256,27 +1256,27 @@ describe("Debate that throws is replaced by a band, not by an empty page", () =>
     expect(location.pathname).toBe(`/read/${OTHER_SLUG}`);
     expect(text(), "the fallback followed the reader").not.toContain("[mode-render]");
     expect(
-      trace.some((r) => r.url === `/api/debate/${OTHER_SLUG}`),
+      trace.some((r) => r.url === `/api/reception/${OTHER_SLUG}`),
       "the new article's Debate never mounted",
     ).toBe(true);
     expect(jobPosts(), "changing article is not a press").toEqual([]);
   });
 
   /**
-   * **Owner → visitor.** Debate has no visitor band yet (`POLICY.debate` is
+   * **Owner → visitor.** Debate has no visitor band yet (`POLICY.reception` is
    * owners-only), so the far side is not a Debate panel; what matters is that
    * neither the fallback nor a press survives the change of reader, that the
    * owner's controller is not mounted for a visitor, and that the article is
    * still there.
    */
   it("leaves nothing behind when the owner signs out underneath it", async () => {
-    debateOn();
-    probe.throwDebate = true;
+    receptionOn();
+    probe.throwReception = true;
     await open("?mode=sources&sources=reception");
-    containedInsideDebate();
-    const rendered = probe.debateRenders;
+    containedInsideReception();
+    const rendered = probe.receptionRenders;
 
-    probe.throwDebate = false;
+    probe.throwReception = false;
     trace.length = 0;
     await act(async () => who.set(null));
     await settle();
@@ -1293,7 +1293,7 @@ describe("Debate that throws is replaced by a band, not by an empty page", () =>
     ).not.toBeNull();
     expect(text(), "the fallback survived the change of reader").not.toContain("[mode-render]");
     expect(text(), "the article went with it").toContain(PARAGRAPH);
-    expect(probe.debateRenders, "a visitor mounted the owner's controller").toBe(rendered);
+    expect(probe.receptionRenders, "a visitor mounted the owner's controller").toBe(rendered);
     expect(jobPosts(), "signing out is not a press").toEqual([]);
   });
 });
@@ -1305,7 +1305,7 @@ describe("Debate that throws is replaced by a band, not by an empty page", () =>
 describe("a Debate press that met a broken band cannot be spent later", () => {
   /** The positive control for every zero below: a press that works buys one search. */
   it("gives exactly one job for an ordinary press on a working Debate", async () => {
-    debateOn();
+    receptionOn();
     await open("?sources=reception");
     trace.length = 0;
 
@@ -1317,38 +1317,38 @@ describe("a Debate press that met a broken band cannot be spent later", () => {
   });
 
   it("gives no job at all when the press throws and the reader comes back", async () => {
-    debateOn();
+    receptionOn();
     await open("?sources=reception");
     trace.length = 0;
 
-    probe.throwDebate = true;
+    probe.throwReception = true;
     await press(MODE_LABEL.sources);
-    containedInsideDebate();
+    containedInsideReception();
     expect(
-      activation.pendingActivation(SLUG, "debate"),
+      activation.pendingActivation(SLUG, "reception"),
       "the press outlived the failed render",
     ).toBeNull();
     expect(jobPosts(), "the failed render bought something").toEqual([]);
 
-    probe.throwDebate = false;
+    probe.throwReception = false;
     await press(MODE_LABEL.plain);
     await act(async () => history.back());
     await modeAfterPress("plain");
     await settle();
 
     expect(modeInUrl(), "Back did not return to Debate").toBe("sources");
-    expect(trace.some((r) => r.url === `/api/debate/${SLUG}`), "the GET settled").toBe(true);
+    expect(trace.some((r) => r.url === `/api/reception/${SLUG}`), "the GET settled").toBe(true);
     expect(jobPosts(), "Back spent the retired press").toEqual([]);
   });
 
   it("gives no job when the press made at the fallback throws too", async () => {
-    debateOn();
+    receptionOn();
     await open("?sources=reception");
     trace.length = 0;
 
-    probe.throwDebate = true;
+    probe.throwReception = true;
     await press(MODE_LABEL.sources);
-    const afterFirst = probe.debateThrows;
+    const afterFirst = probe.receptionThrows;
 
     /* Since 2026-10-02 a press on the mode you are in closes it (261002g), so
        a press at the fallback is close, then reopen: a fresh press on a fresh
@@ -1356,13 +1356,13 @@ describe("a Debate press that met a broken band cannot be spent later", () => {
     await press(MODE_LABEL.sources);
     expect(jobPosts(), "the closing press spent").toEqual([]);
     await press(MODE_LABEL.sources);
-    expect(probe.debateThrows, "the fresh press never reset the boundary").toBeGreaterThan(
+    expect(probe.receptionThrows, "the fresh press never reset the boundary").toBeGreaterThan(
       afterFirst,
     );
-    containedInsideDebate();
+    containedInsideReception();
     expect(jobPosts()).toEqual([]);
 
-    probe.throwDebate = false;
+    probe.throwReception = false;
     await press(MODE_LABEL.plain);
     await act(async () => history.back());
     await modeAfterPress("plain");
@@ -1373,15 +1373,15 @@ describe("a Debate press that met a broken band cannot be spent later", () => {
   });
 
   it("gives exactly one job when the press made at the fallback succeeds", async () => {
-    debateOn();
+    receptionOn();
     await open("?sources=reception");
 
-    probe.throwDebate = true;
+    probe.throwReception = true;
     await press(MODE_LABEL.sources);
-    containedInsideDebate();
+    containedInsideReception();
     trace.length = 0;
 
-    probe.throwDebate = false;
+    probe.throwReception = false;
     /* Since 2026-10-02 a press on the mode you are in closes it (261002g), so
        a press at the fallback is close, then reopen: a fresh press on a fresh
        mount. The closing press must arm nothing. */
@@ -1530,7 +1530,7 @@ const NOTHING_AVAILABLE: PublicArtefacts = {
   faq: false,
   simpleSummary: false,
   bibliography: false,
-  debate: false,
+  reception: false,
 };
 
 /**
@@ -1908,23 +1908,23 @@ describe("a press that met any broken band is retired", () => {
    `Record<ModeWithSubModes, …>` in ModeBoundary.tsx now, so a seventh mode
    with sub-modes does not compile until it has been decided. */
 describe("a broken Debate view does not follow the reader to the other one", () => {
-  const debateView = () => new URLSearchParams(location.search).get("sources");
+  const sourcesView = () => new URLSearchParams(location.search).get("sources");
 
   it("owner: Back from a broken Claims to Reception is a fresh band", async () => {
-    debateOn();
+    receptionOn();
     await open("?mode=sources&sources=reception");
     expect(text(), "Reception opened working").not.toContain("[mode-render]");
 
-    probe.throwDebate = true;
+    probe.throwReception = true;
     await act(async () => history.pushState(null, "", "?mode=sources&sources=claims"));
     await settle();
-    containedInsideDebate();
+    containedInsideReception();
 
     /* What threw was Claims; Reception would draw. No press is made. */
-    probe.throwDebate = false;
-    const renders = probe.debateRenders;
+    probe.throwReception = false;
+    const renders = probe.receptionRenders;
     await act(async () => history.back());
-    for (let i = 0; i < 40 && debateView() !== "reception"; i++) {
+    for (let i = 0; i < 40 && sourcesView() !== "reception"; i++) {
       await act(async () => {
         await new Promise((go) => setTimeout(go, 10));
       });
@@ -1932,9 +1932,9 @@ describe("a broken Debate view does not follow the reader to the other one", () 
     await settle();
 
     expect(modeInUrl()).toBe("sources");
-    expect(debateView(), "Back did not leave Claims").toBe("reception");
+    expect(sourcesView(), "Back did not leave Claims").toBe("reception");
     expect(text(), "the broken Claims followed the reader to Reception").not.toContain("[mode-render]");
-    expect(probe.debateRenders, "the band was never tried again").toBeGreaterThan(renders);
+    expect(probe.receptionRenders, "the band was never tried again").toBeGreaterThan(renders);
     expect(host.querySelector('.mode-band[aria-label="Sources"]'), "no Debate band").not.toBeNull();
   });
 

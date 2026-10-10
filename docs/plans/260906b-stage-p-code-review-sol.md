@@ -3,7 +3,7 @@ Three findings: two P0s and one P1.
 ## Findings
 
 **F1 — P0 — Long article titles count as quotations, allowing the wrong document through.**  
-[src/debate.ts:1641](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/debate.ts:1641), [src/shingles.ts:147](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/shingles.ts:147)
+[src/debate.ts:1641](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/reception.ts:1641), [src/shingles.ts:147](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/shingles.ts:147)
 
 `evidence` includes headings, including the H1, and `articleShingles` shingles every supplied block. Therefore, an article title of at least eight words and forty characters is itself sufficient to earn `quoted`.
 
@@ -26,7 +26,7 @@ Thus the row clears the default threshold and is shown as reception of the older
 Exclude the title-identical heading from quotation shingles, or define quotation evidence over prose blocks rather than every body block.
 
 **F2 — P0 — The density ceiling rejects a genuine fisking and tells the reader it was a copy.**  
-[src/shingles.ts:209](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/shingles.ts:209), with the drop at [src/debate.ts:825](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/debate.ts:825)
+[src/shingles.ts:209](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/shingles.ts:209), with the drop at [src/debate.ts:825](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/reception.ts:825)
 
 The classifier judges a search extract, not the page. A search engine can return a long blockquote plus one short rebuttal from a genuine response.
 
@@ -55,7 +55,7 @@ The five-window floor provides less protection than it appears to: these are ove
 Given that no reported mirror row demonstrates a positive case, I would not ship this as a hard drop. Defer it until a real row exercises it, or require row-level evidence such as the verified `sourceQuote` itself also being article text.
 
 **F3 — P1 — A linked page can be assigned `named` and hidden because link detection examines only the model-selected witness.**  
-[src/debate.ts:817](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/debate.ts:817)
+[src/debate.ts:817](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/reception.ts:817)
 
 `namesArticleBy` receives `articleReferenceQuote`, while quotation matching receives the full extract. The model is required to supply one valid witness, not every witness.
 

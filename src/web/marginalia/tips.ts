@@ -24,7 +24,7 @@ export type MargTipKey =
   | "question-part"
   | "faq"
   | "timeline"
-  | "debate"
+  | "reception"
   | "citation"
   | "comment-own"
   | "comment-owner";
@@ -52,7 +52,7 @@ export const MARG_TIPS: Record<MargTipKey, MargTip> = {
     what: "Something the article says happened, with the date it gives. Press this line to open it and see the words that mention it.",
     how: "From Timeline mode. The short description was written by AI; the date comes from the article's words. A missing year can come from its publication date, or be assumed from a year stated elsewhere in it and marked 'year assumed'. A phrase in quotation marks is the article's own. A dated event sits beside the passage that dates it; the article's own relative wording sits beside its first surviving mention.",
   },
-  debate: {
+  reception: {
     /* "Debate" until 2026-10-09, when Debate became Sources' Reception
        and Claims (plan 261009l): the stamp says what the line is, in the
        mode's frame, rather than a mode name that has gone. */

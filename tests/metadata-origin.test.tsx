@@ -173,7 +173,7 @@ async function visitor(meta: Partial<Meta>, sourceGuess?: SourceGuess) {
           faq: false,
           simpleSummary: false,
           bibliography: false,
-          debate: false,
+          reception: false,
         },
         signedIn: false,
         /* This file is about where the piece came from; the session is beside

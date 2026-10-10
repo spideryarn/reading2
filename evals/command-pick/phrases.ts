@@ -329,7 +329,7 @@ const NEW: readonly Hand[] = [
   { id: "n49", style: "paraphrase", text: "upgrade my plan", accept: ["page:/profile"] },
   { id: "n50", style: "paraphrase", text: "back up this article to my computer", accept: ["action:export"] },
   { id: "n51", style: "paraphrase", text: "see all the sections with their summaries", accept: ["submode:structure:expanded", "mode:structure"] },
-  { id: "n52", style: "paraphrase", text: "run the debate again", accept: ["action:rerun-debate"] },
+  { id: "n52", style: "paraphrase", text: "run the debate again", accept: ["action:rerun-reception"] },
   {
     id: "n53",
     style: "paraphrase",

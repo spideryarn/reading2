@@ -40,7 +40,7 @@ const ORDER_CALLERS = [
   { mode: "Quotes", file: "src/web/QuotesPanel.tsx", label: "Order the quotes by" },
   { mode: "Citations", file: "src/web/BibliographyPanel.tsx", label: "Order the citations by" },
   { mode: "FAQ", file: "src/web/FaqPanel.tsx", label: "Order the questions by" },
-  { mode: "Debate", file: "src/web/DebatePanel.tsx", label: "Order the sources by" },
+  { mode: "Debate", file: "src/web/ReceptionAndClaimsPanel.tsx", label: "Order the sources by" },
 ] as const;
 
 function attribute(tag: JSXOpeningElement, name: string): JSXAttribute | undefined {
@@ -175,7 +175,7 @@ const FAILURES = [
   ".mir-error",
   ".cnd-error",
   ".dock-drawer-error",
-  ".dbt-thread-failed",
+  ".rcp-thread-failed",
   ".sk-failed",
   ".ill-failed",
   ".ill-plate-out.is-failed",

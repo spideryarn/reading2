@@ -70,8 +70,8 @@ export function artefactsOf(article: PublicArticle): PublicArtefactSet {
     ...(article.faq === undefined ? {} : { faq: article.faq }),
     ...(article.simpleSummary === undefined ? {} : { simpleSummary: article.simpleSummary }),
     ...(article.bibliography === undefined ? {} : { bibliography: article.bibliography }),
-    ...(article.debate === undefined ? {} : { debate: article.debate }),
-    ...(article.debateClaims === undefined ? {} : { debateClaims: article.debateClaims }),
+    ...(article.reception === undefined ? {} : { reception: article.reception }),
+    ...(article.sourcesClaims === undefined ? {} : { sourcesClaims: article.sourcesClaims }),
     ...(article.sketch === undefined ? {} : { sketch: article.sketch }),
   };
 }
@@ -97,7 +97,7 @@ export function artefactsIn(article: PublicArticle): PublicArtefacts {
     bibliography: article.bibliography !== undefined,
     /* Debate is open to a visitor with either of its artefacts: the search,
        or Claims' list made with no search stored (plan 261008i § 2). */
-    debate: article.debate !== undefined || article.debateClaims !== undefined,
+    reception: article.reception !== undefined || article.sourcesClaims !== undefined,
     sketch: article.sketch !== undefined,
   };
 }

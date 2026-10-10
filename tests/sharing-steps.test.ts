@@ -127,11 +127,11 @@ describe("the policy", () => {
     expect([...SHARING_STEPS].sort()).toEqual(
       [
         "arc", "tweets", "glossary", "quotes", "ideas", "timeline", "quiz", "faq",
-        "sketch", "illustrated", "skim", "debate", "bibliography", "crossrefs", "simple",
+        "sketch", "illustrated", "skim", "reception", "bibliography", "crossrefs", "simple",
         /* 2026-10-03, a whole column that reads nothing — plan 261003f. */
         "relations",
         /* 2026-10-08, the same: Debate's claims list — plan 261008i. */
-        "debate-claims",
+        "sources-claims",
       ].sort(),
     );
   });

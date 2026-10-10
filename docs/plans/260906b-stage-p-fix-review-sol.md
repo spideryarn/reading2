@@ -2,7 +2,7 @@
 
 ### P0 — The fallback fabricates a link to the article
 
-[src/debate.ts:868](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/debate.ts:868)
+[src/debate.ts:868](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/reception.ts:868)
 
 Concrete input:
 
@@ -31,7 +31,7 @@ The non-empty invariant is mechanically guaranteed: non-null `naming` always con
 
 ### P0 — A genuine mirror survives when `sourceQuote` crosses a block boundary
 
-[src/debate.ts:853](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/debate.ts:853), [src/shingles.ts:263](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/shingles.ts:263)
+[src/debate.ts:853](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/reception.ts:853), [src/shingles.ts:263](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/shingles.ts:263)
 
 Concrete input:
 
@@ -66,7 +66,7 @@ The same hole exists whenever a mirror has non-article archive chrome and the mo
 
 ### P1 — Keeping headings only on the density side creates a contradictory verdict
 
-[src/shingles.ts:177](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/shingles.ts:177), [src/shingles.ts:215](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/shingles.ts:215), [src/debate.ts:853](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/debate.ts:853)
+[src/shingles.ts:177](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/shingles.ts:177), [src/shingles.ts:215](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/shingles.ts:215), [src/debate.ts:853](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/reception.ts:853)
 
 Use a 14-word H1:
 
@@ -92,7 +92,7 @@ The current test title has only eleven words, producing four windows and staying
 
 ### P2 — The tooltip still does not list every signal in the extract
 
-[src/debate.ts:517](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/debate.ts:517), [src/debate.ts:879](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/debate.ts:879), [src/web/DebatePanel.tsx:582](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/web/DebatePanel.tsx:582)
+[src/debate.ts:517](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/reception.ts:517), [src/debate.ts:879](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/reception.ts:879), [src/web/DebatePanel.tsx:582](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/web/ReceptionAndClaimsPanel.tsx:582)
 
 Concrete input:
 

@@ -190,7 +190,7 @@ describe("every environment read under src/ is literal", () => {
          `citation-influence` (plan 261003m), which shares the press's own
          SPIDERYARN_CITATION_INVESTIGATE_MODEL rather than adding a name. Twenty since
          `referee-hidden-check` (plan 261007l), with its own name. Twenty-one since
-         `debate-check` (plan 261008i), which shares SPIDERYARN_DEBATE_MODEL with Debate.
+         `debate-check` (plan 261008i), which shares SPIDERYARN_RECEPTION_MODEL with Debate.
          Twenty-two since `author-lookup` (plan 261010c), with its own name. */
       /* A different soundness question from the pin: the pin says `resolveModel`
          still indexes that record, this says what the record contains. */

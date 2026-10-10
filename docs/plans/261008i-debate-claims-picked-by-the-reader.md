@@ -1,7 +1,7 @@
 # Debate Claims: list the claims first, the reader picks, and a box for a claim of their own
 
 Queue item `qi-7e32ngyt` (supersedes `qi-k9deez4b`). Report `spya-caue42`; question
-[q-sn37bt](../user-feedback/questions/q-sn37bt.md). Up: [debate.md](../project/debate.md).
+[q-sn37bt](../user-feedback/questions/q-sn37bt.md). Up: [debate.md](../project/reception.md).
 
 ## What Greg asked for
 
@@ -34,8 +34,8 @@ then."* (Greg, 2026-10-03, `spya-caue42`.)
   shared article also sees.
 - **Since 2026-10-05 the owner can already dig in chat**: *Check this claim in chat* on each claim,
   and the angle box at the top of the panel
-  ([debate.md § Check a claim in chat](../project/debate.md#check-a-claim-in-chat),
-  [§ Look at the debate from an angle](../project/debate.md#look-at-the-debate-from-an-angle)).
+  ([debate.md § Check a claim in chat](../project/reception.md#check-a-claim-in-chat),
+  [§ Look at the debate from an angle](../project/reception.md#look-at-the-debate-from-an-angle)).
   That route answers in prose; it does not give rows with checked quotations. Greg's answer asks
   for the stored, checked kind. **Both stay**: chat for open-ended digging, Claims for checked
   sources. The angle box is about the debate as a whole; the new box is one claim, checked.

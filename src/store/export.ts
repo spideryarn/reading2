@@ -471,9 +471,9 @@ export async function exportArticle(
   if (revision.relations) await put("article_revisions", "relations.json", revision.relations);
   /* Missing until 2026-10-09 (qi-mv7wk6ap): the bundle carried a stored debate
      inside content/revision.json all along, and this rollback silently didn't. */
-  if (revision.debate) await put("article_revisions", "debate.json", revision.debate);
-  if (revision.debateClaims)
-    await put("article_revisions", "debate-claims.json", revision.debateClaims);
+  if (revision.reception) await put("article_revisions", "reception.json", revision.reception);
+  if (revision.sourcesClaims)
+    await put("article_revisions", "sources-claims.json", revision.sourcesClaims);
   if (revision.crossrefs)
     await put("article_revisions", "crossrefs.json", revision.crossrefs);
   if (revision.simpleSummary)
@@ -870,12 +870,12 @@ export async function exportArticle(
     });
   }
 
-  /* debate-claim-checks.json — the reader's checks of the claims they picked
+  /* sources-claim-checks.json — the reader's checks of the claims they picked
      in Debate (plan 261008i § 3). No filesystem store ever read this back, so
      the shape is the rows, columns as they are, as the bundle writes them. */
-  if (rows.debateClaimChecks.length) {
-    await put("debate_claim_checks", "debate-claim-checks.json", {
-      checks: rows.debateClaimChecks.map((row) =>
+  if (rows.sourcesClaimChecks.length) {
+    await put("sources_claim_checks", "sources-claim-checks.json", {
+      checks: rows.sourcesClaimChecks.map((row) =>
         compact({
           id: row.id,
           status: row.status,

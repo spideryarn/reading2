@@ -27,11 +27,11 @@ import { ChevronRight, X } from "lucide-react";
 import { TOAST_MS, useGoesByItself } from "../Toast.js";
 import type { BlockId, CitedWork, Faq, Ideas, TimelineEvent } from "../../types.js";
 import { isFolded, subscribeFold } from "../fold.js";
-import { useDebateRead } from "../useDebate.js";
+import { useReceptionRead } from "../useReception.js";
 import { useStepFinished } from "../useStepJob.js";
 import { useFaqRead } from "../useFaq.js";
 import { byLineOf } from "../BibliographyPanel.js";
-import { rowWork } from "../DebatePanel.js";
+import { rowWork } from "../ReceptionAndClaimsPanel.js";
 import { nameOfThrown, recordLog } from "../log-buffer.js";
 import { captureClientFailure } from "../monitoring.js";
 import { useRenderCount } from "../perf.js";
@@ -216,8 +216,8 @@ function MarginNotes({
             return <FaqNote key="faq" blockId={blockId} items={note.items} />;
           case "timeline":
             return <TimelineNote key="timeline" blockId={blockId} items={note.items} />;
-          case "debate":
-            return <DebateNote key="debate" items={note.items} />;
+          case "reception":
+            return <ReceptionNote key="reception" items={note.items} />;
           case "citation":
             return <CitationNote key="citation" items={note.items} />;
           case "comment":
@@ -419,18 +419,18 @@ const RELATION_WORD: Record<MarginClaim["relation"], string> = {
 const relationWord = (relation: string): string => ownLabel(RELATION_WORD, relation) ?? plainWords(relation);
 
 /** A page's headline is its own, unless the model read one off it (`titleIsAI`,
-    as the band's `dbt-title-ai`); a page's own words are third party, so ours. */
+    as the band's `rcp-title-ai`); a page's own words are third party, so ours. */
 const headlineVoice = (row: MarginClaim): Voice => (rowWork(row).titleIsAI ? "ai" : "ui");
 
-function DebateNote({ items }: { items: readonly MarginClaim[] }) {
+function ReceptionNote({ items }: { items: readonly MarginClaim[] }) {
   const only = items.length === 1 ? items[0] : undefined;
   return (
     <ShutNote
-      kind="debate"
+      kind="reception"
       /* "Debate" until 2026-10-09, when Debate became Sources' Reception
          and Claims: the stamp says what the line is (tips.ts § debate). */
       stamp={only ? relationWord(only.relation) : "Others say"}
-      tip="debate"
+      tip="reception"
       line={only ? rowWork(only).headline : plural(items.length, "page on the web", "pages on the web")}
       lineVoice={only ? headlineVoice(only) : "ui"}
     >
@@ -443,7 +443,7 @@ function DebateNote({ items }: { items: readonly MarginClaim[] }) {
             </a>
           </p>
           <p className="marg-open-quote">“{row.sourceQuote}”</p>
-          {row.applies && <p className="marg-debate-applies">{row.applies}</p>}
+          {row.applies && <p className="marg-reception-applies">{row.applies}</p>}
         </div>
       ))}
     </ShutNote>
@@ -798,7 +798,7 @@ export const NO_OWNER_FEED: MarginFeed = { ideas: null, faq: null, timeline: nul
  * **The owner's ideas, FAQ, Timeline and Debate, read and never made** — and
  * the relation words, which are made here. A component of
  * its own so the reads happen only while Marginalia is open — the read halves
- * (`useIdeasRead`, `useFaqRead`, `useTimelineRead`, `useDebateRead`), never the full hooks, which
+ * (`useIdeasRead`, `useFaqRead`, `useTimelineRead`, `useReceptionRead`), never the full hooks, which
  * arm the automatic run and could spend (Debate is the dearest step in the
  * app). A stale list (the article moved under it) is not drawn: its blocks may
  * not be these. Owner only: a visitor's lists are in their payload. Citations
@@ -825,7 +825,7 @@ export function OwnerMarginFeed({
   const ideasRead = useIdeasRead(slug);
   const faqRead = useFaqRead(slug);
   const timelineRead = useTimelineRead(slug);
-  const debateRead = useDebateRead(slug);
+  const receptionRead = useReceptionRead(slug);
   /* **The one thing here that can spend**: the relation words are Marginalia's
      own, and this mount is what asks for them where none is stored — once per
      article per page load, whatever opened the column, and only while the
@@ -838,13 +838,13 @@ export function OwnerMarginFeed({
   useStepFinished(slug, "ideas", ideasRead.refresh);
   useStepFinished(slug, "faq", faqRead.refresh);
   useStepFinished(slug, "timeline", timelineRead.refresh);
-  useStepFinished(slug, "debate", debateRead.refresh);
+  useStepFinished(slug, "reception", receptionRead.refresh);
   const ideas = ideasRead.status === "ready" && !ideasRead.stale ? (ideasRead.ideas?.ideas ?? null) : null;
   const faq = faqRead.status === "ready" && !faqRead.stale ? (faqRead.faq?.questions ?? null) : null;
   const timeline =
     timelineRead.status === "ready" && !timelineRead.stale ? (timelineRead.timeline?.events ?? null) : null;
   const claims =
-    debateRead.status === "ready" && !debateRead.stale ? (debateRead.debate?.claims.rows ?? null) : null;
+    receptionRead.status === "ready" && !receptionRead.stale ? (receptionRead.reception?.claims.rows ?? null) : null;
   useEffect(() => {
     onFeed({ ideas, faq, timeline, claims, relations });
   }, [ideas, faq, timeline, claims, relations, onFeed]);

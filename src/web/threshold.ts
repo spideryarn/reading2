@@ -3,7 +3,7 @@
  *
  * Glossary (`?gate=`), Quotes (`?bar=`) and Search (`?conf=`) each put a
  * threshold under the reader's hand — Citations (`?citebar=`) and the FAQ (`?faqbar=`) joined them later,
- * and Debate's categorical bar (`?bears=`, debate-order.ts) uses the same pass —
+ * and Debate's categorical bar (`?bears=`, reception-order.ts) uses the same pass —
  * and until 2026-09-03 the first three disagreed about
  * what one is for: Search hid what was below it, while the other two moved it
  * into a second group headed *"the rest"*. Greg looked at the built thing and

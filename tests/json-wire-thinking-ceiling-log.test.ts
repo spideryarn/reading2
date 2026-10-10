@@ -56,9 +56,9 @@ beforeAll(() => {
     let n = 0;
     globalThis.fetch = async () => reply(n++ === 1 ? "stop" : "length");
     // The first stops on its ceiling; the second, a clean stop, must not warn.
-    const first = await openRouterJson("debate", { model: "anthropic/claude-sonnet-5", max_tokens: ${OUTPUT}, messages: [] });
+    const first = await openRouterJson("reception", { model: "anthropic/claude-sonnet-5", max_tokens: ${OUTPUT}, messages: [] });
     if (first.json?.choices?.[0]?.finish_reason !== "length") throw new Error("the warning changed the returned body");
-    await openRouterJson("debate", { model: "anthropic/claude-sonnet-5", max_tokens: ${OUTPUT}, messages: [] });
+    await openRouterJson("reception", { model: "anthropic/claude-sonnet-5", max_tokens: ${OUTPUT}, messages: [] });
     // Embeddings share openRouterJson. Even a malformed reply that happens to
     // carry chat-like fields must not be treated as a chat-wire ceiling event.
     await openRouterJson("embeddings", { model: "voyage/test", max_tokens: ${OUTPUT}, input: ["x"] });
@@ -99,7 +99,7 @@ describe("a non-streamed call that thought through its ceiling", () => {
     expect(found, stdout).toHaveLength(1);
     const warn = found[0];
     expect(warn?.level).toBe("warn");
-    expect(warn?.job).toBe("debate");
+    expect(warn?.job).toBe("reception");
     expect(warn?.ceiling).toBe(OUTPUT);
     expect(warn?.reasoningTokens).toBe(THOUGHT);
     expect(warn?.outputTokens).toBe(OUTPUT);

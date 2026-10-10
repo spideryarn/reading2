@@ -212,9 +212,9 @@ const EXPECTED_THRESHOLD_MS: Record<StepName, number> = {
   /* Three minutes: past the worst of the sixteen low-effort draws (101s). */
   sketch: 180_000,
   illustrated: 600_000,
-  debate: 180_000,
+  reception: 180_000,
   /* Unmeasured: the fallback. */
-  "debate-claims": 180_000,
+  "sources-claims": 180_000,
   bibliography: 180_000,
   crossrefs: 180_000,
   simple: 180_000,

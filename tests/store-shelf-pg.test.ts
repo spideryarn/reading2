@@ -59,7 +59,7 @@ import {
   citationFinds,
   citationInvestigations,
   comments,
-  debateClaimChecks,
+  sourcesClaimChecks,
   glossaryHiddenEntries,
   glossaryLookups,
   ingestEvents,
@@ -1048,8 +1048,8 @@ describe("destroying an article", () => {
           start: 0,
           status: "none",
         }),
-      debate_claim_checks: () =>
-        db.insert(debateClaimChecks).values({
+      sources_claim_checks: () =>
+        db.insert(sourcesClaimChecks).values({
           articleId: GONE_ARTICLE,
           id: mintId(),
           ownerId: owner,

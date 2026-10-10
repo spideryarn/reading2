@@ -215,7 +215,7 @@ describe("the public revision read", () => {
       "skim",
       "faq",
       "bibliography",
-      "debate",
+      "reception",
       "simple_summary",
     ]) {
       expect(article, column).toContain(`"${column}"`);

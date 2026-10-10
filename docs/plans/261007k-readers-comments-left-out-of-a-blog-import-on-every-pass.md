@@ -131,7 +131,7 @@ The rest of the pipeline treats everything in `article.html` as the author's:
 The cleaner shape, if wanted, is **a separate discussion artefact beside the article**: one entry
 per comment with its author, date, permalink and parent, possibly its own blocks inside, and read by
 no article mode unless asked. A folded section at the end or its own mode could show it.
-[Debate](../project/debate.md) is the nearest existing reader of other people's responses, though a
+[Debate](../project/reception.md) is the nearest existing reader of other people's responses, though a
 blog's own thread is not quite "the rest of the web". Queued as a proposal waiting on Greg:
 `qi-e69nfvkx`.
 

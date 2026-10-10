@@ -720,7 +720,7 @@ export function useBibliography(slug: string, read: BibliographyRead, enabled = 
   /* `enabled` is whether Bibliography is the sub-mode on screen: since
      2026-10-09 this hook stays mounted in all three of Sources'
      sub-modes, so a press that lands on Reception or Claims is retired
-     unspent, as useDebate.ts and useDebateClaims.ts do for theirs. */
+     unspent, as useReception.ts and useSourcesClaims.ts do for theirs. */
   const auto = useAutoRun(slug, "bibliography", status, ensure, reload, enabled);
 
   return {

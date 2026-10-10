@@ -38,7 +38,7 @@ import { parseJsonFrom } from "../../src/parse-json.js";
 import { supplementIndex } from "../../src/supplement.js";
 import type { Block, Tree, TreeNode } from "../../src/types.js";
 import { buildHeadingTree } from "../../src/heading-tree.js";
-import { mulberry32 } from "../debate/label-sheet.js";
+import { mulberry32 } from "../reception/label-sheet.js";
 
 interface Lineup {
   label: string;

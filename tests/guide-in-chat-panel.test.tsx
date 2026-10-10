@@ -91,7 +91,7 @@ function thread(id: string, kind: ThreadKind, over: Partial<ChatThread> = {}): C
 
 const CHAT = thread("spya-chtaab", "chat");
 const CLAIM = thread("spya-clmaab", "chat", {
-  origin: { mode: "debate", blockId: "spya-bbbbbb", quote: "RNA can transfer a memory" },
+  origin: { mode: "sources-claims", blockId: "spya-bbbbbb", quote: "RNA can transfer a memory" },
 });
 const LEARN = thread("spya-remaab", "learn");
 const EMPTY_GUIDE = thread("spya-gdeaab", "guide", { messages: [] });

@@ -967,12 +967,12 @@ was nothing here*, and a run that died says so at the top rather than in its las
 ## `debate/` — does the mode's reading of a page hold up, and what did the run actually buy?
 
 ```
-npm run eval:debate -- check                   # free: every seam, no model, no network, no database
-npm run eval:debate -- plan --slug <slug>      # free: what a run would buy, and from where
-npm run eval:debate -- run --slug <slug>       # one live run, journalled. ~$0.15
-npm run eval:debate -- replay --run <dir>      # Layer 1, free, over a journal on disk
-npm run eval:debate -- verify --dry-run        # free: the full-page fallback, over a synthetic web
-npm run eval:debate -- verify --run <dir>      # would the FULL PAGE have held the quotations the extract lost?
+npm run eval:reception -- check                   # free: every seam, no model, no network, no database
+npm run eval:reception -- plan --slug <slug>      # free: what a run would buy, and from where
+npm run eval:reception -- run --slug <slug>       # one live run, journalled. ~$0.15
+npm run eval:reception -- replay --run <dir>      # Layer 1, free, over a journal on disk
+npm run eval:reception -- verify --dry-run        # free: the full-page fallback, over a synthetic web
+npm run eval:reception -- verify --run <dir>      # would the FULL PAGE have held the quotations the extract lost?
 ```
 
 Stage A of
@@ -985,7 +985,7 @@ It exists because two live debate runs cost $0.6252 and **bought no replayable e
 the model was reading was gone the moment the step ended — and the thing worth diagnosing was
 precisely the rows that did not survive.
 
-**The runner calls `generateDebate` directly and never through the queue**, so no reader's artefact
+**The runner calls `generateReception` directly and never through the queue**, so no reader's artefact
 is clobbered and no product spend row is written against a purchase nobody made. A run lands under
 `output/debate-runs/`, which is **gitignored**, for the reason `summaries/` gives about its own:
 a journal carries whole page extracts and, through the answer text, sentences of the article.
@@ -1012,11 +1012,11 @@ Two things it deliberately cannot capture, both `src/ai-call.ts`'s design rather
 2xx body that will not parse arrives as `json: null` with the bytes gone, and a non-2xx arrives as a
 status with the body gone. The gateway keeps one key, one `Meter` and one `finally` and hands no
 caller a hook, and provider bytes on this wire are a stranger's page and the reader's article.
-Both are written up in `src/debate-journal.ts`'s header.
+Both are written up in `src/reception-journal.ts`'s header.
 
 ### The cost of a run is not a number anything hands you
 
-GPT Sol's F43. `generateDebate` returns searches and elapsed time, not money; `withLedger` prints an
+GPT Sol's F43. `generateReception` returns searches and elapsed time, not money; `withLedger` prints an
 aggregate it does not return; and token `Usage` prices nothing here, because a web search is billed
 **per search** and is invisible to token arithmetic. So the figure comes from the collector's own
 `SpendRecord`s through `totalSpend`, with the contributing generation ids and the ledger run id
@@ -1033,16 +1033,16 @@ nothing is this repo's commonest expensive bug**. `check` exercises journal writ
 row lost to `directnessUnverified` and an attempt whose bytes are gone. Seventeen assertions, no
 model, no network, no database, and it exits non-zero when any of them fails.
 
-The one seam it cannot cover is `generateDebate` writing the journal at all, which needs something
+The one seam it cannot cover is `generateReception` writing the journal at all, which needs something
 at the other end of `openRouterJson`.
-[`tests/debate-journal.test.ts`](../tests/debate-journal.test.ts) covers that with the gateway
+[`tests/reception-journal.test.ts`](../tests/reception-journal.test.ts) covers that with the gateway
 stubbed — including that `attempt-started` really goes down *before* dispatch, which is F40 in one
 assertion.
 
 ### `verify` — would the full page have rescued the rows the extract lost?
 
 The plan's two-curl experiment, and the thing that decides whether Stage F gets built:
-[`verify-fallback.ts`](debate/verify-fallback.ts). Production checks a row's quotation against the
+[`verify-fallback.ts`](reception/verify-fallback.ts). Production checks a row's quotation against the
 **search engine's page extract** — 236–4,945 characters on the one live run we have — and on that run
 it emptied group one. If the quotations are in the full page the extract is the constraint and a
 fallback fixes it; if they are not, the model paraphrased and the repair is in the prompt. **Opposite
@@ -1081,7 +1081,7 @@ Four rules keep it honest, and each is a test:
   of the denominator, because production drops it whatever a page says.
 
 `verify --dry-run` runs all of that over a synthetic journal and a seven-page synthetic web
-([`verify-fixture.ts`](debate/verify-fixture.ts)) with **no network at all** — the fixture is handed
+([`verify-fixture.ts`](reception/verify-fixture.ts)) with **no network at all** — the fixture is handed
 to `fetchDocument` as its own `fetchImpl` seam, so every guard still runs. Twenty-five assertions,
 including the negative ones: a page whose quotation the extract already had must **not** be fetched,
 and neither the PDF nor the 404 may appear in the *not recovered* column. The output names hosts and

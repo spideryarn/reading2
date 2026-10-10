@@ -4,9 +4,9 @@
 
    **Its position ahead of those files is load-bearing, not incidental.**
    `.gloss-quiet` below sets `padding: 1rem 0.9rem`; `.tl-thin` (timeline.css)
-   and `.dbt-empty` (debate.css) reset the padding on the *same* element at
+   and `.rcp-empty` (reception.css) reset the padding on the *same* element at
    *equal* specificity — `<p className="gloss-quiet tl-thin">` in
-   TimelinePanel.tsx, and its twin in DebatePanel.tsx. Source order decides
+   TimelinePanel.tsx, and its twin in ReceptionAndClaimsPanel.tsx. Source order decides
    that, which means the import list in ../styles.css decides it. Move this file
    later and both go wrong with nothing to show for it.
 
@@ -154,7 +154,7 @@
    draw it through ThresholdSlider.tsx; Search's `ConfSlider`, Quotes'
    `BarSlider` and Debate's `StopBar` are components of their own that emit the
    same classes. Until 2026-10-07 the last three each had a copy of these ten
-   rules under their own names (`.srch-gate*`, `.quotes-bar*`, `.dbt-bar*`),
+   rules under their own names (`.srch-gate*`, `.quotes-bar*`, `.rcp-bar*`),
    kept in step by hand; plan 261007a § K5 measured the four alike and left
    one. The range input's `id` is still each band's own.
 
@@ -189,7 +189,7 @@
 }
 /* **Debate's value is words, not a number**, so it is not mono: a proportional
    face is what stops *"bears partly · 2 of 3"* reading as a reading off an
-   instrument (debate.css § the relevance bar). `inherit` is what the span had
+   instrument (reception.css § the relevance bar). `inherit` is what the span had
    when it set no face of its own. */
 .gloss-gate-value.in-words { font-family: inherit; }
 .gloss-gate-reset {

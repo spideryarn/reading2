@@ -289,7 +289,7 @@ describe("the Citations band's top and foot", () => {
   it("has only the chip row for a head while the order row is drawn, and the count in the (i) rather than on the band", async () => {
     await mountBibliography(citeOwner(citations(WORKS)), "prioritised");
     expect(host.querySelector(".gloss-sort"), "no order row to fold into").not.toBeNull();
-    expect(head()?.querySelector(".dbt-views")).not.toBeNull();
+    expect(head()?.querySelector(".rcp-views")).not.toBeNull();
     expect(head()?.children).toHaveLength(1);
     expect(host.textContent).not.toContain("3 works");
 

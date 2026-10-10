@@ -62,7 +62,7 @@ describe("the icon each mode wears", () => {
     ["ChatDialog.tsx", 'className="chat-card-head"', "</span>"],
     ["ChatDialog.tsx", 'className="chat-dialog-label"', "</span>"],
     ["OriginChat.tsx", "export function OriginChatMark", "export function AskInChatButton"],
-    ["DebatePanel.tsx", 'className="dbt-angle"', "</button>"],
+    ["ReceptionAndClaimsPanel.tsx", 'className="rcp-angle"', "</button>"],
     ["SimplePanel.tsx", 'className="simple-ask', "</Button>"],
   ])("draws the chat at %s / %s as two bubbles", (file, start, end) => {
     const source = read(file);

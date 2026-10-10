@@ -848,7 +848,7 @@ work's id, which a re-run inherits by its key, and a snapshot of its title. Matc
 the id alone, so a reworded title keeps the line. Everything else, and Greg's words, are in
 [glossary.md § Asking about an entry in chat](glossary.md#asking-about-an-entry-in-chat); the
 machinery under both is
-[debate.md § Check a claim in chat](debate.md#check-a-claim-in-chat). The hover card in the prose
+[reception.md § Check a claim in chat](reception.md#check-a-claim-in-chat). The hover card in the prose
 has it too since 2026-10-09, in Dig deeper's old place (§ [Marked in the prose](#marked-in-the-prose-in-every-mode)).
 
 ## Already an article here

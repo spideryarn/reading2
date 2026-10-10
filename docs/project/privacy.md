@@ -663,7 +663,7 @@ and `tests/privacy-page.test.ts` holds the clause. `LAST_UPDATED` already reads 
 ## Crossref, DataCite and OpenAlex are sent a DOI
 
 **Added 2026-10-04**, with
-[debate.md § Cited by](debate.md#cited-by-the-papers-that-cite-the-piece)
+[reception.md § Cited by](reception.md#cited-by-the-papers-that-cite-the-piece)
 ([261004h](../plans/261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md)). Three
 public indexes of published work are asked about a paper by its identifier, from our server:
 
@@ -689,14 +689,14 @@ dial, and requires the page to name each. A fourth index turns it red until the 
 
 ## A claim typed into Debate
 
-**Added 2026-10-09**, with [debate.md § Checking the claims you pick](debate.md#checking-the-claims-you-pick)
+**Added 2026-10-09**, with [reception.md § Checking the claims you pick](reception.md#checking-the-claims-you-pick)
 ([261008i § 3](../plans/261008i-debate-claims-picked-by-the-reader.md)): the owner of an article can
 type a claim of their own into Debate's Claims and press Check. Their words go, with the article,
 to the model doing the web search, through OpenRouter, as a chat message's words already do — so
 **no new flow and no new party**, and the page needed no change; `LAST_UPDATED` did not move. The
 words are stored with the check (`debate_claim_checks.targets`), are in the article's export, go
 when the article is deleted, and are never shown to a visitor of a shared article: checks are not
-in the public payload. [`src/store/pg-debate-claim-checks.ts`](../../src/store/pg-debate-claim-checks.ts)
+in the public payload. [`src/store/pg-sources-claim-checks.ts`](../../src/store/pg-sources-claim-checks.ts)
 and the route log counts and ids, never the words.
 
 ## Quiz answers

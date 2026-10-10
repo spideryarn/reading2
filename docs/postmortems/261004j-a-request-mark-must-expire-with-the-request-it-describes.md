@@ -37,7 +37,7 @@ as the answer a guard is protecting.
 
 The second class is **checking a collection's container while casting its unchecked elements**.
 `asCitersResult` checked `Array.isArray(citers)` and cast the complete body to `CitersResult`.
-[CitersList and CiterRow](../../src/web/DebatePanel.tsx) immediately read each row's id, author array
+[CitersList and CiterRow](../../src/web/ReceptionAndClaimsPanel.tsx) immediately read each row's id, author array
 and display fields. A list containing `null` passed validation; the first row-key access would
 throw. An object title and a missing author array were other unchecked rendering inputs.
 

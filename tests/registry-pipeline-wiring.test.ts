@@ -24,8 +24,8 @@ describe("the Stage 5/6 pipeline wiring", () => {
   });
 
   it("enriches Debate after its searches and before returning the artefact", () => {
-    const body = STEPS.debate.run.toString();
-    expect(position(body, "generateDebate")).toBeLessThan(position(body, "attachDebateRegistry"));
-    expect(position(body, "attachDebateRegistry")).toBeLessThan(position(body, "parts: { debate"));
+    const body = STEPS.reception.run.toString();
+    expect(position(body, "generateReception")).toBeLessThan(position(body, "attachReceptionRegistry"));
+    expect(position(body, "attachReceptionRegistry")).toBeLessThan(position(body, "parts: { reception"));
   });
 });

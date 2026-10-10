@@ -1722,7 +1722,7 @@
   ]
  },
  {
-  "id": "action:rerun-debate",
+  "id": "action:rerun-reception",
   "label": "Sources › Reception › Run again",
   "description": "One model call that searches the web, plus one search-free call to find themes when it keeps enough sources",
   "aliases": [

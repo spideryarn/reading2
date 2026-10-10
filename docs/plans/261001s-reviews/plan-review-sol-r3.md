@@ -62,7 +62,7 @@ No P0 findings.
 
   Already expected not to fit without a separate probe:
 
-  - [`src/debate.ts`](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/src/debate.ts:258): explicitly keeps a fence because schema plus `openrouter:web_search` is unmeasured.
+  - [`src/debate.ts`](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/src/reception.ts:258): explicitly keeps a fence because schema plus `openrouter:web_search` is unmeasured.
   - [`src/citation-find.ts`](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/src/citation-find.ts:234) and `src/source-guess-run.ts`: search annotations are the security witness for allowed URLs.
   - [`src/dig-deeper.ts`](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/src/dig-deeper.ts:299): also requires web-search annotations.
   - [`src/referee-candidates.ts`](/home/greg/code/spideryarn2/.claude/worktrees/structure-code-in-answer/src/referee-candidates.ts:180): deliberately streams reader-visible prose while hiding and later parsing a fenced shortlist; a JSON-only response changes the product.

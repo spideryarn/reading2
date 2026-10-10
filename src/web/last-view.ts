@@ -114,9 +114,9 @@ export const REMEMBERED = [
   "rank", // quotes order
   "bar", // quotes threshold
   "sources", // bibliography, reception or claims — a restore draws what is stored; only a press makes anything
-  "debateby", // reception's order
+  "receptionby", // reception's order — `debateby` until 2026-10-09, now in NEVER_REMEMBERED
   "bears", // claims' relevance threshold
-  "debatethread", // which of debate's threads narrows its list
+  "receptionthread", // which of reception's threads narrows its list — `debatethread` until 2026-10-09
   "chatfrom", // which source Chat's list of conversations is narrowed to
   "citeby", // citations order
   "citebar", // citations threshold
@@ -217,6 +217,14 @@ export const NEVER_REMEMBERED = [
      `?peer-review=claims` is somebody's old link, and must win over a stored
      view (GPT Sol's F7 on plan 261009w). */
   "peer-review",
+  /* **Reception's order and thread keys until 2026-10-09**, when they became
+     `receptionby` and `receptionthread` above (plan 261009w, Stage 3). Lifted
+     to the new keys on arrival and on restore (router.ts §
+     `liftLegacySources`), so a remembered `debateby=date` comes back as
+     `receptionby=date`. Listed for `deep`'s reason: a lone `?debateby=date`
+     is somebody's old link, and must win over a stored view. */
+  "debateby",
+  "debatethread",
 ] as const;
 
 /** Every parameter this app puts on an article's address. */

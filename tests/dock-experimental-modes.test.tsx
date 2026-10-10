@@ -443,7 +443,7 @@ const NOTHING_SHARED: PublicArtefacts = {
   faq: false,
   simpleSummary: false,
   bibliography: false,
-  debate: false,
+  reception: false,
 };
 const EVERYTHING_SHARED: PublicArtefacts = {
   arc: true,
@@ -457,7 +457,7 @@ const EVERYTHING_SHARED: PublicArtefacts = {
   faq: true,
   simpleSummary: true,
   bibliography: true,
-  debate: true,
+  reception: true,
 };
 
 /**

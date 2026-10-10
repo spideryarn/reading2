@@ -616,15 +616,15 @@ describe("Sources' three sub-modes", () => {
   });
 
   /* **Each row buys its own sub-mode's work and nothing else**: the
-     citations for Bibliography, the `debate` search for Reception (since
+     citations for Bibliography, the `reception` search for Reception (since
      `debate/7`, 2026-10-08, the search is Reception's only — plan 261008i,
      GPT Sol's F1), the claims list for Claims: one call, no search. */
-  it("arms the citations for Bibliography, the `debate` search for Reception and the claims list for Claims", () => {
+  it("arms the citations for Bibliography, the `reception` search for Reception and the claims list for Claims", () => {
     expect(subModeTarget(BIBLIOGRAPHY)).toBe("bibliography");
     expect(subModeGenerates(BIBLIOGRAPHY)).toBe(true);
-    expect(subModeTarget(RECEPTION)).toBe("debate");
+    expect(subModeTarget(RECEPTION)).toBe("reception");
     expect(subModeGenerates(RECEPTION)).toBe(true);
-    expect(subModeTarget(CLAIMS)).toBe("debate-claims");
+    expect(subModeTarget(CLAIMS)).toBe("sources-claims");
     expect(subModeGenerates(CLAIMS)).toBe(true);
   });
 
@@ -635,9 +635,9 @@ describe("Sources' three sub-modes", () => {
     type("sources claims");
     press("Enter");
     expect(onMode).toHaveBeenCalledWith("sources", CLAIMS);
-    expect(pendingActivation("a-piece", "debate")).toBeNull();
+    expect(pendingActivation("a-piece", "reception")).toBeNull();
     expect(pendingActivation("a-piece", "bibliography")).toBeNull();
-    expect(pendingActivation("a-piece", "debate-claims")).not.toBeNull();
+    expect(pendingActivation("a-piece", "sources-claims")).not.toBeNull();
   });
 
   /* **The mode row too**: it lands on whatever sub-mode the reading view says
@@ -652,9 +652,9 @@ describe("Sources' three sub-modes", () => {
     expect(fullName(rows()[0] as HTMLElement)).toBe("Sources");
     press("Enter");
     expect(onMode).toHaveBeenCalledWith("sources", undefined, false);
-    expect(pendingActivation("a-piece", "debate")).toBeNull();
+    expect(pendingActivation("a-piece", "reception")).toBeNull();
     expect(pendingActivation("a-piece", "bibliography")).toBeNull();
-    expect(pendingActivation("a-piece", "debate-claims")).not.toBeNull();
+    expect(pendingActivation("a-piece", "sources-claims")).not.toBeNull();
   });
 
   it("arms the search from the mode row when Sources would open on Reception", () => {
@@ -663,9 +663,9 @@ describe("Sources' three sub-modes", () => {
     openBar();
     type("sources");
     press("Enter");
-    expect(pendingActivation("a-piece", "debate")).not.toBeNull();
+    expect(pendingActivation("a-piece", "reception")).not.toBeNull();
     /* …and never Claims' list (plan 261008i stage 2), nor the citations. */
-    expect(pendingActivation("a-piece", "debate-claims")).toBeNull();
+    expect(pendingActivation("a-piece", "sources-claims")).toBeNull();
     expect(pendingActivation("a-piece", "bibliography")).toBeNull();
   });
 
@@ -678,8 +678,8 @@ describe("Sources' three sub-modes", () => {
     type("sources");
     press("Enter");
     expect(pendingActivation("a-piece", "bibliography")).not.toBeNull();
-    expect(pendingActivation("a-piece", "debate")).toBeNull();
-    expect(pendingActivation("a-piece", "debate-claims")).toBeNull();
+    expect(pendingActivation("a-piece", "reception")).toBeNull();
+    expect(pendingActivation("a-piece", "sources-claims")).toBeNull();
   });
 
   it("opens Sources on Reception from the bar and arms the search, as the mode row does", () => {
@@ -689,8 +689,8 @@ describe("Sources' three sub-modes", () => {
     type("sources reception");
     press("Enter");
     expect(onMode).toHaveBeenCalledWith("sources", RECEPTION);
-    expect(pendingActivation("a-piece", "debate")).not.toBeNull();
-    expect(pendingActivation("a-piece", "debate-claims")).toBeNull();
+    expect(pendingActivation("a-piece", "reception")).not.toBeNull();
+    expect(pendingActivation("a-piece", "sources-claims")).toBeNull();
   });
 
   it("opens Sources on Claims through the Reader's setter, in one pushed entry", async () => {

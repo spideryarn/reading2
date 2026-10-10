@@ -22,7 +22,7 @@ describe("stepName and stepWhat", () => {
     expect(stepName("tweets")).toBe(`${MODE_LABEL.summary} › ${SUMMARY_SUB_MODES.thread.label}`);
     expect(stepName("quiz")).toBe(`${MODE_LABEL.learn} › ${LEARN_SUB_MODES.quiz.label}`);
     expect(stepName("sketch")).toBe(`${MODE_LABEL.diagram} › ${DIAGRAM_SUB_MODES.sketch.label}`);
-    expect(stepName("debate")).toBe(
+    expect(stepName("reception")).toBe(
       `${MODE_LABEL.sources} › ${SOURCES_SUB_MODES.reception.label}`,
     );
     expect(stepName("bibliography")).toBe(

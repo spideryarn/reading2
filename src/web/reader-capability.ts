@@ -316,5 +316,5 @@ export const OWNER_HAS_EVERYTHING: PublicArtefacts = {
   faq: true,
   simpleSummary: true,
   bibliography: true,
-  debate: true,
+  reception: true,
 };

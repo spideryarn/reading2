@@ -911,7 +911,7 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      answer (at most eight claims, each a quote and a line). Replace with a
      measurement once it has run on real articles.
      docs/plans/261008i-debate-claims-picked-by-the-reader.md. */
-  "debate-claims": 150_000,
+  "sources-claims": 150_000,
   /* **MEASURED 2026-09-30**, stage 1's real runs: 54 s on a 99-block paper and
      119 s on a 141-block essay, one Messages call each at `medium` — slower
      than `faq` at `high`, because the answer is longer and the reasoning ran
@@ -1025,7 +1025,7 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
 
      **Raised 120 s → 360 s on 2026-10-07, and still not a bound.** Since
      `debate/7` the step makes up to two non-streamed calls in sequence — the
-     Reception search and optional synthesis (src/debate.ts § `generateDebate`) — and neither has a
+     Reception search and optional synthesis (src/reception.ts § `generateReception`) — and neither has a
      clock: `openRouterJson` (src/ai-call.ts) fetches without a timeout, and a
      transient failure re-asks the whole call, up to `TRANSPORT_ATTEMPTS`.
      What the code does state is each call's `max_tokens`: `ANSWER_TOKENS` and
@@ -1046,7 +1046,7 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      spend changes. tests/jobs-lease-budget.test.ts holds the token floor and
      the current two-call topology.
      docs/plans/261007h-five-more-step-budgets-to-what-they-measure.md. */
-  debate: 360_000,
+  reception: 360_000,
   /* One Messages call over the whole article, notes and bibliography
      included. **Measured 2026-09-11** on six local runs (ai_calls.duration_ms):
      17 s for a blog post, 63–154 s for three long ones, the slowest writing

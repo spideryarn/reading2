@@ -54,8 +54,8 @@ const SHARED = new Set([
   /* The rules a Debate synthesis keeps — work identity, caps, lengths — which
      the server applies to the model's answer and the panel applies again to
      the stored one, so the two cannot drift. Imports `types.js` and `ids.js`
-     and nothing else. See src/debate-synthesis.ts and plan 260930j. */
-  "debate-synthesis.js",
+     and nothing else. See src/reception-synthesis.ts and plan 260930j. */
+  "reception-synthesis.js",
   /* How a Crossref or DataCite record is read back off a stored row — the
      server writes it into Citations and Debate, and the band, the hover card
      and the date order read it again, so both sides keep one reading. Imports

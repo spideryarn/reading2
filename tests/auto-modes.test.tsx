@@ -174,8 +174,8 @@ describe("which steps are queued", () => {
     ]);
     expect(modeStep("summary")).toBeNull();
     expect(modeStep("sources")).toBeNull();
-    expect(AUTO_MODE_STEPS).not.toContain("debate");
-    expect(AUTO_MODE_STEPS).not.toContain("debate-claims");
+    expect(AUTO_MODE_STEPS).not.toContain("reception");
+    expect(AUTO_MODE_STEPS).not.toContain("sources-claims");
     expect(modeStep("marginalia")).toBeNull();
     expect(AUTO_MODE_STEPS).not.toContain("relations");
   });

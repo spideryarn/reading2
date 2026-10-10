@@ -380,7 +380,7 @@ describe("the AI processing section", () => {
     async (on) => {
       experimentalOn = on;
       await open();
-      for (const step of ["timeline", "quiz", "faq", "debate", "bibliography"]) {
+      for (const step of ["timeline", "quiz", "faq", "reception", "bibliography"]) {
         expect(row(step), `no row for ${step}`).toBeTruthy();
         expect(button(step, "Run it again"), `no button for ${step}`).toBeTruthy();
       }
@@ -575,7 +575,7 @@ describe("the AI processing section", () => {
   it("names Debate's web-searching call and optional synthesis call, and no price", async () => {
     await open();
 
-    const text = row("debate")?.textContent ?? "";
+    const text = row("reception")?.textContent ?? "";
     expect(text).toContain("One model call that searches the web");
     expect(text).toContain("one search-free call to find themes");
     expect(text).not.toMatch(/[$£€]\s?\d/);
@@ -590,7 +590,7 @@ describe("the AI processing section", () => {
 
   it("puts a note on the glossary, sketch, debate and skim rows and on no other", async () => {
     await open();
-    const noted = new Set(["glossary", "sketch", "debate", "skim"]);
+    const noted = new Set(["glossary", "sketch", "reception", "skim"]);
     for (const step of METADATA_RERUN_STEPS) {
       expect(
         host.querySelector(`#rerun-note-${step}`) !== null,
@@ -614,7 +614,7 @@ describe("the AI processing section", () => {
    */
   it("describes the Run and Retry buttons with the note, so a screen reader hears it", async () => {
     await open();
-    const run = button("debate", "Run it again");
+    const run = button("reception", "Run it again");
     const ids = (run?.getAttribute("aria-describedby") ?? "").split(/\s+/).filter(Boolean);
     expect(ids, "Run is not described by anything").not.toEqual([]);
     const described = ids.map((id) => document.getElementById(id)?.textContent ?? "").join(" ");
@@ -625,11 +625,11 @@ describe("the AI processing section", () => {
     await act(async () => jobEngine.receive([]));
     await act(async () => {
       jobEngine.receive([
-        { ...madeJob("job-1", "debate", "error"), error: "The AI service is busy right now." },
+        { ...madeJob("job-1", "reception", "error"), error: "The AI service is busy right now." },
       ]);
     });
     await settle();
-    const retry = button("debate", "Retry");
+    const retry = button("reception", "Retry");
     const retryIds = (retry?.getAttribute("aria-describedby") ?? "").split(/\s+/).filter(Boolean);
     const retryDescription = retryIds
       .map((id) => document.getElementById(id)?.textContent ?? "")

@@ -11,7 +11,7 @@
  * Plan docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md, D1;
  * the lens is docs/plans/261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md, A.
  */
-import { currentOriginMode, isLensOrigin, type ThreadOrigin } from "./types.js";
+import { currentOriginMode, type ThreadOrigin } from "./types.js";
 
 /** The five columns, as a row holds them. */
 export interface OriginColumns {
@@ -34,11 +34,12 @@ const NO_ORIGIN: OriginColumns = {
 export function originColumns(origin: ThreadOrigin | undefined): OriginColumns {
   if (!origin) return { ...NO_ORIGIN };
   switch (origin.mode) {
-    case "debate":
-      /* Two shapes under one mode: a lens, or a claim. Never both. */
-      return isLensOrigin(origin)
-        ? { ...NO_ORIGIN, originMode: "debate", originLens: origin.lens }
-        : { ...NO_ORIGIN, originMode: "debate", originBlockId: origin.blockId, originQuote: origin.quote };
+    case "reception":
+      /* A lens: the reader's angle, no block and no words. */
+      return { ...NO_ORIGIN, originMode: "reception", originLens: origin.lens };
+    case "sources-claims":
+      /* A claim: its block and its words, no lens. */
+      return { ...NO_ORIGIN, originMode: "sources-claims", originBlockId: origin.blockId, originQuote: origin.quote };
     case "glossary":
     case "bibliography":
     case "ideas":
@@ -56,7 +57,8 @@ export function originColumns(origin: ThreadOrigin | undefined): OriginColumns {
  * A mode this code does not know (the CHECK allows `summary`, which is not
  * built) reads as no origin: the thread is still an ordinary chat. So does a
  * row that is not one shape exactly, which the CHECKs refuse
- * (`chat_threads_origin_debate`, `chat_threads_origin_item`); half of one is
+ * (`chat_threads_origin_reception`, `chat_threads_origin_sources_claims`,
+ * `chat_threads_origin_debate`, `chat_threads_origin_item`); half of one is
  * never read as the whole.
  *
  * **Not exhaustive by construction**: `originMode` is a string out of a
@@ -64,19 +66,19 @@ export function originColumns(origin: ThreadOrigin | undefined): OriginColumns {
  */
 export function originFromColumns(row: OriginColumns): { origin?: ThreadOrigin } {
   const { originItemId: itemId, originBlockId: blockId, originQuote: quote, originLens: lens } = row;
-  /* A cited work's row written before 2026-10-09 says `citations`; it is read
-     as `bibliography` (`RETIRED_ORIGIN_MODES`, plan 261009w). */
-  const mode = currentOriginMode(row.originMode);
+  /* A row written before 2026-10-09 may say `citations`, read as
+     `bibliography`, or `debate`, read by its shape as `reception` (a lens) or
+     `sources-claims` (a claim) — `currentOriginMode`, plan 261009w. */
+  const mode = currentOriginMode(row.originMode, lens);
   if (mode === "glossary" || mode === "bibliography" || mode === "ideas") {
     if (itemId === null || quote === null || blockId !== null || lens !== null) return {};
     return { origin: { mode, itemId, quote } };
   }
-  if (mode !== "debate") return {};
-  if (blockId !== null && quote !== null && lens === null) {
-    return { origin: { mode: "debate", blockId, quote } };
+  if (mode === "sources-claims" && itemId === null && blockId !== null && quote !== null && lens === null) {
+    return { origin: { mode: "sources-claims", blockId, quote } };
   }
-  if (blockId === null && quote === null && lens !== null) {
-    return { origin: { mode: "debate", lens } };
+  if (mode === "reception" && itemId === null && blockId === null && quote === null && lens !== null) {
+    return { origin: { mode: "reception", lens } };
   }
   return {};
 }

@@ -49,18 +49,19 @@
  * route says whether a request was refused, without saying what it was for.
  */
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
 import { rateLimitEvents } from "../db/schema.js";
 import { guardDbStore } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { currentOwnerId } from "../owner.js";
-import type {
-  AllowanceTaken,
-  FetchAllowanceStore,
-  RateBucket,
-  RatePolicy,
+import {
+  bucketSpellings,
+  type AllowanceTaken,
+  type FetchAllowanceStore,
+  type RateBucket,
+  type RatePolicy,
 } from "./contracts.js";
 
 /**
@@ -107,6 +108,10 @@ const rawPgFetchAllowanceStore: FetchAllowanceStore = {
        day — a limiter that reports a number for the right reason and the wrong
        period. */
     const keepSeconds = Math.max(windowSeconds, dailySeconds);
+    /* **Every word this bucket was stored under**, so a renamed bucket's old
+       rows go on counting against it (contracts.ts § `RETIRED_RATE_BUCKETS`,
+       plan 261009w's F2). The insert below writes the current word only. */
+    const spellings = bucketSpellings(bucket);
 
     /**
      * **`read committed`, said in the code and not only here**, for the reason
@@ -143,7 +148,7 @@ const rawPgFetchAllowanceStore: FetchAllowanceStore = {
         .where(
           and(
             eq(rateLimitEvents.ownerId, ownerId),
-            eq(rateLimitEvents.bucket, bucket),
+            inArray(rateLimitEvents.bucket, spellings),
             sql`${rateLimitEvents.startedAt} < now() - make_interval(secs => ${keepSeconds})`,
           ),
         );
@@ -170,7 +175,7 @@ const rawPgFetchAllowanceStore: FetchAllowanceStore = {
           inFlight: sql<number>`count(*) filter (where ${rateLimitEvents.leaseUntil} > now())::int`,
         })
         .from(rateLimitEvents)
-        .where(and(eq(rateLimitEvents.ownerId, ownerId), eq(rateLimitEvents.bucket, bucket)));
+        .where(and(eq(rateLimitEvents.ownerId, ownerId), inArray(rateLimitEvents.bucket, spellings)));
 
       const fills = counts?.fills ?? 0;
       const inFlight = counts?.inFlight ?? 0;
@@ -194,7 +199,7 @@ const rawPgFetchAllowanceStore: FetchAllowanceStore = {
           .from(rateLimitEvents)
           .where(
             and(
-              eq(rateLimitEvents.bucket, bucket),
+              inArray(rateLimitEvents.bucket, spellings),
               sql`${rateLimitEvents.startedAt} > now() - make_interval(secs => ${dailySeconds})`,
             ),
           );

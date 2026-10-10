@@ -123,7 +123,7 @@ enough to show a stranger by default.
 - **Timeline** *(experimental)* — when the piece says things happened, showing the uncertainty
   rather than hiding it ([timeline.md](docs/project/timeline.md)).
 - **Debate** *(experimental)* — what the rest of the web says about this piece; the one mode whose
-  content is not drawn from the article ([debate.md](docs/project/debate.md)).
+  content is not drawn from the article ([reception.md](docs/project/reception.md)).
 
 **Asking**
 

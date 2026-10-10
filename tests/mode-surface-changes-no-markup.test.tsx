@@ -157,9 +157,9 @@ import { act, createElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { checksOwner, claimListOwner } from "./helpers/debate-claims-owner.js";
+import { checksOwner, claimListOwner } from "./helpers/sources-claims-owner.js";
 
-import type { DebateOwner } from "../src/web/DebatePanel.js";
+import type { ReceptionOwner } from "../src/web/ReceptionAndClaimsPanel.js";
 import type { DiagramAccess } from "../src/web/DiagramPanel.js";
 import type { GlossaryAccess, GlossaryOwner } from "../src/web/GlossaryPanel.js";
 import type { IdeasOwner } from "../src/web/IdeasPanel.js";
@@ -174,9 +174,9 @@ import type {
   Block,
   BlockId,
   ChatThread,
-  Debate,
-  DebateCounts,
-  DebateLosses,
+  Reception,
+  ReceptionCounts,
+  ReceptionLosses,
   Glossary,
   Ideas,
   Job,
@@ -257,7 +257,7 @@ const { ChatPanel } = await import("../src/web/ChatPanel.js");
 const { App } = await import("../src/web/App.js");
 const { ModeSurface } = await import("../src/web/ModeSurface.js");
 const { SearchPanel } = await import("../src/web/SearchPanel.js");
-const { DebatePanel } = await import("../src/web/DebatePanel.js");
+const { ReceptionAndClaimsPanel } = await import("../src/web/ReceptionAndClaimsPanel.js");
 const { sourcesHead } = await import("./helpers/sources-head.js");
 const { DiagramPanel } = await import("../src/web/DiagramPanel.js");
 const { GlossaryPanel } = await import("../src/web/GlossaryPanel.js");
@@ -1079,7 +1079,7 @@ const TIMELINE: Timeline = {
   elapsedMs: 1,
 };
 
-const NO_LOSSES: DebateLosses = {
+const NO_LOSSES: ReceptionLosses = {
   uncited: 0,
   selfSource: 0,
   unverifiedSource: 0,
@@ -1089,7 +1089,7 @@ const NO_LOSSES: DebateLosses = {
   unknownBlockId: 0,
   malformed: 0,
 };
-const COUNTS: DebateCounts = {
+const COUNTS: ReceptionCounts = {
   returnedSources: 1,
   reportedRows: 1,
   keptRows: 1,
@@ -1098,7 +1098,7 @@ const COUNTS: DebateCounts = {
   webSearches: 1,
 };
 
-const DEBATE: Debate = {
+const RECEPTION: Reception = {
   version: "test",
   generator: "test",
   slug: SLUG,
@@ -1389,10 +1389,10 @@ function timelineOwner(timeline: Timeline | null, over: Partial<TimelineOwner> =
   };
 }
 
-function debateOwner(debate: Debate | null, over: Partial<DebateOwner> = {}): DebateOwner {
+function receptionOwner(reception: Reception | null, over: Partial<ReceptionOwner> = {}): ReceptionOwner {
   return {
-    status: debate ? "ready" : "loading",
-    debate,
+    status: reception ? "ready" : "loading",
+    reception,
     stale: false,
     outdated: false,
     slug: SLUG,
@@ -1624,14 +1624,14 @@ function mountVisitorTweets(): ReactNode {
   });
 }
 
-/** The owner has chat, and nothing here presses it (tests/debate-claim-chat.test.tsx does). */
+/** The owner has chat, and nothing here presses it (tests/sources-claims-chat.test.tsx does). */
 const NO_CLAIM_CHATS = { summaries: [], onCheck: () => {}, onLens: () => {}, onOpen: () => {} };
 
-function mountDebate(debate: Debate | null, over: Partial<DebateOwner> = {}): ReactNode {
-  return createElement(DebatePanel, {
+function mountReception(reception: Reception | null, over: Partial<ReceptionOwner> = {}): ReactNode {
+  return createElement(ReceptionAndClaimsPanel, {
     /* Sources' chip row, as `SourcesBand` hands it (since 2026-10-09). */
-    head: sourcesHead({ view: "reception", onView: noop, ownerSlug: SLUG, debate }),
-    access: { kind: "owner", owner: debateOwner(debate, over), claimList: claimListOwner(), checks: checksOwner(), citers: { result: { kind: "no-doi" }, retry: () => {} }, claimChats: NO_CLAIM_CHATS },
+    head: sourcesHead({ view: "reception", onView: noop, ownerSlug: SLUG, reception }),
+    access: { kind: "owner", owner: receptionOwner(reception, over), claimList: claimListOwner(), checks: checksOwner(), citers: { result: { kind: "no-doi" }, retry: () => {} }, claimChats: NO_CLAIM_CHATS },
     onJump: noop,
     /* What a reader who has never touched `?debate=` sends: Reception. */
     view: "reception",
@@ -1639,7 +1639,7 @@ function mountDebate(debate: Debate | null, over: Partial<DebateOwner> = {}): Re
     articleTitle: null,
     /* What a reader who has never touched `?debateby=` sends. The fixture has
        one row, so no two orders differ and no order bar is drawn — which is why
-       `DEBATE_SHAPE` has no `.gloss-sort`. */
+       `RECEPTION_SHAPE` has no `.gloss-sort`. */
     order: "prioritised",
     onOrder: noop,
     blockOrder: new Map(),
@@ -1905,54 +1905,54 @@ const TWEETS_VISITOR: BandShape = {
  * that day; now it is Sources' chip row, Bibliography | Reception |
  * Claims, handed in by the mode (SourcesMode.tsx § `SourcesViews`), and
  * the Reception | Claims control that sat under the head as
- * `div.summ-controls.dbt-controls` went into it — a deliberate change to both
+ * `div.summ-controls.rcp-controls` went into it — a deliberate change to both
  * shapes (plan 261009l). The band's name is the mode's.
  *
- * Until 2026-10-03 a `p.dbt-frame` (the order's sentence) and
- * `div.dbt-bar.dbt-name` (the identification threshold) sat under the head;
- * both went with plan 261003o. The relevance bar (`.dbt-rel`) is Claims', so
+ * Until 2026-10-03 a `p.rcp-frame` (the order's sentence) and
+ * `div.rcp-bar.rcp-name` (the identification threshold) sat under the head;
+ * both went with plan 261003o. The relevance bar (`.rcp-rel`) is Claims', so
  * Reception, which this fixture opens on, has none.
  *
- * `div.gloss-ask.dbt-lens` is the owner's *Look at the debate from an angle*
+ * `div.gloss-ask.rcp-lens` is the owner's *Look at the debate from an angle*
  * box, the first row since 2026-10-05 (plan 261005k, A) and a deliberate
  * change to both shapes: it is drawn with or without a stored debate.
  */
-const DEBATE_SHAPE: BandShape = {
-  className: "mode-band gloss dbt sources has-about",
+const RECEPTION_SHAPE: BandShape = {
+  className: "mode-band gloss rcp sources has-about",
   label: "Sources",
   head: true,
   children: [
     "button.band-about[aria-expanded,aria-haspopup,aria-label,type]",
     "div.band-head",
-    "div.gloss-ask.dbt-lens",
-    "div.dbt-scroll",
+    "div.gloss-ask.rcp-lens",
+    "div.rcp-scroll",
   ],
-  headChildren: ["div.summ-views.dbt-views[aria-label,data-more-unmasked,role]"],
+  headChildren: ["div.summ-views.rcp-views[aria-label,data-more-unmasked,role]"],
 };
 
 /** The same header — Sources' chip row, not empty, which is what makes
  *  this panel the control for the five bands whose headers do empty out.
  *
- *  `div.dbt-scroll` holds the owner's *Cited by*, which since 2026-10-04 is on
+ *  `div.rcp-scroll` holds the owner's *Cited by*, which since 2026-10-04 is on
  *  screen before a search is stored (plan 261004h) — a deliberate change to
- *  this shape. In `DEBATE_SHAPE` it is inside `div.dbt-scroll`, at the end of
+ *  this shape. In `RECEPTION_SHAPE` it is inside `div.rcp-scroll`, at the end of
  *  Reception's list, so that shape did not move.
  *
  *  The chips are drawn before a search is stored, since 2026-10-08 as
  *  Reception | Claims under the head (plan 261008i stage 2, GPT Sol's F9) and
  *  since 2026-10-09 as the head itself: Claims has a list of its own to reach. */
-const DEBATE_LOADING: BandShape = {
-  className: "mode-band gloss dbt sources has-about",
+const RECEPTION_LOADING: BandShape = {
+  className: "mode-band gloss rcp sources has-about",
   label: "Sources",
   head: true,
   children: [
     "button.band-about[aria-expanded,aria-haspopup,aria-label,type]",
     "div.band-head",
-    "div.gloss-ask.dbt-lens",
+    "div.gloss-ask.rcp-lens",
     "p.band-waiting.gloss-quiet[role]",
-    "div.dbt-scroll",
+    "div.rcp-scroll",
   ],
-  headChildren: ["div.summ-views.dbt-views[aria-label,data-more-unmasked,role]"],
+  headChildren: ["div.summ-views.rcp-views[aria-label,data-more-unmasked,role]"],
 };
 
 const QUIZ_SHAPE: BandShape = {
@@ -2126,13 +2126,13 @@ describe("the bands stage 2 migrated, as they stood before it", () => {
   });
 
   it("draws Debate's band, whose header cannot come out empty", async () => {
-    await paint(mountDebate(DEBATE));
-    expectShape(DEBATE_SHAPE);
+    await paint(mountReception(RECEPTION));
+    expectShape(RECEPTION_SHAPE);
   });
 
   it("keeps Sources' chip row as the header, with nothing else in it", async () => {
-    await paint(mountDebate(null));
-    expectShape(DEBATE_LOADING);
+    await paint(mountReception(null));
+    expectShape(RECEPTION_LOADING);
   });
 
   it("draws Quiz's band with a question, and no rewrite footer since plan 260929b", async () => {
@@ -2144,7 +2144,7 @@ describe("the bands stage 2 migrated, as they stood before it", () => {
     const cases: [string, ReactNode, string][] = [
       ["Ideas", mountIdeas(IDEAS, { job: runningJob("ideas") }), "ideas-again"],
       ["Timeline", mountTimeline(TIMELINE, { job: runningJob("timeline") }), "tl-again"],
-      ["Debate", mountDebate(DEBATE, { job: runningJob("debate") }), "dbt-again"],
+      ["Debate", mountReception(RECEPTION, { job: runningJob("reception") }), "rcp-again"],
       ["Quiz", mountQuiz(QUIZ, { job: runningJob("quiz") }), "quiz-rewrite"],
     ];
 
@@ -2160,7 +2160,7 @@ describe("the bands stage 2 migrated, as they stood before it", () => {
     const cases: [string, ReactNode][] = [
       ["Ideas", mountIdeas(IDEAS, { failed: VISIBLE_FAILURE })],
       ["Timeline", mountTimeline(TIMELINE, { failed: VISIBLE_FAILURE })],
-      ["Debate", mountDebate(DEBATE, { failed: VISIBLE_FAILURE })],
+      ["Debate", mountReception(RECEPTION, { failed: VISIBLE_FAILURE })],
       ["Quiz", mountQuiz(QUIZ, { failed: VISIBLE_FAILURE })],
     ];
 
@@ -2181,7 +2181,7 @@ describe("the bands stage 2 migrated, as they stood before it", () => {
     const cases: [string, ReactNode, ReactNode][] = [
       ["Ideas", mountIdeas(IDEAS, { outdated: true }), mountIdeas(IDEAS, { stale: true })],
       ["Timeline", mountTimeline(TIMELINE, { outdated: true }), mountTimeline(TIMELINE, { stale: true })],
-      ["Debate", mountDebate(DEBATE, { outdated: true }), mountDebate(DEBATE, { stale: true })],
+      ["Debate", mountReception(RECEPTION, { outdated: true }), mountReception(RECEPTION, { stale: true })],
       ["Quiz", mountQuiz(QUIZ, { outdated: true }), mountQuiz(QUIZ, { stale: true })],
     ];
 
@@ -2203,7 +2203,7 @@ describe("the bands stage 2 migrated, as they stood before it", () => {
     const cases: [string, ReactNode, string][] = [
       ["Ideas", mountIdeas(IDEAS, { stale: true, job: runningJob("ideas") }), "ideas-again"],
       ["Timeline", mountTimeline(TIMELINE, { stale: true, job: runningJob("timeline") }), "tl-again"],
-      ["Debate", mountDebate(DEBATE, { stale: true, job: runningJob("debate") }), "dbt-again"],
+      ["Debate", mountReception(RECEPTION, { stale: true, job: runningJob("reception") }), "rcp-again"],
     ];
 
     for (const [name, node, footClass] of cases) {
@@ -2225,7 +2225,7 @@ describe("the bands stage 2 migrated, as they stood before it", () => {
     const cases: [string, ReactNode, string][] = [
       ["Ideas", mountIdeas(IDEAS, { outdated: true, job: runningJob("ideas") }), "ideas-again"],
       ["Timeline", mountTimeline(TIMELINE, { outdated: true, job: runningJob("timeline") }), "tl-again"],
-      ["Debate", mountDebate(DEBATE, { outdated: true, job: runningJob("debate") }), "dbt-again"],
+      ["Debate", mountReception(RECEPTION, { outdated: true, job: runningJob("reception") }), "rcp-again"],
       ["Quiz", mountQuiz(QUIZ, { outdated: true, job: runningJob("quiz") }), "quiz-rewrite"],
     ];
 

@@ -48,8 +48,8 @@ const BODIES: Record<string, unknown> = {
     stale: false,
     outdated: false,
   },
-  debate: {
-    debate: { direct: { rows: [] }, claims: { rows: [{ id: "c1" }] } },
+  reception: {
+    reception: { direct: { rows: [] }, claims: { rows: [{ id: "c1" }] } },
     stale: false,
     outdated: false,
   },
@@ -61,7 +61,7 @@ vi.mock("../src/web/lib/api.js", async () => {
     const method = init?.method ?? "GET";
     trace.push(`${method} ${url}`);
     if (url === "/api/jobs" && method === "GET") return new Response(JSON.stringify({ jobs }), { status: 200 });
-    const kind = /^\/api\/(ideas|faq|debate)\//.exec(url)?.[1];
+    const kind = /^\/api\/(ideas|faq|reception)\//.exec(url)?.[1];
     const there = kind !== undefined && present.has(kind);
     if (kind === "faq" && holdFaq) await holdFaq;
     if (there) return new Response(JSON.stringify(BODIES[kind]), { status: 200 });
@@ -162,11 +162,11 @@ describe("a list made while the margin was shut", () => {
 describe("a list made while the margin is open", () => {
   const PICK: Record<string, (f: MarginFeed | null) => readonly unknown[] | null | undefined> = {
     faq: (f) => f?.faq,
-    debate: (f) => f?.claims,
+    reception: (f) => f?.claims,
     ideas: (f) => f?.ideas,
   };
 
-  for (const step of ["faq", "debate", "ideas"] as const) {
+  for (const step of ["faq", "reception", "ideas"] as const) {
     it(`${step}: appears when its job finishes, with no reopen and no request to start one`, async () => {
       /* The engine is running, as it is for any owner. Its first list is the
          baseline, and history in it is not news. */

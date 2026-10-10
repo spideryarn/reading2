@@ -4,8 +4,8 @@
 
 [`readStoredLean`](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/types.ts:4075) protects the appearance lookup, but other consumers still read only `lean`:
 
-- [`vocabularyReport`](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/evals/debate/score.ts:237) treats every historical raw `valence` as an absent lean.
-- [`replayJournal`](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/evals/debate/replay.ts:136) sends historical rows through the new parser, which converts each missing `lean` to `cannot-tell`.
+- [`vocabularyReport`](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/evals/reception/score.ts:237) treats every historical raw `valence` as an absent lean.
+- [`replayJournal`](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/evals/reception/replay.ts:136) sends historical rows through the new parser, which converts each missing `lean` to `cannot-tell`.
 
 Measured against the three real journals:
 
@@ -19,15 +19,15 @@ The synthetic fixtures were correctly renamed—they explicitly are invented rig
 
 ### F72 — P1, reasoned: the new negation can contradict the target binding
 
-The shared instruction says lean is about the row target but not about “whatever the outside piece is itself discussing” ([debate.ts](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/debate.ts:1093)). The direct prompt then says the target is the article itself while repeating that prohibition ([debate.ts](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/debate.ts:1150)).
+The shared instruction says lean is about the row target but not about “whatever the outside piece is itself discussing” ([debate.ts](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/reception.ts:1093)). The direct prompt then says the target is the article itself while repeating that prohibition ([debate.ts](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/reception.ts:1150)).
 
 An admissible review will often itself be discussing precisely that article. Likewise, a claims source may discuss precisely the quoted claim. The intended exclusion is sentiment toward a person, product, phenomenon, or topic considered separately—not everything the source discusses.
 
-The supplement example teaches the intended rule well for group two, but it does not remove the literal conflict, particularly in group one. Also, `relation` and `lean` share a subject and target; they do not “answer that same question” ([debate.ts](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/debate.ts:1100)).
+The supplement example teaches the intended rule well for group two, but it does not remove the literal conflict, particularly in group one. Also, `relation` and `lean` share a subject and target; they do not “answer that same question” ([debate.ts](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/reception.ts:1100)).
 
 ### F73 — P2, established: the prompt test is polarity- and format-insensitive
 
-[`debate-prompt-target.test.ts`](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/tests/debate-prompt-target.test.ts:52) proves that selected phrases remain present, but not what the prompt says about them.
+[`debate-prompt-target.test.ts`](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/tests/reception-prompt-target.test.ts:52) proves that selected phrases remain present, but not what the prompt says about them.
 
 These opposite mutations would still pass:
 
@@ -43,8 +43,8 @@ So the deletion mutation is valid evidence, but C4 is false at the stronger sema
 Examples:
 
 - `DebateRelation` still opens with “What the outside page does…” despite the passage rescope ([types.ts](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/types.ts:3503)).
-- Parser comments still name fallback `unknown` ([debate.ts](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/debate.ts:330), [debate.ts](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/debate.ts:796)).
-- Debate CSS still describes `neutral` and `unknown` ([debate.css](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/web/styles/debate.css:347)).
+- Parser comments still name fallback `unknown` ([debate.ts](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/reception.ts:330), [debate.ts](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/reception.ts:796)).
+- Debate CSS still describes `neutral` and `unknown` ([debate.css](/home/greg/code/spideryarn2/.claude/worktrees/critiques-mode/src/web/styles/reception.css:347)).
 
 The functional rename is complete, but C3’s “did not miss a Debate one” is not literally true.
 

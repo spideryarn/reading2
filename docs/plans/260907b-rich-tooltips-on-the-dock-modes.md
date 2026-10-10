@@ -169,7 +169,7 @@ review). GPT Sol, 2026-09-07:
   or translated one, so the promise the code settled on is *verbatim passages from this article* and
   nothing about authorship. I had read that paragraph and stopped one sentence early;
 - *Debate*'s second draft: "nothing here came out of the article itself" — a claim row prints the
-  article's own `claimQuote` beside the response ([`DebatePanel.tsx`](../../src/web/DebatePanel.tsx));
+  article's own `claimQuote` beside the response ([`DebatePanel.tsx`](../../src/web/ReceptionAndClaimsPanel.tsx));
   and "two searches" undercounts two metered *passes*, one of which has run 36 searches alone;
 - *Chat*: `ToolStrip` renders nothing when no tool ran, so "the strip above each answer" over-promises;
 - *Ideas*: "every row points at the passage it came from" is not invariant — a re-extraction can

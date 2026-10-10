@@ -43,7 +43,7 @@ import gutterPng from "./pages/images/gutter.png";
 import helpModeInfoPng from "./pages/images/help-mode-info.png";
 import modeBibliographyPng from "./pages/images/mode-bibliography.png";
 import modeChatPng from "./pages/images/mode-chat.png";
-import modeDebatePng from "./pages/images/mode-debate.png";
+import modeSourcesClaimsPng from "./pages/images/mode-sources-claims.png";
 import modeFaqPng from "./pages/images/mode-faq.png";
 import modeIllustratedPng from "./pages/images/mode-illustrated.png";
 import modeLearnPng from "./pages/images/mode-learn.png";
@@ -348,8 +348,8 @@ export const HELP_IMAGES: Readonly<Record<string, HelpImage>> = {
     window: "1440×900 at 2×",
     taken: "2026-10-07",
   },
-  "mode-debate.png": {
-    src: modeDebatePng,
+  "mode-sources-claims.png": {
+    src: modeSourcesClaimsPng,
     w: 1088,
     h: 896,
     shows:

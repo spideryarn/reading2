@@ -66,7 +66,7 @@ const { useSimple } = await import("../src/web/useSimple.js");
 const { useIdeasRead } = await import("../src/web/useIdeas.js");
 const { useFaqRead } = await import("../src/web/useFaq.js");
 const { useTimelineRead } = await import("../src/web/useTimeline.js");
-const { useDebateRead } = await import("../src/web/useDebate.js");
+const { useReceptionRead } = await import("../src/web/useReception.js");
 const { useGlossaryRead } = await import("../src/web/useGlossary.js");
 const { useQuotesRead } = await import("../src/web/useQuotes.js");
 const { useTweets } = await import("../src/web/useTweets.js");
@@ -215,7 +215,7 @@ const SEVEN = [
   ["ideas", useIdeasRead, "ideas", { ideas: { slug: SLUG, generatedAt: AT, profileHash: null, ideas: [] }, ...FLAGS }, "ideas"],
   ["faq", useFaqRead, "faq", { faq: { slug: SLUG, generatedAt: AT, questions: [] }, ...FLAGS }, "faq"],
   ["timeline", useTimelineRead, "timeline", { timeline: { slug: SLUG, generatedAt: AT, events: [] }, ...FLAGS }, "timeline"],
-  ["debate", useDebateRead, "debate", { debate: { slug: SLUG, generatedAt: AT, direct: { rows: [] }, claims: { rows: [] } }, ...FLAGS }, "debate"],
+  ["reception", useReceptionRead, "reception", { reception: { slug: SLUG, generatedAt: AT, direct: { rows: [] }, claims: { rows: [] } }, ...FLAGS }, "reception"],
   ["glossary", useGlossaryRead, "glossary", { glossary: { slug: SLUG, generatedAt: AT, profileHash: null, entries: [] }, ...FLAGS }, "glossary"],
   ["quotes", useQuotesRead, "quotes", { quotes: { slug: SLUG, generatedAt: AT, profileHash: null, quotes: [] }, ...FLAGS }, "quotes"],
 ] as const;

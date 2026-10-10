@@ -177,10 +177,10 @@ export function ModeSurface({
    * **Seven panels used it, not four**: `.gloss-foot` (until its run row moved
    * into the scroller in plan 261003c), `.ideas-again`,
    * `.quotes-foot`, `.tl-again`, and — missed by the first inventory and by the
-   * plan — Debate's `.dbt-again` and Quiz's `.quiz-rewrite`, plus Skim's
+   * plan — Debate's `.rcp-again` and Quiz's `.quiz-rewrite`, plus Skim's
    * `.skim-foot`. All are direct
-   * children sitting after the scrolling child, and `debate.css` says of
-   * `.dbt-again` in as many words: "Pinned under the scroller rather than at the
+   * children sitting after the scrolling child, and `reception.css` says of
+   * `.rcp-again` in as many words: "Pinned under the scroller rather than at the
    * end of it, like `.tl-again`". GPT Sol F22, 2026-09-06. Four of those —
    * the standing redo buttons — went on 2026-09-29 (plan 260929b), when Metadata
    * became the one place to ask for a mode again. Their footers still appear for

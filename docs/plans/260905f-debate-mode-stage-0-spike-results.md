@@ -265,7 +265,7 @@ and re-run**; it is not measurable any other way.
 
 ## Stage A of the eval — the first journalled runs, 2026-09-06
 
-Three articles through [`evals/debate/`](../../evals/debate/), which calls `generateDebate` directly
+Three articles through [`evals/debate/`](../../evals/reception/), which calls `generateDebate` directly
 rather than through the queue, journals every attempted pass, and bills to `scope_kind: 'eval'`.
 **$0.6384 over six calls**, confirmed against `spideryarn.ai_calls`.
 

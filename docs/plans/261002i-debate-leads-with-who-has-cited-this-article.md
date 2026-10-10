@@ -1,6 +1,6 @@
 # Debate leads with who has cited this article, for and against
 
-Up: [debate.md](../project/debate.md)
+Up: [debate.md](../project/reception.md)
 
 **Status:** stage 1 (the search for responses also looks for the papers that cite this one) is
 built here. Stage 2 (a citation index, which would list every citer) was **decided on 2026-10-04**:

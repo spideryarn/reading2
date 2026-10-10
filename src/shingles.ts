@@ -130,7 +130,7 @@ export interface ShingleOverlap {
    * characters** — or `null` when the page quotes nothing.
    *
    * The extract's spelling rather than the article's, which is the same
-   * discipline `locate` (src/debate.ts) and `place` (src/quotes.ts) follow: what
+   * discipline `locate` (src/reception.ts) and `place` (src/quotes.ts) follow: what
    * is shown as a quotation from a page must be what a reader would find if they
    * followed the link.
    */

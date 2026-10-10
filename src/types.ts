@@ -2867,7 +2867,7 @@ export interface PublicArtefacts {
    * not built) and for the cost of *running* a search, which a visitor never
    * pays. SPIDERYARN-READING2-56, plan 260929c stage 4.
    */
-  debate: boolean;
+  reception: boolean;
 }
 
 export interface ArticleSharing extends VisibilityState {
@@ -3561,13 +3561,13 @@ export type StepName =
      in `cacheArticleForStep`. Stated here because mode.md lists both tables
      among the ones the compiler asks for, and a reader will otherwise go
      looking for the missing rows. */
-  | "debate"
+  | "reception"
   /* **The article's own claims, listed for Debate's Claims to pick from** —
      docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2. One
      Messages-wire call over `articleWithIds` on the body, **no web search**,
      made by a press on Claims. Ideas' article block at `high` effort, so an
      `ArticleStage`. */
-  | "debate-claims"
+  | "sources-claims"
   /* **Every work the piece cites, linked** — docs/plans/260911g-citations-mode.md.
      One Messages-wire call over the whole article, bibliography and notes
      included, and a link derived by code from the article's own hrefs.
@@ -4311,27 +4311,29 @@ export type ChatAnchor =
  * each has a durable id, so the id is its identity and the name beside it is
  * a snapshot. See `GlossaryOrigin`.
  *
- * **Debate has two shapes since 2026-10-05, and `mode` does not tell them
- * apart** (plan docs/plans/261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md, A):
- * a claim, and a *lens*, an angle the reader typed to look at the debate from.
- * Both say `mode: "debate"`, so narrowing on `mode` reaches neither's fields.
- * Ask `isLensOrigin` or `isClaimOrigin`; a claim never equals a lens
- * (`sameOrigin`).
+ * **A claim and a lens are two modes since 2026-10-09.** Debate took a lens
+ * on 2026-10-05 (plan docs/plans/261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md, A):
+ * an angle the reader typed to look at the debate from, beside its claims, and
+ * both said `mode: "debate"`. Plan 261009w split that word by the sub-mode
+ * each serves: a claim is `sources-claims` (Sources › Claims), a lens
+ * `reception` (Sources › Reception). A row or a tab that still says `debate`
+ * is read by its shape (`currentOriginMode`). `isLensOrigin` and
+ * `isClaimOrigin` still answer; a claim never equals a lens (`sameOrigin`).
  *
  * Set on the turn that creates the thread and never again, like `anchor`.
  * Written by conditional spread, never `origin: undefined`.
  */
 export type ThreadOrigin = ClaimOrigin | LensOrigin | GlossaryOrigin | BibliographyOrigin | IdeasOrigin;
 
-/** One of Debate's claims: the block it sits in and its words when the chat started. */
-export type ClaimOrigin = { mode: "debate"; blockId: BlockId; quote: string };
+/** One of Sources › Claims' claims: the block it sits in and its words when the chat started. */
+export type ClaimOrigin = { mode: "sources-claims"; blockId: BlockId; quote: string };
 
 /**
  * An angle the reader asked to see the debate from: their own words, trimmed
  * and non-empty, at most `MAX_LENS_CHARS`. No block and no quote. Two chats
- * may share one lens; they are then two lines in Debate's *Your angles*.
+ * may share one lens; they are then two lines in Reception's *Your angles*.
  */
-export type LensOrigin = { mode: "debate"; lens: string };
+export type LensOrigin = { mode: "reception"; lens: string };
 
 /**
  * **One entry of the Glossary**: its id, and its name when the chat started.
@@ -4395,13 +4397,13 @@ export function isLensOrigin(origin: ThreadOrigin): origin is LensOrigin {
   return "lens" in origin;
 }
 
-/** Is this origin one of Debate's claims: the one shape that names a block? */
+/** Is this origin one of Sources › Claims' claims: the one shape that names a block? */
 export function isClaimOrigin(origin: ThreadOrigin): origin is ClaimOrigin {
-  return origin.mode === "debate" && !isLensOrigin(origin);
+  return origin.mode === "sources-claims";
 }
 
 /** The origin modes that are built. The route refuses any other. */
-export const ORIGIN_MODES = ["debate", "glossary", "bibliography", "ideas"] as const satisfies readonly ThreadOrigin["mode"][];
+export const ORIGIN_MODES = ["reception", "sources-claims", "glossary", "bibliography", "ideas"] as const satisfies readonly ThreadOrigin["mode"][];
 
 /**
  * **An origin mode's old word, and the mode it is now.** A chat started from a
@@ -4411,13 +4413,24 @@ export const ORIGIN_MODES = ["debate", "glossary", "bibliography", "ideas"] as c
  * here: `originFromColumns` (src/thread-origin.ts) for a stored row, and the
  * chat route's `parseOrigin` (src/routes.ts) for a request. Nothing writes an
  * old word. The read may stay after the contract, as `RETIRED_STEPS` does.
+ *
+ * `debate` is the other old word, and it is not in this table because it
+ * became two modes, not one: a claim and a lens both said `debate` until the
+ * same day. `currentOriginMode` reads it by its shape — with a lens it is
+ * `reception`, otherwise `sources-claims` — and the shape checks that follow
+ * refuse anything that is neither.
  */
 export const RETIRED_ORIGIN_MODES: Readonly<Record<string, (typeof ORIGIN_MODES)[number]>> = {
   citations: "bibliography",
 };
 
-/** A retired origin mode's successor, or the value as it came. */
-export function currentOriginMode(mode: unknown): unknown {
+/**
+ * A retired origin mode's successor, or the value as it came. `lens` is the
+ * origin's lens as sent or stored (absent or null for none), which is what
+ * tells an old `debate` lens from an old `debate` claim.
+ */
+export function currentOriginMode(mode: unknown, lens: unknown): unknown {
+  if (mode === "debate") return lens === undefined || lens === null ? "sources-claims" : "reception";
   return typeof mode === "string" && Object.hasOwn(RETIRED_ORIGIN_MODES, mode) ? RETIRED_ORIGIN_MODES[mode] : mode;
 }
 
@@ -4456,10 +4469,10 @@ export function sameOrigin(a: ThreadOrigin, b: ThreadOrigin): boolean {
     case "bibliography":
     case "ideas":
       return b.mode === a.mode && a.itemId === b.itemId;
-    case "debate":
-      if (b.mode !== "debate") return false;
-      if (isLensOrigin(a)) return isLensOrigin(b) && a.lens === b.lens;
-      return !isLensOrigin(b) && a.blockId === b.blockId && a.quote === b.quote;
+    case "reception":
+      return b.mode === "reception" && a.lens === b.lens;
+    case "sources-claims":
+      return b.mode === "sources-claims" && a.blockId === b.blockId && a.quote === b.quote;
     default:
       return a satisfies never;
   }
@@ -6436,13 +6449,13 @@ export const NONE_YET_AS_NULL_HEADER = "x-spideryarn-none-yet-as-null";
    `article_revisions`, and the only artefact here whose content is **not in the
    article at all**. docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md.
 
-   ## Why these are here and not in src/debate.ts, where the stage lives
+   ## Why these are here and not in src/reception.ts, where the stage lives
 
    The same reason `Timeline` and `Quiz` are, above: `tests/client-imports.test.ts`
    lets `src/web/` import only the pure leaves in its `SHARED` list, and
-   `src/debate.ts` is a stage with a CLI and two model calls in it. A panel that
+   `src/reception.ts` is a stage with a CLI and two model calls in it. A panel that
    cannot see a row cannot be written, so the shape both sides speak lives in
-   this file, which imports nothing, and src/debate.ts re-exports it.
+   this file, which imports nothing, and src/reception.ts re-exports it.
 
    ## The one thing to understand before reading any of it
 
@@ -6462,10 +6475,10 @@ export const NONE_YET_AS_NULL_HEADER = "x-spideryarn-none-yet-as-null";
  * It said *"what the outside page does to what it is answering"* until
  * 2026-09-08, and the two halves of that were both wrong by a step: the subject
  * is the passage we quoted rather than the whole page, and the target is this
- * row's, named. `DebateLean` had the narrower subject all along, so one row was
+ * row's, named. `ReceptionLean` had the narrower subject all along, so one row was
  * carrying two scopes — Sol's F54.
  *
- * **Strongly associated with `DebateLean` below, and not functionally dependent
+ * **Strongly associated with `ReceptionLean` below, and not functionally dependent
  * on it** — which is a correction, made twice. This said "orthogonal, and the
  * two must stay that way" until 2026-09-08, and the measurement refuted the
  * word: over 61 real rows the lean varies freely only under `qualifies`, and
@@ -6496,7 +6509,7 @@ export const NONE_YET_AS_NULL_HEADER = "x-spideryarn-none-yet-as-null";
  * cannot tell what a page is doing should say so and be believed — the same
  * rule docs/project/timeline.md applies to an undated row.
  */
-export type DebateRelation =
+export type ReceptionRelation =
   | "disputes"
   | "qualifies"
   | "extends"
@@ -6515,7 +6528,7 @@ export type DebateRelation =
  * numeric lean is computed or stored anywhere.
  *
  * **The words are agreement words, and that is the repair.** This was
- * `DebateValence`, spelled `positive | negative | neutral | unknown`, until
+ * `ReceptionValence`, spelled `positive | negative | neutral | unknown`, until
  * 2026-09-08. Three stored rows had recorded the source's stance toward *its
  * own* subject rather than toward the row's target — a page negative about Uri
  * Geller marked `negative` on a row whose target was a claim it *supported* —
@@ -6546,7 +6559,7 @@ export type DebateRelation =
  * This is a model's reading of a stranger's page: same shape, different
  * instrument, and the panel labels it as such.
  */
-export type DebateLean = "leans-for" | "leans-against" | "neither" | "cannot-tell";
+export type ReceptionLean = "leans-for" | "leans-against" | "neither" | "cannot-tell";
 
 /**
  * What both groups' rows share.
@@ -6557,7 +6570,7 @@ export type DebateLean = "leans-for" | "leans-against" | "neither" | "cannot-tel
  * That is the compiler standing in for the two rules that a review found the
  * first draft had no code for.
  */
-interface DebateRowBase {
+interface ReceptionRowBase {
   /**
    * `mintId`, so it is a block id by construction and a future `?debate=` would
    * validate for free.
@@ -6592,14 +6605,14 @@ interface DebateRowBase {
    * evidence. **No row survives as an unchecked paraphrase.**
    */
   sourceQuote: string;
-  relation: DebateRelation;
+  relation: ReceptionRelation;
   /**
    * **Never read straight off a stored row** — call `readStoredLean` below.
    * Rows written before 2026-09-08 have no `lean` at all, they have a `valence`
    * in the old vocabulary, and nothing revalidates a row on the way out of the
    * database.
    */
-  lean: DebateLean;
+  lean: ReceptionLean;
   /** How the outside piece bears on this row's target. The model's reading, labelled as such. */
   applies: string;
   /**
@@ -6648,11 +6661,11 @@ interface DebateRowBase {
    * default here would put a row in a relevance band the model never chose.
    * Read it through `readStoredBears`.
    */
-  bears?: DebateBears;
+  bears?: SourcesClaimsBears;
   /**
    * **What Crossref or DataCite holds for the identifier this row's address
    * carries** — written by the `debate` step after its searches
-   * (src/debate-registry.ts, plan 261001a stage 6), and only when the
+   * (src/reception-registry.ts, plan 261001a stage 6), and only when the
    * registry's title agrees with the engine's `title` for the page. The
    * by-line and the *date* order prefer it to `authors` / `publishedYear`, and
    * say where it came from. Read it through `readRegistryWork`.
@@ -6671,20 +6684,20 @@ interface DebateRowBase {
  * Three words rather than a number: a reader shown *0.73* reads a measurement, and
  * this is one model's judgment of a stranger's page.
  */
-export type DebateBears = "directly" | "partly" | "loosely";
+export type SourcesClaimsBears = "directly" | "partly" | "loosely";
 
 /** Total by construction, as `LEAN_MEMBERS` is: omit a member and this stops compiling. */
-const BEARS_MEMBERS: { [K in DebateBears]: true } = {
+const BEARS_MEMBERS: { [K in SourcesClaimsBears]: true } = {
   directly: true,
   partly: true,
   loosely: true,
 };
 
 /** The three stops, strongest first — the order *prioritised* sorts in. */
-export const DEBATE_BEARS: readonly DebateBears[] = ["directly", "partly", "loosely"];
+export const SOURCES_CLAIMS_BEARS: readonly SourcesClaimsBears[] = ["directly", "partly", "loosely"];
 
 /** Is this one of the three stops this build knows? */
-export function isDebateBears(value: unknown): value is DebateBears {
+export function isSourcesClaimsBears(value: unknown): value is SourcesClaimsBears {
   return typeof value === "string" && Object.hasOwn(BEARS_MEMBERS, value);
 }
 
@@ -6696,8 +6709,8 @@ export function isDebateBears(value: unknown): value is DebateBears {
  * the prioritised order puts them last under a line that says so, and a
  * default would quietly file them in a band.
  */
-export function readStoredBears(row: { bears?: unknown }): DebateBears | null {
-  return isDebateBears(row.bears) ? row.bears : null;
+export function readStoredBears(row: { bears?: unknown }): SourcesClaimsBears | null {
+  return isSourcesClaimsBears(row.bears) ? row.bears : null;
 }
 
 /**
@@ -6708,7 +6721,7 @@ export function readStoredBears(row: { bears?: unknown }): DebateBears | null {
  * passes prove *a search ran*; they do not prove that anything it returned is a
  * **response to this piece**. Stage 0 is the exact counterexample.
  */
-export interface DirectDebateRow extends DebateRowBase {
+export interface DirectReceptionRow extends ReceptionRowBase {
   /**
    * **Words from the source's own extract in which that page names *this*
    * article** — its exact title, its URL, or its title together with the
@@ -6790,9 +6803,9 @@ export type NamedSignal = Extract<IdentificationSignal, { kind: "named" }>;
 
 /**
  * **The least a row needs for its identification to be read** — the owner's
- * `DirectDebateRow` and a visitor's `PublicDirectDebateRow` alike. Generic in
+ * `DirectReceptionRow` and a visitor's `PublicDirectReceptionRow` alike. Generic in
  * the signal because the public boundary may take a `linked` signal's address
- * off (src/public/dto.ts § `publicDebate`), so a visitor's signal is not an
+ * off (src/public/dto.ts § `publicReception`), so a visitor's signal is not an
  * `IdentificationSignal`; everything read here is the `kind`. Since
  * 2026-09-29, plan 260929c stage 4.
  */
@@ -6850,7 +6863,7 @@ function strengthOf(signal: { kind: IdentificationLevel }): number {
  * The two required fields are the only thing standing between this mode and
  * nine sourdough blogs presented as critical reception.
  */
-export interface ClaimDebateRow extends DebateRowBase {
+export interface ClaimReceptionRow extends ReceptionRowBase {
   /**
    * **The article's own words for the claim being answered**, located in
    * `blockId` by the spaced matcher and stored as the *block's* characters.
@@ -6875,7 +6888,7 @@ export interface ClaimDebateRow extends DebateRowBase {
  * stored counts equal and the visitor looking at a shorter list with no sentence
  * at all.
  */
-export interface DebateLosses {
+export interface ReceptionLosses {
   /** No URL, or a URL this run's own annotations never returned. */
   uncited: number;
   /** The article citing itself — same request target as `meta.url`. */
@@ -6925,7 +6938,7 @@ export interface DebateLosses {
  * `reportedRows` counts *the model's output* and must never be allowed to stand
  * in for *what the search found*.
  */
-export interface DebateCounts {
+export interface ReceptionCounts {
   /**
    * **Unique admissible annotation URLs this pass returned** — after the
    * `isWebUrl` refusal and the `selfSource` one, and independent of what the
@@ -6942,7 +6955,7 @@ export interface DebateCounts {
    * have none.
    */
   omittedOverCap: number;
-  lost: DebateLosses;
+  lost: ReceptionLosses;
   /**
    * **The provider's own web-search count for this pass**, from
    * `whereSearchCountCameFrom`. Always positive: zero, or accounting we could
@@ -6957,9 +6970,9 @@ export interface DebateCounts {
 }
 
 /** One group: its rows, in the order they are to be shown, and what it lost. */
-export interface DebateGroup<Row> {
+export interface ReceptionGroup<Row> {
   rows: Row[];
-  counts: DebateCounts;
+  counts: ReceptionCounts;
 }
 
 /**
@@ -6981,16 +6994,16 @@ export interface DebateGroup<Row> {
  * - **`not-run`** — the press did not search for claims. No counts, because
  *   there was no search to count; `rows` is stored empty only so that every
  *   reader of `claims.rows` (the marginalia, the public boundary, the registry)
- *   reads nothing without asking, and `isDebateDocument` keeps its rule.
+ *   reads nothing without asking, and `isReceptionDocument` keeps its rule.
  *
  * `counts` is reachable only after narrowing on `pass`, so a sentence about
  * what the search found cannot be written over a search that did not run
  * without the compiler asking first.
  */
-export type DebateClaims = (DebateGroup<ClaimDebateRow> & { pass?: undefined }) | DebateClaimsNotRun;
+export type ReceptionClaims = (ReceptionGroup<ClaimReceptionRow> & { pass?: undefined }) | ReceptionClaimsNotRun;
 
-/** Pass B did not run — § `DebateClaims`. The only value this build writes. */
-export interface DebateClaimsNotRun {
+/** Pass B did not run — § `ReceptionClaims`. The only value this build writes. */
+export interface ReceptionClaimsNotRun {
   pass: "not-run";
   rows: [];
 }
@@ -6998,23 +7011,23 @@ export interface DebateClaimsNotRun {
 /**
  * **Did this group lose anything at all?**
  *
- * Here rather than in src/debate.ts, where it started, for the reason the types
+ * Here rather than in src/reception.ts, where it started, for the reason the types
  * above are here: the panel draws the foot line this answers, and
  * tests/client-imports.test.ts will not let `src/web/` import a module with a
  * CLI and two model calls in it. The stage re-exports it, so it still has one
  * name on the server side.
  *
  * **A sum of every field rather than `Object.values` over the argument**, so a
- * new loss reason added to `DebateLosses` is a compile error rather than a
+ * new loss reason added to `ReceptionLosses` is a compile error rather than a
  * number silently folded into a sentence nobody re-read. `lossesOf` below is
  * where that is enforced, and it is enforced rather than asserted: the sentence
  * above is older than the mechanism and was a claim without one until
- * 2026-09-06, when `sourceIsCopy` was added to `DebateLosses`, every field here
+ * 2026-09-06, when `sourceIsCopy` was added to `ReceptionLosses`, every field here
  * was still summed by hand, and nothing failed to compile. A docblock stating a
  * rule the code does not make is the shape of this file's worst bug (Sol's F24,
  * `readDirectGroup`).
  */
-export function anyLost(lost: DebateLosses): boolean {
+export function anyLost(lost: ReceptionLosses): boolean {
   return Object.values(lossesOf(lost)).some((n) => n > 0);
 }
 
@@ -7024,7 +7037,7 @@ export function anyLost(lost: DebateLosses): boolean {
  * Two jobs in one function because they are one fact.
  *
  * **It fills the gaps.** `sourceIsCopy` landed on 2026-09-06 and
- * `isDebateDocument` validates two arrays and nothing else, so every debate
+ * `isReceptionDocument` validates two arrays and nothing else, so every debate
  * stored before that day reads back with the key absent — as, that day, did
  * every one in the local database. The type says `number` because that is what
  * the stage writes; **JSONB read back is not bound by it**, and `undefined`
@@ -7034,13 +7047,13 @@ export function anyLost(lost: DebateLosses): boolean {
  * counter was added to prevent, arriving through the counter itself.
  *
  * **And it is the exhaustiveness gate.** The returned object names every field,
- * so a new one added to `DebateLosses` stops this literal compiling, and both
+ * so a new one added to `ReceptionLosses` stops this literal compiling, and both
  * `anyLost` and the panel pick it up rather than dropping it. One place to add a
  * counter and one place to forget it, instead of a hand-written sum in each
  * caller — which is how `sourceIsCopy` was nearly lost twice on the day it was
  * written.
  */
-export function lossesOf(lost: DebateLosses): DebateLosses {
+export function lossesOf(lost: ReceptionLosses): ReceptionLosses {
   return {
     uncited: count(lost.uncited),
     selfSource: count(lost.selfSource),
@@ -7089,14 +7102,14 @@ export function distinctSources(rows: readonly { url: string }[]): number {
  * to this piece"* from *"the model only ever searched for the topic"*, and group
  * one being empty is this mode's most common output. It must not be an
  * inference. **Since `debate/7` (2026-10-08) only the first call runs**, and
- * `claims` says so (`DebateClaims`); debates stored before then carry both.
+ * `claims` says so (`ReceptionClaims`); debates stored before then carry both.
  *
  * **The search is one atomic step**: a failure — zero or unreadable search
  * accounting, malformed JSON, `finish_reason: "length"`, timeout, provider
  * refusal — fails the whole step and writes none of this. Only a *successful*
  * pass A that kept no direct rows may say the search found nothing.
  */
-export interface Debate {
+export interface Reception {
   version: string;
   generator: string;
   slug: string;
@@ -7117,28 +7130,28 @@ export interface Debate {
    */
   searchedAt: string;
   /** About this piece. Empty is the commonest correct answer. */
-  direct: DebateGroup<DirectDebateRow>;
+  direct: ReceptionGroup<DirectReceptionRow>;
   /**
    * About what it claims — or, since `debate/7`, `{pass: "not-run"}`: the press
-   * searches for Reception only (`DebateClaims`).
+   * searches for Reception only (`ReceptionClaims`).
    */
-  claims: DebateClaims;
+  claims: ReceptionClaims;
   elapsedMs: number;
   /**
    * **What the sources keep coming back to, and which of them matter most** —
    * an optional search-free call over the rows the search *kept*
-   * (src/debate-themes.ts; SPIDERYARN-READING2-6M, plan 260930j).
+   * (src/reception-themes.ts; SPIDERYARN-READING2-6M, plan 260930j).
    *
    * **Absent means the debate was searched before 2026-09-30**, not that the
    * call failed: a failure is stored as `{kind: "failed"}`, so the two cannot
-   * be confused. Read it through `readStoredSynthesis` (src/debate-synthesis.ts), never directly — JSONB
+   * be confused. Read it through `readStoredSynthesis` (src/reception-synthesis.ts), never directly — JSONB
    * comes back unchecked.
    *
    * **A visitor gets it since 2026-10-01** (plan 261001b), re-settled against
    * the rows they are sent, and not at all when the boundary withheld a row —
    * src/public/dto.ts § `publicSynthesis`.
    */
-  synthesis?: DebateSynthesis;
+  synthesis?: ReceptionSynthesis;
 }
 
 /**
@@ -7154,19 +7167,19 @@ export interface Debate {
  *   three, the model filed *"the original study behind the article's 67%
  *   figure"* under `responds`, which is false — a source is not a reply.
  *
- * A closed set, like `DebateBears`, so the panel draws a word it chose rather
+ * A closed set, like `SourcesClaimsBears`, so the panel draws a word it chose rather
  * than whatever the model typed.
  */
-export type DebateKeyRole = "responds" | "advances" | "dissents" | "origin";
+export type ReceptionKeyRole = "responds" | "advances" | "dissents" | "origin";
 
-const KEY_ROLE_MEMBERS: { [K in DebateKeyRole]: true } = {
+const KEY_ROLE_MEMBERS: { [K in ReceptionKeyRole]: true } = {
   responds: true,
   advances: true,
   dissents: true,
   origin: true,
 };
 
-export function isDebateKeyRole(value: unknown): value is DebateKeyRole {
+export function isReceptionKeyRole(value: unknown): value is ReceptionKeyRole {
   return typeof value === "string" && Object.hasOwn(KEY_ROLE_MEMBERS, value);
 }
 
@@ -7176,7 +7189,7 @@ export function isDebateKeyRole(value: unknown): value is DebateKeyRole {
  * of one paper do not turn that paper's point into something several sources
  * keep saying.
  */
-export interface DebateTheme {
+export interface ReceptionTheme {
   /**
    * `mintId`, fresh on every run like the rows' own ids — what `?debatethread=`
    * names, so the address points at a theme rather than at a position in the
@@ -7191,9 +7204,9 @@ export interface DebateTheme {
 }
 
 /** **One row picked out as a key source**, and the one-line reason. */
-export interface DebateKeySource {
+export interface ReceptionKeySource {
   rowId: string;
-  role: DebateKeyRole;
+  role: ReceptionKeyRole;
   /** Why, in a sentence. The model's words, labelled as such on screen. */
   why: string;
 }
@@ -7209,8 +7222,8 @@ export interface DebateKeySource {
  *   are kept anyway: they cost a web search, and nothing about them
  *   depends on this call.
  */
-export type DebateSynthesis =
-  | { kind: "made"; themes: DebateTheme[]; key: DebateKeySource[] }
+export type ReceptionSynthesis =
+  | { kind: "made"; themes: ReceptionTheme[]; key: ReceptionKeySource[] }
   | { kind: "too-few"; rows: number }
   | { kind: "failed" };
 
@@ -7218,8 +7231,8 @@ export type DebateSynthesis =
  * **Is this value a debate document at all?** — the one shallow shape check,
  * asked by all three readers.
  *
- * `SHAPE.debate` (src/store/artifacts.ts) asked only whether `direct` was an
- * object, so `{"direct":{}}` passed it; `readDebate` (src/debate.ts) required
+ * `SHAPE.reception` (src/store/artifacts.ts) asked only whether `direct` was an
+ * object, so `{"direct":{}}` passed it; `readReception` (src/reception.ts) required
  * both groups' rows; and the Postgres reader served any non-null JSONB
  * unchecked. Three answers to one question, which is the drift `SHAPE` exists
  * to prevent — GPT Sol's F29.
@@ -7229,13 +7242,13 @@ export type DebateSynthesis =
  * what it has to tell apart is a *half-written or hand-edited document*, and a
  * missing `claims` is exactly that.
  *
- * Here rather than in src/debate.ts for the reason `anyLost` is: the store's
+ * Here rather than in src/reception.ts for the reason `anyLost` is: the store's
  * shape table is reachable from the client, and it may not import a module with
  * a CLI and two model calls in it (tests/client-imports.test.ts). The stage
  * re-exports it, so the server side still has one name for it.
  */
 /** Is this one of the four leans this build knows? Total by construction below. */
-const LEAN_MEMBERS: { [K in DebateLean]: true } = {
+const LEAN_MEMBERS: { [K in ReceptionLean]: true } = {
   "leans-for": true,
   "leans-against": true,
   neither: true,
@@ -7245,9 +7258,9 @@ const LEAN_MEMBERS: { [K in DebateLean]: true } = {
 /**
  * **The lean of a row that may have been written before the vocabulary changed.**
  *
- * `isDebateDocument` validates that the two groups hold arrays and nothing about
+ * `isReceptionDocument` validates that the two groups hold arrays and nothing about
  * the rows inside them, and Postgres hands JSONB back unchecked — so a row
- * stored before 2026-09-08 arrives typed as `DebateRow` while carrying
+ * stored before 2026-09-08 arrives typed as `ReceptionRow` while carrying
  * `valence: "positive"` and no `lean` at all. Indexing an appearance table with
  * that gives `undefined`, and the next property access crashes the panel.
  *
@@ -7268,7 +7281,7 @@ const LEAN_MEMBERS: { [K in DebateLean]: true } = {
  * The eval's `vocabularyReport` and `replayJournal` read `lean` directly, so
  * every one of the 26 journalled rows read as absent and Layer 1 replayed their
  * stance as `cannot-tell` — Sol's F71, measured before it was fixed. There is a
- * second copy of this four-way map in `evals/debate/score.ts`
+ * second copy of this four-way map in `evals/reception/score.ts`
  * (`SUPERSEDED_LEANS`), deliberately, because production must not depend on the
  * eval and the eval must not be the only place the mapping is stated. **Edit one,
  * edit the other** — and a test there asserts the two agree for all four
@@ -7277,11 +7290,11 @@ const LEAN_MEMBERS: { [K in DebateLean]: true } = {
  * **The live wire stays strict.** Carrying the old vocabulary forward is a job
  * for readers of *stored* rows. A row arriving from a model **today** with
  * `valence` and no `lean` is a prompt that has reverted, and `readShared` in
- * src/debate.ts must go on coercing it rather than quietly reading it forward.
+ * src/reception.ts must go on coercing it rather than quietly reading it forward.
  */
-export function readStoredLean(row: { lean?: unknown; valence?: unknown }): DebateLean {
+export function readStoredLean(row: { lean?: unknown; valence?: unknown }): ReceptionLean {
   if (typeof row.lean === "string" && Object.hasOwn(LEAN_MEMBERS, row.lean)) {
-    return row.lean as DebateLean;
+    return row.lean as ReceptionLean;
   }
   switch (row.valence) {
     case "positive":
@@ -7295,12 +7308,12 @@ export function readStoredLean(row: { lean?: unknown; valence?: unknown }): Deba
   }
 }
 
-export function isDebateDocument(value: unknown): boolean {
+export function isReceptionDocument(value: unknown): boolean {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   const doc = value as { direct?: { rows?: unknown }; claims?: { rows?: unknown; pass?: unknown } };
   if (!Array.isArray(doc.direct?.rows) || !Array.isArray(doc.claims?.rows)) return false;
   /* **The claims marker, when there is one, is the one this build writes**
-     (`DebateClaims`) — and a not-run group with rows in it is a document
+     (`ReceptionClaims`) — and a not-run group with rows in it is a document
      nobody designed: the marker says no search ran, the rows say one did.
      Absent is a debate stored before `debate/7`, which did search. */
   const pass = doc.claims.pass;
@@ -7309,15 +7322,15 @@ export function isDebateDocument(value: unknown): boolean {
 }
 
 /**
- * `GET /api/debate/:slug`. Two staleness facts and no third, exactly as
+ * `GET /api/reception/:slug`. Two staleness facts and no third, exactly as
  * `TimelineResponse` and `QuizResponse` above: the reader profile is not in this
  * stage's stamp, because who is reading does not change what the web said.
  *
  * **Neither of these is about the age of the search** — that is `searchedAt`,
  * which the panel shows separately and which no comparison here consults.
  */
-export interface DebateResponse {
-  debate: Debate;
+export interface ReceptionResponse {
+  reception: Reception;
   /** The article moved underneath this — blocks, sections or the cited head. */
   stale: boolean;
   /** The article is the same and we would ask the web differently now. */
@@ -7392,12 +7405,12 @@ export type CitersResult =
  * out. Named rather than skipped so both adapters agree with their neighbours
  * by shape.
  */
-export type DebateFound = DebateResponse;
+export type ReceptionFound = ReceptionResponse;
 
 /* ---------------------------------------------------------- debate-claims --
    The article's own claims, listed for the reader to pick from — the
    `debate_claims` column on `article_revisions`, written by the
-   `debate-claims` step (src/debate-claims.ts) and drawn by Debate's Claims
+   `debate-claims` step (src/sources-claims.ts) and drawn by Debate's Claims
    sub-mode. No web search: one model call over the article.
    docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2. */
 
@@ -7418,7 +7431,7 @@ export interface ListedClaim {
 }
 
 /** What validation threw away. Counts only — never a claim or a quote. */
-export interface DebateClaimListDropped {
+export interface SourcesClaimListDropped {
   /** A claim naming a block id that is not in the body evidence. */
   unknownIds: number;
   /** A claim whose quote `findQuote` (`"spaced"`) could not find in its block. */
@@ -7434,7 +7447,7 @@ export interface DebateClaimListDropped {
 }
 
 /** The artefact. The `debate_claims` column on `article_revisions`. */
-export interface DebateClaimList {
+export interface SourcesClaimList {
   version: string;
   generator: string;
   slug: string;
@@ -7445,14 +7458,14 @@ export interface DebateClaimList {
    * the model found no claim someone outside could argue with.
    */
   claims: ListedClaim[];
-  dropped: DebateClaimListDropped;
+  dropped: SourcesClaimListDropped;
   generatedAt: string;
   elapsedMs: number;
 }
 
-/** `GET /api/debate-claims/:slug`. Two staleness facts: no profile is in this stamp. */
-export interface DebateClaimListResponse {
-  claimList: DebateClaimList;
+/** `GET /api/sources-claims/:slug`. Two staleness facts: no profile is in this stamp. */
+export interface SourcesClaimListResponse {
+  claimList: SourcesClaimList;
   /** The rendered body or cited head moved underneath this. */
   stale: boolean;
   /** The article is the same and we would write this differently now. */
@@ -7460,13 +7473,13 @@ export interface DebateClaimListResponse {
 }
 
 /** As `FaqFound`: the same type, because there is no `profileChanged` to omit. */
-export type DebateClaimListFound = DebateClaimListResponse;
+export type SourcesClaimListFound = SourcesClaimListResponse;
 
 /* ------------------------------------------------------ debate claim checks --
    One reader press: the ticked claims and the typed one, searched on the open
    web in one call. The `debate_claim_checks` table, written by
-   `POST /api/debate-claims/:slug/checks` (src/routes.ts) and read by
-   src/debate.ts § `readCheckedClaimGroup`. Owner-only: a typed claim is the
+   `POST /api/sources-claims/:slug/checks` (src/routes.ts) and read by
+   src/reception.ts § `readCheckedClaimGroup`. Owner-only: a typed claim is the
    reader's own words, and nothing here reaches the public payload.
    docs/plans/261008i-debate-claims-picked-by-the-reader.md § 3. */
 
@@ -7481,7 +7494,7 @@ export const MAX_OWN_CLAIM_CHARS = MAX_PURPOSE_CHARS;
  * from the request: a listed target's anchor and statement are copied off the
  * stored list, and the client sends only its id (plan § 3, GPT Sol's F12).
  */
-export type DebateCheckTarget =
+export type SourcesClaimCheckTarget =
   | {
       kind: "listed";
       /** The `ListedClaim.id` it was ticked by. */
@@ -7505,10 +7518,10 @@ export type DebateCheckTarget =
  * passage, so it has no block and no claim quote — and `blockId` is spelled
  * `never` so that a row cannot be both kinds by accident.
  */
-export type OwnClaimDebateRow = DebateRowBase & { blockId?: never; claimQuote?: never };
+export type OwnClaimReceptionRow = ReceptionRowBase & { blockId?: never; claimQuote?: never };
 
 /** A row of a check: a listed claim's (anchored by the list) or a typed claim's. */
-export type DebateCheckRow = ClaimDebateRow | OwnClaimDebateRow;
+export type SourcesClaimCheckRow = ClaimReceptionRow | OwnClaimReceptionRow;
 
 /**
  * **What the search said about one target — and whether it said anything.**
@@ -7518,12 +7531,12 @@ export type DebateCheckRow = ClaimDebateRow | OwnClaimDebateRow;
  * answer, or answering it twice: never shown as *found nothing*, because that
  * would be a sentence about a search that may never have looked (F5).
  */
-export type DebateCheckResult =
-  | { claimId: string; outcome: "answered"; rows: DebateCheckRow[] }
+export type SourcesClaimCheckResult =
+  | { claimId: string; outcome: "answered"; rows: SourcesClaimCheckRow[] }
   | { claimId: string; outcome: "not-answered" };
 
 /** What became of the answer's per-claim groups. Counts only. */
-export interface DebateCheckGroupCounts {
+export interface SourcesClaimCheckGroupCounts {
   /** A requested claim with no group in the answer. */
   missing: number;
   /** A claim answered more than once; every one of its groups is set aside. */
@@ -7537,29 +7550,29 @@ export interface DebateCheckGroupCounts {
 }
 
 /**
- * **The whole call's counts**: the pass's own (`DebateCounts`, summed over
+ * **The whole call's counts**: the pass's own (`ReceptionCounts`, summed over
  * the groups read; `returnedSources` and `webSearches` once for the call) and
  * the groups'.
  */
-export interface DebateCheckCounts extends DebateCounts {
-  groups: DebateCheckGroupCounts;
+export interface SourcesClaimCheckCounts extends ReceptionCounts {
+  groups: SourcesClaimCheckGroupCounts;
 }
 
-export type DebateCheckStatus = "pending" | "done" | "error";
+export type SourcesClaimCheckStatus = "pending" | "done" | "error";
 
 /** One check, as the owner's panel reads it. */
-export interface DebateClaimCheck {
+export interface SourcesClaimCheck {
   id: string;
-  status: DebateCheckStatus;
-  /** The list it was made from — `DebateClaimList.sourceHash` when it was pressed. */
+  status: SourcesClaimCheckStatus;
+  /** The list it was made from — `SourcesClaimList.sourceHash` when it was pressed. */
   listSourceHash: string;
   promptVersion: string;
   /** Dig further on one claim: told the addresses it already had, to look elsewhere. */
   digFurther: boolean;
-  targets: DebateCheckTarget[];
+  targets: SourcesClaimCheckTarget[];
   /** One per target, in the targets' order, once `done`. Empty otherwise. */
-  results: DebateCheckResult[];
-  counts?: DebateCheckCounts;
+  results: SourcesClaimCheckResult[];
+  counts?: SourcesClaimCheckCounts;
   webSearches?: number;
   model?: string;
   /** The reader's sentence for a failed check. */
@@ -7568,16 +7581,16 @@ export interface DebateClaimCheck {
   finishedAt?: string;
 }
 
-/** `GET /api/debate-claims/:slug/checks`: every check on the article, oldest first. */
-export interface DebateClaimChecksResponse {
-  checks: DebateClaimCheck[];
+/** `GET /api/sources-claims/:slug/checks`: every check on the article, oldest first. */
+export interface SourcesClaimChecksResponse {
+  checks: SourcesClaimCheck[];
 }
 
 /**
- * `POST /api/debate-claims/:slug/checks`. Ids and the typed words, nothing
+ * `POST /api/sources-claims/:slug/checks`. Ids and the typed words, nothing
  * else: every anchor and every address a Dig further avoids is the server's.
  */
-export interface DebateCheckRequest {
+export interface SourcesClaimCheckRequest {
   claimIds?: string[];
   own?: string;
   /** One claim, listed or typed, that already has a finished check. Alone. */

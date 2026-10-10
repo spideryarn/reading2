@@ -1331,6 +1331,13 @@
       "when": 1791607574802,
       "tag": "20261010044614_stale_notice_bibliography",
       "breakpoints": true
+    },
+    {
+      "idx": 190,
+      "version": "7",
+      "when": 1791614030889,
+      "tag": "20261010063350_reception_expand",
+      "breakpoints": true
     }
   ]
 }

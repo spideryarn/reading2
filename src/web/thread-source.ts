@@ -60,9 +60,9 @@ export type SourcedThread = Pick<ChatThread, "kind"> & Partial<Pick<ChatThread, 
  */
 const SOURCES_IN = `${MODE_LABEL.sources} ›`;
 /** What the tooltip says for a chat started from one of Claims' claims. */
-export const SOURCE_DEBATE_CLAIM = `Started from a claim in ${SOURCES_IN} ${SOURCES_SUB_MODES.claims.label}`;
+export const SOURCE_SOURCES_CLAIM = `Started from a claim in ${SOURCES_IN} ${SOURCES_SUB_MODES.claims.label}`;
 /** And for one started from an angle the reader typed into Reception's box (plan 261005k, A). */
-export const SOURCE_DEBATE_LENS = `Started from an angle in ${SOURCES_IN} ${SOURCES_SUB_MODES.reception.label}`;
+export const SOURCE_RECEPTION_LENS = `Started from an angle in ${SOURCES_IN} ${SOURCES_SUB_MODES.reception.label}`;
 
 /** And for one started from a Glossary entry's *Ask in chat* (plan 261006d, D6). */
 export const SOURCE_GLOSSARY_ENTRY = "Started from a glossary entry";
@@ -118,11 +118,10 @@ export function threadSource(thread: SourcedThread): ThreadSource | null {
   const { origin, kind, anchor } = thread;
   if (origin) {
     switch (origin.mode) {
-      case "debate":
-        /* Two shapes under one stored word, so the word does not say which. */
-        return isLensOrigin(origin)
-          ? { from: "sources", mode: "sources", label: SOURCE_DEBATE_LENS, quote: origin.lens, voice: "reader" }
-          : { from: "sources", mode: "sources", label: SOURCE_DEBATE_CLAIM, quote: origin.quote };
+      case "reception":
+        return { from: "sources", mode: "sources", label: SOURCE_RECEPTION_LENS, quote: origin.lens, voice: "reader" };
+      case "sources-claims":
+        return { from: "sources", mode: "sources", label: SOURCE_SOURCES_CLAIM, quote: origin.quote };
       /* The quote is the entry's name as it was when the chat started. */
       case "glossary":
         return { from: "glossary", mode: "glossary", label: SOURCE_GLOSSARY_ENTRY, quote: origin.quote };
@@ -232,8 +231,9 @@ export function originBack(origin: ThreadOrigin): OriginBackWords {
       return { mode: origin.mode, modeLabel, quote, text: `Back to ${what} in ${modeLabel}` };
     }
     case "bibliography":
-    case "debate": {
-      const view = origin.mode === "bibliography" ? "bibliography" : isLensOrigin(origin) ? "reception" : "claims";
+    case "reception":
+    case "sources-claims": {
+      const view = origin.mode === "bibliography" ? "bibliography" : origin.mode === "reception" ? "reception" : "claims";
       const modeLabel = SOURCES_SUB_MODES[view].label;
       return { mode: "sources", view, modeLabel, quote, text: `Back to ${what} in ${modeLabel}` };
     }

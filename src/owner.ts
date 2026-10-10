@@ -264,7 +264,7 @@ export function currentOwnerId(): OwnerId {
  * environment is the only answer there is. `src/cli-ledger.ts` is the common
  * route in — every command that spends money through `withLedger` attributes
  * the spend to this owner — and `scripts/stage.ts`, `scripts/live-spike.ts` and
- * five eval files (`cost/run.ts`, `cost/interactions.ts`, `debate/run.ts`,
+ * five eval files (`cost/run.ts`, `cost/interactions.ts`, `reception/run.ts`,
  * `deepen/run.ts`, `illustrated/run.ts`) call it directly.
  *
  * **The job it was written for is gone**, and the paragraph describing it stood

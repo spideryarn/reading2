@@ -500,7 +500,7 @@ describe("marginaliaNotes, other modes' items (report 82)", () => {
         faq: [faqQ("f", [{ blockId: "spya-aaaaa2", quote: say(1) }])],
       }).get("spya-aaaaa2") ?? []
     ).map((n) => n.kind);
-    expect(kinds).toEqual(["question", "idea", "faq", "debate", "citation", "comment"]);
+    expect(kinds).toEqual(["question", "idea", "faq", "reception", "citation", "comment"]);
   });
 });
 
@@ -662,7 +662,7 @@ describe("marginaliaNotes, Timeline events (plan 261003f)", () => {
         faq: [faqQ("f", [{ blockId: "spya-aaaaa2", quote: say(1) }])],
       }).get("spya-aaaaa2") ?? []
     ).map((n) => n.kind);
-    expect(kinds).toEqual(["faq", "timeline", "debate"]);
+    expect(kinds).toEqual(["faq", "timeline", "reception"]);
   });
 });
 

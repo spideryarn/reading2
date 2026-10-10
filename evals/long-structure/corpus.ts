@@ -24,7 +24,7 @@ import path from "node:path";
 import { isMain } from "../../src/is-main.js";
 import { splitBlocks } from "../../src/supplement.js";
 import type { Block } from "../../src/types.js";
-import { mulberry32 } from "../debate/label-sheet.js";
+import { mulberry32 } from "../reception/label-sheet.js";
 
 /** The primary checkout: where `output/` and `data/` live. A worktree has neither. */
 export const PRIMARY = process.env.SPIDERYARN_PRIMARY ?? "/home/greg/code/spideryarn2";

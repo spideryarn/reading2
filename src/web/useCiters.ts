@@ -5,8 +5,8 @@
  * **It can never start the paid search.** There is no job here, no `useAutoRun`
  * and no POST: the list comes from OpenAlex, costs nothing, and is fetched and
  * cached apart from the stored Debate. That is why it is its own hook rather
- * than a field on `useDebate`, whose automatic run is the dearest press in the
- * app to make by accident (src/web/useDebate.ts).
+ * than a field on `useReception`, whose automatic run is the dearest press in the
+ * app to make by accident (src/web/useReception.ts).
  * docs/plans/261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md.
  *
  * **Asked once per article, the first time it is wanted** — when Reception is

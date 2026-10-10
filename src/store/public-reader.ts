@@ -429,17 +429,17 @@ const PUBLIC_PROJECTIONS = {
        It is now: every row's address re-judged by `publicCitationUrl`, a
        refusal dropping the row and counting it, and the article's own address
        — inside a direct row's witness and its `linked` signal — judged by
-       `publicSourceUrl`, as the masthead's is. `publicDebate` in
+       `publicSourceUrl`, as the masthead's is. `publicReception` in
        ../public/dto.ts. docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
-    debate: articleRevisions.debate,
+    reception: articleRevisions.reception,
     /* **Debate's claims list, from the day it was built** (2026-10-08):
        generated output about the article, so a visitor sees the stored one
        and only making it is the owner's (docs/project/mode.md § The
        artefact). No profile, and the reader's checks of the listed claims
-       are a separate table this read never joins. `publicDebateClaimList`
+       are a separate table this read never joins. `publicSourcesClaimList`
        in ../public/dto.ts keeps `{id, blockId, quote, statement}` per claim.
        docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2. */
-    debateClaims: articleRevisions.debateClaims,
+    sourcesClaims: articleRevisions.sourcesClaims,
     /* **Cross-references, 2026-10-01** — Greg approved the defence edit
        (plan 261001b, SPIDERYARN-READING2-5Z). Not a mode but an annotation:
        links drawn in the prose. `loadArticle` below asks `isStale` of it with
@@ -1047,8 +1047,8 @@ export const pgPublicReader: PublicArticleReader = {
         faq: found.revision.faq,
         simpleSummary: found.revision.simpleSummary,
         bibliography: found.revision.bibliography,
-        debate: found.revision.debate,
-        debateClaims: found.revision.debateClaims,
+        reception: found.revision.reception,
+        sourcesClaims: found.revision.sourcesClaims,
         crossrefs,
         crossrefsFresh,
         sketch: found.revision.sketch,

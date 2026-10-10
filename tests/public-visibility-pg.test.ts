@@ -61,7 +61,7 @@ import { citedMetaFingerprintOf } from "../src/source-hash.js";
 import { documentTitle } from "../src/title-text.js";
 import { safePublicCanonical } from "../src/urls.js";
 import { currentOwnerId, type OwnerId, runInRequest } from "../src/owner.js";
-import type { Bibliography, Debate, Faq, Glossary, Ideas, Skim, Tree, TweetThread } from "../src/types.js";
+import type { Bibliography, Reception, Faq, Glossary, Ideas, Skim, Tree, TweetThread } from "../src/types.js";
 
 loadEnvLocal();
 
@@ -116,7 +116,7 @@ const PUBLIC_WORK = "Consciousness as integrated information";
 /** A cited work's address carrying a credential: its row crosses, the address never does. */
 const CREDENTIALLED_URL = "https://reader:hunter2@papers.example.org/phi.pdf";
 /** A stored Debate claim row's quotation — on the wire once published, never before (plan 260929c stage 4). */
-const PUBLIC_DEBATE_QUOTE = "Integration is not the same thing as experience.";
+const PUBLIC_RECEPTION_QUOTE = "Integration is not the same thing as experience.";
 /** A Debate row's source carrying a credential: the whole row stays behind, counted. */
 const CREDENTIALLED_REPLY = "https://reader:opensesame@replies.example.org/answer";
 
@@ -174,7 +174,7 @@ const ARTEFACTS: {
   skim: Skim;
   faq: Faq;
   bibliography: Bibliography;
-  debate: Debate;
+  reception: Reception;
 } = {
   glossary: {
     version: "glossary/2",
@@ -305,7 +305,7 @@ const ARTEFACTS: {
      where that address turns up. Three direct rows: one whose signal carries
      it (kept, the address taken off), one whose witness quotes it (dropped),
      one whose source is credentialled (dropped). One clean claim row. */
-  debate: {
+  reception: {
     version: "debate/9",
     generator: "test",
     slug: SLUG,
@@ -370,7 +370,7 @@ const ARTEFACTS: {
         {
           id: "spya-dbtpg4",
           url: "https://answers.example.org/claim",
-          sourceQuote: PUBLIC_DEBATE_QUOTE,
+          sourceQuote: PUBLIC_RECEPTION_QUOTE,
           relation: "disputes",
           lean: "leans-against",
           applies: "It disputes the claim.",
@@ -837,7 +837,7 @@ describe("sharing one article", { timeout: 60_000 }, () => {
        Skim is on this row too, and must not be readable either. */
     /* The FAQ's question and the cited work's title joined the same day. */
     /* And the Debate's claim quotation, since plan 260929c stage 4. */
-    for (const canary of [PUBLIC_TERM, PUBLIC_IDEA, PUBLIC_TWEET, PUBLIC_CUE, PUBLIC_QUESTION, PUBLIC_WORK, PUBLIC_DEBATE_QUOTE]) {
+    for (const canary of [PUBLIC_TERM, PUBLIC_IDEA, PUBLIC_TWEET, PUBLIC_CUE, PUBLIC_QUESTION, PUBLIC_WORK, PUBLIC_RECEPTION_QUOTE]) {
       expect(r.text, canary).not.toContain(canary);
     }
   });
@@ -1161,25 +1161,25 @@ describe("sharing one article", { timeout: 60_000 }, () => {
     const r = await call("GET", `/api/public/article/${SLUG}`);
     expect(r.status).toBe(200);
     const body = r.body as {
-      debate?: {
+      reception?: {
         searchedAt: string;
         direct: { rows: { id: string; identifies: unknown[] }[]; sourceNotPublishable: number };
         claims: { rows: { id: string; sourceQuote: string }[]; sourceNotPublishable: number };
       };
     };
-    expect(body.debate?.searchedAt).toBe("2026-02-02T00:00:00.000Z");
-    expect(body.debate?.direct.rows.map((row) => row.id)).toEqual(["spya-dbtpg1"]);
-    expect(body.debate?.direct.sourceNotPublishable).toBe(2);
-    expect(body.debate?.direct.rows[0]?.identifies).toEqual([
+    expect(body.reception?.searchedAt).toBe("2026-02-02T00:00:00.000Z");
+    expect(body.reception?.direct.rows.map((row) => row.id)).toEqual(["spya-dbtpg1"]);
+    expect(body.reception?.direct.sourceNotPublishable).toBe(2);
+    expect(body.reception?.direct.rows[0]?.identifies).toEqual([
       { kind: "linked" },
       { kind: "named", by: "title", witness: EXTRACTED_TITLE },
     ]);
-    expect(body.debate?.claims.rows.map((row) => row.sourceQuote)).toEqual([PUBLIC_DEBATE_QUOTE]);
-    expect(body.debate?.claims.sourceNotPublishable).toBe(0);
+    expect(body.reception?.claims.rows.map((row) => row.sourceQuote)).toEqual([PUBLIC_RECEPTION_QUOTE]);
+    expect(body.reception?.claims.sourceNotPublishable).toBe(0);
     expect(r.text).not.toContain("SECRETSIGNATURE");
     expect(r.text).not.toContain("opensesame");
-    expect(JSON.stringify(body.debate)).not.toContain("webSearches");
-    expect(JSON.stringify(body.debate)).not.toContain("counts");
+    expect(JSON.stringify(body.reception)).not.toContain("webSearches");
+    expect(JSON.stringify(body.reception)).not.toContain("counts");
   });
 
   it("serves the stored faq and bibliography, and not a credentialled address", async () => {
@@ -1662,7 +1662,7 @@ describe("sharing one article", { timeout: 60_000 }, () => {
         /* Not planted, so absent — the `false` is the half that matters. */
         simpleSummary: false,
         bibliography: true,
-        debate: true,
+        reception: true,
       },
     });
   });

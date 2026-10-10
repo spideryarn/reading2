@@ -99,7 +99,7 @@ const AVAILABLE: PublicArtefacts = {
   faq: true,
   simpleSummary: true,
   bibliography: true,
-  debate: true,
+  reception: true,
 };
 
 const PRIVATE: ArticleSharing = {
@@ -574,7 +574,7 @@ describe("the list of what goes out", () => {
      direction, and a card that could not do it would strand an owner over a
      field with nothing to do with visibility. */
   it("still lets an owner stop sharing when an old server omits a newer flag", async () => {
-    const { debate: _newFlag, ...oldAvailable } = AVAILABLE;
+    const { reception: _newFlag, ...oldAvailable } = AVAILABLE;
     const parsed = asArticleSharing({ ...SHARED, available: oldAvailable });
     expect(parsed && "available" in parsed).toBe(false);
     await mount(parsed);

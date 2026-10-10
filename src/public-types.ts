@@ -69,11 +69,11 @@ import type {
   CommentAnchor,
   HighlightColour,
   Crossref,
-  DebateBears,
-  DebateLean,
-  DebateRelation,
-  DebateClaimsNotRun,
-  DebateSynthesis,
+  SourcesClaimsBears,
+  ReceptionLean,
+  ReceptionRelation,
+  ReceptionClaimsNotRun,
+  ReceptionSynthesis,
   FaqQuestion,
   ListedClaim,
   SimpleLevel,
@@ -265,6 +265,17 @@ export interface PublicArticle extends PublicArtefactSet {
    */
   citations?: PublicBibliography;
   /**
+   * **`reception` and `sourcesClaims` under their old keys, for one deploy** —
+   * the same objects. Reception's payload key was `debate` and the claims
+   * list's `debateClaims` until 2026-10-09; a public tab loaded before the
+   * rename reads those, and must not be told the search or the list is gone
+   * (plan 261009w, F1). Nothing in this tree reads them. **Removed by the
+   * contract**, with the test in tests/public-dto-owner-only-fields.test.ts
+   * that holds them equal.
+   */
+  debate?: PublicReception;
+  debateClaims?: PublicSourcesClaimList;
+  /**
    * **The owner's comments — a required array, unlike every artefact above.**
    *
    * The optional keys in `PublicArtefactSet` answer *did anybody build one of
@@ -434,8 +445,8 @@ export interface PublicArtefactSet {
   faq?: PublicFaq;
   simpleSummary?: PublicSimpleSummary;
   bibliography?: PublicBibliography;
-  debate?: PublicDebate;
-  debateClaims?: PublicDebateClaimList;
+  reception?: PublicReception;
+  sourcesClaims?: PublicSourcesClaimList;
   sketch?: PublicSketch;
 }
 
@@ -633,7 +644,7 @@ export interface PublicFaq {
  * and `dropped`, our checking's tally. Nor does any check the owner ran on a
  * listed claim: those are a separate table (plan § 4).
  */
-export interface PublicDebateClaimList {
+export interface PublicSourcesClaimList {
   claims: ListedClaim[];
 }
 
@@ -742,7 +753,7 @@ export interface PublicBibliography {
  * absent.
  *
  * That address is **the article's own**, as the stranger's page spelled it
- * (`linkTo` in src/debate.ts matches it against the article's `meta.url`, which
+ * (`linkTo` in src/reception.ts matches it against the article's `meta.url`, which
  * is `final_url`), and `describeSignal` prints it. So it is judged by the policy
  * `publicMeta` applies to the article's own address — `publicSourceUrl`, which
  * also refuses a query string — and a refusal takes the address off the signal
@@ -764,13 +775,13 @@ export type PublicIdentificationSignal =
  * Debate row *is* its source, so a row whose address `publicCitationUrl`
  * refuses does not cross at all — it is counted instead.
  */
-interface PublicDebateRowBase {
+interface PublicReceptionRowBase {
   id: string;
   url: string;
   title?: string;
   sourceQuote: string;
-  relation: DebateRelation;
-  lean: DebateLean;
+  relation: ReceptionRelation;
+  lean: ReceptionLean;
   applies: string;
   limits?: string;
   /**
@@ -780,19 +791,19 @@ interface PublicDebateRowBase {
    * `readStoredBears` so a value outside the vocabulary is absent, never
    * defaulted. Nothing about the reader goes into it.
    */
-  bears?: DebateBears;
+  bears?: SourcesClaimsBears;
   /** The registry's record for the identifier the row's address carries (plan 261001a stage 6), rebuilt by `readRegistryWork`. */
   registry?: RegistryWork;
 }
 
 /** A page about this piece, as a visitor gets it. `identifies` is never empty — the boundary reads it through `identifiesOf`. */
-export interface PublicDirectDebateRow extends PublicDebateRowBase {
+export interface PublicDirectReceptionRow extends PublicReceptionRowBase {
   articleReferenceQuote: string;
   identifies: PublicIdentificationSignal[];
 }
 
 /** A page that answers a claim the piece makes, as a visitor gets it. */
-export interface PublicClaimDebateRow extends PublicDebateRowBase {
+export interface PublicClaimReceptionRow extends PublicReceptionRowBase {
   claimQuote: string;
   blockId: BlockId;
 }
@@ -806,7 +817,7 @@ export interface PublicClaimDebateRow extends PublicDebateRowBase {
  * which the owner's foot lines print and a visitor's do not — the FAQ's
  * `dropped`, one mode along.
  */
-export interface PublicDebateGroup<Row> {
+export interface PublicReceptionGroup<Row> {
   rows: Row[];
   /**
    * Rows the boundary did not publish: the source address `publicCitationUrl`
@@ -818,10 +829,10 @@ export interface PublicDebateGroup<Row> {
   sourceNotPublishable: number;
 }
 
-/** The claims group as a visitor gets it: searched (a legacy debate), or not run. src/types.ts § `DebateClaims`. */
-export type PublicDebateClaims =
-  | (PublicDebateGroup<PublicClaimDebateRow> & { pass?: undefined })
-  | DebateClaimsNotRun;
+/** The claims group as a visitor gets it: searched (a legacy debate), or not run. src/types.ts § `ReceptionClaims`. */
+export type PublicReceptionClaims =
+  | (PublicReceptionGroup<PublicClaimReceptionRow> & { pass?: undefined })
+  | ReceptionClaimsNotRun;
 
 /**
  * **The Debate, as a visitor gets it** — since 2026-09-29, the fourth mode plan
@@ -834,16 +845,16 @@ export type PublicDebateClaims =
  * rest of the pipeline does not: `version`, `generator`, `slug`, `sourceHash`,
  * `elapsedMs`, and every stored count. No profile is in this stage.
  */
-export interface PublicDebate {
+export interface PublicReception {
   searchedAt: string;
-  direct: PublicDebateGroup<PublicDirectDebateRow>;
+  direct: PublicReceptionGroup<PublicDirectReceptionRow>;
   /**
    * The claims search's rows — or `{pass: "not-run"}` for a debate searched at
    * `debate/7` or later, when the press stopped searching for claims
-   * (src/types.ts § `DebateClaims`). Carried across as it is stored, so a
+   * (src/types.ts § `ReceptionClaims`). Carried across as it is stored, so a
    * visitor is never told a search found nothing when none ran.
    */
-  claims: PublicDebateClaims;
+  claims: PublicReceptionClaims;
   /**
    * **The threads and the key sources** — since 2026-10-01 (plan 261001b,
    * SPIDERYARN-READING2-6M). The model's words over the rows the search kept;
@@ -858,7 +869,7 @@ export interface PublicDebate {
    * carry no prose and cross as they are. Absent when the debate was searched
    * before 2026-09-30, or when withholding took it off.
    */
-  synthesis?: DebateSynthesis;
+  synthesis?: ReceptionSynthesis;
 }
 
 /**

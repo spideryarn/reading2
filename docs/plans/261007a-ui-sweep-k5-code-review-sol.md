@@ -43,6 +43,6 @@ Files changed:
 - [census script](/var/tmp/spideryarn-worktrees/agent-a9c5866f16a8fec1a/docs/plans/261007a-ui-sweep-k5-census.mjs.txt)
 - [measurement script comments](/var/tmp/spideryarn-worktrees/agent-a9c5866f16a8fec1a/docs/plans/261007a-ui-sweep-k5-measure.ts.txt)
 - [cluster plan](/var/tmp/spideryarn-worktrees/agent-a9c5866f16a8fec1a/docs/plans/261007a-ui-sweep-k5-threshold-slider-and-order-row-one-class-set.md)
-- [Debate test](/var/tmp/spideryarn-worktrees/agent-a9c5866f16a8fec1a/tests/debate-panel.test.tsx)
+- [Debate test](/var/tmp/spideryarn-worktrees/agent-a9c5866f16a8fec1a/tests/reception-and-claims-panel.test.tsx)
 
 VERDICT: ready with these fixes

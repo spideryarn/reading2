@@ -457,7 +457,7 @@ export function barToReveal(
  * influence order the unknown tail is itself ordered, by relevance descending**
  * (no relevance last): with unknown common since `citations/6`, a tail in
  * first-cited order would be most of the list in no order at all. `date` is
- * oldest first, undated last, as Debate's date order is (debate-order.ts), with
+ * oldest first, undated last, as Debate's date order is (reception-order.ts), with
  * the same tie-break.
  */
 export function orderWorks<W extends ShownWork>(
@@ -1468,7 +1468,7 @@ function CitedBy({ citedBy }: { citedBy: RegistryCitedBy }) {
  * extract's own characters, located by code — src/citation-lookup.ts §
  * `verifyQuote`); and `paperDoes.says`, the AI's sentence, only beside the
  * quote that bears it out. Quotes are `<blockquote>`s drawn as text, with
- * Debate's rule down the left (debate.css § `.dbt-quote`): a slice of a
+ * Debate's rule down the left (reception.css § `.rcp-quote`): a slice of a
  * stranger's page, which may never become markup.
  */
 /**

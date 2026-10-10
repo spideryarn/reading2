@@ -226,7 +226,7 @@ function casesFor(f: Fixture): Case[] {
       experience: "a-few",
       inject: HOSTILE_SOFT,
       injected: {
-        debate: has("debate"),
+        reception: has("reception"),
         timeline: has("timeline"),
         newsletter: has("newsletter"),
         purpose: has("cmd:purpose"),

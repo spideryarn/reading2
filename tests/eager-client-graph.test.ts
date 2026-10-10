@@ -571,7 +571,7 @@ const SHARED_WITH_READER = [
   "src/web/Tooltip.tsx",
   "src/web/build-stamp.ts",
   "src/web/components/ui/button.tsx",
-  /* `debate-levels.ts` and `threshold.ts` were here from 2026-09-06 to
+  /* `reception-levels.ts` and `threshold.ts` were here from 2026-09-06 to
      2026-10-03: `params.ts` imported the first for `?name=`'s vocabulary, and
      the second followed it in. `?name=` retired with Debate's identification
      slider (plan 261003o), `params.ts` no longer imports either, and the lazy

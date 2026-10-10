@@ -643,11 +643,23 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/faq/w1"],
   },
   {
+    match: { kind: "regex", source: "^\\/api\\/sources-claims\\/([\\w.%-]+)$", flags: "" },
+    methods: ["GET"],
+    witnesses: ["/api/sources-claims/w1"],
+  },
+  {
+    /* The claims list's old path, for one deploy (plan 261009w F1; removed by its contract). */
     match: { kind: "regex", source: "^\\/api\\/debate-claims\\/([\\w.%-]+)$", flags: "" },
     methods: ["GET"],
     witnesses: ["/api/debate-claims/w1"],
   },
   {
+    match: { kind: "regex", source: "^\\/api\\/sources-claims\\/([\\w.%-]+)\\/checks$", flags: "" },
+    methods: ["GET", "POST"],
+    witnesses: ["/api/sources-claims/w1/checks"],
+  },
+  {
+    /* The checks' old path, for one deploy (plan 261009w F1; removed by its contract). */
     match: { kind: "regex", source: "^\\/api\\/debate-claims\\/([\\w.%-]+)\\/checks$", flags: "" },
     methods: ["GET", "POST"],
     witnesses: ["/api/debate-claims/w1/checks"],
@@ -679,6 +691,12 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/skim/w1/profile-notice-dismissal"],
   },
   {
+    match: { kind: "regex", source: "^\\/api\\/reception\\/([\\w.%-]+)$", flags: "" },
+    methods: ["GET"],
+    witnesses: ["/api/reception/w1"],
+  },
+  {
+    /* Reception's old path, for one deploy (plan 261009w F1; removed by its contract). */
     match: { kind: "regex", source: "^\\/api\\/debate\\/([\\w.%-]+)$", flags: "" },
     methods: ["GET"],
     witnesses: ["/api/debate/w1"],
@@ -1060,8 +1078,10 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
    paths kept beside its new ones for one deploy (plan 261009w, removed by its
    contract); 111 with author gifts' list and ensure (one literal), one gift,
    its lookups and its Send (plan 261010c); 112 with the dismissed "older
-   version" notices (plan 261010a). */
-const EXPECTED_MATCHER_COUNT = 112;
+   version" notices (plan 261010a); 115 with Reception's and the claims list's
+   new paths beside their old ones, and the claim checks' new path beside its
+   old one, for one deploy (plan 261009w Stage 3, removed by its contract). */
+const EXPECTED_MATCHER_COUNT = 115;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
    with the admin's earlier feedback; 118 with their replies to questions; 119
    with the Help pages' chatbot; 120 with Hidden text's Opus check; 121 with the
@@ -1072,8 +1092,10 @@ const EXPECTED_MATCHER_COUNT = 112;
    261009i); 129 with deleting a chat question and what follows it (plan
    261009o); 131 with Bibliography's two old paths (plan 261009w); 136 with
    author gifts' list, ensure, lookups, edit and Send (plan 261010c); 138 with
-   the dismissed "older version" notices' GET and POST (plan 261010a). */
-const EXPECTED_GUARD_COUNT = 138;
+   the dismissed "older version" notices' GET and POST (plan 261010a); 142 with
+   the new Reception GET, the new list GET and the new checks' GET and POST
+   beside their old paths (plan 261009w Stage 3). */
+const EXPECTED_GUARD_COUNT = 142;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2304,8 +2326,13 @@ describe("the authenticated API's route contract", () => {
         "GET regex /^\\/api\\/timeline\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/quiz\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/faq\\/([\\w.%-]+)$/",
+        "GET regex /^\\/api\\/sources-claims\\/([\\w.%-]+)$/",
+        // and its old path, for one deploy (plan 261009w)
         "GET regex /^\\/api\\/debate-claims\\/([\\w.%-]+)$/",
-        // Debate's claim checks, 261008i stage 3 — beside the list they check
+        // the claim checks, 261008i stage 3 — beside the list they check
+        "GET regex /^\\/api\\/sources-claims\\/([\\w.%-]+)\\/checks$/",
+        "POST regex /^\\/api\\/sources-claims\\/([\\w.%-]+)\\/checks$/",
+        // and their old path, for one deploy (plan 261009w)
         "GET regex /^\\/api\\/debate-claims\\/([\\w.%-]+)\\/checks$/",
         "POST regex /^\\/api\\/debate-claims\\/([\\w.%-]+)\\/checks$/",
         "GET regex /^\\/api\\/relations\\/([\\w.%-]+)$/",
@@ -2314,6 +2341,8 @@ describe("the authenticated API's route contract", () => {
         "GET regex /^\\/api\\/skim\\/([\\w.%-]+)$/",
         // Skim's profile notice, 261009i
         "POST regex /^\\/api\\/skim\\/([\\w.%-]+)\\/profile-notice-dismissal$/",
+        "GET regex /^\\/api\\/reception\\/([\\w.%-]+)$/",
+        // Reception's old path, for one deploy (plan 261009w)
         "GET regex /^\\/api\\/debate\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/citers\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/bibliography\\/([\\w.%-]+)$/",

@@ -601,7 +601,7 @@ export function activationForSummary(view: SummaryView): AutoRunTarget | null {
  * docs/plans/261008i-debate-claims-picked-by-the-reader.md). Claims' own work
  * is the list of the article's claims, one call and no search (that plan's
  * § 2), and each hook spends only its own target and only while its sub-mode
- * is showing (useDebate.ts, useDebateClaims.ts), so neither press can buy the
+ * is showing (useReception.ts, useSourcesClaims.ts), so neither press can buy the
  * other's work.
  */
 export function activationForSources(view: SourcesView): AutoRunTarget {
@@ -610,9 +610,9 @@ export function activationForSources(view: SourcesView): AutoRunTarget {
     case "bibliography":
       return "bibliography";
     case "reception":
-      return "debate";
+      return "reception";
     case "claims":
-      return "debate-claims";
+      return "sources-claims";
     default: {
       const unhandled: never = view;
       throw new Error(`unhandled Sources view: ${String(unhandled)}`);

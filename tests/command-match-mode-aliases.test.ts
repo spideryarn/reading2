@@ -265,7 +265,7 @@ describe("every Run again phrase, typed in full", () => {
     expect(rerunWords("glossary").aliases).toContain("rerun jargon");
     /* Bibliography's words since 2026-10-09 (plan 261009l, GPT Sol's F8). */
     expect(rerunWords("bibliography").aliases).toContain("references again");
-    expect(rerunWords("debate").aliases).toContain("rerun critiques");
+    expect(rerunWords("reception").aliases).toContain("rerun critiques");
   });
 });
 

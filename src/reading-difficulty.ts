@@ -371,7 +371,7 @@ function abortOf(err: unknown, signal: AbortSignal | undefined): boolean {
  * as job `reading-difficulty`, metered in whatever collector is open.
  *
  * **What comes back as `unrated`, and what is thrown**, by the reasoning
- * src/debate.ts § `synthesiseDebate` gives for its own optional call. A
+ * src/reception.ts § `synthesiseReception` gives for its own optional call. A
  * provider's refusal, this call's own deadline, and an answer that fails its
  * checks leave the article unrated: none of them says anything is wrong with
  * the import, and the flat estimate is a state the card names. The caller's

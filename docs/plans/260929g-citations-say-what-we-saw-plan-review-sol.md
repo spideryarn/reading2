@@ -66,7 +66,7 @@ Code can establish the URL came from the call, the title passed a matcher, and a
 
 The risk is sharper in this one-call design because the model consumes search content inside OpenRouter before application code sees it; it cannot first be fenced with `untrusted()`. Debate mode documents this as residual risk, not a solved one. The proposed richer parser also lacks maximum lengths and a precise runtime union.
 
-Evidence: [plan:74](</home/greg/code/spideryarn2/.claude/worktrees/fb5g-citation-support-check/docs/plans/260929g-check-a-cited-paper-supports-the-claim.md:74>), [plan:84](</home/greg/code/spideryarn2/.claude/worktrees/fb5g-citation-support-check/docs/plans/260929g-check-a-cited-paper-supports-the-claim.md:84>), [debate.ts:78](</home/greg/code/spideryarn2/.claude/worktrees/fb5g-citation-support-check/src/debate.ts:78>), [debate.ts:91](</home/greg/code/spideryarn2/.claude/worktrees/fb5g-citation-support-check/src/debate.ts:91>), [citation-find.ts:255](</home/greg/code/spideryarn2/.claude/worktrees/fb5g-citation-support-check/src/citation-find.ts:255>).
+Evidence: [plan:74](</home/greg/code/spideryarn2/.claude/worktrees/fb5g-citation-support-check/docs/plans/260929g-check-a-cited-paper-supports-the-claim.md:74>), [plan:84](</home/greg/code/spideryarn2/.claude/worktrees/fb5g-citation-support-check/docs/plans/260929g-check-a-cited-paper-supports-the-claim.md:84>), [debate.ts:78](</home/greg/code/spideryarn2/.claude/worktrees/fb5g-citation-support-check/src/reception.ts:78>), [debate.ts:91](</home/greg/code/spideryarn2/.claude/worktrees/fb5g-citation-support-check/src/reception.ts:91>), [citation-find.ts:255](</home/greg/code/spideryarn2/.claude/worktrees/fb5g-citation-support-check/src/citation-find.ts:255>).
 
 Recommended fix:
 

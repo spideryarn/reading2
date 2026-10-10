@@ -30,7 +30,7 @@
 import { act, createElement, type ReactElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { checksOwner, claimListOf, claimListOwner } from "./helpers/debate-claims-owner.js";
+import { checksOwner, claimListOf, claimListOwner } from "./helpers/sources-claims-owner.js";
 import { noticeIdentity, STALE_NOTICE_MODES, type StaleNoticeMode } from "../src/stale-notice.js";
 
 import type { Claim } from "../src/referee-claims.js";
@@ -40,8 +40,8 @@ import type {
   Bibliography,
   Block,
   BlockId,
-  Debate,
-  DebateCounts,
+  Reception,
+  ReceptionCounts,
   Faq,
   Glossary,
   Ideas,
@@ -51,7 +51,7 @@ import type {
   Timeline,
   TweetThread,
 } from "../src/types.js";
-import type { DebateOwner } from "../src/web/DebatePanel.js";
+import type { ReceptionOwner } from "../src/web/ReceptionAndClaimsPanel.js";
 import type { GlossaryOwner } from "../src/web/GlossaryPanel.js";
 import type { IdeasOwner } from "../src/web/IdeasPanel.js";
 import type { QuotesOwner } from "../src/web/QuotesPanel.js";
@@ -59,7 +59,7 @@ import type { TimelineOwner } from "../src/web/TimelinePanel.js";
 import type { SkimView } from "../src/web/modes/skim/SkimMode.js";
 import type { UseBibliography } from "../src/web/useBibliography.js";
 import type { ClaimsApi } from "../src/web/useClaims.js";
-import type { UseDebateClaims } from "../src/web/useDebateClaims.js";
+import type { UseSourcesClaims } from "../src/web/useSourcesClaims.js";
 import type { UseFaq } from "../src/web/useFaq.js";
 import type { SavedSearch } from "../src/web/useSearch.js";
 import type { UseSimple } from "../src/web/useSimple.js";
@@ -121,7 +121,7 @@ const { TimelinePanel } = await import("../src/web/TimelinePanel.js");
 const { SimplePanel } = await import("../src/web/SimplePanel.js");
 const { BibliographyPanel } = await import("../src/web/BibliographyPanel.js");
 const { TweetsPanel } = await import("../src/web/Tweets.js");
-const { DebatePanel } = await import("../src/web/DebatePanel.js");
+const { ReceptionAndClaimsPanel } = await import("../src/web/ReceptionAndClaimsPanel.js");
 const { QuotesPanel } = await import("../src/web/QuotesPanel.js");
 const { SkimPanel } = await import("../src/web/SkimPanel.js");
 const { SearchPanel } = await import("../src/web/SearchPanel.js");
@@ -198,8 +198,8 @@ const AT = {
   simple: "2026-09-01T05:00:00.000Z",
   bibliography: "2026-09-01T06:00:00.000Z",
   tweets: "2026-09-01T07:00:00.000Z",
-  debate: "2026-09-01T08:00:00.000Z",
-  debateClaims: "2026-09-01T09:00:00.000Z",
+  reception: "2026-09-01T08:00:00.000Z",
+  sourcesClaims: "2026-09-01T09:00:00.000Z",
   quotes: "2026-09-01T10:00:00.000Z",
   skim: "2026-09-01T11:00:00.000Z",
   searchCreated: "2026-09-01T12:00:00.000Z",
@@ -534,7 +534,7 @@ function tweetsOwner(): UseTweets {
   };
 }
 
-const COUNTS: DebateCounts = {
+const COUNTS: ReceptionCounts = {
   returnedSources: 1,
   reportedRows: 1,
   keptRows: 1,
@@ -552,12 +552,12 @@ const COUNTS: DebateCounts = {
   webSearches: 1,
 };
 
-const DEBATE: Debate = {
+const RECEPTION: Reception = {
   version: "test",
   generator: "test",
   slug: SLUG,
   sourceHash: "hash",
-  searchedAt: AT.debate,
+  searchedAt: AT.reception,
   direct: {
     rows: [
       {
@@ -578,12 +578,12 @@ const DEBATE: Debate = {
   elapsedMs: 1,
 };
 
-function debateOwner(stale: boolean): DebateOwner {
+function receptionOwner(stale: boolean): ReceptionOwner {
   return {
     ...COMMON,
     stale,
     status: "ready",
-    debate: DEBATE,
+    reception: RECEPTION,
     automatic: false,
     ensure: async () => {},
     regenerate: async () => {},
@@ -591,12 +591,12 @@ function debateOwner(stale: boolean): DebateOwner {
 }
 
 /** Debate's Claims list, stale, with its own clock — `claimListOf` stamps a fixed one. */
-function staleClaimList(): UseDebateClaims {
+function staleClaimList(): UseSourcesClaims {
   return claimListOwner({
     status: "ready",
     stale: true,
     slug: SLUG,
-    claimList: { ...claimListOf([]), slug: SLUG, generatedAt: AT.debateClaims },
+    claimList: { ...claimListOf([]), slug: SLUG, generatedAt: AT.sourcesClaims },
   });
 }
 
@@ -730,13 +730,13 @@ function claimsApi(): ClaimsApi {
 
 /* ------------------------------------------------------------- the mounts -- */
 
-function mountDebate(view: "reception" | "claims"): ReactNode {
+function mountReception(view: "reception" | "claims"): ReactNode {
   const claimList = view === "claims" ? staleClaimList() : claimListOwner();
-  return createElement(DebatePanel, {
-    head: sourcesHead({ view, onView: noop, ownerSlug: SLUG, debate: DEBATE }),
+  return createElement(ReceptionAndClaimsPanel, {
+    head: sourcesHead({ view, onView: noop, ownerSlug: SLUG, reception: RECEPTION }),
     access: {
       kind: "owner",
-      owner: debateOwner(view === "reception"),
+      owner: receptionOwner(view === "reception"),
       claimList,
       checks: checksOwner(),
       citers: { result: { kind: "no-doi" }, retry: noop },
@@ -839,8 +839,8 @@ const ROWS: Record<StaleNoticeMode, Row> = {
       createElement(TweetsPanel, { access: { kind: "owner", owner: tweetsOwner() }, article: ARTICLE, slug: SLUG, onJump: noop }),
     identity: AT.tweets,
   },
-  debate: { mount: () => mountDebate("reception"), identity: AT.debate },
-  "debate-claims": { mount: () => mountDebate("claims"), identity: AT.debateClaims },
+  reception: { mount: () => mountReception("reception"), identity: AT.reception },
+  "sources-claims": { mount: () => mountReception("claims"), identity: AT.sourcesClaims },
   quotes: {
     mount: () =>
       createElement(QuotesPanel, {

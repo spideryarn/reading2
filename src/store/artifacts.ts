@@ -47,10 +47,10 @@ import type {
   Bibliography,
   Crossrefs,
   SimpleSummary,
-  Debate,
+  Reception,
   Faq,
   Relations,
-  DebateClaimList,
+  SourcesClaimList,
   Skim,
   Glossary,
   Ideas,
@@ -63,7 +63,7 @@ import type {
   Tree,
   TweetThread,
 } from "../types.js";
-import { isDebateDocument, isUsableSimpleSummary } from "../types.js";
+import { isReceptionDocument, isUsableSimpleSummary } from "../types.js";
 import { isDifficultyLevel } from "../reading-time.js";
 import { sameGenerator } from "../models.js";
 import type { LabelsFile } from "../labels.js";
@@ -105,11 +105,11 @@ export type ArtifactKind =
   | "quiz"
   | "faq"
   | "relations"
-  | "debate-claims"
+  | "sources-claims"
   | "skim"
   | "sketch"
   | "illustrated"
-  | "debate"
+  | "reception"
   | "bibliography"
   | "crossrefs"
   | "simple";
@@ -201,10 +201,10 @@ export interface ArtifactMap {
   relations: Relations;
   /**
    * The article's claims, listed for Debate's Claims to pick from —
-   * `DebateClaimList`, src/types.ts, written by the `debate-claims` step.
+   * `SourcesClaimList`, src/types.ts, written by the `debate-claims` step.
    * docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2.
    */
-  "debate-claims": DebateClaimList;
+  "sources-claims": SourcesClaimList;
   /**
    * A route through the Quotes, at three depths — `Skim`, src/types.ts,
    * written by the `skim` step.
@@ -235,7 +235,7 @@ export interface ArtifactMap {
    * each with its own rows and its own counts, and a failure of either pass
    * writes none of it.
    */
-  debate: Debate;
+  reception: Reception;
   /**
    * Every work the piece cites — `Bibliography`, src/types.ts, written by the
    * `bibliography` step. docs/plans/260911g-citations-mode.md.
@@ -440,10 +440,10 @@ export const SHAPE: Record<ArtifactKind, ShapeCheck> = {
   relations: { field: "relations", ok: (v) => typeof v === "object" && v !== null && !isArray(v) },
   /* A `claims` array, and **an EMPTY one IS usable**, as `faq`'s: the prompt
      says none is a fine answer — a piece that makes no claim an outsider could
-     argue with — and the panel has a sentence for it. `buildDebateClaimList`
-     (src/debate-claims.ts) throws when the model listed claims and validation
+     argue with — and the panel has a sentence for it. `buildSourcesClaimList`
+     (src/sources-claims.ts) throws when the model listed claims and validation
      dropped every one. */
-  "debate-claims": { field: "claims", ok: isArray },
+  "sources-claims": { field: "claims", ok: isArray },
   /* A `stops` array, and **an empty one is NOT usable** — the opposite call
      from `faq` directly above. There is always a route through a non-empty set
      of quotes, so `buildSkim` (src/skim.ts) throws on every empty
@@ -480,10 +480,10 @@ export const SHAPE: Record<ArtifactKind, ShapeCheck> = {
      is what tells a half-written or hand-edited file from an artefact — **both
      groups' rows, which is why this is the one `whole` row in the table**. It
      asked only whether `direct` was an object until 2026-09-05, so `{direct:{}}`
-     passed here while `readDebate` refused it and Postgres served it unchecked:
-     three answers to one question (Sol's F29). `isDebateDocument` (src/types.ts)
+     passed here while `readReception` refused it and Postgres served it unchecked:
+     three answers to one question (Sol's F29). `isReceptionDocument` (src/types.ts)
      is now the only one, and all three readers ask it. */
-  debate: { field: "direct", ok: isDebateDocument, whole: true },
+  reception: { field: "direct", ok: isReceptionDocument, whole: true },
   /* A `citations` array, and **an EMPTY one is usable** — `timeline`'s call,
      not `quotes`'. A blog post that links nothing and names no source cites
      no work, and that is a real answer the panel has a sentence for;
@@ -1030,7 +1030,7 @@ export const STAMP_SOURCE: Record<StepName, ArtifactKind | null> = {
   relations: "relations",
   /* **And deliberately NO `BASELINE` row**, like `faq`: ids are minted per
      run. docs/plans/261008i-debate-claims-picked-by-the-reader.md. */
-  "debate-claims": "debate-claims",
+  "sources-claims": "sources-claims",
   /* **And deliberately NO `BASELINE` row**: the route holds only quote ids and
      has no ids of its own to inherit, so a re-run simply replaces it. Its
      `sourceHash` is the quotes hash, not an article fingerprint. */
@@ -1041,7 +1041,7 @@ export const STAMP_SOURCE: Record<StepName, ArtifactKind | null> = {
      reason: there is no id inheritance across runs, marks in the prose are not
      in v1, and `readBaseline` throws for a kind with no row precisely so that
      nothing can half-inherit. */
-  debate: "debate",
+  reception: "reception",
   bibliography: "bibliography",
   /* **And deliberately NO `BASELINE` row**: nothing addresses a link, so a
      re-run simply replaces the list. */

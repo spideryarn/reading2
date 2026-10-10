@@ -53,11 +53,11 @@ type StepAutoRunTarget = StepTarget<
   | "ideas"
   | "quotes"
   | "timeline"
-  | "debate"
+  | "reception"
   /* Sources' Claims: the list of the article's claims, armed by a press
      that lands there — its chip, its command row, or the Sources button —
      docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2. */
-  | "debate-claims"
+  | "sources-claims"
   /* Every work the piece cites — docs/plans/260911g-citations-mode.md. */
   | "bibliography"
   /* The questions a careful reader would put to the piece —

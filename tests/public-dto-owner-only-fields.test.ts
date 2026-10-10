@@ -19,10 +19,10 @@ import type {
   BlockId,
   CitedWork,
   Bibliography,
-  ClaimDebateRow,
+  ClaimReceptionRow,
   Crossrefs,
-  Debate,
-  DebateSynthesis,
+  Reception,
+  ReceptionSynthesis,
   NodeId,
   Tree,
 } from "../src/types.js";
@@ -112,8 +112,8 @@ const NONE = {
   faq: null,
   simpleSummary: null,
   bibliography: null,
-  debate: null,
-  debateClaims: null,
+  reception: null,
+  sourcesClaims: null,
   crossrefs: null,
   crossrefsFresh: false,
   comments: [],
@@ -144,7 +144,7 @@ const COUNTS = {
   webSearches: 2,
 };
 
-function claimRow(over: Partial<ClaimDebateRow>): ClaimDebateRow {
+function claimRow(over: Partial<ClaimReceptionRow>): ClaimReceptionRow {
   return {
     id: "spya-caaaaa",
     url: "https://one.example.org/a",
@@ -163,7 +163,7 @@ const ROW_A = claimRow({ id: "spya-caaaaa", url: "https://one.example.org/a", ti
 const ROW_B = claimRow({ id: "spya-cbbbbb", url: "https://two.example.net/b", title: "Work two, a replication", bears: "partly" });
 const ROW_C = claimRow({ id: "spya-cccccc", url: "https://three.example.com/c", title: "Work three, a survey", bears: "loosely" });
 
-function debate(rows: ClaimDebateRow[], synthesis?: unknown): Debate {
+function reception(rows: ClaimReceptionRow[], synthesis?: unknown): Reception {
   return {
     version: "debate/3",
     generator: "g",
@@ -173,7 +173,7 @@ function debate(rows: ClaimDebateRow[], synthesis?: unknown): Debate {
     direct: { rows: [], counts: COUNTS },
     claims: { rows, counts: COUNTS },
     elapsedMs: 1,
-    ...(synthesis === undefined ? {} : { synthesis: synthesis as DebateSynthesis }),
+    ...(synthesis === undefined ? {} : { synthesis: synthesis as ReceptionSynthesis }),
   };
 }
 
@@ -190,16 +190,16 @@ const THEME_AB = {
   ownerId: sentinel("owner id sentinel on a theme"),
 };
 
-function publish(d: Debate, finalUrl: string | null = NONE.finalUrl) {
-  return publicArticle({ ...NONE, finalUrl, debate: d });
+function publish(d: Reception, finalUrl: string | null = NONE.finalUrl) {
+  return publicArticle({ ...NONE, finalUrl, reception: d });
 }
 
 describe("Debate's relevance judgement (5P)", () => {
   it("crosses on every row that has one, and only as one of the three words", () => {
     const odd = claimRow({ id: "spya-cdddd2", url: "https://four.example.org/d", bears: "very" as never });
-    const built = publish(debate([ROW_A, ROW_B, ROW_C, odd]));
-    expect(built.debate?.claims.rows.map((r) => r.bears)).toEqual(["directly", "partly", "loosely", undefined]);
-    expect(built.debate?.claims.rows[3]).not.toHaveProperty("bears");
+    const built = publish(reception([ROW_A, ROW_B, ROW_C, odd]));
+    expect(built.reception?.claims.rows.map((r) => r.bears)).toEqual(["directly", "partly", "loosely", undefined]);
+    expect(built.reception?.claims.rows[3]).not.toHaveProperty("bears");
   });
 });
 
@@ -207,12 +207,12 @@ describe("Debate's threads and key sources (6M)", () => {
   it("cross, rebuilt, when no row was withheld", () => {
     const why = "It is the replication.";
     const built = publish(
-      debate(
+      reception(
         [ROW_A, ROW_B, ROW_C],
         made([THEME_AB], [{ rowId: ROW_B.id, role: "advances", why, ownerId: "x" }]),
       ),
     );
-    expect(built.debate?.synthesis).toEqual({
+    expect(built.reception?.synthesis).toEqual({
       kind: "made",
       themes: [{ id: THEME_AB.id, label: THEME_AB.label, gist: THEME_AB.gist, rowIds: [ROW_A.id, ROW_B.id] }],
       key: [{ rowId: ROW_B.id, role: "advances", why }],
@@ -229,13 +229,13 @@ describe("Debate's threads and key sources (6M)", () => {
       title: "Withheld",
     });
     const built = publish(
-      debate(
+      reception(
         [ROW_A, ROW_B, withheld],
         made([{ ...THEME_AB, gist: `Both agree, as does ${privateWords}.` }]),
       ),
     );
-    expect(built.debate?.claims).toMatchObject({ sourceNotPublishable: 1 });
-    expect(built.debate).not.toHaveProperty("synthesis");
+    expect(built.reception?.claims).toMatchObject({ sourceNotPublishable: 1 });
+    expect(built.reception).not.toHaveProperty("synthesis");
     expect(JSON.stringify(built)).not.toContain(privateWords);
   });
 
@@ -244,7 +244,7 @@ describe("Debate's threads and key sources (6M)", () => {
        gist quotes it. */
     const own = "https://owner:hunter2@papers.example.org/piece";
     const built = publish(
-      debate(
+      reception(
         [ROW_A, ROW_B, ROW_C],
         made(
           [
@@ -256,7 +256,7 @@ describe("Debate's threads and key sources (6M)", () => {
       ),
       own,
     );
-    expect(built.debate?.synthesis).toEqual({
+    expect(built.reception?.synthesis).toEqual({
       kind: "made",
       themes: [{ id: "spya-tbbbbb", label: "Replication", gist: "Two of them replicate it.", rowIds: [ROW_B.id, ROW_C.id] }],
       key: [],
@@ -267,20 +267,20 @@ describe("Debate's threads and key sources (6M)", () => {
   it("stay `made` with empty lists when the boundary took every item, never `failed`", () => {
     const own = "https://owner:hunter2@papers.example.org/piece";
     const built = publish(
-      debate([ROW_A, ROW_B, ROW_C], made([{ ...THEME_AB, label: "owner:hunter2@papers.example.org/piece" }])),
+      reception([ROW_A, ROW_B, ROW_C], made([{ ...THEME_AB, label: "owner:hunter2@papers.example.org/piece" }])),
       own,
     );
-    expect(built.debate?.synthesis).toEqual({ kind: "made", themes: [], key: [] });
+    expect(built.reception?.synthesis).toEqual({ kind: "made", themes: [], key: [] });
   });
 
   it("cross `failed` and `too-few` as they are, and nothing for a debate that never had one", () => {
-    expect(publish(debate([ROW_A], { kind: "failed" })).debate?.synthesis).toEqual({ kind: "failed" });
-    expect(publish(debate([ROW_A], { kind: "too-few", rows: 1 })).debate?.synthesis).toEqual({
+    expect(publish(reception([ROW_A], { kind: "failed" })).reception?.synthesis).toEqual({ kind: "failed" });
+    expect(publish(reception([ROW_A], { kind: "too-few", rows: 1 })).reception?.synthesis).toEqual({
       kind: "too-few",
       rows: 1,
     });
-    expect(publish(debate([ROW_A])).debate).not.toHaveProperty("synthesis");
-    expect(publish(debate([ROW_A], { kind: "made", themes: "not a list" })).debate?.synthesis).toEqual({
+    expect(publish(reception([ROW_A])).reception).not.toHaveProperty("synthesis");
+    expect(publish(reception([ROW_A], { kind: "made", themes: "not a list" })).reception?.synthesis).toEqual({
       kind: "failed",
     });
   });
@@ -349,6 +349,42 @@ describe("the Bibliography under its old public key", () => {
     const built = publicArticle({ ...NONE, blocks: BLOCKS });
     expect("bibliography" in built).toBe(false);
     expect("citations" in built).toBe(false);
+  });
+});
+
+/**
+ * **Reception and the claims list under their old public keys too**, for the
+ * same deploy (plan 261009w, F1, Stage 3): `reception` and `sourcesClaims`,
+ * which this code reads, and `debate` and `debateClaims`, which a public tab
+ * loaded before the rename reads. The same objects. Removed by the contract.
+ */
+describe("Reception and Claims under their old public keys", () => {
+  const LIST = {
+    version: "debate-claims/1",
+    generator: "g",
+    slug: "piece",
+    sourceHash: "h",
+    createdAt: "2026-10-08T10:00:00.000Z",
+    claims: [{ id: "spya-claaaa", blockId: P1.id, quote: "The measure cannot be computed", statement: "It cannot be computed." }],
+  };
+
+  it("is the same search under `debate` as under `reception`", () => {
+    const built = publish(reception([ROW_A]));
+    expect(built.reception).toBeDefined();
+    expect(built.debate).toEqual(built.reception);
+  });
+
+  it("is the same list under `debateClaims` as under `sourcesClaims`", () => {
+    const built = publicArticle({ ...NONE, sourcesClaims: LIST as never });
+    expect(built.sourcesClaims).toBeDefined();
+    expect(built.debateClaims).toEqual(built.sourcesClaims);
+  });
+
+  it("is absent under all four when there is neither", () => {
+    const built = publicArticle({ ...NONE });
+    for (const key of ["reception", "debate", "sourcesClaims", "debateClaims"]) {
+      expect(key in built, key).toBe(false);
+    }
   });
 });
 
@@ -472,7 +508,7 @@ describe("all four at once", () => {
     const blockEntry = entryOfText(REF.text)!;
     const built = publicArticle({
       ...NONE,
-      debate: debate(
+      reception: reception(
         [ROW_A, ROW_B, ROW_C],
         made([THEME_AB], [{ rowId: ROW_A.id, role: "responds", why: "It replies." }]),
       ),
@@ -495,8 +531,8 @@ describe("all four at once", () => {
       crossrefsFresh: true,
     });
     /* Each of the four is really present, so the sweep is not vacuous. */
-    expect(built.debate?.claims.rows[0]?.bears).toBe("directly");
-    expect(built.debate?.synthesis?.kind).toBe("made");
+    expect(built.reception?.claims.rows[0]?.bears).toBe("directly");
+    expect(built.reception?.synthesis?.kind).toBe("made");
     expect(built.bibliography?.citations[0]?.entry).toBe(blockEntry);
     expect(built.crossrefs?.links).toHaveLength(1);
 

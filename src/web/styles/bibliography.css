@@ -7,7 +7,7 @@
    row: a title that is a link out, who wrote it, why the piece uses it, and one
    quiet line saying where the link came from and where the piece first cites it.
 
-   Loaded after timeline.css and debate.css; it sets no property those two set
+   Loaded after timeline.css and reception.css; it sets no property those two set
    on the same element, so its place in the cascade decides nothing between
    them. BibliographyPanel.tsx, docs/project/bibliography.md. */
 
@@ -158,7 +158,7 @@
    Under an assessed row (BibliographyPanel.tsx § LookupReading): the verdict, each
    quote from the search extract, and what the work does. Quiet, like the lines
    around it — the row is still the article's citation first. The quotes wear
-   Debate's solid rule down the left (debate.css § `.dbt-quote`), the mark this
+   Debate's solid rule down the left (reception.css § `.rcp-quote`), the mark this
    app already uses for "these are not our words", with the caption under them
    saying whose words they are. Margins are reset explicitly: `figure` and
    `blockquote` carry 40px of browser indent, which at 288px would take a
@@ -231,8 +231,8 @@
   font-weight: 600;
 }
 /* Folded: the first part's paragraph, three lines, then an ellipsis. The text
-   stays in the accessibility tree; only the paint is cut (debate.css §
-   `.dbt-title` does the same). */
+   stays in the accessibility tree; only the paint is cut (reception.css §
+   `.rcp-title` does the same). */
 .cite-inv-part.folded .cite-inv-text {
   display: -webkit-box;
   -webkit-box-orient: vertical;

@@ -19,10 +19,11 @@ import { articleRevisions } from "../db/schema.js";
 
 /**
  * The retired names, as their `schema.ts` keys. `legacyCitations` is the
- * `citations` column, Bibliography's before 2026-10-09; dropped by the
- * contract migration.
+ * `citations` column, Bibliography's before 2026-10-09; `legacyDebate` and
+ * `legacyDebateClaims` are `debate` and `debate_claims`, Reception's and the
+ * claims list's before the same day. Dropped by the contract migration.
  */
-export const LEGACY_REVISION_COLUMNS = ["legacyCitations"] as const;
+export const LEGACY_REVISION_COLUMNS = ["legacyCitations", "legacyDebate", "legacyDebateClaims"] as const;
 
 export type LegacyRevisionColumn = (typeof LEGACY_REVISION_COLUMNS)[number];
 

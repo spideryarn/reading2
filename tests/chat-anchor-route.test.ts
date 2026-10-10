@@ -564,7 +564,7 @@ describe("a send reads the article's conversations once for its checks, however 
     }
   }
 
-  const claim = () => ({ mode: "debate", blockId: BLOCK.id, quote: "a claim the piece makes" });
+  const claim = () => ({ mode: "sources-claims", blockId: BLOCK.id, quote: "a claim the piece makes" });
 
   it("none: the one read that finds the thread's kind", async () => {
     expect(await loadsBeforeBegin({ threadId: "spya-anchr6", question: "what?" })).toBe(1);

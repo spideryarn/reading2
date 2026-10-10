@@ -39,7 +39,7 @@
  * the page is the paper rather than a page titled like it. The verdict and
  * `paperDoes` are the AI's reading of a search extract, and are labelled so.
  *
- * ## Security — carried from src/debate.ts, because it applies unchanged
+ * ## Security — carried from src/reception.ts, because it applies unchanged
  *
  * **Prompt injection from a searched page is a residual risk, not a mitigated
  * one.** The search runs inside the provider and the model reads the extract

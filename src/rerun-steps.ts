@@ -126,7 +126,7 @@ export const METADATA_RERUN_STEPS = [
   "relations",
   "sketch",
   "skim",
-  "debate",
+  "reception",
   "bibliography",
   /* **Joined on 2026-09-30 with the step**, the one way to make cross-references
      for an article already on the shelf (the after-import box covers new ones).

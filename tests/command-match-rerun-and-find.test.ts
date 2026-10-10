@@ -85,7 +85,7 @@ describe("the Run again rows", () => {
     const cases = {
       "rerun quiz": "rerun-quiz",
       "rerun sketch": "rerun-sketch",
-      "rerun reception": "rerun-debate",
+      "rerun reception": "rerun-reception",
       "rerun bibliography": "rerun-bibliography",
       "rerun brief": "rerun-simple",
       "rerun fuller": "rerun-simple",
@@ -122,15 +122,15 @@ describe("the Run again rows", () => {
      pick one paid run at random. */
   it("labels Citations' and Debate's re-runs by their sub-modes, and keeps the old words", () => {
     expect(rerunWords("bibliography").label).toBe("Sources › Bibliography › Run again");
-    expect(rerunWords("debate").label).toBe("Sources › Reception › Run again");
+    expect(rerunWords("reception").label).toBe("Sources › Reception › Run again");
     for (const query of ["rerun bibliography", "rerun citations", "regenerate references", "citations again"]) {
       const ranked = rankCommands(query, LIST);
       expect(ranked[0], query).toMatchObject({ kind: "action", id: "rerun-bibliography" });
-      expect(ranked, query).not.toContainEqual(expect.objectContaining({ id: "rerun-debate" }));
+      expect(ranked, query).not.toContainEqual(expect.objectContaining({ id: "rerun-reception" }));
     }
     for (const query of ["rerun reception", "rerun debate", "redo critiques", "debate again"]) {
       const ranked = rankCommands(query, LIST);
-      expect(ranked[0], query).toMatchObject({ kind: "action", id: "rerun-debate" });
+      expect(ranked[0], query).toMatchObject({ kind: "action", id: "rerun-reception" });
       expect(ranked, query).not.toContainEqual(expect.objectContaining({ id: "rerun-bibliography" }));
     }
   });
@@ -139,7 +139,7 @@ describe("the Run again rows", () => {
     for (const query of ["rerun sources", "rerun peer review", "regenerate peer review", "peer review again"]) {
       const ids = rankCommands(query, LIST).map((c) => (c.kind === "action" ? c.id : ""));
       expect(ids, query).not.toContain("rerun-bibliography");
-      expect(ids, query).not.toContain("rerun-debate");
+      expect(ids, query).not.toContain("rerun-reception");
     }
   });
 

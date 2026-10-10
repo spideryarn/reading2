@@ -39,9 +39,9 @@ import {
   spineParam,
   TERM_SORTS,
   sortParam,
-  DEBATE_ORDERS,
+  RECEPTION_ORDERS,
   SOURCES_VIEWS,
-  debateOrderParam,
+  receptionOrderParam,
   sourcesParam,
 } from "../src/web/params.js";
 import { NEVER_REMEMBERED, REMEMBERED } from "../src/web/last-view.js";
@@ -312,10 +312,10 @@ describe("Sources' sub-mode, and Reception's order", () => {
      sub-mode now, and an old `?debateby=claim` is lifted to `?debate=claims`
      before anything parses it (router.ts § `liftLegacyDebateBy`). */
   it("reads Reception's three orders, and no longer `claim`", () => {
-    expect([...DEBATE_ORDERS]).toEqual(["prioritised", "date", "stance"]);
-    for (const order of DEBATE_ORDERS) expect(debateOrderParam.parse(order)).toBe(order);
-    expect(debateOrderParam.parse("claim")).toBeNull();
-    expect(debateOrderParam.defaultValue).toBe("prioritised");
+    expect([...RECEPTION_ORDERS]).toEqual(["prioritised", "date", "stance"]);
+    for (const order of RECEPTION_ORDERS) expect(receptionOrderParam.parse(order)).toBe(order);
+    expect(receptionOrderParam.parse("claim")).toBeNull();
+    expect(receptionOrderParam.defaultValue).toBe("prioritised");
   });
 
   it("remembers the sub-mode, and no longer the retired identification threshold", () => {

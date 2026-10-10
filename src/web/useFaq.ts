@@ -3,7 +3,7 @@
  * to this piece, each with the passages where it responds; whether that still
  * describes the article; and the things you can ask for.
  *
- * `useDebate`'s shape, because the artefact's contract is the same: one model
+ * `useReception`'s shape, because the artefact's contract is the same: one model
  * pass over the article, stored once, **replaced** on a re-run, and two
  * staleness facts — no profile is in this stage's stamp, so there is no
  * `profileChanged`.
@@ -50,7 +50,7 @@ export interface UseFaq {
   stalled: boolean;
   /** `StepJob.starting`: the POST has gone and the queue has not seen it yet. */
   starting: boolean;
-  /** The run in flight was started automatically. `UseDebate.automatic`. */
+  /** The run in flight was started automatically. `UseReception.automatic`. */
   automatic: boolean;
   /**
    * Repeat the GET after a failed read. **It sends only a GET**; a press still
@@ -170,7 +170,7 @@ export function useFaqRead(slug: string): FaqRead {
         setError(describeFetchFailure(err as Error));
         /* **A failed revalidation must not take the list away** — `load` runs
            again every time a job finishes, and only the opening read has
-           nothing to fall back on. Same guard as useDebate.ts. */
+           nothing to fall back on. Same guard as useReception.ts. */
         setStatus((was) => (was !== "loading" ? was : saidNoneFor.current === slug ? "none" : "error"));
       }
     },

@@ -156,8 +156,8 @@ const { useIdeas } = await import("../src/web/useIdeas.js");
 const { useQuotes } = await import("../src/web/useQuotes.js");
 const { useTimeline } = await import("../src/web/useTimeline.js");
 const { useGlossary } = await import("../src/web/useGlossary.js");
-const { useDebate } = await import("../src/web/useDebate.js");
-const { useDebateClaims } = await import("../src/web/useDebateClaims.js");
+const { useReception } = await import("../src/web/useReception.js");
+const { useSourcesClaims } = await import("../src/web/useSourcesClaims.js");
 const { useCiters } = await import("../src/web/useCiters.js");
 const { useBibliography, useBibliographyRead } = await import("../src/web/useBibliography.js");
 const { useFaq } = await import("../src/web/useFaq.js");
@@ -240,7 +240,7 @@ function QuotesBand({ slug }: { slug: string }): ReactElement {
  * open web and may add a search-free synthesis call when enough sources
  * survive. So the sentence at the top of this file — *arriving at a mode does
  * not run it* — is worth more here than anywhere, and the only thing holding
- * it is one call to `useAutoRun` in useDebate.ts.
+ * it is one call to `useAutoRun` in useReception.ts.
  *
  * **Every read mounted in every sub-mode, as the real band mounts them**
  * (SourcesMode.tsx, plan 261009l), each told whether its own sub-mode is
@@ -248,15 +248,15 @@ function QuotesBand({ slug }: { slug: string }): ReactElement {
  * unspent. It was Debate's band until 2026-10-09, with Reception and Claims
  * alone. The band says the status of the sub-mode on screen.
  *
- * Remove the `useAutoRun` call in useDebate.ts, or turn `sources`'s
+ * Remove the `useAutoRun` call in useReception.ts, or turn `sources`'s
  * `MODE_TARGET` row to `{ kind: "none" }`, and every other test in this file
  * stays green.
  */
 function SourcesBand({ slug, view }: { slug: string; view: SourcesView }): ReactElement {
   const bibliography = useBibliography(slug, useBibliographyRead(slug), view === "bibliography");
-  const reception = useDebate(slug, view === "reception");
+  const reception = useReception(slug, view === "reception");
   /* Claims' own list and press (plan 261008i stage 2). */
-  const claims = useDebateClaims(slug, view === "claims");
+  const claims = useSourcesClaims(slug, view === "claims");
   /* The owner's band makes a second read, the papers that cite the piece
      (plan 261004h). It is here so the Reception cases below can show it asks
      on arrival and can start nothing. */
@@ -725,11 +725,11 @@ describe("a press", () => {
     await press("Sources");
     await settle();
 
-    expect(artefactGets("debate").length).toBeGreaterThan(0);
+    expect(artefactGets("reception").length).toBeGreaterThan(0);
     /* Exactly the one search it started before *Cited by* existed: the citers
        read beside it is a GET and adds no job (plan 261004h, F8). */
     expect(artefactGets("citers")).toEqual(["/api/citers/constitution"]);
-    expect(posts).toEqual([{ slug: "constitution", steps: ["debate"] }]);
+    expect(posts).toEqual([{ slug: "constitution", steps: ["reception"] }]);
   });
 
   /* **The other half, and the one that guards the money.** A bookmarked
@@ -743,7 +743,7 @@ describe("a press", () => {
     await act(async () => arrive("sources"));
     await settle();
 
-    expect(artefactGets("debate").length).toBeGreaterThan(0);
+    expect(artefactGets("reception").length).toBeGreaterThan(0);
     expect(bandSays()).toBe("none");
     expect(artefactGets("citers")).toEqual(["/api/citers/constitution"]);
     expect(posts).toEqual([]);
@@ -761,7 +761,7 @@ describe("a press", () => {
     releaseGets();
     await settle();
 
-    expect(artefactGets("debate").length).toBeGreaterThan(0);
+    expect(artefactGets("reception").length).toBeGreaterThan(0);
     expect(posts).toEqual([]);
   });
 
@@ -777,8 +777,8 @@ describe("a press", () => {
     await press("Sources");
     await settle();
 
-    expect(artefactGets("debate-claims").length).toBeGreaterThan(0);
-    expect(posts).toEqual([{ slug: "constitution", steps: ["debate-claims"] }]);
+    expect(artefactGets("sources-claims").length).toBeGreaterThan(0);
+    expect(posts).toEqual([{ slug: "constitution", steps: ["sources-claims"] }]);
   });
 
   it("only reads the claims list when a link, Back or a restore lands on Claims", async () => {
@@ -787,7 +787,7 @@ describe("a press", () => {
     await act(async () => arrive("sources"));
     await settle();
 
-    expect(artefactGets("debate-claims").length).toBeGreaterThan(0);
+    expect(artefactGets("sources-claims").length).toBeGreaterThan(0);
     expect(bandSays()).toBe("none");
     expect(posts).toEqual([]);
   });
@@ -804,7 +804,7 @@ describe("a press", () => {
     releaseGets();
     await settle();
 
-    expect(artefactGets("debate-claims").length).toBeGreaterThan(0);
+    expect(artefactGets("sources-claims").length).toBeGreaterThan(0);
     expect(posts).toEqual([]);
   });
 

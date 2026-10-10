@@ -22,7 +22,7 @@ import {
   threadSource,
 } from "../src/web/thread-source.js";
 
-const CLAIM: ThreadOrigin = { mode: "debate", blockId: "spya-bbbbbb", quote: "RNA can transfer a memory" };
+const CLAIM: ThreadOrigin = { mode: "sources-claims", blockId: "spya-bbbbbb", quote: "RNA can transfer a memory" };
 const BLOCK: ChatAnchor = { blockId: "spya-cccccc" };
 const QUOTED: ChatAnchor = { blockId: "spya-cccccc", quote: "the felt quality", start: 4 };
 
@@ -144,7 +144,7 @@ describe("the filter", () => {
     expect(narrowed([...all, i, c, g], "ideas").map((x) => x.id)).toEqual(["i"]);
     expect(narrowed([...all, c, g], "glossary").map((x) => x.id)).toEqual(["g"]);
     expect(narrowed([...all, c, g], "sources").map((x) => x.id)).toEqual(["c", "c2"]);
-    const lens = { id: "l", ...t("chat", { origin: { mode: "debate", lens: "how it relates to Nagel" } }) };
+    const lens = { id: "l", ...t("chat", { origin: { mode: "reception", lens: "how it relates to Nagel" } }) };
     expect(narrowed([...all, c, lens], "sources").map((x) => x.id)).toEqual(["c", "c2", "l"]);
   });
 
@@ -173,7 +173,7 @@ describe("the filter", () => {
     expect(chatFromParam.parse("")).toBeNull();
     /* The old words are lifted on arrival (router.ts § `liftLegacySources`),
        so the parser itself need not know them. */
-    expect(chatFromParam.parse("debate")).toBeNull();
+    expect(chatFromParam.parse("reception")).toBeNull();
   });
 });
 
@@ -205,7 +205,7 @@ describe("originBack", () => {
   });
 
   it("calls an angle the reader's, with no quote: it is not an item in the article", () => {
-    expect(originBack({ mode: "debate", lens: "how it relates to Nagel" })).toEqual({
+    expect(originBack({ mode: "reception", lens: "how it relates to Nagel" })).toEqual({
       mode: "sources",
       view: "reception",
       modeLabel: "Reception",

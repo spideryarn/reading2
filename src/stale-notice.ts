@@ -11,7 +11,7 @@
  *
  * A dismissal is about **one artefact**: its identity is the artefact's own
  * clock — the value each mode hook already gives `useRewriteHold`
- * (`generatedAt` for most, `searchedAt` for Debate's Reception, the route's
+ * (`generatedAt` for most, `searchedAt` for Reception, the route's
  * `generatedAt` for Skim, the Sketch's or the painting's own identity, the
  * claims run's `createdAt`), or for Search `<runId>@<finishedAt>` per saved
  * run. Making the artefact again re-stamps it, so the new one's notice is a
@@ -31,8 +31,8 @@ export const STALE_NOTICE_MODES = [
   "simple",
   "bibliography",
   "tweets",
-  "debate",
-  "debate-claims",
+  "reception",
+  "sources-claims",
   "quotes",
   "skim",
   "search",
@@ -49,7 +49,8 @@ export function isStaleNoticeMode(x: unknown): x is StaleNoticeMode {
 
 /**
  * **The words a mode's notice was stored under before it was renamed**, and
- * what each is now. Bibliography's was `citations` until 2026-10-09 (plan
+ * what each is now. Bibliography's was `citations`, Reception's `debate` and
+ * Claims' `debate-claims` until 2026-10-09 (plan
  * docs/plans/261009w-peer-review-becomes-sources-all-the-way-down.md), renamed
  * by expand and contract: the `mode` column's check admits both until the
  * contract narrows it, rows the old code wrote keep the old word until then,
@@ -59,6 +60,9 @@ export function isStaleNoticeMode(x: unknown): x is StaleNoticeMode {
  */
 export const RETIRED_STALE_NOTICE_MODES: Readonly<Record<string, StaleNoticeMode>> = {
   citations: "bibliography",
+  /* Reception's and Claims' until the same plan's Stage 3. */
+  debate: "reception",
+  "debate-claims": "sources-claims",
 };
 
 /** A retired notice mode's successor, or the value as it came. */
@@ -108,7 +112,8 @@ export function parseStaleNoticeDismissal(body: unknown): StaleNoticeDismissalRe
     if (key !== "mode" && key !== "identities") return "That request has a field this endpoint does not take";
   }
   const { mode: asked, identities } = body as { mode?: unknown; identities?: unknown };
-  /* A tab open across plan 261009w's deploy still says `citations`. */
+  /* A tab open across plan 261009w's deploy still says `citations`, `debate`
+     or `debate-claims`. */
   const mode = currentStaleNoticeMode(asked);
   if (!isStaleNoticeMode(mode)) return "That is not a mode whose notice can be dismissed";
   if (!Array.isArray(identities) || identities.length === 0 || identities.length > MAX_DISMISSED_IDENTITIES) {

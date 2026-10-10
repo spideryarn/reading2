@@ -4,9 +4,9 @@ I fixed two narrow issues and left wider Chat behavior unchanged. No commits, da
 
 - **CR2 — P1 — A displaced unsent draft becomes inaccessible after a mode change. Established by running; unfixed, inherited and explicitly accepted by the plan.** [ConversationModes.tsx:851](/var/tmp/spideryarn-worktrees/why-reading-feeds-the-bar/src/web/modes/conversation/ConversationModes.tsx:851). Its words remain in memory, but only the selected draft is restored and given a row to reopen. Added the missing characterization test.
 
-- **CR3 — P2 — IME safety depended entirely on native form behavior. Reasoned browser risk; fixed, with guard tests observed red → green.** [DebatePanel.tsx:1419](/var/tmp/spideryarn-worktrees/why-reading-feeds-the-bar/src/web/DebatePanel.tsx:1419). Added the existing `isImeComposing` guard, including key code 229. Native IME behavior still needs a browser check.
+- **CR3 — P2 — IME safety depended entirely on native form behavior. Reasoned browser risk; fixed, with guard tests observed red → green.** [DebatePanel.tsx:1419](/var/tmp/spideryarn-worktrees/why-reading-feeds-the-bar/src/web/ReceptionAndClaimsPanel.tsx:1419). Added the existing `isImeComposing` guard, including key code 229. Native IME behavior still needs a browser check.
 
-- **CR4 — P3 — “Your angles” wording omitted when a conversation becomes listable. Established by tracing and running the unsent-handoff case; fixed.** [help-modes.tsx:721](/var/tmp/spideryarn-worktrees/why-reading-feeds-the-bar/src/web/help/help-modes.tsx:721), [debate.md:151](/var/tmp/spideryarn-worktrees/why-reading-feeds-the-bar/docs/project/debate.md:151). Clarified that an unsent draft has no saved thread to list.
+- **CR4 — P3 — “Your angles” wording omitted when a conversation becomes listable. Established by tracing and running the unsent-handoff case; fixed.** [help-modes.tsx:721](/var/tmp/spideryarn-worktrees/why-reading-feeds-the-bar/src/web/help/help-modes.tsx:721), [debate.md:151](/var/tmp/spideryarn-worktrees/why-reading-feeds-the-bar/docs/project/reception.md:151). Clarified that an unsent draft has no saved thread to list.
 
 Your six suspicions:
 
@@ -23,11 +23,11 @@ Please run the database suites `chat-origin-route.test.ts`, `store-chat-pg.test.
 
 Repository files changed:
 
-- [DebatePanel.tsx](/var/tmp/spideryarn-worktrees/why-reading-feeds-the-bar/src/web/DebatePanel.tsx)
+- [DebatePanel.tsx](/var/tmp/spideryarn-worktrees/why-reading-feeds-the-bar/src/web/ReceptionAndClaimsPanel.tsx)
 - [help-modes.tsx](/var/tmp/spideryarn-worktrees/why-reading-feeds-the-bar/src/web/help/help-modes.tsx)
-- [debate.md](/var/tmp/spideryarn-worktrees/why-reading-feeds-the-bar/docs/project/debate.md)
-- [debate-lens.test.tsx](/var/tmp/spideryarn-worktrees/why-reading-feeds-the-bar/tests/debate-lens.test.tsx)
-- [debate-lens-in-chat.test.tsx](/var/tmp/spideryarn-worktrees/why-reading-feeds-the-bar/tests/debate-lens-in-chat.test.tsx)
+- [debate.md](/var/tmp/spideryarn-worktrees/why-reading-feeds-the-bar/docs/project/reception.md)
+- [debate-lens.test.tsx](/var/tmp/spideryarn-worktrees/why-reading-feeds-the-bar/tests/reception-lens.test.tsx)
+- [debate-lens-in-chat.test.tsx](/var/tmp/spideryarn-worktrees/why-reading-feeds-the-bar/tests/reception-lens-in-chat.test.tsx)
 - [conversation-band-origin.test.tsx](/var/tmp/spideryarn-worktrees/why-reading-feeds-the-bar/tests/conversation-band-origin.test.tsx)
 - [IME coverage postmortem](/var/tmp/spideryarn-worktrees/why-reading-feeds-the-bar/docs/postmortems/261005n-a-submit-handler-test-cannot-prove-the-key-that-reaches-it.md)
 - [Held-key postmortem](/var/tmp/spideryarn-worktrees/why-reading-feeds-the-bar/docs/postmortems/261005o-a-held-key-becomes-a-new-action-after-focus-moves.md)

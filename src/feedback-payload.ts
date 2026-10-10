@@ -77,6 +77,8 @@ const RETIRED_STEPS: Readonly<Record<string, (typeof STEPS)[number]>> = {
   trajectory: "skim",
   hierarchy: "structure",
   citations: "bibliography",
+  debate: "reception",
+  "debate-claims": "sources-claims",
 };
 
 /** Which shape `FeedbackDiagnostics.payload` has. Stored in its own column. */
@@ -214,8 +216,8 @@ const STEPS = [
   "relations",
   "sketch",
   "illustrated",
-  "debate",
-  "debate-claims",
+  "reception",
+  "sources-claims",
   "bibliography",
   "crossrefs",
   "simple",

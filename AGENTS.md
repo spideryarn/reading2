@@ -73,7 +73,7 @@ listed here; the names under each are files in `docs/project/`.
   `search.md` · `referee-mode.md` (helping a peer reviewer, without reading for them) ·
   `diagram.md` · `sketch.md` (the picture a model draws of the argument) ·
   `illustrated.md` (the Sketch, painted) ·
-  `debate.md` (what the rest of the web says about the piece) ·
+  `reception.md` (Reception and Claims: what the rest of the web says about the piece) ·
   `tweets.md` (the piece as a thread; the one mode that writes on arrival) ·
   `comments.md` (bookmark or annotate a passage; the AI is a tick-box) ·
   `chat-tools.md` (what chat may call) ·

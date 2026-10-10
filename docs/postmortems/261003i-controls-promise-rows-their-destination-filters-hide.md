@@ -21,8 +21,8 @@ composition tests failed on the candidate.
 The fix derives Reception order capability and effective order from its thread-visible sections.
 The explicit handoff clears Claims' relevance and thread, fulfilling its advertised stored count;
 ordinary segment selection preserves filters. Regression tests live in
-[debate-panel.test.tsx](../../tests/debate-panel.test.tsx), with real router, nuqs and DTO coverage in
-[debate-navigation.test.tsx](../../tests/debate-navigation.test.tsx). Root-cause analysis was checked
+[debate-panel.test.tsx](../../tests/reception-and-claims-panel.test.tsx), with real router, nuqs and DTO coverage in
+[debate-navigation.test.tsx](../../tests/reception-navigation.test.tsx). Root-cause analysis was checked
 by a read-only subagent.
 
 Countermeasures, ranked by ease against value:

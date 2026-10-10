@@ -43,7 +43,7 @@ import {
   refereeClaimsStore,
   refereeHiddenCheckStore,
   refereeCriteriaStore,
-  debateClaimChecksStore,
+  sourcesClaimChecksStore,
   searchStore,
   shelfStore,
   tagStore,
@@ -64,12 +64,12 @@ import {
   loadSketch,
   loadQuiz,
   loadFaq,
-  loadDebateClaims,
+  loadSourcesClaims,
   loadRelations,
   loadCrossrefs,
   loadSimpleSummary,
   loadSkim,
-  loadDebate,
+  loadReception,
   loadArticleIdentity,
   loadBibliography,
   citedCandidates,
@@ -320,10 +320,10 @@ import { noteArrival } from "./arrivals.js";
 import { afterResponse, withAfterResponseTasks } from "./after-response.js";
 import { stageFailure } from "./job-failure.js";
 import {
-  DEBATE_CHECK_LIST_CHANGED,
-  DEBATE_CHECK_LIST_STALE,
-  DEBATE_CHECK_NO_LIST,
-  DEBATE_DIG_FURTHER_FIRST,
+  SOURCES_CLAIM_CHECK_LIST_CHANGED,
+  SOURCES_CLAIM_CHECK_LIST_STALE,
+  SOURCES_CLAIM_CHECK_NO_LIST,
+  SOURCES_CLAIM_CHECK_DIG_FURTHER_FIRST,
   LIVE_UPSTREAM,
   NOT_READ_YET,
   NOT_READ_YET_HIGH_POWER,
@@ -545,14 +545,14 @@ import {
 /* Debate's reader claim checks — plan 261008i § 3. The two caps the panel's
    button and this route must agree on, and the shapes the route builds. */
 import {
-  type DebateCheckTarget,
-  type DebateClaimCheck,
-  type DebateClaimList,
+  type SourcesClaimCheckTarget,
+  type SourcesClaimCheck,
+  type SourcesClaimList,
   MAX_CHECK_TARGETS,
   MAX_OWN_CLAIM_CHARS,
 } from "./types.js";
-import { admitDebateCheck, DEBATE_CHECK_TIMEOUT_MS, generateClaimCheck } from "./debate.js";
-import { inputFingerprint as debateClaimsFingerprint } from "./debate-claims.js";
+import { admitSourcesClaimCheck, SOURCES_CLAIM_CHECK_TIMEOUT_MS, generateClaimCheck } from "./reception.js";
+import { inputFingerprint as sourcesClaimsFingerprint } from "./sources-claims.js";
 /* A value, not a type — the one list a legacy stance is validated against
    (`streamChat` says why one is still accepted at all).
    src/types.ts § LEARN_STANCES. */
@@ -664,7 +664,7 @@ function send(res: ServerResponse, status: number, body: unknown): void {
  *   different 404, and stays one whatever the header says; so does every other
  *   failure. What counts as "not made" is the loader's call, not this
  *   function's: three of them put a document they cannot use in the same
- *   throw as no document (`loadFaq`, `loadSimpleSummary`, `loadDebate`).
+ *   throw as no document (`loadFaq`, `loadSimpleSummary`, `loadReception`).
  * - **Only `load`.** Give it the store read and nothing else — whatever the
  *   handler does next (quiz's kept answers, bibliography's matching) is outside
  *   this `catch`, so a failure there is never mistaken for "none yet".
@@ -5109,24 +5109,30 @@ function parseOrigin(origin: unknown): ThreadOrigin | undefined {
   if (typeof origin !== "object") throw httpError(400, "origin must be an object");
   const { mode: asSent, blockId, quote, lens } = origin as Record<string, unknown>;
   /* A tab loaded before 2026-10-09 sends a cited work's origin as
-     `citations`: read as `bibliography`, and stored as that (plan 261009w F1;
-     `RETIRED_ORIGIN_MODES`, which a stored row is read through too). */
-  const mode = currentOriginMode(asSent);
+     `citations`, read as `bibliography`, and a claim's or a lens's as
+     `debate`, read by its shape as `sources-claims` or `reception`; each is
+     stored under the new word (plan 261009w F1; `currentOriginMode`, which a
+     stored row is read through too). */
+  const mode = currentOriginMode(asSent, lens);
   const built = ORIGIN_MODES.find((m) => m === mode);
   if (built === undefined) {
     throw httpError(400, `origin.mode must be one of: ${ORIGIN_MODES.join(", ")}`);
   }
   switch (built) {
-    case "debate": {
-      /* **Two shapes under one mode, told apart by the `lens` key** (plan
-         261005k, A): a lens, or a claim. A body carrying a lens and any part
-         of a claim is neither, and is refused, not read as whichever half
-         this code looked at first. */
+    case "reception": {
+      /* A lens (plan 261005k, A). A body carrying a lens and any part of a
+         claim is neither, and is refused, not read as whichever half this
+         code looked at first. */
+      if (blockId !== undefined || quote !== undefined) {
+        throw httpError(400, "origin is a lens or a claim (blockId and quote), not both");
+      }
+      return { mode: built, lens: parseLens(lens) };
+    }
+    case "sources-claims": {
+      /* A claim. `currentOriginMode` sent an old `debate` body with a lens to
+         the arm above, so a lens here is a new-word body that mixed the two. */
       if (lens !== undefined) {
-        if (blockId !== undefined || quote !== undefined) {
-          throw httpError(400, "origin is a lens or a claim (blockId and quote), not both");
-        }
-        return { mode: built, lens: parseLens(lens) };
+        throw httpError(400, "origin is a lens or a claim (blockId and quote), not both");
       }
       if (typeof blockId !== "string" || !isSpideryarnId(blockId)) {
         throw httpError(400, "origin.blockId must be a block id");
@@ -5935,7 +5941,7 @@ async function runRefereeClaims(slug: string, res: ServerResponse): Promise<void
    The reader ticks claims in Sources' Claims, or types one, and presses Check:
    one web search over them all, stored as a check. Plan
    docs/plans/261008i-debate-claims-picked-by-the-reader.md § 3;
-   src/store/pg-debate-claim-checks.ts; src/debate.ts § `generateClaimCheck`. */
+   src/store/pg-sources-claim-checks.ts; src/reception.ts § `generateClaimCheck`. */
 
 /** The checks this process is running, keyed `slug/id`, so its own GET never sweeps one. */
 const checkingClaims = liveKeys();
@@ -6005,11 +6011,11 @@ function readCheckRequest(body: unknown): CheckAsked {
  */
 function checkTargets(
   asked: CheckAsked,
-  list: DebateClaimList,
-  checks: readonly DebateClaimCheck[],
-): DebateCheckTarget[] {
+  list: SourcesClaimList,
+  checks: readonly SourcesClaimCheck[],
+): SourcesClaimCheckTarget[] {
   const listed = new Map(list.claims.map((c) => [c.id, c]));
-  const fromList = (claimId: string): DebateCheckTarget | null => {
+  const fromList = (claimId: string): SourcesClaimCheckTarget | null => {
     const c = listed.get(claimId);
     return c ? { kind: "listed", claimId, blockId: c.blockId, quote: c.quote, statement: c.statement } : null;
   };
@@ -6030,19 +6036,19 @@ function checkTargets(
       /* Named by no list and no finished check: either nothing has looked at
          it yet, or the id is from somewhere else entirely. */
       const pendingOnly = mine.some((c) => c.targets.some((t) => t.claimId === claimId));
-      throw httpError(409, pendingOnly ? DEBATE_DIG_FURTHER_FIRST : DEBATE_CHECK_LIST_CHANGED);
+      throw httpError(409, pendingOnly ? SOURCES_CLAIM_CHECK_DIG_FURTHER_FIRST : SOURCES_CLAIM_CHECK_LIST_CHANGED);
     }
     if (!mine.some((c) => c.status === "done" && c.targets.some((t) => sameClaim(t, target)))) {
-      throw httpError(409, DEBATE_DIG_FURTHER_FIRST);
+      throw httpError(409, SOURCES_CLAIM_CHECK_DIG_FURTHER_FIRST);
     }
     return [target];
   }
 
-  const targets: DebateCheckTarget[] = [];
+  const targets: SourcesClaimCheckTarget[] = [];
   for (const claimId of asked.claimIds) {
     const target = fromList(claimId);
     /* An id from a list made again since this tab loaded it. */
-    if (target === null) throw httpError(409, DEBATE_CHECK_LIST_CHANGED);
+    if (target === null) throw httpError(409, SOURCES_CLAIM_CHECK_LIST_CHANGED);
     targets.push(target);
   }
   if (asked.own !== null) targets.push({ kind: "own", claimId: mintId(), text: asked.own });
@@ -6053,10 +6059,10 @@ function checkTargets(
  * **Is a stored target the same claim?** By id, or — for a listed claim — by
  * block and quote, which survive a list made again with new ids (GPT Sol's
  * E5). The panel draws them together by the same rule
- * (src/web/debate-checks.ts § `drawChecks`), so what Dig further is offered on
+ * (src/web/sources-claim-checks.ts § `drawChecks`), so what Dig further is offered on
  * and what it is told to look past agree.
  */
-function sameClaim(a: DebateCheckTarget, b: DebateCheckTarget): boolean {
+function sameClaim(a: SourcesClaimCheckTarget, b: SourcesClaimCheckTarget): boolean {
   if (a.claimId === b.claimId) return true;
   return a.kind === "listed" && b.kind === "listed" && a.blockId === b.blockId && a.quote === b.quote;
 }
@@ -6069,9 +6075,9 @@ function sameClaim(a: DebateCheckTarget, b: DebateCheckTarget): boolean {
  * is pending on the article then, so the finished ones are final.
  */
 function alreadyFoundFor(
-  target: DebateCheckTarget,
+  target: SourcesClaimCheckTarget,
   listSourceHash: string,
-  checks: readonly DebateClaimCheck[],
+  checks: readonly SourcesClaimCheck[],
 ): string[] {
   return [
     ...new Set(
@@ -6090,7 +6096,7 @@ function alreadyFoundFor(
 /**
  * **The waits before a failed finish write is tried again** — three more
  * tries, 14 s in all, inside the minute the allowance's lease and the sweep's
- * grace keep past the call's deadline (`DEBATE_CHECK_RATE_POLICY`,
+ * grace keep past the call's deadline (`SOURCES_CLAIM_CHECK_RATE_POLICY`,
  * `CHECK_ORPHAN_GRACE_MS`).
  * Safe to repeat, because `finish` is attempt-fenced: it lands only on this
  * attempt's own pending row, so a retry can never overwrite another check.
@@ -6105,10 +6111,10 @@ async function finishCheck(
   id: string,
   patch: ClaimCheckFinish,
   attempt: string,
-): Promise<DebateClaimCheck | null> {
+): Promise<SourcesClaimCheck | null> {
   for (let tried = 0; ; tried++) {
     try {
-      return await debateClaimChecksStore.finish(slug, id, patch, attempt);
+      return await sourcesClaimChecksStore.finish(slug, id, patch, attempt);
     } catch (err) {
       const wait = CHECK_FINISH_RETRY_MS[tried];
       if (wait === undefined) throw err;
@@ -6142,13 +6148,13 @@ async function finishCheck(
  *  7. for Dig further, the addresses already found — a read, not a spend,
  *     after the reservation so nothing can finish in between unseen;
  *  8. **the `debate-check` allowance** (429, 503), the check's own bucket
- *     (src/debate.ts § `DEBATE_CHECK_RATE_POLICY`) — and a refusal there takes
+ *     (src/reception.ts § `SOURCES_CLAIM_CHECK_RATE_POLICY`) — and a refusal there takes
  *     the reservation back, so nothing is left pending;
  *  9. then the stream and the model.
  *
  * ## A dropped client does not cancel the call
  *
- * The call runs on its own deadline (`DEBATE_CHECK_TIMEOUT_MS`), never on
+ * The call runs on its own deadline (`SOURCES_CLAIM_CHECK_TIMEOUT_MS`), never on
  * `sse().gone`: the answer is paid for either way, and a reader who closed the
  * tab finds it stored on the next GET.
  *
@@ -6168,27 +6174,27 @@ async function finishCheck(
  * row stays `pending` until the sweep ends it, and the answer is lost: the
  * failure is logged and sent to Sentry, without the answer.
  */
-async function runDebateClaimCheck(slug: string, body: unknown, res: ServerResponse): Promise<void> {
+async function runSourcesClaimCheck(slug: string, body: unknown, res: ServerResponse): Promise<void> {
   const asked = readCheckRequest(body);
   const article = await loadArticle(slug);
 
-  let list: DebateClaimList;
+  let list: SourcesClaimList;
   try {
-    list = (await loadDebateClaims(slug)).claimList;
+    list = (await loadSourcesClaims(slug)).claimList;
   } catch (err) {
-    if (err instanceof ArtefactNotMadeYet) throw httpError(409, DEBATE_CHECK_NO_LIST);
+    if (err instanceof ArtefactNotMadeYet) throw httpError(409, SOURCES_CLAIM_CHECK_NO_LIST);
     throw err;
   }
   /* Against the article just loaded — the one the model will be shown — not a
      stale flag read beside the list. */
-  if (list.sourceHash !== debateClaimsFingerprint(article.blocks, article.tree, article.meta)) {
-    throw httpError(409, DEBATE_CHECK_LIST_STALE);
+  if (list.sourceHash !== sourcesClaimsFingerprint(article.blocks, article.tree, article.meta)) {
+    throw httpError(409, SOURCES_CLAIM_CHECK_LIST_STALE);
   }
 
-  const earlier = asked.digFurther === null ? [] : await debateClaimChecksStore.list(slug);
+  const earlier = asked.digFurther === null ? [] : await sourcesClaimChecksStore.list(slug);
   const targets = checkTargets(asked, list, earlier);
 
-  const { check, attempt } = await debateClaimChecksStore.begin(slug, {
+  const { check, attempt } = await sourcesClaimChecksStore.begin(slug, {
     listSourceHash: list.sourceHash,
     targets,
     digFurther: asked.digFurther !== null,
@@ -6198,7 +6204,7 @@ async function runDebateClaimCheck(slug: string, body: unknown, res: ServerRespo
      here, so the call's deadline is too: whatever the setup below takes comes
      out of the model's time, never on top of it. A deadline that has passed
      before the call starts fails it at once, as an ordinary error. */
-  const deadline = AbortSignal.timeout(DEBATE_CHECK_TIMEOUT_MS);
+  const deadline = AbortSignal.timeout(SOURCES_CLAIM_CHECK_TIMEOUT_MS);
 
   let alreadyFound: string[] = [];
   /* After the reservation: no other check is pending now, so the finished
@@ -6206,10 +6212,10 @@ async function runDebateClaimCheck(slug: string, body: unknown, res: ServerRespo
      failed store read must not consume a reader's hourly or daily check. */
   if (asked.digFurther !== null) {
     try {
-      alreadyFound = alreadyFoundFor(targets[0]!, list.sourceHash, await debateClaimChecksStore.list(slug));
+      alreadyFound = alreadyFoundFor(targets[0]!, list.sourceHash, await sourcesClaimChecksStore.list(slug));
     } catch (err) {
       try {
-        await debateClaimChecksStore.abandon(slug, check.id, attempt);
+        await sourcesClaimChecksStore.abandon(slug, check.id, attempt);
       } catch (abandonErr) {
         log("store").error({ ...errorFields(abandonErr), slug }, `could not take back a claim check for ${slug}`);
       }
@@ -6219,14 +6225,14 @@ async function runDebateClaimCheck(slug: string, body: unknown, res: ServerRespo
 
   let free: () => Promise<void>;
   try {
-    free = await admitDebateCheck(fetchAllowanceStore);
+    free = await admitSourcesClaimCheck(fetchAllowanceStore);
   } catch (err) {
     /* Nothing was spent, so the reservation goes: a row left `pending` would
        hold the article's one check until the sweep. If the delete itself
        fails, the sweep is what frees it, and the reader still gets the
        refusal. */
     try {
-      await debateClaimChecksStore.abandon(slug, check.id, attempt);
+      await sourcesClaimChecksStore.abandon(slug, check.id, attempt);
     } catch (abandonErr) {
       log("store").error({ ...errorFields(abandonErr), slug }, `could not take back a claim check for ${slug}`);
     }
@@ -6255,8 +6261,8 @@ async function runDebateClaimCheck(slug: string, body: unknown, res: ServerRespo
         model: run.model,
       };
     } catch (err) {
-      captureFailure(err, { route: "debate-claim-check", slug });
-      patch = { status: "error", error: sayToReader(err, { route: "debate-claim-check", slug }) };
+      captureFailure(err, { route: "sources-claim-check", slug });
+      patch = { status: "error", error: sayToReader(err, { route: "sources-claim-check", slug }) };
     }
 
     try {
@@ -6264,12 +6270,12 @@ async function runDebateClaimCheck(slug: string, body: unknown, res: ServerRespo
          panel draws the same row a reload would. */
       const stored =
         (await finishCheck(slug, check.id, patch, attempt)) ??
-        (await debateClaimChecksStore.list(slug)).find((c) => c.id === check.id) ??
+        (await sourcesClaimChecksStore.list(slug)).find((c) => c.id === check.id) ??
         null;
       if (stored) frame("done", stored);
     } catch (storeErr) {
       log("store").error({ ...errorFields(storeErr), slug }, `could not record a claim check for ${slug}`);
-      captureFailure(storeErr, { route: "debate-claim-check", phase: "record-result", slug });
+      captureFailure(storeErr, { route: "sources-claim-check", phase: "record-result", slug });
     } finally {
       res.end();
     }
@@ -9556,7 +9562,10 @@ const ONE_CRITERION_PATTERN = /^\/api\/referee\/criteria\/([\w.%-]+)\/([\w.%-]+)
 const REFEREE_CLAIMS_PATTERN = /^\/api\/referee\/claims\/([\w.%-]+)$/;
 /* Debate's reader claim checks (plan 261008i § 3): GET lists them, POST makes
    one. One pattern for both rows, as Claims above. */
-const DEBATE_CHECKS_PATTERN = /^\/api\/debate-claims\/([\w.%-]+)\/checks$/;
+const SOURCES_CLAIM_CHECKS_PATTERN = /^\/api\/sources-claims\/([\w.%-]+)\/checks$/;
+/* The checks' path until 2026-10-09, for one deploy — removed by the contract,
+   plan 261009w (the old GET and POST below). */
+const OLD_DEBATE_CLAIM_CHECKS_PATTERN = /^\/api\/debate-claims\/([\w.%-]+)\/checks$/;
 const REFEREE_HIDDEN_CHECK_PATTERN = /^\/api\/referee\/hidden-check\/([\w.%-]+)$/;
 /* Search: the runs of one article, and one run of one article. Two rows apiece,
    so both are named here rather than spelled into the rows twice. */
@@ -11391,25 +11400,43 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     },
   },
 
-  /* Debate's claims list — docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2.
+  /* Sources › Claims' list — docs/plans/261008i-debate-claims-picked-by-the-reader.md § 2.
      GET only, and no DELETE, for `faq`'s reason: the step replaces, so asking
-     again is POST /api/jobs { slug, steps: ["debate-claims"] }. This route
+     again is POST /api/jobs { slug, steps: ["sources-claims"] }. This route
      never spends. A visitor reads the list off the public payload, without
      the staleness verdict, so there is no anonymous twin. None yet is
      `200 null` to a client that asks — `orNullWhenNotMadeYet`. */
   {
     kind: "pattern",
     method: "GET",
-    pattern: /^\/api\/debate-claims\/([\w.%-]+)$/,
+    pattern: /^\/api\/sources-claims\/([\w.%-]+)$/,
     article: "first-capture",
     handler: async ({ request: { req, res } }, captures) => {
-      const found = await orNullWhenNotMadeYet({ req, res }, () => loadDebateClaims(slugPart(captures, 1)));
+      const found = await orNullWhenNotMadeYet({ req, res }, () => loadSourcesClaims(slugPart(captures, 1)));
       if (!found) return;
       send(res, 200, found);
     },
   },
 
-  /* Debate's reader claim checks — plan 261008i § 3, `runDebateClaimCheck`.
+  /* **The old path, for one deploy** — removed by the contract, plan 261009w.
+     The list's route was `/api/debate-claims/:slug` until 2026-10-09, and a
+     tab loaded before the rename still asks for it; a 404 there would tell
+     that reader the list was never made (the plan's F1). The envelope never
+     said the step's name (`claimList`, `stale`, `outdated`), so it is the same
+     read and the same body. tests/reception-old-names.test.ts. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/debate-claims\/([\w.%-]+)$/,
+    article: "first-capture",
+    handler: async ({ request: { req, res } }, captures) => {
+      const found = await orNullWhenNotMadeYet({ req, res }, () => loadSourcesClaims(slugPart(captures, 1)));
+      if (!found) return;
+      send(res, 200, found);
+    },
+  },
+
+  /* Sources › Claims' reader claim checks — plan 261008i § 3, `runSourcesClaimCheck`.
      **Owner-only, both of them**: every store read is owner-scoped, so somebody
      else's article is a 404, and there is no public twin — a check may hold
      the reader's own typed claim. The GET never spends; it sweeps a `pending`
@@ -11418,11 +11445,11 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
   {
     kind: "pattern",
     method: "GET",
-    pattern: DEBATE_CHECKS_PATTERN,
+    pattern: SOURCES_CLAIM_CHECKS_PATTERN,
     article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       const slug = slugPart(captures, 1);
-      const checks = await debateClaimChecksStore.sweep(slug, (id) => checkingClaims.has(`${slug}/${id}`));
+      const checks = await sourcesClaimChecksStore.sweep(slug, (id) => checkingClaims.has(`${slug}/${id}`));
       send(res, 200, { checks });
     },
   },
@@ -11430,13 +11457,39 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
   {
     kind: "pattern",
     method: "POST",
-    pattern: DEBATE_CHECKS_PATTERN,
+    pattern: SOURCES_CLAIM_CHECKS_PATTERN,
     article: "first-capture",
     handler: async ({ request: { req, res } }, captures) => {
       /* SSE on success; every refusal is JSON, before a header is written.
          `article: "first-capture"` because the call inside pays, and the
          ledger row must say which article. */
-      await runDebateClaimCheck(slugPart(captures, 1), await readBody(req), res);
+      await runSourcesClaimCheck(slugPart(captures, 1), await readBody(req), res);
+    },
+  },
+
+  /* **The old paths, for one deploy** — removed by the contract, plan 261009w,
+     for the reason the old list GET above stays. The checks' envelope
+     (`{ checks }`) and the POST's frames never named the step, so both are the
+     same handlers under the path a tab loaded before the rename still asks. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: OLD_DEBATE_CLAIM_CHECKS_PATTERN,
+    article: "first-capture",
+    handler: async ({ request: { res } }, captures) => {
+      const slug = slugPart(captures, 1);
+      const checks = await sourcesClaimChecksStore.sweep(slug, (id) => checkingClaims.has(`${slug}/${id}`));
+      send(res, 200, { checks });
+    },
+  },
+
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: OLD_DEBATE_CLAIM_CHECKS_PATTERN,
+    article: "first-capture",
+    handler: async ({ request: { req, res } }, captures) => {
+      await runSourcesClaimCheck(slugPart(captures, 1), await readBody(req), res);
     },
   },
 
@@ -11582,37 +11635,60 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     },
   },
 
-  /* What the rest of the web says about this piece —
+  /* What the rest of the web says about this piece — Reception,
      docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md. GET
      only, and no DELETE, for the reason `ideas`, `quotes` and `timeline` have
      none: the step replaces rather than appends, so asking the web again is
-     POST /api/jobs { slug, steps: ["debate"] }. That is also the only way to
+     POST /api/jobs { slug, steps: ["reception"] }. That is also the only way to
      start one — this route never spends. */
   {
     kind: "pattern",
     method: "GET",
-    pattern: /^\/api\/debate\/([\w.%-]+)$/,
+    pattern: /^\/api\/reception\/([\w.%-]+)$/,
     article: "first-capture",
     handler: async ({ request: { req, res } }, captures) => {
       /* **No `withProfileChanged`**, for `timeline`'s and `quiz`'s reason: who
          is reading does not change what the web said, so there is no third
          staleness fact and offering one would be a banner about a thing that
-         cannot have happened. `DebateResponse` in src/types.ts has two fields.
+         cannot have happened. `ReceptionResponse` in src/types.ts has two fields.
 
          **And nothing here about how old the search is.** `searchedAt` travels
          on the artefact and the panel prints it; it is provenance rather than
          staleness, and a year-old shared link must not have its artefact
          declared invalid by the clock.
 
-         No debate yet is `200 null` to a client that asks —
-         `orNullWhenNotMadeYet`. "None" is what `loadDebate` calls none: a
-         document that fails `isDebateDocument` as well as no document, and
+         No search yet is `200 null` to a client that asks —
+         `orNullWhenNotMadeYet`. "None" is what `loadReception` calls none: a
+         document that fails `isReceptionDocument` as well as no document, and
          not a search that found nothing. */
       const found = await orNullWhenNotMadeYet({ req, res }, () =>
-        loadDebate(slugPart(captures, 1)),
+        loadReception(slugPart(captures, 1)),
       );
       if (!found) return;
       send(res, 200, found);
+    },
+  },
+
+  /* **The old path, for one deploy** — removed by the contract, plan 261009w.
+     Reception's route was `/api/debate/:slug` until 2026-10-09, and a tab
+     loaded before the rename still asks for it; a 404 there would tell that
+     reader nobody had asked the web yet and offer to pay for it again (the
+     plan's F1). The same read, with the envelope the old hook reads
+     (`git show 6b0b64f78:src/web/useDebate.ts`): the top-level key `debate`
+     rather than `reception`, nothing else changed.
+     tests/reception-old-names.test.ts. */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/debate\/([\w.%-]+)$/,
+    article: "first-capture",
+    handler: async ({ request: { req, res } }, captures) => {
+      const found = await orNullWhenNotMadeYet({ req, res }, () =>
+        loadReception(slugPart(captures, 1)),
+      );
+      if (!found) return;
+      const { reception, ...rest } = found;
+      send(res, 200, { debate: reception, ...rest });
     },
   },
 

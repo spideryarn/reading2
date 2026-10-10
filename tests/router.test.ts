@@ -527,12 +527,17 @@ describe("lifting the old Tweets addresses", () => {
       expect(settleAddress("/read/x", "?debateby=claim&debate=claims", "")).toBe("/read/x?debate=claims");
     });
 
-    it("leaves Reception's own orders alone, and Claims with one of them carried", () => {
-      expect(settleAddress("/read/x", "?mode=sources&sources=reception&debateby=stance", "")).toBeNull();
-      expect(settleAddress("/read/x", "?mode=sources&sources=reception&debateby=date", "")).toBeNull();
-      /* `debate=claims&debateby=date` is Claims; `debateby` is Reception's and
-         waits there. Nothing to rewrite. */
-      expect(settleAddress("/read/x", "?debate=claims&debateby=date", "")).toBeNull();
+    /* Reception's own orders are not this lift's: since plan 261009w's Stage 3
+       they move to `receptionby` (`liftLegacySources`, and
+       tests/sources-old-addresses.test.ts), with their value as it was. */
+    it("leaves Reception's own orders to the key rename, and Claims with one of them carried", () => {
+      expect(settleAddress("/read/x", "?mode=sources&sources=reception&debateby=stance", "")).toBe(
+        "/read/x?mode=sources&sources=reception&receptionby=stance",
+      );
+      expect(settleAddress("/read/x", "?mode=sources&sources=reception&receptionby=date", "")).toBeNull();
+      /* `debate=claims&debateby=date` is Claims; the order is Reception's and
+         waits there, under its new key. */
+      expect(settleAddress("/read/x", "?debate=claims&debateby=date", "")).toBe("/read/x?debate=claims&receptionby=date");
       expect(settleAddress("/read/x", "?find=debateby%3Dclaim", "")).toBeNull();
     });
 
@@ -550,7 +555,8 @@ describe("lifting the old Tweets addresses", () => {
       expect(liftedLegacyHref("/read/x?mode=debate&debateby=claim#h")).toBe(
         "/read/x?mode=sources&sources=claims#h",
       );
-      expect(liftedLegacyHref("/read/x?mode=sources&debateby=stance")).toBeNull();
+      expect(liftedLegacyHref("/read/x?mode=sources&debateby=stance")).toBe("/read/x?mode=sources&receptionby=stance");
+      expect(liftedLegacyHref("/read/x?mode=sources&receptionby=stance")).toBeNull();
       /* Both old spellings on one link. */
       expect(liftedLegacyHref("/read/x/tweets?debateby=claim")).toBe(`/read/x?${THREAD}&debate=claims`);
       expect(liftedLegacyHref("/read/x/tweets")).toBe(`/read/x?${THREAD}`);

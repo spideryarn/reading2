@@ -66,7 +66,7 @@ const CHANGED_PROMPTS = {
   "src/glossary.ts": "pick",
   "src/timeline.ts": "pick",
   "src/arc.ts": "part",
-  "src/debate.ts": "pick",
+  "src/reception.ts": "pick",
 } as const;
 
 describe("the paperwork rule is the default for every whole-article prompt", () => {

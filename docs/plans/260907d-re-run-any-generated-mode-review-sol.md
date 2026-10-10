@@ -6,7 +6,7 @@
 
 (a) The plan equates membership in `FORCE_ONLY_WHEN_NAMED` with “one press, one model call” ([plan:70](/home/greg/code/spideryarn2/.claude/worktrees/worktree-rerun-a-mode/docs/plans/260907d-re-run-any-generated-mode-from-the-metadata-page.md:70)). The job runner explicitly says a step is not a model call ([jobs.ts:1002](/home/greg/code/spideryarn2/.claude/worktrees/worktree-rerun-a-mode/src/jobs.ts:1002)).
 
-- Debate normally makes two separately metered calls ([debate.ts:35](/home/greg/code/spideryarn2/.claude/worktrees/worktree-rerun-a-mode/src/debate.ts:35)).
+- Debate normally makes two separately metered calls ([debate.ts:35](/home/greg/code/spideryarn2/.claude/worktrees/worktree-rerun-a-mode/src/reception.ts:35)).
 - Illustrated makes one brief call ([illustrated.ts:895](/home/greg/code/spideryarn2/.claude/worktrees/worktree-rerun-a-mode/src/illustrated.ts:895)) followed by one image call per plate ([illustrated.ts:1042](/home/greg/code/spideryarn2/.claude/worktrees/worktree-rerun-a-mode/src/illustrated.ts:1042)).
 
 `FORCE_ONLY_WHEN_NAMED` describes force-cascade semantics, not cost, runnable prerequisites, or replacement safety. Automatically adding every future member to the UI is therefore unsafe. A direct client import of `pipeline.ts` would also violate the enforced client/server boundary ([client-imports.test.ts:2](/home/greg/code/spideryarn2/.claude/worktrees/worktree-rerun-a-mode/tests/client-imports.test.ts:2)).

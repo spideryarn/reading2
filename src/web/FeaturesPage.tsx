@@ -295,8 +295,8 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
               about the article, e.g. reviews, critiques, etc (ideally from
               authoritative sources)", with "citation/linking"; and 2026-09-30
               (SPIDERYARN-READING2-6M), "key themes" and "key nodes". Both in
-              docs/project/debate.md; the themes and key sources are
-              src/debate-themes.ts. Sources' Reception since 2026-10-09,
+              docs/project/reception.md; the themes and key sources are
+              src/reception-themes.ts. Sources' Reception since 2026-10-09,
               titled with the sub-mode's name (plan 261009l). */}
           <Tile name="Reception." span="wide" mode="sources">
             What the wider web says about the piece — reviews and critiques, ideally from

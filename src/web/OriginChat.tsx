@@ -6,7 +6,7 @@
  *
  * - `OriginChatMark` is the way back: the chat's count of questions and how
  *   its latest answer begins. A press opens that chat beside the mode. It was
- *   drawn inline in DebatePanel.tsx § `ClaimsList` until 2026-10-06
+ *   drawn inline in ReceptionAndClaimsPanel.tsx § `ClaimsList` until 2026-10-06
  *   (plan docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md, D4).
  * - `AskInChatButton` is Glossary's and Bibliography's *Ask in chat*, beside Dig
  *   deeper (plan docs/plans/261006d-glossary-and-citations-ask-in-chat-with-origin.md, D5)
@@ -55,7 +55,7 @@ export const ASK_IN_CHAT = "Ask in chat";
 export const ASK_ENTRY_IN_CHAT = "Ask about this term in chat";
 export const ASK_WORK_IN_CHAT = "Ask about this work in chat";
 export const ASK_IDEA_IN_CHAT = "Ask about this idea in chat";
-/** The mark's accessible name on each. Debate's is `DEBATE_OPEN_CLAIM_CHAT`. */
+/** The mark's accessible name on each. Debate's is `SOURCES_CLAIMS_OPEN_CLAIM_CHAT`. */
 export const OPEN_ENTRY_CHAT = "Open the chat about this term";
 export const OPEN_WORK_CHAT = "Open the chat about this work";
 export const OPEN_IDEA_CHAT = "Open the chat about this idea";

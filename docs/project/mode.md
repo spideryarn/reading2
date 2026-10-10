@@ -622,12 +622,15 @@ under it, in the same piece of work:
 [rename-or-move.md § A rename on screen is a rename all the way down](../reusable/rename-or-move.md#a-rename-on-screen-is-a-rename-all-the-way-down)
 (Greg, 2026-10-06). The TypeScript unions (`MODES`, `StepName`, `Task`) and their total tables go
 red by themselves. These do not all, and `debate` is the specimen each was checked against on
-2026-10-07:
+2026-10-07; it was renamed by this list on 2026-10-09 (plan
+[261009w](../plans/261009w-peer-review-becomes-sources-all-the-way-down.md), Stage 3), so each line
+says `debate` as it was and the name it is now:
 
 **Where a mode's name is stored**
 
 - [`src/db/schema.ts`](../../src/db/schema.ts) § `articleRevisions` — the jsonb column named for
-  the mode (`debate`). *Silent in the worst way:* `drizzle-kit generate` asks create-or-rename, and
+  the mode (`debate`, now `reception`, with `legacyDebate` kept by trigger until the contract).
+  *Silent in the worst way:* `drizzle-kit generate` asks create-or-rename, and
   without a TTY it cannot take the answer —
   [database.md § That rename question needs a terminal](database.md#that-rename-question-needs-a-terminal-and-without-one-you-get-silence);
   the migration itself is [database.md § A new migration, in five lines](database.md#a-new-migration-in-five-lines).
@@ -637,12 +640,14 @@ red by themselves. These do not all, and `debate` is the specimen each was check
   `jobs.work_key` hashes the ordered step names (`workKeyFor` in
   [`src/store/jobs.ts`](../../src/store/jobs.ts)); the Skim migration deliberately kept it, accepting
   a possible duplicate run across the deploy window.
-- [`src/debate.ts`](../../src/debate.ts) § `PROMPT_VERSION` — stored in `debate.version` and
-  `revision_step_runs.prompt_version`. A rename alone keeps this tag, as the Skim precedent did;
+- [`src/reception.ts`](../../src/reception.ts) § `PROMPT_VERSION` — stored in the artefact's `version` and
+  `revision_step_runs.prompt_version` (still `debate/7`). A rename alone keeps this tag, as the Skim precedent did;
   changing it would mark unchanged output outdated. *A string, not checked by the compiler.*
 - [`src/db/schema.ts`](../../src/db/schema.ts) § `chat_threads_origin_mode`, `chat_threads_origin_debate`,
   `chat_threads_origin_lens_debate_only` — the mode as a chat's origin, with `ORIGIN_MODES` in
-  [`src/types.ts`](../../src/types.ts). *The CHECK is loud at write time; the rows need an `UPDATE`.*
+  [`src/types.ts`](../../src/types.ts) (`debate` was a claim or a lens; it became `sources-claims`
+  and `reception`, `chat_threads_origin_sources_claims` and `chat_threads_origin_reception`, and an
+  old row is read by its shape). *The CHECK is loud at write time; the rows need an `UPDATE`.*
 - [`src/cost-categories.ts`](../../src/cost-categories.ts) § `JOB_DISPOSITION` (compiler), and
   [`src/step-order.ts`](../../src/step-order.ts) § `currentLedgerName` — `ai_calls.purpose` and
   `ai_calls.step_name` are append-only and are **not** rewritten, so the old job/step name gets a
@@ -652,16 +657,18 @@ red by themselves. These do not all, and `debate` is the specimen each was check
   keep old names as evidence. Incoming stale-tab names are normalised in
   [`src/feedback-payload.ts`](../../src/feedback-payload.ts); stored reports are not rewritten.
 - [`src/models.ts`](../../src/models.ts) § `MODEL_ENV_VAR` — the key is checked, the value
-  (`SPIDERYARN_DEBATE_MODEL`) is a string, and so is wherever it is set. *Silent.*
+  (`SPIDERYARN_RECEPTION_MODEL`) is a string, and so is wherever it is set. *Silent.*
 - [`src/web/params.ts`](../../src/web/params.ts) — the mode's own URL words (`?debate=` until
-  2026-10-09, `?debateby=`, `?debatethread=`) and `CHAT_FROM_WORDS`; the literal query keys are in
+  2026-10-09; `?debateby=` and `?debatethread=`, now `?receptionby=` and `?receptionthread=`,
+  lifted in `liftLegacySources`) and `CHAT_FROM_WORDS`; the literal query keys are in
   [`SourcesMode.tsx`](../../src/web/modes/sources/SourcesMode.tsx) (`DebateMode.tsx` then). *Silent:* an old link loses the parameter.
 - [`src/web/last-view.ts`](../../src/web/last-view.ts) § `REMEMBERED`, `lastViewKey` — localStorage
   keeps `mode=debate` and the mode's query keys in the saved search. Decide which old words restore;
   the Learn precedent also moves a retired query key to `NEVER_REMEMBERED` so an old link still wins.
   *The compiler does not check these strings; `tests/last-view.test.ts` checks the key inventory.*
-- [`src/routes.ts`](../../src/routes.ts) and [`src/web/useDebate.ts`](../../src/web/useDebate.ts) —
-  `/api/debate/:slug`, also in `CACHEABLE` and `NONE_YET_AS_NULL` in
+- [`src/routes.ts`](../../src/routes.ts) and [`src/web/useReception.ts`](../../src/web/useReception.ts) —
+  `/api/debate/:slug` (now `/api/reception/:slug`, the old path an alias for one deploy), also in
+  `CACHEABLE` and `NONE_YET_AS_NULL` in
   [`src/web/lib/api.ts`](../../src/web/lib/api.ts). The IndexedDB offline copy stores that URL
   (`keyFor` in [`offline-store.ts`](../../src/web/lib/offline-store.ts)). *The path is a string:*
   renaming it loses the old offline read until fetched again, a cost the Skim precedent accepted.
@@ -669,11 +676,17 @@ red by themselves. These do not all, and `debate` is the specimen each was check
   *Compiler.*
 - [`src/store/export-bundle.ts`](../../src/store/export-bundle.ts) § `REVISION_WRITTEN_ELSEWHERE`
   and the `at("<name>.json")` lines — the file in the owner's zip. A mode with no file there
-  (Debate) ships as its column's key in `content/revision.json`. *A file name is a string.*
+  (Reception) ships as its column's key in `content/revision.json`. *A file name is a string.*
 - [`src/command-pick-catalogue.generated.json`](../../src/command-pick-catalogue.generated.json) —
   *loud:* [`tests/command-pick-catalogue.test.ts`](../../tests/command-pick-catalogue.test.ts)
   fails until `WRITE_COMMAND_PICK_CATALOGUE=1 npx vitest run tests/command-pick-catalogue.test.ts`.
-- [`package.json`](../../package.json) § `eval:debate`, and `evals/debate/`. *Silent.*
+- [`package.json`](../../package.json) § `eval:reception`, and `evals/reception/` (`eval:debate`
+  and `evals/debate/` until 2026-10-09). *Silent.*
+- [`src/store/contracts.ts`](../../src/store/contracts.ts) § `RateBucket` and `rate_limit_events_bucket`
+  — a job's rate bucket (`debate-check`, now `sources-claim-check`). The rows carry the word for a
+  day, so the limiter counts both spellings (`RETIRED_RATE_BUCKETS`). *Silent:* a reset allowance.
+- [`src/stale-notice.ts`](../../src/stale-notice.ts) § `STALE_NOTICE_MODES` and its table's CHECK
+  — a dismissed notice is stored under the step's word. *Loud at write time.*
 
 **The precedents**
 

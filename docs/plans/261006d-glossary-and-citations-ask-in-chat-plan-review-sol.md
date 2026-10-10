@@ -12,7 +12,7 @@ The design is sound, but D1 introduces one concrete failure for valid glossary e
 
   **Smallest fix:** specify owner-only props through Reader → each owner Band → Panel → `Term`/`Looked` or `WorkRow`: raw `chatSummaries`, the new sender, and the existing reopening handler. Use `chatSummaries`, not Reader’s `chats`, which is filtered to quoted passage anchors at [Reader.tsx:1077](/var/tmp/spideryarn-worktrees/qi-mh276fx8-ask-in-chat/src/web/reader/Reader.tsx:1077). Test the complete Reader composition so a panel-only test cannot conceal missing props.
 
-- **F4 — P2, reasoned: extracting the mark’s JSX alone will not preserve its layout.** Its full-width line, indentation and coarse-pointer height depend on `.dbt-group-claim > .dbt-claim-chat`: [debate.css:223](/var/tmp/spideryarn-worktrees/qi-mh276fx8-ask-in-chat/src/web/styles/debate.css:223). Those selectors do not apply in Glossary or Citations.
+- **F4 — P2, reasoned: extracting the mark’s JSX alone will not preserve its layout.** Its full-width line, indentation and coarse-pointer height depend on `.dbt-group-claim > .dbt-claim-chat`: [debate.css:223](/var/tmp/spideryarn-worktrees/qi-mh276fx8-ask-in-chat/src/web/styles/reception.css:223). Those selectors do not apply in Glossary or Citations.
 
   **Smallest fix:** include shared mark styles in the extraction, leaving Debate-specific placement in Debate’s stylesheet. Verify all three callers at narrow widths and with coarse-pointer emulation.
 

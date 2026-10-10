@@ -196,9 +196,9 @@ const VOICES_BY_MODE: Record<Mode, readonly string[] | { noModelText: string }> 
     ".cite-why",
     ".cite-does",
     ".prose-card-cite-does-text",
-    ".dbt-ai",
-    ".dbt-title-ai",
-    ".dbt-thread-gist",
+    ".rcp-ai",
+    ".rcp-title-ai",
+    ".rcp-thread-gist",
   ],
   /* `.voice-ai`: a title or navLabel the model wrote (tree.ts § nodeLabel). */
   structure: [".struct-gist", ".voice-ai", ".tip-gist"],
@@ -208,7 +208,7 @@ const VOICES_BY_MODE: Record<Mode, readonly string[] | { noModelText: string }> 
     ".marg-question",
     ".marg-idea-name",
     ".marg-arc",
-    ".marg-debate-applies",
+    ".marg-reception-applies",
     ".marg-open-answer",
   ],
 };
@@ -394,7 +394,7 @@ describe("voices.css", () => {
       ".gloss-ask-found",
       ".tip-cite-text",
       ".skim-words-tip",
-      ".dbt-group-quote",
+      ".rcp-group-quote",
       ".mir-quote:not(.mir-block-id)",
       ".ideas-quote:not(.ideas-quote-moved)",
       ".tl-quote:not(.tl-quote-moved)",
@@ -413,7 +413,7 @@ describe("voices.css", () => {
       ".cnd-requirement",
       ".cnd-why",
       ".chat-live-line.companion .chat-live-words",
-      ".dbt-thread:not(.dbt-thread-key) .dbt-thread-name",
+      ".rcp-thread:not(.rcp-thread-key) .rcp-thread-name",
       ".clm-list .clm-claim",
       ".clm-why:not(.clm-why-withheld)",
     ]) {
@@ -422,10 +422,10 @@ describe("voices.css", () => {
     expect(ai).not.toContain(".ideas-blurb");
     expect(ai).not.toContain(".cite-verdict-text");
     /* Fixed words that report a model's verdict stay UI (261002b § 2). */
-    expect(innerBranches(ai)).not.toContain(".dbt-relation");
+    expect(innerBranches(ai)).not.toContain(".rcp-relation");
     expect(innerBranches(ai)).not.toContain(".cnd-name");
     expect(innerBranches(ai)).not.toContain(".cnd-affil");
-    expect(innerBranches(ai)).not.toContain(".dbt-thread-name");
+    expect(innerBranches(ai)).not.toContain(".rcp-thread-name");
     /* Hidden, untrusted source text is not obviously the author's (Sol, P2). */
     expect(author).not.toContain(".ref-scan-text");
     expect(ai).not.toContain(".ref-scan-text");

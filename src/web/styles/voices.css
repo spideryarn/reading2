@@ -71,7 +71,7 @@
     /* Marginalia's opened citation: the article's own reference entry */
     .marg-cite-entry,
     /* Debate's claim heading: the article's own words for the claim */
-    .dbt-group-quote,
+    .rcp-group-quote,
     /* "first cited" — the words the article cites the work with */
     .cite-at,
     /* the search hit card's passage */
@@ -150,13 +150,13 @@
     .mir-note,
     /* Hidden text: Opus's reason under a row; the verdict before it is ours */
     .ref-scan-opinion-reason,
-    .dbt-ai,
+    .rcp-ai,
     /* not the fixed "Key sources" thread */
-    .dbt-thread:not(.dbt-thread-key) .dbt-thread-name,
-    .dbt-thread-gist,
-    .dbt-key-why,
+    .rcp-thread:not(.rcp-thread-key) .rcp-thread-name,
+    .rcp-thread-gist,
+    .rcp-key-why,
     /* the headline only when it is the model's reading of the page */
-    .dbt-title-ai,
+    .rcp-title-ai,
     /* Tweets: the post, inside a <p> whose `tw:font-prose` would win */
     .tweets-text,
     /* Marginalia: the part's question, the idea and its statement, the arc */
@@ -168,7 +168,7 @@
     .marg-arc-full,
     /* Marginalia's shut notes, opened: Debate's reading of a page, the AI's
        answer to a comment */
-    .marg-debate-applies,
+    .marg-reception-applies,
     .marg-open-answer,
     /* Sketch: the card, the title bar, and the scene tooltips. NOT the SVG
        labels, which are wrapped in TypeScript at Geist's width (CHAR_W in

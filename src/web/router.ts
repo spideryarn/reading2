@@ -1371,7 +1371,7 @@ const SUMMARY_THREAD = "mode=summary&summary=thread";
  * Reception is the *absent* parameter, so a panel that read a lingering
  * `debateby=claim` as "Claims" would bounce a reader who pressed Reception
  * straight back. After this nothing downstream knows the word:
- * `debateOrderParam` (params.ts) has three values.
+ * `receptionOrderParam` (params.ts) has three values.
  *
  * **An explicit `debate=` wins**: the old order is removed either way, and the
  * sub-mode the link already names is left as it is. Every other pair is kept
@@ -1415,7 +1415,11 @@ const DEBATE_CLAIMS = "debate=claims";
  *   `peer-review=X` → `sources=X`, wherever it appears;
  * - `?chatfrom=debate`, `?chatfrom=citations` and `?chatfrom=peer-review` →
  *   `?chatfrom=sources`, Chat's list filter for conversations started from
- *   any of the three sub-modes.
+ *   any of the three sub-modes;
+ * - Reception's own two words, `?debateby=X` → `?receptionby=X` and
+ *   `?debatethread=X` → `?receptionthread=X`, wherever they appear (plan
+ *   261009w, Stage 3: they were Debate's until 2026-10-09). An explicit new
+ *   word wins over the old one, which is then dropped.
  *
  * `RETIRED_MODES` (src/modes.ts) alone would open Sources at its default,
  * so an old Reception or Claims link would land on Bibliography; this is what
@@ -1426,8 +1430,8 @@ const DEBATE_CLAIMS = "debate=claims";
  * `debate=` wins over `debateby`; a `peer-review=` beside a `sources=` is
  * dropped. The `debate=` pairs a Debate address carried are consumed; on any
  * other address a stray `debate=` is read by nothing and left as written.
- * Every other pair — `?citeby`, `?citebar`, `?debateby`, `?bears`,
- * `?debatethread`, the sub-modes' own — is kept exactly as written.
+ * Every other pair — `?citeby`, `?citebar`, `?bears`, the sub-modes' own —
+ * is kept exactly as written.
  *
  * One function behind every arrival: `settleAddress` on boot,
  * `liftedLegacyHref` on a navigation and on Back, and `liftedLegacySearch` for
@@ -1453,7 +1457,11 @@ function liftLegacySources(at: Address): Address {
   const oldMode = isOldWord(modeWord) ? modeWord : null;
   const oldChatFrom = isOldWord(chatFromWord);
   const oldSubMode = pairs.some((pair) => hasKey(pair, "peer-review"));
-  if (oldMode === null && !oldChatFrom && !oldSubMode) return at;
+  /* Reception's order and thread, under the words they had until 2026-10-09.
+     `debateby=claim` never reaches here: `liftLegacyDebateBy` lifted it to
+     Claims first. */
+  const oldReceptionWords = pairs.some((pair) => hasKey(pair, "debateby") || hasKey(pair, "debatethread"));
+  if (oldMode === null && !oldChatFrom && !oldSubMode && !oldReceptionWords) return at;
 
   /* The sub-mode the old address meant, unless it names a newer one itself. */
   const explicit = pairs.some((pair) => hasKey(pair, "sources"));
@@ -1463,7 +1471,20 @@ function liftLegacySources(at: Address): Address {
   let wroteMode = false;
   let wroteSubMode = explicit;
   let wroteChatFrom = false;
+  /* The newest explicit word wins, as `sources=` does over `peer-review=`. */
+  let wroteOrder = pairs.some((pair) => hasKey(pair, "receptionby"));
+  let wroteThread = pairs.some((pair) => hasKey(pair, "receptionthread"));
   const kept = pairs.flatMap((pair) => {
+    if (hasKey(pair, "debateby")) {
+      if (wroteOrder || !pair.includes("=")) return [];
+      wroteOrder = true;
+      return [`receptionby${pair.slice(pair.indexOf("="))}`];
+    }
+    if (hasKey(pair, "debatethread")) {
+      if (wroteThread || !pair.includes("=")) return [];
+      wroteThread = true;
+      return [`receptionthread${pair.slice(pair.indexOf("="))}`];
+    }
     if (oldMode !== null && hasKey(pair, "mode")) {
       if (wroteMode) return [];
       wroteMode = true;

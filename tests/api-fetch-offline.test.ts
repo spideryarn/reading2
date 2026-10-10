@@ -90,8 +90,8 @@ const NONE_YET_READS = [
   "ideas",
   "faq",
   "timeline",
-  "debate",
-  "debate-claims",
+  "reception",
+  "sources-claims",
   "glossary",
   "quotes",
   "tweets",
@@ -110,6 +110,8 @@ const NONE_YET_READS = [
  */
 const RETIRED_READ_PATHS: Readonly<Record<string, string>> = {
   citations: "Bibliography's path until 2026-10-09; removed by plan 261009w's contract",
+  debate: "Reception's path until 2026-10-09; removed by plan 261009w's contract",
+  "debate-claims": "Claims' list path until 2026-10-09; removed by plan 261009w's contract",
 };
 
 function assertNoneYetInventory(source: string, offlinePattern = NONE_YET_AS_NULL): void {

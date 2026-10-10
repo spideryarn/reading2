@@ -383,7 +383,7 @@ const NOTHING_SHARED: PublicArtefacts = {
   faq: false,
   simpleSummary: false,
   bibliography: false,
-  debate: false,
+  reception: false,
 };
 
 describe("what an item under More says", () => {

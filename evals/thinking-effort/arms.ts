@@ -10,7 +10,7 @@
  * cheapest candidate, twice). `medium-*` is a possible second round, bought
  * only if `low` clearly fails, so it is supported and not run by default.
  */
-import { mulberry32 } from "../debate/label-sheet.js";
+import { mulberry32 } from "../reception/label-sheet.js";
 
 export const MODES = ["sketch", "ideas", "illustrated"] as const;
 export type Mode = (typeof MODES)[number];

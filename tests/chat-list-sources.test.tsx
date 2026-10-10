@@ -41,7 +41,7 @@ const LEARN = thread("spya-rem021", "learn");
 const TUTORIAL = thread("spya-tut022", "tutorial");
 const EXPLORE = thread("spya-exp022", "explore");
 const CLAIM = thread("spya-clm023", "chat", {
-  origin: { mode: "debate", blockId: "spya-bbbbbb", quote: "RNA can transfer a memory" },
+  origin: { mode: "sources-claims", blockId: "spya-bbbbbb", quote: "RNA can transfer a memory" },
 });
 const PASSAGE = thread("spya-psg024", "chat", {
   anchor: { blockId: "spya-cccccc", quote: "the felt quality", start: 4 },
@@ -179,20 +179,20 @@ describe("a row's source icon", () => {
 
   it("is a button a finger or the keyboard can press, and its card says where the row came from", () => {
     paint(EVERY);
-    const debate = mark(CLAIM);
-    expect(debate?.tagName).toBe("BUTTON");
-    press(debate);
+    const reception = mark(CLAIM);
+    expect(reception?.tagName).toBe("BUTTON");
+    press(reception);
     /* Every card on screen: one that is closing fades for a moment after
        the next has opened. */
     const cards = (): string[] => [...document.querySelectorAll('[role="tooltip"]')].map((c) => c.textContent ?? "");
     expect(cards().some((c) => c.includes("Started from a claim in Sources › Claims") && c.includes("RNA can transfer a memory"))).toBe(
       true,
     );
-    expect(debate?.getAttribute("aria-expanded")).toBe("true");
+    expect(reception?.getAttribute("aria-expanded")).toBe("true");
     /* Pressing the icon is not pressing the row. */
     expect(opened).toEqual([]);
-    press(debate);
-    expect(debate?.getAttribute("aria-expanded")).toBe("false");
+    press(reception);
+    expect(reception?.getAttribute("aria-expanded")).toBe("false");
 
     press(mark(LEARN));
     expect(cards().some((c) => c.includes("From Learn › Recall"))).toBe(true);

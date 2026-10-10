@@ -50,7 +50,7 @@ sixteen draws on eight articles measured the effort question ([261001c](261001c-
 
 Plan: [260930j](../plans/260930j-debate-themes-and-key-sources.md). Outputs:
 [run 1](../plans/260930j-themes-eval-run1.txt), [run 2](../plans/260930j-themes-eval-run2.txt).
-Live doc: [debate.md](../project/debate.md).
+Live doc: [debate.md](../project/reception.md).
 
 **Question.** Greg, 2026-09-30 (report 6M): highlight "key themes from other people and commentary"
 and "key nodes, i.e. the critical papers that really responded or moved things forward or take a

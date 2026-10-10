@@ -370,7 +370,6 @@ describe("no Postgres store is selected without a guard", () => {
          addresses from articles they may open. */
       "pgCitedInSpideryarnStore",
       "pgCommentStore",
-      "pgDebateClaimChecksStore",
       "pgFeedbackStore",
       /* The link preview's two, 2026-09-05. Worth one line of why they are
          guarded rather than only that they are: a failed Drizzle query puts
@@ -412,6 +411,7 @@ describe("no Postgres store is selected without a guard", () => {
          somebody's upload lives. */
       "pgSourceGuessStore",
       "pgSourceStore",
+      "pgSourcesClaimChecksStore",
       "pgStaleNoticeStore",
       /* The third factory, and the one that proved a fixed-size window wrong:
          it guards on its last line, 450 below its signature. */

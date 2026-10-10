@@ -67,7 +67,7 @@ export const RERUN_COST_NOTE: Partial<Record<MetadataRerunStep, string>> = {
        all four was too long to be read as a note. */
     "Adds more terms to an up-to-date list; otherwise writes a new one",
   sketch: `One model call, ${SKETCH_WAIT}`,
-  debate:
+  reception:
     "One model call that searches the web, plus one search-free call to find themes when it keeps enough sources",
   skim: "Needs Quotes first; without them it stops before any model call",
 };
@@ -130,7 +130,7 @@ const RERUN_ALSO_CALLED: Partial<Record<MetadataRerunStep, readonly string[]>> =
      (sub-modes.ts § `SOURCES_SUB_MODES`). Never `sources` or `peer review`:
      plan 261009l, GPT Sol's F8. */
   bibliography: SOURCES_SUB_MODES.bibliography.aliases ?? [],
-  debate: SOURCES_SUB_MODES.reception.aliases ?? [],
+  reception: SOURCES_SUB_MODES.reception.aliases ?? [],
 };
 
 /**

@@ -160,7 +160,7 @@ describe("the imported title through the page's rename", () => {
       slug: SLUG, article: article(), signedIn: false, sessionUnconfirmed: false, sharedBy: "public",
       available: { arc: false, tweets: false, glossary: false, ideas: false, quotes: false,
         timeline: false, sketch: false, skim: false, faq: false, simpleSummary: false,
-        bibliography: false, debate: false },
+        bibliography: false, reception: false },
     })));
     expect(host.querySelector("[data-imported-title]")).toBeNull();
     expect(host.textContent).not.toContain(ORIGINAL);

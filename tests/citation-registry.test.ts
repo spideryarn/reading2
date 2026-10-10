@@ -14,7 +14,7 @@ import {
   REGISTRY_CONCURRENCY,
   rowWorkId,
 } from "../src/citation-registry.js";
-import { debateRegistryDeps } from "../src/debate-registry.js";
+import { receptionRegistryDeps } from "../src/reception-registry.js";
 import { REGISTRY_AUTHORS_KEPT } from "../src/registry-work.js";
 import type { BlockId, Bibliography, CitedWork } from "../src/types.js";
 
@@ -421,6 +421,6 @@ describe("how many, and how fast", () => {
 describe("the composition root", () => {
   it("hands both steps stage 1's lookupWork itself", () => {
     expect(citationRegistryDeps.lookup).toBe(lookupWork);
-    expect(debateRegistryDeps.lookup).toBe(lookupWork);
+    expect(receptionRegistryDeps.lookup).toBe(lookupWork);
   });
 });

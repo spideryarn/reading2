@@ -36,11 +36,11 @@ import type {
   BlockId,
   Bibliography,
   CitationRegistry,
-  ClaimDebateRow,
-  Debate,
-  DirectDebateRow,
+  ClaimReceptionRow,
+  Reception,
+  DirectReceptionRow,
   Faq,
-  DebateClaimList,
+  SourcesClaimList,
   ListedClaim,
   SimpleSentence,
   SimpleSummary,
@@ -74,8 +74,8 @@ const NO_ARTEFACTS = {
   faq: null,
   simpleSummary: null,
   bibliography: null,
-  debate: null,
-  debateClaims: null,
+  reception: null,
+  sourcesClaims: null,
   /* Cross-references (plan 261001b): none built, and so nothing to be fresh. */
   crossrefs: null,
   crossrefsFresh: false,
@@ -1355,7 +1355,7 @@ describe("the artefacts a shared link carries", () => {
    * key on a claim the stored document should not have, so a projection that
    * copied its argument would carry it out. Plan 261008i stage 2.
    */
-  const CLAIM_LIST: DebateClaimList = {
+  const CLAIM_LIST: SourcesClaimList = {
     version: "debate-claims/1",
     generator: "some-model",
     slug: "noema",
@@ -1661,8 +1661,8 @@ describe("the artefacts a shared link carries", () => {
     faq: FAQ,
     simpleSummary: SIMPLE,
     bibliography: BIBLIOGRAPHY,
-    debate: null,
-    debateClaims: CLAIM_LIST,
+    reception: null,
+    sourcesClaims: CLAIM_LIST,
     comments: [],
     searches: [],
     sketch: null,
@@ -2192,10 +2192,10 @@ describe("the artefacts a shared link carries", () => {
 
   /** Each listed claim's id, place, quote and the AI's line, and nothing about our pipeline. Plan 261008i. */
   it("carries Debate's listed claims, field by field, and not what checking dropped", () => {
-    expect(pathsUnder("debateClaims")).toEqual(
+    expect(pathsUnder("sourcesClaims")).toEqual(
       ["claims", "claims[].blockId", "claims[].id", "claims[].quote", "claims[].statement"].sort(),
     );
-    expect(built.debateClaims).toEqual({
+    expect(built.sourcesClaims).toEqual({
       claims: [
         {
           id: "spya-cdm2a4",
@@ -2205,7 +2205,7 @@ describe("the artefacts a shared link carries", () => {
         },
       ],
     });
-    const json = JSON.stringify(built.debateClaims);
+    const json = JSON.stringify(built.sourcesClaims);
     for (const gone of ["dropped", "sourceHash", "generator", "version", "owner id sentinel"]) {
       expect(json, gone).not.toContain(gone);
     }
@@ -2550,8 +2550,8 @@ describe("the artefacts a shared link carries", () => {
       faq: null,
       simpleSummary: null,
       bibliography: null,
-      debate: null,
-      debateClaims: null,
+      reception: null,
+      sourcesClaims: null,
       crossrefs: null,
       crossrefsFresh: false,
       comments: [],
@@ -2590,7 +2590,7 @@ describe("the artefacts a shared link carries", () => {
       assets: null,
       ...NO_ARTEFACTS,
     });
-    for (const key of ["glossary", "ideas", "tweets", "skim", "faq", "simpleSummary", "bibliography", "debate", "debateClaims"]) {
+    for (const key of ["glossary", "ideas", "tweets", "skim", "faq", "simpleSummary", "bibliography", "reception", "sourcesClaims"]) {
       expect(key in bare, key).toBe(false);
     }
   });
@@ -2841,7 +2841,7 @@ describe("the debate a shared link carries", () => {
   };
 
   /** A direct row with every field set, and all three kinds of evidence. */
-  function directRow(over: Partial<DirectDebateRow> = {}): DirectDebateRow {
+  function directRow(over: Partial<DirectReceptionRow> = {}): DirectReceptionRow {
     return {
       id: "spya-dr0001",
       url: "https://reply.example.org/a-reply",
@@ -2863,7 +2863,7 @@ describe("the debate a shared link carries", () => {
   }
 
   /** A claim row with every field set. */
-  function claimRow(over: Partial<ClaimDebateRow> = {}): ClaimDebateRow {
+  function claimRow(over: Partial<ClaimReceptionRow> = {}): ClaimReceptionRow {
     return {
       id: "spya-cr0001",
       url: "https://answers.example.org/on-claims",
@@ -2893,18 +2893,18 @@ describe("the debate a shared link carries", () => {
    * would read as a search that kept nothing (plan 261008i, F4).
    */
   it("carries a claims search that did not run as not run, not as an empty group", () => {
-    const built = publish({ ...debateOf([directRow()], []), claims: { pass: "not-run", rows: [] } });
-    expect(built.debate?.claims).toEqual({ pass: "not-run", rows: [] });
-    expect(built.debate?.direct.rows.map((r) => r.id)).toEqual(["spya-dr0001"]);
+    const built = publish({ ...receptionOf([directRow()], []), claims: { pass: "not-run", rows: [] } });
+    expect(built.reception?.claims).toEqual({ pass: "not-run", rows: [] });
+    expect(built.reception?.direct.rows.map((r) => r.id)).toEqual(["spya-dr0001"]);
   });
 
   it("carries a debate stored before the marker as a searched group, with no pass", () => {
-    const built = publish(debateOf([], [claimRow()]));
-    expect(built.debate?.claims).not.toHaveProperty("pass");
-    expect(searched(built.debate?.claims).sourceNotPublishable).toBe(0);
+    const built = publish(receptionOf([], [claimRow()]));
+    expect(built.reception?.claims).not.toHaveProperty("pass");
+    expect(searched(built.reception?.claims).sourceNotPublishable).toBe(0);
   });
 
-  function debateOf(direct: DirectDebateRow[], claims: ClaimDebateRow[]): Debate {
+  function receptionOf(direct: DirectReceptionRow[], claims: ClaimReceptionRow[]): Reception {
     return {
       version: "debate/9",
       generator: "some-model",
@@ -2917,7 +2917,7 @@ describe("the debate a shared link carries", () => {
     };
   }
 
-  function publish(debate: Debate, finalUrl: string | null = "https://www.noemamag.com/the-mythology-of-conscious-ai/") {
+  function publish(reception: Reception, finalUrl: string | null = "https://www.noemamag.com/the-mythology-of-conscious-ai/") {
     return publicArticle({
       slug: "noema",
       title: TITLE,
@@ -2938,7 +2938,7 @@ describe("the debate a shared link carries", () => {
       arc: null,
       assets: null,
       ...NO_ARTEFACTS,
-      debate,
+      reception,
     });
   }
 
@@ -2948,8 +2948,8 @@ describe("the debate a shared link carries", () => {
    * here as `version`, `counts…` or `webSearches`.
    */
   it("carries rows, signals and searchedAt, and none of the provenance or stored counts", () => {
-    const built = publish(debateOf([directRow()], [claimRow()]));
-    expect(keyPaths(built.debate)).toEqual(
+    const built = publish(receptionOf([directRow()], [claimRow()]));
+    expect(keyPaths(built.reception)).toEqual(
       [
         "searchedAt",
         "direct",
@@ -3006,12 +3006,12 @@ describe("the debate a shared link carries", () => {
         "claims.sourceNotPublishable",
       ].sort(),
     );
-    expect(built.debate?.searchedAt).toBe("2026-09-20T10:00:00.000Z");
-    expect(built.debate?.direct.sourceNotPublishable).toBe(0);
-    expect(searched(built.debate?.claims).sourceNotPublishable).toBe(0);
-    expect(JSON.stringify(built.debate)).not.toContain("debate registry extra must not cross");
+    expect(built.reception?.searchedAt).toBe("2026-09-20T10:00:00.000Z");
+    expect(built.reception?.direct.sourceNotPublishable).toBe(0);
+    expect(searched(built.reception?.claims).sourceNotPublishable).toBe(0);
+    expect(JSON.stringify(built.reception)).not.toContain("debate registry extra must not cross");
     /* A clean article address on a linked signal crosses as itself. */
-    expect(built.debate?.direct.rows[0]?.identifies[0]).toEqual({
+    expect(built.reception?.direct.rows[0]?.identifies[0]).toEqual({
       kind: "linked",
       url: "https://www.noemamag.com/the-mythology-of-conscious-ai/",
     });
@@ -3024,7 +3024,7 @@ describe("the debate a shared link carries", () => {
    * appear nowhere in the payload, and the owner's stored counts are untouched.
    */
   it("drops a row whose source is credentialled or private, and counts it", () => {
-    const debate = debateOf(
+    const reception = receptionOf(
       [
         directRow(),
         directRow({ id: "spya-dr0002", url: "https://reader:swordfish@x.org/reply" }),
@@ -3032,15 +3032,15 @@ describe("the debate a shared link carries", () => {
       ],
       [claimRow(), claimRow({ id: "spya-cr0002", url: "http://intranet/answer" })],
     );
-    const before = structuredClone(debate);
-    const built = publish(debate);
-    expect(built.debate?.direct.rows.map((r) => r.id)).toEqual(["spya-dr0001"]);
-    expect(built.debate?.direct.sourceNotPublishable).toBe(2);
-    expect(built.debate?.claims.rows.map((r) => r.id)).toEqual(["spya-cr0001"]);
-    expect(searched(built.debate?.claims).sourceNotPublishable).toBe(1);
+    const before = structuredClone(reception);
+    const built = publish(reception);
+    expect(built.reception?.direct.rows.map((r) => r.id)).toEqual(["spya-dr0001"]);
+    expect(built.reception?.direct.sourceNotPublishable).toBe(2);
+    expect(built.reception?.claims.rows.map((r) => r.id)).toEqual(["spya-cr0001"]);
+    expect(searched(built.reception?.claims).sourceNotPublishable).toBe(1);
     const json = JSON.stringify(built);
     for (const leak of ["swordfish", "192.168.0.7", "intranet/answer"]) expect(json, leak).not.toContain(leak);
-    expect(debate, "the owner's artefact and its counts are untouched").toEqual(before);
+    expect(reception, "the owner's artefact and its counts are untouched").toEqual(before);
   });
 
   /**
@@ -3060,7 +3060,7 @@ describe("the debate a shared link carries", () => {
     ["a private host", PRIVATE_SOURCE, "10.1.2.3"],
   ])("never publishes the article's own address with %s, however it is nested", (_, source, needle) => {
     const built = publish(
-      debateOf(
+      receptionOf(
         [
           directRow({
             id: "spya-dr0010",
@@ -3082,14 +3082,14 @@ describe("the debate a shared link carries", () => {
       ),
       source,
     );
-    expect(built.debate?.direct.rows.map((r) => r.id)).toEqual(["spya-dr0011"]);
-    expect(built.debate?.direct.sourceNotPublishable).toBe(1);
-    expect(built.debate?.direct.rows[0]?.identifies).toEqual([
+    expect(built.reception?.direct.rows.map((r) => r.id)).toEqual(["spya-dr0011"]);
+    expect(built.reception?.direct.sourceNotPublishable).toBe(1);
+    expect(built.reception?.direct.rows[0]?.identifies).toEqual([
       { kind: "linked" },
       { kind: "named", by: "title", witness: TITLE },
     ]);
-    expect(built.debate?.claims.rows.map((r) => r.id)).toEqual(["spya-cr0001"]);
-    expect(searched(built.debate?.claims).sourceNotPublishable).toBe(1);
+    expect(built.reception?.claims.rows.map((r) => r.id)).toEqual(["spya-cr0001"]);
+    expect(searched(built.reception?.claims).sourceNotPublishable).toBe(1);
     expect(JSON.stringify(built)).not.toContain(needle);
   });
 
@@ -3102,7 +3102,7 @@ describe("the debate a shared link carries", () => {
   it("judges a linked address by the article's own policy, not the citation one", () => {
     const signed = "https://www.noemamag.com/the-mythology-of-conscious-ai/?token=OWNERSECRET";
     const built = publish(
-      debateOf(
+      receptionOf(
         [
           directRow({ id: "spya-dr0020", identifies: [{ kind: "linked", url: signed }] }),
           directRow({ id: "spya-dr0021", articleReferenceQuote: signed, identifies: [{ kind: "linked", url: signed }] }),
@@ -3110,41 +3110,41 @@ describe("the debate a shared link carries", () => {
         [],
       ),
     );
-    expect(built.debate?.direct.rows.map((r) => r.id)).toEqual(["spya-dr0020"]);
-    expect(built.debate?.direct.rows[0]?.identifies).toEqual([{ kind: "linked" }]);
-    expect(built.debate?.direct.sourceNotPublishable).toBe(1);
+    expect(built.reception?.direct.rows.map((r) => r.id)).toEqual(["spya-dr0020"]);
+    expect(built.reception?.direct.rows[0]?.identifies).toEqual([{ kind: "linked" }]);
+    expect(built.reception?.direct.sourceNotPublishable).toBe(1);
     expect(JSON.stringify(built)).not.toContain("OWNERSECRET");
   });
 
   it("drops a row whose source is the article's refused own address", () => {
     const signed = "https://www.noemamag.com/the-mythology-of-conscious-ai/?token=OWNERSECRET";
     const built = publish(
-      debateOf(
+      receptionOf(
         [directRow({ id: "spya-dr0022", url: signed })],
         [claimRow({ id: "spya-cr0022", url: signed })],
       ),
       signed,
     );
-    expect(built.debate?.direct.rows).toEqual([]);
-    expect(built.debate?.direct.sourceNotPublishable).toBe(1);
-    expect(built.debate?.claims.rows).toEqual([]);
-    expect(searched(built.debate?.claims).sourceNotPublishable).toBe(1);
+    expect(built.reception?.direct.rows).toEqual([]);
+    expect(built.reception?.direct.sourceNotPublishable).toBe(1);
+    expect(built.reception?.claims.rows).toEqual([]);
+    expect(searched(built.reception?.claims).sourceNotPublishable).toBe(1);
     expect(JSON.stringify(built)).not.toContain("OWNERSECRET");
   });
 
   it("drops a row whose words contain a percent-encoded refused address", () => {
     const signed = "https://www.noemamag.com/the-mythology-of-conscious-ai/?token=OWNERSECRET";
     const built = publish(
-      debateOf(
+      receptionOf(
         [directRow({ id: "spya-dr0023", articleReferenceQuote: encodeURIComponent(signed) })],
         [claimRow({ id: "spya-cr0023", sourceQuote: encodeURIComponent(signed) })],
       ),
       signed,
     );
-    expect(built.debate?.direct.rows).toEqual([]);
-    expect(built.debate?.direct.sourceNotPublishable).toBe(1);
-    expect(built.debate?.claims.rows).toEqual([]);
-    expect(searched(built.debate?.claims).sourceNotPublishable).toBe(1);
+    expect(built.reception?.direct.rows).toEqual([]);
+    expect(built.reception?.direct.sourceNotPublishable).toBe(1);
+    expect(built.reception?.claims.rows).toEqual([]);
+    expect(searched(built.reception?.claims).sourceNotPublishable).toBe(1);
     expect(JSON.stringify(built)).not.toContain("OWNERSECRET");
   });
 
@@ -3159,14 +3159,14 @@ describe("the debate a shared link carries", () => {
       lean: undefined,
       valence: "positive",
       identifies: undefined,
-    } as unknown as DirectDebateRow;
-    const legacyClaim = { ...claimRow({ id: "spya-cr0030" }), lean: undefined, valence: "negative" } as unknown as ClaimDebateRow;
-    const built = publish(debateOf([legacy], [legacyClaim]));
-    const row = built.debate?.direct.rows[0];
+    } as unknown as DirectReceptionRow;
+    const legacyClaim = { ...claimRow({ id: "spya-cr0030" }), lean: undefined, valence: "negative" } as unknown as ClaimReceptionRow;
+    const built = publish(receptionOf([legacy], [legacyClaim]));
+    const row = built.reception?.direct.rows[0];
     expect(row?.lean).toBe("leans-for");
     expect(row?.identifies).toEqual([{ kind: "named", by: "title", witness: `in "${TITLE}"` }]);
-    expect(built.debate?.claims.rows[0]?.lean).toBe("leans-against");
-    expect(JSON.stringify(built.debate)).not.toContain("valence");
+    expect(built.reception?.claims.rows[0]?.lean).toBe("leans-against");
+    expect(JSON.stringify(built.reception)).not.toContain("valence");
   });
 
   it("carries no debate key when nobody searched", () => {
@@ -3191,7 +3191,7 @@ describe("the debate a shared link carries", () => {
       assets: null,
       ...NO_ARTEFACTS,
     });
-    expect("debate" in bare).toBe(false);
+    expect("reception" in bare).toBe(false);
   });
 });
 

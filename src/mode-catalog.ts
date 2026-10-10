@@ -510,14 +510,14 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
          the row (BibliographyPanel.tsx § Source).
        - Reception, "a pass over the open web … stored once it lands": the
          `debate` step since `debate/7` (2026-10-08) is one pass, for
-         Reception only (src/debate.ts). "A pass" rather than "a search",
+         Reception only (src/reception.ts). "A pass" rather than "a search",
          because one pass has run 36 searches on its own (GPT Sol,
          2026-09-07).
        - Claims, "listed by one model call … with no web search": the
          `debate-claims` step (plan 261008i § 2); a check is the reader's own
-         press, per claim (src/debate.ts § `admitDebateCheck`).
+         press, per claim (src/reception.ts § `admitSourcesClaimCheck`).
        - "Every source links out": every Reception and checked-claim row is a
-         page with its address (DebatePanel.tsx § Row).
+         page with its address (ReceptionAndClaimsPanel.tsx § Row).
        No price — mode.md § The card on the button. */
     how: "Bibliography is one model call over the article, written once and stored, and every address shown for a work is one the article itself gave, found by code rather than typed by the model, or else a Scholar search marked as one. Reception comes from a pass over the open web, and Claims lists the piece's claims with one model call and no web search, for you to check against the web; each is stored once it lands. Every source links out, so you can check it rather than take our word for it.",
     /* "peer review" left Referee's aliases on 2026-10-09 for this mode, then

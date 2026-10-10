@@ -93,9 +93,9 @@ export const STEP_SHARING = {
   illustrated: { column: "illustrated", reads: ["sketch"] },
   /* A route through the quotes' ids, and since 260928a stage 6 the ideas too. */
   skim: { column: "skim", reads: ["quotes", "ideas"] },
-  debate: { column: "debate", reads: [] },
+  reception: { column: "reception", reads: [] },
   /* Reads the article only — not the stored Debate — and writes its own column. */
-  "debate-claims": { column: "debateClaims", reads: [] },
+  "sources-claims": { column: "sourcesClaims", reads: [] },
   bibliography: { column: "bibliography", reads: [] },
   crossrefs: { column: "crossrefs", reads: [] },
   simple: { column: "simpleSummary", reads: [] },

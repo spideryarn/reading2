@@ -10,16 +10,16 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { checksOwner, claimListOwner } from "./helpers/debate-claims-owner.js";
+import { checksOwner, claimListOwner } from "./helpers/sources-claims-owner.js";
 
-import type { BlockId, CitationRegistry, Bibliography, ClaimDebateRow, CitedWork, Debate, DebateCounts } from "../src/types.js";
+import type { BlockId, CitationRegistry, Bibliography, ClaimReceptionRow, CitedWork, Reception, ReceptionCounts } from "../src/types.js";
 import type { UseBibliography } from "../src/web/useBibliography.js";
-import type { UseDebate } from "../src/web/useDebate.js";
+import type { UseReception } from "../src/web/useReception.js";
 
 const { BibliographyPanel, byLineOf, registryConflictNote, workByLine } = await import("../src/web/BibliographyPanel.js");
 const { readCitationRegistry, readRegistryWork } = await import("../src/registry-work.js");
-const { DebatePanel, rowWork } = await import("../src/web/DebatePanel.js");
-const { orderReceptionRows, receptionOrderOptions, rowYear } = await import("../src/web/debate-order.js");
+const { ReceptionAndClaimsPanel, rowWork } = await import("../src/web/ReceptionAndClaimsPanel.js");
+const { orderReceptionRows, receptionOrderOptions, rowYear } = await import("../src/web/reception-order.js");
 
 const AT = "spya-k3m9qt" as BlockId;
 
@@ -220,7 +220,7 @@ describe("a Citations row on screen", () => {
 
 /* ---------------------------------------------------------------- Debate -- */
 
-function claim(id: string, over: Partial<ClaimDebateRow> = {}): ClaimDebateRow {
+function claim(id: string, over: Partial<ClaimReceptionRow> = {}): ClaimReceptionRow {
   return {
     id,
     url: "https://doi.org/10.1073/pnas.1",
@@ -289,7 +289,7 @@ describe("Debate's by-line and date order", () => {
       claim("registry-dated", { publishedYear: 2024, registry: RECORD }),
       claim("undated", { url: "https://blog.example.org/x" }),
     ];
-    expect(rowYear(rows[1] as ClaimDebateRow)).toBe(2010);
+    expect(rowYear(rows[1] as ClaimReceptionRow)).toBe(2010);
     /* *Date* is one of Reception's orders since 2026-10-03 (plan 261003o); the
        rule reads any row's year, so these fixtures serve as they are. */
     const groups = orderReceptionRows(rows, "date");
@@ -299,8 +299,8 @@ describe("Debate's by-line and date order", () => {
   });
 });
 
-function debateOwner(row: ClaimDebateRow): UseDebate {
-  const counts: DebateCounts = {
+function receptionOwner(row: ClaimReceptionRow): UseReception {
+  const counts: ReceptionCounts = {
     returnedSources: 1,
     reportedRows: 1,
     keptRows: 1,
@@ -317,7 +317,7 @@ function debateOwner(row: ClaimDebateRow): UseDebate {
     },
     webSearches: 1,
   };
-  const debate: Debate = {
+  const reception: Reception = {
     version: "debate/4",
     generator: "m",
     slug: "s",
@@ -329,7 +329,7 @@ function debateOwner(row: ClaimDebateRow): UseDebate {
   };
   return {
     status: "ready",
-    debate,
+    reception,
     stale: false,
     outdated: false,
     slug: "s",
@@ -345,10 +345,10 @@ function debateOwner(row: ClaimDebateRow): UseDebate {
     cancel: () => {},
     rewriting: false,
     refresh: async () => {},
-  } as UseDebate;
+  } as UseReception;
 }
 
-/** The owner has chat, and nothing here presses it (tests/debate-claim-chat.test.tsx does). */
+/** The owner has chat, and nothing here presses it (tests/sources-claims-chat.test.tsx does). */
 const NO_CLAIM_CHATS = { summaries: [], onCheck: () => {}, onLens: () => {}, onOpen: () => {} };
 
 describe("a Debate row on screen", () => {
@@ -356,9 +356,9 @@ describe("a Debate row on screen", () => {
     const row = claim("shown", { authors: ["Extracted Author"], publishedYear: 2024, registry: RECORD });
     await act(async () =>
       root.render(
-        createElement(DebatePanel, {
+        createElement(ReceptionAndClaimsPanel, {
           head: null,
-          access: { kind: "owner", owner: debateOwner(row), claimList: claimListOwner(), checks: checksOwner(), citers: { result: { kind: "no-doi" }, retry: () => {} }, claimChats: NO_CLAIM_CHATS },
+          access: { kind: "owner", owner: receptionOwner(row), claimList: claimListOwner(), checks: checksOwner(), citers: { result: { kind: "no-doi" }, retry: () => {} }, claimChats: NO_CLAIM_CHATS },
           onJump: () => {},
           /* The fixture is a claim row, so Claims is the sub-mode that draws it. */
           view: "claims",
@@ -375,9 +375,9 @@ describe("a Debate row on screen", () => {
         }),
       ),
     );
-    const byline = host.querySelector<HTMLElement>(".dbt-byline");
+    const byline = host.querySelector<HTMLElement>(".rcp-byline");
     expect(byline?.textContent).toContain("Erin Wamsley, Stickgold · 2010");
     expect(byline?.title).toContain("Authors and year from DataCite");
-    expect(host.querySelector(".dbt-detail")?.textContent).toContain("Authors and year from DataCite");
+    expect(host.querySelector(".rcp-detail")?.textContent).toContain("Authors and year from DataCite");
   });
 });

@@ -34,7 +34,6 @@ import {
   type ClaimOrigin,
   type GlossaryEntry,
   type Idea,
-  isLensOrigin,
   type ThreadOrigin,
 } from "../../types.js";
 import { marginaliaNotes, arcAt, headBlock, headPath } from "../marginalia/notes.js";
@@ -96,7 +95,7 @@ import {
   askAboutBlock,
   askAboutTerm,
   itemOrigin,
-  askDebateThroughLens,
+  askReceptionThroughLens,
   askToCheckClaim,
 } from "../chat-handoff.js";
 import type { QuizArrival } from "../QuizPanel.js";
@@ -160,7 +159,7 @@ import {
   structureParam,
   sourcesParam,
   bearsParam,
-  debateThreadParam,
+  receptionThreadParam,
   type BandMode,
   type Mode,
 } from "../params.js";
@@ -1077,11 +1076,11 @@ export function Reader({
     (lens: string, then: "send" | "wait") => {
       const words = lens.trim();
       if (words === "") return;
-      handToChat(askDebateThroughLens(words), then, { mode: "debate", lens: words });
+      handToChat(askReceptionThroughLens(words), then, { mode: "reception", lens: words });
     },
     [handToChat],
   );
-  const debateThroughLensInChat = useCallback((lens: string) => lensInChat(lens, "send"), [lensInChat]);
+  const receptionThroughLensInChat = useCallback((lens: string) => lensInChat(lens, "send"), [lensInChat]);
   const suggestedLensInChat = useCallback((lens: string) => lensInChat(lens, "wait"), [lensInChat]);
   /* **The command bar's *Ask the guide: “…”* row** (plan 261007j F6): the
      reader's own typed sentence, sent to this article's one guide — opened if
@@ -1677,7 +1676,7 @@ export function Reader({
     mode: modeParam,
     sources: sourcesParam,
     bears: bearsParam,
-    debatethread: debateThreadParam,
+    receptionthread: receptionThreadParam,
     thread: threadParam,
   });
   /**
@@ -1752,21 +1751,21 @@ export function Reader({
           setBandAway(false);
           void setIdeaWay({ mode: "ideas", idea: origin.itemId, thread: null }, { history: "push" });
           return;
-        /* A claim's or a lens's origin keeps the word `debate` until Stage 3
-           of plan 261009w; each lands on its Sources sub-mode. */
-        case "debate":
+        /* A lens's origin lands on Reception, a claim's on Claims (both
+           `debate` until plan 261009w's Stage 3). */
+        case "reception":
           setBandAway(false);
-          if (isLensOrigin(origin)) {
-            /* An angle is not in the article: the angles box is Reception's. */
-            void setSourcesWay(
-              { mode: "sources", sources: "reception", thread: null },
-              { history: "push" },
-            );
-            return;
-          }
+          /* An angle is not in the article: the angles box is Reception's. */
+          void setSourcesWay(
+            { mode: "sources", sources: "reception", thread: null },
+            { history: "push" },
+          );
+          return;
+        case "sources-claims":
+          setBandAway(false);
           setClaimFocus(focusOn(claimFocusKey(origin)));
           void setSourcesWay(
-            { mode: "sources", sources: "claims", bears: null, debatethread: null, thread: null },
+            { mode: "sources", sources: "claims", bears: null, receptionthread: null, thread: null },
             { history: "push" },
           );
           return;
@@ -2101,7 +2100,7 @@ export function Reader({
      reverse that quietly. Comments are the one list both arms already share. */
   const marginaliaFaq = owner ? ownerFeed.faq : (artefacts?.faq?.questions ?? null);
   const marginaliaTimeline = owner ? ownerFeed.timeline : (artefacts?.timeline?.events ?? null);
-  const marginaliaClaims = owner ? ownerFeed.claims : (artefacts?.debate?.claims.rows ?? null);
+  const marginaliaClaims = owner ? ownerFeed.claims : (artefacts?.reception?.claims.rows ?? null);
   const marginaliaBibliography =
     owner && owner.bibliography.status === "ready" && !owner.bibliography.stale
       ? (owner.bibliography.bibliography?.citations ?? null)
@@ -2669,17 +2668,17 @@ export function Reader({
     },
     [setNote, setThread, refreshChats],
   );
-  /* What Debate's claims are handed (DebatePanel.tsx § `DebateClaimChats`).
+  /* What Debate's claims are handed (ReceptionAndClaimsPanel.tsx § `ReceptionAndClaimsChats`).
      Memoised on the summaries, so the band re-renders when a chat appears or
      its latest line changes and not otherwise. */
   const claimChats = useMemo(
     () => ({
       summaries: chatSummaries,
       onCheck: checkClaimInChat,
-      onLens: debateThroughLensInChat,
+      onLens: receptionThroughLensInChat,
       onOpen: openClaimChat,
     }),
-    [chatSummaries, checkClaimInChat, debateThroughLensInChat, openClaimChat],
+    [chatSummaries, checkClaimInChat, receptionThroughLensInChat, openClaimChat],
   );
   /* The same three things for Glossary's entries and Bibliography's rows
      (OriginChat.tsx § `ItemChats`). **The raw `chatSummaries`**, not `chats`
@@ -3647,8 +3646,8 @@ export function Reader({
          one chip row (SourcesMode.tsx). **The owner/visitor pair**, each
          half since 2026-09-29: a visitor's rows arrive with every address
          re-judged by `publicCitationUrl` (src/public/dto.ts §
-         `publicCitedWork`, `publicDebate`), and `VisitorSourcesBand` mounts
-         no `useBibliography` or `useDebate`, so nothing here can start a list or
+         `publicCitedWork`, `publicReception`), and `VisitorSourcesBand` mounts
+         no `useBibliography` or `useReception`, so nothing here can start a list or
          a search. **Any one of the three artefacts draws the band**
          (visitor.ts § POLICY, `any-artefact`): with none, `visitorGap` said
          `not-built` and the `VisitorBand` is in the slot. No passages — every
@@ -3657,11 +3656,11 @@ export function Reader({
          docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
       case "sources":
         if (!owner)
-          return artefacts?.bibliography || artefacts?.debate || artefacts?.debateClaims ? (
+          return artefacts?.bibliography || artefacts?.reception || artefacts?.sourcesClaims ? (
             <VisitorSourcesBand
               bibliography={artefacts.bibliography ?? null}
-              debate={artefacts.debate ?? null}
-              claimList={artefacts.debateClaims ?? null}
+              reception={artefacts.reception ?? null}
+              claimList={artefacts.sourcesClaims ?? null}
               onJump={bandJump}
               blockOrder={blockOrder}
               publishedAt={publishedAt}

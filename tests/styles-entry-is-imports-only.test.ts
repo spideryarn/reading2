@@ -118,9 +118,9 @@ const BRAND_TOKENS = '@import "../../styles/tokens.css"';
  * This list is the expectation; `src/web/styles.css` is the implementation. It
  * used to be neither: the check read the directory and sorted both sides, so
  * **import order was not checked at all**. GPT Sol moved `glossary.css` below
- * `timeline.css` and `debate.css` on 2026-09-06 and every test here stayed
+ * `timeline.css` and `reception.css` on 2026-09-06 and every test here stayed
  * green — reversing the equal-specificity `.gloss-quiet` / `.tl-thin` /
- * `.dbt-empty` overrides and silently breaking the phone layout's padding.
+ * `.rcp-empty` overrides and silently breaking the phone layout's padding.
  *
  * **The order IS the cascade**, so it needs an independent witness rather than
  * a restatement of the thing it is meant to witness. Sorted directory contents
@@ -180,9 +180,9 @@ const MANIFEST = [
   "quotes.css",
   "timeline.css",
   /* Before the two sheets that place its mark: `.origin-chat` is complete
-     here, and debate.css and bibliography.css add placement only. */
+     here, and reception.css and bibliography.css add placement only. */
   "origin-chat.css",
-  "debate.css",
+  "reception.css",
   /* After the two `.gloss`-with-a-class-beside-it sheets it borrows from, and
      setting nothing they set on the same element — bibliography.css's header. */
   "bibliography.css",

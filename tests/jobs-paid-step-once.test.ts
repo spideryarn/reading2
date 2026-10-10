@@ -151,9 +151,9 @@ async function fixture(how: WindowEnd, oncePerJob: boolean) {
       ...(await claimSession(job, attempt)),
       reads: NOT_DONE,
     }),
-    steps: { ...STEPS, debate: countingStep("debate", runs, how, oncePerJob) } as AdvanceParts["steps"],
+    steps: { ...STEPS, reception: countingStep("reception", runs, how, oncePerJob) } as AdvanceParts["steps"],
   };
-  return { slug, workKey, runs, parts, job: await queueJob(slug, "debate", { workKey }) };
+  return { slug, workKey, runs, parts, job: await queueJob(slug, "reception", { workKey }) };
 }
 
 /** Advance until the job is over, the way the pump would. Bounded. */
@@ -176,7 +176,7 @@ describe("a paid-search step is begun once per job (261009l)", () => {
   }, 60_000);
 
   it("is marked so on the real `debate` step", () => {
-    expect(STEPS.debate.oncePerJob).toBe(true);
+    expect(STEPS.reception.oncePerJob).toBe(true);
   });
 
   it("fences the marker to the live attempt and serialises two beginnings", async () => {
@@ -186,7 +186,7 @@ describe("a paid-search step is begun once per job (261009l)", () => {
     expect(claimed.kind).toBe("claimed");
 
     await expect(
-      pgJobStore.beginPaidStep(job.id, mintAttempt(), "debate"),
+      pgJobStore.beginPaidStep(job.id, mintAttempt(), "reception"),
       "another attempt cannot mark this claim",
     ).rejects.toBeInstanceOf(StaleAttemptError);
 
@@ -201,8 +201,8 @@ describe("a paid-search step is begun once per job (261009l)", () => {
         .where(eq(jobsTable.id, job.id))
         .for("update");
       beginningsInFlight = Promise.all([
-        pgJobStore.beginPaidStep(job.id, attempt, "debate"),
-        pgJobStore.beginPaidStep(job.id, attempt, "debate"),
+        pgJobStore.beginPaidStep(job.id, attempt, "reception"),
+        pgJobStore.beginPaidStep(job.id, attempt, "reception"),
       ]);
       /* The app pool has five connections: give both calls time to reach the
          held row before releasing the barrier. */
@@ -217,7 +217,7 @@ describe("a paid-search step is begun once per job (261009l)", () => {
       .set({ leaseExpiresAt: sql`clock_timestamp() - interval '1 second'` })
       .where(eq(jobsTable.id, job.id));
     await expect(
-      pgJobStore.beginPaidStep(job.id, attempt, "debate"),
+      pgJobStore.beginPaidStep(job.id, attempt, "reception"),
       "an expired attempt cannot classify the marker as its own refusal",
     ).rejects.toBeInstanceOf(StaleAttemptError);
     /* Do not leave this deliberately lapsed row for the next case's global
@@ -236,12 +236,12 @@ describe("a paid-search step is begun once per job (261009l)", () => {
     const attempt = mintAttempt();
     expect((await pgJobStore.claim(job.id, OWNER, attempt, 60_000, 100)).kind).toBe("claimed");
     expect(await pgJobStore.beginPaidStep(job.id, attempt, "illustrated-plates")).toBe("begun");
-    expect(await pgJobStore.beginPaidStep(job.id, attempt, "debate")).toBe("begun");
+    expect(await pgJobStore.beginPaidStep(job.id, attempt, "reception")).toBe("begun");
     await endTheWindow(job.id, "lapse");
 
     const next = mintAttempt();
     expect((await pgJobStore.claim(job.id, OWNER, next, 60_000, 100)).kind).toBe("claimed");
-    expect(await pgJobStore.beginPaidStep(job.id, next, "debate")).toBe("begun-before");
+    expect(await pgJobStore.beginPaidStep(job.id, next, "reception")).toBe("begun-before");
   });
 
   for (const how of ["lapse", "pause"] as const) {
@@ -259,15 +259,15 @@ describe("a paid-search step is begun once per job (261009l)", () => {
         })
         .from(jobsTable)
         .where(eq(jobsTable.id, job.id));
-      expect(runs).toEqual(["debate"]);
+      expect(runs).toEqual(["reception"]);
       expect(between?.status, "back in the queue for another window").toBe("queued");
       expect(between?.requeues).toBe(1);
-      expect(between?.begun, "and the job remembers the step was begun").toBe("debate");
+      expect(between?.begun, "and the job remembers the step was begun").toBe("reception");
       expect(between?.begunAt).toBeInstanceOf(Date);
 
       const ended = await walkToTheEnd(job.id, parts);
 
-      expect(runs, "the search was bought once, not again by the next window").toEqual(["debate"]);
+      expect(runs, "the search was bought once, not again by the next window").toEqual(["reception"]);
       expect(ended.status).toBe("error");
       expect(ended.error).toContain("[jb-paid-once]");
       expect(ended.requeues, "and it did take another window to find out").toBe(1);
@@ -326,20 +326,20 @@ describe("a paid-search step is begun once per job (261009l)", () => {
   it("runs a forced fresh job on the same article — a Retry is a new row, not a requeue", async () => {
     const first = await fixture("lapse", true);
     await walkToTheEnd(first.job.id, first.parts);
-    const again = await queueJob(first.slug, "debate", { force: true });
+    const again = await queueJob(first.slug, "reception", { force: true });
     await walkToTheEnd(again.id, first.parts);
-    expect(first.runs, "one run per job").toEqual(["debate", "debate"]);
+    expect(first.runs, "one run per job").toEqual(["reception", "reception"]);
   });
 
   it("keeps an equivalent active enqueue on the marked job instead of buying around it", async () => {
     const first = await fixture("lapse", true);
     await advanceAsOwner(first.job.id, first.parts);
 
-    const coalesced = await queueJob(first.slug, "debate", { workKey: first.workKey });
+    const coalesced = await queueJob(first.slug, "reception", { workKey: first.workKey });
     expect(coalesced.id, "the active-work key stays single-flight").toBe(first.job.id);
 
     const ended = await walkToTheEnd(coalesced.id, first.parts);
-    expect(first.runs).toEqual(["debate"]);
+    expect(first.runs).toEqual(["reception"]);
     expect(ended.error).toContain("[jb-paid-once]");
   });
 });

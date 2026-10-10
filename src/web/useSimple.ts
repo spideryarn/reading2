@@ -209,7 +209,7 @@ export function useSimple(slug: string): UseSimple {
         if (!current()) return;
         setError(describeFetchFailure(err as Error));
         /* A failed revalidation must not take the paragraphs away — only the
-           opening read has nothing to fall back on. useFaq.ts, useDebate.ts. */
+           opening read has nothing to fall back on. useFaq.ts, useReception.ts. */
         setStatus((was) => (was !== "loading" ? was : saidNoneFor.current === slug ? "none" : "error"));
       }
     },

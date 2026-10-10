@@ -51,7 +51,7 @@ import {
   overBundleCap,
 } from "../src/store/export-bundle.js";
 import { exportArticle } from "../src/store/export.js";
-import type { Debate, DebateClaimList, Relations, SimpleSummary } from "../src/types.js";
+import type { Reception, SourcesClaimList, Relations, SimpleSummary } from "../src/types.js";
 import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
@@ -159,7 +159,7 @@ const RELATIONS_FIXTURE: Relations = {
 };
 
 /** Debate's claims list, a third whole artefact, on both paths (plan 261008i stage 2). */
-const DEBATE_CLAIMS_FIXTURE: DebateClaimList = {
+const SOURCES_CLAIMS_FIXTURE: SourcesClaimList = {
   version: "debate-claims/export-fixture",
   generator: "fixture-model",
   slug: SLUG,
@@ -176,7 +176,7 @@ const DEBATE_CLAIMS_FIXTURE: DebateClaimList = {
  * the bundle always carried it, inside content/revision.json's row. A
  * `debate/7`-shaped one: Reception searched, claims not run.
  */
-const DEBATE_FIXTURE: Debate = {
+const RECEPTION_FIXTURE: Reception = {
   version: "debate/export-fixture",
   generator: "fixture-model",
   slug: SLUG,
@@ -292,7 +292,7 @@ await pgReady({
     { table: "spideryarn.chat_messages", column: "truncated" },
     { table: "spideryarn.article_revisions", column: "simple_summary" },
     { table: "spideryarn.article_revisions", column: "relations" },
-    { table: "spideryarn.article_revisions", column: "debate_claims" },
+    { table: "spideryarn.article_revisions", column: "sources_claims" },
   ],
 });
 
@@ -373,8 +373,8 @@ describe("the bundle is the faithful projection", () => {
         assets: ASSETS,
         simpleSummary: SIMPLE,
         relations: RELATIONS_FIXTURE,
-        debateClaims: DEBATE_CLAIMS_FIXTURE,
-        debate: DEBATE_FIXTURE,
+        sourcesClaims: SOURCES_CLAIMS_FIXTURE,
+        reception: RECEPTION_FIXTURE,
         rawSourceSha256: RAW_SHA256,
         rawSourceKind: "html",
       })
@@ -630,19 +630,19 @@ describe("the bundle is the faithful projection", () => {
   });
 
   it("carries Debate's claims list whole through the bundle and rollback exports", async () => {
-    expect(parsed("augmentations/debate-claims.json")).toEqual(DEBATE_CLAIMS_FIXTURE);
+    expect(parsed("augmentations/sources-claims.json")).toEqual(SOURCES_CLAIMS_FIXTURE);
     const rollback = JSON.parse(
-      await readFile(path.join(out, SLUG, "debate-claims.json"), "utf8"),
-    ) as DebateClaimList;
-    expect(rollback).toEqual(DEBATE_CLAIMS_FIXTURE);
+      await readFile(path.join(out, SLUG, "sources-claims.json"), "utf8"),
+    ) as SourcesClaimList;
+    expect(rollback).toEqual(SOURCES_CLAIMS_FIXTURE);
   });
 
   it("carries a stored Debate through the bundle and rollback exports", async () => {
-    expect(parsed("content/revision.json").debate).toEqual(DEBATE_FIXTURE);
+    expect(parsed("content/revision.json").reception).toEqual(RECEPTION_FIXTURE);
     const rollback = JSON.parse(
-      await readFile(path.join(out, SLUG, "debate.json"), "utf8"),
-    ) as Debate;
-    expect(rollback).toEqual(DEBATE_FIXTURE);
+      await readFile(path.join(out, SLUG, "reception.json"), "utf8"),
+    ) as Reception;
+    expect(rollback).toEqual(RECEPTION_FIXTURE);
   });
 
   /* Sol's plan review of 261001b, P2-7: the page counted `paragraphs`, which a

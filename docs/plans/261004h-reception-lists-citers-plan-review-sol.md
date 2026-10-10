@@ -40,7 +40,7 @@ All candidate line references below refer to [the plan](/home/greg/code/spiderya
    **Change:** Name a separate service union for limiter operations, retain the existing registry provenance union, and enumerate the schema types, slot inventory and migration changes required for the third service.
 
 8. **F8 — P2 — Specify the pre-search composition and test the actual activation paths.**  
-   **Plan lines 128, 147–149, 216–218.** Today the Scholar link, segmented control and scroller all sit inside `debate && ready` at [src/web/DebatePanel.tsx:1096](/home/greg/code/spideryarn2/.claude/worktrees/qi-aabv7jjy-debate-openalex-citers/src/web/DebatePanel.tsx:1096). Adding the section where Scholar currently lives will not expose it before a search. Also, a normal Debate press already arms the paid job through `MODE_TARGET.debate`; an independent citer loader does not change that.
+   **Plan lines 128, 147–149, 216–218.** Today the Scholar link, segmented control and scroller all sit inside `debate && ready` at [src/web/DebatePanel.tsx:1096](/home/greg/code/spideryarn2/.claude/worktrees/qi-aabv7jjy-debate-openalex-citers/src/web/ReceptionAndClaimsPanel.tsx:1096). Adding the section where Scholar currently lives will not expose it before a search. Also, a normal Debate press already arms the paid job through `MODE_TARGET.debate`; an independent citer loader does not change that.
 
    **Change:** Explicitly place the owner Reception section outside the artefact-ready condition. Define navigation before an artefact exists. Test a bookmarked arrival making the citer request without starting a job, and a normal mode press retaining exactly one existing paid-search activation.
 

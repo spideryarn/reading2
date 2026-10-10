@@ -875,7 +875,7 @@ export function CommentDialog({
               /* A key an input method is using is not ours. Its Escape keeps
                  the question; its Enter accepts a candidate, so the form's
                  implicit submit, which asks the AI, is cancelled
-                 (DebatePanel.tsx's lens box does the same). */
+                 (ReceptionAndClaimsPanel.tsx's lens box does the same). */
               if (isImeComposing(e)) {
                 if (e.key === "Enter") e.preventDefault();
                 return;

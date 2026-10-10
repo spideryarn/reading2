@@ -4,7 +4,7 @@
 
 ### F9 — P1 — established: Debate understates the paid work being authorized
 
-The generic confirmation says “Another model call” ([Metadata.tsx:1211](/home/greg/code/spideryarn2/.claude/worktrees/worktree-rerun-a-mode/src/web/Metadata.tsx:1211)), but Debate normally makes two separately metered calls ([debate.ts:35](/home/greg/code/spideryarn2/.claude/worktrees/worktree-rerun-a-mode/src/debate.ts:35)). Debate receives the generic copy at [Metadata.tsx:1293](/home/greg/code/spideryarn2/.claude/worktrees/worktree-rerun-a-mode/src/web/Metadata.tsx:1293).
+The generic confirmation says “Another model call” ([Metadata.tsx:1211](/home/greg/code/spideryarn2/.claude/worktrees/worktree-rerun-a-mode/src/web/Metadata.tsx:1211)), but Debate normally makes two separately metered calls ([debate.ts:35](/home/greg/code/spideryarn2/.claude/worktrees/worktree-rerun-a-mode/src/reception.ts:35)). Debate receives the generic copy at [Metadata.tsx:1293](/home/greg/code/spideryarn2/.claude/worktrees/worktree-rerun-a-mode/src/web/Metadata.tsx:1293).
 
 This also makes the accepted F2 exposure worse than the plan claims: its “one model call per lease window, bounded at three” statement can be **two calls per window, six calls total** for Debate. I am not reopening F2’s queue remedy; this is a newly exposed disclosure error inside one step.
 

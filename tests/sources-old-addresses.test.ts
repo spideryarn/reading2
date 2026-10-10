@@ -10,7 +10,7 @@
  * it became Sources (plan 261009w § Old links still land).
  *
  * The DOM half — the real router, nuqs and a band — is
- * tests/debate-navigation.test.tsx.
+ * tests/reception-navigation.test.tsx.
  * docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md § Stage 1,
  * docs/plans/261009w-peer-review-becomes-sources-all-the-way-down.md.
  */
@@ -77,11 +77,15 @@ describe("an old Citations, Debate or Peer review address, on boot", () => {
     expect(q.get("citeby")).toBe("year");
     expect(q.get("citebar")).toBe("3");
     expect(hash).toBe("#passage");
-    const debate = settled("?mode=debate&debateby=date&bears=directly&debatethread=key").q;
-    expect(debate.get("debateby")).toBe("date");
-    expect(debate.get("bears")).toBe("directly");
-    expect(debate.get("debatethread")).toBe("key");
-    expect(debate.get("sources")).toBe("reception");
+    /* Reception's own order and thread arrive under the words they had until
+       2026-10-09 and leave under the new ones (plan 261009w, Stage 3). */
+    const reception = settled("?mode=debate&debateby=date&bears=directly&debatethread=key").q;
+    expect(reception.get("receptionby")).toBe("date");
+    expect(reception.get("bears")).toBe("directly");
+    expect(reception.get("receptionthread")).toBe("key");
+    expect(reception.has("debateby")).toBe(false);
+    expect(reception.has("debatethread")).toBe(false);
+    expect(reception.get("sources")).toBe("reception");
     const peer = settled("?mode=peer-review&peer-review=claims&bears=partly&at=spya-k3m9qt").q;
     expect(peer.get("bears")).toBe("partly");
     expect(peer.get("at")).toBe("spya-k3m9qt");
@@ -141,5 +145,58 @@ describe("a remembered last view from before a rename", () => {
     const out = restoredHref(PATH, "", `?chatfrom=${word}&at=spya-k3m9qt`);
     const q = new URLSearchParams((out ?? "").slice((out ?? "").indexOf("?") + 1));
     expect(q.get("chatfrom")).toBe("sources");
+  });
+});
+
+/**
+ * **Reception's order and thread, under the words they had until 2026-10-09**
+ * (`?debateby=`, `?debatethread=`; plan 261009w, Stage 3). Each lands under
+ * its new word on boot, after boot and from a remembered view; an old
+ * `debateby=claim` still opens Claims, as it did before (above).
+ */
+describe("Reception's old order and thread words", () => {
+  it("lifts ?debateby=X on a Sources address to ?receptionby=X", () => {
+    expect(settleAddress(PATH, "?mode=sources&sources=reception&debateby=date", "")).toBe(
+      `${PATH}?mode=sources&sources=reception&receptionby=date`,
+    );
+  });
+
+  it("lifts ?debatethread=X to ?receptionthread=X", () => {
+    expect(settleAddress(PATH, "?debatethread=spya-ttm222", "")).toBe(`${PATH}?receptionthread=spya-ttm222`);
+    expect(settleAddress(PATH, "?mode=sources&sources=claims&debatethread=key", "")).toBe(
+      `${PATH}?mode=sources&sources=claims&receptionthread=key`,
+    );
+  });
+
+  it("lifts both after boot, on a navigation or Back", () => {
+    expect(liftedLegacyHref(`${PATH}?mode=sources&sources=reception&debateby=stance&debatethread=key#x`)).toBe(
+      `${PATH}?mode=sources&sources=reception&receptionby=stance&receptionthread=key#x`,
+    );
+  });
+
+  it("still opens Claims for ?mode=debate&debateby=claim, with no order left behind", () => {
+    const { q } = settled("?mode=debate&debateby=claim");
+    expect(viewOf(q)).toBe("claims");
+    expect(q.has("debateby")).toBe(false);
+    expect(q.has("receptionby")).toBe(false);
+  });
+
+  it("lets an explicit new word win over the old one", () => {
+    expect(settleAddress(PATH, "?mode=sources&sources=reception&debateby=date&receptionby=stance", "")).toBe(
+      `${PATH}?mode=sources&sources=reception&receptionby=stance`,
+    );
+    expect(settleAddress(PATH, "?receptionthread=key&debatethread=spya-ttm222", "")).toBe(
+      `${PATH}?receptionthread=key`,
+    );
+  });
+
+  it("restores a remembered view holding debateby and debatethread under the new words", () => {
+    expect(
+      restoredHref(PATH, "", "?mode=sources&sources=reception&debateby=date&debatethread=key"),
+    ).toBe(`${PATH}?mode=sources&sources=reception&receptionby=date&receptionthread=key`);
+  });
+
+  it("leaves an address with the new words alone", () => {
+    expect(settleAddress(PATH, "?mode=sources&sources=reception&receptionby=date&receptionthread=key", "")).toBeNull();
   });
 });

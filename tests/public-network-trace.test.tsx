@@ -173,7 +173,7 @@ const PUBLIC_QUESTION = "Where does the argument come from?";
 const PUBLIC_SIMPLE = "This piece is about where an argument comes from.";
 const PUBLIC_WORK = "An information integration theory of consciousness";
 /** A stored Debate row's quotation from a stranger's page, since plan 260929c stage 4. */
-const PUBLIC_DEBATE_QUOTE = "The integration measure cannot be computed for any real brain.";
+const PUBLIC_RECEPTION_QUOTE = "The integration measure cannot be computed for any real brain.";
 
 /**
  * A **PDF** article, because the private source control only mounts for one.
@@ -1516,7 +1516,7 @@ describe("a signed-out browser on a shared document", () => {
     await remount();
     served = {
       ...ARTICLE,
-      debate: {
+      reception: {
         searchedAt: "2026-09-20T10:00:00.000Z",
         direct: {
           rows: [
@@ -1524,7 +1524,7 @@ describe("a signed-out browser on a shared document", () => {
               id: "spya-dbt001",
               url: "https://reply.example.org/a-reply",
               title: "A reply to the piece",
-              sourceQuote: PUBLIC_DEBATE_QUOTE,
+              sourceQuote: PUBLIC_RECEPTION_QUOTE,
               relation: "disputes",
               lean: "leans-against",
               applies: "It argues the measure is not computable.",
@@ -1567,7 +1567,7 @@ describe("a signed-out browser on a shared document", () => {
     expect(band, "a band is open").not.toBeNull();
     expect(band?.matches(VISITOR_BAND), "not the owners-only boundary").toBe(false);
     const text = readable(band as Element);
-    expect(text).toContain(PUBLIC_DEBATE_QUOTE);
+    expect(text).toContain(PUBLIC_RECEPTION_QUOTE);
     /* Reception draws the search about the piece; the other search's row is in
        Claims, a press away — and the press asks the server nothing. */
     expect(text).not.toContain("Somebody else answers what it claims.");
@@ -1576,7 +1576,7 @@ describe("a signed-out browser on a shared document", () => {
        chip since 2026-10-09 (router.ts § `liftLegacySources`). */
     expect(new URLSearchParams(location.search).get("mode")).toBe("sources");
     expect(new URLSearchParams(location.search).get("sources")).toBe("reception");
-    const chips = [...(band?.querySelectorAll<HTMLButtonElement>(".dbt-views [role='radio']") ?? [])];
+    const chips = [...(band?.querySelectorAll<HTMLButtonElement>(".rcp-views [role='radio']") ?? [])];
     /* No bibliography on this payload, so Bibliography's chip has no count. */
     expect(chips[0]?.textContent, "the Bibliography chip, with no count").toBe("Bibliography");
     const claims = chips[2];
@@ -1584,7 +1584,7 @@ describe("a signed-out browser on a shared document", () => {
     await act(async () => claims?.click());
     await until(() => readable(band as Element).includes("Somebody else answers what it claims."));
     expect(new URLSearchParams(location.search).get("sources")).toBe("claims");
-    expect(readable(band as Element)).not.toContain(PUBLIC_DEBATE_QUOTE);
+    expect(readable(band as Element)).not.toContain(PUBLIC_RECEPTION_QUOTE);
     /* The row the boundary withheld is said, not silently missing — in the
        band's (i) since 2026-10-01, with Debate's other counts (plan 261001m). */
     expect(text).not.toContain("1 more result that is not shown on a shared link");
@@ -1627,7 +1627,7 @@ describe("a signed-out browser on a shared document", () => {
     });
     served = {
       ...ARTICLE,
-      debate: {
+      reception: {
         searchedAt: "2026-09-20T10:00:00.000Z",
         direct: { rows: [], sourceNotPublishable: 0 },
         claims: {
@@ -1657,7 +1657,7 @@ describe("a signed-out browser on a shared document", () => {
 
     const band = host.querySelector(".mode-band");
     expect(band?.matches(VISITOR_BAND), "not the owners-only boundary").toBe(false);
-    const threads = band?.querySelector(".dbt-threads");
+    const threads = band?.querySelector(".rcp-threads");
     expect(threads, "the visitor's threads box").not.toBeNull();
     expect(readable(threads as Element)).toContain("Attention narrows");
     expect(readable(band as Element)).toContain("bears directly");
@@ -2205,7 +2205,7 @@ describe("a signed-out browser on a shared document", () => {
       "sources&sources=reception",
       "sources&sources=claims",
       "citations",
-      "debate",
+      "reception",
     ]) {
       await remount();
       await open(`?mode=${mode}`);

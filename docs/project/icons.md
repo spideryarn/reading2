@@ -255,7 +255,7 @@ on 2026-09-29 (`1a44cb57`).
 **A conversation with the AI wears `MessagesSquare`, Chat mode's own icon, wherever it is drawn**:
 the gutter's chat button, the head of the card it opens (`ChatDialog.tsx`), the marks that reopen a
 chat started from a Glossary entry, a cited work or a Sources claim or angle (`OriginChat.tsx`,
-`DebatePanel.tsx`), and *Ask about this paragraph in chat* (`SimplePanel.tsx`).
+`ReceptionAndClaimsPanel.tsx`), and *Ask about this paragraph in chat* (`SimplePanel.tsx`).
 
 **One square bubble is the comment family**: `MessageSquareText` on the bar's Comments button,
 `MessageSquarePlus` on the comment box. Until 2026-10-06 the bare one bubble also meant "a

@@ -63,7 +63,7 @@ const ROUTES = [
   "ideas",
   "faq",
   "timeline",
-  "debate",
+  "reception",
   "glossary",
   "quotes",
   "tweets",
@@ -107,7 +107,7 @@ const STAMP = { sourceHash: "0".repeat(64), generatedAt: "2026-10-06T00:00:00.00
 const EMPTY = {
   faq: { ...STAMP, slug: WITH_QUIZ, version: "faq/test", questions: [] },
   timeline: { ...STAMP, slug: WITH_QUIZ, version: "timeline/test", events: [] },
-  debate: { ...STAMP, slug: WITH_QUIZ, version: "debate/test", direct: { rows: [] }, claims: { rows: [] } },
+  reception: { ...STAMP, slug: WITH_QUIZ, version: "debate/test", direct: { rows: [] }, claims: { rows: [] } },
 };
 
 beforeAll(async () => {
@@ -130,8 +130,8 @@ beforeAll(async () => {
     simpleSummary: { ...STAMP, slug: UNUSABLE, version: "simple/1", paragraphs: [] },
     /* No `questions` array. */
     faq: { ...STAMP, slug: UNUSABLE, version: "faq/test" },
-    /* `direct` without its rows — fails `isDebateDocument`. */
-    debate: { ...STAMP, slug: UNUSABLE, version: "debate/test", direct: {}, claims: { rows: [] } },
+    /* `direct` without its rows — fails `isReceptionDocument`. */
+    reception: { ...STAMP, slug: UNUSABLE, version: "debate/test", direct: {}, claims: { rows: [] } },
   } as never);
 }, 240_000);
 
@@ -256,7 +256,7 @@ describe("an artefact that exists", () => {
 });
 
 describe("a stored document the loader cannot use is none yet", () => {
-  for (const route of ["simple", "faq", "debate"] as const) {
+  for (const route of ["simple", "faq", "reception"] as const) {
     it(`${route}: 200 null to a client that asks, a 404 to one that does not`, async () => {
       const asked = await get(`/api/${route}/${UNUSABLE}`, true);
       expect({ status: asked.status, body: asked.body }).toEqual({ status: 200, body: "null" });
@@ -267,7 +267,7 @@ describe("a stored document the loader cannot use is none yet", () => {
 });
 
 describe("a valid but empty artefact is an artefact", () => {
-  for (const route of ["faq", "timeline", "debate"] as const) {
+  for (const route of ["faq", "timeline", "reception"] as const) {
     it(`${route}: its document, whether or not the client asks`, async () => {
       for (const asks of [true, false]) {
         const res = await get(`/api/${route}/${WITH_QUIZ}`, asks);
