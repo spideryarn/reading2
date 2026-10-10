@@ -268,6 +268,9 @@ const TEST_INFRASTRUCTURE = [
   "tsconfig.json",
   "tsconfig.base.json",
   "scripts/vitest-outcome-reporter.ts",
+  /* vitest-admission.ts imports these to see a deploy's lock (plan 261010g). */
+  "scripts/release-lock.ts",
+  "scripts/lockfile.ts",
   "scripts/db-test-create.ts",
   "scripts/corpus-materialise.ts",
 ];

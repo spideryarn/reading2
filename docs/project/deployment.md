@@ -341,6 +341,16 @@ nobody reran; the readiness loop's next full run is what catches it. The failing
 JSON or its text, because only a reporter is told about unhandled errors, and only one that waits
 for the process to exit sees a teardown fail.
 
+### When the suite does run, it takes the box
+
+Since 2026-10-10 the gate asks vitest for `VITEST_MAX_WORKERS` at half the machine (8 on the box)
+rather than the box's crowded-machine 2, subject to memory admission. Other test runs that start while
+the deploy holds its lock default to one worker and say so —
+[testing.md § While a deploy runs](testing.md#while-a-deploy-runs). The private-postgres lane is
+still serial and still runs after the others, so it is now most of what is left: the measurements,
+the expected gain and the larger options passed over are in
+[261010g](../plans/261010g-deploy-test-run-claims-the-box.md).
+
 ### The gate needs both halves of the artefact store
 
 The test suite is **not hermetic**, and the worktree is empty of everything

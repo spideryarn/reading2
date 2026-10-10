@@ -268,6 +268,8 @@ describe("isTestInfrastructure", () => {
     ["tests/store-migration-registry.ts", true],
     ["scripts/vitest-outcome-reporter.ts", true],
     ["scripts/db-test-create.ts", true],
+    ["scripts/release-lock.ts", true],
+    ["scripts/lockfile.ts", true],
     ["tsconfig.json", true],
     ["tests/fixtures/corpus/x.json", true],
     ["tests/__snapshots__/a.test.ts.snap", true],
