@@ -129,9 +129,9 @@
  *
  *  - `--resume` followed by a lowercase uuid AS THE NEXT ELEMENT names that conversation, and it is
  *    reported in `sessionIds`, because it states the same fact `--session-id` does — which
- *    conversation this process writes. A real resumed process, captured 2026-09-10 in the shape
- *    `gjd-remote --resume-conversation` emits (tests/fixtures/claude-argv/):
- *    `claude --resume <uuid> --permission-mode auto --model haiku -- <prompt>`.
+ *    conversation this process writes. A real resumed process, captured 2026-09-10
+ *    (tests/fixtures/claude-argv/): `claude --resume <uuid> --permission-mode auto --model haiku -- <prompt>`.
+ *    `gjd-remote restart-overseer` types the same shape, without the model and prompt.
  *  - A bare `--resume` — at the end of the line, or before a dash-led token, `--` included — is the
  *    picker, and `unreadable`. A non-uuid value, uppercase included, is `unreadable`. `--resume=<uuid>`
  *    and `-r` are `unreadable`, because nothing here produces them (the table's entry criterion).
