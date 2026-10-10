@@ -248,7 +248,7 @@ describe("Author gifts", () => {
     expect(card(DRAFT)?.textContent).toContain("Send the gift email to ann@example.test?");
     await act(async () => button(card(DRAFT), "Send to ann@example.test")?.click());
     await settle();
-    /* Plan 261010g: the gift as the confirmation showed it, so an agent's edit since is refused. */
+    /* Plan 261010i: the gift as the confirmation showed it, so an agent's edit since is refused. */
     expect(writes()).toEqual([
       {
         method: "POST",

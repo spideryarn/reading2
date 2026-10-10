@@ -101,7 +101,7 @@ remote, so there is nothing to work out.
 
 ## Plan review (GPT Sol, read-only): APPROVE WITH CHANGES
 
-[261010g-plan-review-sol.md](261010g-plan-review-sol.md). How each finding was answered:
+[261010i-plan-review-sol.md](261010i-plan-review-sol.md). How each finding was answered:
 
 - **F1 (high) — *Send* posts only the gift's id**, so an agent's edit landing between Greg reading the
   confirmation and pressing the button sends the link to an address he never saw. Older than this
@@ -153,8 +153,8 @@ gates, commit, push.
 
 ## Code review (GPT Sol, write-capable): approved with one fix applied
 
-[261010g-code-review-sol.md](261010g-code-review-sol.md), over
-[261010g-code-review.diff](261010g-code-review.diff). One finding, high, fixed by the reviewer: the
+[261010i-code-review-sol.md](261010i-code-review-sol.md), over
+[261010i-code-review.diff](261010i-code-review.diff). One finding, high, fixed by the reviewer: the
 open *Send* confirmation re-read the gift on every refresh (the page polls while any lookup runs), so
 it would have sent an agent's newer values as `expected` — the very edit F1 exists to catch. The card
 now keeps the gift as it was when *Send* was pressed, shows and sends that snapshot, and closes the

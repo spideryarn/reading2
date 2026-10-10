@@ -70,7 +70,7 @@ export interface Tool<S extends z.ZodObject = z.ZodObject> {
   readonly ask?: (api: Api, args: z.infer<S>, ctx: ToolContext) => Promise<ApprovalRequest | null>;
   readonly handler: (api: Api, args: z.infer<S>, ctx: ToolContext) => Promise<unknown>;
   /**
-   * **On the remote server, where nobody can be asked** (plan 261010g § D2), a
+   * **On the remote server, where nobody can be asked** (plan 261010i § D2), a
    * tool with `ask` is left out of the list — unless it declares this: the
    * description and a narrower input under which `ask` never asks. The input
    * must be a strict subset, so an argument that would ask is refused by the
@@ -725,7 +725,7 @@ export const TOOLS: readonly Tool[] = [
       "email to the new address**, so a dialog on this computer asks the person to approve that change. A claimed " +
       "voucher's address cannot change.",
     input: updateVoucherInput,
-    /* Only the address change asks, so the remote keeps the rest (261010g). */
+    /* Only the address change asks, so the remote keeps the rest (261010i). */
     remote: {
       description:
         "Admin only. Changes a voucher's number of articles, notes or name, or revokes it (revoked: true) or " +
@@ -824,7 +824,7 @@ export const TOOLS: readonly Tool[] = [
     },
   }),
 
-  /* Plan 261010g § D1: Greg, after his first ChatGPT run, wanted a draft he
+  /* Plan 261010i § D1: Greg, after his first ChatGPT run, wanted a draft he
      reviews and sends himself. One POST makes the draft already filled in.
      It sends nothing, so it does not ask, and it works on the remote server.
      It never makes the private link (`makeLink: false`): that would record a
@@ -950,7 +950,7 @@ export const TOOLS: readonly Tool[] = [
 ];
 
 /**
- * **The list the remote server serves** (plan 261010g § D2). Nobody can be
+ * **The list the remote server serves** (plan 261010i § D2). Nobody can be
  * asked from there, so a tool that asks is left out rather than listed and
  * refused — a model plans around what it is offered. A tool that declares a
  * `remote` form is served in that form instead. Left out is the default, so

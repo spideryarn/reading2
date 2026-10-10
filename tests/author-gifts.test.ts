@@ -350,9 +350,9 @@ describe("POST /api/admin/author-gifts — ensure", () => {
 });
 
 /* A draft made already filled in, by an agent through draft_author_gift
-   (plan 261010g § D1): the fields go into the insert, and `lookup: false`
+   (plan 261010i § D1): the fields go into the insert, and `lookup: false`
    starts no search. Nothing is emailed: no voucher, no gift email. */
-describe("POST /api/admin/author-gifts — a filled-in draft (261010g)", () => {
+describe("POST /api/admin/author-gifts — a filled-in draft (261010i)", () => {
   it("writes the fields, makes no lookup, starts nothing, and queues no voucher or email", async () => {
     const box = mailbox();
     control.deps = box.deps;
@@ -493,7 +493,7 @@ describe("POST /api/admin/author-gifts — a filled-in draft (261010g)", () => {
 /* ------------------------------------------------------------------- send -- */
 
 describe("POST /api/admin/author-gifts/:id/send", () => {
-  /* Plan 261010g, Sol's F1: an agent's edit between Greg reading the
+  /* Plan 261010i, Sol's F1: an agent's edit between Greg reading the
      confirmation and pressing Send must not send to an address he never saw. */
   it("with what the confirmation showed: sends when it still matches, and refuses, sending nothing, when it changed", async () => {
     const box = mailbox();

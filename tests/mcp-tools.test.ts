@@ -373,7 +373,7 @@ describe("each tool calls the route it claims", () => {
     ]);
   });
 
-  /* Plan 261010g § D1: a gift an agent drafts and Greg sends from /admin/vouchers. */
+  /* Plan 261010i § D1: a gift an agent drafts and Greg sends from /admin/vouchers. */
   it("draft_author_gift makes a filled-in draft in one POST, with no lookup, and does not ask", async () => {
     const approver = new StubApprover(false);
     const h = await harness(
@@ -1141,7 +1141,7 @@ describe("list_users and user_activity read the admin's users route, trimmed", (
   }
 });
 
-/* Plan 261010g § D2: on the remote server nobody can be asked, so a tool that
+/* Plan 261010i § D2: on the remote server nobody can be asked, so a tool that
    asks is left out of the list rather than listed and refused — unless it
    declares what it is without the asking part. */
 describe("the remote server's tool list", () => {
