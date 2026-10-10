@@ -368,9 +368,9 @@ recurring form.
   **Look for the same idea under a different id, too**, and put the prior-work check in every brief
   (Greg, 2026-09-30, report 6F: *"I find myself suggesting it again because I can't remember
   whether I've already suggested it"*) — both are in [feedback-reports.md § The run](feedback-reports.md#the-run).
-  Since 2026-09-10 a tmux loop (`feedback-sweep-loop`, started with `scripts/tmux-job.ts` from the
-  Overseer's scratchpad, the same shape as the dashboard-refresh loop) runs one sweep every three
-  hours as a `scripts/run-claude.ts --mcp` job under the box's default Claude login, while the
+  Since 2026-10-10 `feedback-sweep.timer` runs one sweep three hours after the last one ended, with
+  its debriefs in `~/.overseer/scratch` (from 2026-09-10 until then a tmux loop,
+  `feedback-sweep-loop`, did it), as a `scripts/run-claude.ts --mcp` job under the box's default Claude login, while the
   daemon's scheduler stays off; its first output is queue
   entries — [feedback-reports.md § Into the Overseer's queue](feedback-reports.md#into-the-overseers-queue).
   The default login is the only one signed in to Sentry, and that is by decision: Greg, 2026-09-11,
