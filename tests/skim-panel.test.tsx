@@ -1055,7 +1055,12 @@ describe("the panel", () => {
     await act(async () => guard.focus());
     await settle();
     expect(document.activeElement).toBe(cardButton("Ask about this term in chat"));
-    await act(async () => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    const escape = () => act(async () => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    /* One press, one surface: the Ask button's own tooltip goes first. */
+    await escape();
+    await settle();
+    expect(termCard(), "the first Escape closes only the Ask tooltip").not.toBeNull();
+    await escape();
     await settle();
     expect(termCard()).toBeNull();
     expect(document.activeElement).toBe(termChip());

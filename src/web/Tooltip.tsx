@@ -328,10 +328,10 @@ export function Tooltip({
     // Keyboard parity: the spine's bands are real buttons, so tabbing through
     // them should show the same detail hovering does.
     useFocus(context, { enabled }),
-    /* Escape closes the containing interactive card as well as a descriptive
-       tooltip opened from one of its controls; otherwise the inner listener
-       consumes the key and leaves the card open (plan 261010g). */
-    useDismiss(context, { enabled, bubbles: { escapeKey: true } }),
+    /* No `bubbles`: a tooltip opened from a control inside an interactive card
+       takes the first Escape and the card the second — one press, one surface
+       (tests/one-escape-closes-one-surface.test.tsx, plan 261010g). */
+    useDismiss(context, { enabled }),
     useRole(context, { role: interactive ? "dialog" : "tooltip" }),
   ]);
   const { getReferenceProps, getFloatingProps } = interactions;

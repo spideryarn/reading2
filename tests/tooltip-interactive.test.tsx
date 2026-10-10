@@ -195,9 +195,15 @@ describe("a card with `interactive`", () => {
     await settle();
     expect(document.activeElement).toBe(document.querySelector(".nested-trigger"));
     expect(document.querySelector('[role="dialog"]')).not.toBeNull();
-    await act(async () =>
-      document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })),
-    );
+    const escape = () =>
+      act(async () =>
+        document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })),
+      );
+    /* One press, one surface: the nested tooltip first, then the card. */
+    await escape();
+    await settle();
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    await escape();
     await settle();
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     expect(document.activeElement).toBe(trigger());
