@@ -1705,6 +1705,8 @@ export function CommandBar({
    * stops being shown.
    */
   const [list, setList] = useState<{ slug: string; readFrom: string; suggestions: Suggestions } | null>(null);
+  /** A new list behind a shut bar keeps its first suggestion selected through the next opening. */
+  const selectSuggestionOnOpen = useRef(false);
   /** The request is out. Its own state, not `said`, which an opening and a keystroke both clear. */
   const [suggestWaiting, setSuggestWaiting] = useState(false);
   const suggestOut = useRef<AbortController | null>(null);
@@ -1721,6 +1723,7 @@ export function CommandBar({
     if (savesSeen.current === saves) return;
     savesSeen.current = saves;
     setList(null);
+    selectSuggestionOnOpen.current = false;
     if (suggestOut.current !== null) {
       suggestTurn.current += 1;
       suggestOut.current.abort();
@@ -1735,6 +1738,7 @@ export function CommandBar({
   useLayoutEffect(() => {
     if (suggestSlug !== undefined) return;
     setList(null);
+    selectSuggestionOnOpen.current = false;
     if (suggestOut.current !== null) {
       suggestTurn.current += 1;
       suggestOut.current.abort();
@@ -2011,8 +2015,10 @@ export function CommandBar({
   const active = shown[index];
   /* A profile read may insert or remove rows while the reader is choosing.
      Keep their highlighted command, rather than applying its index to a new
-     list. A new suggestion answer, save and fresh opening still select row zero.
-     An unknown reason keeps the last save generation until its read lands. */
+     list. A new suggestion answer selects its first suggestion, including
+     when it arrived behind a shut bar; a save and every other fresh opening
+     select row zero. An unknown reason keeps the last save generation until
+     its read lands. */
   const previousReasonRows = useRef({ open, reason, list, saves, rowId: active?.rowId });
   useLayoutEffect(() => {
     const previous = previousReasonRows.current;
@@ -2021,16 +2027,21 @@ export function CommandBar({
       saves: reason.state === "unknown" ? previous.saves : saves,
       rowId: active?.rowId,
     };
-    if (!open || !previous.open || (previous.reason === reason && previous.list === list)) return;
+    if (previous.reason === reason && previous.list === list) return;
     /* A new answer deliberately selects its first suggestion — found by kind,
        not taken as row zero, which is the pinned guide chat's where the page
        can open it (plan 261010g, GPT Sol's F1). */
     if (list !== null && previous.list !== list) {
       const first = shown.findIndex((row) => row.suggested !== undefined);
       const next = first >= 0 ? first : 0;
+      /* The opening effect below normally restores row zero. This one answer
+         is the exception: it was requested before the bar shut, and its
+         first row must still be what the next Enter confirms. */
+      selectSuggestionOnOpen.current = first >= 0 && (!open || !previous.open);
       if (next !== index) setSelected(next);
       return;
     }
+    if (!open || !previous.open) return;
     /* A save restarts the choice; a removed row has no neighbour to confirm. */
     const at = previous.saves === saves ? shown.findIndex((row) => row.rowId === previous.rowId) : -1;
     const next = at >= 0 ? at : 0;
@@ -2060,7 +2071,8 @@ export function CommandBar({
          `No command matches.` — before a passive effect could reset it. A
          layout effect runs before that paint, so there is no frame to see. */
       setDraft("");
-      setSelected(0);
+      if (selectSuggestionOnOpen.current) selectSuggestionOnOpen.current = false;
+      else setSelected(0);
       /* Before `inFlight` is read just below: an ask from the last opening
          is stopped, not waited for. */
       dropAsk();
@@ -2684,13 +2696,20 @@ export function CommandBar({
                   muted line saying so, and a rule where the bar's ordinary
                   rows begin again. Neither is an option: the arrows pass
                   over them. */}
+              {/* The pinned guide is a group of its own. This boundary comes
+                  before a suggestion heading, so the heading stays attached
+                  to the rows it names. */}
+              {at === 1 && pinnedGuide !== undefined && (
+                <div role="presentation" className="cmdbar-rest tw:mx-3 tw:my-1 tw:border-t tw:border-rule" />
+              )}
               {row.suggested !== undefined && shown[at - 1]?.suggested === undefined && (
                 <div role="presentation" className="cmdbar-from-why tw:px-3 tw:pb-1 tw:pt-2 tw:text-sm tw:text-muted-foreground">
                   {SUGGEST_HEADING}
                 </div>
               )}
-              {((at === firstOrdinary && at > 0 && shown[at - 1]?.suggested !== undefined) ||
-                (at === 1 && pinnedGuide !== undefined)) && (
+              {/* Independently, end the list written from why they are
+                  reading before the bar's ordinary rows resume. */}
+              {at === firstOrdinary && at > 0 && shown[at - 1]?.suggested !== undefined && (
                 <div role="presentation" className="cmdbar-rest tw:mx-3 tw:my-1 tw:border-t tw:border-rule" />
               )}
               {/* biome-ignore lint/a11y/useKeyWithClickEvents: the keyboard equivalent is on the input above — Up/Down move the selection and Enter takes it, which is the listbox pattern; a key handler here would need focus on the row, and focus stays in the box the reader is typing in */}

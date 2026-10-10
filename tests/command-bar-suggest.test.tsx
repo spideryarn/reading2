@@ -422,6 +422,24 @@ describe("asking", () => {
     expect(openedModes).toEqual(["structure"]);
     expect(asked).toEqual([]);
   });
+
+  it("keeps the selected command when that slow read inserts Suggest below the pinned Guide chat", async () => {
+    deferReader = true;
+    await reading({ exec: { ...executor(), openGuide: () => CLOSE } });
+    await openBar();
+    press("ArrowDown");
+    press("ArrowDown");
+    expect(selectedName()).toBe("Structure");
+    act(() => readerAnswers.at(-1)?.());
+    await settle();
+    expect(listed().slice(0, 3)).toEqual([GUIDE_CHAT_LABEL, SUGGEST_LABEL, "Plain"]);
+    expect(selectedName()).toBe("Structure");
+    press("Enter");
+    await settle();
+    expect(openedModes).toEqual(["structure"]);
+    expect(asked).toEqual([]);
+  });
+
   it("posts the keys of the mode rows and nothing else, once, and waits with the bar open", async () => {
     await reading();
     await openBar();
@@ -540,6 +558,25 @@ describe("the list", () => {
     expect(opened).toBe(0);
   });
 
+  it("keeps the Guide chat rule above the heading for its suggested rows", async () => {
+    await reading({
+      exec: {
+        ...executor(),
+        openGuide: () => CLOSE,
+      },
+    });
+    await openBar();
+    press("ArrowDown");
+    press("Enter");
+    await settle();
+    await answer(list());
+
+    const guideRule = rows()[0]?.nextElementSibling;
+    expect(guideRule?.classList.contains("cmdbar-rest")).toBe(true);
+    expect(guideRule?.nextElementSibling?.classList.contains("cmdbar-from-why")).toBe(true);
+    expect(dialog().querySelectorAll(".cmdbar-rest")).toHaveLength(2);
+  });
+
   it("drops a key that is not a mode here, and a mode the reader does not have — an Archive key is not a row (F1)", async () => {
     await reading();
     await suggestAndLand(
@@ -630,6 +667,32 @@ describe("the list", () => {
     expect(suggested()).toHaveLength(4);
     expect(asked).toHaveLength(1);
   });
+
+  it("selects the first suggestion after its list lands while the Guide chat bar is shut", async () => {
+    let opened = 0;
+    await reading({
+      exec: {
+        ...executor(),
+        openGuide: () => {
+          opened += 1;
+          return CLOSE;
+        },
+      },
+    });
+    await openBar();
+    press("ArrowDown");
+    press("Enter");
+    await settle();
+    await shutBar();
+    await answer(list());
+
+    await openBar();
+    expect(selectedName()).toBe(QUICK_1);
+    press("Enter");
+    await settle();
+    expect(searched).toEqual([SEARCH_1]);
+    expect(opened).toBe(0);
+  });
 });
 
 describe("a save drops the list (F3)", () => {
@@ -702,6 +765,31 @@ describe("a save drops the list (F3)", () => {
     press("Enter");
     await settle();
     expect(asked).toHaveLength(2);
+    expect(openedModes).toEqual([]);
+  });
+
+  it("resets to the pinned Guide chat when a save removes Suggest above the selected command", async () => {
+    let opened = 0;
+    await reading({
+      exec: {
+        ...executor(),
+        openGuide: () => {
+          opened += 1;
+          return CLOSE;
+        },
+      },
+    });
+    await openBar();
+    press("ArrowDown");
+    press("ArrowDown");
+    press("ArrowDown");
+    expect(selectedName()).toBe("Structure");
+    await act(async () => { await savePurpose(SLUG, null); });
+    await settle();
+    expect(listed()).not.toContain(SUGGEST_LABEL);
+    expect(selectedName()).toBe(GUIDE_CHAT_LABEL);
+    press("Enter");
+    expect(opened).toBe(1);
     expect(openedModes).toEqual([]);
   });
 

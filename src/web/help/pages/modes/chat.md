@@ -79,7 +79,8 @@ three next steps as buttons: something to ask it next, a mode to open, or a sear
 can change before you press **Quick search**. Ask it to make a private link, share the article or archive
 it, and it offers **Share this article…** or **Archive or put back…**, which take you to the
 Metadata page where you do it; the guide never does these itself. You can talk to the
-guide out loud with **Live**, as in any chat, and **Guide chat**, the first row of the command bar on your own article, gets you back to it.
+guide out loud with **Live**, as in any chat, and **Guide chat**, the first row of the command bar
+while reading your own article, gets you back to it.
 
 **Talking instead of typing.** The microphone turns your speech into text in the box, to edit before
 you send. It is worth trying even if you type quickly: most people say more out loud than they would

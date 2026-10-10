@@ -305,7 +305,10 @@ product calls) and the two widenings he has made since. **It was modes only unti
 he asked for `/changelog` to be reachable from it as well as from the footer; on 2026-09-08 he named
 six more — Library, Feedback, Metadata, Tweets, Homepage, Profile — and left *"a few more
 likely/useful"* to us ([260908e](../plans/260908e-more-commands-in-the-command-bar-and-the-button-beside-the-logo.md)).
-The rows that are not modes are drawn below all of them, and come in two shapes:
+The rows that are not modes are drawn below all of them — bar one: on the owner's reading view an
+empty bar opens on *Guide chat*, which opens the guide, since 2026-10-10
+([261010g](../plans/261010g-guide-chat-at-the-top-of-the-command-bar-with-one-icon.md)) — and come
+in two shapes:
 **pages**, where Enter goes there, and **actions**, where Enter does the thing — Feedback, which
 opens the dialog, Comments, which opens the drawer, and since 2026-10-02 the *Run again* rows below,
 the first that can fail: an action now answers *close* or *stay open, saying why*, and one that is
@@ -498,8 +501,8 @@ say it will last only until the page is closed. Words in
 
 **It proposes a short list from why you are reading, since 2026-10-05**
 ([261005k](../plans/261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md)).
-On the owner's reading view, for an article that has a *why you're reading this*, an empty bar opens
-on *Suggest what to do here*. Pressing it makes one small model call; the bar stays open and then
+On the owner's reading view, for an article that has a *why you're reading this*, an empty bar offers
+*Suggest what to do here*, just under *Guide chat*. Pressing it makes one small model call; the bar stays open and then
 draws, under *From why you're reading*, up to three quick searches, up to two modes and one
 question for chat about what the web says, each with a line saying why. **Every one is a row the
 bar already had** (the quick-search row, that mode's own row with its own `generates` mark, Debate's

@@ -6,7 +6,7 @@ Owned by [plans.md](../project/plans.md). Overseer queue item `qi-dp2tphkd`; rep
 [261009i](261009i-the-guide-greets-in-chat-takes-live-and-a-bar-row.md), which gave the bar its
 *Guide* row, and [261007j](261007j-the-guide-a-conversation-about-how-to-read-this.md), which gave
 the guide its `Compass` and the bar its *Ask the guide: “…”* row.
-**Status: built, GPT Sol on the plan; code review and a browser check next.**
+**Status: built, GPT Sol on the plan and the code, seen in a browser, on `dev`. Not deployed.**
 
 ## What Greg asked for
 
@@ -88,3 +88,30 @@ GPT Sol ([review](261010g-plan-review-sol.md)): build, with changes. All six tak
 - **F5**: the argument parser's collision matrix now builds the guide row, so its new words are
   checked.
 - **F6**: Chat's header compass has its assertion.
+
+## After the code review
+
+GPT Sol ([review](261010g-code-review-sol.md), on [the diff](261010g-code-review.diff)) fixed two
+things inside the change, and I read and kept both:
+
+- **A list that landed while the bar was shut** reopened on Guide chat, so Enter would have opened
+  the guide, not the first suggestion. The selection now survives that one reopening
+  (`selectSuggestionOnOpen`); its regression test was red first.
+- **The rule under the guide came after *From why you're reading***, cutting the heading off its
+  rows. Now: Guide chat, rule, heading, suggestions, rule, the rest.
+- More tests (a slow profile read, a save, typing then clearing, held Enter), and Help's wording:
+  *while reading your own article* (not the Metadata page), and closing the bar clears what you
+  typed.
+
+Its two wider points, also done: [reading-view-overview.md](../project/reading-view-overview.md)
+named Guide chat as the exception to *modes first*, and Help's command-bar picture was retaken with
+Guide chat as its first row (`help-images.ts`).
+
+## Seen in a browser
+
+A Sonnet subagent with Playwright on the box, signed in as the owner of *The Scaling Hypothesis*: the
+empty bar opens on Guide chat with its compass, highlighted, at 1440 and at 390 with nothing
+overflowing; Enter opens the guide in Chat; `glossary` does not show it and `guide` puts it first;
+Chat's header reads *Guide* with the compass.
+[1440](261010g-shot-1-bar-1440.png) · [390](261010g-shot-2-bar-390.png) ·
+[the header](261010g-shot-3-guide-header-1440.png).

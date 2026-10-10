@@ -5,12 +5,12 @@ keywords: keys hotkeys arrow up down left right command k ctrl enter escape tab 
 related: touch, jumping-around
 ---
 
-![The command bar open: a box saying “Type a command…” above a list of modes, each with a line on what it does, most marked generates](images/command-bar.png "The command bar: type a mode, a page or an action. Rows marked generates start the AI writing.")
+![The command bar open: a box saying “Type a command…” above Guide chat, marked with a compass, and a list of modes, each with a line on what it does, most marked generates](images/command-bar.png "The command bar: type a mode, a page or an action. Rows marked generates start the AI writing.")
 
 - <kbd>⌘K</kbd> (Mac) or <kbd>Ctrl K</kbd> opens the **command bar**. Type the name of a mode, a
   page or an action — *quotes*, *library*, *feedback* — and press <kbd>Enter</kbd>. Rows marked
   **generates** start the AI writing something. The <kbd>⌘</kbd> button in the bottom bar opens the
-  same thing. It works while you are typing in most boxes too, and simply closing it keeps what you
+  same thing. It works while you are typing in most boxes too, and closing it clears what you
   typed. It leaves title editing and boxes inside another open dialog alone. On a Mac, use
   <kbd>⌘K</kbd>: <kbd>Ctrl K</kbd> stays the box’s own editing key.
 - The command bar also takes a few whole requests. *where does it first mention entropy* jumps to
@@ -30,8 +30,8 @@ related: touch, jumping-around
   If it is sure and the command only takes you somewhere, you go there; otherwise it shows its best
   guesses under **Did you mean** and you press the one you want, or <kbd>Enter</kbd>. You need to be
   signed in.
-- On your own article, an empty command bar starts with **Guide chat**, marked with a compass: it
-  opens the guide, the conversation about how to read this piece, and sends nothing.
+- While reading your own article, an empty command bar starts with **Guide chat**, marked with a
+  compass: it opens the guide, the conversation about how to read this piece, and sends nothing.
 - Below it, once you have said why you are reading, comes **Suggest what to do here**. Press it and a fast AI model reads your profile and your reason for
   reading, never the article, and proposes a short list under **From why you’re reading**: up to
   three quick searches, a mode or two, and a question for Chat about what the web says. Nothing is

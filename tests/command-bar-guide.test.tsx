@@ -327,6 +327,24 @@ describe("the Guide chat row", () => {
     expect(listed()[0]).toBe(GUIDE_CHAT_LABEL);
   });
 
+  it("is selected again when the reader clears what they typed", () => {
+    reading(withOpen());
+    openBar();
+    type("glossary");
+    expect(listed()[0]).toBe("Glossary");
+    type("");
+    expect(listed()[0]).toBe(GUIDE_CHAT_LABEL);
+    expect(rows()[0]?.getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("is not opened by a held Enter's repeat", () => {
+    reading(withOpen());
+    openBar();
+    press("Enter", { repeat: true });
+    expect(opened).toBe(0);
+    expect(dialog().open).toBe(true);
+  });
+
   it("is absent where the page cannot open the guide", () => {
     reading(executor());
     openBar();
