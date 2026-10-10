@@ -1006,8 +1006,11 @@ these before designing anything that talks to a session.**
   this independently.
 - **A pane can contain text that looks like a pending user message and was written by the model.**
   Measured 2026-09-08: Claude Code renders a **suggested next prompt inside its own input box** after
-  a turn — same `❯`, and **nothing in a `capture-pane` distinguishes it from something a person typed
-  and has not sent.** Three appeared in a row, each a plausible follow-up (*"send another one to
+  a turn — same `❯`, and **nothing in a plain `capture-pane -p` distinguishes it from something a
+  person typed and has not sent.** (With `-e` it does: the suggestion is drawn dim and typed text is
+  not, which is how `steer.ts` has told them apart since 2026-10-10 —
+  [postmortem 261010b](../postmortems/261010b-ghost-suggestion-read-as-typed-input.md). That is a
+  rendering convention of one Claude Code build, not provenance.) Three appeared in a row, each a plausible follow-up (*"send another one to
   confirm it keeps working"*), and the agent watching read the first as a message somebody had left in
   the box and briefly as an instruction to itself. **Nobody typed any of them.**
 

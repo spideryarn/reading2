@@ -50,12 +50,15 @@
  * request on a stateless transport, and a shared server closed over one
  * person's identity is a hazard under concurrency). `GET` and `DELETE` are 405.
  *
- * ## The asking tools refuse
+ * ## The asking tools are not offered
  *
  * Sending mail, publishing and handing over a private link need the owner's
  * approval, which is a dialog on their Mac; a server on Vercel cannot show
- * one. The approver here throws `CannotAsk` with the page to use, whatever the
- * OS (Sol F8: a remote request served during Mac development must refuse too).
+ * one. So the list served here is `remoteTools()`, which leaves those tools
+ * out so a model does not plan around them (plan 261010i § D2), and the
+ * approver throws `CannotAsk` with the page to use, whatever the OS, should
+ * one ever be reached (Sol F8: a remote request served during Mac development
+ * must refuse too).
  *
  * **Not imported by the local server.** scripts/spideryarn-mcp.ts must not
  * pull in src/routes.ts, and this file is reached only from there; it takes
@@ -82,6 +85,7 @@ import {
 import { siteOrigin } from "../site-origin.js";
 import { type Api, ApiError, type HttpMethod } from "./api.js";
 import { type Approver, CannotAsk } from "./approve.js";
+import { remoteTools } from "./tools.js";
 import { buildServer } from "./server.js";
 
 export const MCP_PATH = "/api/mcp";
@@ -210,6 +214,8 @@ async function serveMcp(r: RemoteMcpRequest): Promise<void> {
     api: inProcessApi(who.claims, r.handleApi, lifetime.signal),
     ctx: { identity: async () => ({ userId: who.userId, email: who.email }) },
     approver: REMOTE_APPROVER,
+    /* Without the tools that could only refuse here (261010i § D2). */
+    tools: remoteTools(),
   });
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
@@ -289,16 +295,18 @@ async function readBytes(req: IncomingMessage): Promise<Buffer> {
 }
 
 /**
- * **No one can be asked from here**, so every asking tool refuses, naming the
- * page that does the same job with the owner present. Unconditional: never
- * chosen by the host's OS.
+ * **No one can be asked from here.** The asking tools are not even listed
+ * (`remoteTools`, 261010i § D2); this is the backstop, should one ever be
+ * reached: it refuses, naming the page that does the same job with the owner
+ * present. Unconditional: never chosen by the host's OS.
  */
 export const REMOTE_APPROVER: Approver = {
   async approve(): Promise<boolean> {
     throw new CannotAsk(
       "Sending mail, publishing and handing over a private link need your approval, which is a dialog in the " +
         "Mac app and cannot be shown from here. Do it in the Mac app, or on Spideryarn itself: /admin/vouchers " +
-        "for gift vouchers, the article's page for publishing or its private link. Nothing was done.",
+        "for gift vouchers (draft_author_gift saves one there for you to send), the article's page for " +
+        "publishing or its private link. Nothing was done.",
     );
   },
 };

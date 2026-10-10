@@ -365,11 +365,22 @@
   font-family: var(--font-author);
   font-size: var(--reading-size);
 }
+/* Back on the left, the way on on the right (spya-gm858u, plan 261010g): the
+   row spans the door's measure, and the forward group keeps to the right even
+   when there is no back button, or it wraps under one on a narrow window. */
 .skim-door-row {
+  display: flex;
+  align-self: stretch;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.skim-door-on {
   display: flex;
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 0.5rem;
+  margin-left: auto;
 }
 /* **Where the door leads**: the next stop's cue, small and muted, so it reads
    as a signpost rather than as the author's words or a summary — or, at the

@@ -2041,6 +2041,7 @@ export function Reader({
       node: (
         <SkimDoor
           door={skimControl.door}
+          onPrevious={skimControl.hasPrevious ? () => skimControl.step(-1) : null}
           onNext={skimControl.advance}
           onDeeper={skimControl.deeper}
           onRoute={bandBack ? () => setBandAway(false) : null}

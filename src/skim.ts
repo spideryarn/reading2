@@ -68,6 +68,7 @@ import { isBody } from "./block-policy.js";
 import { blockIndex, sectionNodesOf, sectionPathOf } from "./section-path.js";
 import { budgetFor } from "./token-budget.js";
 import { plainWords } from "./plain-words.js";
+import { passCount } from "./skim-passes.js";
 import {
   type Block,
   type Ideas,
@@ -160,8 +161,19 @@ export type {
  * test, and forbids asking what the quote does not answer. An empty cue is
  * `noCue`, not `badCue`. The input hash is unchanged, as at `skim/10`.
  * docs/plans/261009j-skim-question-optional-and-the-border.md.
+ *
+ * `skim/12`, 2026-10-10: **no pass is shorter than the one before, and Most
+ * is longer than More, as walked.** Greg's report spya-nbmce7: Most walked 4 stops after More's 5. The
+ * targets were cumulative, the shape from when the passes nested, and the
+ * growth rule judged cumulative counts, so neither saw the walk. Now the
+ * targets are each pass's own stops (`targetsFor`), section 2 says a reader
+ * expects no deeper pass to be shorter, counting what is carried in, the
+ * growth rule judges `passSizes`, and `growPasses` repairs a route that still
+ * does not grow. The input hash is unchanged; the version alone makes a stored
+ * route outdated, which is not announced.
+ * docs/plans/261010g-skim-deeper-passes-always-longer-and-a-previous-stop-door.md.
  */
-export const PROMPT_VERSION = "skim/11";
+export const PROMPT_VERSION = "skim/12";
 
 /**
  * **A cue is a sentence or two, not a paragraph about the passage**: an
@@ -191,7 +203,7 @@ export const MAX_QUOTE_PROMPT_CHARS = 1200;
  */
 export const DEPTH_CAPS = [7, 15, 36] as const;
 
-/** With at least this many offered quotes, the three passes must strictly grow (Sol F2). */
+/** From this many offered quotes, all three passes exist and Most must be longer than More. */
 export const GROWTH_MIN_QUOTES = 8;
 
 /**
@@ -208,9 +220,9 @@ const EFFORT: Effort = "low";
  * The answer budget in tokens: a base for the JSON around the list, plus per
  * stop the label, the depth, the longest `again` there is (`[2, 3]` — what
  * took the allowance from 60 characters to 80 at `skim/9`) and a cue at the
- * cap, at a conservative three characters a token — for every quote the list can hold, because the prompt
- * says depth 3 should include nearly all of them and a model may list past the
- * cap. Undersizing does not degrade: it throws `truncationFailure`.
+ * cap, at a conservative three characters a token — for every quote the list
+ * can hold, because a model may list past the target and the cap. Undersizing
+ * does not degrade: it throws `truncationFailure`.
  * tests/skim.test.ts builds the largest permitted answer and checks it
  * fits.
  */
@@ -238,13 +250,39 @@ export function emptyDrops(): SkimDrops {
  * **Targets, not rules** — what the prompt asks for at each depth, from *q*,
  * the number of quotes. Hypotheses to measure (Sol F10), not product constants;
  * the caps above are the only hard numbers.
+ *
+ * **Each pass's own stops, not cumulative counts**, since `skim/12`. Until then
+ * these were "at depth 1; at depth 1 or 2; in all", the shape from when the
+ * passes nested; read as passes, 11 quotes asked for Gist 3, More 3, Most 5, so
+ * a model on target walked a More no longer than its Gist (spya-nbmce7, plan
+ * 261010g). Now, wherever there are quotes enough (`GROWTH_MIN_QUOTES` and up,
+ * which tests/skim.test.ts checks to the cap), More is at least Gist and Most
+ * is more than More: Gist is the old target; More is about 40% of the rest,
+ * kept below half of it; Most is everything left, within the cumulative cap.
+ *
+ * **More may equal Gist**, on purpose. Making More strictly longer too was
+ * built and measured (docs/investigations/261010a-skim-per-pass-targets-and-walked-growth.md):
+ * at 11–13 quotes it forces a two-stop Gist, which covered 4–5 fewer of 49
+ * Ideas across six articles. Greg reported a deeper pass with FEWER stops;
+ * whether a tie is worth that is his call — q-vzd2xt.
  */
 export function targetsFor(q: number): { gist: number; more: number; most: number } {
-  return {
-    gist: Math.min(5, Math.ceil(q / 5)),
-    more: Math.min(12, Math.ceil(q / 2)),
-    most: Math.min(DEPTH_CAPS[2], q),
-  };
+  if (q <= 0) return { gist: 0, more: 0, most: 0 };
+  const gist = Math.max(1, Math.min(5, Math.ceil(q / 5)));
+  const rest = Math.max(0, q - gist);
+  /* A short route may omit its later passes, but every pass it does offer must
+     still be at least as long as the offered one before it. Splitting the
+     remainder evenly gives 1/1/0 through 2/2/3 for q=2…7; the one remaining
+     stop at q=2 belongs to More rather than opening a gap at depth 2. */
+  if (q < GROWTH_MIN_QUOTES) {
+    const more = rest === 1 ? 1 : Math.floor(rest / 2);
+    return { gist, more, most: rest - more };
+  }
+  /* Below half of the rest, so Most has more; at least Gist when that fits. */
+  const below = Math.floor((rest - 1) / 2);
+  const more = Math.max(Math.min(1, rest), Math.min(10, Math.max(gist, Math.round(0.4 * rest)), below));
+  const most = Math.max(0, Math.min(DEPTH_CAPS[2] - gist - more, rest - more));
+  return { gist, more, most };
 }
 
 /* ------------------------------------------------------ what it is given -- */
@@ -872,28 +910,136 @@ export function visibleCounts(stops: readonly SkimStop[]): [number, number, numb
 }
 
 /**
- * **The passes must grow (Sol F2)**, or the reader presses *More* and gets the
- * same route again. `null` when they do; otherwise the reason, with the counts.
+ * **How many stops each pass walks**, as the reader walks it — `passCount`
+ * from src/skim-passes.ts, the one definition the band uses too: a pass's own
+ * stops and the ones carried into it, and nothing for a pass no stop is first
+ * placed at.
+ */
+export function passSizes(stops: readonly SkimStop[]): [number, number, number] {
+  return [passCount(stops, 1), passCount(stops, 2), passCount(stops, 3)];
+}
+
+/**
+ * **The passes must grow (Sol F2)**, or the reader presses *More* and gets
+ * less. `null` when they do; otherwise the reason, with the sizes.
  *
- * With at least `GROWTH_MIN_QUOTES` offered quotes: `1 ≤ c₁ < c₂ < c₃`. With
- * fewer, a shorter spiral is allowed — `c₁ ≥ 1` and never shrinking (which the
- * nesting guarantees) — and the band shows only the depths that add something.
+ * **Judged on the passes as walked** (`passSizes`) since `skim/12`. It used to
+ * judge the cumulative counts — stops at depth ≤ 1, ≤ 2, ≤ 3 — which was what
+ * the reader saw while the passes nested; from 260929e each pass walks only
+ * its own stops (and, from 261003l, a few carried in), and the check went on
+ * guarding the old walk. A route with cumulative 3 < 7 < 11 walked Gist 3,
+ * More 5, Most 4 (spya-nbmce7, plan 261010g).
+ *
+ * With at least `GROWTH_MIN_QUOTES` offered quotes, all three passes and
+ * `1 ≤ w₁ ≤ w₂ < w₃`: Most always walks more than More, and More at least as
+ * many as Gist — `targetsFor` says why More may equal Gist (q-vzd2xt). With
+ * fewer, a shorter spiral is allowed — Gist has a stop, a pass may be absent,
+ * and no offered pass is shorter than the offered one before it.
  */
 export function growthFailure(
-  counts: readonly [number, number, number],
+  sizes: readonly [number, number, number],
   offered: number,
 ): string | null {
-  const [c1, c2, c3] = counts;
-  const said = `${c1} stops at Gist, ${c2} at More and ${c3} at Most`;
-  if (c1 < 1) return `The route has no stop at the first depth (${said}).`;
-  if (c1 > c2 || c2 > c3) return `The route shrinks as it deepens (${said}).`;
-  if (offered >= GROWTH_MIN_QUOTES && !(c1 < c2 && c2 < c3)) {
+  const [w1, w2, w3] = sizes;
+  const said = `${w1} stops in Gist, ${w2} in More and ${w3} in Most`;
+  if (w1 < 1) return `The route has no stop at the first depth (${said}).`;
+  const walked = sizes.filter((w) => w > 0);
+  if (walked.some((w, i) => i > 0 && w < walked[i - 1]!)) {
+    return `The route shrinks as it deepens (${said}).`;
+  }
+  if (offered >= GROWTH_MIN_QUOTES && !(w2 >= 1 && w2 < w3)) {
     return (
-      `With ${offered} quotes, each depth has to add stops to the one before it, and this ` +
-      `route does not (${said}).`
+      `With ${offered} quotes, the route needs all three passes and Most has to be longer ` +
+      `than More, and this route does not (${said}).`
     );
   }
   return null;
+}
+
+/**
+ * **Make no pass shorter than the one before, and Most longer than More,
+ * where the model's route does not** — rule 9, after `validateRoute`'s eight,
+ * since `skim/12` (plan 261010g); the rule itself is `growthFailure`'s. The
+ * prompt asks for it; this is the backstop, so that More is never longer
+ * than Most by luck of the draw (spya-nbmce7: Gist 3, More 5, Most 4, and a
+ * re-run that happened to grow).
+ *
+ * For each adjacent pair of offered passes, shallow pair first, while the
+ * shallower walks more than the deeper — or, for More and Most with at least
+ * `GROWTH_MIN_QUOTES` quotes, as many:
+ *
+ * 1. drop a stop's `again` entry into the shallower pass, the latest in route
+ *    order first — a carried stop is an extra, and the stop is kept
+ *    (`shrinkCarried`);
+ * 2. with none left, move the shallower pass's **least important own stop**
+ *    one pass deeper — lowest quote priority (`priorityOf`, what the prompt
+ *    shows; none is lowest), the latest on a tie — keeping
+ *    its place in the route and any `again` deeper than its new depth
+ *    (`shrinkMoved`). Never the last stop of a pass, so no pass is emptied and
+ *    no `again` loses the pass it names.
+ *
+ * Then round again, since a stop moved into More can make it as long as Most.
+ * It ends: every step removes a carried entry or moves a stop deeper, and
+ * there are finitely many of both. Rule 6 never demotes (Sol F8) because that
+ * would bloat a deeper pass past its cap; a move here lowers a shallower
+ * cumulative count and leaves the deepest unchanged, so every cap still holds,
+ * and room for carrying never shrinks in the pass a stop moves into.
+ *
+ * Whatever it cannot fix — a pass of one stop as long as the next — is left
+ * for `growthFailure`, and the job fails as before.
+ */
+export function growPasses(
+  stops: readonly SkimStop[],
+  quotes: readonly Quote[],
+  dropped: SkimDrops,
+): SkimStop[] {
+  /* The priority the prompt shows (`priorityOf`); none is the lowest, as `collapseQuotes` ranks it. */
+  const byId = new Map(quotes.map((q) => [q.id, q]));
+  const importance = (id: string) => {
+    const q = byId.get(id);
+    return (q && priorityOf(q)) ?? Number.NEGATIVE_INFINITY;
+  };
+  const strict = quotes.length >= GROWTH_MIN_QUOTES;
+  const route = stops.map((s) => ({ ...s }));
+  const tooLong = (a: SkimDepth, b: SkimDepth, sizes: readonly number[]) =>
+    strict && a === 2 && b === 3 ? sizes[1]! >= sizes[2]! : sizes[a - 1]! > sizes[b - 1]!;
+
+  /** The first pair of adjacent offered passes that does not grow, shallow first. */
+  const failing = (): [SkimDepth, SkimDepth] | null => {
+    const sizes = passSizes(route);
+    const offered = ([1, 2, 3] as const).filter((d) => sizes[d - 1]! > 0);
+    for (let i = 0; i + 1 < offered.length; i++) {
+      const [a, b] = [offered[i]!, offered[i + 1]!];
+      if (tooLong(a, b, sizes)) return [a, b];
+    }
+    return null;
+  };
+
+  for (let pair = failing(); pair !== null; pair = failing()) {
+    const [shallow, deep] = pair;
+    const s = [...route].reverse().find((r) => r.again?.includes(shallow) ?? false);
+    if (s !== undefined) {
+      const again = s.again!.filter((d) => d !== shallow);
+      if (again.length > 0) s.again = again;
+      else delete s.again;
+      dropped.shrinkCarried = (dropped.shrinkCarried ?? 0) + 1;
+      continue;
+    }
+    const own = route.filter((s) => s.depth === shallow);
+    if (own.length <= 1) break;
+    const least = own.reduce((low, s) =>
+      importance(s.quoteId) <= importance(low.quoteId) ? s : low,
+    );
+    /* One pass deeper is `deep` itself only when no pass lies between them;
+       a pass is offered only when a stop is first placed there, so a stop
+       moved past an absent pass would offer it — move it to `deep`. */
+    least.depth = deep;
+    const again = least.again?.filter((d) => d > deep) ?? [];
+    if (again.length > 0) least.again = again;
+    else delete least.again;
+    dropped.shrinkMoved = (dropped.shrinkMoved ?? 0) + 1;
+  }
+  return route;
 }
 
 /**
@@ -932,7 +1078,7 @@ export function buildSkim(
     );
   }
   const d = opts.dropped;
-  const stops = validateRoute(parsed.stops, opts.quotes, d);
+  const stops = growPasses(validateRoute(parsed.stops, opts.quotes, d), opts.quotes, d);
   if (stops.length === 0) {
     throw new Error(
       `The model named ${parsed.stops.length} stops and none of them survived, so there is ` +
@@ -943,12 +1089,14 @@ export function buildSkim(
     );
   }
   const visible = visibleCounts(stops);
-  const failure = growthFailure(visible, opts.quotes.length);
+  const failure = growthFailure(passSizes(stops), opts.quotes.length);
   if (failure) {
     throw new Error(
       `${failure} Nothing was written. Dropped: ${d.collapsed} same-block quotes before the call, ` +
         `${d.unknownQuote} unknown, ${d.malformed} malformed, ${d.duplicate} duplicates, ` +
-        `${d.sameBlock} on one block, ${d.overCap} over a cap.`,
+        `${d.sameBlock} on one block, ${d.overCap} over a cap; moved ${d.shrinkMoved ?? 0} ` +
+        `stops a pass deeper and dropped ${d.shrinkCarried ?? 0} carried entries to make the ` +
+        "passes grow.",
     );
   }
   return {
@@ -1020,9 +1168,13 @@ WHAT YOU DECIDE
    1 = GIST: the few stops that give the gist on their own;
    2 = MORE: go round again, in more detail — the stops that fill in how and why;
    3 = MOST: nearly everything else worth stopping at.
-   Each pass must ADD stops of its own when its target is larger than the one
-   before it. When two adjacent targets are the same because only one or two
-   quotes were offered, that pass may be absent.
+   The reader walks each pass on its own and expects a deeper pass never to
+   be SHORTER than the one before: MORE walks at least as many stops as GIST,
+   and MOST at least as many as MORE, counting the stops carried into each.
+   With eight or more quotes, all three passes are offered and MOST must be
+   longer than MORE. So follow the targets for each pass's own stops, and carry
+   a stop into MORE only while those size rules still hold. When a target is 0
+   because few quotes were offered, that pass may be absent.
 
    And "again" for each stop: the deeper passes it is ALSO walked in. The
    reader walks one pass at a time. A pass is its own stops (the ones whose
@@ -1164,10 +1316,11 @@ RULES
 - Each quote is at most one entry in the list, never two. "again" is how a
   stop appears in more than one pass.
 - There is at most one offered quote from any paragraph.
-- Depth 3 should normally include nearly all the quotes. Leave one out only if
-  it adds nothing a stop already gives.
-- The user message gives a target for each depth. Aim near it. The targets
-  count each stop once, at its depth; a carried stop does not count again.
+- Use about as many quotes in all as the three targets add up to. Those chosen
+  for neither depth 1 nor depth 2 go at depth 3. Prefer leaving out a quote
+  that adds nothing a chosen stop already gives.
+- The user message gives a target for each depth: how many stops of its own
+  that pass has. Aim near it. A carried stop is not counted in the target.
 
 OUTPUT
 
@@ -1244,8 +1397,8 @@ export function renderPromptParts(opts: {
   const who = profileSection(opts.profile);
   const prompt = `Plan the route through these ${count} quotes.
 
-Targets: about ${t.gist} at depth 1; about ${t.more} at depth 1 or 2; about ${t.most} in all.
-Each stop counts once, at its depth: a stop carried into a deeper pass with "again" does not count again.
+Targets, each pass's own stops: about ${t.gist} at depth 1; about ${t.more} at depth 2; about ${t.most} at depth 3.
+A stop carried into a deeper pass with "again" is not counted in that pass's target.
 ${who ? `\n${who}\n` : ""}
 === THE KEY IDEAS ===
 

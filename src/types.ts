@@ -1352,12 +1352,12 @@ export interface QuotesResponse {
    to keep, and a re-run simply replaces it. */
 
 /**
- * The pass a stop belongs to. **The model plans the passes as nesting** (depth
- * *d* covering every stop with `depth ≤ d`, which is what `Skim.visible`
- * counts). **The reader walks a pass as the stops first placed there plus any
- * earlier stops whose `again` names it** — plan 261003l, `walkedIn` in
- * src/web/skim-route.ts. Before `skim/9`, there were no carried stops, so each
- * pass was only its own (plan 260929e).
+ * The first, shallowest pass a stop is placed in. The cumulative caps count
+ * every stop with `depth ≤ d`, which is what `Skim.visible` records, but that
+ * is allocation arithmetic rather than pass membership. **The reader walks a
+ * pass as the stops first placed there plus any earlier stops whose `again`
+ * names it** — plan 261003l, `walkedIn` in src/skim-passes.ts. Before `skim/9`,
+ * there were no carried stops, so each pass was only its own (plan 260929e).
  */
 export type SkimDepth = 1 | 2 | 3;
 
@@ -1446,6 +1446,20 @@ export interface SkimDrops {
    * stops as it may — `maxCarried` in src/skim.ts. The stop is kept.
    */
   overCarried?: number;
+  /**
+   * `again` entries dropped so no pass is shorter than the one before it and
+   * Most is longer than More — `growPasses` in src/skim.ts, since `skim/12`
+   * (docs/plans/261010g-skim-deeper-passes-always-longer-and-a-previous-stop-door.md).
+   * The stop is kept. Absent before, read it as 0.
+   */
+  shrinkCarried?: number;
+  /**
+   * Stops moved one pass deeper for the same rule, once no carried entry
+   * was left to drop — the least important own stop of the pass that was
+   * too long. The stop is kept, in its place in the route. Absent before
+   * `skim/12`, read it as 0.
+   */
+  shrinkMoved?: number;
   /** Stops past a cumulative cap, dropped in route order — never demoted. */
   overCap: number;
 }
@@ -7796,11 +7810,11 @@ export interface AdminFeedbackQuestionAnswer {
 
 /**
  * **One open question an agent has put to the admin, as a thread** — part of
- * `GET /api/admin/feedback/earlier?questions=2`. An agent wrote `title` and
+ * `GET /api/admin/feedback/earlier?questions=3`. An agent wrote `title` and
  * `body` (a file under docs/user-feedback/questions/, compiled into the
  * server): plain text, to be drawn as text with its line breaks kept. The
  * file's `refs` line is for agents and is never here, and its `acted` ids
- * reach the browser only as `state` and as which replies are listed.
+ * reach the browser only as `state` and as which list each reply is in.
  * docs/plans/261008i-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md.
  */
 export interface AdminFeedbackQuestion {
@@ -7818,7 +7832,7 @@ export interface AdminFeedbackQuestion {
   report: { id: string; number: number; firstLine: string; body: string } | null;
   /**
    * This admin's replies **no agent has acted on yet**, oldest first. One that
-   * has been acted on is quoted in `body` by the agent that acted on it.
+   * has been acted on is in `actedAnswers` instead.
    */
   answers: AdminFeedbackQuestionAnswer[];
   /**
@@ -7826,6 +7840,14 @@ export interface AdminFeedbackQuestion {
    * most the newest five, so one page stays bounded (GPT Sol's plan review, F12).
    */
   olderAnswers: number;
+  /**
+   * This admin's replies **an agent has acted on**, at most the newest five,
+   * oldest first, and how many older ones were not sent. Without them a thread
+   * answered, acted on and asked again looked exactly like one never answered
+   * (spya-j4sg9g, plan 261010h). They never change `state`.
+   */
+  actedAnswers: AdminFeedbackQuestionAnswer[];
+  olderActedAnswers: number;
   /** Which group the thread is in: src/feedback-question-values.ts § `questionState`. */
   state: FeedbackQuestionState;
   /** ISO: when this admin deferred it, while it is deferred; otherwise null. */
@@ -7834,8 +7856,9 @@ export interface AdminFeedbackQuestion {
 
 /**
  * **A question as a server before 261008i sends it**, and as the new server
- * still sends it to a request without `questions=2`, so a tab from before the
- * deploy keeps working after it (F3). Six keys, the newest reply only.
+ * still sends it to a request without `questions=2` or `questions=3`, so a
+ * tab from before the deploy keeps working after it (F3). Six keys, the newest
+ * reply only.
  */
 export interface AdminFeedbackQuestionV1 {
   id: string;
@@ -7869,7 +7892,19 @@ export interface AdminEarlierFeedbackPage {
   questions: AdminFeedbackQuestion[];
 }
 
-/** The same answer to a request without `questions=2`: the shape before 261008i (F3). */
+/**
+ * **A question as a server before 261010h sends it**, and as the new server
+ * still sends it to `questions=2`, so a tab from before that deploy keeps
+ * working after it: no acted replies.
+ */
+export type AdminFeedbackQuestionV2 = Omit<AdminFeedbackQuestion, "actedAnswers" | "olderActedAnswers">;
+
+/** The same answer to `questions=2`: the shape before 261010h. */
+export interface AdminEarlierFeedbackPageV2 extends Omit<AdminEarlierFeedbackPage, "questions"> {
+  questions: AdminFeedbackQuestionV2[];
+}
+
+/** The same answer to a request without `questions=2` or `3`: the shape before 261008i (F3). */
 export interface AdminEarlierFeedbackPageV1 extends Omit<AdminEarlierFeedbackPage, "questions"> {
   questions: AdminFeedbackQuestionV1[];
 }
