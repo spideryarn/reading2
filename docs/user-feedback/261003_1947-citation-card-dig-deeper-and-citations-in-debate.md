@@ -1,7 +1,7 @@
 ---
 reports: spya-c2qmbg
 ending: shipped
-comment: Shipped: Citations and Debate are one mode, Peer review (Bibliography, Reception, Claims), out of Experimental, with the works cited beside each claim. Still asking you: keep the name, given Referee?
+comment: Shipped: Citations and Debate are one mode, now called Sources (your answer B), renamed all the way down, with Bibliography, Reception and Claims, out of Experimental. Old links still land.
 ---
 
 # A citation's card offers Dig deeper; folding Citations into Debate awaits Greg
@@ -39,3 +39,15 @@ q-xf2xvb.
 **The question for Greg is now a file**, `docs/user-feedback/questions/q-xf2xvb.md`, moved there from
 `awaiting-approval.md` on 2026-10-07. He sees it in the Feedback dialog and replies there
 ([feedback-reports.md § Asking Greg a question](../project/feedback-reports.md#asking-greg-a-question-and-acting-on-his-answer)).
+
+**Then, 2026-10-10: renamed Sources, all the way down** (Greg's reply `spya-egmn6r` to q-xf2xvb:
+*"B Sources. Rename comprehensively, eg including docs, code, database etc"*). The label, the mode
+word (`?mode=sources`), and the stored names underneath (`citations` → `bibliography`, `debate` →
+`reception`, `debate-claims` → `sources-claims`, `debate-check` → `sources-claim-check`). Old Peer
+review, Citations and Debate links still land. The database is expanded rather than renamed in place,
+so that no reader meets an error during the deploy. The expand is on `dev`, and the Overseer holds
+its deploy for Greg's OK on one rare deploy-window race. **The contract half**, which removes the old
+names after that deploy, is queued for the Overseer
+([draft](../plans/261009w-contract-queue-item.md)). Plan and reviews:
+[261009w](../plans/261009w-peer-review-becomes-sources-all-the-way-down.md). That ends the deferred
+half, qi-j8py7rjw.

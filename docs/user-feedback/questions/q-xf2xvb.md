@@ -5,7 +5,7 @@ status: answered
 asked: 2026-10-03
 title: Peer review is built. Keep that name, now that it clashes with Referee mode?
 acted: spya-vcvxu5, spya-egmn6r
-refs: SPIDERYARN-READING2-BV · qi-vmnga65v · qi-m9sk699v · qi-j8py7rjw · docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md · docs/plans/261004b-citation-hover-card-offers-dig-deeper.md § Part 2 · docs/user-feedback/261003_1947-citation-card-dig-deeper-and-citations-in-debate.md
+refs: SPIDERYARN-READING2-BV · qi-m9tmnpy3 · docs/plans/261009w-peer-review-becomes-sources-all-the-way-down.md · qi-vmnga65v · qi-m9sk699v · qi-j8py7rjw · docs/plans/261009l-peer-review-mode-merges-citations-and-debate.md · docs/plans/261004b-citation-hover-card-offers-dig-deeper.md § Part 2 · docs/user-feedback/261003_1947-citation-card-dig-deeper-and-citations-in-debate.md
 ---
 Done as you said: one mode, Peer review, out of the Experimental switch, with Bibliography (the old Citations), Reception and Claims, plus the works cited under each claim (C1). It is on dev, waiting for the next deploy. One thing you could not have known when you picked the name: should it stay "Peer review"?
 
@@ -46,3 +46,5 @@ The question it answered, asked 3 Oct: should Citations become part of Debate? O
 > Rename comprehensively, eg including docs, code, database etc
 
 Acted on 2026-10-09 by the feedback sweep: queued as qi-m9tmnpy3 (which replaces qi-j8py7rjw) and dispatched as session fbc2qmbg-rename-to-sources. It renames Peer review to Sources all the way down, together with the stored names that still say citations and debate. Old links keep working.
+
+Done 2026-10-10, on dev (plan docs/plans/261009w-peer-review-becomes-sources-all-the-way-down.md): the mode is Sources on screen and underneath. Its address is ?mode=sources, and its three parts' stored names are bibliography, reception and sources-claims. Old Peer review, Citations and Debate links still open the right view. Typing "peer review" in the command bar now finds Sources first and Referee second; Referee's own word is "for peer reviewers". The database change comes in two halves so that no reader sees an error while a deploy is under way. The first half adds the new names beside the old ones; the Overseer is holding that deploy for your OK on one small risk. The second half removes the old names after that deploy and is queued for the Overseer.

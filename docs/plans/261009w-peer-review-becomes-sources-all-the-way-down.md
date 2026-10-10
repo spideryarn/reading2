@@ -305,6 +305,36 @@ report's note, `feedback-endings.ts`), and messages to the two sessions if they 
 
 ## Log
 
+- 2026-10-10: **Stage 3 and the finish.** Stage 3 (9ac4332ae) renamed `debate` → `reception`,
+  `debate-claims` → `sources-claims` and `debate-check` → `sources-claim-check`, using Stage 2's
+  machinery. Its expand migration is `drizzle/20261010063350_reception_expand.sql`. The claim-check
+  table is renamed, with a `debate_claim_checks` view kept for the old code. The limiter counts both
+  bucket spellings, and stale-notice words get aliases. Decisions the plan left open:
+  `DebatePanel` → `ReceptionAndClaimsPanel`; `debate-order` / `-levels` / `-threads` →
+  `reception-*` (the order file also holds Claims' grouping); the claims group *inside* the stored
+  Reception artefact is `ReceptionClaims…`; the lens-only CHECK keeps its old name until the
+  contract.
+  - **GPT Sol's code review** ([261009w-stage-3-code-review-sol.md](261009w-stage-3-code-review-sol.md)):
+    LAND AFTER FIXES. Its C1 was a real gap that also reaches back to Stage 2: a tab open across
+    the deploy matched job progress by the old step names. `GET /api/jobs` now answers those for one
+    deploy. Its other fixes were stale command-pick gold labels, the Reception eval's names, and
+    reader copy ("Reception in Debate", "a debate").
+  - **Sol's migration review** ([261009w-reception-migration-review-sol.md](261009w-reception-migration-review-sol.md)):
+    SAFE TO APPLY AFTER CHANGES. M1 is the same deploy-window race as Bibliography's and goes to
+    Greg the same way. M2 (no `ON CONFLICT DO NOTHING`, so an impossible conflict aborts the batch)
+    and M3 (the grant comment) are taken, since this file was not yet applied anywhere. It was then
+    applied to the shared local database.
+  - **Before the contract, checked:** no statement in `src/`, `scripts/` or `tools/` names a legacy
+    column. That makes the contract a database-only step
+    ([261009w-contract-queue-item.md](261009w-contract-queue-item.md), which the Overseer files,
+    since only Greg or the Overseer may write the queue).
+  - **Browser pass** (Sonnet, Playwright, `scaling-hypothesis`, 1440 and 390): all six checks pass
+    with no console errors: the Sources button and chips, all six old addresses rewritten, Bibliography
+    and Claims drawn, the (i) and help pages, the command bar ("peer review" finds Sources first), and
+    Metadata's step names. On screen the old words survive only in Referee's own line and a stored
+    prompt-version tag (`citations/2`).
+  - Full suite green after every stage and merge (last run: 1,939 files).
+
 - 2026-10-10: **A second merge with `dev` brought a table that stores the old word.** Plan
   261010a's `stale_notice_dismissals` (`drizzle/20261010030425_stale_notice_dismissals.sql`) keys a
   dismissed "older version" notice by panel, and Bibliography's was `citations`. The two
