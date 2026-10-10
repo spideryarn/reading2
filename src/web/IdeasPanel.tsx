@@ -582,15 +582,19 @@ function IdeaRow({
               this idea** (plan 261009k, stage 3), drawn as a Glossary entry
               draws them (GlossaryPanel.tsx § `Looked`). The press sends the
               idea's name and statement, fenced, and a question about it
-              (chat-handoff.ts § `askAboutIdea`). Owner only. */}
+              (chat-handoff.ts § `askAboutIdea`). Owner only. One or the
+              other, never both (plan 261010g, D2). */}
           {chats && (
             <div className="gloss-look ideas-ask">
-              <AskInChatButton
-                label={ASK_IDEA_IN_CHAT}
-                className="gloss-btn ideas-ask-chat"
-                onAsk={() => chats.onAsk(idea)}
-              />
-              {chat && <OriginChatMark chat={chat} label={OPEN_IDEA_CHAT} onOpen={chats.onOpen} />}
+              {chat ? (
+                <OriginChatMark chat={chat} label={OPEN_IDEA_CHAT} onOpen={chats.onOpen} />
+              ) : (
+                <AskInChatButton
+                  label={ASK_IDEA_IN_CHAT}
+                  className="gloss-btn ideas-ask-chat"
+                  onAsk={() => chats.onAsk(idea)}
+                />
+              )}
             </div>
           )}
         </div>

@@ -75,7 +75,8 @@ import { citePassageKey } from "./rows.js";
    which is the drift src/reading-time.ts exists to make impossible. */
 import { readingMinutes } from "../reading-time.js";
 import { entryProse } from "./GlossaryPanel.js";
-import { ASK_ENTRY_IN_CHAT, ASK_IN_CHAT, ASK_IN_CHAT_SAYS, ASK_WORK_IN_CHAT } from "./OriginChat.js";
+import { ASK_ENTRY_IN_CHAT, ASK_IN_CHAT_CARD_HOW, ASK_IN_CHAT_WHAT, ASK_WORK_IN_CHAT } from "./OriginChat.js";
+import { ControlTip, Tooltip } from "./Tooltip.js";
 /* **The band's own provenance function, not a second opinion.** `sourceOf`
    decides whether a row has an address or only a search, and it is total over
    `linkFrom` — so importing it is what stops this card and the band teaching a
@@ -2270,19 +2271,23 @@ function CiteCard({
         {(onAsk || onOpen) && (
           <span className="prose-card-acts">
             {onAsk && (
-              <button
-                type="button"
-                className="prose-card-act prose-card-cite-ask"
-                aria-label={ASK_WORK_IN_CHAT}
-                title={`${ASK_WORK_IN_CHAT}. ${ASK_IN_CHAT_SAYS}`}
-                onClick={() => {
-                  onAsk(work);
-                  onClose();
-                }}
+              <Tooltip
+                placement="bottom"
+                className="tip-soon"
+                content={<ControlTip head={ASK_WORK_IN_CHAT} what={ASK_IN_CHAT_WHAT} how={ASK_IN_CHAT_CARD_HOW} />}
               >
-                <MessagesSquare size={10} aria-hidden="true" />
-                {ASK_IN_CHAT}
-              </button>
+                <button
+                  type="button"
+                  className="prose-card-act prose-card-cite-ask"
+                  aria-label={ASK_WORK_IN_CHAT}
+                  onClick={() => {
+                    onAsk(work);
+                    onClose();
+                  }}
+                >
+                  <MessagesSquare size={12} aria-hidden="true" />
+                </button>
+              </Tooltip>
             )}
             {onOpen && <OpenInMode mode="sources" onPress={onOpen} />}
           </span>
@@ -2569,16 +2574,20 @@ export function TermCard({
                 row's other two are `.prose-card-act`, and a 32px outline Button
                 among them would be a second kind of thing. */}
             {onAsk && (
-              <button
-                type="button"
-                className="prose-card-act prose-card-term-ask"
-                aria-label={ASK_ENTRY_IN_CHAT}
-                title={`${ASK_ENTRY_IN_CHAT}. ${ASK_IN_CHAT_SAYS}`}
-                onClick={ask}
+              <Tooltip
+                placement="bottom"
+                className="tip-soon"
+                content={<ControlTip head={ASK_ENTRY_IN_CHAT} what={ASK_IN_CHAT_WHAT} how={ASK_IN_CHAT_CARD_HOW} />}
               >
-                <MessagesSquare size={10} aria-hidden="true" />
-                {ASK_IN_CHAT}
-              </button>
+                <button
+                  type="button"
+                  className="prose-card-act prose-card-term-ask"
+                  aria-label={ASK_ENTRY_IN_CHAT}
+                  onClick={ask}
+                >
+                  <MessagesSquare size={12} aria-hidden="true" />
+                </button>
+              </Tooltip>
             )}
             {actions && (
             <button

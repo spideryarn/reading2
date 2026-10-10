@@ -979,12 +979,17 @@ A lookup answer kept from before is still drawn above it.
 
 What the owner gets:
 
-- **The button** goes to Chat and opens a fresh conversation with the term quoted and a question
-  after it, then sends that question. The press is the Send since 2026-10-06
+- **The button**, Chat's two bubbles with its words in a card (icon only since plan
+  [261010g](../plans/261010g-ask-in-chat-resumes-its-thread-and-becomes-an-icon.md)), goes to Chat
+  and opens a fresh conversation with the term quoted and a question after it, then sends that
+  question. The press is the Send since 2026-10-06
   ([261006j](../plans/261006j-ask-in-chat-sends-the-question.md)), and Back returns to the Glossary.
-- **A line under the button once a chat exists**: how many questions were asked, and how the
-  chat's latest answer begins. Pressing it opens that conversation beside the Glossary
-  (`?thread=`, the mode unchanged). The button stays, so a second chat can be started.
+- **A line in the button's place once a chat exists**: how many questions were asked, and the
+  chat's gist (what it has covered, in the AI's words), or how its latest answer begins until it
+  has one. Pressing it opens that conversation beside the Glossary (`?thread=`, the mode
+  unchanged). **The button goes**, and the hover card's reopens the same chat: an entry has one
+  chat reached from it, since plan 261010g
+  ([chat-from-a-mode.md § One chat per item](chat-from-a-mode.md#one-chat-per-item)).
 - **In Chat's list** the conversation has the Glossary's icon, with a card that names the term, and
   the filter above the list gains *Glossary*.
 - **A visitor has neither** the button nor the line.

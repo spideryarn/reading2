@@ -2038,16 +2038,18 @@ export function Looked({
       <div className="gloss-look">
         {/* **Ask in chat, where Dig deeper was** (plan 261009k). Never
             disabled, a term the article never quotes included: a chat needs
-            no passage. The press sends the question (plan 261006j). It stays
-            once a chat exists: a second one can be started. */}
-        <AskInChatButton
-          label={ASK_ENTRY_IN_CHAT}
-          className="gloss-btn gloss-ask-chat"
-          onAsk={() => chats.onAsk(entry)}
-        />
-        {/* The way back to the chat started from this entry, on a line of its
-            own under the button. */}
-        {chat && <OriginChatMark chat={chat} label={OPEN_ENTRY_CHAT} onOpen={chats.onOpen} />}
+            no passage. The press sends the question (plan 261006j). Only
+            while the entry has no chat: then the mark, the way back to it,
+            stands in its place (plan 261010g, D2). */}
+        {chat ? (
+          <OriginChatMark chat={chat} label={OPEN_ENTRY_CHAT} onOpen={chats.onOpen} />
+        ) : (
+          <AskInChatButton
+            label={ASK_ENTRY_IN_CHAT}
+            className="gloss-btn gloss-ask-chat"
+            onAsk={() => chats.onAsk(entry)}
+          />
+        )}
       </div>
     </>
   );

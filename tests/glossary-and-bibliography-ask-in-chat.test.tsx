@@ -405,6 +405,8 @@ let server: ChatThread[] = [];
 let nextAnswer = "";
 let minted = 0;
 let refuseNextSend = false;
+/** When set, the summaries are this list and not the server's: a re-read that has not caught up yet. */
+let frozenSummaries: ChatThread[] | null = null;
 let bibliographyMayReply: Promise<void> | null = null;
 /** Ids the fake mints; the id alphabet has no `i`, `l`, `o` or `1`. */
 const mint = (): string => `spya-srv${"abcdefgh"[minted++ % 8]}22`;
@@ -483,7 +485,7 @@ function reply(url: string, method: string, body: unknown): Response {
     return answerTurn(body as { threadId: string; question: string; origin?: ThreadOrigin });
   }
   if (method === "POST") return new Response(null, { status: 204 });
-  if (url === `/api/chat/${SLUG}?summary=1`) return json({ threads: server.map(summarise) });
+  if (url === `/api/chat/${SLUG}?summary=1`) return json({ threads: (frozenSummaries ?? server).map(summarise) });
   if (url === `/api/chat/${SLUG}`) return json({ threads: server });
   if (url.startsWith("/api/glossary/"))
     return json({ glossary: GLOSSARY, stale: false, outdated: false, profileChanged: false });
@@ -516,6 +518,7 @@ beforeEach(() => {
   nextAnswer = "";
   minted = 0;
   refuseNextSend = false;
+  frozenSummaries = null;
   bibliographyMayReply = null;
   who.set(null);
   activation.resetActivations();
@@ -627,12 +630,12 @@ describe("Ask in chat on a Glossary entry", () => {
     await open(`?mode=glossary&term=${QUOTED}&thread=${STORED.id}`);
     await until(() => entryButton() !== null, "the open entry's Ask in chat");
     const button = entryButton() as HTMLButtonElement;
-    expect(button.textContent?.trim()).toBe("Ask in chat");
+    expect(button.textContent?.trim(), "icon only, its words in the card (plan 261010g, D3)").toBe("");
     expect(button.getAttribute("aria-label")).toBe(ASK_ENTRY_IN_CHAT);
     expect(digDeeper(), "in Dig deeper's place, which is gone (plan 261009k)").toEqual([]);
     /* The run buttons' size (plan 261007m S2): the shared outline/sm Button. */
     expect(button.dataset.variant).toBe("outline");
-    expect(button.dataset.size).toBe("sm");
+    expect(button.dataset.size).toBe("icon-sm");
     expect(marks(), "no chat was started from it yet").toHaveLength(0);
 
     /* 1. The press, which is the Send. */
@@ -673,7 +676,7 @@ describe("Ask in chat on a Glossary entry", () => {
     const line = mark.querySelector(".origin-chat-line");
     expect(line?.textContent).toBe("Dennett says there are none.");
     expect(line?.classList.contains("voice-ai"), "a model's words, in the model's face").toBe(true);
-    expect(entryButton(), "and the button stays, for a second chat").not.toBeNull();
+    expect(entryButton(), "the mark stands in the button's place (plan 261010g, D2)").toBeNull();
 
     /* 4. The mark opens the conversation beside the Glossary. */
     await act(async () => mark.click());
@@ -765,13 +768,13 @@ describe("Ask in chat on a cited work", () => {
     await open(`?mode=sources&thread=${STORED.id}`);
     await until(() => workButton(WORK) !== null && workButton(BARE_WORK) !== null, "both rows' Ask in chat");
     const button = workButton(WORK) as HTMLButtonElement;
-    expect(button.textContent?.trim()).toBe("Ask in chat");
+    expect(button.textContent?.trim(), "icon only, its words in the card (plan 261010g, D3)").toBe("");
     expect(button.getAttribute("aria-label")).toBe(ASK_WORK_IN_CHAT);
     expect(workRow(WORK)?.querySelector(".cite-investigate"), "in Dig deeper's place, which is gone").toBeNull();
     expect(digDeeper()).toEqual([]);
     /* The same size as Glossary's (plan 261007m S2). */
     expect(button.dataset.variant).toBe("outline");
-    expect(button.dataset.size).toBe("sm");
+    expect(button.dataset.size).toBe("icon-sm");
     expect(marks()).toHaveLength(0);
 
     /* 1. The press, which is the Send. */
@@ -810,7 +813,7 @@ describe("Ask in chat on a cited work", () => {
     expect(mark.getAttribute("aria-label")).toBe(OPEN_WORK_CHAT);
     expect(mark.querySelector(".origin-chat-count")?.textContent).toBe("1");
     expect(mark.querySelector(".origin-chat-line")?.textContent).toBe("It argues consciousness is many drafts.");
-    expect(workButton(WORK), "and the button stays").not.toBeNull();
+    expect(workButton(WORK), "the mark stands in the button's place (plan 261010g, D2)").toBeNull();
 
     /* 4. The mark opens the conversation beside Citations. */
     await act(async () => mark.click());
@@ -945,25 +948,71 @@ describe.each(["glossary", "bibliography", "ideas"] as const)("a %s entry's chat
     await until(() => param("thread") === firstId && dialog() !== null, "the retried conversation");
   });
 
-  it("starts a second chat from the same entry and reopens the newest one", async () => {
+  /* Until plan 261010g this held the opposite: a second press started a
+     second chat. Greg, spya-pdpnjf: *"I'm 99% sure it somehow created a new
+     chat rather than resuming the existing one for that citation."* */
+  it("has one chat: once there is one, the mark stands in the button's place and reopens it", async () => {
     who.set(OWNER);
     await open(search);
     nextAnswer = "The first conversation.";
     const firstId = await start();
     await visit(mode);
     await until(() => marks().length === 1, "the first mark");
-    nextAnswer = "The second conversation.";
-    const secondId = await start();
-    expect(secondId).not.toBe(firstId);
-    expect(chatPosts(), "two presses, two requests").toHaveLength(2);
-    const stored = server.filter((t) => t.origin?.mode === mode);
-    expect(stored.map((t) => t.origin)).toEqual([origin, origin]);
-    await visit(mode);
-    await until(() => marks()[0]?.querySelector(".origin-chat-line")?.textContent === nextAnswer, "the newest mark");
-    expect(marks()).toHaveLength(1);
+    expect(button(), "no second Ask in chat beside the mark").toBeNull();
     await act(async () => marks()[0]?.click());
-    await until(() => param("thread") === secondId && dialog() !== null, "the second conversation");
-    expect(server.find((t) => t.id === firstId)?.messages[1]?.text).toBe("The first conversation.");
+    await until(() => param("thread") === firstId && dialog() !== null, "the first conversation");
+    expect(chatPosts(), "reopening sends nothing").toHaveLength(1);
+    expect(server.filter((t) => t.origin?.mode === mode)).toHaveLength(1);
+  });
+});
+
+describe("a prose hover card's Ask in chat, on an item that already has a chat", () => {
+  const card = async (selector: string, ask: string): Promise<HTMLButtonElement> => {
+    await until(() => host.querySelector(selector) !== null, `the mark ${selector}`);
+    await act(async () => {
+      const event = new MouseEvent("pointerover", { bubbles: true, clientX: 10, clientY: 10 });
+      Object.defineProperty(event, "pointerType", { value: "mouse" });
+      host.querySelector(selector)?.dispatchEvent(event);
+    });
+    await until(() => document.querySelector(ask) !== null, `the card's ${ask}`);
+    return document.querySelector<HTMLButtonElement>(ask) as HTMLButtonElement;
+  };
+
+  it.each([
+    ["glossary", "?mode=glossary", `.prose mark.term`, ".prose-card-term-ask"],
+    ["bibliography", "?mode=sources", `.prose mark.cite`, ".prose-card-cite-ask"],
+  ] as const)("reopens the %s item's chat and sends nothing", async (mode, search, mark, ask) => {
+    who.set(OWNER);
+    const itemId = mode === "glossary" ? QUOTED : WORK;
+    const quote = mode === "glossary" ? "qualia" : WORK_TITLE;
+    server.push(startedFrom("spya-srvx33", { mode, itemId, quote }, "The earlier answer."));
+    await open(search);
+    const button = await card(mark, ask);
+    expect(button.textContent?.trim(), "icon only (plan 261010g, D3)").toBe("");
+    await act(async () => button.click());
+    await until(() => param("thread") === "spya-srvx33" && dialog() !== null, "the earlier conversation");
+    expect(chatPosts(), "no new question").toHaveLength(0);
+    expect(server.filter((t) => t.origin?.mode === mode), "and no second chat").toHaveLength(1);
+  });
+
+  /* GPT Sol's F1 on plan 261010g: still in Chat, the summaries have not been
+     re-read since the first press, so only the band's report of the thread it
+     began can say the work has a chat. */
+  it("reopens a chat begun moments ago, before the summaries have heard of it", async () => {
+    who.set(OWNER);
+    await open("?mode=sources");
+    await until(() => workButton(WORK) !== null, "the row's Ask in chat");
+    frozenSummaries = structuredClone(server);
+    nextAnswer = "The first answer.";
+    await act(async () => workButton(WORK)?.click());
+    await until(() => param("mode") === "chat" && param("thread") !== null, "Chat, on the new conversation");
+    const firstId = param("thread") as string;
+    const button = await card(".prose mark.cite", ".prose-card-cite-ask");
+    await act(async () => button.click());
+    await settle();
+    expect(param("thread")).toBe(firstId);
+    expect(chatPosts(), "one question, not two").toHaveLength(1);
+    expect(server.filter((t) => t.origin?.mode === "bibliography")).toHaveLength(1);
   });
 });
 
@@ -980,11 +1029,11 @@ describe("Ask in chat on an idea", () => {
     await open(`?mode=ideas&idea=${IDEA}&thread=${STORED.id}`);
     await until(() => ideaButton() !== null, "the open idea's Ask in chat");
     const button = ideaButton() as HTMLButtonElement;
-    expect(button.textContent?.trim()).toBe("Ask in chat");
+    expect(button.textContent?.trim(), "icon only, its words in the card (plan 261010g, D3)").toBe("");
     expect(button.getAttribute("aria-label")).toBe(ASK_IDEA_IN_CHAT);
     expect(ideaRow(IDEA)?.contains(button), "on the open idea").toBe(true);
     expect(button.dataset.variant).toBe("outline");
-    expect(button.dataset.size).toBe("sm");
+    expect(button.dataset.size).toBe("icon-sm");
     expect(marks()).toHaveLength(0);
 
     /* 1. The press, which is the Send. */
@@ -1112,7 +1161,7 @@ describe("the way back from a chat to its item", () => {
     expect(param("term")).toBe(QUOTED);
     expect(param("thread"), "the chat does not float over the item it went back to").toBeNull();
     expectLandedOn(term(QUOTED));
-    expect(entryButton(), "the entry is open").not.toBeNull();
+    expect(host.querySelector(".mode-band .gloss-look"), "the entry is open").not.toBeNull();
     /* One Back returns to the chat. */
     await act(async () => history.back());
     await until(() => param("mode") === "chat" && param("thread") === CHAT, "the chat again");

@@ -27,7 +27,7 @@ import { MessagesSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 import type { CitedWork, GlossaryEntry, Idea, ThreadSummary } from "../types.js";
-import { TipNote, Tooltip } from "./Tooltip.js";
+import { ControlTip, TipNote, Tooltip } from "./Tooltip.js";
 
 /**
  * What a panel's rows need to start a chat about one of them and to find the
@@ -49,8 +49,6 @@ export type CitedWorkChats = ItemChats<Pick<CitedWork, "id" | "title" | "authors
 /** What Ideas' rows are handed: `onAsk` takes the idea's id, its name and its statement (plan 261009k, stage 3). */
 export type IdeaChats = ItemChats<Pick<Idea, "id" | "name" | "statement">>;
 
-/** The words on Glossary's, Bibliography's and Ideas' button. */
-export const ASK_IN_CHAT = "Ask in chat";
 /** The button's accessible name on a Glossary entry, and on a cited work. */
 export const ASK_ENTRY_IN_CHAT = "Ask about this term in chat";
 export const ASK_WORK_IN_CHAT = "Ask about this work in chat";
@@ -62,20 +60,36 @@ export const OPEN_IDEA_CHAT = "Open the chat about this idea";
 
 /** What the button's card says under its name: where the press goes, and that the press is the Send (since 2026-10-06, plan 261006j). */
 export const ASK_IN_CHAT_SAYS = "Opens a new chat and asks a question about it straight away.";
+/** The card's two statements (plan 261010g, D3): what the chat is, and what becomes of it. */
+export const ASK_IN_CHAT_WHAT = "A conversation with the AI about this one thing, which you can carry on.";
+export const ASK_IN_CHAT_HOW = "The chat is kept. This button then becomes the chat's mark, which opens it again.";
+/** A prose hover card's second statement (plan 261010g, D3): the card draws no mark, so its press reopens the chat the item already has. */
+export const ASK_IN_CHAT_CARD_HOW =
+  "Opens your chat about it if there is one. If not, starts one and asks a question straight away.";
 
 /** The mark's tooltip: what a press does, what the number is, and what the words are. */
-export function originChatTip(label: string, turns: number, answered: boolean): string {
+export function originChatTip(label: string, turns: number, words: "gist" | "answer" | "none"): string {
   const asked = `${turns} ${turns === 1 ? "question" : "questions"} so far.`;
-  return `${label}. ${asked}${answered ? " The words are how its latest answer begins." : ""}`;
+  const said =
+    words === "gist"
+      ? " The words are the AI's summary of what the chat has covered."
+      : words === "answer"
+        ? " The words are how its latest answer begins."
+        : "";
+  return `${label}. ${asked}${said}`;
 }
 
 /**
  * **The way back to a chat that was started from this item.**
  *
- * The count and *No answer yet* are the app's words. The line is the chat's
- * own latest answer, clipped: a model's words, so in the model's face
- * (docs/project/fonts.md, `voice-ai`). Absent while the newest question is
- * unanswered.
+ * The count and *No answer yet* are the app's words. The line is **the
+ * chat's gist** when it has one: a small model's line on what the whole
+ * conversation covered (src/chat-gist.ts), the *"short summary of the chat"*
+ * Greg asked to see here (spya-pdpnjf, plan 261010g, D4). Until the first gist
+ * lands, and after an edit clears it, it is the latest answer's opening,
+ * clipped. Either is a model's words, so in the model's face
+ * (docs/project/fonts.md, `voice-ai`). *No answer yet* until the first
+ * answer has finished.
  *
  * Wears Chat's two bubbles, as every chat does wherever it opens
  * (docs/project/icons.md § A chat is two bubbles). Until 2026-10-06 it wore
@@ -99,10 +113,11 @@ export function OriginChatMark({
   className?: string;
   onOpen(threadId: string): void;
 }) {
+  const line = chat.gist ?? chat.lastLine;
   return (
     <Tooltip
       placement="bottom"
-      content={<TipNote>{originChatTip(label, chat.turns, Boolean(chat.lastLine))}</TipNote>}
+      content={<TipNote>{originChatTip(label, chat.turns, line === undefined ? "none" : chat.gist ? "gist" : "answer")}</TipNote>}
     >
       <button
         type="button"
@@ -115,8 +130,10 @@ export function OriginChatMark({
       >
         <MessagesSquare size={12} aria-hidden="true" />
         <span className="origin-chat-count">{chat.turns}</span>
-        {chat.lastLine ? (
-          <span className="origin-chat-line voice-ai">{chat.lastLine}</span>
+        {line ? (
+          <span className={chat.gist ? "origin-chat-line origin-chat-gist voice-ai" : "origin-chat-line voice-ai"}>
+            {line}
+          </span>
         ) : (
           <span className="origin-chat-waiting">No answer yet</span>
         )}
@@ -126,39 +143,46 @@ export function OriginChatMark({
 }
 
 /**
- * **Glossary's and Bibliography's *Ask in chat*.** Where Dig deeper was (plan
- * 261009k), and drawn as it was: the shared outline `Button` at `sm`, with the
- * caller's `.gloss-btn` hook, an icon and a label. The prose hover cards draw
- * their own smaller button with the same words (ProseHoverCard.tsx). Chat's icon from the bar, because
- * the press takes the reader into Chat.
+ * **Glossary's, Bibliography's and Ideas' *Ask in chat*: Chat's two bubbles,
+ * with its words in a card.** Where Dig deeper was (plan 261009k). Icon only
+ * since plan 261010g, Greg's ask (spya-pdpnjf, 2026-10-09): *"Can we get rid
+ * of the words Ask in Chat and just show the chat icon with a rich
+ * tooltip?"*, which is icons.md § Navigation. Chat's icon from the bar,
+ * because the press takes the reader into Chat. The prose hover cards draw
+ * their own smaller button (ProseHoverCard.tsx).
+ *
+ * **Drawn only while the item has no chat** (plan 261010g, D2). Once it has
+ * one, the caller draws `OriginChatMark` in its place, which wears the same
+ * bubbles and opens that chat; and the sender behind this button reopens it
+ * too, for the hover cards that draw no mark (Reader.tsx § `reopenItemChat`).
  *
  * Never disabled: a chat needs no passage and no finished lookup. **The
  * press sends the question** (since 2026-10-06, Greg's ask in
  * docs/plans/261006j-ask-in-chat-sends-the-question.md), so it is one model
- * call, and the tooltip says so.
+ * call, and the card says so.
  */
 export function AskInChatButton({
   label,
   className,
-  iconSize = 12,
   onAsk,
 }: {
-  /** The accessible name: which thing the chat will be about. */
+  /** The accessible name and the card's head: which thing the chat will be about. */
   label: string;
-  /** The caller's classes, with `.gloss-btn` among them. */
+  /** The caller's hook class. */
   className: string;
-  iconSize?: number;
   onAsk(): void;
 }) {
   return (
-    <Tooltip placement="bottom" content={<TipNote>{`${label}. ${ASK_IN_CHAT_SAYS}`}</TipNote>}>
-      {/* **The run buttons' Button, at their size** (plan 261007m S2): it sat
-          beside Dig deeper in both callers until 2026-10-09, which is
-          `outline`/`sm`, and a 28px `.gloss-btn` beside a 32px Button read as
-          two kinds of thing. It is still the run buttons' size. */}
-      <Button type="button" variant="outline" size="sm" className={className} aria-label={label} onClick={onAsk}>
-        <MessagesSquare size={iconSize} aria-hidden="true" />
-        {ASK_IN_CHAT}
+    <Tooltip
+      placement="bottom"
+      className="tip-soon"
+      content={<ControlTip head={label} what={ASK_IN_CHAT_WHAT} how={ASK_IN_CHAT_HOW} press={ASK_IN_CHAT_SAYS} />}
+    >
+      {/* **The run buttons' Button, at their height** (plan 261007m S2):
+          `outline`, and `icon-sm` is `sm`'s 32px square, so it still reads as
+          one of them where it sits beside one. */}
+      <Button type="button" variant="outline" size="icon-sm" className={className} aria-label={label} onClick={onAsk}>
+        <MessagesSquare size={14} aria-hidden="true" />
       </Button>
     </Tooltip>
   );

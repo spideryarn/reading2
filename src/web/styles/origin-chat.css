@@ -53,3 +53,14 @@
   /* A finger's height (docs/project/touch.md), without widening the row. */
   .origin-chat { min-height: 2.5rem; }
 }
+/* **A gist wraps to two lines** (plan 261010g, D4): it is a sentence about
+   the whole conversation, up to ~200 characters, and one clipped line of it
+   says less than an answer's opening does. Two, then an ellipsis. */
+.origin-chat:has(.origin-chat-gist) { align-items: flex-start; }
+.origin-chat-gist {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+}

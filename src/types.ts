@@ -4575,6 +4575,15 @@ export interface ThreadSummary {
    * the tooltip has to render rather than a state that cannot happen.
    */
   lastLine?: string;
+  /**
+   * **What the whole conversation covered**, the small model's one line
+   * (`ChatThread.gist`, src/chat-gist.ts). Shown on the mark of an item the
+   * chat was started from, in place of `lastLine`, since plan 261010g: Greg
+   * asked that the caller mode show *"a short summary of the chat"*
+   * (spya-pdpnjf). Absent until the first gist lands, and after an edit or a
+   * delete clears it; the mark then falls back to `lastLine`.
+   */
+  gist?: string;
 }
 
 /* ---------------------------------------------------------------- search --
