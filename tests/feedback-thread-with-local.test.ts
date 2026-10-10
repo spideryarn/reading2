@@ -1,6 +1,6 @@
 /**
  * `withLocal`, the receipts of a reply this page sent laid over the server's
- * thread, against the replies an agent has acted on (plan 261010g, GPT Sol's
+ * thread, against the replies an agent has acted on (plan 261010h, GPT Sol's
  * plan review P1): an idempotent retry can hand back a reply the server
  * already lists as acted on, which must not be drawn twice or move the thread
  * to *being considered*.

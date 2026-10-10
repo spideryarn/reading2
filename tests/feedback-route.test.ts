@@ -175,7 +175,7 @@ vi.mock("../src/feedback-questions.generated.js", () => ({
     { id: "q-bbbbbb", title: "A question about nothing filed", report: null, asked: "2026-10-06", body: "Stands alone." },
     { id: "q-cccccc", title: "About a reader's report", report: "spya-n0tm1n", asked: "2026-10-07", body: "The body says it all." },
   ],
-  /* q-bbbbbb's first replies have been acted on (plans 261008i and 261010g). */
+  /* q-bbbbbb's first replies have been acted on (plans 261008i and 261010h). */
   FEEDBACK_QUESTION_ACTED: {
     "q-aaaaaa": [],
     "q-bbbbbb": [
@@ -904,7 +904,7 @@ describe("questions for the admin, and replies to them", () => {
     ]);
   });
 
-  /* Plan 261010g (spya-j4sg9g): a client that asks `questions=3` also gets
+  /* Plan 261010h (spya-j4sg9g): a client that asks `questions=3` also gets
      the replies an agent has acted on, so a thread answered and asked again
      does not look like one never answered. Shape 2 stays exactly as it was. */
   it("sends acted replies apart to a client that asks for shape 3, and shape 2 without them", async () => {

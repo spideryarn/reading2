@@ -1,4 +1,4 @@
-You are reviewing code for plan docs/plans/261010g-needs-a-decision-shows-replies-an-agent-acted-on.md (read it first, and your own plan review docs/plans/261010g-plan-review-sol.md). The work is the last commit on this branch (compare HEAD against HEAD~1; the scoped diff is docs/plans/261010g-code-review.diff).
+You are reviewing code for plan docs/plans/261010h-needs-a-decision-shows-replies-an-agent-acted-on.md (read it first, and your own plan review docs/plans/261010h-plan-review-sol.md). The work is the last commit on this branch (compare HEAD against HEAD~1; the scoped diff is docs/plans/261010h-code-review.diff).
 
 Per docs/reusable/codex-cli-as-subagent.md § The house workflow: **fix what you find inside this change** (edit files directly; keep fixes small and in the house style; add or adjust tests for anything you fix), and report anything wider for the author to decide. Do NOT commit, and do NOT run any git command that changes state (no add, commit, stash, checkout, restore, reset). Run `npx vitest run tests/feedback-route.test.ts tests/feedback-dialog.test.tsx tests/feedback-thread-with-local.test.ts` and `npm run typecheck` after any fix.
 

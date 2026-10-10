@@ -27,7 +27,7 @@ the question open until option A was built, which is what put it back in front o
 
 ## What we did
 
-[Plan 261010g](../plans/261010g-needs-a-decision-shows-replies-an-agent-acted-on.md), with GPT
+[Plan 261010h](../plans/261010h-needs-a-decision-shows-replies-an-agent-acted-on.md), with GPT
 Sol's plan and code reviews; postmortem
 [261010a](../postmortems/261010a-needs-a-decision-hid-replies-an-agent-had-acted-on.md).
 

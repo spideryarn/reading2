@@ -311,7 +311,7 @@ const QUESTION_KEYS = [
   "state",
   "title",
 ];
-/** A thread as a server before 261010g sends it: no acted replies. */
+/** A thread as a server before 261010h sends it: no acted replies. */
 const V2_QUESTION_KEYS = QUESTION_KEYS.filter((key) => key !== "actedAnswers" && key !== "olderActedAnswers");
 const LEGACY_QUESTION_KEYS = ["answer", "asked", "body", "id", "report", "title"];
 
@@ -332,7 +332,7 @@ export type AdminThreadsPage = Omit<AdminEarlierFeedbackPage, "questions"> & { q
  * or the minutes of a deploy (F3). Each such question becomes a thread before
  * the strict check: its newest reply as the only one, *being considered* if
  * there is one, never deferred, no report text. **A server from before
- * 261010g answers threads without the acted replies**, which become none.
+ * 261010h answers threads without the acted replies**, which become none.
  * Only a question with exactly the old keys of either is mapped; anything
  * else reaches the check as it came, and fails there.
  */
@@ -680,7 +680,7 @@ export function withLocal(
   /* A receipt the server already lists as acted on says nothing new: an
      idempotent retry can hand back a reply an agent has since acted on, and
      laying it over would draw it twice and call the thread being considered
-     (GPT Sol, 261010g P1). */
+     (GPT Sol, 261010h P1). */
   const acted = (one: AdminFeedbackQuestionAnswer) => question.actedAnswers.some((known) => known.id === one.id);
   const sent = mine !== undefined && mine.at > startedAt && !mine.value.every(acted) ? mine : null;
   const set = deferral !== undefined && deferral.at > startedAt ? deferral : null;
@@ -1652,7 +1652,7 @@ function ThreadView({
           </details>
         )}
         {question.actedAnswers.length === 0 ? null : (
-          /* What he said that an agent has acted on (261010g): before
+          /* What he said that an agent has acted on (261010h): before
              spya-j4sg9g it was only quoted inside the question, usually
              under the shut Details, so the thread looked unanswered. */
           <div className="fb-question-answer" data-acted="true">

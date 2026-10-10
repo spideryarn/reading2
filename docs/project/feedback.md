@@ -397,7 +397,7 @@ postmortem [261008c](../postmortems/261008c-needs-a-decision-lists-reports-nobod
   otherwise *Needs a decision*, which includes a question an agent acted on and left open with a
   follow-up in its text. That one says *Needs a decision again* in its thread, and its contents
   row says *you've replied N×*, because until
-  [261010g](../plans/261010g-needs-a-decision-shows-replies-an-agent-acted-on.md) it looked exactly
+  [261010h](../plans/261010h-needs-a-decision-shows-replies-an-agent-acted-on.md) it looked exactly
   like a question never answered (`spya-j4sg9g`: *"I could swear I have posted a reply … multiple
   times"*). Both times are the database's own clock
   (`questionState` in [`src/feedback-question-values.ts`](../../src/feedback-question-values.ts)).
@@ -410,7 +410,7 @@ postmortem [261008c](../postmortems/261008c-needs-a-decision-lists-reports-nobod
   acted on**, each marked *acted on*, with a line saying what happened next is written in the
   question; then those **no agent has acted on yet**. At most the newest five of each, with a count
   of the rest. The file's `refs:` line is never compiled; `acted:` reaches the browser only as the
-  group and as which list each reply is in. A tab from before 261010g asks `questions=2` and gets
+  group and as which list each reply is in. A tab from before 261010h asks `questions=2` and gets
   threads without the acted list; one from before 261008i asks nothing and gets the six-key shape.
 - **Replying.** In a thread the box is simply there, one thread and so one box at a time, and each
   thread keeps its words when you move to another. It grows with what is in it and never scrolls
@@ -448,7 +448,7 @@ postmortem [261008c](../postmortems/261008c-needs-a-decision-lists-reports-nobod
   opens**. **Earlier opens on *Needs a decision***, and moves to All when that first read says no
   thread is waiting, unless the reader has chosen anything in the meantime (a pill, the button, a
   thread). Every other reader's dialog is unchanged.
-- **Two builds at once.** The browser asks `questions=3`. A tab from before 261010g asks
+- **Two builds at once.** The browser asks `questions=3`. A tab from before 261010h asks
   `questions=2` and gets the previous thread shape exactly; one from before 261008i asks nothing
   and gets the six-key questions from then. In the other direction, this browser maps either older
   shape into today's threads (with no acted replies). A 404 on a reply says to copy the words,

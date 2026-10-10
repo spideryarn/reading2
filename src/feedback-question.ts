@@ -16,7 +16,7 @@ import {
 
 /**
  * The ids of an open question's replies an agent has acted on: which list a
- * reply is sent in (261010g), and part of its state (plan 261008i). The ids
+ * reply is sent in (261010h), and part of its state (plan 261008i). The ids
  * themselves are never sent.
  */
 export function feedbackQuestionActed(id: string): readonly string[] {

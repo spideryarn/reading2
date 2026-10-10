@@ -2928,7 +2928,7 @@ export interface FeedbackStore {
    * question they have not replied to has none. Owner-scoped: another admin's
    * reply is never this one's. The route separates acted from unacted replies
    * and works out each thread's state from all of them (plans 261008i and
-   * 261010g).
+   * 261010h).
    */
   answersTo(questionIds: readonly string[]): Promise<StoredFeedbackAnswer[]>;
   /**

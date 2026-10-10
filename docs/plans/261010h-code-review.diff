@@ -1,10 +1,10 @@
-diff --git a/docs/plans/261010g-code-review-prompt.md b/docs/plans/261010g-code-review-prompt.md
+diff --git a/docs/plans/261010h-code-review-prompt.md b/docs/plans/261010h-code-review-prompt.md
 new file mode 100644
 index 000000000..b4910fc51
 --- /dev/null
-+++ b/docs/plans/261010g-code-review-prompt.md
++++ b/docs/plans/261010h-code-review-prompt.md
 @@ -0,0 +1,11 @@
-+You are reviewing code for plan docs/plans/261010g-needs-a-decision-shows-replies-an-agent-acted-on.md (read it first, and your own plan review docs/plans/261010g-plan-review-sol.md). The work is the last commit on this branch (compare HEAD against HEAD~1; the scoped diff is docs/plans/261010g-code-review.diff).
++You are reviewing code for plan docs/plans/261010h-needs-a-decision-shows-replies-an-agent-acted-on.md (read it first, and your own plan review docs/plans/261010h-plan-review-sol.md). The work is the last commit on this branch (compare HEAD against HEAD~1; the scoped diff is docs/plans/261010h-code-review.diff).
 +
 +Per docs/reusable/codex-cli-as-subagent.md § The house workflow: **fix what you find inside this change** (edit files directly; keep fixes small and in the house style; add or adjust tests for anything you fix), and report anything wider for the author to decide. Do NOT commit, and do NOT run any git command that changes state (no add, commit, stash, checkout, restore, reset). Run `npx vitest run tests/feedback-route.test.ts tests/feedback-dialog.test.tsx tests/feedback-thread-with-local.test.ts` and `npm run typecheck` after any fix.
 +
@@ -15,11 +15,11 @@ index 000000000..b4910fc51
 +4. Docs: docs/project/feedback.md, the comments in src/types.ts, src/feedback-question.ts, src/feedback-question-values.ts; the postmortem docs/postmortems/261010a-…; the note docs/user-feedback/261009_2346-…; the question docs/user-feedback/questions/q-jpy4xv.md (plain words for Greg, accurate).
 +
 +End with: a list of what you changed (file, one line each), a numbered list of anything you did not fix with severity P1/P2/P3, and a one-line verdict: LAND / LAND AFTER FIXES / DO NOT LAND.
-diff --git a/docs/plans/261010g-needs-a-decision-shows-replies-an-agent-acted-on.md b/docs/plans/261010g-needs-a-decision-shows-replies-an-agent-acted-on.md
+diff --git a/docs/plans/261010h-needs-a-decision-shows-replies-an-agent-acted-on.md b/docs/plans/261010h-needs-a-decision-shows-replies-an-agent-acted-on.md
 new file mode 100644
 index 000000000..946468c6e
 --- /dev/null
-+++ b/docs/plans/261010g-needs-a-decision-shows-replies-an-agent-acted-on.md
++++ b/docs/plans/261010h-needs-a-decision-shows-replies-an-agent-acted-on.md
 @@ -0,0 +1,114 @@
 +# *Needs a decision* shows the replies an agent has already acted on
 +
@@ -132,37 +132,37 @@ index 000000000..946468c6e
 +## Log
 +
 +- 2026-10-10: plan written. GPT Sol plan review
-+  ([261010g-plan-review-sol.md](261010g-plan-review-sol.md)): BUILD AFTER FIXES, five findings,
++  ([261010h-plan-review-sol.md](261010h-plan-review-sol.md)): BUILD AFTER FIXES, five findings,
 +  all taken — rollback gets shape 1 not 2, `withLocal` and the strict check across both lists,
 +  the rule wording, copy that does not assume `Details`, and the docs and postmortem in scope.
-diff --git a/docs/plans/261010g-plan-review-prompt.md b/docs/plans/261010g-plan-review-prompt.md
+diff --git a/docs/plans/261010h-plan-review-prompt.md b/docs/plans/261010h-plan-review-prompt.md
 new file mode 100644
 index 000000000..bc166a8f9
 --- /dev/null
-+++ b/docs/plans/261010g-plan-review-prompt.md
++++ b/docs/plans/261010h-plan-review-prompt.md
 @@ -0,0 +1,7 @@
-+You are reviewing a plan, read-only. Plan: docs/plans/261010g-needs-a-decision-shows-replies-an-agent-acted-on.md (repo at the current directory).
++You are reviewing a plan, read-only. Plan: docs/plans/261010h-needs-a-decision-shows-replies-an-agent-acted-on.md (repo at the current directory).
 +
 +Context: a trusted admin (Greg) replied three times to a question in the Feedback dialog's "Needs a decision" view and thought none had stuck. The relevant code: src/routes.ts § questionsForAdmin (around line 8790-8870) and the route that calls it (search `query.get("questions")`), src/feedback-question-values.ts § questionState and splitQuestionBody, src/feedback-question.ts, src/types.ts § AdminFeedbackQuestion, src/web/FeedbackEarlier.tsx (withLegacyQuestions, the strict question check / QUESTION_KEYS, withLocal, pagerStops, ThreadContents, ThreadView), the earlier plan docs/plans/261008i-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md, and docs/project/feedback-reports.md § "To act on one". Also the q-rstqvz question file as it was at commit 5f6d3d5f (read it from git history at that commit).
 +
 +Please check: (1) is the diagnosis right — would Greg, at build 5f6d3d5f, have seen no replies in the q-rstqvz thread and a "Needs a decision" label? Is there any other path (withLocal receipts, the startedAt rule, the pager, retained drafts, caching) by which a reply he just sent could also vanish? (2) Is the design sound and the simplest that fixes it; wire compatibility both ways; anything in withLocal (which merges a just-sent reply into answers) that interacts with actedAnswers; (3) the proposed wording for the rule in feedback-reports.md step 3; (4) anything missing (other consumers of the question shape, docs that describe what a thread lists, tests).
 +
 +Write findings as a numbered list with severity (P1 must fix / P2 should / P3 nit), file:line evidence, and a one-line verdict at the end: BUILD AS IS / BUILD AFTER FIXES / RETHINK.
-diff --git a/docs/plans/261010g-plan-review-sol.md b/docs/plans/261010g-plan-review-sol.md
+diff --git a/docs/plans/261010h-plan-review-sol.md b/docs/plans/261010h-plan-review-sol.md
 new file mode 100644
 index 000000000..ff6cd7216
 --- /dev/null
-+++ b/docs/plans/261010g-plan-review-sol.md
++++ b/docs/plans/261010h-plan-review-sol.md
 @@ -0,0 +1,13 @@
 +The diagnosis is correct. At `5f6d3d5f`, the question was open with both stored replies marked acted (`5f6d3d5f:docs/user-feedback/questions/q-rstqvz.md:4-7`); the server removed them from `answers` and returned `waiting` (`5f6d3d5f:src/routes.ts:8762-8784`); their quotations were below `Details` (`q-rstqvz.md:24,40-50`), which the UI kept shut. A newly sent third reply would remain visible through `withLocal`; the started-at rule prevents older reads overwriting it, the pager only chooses navigation stops, retained questions preserve an open thread/draft, and the GET is `private, no-store` (`5f6d3d5f:src/routes.ts:9821-9823`). I found no separate ordinary disappearance path—only another agent acting on and deploying that reply, which is the same bug class.
 +
-+1. **P1 must fix — The rollback compatibility description is wrong.** The plan says a new client requesting `questions=3` from an old server receives shape 2 (`docs/plans/261010g-needs-a-decision-shows-replies-an-agent-acted-on.md:53-57`). In fact, the old route returns shape 2 only for the exact value `"2"`; every other value, including `"3"`, receives six-key shape 1 (`5f6d3d5f:src/routes.ts:9850-9857`). The new adapter must map both V1 and V2 directly to V3, with a test for each direction.
++1. **P1 must fix — The rollback compatibility description is wrong.** The plan says a new client requesting `questions=3` from an old server receives shape 2 (`docs/plans/261010h-needs-a-decision-shows-replies-an-agent-acted-on.md:53-57`). In fact, the old route returns shape 2 only for the exact value `"2"`; every other value, including `"3"`, receives six-key shape 1 (`5f6d3d5f:src/routes.ts:9850-9857`). The new adapter must map both V1 and V2 directly to V3, with a test for each direction.
 +
 +2. **P1 must fix — `withLocal` must understand `actedAnswers`.** It currently deduplicates a receipt only against `question.answers`, then unconditionally changes the thread to `responded` (`src/web/FeedbackEarlier.tsx:649-668`). An idempotent retry can return a previously stored reply (`src/store/pg-feedback.ts:569-583`) while a list response already places that ID in `actedAnswers`; the client would then show it twice—acted and unacted—and incorrectly override `waiting` with `responded`. Deduplicate across both arrays, preserve the server state when every local receipt is already acted, and make the strict validator reject IDs appearing in both arrays (`src/web/FeedbackEarlier.tsx:377-396`).
 +
-+3. **P2 should — The proposed operating rule hides the current follow-up.** It says to put the new question “at the end of the body” (`docs/plans/261010g-needs-a-decision-shows-replies-an-agent-acted-on.md:82-86`), but everything after `Details` is collapsed (`src/feedback-question-values.ts:40-48`; `src/web/FeedbackEarlier.tsx:1514-1580`). That conflicts with the standing rule that the question and options above `Details` must be answerable alone (`docs/project/feedback-reports.md:515-528`). Better wording: set `answered` once Greg owes no further reply; unfinished implementation belongs in the queue. If a follow-up remains, rewrite the short section above `Details` to contain the current question, options, and recommendation; if it is materially different, close this question and open another.
++3. **P2 should — The proposed operating rule hides the current follow-up.** It says to put the new question “at the end of the body” (`docs/plans/261010h-needs-a-decision-shows-replies-an-agent-acted-on.md:82-86`), but everything after `Details` is collapsed (`src/feedback-question-values.ts:40-48`; `src/web/FeedbackEarlier.tsx:1514-1580`). That conflicts with the standing rule that the question and options above `Details` must be answerable alone (`docs/project/feedback-reports.md:515-528`). Better wording: set `answered` once Greg owes no further reply; unfinished implementation belongs in the queue. If a follow-up remains, rewrite the short section above `Details` to contain the current question, options, and recommendation; if it is materially different, close this question and open another.
 +
-+4. **P2 should — The proposed UI copy assumes every question has a `Details` section and that one agent recorded an action there.** The plan unconditionally says “what it did is at the end of Details” (`docs/plans/261010g-needs-a-decision-shows-replies-an-agent-acted-on.md:46-51`), while bodies without that separator are explicitly valid (`docs/project/feedback-reports.md:525-528`). Use conditional copy, or the more generally true “These replies were acted on; what happened next is recorded in the question.”
++4. **P2 should — The proposed UI copy assumes every question has a `Details` section and that one agent recorded an action there.** The plan unconditionally says “what it did is at the end of Details” (`docs/plans/261010h-needs-a-decision-shows-replies-an-agent-acted-on.md:46-51`), while bodies without that separator are explicitly valid (`docs/project/feedback-reports.md:525-528`). Use conditional copy, or the more generally true “These replies were acted on; what happened next is recorded in the question.”
 +
 +5. **P2 should — The documentation and test scope needs to be explicit.** `feedback.md` is not optional: it currently specifies `questions=2`, unacted replies only, and says acted IDs never otherwise reach the browser (`docs/project/feedback.md:374-408`). The same now-stale contract appears in `src/feedback-question-values.ts:98-102`, `src/feedback-question.ts:17-20`, `src/routes.ts:8792-8802`, and `src/types.ts:7797-7821`. Tests should cover acted-reply bounds/order/count, exact V2 preservation, V1→V3 and V2→V3 mapping, strict validation including cross-array duplicate IDs, the `withLocal` retry case, optional `Details`, and the unchanged pager state. The plan also omits the required bug postmortem (`AGENTS.md:403-405`).
 +
@@ -241,7 +241,7 @@ index 000000000..f919e6f1f
 +was left for him to choose. [feedback-reports.md § To act on one](../project/feedback-reports.md#asking-greg-a-question-and-acting-on-his-answer)
 +step 3 says to leave it open "when his reply asks for more", read loosely. Its wording is a rule, so a
 +sharper version goes to Greg as a proposal rather than being edited
-+([plan 261010g](../plans/261010g-needs-a-decision-shows-replies-an-agent-acted-on.md)).
++([plan 261010h](../plans/261010h-needs-a-decision-shows-replies-an-agent-acted-on.md)).
 +Had the question been closed, it would have left the dialog, and the display gap would have waited
 +for the next question an agent left open after acting.
 +
@@ -294,7 +294,7 @@ index 926a86c69..8aeef5d78 100644
 -  follow-up in its text. Both times are the database's own clock
 +  follow-up in its text. That one says *Needs a decision again* in its thread, and its contents
 +  row says *you've replied N×*, because until
-+  [261010g](../plans/261010g-needs-a-decision-shows-replies-an-agent-acted-on.md) it looked exactly
++  [261010h](../plans/261010h-needs-a-decision-shows-replies-an-agent-acted-on.md) it looked exactly
 +  like a question never answered (`spya-j4sg9g`: *"I could swear I have posted a reply … multiple
 +  times"*). Both times are the database's own clock
    (`questionState` in [`src/feedback-question-values.ts`](../../src/feedback-question-values.ts)).
@@ -311,7 +311,7 @@ index 926a86c69..8aeef5d78 100644
 +  acted on**, each marked *acted on*, with a line saying what happened next is written in the
 +  question; then those **no agent has acted on yet**. At most the newest five of each, with a count
 +  of the rest. The file's `refs:` line is never compiled; `acted:` reaches the browser only as the
-+  group and as which list each reply is in. A tab from before 261010g asks `questions=2` and gets
++  group and as which list each reply is in. A tab from before 261010h asks `questions=2` and gets
 +  threads without the acted list; one from before 261008i asks nothing and gets the six-key shape.
  - **Replying.** In a thread the box is simply there, one thread and so one box at a time, and each
    thread keeps its words when you move to another. It grows with what is in it and never scrolls
@@ -351,7 +351,7 @@ index 000000000..2ac53bcb3
 +
 +## What we did
 +
-+[Plan 261010g](../plans/261010g-needs-a-decision-shows-replies-an-agent-acted-on.md), with GPT
++[Plan 261010h](../plans/261010h-needs-a-decision-shows-replies-an-agent-acted-on.md), with GPT
 +Sol's plan and code reviews; postmortem
 +[261010a](../postmortems/261010a-needs-a-decision-hid-replies-an-agent-had-acted-on.md).
 +
@@ -374,7 +374,7 @@ index 000000000..43ca3efef
 +status: open
 +asked: 2026-10-10
 +title: May I sharpen the rule for when an agent closes your question?
-+refs: docs/plans/261010g-needs-a-decision-shows-replies-an-agent-acted-on.md (§ The rule proposal) · docs/plans/261010g-plan-review-sol.md (P2-3) · docs/project/feedback-reports.md § To act on one, step 3 · docs/postmortems/261010a-needs-a-decision-hid-replies-an-agent-had-acted-on.md · SPIDERYARN-READING2-GE · qi-yf62kckg
++refs: docs/plans/261010h-needs-a-decision-shows-replies-an-agent-acted-on.md (§ The rule proposal) · docs/plans/261010h-plan-review-sol.md (P2-3) · docs/project/feedback-reports.md § To act on one, step 3 · docs/postmortems/261010a-needs-a-decision-hid-replies-an-agent-had-acted-on.md · SPIDERYARN-READING2-GE · qi-yf62kckg
 +---
 +You replied A to q-rstqvz three times because an agent kept that question open after acting on your first reply, waiting for A to be built, though nothing was left for you to choose. The rule agents follow says to leave a question open "when his reply asks for more", and that was read loosely. May I change it?
 +
@@ -425,7 +425,7 @@ index 18fa1b65a..dffef564c 100644
   * for the server alone (`FEEDBACK_QUESTION_ACTED`), which sends the browser
 - * only the state it works out from it (plan 261008i, decision 1).
 + * only the state it works out from it and which list each reply goes in
-+ * (plan 261008i, decision 1; 261010g).
++ * (plan 261008i, decision 1; 261010h).
   */
  export interface CompiledFeedbackQuestion {
    id: string;
@@ -440,7 +440,7 @@ index d6a0939c9..97e2dd9b2 100644
 - * The ids of an open question's replies an agent has acted on: which replies
 - * the thread still lists, and part of its state (plan 261008i). Never sent.
 + * The ids of an open question's replies an agent has acted on: which list a
-+ * reply is sent in (261010g), and part of its state (plan 261008i). The ids
++ * reply is sent in (261010h), and part of its state (plan 261008i). The ids
 + * themselves are never sent.
   */
  export function feedbackQuestionActed(id: string): readonly string[] {
@@ -490,7 +490,7 @@ index c48585b76..22282a350 100644
   * **Every open question, as the signed-in admin's Earlier tab shows it**:
   * oldest first, as threads (plan 261008i). Each carries the admin's own
 - * replies not yet acted on, which group it is in (`questionState`, from every
-+ * replies not yet acted on, and (shape 3, 261010g) those an agent has acted
++ * replies not yet acted on, and (shape 3, 261010h) those an agent has acted
 + * on, apart, which group it is in (`questionState`, from every
   * reply and the admin's deferral), and, when it names a report **of theirs**,
   * that report's number, first line and text. Every lookup is owner-scoped in
@@ -540,7 +540,7 @@ index c48585b76..22282a350 100644
        deferredAt: state === "deferred" ? deferral : null,
      };
 +    if (shape === 2) return thread;
-+    /* Shape 3 (261010g, spya-j4sg9g): the acted ones too, bounded the same way,
++    /* Shape 3 (261010h, spya-j4sg9g): the acted ones too, bounded the same way,
 +       so a thread answered and asked again shows what was said. */
 +    const done = replies.filter((one) => one.acted);
 +    return {
@@ -560,7 +560,7 @@ index c48585b76..22282a350 100644
 -        query.get("questions") === "2"
 -          ? { ...envelope, questions: await questionsForAdmin(2) }
 -          : { ...envelope, questions: await questionsForAdmin(1) };
-+         `2` or `3` is that older client; `2` is a tab from before 261010g,
++         `2` or `3` is that older client; `2` is a tab from before 261010h,
 +         whose check wants threads without the acted replies. */
 +      const shape = query.get("questions");
 +      const answer: AdminEarlierFeedbackPage | AdminEarlierFeedbackPageV2 | AdminEarlierFeedbackPageV1 =
@@ -607,7 +607,7 @@ index eded090ce..924fcfced 100644
 +   * This admin's replies **an agent has acted on**, at most the newest five,
 +   * oldest first, and how many older ones were not sent. Without them a thread
 +   * answered, acted on and asked again looked exactly like one never answered
-+   * (spya-j4sg9g, plan 261010g). They never change `state`.
++   * (spya-j4sg9g, plan 261010h). They never change `state`.
 +   */
 +  actedAnswers: AdminFeedbackQuestionAnswer[];
 +  olderActedAnswers: number;
@@ -620,13 +620,13 @@ index eded090ce..924fcfced 100644
  
 -/** The same answer to a request without `questions=2`: the shape before 261008i (F3). */
 +/**
-+ * **A question as a server before 261010g sends it**, and as the new server
++ * **A question as a server before 261010h sends it**, and as the new server
 + * still sends it to `questions=2`, so a tab from before that deploy keeps
 + * working after it: no acted replies.
 + */
 +export type AdminFeedbackQuestionV2 = Omit<AdminFeedbackQuestion, "actedAnswers" | "olderActedAnswers">;
 +
-+/** The same answer to `questions=2`: the shape before 261010g. */
++/** The same answer to `questions=2`: the shape before 261010h. */
 +export interface AdminEarlierFeedbackPageV2 extends Omit<AdminEarlierFeedbackPage, "questions"> {
 +  questions: AdminFeedbackQuestionV2[];
 +}
@@ -657,7 +657,7 @@ index 2f141007f..cacf83241 100644
 +  "state",
 +  "title",
 +];
-+/** A thread as a server before 261010g sends it: no acted replies. */
++/** A thread as a server before 261010h sends it: no acted replies. */
 +const V2_QUESTION_KEYS = QUESTION_KEYS.filter((key) => key !== "actedAnswers" && key !== "olderActedAnswers");
  const LEGACY_QUESTION_KEYS = ["answer", "asked", "body", "id", "report", "title"];
  
@@ -670,7 +670,7 @@ index 2f141007f..cacf83241 100644
 - * the six old keys is mapped; anything else reaches the check as it came, and
 - * fails there.
 + * there is one, never deferred, no report text. **A server from before
-+ * 261010g answers threads without the acted replies**, which become none.
++ * 261010h answers threads without the acted replies**, which become none.
 + * Only a question with exactly the old keys of either is mapped; anything
 + * else reaches the check as it came, and fails there.
   */
@@ -722,7 +722,7 @@ index 2f141007f..cacf83241 100644
 +  /* A receipt the server already lists as acted on says nothing new: an
 +     idempotent retry can hand back a reply an agent has since acted on, and
 +     laying it over would draw it twice and call the thread being considered
-+     (GPT Sol, 261010g P1). */
++     (GPT Sol, 261010h P1). */
 +  const acted = (one: AdminFeedbackQuestionAnswer) => question.actedAnswers.some((known) => known.id === one.id);
 +  const sent = mine !== undefined && mine.at > startedAt && !mine.value.every(acted) ? mine : null;
    const set = deferral !== undefined && deferral.at > startedAt ? deferral : null;
@@ -813,7 +813,7 @@ index 2f141007f..cacf83241 100644
            </details>
          )}
 +        {question.actedAnswers.length === 0 ? null : (
-+          /* What he said that an agent has acted on (261010g): before
++          /* What he said that an agent has acted on (261010h): before
 +             spya-j4sg9g it was only quoted inside the question, usually
 +             under the shut Details, so the thread looked unanswered. */
 +          <div className="fb-question-answer" data-acted="true">
@@ -867,7 +867,7 @@ index 690f30d89..78a880a50 100644
    describe("for an admin", () => {
      const ADMIN_PATH = "/api/admin/feedback/earlier";
 -    /** The admin route for one filter, as the client asks it: `show` first, then `questions=2` (F3). */
-+    /** The admin route for one filter, as the client asks it: `show` first, then `questions=3` (F3, 261010g). */
++    /** The admin route for one filter, as the client asks it: `show` first, then `questions=3` (F3, 261010h). */
      const url = (which?: string) =>
 -      which === undefined ? `${ADMIN_PATH}?questions=2` : `${ADMIN_PATH}?show=${which}&questions=2`;
 +      which === undefined ? `${ADMIN_PATH}?questions=3` : `${ADMIN_PATH}?show=${which}&questions=3`;
@@ -905,7 +905,7 @@ index 690f30d89..78a880a50 100644
          expect(replyBoxes()).toHaveLength(1);
        });
  
-+      /* 261010g (spya-j4sg9g): replies an agent has acted on are listed too,
++      /* 261010h (spya-j4sg9g): replies an agent has acted on are listed too,
 +         and a waiting thread that has them does not look never answered. */
 +      describe("replies an agent has acted on", () => {
 +        const FIRST = { id: "spya-ac7edz", body: "A, with the risk written down.", createdAt: "2026-10-09T10:00:00.000Z" };
@@ -948,7 +948,7 @@ index 690f30d89..78a880a50 100644
 +          expect(shown?.textContent).not.toContain("earlier reply");
 +        });
 +
-+        it("reads a server from before 261010g, whose threads have no acted replies", async () => {
++        it("reads a server from before 261010h, whose threads have no acted replies", async () => {
 +          const { actedAnswers: _a, olderActedAnswers: _o, ...v2 } = Q1;
 +          const { actedAnswers: _b, olderActedAnswers: _p, ...v2b } = Q2;
 +          await openWaiting({ ...ADMIN_REPORTS, questions: [v2, v2b] }, { ...WAITING, questions: [v2, v2b] });
@@ -977,7 +977,7 @@ index c6e5fa917..0c85546fa 100644
      ]);
    });
  
-+  /* Plan 261010g (spya-j4sg9g): a client that asks `questions=3` also gets
++  /* Plan 261010h (spya-j4sg9g): a client that asks `questions=3` also gets
 +     the replies an agent has acted on, so a thread answered and asked again
 +     does not look like one never answered. Shape 2 stays exactly as it was. */
 +  it("sends acted replies apart to a client that asks for shape 3, and shape 2 without them", async () => {
@@ -1008,7 +1008,7 @@ index 000000000..f0620c200
 @@ -0,0 +1,43 @@
 +/**
 + * `withLocal`, the receipts of a reply this page sent laid over the server's
-+ * thread, against the replies an agent has acted on (plan 261010g, GPT Sol's
++ * thread, against the replies an agent has acted on (plan 261010h, GPT Sol's
 + * plan review P1): an idempotent retry can hand back a reply the server
 + * already lists as acted on, which must not be drawn twice or move the thread
 + * to *being considered*.

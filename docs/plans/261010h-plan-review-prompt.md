@@ -1,4 +1,4 @@
-You are reviewing a plan, read-only. Plan: docs/plans/261010g-needs-a-decision-shows-replies-an-agent-acted-on.md (repo at the current directory).
+You are reviewing a plan, read-only. Plan: docs/plans/261010h-needs-a-decision-shows-replies-an-agent-acted-on.md (repo at the current directory).
 
 Context: a trusted admin (Greg) replied three times to a question in the Feedback dialog's "Needs a decision" view and thought none had stuck. The relevant code: src/routes.ts § questionsForAdmin (around line 8790-8870) and the route that calls it (search `query.get("questions")`), src/feedback-question-values.ts § questionState and splitQuestionBody, src/feedback-question.ts, src/types.ts § AdminFeedbackQuestion, src/web/FeedbackEarlier.tsx (withLegacyQuestions, the strict question check / QUESTION_KEYS, withLocal, pagerStops, ThreadContents, ThreadView), the earlier plan docs/plans/261008i-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md, and docs/project/feedback-reports.md § "To act on one". Also the q-rstqvz question file as it was at commit 5f6d3d5f (read it from git history at that commit).
 

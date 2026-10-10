@@ -8794,7 +8794,7 @@ async function fileFeedback(
 /**
  * **Every open question, as the signed-in admin's Earlier tab shows it**:
  * oldest first, as threads (plan 261008i). Each carries the admin's own
- * replies not yet acted on, and (shape 3, 261010g) those an agent has acted
+ * replies not yet acted on, and (shape 3, 261010h) those an agent has acted
  * on, apart, which group it is in (`questionState`, from every
  * reply and the admin's deferral), and, when it names a report **of theirs**,
  * that report's number, first line and text. Every lookup is owner-scoped in
@@ -8809,7 +8809,7 @@ async function fileFeedback(
  * working after it (F3).
  * Six keys, the newest reply of any kind, the report without its text.
  */
-/** At most this many replies in either of a thread's lists, the newest (F12, 261010g). */
+/** At most this many replies in either of a thread's lists, the newest (F12, 261010h). */
 const THREAD_ANSWERS = 5;
 
 async function questionsForAdmin(shape: 3): Promise<AdminFeedbackQuestion[]>;
@@ -8869,7 +8869,7 @@ async function questionsForAdmin(
       deferredAt: state === "deferred" ? deferral : null,
     };
     if (shape === 2) return thread;
-    /* Shape 3 (261010g, spya-j4sg9g): the acted ones too, bounded the same way,
+    /* Shape 3 (261010h, spya-j4sg9g): the acted ones too, bounded the same way,
        so a thread answered and asked again shows what was said. */
     const done = replies.filter((one) => one.acted);
     return {
@@ -10104,7 +10104,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       /* **Threads only to a client that asks for them** (plan 261008i, F3): a
          tab loaded before the deploy sends no `questions`, and its strict
          check wants the six-key questions it was built against. Anything but
-         `2` or `3` is that older client; `2` is a tab from before 261010g,
+         `2` or `3` is that older client; `2` is a tab from before 261010h,
          whose check wants threads without the acted replies. */
       const shape = query.get("questions");
       const answer: AdminEarlierFeedbackPage | AdminEarlierFeedbackPageV2 | AdminEarlierFeedbackPageV1 =

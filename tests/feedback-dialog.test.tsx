@@ -1896,7 +1896,7 @@ describe("the Earlier tab", () => {
      decision as soon as it opens, and Earlier opens there when a thread waits. */
   describe("for an admin", () => {
     const ADMIN_PATH = "/api/admin/feedback/earlier";
-    /** The admin route for one filter, as the client asks it: `show` first, then `questions=3` (F3, 261010g). */
+    /** The admin route for one filter, as the client asks it: `show` first, then `questions=3` (F3, 261010h). */
     const url = (which?: string) =>
       which === undefined ? `${ADMIN_PATH}?questions=3` : `${ADMIN_PATH}?show=${which}&questions=3`;
     const ALL_URL = url();
@@ -2578,7 +2578,7 @@ describe("the Earlier tab", () => {
         expect(replyBoxes()).toHaveLength(1);
       });
 
-      /* 261010g (spya-j4sg9g): replies an agent has acted on are listed too,
+      /* 261010h (spya-j4sg9g): replies an agent has acted on are listed too,
          and a waiting thread that has them does not look never answered. */
       describe("replies an agent has acted on", () => {
         const FIRST = { id: "spya-ac7edz", body: "A, with the risk written down.", createdAt: "2026-10-09T10:00:00.000Z" };
@@ -2632,7 +2632,7 @@ describe("the Earlier tab", () => {
           expect(row("q-aaaaaa").textContent).toContain("you've replied 6×");
         });
 
-        it("reads a server from before 261010g, whose threads have no acted replies", async () => {
+        it("reads a server from before 261010h, whose threads have no acted replies", async () => {
           const { actedAnswers: _a, olderActedAnswers: _o, ...v2 } = Q1;
           const { actedAnswers: _b, olderActedAnswers: _p, ...v2b } = Q2;
           await openWaiting({ ...ADMIN_REPORTS, questions: [v2, v2b] }, { ...WAITING, questions: [v2, v2b] });
@@ -3369,7 +3369,7 @@ describe("the Earlier tab", () => {
         ["a deferral time on a waiting question", { ...WAITING, questions: [{ ...Q1, deferredAt: "2026-10-08T07:00:00.000Z" }] }],
         ["an agent-only field on a question", { ...WAITING, questions: [{ ...Q1, refs: "qi-8qvg5gwv" }] }],
         [
-          "a server before 261010g's question with a field more",
+          "a server before 261010h's question with a field more",
           {
             ...WAITING,
             questions: [{

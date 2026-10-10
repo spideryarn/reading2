@@ -109,6 +109,6 @@ never reach the browser, `feedback.md`'s Needs a decision section, and a postmor
 ## Log
 
 - 2026-10-10: plan written. GPT Sol plan review
-  ([261010g-plan-review-sol.md](261010g-plan-review-sol.md)): BUILD AFTER FIXES, five findings,
+  ([261010h-plan-review-sol.md](261010h-plan-review-sol.md)): BUILD AFTER FIXES, five findings,
   all taken — rollback gets shape 1 not 2, `withLocal` and the strict check across both lists,
   the rule wording, copy that does not assume `Details`, and the docs and postmortem in scope.

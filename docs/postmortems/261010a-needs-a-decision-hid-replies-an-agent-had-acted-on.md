@@ -65,7 +65,7 @@ The agent that acted on his first reply left the question `open` "until A is bui
 was left for him to choose. [feedback-reports.md § To act on one](../project/feedback-reports.md#asking-greg-a-question-and-acting-on-his-answer)
 step 3 says to leave it open "when his reply asks for more", read loosely. Its wording is a rule, so a
 sharper version goes to Greg as a proposal rather than being edited
-([plan 261010g](../plans/261010g-needs-a-decision-shows-replies-an-agent-acted-on.md)).
+([plan 261010h](../plans/261010h-needs-a-decision-shows-replies-an-agent-acted-on.md)).
 Had the question been closed, it would have left the dialog, and the display gap would have waited
 for the next question an agent left open after acting.
 

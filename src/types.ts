@@ -7829,7 +7829,7 @@ export interface AdminFeedbackQuestion {
    * This admin's replies **an agent has acted on**, at most the newest five,
    * oldest first, and how many older ones were not sent. Without them a thread
    * answered, acted on and asked again looked exactly like one never answered
-   * (spya-j4sg9g, plan 261010g). They never change `state`.
+   * (spya-j4sg9g, plan 261010h). They never change `state`.
    */
   actedAnswers: AdminFeedbackQuestionAnswer[];
   olderActedAnswers: number;
@@ -7878,13 +7878,13 @@ export interface AdminEarlierFeedbackPage {
 }
 
 /**
- * **A question as a server before 261010g sends it**, and as the new server
+ * **A question as a server before 261010h sends it**, and as the new server
  * still sends it to `questions=2`, so a tab from before that deploy keeps
  * working after it: no acted replies.
  */
 export type AdminFeedbackQuestionV2 = Omit<AdminFeedbackQuestion, "actedAnswers" | "olderActedAnswers">;
 
-/** The same answer to `questions=2`: the shape before 261010g. */
+/** The same answer to `questions=2`: the shape before 261010h. */
 export interface AdminEarlierFeedbackPageV2 extends Omit<AdminEarlierFeedbackPage, "questions"> {
   questions: AdminFeedbackQuestionV2[];
 }
