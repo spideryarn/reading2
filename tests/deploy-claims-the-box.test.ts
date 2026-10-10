@@ -1,7 +1,7 @@
 /**
  * **While a deploy holds the release lock, its test run has the box.** Every
  * other run takes one worker; the deploy's own run takes half the machine.
- * docs/plans/261010g-deploy-test-run-claims-the-box.md.
+ * docs/plans/261010j-deploy-test-run-claims-the-box.md.
  *
  * The decision is a pure function, so each case is a state this machine is not
  * in. The two impure edges — where the lock is, and whether its holder is alive

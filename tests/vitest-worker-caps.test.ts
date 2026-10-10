@@ -166,7 +166,7 @@ test("one run's override does not leak into the next vitest in this process", as
   // Relative to whatever this machine would say anyway — the box has a machine
   // file and a laptop does not, and the override has to differ from both.
   // The config without an override also drops to one worker while a live
-  // deploy holds the release lock (plan 261010g), and a deploy can take or
+  // deploy holds the release lock (plan 261010j), and a deploy can take or
   // release it between two reads here — so either answer is this machine's,
   // and neither is the leaked override.
   const machineSays = resolveParallelWorkers();

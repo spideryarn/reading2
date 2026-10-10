@@ -1185,7 +1185,7 @@ function gatesAt(sha: string): void {
         ],
         /* Half the machine rather than the box's crowded-machine 2, while every
            other run on the box sees this deploy's lock and takes one worker
-           (vitest-admission.ts § deployTestWorkers; plan 261010g). Set here, as
+           (vitest-admission.ts § deployTestWorkers; plan 261010j). Set here, as
            an explicit override, because that is what exempts this run from the
            yield it would otherwise make to its own lock. */
         { cwd: wt, env: { [TEST_OUTCOME_FILE_ENV]: outcomePath, VITEST_MAX_WORKERS: String(deployTestWorkers()) } },

@@ -405,7 +405,7 @@ export function resolveParallelWorkers(machineFile = MACHINE_WORKERS_FILE): numb
  * each, and took 72–83 minutes every time. So the deploy now asks for half the machine
  * ({@link deployTestWorkers}, passed as `VITEST_MAX_WORKERS`), and every other run that starts while
  * a live process holds the release lock takes one worker instead of its usual number — slower, not
- * refused, and it says why. docs/plans/261010g-deploy-test-run-claims-the-box.md.
+ * refused, and it says why. docs/plans/261010j-deploy-test-run-claims-the-box.md.
  *
  * **The yield never overrules an explicit `VITEST_MAX_WORKERS`.** That is what exempts the deploy's
  * own run, which sees its own lock. Memory admission can still reduce the request or refuse the run.

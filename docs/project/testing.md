@@ -194,7 +194,7 @@ already going when the deploy begins keeps its workers. `changelog:prepare` and 
 same lock while they run, and runs starting then yield too.
 `resolveRunWorkers` in [`vitest-admission.ts`](../../vitest-admission.ts);
 [`tests/deploy-claims-the-box.test.ts`](../../tests/deploy-claims-the-box.test.ts);
-[261010g](../plans/261010g-deploy-test-run-claims-the-box.md) has the measurements.
+[261010j](../plans/261010j-deploy-test-run-claims-the-box.md) has the measurements.
 
 ## A test's temp files
 

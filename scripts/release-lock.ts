@@ -5,7 +5,7 @@
  * `scripts/changelog/release-notes.ts` takes it for `prepare` and `promote`, and
  * `vitest-admission.ts` only *looks* at it, so that every other test run on the
  * box can make room while a deploy's own suite runs
- * (docs/plans/261010g-deploy-test-run-claims-the-box.md).
+ * (docs/plans/261010j-deploy-test-run-claims-the-box.md).
  *
  * Its own module, rather than a constant in `deploy-checks.ts`, because the
  * vitest config imports it on every run and must not drag the deploy's checks

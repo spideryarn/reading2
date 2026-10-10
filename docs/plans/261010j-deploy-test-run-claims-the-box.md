@@ -124,7 +124,7 @@ quicker. A line in [overseer.md § Deploying](../project/overseer.md#deploying) 
 
 ## Review
 
-GPT Sol on the plan and first build ([plan-review-sol](261010g-deploy-test-run-claims-the-box-plan-review-sol.md)),
+GPT Sol on the plan and first build ([plan-review-sol](261010j-deploy-test-run-claims-the-box-plan-review-sol.md)),
 all four taken: `tests/vitest-worker-caps.test.ts` no longer compares two live reads of the lock
 (it accepts the machine's number or one); `scripts/release-lock.ts` and `scripts/lockfile.ts` joined
 `TEST_INFRASTRUCTURE` in `scripts/deploy-evidence.ts`, since the config now imports them; the

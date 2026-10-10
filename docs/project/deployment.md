@@ -349,7 +349,7 @@ the deploy holds its lock default to one worker and say so —
 [testing.md § While a deploy runs](testing.md#while-a-deploy-runs). The private-postgres lane is
 still serial and still runs after the others, so it is now most of what is left: the measurements,
 the expected gain and the larger options passed over are in
-[261010g](../plans/261010g-deploy-test-run-claims-the-box.md).
+[261010j](../plans/261010j-deploy-test-run-claims-the-box.md).
 
 ### The gate needs both halves of the artefact store
 
