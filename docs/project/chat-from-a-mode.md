@@ -70,7 +70,7 @@ origin (`summary` is reserved in the database CHECK and not built, and since 202
 > created a new chat rather than resuming the existing one for that citation. […] Can we get rid
 > of the words Ask in Chat and just show the chat icon with a rich tooltip?
 >
-> — Greg, 2026-10-09 (spya-pdpnjf), in [261010g](../plans/261010g-ask-in-chat-resumes-its-thread-and-becomes-an-icon.md)
+> — Greg, 2026-10-09 (spya-pdpnjf), in [261010s](../plans/261010s-ask-in-chat-resumes-its-thread-and-becomes-an-icon.md)
 
 Since 2026-10-10:
 

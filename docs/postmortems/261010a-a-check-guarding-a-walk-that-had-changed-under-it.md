@@ -2,7 +2,7 @@
 
 Up: [postmortems.md](../project/postmortems.md). Reports spya-nbmce7 and spya-q2w7yt (Greg,
 2026-10-09); fix in plan
-[261010g](../plans/261010g-skim-deeper-passes-always-longer-and-a-previous-stop-door.md). The mode
+[261010t](../plans/261010t-skim-deeper-passes-always-longer-and-a-previous-stop-door.md). The mode
 is [skim.md](../project/skim.md).
 
 ## What happened

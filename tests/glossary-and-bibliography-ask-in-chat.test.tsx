@@ -649,7 +649,7 @@ describe("Ask in chat on a Glossary entry", () => {
     await open(`?mode=glossary&term=${QUOTED}&thread=${STORED.id}`);
     await until(() => entryButton() !== null, "the open entry's Ask in chat");
     const button = entryButton() as HTMLButtonElement;
-    expect(button.textContent?.trim(), "icon only, its words in the card (plan 261010g, D3)").toBe("");
+    expect(button.textContent?.trim(), "icon only, its words in the card (plan 261010s, D3)").toBe("");
     expect(button.getAttribute("aria-label")).toBe(ASK_ENTRY_IN_CHAT);
     expect(digDeeper(), "in Dig deeper's place, which is gone (plan 261009k)").toEqual([]);
     /* The run buttons' size (plan 261007m S2): the shared outline/sm Button. */
@@ -695,7 +695,7 @@ describe("Ask in chat on a Glossary entry", () => {
     const line = mark.querySelector(".origin-chat-line");
     expect(line?.textContent).toBe("Dennett says there are none.");
     expect(line?.classList.contains("voice-ai"), "a model's words, in the model's face").toBe(true);
-    expect(entryButton(), "the mark stands in the button's place (plan 261010g, D2)").toBeNull();
+    expect(entryButton(), "the mark stands in the button's place (plan 261010s, D2)").toBeNull();
 
     /* 4. The mark opens the conversation beside the Glossary. */
     await act(async () => mark.click());
@@ -787,7 +787,7 @@ describe("Ask in chat on a cited work", () => {
     await open(`?mode=sources&thread=${STORED.id}`);
     await until(() => workButton(WORK) !== null && workButton(BARE_WORK) !== null, "both rows' Ask in chat");
     const button = workButton(WORK) as HTMLButtonElement;
-    expect(button.textContent?.trim(), "icon only, its words in the card (plan 261010g, D3)").toBe("");
+    expect(button.textContent?.trim(), "icon only, its words in the card (plan 261010s, D3)").toBe("");
     expect(button.getAttribute("aria-label")).toBe(ASK_WORK_IN_CHAT);
     expect(workRow(WORK)?.querySelector(".cite-investigate"), "in Dig deeper's place, which is gone").toBeNull();
     expect(digDeeper()).toEqual([]);
@@ -832,7 +832,7 @@ describe("Ask in chat on a cited work", () => {
     expect(mark.getAttribute("aria-label")).toBe(OPEN_WORK_CHAT);
     expect(mark.querySelector(".origin-chat-count")?.textContent).toBe("1");
     expect(mark.querySelector(".origin-chat-line")?.textContent).toBe("It argues consciousness is many drafts.");
-    expect(workButton(WORK), "the mark stands in the button's place (plan 261010g, D2)").toBeNull();
+    expect(workButton(WORK), "the mark stands in the button's place (plan 261010s, D2)").toBeNull();
 
     /* 4. The mark opens the conversation beside Citations. */
     await act(async () => mark.click());
@@ -962,7 +962,7 @@ describe.each(["glossary", "bibliography", "ideas"] as const)("a %s entry's chat
     await until(() => param("thread") === retriedId && dialog() !== null, "the retried conversation");
   });
 
-  /* Until plan 261010g this held the opposite: a second press started a
+  /* Until plan 261010s this held the opposite: a second press started a
      second chat. Greg, spya-pdpnjf: *"I'm 99% sure it somehow created a new
      chat rather than resuming the existing one for that citation."* */
   it("has one chat: once there is one, the mark stands in the button's place and reopens it", async () => {
@@ -1002,14 +1002,14 @@ describe("a prose hover card's Ask in chat, on an item that already has a chat",
     server.push(startedFrom("spya-srvx33", { mode, itemId, quote }, "The earlier answer."));
     await open(search);
     const button = await card(mark, ask);
-    expect(button.textContent?.trim(), "icon only (plan 261010g, D3)").toBe("");
+    expect(button.textContent?.trim(), "icon only (plan 261010s, D3)").toBe("");
     await act(async () => button.click());
     await until(() => param("thread") === "spya-srvx33" && dialog() !== null, "the earlier conversation");
     expect(chatPosts(), "no new question").toHaveLength(0);
     expect(server.filter((t) => t.origin?.mode === mode), "and no second chat").toHaveLength(1);
   });
 
-  /* GPT Sol's F1 on plan 261010g: still in Chat, the summaries have not been
+  /* GPT Sol's F1 on plan 261010s: still in Chat, the summaries have not been
      re-read since the first press, so only the band's report of the thread it
      began can say the work has a chat. */
   it("reopens a chat begun moments ago, before the summaries have heard of it", async () => {
@@ -1043,7 +1043,7 @@ describe("Ask in chat on an idea", () => {
     await open(`?mode=ideas&idea=${IDEA}&thread=${STORED.id}`);
     await until(() => ideaButton() !== null, "the open idea's Ask in chat");
     const button = ideaButton() as HTMLButtonElement;
-    expect(button.textContent?.trim(), "icon only, its words in the card (plan 261010g, D3)").toBe("");
+    expect(button.textContent?.trim(), "icon only, its words in the card (plan 261010s, D3)").toBe("");
     expect(button.getAttribute("aria-label")).toBe(ASK_IDEA_IN_CHAT);
     expect(ideaRow(IDEA)?.contains(button), "on the open idea").toBe(true);
     expect(button.dataset.variant).toBe("outline");

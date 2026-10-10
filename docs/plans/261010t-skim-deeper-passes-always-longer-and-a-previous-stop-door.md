@@ -127,7 +127,7 @@ narrow window) stays with the forward buttons. `SkimControl` gains `hasPrevious`
 
 ## Log
 
-- **Plan review (GPT Sol)**, [261010g-skim-plan-review-sol.md](261010g-skim-plan-review-sol.md),
+- **Plan review (GPT Sol)**, [261010t-skim-plan-review-sol.md](261010t-skim-plan-review-sol.md),
   eight findings, all taken: one shared definition of a walked pass (F1 — `src/skim-passes.ts`,
   imported by the band and the server; server code may not import `src/web/`); gaps between
   offered passes and fewer-than-eight routes pinned in tests (F2); a moved stop keeps `again`
@@ -157,8 +157,8 @@ narrow window) stays with the forward buttons. `SkimControl` gains `hasPrevious`
   [261010a](../postmortems/261010a-a-check-guarding-a-walk-that-had-changed-under-it.md), the note.
 - **Browser check** (Sonnet subagent, Playwright on the box): the door on desktop, ‹ Previous stop
   stepping back, the end-of-pass door, a phone width wrapping to two rows with no sideways scroll,
-  and dark mode — all as intended; screenshots `261010g-shot-*.png`.
-- **Code review (GPT Sol)**, [261010g-skim-code-review-sol.md](261010g-skim-code-review-sol.md),
+  and dark mode — all as intended; screenshots `261010t-shot-*.png`.
+- **Code review (GPT Sol)**, [261010t-skim-code-review-sol.md](261010t-skim-code-review-sol.md),
   fixes applied by Sol and checked here: targets below eight quotes no longer contradicted the rule
   (`targetsFor(6)` was 2/1/3; 0 asked for a Gist stop); the prompt's "Most longer than More" said
   only from eight quotes, and "nearly all the quotes" became "about as many as the targets add up

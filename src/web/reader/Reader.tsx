@@ -1144,7 +1144,7 @@ export function Reader({
   const handoffTaken = useCallback(() => setChatHandoff(null), []);
   /**
    * **An item's chat between its first press and the summaries hearing of
-   * it** (plan 261010g, GPT Sol's F1 on the plan). `reopenItemChat` finds an
+   * it** (plan 261010s, GPT Sol's F1 on the plan). `reopenItemChat` finds an
    * item's chat in `chatSummaries`, which are re-read only when the reader
    * leaves Chat or a turn settles; a second press inside that window would
    * otherwise start a second chat. The band names the thread here as it
@@ -2704,7 +2704,7 @@ export function Reader({
     [setNote, setThread, refreshChats],
   );
   /**
-   * **An item has one chat, and *Ask in chat* reopens it** (plan 261010g, D1).
+   * **An item has one chat, and *Ask in chat* reopens it** (plan 261010s, D1).
    * Greg, 2026-10-09 (spya-pdpnjf): pressing it again on a cited work *"created
    * a new chat rather than resuming the existing one"*. The gutter's
    * `chatAboutBlock` already reopened a passage's chat; this is the item

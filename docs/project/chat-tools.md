@@ -431,7 +431,7 @@ the conversation went. Two pieces fix that:
   only if nothing has been stored in the thread since it was read (`chatStore.setGist`), only when
   this turn's answer is what landed, and never for Candidates. A failure costs the gist, never the
   turn. It never replaces their title. **Since plan
-  [261010g](../plans/261010g-ask-in-chat-resumes-its-thread-and-becomes-an-icon.md) it is shown**,
+  [261010s](../plans/261010s-ask-in-chat-resumes-its-thread-and-becomes-an-icon.md) it is shown**,
   on the mark of the item a chat was started from (the thread summary carries it;
   [chat-from-a-mode.md § One chat per item](chat-from-a-mode.md#one-chat-per-item)). Until then it
   was for the model only. Measured: $0.0001 to

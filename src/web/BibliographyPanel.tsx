@@ -1310,7 +1310,7 @@ function WorkRow({
         {/* **Where Dig deeper was** (plan 261009k; beside it from plan
             261006d until then). The press sends the question (plan 261006j).
             Only while the work has no chat: then the mark below stands in
-            its place and opens that chat (plan 261010g, D2). */}
+            its place and opens that chat (plan 261010s, D2). */}
         {chats && !chat && (
           <AskInChatButton
             label={ASK_WORK_IN_CHAT}
