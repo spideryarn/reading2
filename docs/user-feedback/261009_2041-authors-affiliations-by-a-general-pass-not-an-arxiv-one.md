@@ -16,7 +16,7 @@ LLM author post-processing costs well under $0.01".
 > LLM in a general way rather than deterministic scripts that are specific to particular sites.
 
 **Ending: shipped**, on `dev` —
-[261009u](../plans/261009u-a-general-authors-pass-for-every-web-page.md).
+[261010d](../plans/261010d-a-general-authors-pass-for-every-web-page.md).
 
 - **The honest answer first.** The affiliations were already read by a model in 1.4.8, but through
   arXiv-only plumbing and on Sonnet. Two arXiv pieces were deterministic: reading the names out of

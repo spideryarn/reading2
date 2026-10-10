@@ -21,7 +21,7 @@
  *   npx tsx evals/front-matter/measure.ts [--arms=haiku,deepseek] [--draws=N] [--only=a,b]
  *     [--baseline=<results.json>] [--out=<file.json>]
  *
- * docs/plans/261009u-a-general-authors-pass-for-every-web-page.md § Measured.
+ * docs/plans/261010d-a-general-authors-pass-for-every-web-page.md § Measured.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { sql } from "drizzle-orm";

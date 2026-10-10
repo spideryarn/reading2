@@ -1,8 +1,8 @@
-You are reviewing CODE in the Spideryarn repo, in this worktree, with write access. You reviewed the plan earlier (docs/plans/261009u-general-authors-plan-review-sol.md: verdict "revise before build", four findings). This is the code built after it.
+You are reviewing CODE in the Spideryarn repo, in this worktree, with write access. You reviewed the plan earlier (docs/plans/261010d-general-authors-plan-review-sol.md: verdict "revise before build", four findings). This is the code built after it.
 
 Read:
-- docs/plans/261009u-a-general-authors-pass-for-every-web-page.md (the revised plan, with "The plan review" section saying how each of your four findings was handled)
-- docs/plans/261009u-general-authors-code-review.diff (the scoped diff), or `git diff HEAD` (new files are intent-to-add)
+- docs/plans/261010d-a-general-authors-pass-for-every-web-page.md (the revised plan, with "The plan review" section saying how each of your four findings was handled)
+- docs/plans/261010d-general-authors-code-review.diff (the scoped diff), or `git diff HEAD` (new files are intent-to-add)
 - src/front-matter-authors.ts (new), src/extract.ts (readingArm, runExtract), src/pipeline.ts (the wiring), src/latexml.ts (latexmlTitleBlock removed), src/models.ts / src/ai-call.ts / src/cost-categories.ts / src/plain-words.ts (the job registered)
 - tests/front-matter-authors.test.ts
 - evals/front-matter/measure.ts, compare.ts; results in evals/results/front-matter-authors-2026-10-09/run-5-final-haiku.* (the final measurement)

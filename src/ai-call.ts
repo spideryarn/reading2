@@ -1239,7 +1239,7 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
   "front-matter-authors": {
     providerDefault:
       "Measured 2026-10-09 by the eval that chose the model: 50–1,600 output tokens, 1.6–6 s, " +
-      "~$0.0005 a page (plan 261009u). Unmeasured at any named effort.",
+      "~$0.0005 a page (plan 261010d). Unmeasured at any named effort.",
   },
   /* One line describing a conversation. Nobody waits on it, but thinking
      would spend the 300-token ceiling before the answer began. */

@@ -7,7 +7,7 @@ index c31b7d4e0..b0a41f7a3 100644
  | a code listing as a `<div>` per line | a paragraph per line | one `<pre>` |
  | a boxed passage as an SVG frame round a `foreignObject` | an empty block | the passage's own blocks |
 -| authors in the title block, none in the metadata | Readability's guess: a cited author, or "and" | the paper's authors, names only, through `metaAuthors` ([`src/meta-authors.ts`](../../src/meta-authors.ts)); right on 12 of 19 live pages and refused on the rest, 2026-10-07 ([261007d](../plans/261007d-front-matter-folded-by-default-and-arxiv-html-authors.md) § Stage 2 says why a rule cannot read affiliations). **Each name's affiliations** are read on import by the PDF path's authors pass (one call on the `pdf-frontmatter` model, about half a cent), held to the title block's own words, and the names must come back exactly as the markup has them, or the names stay alone ([`src/arxiv-affiliations.ts`](../../src/arxiv-affiliations.ts), [261009m](../plans/261009m-arxiv-html-affiliations-by-the-authors-pass.md)) |
-+| authors in the title block, none in the metadata | Readability's guess: a cited author, or "and" | the paper's authors, names only, through `metaAuthors` ([`src/meta-authors.ts`](../../src/meta-authors.ts)); right on 12 of 19 live pages and refused on the rest, 2026-10-07 ([261007d](../plans/261007d-front-matter-folded-by-default-and-arxiv-html-authors.md) § Stage 2 says why a rule cannot read affiliations). **Each name's affiliations** come from the general pass every web page gets (below, § `meta.authors`), reading the rewritten rows; nothing arXiv-specific. From 2026-10-09 to the same day's [261009u](../plans/261009u-a-general-authors-pass-for-every-web-page.md) they came from an arXiv-only call on Sonnet ([261009m](../plans/261009m-arxiv-html-affiliations-by-the-authors-pass.md)) |
++| authors in the title block, none in the metadata | Readability's guess: a cited author, or "and" | the paper's authors, names only, through `metaAuthors` ([`src/meta-authors.ts`](../../src/meta-authors.ts)); right on 12 of 19 live pages and refused on the rest, 2026-10-07 ([261007d](../plans/261007d-front-matter-folded-by-default-and-arxiv-html-authors.md) § Stage 2 says why a rule cannot read affiliations). **Each name's affiliations** come from the general pass every web page gets (below, § `meta.authors`), reading the rewritten rows; nothing arXiv-specific. From 2026-10-09 to the same day's [261010d](../plans/261010d-a-general-authors-pass-for-every-web-page.md) they came from an arXiv-only call on Sonnet ([261009m](../plans/261009m-arxiv-html-affiliations-by-the-authors-pass.md)) |
  | the title block itself: each author's affiliation, email and `\thanks` note in a pop-up CSS hides | one paragraph of every author fused, with `thanks:`, `footnotemark: 1` and `Affiliation:` as text; and Readability **deleting** the first short author element it took for the byline | one row per author (name, then each contact on its own line), each note once, numbered, and a name carrying the numbers of the notes it shares; one line of names when nobody has details. The page's nodes are moved, a word check and the link targets checked before the swap, and an unproved `\footnotemark` refuses. 16 of 20 live pages, 2026-10-09 ([261009d](../plans/261009d-arxiv-html-title-block-tidied-at-import.md)) |
  | a macro it could not expand, as its name in `<span class="ltx_ERROR undefined">`, and the macro's argument as ordinary text | `\hohsettheme` then `hohRose` above the title; `phases\ucitedagotto2005.` mid-sentence; `\bmsection` before a funding statement. 9 of 79 papers, 2026-10-09 | the report gone, a space where it would join two words, `\sep` a semicolon between keyword phrases. The argument stays, unless it is a name from the TeX source (`hohRose`, a .bib file's name) or a citation key after a `…cite` macro, which go too ([261009f](../plans/261009f-latex-undefined-macros-leave-the-page.md)) |
  
@@ -26,7 +26,7 @@ index c31b7d4e0..b0a41f7a3 100644
 +alone. A page that declares nobody is not asked: a model choosing a blog's author from its prose
 +could put a quoted person over a correct byline
 +([`src/front-matter-authors.ts`](../../src/front-matter-authors.ts),
-+[261009u](../plans/261009u-a-general-authors-pass-for-every-web-page.md), which measured it on arXiv
++[261010d](../plans/261010d-a-general-authors-pass-for-every-web-page.md), which measured it on arXiv
 +HTML, journals, blogs and PDFs). Stored only when it accounts for the whole
  byline, and then the byline is derived from it, so the two never disagree. For a PDF whose names
  all verify but an affiliation does not, since 2026-09-30 the byline is those names and no list is
@@ -39,7 +39,7 @@ index 7f54a4cee..52c661bc3 100644
  | **reading difficulty** | DeepSeek V4.1 Flash — `deepseek/deepseek-v4.1-flash` | The same zero-data-retention route as paper metadata, not a tier — `READING_DIFFICULTY_MODEL`, job `reading-difficulty`. Rates an article's language and ideas from a sample at the end of the `blocks` step, for the reading-time estimate (`src/reading-difficulty.ts`; measured in [261005b](../investigations/261005b-reading-time-difficulty-multiplier-coefficients-and-where-the-rating-comes-from.md)) |
  | **shelf topics** | GPT-6 Luna — `openai/gpt-6-luna` | OpenRouter, not a tier — `SHELF_TOPICS_MODEL`, job `shelf-topics`. Scores the candidate topics shown above a shelf (`src/shelf-terms/model-scores.ts`; chosen by measurement in [260929c](../plans/260929c-shelf-topics-chosen-by-a-model.md)) |
  | **title tidy** | DeepSeek V4.1 Flash — `deepseek/deepseek-v4.1-flash` | The same zero-data-retention route as paper metadata, on a copy of it, not a tier — `TITLE_TIDY_MODEL`, job `title-tidy`. Lightly tidies an imported title: its capitals, a site's name stuck on the end (`src/title-tidy-model.ts`; measured in [261005b](../investigations/261005b-title-tidying-rule-against-a-small-model.md)) |
-+| **front-matter authors** | Haiku 5.5 — `anthropic/claude-haiku-5.5` | OpenRouter, pinned to Anthropic like `pdf-frontmatter`, not a tier — `FRONT_MATTER_AUTHORS_MODEL`, job `front-matter-authors`. Reads the institutions printed for a web page's declared authors off its opening, at import (`src/front-matter-authors.ts`; chosen over DeepSeek V4.1 Flash, which split an unmarked shared line by outside knowledge, in [261009u](../plans/261009u-a-general-authors-pass-for-every-web-page.md)) |
++| **front-matter authors** | Haiku 5.5 — `anthropic/claude-haiku-5.5` | OpenRouter, pinned to Anthropic like `pdf-frontmatter`, not a tier — `FRONT_MATTER_AUTHORS_MODEL`, job `front-matter-authors`. Reads the institutions printed for a web page's declared authors off its opening, at import (`src/front-matter-authors.ts`; chosen over DeepSeek V4.1 Flash, which split an unmarked shared line by outside knowledge, in [261010d](../plans/261010d-a-general-authors-pass-for-every-web-page.md)) |
  | **chat gist** | DeepSeek V4.1 Flash — `deepseek/deepseek-v4.1-flash` | The same zero-data-retention route as paper metadata, on a copy of it, not a tier — `CHAT_GIST_MODEL`, job `chat-gist`. After each finished answer, one line on what the conversation covered, for the model in the reader's other conversations (`src/chat-gist.ts`; plan [261008e](../plans/261008e-chat-knows-the-reader-s-other-conversations.md)) |
  | **dictation** | GPT Transcribe — `openai/gpt-transcribe` | OpenRouter's `/v1/audio/transcriptions`, and not a tier — `DICTATION_MODEL`. Not on chat/completions; it takes a `keywords` vocabulary, which is why it is there ([260907c](../plans/260907c-dictation-onto-an-openai-transcriber.md)) |
  | **quick search** | Jev 1.13 — `typesafe/jev-1.13` | OpenRouter's alpha `/api/alpha/decisions`, and not a tier — `QUICK_SEARCH_MODEL`, job `search-quick`. Requests this versioned id; the stored model is the id the provider returned ([search.md § Quick search](search.md#quick-search-a-meaning-search-in-about-a-second)) |
@@ -123,7 +123,7 @@ index 000000000..b3a40acac
 + *   npx tsx evals/front-matter/measure.ts [--arms=haiku,deepseek] [--draws=N] [--only=a,b]
 + *     [--baseline=<results.json>] [--out=<file.json>]
 + *
-+ * docs/plans/261009u-a-general-authors-pass-for-every-web-page.md § Measured.
++ * docs/plans/261010d-a-general-authors-pass-for-every-web-page.md § Measured.
 + */
 +import { readFileSync, writeFileSync } from "node:fs";
 +import { sql } from "drizzle-orm";
@@ -334,7 +334,7 @@ index 43d979521..7c13eeb8a 100644
 +  "front-matter-authors": {
 +    providerDefault:
 +      "Measured 2026-10-09 by the eval that chose the model: 50–1,600 output tokens, 1.6–6 s, " +
-+      "~$0.0005 a page (plan 261009u). Unmeasured at any named effort.",
++      "~$0.0005 a page (plan 261010d). Unmeasured at any named effort.",
 +  },
    /* One line describing a conversation. Nobody waits on it, but thinking
       would spend the 300-token ceiling before the answer began. */
@@ -597,7 +597,7 @@ index 58640e3e0..4f39b76e0 100644
 -   * hands in the PDF path's authors pass (src/arxiv-affiliations.ts, plan
 -   * 261009m); absent, no call, and the names stay alone.
 +   * What reads the declared authors' affiliations off the page's opening, on
-+   * any site (src/front-matter-authors.ts, plan 261009u). Import hands in the
++   * any site (src/front-matter-authors.ts, plan 261010d). Import hands in the
 +   * cheap model's; absent, no call. Asked only when the page declares its
 +   * authors and gives none of them an affiliation.
     */
@@ -624,7 +624,7 @@ index 58640e3e0..4f39b76e0 100644
 -     already said what it has to say. The reader returns the same names, in the
 -     same order, or nothing (src/arxiv-affiliations.ts). Plan 261009m. */
 +  /* **Affiliations for the declared names**, read off the page's opening by
-+     one cheap call (src/front-matter-authors.ts, plan 261009u), on any site.
++     one cheap call (src/front-matter-authors.ts, plan 261010d), on any site.
 +     Only when the page declares its authors — `citation_author`, `dc.creator`
 +     or an arXiv paper's LaTeXML markup — and gives none an affiliation: a page
 +     that declares affiliations has said what it has to say, and a page that
@@ -653,7 +653,7 @@ index 000000000..c1a54a0ca
 + * things that are specific to a particular site unless we really have to … this
 + * kind of thing is the sort of thing I'd hope we could do with an LLM in a
 + * general way rather than deterministic scripts that are specific to particular
-+ * sites."* docs/plans/261009u-a-general-authors-pass-for-every-web-page.md.
++ * sites."* docs/plans/261010d-a-general-authors-pass-for-every-web-page.md.
 + *
 + * **It adds affiliations to the names a page declares; it does not find
 + * names.** The names come from the page's own metadata — `citation_author`,
@@ -661,7 +661,7 @@ index 000000000..c1a54a0ca
 + * they are the masthead's already. A page that declares nobody gets no call:
 + * a model choosing who wrote a blog post from its prose could put a quoted
 + * person over a correct byline, and that is a separate piece of work with its
-+ * own negative corpus (GPT Sol, plan review of 261009u, P1-3).
++ * own negative corpus (GPT Sol, plan review of 261010d, P1-3).
 + *
 + * What the model sees is the page's opening (`pageOpening`: its visible text
 + * from the main heading on, before Readability) and the declared names. It
@@ -680,7 +680,7 @@ index 000000000..c1a54a0ca
 + *   prints on that author's name; or, unmarked, given to every author it could
 + *   belong to. The arXiv path proved this from LaTeXML's markup; this proves it
 + *   from the printed words, so a swap of two printed institutions is refused on
-+ *   any site (GPT Sol, plan review of 261009m and of 261009u, P1-1).
++ *   any site (GPT Sol, plan review of 261009m and of 261010d, P1-1).
 + *
 + * The records are a stranger's text: they go to the model as inert JSON lines,
 + * and the worst a hostile page can do is mislabel its own authors with words
@@ -1236,7 +1236,7 @@ index 70d8ada33..0b39d794d 100644
 + * between authors by what it seemed to know about them, which the page did not
 + * say; Haiku's misses were refusals. On no tier, so High-powered AI does not
 + * move it. Route `front-matter-authors` in src/ai-call.ts.
-+ * docs/plans/261009u-a-general-authors-pass-for-every-web-page.md § Measured.
++ * docs/plans/261010d-a-general-authors-pass-for-every-web-page.md § Measured.
 + */
 +export const FRONT_MATTER_AUTHORS_MODEL = "anthropic/claude-haiku-5.5";
 +
@@ -1311,7 +1311,7 @@ index 6cff255d6..c8ccaf179 100644
 -               title block whose names are the whole author list. */
 -            affiliations: arxivAffiliationReader(openRouterAuthorsReader(modelFor("pdf-frontmatter", ctx.power)), ctx),
 +            /* Any page's authors and affiliations, read off its opening by one
-+               cheap call and held to its words (plan 261009u). Not called when
++               cheap call and held to its words (plan 261010d). Not called when
 +               the page's meta tags already give an affiliation. */
 +            frontMatterAuthors: frontMatterAuthorsReader(ctx),
            });
@@ -1602,7 +1602,7 @@ index 000000000..f7929ed41
 + * gateway that answers what each test says; nothing here spends. What the real
 + * model answers, and what it costs, is evals/front-matter/measure.ts.
 + *
-+ * docs/plans/261009u-a-general-authors-pass-for-every-web-page.md.
++ * docs/plans/261010d-a-general-authors-pass-for-every-web-page.md.
 + */
 +import { readFileSync } from "node:fs";
 +import { JSDOM } from "jsdom";

@@ -261,6 +261,8 @@ describe("declaredTables", () => {
       "article_tags",
       "article_visibility_changes",
       "articles",
+      "author_gifts",
+      "author_lookups",
       "bibliographic_records",
       "bibliographic_service_slots",
       "bibliographic_services",
@@ -399,8 +401,9 @@ describe("against a real database", () => {
          (plan 261008i); fifty-two since `import_records` the same day (plan
          261008j); fifty-three since `referee_hidden_checks`, 2026-10-09 (plan
          261009a); fifty-four since `debate_claim_checks` the same day (plan
-         261008i § 3). */
-      expect(report.declaredTables).toBe(54);
+         261008i § 3); fifty-six since `author_gifts` and `author_lookups`,
+         2026-10-09 (plan 261010c). */
+      expect(report.declaredTables).toBe(56);
       expect(driftWarnings(report)).toEqual([]);
     });
   });

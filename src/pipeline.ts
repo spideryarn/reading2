@@ -2884,7 +2884,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
             slug: ctx.slug,
             titleTidier: stepTitleTidier(ctx, store),
             /* Any page's authors and affiliations, read off its opening by one
-               cheap call and held to its words (plan 261009u). Not called when
+               cheap call and held to its words (plan 261010d). Not called when
                the page's meta tags already give an affiliation. */
             frontMatterAuthors: frontMatterAuthorsReader(ctx),
           });

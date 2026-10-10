@@ -6,7 +6,7 @@
  * things that are specific to a particular site unless we really have to … this
  * kind of thing is the sort of thing I'd hope we could do with an LLM in a
  * general way rather than deterministic scripts that are specific to particular
- * sites."* docs/plans/261009u-a-general-authors-pass-for-every-web-page.md.
+ * sites."* docs/plans/261010d-a-general-authors-pass-for-every-web-page.md.
  *
  * **It adds affiliations to the names a page declares; it does not find
  * names.** The names come from the page's own metadata — `citation_author`,
@@ -14,7 +14,7 @@
  * they are the masthead's already. A page that declares nobody gets no call:
  * a model choosing who wrote a blog post from its prose could put a quoted
  * person over a correct byline, and that is a separate piece of work with its
- * own negative corpus (GPT Sol, plan review of 261009u, P1-3).
+ * own negative corpus (GPT Sol, plan review of 261010d, P1-3).
  *
  * What the model sees is the page's opening (`pageOpening`: its visible text
  * from the main heading on, before Readability) and the declared names. It
@@ -33,7 +33,7 @@
  *   prints on that author's name; or, unmarked, given to every author it could
  *   belong to. The arXiv path proved this from LaTeXML's markup; this proves it
  *   from the printed words, so a swap of two printed institutions is refused on
- *   any site (GPT Sol, plan review of 261009m and of 261009u, P1-1).
+ *   any site (GPT Sol, plan review of 261009m and of 261010d, P1-1).
  *
  * The records are a stranger's text: they go to the model as inert JSON lines,
  * and the worst a hostile page can do is mislabel its own authors with words
@@ -90,7 +90,7 @@ const HIDDEN_STAMP = RESERVED_ATTRS.hidden;
  * fetched at this stage. `pageOpening` takes every stamp off again, so none
  * reaches Readability or the stored article.
  *
- * **Attributes only, never a new element.** GPT Sol's code review of 261009u
+ * **Attributes only, never a new element.** GPT Sol's code review of 261010d
  * also wrapped hidden bare text in `<span>`s, so text the LaTeXML rewrite
  * moves out of a hidden contact would keep its provenance. That reshapes,
  * on every page, the DOM that every rewrite in `prepareDocument` then
