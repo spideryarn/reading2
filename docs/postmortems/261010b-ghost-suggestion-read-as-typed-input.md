@@ -4,7 +4,7 @@
 ghost suggestion — the dim `carry on` it pre-fills after a turn — with `input-not-empty`, as though
 somebody had left a draft there. At 19:00 on 2026-10-10 that was all six sessions on the box sitting
 at a prompt. Nothing was sent wrongly; messages simply could not be sent. Plan:
-[261010i](../plans/261010i-ghost-suggestion-is-not-input.md).
+[261010m](../plans/261010m-ghost-suggestion-is-not-input.md).
 
 ## Root cause
 

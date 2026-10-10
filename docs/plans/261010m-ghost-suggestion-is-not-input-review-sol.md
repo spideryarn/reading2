@@ -6,7 +6,7 @@ Found and fixed three issues:
 
 Capture-form threading is correct. Keeping `answerQuestion` on plain capture is appropriate.
 
-Changed: [pane.ts](/var/tmp/spideryarn-worktrees/agent-a711e50baff7f954d/tools/fleet/pane.ts), [surface tests](/var/tmp/spideryarn-worktrees/agent-a711e50baff7f954d/tests/fleet-pane-surface.test.ts), [steer tests](/var/tmp/spideryarn-worktrees/agent-a711e50baff7f954d/tests/fleet-steer.test.ts), [pane test comment](/var/tmp/spideryarn-worktrees/agent-a711e50baff7f954d/tests/fleet-pane.test.ts), [plan](/var/tmp/spideryarn-worktrees/agent-a711e50baff7f954d/docs/plans/261010i-ghost-suggestion-is-not-input.md), and [postmortem](/var/tmp/spideryarn-worktrees/agent-a711e50baff7f954d/docs/postmortems/261010b-ghost-suggestion-read-as-typed-input.md).
+Changed: [pane.ts](/var/tmp/spideryarn-worktrees/agent-a711e50baff7f954d/tools/fleet/pane.ts), [surface tests](/var/tmp/spideryarn-worktrees/agent-a711e50baff7f954d/tests/fleet-pane-surface.test.ts), [steer tests](/var/tmp/spideryarn-worktrees/agent-a711e50baff7f954d/tests/fleet-steer.test.ts), [pane test comment](/var/tmp/spideryarn-worktrees/agent-a711e50baff7f954d/tests/fleet-pane.test.ts), [plan](/var/tmp/spideryarn-worktrees/agent-a711e50baff7f954d/docs/plans/261010m-ghost-suggestion-is-not-input.md), and [postmortem](/var/tmp/spideryarn-worktrees/agent-a711e50baff7f954d/docs/postmortems/261010b-ghost-suggestion-read-as-typed-input.md).
 
 **Validation:** all **287 tests passed** across the four requested files; regressions were observed failing before fixes. Typecheck passed using `node --import tsx scripts/typecheck.ts`; `npm run typecheck` was blocked by the sandbox’s tsx IPC restriction.
 

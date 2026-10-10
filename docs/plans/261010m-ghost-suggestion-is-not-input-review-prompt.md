@@ -1,7 +1,7 @@
-# Code review: a ghost suggestion is not input (261010i)
+# Code review: a ghost suggestion is not input (261010m)
 
 You are reviewing an uncommitted change in this worktree. Read the plan first:
-`docs/plans/261010i-ghost-suggestion-is-not-input.md`, then the postmortem
+`docs/plans/261010m-ghost-suggestion-is-not-input.md`, then the postmortem
 `docs/postmortems/261010b-ghost-suggestion-read-as-typed-input.md`. The diff is
 `git diff` in this worktree (the three new files are intent-to-add, so they show).
 
