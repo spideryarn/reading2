@@ -201,9 +201,9 @@ describe("the card's owner actions", () => {
        with the entire 261003h stylesheet change removed. Check the loaded
        stylesheet's grouping contract too; pixel layout still needs a browser. */
     const css = readerCssNoComments();
-    const foot = /^\.prose-card-term-foot\s*\{([^}]*)\}/m.exec(css)?.[1] ?? "";
-    const group = /^\.prose-card-term-acts\s*\{([^}]*)\}/m.exec(css)?.[1] ?? "";
-    const open = /^\.prose-card-term-acts > \.prose-card-open\s*\{([^}]*)\}/m.exec(css)?.[1] ?? "";
+    const foot = /^\.prose-card-foot-wraps\s*\{([^}]*)\}/m.exec(css)?.[1] ?? "";
+    const group = /^\.prose-card-acts\s*\{([^}]*)\}/m.exec(css)?.[1] ?? "";
+    const open = /^\.prose-card-acts > \.prose-card-open\s*\{([^}]*)\}/m.exec(css)?.[1] ?? "";
     expect(foot, "the term foot must wrap between the link and the buttons").toMatch(/flex-wrap:\s*wrap\s*;/);
     expect(group, "the three buttons must share a flex row").toMatch(/display:\s*inline-flex\s*;/);
     expect(group).toMatch(/white-space:\s*nowrap\s*;/);
@@ -224,12 +224,12 @@ describe("the card's owner actions", () => {
        the same row to minimize vertical space"*. The owner's two verbs sit in
        the foot beside the way out, which is now named for what it does. */
     const foot = card()?.querySelector(".prose-card-foot");
-    const group = foot?.querySelector(".prose-card-term-acts");
+    const group = foot?.querySelector(".prose-card-acts");
     expect(ask?.parentElement).toBe(group);
     expect(button("Hide")?.parentElement).toBe(group);
-    expect(group?.firstElementChild, "Ask in chat · Hide · Open glossary").toBe(ask);
-    expect(group?.lastElementChild?.textContent).toBe("Open glossary");
-    expect(foot?.querySelector(".prose-card-open")?.textContent).toBe("Open glossary");
+    expect(group?.firstElementChild, "Ask in chat · Hide · Open in Glossary").toBe(ask);
+    expect(group?.lastElementChild?.textContent).toBe("Open in Glossary");
+    expect(foot?.querySelector(".prose-card-open")?.textContent).toBe("Open in Glossary");
     expect(card()?.querySelectorAll("p.prose-card-foot, p.prose-card-acts")).toHaveLength(1);
 
     act(() => root.render(<Harness entries={[TERM]} actions={null} />));
@@ -240,7 +240,7 @@ describe("the card's owner actions", () => {
     expect(card(), "the visitor's card did not open").not.toBeNull();
     expect(card()?.querySelector(".prose-card-act")).toBeNull();
     expect(card()?.textContent).not.toMatch(/Dig deeper|Ask in chat/);
-    expect(card()?.querySelector(".prose-card-open")?.textContent).toBe("Open glossary");
+    expect(card()?.querySelector(".prose-card-open")?.textContent).toBe("Open in Glossary");
   });
 
   it("Ask in chat asks the band's sender about this entry, and closes the card", () => {

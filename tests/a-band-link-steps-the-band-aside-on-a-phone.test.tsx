@@ -700,7 +700,7 @@ describe("the term card brings its band back", () => {
     stale: false, outdated: false, profileChanged: false,
   };
 
-  it.each([PHONE, 600])("Open glossary reveals a stepped-aside Glossary band at %ipx", async (width) => {
+  it.each([PHONE, 600])("Open in Glossary reveals a stepped-aside Glossary band at %ipx", async (width) => {
     vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url === `/api/glossary/${SLUG}`) return Promise.resolve(json(GLOSSARY_BODY));
@@ -721,11 +721,27 @@ describe("the term card brings its band back", () => {
       mark?.dispatchEvent(event);
     });
     await until(() => document.querySelector(".prose-card .prose-card-open") !== null, "the term card did not open");
-    await act(async () => document.querySelector<HTMLButtonElement>(".prose-card .prose-card-open")?.click());
-    await settle();
+    /* jsdom has no `scrollIntoView`; item-focus.ts calls it optionally, so a
+       stub is the only way to see the row was landed on (plan 261010d). */
+    const landed: Element[] = [];
+    const had = Object.getOwnPropertyDescriptor(Element.prototype, "scrollIntoView");
+    Element.prototype.scrollIntoView = function (this: Element) {
+      landed.push(this);
+    };
+    try {
+      await act(async () => document.querySelector<HTMLButtonElement>(".prose-card .prose-card-open")?.click());
+      await settle();
+    } finally {
+      if (had) Object.defineProperty(Element.prototype, "scrollIntoView", had);
+      else delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    }
     expect(param("mode")).toBe("glossary");
     expect(param("term")).toBe(TERM_ID);
-    expect(reader().classList.contains("band-away"), "Open glossary left the band hidden").toBe(false);
+    expect(reader().classList.contains("band-away"), "Open in Glossary left the band hidden").toBe(false);
+    expect(
+      landed.some((el) => el.getAttribute("data-term-id") === TERM_ID),
+      "Open in Glossary must bring the term's row into view, not only select it",
+    ).toBe(true);
   });
 });
 

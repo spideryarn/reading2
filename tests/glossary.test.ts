@@ -1076,7 +1076,7 @@ describe("the threshold slider", () => {
   });
 
   it("answers the gate that would put a hidden term back on screen", () => {
-    /* "Open glossary" on a prose hover card is a deliberate request to reveal
+    /* "Open in Glossary" on a prose hover card is a deliberate request to reveal
        a term, and it writes `?term=`. Without lowering the gate first, pressing
        it on a below-bar term opens the band on nothing at all. */
     expect(gateToReveal(list, low.id, "prioritised", PRIORITY_GATE)).toBeCloseTo(0.04);

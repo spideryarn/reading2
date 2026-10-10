@@ -129,7 +129,7 @@ function param(key: string): string | null {
   return new URLSearchParams(location.search).get(key);
 }
 
-async function mount(search: string): Promise<void> {
+async function mount(search: string, extra: Record<string, unknown> = {}): Promise<void> {
   history.replaceState(null, "", `/a-piece${search}`);
   await act(async () => {
     root.render(
@@ -147,6 +147,7 @@ async function mount(search: string): Promise<void> {
               marks.push(`band:${sel ? sel.id : "null"}`);
               selection = sel ? sel.id : null;
             },
+            ...extra,
           }),
           createElement(Probe, { key: "probe" }),
         ),
@@ -236,5 +237,30 @@ describe("a term the threshold hides stops being the open one", () => {
     await settle();
     expect(selection).toBe(HARD.id);
     expect(param("term")).toBe(HARD.id);
+  });
+});
+
+/* Plan 261010d, GPT Sol's F2: the prose card's *Open in Glossary* asks the band
+   to bring the term's row into view, and a visitor's band was never handed the
+   request — only the owner's was. */
+describe("a visitor's band lands on the term it was asked for", () => {
+  it("scrolls the row into view and hands the request back", async () => {
+    const landed: Element[] = [];
+    const taken: { id: string; n: number }[] = [];
+    const had = Object.getOwnPropertyDescriptor(Element.prototype, "scrollIntoView");
+    Element.prototype.scrollIntoView = function (this: Element) {
+      landed.push(this);
+    };
+    try {
+      await mount(`?mode=glossary&sort=document&term=${RARE.id}`, {
+        focus: { id: RARE.id, n: 1 },
+        onFocusTaken: (f: { id: string; n: number }) => taken.push(f),
+      });
+    } finally {
+      if (had) Object.defineProperty(Element.prototype, "scrollIntoView", had);
+      else delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    }
+    expect(landed.some((el) => el.getAttribute("data-term-id") === RARE.id)).toBe(true);
+    expect(taken).toEqual([{ id: RARE.id, n: 1 }]);
   });
 });

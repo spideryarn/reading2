@@ -164,17 +164,21 @@ interface CiteActions {
 const jumped: BlockId[] = [];
 const aimed: { id: BlockId; aim: unknown }[] = [];
 const openedTerms: string[] = [];
+const openedWorks: string[] = [];
 
 function Harness({
   works,
   entries,
   owner,
   citeActions = null,
+  openWork = false,
 }: {
   works: CitedWork[];
   entries: GlossaryEntry[];
   owner: boolean;
   citeActions?: CiteActions | null;
+  /** Reader's `openBibliographyWork`, which only the owner's card is given. */
+  openWork?: boolean;
 }) {
   /* Both scans, and then concatenated per block — which is what `TableView`
      does, and is the only way to get the merged `<mark class="term cite">` the
@@ -223,6 +227,7 @@ function Harness({
         showInSpideryarn={owner}
         termActions={null}
         onAskCitedWork={citeActions ? (work) => citeActions.ask(work) : null}
+        onOpenCitedWork={openWork ? (id) => void openedWorks.push(id) : null}
         onOpenTerm={(id) => openedTerms.push(id)}
         onJump={(id, aim) => {
           jumped.push(id);
@@ -290,8 +295,13 @@ function paint(
   entries: GlossaryEntry[] = [],
   owner = true,
   citeActions: CiteActions | null = null,
+  openWork = false,
 ): void {
-  act(() => root.render(<Harness works={works} entries={entries} owner={owner} citeActions={citeActions} />));
+  act(() =>
+    root.render(
+      <Harness works={works} entries={entries} owner={owner} citeActions={citeActions} openWork={openWork} />,
+    ),
+  );
 }
 
 beforeEach(() => {
@@ -300,6 +310,7 @@ beforeEach(() => {
   jumped.length = 0;
   aimed.length = 0;
   openedTerms.length = 0;
+  openedWorks.length = 0;
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -695,6 +706,41 @@ describe("Ask in chat from the card", () => {
     hover(cite(0));
     expect(card()).not.toBeNull();
     expect(button()).toBeUndefined();
+  });
+});
+
+/* Report `spya-zux9w6`, Greg, 2026-10-09: *"Citation tooltips should include a
+   link to take you to the citations mode, just like I think quotes do"*. Plan
+   261010d: every card on a mode's mark ends in the same *Open in <Mode>*. */
+describe("Open in Sources from the card", () => {
+  const open = () =>
+    [...(card()?.querySelectorAll("button") ?? [])].find((b) => /Open in Sources/.test(b.textContent ?? "")) as
+      | HTMLButtonElement
+      | undefined;
+
+  it("opens Bibliography on that work, and closes the card", () => {
+    paint(WORKS, [], true, null, true);
+    hover(cite(0));
+    expect(open()?.textContent?.trim()).toBe("Open in Sources");
+    act(() => open()?.click());
+    expect(openedWorks).toEqual([TULVING.id]);
+    expect(card()).toBe(null);
+  });
+
+  it("is the shared button the glossary and quote cards end in, last in one group with Ask in chat", () => {
+    paint(WORKS, [], true, { ask: () => {} }, true);
+    hover(cite(0));
+    const acts = open()?.parentElement;
+    expect(open()?.classList.contains("prose-card-open")).toBe(true);
+    expect(acts?.classList.contains("prose-card-acts"), "Ask in chat and Open in Sources are one group").toBe(true);
+    expect(acts?.lastElementChild).toBe(open());
+  });
+
+  it("is not drawn when the card is given no way to the mode", () => {
+    paint(WORKS, [], false, null, false);
+    hover(cite(0));
+    expect(card()).not.toBeNull();
+    expect(open()).toBeUndefined();
   });
 });
 

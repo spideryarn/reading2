@@ -31,7 +31,6 @@
 import { useCallback, useEffect, useMemo, useReducer, useState, type ReactElement } from "react";
 import {
   Asterisk,
-  BookA,
   BookCheck,
   BookMarked,
   BookOpen,
@@ -131,6 +130,9 @@ import { helpHref, modeAnchor } from "./help/help-anchors.js";
 import { readHref } from "./router.js";
 import { internalTarget } from "./internal-links.js";
 import { GlossaryKindIcon } from "./GlossaryKindIcon.js";
+import { MODE_ICON } from "./mode-icons.js";
+import { MODE_LABEL } from "../title-text.js";
+import type { Mode } from "../modes.js";
 import {
   isBackLink,
   noteMarkerAt,
@@ -218,6 +220,7 @@ function HoverCard({
   termActions,
   onAskTerm = null,
   onAskCitedWork = null,
+  onOpenCitedWork = null,
   quotes = null,
 }: {
   entries: GlossaryEntry[];
@@ -373,6 +376,14 @@ function HoverCard({
    * visitor, who has no chat.
    */
   onAskCitedWork?: ((work: CitedWork) => void) | null;
+  /**
+   * ***Open in Sources* on a cited work's card** — Reader's
+   * `openBibliographyWork`, which opens Bibliography and brings the work's row
+   * into view. Report `spya-zux9w6`, Greg, 2026-10-09: *"Citation tooltips
+   * should include a link to take you to the citations mode"* (plan 261010d).
+   * `null` or absent and no button is drawn; the marks are the owner's only.
+   */
+  onOpenCitedWork?: ((workId: string) => void) | null;
   /**
    * **The quotes the prose fills, and what the card's buttons do with one**
    * — `QuoteCard`. `null` where there are none to point at; then `read` never
@@ -746,6 +757,14 @@ function HoverCard({
               work={w}
               showInSpideryarn={showInSpideryarn}
               onAsk={onAskCitedWork}
+              onOpen={
+                onOpenCitedWork
+                  ? () => {
+                      close();
+                      onOpenCitedWork(w.id);
+                    }
+                  : null
+              }
               here={shown.el.closest("tr[data-block]")?.getAttribute("data-block") ?? null}
               onJump={(id) => {
                 close();
@@ -1754,6 +1773,30 @@ function ExternalBody({
 }
 
 /**
+ * ***Open in <Mode>*: every card on a mark a mode made ends with this.**
+ * Report `spya-zux9w6`, Greg, 2026-10-09: *"Anything else that's an annotation
+ * on the text should … have a tooltip, and there should be a way to take you
+ * to its mode."* One control, so the glossary's, the citation's and the
+ * quote's ways in look and read alike (controls.md § Controls that do the same
+ * job look the same): the mode's own Dock icon and name, pushed right.
+ *
+ * What the press does is the caller's — open the mode and bring the item's row
+ * into view, selecting it where the mode has a selection. It is drawn in its
+ * own mode too, where the same press re-lands the row. The survey of which
+ * marks have a card at all is docs/project/tooltips.md § Every card on a
+ * mode's mark has a way into its mode; plan 261010d.
+ */
+export function OpenInMode({ mode, onPress }: { mode: Mode; onPress(): void }) {
+  const Icon = MODE_ICON[mode];
+  return (
+    <button type="button" className="prose-card-open" onClick={onPress}>
+      <Icon size={10} aria-hidden="true" />
+      Open in {MODE_LABEL[mode]}
+    </button>
+  );
+}
+
+/**
  * **What the card knows about the quotes**: the list the prose fills, and
  * what pressing does. Built by `Reader` through `quoteCardQuotes`, so the card
  * walks those marks in document order even when the band is sorted another
@@ -1765,8 +1808,6 @@ export interface QuoteCardSource {
   listed: readonly Quote[];
   /** The same quotes by their mark key (`quoteMarkKey`), which is what `data-hit` holds. */
   byKey: ReadonlyMap<string, Quote>;
-  /** Quotes is the mode already, so there is nothing to open. */
-  inQuotesMode: boolean;
   /**
    * When the list was last written — the *on or before* bound for a quote with
    * no `addedAt` of its own (`aiProvenance`). An owner's artefact and a
@@ -1801,7 +1842,7 @@ export const QUOTE_CARD_PURPLE = "Stronger purple means a higher Importance or S
  * **A quote, from the fill the reader is pointing at** — Greg, 2026-09-11
  * (spya-mtyquy): *"tooltip to show our quantitative scores and perhaps
  * Previous/Next icon-buttons to jump to the next Quote, and a button to open
- * Quotes mode"*.
+ * Quotes mode"*. That button is `OpenInMode`, as on every card here.
  *
  * - **The numbers, printed as well as drawn**: this card is where the band's
  *   rows send them ("the numbers are in the tooltip", quotes.md). Each raw
@@ -1914,19 +1955,15 @@ function QuoteCard({
         >
           <ChevronRight size={14} />
         </button>
-        {!source.inQuotesMode && (
-          <button
-            type="button"
-            className="prose-card-open"
-            onClick={() => {
-              onClose();
-              source.onOpenInQuotes(quote);
-            }}
-          >
-            <QuoteIcon size={10} />
-            open Quotes
-          </button>
-        )}
+        {/* Drawn in Quotes mode too since plan 261010d: the press selects the
+            quote, and Quotes brings a selected row into view. */}
+        <OpenInMode
+          mode="quotes"
+          onPress={() => {
+            onClose();
+            source.onOpenInQuotes(quote);
+          }}
+        />
       </p>
     </div>
   );
@@ -2074,7 +2111,10 @@ function clip(text: string, max: number): string {
  *   number with nothing to compare it against.
  * - **A kept *Dig deeper* answer.** The verdict's short version is here
  *   (`CiteCardReading`); the long reading stays on the row, which has the room.
- * - **A selected row in Citations mode.** There is no `?cite=`.
+ * - **A selected row in Citations mode.** There is no `?cite=`. What the card
+ *   has instead, since plan 261010d, is *Open in Sources*, which opens
+ *   Bibliography and brings the work's row into view — a one-shot focus
+ *   (item-focus.ts), not a selection.
  *
  * ## And one thing that was not here until 2026-10-04: a button
  *
@@ -2100,6 +2140,7 @@ function CiteCard({
   work,
   showInSpideryarn,
   onAsk,
+  onOpen,
   here,
   onJump,
   onClose,
@@ -2108,6 +2149,8 @@ function CiteCard({
   showInSpideryarn: boolean;
   /** `null` for a visitor: no Ask in chat. */
   onAsk: ((work: CitedWork) => void) | null;
+  /** *Open in Sources*, closing the card first; `null` draws no button. */
+  onOpen: (() => void) | null;
   /** The block the card was opened from, which is not a jump (plan 261009e). */
   here: BlockId | null;
   /** Go to one of the passages that cite the work. The caller closes the card. */
@@ -2197,7 +2240,7 @@ function CiteCard({
         />
       )}
 
-      <p className="prose-card-foot prose-card-cite-foot">
+      <p className="prose-card-foot prose-card-foot-wraps prose-card-cite-foot">
         {source.kind === "address" ? (
           <span className="prose-card-cite-source">
             {source.host} · {source.how}
@@ -2219,10 +2262,13 @@ function CiteCard({
             is cited, the count and a jump to each place are their own line
             above (`CitedAtJumps`). */}
         {!work.citedInBody && <span className="prose-card-cite-where">only in the references</span>}
-        {/* The owner's one verb, last and pushed right: *Ask in chat*, where
-            *Dig deeper* was until 2026-10-09 (plan 261009k). The band's own
-            sender, so the chat records the same origin as a press on the row
-            would. The card closes on the press: the answer is in Chat. */}
+        {/* The owner's verbs, last and pushed right as one group, the term
+            card's shape: *Ask in chat*, where *Dig deeper* was until
+            2026-10-09 (plan 261009k), then the way into the mode. Ask is the
+            band's own sender, so the chat records the same origin as a press
+            on the row would. The card closes on either press. */}
+        {(onAsk || onOpen) && (
+        <span className="prose-card-acts">
         {onAsk && (
           <button
             type="button"
@@ -2237,6 +2283,9 @@ function CiteCard({
             <MessagesSquare size={10} aria-hidden="true" />
             {ASK_IN_CHAT}
           </button>
+        )}
+        {onOpen && <OpenInMode mode="sources" onPress={onOpen} />}
+        </span>
         )}
       </p>
     </div>
@@ -2380,7 +2429,7 @@ export interface TermActions {
 
 /**
  * **A glossary entry as a card**: what it means here, in general, what the web
- * said, and one row of *Ask in chat · Hide · Open glossary*.
+ * said, and one row of *Ask in chat · Hide · Open in Glossary*.
  *
  * Exported since 2026-10-06 for Skim's term chips (SkimPanel.tsx § `TermChip`,
  * plan 261006e), which draw it inside the shared `Tooltip` rather than this
@@ -2395,7 +2444,7 @@ export function TermCard({
 }: {
   entry: GlossaryEntry;
   /**
-   * The way out to the full entry. **Absent, no *Open glossary* is drawn**: a
+   * The way out to the full entry. **Absent, no *Open in Glossary* is drawn**: a
    * Skim reader whose Glossary control is hidden has nowhere to be sent. The
    * prose always passes it.
    */
@@ -2496,7 +2545,7 @@ export function TermCard({
       {/* No foot at all with nothing to put in it: a visitor in Skim with no
           Glossary to open, on a term with no link. */}
       {(entry.url || actions || onAsk || onOpen) && (
-      <p className="prose-card-foot prose-card-term-foot">
+      <p className="prose-card-foot prose-card-foot-wraps prose-card-term-foot">
         {entry.url && (
           /* `noreferrer` as well as `noopener`, as in the panel: the article's
              own URL is a reading history and a model-supplied link should not be
@@ -2509,8 +2558,8 @@ export function TermCard({
         {/* **The three buttons are one group that never breaks**, pushed right.
             When a link beside them leaves no room, the group moves to a line
             of its own whole, rather than *Hide* parting from *Ask in chat* or
-            *Open glossary* landing alone (GPT Sol, plan review of 261003h). */}
-        <span className="prose-card-term-acts">
+            *Open in Glossary* landing alone (GPT Sol, plan review of 261003h). */}
+        <span className="prose-card-acts">
         {/* The owner's two verbs, beside the way out. Plain buttons, like
             that one: a tap inside the card is left entirely alone by the touch
             path (useHoverCard.ts § "Inside the card"), so they work on a
@@ -2551,13 +2600,10 @@ export function TermCard({
         {/* The way out to the full entry. Without it the underline is a
             dead end: the mark itself stays inert to a click, because pressing
             prose has always meant selecting it. It said "in the glossary" until
-            2026-10-03; Greg asked for a label that says what pressing it does. */}
-        {onOpen && (
-        <button type="button" className="prose-card-open" onClick={onOpen}>
-          <BookA size={10} />
-          Open glossary
-        </button>
-        )}
+            2026-10-03; Greg asked for a label that says what pressing it does.
+            *Open glossary* until plan 261010d, which made it every card's
+            `OpenInMode`. */}
+        {onOpen && <OpenInMode mode="glossary" onPress={onOpen} />}
         </span>
       </p>
       )}

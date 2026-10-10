@@ -63,11 +63,10 @@ const LIST_WRITTEN = "2026-09-29T14:02:00.000Z";
 const went: string[] = [];
 const opened: string[] = [];
 
-function source(inQuotesMode = false): QuoteCardSource {
+function source(): QuoteCardSource {
   return {
     listed: QUOTES,
     byKey: new Map(QUOTES.map((q) => [quoteMarkKey(q.id, q.blockId), q])),
-    inQuotesMode,
     generatedAt: LIST_WRITTEN,
     onGo: (q) => went.push(q.id),
     onOpenInQuotes: (q) => opened.push(q.id),
@@ -167,7 +166,7 @@ const button = (label: string) =>
   document.querySelector<HTMLButtonElement>(`.prose-card button[aria-label="${label}"]`);
 const openInQuotes = () =>
   [...document.querySelectorAll<HTMLButtonElement>(".prose-card button")].find((b) =>
-    (b.textContent ?? "").includes("open Quotes"),
+    (b.textContent ?? "").includes("Open in Quotes"),
   );
 
 describe("resting on a quote", () => {
@@ -337,16 +336,16 @@ describe("the card's buttons", () => {
     expect(went).toEqual(["spya-qa0001"]);
   });
 
-  it("opens Quotes on this quote, and offers nothing to open once Quotes is the mode", () => {
+  /* Until plan 261010d the button was hidden while Quotes was the mode. It is
+     drawn in every mode now, as every card's *Open in <Mode>* is: the press
+     also selects the quote, and Quotes brings a selected row into view. */
+  it("opens Quotes on this quote, closing the card", () => {
     paint();
     rest(quoteMark(0), QUOTE_OPEN_MS + 10);
+    expect(openInQuotes()?.classList.contains("prose-card-open")).toBe(true);
     act(() => openInQuotes()?.click());
     expect(opened).toEqual(["spya-qa0001"]);
-
-    paint(source(true));
-    rest(quoteMark(1), QUOTE_OPEN_MS + 10);
-    expect(card()).not.toBe(null);
-    expect(openInQuotes()).toBeUndefined();
+    expect(card()).toBe(null);
   });
 });
 

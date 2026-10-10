@@ -86,7 +86,7 @@ own design rather than a small extension:
 - **Hits** (Search, Ideas, Timeline, Referee, Skim): drawn only while their own mode is open, so the
   way into the mode is met; a card would say something different for each of five modes.
 
-They are one Overseer queue entry, filed with this plan's ending, so the "every annotation has a
+They are one Overseer queue entry, `qi-yr7hx7t8` (proposed 2026-10-10), so the "every annotation has a
 tooltip" half is held somewhere that gets picked up rather than in this sentence.
 
 ## The simpler option passed over

@@ -18,6 +18,7 @@ Code: [`Tooltip.tsx`](../../src/web/Tooltip.tsx) (`Tooltip`, `ControlTip`, `Tool
 - [§ Five things that are load-bearing](#five-things-that-are-load-bearing) — the ways the obvious version fails silently
 - [§ Grouping, and why the delays are what they are](#grouping-and-why-the-delays-are-what-they-are) — 240ms/90ms and `TooltipGroup`
 - [§ A card the pointer can enter](#a-card-the-pointer-can-enter) — making a card interactive (links, buttons inside it)
+- [§ Every card on a mode's mark has a way into its mode](#every-card-on-a-modes-mark-has-a-way-into-its-mode) — the survey of every mark on the prose, which have a card, and the one *Open in ‹Mode›* button
 - [§ Checking it in a browser](#checking-it-in-a-browser) — why a screenshot lies about a fading card
 
 > In the left-most column, add a nice hover-tooltip to show more detail somehow.
@@ -188,7 +189,7 @@ gesture lives in `useHoverCard.ts`.
 
 **A quote's mark joined it on 2026-10-02** (`mark.hit[data-quote]`; an outline then, a fill since
 2026-10-03), as a fourth half of the
-same card — scores, reason, ‹ › and *open Quotes* ([quotes.md](quotes.md) § In the spine, on a
+same card — scores, reason, ‹ › and *Open in Quotes* ([quotes.md](quotes.md) § In the spine, on a
 card, and one at a time). Pointer only, and not in `tapSelector`, because a tap on a bare quote
 selects its paragraph. It brought the hook one option, **`openDelay`**: a per-hit rest before a cold
 open, so a quote — a passage the reader rests in while reading — waits 600ms (900ms until
@@ -726,11 +727,50 @@ of [Help](help-page.md) (`BandAbout.tsx`, given `help` by `ModeSurface`). The pr
 implementation says why it is separate — and is not a customer.
 
 The second, since 2026-10-06, is **Skim's term chips**: each opens the glossary's own entry card
-(`TermCard`, the one the prose card draws) with its *Ask in chat · Hide · Open glossary* row (*Dig deeper* in the first place until plan 261009k)
+(`TermCard`, the one the prose card draws) with its *Ask in chat · Hide · Open in Glossary* row (*Dig deeper* in the first place until plan 261009k)
 (`TermChip` in `SkimPanel.tsx`; [skim.md](skim.md)). It is the first to combine `interactive` with
 a controlled `open`, so that a finger's tap keeps it up. Its content scrolls inside a height tied to
 the window. That cap is on a wrapper inside the panel, not on `.tooltip`, where `overflow` would
 clip the arrow.
+
+## Every card on a mode's mark has a way into its mode
+
+> Citation tooltips should include a link to take you to the citations mode, just like I think
+> quotes do, and hopefully the glossary as well. Anything else that's an annotation on the text
+> should, you know, should have a tooltip, and there should be a way to take you to its mode.
+>
+> — Greg, 2026-10-09 (`spya-zux9w6`)
+
+**Every card on a mark a mode drew ends in the same button, *Open in ‹Mode›*** — `OpenInMode` in
+[`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx), the mode's Dock icon and its `MODE_LABEL`,
+pushed right. A press opens the mode and brings the item's row into view, selecting it where the
+mode has a selection. It is drawn in its own mode too, where the same press re-lands the row; a
+button that came and went with the mode would be a second rule to learn. Bringing back a band that
+had stepped aside on a phone is component state, so Back does not put it away again
+(`showBand`'s rule). Plan [261010d](../plans/261010d-every-annotation-card-opens-its-mode.md).
+
+This is the single home for which marks have a card. As of 2026-10-10:
+
+| Mark on the prose | Drawn | Card | Way into its mode |
+|---|---|---|---|
+| Glossary term, `mark.term` | every mode | `TermCard` | *Open in Glossary*: `?term=`, the gate lowered if it hides the entry, the row landed (`termFocus`, owner and visitor) |
+| Quote, `mark.hit[data-quote]` | every mode | `QuoteCard` | *Open in Quotes*: `?quote=`, the bar lowered if needed; Quotes scrolls a selected row in |
+| Citation, `mark.cite` | every mode, owner only | `CiteCard` | *Open in Sources*: Bibliography, `openBibliographyWork`'s one-shot focus (no `?cite=`, no selection) |
+| Cross-reference, `mark.xref` | every mode | `BlockLinkCard` | none needed — it is a link to another passage, not a mode's |
+| Highlight, comment, Referee placement, `mark.cmt` | every mode | **none** | a press opens the comment's dialog (`?note=`) |
+| Chat anchor, `mark.chat` | every mode | **none** | a press opens the floating conversation (`?thread=`) |
+| Hits, `mark.hit` — Search, Ideas, Timeline, Referee, Skim | only while their mode is open | **none** | none needed — the mode is open and its band lists the item |
+| The author's links, footnote markers | every mode | `LinkCard`, `NoteCard` | none — the author's, not a mode's |
+
+Nothing else draws in the prose: Sources' Reception and Claims, FAQ, Structure, Summary, Diagram,
+Learn and Marginalia do not (`passages.ts` § `selectPassages`). A new mark that a mode draws gets a
+card, and the card gets `OpenInMode`.
+
+**Three rows still have no card**, which is the other half of Greg's sentence, and it is queued
+rather than built: each is its own design (a `mark.cmt` is four kinds of thing and "its mode" is not
+one place; a chat anchor's data has no question to show; neither mark is focusable, so a keyboard
+route needs designing; one mark can carry several ids of each kind). Plan 261010d § Not built here
+has GPT Sol's reasons, and the work is queue item `qi-yr7hx7t8`.
 
 ## Checking it in a browser
 

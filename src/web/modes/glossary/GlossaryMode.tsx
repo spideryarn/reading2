@@ -153,14 +153,31 @@ export function VisitorGlossaryBand({
   glossary,
   onJump,
   onSelected,
+  focus,
+  onFocusTaken,
 }: {
   glossary: PublicGlossary;
   onJump(id: BlockId): void;
   onSelected(selection: TermSelection | null): void;
+  /**
+   * One entry to scroll into view, once — the owner's band has had it since
+   * plan 261009k; a visitor needs it since the prose card's *Open in
+   * Glossary* asks for it (plan 261010d, GPT Sol's F2).
+   */
+  focus?: ItemFocus | null | undefined;
+  onFocusTaken?: ((focus: ItemFocus) => void) | undefined;
 }) {
   useRenderCount("VisitorGlossaryBand");
   const band = useGlossaryMode(glossary.entries, onSelected);
-  return <GlossaryPanel access={{ kind: "visitor", glossary }} {...band} onJump={onJump} />;
+  return (
+    <GlossaryPanel
+      access={{ kind: "visitor", glossary }}
+      {...band}
+      onJump={onJump}
+      focus={focus}
+      onFocusTaken={onFocusTaken}
+    />
+  );
 }
 
 /**
