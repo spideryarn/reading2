@@ -1323,6 +1323,212 @@ export function setRoleCommand(sessionId: string, role: string | null): string {
 }
 
 /**
+ * What `gjd-remote resume-overseer` should do — decided against a listing,
+ * before anything is typed.
+ *
+ * **THE UUID IS THE ONE THE STEER ROUTE CHECKS.** It is the holder's
+ * `CLAUDE_SESSION_ID` (`claudeId`), the same variable tools/fleet/steer.ts
+ * compares a pane's `claude` command line against. A Claude resumed by NAME
+ * (`claude --resume Overseer`) works and is refused every message
+ * (`no-claude-in-pane`, queue item qi-d66em72h), which is the footgun this
+ * removes: there is no second way of finding the uuid, and none is wanted.
+ *
+ * **IT NEVER KILLS ANYTHING.** Only a pane at its shell with nothing running
+ * (`proc: none`) is resumed. A live Claude, a `claude --resume <name>` (which the
+ * probe reads as `busy`), a pending `--wait` or an unreadable process table is
+ * a refusal that says to `/exit` first — an Overseer interrupted mid-turn could
+ * be mid-deploy. docs/plans/261010g-gjd-remote-restart-overseer-resumes-the-overseer-by-uuid.md.
+ */
+export type OverseerResume =
+  | { kind: "resume"; id: string; name: string; conversationId: string; dir: string }
+  | { kind: "refused"; why: string };
+
+export function decideOverseerResume(list: readonly Session[]): OverseerResume {
+  const claim = overseerClaim(list);
+  switch (claim.kind) {
+    case "none":
+      return {
+        kind: "refused",
+        why:
+          "no session holds the overseer claim, so there is no Overseer to resume in place." +
+          "\n  After a reboot: gjd-remote new-claude, then claim-overseer; `gjd-remote log` has the old conversation id.",
+      };
+    case "contested":
+      return {
+        kind: "refused",
+        why: `${claim.names.length} sessions claim to be the Overseer: ${claim.names.map(printableName).join(", ")}\n  Release all but one first.`,
+      };
+    case "cannot-tell":
+      return { kind: "refused", why: `cannot tell who the Overseer is: ${claim.why}` };
+    case "one":
+      break;
+    default: {
+      const never: never = claim;
+      return never;
+    }
+  }
+
+  const s = list.find((x) => x.id === claim.id);
+  if (s === undefined) return { kind: "refused", why: "the overseer claim names a session that is not in the listing" };
+  const name = printableName(s.name);
+  if (s.claudeId === null || !SESSION_UUID.test(s.claudeId)) {
+    return {
+      kind: "refused",
+      why:
+        `${name} has no usable CLAUDE_SESSION_ID in its tmux environment, so there is no uuid to resume by.` +
+        "\n  It was not started with gjd-remote new-claude; resume it by hand with claude --resume <uuid>.",
+    };
+  }
+  if (s.meta.version !== 1) {
+    return {
+      kind: "refused",
+      why: `${name} carries no launch directory (GJD_REMOTE_DIR), so there is no directory to resume it in; resume it by hand from where it was launched.`,
+    };
+  }
+  const exitFirst = `\n  Nothing was typed. Attach (gjd-remote resume ${name}), /exit the Claude there, then run this again.`;
+  switch (s.proc.kind) {
+    case "none":
+      return { kind: "resume", id: s.id, name: s.name, conversationId: s.claudeId, dir: s.meta.dir };
+    case "claude":
+      return { kind: "refused", why: `${name}'s Claude is already running.${exitFirst}` };
+    case "busy":
+      return {
+        kind: "refused",
+        why: `something is running in ${name}'s pane — a Claude resumed by name looks like this.${exitFirst}`,
+      };
+    case "wait":
+      return { kind: "refused", why: `${name} is still waiting to start its first Claude.` };
+    case "unknown":
+      return { kind: "refused", why: `the box could not say what is running in ${name}'s pane, so nothing was typed.` };
+    default: {
+      const never: never = s.proc;
+      return never;
+    }
+  }
+}
+
+/** POSIX single-quoting, for the one path this module puts into a command. */
+const shq = (s: string): string => `'${s.replaceAll("'", `'\\''`)}'`;
+
+/**
+ * The line a person would type to resume the Overseer — and what
+ * {@link resumeOverseerCommand} types for them. Printed on every refusal, so
+ * the right command is still the one in front of you.
+ *
+ * `--permission-mode auto`, as every `new-claude` launch passes — see the
+ * comment there. `claude --resume <uuid> --permission-mode auto` is the shape
+ * tools/fleet/claude-argv.ts reads as naming the conversation. `cd` first
+ * because the launch directory carries the project's settings.
+ *
+ * Throws on a directory with a terminal control byte in it: `shq` makes it one
+ * shell word, but `send-keys -l` would still deliver a Ctrl-C or an Escape to
+ * whatever owns the terminal (GPT Sol, plan review).
+ */
+export function overseerResumeLine(t: { conversationId: string; dir: string }): string {
+  if (!SESSION_UUID.test(t.conversationId)) throw new Error(`not a claude session id: ${t.conversationId}`);
+  if (!t.dir.startsWith("/")) throw new Error(`not an absolute directory: ${t.dir}`);
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: matching control bytes is the point
+  if (/[\x00-\x1f\x7f]/.test(t.dir)) throw new Error("the directory contains a terminal control byte");
+  return `cd -- ${shq(t.dir)} && claude --resume ${t.conversationId} --permission-mode auto`;
+}
+
+/** A receipt confirms delivery only when the remote command also exited zero. */
+export function overseerResumeSucceeded(r: { status: number | null; stdout: string }): boolean {
+  return r.status === 0 && r.stdout.trim() === "GJD_TYPED";
+}
+
+/**
+ * The script that types the Overseer's resume into its pane, run on the box in
+ * one round trip.
+ *
+ * Typed into the EXISTING interactive shell, rather than `respawn-pane -k`ing a
+ * fresh `bash -lc`, because that shell already holds the environment the job
+ * script exported before its `exec bash -l`, and because `-k` would kill
+ * whatever had started in the window since the check (see the plan).
+ *
+ * **IT REQUIRES THE DISPLAY OF AN EMPTY DEFAULT BASH PROMPT**, and refuses
+ * every other state rather than trying to clear it (GPT Sol's plan review
+ * reproduced `C-e C-u` failing in vi mode and after a backslash continuation):
+ *
+ *  - exactly one pane, not dead, not in copy mode, its foreground process
+ *    `bash` — the shell the job `exec`s;
+ *  - `pgrep -P` finds no child — and only its exit 1 means "none"; an error is
+ *    a refusal, never a pass;
+ *  - a complete, unwrapped ASCII default bash prompt, with no text after the
+ *    cursor or on rows below it. ASCII matters: tmux's cursor_x counts display
+ *    columns, whereas bash substrings count bytes or characters.
+ *
+ * This is a display heuristic, not proof of shell state: a builtin `read -p`
+ * or a customised PS2 can imitate the entire primary prompt. Proving otherwise
+ * requires shell cooperation. Unsupported prompts refuse with a manual line.
+ *
+ * What it cannot close is the few milliseconds between those checks and
+ * `send-keys`: a Claude started by somebody else in exactly that window would
+ * receive the line as a message. Nothing short of the shell's own cooperation
+ * closes it; the plan says why that is accepted.
+ *
+ * Exit 0 and `GJD_TYPED` means the keys went in — not that Claude started.
+ * Exit 3 is a refusal with nothing typed; exit 5 means the listing became
+ * stale, also with nothing typed. Exit 4 may have sent part of the line.
+ * Throws on a value that did not come from a parsed listing.
+ */
+export function resumeOverseerCommand(t: { id: string; conversationId: string; dir: string }): string {
+  if (!TMUX_ID.test(t.id)) throw new Error(`not a tmux session id: ${t.id}`);
+  const line = overseerResumeLine(t);
+  const refuse = (why: string, status = 3) => {
+    // Inside single quotes: an apostrophe here once ended the quote and broke the whole script.
+    if (why.includes("'")) throw new Error(`refusal text may not contain an apostrophe: ${why}`);
+    return `{ echo 'GJDERR ${why}; nothing was typed'; exit ${status}; }`;
+  };
+  return [
+    // Only these bytes may be sliced by tmux's display-column cursor offset.
+    `export LC_ALL=C`,
+    ...[
+      [SESSION_ROLE_ENV, OVERSEER_ROLE],
+      ["CLAUDE_SESSION_ID", t.conversationId],
+      [META.dir, t.dir],
+    ].map(([key, value]) =>
+      `actual=$(tmux show-environment -t '${t.id}' ${key}) && [ "$actual" = ${shq(`${key}=${value}`)} ] || ${refuse("the claim or launch metadata changed or could not be read; run resume-overseer again for a fresh listing", 5)}`,
+    ),
+    `panes=$(tmux list-panes -s -t '${t.id}' -F '#{pane_id} #{pane_pid}') || ${refuse("the session is gone")}`,
+    `[ "$(printf '%s\\n' "$panes" | grep -c .)" -eq 1 ] || ${refuse("the session has more than one pane, and I will not guess which")}`,
+    `pane=\${panes%% *}; ppid=\${panes##* }`,
+    `info=$(tmux display-message -p -t "$pane" '#{pane_dead} #{pane_in_mode} #{cursor_x} #{cursor_y} #{pane_current_command} #{pane_width} #{pane_height}') || ${refuse("the pane could not be read")}`,
+    `set -- $info`,
+    `[ "$1" = 0 ] && [ "$2" = 0 ] && [ "$5" = bash ] || ${refuse("the pane is not sitting at its bash shell (dead, in copy mode, or running something)")}`,
+    `cx=$3; cy=$4; width=$6; height=$7`,
+    `[[ "$cx" =~ ^[0-9]+$ && "$cy" =~ ^[0-9]+$ && "$width" =~ ^[1-9][0-9]*$ && "$height" =~ ^[1-9][0-9]*$ && "$ppid" =~ ^[1-9][0-9]*$ ]] || ${refuse("the pane coordinates could not be read")}`,
+    `pgrep -P "$ppid" >/dev/null 2>&1; rc=$?`,
+    `[ "$rc" -ne 0 ] || ${refuse("something is running in the pane")}`,
+    `[ "$rc" -eq 1 ] || ${refuse("could not check what is running in the pane")}`,
+    `screen=$(tmux capture-pane -p -N -t "$pane") || ${refuse("the pane could not be captured")}`,
+    `mapfile -t rows <<< "$screen"`,
+    // $(…) drops trailing blank rows, so a cursor below the last printed row is
+    // on a blank one — still a reading, and one the prompt check below refuses.
+    `(( cy < height && cx < width )) || ${refuse("the pane coordinates do not match its capture")}`,
+    `cur=\${rows[$cy]:-}`,
+    // -N keeps meaningful trailing spaces, including the prompt's own space.
+    // Refuse non-ASCII before slicing: bytes, characters and cells must agree.
+    `ascii='^[ -~]*$'; [[ "$cur" =~ $ascii ]] || ${refuse("the pane is not at an empty shell prompt (unsupported characters)")}`,
+    // A full preceding row might be the start of a wrapped command or prompt.
+    // Asked of tmux's own wrap flag: -J joins a wrapped row onto the next, so
+    // the two rows come back as one line exactly when the prompt row is the
+    // continuation of the one above. NOT "the row above is full": Claude Code
+    // leaves full-width rules behind when it exits, and that test refused the
+    // ordinary case (and -N pads some rows with written spaces to full width).
+    `(( cy == 0 )) || { pair=$(tmux capture-pane -p -J -t "$pane" -S $((cy-1)) -E "$cy") || ${refuse("the pane could not be captured")}; [ "$(printf '%s\\n' "$pair" | wc -l)" -eq 2 ]; } || ${refuse("the pane is not at an empty shell prompt (wrapped)")}`,
+    `before=\${cur:0:$cx}; after=\${cur:$cx}`,
+    // A suffix alone also matches typed `read x # ` after the real prompt.
+    `prompt='^([a-zA-Z0-9_.-]+@[a-zA-Z0-9_.-]+:[^$#]*|bash-[0-9.]+)[$#] $'`,
+    `[[ "$before" =~ $prompt ]] || ${refuse("the pane is not at an empty shell prompt")}`,
+    `[ -z "\${after// /}" ] || ${refuse("there is text in the input line of the shell")}`,
+    `for (( y=cy+1; y<\${#rows[@]}; y++ )); do [ -z "\${rows[y]// /}" ] || ${refuse("there is text in the input line below the cursor")}; done`,
+    `tmux send-keys -t "$pane" -l -- ${shq(line)} && tmux send-keys -t "$pane" Enter || { echo 'GJDERR send-keys failed part-way: look at the pane'; exit 4; }`,
+    `echo GJD_TYPED`,
+  ].join("\n");
+}
+
+/**
  * The five shapes the process probe is allowed to have, and nothing else.
  *
  * A token this reader was not written against is a broken record, not a shrug:

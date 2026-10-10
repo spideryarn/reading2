@@ -788,7 +788,10 @@ Each of these has cost somebody real time on this box.
   and the plan doc's status line over any reading of the pane. Killing a finished session loses
   nothing: its edits are on disk and `claude --resume <session-id>` brings the conversation back.
 - **`gjd-remote resume` is an alias for `attach`** and reattaches to a **live** tmux session. It is
-  not what brings a conversation back after a reboot; that is `claude --resume <claudeSessionId>`,
+  not what brings a conversation back after a reboot; that is `claude --resume <claudeSessionId>`
+  (for the Overseer itself, while its tmux session lives, `gjd-remote resume-overseer` types that
+  for you, and a resume by name cannot be messaged —
+  [hetzner-remote-server-box.md](hetzner-remote-server-box.md#bringing-the-overseer-back-by-uuid)),
   and the id is in your own register.
 - **Talk to a Claude session with `SendMessage`, and steer through tmux only as the fallback.**
   `ListAgents` shows every live Claude session on the box by name; a message sent that way lands in

@@ -31,7 +31,7 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
 **The CLI**
 
 - [`scripts/gjd-remote.ts`](../../scripts/gjd-remote.ts) — all of it: `ls`, `new-claude`,
-  `new-shell`, `resume`, `resume-all`, `kill`, `claim-overseer`, `release-overseer`,
+  `new-shell`, `resume`, `resume-all`, `kill`, `claim-overseer`, `release-overseer`, `resume-overseer`,
   `tell-overseer`, `tell`, `log`,
   `doctor`, `provision`, `clone`, `setup`, `push-env`, `upload`, `resolve`, `ssh`, `tunnel`,
   `forget-key`. `--help` is long on purpose.
@@ -677,7 +677,35 @@ Three refusals that are not bugs in `tell`, and are the dashboard's own:
 - **A Claude started by name (`claude --resume Overseer`) is refused `no-claude-in-pane`.** The route
   trusts a pane only when its `claude` command line carries the conversation's uuid (`--session-id`
   or `--resume <uuid>`), and a name is not one. That was how the Overseer was running on 2026-10-09,
-  so `tell-overseer` and the dashboard's own box were both refused until it is restarted by uuid.
+  so `tell-overseer` and the dashboard's own box were both refused until it is restarted by uuid —
+  which is what [`resume-overseer`](#bringing-the-overseer-back-by-uuid) does.
+
+### Bringing the Overseer back, by uuid
+
+When the Overseer's `claude` has exited — or after you `/exit` it — its pane is left at the login
+shell the job script `exec`s. Bring it back with:
+
+```
+gjd-remote resume-overseer              # types the resume, then attaches
+gjd-remote resume-overseer --no-attach
+```
+
+It finds the holder of the overseer claim, reads the uuid from that session's `CLAUDE_SESSION_ID`
+— the same value the steer route checks, so a resume this types is one `tell-overseer` can
+reach — and types `cd -- <launch dir> && claude --resume <uuid> --permission-mode auto` into the
+pane. **Never type `claude --resume Overseer` by hand**: it works, and nothing can message it.
+
+**It never kills anything.** Its checks and receipts live in
+[`resumeOverseerCommand`](../../scripts/gjd-remote-tmux.ts): it rechecks the holder's claim and launch
+metadata, requires an unwrapped ASCII default bash prompt, and refuses visible input on or below
+the cursor row. Unsupported prompts need the manual command. This is a display heuristic: a builtin
+`read -p` or customised continuation prompt can imitate the complete primary prompt; proving shell
+state would require shell integration. A refusal before sending keys types nothing; a send or SSH
+failure may have delivered keys, so inspect the pane before retrying. "Typed" is not "started";
+the attach is how you see it come up. After a reboot there is no session and no
+claim, so there is nothing to restart in place: `new-claude`, then `claim-overseer`. Why it types
+rather than respawning the pane, and the one race it cannot close:
+[261010g](../plans/261010g-gjd-remote-restart-overseer-resumes-the-overseer-by-uuid.md).
 
 Proven end to end on 2026-10-10: a throwaway session started with a prompt was sent a line by
 `tell`, showed it as `[Greg, via the fleet dashboard] …`, and answered it.
@@ -701,8 +729,9 @@ exits. **Not borrowed, each for a stated reason** — candidates if a need shows
 - **Waiting up to 75 s for a just-started session** to appear in the dashboard's list. Polling plus a
   tmux-server pin to be safe; the refusal sentence says what to do instead.
 - **A box-health gate on `new-claude`**, **pre-answering launch dialogs** for unattended runs,
-  **`--tab`**, **`session go`**, **`overseer up`** (which starts the Overseer by uuid, and would fix
-  the refusal above), and the multi-person, multi-box machinery, which is for a team.
+  **`--tab`**, **`session go`**, and the multi-person, multi-box machinery, which is for a team.
+  Its **`overseer up`** (starting the Overseer by uuid) now has a smaller counterpart here,
+  `resume-overseer`, which resumes in place and never kills.
 
 ## Sessions nobody made on purpose
 

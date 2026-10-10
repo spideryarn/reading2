@@ -93,12 +93,13 @@ export interface AdminAuthorGift {
 
 /**
  * What `POST /api/admin/author-gifts` answers (R2-F2): `202` with
- * `created: true` and the first lookup's id for a new gift; `200` with
- * `created: false` for one that already existed, whose link and lookups it did
- * not touch.
+ * `created: true` and the first lookup's id for a new gift; `201` with
+ * `lookupId: null` for a new gift made with `lookup: false` (261010i); `200`
+ * with `created: false` for one that already existed, whose link, lookups and
+ * fields it did not touch.
  */
 export type AuthorGiftEnsured =
-  | { readonly id: string; readonly status: AuthorGiftStatus; readonly created: true; readonly lookupId: string }
+  | { readonly id: string; readonly status: AuthorGiftStatus; readonly created: true; readonly lookupId: string | null }
   | { readonly id: string; readonly status: AuthorGiftStatus; readonly created: false };
 
 /**
@@ -114,6 +115,20 @@ export interface AuthorGiftPatched {
 /** What `POST /api/admin/author-gifts/:id/lookups` answers with its `202`. */
 export interface AuthorLookupStarted {
   readonly lookupId: string;
+}
+
+/**
+ * **What the *Send* confirmation showed** — the body of `POST
+ * /api/admin/author-gifts/:id/send`, `{ expected }` (261010i, Sol's F1): the
+ * voucher's fields exactly as the list gave them. *Send* goes ahead only while
+ * the gift still holds these, so an edit landing after the page drew it (an
+ * agent's, through MCP) is a `409`, not an email to an address nobody read.
+ */
+export interface AuthorGiftSendExpected {
+  readonly email: string;
+  readonly recipientName: string | null;
+  readonly recipientNote: string | null;
+  readonly articles: number;
 }
 
 /**

@@ -36,7 +36,7 @@ import { join } from "node:path";
 import { Readable } from "node:stream";
 
 import { Client as McpClient, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { ADMIN_EMAIL_LOCAL, ADMIN_USER_ID_LOCAL, ADMIN_USER_ID_PROD } from "../src/admin.js";
@@ -363,28 +363,74 @@ describe("the tools, through the SDK's client", () => {
     }
   });
 
-  it("an asking tool refuses with the page to use, and writes nothing", async () => {
+  /* Plan 261010i § D2: a tool that could only refuse here is not listed, so a
+     model does not plan around it; called anyway, it is unknown and writes nothing. */
+  it("the asking tools are not listed, and calling one anyway writes nothing", async () => {
     const client = await connect("admin-app");
     try {
-      const pub = await client.callTool({ name: "make_article_public", arguments: { slug: mine.slug } });
-      expect(pub.isError).toBe(true);
-      expect(textOf(pub)).toMatch(/article's page/);
+      const { tools } = await client.listTools();
+      const names = tools.map((t) => t.name);
+      for (const name of ["make_article_public", "create_private_link", "create_gift_voucher", "retry_gift_voucher_email"]) {
+        expect(names, name).not.toContain(name);
+      }
+      expect(names).toContain("draft_author_gift");
+      const update = tools.find((t) => t.name === "update_gift_voucher");
+      expect(Object.keys(update?.inputSchema.properties ?? {})).not.toContain("email");
 
-      const link = await client.callTool({ name: "create_private_link", arguments: { slug: mine.slug } });
-      expect(link.isError).toBe(true);
+      /* An unlisted tool is a protocol error or an error result; either way, not done. */
+      const refused = async (name: string, args: Record<string, unknown>) => {
+        const result = await client.callTool({ name, arguments: args }).catch((e: Error) => ({ isError: true, thrown: e.message }));
+        expect(result.isError, name).toBe(true);
+      };
+      await refused("make_article_public", { slug: mine.slug });
+      await refused("create_private_link", { slug: mine.slug });
+      await refused("create_gift_voucher", { email: "someone@example.test", articles: 5, idempotency_key: `k-${RUN}` });
+      await refused("update_gift_voucher", { id: randomUUID(), email: "someone@example.test" });
 
-      const gift = await client.callTool({
-        name: "create_gift_voucher",
-        arguments: { email: "someone@example.test", articles: 5, idempotency_key: `k-${RUN}` },
-      });
-      expect(gift.isError).toBe(true);
-      expect(textOf(gift)).toMatch(/\/admin\/vouchers/);
+      /* The positive control (Sol's F4): the same tool without the address reaches its route. */
+      const revoke = await client.callTool({ name: "update_gift_voucher", arguments: { id: randomUUID(), revoked: true } });
+      expect(revoke.isError).toBe(true);
+      expect(textOf(revoke)).toMatch(/^Not found/);
 
       const [row] = await getDb()
         .select({ visibility: articles.visibility, shareToken: articles.shareToken })
         .from(articles)
         .where(eq(articles.id, mine.articleId));
       expect(row).toEqual({ visibility: "private", shareToken: null });
+    } finally {
+      await client.close();
+    }
+  });
+
+  /* Plan 261010i § D1: gifting from here is a draft Greg sends from /admin/vouchers. */
+  it("draft_author_gift saves a filled-in draft and sends nothing", async () => {
+    const client = await connect("admin-app");
+    try {
+      const address = `mcp-remote-draft-${RUN}@example.invalid`;
+      /* The tool never makes the link (Sol's F2): first, refused without one. */
+      const nolink = await client.callTool({ name: "draft_author_gift", arguments: { slug: mine.slug, email: address } });
+      expect(nolink.isError).toBe(true);
+      expect(textOf(nolink)).toMatch(/private link/);
+      /* Greg turns it on from the article's page. */
+      await getDb()
+        .update(articles)
+        .set({ shareToken: `MCPxREMOTExDRAFTx${RUN}`.slice(0, 22).padEnd(22, "x"), shareTokenAt: new Date() })
+        .where(eq(articles.id, mine.articleId));
+      const result = await client.callTool({
+        name: "draft_author_gift",
+        arguments: { slug: mine.slug, email: address, recipientName: "Ada", notes: "From a remote test." },
+      });
+      expect(result.isError, textOf(result)).toBeFalsy();
+      const answer = JSON.parse(textOf(result)) as { id: string; created: boolean };
+      expect(answer.created).toBe(true);
+
+      const { rows } = await getDb().execute<{ email: string; notes: string; lookups: number; vouchers: number }>(
+        sql`select g.email, g.notes,
+              (select count(*)::int from spideryarn.author_lookups l where l.author_gift_id = g.id) as lookups,
+              (select count(*)::int from spideryarn.billing_vouchers v where v.id = g.voucher_id or v.email = g.email) as vouchers
+            from spideryarn.author_gifts g where g.id = ${answer.id}`,
+      );
+      expect(rows[0]).toEqual({ email: address, notes: "From a remote test.", lookups: 0, vouchers: 0 });
     } finally {
       await client.close();
     }
