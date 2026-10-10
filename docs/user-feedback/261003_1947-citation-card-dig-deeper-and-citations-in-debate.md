@@ -47,7 +47,7 @@ word (`?mode=sources`), and the stored names underneath (`citations` → `biblio
 review, Citations and Debate links still land. The database is expanded rather than renamed in place,
 so that no reader meets an error during the deploy. The expand is on `dev`, and the Overseer holds
 its deploy for Greg's OK on one rare deploy-window race. **The contract half**, which removes the old
-names after that deploy, is queued for the Overseer
+names after that deploy, is queued as qi-mzfxw3q2
 ([draft](../plans/261009w-contract-queue-item.md)). Plan and reviews:
 [261009w](../plans/261009w-peer-review-becomes-sources-all-the-way-down.md). That ends the deferred
 half, qi-j8py7rjw.

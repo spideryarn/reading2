@@ -326,7 +326,7 @@ report's note, `feedback-endings.ts`), and messages to the two sessions if they 
     applied to the shared local database.
   - **Before the contract, checked:** no statement in `src/`, `scripts/` or `tools/` names a legacy
     column. That makes the contract a database-only step
-    ([261009w-contract-queue-item.md](261009w-contract-queue-item.md), which the Overseer files,
+    ([261009w-contract-queue-item.md](261009w-contract-queue-item.md), filed by the Overseer as qi-mzfxw3q2, needs Greg,
     since only Greg or the Overseer may write the queue).
   - **Browser pass** (Sonnet, Playwright, `scaling-hypothesis`, 1440 and 390): all six checks pass
     with no console errors: the Sources button and chips, all six old addresses rewritten, Bibliography
