@@ -13,7 +13,7 @@ they will answer honestly, and they are the best judges of whether it got their 
 Each reply is a user interview, and it tests the author-gift idea below on friendly ground first.
 Greg, 2026-10-09: *"That's a good idea for the first experiment. I might try and actually talk to
 them on the phone at the same time."* He will pick the five and draft the notes from a
-knowledge-work harness, through Spideryarn's MCP server ([mcp.md](mcp.md)).
+knowledge-work harness, through Spideryarn's MCP server ([mcp.md](mcp.md)): `draft_author_gift` saves each one unsent, for him to read and send from `/admin/vouchers`.
 
 ## Authors: a gift, not a republication — *idea, to run as an experiment*
 

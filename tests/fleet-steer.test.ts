@@ -20,13 +20,14 @@
  * rather than against a hand-written question, because a hand-written one would
  * keep passing after the parser changed shape.
  */
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { fromProcCmdline } from "../tools/fleet/claude-argv.js";
-import { paneSurface, parsePane, type OptionKey } from "../tools/fleet/pane.js";
+import { paneSurface, parsePane, type CaptureForm, type OptionKey } from "../tools/fleet/pane.js";
 import type { FleetStatus } from "../tools/fleet/status.js";
 import {
   answerQuestion,
@@ -38,6 +39,7 @@ import {
   keysFor,
   parseParents,
   parsePanes,
+  realIo,
   sameQuestion,
   sendMessage,
   steerableStatus,
@@ -46,6 +48,12 @@ import {
   type SteerResult,
   type SteerTarget,
 } from "../tools/fleet/steer.js";
+
+// Exercise the real capture adapter without running any tmux command.
+vi.mock("node:child_process", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("node:child_process")>()),
+  execFileSync: vi.fn(),
+}));
 
 const FIXTURES = path.resolve(import.meta.dirname, "fixtures/fleet-panes");
 const fixture = (name: string): string => readFileSync(path.join(FIXTURES, `${name}.txt`), "utf8");
@@ -120,8 +128,9 @@ type Box = {
   failSend?: { at: number; error: unknown };
 };
 
-function fakeBox(box: Box = {}): { io: SteerIo; sent: string[][] } {
+function fakeBox(box: Box = {}): { io: SteerIo; sent: string[][]; captured: CaptureForm[] } {
   const sent: string[][] = [];
+  const captured: CaptureForm[] = [];
   const boom = (what: string) => {
     throw new Error(`${what}: no such thing`);
   };
@@ -132,7 +141,10 @@ function fakeBox(box: Box = {}): { io: SteerIo; sent: string[][] } {
     listPanes: () => (box.throwOn === "panes" ? boom("tmux") : (box.panes ?? PANES)),
     processParents: () => (box.throwOn === "parents" ? boom("ps") : (box.parents ?? PARENTS)),
     claudeCandidates: () => (box.throwOn === "pgrep" ? boom("pgrep") : (box.pgrep ?? PGREP)),
-    capture: () => (box.throwOn === "capture" ? boom("capture-pane") : (box.capture ?? fixture(AT_PROMPT))),
+    capture: (_paneId, form) => {
+      captured.push(form);
+      return box.throwOn === "capture" ? boom("capture-pane") : (box.capture ?? fixture(AT_PROMPT));
+    },
     cmdline: (pid) => {
       if (box.throwOn === "cmdline") boom("/proc");
       const override = box.cmdlines?.[pid];
@@ -144,7 +156,7 @@ function fakeBox(box: Box = {}): { io: SteerIo; sent: string[][] } {
       sent.push([...args]);
     },
   };
-  return { io, sent };
+  return { io, sent, captured };
 }
 
 /**
@@ -722,6 +734,70 @@ describe("sendMessage will not append to a draft somebody else is still writing"
   });
 });
 
+/**
+ * **A GHOST SUGGESTION IS NOT A DRAFT** (2026-10-10). Claude Code's dim
+ * pre-filled `carry on` is not in the input buffer, and the first keystroke
+ * replaces it; until today it was refused as `input-not-empty`, because the
+ * capture had been taken without attributes. See
+ * docs/postmortems/261010b-ghost-suggestion-read-as-typed-input.md.
+ */
+describe("sendMessage types over a ghost suggestion, and reads attributes to know it is one", () => {
+  it("sends to a box holding only a dim suggestion, with exactly our text", () => {
+    const { io, sent } = fakeBox({ capture: fixture("none-ghost-suggestion-ansi") });
+    const result = sendMessage(TARGET, "keep going", WORKING, io);
+    expect(result.ok).toBe(true);
+    expect(sent).toEqual([
+      ["send-keys", "-t", "%10", "-l", "--", "keep going"],
+      ["send-keys", "-t", "%10", "Enter"],
+    ]);
+  });
+
+  it("still refuses the same screen when the text in the box is typed", () => {
+    const typed = fixture("none-ghost-suggestion-ansi").replace("\u001b[2mcarry on\u001b[0m", "carry on");
+    const { io, sent } = fakeBox({ capture: typed });
+    refused(sendMessage(TARGET, "keep going", WORKING, io), sent, "input-not-empty");
+  });
+
+  it("refuses a real draft ending in ❯ even if the structural marker is dim", () => {
+    const ghost = fixture("none-ghost-suggestion-ansi");
+    const prompt = "❯\u00a0\u001b[2mcarry on\u001b[0m";
+    expect(ghost.includes(prompt)).toBe(true);
+    const typed = ghost.replace(prompt, "\u001b[2m❯\u00a0\u001b[0mDRAFT❯");
+    const { io, sent } = fakeBox({ capture: typed });
+    refused(sendMessage(TARGET, "keep going", WORKING, io), sent, "input-not-empty");
+  });
+
+  it("threads capture form through realIo to tmux's actual flags", () => {
+    const run = vi.mocked(execFileSync);
+    run.mockReturnValue("");
+    try {
+      const io = realIo();
+      io.capture("%10", "attributes");
+      expect(run).toHaveBeenLastCalledWith("tmux", ["capture-pane", "-p", "-e", "-t", "%10"], expect.any(Object));
+      io.capture("%10", "text");
+      expect(run).toHaveBeenLastCalledWith("tmux", ["capture-pane", "-p", "-t", "%10"], expect.any(Object));
+    } finally {
+      run.mockReset();
+    }
+  });
+
+  /**
+   * The capture form is part of the contract, not a detail of `realIo`: a
+   * `sendMessage` that asked for plain text would make every ghost a draft
+   * again, and nothing else here would go red.
+   */
+  it("asks for an attributed capture to send prose, and a plain one to answer a dialog", () => {
+    const { io, captured } = fakeBox();
+    sendMessage(TARGET, "keep going", WORKING, io);
+    expect(captured).toEqual(["attributes"]);
+
+    const seen = question("dialog-ask-user-question");
+    const answering = fakeBox({ capture: fixture("dialog-ask-user-question") });
+    answerQuestion(TARGET, seen, 0, NEEDS_YOU, answering.io);
+    expect(answering.captured).toEqual(["text"]);
+  });
+});
+
 /* ---------------------------------------------------------------- *
  * F17: what a failed send left behind, and what it may say about it
  * ---------------------------------------------------------------- */
@@ -1184,7 +1260,7 @@ describe("answerQuestion re-reads the dialog before it answers it", () => {
       processParents: () => note("parents", () => io.processParents()),
       claudeCandidates: (id) => note("pgrep", () => io.claudeCandidates(id)),
       cmdline: (pid) => note("cmdline", () => io.cmdline(pid)),
-      capture: (id) => note("capture", () => io.capture(id)),
+      capture: (id, form) => note("capture", () => io.capture(id, form)),
       sendKeys: (args) => note("send", () => io.sendKeys(args)),
     };
 

@@ -679,7 +679,11 @@ function GiftCard({
   onSent: () => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const [confirming, setConfirming] = useState(false);
+  /* Keep what the person opened, including the fields drawn above the
+     confirmation. A refresh (or a poll for another gift's lookup) must not
+     replace their review with an agent's newer edit. The server compares
+     this snapshot with the row when Send freezes it. */
+  const [confirming, setConfirming] = useState<AdminAuthorGift | null>(null);
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [said, setSaid] = useState<string | null>(null);
@@ -687,6 +691,12 @@ function GiftCard({
   const canSend = gift.status === "draft" || gift.status === "sending";
   const running = gift.lookups.some((l) => lookupPending(l, now));
   const title = gift.starter.title;
+
+  /* A gift sent or discarded elsewhere no longer has anything to confirm.
+     Restoring it later must require opening a fresh confirmation. */
+  useEffect(() => {
+    if (!canSend) setConfirming(null);
+  }, [canSend]);
 
   async function attempt(run: () => Promise<string | null>) {
     setBusy(true);
@@ -697,12 +707,12 @@ function GiftCard({
   }
 
   async function sendNow() {
-    if (busy || running) return;
+    if (busy || running || confirming === null) return;
     setBusy(true);
     setSaid(null);
-    const answer = await hooks.send(gift.id);
+    const answer = await hooks.send(confirming);
     setBusy(false);
-    setConfirming(false);
+    setConfirming(null);
     if (answer.kind === "refused") {
       setRefusal(answer.message);
       return;
@@ -724,7 +734,7 @@ function GiftCard({
         highlighted ? "tw:border-highlight-text tw:ring-2 tw:ring-highlight-text/25" : "tw:border-border"
       }`}
     >
-      <GiftFields gift={gift} />
+      <GiftFields gift={canSend && confirming ? confirming : gift} />
       {refusal && (
         <p role="alert" className="tw:m-0 tw:mt-2 tw:text-danger">
           {refusal}
@@ -738,17 +748,18 @@ function GiftCard({
 
       {editing && draft ? (
         <DraftEditor gift={gift} patch={hooks.patch} done={() => setEditing(false)} />
-      ) : confirming && canSend && gift.email !== null ? (
+      ) : confirming && canSend && confirming.email !== null ? (
         <div className="tw:mt-2 tw:rounded-md tw:border tw:border-border tw:p-3">
           <p className="tw:m-0 tw:mb-2 tw:text-foreground">
-            Send the gift email to <strong>{gift.email}</strong>? It gives {freeArticles(gift.articles)}
-            {title !== null ? <> and links “{title}”</> : null}. This sends a real email and cannot be taken back.
+            Send the gift email to <strong>{confirming.email}</strong>? It gives {freeArticles(confirming.articles)}
+            {confirming.starter.title !== null ? <> and links “{confirming.starter.title}”</> : null}. This sends a
+            real email and cannot be taken back.
           </p>
           <div className="tw:flex tw:flex-wrap tw:gap-2">
             <Button type="button" size="sm" disabled={busy || running} onClick={() => void sendNow()}>
-              {busy ? "Sending…" : running ? "Waiting for lookup…" : `Send to ${gift.email}`}
+              {busy ? "Sending…" : running ? "Waiting for lookup…" : `Send to ${confirming.email}`}
             </Button>
-            <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => setConfirming(false)}>
+            <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => setConfirming(null)}>
               Cancel
             </Button>
           </div>
@@ -760,7 +771,7 @@ function GiftCard({
           running={running}
           onSend={() => {
             setRefusal(null);
-            setConfirming(true);
+            setConfirming(gift);
           }}
           onEdit={() => {
             setRefusal(null);

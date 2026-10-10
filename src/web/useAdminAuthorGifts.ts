@@ -22,6 +22,7 @@ import {
   type AdminAuthorLookup,
   AUTHOR_LOOKUP_STALE_MINUTES,
   type AuthorGiftEnsured,
+  type AuthorGiftSendExpected,
   type AuthorGiftSent,
 } from "../admin-author-gifts.js";
 import { apiFetch, readJson } from "./lib/api.js";
@@ -82,7 +83,8 @@ export interface UseAdminAuthorGifts {
   ensure: (slug: string) => Promise<EnsureAnswer>;
   lookUpAgain: (id: string) => Promise<string | null>;
   patch: (id: string, patch: AuthorGiftPatchInput) => Promise<string | null>;
-  send: (id: string) => Promise<SendAnswer>;
+  /** Sends the gift as drawn: refused if it has changed since. */
+  send: (gift: AdminAuthorGift) => Promise<SendAnswer>;
 }
 
 type Written =
@@ -215,8 +217,16 @@ export function useAdminAuthorGifts(): UseAdminAuthorGifts {
   );
 
   const send = useCallback(
-    async (id: string): Promise<SendAnswer> => {
-      const written = await write(`${PATH}/${encodeURIComponent(id)}/send`, "POST");
+    async (gift: AdminAuthorGift): Promise<SendAnswer> => {
+      if (gift.email === null) return { kind: "refused", message: "That gift has no address yet. Add one, then send it." };
+      /* What the confirmation showed, so an edit since (an agent's) is refused, not sent (261010i). */
+      const expected: AuthorGiftSendExpected = {
+        email: gift.email,
+        recipientName: gift.recipientName,
+        recipientNote: gift.recipientNote,
+        articles: gift.articles,
+      };
+      const written = await write(`${PATH}/${encodeURIComponent(gift.id)}/send`, "POST", { expected });
       if (!written.ok) return { kind: "refused", message: written.message };
       const answer = written.body as Partial<AuthorGiftSent>;
       if (

@@ -19,7 +19,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { cleanLines, paneSurface, type PaneSurface } from "../tools/fleet/pane.js";
+import { cleanLines, paneSurface, parsePane, stripAnsi, undimmedLines, type PaneSurface } from "../tools/fleet/pane.js";
 
 const FIXTURES = path.resolve(import.meta.dirname, "fixtures/fleet-panes");
 const fixture = (name: string): string => readFileSync(path.join(FIXTURES, `${name}.txt`), "utf8");
@@ -161,6 +161,125 @@ describe("paneSurface tells an empty input box from an occupied one", () => {
   });
 });
 
+/**
+ * **A GHOST SUGGESTION IS NOT INPUT** — 2026-10-10, and
+ * docs/postmortems/261010b-ghost-suggestion-read-as-typed-input.md.
+ *
+ * After a turn Claude Code pre-fills its empty box with a suggested next prompt
+ * (`carry on`, `go ahead`), and a never-used session shows a hint (`Try
+ * "refactor <filepath>"`). Neither is in the input buffer: the first keystroke
+ * replaces it. Both are drawn with SGR 2, dim, and typed text is not — measured
+ * on a throwaway Claude Code 2.1.296 under its own tmux server, where typed,
+ * multi-line and pasted input (the `[Pasted text #1 +11 lines]` pill included)
+ * all came back with no attribute at all after the `❯ `.
+ *
+ * A plain `capture-pane -p` drops attributes, so `carry on` read as somebody's
+ * draft and every message to a session showing one was refused with
+ * `input-not-empty`. `none-ghost-suggestion-ansi.txt` is a real `-p -e` capture
+ * of a session in exactly that state, taken read-only off the box.
+ *
+ * The other cases are that capture with its prompt line rewritten, because the
+ * only thing that differs between them is the prompt line.
+ */
+describe("paneSurface reads a dim ghost suggestion as an empty box", () => {
+  const ghost = fixture("none-ghost-suggestion-ansi");
+  const GHOST = "\u001b[2mcarry on\u001b[0m";
+  const withPrompt = (after: string): string => {
+    expect(ghost.includes(GHOST), "the fixture's ghost run is what these cases rewrite").toBe(true);
+    return ghost.replace(GHOST, after);
+  };
+
+  it("calls a box holding only a dim suggestion empty", () => {
+    expect(paneSurface(ghost).kind).toBe("empty-input");
+  });
+
+  it("calls a box holding typed (undimmed) text occupied", () => {
+    expect(paneSurface(withPrompt("keep going please")).kind).toBe("occupied-input");
+  });
+
+  it("calls typed text with a dim completion tail occupied", () => {
+    expect(paneSurface(withPrompt("/comp\u001b[2mact\u001b[0m")).kind).toBe("occupied-input");
+    expect(paneSurface(withPrompt("\u001b[2mcarry\u001b[0m on")).kind).toBe("occupied-input");
+  });
+
+  it("does not take a colour parameter of 2 for dim", () => {
+    // `38;2;r;g;b` is truecolour and `38;5;2` palette green: a `2` that is a
+    // sub-parameter is not the dim attribute.
+    expect(paneSurface(withPrompt("\u001b[38;2;2;2;2mcarry on\u001b[0m")).kind).toBe("occupied-input");
+    expect(paneSurface(withPrompt("\u001b[38;5;2mcarry on\u001b[0m")).kind).toBe("occupied-input");
+    expect(paneSurface(withPrompt("\u001b[38:2::2:2:2mcarry on\u001b[0m")).kind).toBe("occupied-input");
+  });
+
+  it("follows dim being switched off again", () => {
+    expect(paneSurface(withPrompt("\u001b[2;22mcarry on\u001b[0m")).kind).toBe("occupied-input");
+    expect(paneSurface(withPrompt("\u001b[2mcarry\u001b[mon\u001b[0m")).kind).toBe("occupied-input");
+  });
+
+  it("carries dim across a line break, as tmux's -e output does", () => {
+    // tmux emits attribute CHANGES, so a long suggestion wrapped onto a second
+    // line may carry its dim without re-emitting it. The genuine closing border
+    // re-emits its own colour, which does not cancel dim, and is still found.
+    const wrapped = withPrompt("\u001b[2mcarry on with the rest of the plan\n  and then report\u001b[0m");
+    expect(paneSurface(wrapped).kind).toBe("empty-input");
+  });
+
+  it("still sees a typed continuation line under a dim prompt line", () => {
+    const mixed = withPrompt("\u001b[2mcarry on\u001b[0m\n  typed underneath");
+    const surface = paneSurface(mixed);
+    expect(surface.kind).toBe("occupied-input");
+  });
+
+  it("does not mistake a typed ❯ for a dim structural prompt marker", () => {
+    for (const draft of ["❯", "DRAFT❯", "■❯", "────❯"]) {
+      expect(paneSurface(boxed(`\u001b[2m❯ \u001b[0m${draft}`)).kind, draft).toBe("occupied-input");
+    }
+  });
+
+  it("preserves geometry when -e emits colon-form underline and coloured padding", () => {
+    const capture = boxed("❯ \u001b[2mcarry on\u001b[0m")
+      .split("\n")
+      .map((line) => `\u001b[4:3m${line}\u001b[0m\u001b[48;5;2m   \u001b[49m`)
+      .join("\n");
+    expect(stripAnsi(capture)).toBe(boxed("❯ carry on").split("\n").map((line) => `${line}   `).join("\n"));
+    expect(paneSurface(capture).kind).toBe("empty-input");
+  });
+
+  it("keeps attributed and plain dialog readings identical", () => {
+    const plain = fixture("dialog-ask-user-question");
+    expect(parsePane(plain).kind).toBe("question");
+    const attributed = plain.split("\n").map((line) => `\u001b[4:3m${line}\u001b[0m\u001b[48;5;2m   \u001b[49m`).join("\n");
+    expect(parsePane(attributed)).toEqual(parsePane(plain));
+    expect(paneSurface(attributed)).toEqual(paneSurface(plain));
+  });
+
+  it.each(["38;5;2", "48;5;2", "58;5;2", "38;2;2;2;2", "48;2;2;2;2", "58;2;2;2;2",
+    "38:5:2", "48:2::2:2:2", "58:2:2:2:2"])("does not read %s colour components as dim", (params) => {
+    expect(paneSurface(withPrompt(`\u001b[${params}mDRAFT\u001b[0m`)).kind).toBe("occupied-input");
+  });
+
+  it.each(["22", "0", "", ";", "38;5;2;22", "48;2;2;2;2;22", "58:2::2:2:2;22"])(
+    "sees typed text after a dim run is reset by SGR %s", (params) => {
+      expect(paneSurface(withPrompt(`\u001b[2mghost\u001b[${params}mDRAFT\u001b[0m`)).kind).toBe("occupied-input");
+    },
+  );
+
+  it.each(["999", "2:0", "38;2;22", "48;5", "58;2;0;0", "?2"])(
+    "keeps text after uncertain SGR %s rather than trusting dim", (params) => {
+      expect(paneSurface(withPrompt(`\u001b[2mghost\u001b[${params}mDRAFT\u001b[0m`)).kind).toBe("occupied-input");
+    },
+  );
+
+  it.each(["\u0007", "\u001b\\"])("ignores OSC 8 payloads and keeps linked draft text (%j terminator)", (end) => {
+    const link = (text: string) => `\u001b]8;;https://example.test/${end}${text}\u001b]8;;${end}`;
+    expect(paneSurface(withPrompt(link("DRAFT"))).kind).toBe("occupied-input");
+    expect(paneSurface(withPrompt(`\u001b[2m${link("ghost")}\u001b[0m`)).kind).toBe("empty-input");
+    // A newline in metadata must not shift the occupancy rows relative to geometry.
+    const capture = withPrompt(`\u001b[2mghost\u001b[0m\n  \u001b]8;;https://example.test/\n${end}DRAFT\u001b]8;;${end}`);
+    expect(undimmedLines(capture)).toHaveLength(cleanLines(capture).length);
+    expect(paneSurface(capture).kind).toBe("occupied-input");
+  });
+});
+
 describe("paneSurface refuses everything that is not one of the two boxes", () => {
   it("says unrecognised, with a reason, for a screen that has no box at all", () => {
     for (const capture of ["", fixture("none-blank-pane"), fixture("none-bare-shell")]) {
@@ -218,6 +337,7 @@ describe("every capture in the corpus lands in a known arm", () => {
     "none-bare-shell": "unrecognised",
     "none-blank-pane": "unrecognised",
     "none-dialog-just-answered": "empty-input",
+    "none-ghost-suggestion-ansi": "empty-input",
     "none-idle-with-prose-numbered-list": "empty-input",
     "none-slash-command-autocomplete": "empty-input",
     "none-typed-numbered-message-in-input-box": "occupied-input",
@@ -248,6 +368,6 @@ describe("every capture in the corpus lands in a known arm", () => {
       const kind = paneSurface(fixture(name)).kind;
       counts[kind] = (counts[kind] ?? 0) + 1;
     }
-    expect(counts).toEqual({ dialog: 16, "empty-input": 5, "occupied-input": 2, unrecognised: 2 });
+    expect(counts).toEqual({ dialog: 16, "empty-input": 6, "occupied-input": 2, unrecognised: 2 });
   });
 });
