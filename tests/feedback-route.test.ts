@@ -892,6 +892,26 @@ describe("questions for the admin, and replies to them", () => {
     ]);
   });
 
+  /* Plan 261010g (spya-j4sg9g): a client that asks `questions=3` also gets
+     the replies an agent has acted on, so a thread answered and asked again
+     does not look like one never answered. Shape 2 stays exactly as it was. */
+  it("sends acted replies apart to a client that asks for shape 3, and shape 2 without them", async () => {
+    newestAnswer = [
+      { id: "spya-act3d0", questionId: "q-bbbbbb", body: "First go", createdAt: "2026-10-07T07:00:00.000Z" },
+      { id: "spya-repzyy", questionId: "q-bbbbbb", body: "Yes, do it", createdAt: "2026-10-07T08:00:00.000Z" },
+    ];
+    const three = ((await get(`${EARLIER}?questions=3`)).body as Sent).questions;
+    const b3 = three.find((one) => one.id === "q-bbbbbb");
+    expect(b3?.actedAnswers).toEqual([{ id: "spya-act3d0", body: "First go", createdAt: "2026-10-07T07:00:00.000Z" }]);
+    expect(b3?.olderActedAnswers).toBe(0);
+    expect(b3?.answers).toEqual([{ id: "spya-repzyy", body: "Yes, do it", createdAt: "2026-10-07T08:00:00.000Z" }]);
+    expect(three.find((one) => one.id === "q-aaaaaa")?.actedAnswers).toEqual([]);
+    const two = ((await get(THREADS)).body as Sent).questions;
+    expect(Object.keys(two[1] ?? {}).sort()).toEqual([
+      "answers", "asked", "body", "deferredAt", "id", "olderAnswers", "report", "state", "title",
+    ]);
+  });
+
   it("sends at most five unacted replies a thread, the newest, and counts the rest (F12)", async () => {
     newestAnswer = Array.from({ length: 7 }, (_, i) => ({
       id: `spya-rep00${i}`,

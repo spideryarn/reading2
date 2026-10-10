@@ -99,7 +99,8 @@ export function mintFeedbackQuestionId(random?: () => number): string {
  * is for agents and is not here: nothing compiled reaches a browser that the
  * file's author did not write for Greg to read. `acted` is compiled beside it,
  * for the server alone (`FEEDBACK_QUESTION_ACTED`), which sends the browser
- * only the state it works out from it (plan 261008i, decision 1).
+ * only the state it works out from it and which list each reply goes in
+ * (plan 261008i, decision 1; 261010g).
  */
 export interface CompiledFeedbackQuestion {
   id: string;

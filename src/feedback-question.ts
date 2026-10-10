@@ -15,8 +15,9 @@ import {
 } from "./feedback-questions.generated.js";
 
 /**
- * The ids of an open question's replies an agent has acted on: which replies
- * the thread still lists, and part of its state (plan 261008i). Never sent.
+ * The ids of an open question's replies an agent has acted on: which list a
+ * reply is sent in (261010g), and part of its state (plan 261008i). The ids
+ * themselves are never sent.
  */
 export function feedbackQuestionActed(id: string): readonly string[] {
   return Object.hasOwn(FEEDBACK_QUESTION_ACTED, id) ? (FEEDBACK_QUESTION_ACTED[id] ?? []) : [];

@@ -1892,13 +1892,13 @@ describe("the Earlier tab", () => {
   /* docs/plans/261007d-…: for an admin the tab says what became of each report,
      numbers them, and carries the note's one-line comment. Reshaped by
      docs/plans/261008i-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md:
-     the read asks for threads (`questions=2`), an admin's dialog reads Needs a
+     the read asks for threads (`questions=3`), an admin's dialog reads Needs a
      decision as soon as it opens, and Earlier opens there when a thread waits. */
   describe("for an admin", () => {
     const ADMIN_PATH = "/api/admin/feedback/earlier";
-    /** The admin route for one filter, as the client asks it: `show` first, then `questions=2` (F3). */
+    /** The admin route for one filter, as the client asks it: `show` first, then `questions=3` (F3, 261010g). */
     const url = (which?: string) =>
-      which === undefined ? `${ADMIN_PATH}?questions=2` : `${ADMIN_PATH}?show=${which}&questions=2`;
+      which === undefined ? `${ADMIN_PATH}?questions=3` : `${ADMIN_PATH}?show=${which}&questions=3`;
     const ALL_URL = url();
     const WAITING_URL = url("waiting");
     const ADMIN_COUNTS = { all: 5, open: 1, waiting: 1, aside: 2, shipped: 1 };
@@ -2157,7 +2157,7 @@ describe("the Earlier tab", () => {
     describe("questions an agent has asked", () => {
       const ANSWERS_PATH = "/api/admin/feedback/answers";
       const DEFERRALS_PATH = "/api/admin/feedback/deferrals";
-      /** A question as the server sends it when asked `questions=2` (src/types.ts § AdminFeedbackQuestion). */
+      /** A question as the server sends it when asked `questions=3` (src/types.ts § AdminFeedbackQuestion). */
       const Q1 = {
         id: "q-aaaaaa",
         title: "One switch or two?",
@@ -2166,6 +2166,8 @@ describe("the Earlier tab", () => {
         report: { id: "spya-a2b2c3", number: 214, firstLine: "One switch or two?", body: "One switch or two?\nI keep <b>pressing</b> both." },
         answers: [] as unknown[],
         olderAnswers: 0,
+        actedAnswers: [] as unknown[],
+        olderActedAnswers: 0,
         state: "waiting",
         deferredAt: null as string | null,
       };
@@ -2177,6 +2179,8 @@ describe("the Earlier tab", () => {
         report: null,
         answers: [] as unknown[],
         olderAnswers: 0,
+        actedAnswers: [] as unknown[],
+        olderActedAnswers: 0,
         state: "waiting",
         deferredAt: null as string | null,
       };
@@ -2572,6 +2576,67 @@ describe("the Earlier tab", () => {
         expect(thread().querySelector(".fb-question")?.getAttribute("data-state")).toBe("responded");
         /* The box is still there: Greg can add to what he said. */
         expect(replyBoxes()).toHaveLength(1);
+      });
+
+      /* 261010g (spya-j4sg9g): replies an agent has acted on are listed too,
+         and a waiting thread that has them does not look never answered. */
+      describe("replies an agent has acted on", () => {
+        const FIRST = { id: "spya-ac7edz", body: "A, with the risk written down.", createdAt: "2026-10-09T10:00:00.000Z" };
+        const SECOND = { id: "spya-ac7ed3", body: "A. I think it's fine.", createdAt: "2026-10-09T19:38:00.000Z" };
+        const askedAgain = {
+          ...Q1,
+          body: "Background first.\n\nDetails\nWhat happened to your replies.",
+          actedAnswers: [FIRST, SECOND],
+          olderActedAnswers: 1,
+        };
+
+        it("lists them as acted on, says Needs a decision again, and counts them on the contents row", async () => {
+          await openWaiting({ ...ADMIN_REPORTS, questions: [askedAgain, Q2] }, { ...WAITING, questions: [askedAgain, Q2] });
+          expect(inGroup("waiting")).toEqual(["q-aaaaaa", "q-bbbbbb"]);
+          expect(row("q-aaaaaa").textContent).toContain("you've replied 3×");
+          expect(row("q-bbbbbb").textContent).not.toContain("replied");
+          click(row("q-aaaaaa"));
+          const shown = thread().querySelector('.fb-question-answer[data-acted="true"]');
+          expect([...(shown?.querySelectorAll(".fb-question-answer-body") ?? [])].map((p) => p.textContent)).toEqual([
+            FIRST.body,
+            SECOND.body,
+          ]);
+          expect(shown?.textContent).toContain("You replied · ");
+          expect(shown?.textContent).toContain(" · acted on");
+          expect(shown?.textContent).toContain("And 1 earlier reply acted on, not shown here.");
+          expect(shown?.textContent).toContain("kept this open, so it is asking something more.");
+          expect(shown?.textContent).toContain("What happened next is written in the question, under Details.");
+          expect(thread().querySelector(".fb-earlier-meta")?.textContent).toContain("Needs a decision again");
+          /* Still a thread that needs a decision: the state and the pager are unchanged. */
+          expect(thread().querySelector(".fb-question")?.getAttribute("data-state")).toBe("waiting");
+          expect(place()).toBe("1 of 2 needing a decision");
+          expect(replyBoxes()).toHaveLength(1);
+        });
+
+        it("does not point at Details when the question has none", async () => {
+          const plain = { ...askedAgain, body: "It stands alone.", olderActedAnswers: 0 };
+          await openThread("q-aaaaaa", { ...ADMIN_REPORTS, questions: [plain, Q2] }, { ...WAITING, questions: [plain, Q2] });
+          const shown = thread().querySelector('.fb-question-answer[data-acted="true"]');
+          expect(shown?.textContent).toContain("What happened next is written in the question.");
+          expect(shown?.textContent).not.toContain("earlier reply");
+        });
+
+        it("reads a server from before 261010g, whose threads have no acted replies", async () => {
+          const { actedAnswers: _a, olderActedAnswers: _o, ...v2 } = Q1;
+          const { actedAnswers: _b, olderActedAnswers: _p, ...v2b } = Q2;
+          await openWaiting({ ...ADMIN_REPORTS, questions: [v2, v2b] }, { ...WAITING, questions: [v2, v2b] });
+          expect(panelOf("Earlier").textContent).not.toContain("[fb-list]");
+          expect(rows()).toEqual(["q-aaaaaa", "q-bbbbbb"]);
+          click(row("q-aaaaaa"));
+          expect(thread().querySelector('[data-acted="true"]')).toBeNull();
+          expect(thread().querySelector(".fb-earlier-meta")?.textContent).not.toContain("again");
+        });
+
+        it("refuses a reply listed as both acted on and not", async () => {
+          const both = { ...Q1, answers: [FIRST], actedAnswers: [FIRST], state: "responded" };
+          await openWaiting({ ...ADMIN_REPORTS, questions: [both, Q2] }, { ...WAITING, questions: [both, Q2] });
+          expect(panelOf("Earlier").textContent).toContain("[fb-list]");
+        });
       });
 
       /* F3, the other direction: a server from before 261008i ignores

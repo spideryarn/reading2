@@ -298,7 +298,21 @@ function isAnswerReceipt(value: unknown): value is { answer: AdminFeedbackQuesti
   return Object.keys(receipt).join() === "answer" && isQuestionAnswer(receipt.answer);
 }
 
-const QUESTION_KEYS = ["answers", "asked", "body", "deferredAt", "id", "olderAnswers", "report", "state", "title"];
+const QUESTION_KEYS = [
+  "actedAnswers",
+  "answers",
+  "asked",
+  "body",
+  "deferredAt",
+  "id",
+  "olderActedAnswers",
+  "olderAnswers",
+  "report",
+  "state",
+  "title",
+];
+/** A thread as a server before 261010g sends it: no acted replies. */
+const V2_QUESTION_KEYS = QUESTION_KEYS.filter((key) => key !== "actedAnswers" && key !== "olderActedAnswers");
 const LEGACY_QUESTION_KEYS = ["answer", "asked", "body", "id", "report", "title"];
 
 /**
@@ -317,9 +331,10 @@ export type AdminThreadsPage = Omit<AdminEarlierFeedbackPage, "questions"> & { q
  * **A server from before 261008i answers in the six-key shape** — a rollback,
  * or the minutes of a deploy (F3). Each such question becomes a thread before
  * the strict check: its newest reply as the only one, *being considered* if
- * there is one, never deferred, no report text. Only a question with exactly
- * the six old keys is mapped; anything else reaches the check as it came, and
- * fails there.
+ * there is one, never deferred, no report text. **A server from before
+ * 261010g answers threads without the acted replies**, which become none.
+ * Only a question with exactly the old keys of either is mapped; anything
+ * else reaches the check as it came, and fails there.
  */
 function withLegacyQuestions(value: unknown): unknown {
   if (typeof value !== "object" || value === null) return value;
@@ -330,13 +345,17 @@ function withLegacyQuestions(value: unknown): unknown {
     questions: answer.questions.map((question: unknown) => {
       if (typeof question !== "object" || question === null) return question;
       const old = question as Record<string, unknown>;
-      if (Object.keys(old).sort().join() !== LEGACY_QUESTION_KEYS.join()) return question;
+      const keys = Object.keys(old).sort().join();
+      if (keys === V2_QUESTION_KEYS.join()) return { ...old, actedAnswers: [], olderActedAnswers: 0 };
+      if (keys !== LEGACY_QUESTION_KEYS.join()) return question;
       const { answer: newest, report, ...rest } = old;
       return {
         ...rest,
         report: typeof report === "object" && report !== null ? { ...report, body: null } : report,
         answers: newest === null ? [] : [newest],
         olderAnswers: 0,
+        actedAnswers: [],
+        olderActedAnswers: 0,
         state: newest === null ? "waiting" : "responded",
         deferredAt: null,
       };
@@ -378,6 +397,7 @@ function isQuestion(value: unknown): value is ThreadQuestion {
   if (typeof value !== "object" || value === null) return false;
   const question = value as Record<string, unknown>;
   const answers = question.answers;
+  const acted = question.actedAnswers;
   return (
     Object.keys(question).sort().join() === QUESTION_KEYS.join() &&
     isFeedbackQuestionId(question.id) &&
@@ -388,6 +408,10 @@ function isQuestion(value: unknown): value is ThreadQuestion {
     Array.isArray(answers) && answers.every(isQuestionAnswer) &&
     new Set(answers.map((one: AdminFeedbackQuestionAnswer) => one.id)).size === answers.length &&
     Number.isSafeInteger(question.olderAnswers) && (question.olderAnswers as number) >= 0 &&
+    Array.isArray(acted) && acted.every(isQuestionAnswer) &&
+    /* A reply is acted on or not, never both. */
+    new Set([...answers, ...acted].map((one: AdminFeedbackQuestionAnswer) => one.id)).size === answers.length + acted.length &&
+    Number.isSafeInteger(question.olderActedAnswers) && (question.olderActedAnswers as number) >= 0 &&
     FEEDBACK_QUESTION_STATES.some((state) => state === question.state) &&
     /* A time exactly when it says deferred, so the group and the line under it agree. */
     (question.state === "deferred"
@@ -653,13 +677,21 @@ export function withLocal(
 ): ThreadQuestion {
   const mine = replies.sent[question.id];
   const deferral = replies.deferrals[question.id];
-  const sent = mine !== undefined && mine.at > startedAt ? mine : null;
+  /* A receipt the server already lists as acted on says nothing new: an
+     idempotent retry can hand back a reply an agent has since acted on, and
+     laying it over would draw it twice and call the thread being considered
+     (GPT Sol, 261010g P1). */
+  const acted = (one: AdminFeedbackQuestionAnswer) => question.actedAnswers.some((known) => known.id === one.id);
+  const sent = mine !== undefined && mine.at > startedAt && !mine.value.every(acted) ? mine : null;
   const set = deferral !== undefined && deferral.at > startedAt ? deferral : null;
   if (sent === null && set === null) return question;
   const answers =
     sent === null
       ? question.answers
-      : [...question.answers, ...sent.value.filter((one) => !question.answers.some((known) => known.id === one.id))];
+      : [
+          ...question.answers,
+          ...sent.value.filter((one) => !acted(one) && !question.answers.some((known) => known.id === one.id)),
+        ];
   if (set !== null && (sent === null || set.at > sent.at)) {
     return set.value !== null
       ? { ...question, answers, state: "deferred", deferredAt: set.value }
@@ -761,12 +793,13 @@ type ReadAnswer = { detail: "plain"; page: EarlierFeedbackPage } | { detail: "ad
  * One read of one filter of one list: the answer checked, or why there is
  * none. `absent` is the admin route answering 404, and only that: a server
  * from before the route (a rollback, or the minutes of a deploy). The admin
- * route is asked for threads (`questions=2`); a server that ignores that
- * answers in the older shape, which `withLegacyQuestions` maps (F3).
+ * route is asked for threads with acted replies (`questions=3`); a server
+ * that ignores that answers in an older shape, which `withLegacyQuestions`
+ * maps (F3).
  */
 async function read(ask: EarlierAsk): Promise<ReadAnswer | "failed" | "absent"> {
   if (ask.detail === "admin") {
-    const query = new URLSearchParams(ask.show === "all" ? { questions: "2" } : { show: ask.show, questions: "2" });
+    const query = new URLSearchParams(ask.show === "all" ? { questions: "3" } : { show: ask.show, questions: "3" });
     const res = await apiFetch(`${ADMIN_PATH}?${query}`);
     if (res.status === 404) return "absent";
     if (!res.ok) return "failed";
@@ -1378,6 +1411,33 @@ const GROUP_WORD: Record<FeedbackQuestionState, string> = {
   deferred: "Deferred",
 };
 
+/** How many of the admin's replies to it an agent has acted on, sent or not. */
+const actedCount = (question: ThreadQuestion): number => question.actedAnswers.length + question.olderActedAnswers;
+
+/**
+ * The state word in a thread. A waiting thread an agent has already acted on
+ * is not the same as one never answered, and said the same thing until
+ * spya-j4sg9g ("I could swear I have posted a reply … multiple times").
+ */
+function stateWord(question: ThreadQuestion): string {
+  return question.state === "waiting" && actedCount(question) > 0 ? "Needs a decision again" : GROUP_WORD[question.state];
+}
+
+/** One reply of the admin's, as a thread lists it. */
+function ReplyLine({ answer, acted, now }: { answer: AdminFeedbackQuestionAnswer; acted: boolean; now: number }) {
+  return (
+    <div className="fb-question-answer-one" data-acted={acted || undefined}>
+      <p className="fb-earlier-meta">
+        <span className="fb-earlier-shipped">You replied</span>
+        {" · "}
+        <time dateTime={answer.createdAt}>{when(answer.createdAt, now)}</time>
+        {acted ? " · acted on" : null}
+      </p>
+      <p className="fb-question-answer-body">{answer.body}</p>
+    </div>
+  );
+}
+
 /**
  * `q-k3m9qt · about #301 (spya-mdp0em)`: the ids Greg and a terminal share
  * (`spya-krvuc9`). `feedback-questions.ts --show q-…` prints the file;
@@ -1427,6 +1487,9 @@ function ThreadContents({
             <span className="fb-thread-title">{question.title}</span>
             <span className="fb-earlier-meta">
               <ThreadIds question={question} /> · asked {dayOf(question.asked) ?? question.asked}
+              {actedCount(question) > 0
+                ? ` · you've replied ${actedCount(question) + question.answers.length + question.olderAnswers}×`
+                : null}
             </span>
           </button>
         </li>
@@ -1568,7 +1631,7 @@ function ThreadView({
         <p className="fb-earlier-meta">
           <ThreadIds question={question} /> · asked {dayOf(question.asked) ?? question.asked} ·{" "}
           <span className={question.state === "waiting" ? "fb-earlier-waiting" : "fb-earlier-unshipped"}>
-            {GROUP_WORD[question.state]}
+            {stateWord(question)}
           </span>
         </p>
         <h4 className="fb-question-title">{question.title}</h4>
@@ -1587,6 +1650,28 @@ function ThreadView({
             <p className="fb-earlier-body">{question.report.body}</p>
           </details>
         )}
+        {question.actedAnswers.length === 0 ? null : (
+          /* What he said that an agent has acted on (261010g): before
+             spya-j4sg9g it was only quoted inside the question, usually
+             under the shut Details, so the thread looked unanswered. */
+          <div className="fb-question-answer" data-acted="true">
+            {question.olderActedAnswers > 0 ? (
+              <p className="fb-earlier-meta">
+                And {question.olderActedAnswers} earlier {question.olderActedAnswers === 1 ? "reply" : "replies"} acted
+                on, not shown here.
+              </p>
+            ) : null}
+            {question.actedAnswers.map((answer) => (
+              <ReplyLine key={answer.id} answer={answer} acted now={now} />
+            ))}
+            <p className="fb-earlier-note">
+              {question.state === "waiting"
+                ? "An agent acted on what you said and kept this open, so it is asking something more."
+                : "An agent acted on what you said."}{" "}
+              What happened next is written in the question{details === null ? "" : ", under Details"}.
+            </p>
+          </div>
+        )}
         {question.answers.length === 0 ? null : (
           <div className="fb-question-answer">
             {question.olderAnswers > 0 ? (
@@ -1595,14 +1680,7 @@ function ThreadView({
               </p>
             ) : null}
             {question.answers.map((answer) => (
-              <div key={answer.id} className="fb-question-answer-one">
-                <p className="fb-earlier-meta">
-                  <span className="fb-earlier-shipped">You replied</span>
-                  {" · "}
-                  <time dateTime={answer.createdAt}>{when(answer.createdAt, now)}</time>
-                </p>
-                <p className="fb-question-answer-body">{answer.body}</p>
-              </div>
+              <ReplyLine key={answer.id} answer={answer} acted={false} now={now} />
             ))}
           </div>
         )}

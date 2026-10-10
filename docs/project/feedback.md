@@ -373,7 +373,7 @@ postmortem [261008c](../postmortems/261008c-needs-a-decision-lists-reports-nobod
 
 ```
  POST /api/admin/feedback/deferrals ──▶ a row in feedback_question_deferrals ("not now")
- GET  …/earlier?questions=2         ──▶ threads: unacted replies, a state, the report's text
+ GET  …/earlier?questions=3         ──▶ threads: replies (acted on and not), a state, the report's text
 ```
 
 - **Where they show.** *Needs a decision* is the threads, not a list of reports. It opens on a
@@ -395,17 +395,23 @@ postmortem [261008c](../postmortems/261008c-needs-a-decision-lists-reports-nobod
   `acted:` ids and the admin's deferral: *Deferred* when the deferral is at or after the newest
   reply (a tie is deferred); otherwise *being considered* when a reply has not been acted on;
   otherwise *Needs a decision*, which includes a question an agent acted on and left open with a
-  follow-up in its text. Both times are the database's own clock
+  follow-up in its text. That one says *Needs a decision again* in its thread, and its contents
+  row says *you've replied N×*, because until
+  [261010g](../plans/261010g-needs-a-decision-shows-replies-an-agent-acted-on.md) it looked exactly
+  like a question never answered (`spya-j4sg9g`: *"I could swear I have posted a reply … multiple
+  times"*). Both times are the database's own clock
   (`questionState` in [`src/feedback-question-values.ts`](../../src/feedback-question-values.ts)).
 - **What a thread shows.** The ids, `q-k3m9qt · about #301 (spya-mdp0em)`, the ones to say to the
   Overseer in a terminal (`feedback-questions.ts --show q-…` prints the file); when it was asked;
   its title and text, which an agent wrote, in the model's face and as plain text with its line
   breaks ([fonts.md](fonts.md)), everything after a line that is exactly `Details` shut under
   *Details*; the report it is about, **only when it is the admin's own**, whole and shut, under
-  *Your report #301*; and the admin's replies **no agent has acted on yet**, at most the newest
-  five with a count of the rest, in the reader's face (an acted-on reply is quoted in the text by
-  the agent that acted). The file's `refs:` line is never compiled; `acted:` reaches the browser
-  only as the group and as which replies are listed.
+  *Your report #301*; and the admin's replies, in the reader's face: first those **an agent has
+  acted on**, each marked *acted on*, with a line saying what happened next is written in the
+  question; then those **no agent has acted on yet**. At most the newest five of each, with a count
+  of the rest. The file's `refs:` line is never compiled; `acted:` reaches the browser only as the
+  group and as which list each reply is in. A tab from before 261010g asks `questions=2` and gets
+  threads without the acted list; one from before 261008i asks nothing and gets the six-key shape.
 - **Replying.** In a thread the box is simply there, one thread and so one box at a time, and each
   thread keeps its words when you move to another. It grows with what is in it and never scrolls
   itself (`useFitTextarea`), so the panel is the one scroller: two scrollers under one finger with
