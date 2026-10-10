@@ -19,7 +19,7 @@ stored artefact.
 One pure function, `src/figures.ts` § `figureOf(block)`, shared by both halves, answering
 `"figure" | "table" | "media" | null`:
 
-- **`table`** — `tag === "TABLE"` (stage 3 classifies these `kind: "other"`, `src/blocks.ts`
+- **`table`** — `tag === "table"` (stored tags are lower case) (stage 3 classifies these `kind: "other"`, `src/blocks.ts`
   § `classify`), or a `FIGURE` whose markup holds a `<table>` (a PDF's table, or an author's
   `<figure><table>`).
 - **`media`** — a `kind: "media"` block holding `<video>`, `<audio>` or `<iframe>` (the sanitizer
@@ -38,6 +38,19 @@ face ([fonts.md](../project/fonts.md)).
 
 `figuresOf(blocks)` returns them in reading order. It is a pure function of `blocks`; nothing to
 cache, nothing to invalidate.
+
+**Changed after GPT Sol's plan review**
+([261011b-skim-figures-plan-review-sol.md](261011b-skim-figures-plan-review-sol.md)):
+
+- A LaTeXML displayed equation is a `<table class="ltx_equation ltx_eqn_table">`, and a page laid out
+  in a table says `role="presentation"`; neither is a table (F2). Without this a paper's Figures
+  walk would be mostly equations.
+- A `<figure>` holding a `<blockquote>` is a pull-quote even with a portrait in it (F2).
+- A standalone `<svg>`, `<canvas>`, `<video>` or `<audio>` is not a leaf in stage 3, so one with
+  text of its own arrives as a block of another kind; it is classified by tag, whatever its kind (F1).
+- **An image whose declared height is under 48 px is lettering**, not a figure: Paul Graham's essays
+  set their title as a 190 × 18 GIF. An image with no declared height is kept. A genuine figure
+  under 48 px tall is the price, and is rare.
 
 ## Half 1: Skim gets a fourth chip, *Figures*
 
@@ -98,6 +111,19 @@ noun:
   and Figures is a pushed `?depth=`/`?stop=` pair landing on the first stop of the target, the same
   as switching passes today. The newly mounted walk is handed that stop through the arrival token,
   so it scrolls there and flashes, without a second history entry.
+- **The panel needs a readiness of its own for Figures** (Sol F3): today `SkimPanel` shows its head
+  and rows only over a ready route. `FiguresWalk` draws its own body through `ModeSurface`, and
+  `useSkim` stays mounted above the choice, so the route goes on being planned underneath.
+- **Part switches arm the arrival** (Sol F4): the switch puts the target stop into `SkimArrival`
+  synchronously before the one URL write, and the mounted walk claims it. Figures arrives with a
+  whole-block helper (`scrollToBlock` + `flashBlock(block)`, no passage), and publishes no passage,
+  so the route walk's layout cleanup leaves no quote ring behind (F5). Back and Forward arm nothing,
+  as today.
+- `?depth=` is parsed into a client-only `SkimPart = SkimDepth | "figures"`; the stored
+  `SkimDepth` is unchanged (F4). `last-view.ts`, which remembers `depth` and `stop`, gets its
+  comment corrected.
+- The door's noun covers every literal in it: *Previous*, *Next*, the tooltips and the end line (F5).
+- Outline's drawn and measured rows share `RowBody`, not `Row`: the mark goes there (F6).
 - With no route yet, the head shows only the switcher with its *Figures* chip above the
   empty/loading state, so the figures are reachable while the route is planned.
 

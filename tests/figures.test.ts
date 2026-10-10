@@ -61,6 +61,23 @@ describe("figureKindOf", () => {
     expect(figureKindOf(block("figure", "media", "<figure><blockquote><p>Said.</p></blockquote></figure>"))).toBeNull();
     expect(figureKindOf(block("p", "text", "<p>Words.</p>", "Words."))).toBeNull();
   });
+  it("a LaTeXML equation and a layout table are not tables", () => {
+    expect(
+      figureKindOf(block("table", "other", '<table class="ltx_equation ltx_eqn_table" id="S1.E1"><tr><td>x</td></tr></table>')),
+    ).toBeNull();
+    expect(figureKindOf(block("table", "other", '<table role="presentation"><tr><td>x</td></tr></table>'))).toBeNull();
+  });
+  it("a pull-quote with a portrait in its figure is not a figure", () => {
+    expect(
+      figureKindOf(block("figure", "media", '<figure><img src="face.jpg"><blockquote><p>Said.</p></blockquote></figure>')),
+    ).toBeNull();
+  });
+  it("a standalone svg, canvas, video or audio with text of its own is still found", () => {
+    expect(figureKindOf(block("svg", "text", "<svg><title>A chart</title></svg>", "A chart"))).toBe("figure");
+    expect(figureKindOf(block("canvas", "text", "<canvas>Fallback</canvas>", "Fallback"))).toBe("figure");
+    expect(figureKindOf(block("video", "text", "<video>Your browser…</video>", "Your browser…"))).toBe("media");
+    expect(figureKindOf(block("audio", "text", "<audio>Listen</audio>", "Listen"))).toBe("media");
+  });
   it("a title set as a short image is lettering, not a figure; an image with no height is kept", () => {
     expect(figureKindOf(block("img", "media", '<img src="t.gif" width="190" height="18">'))).toBeNull();
     expect(figureKindOf(block("img", "media", '<img src="t.gif" width="190" height="300">'))).toBe("figure");

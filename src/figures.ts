@@ -51,11 +51,18 @@ const MIN_HEIGHT = 48;
 /** Whether a block is a figure, a table or a medium, and which — or `null`. */
 export function figureKindOf(block: Block): FigureKind | null {
   const tag = block.tag.toLowerCase();
-  if (tag === "hr") return null;
-  if (tag === "table") return "table";
-  if (block.kind !== "media") return null;
   const html = block.html;
-  if (TABLE.test(html)) return "table";
+  if (tag === "hr") return null;
+  if (tag === "table") return isLayoutTable(html) ? null : "table";
+  /* Not leaves in stage 3, so one carrying text of its own (a title, a
+     fallback line) arrives as a block of whatever kind; an empty one is
+     dropped there and never reaches us (GPT Sol, plan review F1). */
+  if (tag === "video" || tag === "audio") return "media";
+  if (tag === "svg" || tag === "canvas") return "figure";
+  if (block.kind !== "media") return null;
+  /* A pull-quote set in a <figure> — with a portrait beside it or not. */
+  if (/<blockquote\b/i.test(html)) return null;
+  if (TABLE.test(html)) return isLayoutTable(html) ? null : "table";
   if (PLAYER.test(html)) return "media";
   /* A PDF's figure carries its marker before its picture is fetched — the
      image arrives later (src/web/rehost.ts), and the place is a figure either way. */
@@ -63,6 +70,17 @@ export function figureKindOf(block: Block): FigureKind | null {
   if (!PICTURE.test(html)) return null; // a pull-quote's <figure>
   if (onlyLettering(html)) return null;
   return "figure";
+}
+
+/**
+ * **A table that is not a table of data**: LaTeXML sets each displayed
+ * equation as `<table class="ltx_equation ltx_eqn_table">` (src/latexml.ts
+ * rewrites only the equation *groups*), and a page laid out in a table says
+ * `role="presentation"`. Display maths is not a figure (plan § What counts).
+ */
+function isLayoutTable(html: string): boolean {
+  const open = /<table\b[^>]*>/i.exec(html)?.[0] ?? "";
+  return /\bltx_eqn|\bltx_equation/.test(open) || /\brole\s*=\s*["']?(presentation|none)\b/i.test(open);
 }
 
 /** Every `<img>` declares a height under `MIN_HEIGHT`, and nothing else is drawn. */
@@ -144,6 +162,7 @@ export function figuresInRange(
   end: number,
 ): Record<FigureKind, number> {
   const counts: Record<FigureKind, number> = { figure: 0, table: 0, media: 0 };
+  /* A scan, not a prefix sum: an article has tens of figures at most. */
   for (const f of figures) if (f.row >= start && f.row <= end) counts[f.kind] += 1;
   return counts;
 }
