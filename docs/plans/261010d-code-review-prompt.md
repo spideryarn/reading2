@@ -1,0 +1,20 @@
+You are reviewing CODE in the Spideryarn repo, in the worktree you are running in. You may edit files to fix what you find (workspace-write). Do NOT run git commands that change history or the index (no commit, reset, stash, checkout, restore). Do NOT run sudo, systemctl start/enable, or anything that touches the live box's services, ~/.overseer, or the fleet dashboard. Do NOT post to the dashboard on 127.0.0.1:8787.
+
+The change is the last commit (`git show HEAD`, base `HEAD~1`). The plan is docs/plans/261010d-standing-jobs-survive-a-reboot.md; your own earlier plan review is docs/plans/261010d-plan-review-sol.md, and the plan's section "What the plan review changed" says what was done with each of your findings, including two you suggested that were deliberately not taken (refusing any dirty primary; FETCH_HEAD) and one deferred (bounded retry for the sweep). Check those answers too.
+
+What it does: systemd timers on the Hetzner box (infra/hetzner/systemd/{box-health,worktree-sweep,dashboard-refresh,feedback-sweep}.{service,timer}, spliced as heredocs into infra/hetzner/provision.sh), scripts/box-health.ts, scripts/box-notify.ts, scripts/worktree-sweep-daily.ts, scripts/overseer-tools/{dashboard-refresh.sh,feedback-sweep-once.sh,feedback-sweep-loop.sh}, a new `box` Speaker on the fleet dashboard's POST /api/steer/message (tools/fleet/wire.ts, actions.ts, routes-steer.ts parseMessageSpeaker, receipt-journal.ts, web/src/request-envelope.ts), and tests (tests/box-jobs.test.ts, tests/systemd-units.test.ts, tests/fleet-request-replay.test.ts, tests/fleet-request-envelope.test.ts, tests/fleet-actions.test.ts).
+
+This is the orchestrator's middle robustness tier: the failure to hunt is something reporting success while doing nothing (docs/reusable/silent-success.md), a message typed twice into the Overseer's pane, an alarm that is silently lost, and a unit that looks installed but does not survive a reboot.
+
+Look hard at:
+1. box-health.ts runOnce: the state machine (said / shrinkRuns / pending), write-before-post, retry of an uncertain envelope, every exit code, and what happens when /home is full (state write fails), when the dashboard is down, when collectHealth's commands fail under systemd's PATH.
+2. box-notify.ts readBoxAnswer against what tools/fleet/routes-steer.ts actually returns for each path (message success, replay, conflict, expired, refusals with and without `delivery`), and whether an uncertain retry can ever type twice. Does the route's rate limiter or quarantine change the picture for a `box` message?
+3. Is `box` complete everywhere Speaker matters (the web client's rendering of receipts/feeds, quarantine, drain, recovery, anything with an exhaustive switch or allowlist)? `npm run typecheck` passes; look for runtime allowlists typecheck cannot see.
+4. worktree-sweep-daily.ts: the unowned in-use rule, its state file, the message, exit codes; that running under systemd (no Claude session, cwd the primary, under flock) behaves like an interactive `npm run worktree:sweep -- --remove`.
+5. The units and provision.sh: flock usage, OnUnitActiveSec vs OnUnitInactiveSec, Persistent=, After=network-online.target, HOME/PATH, that `sudo -n` in fleet-restart.ts works from the dashboard-refresh unit, that provisioning enables what it should and not feedback-sweep, and the provision check lines.
+6. dashboard-refresh.sh after its edits: `rc=$?` placement, exit codes, the explicit refspec.
+7. Docs that now say something false.
+
+Then run: `npm run typecheck`, and `npx vitest run tests/box-jobs.test.ts tests/systemd-units.test.ts tests/fleet-request-replay.test.ts tests/fleet-request-envelope.test.ts tests/fleet-actions.test.ts tests/doc-links.test.ts`. Fix what you find inside this change's scope, adding a test for each real bug (watch it fail first where you can). Report anything wider without fixing it.
+
+Write your answer as: numbered findings, each with severity (P0/P1/P2), file:line evidence, and either FIXED (what you changed) or NOT FIXED (why, and what you recommend). Then the gate results. End with a one-line verdict: SHIP, SHIP AFTER FIXES ABOVE, or DO NOT SHIP.

@@ -34,6 +34,7 @@ import { describe, expect, it } from "vitest";
 
 const REPO = fileURLToPath(new URL("..", import.meta.url));
 const PROVISION = readFileSync(`${REPO}infra/hetzner/provision.sh`, "utf8");
+const STANDING_JOBS = readFileSync(`${REPO}scripts/overseer-tools/standing-jobs.md`, "utf8");
 
 /** The units this box runs, and the heredoc delimiter each is spliced under. */
 const UNITS = [
@@ -793,6 +794,7 @@ describe.each([
     expect(lines).toContain("WorkingDirectory=/home/@USER@/code/spideryarn2");
     expect(lines).toContain("Environment=HOME=/home/@USER@");
     expect(service).not.toMatch(/worktrees\//);
+    if (name === "box-health") expect(lines.join("\n")).toContain("/usr/sbin"); // `swapon` lives there on the box.
   });
 
   it("never sets NoNewPrivileges= or capabilities", () => {
@@ -810,6 +812,12 @@ describe.each([
     else expect(PROVISION).not.toMatch(enables);
     // Never the bare service: only the timer is ever enabled.
     expect(PROVISION).not.toMatch(new RegExp(`^systemctl enable [^\\n]*\\b${name}\\.service\\b`, "m"));
+  });
+
+  it("provisioning checks the installed service's user and primary working directory", () => {
+    expect(PROVISION).toContain('check "repeating job units run as $USER_NAME"');
+    expect(PROVISION).toContain('check "repeating jobs use the primary checkout"');
+    expect(PROVISION).toContain('check "repeating job commands come from the primary checkout"');
   });
 
   it("a box that was off catches up: OnBootSec= on an interval timer, Persistent= on a calendar one", () => {
@@ -840,4 +848,18 @@ describe.each([
       rmSync(dir, { recursive: true, force: true });
     }
   });
+});
+
+it("the renewal fallback requires the worktree timer to be both enabled and active", () => {
+  expect(STANDING_JOBS).toContain("systemctl is-enabled worktree-sweep.timer");
+  expect(STANDING_JOBS).toContain("systemctl is-active worktree-sweep.timer");
+  expect(STANDING_JOBS).not.toContain("the timer ran it at 06:30");
+});
+
+it("systemd job wrappers use the checkout's tsx rather than network-capable npx", () => {
+  for (const file of ["dashboard-refresh.sh", "feedback-sweep-once.sh"]) {
+    const source = readFileSync(`${REPO}scripts/overseer-tools/${file}`, "utf8");
+    expect(source).toContain("./node_modules/.bin/tsx");
+    expect(source).not.toMatch(/^npx tsx /m);
+  }
 });

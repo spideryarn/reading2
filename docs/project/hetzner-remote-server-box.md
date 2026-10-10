@@ -1110,17 +1110,16 @@ found no address by the time you get here. So `tailscale up` is two commands, no
 ```
 tailscale ip -4 | head -n 1                 # confirm a tailnet address exists BEFORE the next line
 printf 'FLEET_BIND=127.0.0.1,%s\n' "$(tailscale ip -4 | head -n 1)" | sudo tee /etc/fleet-dashboard.env
-sudo systemctl restart fleet-dashboard      # only if the unit is enabled — see the warning below
+sudo systemctl restart fleet-dashboard      # provisioning enables the unit for boot
 ```
 
 **That order, and it matters.** `EnvironmentFile=` is read when the service *starts*, so a restart
 before the file exists binds loopback and looks fine until somebody picks up a phone. Written first,
 the *first* start after login already has the address.
 
-**The restart is conditional on the unit being enabled**, which as of 2026-09-08 it is not: the page
-is up under a tmux job, and starting the unit alongside it makes two supervisors race for `:8787`.
-If the unit is not running, there is nothing to restart — the file is simply waiting for its first
-start, which is what you want.
+Since 2026-10-10 provisioning enables the dashboard unit for boot; the old tmux supervisor is gone.
+If this is an older box where the unit is not running yet, the restart fails harmlessly and the file
+waits for its first start.
 
 Doing this by hand, rather than by an `ExecStartPre` that generates the file, is deliberate: an
 `ExecStartPre` writes the file *after* systemd has already read `EnvironmentFile`, so it would take
@@ -1249,10 +1248,9 @@ when somebody cleans up. Two consequences follow, and both are real rather than 
 - They run **whatever is in the primary checkout when they start**, including a red `dev`. That is
   deliberate: a dashboard that refuses to boot until somebody fixes `dev` is unavailable exactly
   when it is needed.
-- Nothing keeps the primary checkout current, and it is often hours behind `origin/dev`. **Updating
-  it is a deploy**: `git merge origin/dev` there, then `npm run build:fleet` if the dashboard's
-  client changed — `tools/fleet/web/dist/` is gitignored, so no pull can supply it, and a stale one
-  is served with no error anywhere.
+- `dashboard-refresh.timer` fetches and merges `origin/dev` hourly, then rebuilds and restarts only
+  when dashboard inputs changed. A failed merge or restart leaves the unit failed for box-health to
+  report; until the next successful run, the primary and served bundle can still lag.
 
 The unit files are checked in at [`infra/hetzner/systemd/`](../../infra/hetzner/systemd/) and
 installed by [`provision.sh`](../../infra/hetzner/provision.sh), which splices them in verbatim —
@@ -1287,11 +1285,11 @@ primary checkout, as `greg` — [plan 261010d](../plans/261010d-standing-jobs-su
 | `box-health` | 10 min | the dashboard's own health verdict, and whether any of the box's units has `failed` | when its alarms change; daily while one lasts |
 | `worktree-sweep` | 06:30 daily | `worktree:sweep --remove` | only trees that need judging |
 | `dashboard-refresh` | hourly | merge `origin/dev` into the primary; restart the dashboard if its inputs changed | through box-health, when it fails |
-| `feedback-sweep` | 3 h after the last | one Claude feedback sweep | through box-health, when it fails. **Installed, not enabled** until Greg says |
+| `feedback-sweep` | 3 h after the last | one Claude feedback sweep | through box-health, when it fails. Installed; provisioning leaves enablement unchanged until Greg says |
 
-Each exits 1 when it could not do its work, so its unit shows `failed`, and **box-health is the one
-path by which any of them reaches the Overseer** — as a line in its pane from speaker `box`, through
-the dashboard's steer route, once per change. Nothing is ever said for a run that went fine. The
+Each exits nonzero when it could not do its work, so its unit shows `failed`; box-health reports
+those failures as a line from speaker `box`. The worktree sweep also sends its own successful
+`needs-a-look` judgement messages. An ordinary run with no alarm or judgement stays silent. The
 full record is the journal: `journalctl -u box-health` (or the job's name).
 
 A reboot brings them back with `timers.target`; an OOM-killed run is simply run at the next tick;

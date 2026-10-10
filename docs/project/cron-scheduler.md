@@ -130,7 +130,9 @@ wrong place to touch that from. The row that says the box *"should not become it
 **The box's own chores are plain systemd timers**, since 2026-10-10: box health, the daily worktree
 sweep, the hourly dashboard refresh, and (once Greg enables it) the feedback sweep —
 [hetzner-remote-server-box.md § The repeating jobs, on timers](hetzner-remote-server-box.md#the-repeating-jobs-on-timers).
-They are about the fleet and the box, never a reader's data, so the same line holds for them.
+The first three are about the fleet and the box, never a reader's data. The feedback sweep is an
+operator workflow over reports readers chose to send; it remains disabled until Greg approves the
+paid, clock-driven work.
 
 ## See also
 

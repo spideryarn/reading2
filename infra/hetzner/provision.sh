@@ -2317,7 +2317,7 @@ install_unit box-health.service <<'BOX_HEALTH_SERVICE_UNIT'
 # docs/plans/261010d-standing-jobs-survive-a-reboot.md.
 #
 # One journal line per check every run (`journalctl -u box-health`). The
-# Overseer hears only when the set of alarms changes, and every six hours while
+# Overseer hears only when the set of alarms changes, and once a day while
 # one lasts, through the fleet dashboard's steer route as speaker `box`.
 #
 # A SYSTEM unit with User=@USER@, not a systemd USER unit, for the reason
@@ -2341,9 +2341,13 @@ Group=@USER@
 # The PRIMARY checkout, never a worktree -- a worktree is deleted by normal
 # tidying, and an ExecStart inside one is a check that disappears with it.
 WorkingDirectory=/home/@USER@/code/spideryarn2
-# HOME explicitly: the state file is ~/.overseer/box-health.json.
 Environment=HOME=/home/@USER@
-Environment=PATH=/usr/local/bin:/usr/bin:/bin
+# What was last said to the Overseer: /var/lib/box-health/box-health.json, made
+# by systemd and owned by @USER@. On the ROOT disk on purpose: nothing is posted
+# that cannot first be recorded, so a state file on /home would let a full /home
+# silence the alarm about /home.
+StateDirectory=box-health
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 # The checkout's own tsx, not `npx tsx`, which can fetch SOME tsx from the network.
 ExecStart=/home/@USER@/code/spideryarn2/node_modules/.bin/tsx scripts/box-health.ts
 TimeoutStartSec=5min
@@ -2750,7 +2754,7 @@ echo "box-tidy timer enabled and started"
 # alone here in both directions: enabling it starts paid work, so it is a
 # person's step, and a re-run must not disable one somebody enabled.
 systemctl enable box-health.timer worktree-sweep.timer dashboard-refresh.timer
-echo "box-health, worktree-sweep and dashboard-refresh timers enabled for the next boot (not started); feedback-sweep installed, not enabled"
+echo "box-health, worktree-sweep and dashboard-refresh timers enabled for the next boot (not started); feedback-sweep installed, enablement unchanged"
 
 echo "=== ssh ==="
 systemctl start apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true
@@ -3135,6 +3139,9 @@ check "box-tidy runs as $USER_NAME" 'systemctl show -p User --value box-tidy.ser
 check "box-health timer enabled"  'test -L /etc/systemd/system/timers.target.wants/box-health.timer'
 check "worktree-sweep timer enabled" 'test -L /etc/systemd/system/timers.target.wants/worktree-sweep.timer'
 check "dashboard-refresh timer enabled" 'test -L /etc/systemd/system/timers.target.wants/dashboard-refresh.timer'
+check "repeating job units run as $USER_NAME" 'for unit in box-health worktree-sweep dashboard-refresh feedback-sweep; do systemctl show -p User --value "$unit.service" | grep -qx '"$USER_NAME"' || exit 1; done'
+check "repeating jobs use the primary checkout" 'for unit in box-health worktree-sweep dashboard-refresh feedback-sweep; do out=$(systemctl show -p WorkingDirectory --value "$unit.service") || exit 1; test "$out" = /home/'"$USER_NAME"'/code/spideryarn2 || exit 1; done'
+check "repeating job commands come from the primary checkout" 'for unit in box-health worktree-sweep dashboard-refresh feedback-sweep; do out=$(systemctl show -p ExecStart --value "$unit.service") || exit 1; case "$out" in *"/home/'"$USER_NAME"'/code/spideryarn2/"*) ;; *) exit 1 ;; esac; done'
 check "gh installed from GitHub's repo" 'gh --version && apt-cache policy gh | grep -q "cli.github.com"'
 check "pngquant installed"        'command -v pngquant'
 # cat-config also prints ignored duplicates. Require exactly one /tmp entry,
@@ -3145,13 +3152,11 @@ check "/tmp ages out after 7 days" 'set -o pipefail; systemd-tmpfiles --cat-conf
 # The Overseer's key file is a person's step, not provisioning's, so its absence
 # is not a failure here; a copy anybody can read is.
 check "overseer key file, if present, is root 0600" '! test -e /etc/overseer-secrets.env || test "$(stat -c %u:%a /etc/overseer-secrets.env)" = 0:600'
-# The dashboard's unit is installed and NOT enabled -- see the comment where it
-# is written. So there is no boot-symlink check here, deliberately: it would be
-# red on a correctly-provisioned box, and a red check nobody expects to be green
-# is how a report stops being read. What is asserted is that systemd can PARSE
-# the file, so the day somebody enables it there is nothing left to discover.
+# The dashboard is a boot service: the repeating jobs deliver through it, so a
+# rebuilt box must not come up with an alarm path that has no listener.
 check "fleet dashboard unit installed" 'test -f /etc/systemd/system/fleet-dashboard.service'
 check "fleet dashboard unit parses"    'systemd-analyze verify /etc/systemd/system/fleet-dashboard.service'
+check "fleet dashboard enabled"        'test -L /etc/systemd/system/multi-user.target.wants/fleet-dashboard.service'
 check "fleet dashboard runs as $USER_NAME" 'systemctl show -p User --value fleet-dashboard.service | grep -qx '"$USER_NAME"''
 check "fleet dashboard restarts always" 'systemctl show -p Restart --value fleet-dashboard.service | grep -qx always'
 check "fleet dashboard ExecStart is in the primary checkout" 'out=$(systemctl show -p ExecStart --value fleet-dashboard.service); case "$out" in *"/home/'"$USER_NAME"'/code/spideryarn2/"*worktrees*) false ;; *"/home/'"$USER_NAME"'/code/spideryarn2/"*) true ;; *) false ;; esac'

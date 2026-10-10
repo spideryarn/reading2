@@ -18,7 +18,7 @@ mkdir -p "$S" "$(dirname "$LOG")" || exit 1
 unset CLAUDE_CONFIG_DIR
 stamp=$(date -u +%H%M)
 echo "$(date -u +%FT%TZ) starting fbsweep-$stamp (run-claude, ambient login, --mcp)" | tee -a "$LOG"
-npx tsx scripts/run-claude.ts --model opus --effort high --access write --mcp --tools Read,Grep,Glob,Bash,Edit,Write,TodoWrite,mcp__sentry__search_issues,mcp__sentry__get_sentry_resource,mcp__sentry__search_events,mcp__sentry__update_issue --allow mcp__sentry__search_issues --allow mcp__sentry__get_sentry_resource --allow mcp__sentry__search_events --allow mcp__sentry__update_issue \
+./node_modules/.bin/tsx scripts/run-claude.ts --model opus --effort high --access write --mcp --tools Read,Grep,Glob,Bash,Edit,Write,TodoWrite,mcp__sentry__search_issues,mcp__sentry__get_sentry_resource,mcp__sentry__search_events,mcp__sentry__update_issue --allow mcp__sentry__search_issues --allow mcp__sentry__get_sentry_resource --allow mcp__sentry__search_events --allow mcp__sentry__update_issue \
   --timeout-minutes 150 --prompt-file "$PROMPT" \
   --output "$S/fbsweep-$stamp.md" --activity-log "$S/fbsweep-$stamp.activity.jsonl" >> "$LOG" 2>&1
 rc=$?

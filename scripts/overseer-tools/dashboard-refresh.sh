@@ -24,22 +24,59 @@ fi
 
 # Into the explicit remote-tracking ref, as the watchdog fetches, so origin/dev is what was just fetched.
 git fetch -q origin +refs/heads/dev:refs/remotes/origin/dev || { say "SKIP: fetch failed"; exit 1; }
-behind=$(git rev-list --count HEAD..origin/dev)
+if ! behind=$(git rev-list --count HEAD..origin/dev); then
+  say "SKIP: could not compare HEAD with origin/dev"
+  exit 1
+fi
 if [ "$behind" != 0 ]; then
   if git merge -q --no-edit origin/dev 2>>"$LOG"; then say "merged origin/dev into the primary ($behind commit(s))"
   else say "SKIP: merge of origin/dev failed — leaving all work and conflicts for review"; exit 1; fi
 fi
-head=$(git rev-parse HEAD)
-last=$(cat "$STATE" 2>/dev/null || true)
-if [ -z "$last" ]; then say "no record of the last served commit; treating as changed"
-elif git diff --quiet "$last" "$head" -- $INPUTS; then say "no change in build inputs since $(git rev-parse --short "$last"); nothing to restart"; exit 0
+if ! head=$(git rev-parse HEAD); then
+  say "SKIP: could not read the primary's HEAD"
+  exit 1
 fi
-if ! git diff --quiet "${last:-$head~1}" "$head" -- package-lock.json; then
+last=
+if [ -e "$STATE" ] && ! last=$(cat "$STATE" 2>/dev/null); then
+  say "SKIP: could not read last-served state $STATE"
+  exit 1
+fi
+base="$head~1"
+if [ -z "$last" ]; then
+  say "no record of the last served commit; treating as changed"
+elif ! git cat-file -e "$last^{commit}" 2>/dev/null; then
+  say "last-served state is not a commit ($last); treating as changed"
+else
+  base=$last
+  git diff --quiet "$last" "$head" -- $INPUTS
+  rc=$?
+  if [ "$rc" -eq 0 ]; then
+    short=$(git rev-parse --short "$last") || { say "SKIP: could not abbreviate last-served commit"; exit 1; }
+    say "no change in build inputs since $short; nothing to restart"
+    exit 0
+  elif [ "$rc" -gt 1 ]; then
+    say "SKIP: could not compare build inputs (git diff exit $rc)"
+    exit 1
+  fi
+fi
+git diff --quiet "$base" "$head" -- package-lock.json
+lock_rc=$?
+if [ "$lock_rc" -eq 1 ]; then
   say "package-lock changed; npm install"; npm install --no-audit --no-fund >>"$LOG" 2>&1 || { say "npm install failed — not restarting onto a broken node_modules"; exit 1; }
+elif [ "$lock_rc" -gt 1 ]; then
+  say "SKIP: could not compare package-lock.json (git diff exit $lock_rc)"
+  exit 1
 fi
 say "restarting: build inputs changed between ${last:-(none)} and $head"
-if npx tsx scripts/fleet-restart.ts restart >>"$LOG" 2>&1; then
-  echo "$head" > "$STATE"; say "restart OK; now serving $head"
+if ./node_modules/.bin/tsx scripts/fleet-restart.ts restart >>"$LOG" 2>&1; then
+  tmp="$STATE.tmp.$$"
+  if printf '%s\n' "$head" > "$tmp" && mv -T "$tmp" "$STATE"; then
+    say "restart OK; now serving $head"
+  else
+    rm -f "$tmp"
+    say "restart succeeded but its served-commit state could not be saved; refusing a false success"
+    exit 1
+  fi
 else
   rc=$?
   say "restart refused or failed (exit $rc) — see $LOG; will try again next hour"

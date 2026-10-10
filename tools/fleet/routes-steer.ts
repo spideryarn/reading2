@@ -518,7 +518,8 @@ export function parseSpeaker(v: unknown): Parsed<Speaker> {
  */
 export function parseMessageSpeaker(v: unknown): Parsed<Speaker> {
   if (v === "box") return { ok: true, value: "box" };
-  return parseSpeaker(v);
+  const parsed = parseSpeaker(v);
+  return parsed.ok ? parsed : bad(`speaker must be 'greg', 'overseer' or 'box', not ${JSON.stringify(v)}`);
 }
 
 /**
@@ -1130,7 +1131,7 @@ export function makeSteerRoutes(overrides: Partial<SteerDeps> = {}): SteerRoutes
       respond(
         res,
         429,
-        { ok: false, code: "rate-limited", why: rate.why },
+        { ok: false, code: "rate-limited", why: rate.why, delivery: "none" },
         { "retry-after": String(Math.max(1, Math.ceil(rate.retryAfterMs / 1000))) },
       );
       return;

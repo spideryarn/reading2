@@ -73,7 +73,7 @@ export type AlarmKey = "critical" | "unknown" | "disk:/" | "disk:/home" | "units
 
 /**
  * The box's own units whose `failed` state is an alarm. Each of the oneshot
- * jobs exits 1 when it could not do its work, so a `failed` here is that job
+ * jobs exits nonzero when it could not do its work, so a `failed` here is that job
  * saying so — and this is the one path by which it reaches the Overseer,
  * rather than every job growing its own notifier. It also carries the
  * overseer-watchdog's verdict, which until now reached only the journal
@@ -100,6 +100,9 @@ export type UnitsReading = { kind: "read"; failed: string[] } | { kind: "cannot-
 export function parseIsFailed(stdout: string, units: readonly string[]): UnitsReading {
   const lines = stdout.split("\n").map((l) => l.trim()).filter((l) => l !== "");
   if (lines.length !== units.length) return { kind: "cannot-tell", why: `systemctl is-failed printed ${lines.length} states for ${units.length} units` };
+  const known = new Set(["active", "reloading", "inactive", "failed", "activating", "deactivating", "maintenance"]);
+  const unknown = lines.find((line) => !known.has(line));
+  if (unknown !== undefined) return { kind: "cannot-tell", why: `systemctl is-failed printed an unknown state: ${unknown}` };
   return { kind: "read", failed: units.filter((_, i) => lines[i] === "failed") };
 }
 
@@ -134,7 +137,10 @@ function readUnits(): UnitsReading {
 /** What was last DELIVERED to the Overseer — not what was last measured. */
 export type Said = { keys: AlarmKey[]; at: string };
 
-export type Pending = { envelope: BoxEnvelope; to: string; says: Said };
+export type Pending =
+  | { phase: "waiting"; text: string; says: Said }
+  | { phase: "ready"; text: string; envelope: BoxEnvelope; to: string; says: Said };
+export type ReadyPending = Extract<Pending, { phase: "ready" }>;
 
 export type BoxHealthState = {
   said: Said;
@@ -183,16 +189,16 @@ export function decide(
 /**
  * What a post's outcome does to the state. `sent` and `abandoned` count as said
  * (an abandoned envelope may have been typed, and must not be typed again);
- * `not-sent` drops the envelope so the next run decides afresh; `uncertain`
- * keeps it for the next run to resend.
+ * `not-sent` drops only the envelope so the same intent can be addressed
+ * afresh; `uncertain` keeps the exact envelope for the next run to resend.
  */
-export function settle(state: BoxHealthState, pending: Pending, outcome: BoxNotifyOutcome): BoxHealthState {
+export function settle(state: BoxHealthState, pending: ReadyPending, outcome: BoxNotifyOutcome, nowMs = Date.parse(pending.says.at)): BoxHealthState {
   switch (outcome.kind) {
     case "sent":
     case "abandoned":
-      return { ...state, said: pending.says, pending: null };
+      return { ...state, said: { ...pending.says, at: new Date(nowMs).toISOString() }, pending: null };
     case "not-sent":
-      return { ...state, pending: null };
+      return { ...state, pending: { phase: "waiting", text: pending.text, says: pending.says } };
     case "uncertain":
       return { ...state, pending };
     default: {
@@ -206,33 +212,64 @@ export function settle(state: BoxHealthState, pending: Pending, outcome: BoxNoti
 /* State file                                                          */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Where what was said is recorded. Under systemd, `StateDirectory=box-health`
+ * — /var/lib/box-health, on the ROOT disk. Not ~/.overseer: that is on /home,
+ * and since nothing is posted that cannot first be recorded, a full /home would
+ * silence exactly the alarm about /home filling (2026-10-05). Run by hand, the
+ * old place.
+ */
 export function statePath(env: NodeJS.ProcessEnv = process.env): string {
-  return env["BOX_HEALTH_STATE"] ?? path.join(homedir(), ".overseer", "box-health.json");
+  const explicit = env["BOX_HEALTH_STATE"];
+  if (explicit !== undefined) return explicit;
+  const dir = env["STATE_DIRECTORY"];
+  if (dir !== undefined && dir !== "") return path.join(dir.split(":")[0] ?? dir, "box-health.json");
+  return path.join(homedir(), ".overseer", "box-health.json");
 }
 
-function isState(v: unknown): v is BoxHealthState {
-  if (typeof v !== "object" || v === null) return false;
-  const s = v as BoxHealthState;
-  return typeof s.said === "object" && s.said !== null && Array.isArray(s.said.keys) && typeof s.said.at === "string" && typeof s.shrinkRuns === "number" && (s.pending === null || typeof s.pending === "object");
+function parseState(v: unknown): BoxHealthState | null {
+  if (typeof v !== "object" || v === null) return null;
+  const s = v as Record<string, unknown>;
+  const said = s["said"] as Partial<Said> | null;
+  if (typeof said !== "object" || said === null || !Array.isArray(said.keys) || typeof said.at !== "string" || typeof s["shrinkRuns"] !== "number") return null;
+  const cleanSaid: Said = { keys: said.keys as AlarmKey[], at: said.at };
+  const base = { said: cleanSaid, shrinkRuns: s["shrinkRuns"] as number };
+  const raw = s["pending"];
+  if (raw === null) return { ...base, pending: null };
+  if (typeof raw !== "object" || raw === null) return null;
+  const p = raw as Record<string, unknown>;
+  const pendingSaid = p["says"] as Partial<Said> | null;
+  if (typeof pendingSaid !== "object" || pendingSaid === null || !Array.isArray(pendingSaid.keys) || typeof pendingSaid.at !== "string") return null;
+  const says: Said = { keys: pendingSaid.keys as AlarmKey[], at: pendingSaid.at };
+  if (p["phase"] === "waiting" && typeof p["text"] === "string") return { ...base, pending: { phase: "waiting", text: p["text"], says } };
+  if (p["phase"] === "ready" && typeof p["text"] === "string" && typeof p["to"] === "string" && typeof p["envelope"] === "object" && p["envelope"] !== null) {
+    return { ...base, pending: { phase: "ready", text: p["text"], to: p["to"], envelope: p["envelope"] as BoxEnvelope, says } };
+  }
+  // Compatibility with the first build of this change, before the durable
+  // intent gained an explicit phase. Its envelope is already safe to replay.
+  const oldEnvelope = p["envelope"] as Partial<BoxEnvelope> | null;
+  if (typeof p["to"] === "string" && typeof oldEnvelope === "object" && oldEnvelope !== null && typeof oldEnvelope.text === "string") {
+    return { ...base, pending: { phase: "ready", text: oldEnvelope.text, to: p["to"], envelope: oldEnvelope as BoxEnvelope, says } };
+  }
+  return null;
 }
 
 /** The state, or `EMPTY_STATE` with a sentence when there is none or it will not parse. */
-export function readState(file: string): { state: BoxHealthState; note: string | null } {
+export function readState(file: string): { state: BoxHealthState; note: string | null; usable: boolean } {
   let raw: string;
   try {
     raw = readFileSync(file, "utf8");
   } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === "ENOENT") return { state: EMPTY_STATE, note: null };
-    return { state: EMPTY_STATE, note: `cannot read ${file} (${(e as Error).message}); treating as nothing said` };
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return { state: EMPTY_STATE, note: null, usable: true };
+    return { state: EMPTY_STATE, note: `cannot read ${file} (${(e as Error).message}); refusing to guess what was sent`, usable: false };
   }
   try {
-    const v = JSON.parse(raw) as unknown;
-    if (isState(v)) return { state: v, note: null };
+    const parsed = parseState(JSON.parse(raw) as unknown);
+    if (parsed !== null) return { state: parsed, note: null, usable: true };
   } catch {
     /* below */
   }
-  // The worst this costs is one repeated message; never a silenced alarm.
-  return { state: EMPTY_STATE, note: `${file} is not a box-health state file; treating as nothing said` };
+  return { state: EMPTY_STATE, note: `${file} is not a box-health state file; refusing to guess what was sent`, usable: false };
 }
 
 export function writeState(file: string, s: BoxHealthState): void {
@@ -257,20 +294,42 @@ export type RunDeps = {
 };
 
 /** Persist, or say why not. /home full is one of the alarms, so a failed write is expected sometimes. */
-function persist(deps: RunDeps, s: BoxHealthState): void {
+function persist(deps: RunDeps, s: BoxHealthState): boolean {
   try {
     writeState(deps.file, s);
+    return true;
   } catch (e) {
-    deps.log(`state: could not write ${deps.file} (${(e as Error).message}); the next run may repeat a message`);
+    deps.log(`state: could not write ${deps.file} (${(e as Error).message}); refusing to post without durable state`);
+    return false;
   }
 }
 
-async function post(deps: RunDeps, state: BoxHealthState, pending: Pending, label: string): Promise<{ state: BoxHealthState; outcome: BoxNotifyOutcome }> {
+async function post(deps: RunDeps, state: BoxHealthState, pending: ReadyPending, label: string): Promise<{ state: BoxHealthState; outcome: BoxNotifyOutcome; persisted: boolean }> {
   const outcome = await postEnvelope(pending.envelope, pending.to, deps.notify);
   deps.log(`${label}: ${describeBoxNotify(outcome)}`);
-  const next = settle(state, pending, outcome);
-  persist(deps, next);
-  return { state: next, outcome };
+  const next = settle(state, pending, outcome, deps.now());
+  return { state: next, outcome, persisted: persist(deps, next) };
+}
+
+/** Advance one durable intent. Every network attempt is preceded by a state write. */
+async function deliverPending(
+  deps: RunDeps,
+  state: BoxHealthState,
+  label: string,
+): Promise<{ state: BoxHealthState; outcome: BoxNotifyOutcome; persisted: boolean }> {
+  let pending = state.pending;
+  if (pending === null) throw new Error("deliverPending called without a pending message");
+  if (pending.phase === "waiting") {
+    const prepared = await prepareEnvelope(pending.text, deps.notify);
+    if (prepared.kind !== "ready") {
+      deps.log(`${label}: NOT told the Overseer, nothing typed — ${prepared.why}`);
+      return { state, outcome: prepared, persisted: true };
+    }
+    pending = { ...pending, phase: "ready", envelope: prepared.envelope, to: prepared.to };
+    state = { ...state, pending };
+    if (!persist(deps, state)) return { state, outcome: { kind: "not-sent", why: "could not persist the prepared envelope" }, persisted: false };
+  }
+  return post(deps, state, pending, label);
 }
 
 /** One timer tick. Returns the exit code. */
@@ -282,6 +341,7 @@ export async function runOnce(deps: RunDeps): Promise<number> {
 
   const read = readState(deps.file);
   if (read.note !== null) deps.log(`state: ${read.note}`);
+  if (!read.usable) return 1;
   let state = read.state;
 
   // A message from an earlier run whose delivery was uncertain goes first, as
@@ -291,38 +351,36 @@ export async function runOnce(deps: RunDeps): Promise<number> {
       deps.log("an earlier message is pending and --no-notify was given; not resending");
       return 1;
     }
-    const r = await post(deps, state, state.pending, "pending message from an earlier run");
+    const r = await deliverPending(deps, state, "pending message from an earlier run");
     state = r.state;
-    if (state.pending !== null) return 1;
+    if (!r.persisted || state.pending !== null) return 1;
   }
 
   const { decision, shrinkRuns } = decide(alarm, report.verdict.level, state, deps.now());
   state = { ...state, shrinkRuns };
   if (decision.kind === "silent") {
-    persist(deps, state);
-    return unhealthy ? 1 : 0;
+    return persist(deps, state) ? (unhealthy ? 1 : 0) : 1;
   }
   if (!deps.notifyEnabled) {
     deps.log(`would tell the Overseer (${decision.kind}), --no-notify given: ${oneLine(decision.text)}`);
     return unhealthy ? 1 : 0;
   }
 
-  const prepared = await prepareEnvelope(decision.text, deps.notify);
-  if (prepared.kind !== "ready") {
-    // Nothing typed, nothing recorded: the next run decides again and retries.
-    deps.log(`${decision.kind}: NOT told the Overseer, nothing typed — ${prepared.why}`);
-    persist(deps, { ...state, shrinkRuns: decision.kind === "clear" || decision.kind === "narrower" ? HOLD_RUNS - 1 : state.shrinkRuns });
-    return 1;
-  }
-  const pending: Pending = { envelope: prepared.envelope, to: prepared.to, says: { keys: decision.keys, at: new Date(deps.now()).toISOString() } };
-  // Written BEFORE the post, so a run killed in between leaves the envelope for
-  // the next one to resend rather than a fresh message to send twice.
-  persist(deps, { ...state, pending });
-  const r = await post(deps, { ...state, pending }, pending, decision.kind);
-  if (r.outcome.kind === "not-sent" && (decision.kind === "clear" || decision.kind === "narrower")) {
-    persist(deps, { ...r.state, shrinkRuns: HOLD_RUNS - 1 });
-  }
-  return unhealthy || r.outcome.kind !== "sent" ? 1 : 0;
+  const pending: Pending = {
+    phase: "waiting",
+    text: oneLine(decision.text),
+    says: { keys: decision.keys, at: new Date(deps.now()).toISOString() },
+  };
+  state = {
+    ...state,
+    shrinkRuns: decision.kind === "clear" || decision.kind === "narrower" ? HOLD_RUNS - 1 : state.shrinkRuns,
+    pending,
+  };
+  // The intent itself is durable before target lookup. Otherwise a dashboard
+  // outage followed by a healthy reading silently loses a transient alarm.
+  if (!persist(deps, state)) return 1;
+  const r = await deliverPending(deps, state, decision.kind);
+  return !r.persisted || unhealthy || r.outcome.kind !== "sent" ? 1 : 0;
 }
 
 function isMain(): boolean {

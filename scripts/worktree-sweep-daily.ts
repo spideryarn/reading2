@@ -40,7 +40,14 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 
-import { describeBoxNotify, tellOverseerFromBox } from "./box-notify.js";
+import {
+  describeBoxNotify,
+  postEnvelopeWithRetries,
+  prepareEnvelope,
+  type BoxEnvelope,
+  type BoxNotifyOutcome,
+  type NotifyOptions,
+} from "./box-notify.js";
 import { classifyAll, removeAll, renderRemoval, type SweepOutcome } from "./worktree-sweep.js";
 import { GIT_LOCATION_ENV } from "../tools/fleet/readiness-git.js";
 
@@ -57,6 +64,11 @@ export function unowned(o: SweepOutcome): boolean {
 
 /** Which unowned in-use trees have been seen before, and which have been said. */
 export type SweepState = { seen: string[]; said: string[] };
+type SweepPending =
+  | { phase: "waiting"; text: string; after: SweepState }
+  | { phase: "ready"; text: string; after: SweepState; envelope: BoxEnvelope; to: string };
+export type StoredSweepState = SweepState & { pending: SweepPending | null };
+const EMPTY_SWEEP_STATE: StoredSweepState = { seen: [], said: [], pending: null };
 
 /**
  * The in-use trees to say today, and tomorrow's state. A tree is said on the
@@ -74,6 +86,12 @@ export function unownedToSay(outcomes: readonly SweepOutcome[], prev: SweepState
       said: [...new Set([...prev.said.filter((n) => names.has(n)), ...say.map((o) => o.name)])].sort(),
     },
   };
+}
+
+/** A dry notification must not consume the once-only in-use message. */
+export function withoutUndelivered(next: SweepState, say: readonly SweepOutcome[]): SweepState {
+  const unsaid = new Set(say.map((o) => o.name));
+  return { ...next, said: next.said.filter((name) => !unsaid.has(name)) };
 }
 
 function firstLine(o: SweepOutcome): string {
@@ -100,21 +118,83 @@ export function sweepStatePath(env: NodeJS.ProcessEnv = process.env): string {
   return env["WORKTREE_SWEEP_STATE"] ?? path.join(homedir(), ".overseer", "worktree-sweep.json");
 }
 
-function readSweepState(file: string): SweepState {
+function readSweepState(file: string): StoredSweepState {
   try {
-    const v = JSON.parse(readFileSync(file, "utf8")) as Partial<SweepState>;
-    if (Array.isArray(v.seen) && Array.isArray(v.said)) return { seen: v.seen.map(String), said: v.said.map(String) };
-  } catch {
-    /* missing or unreadable: start again; the worst case is one in-use tree said twice */
+    const v = JSON.parse(readFileSync(file, "utf8")) as Partial<StoredSweepState>;
+    if (Array.isArray(v.seen) && Array.isArray(v.said)) {
+      const base = { seen: v.seen.map(String), said: v.said.map(String) };
+      if (v.pending === undefined || v.pending === null) return { ...base, pending: null };
+      const p = v.pending as Partial<SweepPending>;
+      const after = p.after as Partial<SweepState> | undefined;
+      if (typeof p.text !== "string" || after === undefined || !Array.isArray(after.seen) || !Array.isArray(after.said)) {
+        throw new Error("invalid pending message");
+      }
+      const cleanAfter = { seen: after.seen.map(String), said: after.said.map(String) };
+      if (p.phase === "waiting") return { ...base, pending: { phase: "waiting", text: p.text, after: cleanAfter } };
+      if (p.phase === "ready" && typeof p.to === "string" && typeof p.envelope === "object" && p.envelope !== null) {
+        return { ...base, pending: { phase: "ready", text: p.text, after: cleanAfter, to: p.to, envelope: p.envelope as BoxEnvelope } };
+      }
+      throw new Error("invalid pending message phase");
+    }
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return EMPTY_SWEEP_STATE;
+    throw new Error(`cannot read ${file}; refusing to guess which sweep messages were sent: ${(e as Error).message}`);
   }
-  return { seen: [], said: [] };
+  throw new Error(`${file} is not a worktree-sweep state file; refusing to guess which messages were sent`);
 }
 
-function writeSweepState(file: string, s: SweepState): void {
+function writeSweepState(file: string, s: StoredSweepState): void {
   mkdirSync(path.dirname(file), { recursive: true });
   const tmp = `${file}.tmp-${process.pid}`;
   writeFileSync(tmp, `${JSON.stringify(s)}\n`);
   renameSync(tmp, file);
+}
+
+type SweepDelivery = { state: StoredSweepState; outcome: BoxNotifyOutcome };
+
+/** Resume one durable notification intent. No POST happens before its exact envelope is on disk. */
+export async function deliverSweepPending(
+  file: string,
+  state: StoredSweepState,
+  notify: NotifyOptions & { tries?: number; gapMs?: number } = {},
+  log: (line: string) => void = console.log,
+): Promise<SweepDelivery> {
+  let pending = state.pending;
+  if (pending === null) throw new Error("deliverSweepPending called without a pending message");
+  if (pending.phase === "waiting") {
+    const prepared = await prepareEnvelope(pending.text, notify);
+    if (prepared.kind !== "ready") {
+      log(describeBoxNotify(prepared));
+      return { state, outcome: prepared };
+    }
+    pending = { ...pending, phase: "ready", envelope: prepared.envelope, to: prepared.to };
+    state = { ...state, pending };
+    writeSweepState(file, state);
+  }
+  const outcome = await postEnvelopeWithRetries(pending.envelope, pending.to, notify);
+  log(describeBoxNotify(outcome));
+  const next: StoredSweepState =
+    outcome.kind === "sent" || outcome.kind === "abandoned"
+      ? { ...pending.after, pending: null }
+      : outcome.kind === "not-sent"
+        ? { ...state, pending: { phase: "waiting", text: pending.text, after: pending.after } }
+        : state;
+  writeSweepState(file, next);
+  return { state: next, outcome };
+}
+
+/** Queue a new message durably, then try to deliver it. */
+export async function queueSweepMessage(
+  file: string,
+  current: SweepState,
+  text: string,
+  after: SweepState,
+  notify: NotifyOptions & { tries?: number; gapMs?: number } = {},
+  log: (line: string) => void = console.log,
+): Promise<SweepDelivery> {
+  const state: StoredSweepState = { ...current, pending: { phase: "waiting", text, after } };
+  writeSweepState(file, state);
+  return deliverSweepPending(file, state, notify, log);
 }
 
 async function main(): Promise<number> {
@@ -123,25 +203,33 @@ async function main(): Promise<number> {
   // --dry-run: remove nothing, tell nobody, write no state — the whole run, said aloud.
   const dryRun = process.argv.includes("--dry-run");
   const quiet = dryRun || process.argv.includes("--no-notify");
+  const file = sweepStatePath();
+  let stored = readSweepState(file);
+  if (stored.pending !== null && !dryRun) {
+    if (quiet) {
+      console.log("an earlier sweep message is pending and --no-notify was given; not resending");
+      return 1;
+    }
+    const delivery = await deliverSweepPending(file, stored);
+    stored = delivery.state;
+    if (stored.pending !== null || delivery.outcome.kind !== "sent") return 1;
+  }
   const outcomes = removeAll(cwd, classifyAll(cwd), { dryRun });
   console.log(renderRemoval(outcomes, dryRun));
 
-  const file = sweepStatePath();
-  const { say, next } = unownedToSay(outcomes, readSweepState(file));
+  const current: SweepState = { seen: stored.seen, said: stored.said };
+  const { say, next } = unownedToSay(outcomes, current);
   const text = sweepMessage(outcomes, say);
   const refused = outcomes.some((o) => o.kind === "refused");
   if (text === null || quiet) {
     if (text !== null) console.log(`would tell the Overseer, --no-notify given: ${text}`);
-    if (!dryRun) writeSweepState(file, next);
+    if (!dryRun) writeSweepState(file, { ...withoutUndelivered(next, say), pending: null });
     return refused ? 1 : 0;
   }
-  const outcome = await tellOverseerFromBox(text);
-  console.log(describeBoxNotify(outcome));
-  // An in-use tree counts as said only once the message went (or may have).
-  writeSweepState(file, outcome.kind === "not-sent" ? { ...next, said: next.said.filter((n) => !say.some((o) => o.name === n)) } : next);
+  const delivery = await queueSweepMessage(file, current, text, next);
   // Once a day, so a message that did not go waits for tomorrow's — and the
   // non-zero exit puts this run in `systemctl --failed` meanwhile.
-  return outcome.kind === "not-sent" || outcome.kind === "uncertain" || refused ? 1 : 0;
+  return delivery.outcome.kind !== "sent" || refused ? 1 : 0;
 }
 
 function isMain(): boolean {

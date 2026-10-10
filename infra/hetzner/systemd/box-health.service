@@ -3,7 +3,7 @@
 # docs/plans/261010d-standing-jobs-survive-a-reboot.md.
 #
 # One journal line per check every run (`journalctl -u box-health`). The
-# Overseer hears only when the set of alarms changes, and every six hours while
+# Overseer hears only when the set of alarms changes, and once a day while
 # one lasts, through the fleet dashboard's steer route as speaker `box`.
 #
 # A SYSTEM unit with User=@USER@, not a systemd USER unit, for the reason
@@ -27,9 +27,13 @@ Group=@USER@
 # The PRIMARY checkout, never a worktree -- a worktree is deleted by normal
 # tidying, and an ExecStart inside one is a check that disappears with it.
 WorkingDirectory=/home/@USER@/code/spideryarn2
-# HOME explicitly: the state file is ~/.overseer/box-health.json.
 Environment=HOME=/home/@USER@
-Environment=PATH=/usr/local/bin:/usr/bin:/bin
+# What was last said to the Overseer: /var/lib/box-health/box-health.json, made
+# by systemd and owned by @USER@. On the ROOT disk on purpose: nothing is posted
+# that cannot first be recorded, so a state file on /home would let a full /home
+# silence the alarm about /home.
+StateDirectory=box-health
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 # The checkout's own tsx, not `npx tsx`, which can fetch SOME tsx from the network.
 ExecStart=/home/@USER@/code/spideryarn2/node_modules/.bin/tsx scripts/box-health.ts
 TimeoutStartSec=5min

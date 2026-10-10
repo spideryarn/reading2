@@ -158,10 +158,26 @@ export async function postEnvelope(envelope: BoxEnvelope, to: string, opts: Noti
   return readBoxAnswer(status, raw, to);
 }
 
+/** Retry only an uncertain answer, always with the identical prepared envelope. */
+export async function postEnvelopeWithRetries(
+  envelope: BoxEnvelope,
+  to: string,
+  opts: NotifyOptions & { tries?: number; gapMs?: number } = {},
+): Promise<BoxNotifyOutcome> {
+  let outcome: BoxNotifyOutcome = { kind: "uncertain", why: "not yet posted" };
+  for (let i = 0; i < (opts.tries ?? 3); i++) {
+    if (i > 0) await new Promise((resolve) => setTimeout(resolve, opts.gapMs ?? 30_000));
+    outcome = await postEnvelope(envelope, to, opts);
+    if (outcome.kind !== "uncertain") break;
+  }
+  return outcome;
+}
+
 /**
  * Prepare and post, retrying an UNCERTAIN answer with the same envelope up to
- * `tries` times, `gapMs` apart — for a caller with no state file of its own to
- * carry the envelope to its next run (the daily sweep).
+ * `tries` times, `gapMs` apart. Durable callers use `prepareEnvelope` and
+ * `postEnvelopeWithRetries` directly so they can carry the envelope to a later
+ * process as well.
  */
 export async function tellOverseerFromBox(
   text: string,
@@ -169,13 +185,7 @@ export async function tellOverseerFromBox(
 ): Promise<BoxNotifyOutcome> {
   const prepared = await prepareEnvelope(text, opts);
   if (prepared.kind !== "ready") return prepared;
-  let outcome: BoxNotifyOutcome = { kind: "uncertain", why: "not yet posted" };
-  for (let i = 0; i < (opts.tries ?? 3); i++) {
-    if (i > 0) await new Promise((r) => setTimeout(r, opts.gapMs ?? 30_000));
-    outcome = await postEnvelope(prepared.envelope, prepared.to, opts);
-    if (outcome.kind !== "uncertain") break;
-  }
-  return outcome;
+  return postEnvelopeWithRetries(prepared.envelope, prepared.to, opts);
 }
 
 /** The journal line for an outcome. */
