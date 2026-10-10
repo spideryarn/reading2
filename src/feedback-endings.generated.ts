@@ -245,6 +245,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
   "spya-mtajjy": "shipped",
   "spya-mtsf0y": "shipped",
   "spya-mtyquy": "shipped",
+  "spya-mutgym": "shipped",
   "spya-muymup": "shipped",
   "spya-mvmpks": "shipped",
   "spya-mx423m": "shipped",
@@ -531,6 +532,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
   "spya-zux9w6": "shipped",
   "spya-zv8dc6": "shipped",
   "spya-zw479b": "shipped",
+  "spya-zz4z4c": "shipped",
 };
 
 /** One line about a report, from its note's `comment:`. An admin's Earlier tab only. */
@@ -560,6 +562,7 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
   "spya-mdmqqq": "You were right, there were two. While an article loads, the centred animated wordmark is now the only one; the corner logo is gone from that screen, before the 600ms threshold and after it.",
   "spya-mdp0em": "Built as you chose (option A). The public shelf now has topic pills, kept up to date by themselves up to 20 shared articles and billed to a site account; past 20, a Rebuild button on the admin page. They appear once 8 articles are shared.",
   "spya-mq05ww": "Shipped: 22 cropped, captioned screenshots and 3 GIFs across 21 Help pages, and help-page.md says how to keep them true. Eight modes still have no picture; that is queued.",
+  "spya-mutgym": "Every \"older version of the article\" notice now has an × that holds until that thing is made again. Quiz's is left: there no answer can be marked, and the notice is the only thing saying why.",
   "spya-n50aft": "Every version of an arXiv paper is now one article, and the shelf you already have matches too. The cost: pasting v2 while you hold v1 gives you v1.",
   "spya-n7hvm0": "Needs a decision is now threads: a contents, one thread at a time with a reply box, Defer for now, the ids, your report shut, a shortcut beside the tabs. Check the reply box on your iPhone.",
   "spya-n8cuqq": "Shipped: dictation runs fifteen minutes and warns before it stops, and Feedback now takes 20,000 characters, a full fifteen minutes of non-stop speech.",
@@ -598,4 +601,5 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
   "spya-zdkqx4": "spya-x0rfs2: the bar is fixed; the quieter open stop Greg chose in q-u04sye is on dev as an experiment",
   "spya-zuk4f7": "Both stages shipped: Debate asks for work that cites the piece, and OpenAlex supplies its count and list of citing papers.",
   "spya-zux9w6": "The citation, glossary and quote cards now each end in Open in Sources / Glossary / Quotes. Cards on comments, chat anchors and search-style highlights are queued as their own piece of work.",
+  "spya-zz4z4c": "Every \"older version of the article\" notice now has an × that holds until that thing is made again. Quiz's is left: there no answer can be marked, and the notice is the only thing saying why.",
 };

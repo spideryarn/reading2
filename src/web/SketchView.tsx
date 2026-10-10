@@ -64,6 +64,8 @@
  * per article that nobody could ever see.
  */
 import { BandWaiting } from "./BandWaiting.js";
+import { StaleNotice } from "./StaleNotice.js";
+import { useStaleNotice } from "./useStaleNotices.js";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { ChevronLeft, LoaderCircle, Maximize2, Minimize2, PenLine } from "lucide-react";
@@ -208,6 +210,8 @@ function OwnerSketch({
 }) {
   const blockOrder = useMemo(() => blocks.map((b) => b.id), [blocks]);
   const view = useSketch(slug, blockOrder);
+  /* The stale sentence's × (plan 261010a): this picture, by its identity. */
+  const staleNotice = useStaleNotice({ slug, mode: "sketch", identities: view.stale ? view.identity : null });
 
   if (view.status === "loading") {
     return (
@@ -271,12 +275,17 @@ function OwnerSketch({
      *this reader's* article. A visitor gets none of them, nor the badge below:
      they cannot regenerate, the profile is not theirs, and "drawn for a profile
      you have since changed" is a sentence about somebody else. */
+  /* **The stale sentence is a line of its own, with an ×** (plan 261010a,
+     GPT Sol's finding 1): it is the "older version of the article" notice,
+     and the reader may send it away. The other caveats stay in the grey
+     line below and cannot be — they are not this notice. */
+  const staleNote = (
+    <StaleNotice notice={staleNotice} className="sk-stale">
+      The article has changed since this was drawn. The shape is still a fair account of the argument;
+      some boxes may no longer lead anywhere.
+    </StaleNotice>
+  );
   const notes: string[] = [];
-  if (view.stale) {
-    notes.push(
-      "The article has changed since this was drawn. The shape is still a fair account of the argument; some boxes may no longer lead anywhere.",
-    );
-  }
   if (view.faults.length > 0) {
     const lost = view.faults.filter((f) => f.what.includes("not in this article")).length;
     if (lost > 0) notes.push(`${lost} of its boxes point at passages this article no longer has.`);
@@ -346,6 +355,7 @@ function OwnerSketch({
     <SketchBody
       sketch={view.sketch}
       notes={notes}
+      staleNote={staleNote}
       progress={progress}
       badge={badge}
       blocks={blocks}
@@ -412,6 +422,7 @@ const NO_NOTES: readonly string[] = [];
 function SketchBody({
   sketch,
   notes,
+  staleNote,
   progress,
   badge,
   blocks,
@@ -419,8 +430,10 @@ function SketchBody({
   onJump,
 }: {
   sketch: Sketch | PublicSketch;
-  /** Owner-only caveats — staleness, lost boxes. Empty for a visitor. */
+  /** Owner-only caveats — lost boxes. Empty for a visitor. */
   notes: readonly string[];
+  /** The owner's stale notice, already rendered (`StaleNotice`), or nothing. */
+  staleNote?: ReactNode;
   /**
    * The owner's profile icon, already rendered, or nothing — a node
    * for the reason `progress` is one. It goes in the bar, before Enlarge.
@@ -1084,6 +1097,7 @@ function SketchBody({
           the words are the words the shelf shows for the same run. */}
       {progress}
 
+      {staleNote}
       {notes.length > 0 && <p className="sk-note">{notes.join(" ")}</p>}
 
       <div className="sk-scroll" ref={scroll}>

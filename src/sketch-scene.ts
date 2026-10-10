@@ -226,6 +226,12 @@ export interface SketchScene {
 
 export interface Sketch {
   version: string;
+  /**
+   * When this stored picture was generated. A forced rerun may produce the
+   * same scene byte for byte; this clock still gives its stale-notice dismissal
+   * a new identity. Absent on pictures made before plan 261010a.
+   */
+  generatedAt?: string;
   generator?: string;
   slug?: string;
   /**

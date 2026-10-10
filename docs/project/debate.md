@@ -63,7 +63,8 @@ Two of Sources' three sub-modes on its segmented control
   before, headed *Claims the earlier search chose*: one open disclosure per claim, in article
   order, headed by the article's own words; the relevance bar belongs there.
 
-When the article has changed since the search ran, a banner says so and offers *Search again*.
+When the article has changed since the search ran, a banner says so and offers *Search again*,
+and its × sends it away for this search ([controls.md § Every "older version" notice has an ×](controls.md#every-older-version-notice-has-an-)).
 That button is held from the press until the new search has been read, so one press cannot buy two
 searches: [reader-profile.md § Regenerate waits for its own result](reader-profile.md#regenerate-waits-for-its-own-result).
 Nor can the server: a search whose processing stopped part-way (a deploy, or the job's own
@@ -104,7 +105,9 @@ the Reception search, nor a Reception press the list.
 
 **Its states**: none (*List its claims* for the owner; a sentence for a visitor), running, an empty
 list (a sentence: a real answer), a failed run (its sentence and *Retry*), and **stale** — the
-article has changed since — when the list is drawn read-only under a banner with *List again*.
+article has changed since — when the list is drawn read-only under a banner with *List again*
+and an × ([controls.md](controls.md#every-older-version-notice-has-an-)); the list stays read-only
+once the banner is gone.
 
 **Who sees it.** The owner, with the controls. A visitor to a shared article sees the list
 read-only — each claim's id, paragraph, quote and statement, through the public projection — and

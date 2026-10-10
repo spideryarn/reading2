@@ -47,6 +47,12 @@ export interface UseSketch {
   faults: SketchFault[];
   /** The article moved underneath the picture. */
   stale: boolean;
+  /**
+   * Which stored picture this is — `SketchShown.drawn`, the identity
+   * Regenerate's hold uses, and the stale notice's (plan 261010a). `null`
+   * with no picture.
+   */
+  identity: string | null;
   /** We would draw it differently now — the prompt has moved on. */
   outdated: boolean;
   /** It was drawn for a reader profile. */
@@ -111,12 +117,12 @@ interface SketchShown {
   sketch: Sketch;
   /**
    * **Which stored picture this is**, for Regenerate's hold (rewrite-hold.ts).
-   * A sketch carries no clock of its own — `Sketch` has no `generatedAt` — so
-   * this is the stored `sketch` value itself, as the server sent it. **Never
-   * the response beside it**: `stale`, `outdated` and `profileChanged` change
-   * with no job having drawn anything, and would read as a replacement (GPT
-   * Sol's plan review of 261004c, F12). Nor the checked scene, which changes
-   * with the article's block order.
+   * This is the stored `sketch` value itself, as the server sent it: that keeps
+   * its persisted `generatedAt` while also distinguishing older pictures that
+   * predate that clock. **Never the response beside it**: `stale`, `outdated`
+   * and `profileChanged` change with no job having drawn anything, and would
+   * read as a replacement (GPT Sol's plan review of 261004c, F12). Nor the
+   * checked scene, which changes with the article's block order.
    */
   drawn: string;
   stale: boolean;
@@ -291,6 +297,7 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
     sketch: shown?.sketch ?? null,
     faults,
     stale: shown?.stale ?? false,
+    identity: shown?.drawn ?? null,
     outdated: shown?.outdated ?? false,
     profiled: shown?.profiled ?? false,
     profileChanged: shown?.profileChanged ?? false,

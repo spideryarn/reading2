@@ -49,10 +49,10 @@ import {
   ChevronRight,
   Lightbulb,
   Route,
-  TriangleAlert,
-  X,
 } from "lucide-react";
 import type { UseSkim } from "./useSkim.js";
+import { DismissibleNotice, StaleNotice } from "./StaleNotice.js";
+import { type StaleNoticeState, useStaleNotice } from "./useStaleNotices.js";
 import type { PublicSkim } from "../public-types.js";
 import type { BlockId, SkimDepth } from "../types.js";
 import type { DoorView, SkimView } from "./modes/skim/SkimMode.js";
@@ -357,25 +357,38 @@ export function emptyHint(owner: Pick<UseSkim, "quotesFirst" | "ideasFirst">): s
  */
 export function bannerReason(
   owner: Pick<UseSkim, "stale" | "profileChanged" | "profileNoticeDismissed">,
+  /** The reader sent the stale notice away with its × (plan 261010a): `useStaleNotice`'s `showing` is empty. */
+  staleDismissed = false,
 ): string | null {
-  if (owner.stale) {
+  if (owner.stale && !staleDismissed) {
     /* One input hash covers all three, so this read cannot honestly attribute
        the mismatch to Quotes. `notOnRoute` is also only a present-day count: a
        route may deliberately omit a quote, so it is not evidence that quote
        arrived later. */
-    return "The Quotes, Ideas, or outline have changed since this route was planned.";
+    return STALE_REASON;
   }
-  /* **Dismissible, and only this one** — Greg, 2026-10-09 (`spya-ud2w92`):
-     *"there should be a way to dismiss it if I decide that I actually don't
-     care and I don't want to plan it again."* The stale reason above is not:
-     a route over Quotes that have moved can stop where nothing is. The
-     dismissal holds for this route under this profile (src/skim.ts §
-     `profileNoticeKey`). docs/plans/261009i-skim-profile-notice-can-be-dismissed.md. */
+  /* **Dismissible** — Greg, 2026-10-09 (`spya-ud2w92`): *"there should be a
+     way to dismiss it if I decide that I actually don't care and I don't want
+     to plan it again."* The dismissal holds for this route under this profile
+     (src/skim.ts § `profileNoticeKey`).
+     docs/plans/261009i-skim-profile-notice-can-be-dismissed.md. **The stale
+     reason above is dismissible too since plan 261010a** (Greg, the same day,
+     `spya-mutgym`: *"in each case"*): a route over Quotes that have moved can
+     stop where nothing is, and such a stop now says so itself
+     (`SKIM_STOP_MISSING`), so the explanation no longer rests on the banner. */
   if (owner.profileChanged && !owner.profileNoticeDismissed) return PROFILE_NOTICE;
   return null;
 }
 
 const PROFILE_NOTICE = "This route was planned before your profile said what it says now.";
+const STALE_REASON = "The Quotes, Ideas, or outline have changed since this route was planned.";
+
+/**
+ * **A stop whose quote has gone**, said on the row itself and on its card —
+ * a stale route can stop where nothing is, and since its banner can be sent
+ * away (plan 261010a, GPT Sol's finding 3) the row is where that is explained.
+ */
+export const SKIM_STOP_MISSING = "This quote is no longer in the Quotes";
 
 /**
  * **The one banner over a route** (`bannerReason` says which), with *Plan it
@@ -384,36 +397,35 @@ const PROFILE_NOTICE = "This route was planned before your profile said what it 
  * then; if the read shows the dismissal landed after all, there is no banner
  * and nothing is said.
  */
-function RouteBanner({ owner, again }: { owner: UseSkim; again: ReactNode }) {
-  const reason = bannerReason(owner);
-  if (reason === null) return null;
-  const dismissible = reason === PROFILE_NOTICE;
-  return (
-    <div className="gloss-stale">
-      <p>
-        <TriangleAlert size={13} />
+function RouteBanner({
+  owner,
+  stale,
+  again,
+}: {
+  owner: UseSkim;
+  stale: StaleNoticeState;
+  again: ReactNode;
+}) {
+  const reason = bannerReason(owner, stale.showing.length === 0);
+  if (reason === STALE_REASON) {
+    return (
+      <StaleNotice notice={stale} action={again}>
         {reason}
-        {dismissible && (
-          <Tooltip
-            content={<p>Keep this route, and stop saying so until your profile changes again.</p>}
-            placement="bottom"
-          >
-            <button
-              type="button"
-              className="skim-notice-close close-x"
-              aria-label="Dismiss: keep this route"
-              onClick={() => void owner.dismissProfileNotice()}
-            >
-              <X aria-hidden="true" />
-            </button>
-          </Tooltip>
-        )}
-      </p>
-      {dismissible && owner.dismissFailed && (
-        <p className="skim-notice-failed">Could not hide this: {owner.dismissFailed}</p>
-      )}
-      {again}
-    </div>
+      </StaleNotice>
+    );
+  }
+  if (reason === null) return null;
+  return (
+    <DismissibleNotice
+      onDismiss={() => void owner.dismissProfileNotice()}
+      tooltip="Keep this route, and stop saying so until your profile changes again."
+      label="Dismiss: keep this route"
+      failed={owner.dismissFailed}
+      action={again}
+      mode="skim-profile"
+    >
+      {reason}
+    </DismissibleNotice>
   );
 }
 
@@ -593,6 +605,13 @@ export function SkimPanel({ access, view, away }: Props) {
   const promise = owner
     ? skimPromise(owner.skim?.profileHash != null)
     : VISITOR_SKIM_PROMISE;
+  /* The stale notice's × (plan 261010a): this route, by its clock. */
+  const staleNotice = useStaleNotice({
+    slug: owner?.slug ?? null,
+    mode: "skim",
+    identities: owner?.stale ? (owner.skim?.generatedAt ?? null) : null,
+  });
+  const reason = owner ? bannerReason(owner, staleNotice.showing.length === 0) : null;
   const total = view.rows.length;
   const deepest = view.depths.at(-1)?.depth ?? null;
   const atMost = ready && view.depth !== null && view.depth === deepest && view.depth === 3;
@@ -644,7 +663,7 @@ export function SkimPanel({ access, view, away }: Props) {
   useEffect(() => {
     if (tipFor === null) return;
     const row = ready ? view.rows.find((candidate) => candidate.quoteId === tipFor) : undefined;
-    if (row === undefined || !rowWords(row)?.whole) setTipFor(null);
+    if (row === undefined || !(row.missing || rowWords(row)?.whole)) setTipFor(null);
   }, [ready, tipFor, view.rows]);
   /* A controlled tooltip can unmount before reporting that it closed. Do not
      let its stale id reopen if a shallower pass removes the row and a later
@@ -750,9 +769,10 @@ export function SkimPanel({ access, view, away }: Props) {
            docs/plans/260929b-one-place-to-re-run-ai-processing.md. */
         owner &&
         ready &&
-        /* No banner — not "no reason for one": a dismissed profile notice
-           has no button left, so a job from Metadata shows here (plan 261009i). */
-        bannerReason(owner) === null &&
+        /* No banner — not "no reason for one": a dismissed notice, profile
+           (plan 261009i) or stale (plan 261010a), has no button left, so a job
+           from Metadata shows here. */
+        reason === null &&
         (owner.job || owner.starting || owner.failed || (waiting && !owner.error)) ? (
           <div className="skim-foot">
             <div className="skim-again">{run("Plan it again", true)}</div>
@@ -774,7 +794,7 @@ export function SkimPanel({ access, view, away }: Props) {
 
       {ready && (
         <>
-          {owner && <RouteBanner owner={owner} again={run("Plan it again", true)} />}
+          {owner && <RouteBanner owner={owner} stale={staleNotice} again={run("Plan it again", true)} />}
 
           {/* What the route was planned for, or the question — owner only,
               and only over a ready route (Sol F6: the empty state's automatic
@@ -783,7 +803,7 @@ export function SkimPanel({ access, view, away }: Props) {
             <PurposeLine
               key={owner.slug}
               owner={owner}
-              bannerUp={bannerReason(owner) !== null}
+              bannerUp={reason !== null}
             />
           )}
 
@@ -844,6 +864,7 @@ export function SkimPanel({ access, view, away }: Props) {
                             </Tooltip>
                           )}
                           {words && <span className="skim-words">“<Excerpt blockId={row.blockId} words={words.shown} />”</span>}
+                          {row.missing && <span className="skim-missing">{SKIM_STOP_MISSING}.</span>}
                         </span>
                       </button>
                     );
@@ -864,8 +885,14 @@ export function SkimPanel({ access, view, away }: Props) {
                             Controlled, which makes it mouse-only: a tap's
                             synthetic hover must not flash it (Sol, plan review). */}
                         <Tooltip
-                          content={words?.whole ? <p>“<Excerpt blockId={row.blockId} words={words.whole} />”</p> : null}
-                          enabled={Boolean(words?.whole)}
+                          content={
+                            row.missing ? (
+                              <p>{SKIM_STOP_MISSING}.</p>
+                            ) : words?.whole ? (
+                              <p>“<Excerpt blockId={row.blockId} words={words.whole} />”</p>
+                            ) : null
+                          }
+                          enabled={row.missing || Boolean(words?.whole)}
                           open={tipFor === row.quoteId}
                           onOpenChange={(open) =>
                             setTipFor((was) => (open ? row.quoteId : was === row.quoteId ? null : was))

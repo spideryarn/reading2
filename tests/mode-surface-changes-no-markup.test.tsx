@@ -2194,6 +2194,33 @@ describe("the bands stage 2 migrated, as they stood before it", () => {
     }
   });
 
+  /* **A dismissed stale banner gives its job back to the foot** — plan
+     261010a, GPT Sol's finding 4. The banner carried the run button, so the
+     foot stayed away while the result was stale; once the × has sent the
+     banner away, a job started from Metadata would otherwise show nowhere. */
+  it("shows a running job's footer once the stale banner is dismissed", async () => {
+    const { forgetStaleNotices } = await import("../src/web/useStaleNotices.js");
+    const cases: [string, ReactNode, string][] = [
+      ["Ideas", mountIdeas(IDEAS, { stale: true, job: runningJob("ideas") }), "ideas-again"],
+      ["Timeline", mountTimeline(TIMELINE, { stale: true, job: runningJob("timeline") }), "tl-again"],
+      ["Debate", mountDebate(DEBATE, { stale: true, job: runningJob("debate") }), "dbt-again"],
+    ];
+
+    for (const [name, node, footClass] of cases) {
+      forgetStaleNotices();
+      await paint(node);
+      expect(band().querySelector(`:scope > .${footClass}`), `${name} showed its job twice`).toBeNull();
+      const close = band().querySelector<HTMLButtonElement>(".gloss-stale .notice-close");
+      expect(close, `${name}'s stale banner has no ×`).toBeTruthy();
+      await act(async () => close?.click());
+      expect(band().querySelector(".gloss-stale"), `${name}'s banner stayed`).toBeNull();
+      const footer = band().querySelector<HTMLElement>(`:scope > .${footClass}`);
+      expect(footer, `${name}'s running job shows nowhere once its banner is dismissed`).toBeTruthy();
+      expect(footer?.textContent).toContain("Stop");
+    }
+    forgetStaleNotices();
+  });
+
   it("shows a running job's footer on an outdated result", async () => {
     const cases: [string, ReactNode, string][] = [
       ["Ideas", mountIdeas(IDEAS, { outdated: true, job: runningJob("ideas") }), "ideas-again"],

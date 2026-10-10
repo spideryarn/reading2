@@ -276,6 +276,27 @@
 }
 .gloss-stale svg { flex: none; color: var(--highlight-text); }
 
+/* **The × on every "older version of the article" notice** (StaleNotice.tsx,
+   plan 261010a), at the end of the banner's line — Skim's profile notice's
+   from plan 261009i, made shared. Its size is close.css's; only the look is
+   here, Marginalia's narrow line's (`.marg-narrow-close`), so the crosses
+   that send a notice away look alike. `margin-left: auto` keeps it at the
+   right edge however the sentence wraps. The `svg` rule wins over each
+   banner's own `… svg` rule, which colours the ⚠ and would colour this too. */
+.notice-close {
+  flex: none;
+  margin-left: auto;
+  border: 0;
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.notice-close:hover { color: var(--ink); }
+.notice-close:focus-visible { outline: 1px solid var(--highlight-text); outline-offset: 1px; }
+button.notice-close.close-x > svg { color: inherit; transform: none; }
+/* `div > p.notice-failed`: each banner's `p` rule is a class and an element, and may load later. */
+div > p.notice-failed { display: block; color: var(--danger); font-size: 0.85rem; }
+
 /* ---- the list ---- */
 
 /* The scroller. A `div` wrapping one `ol` rather than being the `ol` itself:

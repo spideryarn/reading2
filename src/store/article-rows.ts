@@ -39,6 +39,7 @@ import {
   glossaryHiddenEntries,
   articleTags,
   quizAttempts,
+  staleNoticeDismissals,
   refereeClaims,
   refereeHiddenChecks,
   refereeCriteria,
@@ -241,6 +242,13 @@ export const ARTICLE_TABLE_COVERAGE = {
   quiz_attempts: {
     rollback: { exported: true, into: "quiz-attempts.json" },
     bundle: { exported: true, into: "augmentations/quiz-attempts.json" },
+  },
+  /* The "older version of the article" notices the owner sent away — reader
+     state, exported for `reading_time`'s reason: it is the reader's own.
+     docs/plans/261010a-dismiss-older-version-notices.md. */
+  stale_notice_dismissals: {
+    rollback: { exported: true, into: "stale-notices.json" },
+    bundle: { exported: true, into: "augmentations/stale-notices.json" },
   },
 
   /** The one table the two projections disagree about — see `TableCoverage`. */
@@ -719,6 +727,8 @@ export interface ArticleRows {
    * the article has now. Plan 261005b.
    */
   readonly quizAttempts: readonly (typeof quizAttempts.$inferSelect)[];
+  /** The stale notices the owner sent away, one row per mode. Plan 261010a. */
+  readonly staleNoticeDismissals: readonly (typeof staleNoticeDismissals.$inferSelect)[];
 }
 
 /**
@@ -952,6 +962,11 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     .from(quizAttempts)
     .where(eq(quizAttempts.articleId, article.id))
     .orderBy(asc(quizAttempts.createdAt), asc(quizAttempts.id));
+  const noticesDismissed = await tx
+    .select()
+    .from(staleNoticeDismissals)
+    .where(eq(staleNoticeDismissals.articleId, article.id))
+    .orderBy(asc(staleNoticeDismissals.mode));
 
   return {
     article,
@@ -973,6 +988,7 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     glossaryHiddenEntries: hiddenTerms,
     articleTags: tags,
     quizAttempts: quizMarks,
+    staleNoticeDismissals: noticesDismissed,
   };
 }
 

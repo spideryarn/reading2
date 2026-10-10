@@ -79,6 +79,8 @@ import { ReadError } from "./ReadError.js";
 import { RewriteWaiting } from "./RewriteWaiting.js";
 import { TipNote, Tooltip } from "./Tooltip.js";
 import { BandWaiting } from "./BandWaiting.js";
+import { StaleNotice } from "./StaleNotice.js";
+import { useStaleNotice } from "./useStaleNotices.js";
 
 /** How long a copy button says how it went, a tick or a refusal, before going back to normal. */
 const COPIED_MS = 1600;
@@ -118,6 +120,12 @@ export function TweetsPanel({
   const owner = access.kind === "owner" ? access.owner : null;
   const thread: PublicTweets | null = owner ? owner.thread : access.kind === "visitor" ? access.thread : null;
   const ready = thread !== null && (owner === null || owner.status === "ready");
+  /* The stale banner's × (plan 261010a): this thread, by its clock. */
+  const staleNotice = useStaleNotice({
+    slug: owner ? slug : null,
+    mode: "tweets",
+    identities: owner?.stale ? (owner.thread?.generatedAt ?? null) : null,
+  });
   /* **A head only when there is a thread**: *Copy the thread*, which is not
      the mode's name (mode.md § the band's chrome). No thread, no row. The
      counts that were here are in the (i), with who wrote it — spya-ucu35y —
@@ -158,7 +166,7 @@ export function TweetsPanel({
       about={
         <TweetsAbout thread={ready ? thread : null} article={article} made={ready ? (owner?.thread ?? null) : null} />
       }
-      foot={owner?.thread && ready ? <RunRow owner={owner} /> : null}
+      foot={owner?.thread && ready ? <RunRow owner={owner} bannerShowing={staleNotice.showing.length > 0} /> : null}
     >
       {hasControls && <div className="summ-controls">{controls}</div>}
       {hasControls && head && <div className="band-head">{head}</div>}
@@ -188,14 +196,10 @@ export function TweetsPanel({
           {/* The article has moved and the thread has not. Everything below is
               now a claim about a version of the piece that no longer exists, and
               a passage link may land somewhere else. */}
-          {owner?.stale && (
-            <div className="gloss-stale">
-              <p>
-                <TriangleAlert size={13} />
-                This thread describes an older version of the article.
-              </p>
-              <Run owner={owner} label="Write it again" force />
-            </div>
+          {owner && (
+            <StaleNotice notice={staleNotice} action={<Run owner={owner} label="Write it again" force />}>
+              This thread describes an older version of the article.
+            </StaleNotice>
           )}
           {owner && <UnlinkedNote thread={thread} slug={slug} />}
           <ThreadPosts thread={thread} onJump={onJump} />
@@ -414,11 +418,12 @@ export function ThreadPosts({
  * one says why. Who wrote the thread and when was the first line of this foot
  * until 2026-10-01; it is in the (i) now (`TweetsAbout`, spya-ucu35y).
  */
-function RunRow({ owner }: { owner: UseTweets }) {
-  const running = !owner.stale && (owner.job || owner.starting);
-  const failed = !running && !owner.stale && owner.failed;
-  /* On a stale thread the banner's own control says it — `Run`. */
-  const waiting = !owner.stale && waitingForRewrite(owner) && !owner.error;
+function RunRow({ owner, bannerShowing }: { owner: UseTweets; bannerShowing: boolean }) {
+  /* While the stale banner shows, its own control says it — `Run`. Not
+     "while stale": a dismissed banner carries no job (plan 261010a). */
+  const running = !bannerShowing && (owner.job || owner.starting);
+  const failed = !running && !bannerShowing && owner.failed;
+  const waiting = !bannerShowing && waitingForRewrite(owner) && !owner.error;
   if (!running && !failed && !waiting) return null;
   return (
     <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-2 tw:px-4 tw:py-2">

@@ -65,6 +65,7 @@ import {
   ingestEvents,
   linkSummaries,
   quizAttempts,
+  staleNoticeDismissals,
   realtimeSessions,
   refereeClaims,
   refereeHiddenChecks,
@@ -1069,6 +1070,13 @@ describe("destroying an article", () => {
           question: "What did it say?",
           answer: "something nobody will read again",
           reply: "a mark nobody will read again",
+        }),
+      /* A dismissed "older version" notice — plan 261010a. It goes with the article. */
+      stale_notice_dismissals: () =>
+        db.insert(staleNoticeDismissals).values({
+          articleId: GONE_ARTICLE,
+          mode: "glossary",
+          dismissedFor: ["2026-10-10T00:00:00.000Z"],
         }),
       glossary_lookups: () =>
         db.insert(glossaryLookups).values({

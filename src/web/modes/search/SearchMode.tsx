@@ -228,6 +228,8 @@ export function SearchBand({
   return (
     <SearchPanel
       {...panel}
+      /* The stale banner's dismissal is stored against it (plan 261010a). */
+      slug={slug}
       /* **A tick or a press on a thorough row is the reader choosing**, so a
          pair a reload left behind is no longer tidied over it, even if they
          untick it again (stored-pairs.ts; `forget` does nothing for any other
@@ -542,6 +544,7 @@ function useTypingSession({
  * that is not rendered.
  */
 export function VisitorSearchBand({
+  slug,
   searches,
   blocks,
   onJump,
@@ -550,6 +553,7 @@ export function VisitorSearchBand({
   onOpenHit,
   copy,
 }: {
+  slug: string;
   searches: SavedSearch[];
   blocks: Article["blocks"];
   onJump(id: BlockId): void;
@@ -569,7 +573,7 @@ export function VisitorSearchBand({
     openHit,
     onOpenHit,
   });
-  return <SearchPanel {...panel} access={{ kind: "visitor", copy }} />;
+  return <SearchPanel {...panel} slug={slug} access={{ kind: "visitor", copy }} />;
 }
 
 /**

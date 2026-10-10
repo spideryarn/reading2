@@ -1412,6 +1412,10 @@ export async function generateIllustrated(opts: {
     plateCapMs,
   });
 
+  /* The finished artefact's clock. Content-addressed plates can be byte-identical
+     across a forced rerun; that is still a new painting for notice dismissal. */
+  illustrated.generatedAt = new Date().toISOString();
+
   return {
     illustrated,
     cancelled,
