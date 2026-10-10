@@ -1,7 +1,7 @@
 ---
 reports: spya-yf23zk, spya-xasbd3
 ending: shipped
-comment: The bar shows at most four suggestions, each can be dismissed for good with × or Delete, the list folds to one line, and Guide is the first row of all.
+comment: The bar shows at most four suggestions, each can be dismissed for good with × or Delete, the list folds to one line, and on an empty box Guide is the first row.
 ---
 
 # The bar's suggestions: four at most, dismissable, foldable, and the Guide first
