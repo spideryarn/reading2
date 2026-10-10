@@ -531,7 +531,9 @@ import {
   type AdminFeedbackQuestion,
   type AdminFeedbackQuestionAnswer,
   type AdminFeedbackQuestionV1,
+  type AdminFeedbackQuestionV2,
   type AdminEarlierFeedbackPageV1,
+  type AdminEarlierFeedbackPageV2,
   type AdminFeedbackDeferralReceipt,
   EARLIER_FEEDBACK_LIMIT,
   EARLIER_FEEDBACK_SHOWS,
@@ -8797,32 +8799,37 @@ async function fileFeedback(
 /**
  * **Every open question, as the signed-in admin's Earlier tab shows it**:
  * oldest first, as threads (plan 261008i). Each carries the admin's own
- * replies not yet acted on, which group it is in (`questionState`, from every
+ * replies not yet acted on, and (shape 3, 261010h) those an agent has acted
+ * on, apart, which group it is in (`questionState`, from every
  * reply and the admin's deferral), and, when it names a report **of theirs**,
  * that report's number, first line and text. Every lookup is owner-scoped in
  * the store, so a question about another reader's report sends `report: null`
  * and another admin's reply or deferral is never this one's. Only the open
  * ones: an answered question is not sent, whatever a store hands back. Each is
  * picked field by field; the file's `refs` was never compiled, and its `acted`
- * ids leave only as the state and as which replies are listed.
+ * ids leave only as the state and as which list each reply is in.
  *
  * `shape` 1 is the answer before 261008i, for a request without
- * `questions=2`: a tab loaded before the deploy keeps working after it (F3).
+ * `questions=2` or `questions=3`: a tab loaded before the deploy keeps
+ * working after it (F3).
  * Six keys, the newest reply of any kind, the report without its text.
  */
-/** At most this many of a thread's unacted replies in one answer, the newest (F12). */
+/** At most this many replies in either of a thread's lists, the newest (F12, 261010h). */
 const THREAD_ANSWERS = 5;
 
-async function questionsForAdmin(shape: 2): Promise<AdminFeedbackQuestion[]>;
+async function questionsForAdmin(shape: 3): Promise<AdminFeedbackQuestion[]>;
+async function questionsForAdmin(shape: 2): Promise<AdminFeedbackQuestionV2[]>;
 async function questionsForAdmin(shape: 1): Promise<AdminFeedbackQuestionV1[]>;
-async function questionsForAdmin(shape: 1 | 2): Promise<AdminFeedbackQuestion[] | AdminFeedbackQuestionV1[]> {
+async function questionsForAdmin(
+  shape: 1 | 2 | 3,
+): Promise<AdminFeedbackQuestion[] | AdminFeedbackQuestionV2[] | AdminFeedbackQuestionV1[]> {
   const open = openFeedbackQuestions();
   if (open.length === 0) return [];
   const ids = open.map((question) => question.id);
   const named = [...new Set(open.flatMap((question) => (question.report === null ? [] : [question.report])))];
   const [answers, deferrals, reports] = await Promise.all([
     feedbackStore.answersTo(ids),
-    shape === 2 ? feedbackStore.deferrals(ids) : Promise.resolve([]),
+    shape === 1 ? Promise.resolve([]) : feedbackStore.deferrals(ids),
     feedbackStore.linkedReports(named),
   ]);
   const reply = ({ id, body, createdAt }: AdminFeedbackQuestionAnswer) => ({ id, body, createdAt });
@@ -8850,7 +8857,7 @@ async function questionsForAdmin(shape: 1 | 2): Promise<AdminFeedbackQuestion[] 
     const deferral = deferrals.find((one) => one.questionId === id)?.deferredAt ?? null;
     const state = questionState({ replies, deferredAt: deferral });
     const unacted = replies.filter((one) => !one.acted);
-    return {
+    const thread: AdminFeedbackQuestionV2 = {
       id,
       title,
       body,
@@ -8859,13 +8866,21 @@ async function questionsForAdmin(shape: 1 | 2): Promise<AdminFeedbackQuestion[] 
         linked === undefined
           ? null
           : { id: linked.id, number: linked.number, firstLine: linked.firstLine, body: linked.body },
-      /* What an agent has acted on is quoted in the body already (261008i, decision 2). */
-      /* The newest few, with a count of the rest (F12): every reply is still
+      /* The unacted newest few, with a count of the rest (F12): every reply is still
          stored, and `--answers` prints them all. */
       answers: unacted.slice(-THREAD_ANSWERS).map(reply),
       olderAnswers: Math.max(0, unacted.length - THREAD_ANSWERS),
       state,
       deferredAt: state === "deferred" ? deferral : null,
+    };
+    if (shape === 2) return thread;
+    /* Shape 3 (261010h, spya-j4sg9g): the acted ones too, bounded the same way,
+       so a thread answered and asked again shows what was said. */
+    const done = replies.filter((one) => one.acted);
+    return {
+      ...thread,
+      actedAnswers: done.slice(-THREAD_ANSWERS).map(reply),
+      olderActedAnswers: Math.max(0, done.length - THREAD_ANSWERS),
     };
   });
 }
@@ -10112,11 +10127,15 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       /* **Threads only to a client that asks for them** (plan 261008i, F3): a
          tab loaded before the deploy sends no `questions`, and its strict
          check wants the six-key questions it was built against. Anything but
-         `2` is that older client. */
-      const answer: AdminEarlierFeedbackPage | AdminEarlierFeedbackPageV1 =
-        query.get("questions") === "2"
-          ? { ...envelope, questions: await questionsForAdmin(2) }
-          : { ...envelope, questions: await questionsForAdmin(1) };
+         `2` or `3` is that older client; `2` is a tab from before 261010h,
+         whose check wants threads without the acted replies. */
+      const shape = query.get("questions");
+      const answer: AdminEarlierFeedbackPage | AdminEarlierFeedbackPageV2 | AdminEarlierFeedbackPageV1 =
+        shape === "3"
+          ? { ...envelope, questions: await questionsForAdmin(3) }
+          : shape === "2"
+            ? { ...envelope, questions: await questionsForAdmin(2) }
+            : { ...envelope, questions: await questionsForAdmin(1) };
       send(res, 200, answer);
     },
   },
