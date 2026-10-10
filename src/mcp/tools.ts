@@ -25,7 +25,12 @@ import type { ToolAnnotations } from "@modelcontextprotocol/server";
 import * as z from "zod";
 
 import type { AdminUser } from "../admin.js";
-import { type AdminAuthorGift, type AdminAuthorLookup, AUTHOR_GIFT_NOTES_MAX } from "../admin-author-gifts.js";
+import {
+  type AdminAuthorGift,
+  type AdminAuthorLookup,
+  AUTHOR_GIFT_NOTES_MAX,
+  type AuthorGiftEnsured,
+} from "../admin-author-gifts.js";
 import type { AdminVoucher } from "../admin-vouchers.js";
 import { freeArticles } from "../admin-vouchers.js";
 import { SHARING_RIGHTS_CONFIRM } from "../messages.js";
@@ -64,6 +69,14 @@ export interface Tool<S extends z.ZodObject = z.ZodObject> {
    */
   readonly ask?: (api: Api, args: z.infer<S>, ctx: ToolContext) => Promise<ApprovalRequest | null>;
   readonly handler: (api: Api, args: z.infer<S>, ctx: ToolContext) => Promise<unknown>;
+  /**
+   * **On the remote server, where nobody can be asked** (plan 261010g § D2), a
+   * tool with `ask` is left out of the list — unless it declares this: the
+   * description and a narrower input under which `ask` never asks. The input
+   * must be a strict subset, so an argument that would ask is refused by the
+   * schema before any handler runs; `ask` stays, as a backstop.
+   */
+  readonly remote?: { readonly description: string; readonly input: z.ZodObject };
 }
 
 /** Erases the per-tool input type so a list can hold them all; each was checked where it was written. */
@@ -219,6 +232,16 @@ function trimAuthorGift(api: Api, g: AdminAuthorGift) {
 }
 
 const voucherNote = z.string().max(500).nullable().optional();
+
+const updateVoucherInput = z.strictObject({
+  id: z.string().uuid().describe("The voucher's id, from list_gift_vouchers."),
+  email: z.string().min(3).optional(),
+  articles: z.number().int().min(1).max(1000).optional(),
+  recipientName: z.string().max(80).nullable().optional(),
+  recipientNote: voucherNote,
+  note: voucherNote,
+  revoked: z.boolean().optional(),
+});
 
 async function titleOf(api: Api, slug: string): Promise<string | undefined> {
   const entries = [...(await shelf(api, false)), ...(await shelf(api, true))];
@@ -643,7 +666,9 @@ export const TOOLS: readonly Tool[] = [
       "Admin only. Creates a gift voucher of free articles for an email address and **sends that person a real " +
       "gift email**. A dialog on this computer asks the person to approve every one. `idempotency_key` names this " +
       "one gift: calling again with the same key never sends a second gift (the same arguments are a harmless " +
-      "replay; changed arguments are refused), so reuse it when you retry and choose a new one for a new gift.",
+      "replay; changed arguments are refused), so reuse it when you retry and choose a new one for a new gift. " +
+      "To prepare a gift of one of the admin's own articles for them to review and send themselves, use " +
+      "draft_author_gift instead.",
     input: z.strictObject({
       email: z.string().min(3).describe("The recipient's email address."),
       articles: z.number().int().min(1).max(1000).describe("How many free articles."),
@@ -699,15 +724,15 @@ export const TOOLS: readonly Tool[] = [
       "restores it (revoked: false); none of those sends anything. Changing the email address **sends the gift " +
       "email to the new address**, so a dialog on this computer asks the person to approve that change. A claimed " +
       "voucher's address cannot change.",
-    input: z.strictObject({
-      id: z.string().uuid().describe("The voucher's id, from list_gift_vouchers."),
-      email: z.string().min(3).optional(),
-      articles: z.number().int().min(1).max(1000).optional(),
-      recipientName: z.string().max(80).nullable().optional(),
-      recipientNote: voucherNote,
-      note: voucherNote,
-      revoked: z.boolean().optional(),
-    }),
+    input: updateVoucherInput,
+    /* Only the address change asks, so the remote keeps the rest (261010g). */
+    remote: {
+      description:
+        "Admin only. Changes a voucher's number of articles, notes or name, or revokes it (revoked: true) or " +
+        "restores it (revoked: false); none of those sends anything. The address cannot be changed from here, " +
+        "because that sends the gift email again; do it on /admin/vouchers.",
+      input: updateVoucherInput.omit({ email: true }),
+    },
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
     ask: async (api, a) =>
       a.email === undefined
@@ -799,6 +824,73 @@ export const TOOLS: readonly Tool[] = [
     },
   }),
 
+  /* Plan 261010g § D1: Greg, after his first ChatGPT run, wanted a draft he
+     reviews and sends himself. One POST makes the draft already filled in.
+     It sends nothing, so it does not ask, and it works on the remote server.
+     It never makes the private link (`makeLink: false`): that would record a
+     rights confirmation the person did not give (Sol's F2 on the plan). */
+  tool({
+    name: "draft_author_gift",
+    title: "Draft a gift of one of your articles",
+    description:
+      "Admin only. Saves an unsent draft gift voucher for the person who should receive one of the admin's own " +
+      "articles (usually its author): their address and name, a note to them, how many free articles, and notes " +
+      "for the admin (where you found the address, why this person). **Sends nothing.** The admin reviews it on " +
+      "/admin/vouchers under Author gifts and presses Send there; no tool can send it. The article must already be " +
+      "readable by link (public, or its private link on); if it is not, ask the admin to turn its private link on " +
+      "from the article's page. One gift per article: if the article already has one, nothing is changed and the " +
+      "answer says so, and update_author_gift edits it. look_up_author: true also runs a paid web search for the " +
+      "author's name and address, which fills only what you left empty. For a gift with no article, there is no " +
+      "draft: the admin makes it on /admin/vouchers.",
+    input: z.strictObject({
+      slug: slugInput,
+      email: z.string().min(3).nullable().optional().describe("The recipient's address, if you know it."),
+      recipientName: z.string().max(80).nullable().optional().describe('Their name; the email opens "Dear <name>,".'),
+      recipientNote: voucherNote.describe("A note to them, put in their email when the admin sends it."),
+      articles: z.number().int().min(1).max(1000).optional().describe("How many free articles (default 20)."),
+      notes: z
+        .string()
+        .max(AUTHOR_GIFT_NOTES_MAX)
+        .nullable()
+        .optional()
+        .describe("Notes for the admin, never emailed: where the address came from, why this person, a draft message."),
+      look_up_author: z.boolean().default(false).describe("Also search the web for the author and an address. Costs money."),
+    }),
+    /* Not idempotent in what it answers: the second call finds the first's gift. */
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    handler: async (api, { slug, look_up_author, ...fields }) => {
+      const draft = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
+      const answer = await api.call<AuthorGiftEnsured>("POST", "/api/admin/author-gifts", {
+        slug,
+        makeLink: false,
+        lookup: look_up_author,
+        draft,
+      });
+      const review = `${api.site}/admin/vouchers`;
+      if (!answer.created) {
+        return {
+          id: answer.id,
+          status: answer.status,
+          created: false,
+          said:
+            `This article already has an author gift (${answer.status}), so nothing was changed. ` +
+            "Use list_author_gifts to see it and update_author_gift to edit it while it is a draft.",
+          review,
+        };
+      }
+      return {
+        id: answer.id,
+        status: answer.status,
+        created: true,
+        lookup: answer.lookupId !== null,
+        said:
+          "Saved as a draft; nothing was sent. The admin reviews it and presses Send on /admin/vouchers." +
+          (answer.lookupId !== null ? " A web search for the author is running and will fill what is empty." : ""),
+        review,
+      };
+    },
+  }),
+
   tool({
     name: "update_author_gift",
     title: "Change an author gift's notes or draft",
@@ -857,6 +949,22 @@ export const TOOLS: readonly Tool[] = [
   }),
 ];
 
+/**
+ * **The list the remote server serves** (plan 261010g § D2). Nobody can be
+ * asked from there, so a tool that asks is left out rather than listed and
+ * refused — a model plans around what it is offered. A tool that declares a
+ * `remote` form is served in that form instead. Left out is the default, so
+ * a new asking tool cannot appear remotely by being forgotten. The stdio
+ * server keeps `TOOLS` whole.
+ */
+export function remoteTools(tools: readonly Tool[] = TOOLS): readonly Tool[] {
+  return tools.flatMap((t): Tool[] => {
+    if (!t.ask) return [t];
+    if (!t.remote) return [];
+    return [{ ...t, description: t.remote.description, input: t.remote.input }];
+  });
+}
+
 /* ----------------------------------------------------- failures, in words -- */
 
 const ADMIN_ONLY = new Set([
@@ -867,6 +975,7 @@ const ADMIN_ONLY = new Set([
   "update_gift_voucher",
   "retry_gift_voucher_email",
   "list_author_gifts",
+  "draft_author_gift",
   "update_author_gift",
 ]);
 

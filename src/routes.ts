@@ -375,7 +375,12 @@ import {
   type AuthorLookupStarted,
 } from "./admin-author-gifts.js";
 import { startAuthorLookup } from "./author-lookup-start.js";
-import { parseAuthorGiftPatch, parseEnsureAuthorGift, pgAuthorGiftStore } from "./store/pg-author-gifts.js";
+import {
+  parseAuthorGiftPatch,
+  parseEnsureAuthorGift,
+  parseSendAuthorGift,
+  pgAuthorGiftStore,
+} from "./store/pg-author-gifts.js";
 import {
   chargeAndSwitchOnHighPower,
   refuseUploadWithoutQuota,
@@ -9874,7 +9879,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       if (!parsed.ok) throw httpError(400, parsed.message);
       /* Ensure, nothing more (R2-F2): an existing gift is answered as it
          stands, and only a new one makes the link and its first lookup. */
-      const answer = await pgAuthorGiftStore.ensureAuthorGift(parsed.value.slug, user.id);
+      const answer = await pgAuthorGiftStore.ensureAuthorGift(parsed.value.slug, user.id, parsed.value.options);
       res.setHeader("Cache-Control", "private, no-store");
       if (answer.kind === "refused") {
         switch (answer.reason) {
@@ -9883,7 +9888,14 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
           case "unpublished":
             throw httpError(409, "That article has nothing to read yet. Draft its gift once it is on your shelf.");
           case "link-off":
-            throw httpError(409, "That article's private link was turned off while its gift was being drafted. Try again.");
+            throw httpError(
+              409,
+              parsed.value.options.makeLink
+                ? "That article's private link was turned off while its gift was being drafted. Try again."
+                : /* An agent's draft never makes the link (261010g): the rights tick is the person's. */
+                  "That article is private and has no private link, and a draft made this way does not make one. " +
+                    "Turn its private link on from the article's page (which asks you to confirm you may share it), then draft again.",
+            );
           default: {
             const never: never = answer.reason;
             throw httpError(500, `unknown refusal ${String(never)}`);
@@ -9892,6 +9904,12 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       }
       if (answer.kind === "existing") {
         send(res, 200, { id: answer.id, status: answer.status, created: false } satisfies AuthorGiftEnsured);
+        return;
+      }
+      /* A gift made already filled in, with no lookup asked for (261010g):
+         201, and nothing runs after the response. */
+      if (answer.lookupId === null) {
+        send(res, 201, { id: answer.id, status: "draft", created: true, lookupId: null } satisfies AuthorGiftEnsured);
         return;
       }
       /* Registered only now, after the gift and its pending lookup committed. */
@@ -9950,13 +9968,18 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "POST",
     pattern: /^\/api\/admin\/author-gifts\/([\w-]+)\/send$/,
     article: "none",
-    handler: async ({ request: { res } }, captures) => {
+    handler: async ({ request: { req, res } }, captures) => {
       const [, id = ""] = captures;
       if (!isUuid(id)) throw httpError(400, "id must be a uuid");
-      const answer = await pgAuthorGiftStore.sendAuthorGift(id);
+      /* What the confirmation showed (261010g, Sol's F1); the page always sends it. */
+      const parsed = parseSendAuthorGift(await readBody(req));
+      if (!parsed.ok) throw httpError(400, parsed.message);
+      const answer = await pgAuthorGiftStore.sendAuthorGift(id, { expected: parsed.value.expected });
       switch (answer.kind) {
         case "not-found":
           throw httpError(404, "There is no such author gift.");
+        case "changed":
+          throw httpError(409, "That gift changed since you opened it, so nothing was sent. Check it again, then press Send.");
         case "no-address":
           throw httpError(409, "That gift has no address yet. Add one, then send it.");
         case "discarded":

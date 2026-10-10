@@ -238,8 +238,8 @@ describe("Author gifts", () => {
     expect(reason?.textContent).toContain("lookup");
   });
 
-  it("asks before Send by naming the address, then sends, and re-reads the vouchers", async () => {
-    giftsAnswer = () => [gift({ email: "ann@example.test" })];
+  it("asks before Send by naming the address, then sends what it showed, and re-reads the vouchers", async () => {
+    giftsAnswer = () => [gift({ email: "ann@example.test", recipientName: "Ann" })];
     await mount();
     const vouchersRead = () => calls.filter((c) => c.method === "GET" && c.url === "/api/admin/vouchers").length;
     const before = vouchersRead();
@@ -248,7 +248,14 @@ describe("Author gifts", () => {
     expect(card(DRAFT)?.textContent).toContain("Send the gift email to ann@example.test?");
     await act(async () => button(card(DRAFT), "Send to ann@example.test")?.click());
     await settle();
-    expect(writes()).toEqual([{ method: "POST", url: `/api/admin/author-gifts/${DRAFT}/send`, body: undefined }]);
+    /* Plan 261010g: the gift as the confirmation showed it, so an agent's edit since is refused. */
+    expect(writes()).toEqual([
+      {
+        method: "POST",
+        url: `/api/admin/author-gifts/${DRAFT}/send`,
+        body: { expected: { email: "ann@example.test", recipientName: "Ann", recipientNote: null, articles: 20 } },
+      },
+    ]);
     expect(card(DRAFT)?.textContent).toContain("The gift email is on its way");
     expect(vouchersRead()).toBeGreaterThan(before);
   });

@@ -700,7 +700,7 @@ function GiftCard({
     if (busy || running) return;
     setBusy(true);
     setSaid(null);
-    const answer = await hooks.send(gift.id);
+    const answer = await hooks.send(gift);
     setBusy(false);
     setConfirming(false);
     if (answer.kind === "refused") {
