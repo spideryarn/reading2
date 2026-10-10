@@ -34,6 +34,10 @@ The same convention as a planning doc — `yyMMdd<letter>-kebab-description.md`,
 
 ## See also
 
+- [reading-research-overview.md](reading-research-overview.md) — the library of evidence on reading
+  and learning deeply (2026-10-10): twenty-one topic files and a digest of what they say about each
+  mode. Research on how people read goes there, not only here.
+
 - [261005e-where-a-reader-s-paper-link-points-the-other-sources-measured-and-ranked.md](../research/261005e-where-a-reader-s-paper-link-points-the-other-sources-measured-and-ranked.md)
   — 45 places a reader's paper link points, what each imports as today through our own fetcher,
   which refuse us, and the ranking of which are worth an import rule

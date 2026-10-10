@@ -19,7 +19,7 @@ import { SHARING_RIGHTS_CONFIRM } from "../src/messages.js";
 import { ApiError, makeApi, type TokenSource } from "../src/mcp/api.js";
 import { type Approver, defaultApprover, dialogText, type Operation, osascriptArgs, readDialogAnswer } from "../src/mcp/approve.js";
 import { buildServer } from "../src/mcp/server.js";
-import { remoteTools, TOOLS, voucherId } from "../src/mcp/tools.js";
+import { INSTRUCTIONS, remoteTools, TOOLS, voucherId } from "../src/mcp/tools.js";
 
 const SITE = "https://sy.test";
 const ACCESS = "SENTINEL-ACCESS-7f3a9c";
@@ -1144,6 +1144,21 @@ describe("list_users and user_activity read the admin's users route, trimmed", (
 /* Plan 261010i § D2: on the remote server nobody can be asked, so a tool that
    asks is left out of the list rather than listed and refused — unless it
    declares what it is without the asking part. */
+/* Plan 261010r § D3 (Sol's F4): one text for both servers, so it may name
+   only tools both offer, and it must not tell the model a tool sends nothing
+   when the Mac's version of it can. */
+describe("the server's instructions", () => {
+  it("name only tools that both servers offer", () => {
+    const remote = new Set(remoteTools().map((t) => t.name));
+    const named = TOOLS.map((t) => t.name).filter((n) => new RegExp(`\\b${n}\\b`).test(INSTRUCTIONS));
+    expect(named).toEqual(
+      expect.arrayContaining(["import_article", "get_import_status", "list_author_gifts", "draft_author_gift"]),
+    );
+    for (const n of named) expect(remote.has(n), n).toBe(true);
+    expect(INSTRUCTIONS).toMatch(/own_copy/);
+  });
+});
+
 describe("the remote server's tool list", () => {
   const remote = remoteTools();
   const names = remote.map((t) => t.name);

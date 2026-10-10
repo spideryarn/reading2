@@ -12,6 +12,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import {
   type SuggestAnswer,
   type SuggestRequest,
+  commandSuggestDismissPath,
   commandSuggestPath,
   readFromHash,
   readSuggestAnswer,
@@ -19,6 +20,7 @@ import {
 import { PROVIDER_UNREADABLE } from "../messages.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
+import { MalformedReply } from "./lib/reader-facing.js";
 import { onProfileSaved, profileGeneration } from "./profile-saved.js";
 
 /** The answer, or the sentence to show under the box. A failure here can always be tried again. */
@@ -59,6 +61,41 @@ export async function askForSuggestions(slug: string, request: SuggestRequest, s
  *  - `has`: there is one; `readFrom` is `readFromHash` of both boxes as
  *    stored, the value the server sends with a list.
  */
+/**
+ * **Remember one dismissed suggestion, on the server** — plan 261010u. The
+ * identity is a hash (src/command-suggest.ts § `suggestionIdentity`), so no
+ * words leave with it. `null` when it was kept, else the sentence for the
+ * status line: the bar puts the row back, rather than claiming a dismissal
+ * that the next visit would contradict (GPT Sol's F7 on the plan).
+ */
+export async function dismissSuggestion(slug: string, readFrom: string, identity: string): Promise<string | null> {
+  try {
+    const answer = await readJson<unknown>(
+      await apiFetch(commandSuggestDismissPath(slug), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ readFrom, identity }),
+      }),
+    );
+    /* A 2xx alone is not an acknowledgement. Treat an old or malformed server
+       reply as a failed save, so the optimistic row comes back rather than
+       reporting permanence by silence. */
+    if (
+      typeof answer !== "object" ||
+      answer === null ||
+      Array.isArray(answer) ||
+      Object.keys(answer).length !== 1 ||
+      !("ok" in answer) ||
+      answer.ok !== true
+    ) {
+      throw new MalformedReply("Dismissal response was not exactly { ok: true }");
+    }
+    return null;
+  } catch (err) {
+    return describeFetchFailure(err as Error);
+  }
+}
+
 export type ReasonRead =
   | { readonly state: "unknown" }
   | { readonly state: "none" }

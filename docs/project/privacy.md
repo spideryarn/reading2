@@ -588,6 +588,12 @@ profile can end up outside the conversation, on the reader's own press. This is 
 [reader-profile.md § The command bar's suggestions](reader-profile.md#the-command-bars-suggestions-the-one-exception)
 owns the reasoning.
 
+**A suggestion the reader dismisses is stored as a hash, never as its words** (since 2026-10-10,
+plan [261010u](../plans/261010u-bar-suggestions-capped-dismissable-collapsible-and-the-guide-at-the-top.md)),
+and is not sent to any model; the reasoning is
+[reader-profile.md § The command bar's suggestions](reader-profile.md#the-command-bars-suggestions-the-one-exception).
+The page does not mention it: it holds no words of the reader's.
+
 **The page makes no promise that personal details are kept out, and must not gain one.** The prompt
 asks the model to build the searches and the question from the topic and leave the person out
 ([`src/command-suggest-call.ts`](../../src/command-suggest-call.ts) § `SUGGEST_SYSTEM`). Nothing

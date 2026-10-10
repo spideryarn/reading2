@@ -27,7 +27,7 @@ route; visitors to a shared article can walk one already planned.
 
 - <kbd>‹</kbd> <kbd>›</kbd> at the top, or <kbd>←</kbd> <kbd>→</kbd> while reading, step from stop
   to stop. **Next stop ›**, in the text under the current stop, does the same, and at the end of a
-  pass becomes **More detail ›**.
+  pass becomes **More detail ›**. **‹ Previous stop**, on the left under it, goes back one.
 - Some stops have a short question above the quote, written by AI, to read it with: what the quote
   refers to, what it settles, or why it matters — never what it found. A stop whose quote stands on
   its own has none.

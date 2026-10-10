@@ -166,6 +166,7 @@ describe("every Postgres store, asked for the seam it was guarded under", () => 
     ["../src/store/pg-glossary-hidden.js", "pgGlossaryHiddenStore", "glossary-hidden"],
     ["../src/store/pg-skim-notice.js", "pgSkimNoticeStore", "skim-notice"],
     ["../src/store/pg-stale-notices.js", "pgStaleNoticeStore", "stale-notices"],
+    ["../src/store/pg-suggestion-dismissals.js", "pgSuggestionDismissalStore", "suggestion-dismissals"],
     ["../src/store/pg-quiz-attempts.js", "pgQuizAttemptStore", "quiz-attempts"],
     ["../src/store/pg-admin.js", "pgAdminStore", "admin"],
     ["../src/store/pg-visibility.js", "pgVisibilityStore", "visibility"],
@@ -349,6 +350,10 @@ describe("no Postgres store is selected without a guard", () => {
          `createPgSourceStore` unguarded behind that blind spot, 2026-09-03. */
       "createPgCheckpointStore",
       "createPgSourceStore",
+      /* An author gift's private link, made only for the gift's own article,
+         2026-10-10 (261010r): it writes the key, so it is guarded at its export
+         like the share-link store it lives beside. */
+      "ensureShareLinkForArticle",
       "pgAdminStore",
       "pgArticleReader",
       /* Author gifts, 2026-10-09 (261010c): addresses, notes, and through Send
@@ -416,6 +421,7 @@ describe("no Postgres store is selected without a guard", () => {
       /* The third factory, and the one that proved a fixed-size window wrong:
          it guards on its last line, 450 below its signature. */
       "pgStoreSession",
+      "pgSuggestionDismissalStore",
       /* The reader's own tags, 2026-10-03 (plan 261003d): its parameters are
          the reader's own words. */
       "pgTagStore",

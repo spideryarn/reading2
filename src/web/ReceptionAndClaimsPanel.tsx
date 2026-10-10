@@ -202,7 +202,9 @@ import {
   RECEPTION_THREADS_FAILED,
   sourcesClaimsHandoff,
   sourcesClaimsUnverified,
+  sourcesClaimsNoneSuggested,
   receptionResponsesUnverified,
+  receptionResponsesNoneSuggested,
   receptionWithheldOnSharedLink,
   receptionRegistryNote,
   receptionWorkFieldsNote,
@@ -745,8 +747,9 @@ const ORDER_OPTION: Record<ReceptionOrder, { label: string; title: string }> = {
 };
 
 /**
- * **What one search says when it kept no rows**, and it is two sentences rather
- * than one.
+ * **What one search says when it kept no rows**, and it is three sentences
+ * rather than one: no pages came back; pages came back and the AI put none
+ * forward; the AI put some forward and none survived our checks (plan 261010n).
  *
  * Collapsing them is the single thing most worth getting right in this panel
  * (docs/reusable/silent-success.md). *The search came back with no pages* and
@@ -778,9 +781,17 @@ export function emptyGroupNote(counts: ReceptionCounts, group: "direct" | "claim
   if (counts.returnedSources === 0) {
     return group === "direct" ? RECEPTION_RESPONSES_NONE : SOURCES_CLAIMS_NONE;
   }
+  /* **The AI put nothing forward**: nothing was checked, so this must not say a
+     check failed. Until plan 261010n it shared the next case's sentence, and
+     Greg could not tell what it meant (spya-qtk3q2). */
+  if (counts.reportedRows === 0) {
+    return group === "direct"
+      ? receptionResponsesNoneSuggested(counts.returnedSources)
+      : sourcesClaimsNoneSuggested(counts.returnedSources);
+  }
   return group === "direct"
-    ? receptionResponsesUnverified(counts.returnedSources)
-    : sourcesClaimsUnverified(counts.returnedSources);
+    ? receptionResponsesUnverified(counts.returnedSources, counts.reportedRows)
+    : sourcesClaimsUnverified(counts.returnedSources, counts.reportedRows);
 }
 
 /**
@@ -944,7 +955,7 @@ export type ReceptionAndClaimsAccess =
  */
 export interface ReceptionAndClaimsChats {
   summaries: readonly ThreadSummary[];
-  /** Start a fresh chat about this claim. Goes to Chat and sends the question: one press, one model call (plan 261006j). */
+  /** Start this claim's chat, or reopen it when another surface reaches this sender. */
   onCheck(origin: ClaimOrigin): void;
   /**
    * Start a fresh chat that looks at the debate from this angle, the reader's
@@ -2245,7 +2256,7 @@ function ReceptionList({
  * wears Chat's icon from the bar, because it takes the reader into Chat
  * (docs/project/icons.md). The mark is the shared `OriginChatMark`
  * (OriginChat.tsx); it sits on a line of its own under the claim, so the
- * latest answer's opening has room.
+ * chat's gist (or latest-answer fallback) has room.
  */
 function ClaimsList({
   groups,
@@ -2277,7 +2288,9 @@ function ClaimsList({
             <summary className="rcp-group-head rcp-group-claim">
               <span className="rcp-group-quote">“{group.claimQuote}”</span>
               <BlockRef id={group.blockId} onJump={onJump} />
-              {chats && (
+              {/* Only while the claim has no chat: then the mark below is the
+                  one chat control, and opens it (plan 261010s, D2). */}
+              {chats && !chat && (
                 <Tooltip placement="top" content={<TipNote>{SOURCES_CLAIM_CHECK_CLAIM}</TipNote>}>
                   <Button
                     type="button"
@@ -2726,7 +2739,7 @@ function ListedClaims({
               <p className="rcp-group-claim rcp-listed-head">
                 <span className="rcp-group-quote">“<Excerpt blockId={claim.blockId} words={claim.quote} />”</span>
                 <BlockRef id={claim.blockId} onJump={onJump} />
-                {chats && (
+                {chats && !chat && (
                   <Tooltip placement="top" content={<TipNote>{SOURCES_CLAIM_CHECK_CLAIM}</TipNote>}>
                     <Button
                       type="button"

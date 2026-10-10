@@ -684,6 +684,9 @@ function GiftCard({
      replace their review with an agent's newer edit. The server compares
      this snapshot with the row when Send freezes it. */
   const [confirming, setConfirming] = useState<AdminAuthorGift | null>(null);
+  /* The rights tick for a gift whose article has no link yet, which Send then
+     makes (261010r § D2). Belongs to one confirmation: cleared with it. */
+  const [rights, setRights] = useState(false);
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [said, setSaid] = useState<string | null>(null);
@@ -697,6 +700,8 @@ function GiftCard({
   useEffect(() => {
     if (!canSend) setConfirming(null);
   }, [canSend]);
+  /* Whether this Send would make the private link, decided by what the confirmation showed. */
+  const needsRights = confirming !== null && !confirming.starter.linkable;
 
   async function attempt(run: () => Promise<string | null>) {
     setBusy(true);
@@ -707,10 +712,10 @@ function GiftCard({
   }
 
   async function sendNow() {
-    if (busy || running || confirming === null) return;
+    if (busy || running || confirming === null || (needsRights && !rights)) return;
     setBusy(true);
     setSaid(null);
-    const answer = await hooks.send(confirming);
+    const answer = await hooks.send(confirming, { rightsConfirmed: needsRights && rights });
     setBusy(false);
     setConfirming(null);
     if (answer.kind === "refused") {
@@ -755,8 +760,25 @@ function GiftCard({
             {confirming.starter.title !== null ? <> and links “{confirming.starter.title}”</> : null}. This sends a
             real email and cannot be taken back.
           </p>
+          {needsRights && (
+            <>
+              <p className="tw:m-0 tw:mb-2 tw:text-foreground">
+                This article is private and has no private link yet, so Send makes one: anyone with the link can
+                read it.
+              </p>
+              <label className="tw:mb-2 tw:flex tw:items-start tw:gap-2 tw:text-foreground">
+                <input type="checkbox" checked={rights} disabled={busy} onChange={(e) => setRights(e.target.checked)} />
+                <span>{SHARING_RIGHTS_CONFIRM}</span>
+              </label>
+            </>
+          )}
           <div className="tw:flex tw:flex-wrap tw:gap-2">
-            <Button type="button" size="sm" disabled={busy || running} onClick={() => void sendNow()}>
+            <Button
+              type="button"
+              size="sm"
+              disabled={busy || running || (needsRights && !rights)}
+              onClick={() => void sendNow()}
+            >
               {busy ? "Sending…" : running ? "Waiting for lookup…" : `Send to ${confirming.email}`}
             </Button>
             <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => setConfirming(null)}>
@@ -771,6 +793,8 @@ function GiftCard({
           running={running}
           onSend={() => {
             setRefusal(null);
+            /* A fresh confirmation starts unticked: a tick belongs to the one it was given in. */
+            setRights(false);
             setConfirming(gift);
           }}
           onEdit={() => {

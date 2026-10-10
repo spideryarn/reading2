@@ -2,9 +2,9 @@
    `OriginChatMark`): one of Debate's claims, a Glossary entry, a Citations
    row. Plans 261005i (D4) and 261006d (D5).
 
-   A line of its own: an icon, the count of questions, and how the chat's
-   latest answer begins, on one line and cut with an ellipsis. It takes the
-   width it is given and never asks for more, so a long answer cannot push a
+   A line of its own: an icon, the count of questions, and the chat's gist (or
+   how its latest answer begins until there is one), clamped to two lines. It
+   takes the width it is given and never asks for more, so a long line cannot push a
    narrow band wide. The words are the model's and take their face from
    voices.css (`.voice-ai`); the count and "No answer yet" are ours.
 
@@ -52,4 +52,15 @@
 @media (pointer: coarse) {
   /* A finger's height (docs/project/touch.md), without widening the row. */
   .origin-chat { min-height: 2.5rem; }
+}
+/* **A gist wraps to two lines** (plan 261010s, D4): it is a sentence about
+   the whole conversation, up to ~200 characters, and one clipped line of it
+   says less than an answer's opening does. Two, then an ellipsis. */
+.origin-chat:has(.origin-chat-gist) { align-items: flex-start; }
+.origin-chat-gist {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
 }

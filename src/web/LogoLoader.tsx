@@ -38,6 +38,7 @@ export const LOADER_EXCLUDED: Readonly<Record<string, string>> = {
   "spya-dawn": "masks the whole host, so it would eat the other track",
   "spya-seam": "a held pose whose transition is scoped to its class, so leaving it snaps",
   "spya-i": "a held pose whose transition is scoped to its class, so leaving it snaps",
+  "spya-dead": "a grey spider on its back, on an empty loading page, reads as an error",
 };
 
 /**
@@ -62,6 +63,18 @@ export const LOADER_HOLD_MS: Readonly<Record<string, { run: number; rest?: numbe
   "spya-type": { run: 2820 }, // the cursor: 700ms delay + 2 × 1.06s blink
   "spya-abseil": { run: 2000 }, // 1 × 2s
   "spya-dew": { run: 1600 }, // once, 630ms stagger + 900ms
+  "spya-hop": { run: 1600 }, // 1 × 1.6s
+  "spya-asterisk": { run: 1800 }, // 1 × 1.8s
+  "spya-magnifier": { run: 2000 }, // 1 × 2s
+  "spya-pacing": { run: 3000 }, // 1 × 3s
+  "spya-lines": { run: 2400 }, // 1 × 2.4s
+  "spya-semaphore": { run: 1800 }, // 1 × 1.8s, both legs
+  "spya-quotes": { run: 1800 }, // 1 × 1.8s
+  "spya-click": { run: 1800 }, // 1 × 1.8s
+  "spya-shed": { run: 1600 }, // 1 × 1.6s
+  "spya-xref": { run: 1600 }, // 1 × 1.6s
+  "spya-skim": { run: 3225 }, // once on the loader, 225ms stagger + 3s
+  "spya-tex": { run: 1715 }, // once, 315ms stagger + 1.4s
 };
 
 const eligible = (reach: LogoAnimation["reach"]) =>

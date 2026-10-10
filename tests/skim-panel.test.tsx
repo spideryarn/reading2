@@ -920,9 +920,11 @@ describe("the panel", () => {
      (spya-se0e4v): "they should provide/reuse the usual 'go to glossary' etc
      in rich tooltips". The card is portalled, so it is found on `document`. */
   const termCard = () => document.querySelector<HTMLElement>('[role="dialog"]');
-  const cardButtons = () => [...(termCard()?.querySelectorAll("button") ?? [])].map((b) => b.textContent);
+  /* An icon-only button (plan 261010s) is named by its aria-label. */
+  const buttonName = (b: HTMLButtonElement) => b.textContent?.trim() || b.getAttribute("aria-label");
+  const cardButtons = () => [...(termCard()?.querySelectorAll("button") ?? [])].map(buttonName);
   const cardButton = (label: string) =>
-    [...termCard()!.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === label)!;
+    [...termCard()!.querySelectorAll<HTMLButtonElement>("button")].find((b) => buttonName(b) === label)!;
   const termChip = () => host.querySelector<HTMLButtonElement>(".skim-chip")!;
 
   it("opens a term chip to the glossary's own card on focus, with the owner's three actions (261006e)", async () => {
@@ -932,7 +934,7 @@ describe("the panel", () => {
     await act(async () => termChip().focus());
     expect(termChip().getAttribute("aria-expanded")).toBe("true");
     expect(termCard()?.textContent).toContain(TERM.senseHere!);
-    expect(cardButtons()).toEqual(["Ask in chat", "Hide", "Open in Glossary"]);
+    expect(cardButtons()).toEqual(["Ask about this term in chat", "Hide", "Open in Glossary"]);
     /* The sense is in the card and nowhere in the band: one surface, not two. */
     expect(host.querySelector(".skim-sense")).toBeNull();
     expect(host.querySelector('[aria-label="Open in Glossary"]')).toBeNull();
@@ -945,7 +947,7 @@ describe("the panel", () => {
     await draw(owner(), view({ card: CARD, termActions: termActions(), onAskTerm: ask }));
     await act(async () => termChip().focus());
     expect(cardButtons(), "Dig deeper is gone").not.toContain("Dig deeper");
-    await act(async () => cardButton("Ask in chat").click());
+    await act(async () => cardButton("Ask about this term in chat").click());
     expect(calls).toEqual([`ask ${TERM.id}`]);
     expect(termChip().getAttribute("aria-expanded")).toBe("false");
   });
@@ -1052,8 +1054,13 @@ describe("the panel", () => {
     expect(guard.getAttribute("data-type")).toBe("outside");
     await act(async () => guard.focus());
     await settle();
-    expect(document.activeElement).toBe(cardButton("Ask in chat"));
-    await act(async () => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(document.activeElement).toBe(cardButton("Ask about this term in chat"));
+    const escape = () => act(async () => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    /* One press, one surface: the Ask button's own tooltip goes first. */
+    await escape();
+    await settle();
+    expect(termCard(), "the first Escape closes only the Ask tooltip").not.toBeNull();
+    await escape();
     await settle();
     expect(termCard()).toBeNull();
     expect(document.activeElement).toBe(termChip());
@@ -1073,7 +1080,7 @@ describe("the panel", () => {
     expect(termCard()?.textContent).toContain(TERM.senseHere!);
     /* Dig deeper landed in Glossary, so it went with the way there, until
        2026-10-09. Ask in chat goes to Chat, and Hide stays put (plan 261009k). */
-    expect(cardButtons()).toEqual(["Ask in chat", "Hide"]);
+    expect(cardButtons()).toEqual(["Ask about this term in chat", "Hide"]);
   });
 
   it("keeps Hide and Ask in chat independent: either can be drawn without the other (261009k, Sol F1)", async () => {
@@ -1083,7 +1090,7 @@ describe("the panel", () => {
     await act(async () => termChip().blur());
     await draw(owner(), view({ card: CARD, termActions: null, onAskTerm: ask }));
     await act(async () => termChip().focus());
-    expect(cardButtons()).toEqual(["Ask in chat", "Open in Glossary"]);
+    expect(cardButtons()).toEqual(["Ask about this term in chat", "Open in Glossary"]);
   });
 
   it("draws a visitor's card with no button at all when Glossary cannot be opened", async () => {
@@ -1458,6 +1465,7 @@ describe("the door in the prose", () => {
   const door = (props: Partial<Parameters<typeof SkimDoor>[0]>) =>
     createElement(SkimDoor, {
       door: null,
+      onPrevious: null,
       onNext: () => {},
       onDeeper: () => {},
       onRoute: null,
@@ -1512,6 +1520,53 @@ describe("the door in the prose", () => {
   it("draws nothing with no door and no band to bring back", async () => {
     await act(async () => root.render(door({})));
     expect(host.innerHTML).toBe("");
+  });
+
+  /* spya-gm858u, Greg 2026-10-09: "perhaps add a previous step as well as a
+     next step in the article text … the previous step is on the left-hand side
+     and the next step is on the right, as it already is." */
+  it("offers the previous stop on the left, the way on on the right", async () => {
+    let prev = 0;
+    let next = 0;
+    await act(async () =>
+      root.render(
+        door({
+          door: { kind: "next", cue: null },
+          onPrevious: () => void prev++,
+          onNext: () => void next++,
+          onRoute: () => {},
+        }),
+      ),
+    );
+    const left = [...host.querySelectorAll<HTMLButtonElement>(".skim-door-back button")];
+    const right = [...host.querySelectorAll<HTMLButtonElement>(".skim-door-on button")];
+    expect(left.map((b) => b.textContent)).toEqual(["‹ Previous stop"]);
+    expect(right.map((b) => b.textContent)).toEqual(["All stops", "Next stop ›"]);
+    await act(async () => left[0]!.click());
+    expect([prev, next]).toEqual([1, 0]);
+  });
+
+  it("offers no previous stop on stop 1 of a pass", async () => {
+    await act(async () => root.render(door({ door: { kind: "next", cue: null }, onPrevious: null })));
+    expect(host.querySelector(".skim-door-back")).toBeNull();
+    expect([...host.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["Next stop ›"]);
+  });
+
+  it("keeps the previous stop at the end of a pass, beside More detail or alone at the deepest", async () => {
+    await act(async () =>
+      root.render(
+        door({ door: { kind: "end", pass: "Gist", count: 3, deeper: "More" }, onPrevious: () => {} }),
+      ),
+    );
+    expect([...host.querySelectorAll("button")].map((b) => b.textContent)).toEqual([
+      "‹ Previous stop",
+      "More detail ›",
+    ]);
+    await act(async () =>
+      root.render(door({ door: { kind: "end", pass: "Most", count: 3, deeper: null }, onPrevious: () => {} })),
+    );
+    expect([...host.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["‹ Previous stop"]);
+    expect(text(".skim-door-cue")).toBe("End of Most — 3 stops.");
   });
 });
 
@@ -1580,11 +1635,28 @@ describe("the step controls name their keys", () => {
 
   it("the door's Next stop names → too", async () => {
     await act(async () =>
-      root.render(createElement(SkimDoor, { door: { kind: "next", cue: null }, onNext: () => {}, onDeeper: () => {}, onRoute: null })),
+      root.render(createElement(SkimDoor, { door: { kind: "next", cue: null }, onPrevious: null, onNext: () => {}, onDeeper: () => {}, onRoute: null })),
     );
     await hover(host.querySelector("button")!);
     expect(tip()).toContain("While reading, press →");
     expect(tip()).toContain("On to the next stop along the route.");
+  });
+
+  it("the door's Previous stop names ←", async () => {
+    await act(async () =>
+      root.render(
+        createElement(SkimDoor, {
+          door: { kind: "next", cue: null },
+          onPrevious: () => {},
+          onNext: () => {},
+          onDeeper: () => {},
+          onRoute: null,
+        }),
+      ),
+    );
+    await hover(host.querySelector(".skim-door-back button")!);
+    expect(tip()).toContain("While reading, press ←");
+    expect(tip()).toContain("Back one stop along the route.");
   });
 
   /* 73 kept the head's own (i) in one group with the depth buttons. Since
@@ -1760,6 +1832,7 @@ describe("the band, walked", () => {
     expect(host.querySelector("#state")?.getAttribute("data-open")).toBe(published[0]!.key);
     expect(control?.blockId).toBe(B[2]);
     expect(control?.door).toEqual({ kind: "next", cue: "Look for the headline comparison." });
+    expect(control?.hasPrevious).toBe(false);
   });
 
   it("steps by replacing the entry, and scrolls the stop to the top", async () => {
@@ -1772,6 +1845,7 @@ describe("the band, walked", () => {
     expect(param("stop")).toBe(Q[0]);
     expect(history.length, "a step must not push").toBe(before);
     expect(scrolled).toEqual([B[0]]);
+    expect(control?.hasPrevious).toBe(true);
     /* The end of Gist: no wrap, and the key goes back to the browser. */
     let took = true;
     await act(async () => {
@@ -2041,6 +2115,7 @@ describe("the band, walked", () => {
       expect([param("depth"), param("stop"), current()]).toEqual(["2", Q[2], Q[2]]);
       expect(host.querySelector(".skim-depth.on")?.textContent).toContain("More");
       expect(text(".band-head")).toContain("Stop 1 of 2");
+      expect(control?.hasPrevious, "a carried stop first in More still has no previous stop in More").toBe(false);
       expect(scrolled, "the reader is already there").toEqual([]);
       expect(flashed).toEqual([]);
       /* The door is More's now: on to More's own stop. */

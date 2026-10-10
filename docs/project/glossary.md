@@ -78,7 +78,7 @@ until you know what they are for.
  │             │ │sense Chalmers…    ││                         │
  │             │ │ ↗ plato.stanford  ││                         │
  │             │ └───────────────────┘│                         │
- │             │ [💬 Ask in chat]    │                         │
+ │             │ [💬]                │                         │
  │             │ ▸ also: nonredu…     │                         │
  │             │ ▸ used in 3 places   │                         │
  │             │   k3m9qt qw82nf      │                         │
@@ -518,13 +518,13 @@ Three details worth knowing before changing it:
   (spya-p09u4s), and the card had *Dig deeper* from 2026-10-02 **until 2026-10-09**, when *Ask in
   chat* took its place there as in the band (plan
   [261009k](../plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)).
-  *Ask in chat* calls the band's own sender (`askGlossaryEntryInChat`), so the chat records the
-  same origin as one started from the entry, and closes the card; it is never disabled. It is its
+  *Ask in chat* calls the band's own sender (`askEntry`), so the card starts or reopens the same
+  origin as the entry, and closes the card; it is never disabled. Its rich card opens on the first
+  finger tap and the second sends; a mouse or keyboard sends at once. It is its
   own prop, `onAskTerm`, not part of `termActions`, so Hide and the chat do not hang off each
   other, and Skim's term chips get it the same way (`SkimBand`'s `onAskTerm`). *Hide* is
   [below](#hiding-an-entry); the card closes only once the write has landed, and says a refusal on
-  a line of its own. A visitor gets neither. Both are plain buttons, so a finger reaches them the
-  way it reaches *Open in Glossary* — a tap inside the card is left alone.
+  a line of its own. A visitor gets neither. Hide remains a direct plain-button tap.
 
 ## Hiding an entry
 
@@ -979,12 +979,17 @@ A lookup answer kept from before is still drawn above it.
 
 What the owner gets:
 
-- **The button** goes to Chat and opens a fresh conversation with the term quoted and a question
-  after it, then sends that question. The press is the Send since 2026-10-06
+- **The button**, Chat's two bubbles with its words in a card (icon only since plan
+  [261010s](../plans/261010s-ask-in-chat-resumes-its-thread-and-becomes-an-icon.md)), goes to Chat
+  and opens a fresh conversation with the term quoted and a question after it, then sends that
+  question. The press is the Send since 2026-10-06
   ([261006j](../plans/261006j-ask-in-chat-sends-the-question.md)), and Back returns to the Glossary.
-- **A line under the button once a chat exists**: how many questions were asked, and how the
-  chat's latest answer begins. Pressing it opens that conversation beside the Glossary
-  (`?thread=`, the mode unchanged). The button stays, so a second chat can be started.
+- **A line in the button's place once a chat exists**: how many questions were asked, and the
+  chat's gist (what it has covered, in the AI's words), or how its latest answer begins until it
+  has one. Pressing it opens that conversation beside the Glossary (`?thread=`, the mode
+  unchanged). **The button goes**, and the hover card's reopens the same chat: an entry has one
+  chat reached from it, since plan 261010s
+  ([chat-from-a-mode.md § One chat per item](chat-from-a-mode.md#one-chat-per-item)).
 - **In Chat's list** the conversation has the Glossary's icon, with a card that names the term, and
   the filter above the list gains *Glossary*.
 - **A visitor has neither** the button nor the line.

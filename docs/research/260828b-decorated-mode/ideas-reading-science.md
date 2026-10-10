@@ -806,6 +806,14 @@ author-quality, which means confidently wrong somewhere in every article. It als
 signature illusion of fluency: the reader who read the highlights feels they read the piece.
 *If we do it at all, do it after the reader has highlighted (#21), never before.*
 
+> **Correction, 2026-10-10.** "The worst" overstates it. The 2026-10-10 evidence library found no
+> source for "attention narrows and incidental learning of the unmarked text drops", and found that
+> *accurate* highlighting chosen by someone else helped memory and comprehension a little (Ponce et
+> al. 2022), while *inaccurate* highlighting hurt both comprehension and calibration (Gier et al.
+> 2009). The conclusion that survives: the danger is model-quality marks being wrong, not marking as
+> such. The advice to show marks only after the reader has read still stands. See
+> [17-typography-and-decoration.md](../261010a-reading-and-learning-evidence/17-typography-and-decoration.md).
+
 **Making unimportant sentences smaller or fainter.** Greg names this explicitly, and it is the one
 suggestion in the brief I would push back on. Three problems. (a) It encodes a model's importance
 judgement that the reader cannot audit, at the exact moment they are least able to check it — before

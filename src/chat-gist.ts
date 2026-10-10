@@ -13,8 +13,11 @@
  * conversations (src/reader-notes.ts § `indexRow`), which a typed Chat turn
  * now carries with every question. It is what lets a new conversation asking
  * "any confounds?" see that an earlier one, titled with whatever its first
- * question happened to be, went on to list three. **It is never shown to the
- * reader** and it never replaces their title.
+ * question happened to be, went on to list three. It never replaces the
+ * reader's title. **Since plan 261010s it is also shown to the reader**, on
+ * the mark of the item a chat was started from (src/routes.ts § `summarise`,
+ * OriginChat.tsx § `OriginChatMark`): Greg asked for *"a short summary of the
+ * chat"* there (spya-pdpnjf).
  *
  * **A gist of what was concluded, not a five-word title** — the research in
  * the plan: "Discussion of study design" would not say confounds were covered.

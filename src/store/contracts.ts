@@ -373,7 +373,9 @@ export interface ArticleReader {
 
   /**
    * **What the article was imported as: its title, its authors and its DOI** —
-   * for checking an outside record against it (src/citation-index.ts).
+   * for checking an outside record against it (src/citation-index.ts). And its
+   * address (`finalUrl`), which names an arXiv paper's DOI when the article
+   * carries none (`citersIdOf`, plan 261010n).
    *
    * **The title is the revision's own, never the reader's rename.** `loadArticle`
    * puts its meta through `titleFor`, so a renamed paper's title is the
@@ -384,7 +386,7 @@ export interface ArticleReader {
    * Owner-scoped like every read here: somebody else's slug is the same 404 as
    * one that does not exist.
    */
-  loadArticleIdentity(slug: string): Promise<Pick<Meta, "title" | "byline" | "authors" | "doi">>;
+  loadArticleIdentity(slug: string): Promise<Pick<Meta, "title" | "byline" | "authors" | "doi" | "url">>;
 
   /**
    * Every work the piece cites, plus whether the list still describes the
@@ -1900,6 +1902,24 @@ export interface StaleNoticeStore {
    * `dismissed_at` forward. `created_at` stays the first dismissal's.
    */
   dismiss(slug: string, mode: StaleNoticeMode, identities: readonly string[]): Promise<void>;
+}
+
+/**
+ * The command bar's suggestions the owner dismissed on one article —
+ * docs/plans/261010u-bar-suggestions-capped-dismissable-collapsible-and-the-guide-at-the-top.md.
+ * Both methods are owner-scoped (a stranger's slug is a 404). `readFrom` and
+ * `identity` are sixteen hex digits the route has checked
+ * (src/command-suggest.ts § `parseDismissRequest`); nothing here is words.
+ */
+export interface SuggestionDismissalStore {
+  /**
+   * Remember `identity` under `readFrom`. Under the stored fingerprint it is
+   * appended if absent, keeping the newest `MAX_DISMISSED_SUGGESTIONS`; under
+   * another it replaces the row. Atomic: two at once both land.
+   */
+  dismiss(slug: string, readFrom: string, identity: string): Promise<void>;
+  /** The identities dismissed under `readFrom`, or none if the row is another fingerprint's. */
+  forFingerprint(slug: string, readFrom: string): Promise<ReadonlySet<string>>;
 }
 
 /**

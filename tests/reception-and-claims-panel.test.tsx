@@ -63,6 +63,7 @@ import type {
 } from "../src/types.js";
 import type { ReceptionOrder } from "../src/web/reception-order.js";
 import type { ReceptionAndClaimsView, SourcesView } from "../src/web/params.js";
+import type { ReceptionAndClaimsChats } from "../src/web/ReceptionAndClaimsPanel.js";
 import type { UseReception } from "../src/web/useReception.js";
 import type { PublicReception, PublicSourcesClaimList } from "../src/public-types.js";
 import type { UseSourcesClaims } from "../src/web/useSourcesClaims.js";
@@ -99,7 +100,9 @@ import {
   RECEPTION_RESPONSES_NONE,
   RECEPTION_RESPONSES_NONE_SHARED,
   sourcesClaimsUnverified,
+  sourcesClaimsNoneSuggested,
   receptionResponsesUnverified,
+  receptionResponsesNoneSuggested,
   receptionWithheldOnSharedLink,
 } from "../src/messages.js";
 
@@ -228,7 +231,7 @@ const threaded: (string | null)[] = [];
 const retried: string[] = [];
 const NO_DOI: CitersResult = { kind: "no-doi" };
 /** The owner has chat, and nothing here presses it (tests/sources-claims-chat.test.tsx does). */
-const NO_CLAIM_CHATS = { summaries: [], onCheck: () => {}, onLens: () => {}, onOpen: () => {} };
+const NO_CLAIM_CHATS: ReceptionAndClaimsChats = { summaries: [], onCheck: () => {}, onLens: () => {}, onOpen: () => {} };
 
 /** The article's own title, which the panel is handed for the Scholar link. */
 const ARTICLE_TITLE = "Notes on my sourdough starter, week 3";
@@ -251,6 +254,8 @@ function paint(
     citers?: CitersResult | null;
     /** Claims' list hook. Nobody has pressed Claims unless a test says otherwise. */
     claimList?: UseSourcesClaims;
+    /** Chats already started from claims in the list. */
+    claimChats?: ReceptionAndClaimsChats;
     /** Bibliography's works, for Claims' *Cited in this paragraph* (plan 261009l § C1). */
     citedIn?: CitedInParagraph | null;
   } = {},
@@ -266,7 +271,7 @@ function paint(
           owner: o,
           claimList, checks,
           citers: { result, retry: () => retried.push("retry") },
-          claimChats: NO_CLAIM_CHATS,
+          claimChats: extra.claimChats ?? NO_CLAIM_CHATS,
         },
         /* Sources' chip row, as `SourcesBand` hands it (since 2026-10-09). */
         head: sourcesHead({
@@ -423,7 +428,7 @@ describe("Reception and Claims, each drawing its own search", () => {
     /* mode.md bans a description line under a control: what each one is goes
        in its card and the band's (i). */
     expect(card()).toContain("What others say about this piece: replies, reviews, and work that cites it");
-    expect(card()).toContain("What others say about each claim it makes");
+    expect(card()).toContain("The claims this piece rests on, quoted from it");
   });
 
   it("hands a press back as the sub-mode's word, and nothing for the one already open", () => {
@@ -641,9 +646,11 @@ describe("the empty states are different sentences, in each sub-mode", () => {
   it("has distinguishable sentences to say in the first place", () => {
     const all = [
       RECEPTION_RESPONSES_NONE,
-      receptionResponsesUnverified(4),
+      receptionResponsesNoneSuggested(4),
+      receptionResponsesUnverified(4, 2),
       SOURCES_CLAIMS_NONE,
-      sourcesClaimsUnverified(4),
+      sourcesClaimsNoneSuggested(4),
+      sourcesClaimsUnverified(4, 2),
       RECEPTION_RESPONSES_NONE_SHARED,
       SOURCES_CLAIMS_NONE_SHARED,
     ];
@@ -654,10 +661,28 @@ describe("the empty states are different sentences, in each sub-mode", () => {
     for (const s of all) expect(s.toLowerCase()).not.toContain("no one has");
   });
 
+  it("uses singular words for one returned page and one candidate", () => {
+    expect(receptionResponsesNoneSuggested(1)).toContain("1 page");
+    expect(receptionResponsesUnverified(1, 1)).toContain("1 page. The AI put forward 1 possible response");
+    expect(receptionResponsesUnverified(1, 1)).toContain("We could not confirm it");
+    expect(sourcesClaimsNoneSuggested(1)).toContain("1 page");
+    expect(sourcesClaimsUnverified(1, 1)).toContain("1 possible piece of evidence");
+    expect(sourcesClaimsUnverified(1, 1)).toContain("We could not confirm it");
+  });
+
+  it("uses plural words for several returned pages and candidates", () => {
+    expect(receptionResponsesNoneSuggested(2)).toContain("2 pages");
+    expect(receptionResponsesUnverified(2, 2)).toContain("2 pages. The AI put forward 2 possible responses");
+    expect(receptionResponsesUnverified(2, 2)).toContain("We could not confirm any of them");
+    expect(sourcesClaimsNoneSuggested(2)).toContain("2 pages");
+    expect(sourcesClaimsUnverified(2, 2)).toContain("2 possible pieces of evidence");
+    expect(sourcesClaimsUnverified(2, 2)).toContain("We could not confirm any of them");
+  });
+
   it("says the search found nothing to look at, when it returned no pages", () => {
     paint(owner({ reception: artefact({ direct: { rows: [], counts: counts(EMPTY) } }) }));
     expect(text()).toContain(RECEPTION_RESPONSES_NONE);
-    expect(text()).not.toContain(receptionResponsesUnverified(0));
+    expect(text()).not.toContain("The web search returned");
     expect(host.querySelector(".rcp-item")).toBeNull();
   });
 
@@ -681,8 +706,23 @@ describe("the empty states are different sentences, in each sub-mode", () => {
     );
     /* The count in it is `returnedSources` and it is real: told "6 pages", a
        reader can weigh how thin the answer is. */
-    expect(text()).toContain(receptionResponsesUnverified(6));
+    expect(text()).toContain(receptionResponsesUnverified(6, 3));
     expect(text()).not.toContain(RECEPTION_RESPONSES_NONE);
+    expect(text()).not.toContain(receptionResponsesNoneSuggested(6));
+  });
+
+  /* Plan 261010n (spya-qtk3q2): pages came back and the AI put none forward. Nothing
+     was checked, so the sentence must not say a check failed. */
+  it("says the AI put none forward, when the search returned pages and its answer had no rows", () => {
+    paint(
+      owner({
+        reception: artefact({
+          direct: { rows: [], counts: counts({ returnedSources: 12, reportedRows: 0, keptRows: 0 }) },
+        }),
+      }),
+    );
+    expect(host.querySelector(".rcp-empty")?.textContent).toBe(receptionResponsesNoneSuggested(12));
+    expect(text()).not.toContain("confirm it ourselves");
   });
 
   /* The third state is the ordinary job failure, and the thing that must be
@@ -703,7 +743,7 @@ describe("the empty states are different sentences, in each sub-mode", () => {
     );
     expect(text()).toContain("The search did not run.");
     expect(text()).not.toContain(RECEPTION_RESPONSES_NONE);
-    expect(text()).not.toContain(receptionResponsesUnverified(6));
+    expect(text()).not.toContain("The web search returned");
   });
 
   /* **A fourth state, and it is not one of the three**: nobody has ever run it.
@@ -715,7 +755,7 @@ describe("the empty states are different sentences, in each sub-mode", () => {
   it("says nothing about any search when nobody has run one, and what the one search is", () => {
     paint(owner({ status: "none", reception: null }));
     expect(text()).not.toContain(RECEPTION_RESPONSES_NONE);
-    expect(text()).not.toContain(receptionResponsesUnverified(6));
+    expect(text()).not.toContain("The web search returned");
     expect(text()).not.toContain(SOURCES_CLAIMS_NONE);
     expect(host.querySelector(".gloss-hint")?.textContent).toBe(
       "One search of the open web, for what others have written about this piece. It takes about " +
@@ -759,7 +799,7 @@ describe("the empty states are different sentences, in each sub-mode", () => {
     expect(host.querySelector(".rcp-empty")).toBeNull();
     expect(text()).toContain(SOURCES_CLAIMS_LIST_NONE);
     expect(text()).not.toContain(SOURCES_CLAIMS_NONE);
-    expect(text()).not.toContain(sourcesClaimsUnverified(0));
+    expect(text()).not.toContain("The web search returned");
     expect(text()).not.toContain(SOURCES_CLAIMS_EARLIER);
     /* The (i): said once, and none of the claims search's own counts. */
     const said = card();
@@ -804,7 +844,12 @@ describe("the empty states are different sentences, in each sub-mode", () => {
     paint(owner({ reception }));
     expect(host.querySelector(".rcp-empty")?.textContent).toBe(RECEPTION_RESPONSES_NONE);
     paint(owner({ reception }), "claims");
-    expect(host.querySelector(".rcp-empty")?.textContent).toBe(sourcesClaimsUnverified(5));
+    expect(host.querySelector(".rcp-empty")?.textContent).toBe(sourcesClaimsUnverified(5, 2));
+    const noneSuggested = artefact({
+      claims: { rows: [], counts: counts({ returnedSources: 5, reportedRows: 0, keptRows: 0 }) },
+    });
+    paint(owner({ reception: noneSuggested }), "claims");
+    expect(host.querySelector(".rcp-empty")?.textContent).toBe(sourcesClaimsNoneSuggested(5));
   });
 
   it("says nothing at all when both searches kept something", () => {
@@ -2580,6 +2625,36 @@ describe("Claims' list of the article's claims", () => {
     expect(jump).not.toBeNull();
     press(jump);
     expect(jumped).toEqual([KNOWN]);
+  });
+
+  it("replaces a listed claim's Ask button with its existing chat mark", () => {
+    const opened: string[] = [];
+    paint(owner(), "claims", "prioritised", new Map(), {
+      claimList: ready(),
+      claimChats: {
+        summaries: [{
+          id: "thread-one",
+          title: "Cool water",
+          createdAt: "2026-10-10T10:00:00.000Z",
+          updatedAt: "2026-10-10T10:01:00.000Z",
+          kind: "chat",
+          turns: 1,
+          gist: "Why water temperature matters",
+          origin: { mode: "sources-claims", blockId: KNOWN, quote: LISTED[0]!.quote },
+        }],
+        onCheck: () => {},
+        onLens: () => {},
+        onOpen: (id) => opened.push(id),
+      },
+    });
+    const rows = [...host.querySelectorAll(".rcp-listed-claim")];
+    expect(rows[0]?.querySelector(".rcp-claim-check")).toBeNull();
+    expect(rows[0]?.querySelector(".origin-chat")).not.toBeNull();
+    /* The other claim is the positive control: with no chat, it still offers Ask. */
+    expect(rows[1]?.querySelector(".rcp-claim-check")).not.toBeNull();
+    expect(rows[1]?.querySelector(".origin-chat")).toBeNull();
+    press(rows[0]?.querySelector(".origin-chat"));
+    expect(opened).toEqual(["thread-one"]);
   });
 
   /* **C1, Cited in this paragraph** (plan 261009l § C1): the works whose

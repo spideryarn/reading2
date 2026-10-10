@@ -1031,6 +1031,18 @@ export async function exportArticle(
     });
   }
 
+  /* The command bar's suggestions the owner dismissed, as hashes — plan 261010u. */
+  if (rows.commandSuggestionDismissals.length) {
+    await put("command_suggestion_dismissals", "suggestion-dismissals.json", {
+      dismissals: rows.commandSuggestionDismissals.map((row) => ({
+        readFrom: row.readFrom,
+        dismissed: row.dismissed,
+        createdAt: row.createdAt.toISOString(),
+        dismissedAt: row.dismissedAt.toISOString(),
+      })),
+    });
+  }
+
   logger.info({ slug, files: written.length, tables: wroteFrom.size }, "article exported");
   return { slug, files: written, tables: [...wroteFrom] };
 }

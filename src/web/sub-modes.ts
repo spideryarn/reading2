@@ -276,7 +276,9 @@ export const SOURCES_SUB_MODES: Readonly<Record<SourcesView, SubModeWords>> = {
   },
   claims: {
     label: "Claims",
-    description: "What others say about each claim it makes: the claims it rests on, with the works it cites beside each",
+    /* It starts from the piece's own sentences, which is what tells it from Reception:
+       "What others say about each claim" read as a second Reception (spya-vh0z7s, plan 261010n). */
+    description: "The claims this piece rests on, quoted from it: pick some to check against the web",
     experimental: false,
     /* Debate's compound until 2026-10-09, so *debate claims* still finds it.
        Not through command-match.ts § `FORMER_PARENT_NAMES`, which would give

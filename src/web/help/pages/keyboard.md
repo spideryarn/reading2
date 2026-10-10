@@ -38,7 +38,10 @@ related: touch, jumping-around
   done until you press a row, and each row does what it would anywhere else in the bar; the question
   lands in Chat’s box unsent. The list stays for your visit, hides while you type, and is thrown
   away when you edit your profile or your reason. The searches and the question are worded from what
-  you wrote, so read one before you press it.
+  you wrote, so read one before you press it. At most four are shown. The × on one, or
+  <kbd>Delete</kbd> with it highlighted, dismisses it: it is not suggested again on that article
+  unless you edit your profile or your reason. Press **From why you’re reading** to fold the list
+  away, and again to open it.
 - <kbd>↑</kbd> / <kbd>↓</kbd> move one paragraph at a time, or one part at a time with the pointer
   over the spine. Holding a key down does not repeat, so every step lands somewhere you can read.
 - <kbd>←</kbd> / <kbd>→</kbd> step through Skim’s stops, Quiz’s questions, Quotes’ quotes and

@@ -114,7 +114,6 @@
  * they are on the elements even while they carry no rules.
  */
 import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Compass } from "lucide-react";
 import {
   type ArgumentKind,
   COULD_NOT_TELL,
@@ -124,8 +123,12 @@ import {
   RUN_AT_ONCE,
   sameKey,
 } from "../command-pick.js";
+import { ChevronDown, ChevronRight, Compass, X } from "lucide-react";
 import {
+  DISMISSED,
+  DISMISS_LABEL,
   LENS_DESCRIPTION,
+  MAX_SUGGESTIONS_SHOWN,
   SUGGESTING,
   SUGGEST_DESCRIPTION,
   SUGGEST_HEADING,
@@ -133,8 +136,12 @@ import {
   SUGGEST_NOTHING,
   SUGGEST_NO_REASON,
   type SuggestRequest,
+  type SuggestionKind,
   type Suggestions,
+  dismissFailed,
   lensLabel,
+  suggestToggleWhat,
+  suggestionIdentity,
 } from "../command-suggest.js";
 import { PUBLIC_SHELF_LABEL } from "../messages.js";
 import { MODE_LABEL } from "../title-text.js";
@@ -154,7 +161,7 @@ import {
 } from "./command-match.js";
 import { askForPick } from "./command-pick-client.js";
 import { REASON_NOT_READ } from "../messages.js";
-import { askForSuggestions, useReasonForReading } from "./command-suggest-client.js";
+import { askForSuggestions, dismissSuggestion, useReasonForReading } from "./command-suggest-client.js";
 import {
   type CommandExecutor,
   type ProposalRunners,
@@ -897,6 +904,53 @@ const SUGGEST_ROW: Command = {
 };
 
 /**
+ * **The line over the list, which folds it** — plan 261010u. Greg,
+ * 2026-10-10: *"it should also be possible to collapse them as well … they
+ * kind of pushed everything else down."*
+ *
+ * **An option of the listbox, not a button beside it**: focus stays in the
+ * box, the arrows reach it like any row, and
+ * Enter on it folds or unfolds. Collapsing moves the highlight to Guide or the
+ * first ordinary row, rather than leaving the active descendant on a control
+ * whose children just disappeared. Like `SUGGEST_ROW`, its press is the bar's
+ * own (`toggle`), and `run` says nothing.
+ */
+const SUGGEST_TOGGLE: Command = {
+  kind: "action",
+  id: "suggestions-fold",
+  label: SUGGEST_HEADING,
+  description: "",
+  aliases: [],
+  generates: false,
+  typedOnly: true,
+  opensOnly: false,
+  run: () => ({ kind: "stay", message: "" }),
+};
+
+/**
+ * **Whether the reader folded the list**, remembered in this browser — a
+ * convenience of the device's, as the appearance is, and not a fact about
+ * the reader the server keeps. Unreadable storage is unfolded.
+ */
+const FOLD_KEY = "spya.cmdbarSuggestions.folded";
+const NONE_DISMISSED: ReadonlySet<string> = new Set();
+function readFolded(): boolean {
+  try {
+    return window.localStorage.getItem(FOLD_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+function writeFolded(folded: boolean): void {
+  try {
+    if (folded) window.localStorage.setItem(FOLD_KEY, "1");
+    else window.localStorage.removeItem(FOLD_KEY);
+  } catch {
+    /* Private window or blocked storage: it folds for this visit only. */
+  }
+}
+
+/**
  * **A suggested lens, as a row** — the reading view's own handoff (Reader.tsx
  * § `suggestedLensInChat`, the one that waits), so the question lands in Chat's box and
  * nothing is sent until the reader presses Send there. `generates: false` for
@@ -930,9 +984,20 @@ function lensRow(askThroughLens: (lens: string) => ActionOutcome, lens: string):
 interface ShownRow {
   readonly command: Command;
   readonly rowId: string;
-  /** `suggest`: the one row whose press is the bar's own request. */
-  readonly press: "activate" | "suggest";
-  readonly suggested?: { readonly why: string; readonly said?: string };
+  /** `suggest`: the row whose press is the bar's own request; `toggle`: the line that folds the list. */
+  readonly press: "activate" | "suggest" | "toggle";
+  /**
+   * A row a model suggested: its `why`, its words, and **what a dismissal of
+   * it remembers** (`identity`, src/command-suggest.ts § `suggestionIdentity`)
+   * — carried from the list rather than worked out again from the row's id
+   * (GPT Sol's F6 on plan 261010u).
+   */
+  readonly suggested?: {
+    readonly why: string;
+    readonly said?: string;
+    readonly kind: SuggestionKind;
+    readonly identity: string;
+  };
   /** The reader's own words inside the label (the guide row), set in the reader's face. */
   readonly typed?: string;
 }
@@ -957,6 +1022,21 @@ function RowLabel({ label, said, voice = "ai" }: { label: string; said: string |
 const ordinaryRow = (command: Command): ShownRow => ({ command, rowId: commandId(command), press: "activate" });
 
 /**
+ * **The fold line's words** — *From why you're reading*, a chevron, and what a
+ * press does, which is also how a screen reader hears whether it is folded.
+ */
+function FoldLine({ folded, count }: { folded: boolean; count: number }) {
+  const Chevron = folded ? ChevronRight : ChevronDown;
+  return (
+    <>
+      <Chevron aria-hidden="true" className="tw:size-4 tw:shrink-0" />
+      <span className="cmdbar-name">{SUGGEST_HEADING}</span>
+      <span className="cmdbar-what tw:min-w-0 tw:flex-1 tw:truncate tw:text-xs">{suggestToggleWhat(count, folded)}</span>
+    </>
+  );
+}
+
+/**
  * **A kept list, as rows of today's bar** — and the only place a suggestion
  * becomes something that can be pressed.
  *
@@ -969,36 +1049,57 @@ const ordinaryRow = (command: Command): ShownRow => ({ command, rowId: commandId
  *    draws Chat.
  *
  * Nothing here runs anything. Each row waits for its own press.
+ *
+ * **Then at most four, in turn** (plan 261010u; GPT Sol's F10 on the plan
+ * fixes the order of the steps): what can be drawn today, less what the
+ * reader dismissed, then a search, a mode, the question, a search, a mode, a
+ * search — so the cap never costs the list its only mode or its question —
+ * and the first `MAX_SUGGESTIONS_SHOWN` of those. A dismissal makes room for
+ * the next.
  */
-function suggestionRows(
+export function suggestionRows(
   list: Suggestions,
   commands: readonly Command[],
   article: CommandBarArticle,
   chatReachable: boolean,
+  dismissed: ReadonlySet<string>,
 ): readonly ShownRow[] {
-  const rows: ShownRow[] = [];
-  const add = (command: Command, why: string, said?: string) =>
-    rows.push({
-      command,
-      rowId: `suggested:${commandId(command)}`,
-      press: "activate",
-      suggested: said === undefined ? { why } : { why, said },
-    });
+  const row = (command: Command, kind: SuggestionKind, identity: string, why: string, said?: string): ShownRow => ({
+    command,
+    rowId: `suggested:${commandId(command)}`,
+    press: "activate",
+    suggested: said === undefined ? { why, kind, identity } : { why, said, kind, identity },
+  });
+  const kept = (r: ShownRow) => r.suggested !== undefined && !dismissed.has(r.suggested.identity);
+  const searches: ShownRow[] = [];
   for (const search of list.searches) {
-    const row = quickSearchRow(article, search.words);
-    if (row !== null) add(row, search.why, search.words);
+    const command = quickSearchRow(article, search.words);
+    if (command !== null) {
+      searches.push(row(command, "search", suggestionIdentity("search", search.words), search.why, search.words));
+    }
   }
+  const modes: ShownRow[] = [];
   for (const mode of list.modes) {
     const command = commands.find(
       (c) => (c.kind === "mode" || c.kind === "submode") && sameKey(pickKey(c, article.slug), mode.key),
     );
-    if (command !== undefined) add(command, mode.why);
+    if (command !== undefined) modes.push(row(command, "mode", suggestionIdentity("mode", mode.key.id), mode.why));
   }
+  const lenses: ShownRow[] = [];
   const askThroughLens = article.executor?.askThroughLens;
   if (list.lens !== null && askThroughLens !== undefined && chatReachable) {
-    add(lensRow(askThroughLens, list.lens.words), list.lens.why, list.lens.words);
+    const { words, why } = list.lens;
+    lenses.push(row(lensRow(askThroughLens, words), "lens", suggestionIdentity("lens", words), why, words));
   }
-  return rows;
+  const queues = [searches.filter(kept), modes.filter(kept), lenses.filter(kept)];
+  const rows: ShownRow[] = [];
+  for (let turn = 0; queues.some((q) => q.length > turn); turn++) {
+    for (const q of queues) {
+      const next = q[turn];
+      if (next !== undefined) rows.push(next);
+    }
+  }
+  return rows.slice(0, MAX_SUGGESTIONS_SHOWN);
 }
 
 /**
@@ -1707,6 +1808,29 @@ export function CommandBar({
   const [list, setList] = useState<{ slug: string; readFrom: string; suggestions: Suggestions } | null>(null);
   /** A new list behind a shut bar keeps its first suggestion selected through the next opening. */
   const selectSuggestionOnOpen = useRef(false);
+  /**
+   * **The rows dismissed in this tab, under the article and fingerprint they
+   * belong to.** Keeping the key rather than the answer object's identity does
+   * two jobs: a re-ask cannot race a slow dismissal write and put the row back,
+   * while a list made from another `readFrom` cannot inherit it. A failed save
+   * takes its identity back out (`dismiss` below).
+   */
+  const [dismissed, setDismissed] = useState<{ key: string | null; ids: ReadonlySet<string> }>({
+    key: null,
+    ids: NONE_DISMISSED,
+  });
+  const dismissedRef = useRef(dismissed);
+  dismissedRef.current = dismissed;
+  /** Duplicate pointer clicks before React redraws the missing row still make one write. */
+  const dismissing = useRef(new Set<string>());
+  /** Reconcile the active row after the optimistic removal, by identity where possible. */
+  const afterDismiss = useRef<{ activeRowId: string | undefined; removedRowId: string; index: number } | null>(null);
+  /** Whether the list is folded to its one line. This browser's (`readFolded`). */
+  const [folded, setFoldedState] = useState(readFolded);
+  const setFolded = useCallback((next: boolean) => {
+    setFoldedState(next);
+    writeFolded(next);
+  }, []);
   /** The request is out. Its own state, not `said`, which an opening and a keystroke both clear. */
   const [suggestWaiting, setSuggestWaiting] = useState(false);
   const suggestOut = useRef<AbortController | null>(null);
@@ -1934,13 +2058,20 @@ export function CommandBar({
    */
   const emptyBox = draft.trim() === "";
   const chatReachable = modes.includes("chat");
-  const suggestedNow = useMemo(
+  const dismissalKey = list === null ? null : `${list.slug}\n${list.readFrom}`;
+  /** This tab's dismissals under exactly this article and fingerprint, confirmed or still being sent. */
+  const dismissedNow = keptList !== null && dismissed.key === dismissalKey ? dismissed.ids : NONE_DISMISSED;
+  const currentDismissalKey = useRef<string | null>(null);
+  currentDismissalKey.current = keptList === null ? null : dismissalKey;
+  /** Every suggestion that would be drawn unfolded; `suggestedNow` is what is. */
+  const suggestionsReady = useMemo(
     () =>
       emptyBox && keptList !== null && article !== undefined
-        ? suggestionRows(keptList, commands, article, chatReachable)
+        ? suggestionRows(keptList, commands, article, chatReachable, dismissedNow)
         : [],
-    [emptyBox, keptList, commands, article, chatReachable],
+    [emptyBox, keptList, commands, article, chatReachable, dismissedNow],
   );
+  const suggestedNow = folded ? [] : suggestionsReady;
   /**
    * **The door to the guide** (plan 261007j F6): only after the pick's real
    * `none` answer, not after a request failure. Both say `COULD_NOT_TELL`, but
@@ -1986,33 +2117,60 @@ export function CommandBar({
     emptyBox &&
     suggestSlug !== undefined &&
     (reason.state === "has" || reason.state === "failed") &&
-    suggestedNow.length === 0;
+    suggestionsReady.length === 0;
   const reasonFailure = emptyBox && reason.state === "failed" && !suggestWaiting ? REASON_NOT_READ.message : null;
-  /* **The guide chat, first on an empty box** (plan 261010g): above *Suggest*
-     and anything it suggested, with a rule beneath. Free to open, so it can
-     be what a bare Enter takes. Once the reader types it ranks like any row:
-     pinned, it would sit above the row they are spelling out. */
-  const pinnedGuide = emptyBox
-    ? results.find((c) => c.kind === "action" && c.id === GUIDE_ROW_ID)
-    : undefined;
-  const ordinary = useMemo(
-    () => (pinnedGuide === undefined ? results : results.filter((c) => c !== pinnedGuide)),
-    [results, pinnedGuide],
+  /**
+   * **The guide chat, first of all on an empty box** — plans 261010g and
+   * 261010u. Greg, 2026-10-10 (`spya-xasbd3`): *"I still want an easy way to
+   * get to the guide chat, somewhere near the top of the command bar."* Above
+   * *Suggest* and the suggestions too (GPT Sol's F3 on 261010u: below four of
+   * them it was still under the fold), with a rule beneath. Free to open, so
+   * it can be what a bare Enter takes. Only the drawing order: typed, it ranks
+   * as any row does, or it would sit above the row the reader is spelling out.
+   */
+  const guideFirst = emptyBox ? results.find((c) => c.kind === "action" && c.id === GUIDE_ROW_ID) : undefined;
+  const rest = useMemo(
+    () => (guideFirst === undefined ? results : results.filter((c) => c !== guideFirst)),
+    [results, guideFirst],
   );
   const shown = useMemo<readonly ShownRow[]>(
     () => [
-      ...(pinnedGuide === undefined ? [] : [ordinaryRow(pinnedGuide)]),
+      ...(guideFirst === undefined ? [] : [ordinaryRow(guideFirst)]),
       ...(offerSuggest ? [{ command: SUGGEST_ROW, rowId: commandId(SUGGEST_ROW), press: "suggest" } as const] : []),
+      ...(suggestionsReady.length > 0
+        ? [{ command: SUGGEST_TOGGLE, rowId: commandId(SUGGEST_TOGGLE), press: "toggle" } as const]
+        : []),
       ...suggestedNow,
-      ...ordinary.map(ordinaryRow),
+      ...rest.map(ordinaryRow),
       ...(guideRow === null ? [] : [guideRow]),
     ],
-    [pinnedGuide, offerSuggest, suggestedNow, ordinary, guideRow],
+    [guideFirst, offerSuggest, suggestionsReady.length, suggestedNow, rest, guideRow],
   );
   /** Where the ordinary rows start, for the rule drawn between the list and them. */
-  const firstOrdinary = shown.length - ordinary.length - (guideRow === null ? 0 : 1);
+  const firstOrdinary = shown.length - rest.length - (guideRow === null ? 0 : 1);
   const index = Math.min(selected, Math.max(0, shown.length - 1));
   const active = shown[index];
+  const selectionNow = useRef({ rowId: active?.rowId, index });
+  selectionNow.current = { rowId: active?.rowId, index };
+  /* A dismissal changes neither `list` nor `reason`, so the general row
+     reconciliation below cannot see it. Preserve an ordinary active row by
+     id; when the active suggestion itself went, take its backfill, or the
+     nearest remaining suggestion, or the first row once the list is empty. */
+  useLayoutEffect(() => {
+    const wanted = afterDismiss.current;
+    if (wanted === null) return;
+    afterDismiss.current = null;
+    const preserved =
+      wanted.activeRowId === wanted.removedRowId
+        ? -1
+        : shown.findIndex((row) => row.rowId === wanted.activeRowId);
+    const suggestions = shown.flatMap((row, at) => (row.suggested === undefined ? [] : [at]));
+    const next =
+      preserved >= 0
+        ? preserved
+        : suggestions.find((at) => at >= wanted.index) ?? suggestions.at(-1) ?? 0;
+    if (next !== index) setSelected(next);
+  }, [shown, index]);
   /* A profile read may insert or remove rows while the reader is choosing.
      Keep their highlighted command, rather than applying its index to a new
      list. A new suggestion answer selects its first suggestion, including
@@ -2029,15 +2187,19 @@ export function CommandBar({
     };
     if (previous.reason === reason && previous.list === list) return;
     /* A new answer deliberately selects its first suggestion — found by kind,
-       not taken as row zero, which is the pinned guide chat's where the page
-       can open it (plan 261010g, GPT Sol's F1). */
+       not taken as row zero, which is Guide chat's where the page can open it,
+       and below the fold line (plans 261010g and 261010u, GPT Sol's F1 on
+       261010g). Folded, suggestions are not selectable, so keep the first
+       ordinary row. */
     if (list !== null && previous.list !== list) {
-      const first = shown.findIndex((row) => row.suggested !== undefined);
+      const first = shown.findIndex((row) =>
+        folded ? row.press !== "toggle" && row.suggested === undefined : row.suggested !== undefined,
+      );
       const next = first >= 0 ? first : 0;
       /* The opening effect below normally restores row zero. This one answer
          is the exception: it was requested before the bar shut, and its
          first row must still be what the next Enter confirms. */
-      selectSuggestionOnOpen.current = first >= 0 && (!open || !previous.open);
+      selectSuggestionOnOpen.current = !folded && first >= 0 && (!open || !previous.open);
       if (next !== index) setSelected(next);
       return;
     }
@@ -2046,7 +2208,7 @@ export function CommandBar({
     const at = previous.saves === saves ? shown.findIndex((row) => row.rowId === previous.rowId) : -1;
     const next = at >= 0 ? at : 0;
     if (next !== index) setSelected(next);
-  }, [open, reason, list, saves, shown, index, active?.rowId]);
+  }, [open, reason, list, saves, shown, index, active?.rowId, folded]);
 
   /* Lightbox.tsx § closingOurselves, and the same trap: `close()` fires the
      same `close` event a reader's Escape does, so without this the shutting we
@@ -2453,7 +2615,65 @@ export function CommandBar({
   /** A row's press, by Enter or by a finger: the bar's own request for the one row that is one, `activate` for the rest. */
   const pressRow = (row: ShownRow): void => {
     if (row.press === "suggest") suggest();
+    else if (row.press === "toggle") {
+      const next = !folded;
+      if (next) {
+        const firstOrdinary = shown.findIndex(
+          (candidate) => candidate.press !== "toggle" && candidate.suggested === undefined,
+        );
+        setSelected(firstOrdinary >= 0 ? firstOrdinary : 0);
+      }
+      setFolded(next);
+    }
     else activate(row.command);
+  };
+
+  /**
+   * **Dismiss one suggestion, for good** — plan 261010u. The row goes at once
+   * and the next suggestion, if the model wrote one, takes its place; the
+   * server remembers the identity under this list's `readFrom`, and leaves it
+   * out of every later answer while that fingerprint holds. If the save fails
+   * the row comes back and the status line says so (GPT Sol's F7).
+   */
+  const dismiss = (row: ShownRow): void => {
+    const { suggested } = row;
+    if (suggested === undefined || list === null || dictationBusy) return;
+    const { identity } = suggested;
+    const forList = list;
+    const forKey = `${forList.slug}\n${forList.readFrom}`;
+    const requestKey = `${forKey}\n${identity}`;
+    if (dismissing.current.has(requestKey)) return;
+    if (dismissedRef.current.key === forKey && dismissedRef.current.ids.has(identity)) return;
+    dismissing.current.add(requestKey);
+    afterDismiss.current = { activeRowId: active?.rowId, removedRowId: row.rowId, index };
+    setDismissed((was) => {
+      const next = {
+        key: forKey,
+        ids: new Set([...(was.key === forKey ? was.ids : []), identity]),
+      };
+      dismissedRef.current = next;
+      return next;
+    });
+    setSaid({ kind: "message", text: DISMISSED });
+    void dismissSuggestion(forList.slug, forList.readFrom, identity).then((failure) => {
+      dismissing.current.delete(requestKey);
+      if (failure === null) return;
+      if (currentDismissalKey.current === forKey) {
+        const now = selectionNow.current;
+        afterDismiss.current = { activeRowId: now.rowId, removedRowId: "", index: now.index };
+      }
+      setDismissed((was) => {
+        if (was.key !== forKey) return was;
+        const ids = new Set(was.ids);
+        ids.delete(identity);
+        const next = { key: forKey, ids };
+        dismissedRef.current = next;
+        return next;
+      });
+      if (ref.current?.open === true && currentDismissalKey.current === forKey) {
+        setSaid({ kind: "message", text: dismissFailed(failure) });
+      }
+    });
   };
 
   /**
@@ -2557,6 +2777,16 @@ export function CommandBar({
             if (e.key === "ArrowUp") {
               e.preventDefault();
               setSelected(Math.max(index - 1, 0));
+              return;
+            }
+            /* **Delete on a highlighted suggestion dismisses it** (plan
+               261010u) — the keyboard's way, and a screen reader's, to the ×
+               a pointer has. Only on an empty box, where it would delete
+               nothing, which is the only time suggestions are drawn. */
+            if (e.key === "Delete" && emptyBox && active?.suggested !== undefined) {
+              e.preventDefault();
+              if (e.repeat) return;
+              dismiss(active);
               return;
             }
             if (e.key === "Enter") {
@@ -2692,24 +2922,17 @@ export function CommandBar({
               const { command } = row;
               return (
               <Fragment key={row.rowId}>
-              {/* The list a model wrote from why you are reading, under one
-                  muted line saying so, and a rule where the bar's ordinary
-                  rows begin again. Neither is an option: the arrows pass
-                  over them. */}
-              {/* The pinned guide is a group of its own. This boundary comes
-                  before a suggestion heading, so the heading stays attached
-                  to the rows it names. */}
-              {at === 1 && pinnedGuide !== undefined && (
+              {/* Guide chat, pinned, is a group of its own: a rule
+                  beneath it. Not an option: the arrows pass over it. */}
+              {at === 1 && guideFirst !== undefined && (
                 <div role="presentation" className="cmdbar-rest tw:mx-3 tw:my-1 tw:border-t tw:border-rule" />
               )}
-              {row.suggested !== undefined && shown[at - 1]?.suggested === undefined && (
-                <div role="presentation" className="cmdbar-from-why tw:px-3 tw:pb-1 tw:pt-2 tw:text-sm tw:text-muted-foreground">
-                  {SUGGEST_HEADING}
-                </div>
-              )}
-              {/* Independently, end the list written from why they are
-                  reading before the bar's ordinary rows resume. */}
-              {at === firstOrdinary && at > 0 && shown[at - 1]?.suggested !== undefined && (
+              {/* A rule where the bar's ordinary rows begin again, after the
+                  list a model wrote (or its folded line). Not an option: the
+                  arrows pass over it. */}
+              {at === firstOrdinary &&
+                at > 0 &&
+                (shown[at - 1]?.suggested !== undefined || shown[at - 1]?.press === "toggle") && (
                 <div role="presentation" className="cmdbar-rest tw:mx-3 tw:my-1 tw:border-t tw:border-rule" />
               )}
               {/* biome-ignore lint/a11y/useKeyWithClickEvents: the keyboard equivalent is on the input above — Up/Down move the selection and Enter takes it, which is the listbox pattern; a key handler here would need focus on the row, and focus stays in the box the reader is typing in */}
@@ -2721,6 +2944,10 @@ export function CommandBar({
                      short labels never need to (narrow-windows.md). */
                   row.suggested !== undefined ? "cmdbar-row-suggested tw:flex-wrap" : ""
                 } ${
+                  /* The fold line reads as the heading it replaced: muted, and
+                     tight to the rows it folds. */
+                  row.press === "toggle" ? "cmdbar-from-why tw:items-center tw:pb-1 tw:pt-2 tw:text-muted-foreground" : ""
+                } ${
                   dictationBusy ? "tw:cursor-default tw:opacity-50" : "tw:cursor-pointer"
                 } ${
                   at === index ? "on tw:bg-accent tw:text-ink" : "tw:text-ink-soft"
@@ -2731,6 +2958,10 @@ export function CommandBar({
                    half of it. A highlighted row that silently ignores Enter
                    while the microphone is involved looks broken. */
                 aria-disabled={dictationBusy || undefined}
+                /* A suggestion's dismissal, for the keyboard (the × is the
+                   pointer's). The fold line says its state in its own words:
+                   `aria-expanded` is not one of an option's. */
+                aria-keyshortcuts={row.suggested !== undefined ? "Delete" : undefined}
                 /* **Which kind of row this is, readable from the outside.** Not
                    styling — the two kinds are drawn identically on purpose, so
                    that going somewhere and changing the band feel like one
@@ -2754,6 +2985,10 @@ export function CommandBar({
                   pressRow(row);
                 }}
               >
+                {row.press === "toggle" ? (
+                  <FoldLine folded={folded} count={suggestionsReady.length} />
+                ) : (
+                <>
                 {goesToTheGuide(command) && (
                   <span className="cmdbar-guide-mark tw:shrink-0 tw:self-center tw:text-ink-faint">
                     <Compass size={14} aria-hidden="true" />
@@ -2779,18 +3014,43 @@ export function CommandBar({
                     voice={row.typed === undefined ? "ai" : "reader"}
                   />
                 </span>
+                {/* **The ×, for a pointer** (plan 261010u). Not a button: a
+                    button inside an option is a second control inside one, and
+                    focus stays in the box here (GPT Sol's F4). `Delete` is the
+                    keyboard's way, announced on the option. Its click is not
+                    the row's: it dismisses and stops there. 44px for a finger
+                    (narrow-windows.md § the finger floor). */}
+                {row.suggested !== undefined && (
+                  <span
+                    aria-hidden="true"
+                    title={DISMISS_LABEL}
+                    className="cmdbar-dismiss tw:-my-1 tw:ml-auto tw:inline-flex tw:shrink-0 tw:items-center tw:justify-center tw:rounded tw:p-1 tw:text-ink-faint tw:hover:bg-muted tw:hover:text-ink tw:pointer-coarse:min-h-11 tw:pointer-coarse:min-w-11"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      dismiss(row);
+                    }}
+                  >
+                    <X className="tw:size-4" />
+                  </span>
+                )}
                 {/* A suggested row's sentence is never cut: it takes a line of its
                     own and wraps, at every width. Beside a long label it was cut
                     to "Pu…" on a desktop and "Nothing is sent u…" on a phone, so
                     the Chat row lost the half that says a press sends nothing
-                    (seen in the browser, 2026-10-06, plan 261005k). */}
-                <span
-                  className={`cmdbar-what tw:min-w-0 tw:text-muted-foreground ${
-                    row.suggested !== undefined ? "tw:basis-full" : "tw:flex-1 tw:truncate"
-                  }`}
-                >
-                  {commandText(command).description}
-                </span>
+                    (seen in the browser, 2026-10-06, plan 261005k).
+                    **Not on a suggested search** (plan 261010u): *Quick search
+                    “…”* already says what it does, and the line was a third of
+                    the height that pushed the bar's own rows down. */}
+                {row.suggested?.kind !== "search" && (
+                  <span
+                    className={`cmdbar-what tw:min-w-0 tw:text-muted-foreground ${
+                      row.suggested !== undefined ? "tw:basis-full" : "tw:flex-1 tw:truncate"
+                    }`}
+                  >
+                    {commandText(command).description}
+                  </span>
+                )}
                 {/* One bit, after the sentence rather than before it: the row is
                     still about what the row gives you, and this is a note on
                     the end. `GENERATES_MARKER` says why it is a word, and
@@ -2817,6 +3077,8 @@ export function CommandBar({
                   <span className={`cmdbar-why tw:basis-full tw:text-xs tw:text-muted-foreground ${voiceClass("ai")}`}>
                     {row.suggested.why}
                   </span>
+                )}
+                </>
                 )}
               </div>
               </Fragment>

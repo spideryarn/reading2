@@ -14,6 +14,11 @@
  * 5. **The answer carries the fingerprint of what the model read**, which is
  *    the one the browser computes from `GET /api/reader?slug=` (F3).
  * 6. **A provider's failure is its own sentence and status**, not a list.
+ * 7. **Dismissals** (plan 261010u): `POST …/dismiss` is owner-only and takes
+ *    two fingerprints and nothing else; a dismissed search, mode or lens is
+ *    gone from the next answer, and the model is sent none of it; once the
+ *    reason changes nothing is filtered; the row keeps the newest fifty, loses
+ *    neither of two at once, and goes with the article.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { eq } from "drizzle-orm";
@@ -38,11 +43,16 @@ vi.mock("../src/store/index.js", async () => {
 });
 
 import { closeDb, getDb } from "../src/db/client.js";
-import { articles } from "../src/db/schema.js";
+import { articles, commandSuggestionDismissals, SUGGESTION_DISMISSAL_TABLE } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { REASON_NOT_READ } from "../src/messages.js";
 import { EVAL_OWNER_ID } from "../src/owner.js";
-import { readFromHash } from "../src/command-suggest.js";
+import {
+  DISMISS_STALE,
+  MAX_DISMISSED_SUGGESTIONS,
+  readFromHash,
+  suggestionIdentity,
+} from "../src/command-suggest.js";
 import { acceptAny, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
@@ -51,9 +61,13 @@ loadEnvLocal();
 
 const SLUG = "test-command-suggest-route";
 const STRANGERS = "test-command-suggest-route-strangers";
+const DOOMED = "test-command-suggest-route-doomed";
 const REASON = "how they handled missing data in the follow-up";
 
-await pgReady({ suite: "tests/command-suggest-route.test.ts", tables: ["spideryarn.articles"] });
+await pgReady({
+  suite: "tests/command-suggest-route.test.ts",
+  tables: ["spideryarn.articles", "spideryarn.command_suggestion_dismissals"],
+});
 
 const { handleApi } = await import("../src/routes.js");
 
@@ -269,5 +283,192 @@ describe("POST /api/command-suggest/:slug", () => {
     expect(got.status).toBe(502);
     expect(JSON.stringify(got.body)).not.toContain("upstream words");
     expect(got.body).not.toHaveProperty("kind");
+  });
+});
+
+/* ------------------------------------------------- dismissals, plan 261010u -- */
+
+const dismiss = (slug: string, body: unknown, headers?: Record<string, string>) =>
+  request("POST", `/api/command-suggest/${slug}/dismiss`, body, headers);
+
+/** The fingerprint the route computes for `SLUG` as it stands. */
+async function fingerprintOf(slug: string): Promise<string> {
+  const reader = await request("GET", `/api/reader?slug=${slug}`);
+  const { profile, purpose } = reader.body as { profile: string | null; purpose: string | null };
+  return readFromHash({ profile, purpose });
+}
+
+async function rowOf(articleId: string | undefined) {
+  const rows = await getDb()
+    .select()
+    .from(commandSuggestionDismissals)
+    .where(eq(commandSuggestionDismissals.articleId, articleId ?? ""));
+  return rows[0];
+}
+
+/** Sixteen hex digits that are not any suggestion's identity: `n` in hex, padded. */
+const filler = (n: number): string => n.toString(16).padStart(16, "0");
+
+describe("POST /api/command-suggest/:slug/dismiss", () => {
+  beforeEach(async () => {
+    await getDb()
+      .delete(commandSuggestionDismissals)
+      .where(eq(commandSuggestionDismissals.articleId, article?.articleId ?? ""));
+  });
+
+  it("the table's bound is the route's", () => {
+    expect(SUGGESTION_DISMISSAL_TABLE.maxIdentities).toBe(MAX_DISMISSED_SUGGESTIONS);
+  });
+
+  it("is a 401 with no sign-in, and stores nothing", async () => {
+    const readFrom = await fingerprintOf(SLUG);
+    const got = await dismiss(SLUG, { readFrom, identity: suggestionIdentity("search", "missing data") }, {});
+    expect(got.status).toBe(401);
+    expect(await rowOf(article?.articleId)).toBeUndefined();
+  });
+
+  it("is a 404 for an article somebody else owns, and stores nothing", async () => {
+    const got = await dismiss(STRANGERS, { readFrom: filler(1), identity: filler(2) });
+    expect(got.status).toBe(404);
+    expect(await rowOf(strangers?.articleId)).toBeUndefined();
+  });
+
+  it("is a 400 for a body that is not exactly two fingerprints — no words reach the server", async () => {
+    const readFrom = await fingerprintOf(SLUG);
+    const identity = suggestionIdentity("search", "missing data");
+    for (const body of [
+      { readFrom, identity, words: "missing data" },
+      { readFrom, identity: "missing data" },
+      { readFrom: "not hex at all!!", identity },
+      { readFrom, identity: identity.toUpperCase() },
+      { readFrom },
+      "[1]",
+    ]) {
+      const got = await dismiss(SLUG, body);
+      expect(got.status, JSON.stringify(body)).toBe(400);
+    }
+    expect(await rowOf(article?.articleId)).toBeUndefined();
+  });
+
+  it("filters a dismissed search, mode and lens out of the next answer, and sends the model none of it", async () => {
+    const readFrom = await fingerprintOf(SLUG);
+    const dismissed = [
+      suggestionIdentity("search", "missing data"),
+      suggestionIdentity("mode", "mode:skim"),
+      suggestionIdentity("lens", LIST.lens.words),
+    ];
+    for (const identity of dismissed) {
+      expect(await dismiss(SLUG, { readFrom, identity })).toEqual({ status: 200, body: { ok: true } });
+    }
+    const got = await suggest(SLUG);
+    expect(got.status).toBe(200);
+    expect(got.body).toMatchObject({ kind: "suggestions", readFrom, searches: [LIST.searches[1]], modes: [], lens: null });
+    /* Asked the same as ever: the dismissals are applied after, never sent. */
+    expect(asked).toHaveLength(1);
+    for (const identity of dismissed) expect(asked[0]).not.toContain(identity);
+    expect(asked[0]).toContain("mode:skim | Skim: ");
+    expect(asked[0]).not.toMatch(/dismiss/i);
+  });
+
+  it("answers nothing when every suggestion was dismissed", async () => {
+    const readFrom = await fingerprintOf(SLUG);
+    for (const identity of [
+      ...LIST.searches.map((s) => suggestionIdentity("search", s.words)),
+      suggestionIdentity("mode", "mode:skim"),
+      suggestionIdentity("lens", LIST.lens.words),
+    ]) {
+      await dismiss(SLUG, { readFrom, identity });
+    }
+    expect(await suggest(SLUG)).toEqual({ status: 200, body: { kind: "nothing", why: "no-list" } });
+  });
+
+  it("does not filter once the reason has changed, and a dismissal under the new one replaces the row (F6)", async () => {
+    const before = await fingerprintOf(SLUG);
+    await dismiss(SLUG, { readFrom: before, identity: suggestionIdentity("search", "missing data") });
+    await dismiss(SLUG, { readFrom: before, identity: suggestionIdentity("mode", "mode:skim") });
+    const first = await rowOf(article?.articleId);
+
+    await setPurpose(SLUG, "what the control group was given");
+    const after = await fingerprintOf(SLUG);
+    expect(after).not.toBe(before);
+    const got = await suggest(SLUG);
+    expect(got.body).toMatchObject({ kind: "suggestions", readFrom: after, searches: LIST.searches, lens: LIST.lens });
+    expect(got.body?.modes).toHaveLength(1);
+
+    const identity = suggestionIdentity("lens", LIST.lens.words);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await dismiss(SLUG, { readFrom: after, identity });
+    const row = await rowOf(article?.articleId);
+    expect(row?.readFrom).toBe(after);
+    expect(row?.dismissed).toEqual([identity]);
+    /* `created_at` is the row's first creation, not the latest fingerprint;
+       `dismissed_at` is the later event (docs/project/sql.md). */
+    expect(row?.createdAt).toEqual(first?.createdAt);
+    expect(row?.dismissedAt.getTime()).toBeGreaterThan(first?.dismissedAt.getTime() ?? 0);
+  });
+
+  it("rejects a delayed dismissal from an old fingerprint without replacing the current row", async () => {
+    const before = await fingerprintOf(SLUG);
+    await dismiss(SLUG, { readFrom: before, identity: filler(11) });
+    await setPurpose(SLUG, "what the control group was given");
+    const after = await fingerprintOf(SLUG);
+    await dismiss(SLUG, { readFrom: after, identity: filler(12) });
+    const current = await rowOf(article?.articleId);
+
+    const stale = await dismiss(SLUG, { readFrom: before, identity: filler(13) });
+    expect(stale).toEqual({ status: 409, body: { error: DISMISS_STALE } });
+    expect(await rowOf(article?.articleId)).toEqual(current);
+  });
+
+  it("keeps the newest fifty, drops the oldest, and does not repeat one dismissed twice", async () => {
+    const readFrom = await fingerprintOf(SLUG);
+    for (let n = 1; n <= MAX_DISMISSED_SUGGESTIONS + 5; n++) {
+      expect((await dismiss(SLUG, { readFrom, identity: filler(n) })).status).toBe(200);
+    }
+    /* Again, and already there: no second copy, nothing dropped. */
+    await dismiss(SLUG, { readFrom, identity: filler(MAX_DISMISSED_SUGGESTIONS + 5) });
+    const row = await rowOf(article?.articleId);
+    expect(row?.dismissed).toEqual(
+      Array.from({ length: MAX_DISMISSED_SUGGESTIONS }, (_, i) => filler(i + 6)),
+    );
+  });
+
+  it("loses neither of two dismissals made at once", async () => {
+    const readFrom = await fingerprintOf(SLUG);
+    const many = Array.from({ length: 8 }, (_, i) => filler(1000 + i));
+    const answers = await Promise.all(many.map((identity) => dismiss(SLUG, { readFrom, identity })));
+    expect(answers.every((a) => a.status === 200)).toBe(true);
+    const row = await rowOf(article?.articleId);
+    expect([...(row?.dismissed ?? [])].sort()).toEqual([...many].sort());
+  });
+
+  it("goes with the article when it is deleted", async () => {
+    const doomed = await scratchArticleInPg(DOOMED, { ownerId: TEST_OWNER });
+    try {
+      await setPurpose(DOOMED, REASON);
+      const readFrom = await fingerprintOf(DOOMED);
+      expect((await dismiss(DOOMED, { readFrom, identity: filler(7) })).status).toBe(200);
+      expect(await rowOf(doomed.articleId)).toBeDefined();
+    } finally {
+      await doomed.remove();
+    }
+    expect(await rowOf(doomed.articleId)).toBeUndefined();
+  }, 120_000);
+
+  it("the table refuses what the route refuses", async () => {
+    const id = article?.articleId ?? "";
+    const insert = (readFrom: string, dismissed: string[]) =>
+      getDb().insert(commandSuggestionDismissals).values({ articleId: id, readFrom, dismissed });
+    await expect(insert("missing data", [filler(1)])).rejects.toThrow();
+    await expect(insert(filler(1), ["missing data"])).rejects.toThrow();
+    await expect(insert(filler(1), [])).rejects.toThrow();
+    await expect(insert(filler(1), [filler(1).toUpperCase().replace(/0/g, "A")])).rejects.toThrow();
+    await expect(
+      insert(
+        filler(1),
+        Array.from({ length: MAX_DISMISSED_SUGGESTIONS + 1 }, (_, i) => filler(i)),
+      ),
+    ).rejects.toThrow();
+    await expect(insert(filler(1), [`${filler(1)}\n${filler(2)}`])).rejects.toThrow();
   });
 });

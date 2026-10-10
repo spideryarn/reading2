@@ -47,6 +47,11 @@ diagram actually looked at in a browser rather than trusted from the markup.
   Overseer, copied on 2026-09-10). One feedback report followed through both, and what we might
   borrow — chiefly running the loop more than once on one piece of work, and checking that Sol's own
   fixes really do get a second review.
+- [261010a-reading-and-learning-evidence.html](../tutorials/261010a-reading-and-learning-evidence.html)
+  — what the research on reading and learning says about each Spideryarn mode: twenty-one questions,
+  from retrieval practice to voice to AI summaries, each given a verdict, with the counter-evidence
+  as prominent as the support. The library behind it is
+  [reading-research-overview.md](reading-research-overview.md).
 
 ## Naming
 

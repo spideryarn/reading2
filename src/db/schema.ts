@@ -4371,8 +4371,9 @@ export const chatThreads = spideryarn.table(
      * **One line saying what this conversation covered**, written by a small
      * model after each finished answer (src/chat-gist.ts, plan 261008e). Read
      * by the model in the reader's *other* conversations, beside the title, so
-     * a new one can see what an earlier one already said. Never shown on
-     * screen and never the title: the reader's title and renames are untouched.
+     * a new one can see what an earlier one already said. Never the title: the
+     * reader's title and renames are untouched. Shown on screen since plan
+     * 261010s, on the mark of the item a chat was started from.
      * Null until the first gist, and whenever the last attempt failed before
      * any succeeded.
      */
@@ -5684,6 +5685,68 @@ export const staleNoticeDismissals = spideryarn.table(
     check(
       "stale_notice_dismissals_dismissed_for",
       sql`cardinality(${t.dismissedFor}) between 1 and ${sql.raw(String(MAX_DISMISSED_IDENTITIES))} and array_ndims(${t.dismissedFor}) = 1 and array_position(${t.dismissedFor}, null) is null and array_to_string(${t.dismissedFor}, '') ~ '^[!-~]+$' and array_to_string(${t.dismissedFor}, chr(10)) ~ ${sql.raw(`'^[!-~]{1,${MAX_IDENTITY_LENGTH}}(\\n[!-~]{1,${MAX_IDENTITY_LENGTH}})*$'`)}`,
+    ),
+  ],
+);
+
+/**
+ * **The command bar's suggestions the owner dismissed** — one row per article.
+ * Greg, 2026-10-10 (`spya-yf23zk`): *"It should be possible to dismiss some of
+ * them so that they don't come up again if they're not helpful."*
+ * docs/plans/261010u-bar-suggestions-capped-dismissable-collapsible-and-the-guide-at-the-top.md.
+ *
+ * - **Hashes, never words.** `dismissed` holds identities — sixteen hex digits
+ *   from src/command-suggest.ts § `suggestionIdentity`, a hash of the kind and
+ *   the folded words or mode id. A suggestion's words are written from the
+ *   reader's profile; storing them would keep that text after the reader
+ *   changed or cleared the profile (GPT Sol's plan review, F2). Nothing here
+ *   is ever sent to a model.
+ * - **`read_from` is the fingerprint the dismissals belong to** — the
+ *   `readFromHash` of the profile and reason the list was made from. Once
+ *   either box is edited the list is about somebody else, so a dismissal
+ *   posted under a different fingerprint **replaces** the row, and the suggest
+ *   route filters only when the stored fingerprint is the one it has just
+ *   computed (F6).
+ * - **Bounded here as well as in the route**: 1–50 identities, newest kept
+ *   (src/store/pg-suggestion-dismissals.ts drops the oldest), each sixteen
+ *   lowercase hex digits, one-dimensional, no nulls. The hex-only test on the
+ *   joined array is independent of the newline-delimited length test, as in
+ *   `stale_notice_dismissals`: otherwise one element holding a newline looks
+ *   exactly like two valid elements.
+ * - **No `owner_id`**, like `stale_notice_dismissals`: only the owner writes,
+ *   and ownership is inherited through the article, which also deletes it.
+ * - **`created_at` is when this article first acquired the row and never
+ *   moves; `dismissed_at` is the latest dismissal**, including one under a new
+ *   fingerprint — docs/project/sql.md § Store when it happened. Nothing reads
+ *   either yet.
+ *
+ * Read by `POST /api/command-suggest/:slug`; never on the public read.
+ */
+/**
+ * The bound `command_suggestion_dismissals`' check holds — the same as
+ * src/command-suggest.ts's `MAX_DISMISSED_SUGGESTIONS`, written out here rather
+ * than imported, because the public read's predicates import this file and
+ * must reach nothing else (tests/public-imports.test.ts).
+ * tests/command-suggest-route.test.ts holds the two copies equal.
+ */
+export const SUGGESTION_DISMISSAL_TABLE = { maxIdentities: 50 } as const;
+
+export const commandSuggestionDismissals = spideryarn.table(
+  "command_suggestion_dismissals",
+  {
+    articleId: uuid("article_id")
+      .primaryKey()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    readFrom: text("read_from").notNull(),
+    dismissed: text("dismissed").array().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    dismissedAt: timestamp("dismissed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("command_suggestion_dismissals_read_from", sql`${t.readFrom} ~ '^[0-9a-f]{16}$'`),
+    check(
+      "command_suggestion_dismissals_dismissed",
+      sql`cardinality(${t.dismissed}) between 1 and ${sql.raw(String(SUGGESTION_DISMISSAL_TABLE.maxIdentities))} and array_ndims(${t.dismissed}) = 1 and array_position(${t.dismissed}, null) is null and array_to_string(${t.dismissed}, '') ~ '^[0-9a-f]+$' and array_to_string(${t.dismissed}, chr(10)) ~ '^[0-9a-f]{16}(\\n[0-9a-f]{16})*$'`,
     ),
   ],
 );

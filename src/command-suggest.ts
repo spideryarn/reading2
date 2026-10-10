@@ -240,7 +240,11 @@ export function readSuggestAnswer(json: unknown, sent: SuggestRequest): SuggestA
  * has no synchronous one, and this must be the same arithmetic on both sides.
  */
 export function readFromHash(parts: { readonly profile: string | null; readonly purpose: string | null }): string {
-  const text = JSON.stringify([parts.profile ?? null, parts.purpose ?? null]);
+  return cyrb53Hex(JSON.stringify([parts.profile ?? null, parts.purpose ?? null]));
+}
+
+/** Sixteen hex digits — cyrb53's two words. The one arithmetic both fingerprints use. */
+function cyrb53Hex(text: string): string {
   let h1 = 0xdeadbeef;
   let h2 = 0x41c6ce57;
   for (let i = 0; i < text.length; i++) {
@@ -252,6 +256,78 @@ export function readFromHash(parts: { readonly profile: string | null; readonly 
   h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
   return (h2 >>> 0).toString(16).padStart(8, "0") + (h1 >>> 0).toString(16).padStart(8, "0");
 }
+
+/* ----------------------------------------------------------- dismissals -- */
+
+/**
+ * **What a dismissed suggestion is remembered as** — plan 261010u. Greg,
+ * 2026-10-10 (`spya-yf23zk`): *"It should be possible to dismiss some of them
+ * so that they don't come up again if they're not helpful."*
+ *
+ * A hash, never the words: a search or a question is written from the
+ * reader's profile, and keeping the words would keep that text after the
+ * reader changed the profile (GPT Sol's F2 on the plan). The kind is part of
+ * it, so a search and a question with the same words are two suggestions. A
+ * mode is its row id (`mode:quiz`); words are case- and space-folded, so the
+ * same suggestion written again is the same identity.
+ *
+ * Kept per article and per `readFrom` (src/store/pg-suggestion-dismissals.ts):
+ * once either box is edited the list is about somebody else, and so are the
+ * dismissals (F6).
+ */
+export type SuggestionKind = "search" | "mode" | "lens";
+
+export function suggestionIdentity(kind: SuggestionKind, value: string): string {
+  return cyrb53Hex(JSON.stringify([kind, kind === "mode" ? value : collapse(value).toLowerCase()]));
+}
+
+/** The form of an identity and of a `readFrom`: what `cyrb53Hex` writes. */
+export const IDENTITY_FORM = /^[0-9a-f]{16}$/;
+
+/** How many identities one article keeps; the oldest goes first. The table's check holds the same number. */
+export const MAX_DISMISSED_SUGGESTIONS = 50;
+
+/**
+ * **A list without what the reader dismissed**, or `null` when nothing is
+ * left — rule 3 at the top: an answer that kept nothing is `nothing`.
+ */
+export function withoutDismissed(list: Suggestions, dismissed: ReadonlySet<string>): Suggestions | null {
+  if (dismissed.size === 0) return list;
+  const searches = list.searches.filter((s) => !dismissed.has(suggestionIdentity("search", s.words)));
+  const modes = list.modes.filter((m) => !dismissed.has(suggestionIdentity("mode", m.key.id)));
+  const lens = list.lens !== null && dismissed.has(suggestionIdentity("lens", list.lens.words)) ? null : list.lens;
+  if (searches.length === 0 && modes.length === 0 && lens === null) return null;
+  return { searches, modes, lens };
+}
+
+/** What `POST /api/command-suggest/:slug/dismiss` takes. */
+export interface DismissRequest {
+  readonly readFrom: string;
+  readonly identity: string;
+}
+
+export type DismissRequestParse =
+  | { readonly ok: true; readonly request: DismissRequest }
+  /** Fixed prose, never a string the caller sent. */
+  | { readonly ok: false; readonly reason: string };
+
+/** Exactly `{ readFrom, identity }`, both sixteen hex digits. */
+export function parseDismissRequest(body: unknown): DismissRequestParse {
+  if (!isRecord(body)) return { ok: false, reason: "Expected a JSON object" };
+  if (!onlyKeys(body, ["readFrom", "identity"])) return { ok: false, reason: UNKNOWN_FIELD };
+  const { readFrom, identity } = body;
+  if (typeof readFrom !== "string" || !IDENTITY_FORM.test(readFrom)) {
+    return { ok: false, reason: "readFrom must be a fingerprint" };
+  }
+  if (typeof identity !== "string" || !IDENTITY_FORM.test(identity)) {
+    return { ok: false, reason: "identity must be a fingerprint" };
+  }
+  return { ok: true, request: { readFrom, identity } };
+}
+
+/** Where the bar posts a dismissal. */
+export const commandSuggestDismissPath = (slug: string): string =>
+  `/api/command-suggest/${encodeURIComponent(slug)}/dismiss`;
 
 /** Where the bar posts for an article. */
 export const commandSuggestPath = (slug: string): string => `/api/command-suggest/${encodeURIComponent(slug)}`;
@@ -275,3 +351,24 @@ export const SUGGEST_NO_REASON = "This article has no “why you're reading this
 /** The lens row's label, round the model's words. */
 export const lensLabel = (lens: string): string => `Ask chat what the web says about “${lens}”`;
 export const LENS_DESCRIPTION = "Puts the question in Chat's box. Nothing is sent until you press Send.";
+
+/**
+ * **How many suggestions the bar draws at once** — plan 261010u. Greg,
+ * 2026-10-10: *"I think three or four should probably be enough."* The model
+ * may still write six (the caps above); the rest wait, and take the place of
+ * one the reader dismisses.
+ */
+export const MAX_SUGGESTIONS_SHOWN = 4;
+/** The line over the list, which folds it: its second half, by state. */
+export const suggestToggleWhat = (shown: number, collapsed: boolean): string =>
+  collapsed
+    ? `${shown} ${shown === 1 ? "suggestion" : "suggestions"}, hidden. Press to show.`
+    : "Press to hide these.";
+/** The × on a suggested row, for a pointer; `Delete` is the keyboard's way. */
+export const DISMISS_LABEL = "Don't suggest this again";
+/** Said once a dismissal is sent. */
+export const DISMISSED = "Won't suggest that again on this article, unless you edit your reason for reading or About you.";
+/** Said when it could not be kept; the row is back. */
+export const dismissFailed = (why: string): string => `Couldn't remember that dismissal, so it's back. ${why}`;
+/** A dismissal arrived after the profile or reason it belonged to had changed. */
+export const DISMISS_STALE = "That suggestion list is no longer current. Ask for a fresh list and try again. [suggestion-list-old]";
