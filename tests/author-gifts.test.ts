@@ -363,6 +363,7 @@ describe("POST /api/admin/author-gifts/:id/send", () => {
       recipientNote: "Thank you for this.",
       articles: 30,
       notes: "Found on the lab page.",
+      notesBase: null,
     });
     expect(patched.status).toBe(200);
 
@@ -538,13 +539,13 @@ describe("PATCH /api/admin/author-gifts/:id", () => {
       { recipientName: "Someone" },
       { recipientNote: "x" },
       { discarded: true },
-      { notes: "with a field", articles: 5 },
+      { notes: "with a field", notesBase: null, articles: 5 },
     ]) {
       expect((await drive("PATCH", `/api/admin/author-gifts/${id}`, body)).status, JSON.stringify(body)).toBe(409);
     }
     expect(await giftRow(id)).toMatchObject({ email: addressOf("frozen"), articles: 20, notes: null });
 
-    const notes = await drive("PATCH", `/api/admin/author-gifts/${id}`, { notes: "Sent on Thursday." });
+    const notes = await drive("PATCH", `/api/admin/author-gifts/${id}`, { notes: "Sent on Thursday.", notesBase: null });
     expect(notes.status).toBe(200);
     const gift = await giftRow(id);
     expect(gift.notes).toBe("Sent on Thursday.");
@@ -586,14 +587,136 @@ describe("PATCH /api/admin/author-gifts/:id", () => {
     for (const body of [{}, { artcles: 5 }, { articles: 0 }, { email: "nope" }, { notes: 7 }, { discarded: "yes" }]) {
       expect((await drive("PATCH", `/api/admin/author-gifts/${id}`, body)).status, JSON.stringify(body)).toBe(400);
     }
-    expect(parseAuthorGiftPatch({ notes: "x".repeat(AUTHOR_GIFT_NOTES_MAX + 1) }).ok).toBe(false);
-    expect(parseAuthorGiftPatch({ email: null, notes: "  " })).toEqual({ ok: true, value: { email: null, notes: null } });
-    expect((await drive("PATCH", `/api/admin/author-gifts/${randomUUID()}`, { notes: "x" })).status).toBe(404);
+    expect(parseAuthorGiftPatch({ notes: "x".repeat(AUTHOR_GIFT_NOTES_MAX + 1), notesBase: null }).ok).toBe(false);
+    expect(parseAuthorGiftPatch({ email: null, notes: "  ", notesBase: null })).toEqual({
+      ok: true,
+      value: { email: null, notes: { text: null, base: null } },
+    });
+    expect(parseAuthorGiftPatch({ notes: "x", notesBase: "2026-10-09T12:00:00.123Z" })).toEqual({
+      ok: true,
+      value: { notes: { text: "x", base: "2026-10-09T12:00:00.123Z" } },
+    });
+    expect((await drive("PATCH", `/api/admin/author-gifts/${randomUUID()}`, { notes: "x", notesBase: null })).status).toBe(404);
 
     expect((await drive("PATCH", `/api/admin/author-gifts/${id}`, { discarded: true })).status).toBe(200);
     expect((await listAuthorGifts()).find((g) => g.id === id)?.status).toBe("discarded");
     expect((await drive("PATCH", `/api/admin/author-gifts/${id}`, { discarded: false })).status).toBe(200);
     expect((await listAuthorGifts()).find((g) => g.id === id)?.status).toBe("draft");
+  });
+});
+
+/* ------------------------------------------------------- notes, together -- */
+
+/**
+ * **Two writers on one notes field** (Sol's C7): Greg in two tabs, an agent
+ * through MCP, a lookup appending. A replace carries the `notesUpdatedAt` its
+ * writer last saw and is refused if anything wrote since; an append needs no
+ * precondition and lands under the gift's lock.
+ */
+describe("PATCH notes: a replace says what it saw, an append just adds", () => {
+  const stampOf = async (id: string) => (await listAuthorGifts()).find((g) => g.id === id)?.notesUpdatedAt ?? null;
+
+  it("refuses a replace from a stale base with a plain sentence, and writes nothing", async () => {
+    const { id } = await ensured(await seed("stale-base"));
+    expect((await drive("PATCH", `/api/admin/author-gifts/${id}`, { notes: "First.", notesBase: null })).status).toBe(200);
+    const seen = await stampOf(id);
+    expect(seen).not.toBeNull();
+
+    /* Another tab still holding "never written" loses. */
+    const stale = await drive("PATCH", `/api/admin/author-gifts/${id}`, { notes: "From the old tab.", notesBase: null });
+    expect(stale.status).toBe(409);
+    expect(stale.body.error).toBe("The notes changed since you opened them; reload and try again.");
+    expect(await giftRow(id)).toMatchObject({ notes: "First." });
+    expect(await stampOf(id)).toBe(seen);
+
+    /* The writer holding the current stamp wins, and moves it on. */
+    const fresh = await drive("PATCH", `/api/admin/author-gifts/${id}`, { notes: "Second.", notesBase: seen });
+    expect(fresh.status).toBe(200);
+    expect(await giftRow(id)).toMatchObject({ notes: "Second." });
+    const after = await stampOf(id);
+    expect(after).not.toBe(seen);
+    expect(fresh.body.notesUpdatedAt).toBe(after);
+
+    /* …and the first stamp is stale now. */
+    expect((await drive("PATCH", `/api/admin/author-gifts/${id}`, { notes: "Third.", notesBase: seen })).status).toBe(409);
+    expect(await giftRow(id)).toMatchObject({ notes: "Second." });
+  });
+
+  it("refuses the whole patch, the draft fields too, when the notes base is stale", async () => {
+    const { id } = await ensured(await seed("stale-whole"));
+    await drive("PATCH", `/api/admin/author-gifts/${id}`, { notes: "First.", notesBase: null });
+    const stale = await drive("PATCH", `/api/admin/author-gifts/${id}`, { recipientName: "Ann", notes: "x", notesBase: null });
+    expect(stale.status).toBe(409);
+    expect(await giftRow(id)).toMatchObject({ recipient_name: null, notes: "First." });
+  });
+
+  it("compares the stamp as the page saw it: microseconds the page never had do not make it stale", async () => {
+    const { id } = await ensured(await seed("micros"));
+    /* A stamp with more precision than a JavaScript Date carries. */
+    await pool.query("update spideryarn.author_gifts set notes = 'Old.', notes_updated_at = '2026-10-09T12:00:00.123999Z' where id = $1", [id]);
+    const seen = await stampOf(id);
+    expect(seen).toBe("2026-10-09T12:00:00.123Z");
+    expect((await drive("PATCH", `/api/admin/author-gifts/${id}`, { notes: "x", notesBase: "2026-10-09T12:00:00.124Z" })).status).toBe(409);
+    expect((await drive("PATCH", `/api/admin/author-gifts/${id}`, { notes: "New.", notesBase: seen })).status).toBe(200);
+    expect(await giftRow(id)).toMatchObject({ notes: "New." });
+  });
+
+  it("a lookup's append moves the stamp, so a replace from before it is refused", async () => {
+    const { id, lookupId } = await ensured(await seed("lookup-moves"));
+    await drive("PATCH", `/api/admin/author-gifts/${id}`, { notes: "Mine.", notesBase: null });
+    const seen = await stampOf(id);
+    expect(await finishLookup(lookupId, { kind: "failed", failure: "test", notes: "Lookup block." })).toMatchObject({
+      applied: { notes: true },
+    });
+    expect(await stampOf(id)).not.toBe(seen);
+    const stale = await drive("PATCH", `/api/admin/author-gifts/${id}`, { notes: "Mine, edited.", notesBase: seen });
+    expect(stale.status).toBe(409);
+    expect(await giftRow(id)).toMatchObject({ notes: "Mine.\n\nLookup block." });
+  });
+
+  it("appends a paragraph without a base, in every status, a sent gift included", async () => {
+    control.deps = mailbox().deps;
+    const { id } = await ensured(await seed("append", { linkOn: true }));
+    expect((await drive("PATCH", `/api/admin/author-gifts/${id}`, { appendNotes: "  First find.  " })).status).toBe(200);
+    expect(await giftRow(id)).toMatchObject({ notes: "First find." });
+    const first = await stampOf(id);
+
+    await drive("PATCH", `/api/admin/author-gifts/${id}`, { email: addressOf("append") });
+    expect((await drive("POST", `/api/admin/author-gifts/${id}/send`, null)).status).toBe(201);
+    const appended = await drive("PATCH", `/api/admin/author-gifts/${id}`, { appendNotes: "She replied." });
+    expect(appended.status).toBe(200);
+    expect(await giftRow(id)).toMatchObject({ notes: "First find.\n\nShe replied." });
+    expect(await stampOf(id)).not.toBe(first);
+    expect(appended.body.notesUpdatedAt).toBe(await stampOf(id));
+  });
+
+  it("refuses an append to notes with no room left, and writes nothing", async () => {
+    const { id } = await ensured(await seed("append-full"));
+    const full = "z".repeat(AUTHOR_GIFT_NOTES_MAX);
+    await pool.query("update spideryarn.author_gifts set notes = $2 where id = $1", [id, full]);
+    const refused = await drive("PATCH", `/api/admin/author-gifts/${id}`, { appendNotes: "More." });
+    expect(refused.status).toBe(409);
+    expect(String(refused.body.error)).toContain("full");
+    expect((await giftRow(id)).notes).toBe(full);
+  });
+
+  it("asks a replace for its base, and takes a replace or an append, not both", async () => {
+    const { id } = await ensured(await seed("notes-shape"));
+    for (const body of [
+      { notes: "No base." },
+      { notes: "Both.", notesBase: null, appendNotes: "Both." },
+      { appendNotes: "Both.", notesBase: null },
+      { notesBase: null },
+      { appendNotes: "" },
+      { appendNotes: "   " },
+      { appendNotes: 7 },
+      { appendNotes: "x".repeat(AUTHOR_GIFT_NOTES_MAX + 1) },
+      { notes: "Bad base.", notesBase: "yesterday" },
+      { notes: "Bad base.", notesBase: 7 },
+    ]) {
+      expect((await drive("PATCH", `/api/admin/author-gifts/${id}`, body)).status, JSON.stringify(body)).toBe(400);
+    }
+    expect(await giftRow(id)).toMatchObject({ notes: null, notes_updated_at: null });
   });
 });
 
@@ -650,7 +773,7 @@ describe("the lookup's store transactions", () => {
   it("fills only the empty fields, records itself as their source, and appends to the notes", async () => {
     const mine = await seed("fill");
     const { id, lookupId } = await ensured(mine);
-    await drive("PATCH", `/api/admin/author-gifts/${id}`, { recipientName: "Typed By Greg", notes: "Mine." });
+    await drive("PATCH", `/api/admin/author-gifts/${id}`, { recipientName: "Typed By Greg", notes: "Mine.", notesBase: null });
 
     const answer = await finishLookup(lookupId, {
       kind: "found",
@@ -806,7 +929,7 @@ describe("the namespace gate", () => {
     for (const [method, url, body] of [
       ["POST", "/api/admin/author-gifts", { slug: theirs.slug, rightsConfirmed: true }],
       ["GET", "/api/admin/author-gifts", null],
-      ["PATCH", `/api/admin/author-gifts/${id}`, { notes: "x" }],
+      ["PATCH", `/api/admin/author-gifts/${id}`, { notes: "x", notesBase: null }],
       ["POST", `/api/admin/author-gifts/${id}/lookups`, null],
       ["POST", `/api/admin/author-gifts/${id}/send`, null],
     ] as const) {

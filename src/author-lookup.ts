@@ -371,8 +371,8 @@ function readProse(parsed: object): AuthorProse {
  * Greg only. The store does the appending and the cutting to fit.
  */
 export function authorLookupNotes(judged: AuthorJudgement, at: string): string {
-  const day = at.slice(0, 10);
-  const head = `— Author lookup, ${day} —`;
+  /* With the time and "UTC" said: a bare UTC date reads a day off in a London evening. */
+  const head = `— Author lookup, ${at.slice(0, 10)} ${at.slice(11, 16)} UTC —`;
   if (judged.kind === "unreadable") {
     return [head, `The lookup failed (${judged.failure}). Nothing was applied.`].join("\n");
   }

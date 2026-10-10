@@ -228,11 +228,29 @@ describe("each tool calls the route it claims", () => {
     },
     /* Plan 261009u § D6: the author gifts' two rows, neither of which asks. */
     { tool: "list_author_gifts", expect: [{ method: "GET", path: "/api/admin/author-gifts" }] },
+    /* An append needs nothing read first; a replace reads the gift's stamp and
+       sends it, so the server can refuse it if the notes moved on (Sol's C7). */
     {
       tool: "update_author_gift",
-      args: { id: VOUCHER, notes: "Found her address on her lab page." },
+      args: { id: VOUCHER, append_notes: "Found her address on her lab page." },
       expect: [
-        { method: "PATCH", path: `/api/admin/author-gifts/${VOUCHER}`, body: { notes: "Found her address on her lab page." } },
+        {
+          method: "PATCH",
+          path: `/api/admin/author-gifts/${VOUCHER}`,
+          body: { appendNotes: "Found her address on her lab page." },
+        },
+      ],
+    },
+    {
+      tool: "update_author_gift",
+      args: { id: VOUCHER, notes: "The whole new text." },
+      expect: [
+        { method: "GET", path: "/api/admin/author-gifts" },
+        {
+          method: "PATCH",
+          path: `/api/admin/author-gifts/${VOUCHER}`,
+          body: { notes: "The whole new text.", notesBase: "2026-10-09T00:00:00Z" },
+        },
       ],
     },
     {
@@ -311,6 +329,33 @@ describe("each tool calls the route it claims", () => {
     expect(gifts[0]?.starter).toEqual({ slug: "on-tools", title: "On Tools", link: `${SITE}/read/on-tools` });
     expect(result.text).not.toContain("key=");
     expect(result.text).not.toContain("SENTINEL-PRIVATE-LINK-KEY");
+  });
+
+  it("update_author_gift takes a replace or an append, not both, and sends nothing for both", async () => {
+    const h = await harness();
+    const result = await h.call("update_author_gift", { id: VOUCHER, notes: "a", append_notes: "b" });
+    expect(result.isError).toBe(true);
+    expect(h.seen).toEqual([]);
+  });
+
+  it("update_author_gift's replace of a gift the list does not have sends no PATCH", async () => {
+    const h = await harness({ "GET /api/admin/author-gifts": { body: { gifts: [] } } });
+    const result = await h.call("update_author_gift", { id: VOUCHER, notes: "a" });
+    expect(result.isError).toBe(true);
+    expect(h.seen.map((s) => s.method)).toEqual(["GET"]);
+  });
+
+  it("update_author_gift's answer is allow-listed, and its description steers agents to append", async () => {
+    const h = await harness({
+      [`PATCH /api/admin/author-gifts/${VOUCHER}`]: {
+        body: { ok: true, notesUpdatedAt: "2026-10-10T00:00:00.000Z", privateLinkKey: "SENTINEL-PRIVATE-LINK-KEY" },
+      },
+    });
+    const result = await h.call("update_author_gift", { id: VOUCHER, append_notes: "b" });
+    expect(result.json()).toEqual({ ok: true, notesUpdatedAt: "2026-10-10T00:00:00.000Z" });
+    const description = TOOLS.find((t) => t.name === "update_author_gift")?.description ?? "";
+    expect(description).toMatch(/append_notes/);
+    expect(description).toMatch(/rather than/i);
   });
 
   it("update_author_gift with nothing to change sends nothing", async () => {

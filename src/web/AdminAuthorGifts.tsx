@@ -312,20 +312,23 @@ function Notes({
   const [text, setText] = useState(gift.notes ?? "");
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
-  /* When the notes stood at as Edit was pressed: a lookup may append to them
-     while the box is open, and Save replaces the whole text. */
+  /* When the notes stood at as Edit was pressed: a lookup, an agent or another
+     tab may write them while the box is open, and Save replaces the whole
+     text. The pause below catches what this page has seen; the server checks
+     the same stamp (`notesBase`) and refuses with a 409 for what it has not
+     (Sol's C7). A refusal leaves the box open with Greg's words in it. */
   const [base, setBase] = useState<string | null>(null);
   const written = gift.notesUpdatedAt === null ? undefined : exactly(gift.notesUpdatedAt);
   const movedOn = editing && base !== gift.notesUpdatedAt;
 
   async function save(event: FormEvent) {
     event.preventDefault();
-    /* A lookup appended after Edit. Replacing the field from this stale box
-       would lose that block; the warning tells Greg how to merge it. */
+    /* Something wrote the notes after Edit. Replacing the field from this
+       stale box would lose that; the warning tells Greg how to merge it. */
     if (busy || movedOn || lookupRunning) return;
     setBusy(true);
     /* Notes only, so a sent gift takes it (R2-F7). */
-    const said = await patch(gift.id, { notes: text.trim() === "" ? null : text });
+    const said = await patch(gift.id, { notes: text.trim() === "" ? null : text, notesBase: base });
     setBusy(false);
     setRefusal(said);
     if (said === null) setEditing(false);
@@ -346,8 +349,8 @@ function Notes({
         <form onSubmit={(e) => void save(e)} className="tw:mt-1 tw:flex tw:flex-col tw:gap-2">
           {movedOn && (
             <p role="status" className="tw:m-0 tw:text-danger">
-              The notes changed after you started editing (a lookup may have added to them). Save is paused; Cancel
-              and Edit again to see the new text.
+              The notes changed after you started editing (a lookup or an agent may have added to them). Save is
+              paused; copy anything you typed, then Cancel and Edit again to see the new text.
             </p>
           )}
           {lookupRunning && (

@@ -865,6 +865,41 @@ a Retry where the server allows one. How they are kept to once each is
 [email.md § Gift voucher emails](email.md#gift-voucher-emails); the plan is
 [261001p](../plans/261001p-voucher-emails-to-recipient-and-creator.md).
 
+### Author gifts — a draft voucher for an article's author
+
+Since 2026-10-10 the page has a second section above the voucher table, **Author gifts**: a gift
+voucher drafted for the author of one of the administrator's own articles, saved and **never sent
+until the administrator presses Send**. Greg's request and the marketing reason are
+[marketing-author-gifts.md](marketing-author-gifts.md); the plan, its two reviews and every
+decision are [261009u](../plans/261009u-author-gift-draft-voucher-from-the-add-page.md).
+
+**A draft is not a voucher.** It is a row of `author_gifts` (one per article, for good), and it
+becomes a voucher only on *Send*, through the same `createVoucher` the create form uses, with an id
+minted when the draft was made — so a repeated *Send* is that function's replay and queues one email.
+Until then nothing in `billing_vouchers`, the claim, the entitlement or the email queue can see it.
+Its lookups are rows of `author_lookups`, each with the `run_id` of the collector it spent in, which
+is how the section reads each lookup's cost from the ledger.
+
+| Route | Does |
+|---|---|
+| `POST /api/admin/author-gifts` | `{ slug, rightsConfirmed: true }`. A new gift: the private link if the article has neither one nor public visibility (`keepExisting`), the row, and its first lookup, which runs after the response → `202`. An article that already has a gift → `200` and nothing touched, so a late replay cannot turn a link back on or buy another search. The article must be the administrator's own (400) and published (409) |
+| `POST /api/admin/author-gifts/:id/lookups` | *Look up again* on a draft → `202`; `409` while one runs (five minutes, then it counts as stale) or once the gift is not a draft |
+| `GET /api/admin/author-gifts` | every gift with its derived status (draft, sending, sent, discarded), fields, notes, each field's source lookup, and every lookup with its cost — `private, no-store` |
+| `PATCH /api/admin/author-gifts/:id` | `{ email, recipientName, recipientNote, articles, notes, discarded }`, the voucher's own field rules; once *Send* has started only `notes`. Editing the address or name clears its lookup as the source |
+| `POST /api/admin/author-gifts/:id/send` | freezes the draft under an attempt token, then `createVoucher`; the gift email is scheduled after a create *or* a replay, and a starter that cannot be linked now unfreezes only that attempt (409) |
+
+**The lookup** (`src/author-lookup.ts`, `src/author-lookup-start.ts`) is one capable-tier chat call
+with Exa web search, standard power whatever the article's, in a collector of its own because the
+request's has closed. **An address fills the draft only if it was seen**: an exact, normalised
+address token in the extract of the search result the model named, or in the article's own text.
+Anything else is shown as *suggested, not seen in any result* and never put in the voucher. It fills
+only empty fields, and appends to the **notes** — free text the administrator also edits, here and by
+MCP: where the address was seen, who the author is, a suggested message, why this piece. The notes
+never leave the admin routes. The model can choose up to three searches from a prompt holding a
+stranger's article; that residual risk is accepted and written up in the plan's D7.
+
+The add page's half is [ingest-queue.md § The add page](ingest-queue.md#the-add-page).
+
 ## What it cannot do, and what is not built
 
 - **Nothing on `/admin/users` writes, and `/admin/feedback` writes one timestamp.** No delete, no

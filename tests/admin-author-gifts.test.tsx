@@ -293,8 +293,43 @@ describe("Author gifts", () => {
     await act(async () => button(c, "Save notes")?.click());
     await settle();
     expect(writes()).toEqual([
-      { method: "PATCH", url: `/api/admin/author-gifts/${SENT}`, body: { notes: "Old notes.\nSecond line.\nShe replied." } },
+      {
+        method: "PATCH",
+        url: `/api/admin/author-gifts/${SENT}`,
+        /* With the stamp the notes had when Edit was pressed, so the server can refuse a stale save (Sol's C7). */
+        body: { notes: "Old notes.\nSecond line.\nShe replied.", notesBase: "2026-10-09T13:00:00Z" },
+      },
     ]);
+  });
+
+  it("sends a null base for notes never written", async () => {
+    giftsAnswer = () => [gift()];
+    await mount();
+    const c = card(DRAFT);
+    await act(async () => button(c, "Edit notes")?.click());
+    const box = c?.querySelector('textarea[aria-label="Notes"]') as HTMLTextAreaElement;
+    await act(async () => sets(box, "First words."));
+    await act(async () => button(c, "Save notes")?.click());
+    await settle();
+    expect(writes()).toEqual([
+      { method: "PATCH", url: `/api/admin/author-gifts/${DRAFT}`, body: { notes: "First words.", notesBase: null } },
+    ]);
+  });
+
+  it("keeps what Greg typed when the server refuses a stale save, and says why", async () => {
+    patchAnswer = { status: 409, body: { error: "The notes changed since you opened them; reload and try again." } };
+    giftsAnswer = () => [gift({ notes: "Greg's note.", notesUpdatedAt: "2026-10-09T13:00:00Z" })];
+    await mount();
+    const c = card(DRAFT);
+    await act(async () => button(c, "Edit notes")?.click());
+    const box = () => c?.querySelector('textarea[aria-label="Notes"]') as HTMLTextAreaElement | null;
+    await act(async () => sets(box() as HTMLTextAreaElement, "Greg's long, careful rewrite."));
+    await act(async () => button(c, "Save notes")?.click());
+    await settle();
+    expect(c?.querySelector('[role="alert"]')?.textContent).toBe(
+      "The notes changed since you opened them; reload and try again.",
+    );
+    expect(box()?.value).toBe("Greg's long, careful rewrite.");
   });
 
   it("will not overwrite notes a lookup appended while the notes editor was open", async () => {

@@ -230,7 +230,8 @@ describe("runAuthorLookup", () => {
     expect(result.authorName).toBe("Ann Smith");
     expect(result.searches).toBe(2);
     expect(result.model).toBe("anthropic/claude-sonnet-test");
-    expect(result.notes).toContain("2026-10-09");
+    /* The time and "UTC" too: a bare UTC date reads a day off in the evening. */
+    expect(result.notes?.split("\n")[0]).toBe("— Author lookup, 2026-10-09 12:00 UTC —");
     expect(result.notes).toContain(`ann@example.org, seen at ${BIO_PAGE}`);
     expect(result.notes).toContain("Suggested message");
     expect(result.notes).toContain("Why this piece");

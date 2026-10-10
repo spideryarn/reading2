@@ -1,7 +1,8 @@
 # The author gift: a draft voucher from the add page
 
-**Status as of 2026-10-09: planned (revision 3, after two GPT Sol plan reviews), not built.** Where
-§ Revision 3 below and an earlier section disagree, revision 3 wins. Queue
+**Status as of 2026-10-10: built, all four stages, on `dev`, not deployed.** It needs a deploy for
+two additive migrations (`author_gifts`, and an index on `ai_calls.run_id`). § What landed says what
+differs from the plan. Where § Revision 3 below and an earlier section disagree, revision 3 wins. Queue
 item `qi-ghpdsqvv`, authorised by Greg 2026-10-09, dispatched by the Overseer. The idea and Greg's
 words are [marketing.md § A tool to make this cheap](../project/marketing.md) (commit 712d3ad3e).
 Review round 1: [261009u-plan-review-sol.md](261009u-plan-review-sol.md) (REJECT, 12 findings; how
@@ -404,6 +405,49 @@ The route table in D8, amended:
 | `PATCH /api/admin/author-gifts/:id` | as D8, but only `notes` once *Send* has started |
 | `POST /api/admin/author-gifts/:id/send` | D3 with R2-F1, F3, F4 |
 
+## What landed
+
+- **Stage 1–2, the server**: `author_gifts` and `author_lookups`
+  (`drizzle/20261009220519_author_gifts.sql`), `src/store/pg-author-gifts.ts`, the five routes,
+  `src/author-lookup.ts` (the call and the seen-address rules) and `src/author-lookup-start.ts`
+  (the after-response run in its own collector). The address rules moved to an import-free
+  `src/email-address.ts`. Code review 1 ([261009u-code-review-1-sol.md](261009u-code-review-1-sol.md),
+  APPROVE WITH CHANGES) fixed a stale Send attempt that could still create a voucher
+  (`createVoucher` gained an optional, transaction-local `beforeCreate` check) and added the
+  `ai_calls.run_id` index, which I moved into its own migration
+  (`drizzle/20261009232510_ai_calls_run_index.sql`) because Sol put it in the already-applied one.
+  **Deploy note**: that index is a plain `CREATE INDEX` on `ai_calls`, which holds writes to the
+  ledger while it builds — seconds at the ledger's current size.
+- **Stage 3, the UI and MCP**: `src/web/add-author-gift.ts` and `AddAuthorGift.tsx` (the add page),
+  `AdminAuthorGifts.tsx` and `useAdminAuthorGifts.ts` (the section), `admin-vouchers-parts.tsx`
+  (the starter picker both forms share), and `list_author_gifts` / `update_author_gift` in
+  `src/mcp/tools.ts`. Code review 2 ([261009u-code-review-2-sol.md](261009u-code-review-2-sol.md),
+  APPROVE WITH CHANGES) fixed six, and reported C7: a notes save replaced the field with no
+  precondition. Fixed afterwards: a replace carries the `notesUpdatedAt` it saw and gets 409 if
+  the notes moved, and `appendNotes` adds without one (what MCP agents are told to use).
+- **Stage 4, docs**: [admin.md § Author gifts](../project/admin.md#author-gifts-a-draft-voucher-for-an-articles-author)
+  is the home; billing.md, mcp.md, ingest-queue.md and high-powered-ai.md point at it.
+- **Browser check** (Sonnet, Playwright, this worktree's own server, two real lookups at $0.039 and
+  $0.048): the section, polling, provenance, notes, Send disabled without an address, Discard and
+  Restore, the add page's confirmation, arming, the 202 at completion and the navigation, a
+  non-admin seeing neither control nor route, and 390 px without horizontal scroll all worked.
+  Shots: [the lookup done](261009u-shot-3-lookup-done.png), [Send's confirmation](261009u-shot-5-send-confirm.png),
+  [the add page's confirmation](261009u-shot-10-add-confirm.png), [phone width](261009u-shot-7-phone-author-gifts.png).
+
+**Differs from the plan, or not done:**
+
+- **D10's line saying whether High-powered AI is on** for the article is not shown; the list does
+  not carry it. Small, and not a defect.
+- **For a public article no private link is made** — its starter is its public address. The plan
+  said "make a private link" without the public case.
+- **Send runs as the gift's creator** (`runAsOwner(created_by)`) so the starter resolves through that
+  owner's reads whoever presses it (R2-F4). With one administrator this changes nothing.
+- **The add page shows the control for a moment** before it learns the article is already on the
+  shelf, then hides it with the rest of the sharing controls. A flicker, not a write.
+- **Sending from MCP** is a named follow-up (it would need the macOS approval dialog and its test).
+- **Send's confirmation says "This sends a real email"**, which is true in production; locally the
+  email row says *not sent (not production)*.
+
 ## Review log
 
 Round 1 (GPT Sol, REJECT) and what each finding became:
@@ -428,3 +472,5 @@ Round 1 (GPT Sol, REJECT) and what each finding became:
 - 2026-10-09: plan written; Sol round 1 REJECT; revision 2 adopts F11 and answers the rest. Greg's
   notes field added (through the Overseer). Sol round 2 REJECT with eight findings; revision 3
   adopts all eight. Discovery closed; building.
+- 2026-10-10: stages 1–4 built by Opus subagents in parallel; two GPT Sol code reviews (both
+  APPROVE WITH CHANGES, eight fixes by the reviewer, one reported and fixed after); browser-checked.

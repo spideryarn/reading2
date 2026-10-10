@@ -89,6 +89,25 @@ function statusOf(row: {
 /** `exists (a voucher with this gift's voucher_id)`, for the selects below. */
 const VOUCHER_EXISTS = sql<boolean>`exists (select 1 from ${billingVouchers} where ${billingVouchers.id} = ${authorGifts.voucherId})`;
 
+/**
+ * **The next `notes_updated_at`, for every writer of the notes** — a replace,
+ * an append, a lookup's block. It is what a replace's `notesBase` is checked
+ * against (Sol's C7), so it has to move on every write and be comparable with
+ * what the page was sent:
+ *
+ * - **milliseconds**, because the page gets it through a JavaScript `Date`,
+ *   which keeps three digits and drops the rest; a stored microsecond would
+ *   make every base look stale;
+ * - **strictly later than the last one**, because two writes in one
+ *   millisecond, or a transaction whose `now()` predates the one it waited
+ *   behind, would otherwise leave the stamp where a stale base still matches.
+ *   `greatest` ignores the null of a never-written field.
+ */
+const NEXT_NOTES_STAMP = sql`greatest(date_trunc('milliseconds', clock_timestamp()), ${authorGifts.notesUpdatedAt} + interval '1 millisecond')`;
+
+/** The stamp as the page holds it: `toISOString()` of what node-postgres parsed, which truncates to milliseconds. */
+const NOTES_STAMP_SEEN = sql`date_trunc('milliseconds', ${authorGifts.notesUpdatedAt})`;
+
 /* ---------------------------------------------------------------- ensure -- */
 
 export type EnsureAnswer =
@@ -452,7 +471,7 @@ export async function finishLookup(lookupId: string, result: LookupResult): Prom
         .set({
           ...(applied.email ? { email, emailLookupId: lookupId } : {}),
           ...(applied.name ? { recipientName: fillName, nameLookupId: lookupId } : {}),
-          ...(applied.notes ? { notes, notesUpdatedAt: sql`now()` } : {}),
+          ...(applied.notes ? { notes, notesUpdatedAt: NEXT_NOTES_STAMP } : {}),
           updatedAt: sql`now()`,
         })
         .where(eq(authorGifts.id, seen.giftId));
@@ -565,7 +584,20 @@ export async function listAuthorGifts(): Promise<AdminAuthorGift[]> {
 
 /* ----------------------------------------------------------------- patch -- */
 
-/** A change to one gift. Every field optional, at least one present. */
+/**
+ * **A replace of the whole notes field, with what its writer last saw** (Sol's
+ * C7). `base` is the `notesUpdatedAt` the writer read — an ISO string, or null
+ * for notes never written — and the replace applies only while it is still
+ * the stored one, so another tab, an agent or a lookup that wrote meanwhile is
+ * not silently overwritten.
+ */
+export interface NotesReplace {
+  /** Null clears the notes. */
+  readonly text: string | null;
+  readonly base: string | null;
+}
+
+/** A change to one gift. Every field optional, at least one present; `notes` and `appendNotes` never both. */
 export interface AuthorGiftPatch {
   /** Null clears it: a draft may have no address. */
   readonly email?: string | null;
@@ -573,13 +605,72 @@ export interface AuthorGiftPatch {
   readonly recipientNote?: string | null;
   readonly articles?: number;
   /** **Always allowed**, even after *Send* (R2-F7). */
-  readonly notes?: string | null;
+  readonly notes?: NotesReplace;
+  /**
+   * **A paragraph to add under the notes** — always allowed, needs no base:
+   * it is added under the gift's lock to whatever is there then, cut to fit as
+   * a lookup's block is. The way an agent adds to the notes.
+   */
+  readonly appendNotes?: string;
   /** True discards (keeping the row); false restores. */
   readonly discarded?: boolean;
 }
 
 /** The fields the voucher carries, frozen once *Send* has started. Everything but the notes. */
 const VOUCHER_BOUND: readonly (keyof AuthorGiftPatch)[] = ["email", "recipientName", "recipientNote", "articles", "discarded"];
+
+/** The keys a PATCH body may carry; `notesBase` rides with `notes`. */
+const PATCH_KEYS = ["email", "recipientName", "recipientNote", "articles", "notes", "notesBase", "appendNotes", "discarded"];
+
+/** A body's notes text, trimmed and bounded; empty is "". */
+function parseNotesText(value: unknown, field: string): Parsed<string> {
+  if (typeof value !== "string") return { ok: false, message: `${field} must be a string.` };
+  const text = value.trim();
+  if ([...text].length > AUTHOR_GIFT_NOTES_MAX) {
+    return { ok: false, message: `${field} must be at most ${AUTHOR_GIFT_NOTES_MAX} characters.` };
+  }
+  return { ok: true, value: text };
+}
+
+/** `notesBase`: null, or a timestamp, normalised to the ISO form the list sends. */
+function parseNotesBase(value: unknown): Parsed<string | null> {
+  if (value === null) return { ok: true, value: null };
+  const at = typeof value === "string" ? Date.parse(value) : Number.NaN;
+  if (!Number.isFinite(at)) {
+    return { ok: false, message: "notesBase must be the notesUpdatedAt you last read: a timestamp, or null." };
+  }
+  return { ok: true, value: new Date(at).toISOString() };
+}
+
+/** The notes half of a PATCH body: a replace with its base, an append, or neither — never both. */
+function parseNotesFields(
+  body: Record<string, unknown>,
+): Parsed<Pick<AuthorGiftPatch, "notes" | "appendNotes">> {
+  if ("notes" in body && "appendNotes" in body) {
+    return { ok: false, message: "Send notes (the whole new text) or appendNotes (a paragraph to add), not both." };
+  }
+  if ("appendNotes" in body) {
+    if ("notesBase" in body) return { ok: false, message: "notesBase goes only with notes." };
+    const text = parseNotesText(body.appendNotes, "appendNotes");
+    if (!text.ok) return text;
+    if (text.value === "") return { ok: false, message: "appendNotes must not be empty." };
+    return { ok: true, value: { appendNotes: text.value } };
+  }
+  if (!("notes" in body)) {
+    return "notesBase" in body ? { ok: false, message: "notesBase goes only with notes." } : { ok: true, value: {} };
+  }
+  if (!("notesBase" in body)) {
+    return {
+      ok: false,
+      message: "notes replaces the whole field, so it needs notesBase: the notesUpdatedAt you last read (null if never written).",
+    };
+  }
+  const text = body.notes === null ? ({ ok: true, value: "" } as const) : parseNotesText(body.notes, "notes");
+  if (!text.ok) return text;
+  const base = parseNotesBase(body.notesBase);
+  if (!base.ok) return base;
+  return { ok: true, value: { notes: { text: text.value === "" ? null : text.value, base: base.value } } };
+}
 
 /**
  * **What `PATCH /api/admin/author-gifts/:id` may carry, checked strictly** —
@@ -589,7 +680,7 @@ const VOUCHER_BOUND: readonly (keyof AuthorGiftPatch)[] = ["email", "recipientNa
 export function parseAuthorGiftPatch(body: unknown): Parsed<AuthorGiftPatch> {
   if (!isPlainObject(body)) return { ok: false, message: "Expected a JSON object." };
   const keys = Object.keys(body);
-  const unknown = keys.filter((key) => !["email", "recipientName", "recipientNote", "articles", "notes", "discarded"].includes(key));
+  const unknown = keys.filter((key) => !PATCH_KEYS.includes(key));
   if (unknown.length > 0) return { ok: false, message: `Unexpected field: ${unknown.join(", ")}.` };
   if (keys.length === 0) return { ok: false, message: "Nothing to change." };
   const patch: { -readonly [K in keyof AuthorGiftPatch]: AuthorGiftPatch[K] } = {};
@@ -616,14 +707,9 @@ export function parseAuthorGiftPatch(body: unknown): Parsed<AuthorGiftPatch> {
     if (!articles.ok) return articles;
     patch.articles = articles.value;
   }
-  if ("notes" in body) {
-    if (body.notes !== null && typeof body.notes !== "string") return { ok: false, message: "notes must be a string or null." };
-    const notes = body.notes === null ? "" : body.notes.trim();
-    if ([...notes].length > AUTHOR_GIFT_NOTES_MAX) {
-      return { ok: false, message: `notes must be at most ${AUTHOR_GIFT_NOTES_MAX} characters.` };
-    }
-    patch.notes = notes === "" ? null : notes;
-  }
+  const notes = parseNotesFields(body);
+  if (!notes.ok) return notes;
+  Object.assign(patch, notes.value);
   if ("discarded" in body) {
     if (typeof body.discarded !== "boolean") return { ok: false, message: "discarded must be true or false." };
     patch.discarded = body.discarded;
@@ -632,59 +718,97 @@ export function parseAuthorGiftPatch(body: unknown): Parsed<AuthorGiftPatch> {
 }
 
 export type PatchAnswer =
-  | { readonly kind: "updated" }
+  /** `notesUpdatedAt` after the write, so a writer can replace again without re-reading. */
+  | { readonly kind: "updated"; readonly notesUpdatedAt: string | null }
   | { readonly kind: "not-found" }
   /** *Send* has started, and the patch touched a field the voucher carries. */
-  | { readonly kind: "frozen" };
+  | { readonly kind: "frozen" }
+  /** A replace whose `base` is no longer the stored stamp: somebody wrote the notes since. Nothing written. */
+  | { readonly kind: "notes-moved" }
+  /** An append with no room left under `AUTHOR_GIFT_NOTES_MAX`. Nothing written. */
+  | { readonly kind: "notes-full" };
+
+/** The columns a checked patch writes; `appended` is the notes after an append, computed under the lock. */
+function patchSet(patch: AuthorGiftPatch, appended: string | undefined) {
+  const replaced = patch.notes?.text;
+  return {
+    ...(patch.email === undefined
+      ? {}
+      : {
+          email: patch.email,
+          emailLookupId: sql`case when ${authorGifts.email} is distinct from ${patch.email} then null else ${authorGifts.emailLookupId} end`,
+        }),
+    ...(patch.recipientName === undefined
+      ? {}
+      : {
+          recipientName: patch.recipientName,
+          nameLookupId: sql`case when ${authorGifts.recipientName} is distinct from ${patch.recipientName} then null else ${authorGifts.nameLookupId} end`,
+        }),
+    ...(patch.recipientNote === undefined ? {} : { recipientNote: patch.recipientNote }),
+    ...(patch.articles === undefined ? {} : { articles: patch.articles }),
+    ...(replaced === undefined
+      ? {}
+      : {
+          notes: replaced,
+          notesUpdatedAt: sql`case when ${authorGifts.notes} is distinct from ${replaced} then ${NEXT_NOTES_STAMP} else ${authorGifts.notesUpdatedAt} end`,
+        }),
+    ...(appended === undefined ? {} : { notes: appended, notesUpdatedAt: NEXT_NOTES_STAMP }),
+    /* Discarding an already discarded gift keeps its first date. */
+    ...(patch.discarded === undefined
+      ? {}
+      : { discardedAt: patch.discarded ? sql`coalesce(${authorGifts.discardedAt}, now())` : null }),
+  };
+}
 
 /**
- * **Change one gift, in one conditional `UPDATE`.** A patch that touches any
- * field the voucher carries applies only `where send_started_at is null`, so
- * it cannot interleave with *Send*'s freeze (Sol's F1); a notes-only patch
- * applies to any gift (R2-F7).
+ * **Change one gift, under its row lock.** One short transaction: lock the
+ * gift, then refuse —
+ *
+ * - `frozen` if the patch touches a field the voucher carries and *Send* has
+ *   started (Sol's F1: *Send*'s freezing `UPDATE` waits on this lock, so an
+ *   edit and a freeze cannot interleave); a notes-only patch applies to any
+ *   gift (R2-F7);
+ * - `notes-moved` if it replaces the notes from a stale base (Sol's C7);
+ * - `notes-full` if it appends and there is no room —
+ *
+ * and otherwise write it all. A refusal writes nothing, the draft fields
+ * included.
  *
  * **An edit to the address or the name clears its provenance** (Sol's F7) —
  * only a real edit, in SQL (`is distinct from`), so a replayed PATCH with the
- * same value keeps the lookup as the source. `notes_updated_at` is stamped the
- * same way.
+ * same value keeps the lookup as the source. A replace that changes nothing
+ * keeps `notes_updated_at`; every other notes write moves it
+ * (`NEXT_NOTES_STAMP`).
  */
 export async function patchAuthorGift(id: string, patch: AuthorGiftPatch): Promise<PatchAnswer> {
   const touchesVoucher = VOUCHER_BOUND.some((key) => patch[key] !== undefined);
-  const db = getDb();
-  const updated = await db
-    .update(authorGifts)
-    .set({
-      ...(patch.email === undefined
-        ? {}
-        : {
-            email: patch.email,
-            emailLookupId: sql`case when ${authorGifts.email} is distinct from ${patch.email} then null else ${authorGifts.emailLookupId} end`,
-          }),
-      ...(patch.recipientName === undefined
-        ? {}
-        : {
-            recipientName: patch.recipientName,
-            nameLookupId: sql`case when ${authorGifts.recipientName} is distinct from ${patch.recipientName} then null else ${authorGifts.nameLookupId} end`,
-          }),
-      ...(patch.recipientNote === undefined ? {} : { recipientNote: patch.recipientNote }),
-      ...(patch.articles === undefined ? {} : { articles: patch.articles }),
-      ...(patch.notes === undefined
-        ? {}
-        : {
-            notes: patch.notes,
-            notesUpdatedAt: sql`case when ${authorGifts.notes} is distinct from ${patch.notes} then now() else ${authorGifts.notesUpdatedAt} end`,
-          }),
-      /* Discarding an already discarded gift keeps its first date. */
-      ...(patch.discarded === undefined
-        ? {}
-        : { discardedAt: patch.discarded ? sql`coalesce(${authorGifts.discardedAt}, now())` : null }),
-      updatedAt: sql`now()`,
-    })
-    .where(touchesVoucher ? and(eq(authorGifts.id, id), isNull(authorGifts.sendStartedAt)) : eq(authorGifts.id, id))
-    .returning({ id: authorGifts.id });
-  if (updated.length === 1) return { kind: "updated" };
-  const [there] = await db.select({ id: authorGifts.id }).from(authorGifts).where(eq(authorGifts.id, id)).limit(1);
-  return there ? { kind: "frozen" } : { kind: "not-found" };
+  const base = patch.notes?.base ?? null;
+  return await getDb().transaction(async (tx): Promise<PatchAnswer> => {
+    const [gift] = await tx
+      .select({
+        sendStartedAt: authorGifts.sendStartedAt,
+        notes: authorGifts.notes,
+        /* Compared in SQL, against the stamp as the page saw it. */
+        baseMatches: sql<boolean>`${NOTES_STAMP_SEEN} is not distinct from ${base}::timestamptz`,
+      })
+      .from(authorGifts)
+      .where(eq(authorGifts.id, id))
+      .for("update")
+      .limit(1);
+    if (!gift) return { kind: "not-found" };
+    if (touchesVoucher && gift.sendStartedAt !== null) return { kind: "frozen" };
+    if (patch.notes !== undefined && !gift.baseMatches) return { kind: "notes-moved" };
+    const appended = patch.appendNotes === undefined ? undefined : appendNotes(gift.notes, patch.appendNotes);
+    if (appended === null) return { kind: "notes-full" };
+
+    const [row] = await tx
+      .update(authorGifts)
+      .set({ ...patchSet(patch, appended), updatedAt: sql`now()` })
+      .where(eq(authorGifts.id, id))
+      .returning({ notesUpdatedAt: authorGifts.notesUpdatedAt });
+    if (!row) throw new Error(`author gift ${id} was locked and then not updated`);
+    return { kind: "updated", notesUpdatedAt: row.notesUpdatedAt?.toISOString() ?? null };
+  }, READ_COMMITTED);
 }
 
 /* ------------------------------------------------------------------ send -- */

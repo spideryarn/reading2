@@ -804,27 +804,55 @@ export const TOOLS: readonly Tool[] = [
     title: "Change an author gift's notes or draft",
     description:
       "Admin only. Changes an author gift: its notes, and, while it is still a draft, its address, name, note to " +
-      "them and number of free articles. Sends nothing. `notes` **replaces the whole notes field**, so read the " +
-      "current notes with list_author_gifts and send them back with your addition. Once a gift has been sent only " +
-      "its notes can change. Changing the address or name marks it as typed by hand rather than found by a lookup.",
+      "them and number of free articles. Sends nothing. To add to the notes, use `append_notes`: it adds your text " +
+      "as a new paragraph under whatever is there, and cannot lose anybody else's words. Append rather than replace. " +
+      "`notes` **replaces the whole notes field**; use it only to correct or tidy them, and expect a refusal if " +
+      "somebody else wrote the notes since this tool read them (then call list_author_gifts and try again). Notes " +
+      "can change in every status, sent included; the other fields only on a draft. Changing the address or name " +
+      "marks it as typed by hand rather than found by a lookup.",
     input: z.strictObject({
       id: z.string().uuid().describe("The gift's id, from list_author_gifts."),
+      append_notes: z
+        .string()
+        .trim()
+        .min(1)
+        .max(AUTHOR_GIFT_NOTES_MAX)
+        .optional()
+        .describe(
+          "Preferred. A paragraph to add under the notes, e.g. what you found and where. Admins only ever see the " +
+            "notes; they are never emailed.",
+        ),
       notes: z
         .string()
         .max(AUTHOR_GIFT_NOTES_MAX)
         .nullable()
         .optional()
-        .describe("The whole new notes text (null or empty clears it). Admins only ever see it; it is never emailed."),
+        .describe("Replaces the whole notes text (null or empty clears it). Prefer append_notes. Not with append_notes."),
       email: z.string().min(3).nullable().optional().describe("The recipient's address, or null for none yet."),
       recipientName: z.string().max(80).nullable().optional().describe('Their name; the email opens "Dear <name>,".'),
       recipientNote: voucherNote.describe("A note to them, put in their email when the gift is sent."),
       articles: z.number().int().min(1).max(1000).optional().describe("How many free articles."),
     }),
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
-    handler: async (api, { id, ...change }) => {
-      const body = Object.fromEntries(Object.entries(change).filter(([, v]) => v !== undefined));
+    /* Not idempotent: two appends add two paragraphs. */
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    handler: async (api, { id, append_notes, ...change }) => {
+      if (append_notes !== undefined && change.notes !== undefined) {
+        throw new ApiError(400, "Give append_notes (preferred) or notes, not both.");
+      }
+      const body: Record<string, unknown> = Object.fromEntries(Object.entries(change).filter(([, v]) => v !== undefined));
+      if (append_notes !== undefined) body.appendNotes = append_notes;
       if (Object.keys(body).length === 0) throw new ApiError(400, "Nothing to change.");
-      return await api.call("PATCH", `/api/admin/author-gifts/${seg(id)}`, body);
+      /* A replace says which notes it is replacing (Sol's C7): the stamp as
+         listed now, so a write that lands between this read and the PATCH is
+         refused rather than overwritten. */
+      if (change.notes !== undefined) {
+        const { gifts } = await api.call<{ gifts: AdminAuthorGift[] }>("GET", "/api/admin/author-gifts");
+        const gift = gifts.find((g) => g.id === id);
+        if (!gift) throw new ApiError(404, "There is no such author gift.");
+        body.notesBase = gift.notesUpdatedAt;
+      }
+      const answer = await api.call<{ notesUpdatedAt?: unknown }>("PATCH", `/api/admin/author-gifts/${seg(id)}`, body);
+      return { ok: true, notesUpdatedAt: typeof answer.notesUpdatedAt === "string" ? answer.notesUpdatedAt : null };
     },
   }),
 ];

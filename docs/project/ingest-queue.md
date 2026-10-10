@@ -680,6 +680,26 @@ Three things, all in the browser, in
   later ending the list reports
   ([postmortem 261006c](../postmortems/261006c-a-provisional-job-snapshot-outlived-newer-evidence.md)).
 
+### For the author… (administrator only)
+
+Since 2026-10-10 an administrator sees one more control under the High-powered AI box, **For the
+author…**, which marks the article as one to offer its author
+([admin.md § Author gifts](admin.md#author-gifts-a-draft-voucher-for-an-articles-author)). Its
+confirmation carries the private link's rights tick-box; confirming ticks High-powered AI through
+that box's own controller and arms the intent, and *Undo* disarms it (High-powered AI stays ticked).
+The controller is [`src/web/add-author-gift.ts`](../../src/web/add-author-gift.ts), reader-bound
+like the sharing controllers.
+
+**Armed, the page's exit waits for one request.** Every way out to the article — the automatic one
+at completion and the reader's own *Open* — goes through one `leave` in `AddPage.tsx`: not armed,
+it navigates in the same tick exactly as before; armed, it sends `POST /api/admin/author-gifts`
+(answered in about a second, since the lookup runs after the response), single-flight, then checks
+the page, the completion, the source and the reader are all still the same before navigating. A
+refusal or a lost answer keeps the page, says so with a link to `/admin/vouchers`, and offers
+**Open the article anyway**. An open confirmation counts as unsettled, as the sharing one does.
+`tests/add-author-gift.test.ts` and `tests/add-page-author-gift.test.tsx`; the plan is
+[261009u](../plans/261009u-author-gift-draft-voucher-from-the-add-page.md).
+
 ### The three traps in a page whose whole job is one effect
 
 - **Queue it once.** `<StrictMode>` mounts, unmounts and mounts again in development, so a plain

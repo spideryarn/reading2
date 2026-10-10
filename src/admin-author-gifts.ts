@@ -101,6 +101,16 @@ export type AuthorGiftEnsured =
   | { readonly id: string; readonly status: AuthorGiftStatus; readonly created: true; readonly lookupId: string }
   | { readonly id: string; readonly status: AuthorGiftStatus; readonly created: false };
 
+/**
+ * What `PATCH /api/admin/author-gifts/:id` answers with its `200`: the notes'
+ * stamp after the write. A replace carries the stamp its writer last saw as
+ * `notesBase`, and a stale one is a `409` (Sol's C7).
+ */
+export interface AuthorGiftPatched {
+  readonly ok: true;
+  readonly notesUpdatedAt: string | null;
+}
+
 /** What `POST /api/admin/author-gifts/:id/lookups` answers with its `202`. */
 export interface AuthorLookupStarted {
   readonly lookupId: string;

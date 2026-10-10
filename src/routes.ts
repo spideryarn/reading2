@@ -366,7 +366,13 @@ import {
   sendQueuedVoucherEmail,
 } from "./store/pg-voucher-emails.js";
 import type { VoucherCreated, VoucherUpdated } from "./admin-vouchers.js";
-import type { AuthorGiftEnsured, AuthorGiftSent, AuthorLookupStarted } from "./admin-author-gifts.js";
+import {
+  AUTHOR_GIFT_NOTES_MAX,
+  type AuthorGiftEnsured,
+  type AuthorGiftPatched,
+  type AuthorGiftSent,
+  type AuthorLookupStarted,
+} from "./admin-author-gifts.js";
 import { startAuthorLookup } from "./author-lookup-start.js";
 import { parseAuthorGiftPatch, parseEnsureAuthorGift, pgAuthorGiftStore } from "./store/pg-author-gifts.js";
 import {
@@ -9854,8 +9860,14 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       if (answer.kind === "frozen") {
         throw httpError(409, "That gift is being sent or has been sent, so only its notes can change.");
       }
+      if (answer.kind === "notes-moved") {
+        throw httpError(409, "The notes changed since you opened them; reload and try again.");
+      }
+      if (answer.kind === "notes-full") {
+        throw httpError(409, `The notes are full (${AUTHOR_GIFT_NOTES_MAX.toLocaleString("en-GB")} characters), so nothing was added. Shorten them first.`);
+      }
       res.setHeader("Cache-Control", "private, no-store");
-      send(res, 200, { ok: true });
+      send(res, 200, { ok: true, notesUpdatedAt: answer.notesUpdatedAt } satisfies AuthorGiftPatched);
     },
   },
   {

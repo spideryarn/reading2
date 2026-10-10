@@ -50,6 +50,12 @@ export interface AuthorGiftPatchInput {
   readonly recipientNote?: string | null;
   readonly articles?: number;
   readonly notes?: string | null;
+  /**
+   * Required with `notes`: the gift's `notesUpdatedAt` as the editor opened.
+   * The server refuses the replace with a 409 if the notes were written since
+   * (Sol's C7).
+   */
+  readonly notesBase?: string | null;
   readonly discarded?: boolean;
 }
 
