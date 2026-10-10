@@ -349,6 +349,10 @@ describe("no Postgres store is selected without a guard", () => {
          `createPgSourceStore` unguarded behind that blind spot, 2026-09-03. */
       "createPgCheckpointStore",
       "createPgSourceStore",
+      /* An author gift's private link, made only for the gift's own article,
+         2026-10-10 (261010r): it writes the key, so it is guarded at its export
+         like the share-link store it lives beside. */
+      "ensureShareLinkForArticle",
       "pgAdminStore",
       "pgArticleReader",
       /* Author gifts, 2026-10-09 (261010c): addresses, notes, and through Send
