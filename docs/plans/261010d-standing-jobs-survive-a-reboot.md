@@ -157,6 +157,12 @@ GPT Sol's verdict on the first plan was REWORK. Each finding, and what became of
 - **box-health depends on the dashboard to deliver.** If the dashboard is down the alarm cannot
   reach the Overseer; box-health exits 1 every ten minutes and its journal says why. An off-box
   alarm (A27 in overseer-direction.md) is still open.
+- **The steer route refuses an Overseer started as `claude --resume Overseer`.** It verifies the pane
+  by the conversation uuid in Claude's argv, and a resume by name carries none: measured
+  2026-10-10 03:00, every `tell-overseer` answered `no-claude-in-pane`. While the Overseer runs that
+  way, box-health's messages are `not-sent`, retried each run, and its unit exits 1 — loud in the
+  journal, silent in the Overseer's pane. Starting the Overseer with `--resume <uuid>` (or
+  `--session-id`) restores the channel.
 - **An abandoned message is assumed delivered**: one that truly never arrived is lost, and the next
   change or the daily reminder says it again.
 
