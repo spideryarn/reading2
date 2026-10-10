@@ -1446,6 +1446,20 @@ export interface SkimDrops {
    * stops as it may — `maxCarried` in src/skim.ts. The stop is kept.
    */
   overCarried?: number;
+  /**
+   * `again` entries dropped so that a deeper pass walks more stops than the
+   * one before it — `growPasses` in src/skim.ts, since `skim/12`
+   * (docs/plans/261010g-skim-deeper-passes-always-longer-and-a-previous-stop-door.md).
+   * The stop is kept. Absent before, read it as 0.
+   */
+  shrinkCarried?: number;
+  /**
+   * Stops moved one pass deeper for the same reason, once no carried entry
+   * was left to drop — the least important own stop of the pass that was
+   * too long. The stop is kept, in its place in the route. Absent before
+   * `skim/12`, read it as 0.
+   */
+  shrinkMoved?: number;
   /** Stops past a cumulative cap, dropped in route order — never demoted. */
   overCap: number;
 }

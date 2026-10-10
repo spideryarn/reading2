@@ -1458,6 +1458,7 @@ describe("the door in the prose", () => {
   const door = (props: Partial<Parameters<typeof SkimDoor>[0]>) =>
     createElement(SkimDoor, {
       door: null,
+      onPrevious: null,
       onNext: () => {},
       onDeeper: () => {},
       onRoute: null,
@@ -1512,6 +1513,53 @@ describe("the door in the prose", () => {
   it("draws nothing with no door and no band to bring back", async () => {
     await act(async () => root.render(door({})));
     expect(host.innerHTML).toBe("");
+  });
+
+  /* spya-gm858u, Greg 2026-10-09: "perhaps add a previous step as well as a
+     next step in the article text … the previous step is on the left-hand side
+     and the next step is on the right, as it already is." */
+  it("offers the previous stop on the left, the way on on the right", async () => {
+    let prev = 0;
+    let next = 0;
+    await act(async () =>
+      root.render(
+        door({
+          door: { kind: "next", cue: null },
+          onPrevious: () => void prev++,
+          onNext: () => void next++,
+          onRoute: () => {},
+        }),
+      ),
+    );
+    const left = [...host.querySelectorAll<HTMLButtonElement>(".skim-door-back button")];
+    const right = [...host.querySelectorAll<HTMLButtonElement>(".skim-door-on button")];
+    expect(left.map((b) => b.textContent)).toEqual(["‹ Previous stop"]);
+    expect(right.map((b) => b.textContent)).toEqual(["All stops", "Next stop ›"]);
+    await act(async () => left[0]!.click());
+    expect([prev, next]).toEqual([1, 0]);
+  });
+
+  it("offers no previous stop on stop 1 of a pass", async () => {
+    await act(async () => root.render(door({ door: { kind: "next", cue: null }, onPrevious: null })));
+    expect(host.querySelector(".skim-door-back")).toBeNull();
+    expect([...host.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["Next stop ›"]);
+  });
+
+  it("keeps the previous stop at the end of a pass, beside More detail or alone at the deepest", async () => {
+    await act(async () =>
+      root.render(
+        door({ door: { kind: "end", pass: "Gist", count: 3, deeper: "More" }, onPrevious: () => {} }),
+      ),
+    );
+    expect([...host.querySelectorAll("button")].map((b) => b.textContent)).toEqual([
+      "‹ Previous stop",
+      "More detail ›",
+    ]);
+    await act(async () =>
+      root.render(door({ door: { kind: "end", pass: "Most", count: 3, deeper: null }, onPrevious: () => {} })),
+    );
+    expect([...host.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["‹ Previous stop"]);
+    expect(text(".skim-door-cue")).toBe("End of Most — 3 stops.");
   });
 });
 
@@ -1580,11 +1628,28 @@ describe("the step controls name their keys", () => {
 
   it("the door's Next stop names → too", async () => {
     await act(async () =>
-      root.render(createElement(SkimDoor, { door: { kind: "next", cue: null }, onNext: () => {}, onDeeper: () => {}, onRoute: null })),
+      root.render(createElement(SkimDoor, { door: { kind: "next", cue: null }, onPrevious: null, onNext: () => {}, onDeeper: () => {}, onRoute: null })),
     );
     await hover(host.querySelector("button")!);
     expect(tip()).toContain("While reading, press →");
     expect(tip()).toContain("On to the next stop along the route.");
+  });
+
+  it("the door's Previous stop names ←", async () => {
+    await act(async () =>
+      root.render(
+        createElement(SkimDoor, {
+          door: { kind: "next", cue: null },
+          onPrevious: () => {},
+          onNext: () => {},
+          onDeeper: () => {},
+          onRoute: null,
+        }),
+      ),
+    );
+    await hover(host.querySelector(".skim-door-back button")!);
+    expect(tip()).toContain("While reading, press ←");
+    expect(tip()).toContain("Back one stop along the route.");
   });
 
   /* 73 kept the head's own (i) in one group with the depth buttons. Since

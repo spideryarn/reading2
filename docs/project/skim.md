@@ -73,7 +73,8 @@ v1, for the article's owner only, and behind the experimental switch until later
   carries into it, with pips on each row saying which passes it is in (below).
 - **In the prose**: the current stop's quote is ringed and barred, brought into view on every
   step (centred since 2026-09-29, below), and followed by a **Next stop ›** door — *More detail ›*
-  at the end of a pass, and nothing at the end of the deepest, since 2026-09-29, below. On a narrow window the band steps aside when a row is
+  at the end of a pass, and nothing at the end of the deepest, since 2026-09-29, below — with
+  **‹ Previous stop** on its left from stop 2 on (since 2026-10-10, below). On a narrow window the band steps aside when a row is
   pressed, and the door carries the walk; the head's ‹ › and depth buttons keep the band up (since
   2026-10-03, below).
 - **Keys and address**: ← / → step the stops while the mode is open
@@ -332,7 +333,9 @@ Most. So:
   this change still arrives at its stop.
 - **The route and its prompt are unchanged.** The model still plans the passes as nesting — depth 2
   covering Gist and More — which is the allocation wanted either way; `visibleCounts` (src/skim.ts) still
-  counts that way. The prompt's description was left alone because 260929b measured the "the reader
+  counts that way. (That left the growth rule judging the nested passes rather than the walked
+  ones, until `skim/12` — *A deeper pass is never shorter*, below.) The prompt's description was
+  left alone because 260929b measured the "the reader
   has read the earlier pass" framing with no gain. Longer snippets at deeper passes, Summary or
   Glossary stops at the coarser ones, and variety within Most are deferred in the plan.
 
@@ -575,6 +578,55 @@ when each pass walked only its own. So:
 
 Not built, and named in the plan: a mark for "I have actually read this", from reading time — the
 other thing he offered — and the pips on the prose's door.
+
+**A deeper pass is never shorter, and Most is longer than More, as walked** — Greg, 2026-10-09,
+reports spya-nbmce7 and spya-q2w7yt, plan
+[261010g](../plans/261010g-skim-deeper-passes-always-longer-and-a-previous-stop-door.md):
+
+> Levels of the skim mode were supposed to get more and more detailed, and yet in this case it
+> seems as though the most detailed skim submode has fewer steps than the middle one.
+>
+> — Greg, 2026-10-09
+
+His route walked Gist 3, More 5, Most 4. The growth rule (Sol F2) still judged the cumulative
+counts — stops at depth ≤ 1, ≤ 2, ≤ 3 — which were what the reader saw while the passes nested;
+after *Each pass walks only its own stops* and *A stop may be walked at more than one depth*, above,
+it was guarding a walk nobody took, and the cumulative targets in the prompt asked for More = Gist
+on most short articles. 8 of the 29 routes in production did not grow as walked. Postmortem:
+[261010a](../postmortems/261010a-a-check-guarding-a-walk-that-had-changed-under-it.md). So, since
+`skim/12`:
+
+- **The rule is judged on the passes as walked** (`passSizes`, src/skim.ts): with eight or more
+  offered quotes, all three passes, **Gist ≤ More < Most**; with fewer, no offered pass shorter than
+  the one before. Which stops a pass walks is now one module both sides import,
+  [`skim-passes.ts`](../../src/skim-passes.ts) — `walkedIn`, `passCount`, `offeredDepths`.
+  `visibleCounts` stays cumulative, for the caps.
+- **The targets are each pass's own stops** (`targetsFor`), and section 2 of the prompt says a
+  deeper pass is never shorter, counting what is carried in.
+- **A route that still does not grow is repaired, not shown short** (`growPasses`, rule 9): first a
+  carried entry into the too-long pass is dropped, latest first; then its lowest-priority own stop
+  moves one pass deeper, keeping its place in the route. No pass is emptied; whatever cannot be
+  fixed fails the job as before. Counted in `dropped.shrinkCarried` / `shrinkMoved`. Measured, it
+  almost never has to move a stop
+  ([261010a](../investigations/261010a-skim-per-pass-targets-and-walked-growth.md)).
+- **More may equal Gist.** Strictly longer was built and measured first: on articles with 11–13
+  quotes it forced a two-stop Gist, which covered 4–5 fewer of 49 Ideas. Put to Greg as
+  [q-vzd2xt](../user-feedback/questions/q-vzd2xt.md).
+- **Routes planned before `skim/12` keep their walk** until planned again; the version stales them
+  silently, as every Skim version has.
+
+**‹ Previous stop in the prose** — Greg, 2026-10-09, report spya-gm858u, the same plan:
+
+> In skim mode, perhaps add a previous step as well as a next step in the article text. Perhaps the
+> previous step is on the left-hand side and the next step is on the right, as it already is.
+>
+> — Greg, 2026-10-09
+
+The door after the current stop's block has a back group on the left (`.skim-door-back`) and the way
+on on the right (`.skim-door-on`: *All stops*, *Next stop ›*, *More detail ›*). *‹ Previous stop*
+is `step(-1)`, what ← does, with the same card. It is **not drawn on stop 1 of a pass**
+(`SkimControl.hasPrevious`, by index in the pass), where ← goes to stop 1's passage again rather
+than back — a different job from what the button's name promises.
 
 ### What we tried for v2
 

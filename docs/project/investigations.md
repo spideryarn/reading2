@@ -37,6 +37,9 @@ measured with scripted readers and a blind judge:
   set the scene its quote assumes, with and without the quote's paragraph: a large gain on the
   question asked, and the two regressions (giving the finding away, misstating the context) that a
   second and third judge question caught.
+- [261010a](../investigations/261010a-skim-per-pass-targets-and-walked-growth.md) — Skim's
+  per-pass targets and the walked-growth repair (`skim/12` against `skim/11`): the old prompt failed
+  to grow in half its runs, the new one in none, at the cost of a smaller Gist on short articles.
 - [261009b](../investigations/261009b-skim-cue-optional-eval.md) — Skim's cue made optional
   (`skim/11`): two thirds of the cues dropped, both judges calling most old ones echoes, three
   wordings in one day, and the ship rule that was not met and was overridden, with the reasons.

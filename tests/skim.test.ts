@@ -35,7 +35,9 @@ import {
   buildSkim,
   collapseQuotes,
   emptyDrops,
+  growPasses,
   growthFailure,
+  passSizes,
   ideaLabelOf,
   inAbstract,
   isAbstractTitle,
@@ -587,7 +589,7 @@ describe("validating the model's route", () => {
         { stops: [carried(0, 1, [2, 3]), carried(1, 1, [2, 3]), stop(2, 3)] },
         buildOpts(quotesOf(10)),
       ),
-    ).toThrow(/each depth has to add stops/);
+    ).toThrow(/the route needs all three passes/);
   });
 
   it("writes `again` into the artefact, beside counts that are still of first-placed stops", () => {
@@ -645,12 +647,175 @@ describe("validating the model's route", () => {
 
 /* ------------------------------------------------------------ the growth -- */
 
+describe("the passes must grow as WALKED (spya-nbmce7)", () => {
+  const carried = (n: number, depth: unknown, again: unknown) => ({ ...stop(n, depth), again });
+  /** A quote with an importance, so the repair's "least important" is pinned. */
+  const weighted = (n: number, importance: number): Quote => ({ ...quote(n), importance });
+
+  it("counts each pass as the reader walks it: own stops plus the ones carried in", () => {
+    const stops = validateRoute(
+      [carried(0, 1, [2]), stop(1, 1), stop(2, 2), stop(3, 3), stop(4, 3)],
+      quotesOf(10),
+      emptyDrops(),
+    );
+    expect(passSizes(stops)).toEqual([2, 2, 2]);
+    /* A pass no stop is first placed at is not offered, so it walks nothing. */
+    expect(passSizes(validateRoute([stop(0, 1), stop(1, 3)], quotesOf(5), emptyDrops()))).toEqual([1, 0, 1]);
+  });
+
+  it("repairs the reported route: Gist 3, More 5, Most 4 comes out growing", () => {
+    /* arxiv-1706-03762's skim/10 route: own 3, 4, 4 over 11 quotes, and one
+       Gist stop carried into More. Cumulative 3 < 7 < 11 passed; the walk did not. */
+    const quotes = quotesOf(11).map((_, i) => weighted(i, i === 4 ? 0.1 : i === 1 ? 0.2 : 0.5));
+    const raw = [
+      carried(0, 1, [2]),
+      stop(1, 1),
+      stop(2, 1),
+      stop(3, 2),
+      stop(4, 2),
+      stop(5, 2),
+      stop(6, 2),
+      stop(7, 3),
+      stop(8, 3),
+      stop(9, 3),
+      stop(10, 3),
+    ];
+    const kept = validateRoute(raw, quotes, emptyDrops());
+    expect(passSizes(kept)).toEqual([3, 5, 4]);
+    expect(growthFailure(passSizes(kept), 11)).not.toBeNull();
+
+    const d = emptyDrops();
+    const grown = growPasses(kept, quotes, d);
+    expect(growthFailure(passSizes(grown), 11)).toBeNull();
+    /* Nothing is lost, and the route order is the model's. */
+    expect(grown.map((s) => s.quoteId)).toEqual(kept.map((s) => s.quoteId));
+    /* The carry went first; then the least important More stop (quote 4)
+       went one pass deeper. Gist keeps its three: More may equal it (q-vzd2xt). */
+    expect(grown.find((s) => s.quoteId === qid(0))!.again).toBeUndefined();
+    expect(grown.find((s) => s.quoteId === qid(4))!.depth).toBe(3);
+    expect(grown.find((s) => s.quoteId === qid(1))!.depth).toBe(1);
+    expect(d.shrinkCarried).toBe(1);
+    expect(d.shrinkMoved).toBe(1);
+    expect(passSizes(grown)).toEqual([3, 3, 5]);
+  });
+
+  it("lets More equal Gist, and repairs a More shorter than Gist, moving the latest on a tie", () => {
+    /* Eight quotes at the old targets read as passes: 2, 2, 4 — allowed. */
+    const even = validateRoute(
+      [stop(0, 1), stop(1, 2), stop(2, 1), stop(3, 2), stop(4, 3), stop(5, 3), stop(6, 3), stop(7, 3)],
+      quotesOf(8),
+      emptyDrops(),
+    );
+    expect(growPasses(even, quotesOf(8), emptyDrops())).toEqual(even);
+    expect(growthFailure(passSizes(even), 8)).toBeNull();
+
+    const short = validateRoute(
+      [stop(0, 1), stop(1, 1), stop(2, 1), stop(3, 2), stop(4, 3), stop(5, 3), stop(6, 3), stop(7, 3)],
+      quotesOf(8),
+      emptyDrops(),
+    );
+    expect(passSizes(short)).toEqual([3, 1, 4]);
+    const d = emptyDrops();
+    const grown = growPasses(short, quotesOf(8), d);
+    expect(passSizes(grown)).toEqual([2, 2, 4]);
+    expect(grown.find((s) => s.quoteId === qid(2))!.depth).toBe(2);
+    expect(d.shrinkMoved).toBe(1);
+  });
+
+  it("keeps a moved stop's carry into a pass deeper than its new one", () => {
+    const quotes = quotesOf(8).map((_, i) => weighted(i, i === 1 ? 0.1 : 0.5));
+    const kept = validateRoute(
+      [carried(0, 1, [3]), carried(1, 1, [3]), stop(2, 1), stop(3, 2), stop(4, 3), stop(5, 3), stop(6, 3), stop(7, 3)],
+      quotes,
+      emptyDrops(),
+    );
+    expect(passSizes(kept)).toEqual([3, 1, 6]);
+    const grown = growPasses(kept, quotes, emptyDrops());
+    expect(grown.find((s) => s.quoteId === qid(1))).toMatchObject({ depth: 2, again: [3] });
+    expect(passSizes(grown)).toEqual([2, 2, 6]);
+  });
+
+  it("leaves a growing route exactly as it was, and never empties a pass to make one grow", () => {
+    const kept = validateRoute(goodRoute, quotesOf(10), emptyDrops());
+    const d = emptyDrops();
+    expect(growPasses(kept, quotesOf(10), d)).toEqual(kept);
+    expect(d.shrinkCarried ?? 0).toBe(0);
+    expect(d.shrinkMoved ?? 0).toBe(0);
+
+    /* One stop at each depth over nine quotes cannot give Most more than More
+       without emptying More: the repair stops, and the job fails as before. */
+    const flat = validateRoute([stop(0, 1), stop(1, 2), stop(2, 3)], quotesOf(9), emptyDrops());
+    const left = growPasses(flat, quotesOf(9), emptyDrops());
+    expect(passSizes(left)).toEqual([1, 1, 1]);
+    expect(growthFailure(passSizes(left), 9)).not.toBeNull();
+    expect(() => buildSkim({ stops: [stop(0, 1), stop(1, 2), stop(2, 3)] }, buildOpts(quotesOf(9)))).toThrow(
+      /Most has to be longer/,
+    );
+  });
+
+  it("with fewer than eight quotes, only stops a pass being shorter than the one before", () => {
+    const kept = validateRoute(
+      [stop(0, 1), stop(1, 2), stop(2, 2), carried(3, 1, [2]), stop(4, 3)],
+      quotesOf(6),
+      emptyDrops(),
+    );
+    expect(passSizes(kept)).toEqual([2, 3, 1]);
+    const grown = growPasses(kept, quotesOf(6), emptyDrops());
+    const sizes = passSizes(grown);
+    expect(growthFailure(sizes, 6)).toBeNull();
+    expect(sizes[1]).toBeLessThanOrEqual(sizes[2]);
+  });
+
+  it("across an absent pass, moves a stop to the next offered one, never into the gap (Sol F2)", () => {
+    /* Five quotes, Gist and Most only: moving a Gist stop to depth 2 would
+       offer a More of one, so it goes to Most. */
+    const kept = validateRoute([stop(0, 1), stop(1, 1), stop(2, 1), stop(3, 3)], quotesOf(5), emptyDrops());
+    expect(passSizes(kept)).toEqual([3, 0, 1]);
+    const grown = growPasses(kept, quotesOf(5), emptyDrops());
+    expect(passSizes(grown)).toEqual([2, 0, 2]);
+    expect(grown.find((s) => s.quoteId === qid(2))!.depth).toBe(3);
+  });
+
+  it("moves a quote with no priority before any with one, even a priority of 0 (Sol F3)", () => {
+    const quotes = quotesOf(8).map((q, i) =>
+      i === 0 ? { ...q, importance: 0 } : i === 1 ? { id: q.id, blockId: q.blockId, text: q.text } : q,
+    );
+    /* Gist 3, More 1: one Gist stop has to go. */
+    const kept = validateRoute(
+      [stop(1, 1), stop(0, 1), stop(2, 1), stop(3, 2), stop(4, 3), stop(5, 3), stop(6, 3), stop(7, 3)],
+      quotes,
+      emptyDrops(),
+    );
+    const grown = growPasses(kept, quotes, emptyDrops());
+    expect(grown.find((s) => s.quoteId === qid(1))!.depth).toBe(2);
+    expect(grown.find((s) => s.quoteId === qid(0))!.depth).toBe(1);
+  });
+
+  it("builds the reported route rather than failing it, and records what it moved", () => {
+    const raw = [
+      carried(0, 1, [2]),
+      stop(1, 1),
+      stop(2, 1),
+      ...[3, 4, 5, 6].map((n) => stop(n, 2)),
+      ...[7, 8, 9, 10].map((n) => stop(n, 3)),
+    ];
+    const skim = buildSkim({ stops: raw }, buildOpts(quotesOf(11)));
+    const [g, m, n] = passSizes(skim.stops);
+    expect(g <= m && m < n).toBe(true);
+    expect(skim.dropped.shrinkMoved).toBeGreaterThan(0);
+  });
+});
+
 describe("the passes must grow (Sol F2)", () => {
-  it("with eight or more quotes, asks 1 ≤ c1 < c2 < c3", () => {
+  it("with eight or more quotes, asks 1 ≤ w1 ≤ w2 < w3, as walked", () => {
     expect(growthFailure([2, 5, 10], 10)).toBeNull();
     expect(growthFailure([0, 5, 10], 10)).toMatch(/0/);
-    expect(growthFailure([3, 3, 10], 10)).not.toBeNull();
+    /* More may equal Gist (q-vzd2xt) but not be shorter, and Most must beat More. */
+    expect(growthFailure([3, 3, 10], 10)).toBeNull();
+    expect(growthFailure([3, 2, 10], 10)).not.toBeNull();
     expect(growthFailure([2, 5, 5], 8)).not.toBeNull();
+    expect(growthFailure([3, 5, 4], 11)).not.toBeNull();
+    expect(growthFailure([3, 0, 4], 11)).not.toBeNull();
   });
 
   it("with fewer, allows a shorter spiral: c1 ≥ 1 and never shrinking", () => {
@@ -662,7 +827,7 @@ describe("the passes must grow (Sol F2)", () => {
   it("fails the job, with the counts in the message, when the route does not grow", () => {
     const flat = goodRoute.map((s) => ({ ...s, depth: 1 }));
     /* Seven at depth 1 (the cap) and nothing deeper. */
-    expect(() => buildSkim({ stops: flat }, buildOpts(quotesOf(10)))).toThrow(/7.*7.*7/s);
+    expect(() => buildSkim({ stops: flat }, buildOpts(quotesOf(10)))).toThrow(/7 stops in Gist, 0 in More and 0 in Most/);
   });
 
   it("writes the counts and the route when it does", () => {
@@ -696,9 +861,26 @@ describe("the empty outcomes", () => {
 
 describe("what the prompt is given", () => {
   it("sizes the targets from the number of quotes", () => {
-    expect(targetsFor(20)).toEqual({ gist: 4, more: 10, most: 20 });
-    expect(targetsFor(100)).toEqual({ gist: 5, more: 12, most: 36 });
-    expect(targetsFor(3)).toEqual({ gist: 1, more: 2, most: 3 });
+    /* Each pass's OWN count (spya-nbmce7): the reader walks a pass on its own. */
+    expect(targetsFor(11)).toEqual({ gist: 3, more: 3, most: 5 });
+    expect(targetsFor(20)).toEqual({ gist: 4, more: 6, most: 10 });
+    expect(targetsFor(30)).toEqual({ gist: 5, more: 10, most: 15 });
+    expect(targetsFor(100)).toEqual({ gist: 5, more: 10, most: 21 });
+    expect(targetsFor(3)).toEqual({ gist: 1, more: 1, most: 1 });
+  });
+
+  it("asks for passes that never shrink and a Most longer than More, within the caps", () => {
+    for (let q = 8; q <= MAX_QUOTES_TOTAL; q++) {
+      const t = targetsFor(q);
+      expect(t.gist, `q=${q}`).toBeGreaterThanOrEqual(1);
+      /* More may equal Gist (q-vzd2xt); Most is always longer than More. */
+      expect(t.gist, `q=${q}`).toBeLessThanOrEqual(t.more);
+      expect(t.more, `q=${q}`).toBeLessThan(t.most);
+      expect(t.gist + t.more + t.most, `q=${q}`).toBeLessThanOrEqual(q);
+      expect(t.gist, `q=${q}`).toBeLessThanOrEqual(DEPTH_CAPS[0]);
+      expect(t.gist + t.more, `q=${q}`).toBeLessThanOrEqual(DEPTH_CAPS[1]);
+      expect(t.gist + t.more + t.most, `q=${q}`).toBeLessThanOrEqual(DEPTH_CAPS[2]);
+    }
   });
 
   it("builds each quote's section path from the tree, by block index", () => {
@@ -737,7 +919,7 @@ describe("what the prompt is given", () => {
   });
 
   it("asks for a context-free cue, not a role, under a new prompt version (Sol F18, F25)", () => {
-    expect(PROMPT_VERSION).toBe("skim/11");
+    expect(PROMPT_VERSION).toBe("skim/12");
     expect(MAX_CUE_CHARS).toBe(200);
     expect(SKIM_SYSTEM).toContain(`"cue": "..."`);
     expect(SKIM_SYSTEM).not.toContain(`"role"`);
@@ -782,13 +964,14 @@ describe("what the prompt is given", () => {
     expect(SKIM_SYSTEM).not.toMatch(/The passes nest/);
     expect(SKIM_SYSTEM).toMatch(/neither required nor forbidden/);
     expect(SKIM_SYSTEM).toMatch(/Do not carry everything/);
-    expect(SKIM_SYSTEM).toMatch(/Each pass must ADD stops/);
-    expect(SKIM_SYSTEM).toMatch(/When two adjacent targets are the same[\s\S]*that pass may be absent/);
-    /* The targets are still cumulative counts of first-placed stops, and the
-       user message says a carried stop is not counted in them. */
+    /* skim/12: each pass longer than the one before, as walked (spya-nbmce7). */
+    expect(SKIM_SYSTEM).toMatch(/never to\s+be SHORTER than the one before/);
+    expect(SKIM_SYSTEM).toMatch(/When a target is 0[\s\S]*that pass may be absent/);
+    /* The targets are each pass's own stops since skim/12, and the user
+       message says a carried stop is not counted in them. */
     const prompt = renderPrompt({ input: inputOf(quotesOf(10)), profile: null });
-    expect(prompt).toContain("Targets: about 2 at depth 1; about 5 at depth 1 or 2; about 10 in all.");
-    expect(prompt).toMatch(/does not count again/);
+    expect(prompt).toContain("Targets, each pass's own stops: about 2 at depth 1; about 3 at depth 2; about 5 at depth 3.");
+    expect(prompt).toMatch(/is not counted in that pass's target/);
   });
 
   it("marks quote text as untrusted data and prevents it from closing its prompt fence", () => {

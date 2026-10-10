@@ -1204,11 +1204,17 @@ function TermChip({
  */
 export function SkimDoor({
   door,
+  onPrevious,
   onNext,
   onDeeper,
   onRoute,
 }: {
   door: DoorView | null;
+  /**
+   * *‹ Previous stop*, on the left — `null` on stop 1 of a pass, where there
+   * is none (spya-gm858u, plan 261010g). The same step ← takes.
+   */
+  onPrevious: (() => void) | null;
   onNext(): void;
   onDeeper(): void;
   /** Bring the band back — offered only while it has stepped aside. */
@@ -1218,34 +1224,53 @@ export function SkimDoor({
   return (
     <div className="skim-door">
       <div className="skim-door-row">
-        {onRoute && (
-          <button type="button" className="skim-door-btn quiet" onClick={onRoute}>
-            <Route size={14} />
-            All stops
-          </button>
+        {/* Back on the left, the way on on the right — Greg: "the previous
+            step is on the left-hand side and the next step is on the right,
+            as it already is." */}
+        {onPrevious && (
+          <div className="skim-door-back">
+            <StepTip
+              head="Previous stop"
+              what="Back one stop along the route."
+              keyName="←"
+              placement="top"
+            >
+              <button type="button" className="skim-door-btn" onClick={onPrevious}>
+                ‹ Previous stop
+              </button>
+            </StepTip>
+          </div>
         )}
-        {door?.kind === "next" && (
-          <StepTip
-            head="Next stop"
-            what="On to the next stop along the route."
-            keyName="→"
-            placement="top"
-          >
-            <button type="button" className="skim-door-btn" onClick={onNext}>
-              Next stop ›
+        <div className="skim-door-on">
+          {onRoute && (
+            <button type="button" className="skim-door-btn quiet" onClick={onRoute}>
+              <Route size={14} />
+              All stops
             </button>
-          </StepTip>
-        )}
-        {door?.kind === "end" && door.deeper && (
-          <button
-            type="button"
-            className="skim-door-btn"
-            title={`Go on to ${door.deeper}: the next pass, in more detail`}
-            onClick={onDeeper}
-          >
-            More detail ›
-          </button>
-        )}
+          )}
+          {door?.kind === "next" && (
+            <StepTip
+              head="Next stop"
+              what="On to the next stop along the route."
+              keyName="→"
+              placement="top"
+            >
+              <button type="button" className="skim-door-btn" onClick={onNext}>
+                Next stop ›
+              </button>
+            </StepTip>
+          )}
+          {door?.kind === "end" && door.deeper && (
+            <button
+              type="button"
+              className="skim-door-btn"
+              title={`Go on to ${door.deeper}: the next pass, in more detail`}
+              onClick={onDeeper}
+            >
+              More detail ›
+            </button>
+          )}
+        </div>
       </div>
       {/* Where the door leads: the next stop's cue, small and muted — or, at
           the end of a pass, which pass has ended. */}

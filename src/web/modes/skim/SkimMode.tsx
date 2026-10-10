@@ -78,6 +78,12 @@ export interface SkimControl {
   /** What the door after it offers — `DoorView`. */
   door: DoorView | null;
   /**
+   * Whether the door offers *‹ Previous stop*: the current stop is not the
+   * first of its pass (spya-gm858u, plan 261010g). On stop 1, ← goes to stop
+   * 1's passage again, which is a different job, so the door draws nothing.
+   */
+  hasPrevious: boolean;
+  /**
    * ← / →. `false` at the end of the pass, which does not wrap. ← on the first
    * stop goes to the first stop's block again (Greg, SPIDERYARN-READING2-4K).
    */
@@ -581,6 +587,9 @@ function useSkimMode({
   const passLabel = depth === null ? "" : DEPTH_LABEL[depth];
   const deeperLabel = door?.kind === "end" && door.deeper ? DEPTH_LABEL[door.deeper.depth] : null;
   const passSize = route.length;
+  /* By index in the pass, not from `step(-1)`, which answers `true` on stop 1
+     too (it goes to stop 1's passage again) — Sol, plan review F7. */
+  const hasPrevious = current !== null && route.findIndex((s) => s.quoteId === current.quoteId) > 0;
   const doorView = useMemo<DoorView | null>(
     () =>
       doorKind === null
@@ -658,11 +667,12 @@ function useSkimMode({
         : {
             blockId: stopBlock,
             door: doorView,
+            hasPrevious,
             step: stableStep,
             advance: stableAdvance,
             deeper: stableDeeper,
           },
-    [current, stopBlock, doorView, stableStep, stableAdvance, stableDeeper],
+    [current, stopBlock, doorView, hasPrevious, stableStep, stableAdvance, stableDeeper],
   );
   useLayoutEffect(() => {
     onControl(control);
