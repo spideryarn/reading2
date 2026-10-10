@@ -218,7 +218,7 @@ eight taken; where they contradict the sections above, this section wins.
 
 ## What landed
 
-- **Stage 1** (`76424a883`): `feedback_addenda` (migration `drizzle/20261010190341_feedback_addenda.sql`),
+- **Stage 1** (`76424a883`): `feedback_addenda` (migration `drizzle/20261010235243_feedback_addenda.sql`, restamped after a merge put `20261010221230_command_suggestion_dismissals` ahead of it),
   `submitAddendum`, `POST /api/admin/feedback/addenda`, `addenda` on the admin Earlier list, and the
   scripts. One deviation: the store looks for an existing row twice, before and after taking the
   parent's lock, so four concurrent copies of one retry are one created and three duplicates rather

@@ -50,13 +50,15 @@ export interface Starter extends GiftStarter {
  *   else's, or deleted.
  * - `unpublished`: nothing to read yet — still being added, or a paper with
  *   only its title and abstract (`minimal`), which a private link refuses too.
- * - `link-off`: private, with no private link.
+ * - `link-off`: private, with no private link. Carries the article's id, so a
+ *   caller that will make the link later can check it is still the same
+ *   article (an author gift drafted by an agent, plan 261010r, Sol's F2).
  */
 export type StarterResolution =
   | { readonly kind: "ready"; readonly starter: Starter }
   | { readonly kind: "absent" }
   | { readonly kind: "unpublished" }
-  | { readonly kind: "link-off" };
+  | { readonly kind: "link-off"; readonly articleId: string };
 
 /** The `status` the owner's reads give a slug that is not theirs, or not there. */
 function isAbsence(err: unknown): boolean {
@@ -92,7 +94,7 @@ export async function resolveStarter(slug: string): Promise<StarterResolution> {
        stranger, who will see the author's title on the page it opens. */
     const { title } = await pgArticleReader.loadArticleIdentity(slug);
     const url = await addressOf(slug, row.visibility === "public");
-    if (url === null) return { kind: "link-off" };
+    if (url === null) return { kind: "link-off", articleId: row.id };
     return { kind: "ready", starter: { articleId: row.id, slug, title, url } };
   } catch (err) {
     if (isAbsence(err)) return { kind: "absent" };

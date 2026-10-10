@@ -45,7 +45,7 @@ import { randomBytes } from "node:crypto";
 
 import { eq } from "drizzle-orm";
 
-import { getDb } from "../db/client.js";
+import { type Db, getDb } from "../db/client.js";
 import { articleShareLinkEvents, articles } from "../db/schema.js";
 import { NOT_READ_YET_SHARE } from "../messages.js";
 import { NotProcessed } from "../not-processed.js";
@@ -102,6 +102,77 @@ export function currentShareLinkQuery(
   return lock ? query.for("update").limit(1) : query.limit(1);
 }
 
+/** Write a fresh key and its rights-confirmation event while the article row is locked. */
+async function writeLink(
+  db: Pick<Db, "update" | "insert">,
+  row: { readonly id: string; readonly slug: string },
+): Promise<ShareLinkState> {
+  const key = mintShareKey();
+  const since = new Date();
+  /* One statement replaces any key that was on, so there is no moment when
+     both open the article and none when neither does. */
+  await db
+    .update(articles)
+    .set({ shareToken: key, shareTokenAt: since })
+    .where(eq(articles.id, row.id));
+
+  /* **Never the key.** What is recorded is who made a link and that they
+     confirmed the right to; the caller has already obtained that confirmation. */
+  await db.insert(articleShareLinkEvents).values({
+    articleId: row.id,
+    slug: row.slug,
+    actorOwnerId: currentOwnerId(),
+    event: "created",
+    rightsConfirmed: true,
+  });
+
+  return { on: true, key, since: since.toISOString() };
+}
+
+/** The result of making sure one particular owned article is linkable, without returning its key. */
+export type EnsureArticleShareLinkAnswer =
+  | { readonly kind: "ready" }
+  | { readonly kind: "absent" }
+  | { readonly kind: "unpublished" }
+  | { readonly kind: "superseded" };
+
+export interface EnsureArticleShareLinkOptions {
+  /** Final permission to write, checked under the article lock. */
+  readonly beforeCreate?: (tx: Pick<Db, "select">) => Promise<boolean>;
+}
+
+/**
+ * Make a private link only if `slug` still names `articleId`, checking both
+ * under the same row lock that writes the key. Author-gift Send uses this after
+ * the person confirms sharing rights. The id precondition closes the gap
+ * between resolving a gift's frozen slug and creating its link: a replacement
+ * article can never receive the gift's link. No key leaves this function.
+ */
+async function rawEnsureShareLinkForArticle(
+  slug: string,
+  articleId: string,
+  options: EnsureArticleShareLinkOptions = {},
+): Promise<EnsureArticleShareLinkAnswer> {
+  requireSlug(slug);
+  return getDb().transaction(async (tx) => {
+    const [row] = await currentShareLinkQuery(tx, slug, true);
+    if (!row || row.id !== articleId) return { kind: "absent" };
+    if (row.processing === "minimal") return { kind: "unpublished" };
+    /* The key still has one selecting statement in this file. These two extra
+       fields are read separately after that statement locked the same row. */
+    const [state] = await tx
+      .select({ visibility: articles.visibility, currentRevisionId: articles.currentRevisionId })
+      .from(articles)
+      .where(eq(articles.id, row.id))
+      .limit(1);
+    if (!state || state.currentRevisionId === null) return { kind: "unpublished" };
+    if (state.visibility === "public" || stateOf(row).on) return { kind: "ready" };
+    if (options.beforeCreate && !(await options.beforeCreate(tx))) return { kind: "superseded" };
+    await writeLink(tx, row);
+    return { kind: "ready" };
+  }, READ_COMMITTED);
+}
+
 /**
  * The state a row is in. Both columns or neither is what
  * `articles_share_token_pair` guarantees; a row that somehow had one reads as
@@ -137,26 +208,7 @@ const rawPgShareLinkStore: ShareLinkStore = {
          read but a title and an abstract, and the public reader needs a tree. */
       if (row.processing === "minimal") throw new NotProcessed(NOT_READ_YET_SHARE.message);
 
-      const key = mintShareKey();
-      const since = new Date();
-      /* One statement replaces any key that was on, so there is no moment when
-         both open the article and none when neither does. */
-      await tx
-        .update(articles)
-        .set({ shareToken: key, shareTokenAt: since })
-        .where(eq(articles.id, row.id));
-
-      /* **Never the key.** What is recorded is who made a link and that they
-         confirmed the right to; the route refuses a create that did not. */
-      await tx.insert(articleShareLinkEvents).values({
-        articleId: row.id,
-        slug: row.slug,
-        actorOwnerId: currentOwnerId(),
-        event: "created",
-        rightsConfirmed: true,
-      });
-
-      return { on: true, key, since: since.toISOString() };
+      return await writeLink(tx, row);
     }, READ_COMMITTED);
   },
 
@@ -189,3 +241,8 @@ const rawPgShareLinkStore: ShareLinkStore = {
 
 /** Guarded where it is built, not where it is selected — src/store/db-errors.ts. */
 export const pgShareLinkStore: ShareLinkStore = guardDbStore("share-link", rawPgShareLinkStore);
+
+/** Guard the author-gift-only writer at its own export, like the main store above. */
+export const ensureShareLinkForArticle = guardDbStore("share-link", {
+  ensureShareLinkForArticle: rawEnsureShareLinkForArticle,
+}).ensureShareLinkForArticle;

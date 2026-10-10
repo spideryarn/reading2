@@ -1,5 +1,5 @@
 {
-  "id": "0e8a842c-50cf-4dd5-9d37-b369a7786a02",
+  "id": "20f178bf-4771-421b-a1c1-7bd718b2f68d",
   "prevId": "8e9c4141-0784-457f-a4f4-459530ec10c2",
   "version": "7",
   "dialect": "postgresql",
@@ -4325,6 +4325,75 @@
       },
       "isRLSEnabled": false
     },
+    "spideryarn.command_suggestion_dismissals": {
+      "name": "command_suggestion_dismissals",
+      "schema": "spideryarn",
+      "columns": {
+        "article_id": {
+          "name": "article_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "read_from": {
+          "name": "read_from",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "dismissed": {
+          "name": "dismissed",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "dismissed_at": {
+          "name": "dismissed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "command_suggestion_dismissals_article_id_articles_id_fk": {
+          "name": "command_suggestion_dismissals_article_id_articles_id_fk",
+          "tableFrom": "command_suggestion_dismissals",
+          "tableTo": "articles",
+          "schemaTo": "spideryarn",
+          "columnsFrom": [
+            "article_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "command_suggestion_dismissals_read_from": {
+          "name": "command_suggestion_dismissals_read_from",
+          "value": "\"spideryarn\".\"command_suggestion_dismissals\".\"read_from\" ~ '^[0-9a-f]{16}$'"
+        },
+        "command_suggestion_dismissals_dismissed": {
+          "name": "command_suggestion_dismissals_dismissed",
+          "value": "cardinality(\"spideryarn\".\"command_suggestion_dismissals\".\"dismissed\") between 1 and 50 and array_ndims(\"spideryarn\".\"command_suggestion_dismissals\".\"dismissed\") = 1 and array_position(\"spideryarn\".\"command_suggestion_dismissals\".\"dismissed\", null) is null and array_to_string(\"spideryarn\".\"command_suggestion_dismissals\".\"dismissed\", '') ~ '^[0-9a-f]+$' and array_to_string(\"spideryarn\".\"command_suggestion_dismissals\".\"dismissed\", chr(10)) ~ '^[0-9a-f]{16}(\\n[0-9a-f]{16})*$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "spideryarn.comments": {
       "name": "comments",
       "schema": "spideryarn",
@@ -4804,120 +4873,6 @@
         "feedback_mirror_attempted_first": {
           "name": "feedback_mirror_attempted_first",
           "value": "\"spideryarn\".\"feedback\".\"mirrored_at\" is null or \"spideryarn\".\"feedback\".\"mirror_attempted_at\" is not null"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "spideryarn.feedback_addenda": {
-      "name": "feedback_addenda",
-      "schema": "spideryarn",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "owner_id": {
-          "name": "owner_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "report_id": {
-          "name": "report_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "body": {
-          "name": "body",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "environment": {
-          "name": "environment",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "feedback_addenda_owner_report_idx": {
-          "name": "feedback_addenda_owner_report_idx",
-          "columns": [
-            {
-              "expression": "owner_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "report_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "feedback_addenda_feedback_fk": {
-          "name": "feedback_addenda_feedback_fk",
-          "tableFrom": "feedback_addenda",
-          "tableTo": "feedback",
-          "schemaTo": "spideryarn",
-          "columnsFrom": [
-            "owner_id",
-            "report_id"
-          ],
-          "columnsTo": [
-            "owner_id",
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "feedback_addenda_owner_id_id_pk": {
-          "name": "feedback_addenda_owner_id_id_pk",
-          "columns": [
-            "owner_id",
-            "id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "feedback_addenda_id_format": {
-          "name": "feedback_addenda_id_format",
-          "value": "\"spideryarn\".\"feedback_addenda\".\"id\" ~ '^spya-[abcdefghjkmnpqrstuvwxyz][abcdefghjkmnpqrstuvwxyz023456789]{5}$'"
-        },
-        "feedback_addenda_report_id_format": {
-          "name": "feedback_addenda_report_id_format",
-          "value": "\"spideryarn\".\"feedback_addenda\".\"report_id\" ~ '^spya-[abcdefghjkmnpqrstuvwxyz][abcdefghjkmnpqrstuvwxyz023456789]{5}$'"
-        },
-        "feedback_addenda_environment": {
-          "name": "feedback_addenda_environment",
-          "value": "\"spideryarn\".\"feedback_addenda\".\"environment\" in ('production', 'preview', 'development', 'test')"
-        },
-        "feedback_addenda_body_shape": {
-          "name": "feedback_addenda_body_shape",
-          "value": "length(btrim(\"spideryarn\".\"feedback_addenda\".\"body\")) > 0 and length(\"spideryarn\".\"feedback_addenda\".\"body\") <= 1000000"
         }
       },
       "isRLSEnabled": false

@@ -51,6 +51,7 @@ import {
   glossaryHiddenStore,
   skimNoticeStore,
   staleNoticeStore,
+  suggestionDismissalStore,
   quizAttemptStore,
   loadArticle,
   loadGlossary,
@@ -457,7 +458,14 @@ import {
 } from "./transcribe.js";
 import { type PickAnswer, parsePickRequest } from "./command-pick.js";
 import { pickCommand } from "./command-pick-call.js";
-import { type SuggestAnswer, parseSuggestRequest, readFromHash } from "./command-suggest.js";
+import {
+  DISMISS_STALE,
+  type SuggestAnswer,
+  parseDismissRequest,
+  parseSuggestRequest,
+  readFromHash,
+  withoutDismissed,
+} from "./command-suggest.js";
 import { suggestCommands, suggestableOptions } from "./command-suggest-call.js";
 import { parseHelpChatRequest } from "./help-chat.js";
 import { admitHelpChat, askHelp } from "./help-chat-call.js";
@@ -8288,10 +8296,41 @@ async function suggestFromWhyReading(
     const outcome = await suggestCommands({ rendered, rows: parsed.request.rows }, gone.signal);
     if (!outcome.ok) throw httpError(outcome.status, outcome.failure.message);
     if (outcome.suggestions === null) return { kind: "nothing", why: "no-list" };
-    return { kind: "suggestions", readFrom: readFromHash({ profile, purpose }), ...outcome.suggestions };
+    /* What the reader dismissed under this fingerprint goes after the model
+       has answered, never into what it is sent (plan 261010u, F2). Under any
+       other fingerprint nothing is filtered (F6). */
+    const readFrom = readFromHash({ profile, purpose });
+    const kept = withoutDismissed(outcome.suggestions, await suggestionDismissalStore.forFingerprint(slug, readFrom));
+    if (kept === null) return { kind: "nothing", why: "no-list" };
+    return { kind: "suggestions", readFrom, ...kept };
   } finally {
     res.off("close", drop);
   }
+}
+
+/**
+ * **Dismissing one of the bar's suggestions** — `POST
+ * /api/command-suggest/:slug/dismiss`, plan 261010u (Greg, 2026-10-10,
+ * `spya-yf23zk`). The body is `{ readFrom, identity }`, both hashes
+ * (src/command-suggest.ts § `parseDismissRequest`): no words reach the
+ * server. Owner only, checked by name first as for `suggestFromWhyReading`,
+ * and again inside the store. Never spends.
+ */
+async function dismissSuggestion(slug: string, req: IncomingMessage): Promise<void> {
+  await ownedArticleIdentity(slug);
+  const parsed = parseDismissRequest(await readBody(req));
+  if (!parsed.ok) throw httpError(400, parsed.reason);
+  /* A late write from a list made before either profile box changed must not
+     replace dismissals already saved for the current list. Re-read the two
+     stored inputs here; the client supplies neither words nor authority. */
+  const parts = await resolveProfileParts(slug);
+  if (parts.purposeFailed) throw httpError(503, REASON_NOT_READ.message);
+  const currentReadFrom = readFromHash({
+    profile: normaliseProfileText(parts.profile),
+    purpose: normaliseProfileText(parts.purpose),
+  });
+  if (parsed.request.readFrom !== currentReadFrom) throw httpError(409, DISMISS_STALE);
+  await suggestionDismissalStore.dismiss(slug, parsed.request.readFrom, parsed.request.identity);
 }
 
 /* ------------------------------------------------------------- feedback -- */
@@ -9951,14 +9990,9 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
           case "unpublished":
             throw httpError(409, "That article has nothing to read yet. Draft its gift once it is on your shelf.");
           case "link-off":
-            throw httpError(
-              409,
-              parsed.value.options.makeLink
-                ? "That article's private link was turned off while its gift was being drafted. Try again."
-                : /* An agent's draft never makes the link (261010i): the rights tick is the person's. */
-                  "That article is private and has no private link, and a draft made this way does not make one. " +
-                    "Turn its private link on from the article's page (which asks you to confirm you may share it), then draft again.",
-            );
+            /* Only the add page's form, which makes the link: an agent's draft
+               (`makeLink: false`) is made without one (261010r). */
+            throw httpError(409, "That article's private link was turned off while its gift was being drafted. Try again.");
           default: {
             const never: never = answer.reason;
             throw httpError(500, `unknown refusal ${String(never)}`);
@@ -10037,7 +10071,10 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       /* What the confirmation showed (261010i, Sol's F1); the page always sends it. */
       const parsed = parseSendAuthorGift(await readBody(req));
       if (!parsed.ok) throw httpError(400, parsed.message);
-      const answer = await pgAuthorGiftStore.sendAuthorGift(id, { expected: parsed.value.expected });
+      const answer = await pgAuthorGiftStore.sendAuthorGift(id, {
+        expected: parsed.value.expected,
+        rightsConfirmed: parsed.value.rightsConfirmed,
+      });
       switch (answer.kind) {
         case "not-found":
           throw httpError(404, "There is no such author gift.");
@@ -10048,7 +10085,16 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
         case "discarded":
           throw httpError(409, "That gift has been discarded. Restore it first.");
         case "starter-refused":
-          /* The freeze was released: fix the article, then press Send again. */
+          /* The freeze was released: fix the article, then press Send again.
+             A gift drafted without a link is sent with the rights tick (261010r). */
+          if (answer.reason === "link-off") {
+            throw httpError(
+              409,
+              parsed.value.rightsConfirmed
+                ? "That earlier Send did not finish, and its article still has no private link. The attempt was released; check the gift, then press Send again."
+                : "That article is private and has no private link yet. Tick the box to confirm you may share it, and Send makes the link.",
+            );
+          }
           throw starterRefused(answer.reason);
         case "superseded":
           throw httpError(409, "A newer change replaced this Send attempt. Check the gift, then press Send again.");
@@ -10735,6 +10781,19 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       /* Words made from the reader's profile: never a shared cache's. */
       res.setHeader("Cache-Control", "private, no-store");
       send(res, 200, answer);
+    },
+  },
+  /* **Dismissing one of those suggestions** — plan 261010u. Answers
+     `{ ok: true }`. The pattern above takes one segment after the prefix, so
+     it never swallows this one. Never spends. */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/command-suggest\/([\w.%-]+)\/dismiss$/,
+    article: "none",
+    handler: async ({ request: { req, res } }, captures) => {
+      await dismissSuggestion(slugPart(captures, 1), req);
+      send(res, 200, { ok: true });
     },
   },
 

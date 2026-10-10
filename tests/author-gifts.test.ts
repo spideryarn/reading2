@@ -79,6 +79,7 @@ import {
   parseAuthorGiftPatch,
   sendAuthorGift,
 } from "../src/store/pg-author-gifts.js";
+import { ensureShareLinkForArticle } from "../src/store/pg-share-link.js";
 import { createVoucher } from "../src/store/pg-vouchers.js";
 import type { VoucherEmailDeps } from "../src/store/pg-voucher-emails.js";
 import { pgReady } from "./helpers/pg-ready.js";
@@ -394,24 +395,30 @@ describe("POST /api/admin/author-gifts — a filled-in draft (261010i)", () => {
     expect(await shareTokenOf(mine.id)).toBe(key);
   });
 
-  /* Sol's F2 on the plan: a model must not record a rights confirmation
-     nobody gave, so `makeLink: false` never makes the link. */
-  it("with makeLink: false, refuses a private article with no link, and makes no link, gift or event", async () => {
+  /* Sol's F2 on 261010i: a model must not record a rights confirmation
+     nobody gave, so `makeLink: false` never makes the link. Since 261010r
+     it drafts the gift anyway, and Greg's Send makes the link behind his tick. */
+  it("with makeLink: false, drafts a private article with no link, and makes no link and no event", async () => {
     const mine = await seed("filled-nolink");
     const reply = await drive("POST", "/api/admin/author-gifts", { slug: mine.slug, makeLink: false, lookup: false });
-    expect(reply.status).toBe(409);
-    expect(String(reply.body.error)).toMatch(/private link/);
+    expect(reply.status).toBe(201);
     expect(await shareTokenOf(mine.id)).toBeNull();
     const { rows } = await pool.query(
       `select (select count(*)::int from spideryarn.author_gifts where article_id = $1) as gifts,
               (select count(*)::int from spideryarn.article_share_link_events where article_id = $1) as events`,
       [mine.id],
     );
-    expect(rows[0]).toEqual({ gifts: 0, events: 0 });
+    expect(rows[0]).toEqual({ gifts: 1, events: 0 });
 
-    /* A public article needs no link, so it can be drafted. */
+    /* A public article needs no link either. */
     const open = await seed("filled-public", { visibility: "public" });
     expect((await drive("POST", "/api/admin/author-gifts", { slug: open.slug, makeLink: false, lookup: false })).status).toBe(201);
+
+    /* Still refused: somebody else's, and one with nothing to read yet. */
+    const theirs = await seed("filled-theirs", { owner: STRANGER });
+    expect((await drive("POST", "/api/admin/author-gifts", { slug: theirs.slug, makeLink: false, lookup: false })).status).toBe(400);
+    const empty = await seed("filled-empty", { unpublished: true });
+    expect((await drive("POST", "/api/admin/author-gifts", { slug: empty.slug, makeLink: false, lookup: false })).status).toBe(409);
   });
 
   it("still starts a lookup when asked, and the lookup fills only what the draft left empty", async () => {
@@ -529,6 +536,174 @@ describe("POST /api/admin/author-gifts/:id/send", () => {
     expect(box.sent).toHaveLength(1);
   });
 
+  /* Plan 261010r § D2: an agent drafted a gift for an article with no link;
+     Greg's Send makes the link, and only with his tick. */
+  it("makes the private link only when Send carries the rights tick, then sends it in the email", async () => {
+    const box = mailbox();
+    control.deps = box.deps;
+    const mine = await seed("send-makes-link");
+    const made = await drive("POST", "/api/admin/author-gifts", {
+      slug: mine.slug,
+      makeLink: false,
+      lookup: false,
+      draft: { email: addressOf("linkless"), recipientName: "Bea", articles: 5 },
+    });
+    expect(made.status).toBe(201);
+    const id = String(made.body.id);
+    const shown = { email: addressOf("linkless"), recipientName: "Bea", recipientNote: null, articles: 5 };
+    const events = async () =>
+      (
+        await pool.query("select count(*)::int as n from spideryarn.article_share_link_events where article_id = $1", [mine.id])
+      ).rows[0] as { n: number };
+
+    const listed = async () => (await listAuthorGifts()).find((g) => g.id === id);
+    expect((await listed())?.starter.linkable).toBe(false);
+
+    /* No tick: refused, unfrozen, no link, no voucher, no email. */
+    const refused = await drive("POST", `/api/admin/author-gifts/${id}/send`, { expected: shown });
+    expect(refused.status).toBe(409);
+    expect(String(refused.body.error)).toMatch(/tick/i);
+    expect(await giftRow(id)).toMatchObject({ send_started_at: null, send_attempt: null });
+    expect(await shareTokenOf(mine.id)).toBeNull();
+    expect(await events()).toEqual({ n: 0 });
+    expect(box.sent).toEqual([]);
+
+    /* A tick that is not `true` is not a tick. */
+    expect(
+      (await drive("POST", `/api/admin/author-gifts/${id}/send`, { expected: shown, rightsConfirmed: "yes" })).status,
+    ).toBe(400);
+
+    /* A changed gift with the tick still makes nothing: the expected check comes first. */
+    const stale = { ...shown, recipientName: "Someone else" };
+    expect((await drive("POST", `/api/admin/author-gifts/${id}/send`, { expected: stale, rightsConfirmed: true })).status).toBe(409);
+    expect(await shareTokenOf(mine.id)).toBeNull();
+
+    /* With the tick: the link, one event, the voucher, one email that links the article by its key. */
+    const sent = await drive("POST", `/api/admin/author-gifts/${id}/send`, { expected: shown, rightsConfirmed: true });
+    expect(sent.status).toBe(201);
+    const key = await shareTokenOf(mine.id);
+    expect(key).not.toBeNull();
+    expect(await events()).toEqual({ n: 1 });
+    expect(box.sent).toHaveLength(1);
+    expect(box.sent[0]?.text).toContain(`key=${key}`);
+    expect((await listed())?.starter.linkable).toBe(true);
+
+    /* A replay neither makes another link nor sends again. */
+    expect((await drive("POST", `/api/admin/author-gifts/${id}/send`, { expected: shown, rightsConfirmed: true })).status).toBe(200);
+    expect(await shareTokenOf(mine.id)).toBe(key);
+    expect(await events()).toEqual({ n: 1 });
+    expect(box.sent).toHaveLength(1);
+
+    /* Sol's F1 on 261010r: Greg turns the link off after it went; a replayed
+       Send carrying the tick is answered from the voucher and never turns it back on. */
+    await pool.query("update spideryarn.articles set share_token = null, share_token_at = null where id = $1", [mine.id]);
+    expect((await drive("POST", `/api/admin/author-gifts/${id}/send`, { expected: shown, rightsConfirmed: true })).status).toBe(200);
+    expect(await shareTokenOf(mine.id)).toBeNull();
+    expect(await events()).toEqual({ n: 1 });
+    expect(box.sent).toHaveLength(1);
+  });
+
+  /* Sol's F2 on 261010r: the gift keeps the slug it was made with. If another
+     of Greg's articles takes that slug later, Send must neither link it nor
+     make a link for it. */
+  it("refuses to link, or make a link for, another article that has since taken the gift's slug", async () => {
+    const box = mailbox();
+    control.deps = box.deps;
+    const first = await seed("slug-first");
+    const made = await drive("POST", "/api/admin/author-gifts", {
+      slug: first.slug,
+      makeLink: false,
+      lookup: false,
+      draft: { email: addressOf("slug"), articles: 5 },
+    });
+    const id = String(made.body.id);
+    const shown = { email: addressOf("slug"), recipientName: null, recipientNote: null, articles: 5 };
+    await pool.query("update spideryarn.articles set slug = $2 where id = $1", [first.id, `${first.slug}-moved`]);
+    const second = await seed("slug-second");
+    await pool.query("update spideryarn.articles set slug = $2 where id = $1", [second.id, first.slug]);
+
+    const refused = await drive("POST", `/api/admin/author-gifts/${id}/send`, { expected: shown, rightsConfirmed: true });
+    expect(refused.status).toBe(400);
+    expect(await shareTokenOf(second.id)).toBeNull();
+    expect(await giftRow(id)).toMatchObject({ send_started_at: null, send_attempt: null });
+    expect(box.sent).toEqual([]);
+
+    /* The same for a slug taken by an article whose link is already on: not linked in the email. */
+    await pool.query("update spideryarn.articles set share_token = $2, share_token_at = now() where id = $1", [second.id, nextKey()]);
+    expect((await drive("POST", `/api/admin/author-gifts/${id}/send`, { expected: shown })).status).toBe(400);
+    expect(box.sent).toEqual([]);
+  });
+
+  it("does not make a link for a replacement article when the slug changes after starter resolution", async () => {
+    const first = await seed("slug-race-first");
+    const made = await drive("POST", "/api/admin/author-gifts", {
+      slug: first.slug,
+      makeLink: false,
+      lookup: false,
+      draft: { email: addressOf("slug-race"), articles: 5 },
+    });
+    const id = String(made.body.id);
+    let replacement: Awaited<ReturnType<typeof seed>> | null = null;
+
+    const answer = await sendAuthorGift(id, {
+      rightsConfirmed: true,
+      /* `createVoucher` has just resolved the first article as link-off. Move
+         its slug before the link writer takes its lock: the article-id
+         precondition must reject the replacement row atomically. */
+      ensureShareLink: async (slug, articleId, options) => {
+        await pool.query("update spideryarn.articles set slug = $2 where id = $1", [first.id, `${first.slug}-moved`]);
+        replacement = await seed("slug-race-second");
+        await pool.query("update spideryarn.articles set slug = $2 where id = $1", [replacement.id, first.slug]);
+        return await ensureShareLinkForArticle(slug, articleId, options);
+      },
+    });
+
+    expect(answer).toEqual({ kind: "starter-refused", reason: "absent" });
+    expect(replacement).not.toBeNull();
+    expect(await shareTokenOf(replacement!.id)).toBeNull();
+    expect(await giftRow(id)).toMatchObject({ send_started_at: null, send_attempt: null });
+    expect(
+      (
+        await pool.query(
+          "select count(*)::int as n from spideryarn.article_share_link_events where article_id in ($1, $2)",
+          [first.id, replacement!.id],
+        )
+      ).rows[0],
+    ).toEqual({ n: 0 });
+  });
+
+  it("does not re-enable the link when a concurrent replay made the voucher and the owner turned it off", async () => {
+    const mine = await seed("link-after-replay");
+    const made = await drive("POST", "/api/admin/author-gifts", {
+      slug: mine.slug,
+      makeLink: false,
+      lookup: false,
+      draft: { email: addressOf("link-after-replay"), articles: 5 },
+    });
+    const id = String(made.body.id);
+    const key = nextKey();
+
+    const answer = await sendAuthorGift(id, {
+      rightsConfirmed: true,
+      ensureShareLink: async (slug, articleId, options) => {
+        /* The fresh request already saw link-off. Another retry now sees a
+           link, commits the voucher, and then the owner turns that link off. */
+        await pool.query("update spideryarn.articles set share_token = $2, share_token_at = now() where id = $1", [mine.id, key]);
+        expect((await sendAuthorGift(id)).kind).toBe("created");
+        await pool.query("update spideryarn.articles set share_token = null, share_token_at = null where id = $1", [mine.id]);
+        return await ensureShareLinkForArticle(slug, articleId, options);
+      },
+    });
+
+    expect(answer.kind).toBe("replayed");
+    expect(await shareTokenOf(mine.id)).toBeNull();
+    expect(
+      (
+        await pool.query("select count(*)::int as n from spideryarn.article_share_link_events where article_id = $1", [mine.id])
+      ).rows[0],
+    ).toEqual({ n: 0 });
+  });
+
   it("refuses an expected snapshot that is not one", async () => {
     const mine = await seed("send-expected-bad", { linkOn: true });
     const { id } = await ensured(mine);
@@ -644,6 +819,27 @@ describe("POST /api/admin/author-gifts/:id/send", () => {
     /* Fixed: the link is made again, and Send goes through. */
     await pool.query("update spideryarn.articles set share_token = $2, share_token_at = now() where id = $1", [mine.id, nextKey()]);
     expect((await drive("POST", `/api/admin/author-gifts/${id}/send`, null)).status).toBe(201);
+  });
+
+  it("releases an interrupted Send whose link is still off, and tells the admin to press again", async () => {
+    const mine = await seed("interrupted-link-off");
+    const made = await drive("POST", "/api/admin/author-gifts", {
+      slug: mine.slug,
+      makeLink: false,
+      lookup: false,
+      draft: { email: addressOf("interrupted-link-off"), articles: 5 },
+    });
+    const id = String(made.body.id);
+    await pool.query(
+      "update spideryarn.author_gifts set send_started_at = now(), send_attempt = $2 where id = $1",
+      [id, randomUUID()],
+    );
+
+    const reply = await drive("POST", `/api/admin/author-gifts/${id}/send`, { rightsConfirmed: true });
+    expect(reply.status).toBe(409);
+    expect(String(reply.body.error)).toMatch(/attempt was released.*press Send again/i);
+    expect(await giftRow(id)).toMatchObject({ send_started_at: null, send_attempt: null });
+    expect(await shareTokenOf(mine.id)).toBeNull();
   });
 
   it("a slow refusal unfreezes only its own attempt, never a newer one (R2-F3)", async () => {
@@ -1098,7 +1294,7 @@ describe("GET /api/admin/author-gifts", () => {
     expect(reply.headers["cache-control"]).toBe("private, no-store");
     const gifts = reply.body.gifts as AdminAuthorGift[];
     const gift = gifts.find((g) => g.id === id);
-    expect(gift).toMatchObject({ status: "draft", starter: { slug: mine.slug, title: mine.title }, voucherId: null });
+    expect(gift).toMatchObject({ status: "draft", starter: { slug: mine.slug, title: mine.title, linkable: true }, voucherId: null });
     expect(gift?.lookups[0]).toMatchObject({ id: lookupId, outcome: "failed", cost: { nanos: 4000, calls: 3, unpricedCalls: 1 } });
     expect(JSON.stringify(reply.body)).not.toContain("AGIFTxKEY");
     expect(JSON.stringify(reply.body)).not.toMatch(/share_?token/i);

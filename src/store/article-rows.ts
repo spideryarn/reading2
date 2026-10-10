@@ -40,6 +40,7 @@ import {
   articleTags,
   quizAttempts,
   staleNoticeDismissals,
+  commandSuggestionDismissals,
   refereeClaims,
   refereeHiddenChecks,
   refereeCriteria,
@@ -250,6 +251,12 @@ export const ARTICLE_TABLE_COVERAGE = {
   stale_notice_dismissals: {
     rollback: { exported: true, into: "stale-notices.json" },
     bundle: { exported: true, into: "augmentations/stale-notices.json" },
+  },
+  /* The command bar's suggestions the owner dismissed, as hashes — reader
+     state, exported for the same reason. Plan 261010u. */
+  command_suggestion_dismissals: {
+    rollback: { exported: true, into: "suggestion-dismissals.json" },
+    bundle: { exported: true, into: "augmentations/suggestion-dismissals.json" },
   },
 
   /** The one table the two projections disagree about — see `TableCoverage`. */
@@ -730,6 +737,8 @@ export interface ArticleRows {
   readonly quizAttempts: readonly (typeof quizAttempts.$inferSelect)[];
   /** The stale notices the owner sent away, one row per mode. Plan 261010a. */
   readonly staleNoticeDismissals: readonly (typeof staleNoticeDismissals.$inferSelect)[];
+  /** The command bar's suggestions the owner dismissed, as hashes — at most one row. Plan 261010u. */
+  readonly commandSuggestionDismissals: readonly (typeof commandSuggestionDismissals.$inferSelect)[];
 }
 
 /**
@@ -968,6 +977,11 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     .from(staleNoticeDismissals)
     .where(eq(staleNoticeDismissals.articleId, article.id))
     .orderBy(asc(staleNoticeDismissals.mode));
+  /* At most one row: the primary key is the article. */
+  const suggestionsDismissed = await tx
+    .select()
+    .from(commandSuggestionDismissals)
+    .where(eq(commandSuggestionDismissals.articleId, article.id));
 
   return {
     article,
@@ -990,6 +1004,7 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     articleTags: tags,
     quizAttempts: quizMarks,
     staleNoticeDismissals: noticesDismissed,
+    commandSuggestionDismissals: suggestionsDismissed,
   };
 }
 

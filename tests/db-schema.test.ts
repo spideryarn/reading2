@@ -1033,7 +1033,7 @@ describe("the schema keeps the promises the plan makes", () => {
            delete that took it silently would take the evidence with it. */
         "billing_accounts_owner_fk",
         "comments_owner_fk",
-        /* drizzle/20261010190341, appended by hand. RESTRICT, as
+        /* drizzle/20261010235243, appended by hand. RESTRICT, as
            `feedback_owner_fk` is: an addendum is more of the report. */
         "feedback_addenda_owner_fk",
         /* drizzle/0040. A bug report must outlive the account that filed it —

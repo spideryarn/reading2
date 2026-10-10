@@ -64,7 +64,7 @@ function gift(over: Partial<AdminAuthorGift> = {}): AdminAuthorGift {
   return {
     id: DRAFT,
     status: "draft",
-    starter: { slug: "the-bitter-lesson", title: "The Bitter Lesson" },
+    starter: { slug: "the-bitter-lesson", title: "The Bitter Lesson", linkable: true },
     email: null,
     recipientName: null,
     recipientNote: null,
@@ -303,6 +303,81 @@ describe("Author gifts", () => {
     await settle();
     expect(button(card(DRAFT), "Send to ann@example.test")).toBeUndefined();
     expect(button(card(DRAFT), "Send")).toBeDefined();
+  });
+
+  /* Plan 261010r § D2: an agent drafted it for an article with no link, so
+     Send makes the link, and only after Greg ticks the rights box himself. */
+  it("asks for the rights tick before a Send that makes the private link, and sends the tick", async () => {
+    giftsAnswer = () => [
+      gift({ email: "ann@example.test", recipientName: "Ann", starter: { slug: "s", title: "T", linkable: false } }),
+    ];
+    await mount();
+    await act(async () => button(card(DRAFT), "Send")?.click());
+    expect(card(DRAFT)?.textContent).toContain(SHARING_RIGHTS_CONFIRM);
+    expect(card(DRAFT)?.textContent).toContain("private link");
+    const send = () => button(card(DRAFT), "Send to ann@example.test");
+    expect(send()?.disabled).toBe(true);
+    await act(async () => send()?.click());
+    expect(writes()).toEqual([]);
+    const tick = card(DRAFT)?.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    await act(async () => tick.click());
+    expect(send()?.disabled).toBe(false);
+    await act(async () => send()?.click());
+    await settle();
+    expect(writes()).toEqual([
+      {
+        method: "POST",
+        url: `/api/admin/author-gifts/${DRAFT}/send`,
+        body: {
+          expected: { email: "ann@example.test", recipientName: "Ann", recipientNote: null, articles: 20 },
+          rightsConfirmed: true,
+        },
+      },
+    ]);
+  });
+
+  it("asks for no tick when the article is already readable by link", async () => {
+    giftsAnswer = () => [gift({ email: "ann@example.test" })];
+    await mount();
+    await act(async () => button(card(DRAFT), "Send")?.click());
+    expect(card(DRAFT)?.querySelector('input[type="checkbox"]')).toBeNull();
+    expect(card(DRAFT)?.textContent).not.toContain(SHARING_RIGHTS_CONFIRM);
+  });
+
+  it("keeps the confirmation's rights tick across a refresh instead of replacing the review", async () => {
+    giftsAnswer = () => [
+      gift({ email: "ann@example.test", starter: { slug: "s", title: "T", linkable: false } }),
+    ];
+    await mount();
+    await act(async () => button(card(DRAFT), "Send")?.click());
+    const tick = card(DRAFT)?.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    await act(async () => tick.click());
+    expect(tick.checked).toBe(true);
+
+    giftsAnswer = () => [gift({ email: "ann@example.test" })];
+    await act(async () => (section().querySelector('[aria-label="Refresh the author gifts"]') as HTMLButtonElement).click());
+    await settle();
+    const refreshedTick = card(DRAFT)?.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    expect(refreshedTick.checked).toBe(true);
+    expect(button(card(DRAFT), "Send to ann@example.test")?.disabled).toBe(false);
+  });
+
+  it("requires a fresh rights tick when a refused Send opens a second confirmation", async () => {
+    sendAnswer = { status: 409, body: { error: "The starter moved." } };
+    giftsAnswer = () => [
+      gift({ email: "ann@example.test", starter: { slug: "s", title: "T", linkable: false } }),
+    ];
+    await mount();
+    await act(async () => button(card(DRAFT), "Send")?.click());
+    const tick = card(DRAFT)?.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    await act(async () => tick.click());
+    await act(async () => button(card(DRAFT), "Send to ann@example.test")?.click());
+    await settle();
+
+    await act(async () => button(card(DRAFT), "Send")?.click());
+    const secondTick = card(DRAFT)?.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    expect(secondTick.checked).toBe(false);
+    expect(button(card(DRAFT), "Send to ann@example.test")?.disabled).toBe(true);
   });
 
   it("shows a refused Send in the server's words, beside the gift", async () => {

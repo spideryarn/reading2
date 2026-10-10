@@ -1905,6 +1905,24 @@ export interface StaleNoticeStore {
 }
 
 /**
+ * The command bar's suggestions the owner dismissed on one article —
+ * docs/plans/261010u-bar-suggestions-capped-dismissable-collapsible-and-the-guide-at-the-top.md.
+ * Both methods are owner-scoped (a stranger's slug is a 404). `readFrom` and
+ * `identity` are sixteen hex digits the route has checked
+ * (src/command-suggest.ts § `parseDismissRequest`); nothing here is words.
+ */
+export interface SuggestionDismissalStore {
+  /**
+   * Remember `identity` under `readFrom`. Under the stored fingerprint it is
+   * appended if absent, keeping the newest `MAX_DISMISSED_SUGGESTIONS`; under
+   * another it replaces the row. Atomic: two at once both land.
+   */
+  dismiss(slug: string, readFrom: string, identity: string): Promise<void>;
+  /** The identities dismissed under `readFrom`, or none if the row is another fingerprint's. */
+  forFingerprint(slug: string, readFrom: string): Promise<ReadonlySet<string>>;
+}
+
+/**
  * The reader's global profile — "about you", true on every article rather
  * than on one. docs/plans/260826t-reader-profile.md is the design; src/profile.ts
  * is where the two boxes (this one and `ShelfState.purpose`) become one string
