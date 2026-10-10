@@ -430,7 +430,11 @@ the conversation went. Two pieces fix that:
   turn has let go of the thread, and is awaited there so its spend reaches the ledger. It is written
   only if nothing has been stored in the thread since it was read (`chatStore.setGist`), only when
   this turn's answer is what landed, and never for Candidates. A failure costs the gist, never the
-  turn. **It is never shown to the reader**, and never replaces their title. Measured: $0.0001 to
+  turn. It never replaces their title. **Since plan
+  [261010s](../plans/261010s-ask-in-chat-resumes-its-thread-and-becomes-an-icon.md) it is shown**,
+  on the mark of the item a chat was started from (the thread summary carries it;
+  [chat-from-a-mode.md § One chat per item](chat-from-a-mode.md#one-chat-per-item)). Until then it
+  was for the model only. Measured: $0.0001 to
   $0.0003 and about a second per answer on short conversations; the input is capped at 16,000
   characters, so roughly $0.002 at the most.
 - **The index with every typed Chat question**, in the final user message (below the cache
@@ -543,7 +547,8 @@ From 2026-10-01 it showed chats only.
   on screen. Live too since 2026-10-09
   ([261009i](../plans/261009i-the-guide-greets-in-chat-takes-live-and-a-bar-row.md)), with the
   guide's own spoken prompt and tools ([live-conversation.md § In the guide](live-conversation.md#in-the-guide)). Every *Ask in chat* handoff still starts a fresh chat, even with the guide
-  open; a handoff names its target (`ChatHandoff.target`), and only the bar's *Ask the guide*
+  open (an item that already has a chat makes no handoff: its sender reopens that chat,
+  [chat-from-a-mode.md § One chat per item](chat-from-a-mode.md#one-chat-per-item)); a handoff names its target (`ChatHandoff.target`), and only the bar's *Ask the guide*
   (stage 3) targets the guide.
 - **Where a row came from** is one pure function, `threadSource` in
   [`thread-source.ts`](../../src/web/thread-source.ts), in this order: a stored origin (*Started

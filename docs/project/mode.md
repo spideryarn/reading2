@@ -334,6 +334,22 @@ modes; each item points to the mode doc that holds its machinery.
   So when you add a mode, ask whether its items belong in the right-hand column.
   [marginalia.md § Keep an eye out for new kinds](marginalia.md#keep-an-eye-out-for-new-kinds) says
   what adding one takes, and which kinds are not there yet.
+- **An item can start a chat about itself, and the chat and the item each lead to the other.**
+  The item's *Ask in chat* (Chat's icon, its words in a card) starts the chat; once there is one,
+  the item shows its mark (the count and the chat's gist) in the button's place, a second press
+  from anywhere reopens it, and the chat has a line back to the item.
+
+  > any time we want this kind of same idea of Ask in Chat takes you to a chat thread, there's a
+  > way to get back. Ideally then there's a summary of the chat thread in that caller mode, and
+  > then you can also go from the caller mode to the chat, and it sort of indicates that there is
+  > an existing chat. And maybe we make a minimal note in the docs for mode.md or wherever about
+  > this pattern.
+  >
+  > — Greg, 2026-10-09 (spya-pdpnjf,
+  > [261010s](../plans/261010s-ask-in-chat-resumes-its-thread-and-becomes-an-icon.md))
+
+  Which modes have it and the twelve steps to add it to another:
+  [chat-from-a-mode.md](chat-from-a-mode.md).
 
 ## The card on the button
 

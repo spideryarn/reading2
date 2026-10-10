@@ -123,6 +123,12 @@ export interface SendOptions {
   /** Data-only acknowledgement; survives unmount, so never navigate from this callback. */
   onConfirmed?(threadId: string): void;
   /**
+   * The new conversation was definitively removed before its caller's
+   * summary list learned about it. Data-only, like `onConfirmed`: a refused
+   * first turn and a delete may both finish after the band has unmounted.
+   */
+  onGone?(threadId: string): void;
+  /**
    * Whether this answer should be written for the reader's profile. Absent
    * means yes.
    *
@@ -820,6 +826,7 @@ export function useChat(slug: string, onSettled?: () => void): ChatApi {
         },
         onThreadId,
         opts.onConfirmed,
+        opts.onGone,
       );
       return id;
     },

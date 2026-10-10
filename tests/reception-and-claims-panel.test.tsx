@@ -63,6 +63,7 @@ import type {
 } from "../src/types.js";
 import type { ReceptionOrder } from "../src/web/reception-order.js";
 import type { ReceptionAndClaimsView, SourcesView } from "../src/web/params.js";
+import type { ReceptionAndClaimsChats } from "../src/web/ReceptionAndClaimsPanel.js";
 import type { UseReception } from "../src/web/useReception.js";
 import type { PublicReception, PublicSourcesClaimList } from "../src/public-types.js";
 import type { UseSourcesClaims } from "../src/web/useSourcesClaims.js";
@@ -230,7 +231,7 @@ const threaded: (string | null)[] = [];
 const retried: string[] = [];
 const NO_DOI: CitersResult = { kind: "no-doi" };
 /** The owner has chat, and nothing here presses it (tests/sources-claims-chat.test.tsx does). */
-const NO_CLAIM_CHATS = { summaries: [], onCheck: () => {}, onLens: () => {}, onOpen: () => {} };
+const NO_CLAIM_CHATS: ReceptionAndClaimsChats = { summaries: [], onCheck: () => {}, onLens: () => {}, onOpen: () => {} };
 
 /** The article's own title, which the panel is handed for the Scholar link. */
 const ARTICLE_TITLE = "Notes on my sourdough starter, week 3";
@@ -253,6 +254,8 @@ function paint(
     citers?: CitersResult | null;
     /** Claims' list hook. Nobody has pressed Claims unless a test says otherwise. */
     claimList?: UseSourcesClaims;
+    /** Chats already started from claims in the list. */
+    claimChats?: ReceptionAndClaimsChats;
     /** Bibliography's works, for Claims' *Cited in this paragraph* (plan 261009l § C1). */
     citedIn?: CitedInParagraph | null;
   } = {},
@@ -268,7 +271,7 @@ function paint(
           owner: o,
           claimList, checks,
           citers: { result, retry: () => retried.push("retry") },
-          claimChats: NO_CLAIM_CHATS,
+          claimChats: extra.claimChats ?? NO_CLAIM_CHATS,
         },
         /* Sources' chip row, as `SourcesBand` hands it (since 2026-10-09). */
         head: sourcesHead({
@@ -2622,6 +2625,36 @@ describe("Claims' list of the article's claims", () => {
     expect(jump).not.toBeNull();
     press(jump);
     expect(jumped).toEqual([KNOWN]);
+  });
+
+  it("replaces a listed claim's Ask button with its existing chat mark", () => {
+    const opened: string[] = [];
+    paint(owner(), "claims", "prioritised", new Map(), {
+      claimList: ready(),
+      claimChats: {
+        summaries: [{
+          id: "thread-one",
+          title: "Cool water",
+          createdAt: "2026-10-10T10:00:00.000Z",
+          updatedAt: "2026-10-10T10:01:00.000Z",
+          kind: "chat",
+          turns: 1,
+          gist: "Why water temperature matters",
+          origin: { mode: "sources-claims", blockId: KNOWN, quote: LISTED[0]!.quote },
+        }],
+        onCheck: () => {},
+        onLens: () => {},
+        onOpen: (id) => opened.push(id),
+      },
+    });
+    const rows = [...host.querySelectorAll(".rcp-listed-claim")];
+    expect(rows[0]?.querySelector(".rcp-claim-check")).toBeNull();
+    expect(rows[0]?.querySelector(".origin-chat")).not.toBeNull();
+    /* The other claim is the positive control: with no chat, it still offers Ask. */
+    expect(rows[1]?.querySelector(".rcp-claim-check")).not.toBeNull();
+    expect(rows[1]?.querySelector(".origin-chat")).toBeNull();
+    press(rows[0]?.querySelector(".origin-chat"));
+    expect(opened).toEqual(["thread-one"]);
   });
 
   /* **C1, Cited in this paragraph** (plan 261009l § C1): the works whose

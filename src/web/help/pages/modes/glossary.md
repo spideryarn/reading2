@@ -24,7 +24,8 @@ and adds it to your list, marked as added by you. **Find more**, at the top of t
 quieter terms and adds them to your list. If a new run cannot safely add to this list — because the
 article or your profile has changed, or because this version of Spideryarn cannot add to the saved
 list — it says **Write a new list** instead. That run replaces the list rather than adding to it.
-**Ask in chat** on an entry, or on a term’s card in the text, starts a conversation about it. On
+The chat icon on an entry, or on a term’s card in the text, starts a conversation about it or
+reopens the one already there. On
 someone else’s shared article you see the glossary already made, but cannot add to it.
 
 ## Reading it
@@ -42,10 +43,11 @@ In an entry:
 - **used in N places** links to each place the term appears.
 - The icon says what kind of thing the term is: a person, place, organisation, event, or a work such
   as a book or paper. Ideas and ordinary terms have none.
-- **Ask in chat** opens a new conversation in [Chat](/help/mode-chat) and asks a question about the
-  term straight away, with the term quoted. Chat can search the web to answer, and you can go back
+- The **chat icon** opens a new conversation in [Chat](/help/mode-chat) and asks a question about the
+  term straight away, with the term quoted; if one exists, it reopens that instead. Chat can search the web to answer, and you can go back
   and forth. An answer from the web kept on an entry from before (once made by a button called
-  **Dig deeper**, which has gone) is still shown there. Once you have asked, a line under the button shows how the chat’s latest answer begins; press it
+  **Dig deeper**, which has gone) is still shown there. Once you have asked, the button becomes a
+  line with the chat's short summary; press it
   to open that conversation again beside the Glossary. The conversation is also in Chat’s list,
   marked with the Glossary’s icon. Only whoever added the article has this.
 

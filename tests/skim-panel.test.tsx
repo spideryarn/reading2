@@ -920,9 +920,11 @@ describe("the panel", () => {
      (spya-se0e4v): "they should provide/reuse the usual 'go to glossary' etc
      in rich tooltips". The card is portalled, so it is found on `document`. */
   const termCard = () => document.querySelector<HTMLElement>('[role="dialog"]');
-  const cardButtons = () => [...(termCard()?.querySelectorAll("button") ?? [])].map((b) => b.textContent);
+  /* An icon-only button (plan 261010s) is named by its aria-label. */
+  const buttonName = (b: HTMLButtonElement) => b.textContent?.trim() || b.getAttribute("aria-label");
+  const cardButtons = () => [...(termCard()?.querySelectorAll("button") ?? [])].map(buttonName);
   const cardButton = (label: string) =>
-    [...termCard()!.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === label)!;
+    [...termCard()!.querySelectorAll<HTMLButtonElement>("button")].find((b) => buttonName(b) === label)!;
   const termChip = () => host.querySelector<HTMLButtonElement>(".skim-chip")!;
 
   it("opens a term chip to the glossary's own card on focus, with the owner's three actions (261006e)", async () => {
@@ -932,7 +934,7 @@ describe("the panel", () => {
     await act(async () => termChip().focus());
     expect(termChip().getAttribute("aria-expanded")).toBe("true");
     expect(termCard()?.textContent).toContain(TERM.senseHere!);
-    expect(cardButtons()).toEqual(["Ask in chat", "Hide", "Open in Glossary"]);
+    expect(cardButtons()).toEqual(["Ask about this term in chat", "Hide", "Open in Glossary"]);
     /* The sense is in the card and nowhere in the band: one surface, not two. */
     expect(host.querySelector(".skim-sense")).toBeNull();
     expect(host.querySelector('[aria-label="Open in Glossary"]')).toBeNull();
@@ -945,7 +947,7 @@ describe("the panel", () => {
     await draw(owner(), view({ card: CARD, termActions: termActions(), onAskTerm: ask }));
     await act(async () => termChip().focus());
     expect(cardButtons(), "Dig deeper is gone").not.toContain("Dig deeper");
-    await act(async () => cardButton("Ask in chat").click());
+    await act(async () => cardButton("Ask about this term in chat").click());
     expect(calls).toEqual([`ask ${TERM.id}`]);
     expect(termChip().getAttribute("aria-expanded")).toBe("false");
   });
@@ -1052,8 +1054,13 @@ describe("the panel", () => {
     expect(guard.getAttribute("data-type")).toBe("outside");
     await act(async () => guard.focus());
     await settle();
-    expect(document.activeElement).toBe(cardButton("Ask in chat"));
-    await act(async () => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(document.activeElement).toBe(cardButton("Ask about this term in chat"));
+    const escape = () => act(async () => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    /* One press, one surface: the Ask button's own tooltip goes first. */
+    await escape();
+    await settle();
+    expect(termCard(), "the first Escape closes only the Ask tooltip").not.toBeNull();
+    await escape();
     await settle();
     expect(termCard()).toBeNull();
     expect(document.activeElement).toBe(termChip());
@@ -1073,7 +1080,7 @@ describe("the panel", () => {
     expect(termCard()?.textContent).toContain(TERM.senseHere!);
     /* Dig deeper landed in Glossary, so it went with the way there, until
        2026-10-09. Ask in chat goes to Chat, and Hide stays put (plan 261009k). */
-    expect(cardButtons()).toEqual(["Ask in chat", "Hide"]);
+    expect(cardButtons()).toEqual(["Ask about this term in chat", "Hide"]);
   });
 
   it("keeps Hide and Ask in chat independent: either can be drawn without the other (261009k, Sol F1)", async () => {
@@ -1083,7 +1090,7 @@ describe("the panel", () => {
     await act(async () => termChip().blur());
     await draw(owner(), view({ card: CARD, termActions: null, onAskTerm: ask }));
     await act(async () => termChip().focus());
-    expect(cardButtons()).toEqual(["Ask in chat", "Open in Glossary"]);
+    expect(cardButtons()).toEqual(["Ask about this term in chat", "Open in Glossary"]);
   });
 
   it("draws a visitor's card with no button at all when Glossary cannot be opened", async () => {

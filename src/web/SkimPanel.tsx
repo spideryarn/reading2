@@ -1212,7 +1212,7 @@ export function SkimDoor({
   door: DoorView | null;
   /**
    * *‹ Previous stop*, on the left — `null` on stop 1 of a pass, where there
-   * is none (spya-gm858u, plan 261010g). The same step ← takes.
+   * is none (spya-gm858u, plan 261010t). The same step ← takes.
    */
   onPrevious: (() => void) | null;
   onNext(): void;

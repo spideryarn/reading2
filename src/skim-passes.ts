@@ -2,7 +2,7 @@
  * **Which stops each pass of a Skim route walks — the one definition**, shared
  * by the band (src/web/skim-route.ts re-exports it) and the server's growth
  * rule (src/skim.ts § `passSizes`, `growPasses`), so that what the route is
- * checked against is what the reader walks. Until plan 261010g the server
+ * checked against is what the reader walks. Until plan 261010t the server
  * checked cumulative counts instead, and a route whose More walked 5 stops and
  * Most 4 passed (spya-nbmce7). Pure: types only.
  */

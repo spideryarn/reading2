@@ -211,15 +211,16 @@ Greg answered that this kind of digging should be a chat:
 
 What the reader gets:
 
-- **A button on each claim's heading**, *Check this claim in chat*. It goes to Chat and opens a
-  fresh conversation with the claim quoted and sends its first question. The press is the Send
+- **A button on each claim's heading with no chat yet**, *Check this claim in chat*. It goes to Chat,
+  opens a conversation with the claim quoted and sends its first question. The press is the Send
   since 2026-10-06 ([261006j](../plans/261006j-ask-in-chat-sends-the-question.md)), and Back returns
   to Sources' Claims. It is the glossary's *Ask in chat* route
   ([glossary.md](glossary.md)), with one thing added: the conversation records the claim it was
   started from.
-- **A mark under the claim once a chat exists**: how many questions were asked, and how the chat's
-  latest answer begins. No model writes that line; it is the answer's first readable line, in plain
-  words (`answerOpening` in `src/answer-opening.ts` removes markdown formatting and prose citations).
+- **A mark under the claim once a chat exists**, in the button's place: how many questions were
+  asked, and the chat's gist. Until the first gist lands (and after an edit clears it), that line is
+  the latest answer's opening in plain words (`answerOpening` in `src/answer-opening.ts` removes
+  markdown formatting and prose citations).
   Pressing the mark opens the conversation beside Sources (`?thread=`, the mode unchanged), in the
   floating chat panel, which docks in the right-hand column only when Marginalia is open and the
   window is wide.

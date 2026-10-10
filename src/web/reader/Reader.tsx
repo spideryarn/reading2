@@ -34,6 +34,7 @@ import {
   type ClaimOrigin,
   type GlossaryEntry,
   type Idea,
+  sameOrigin,
   type ThreadOrigin,
 } from "../../types.js";
 import { marginaliaNotes, arcAt, headBlock, headPath } from "../marginalia/notes.js";
@@ -208,6 +209,7 @@ import {
   askedQuestions,
   countByBlock,
   helpThreadFor,
+  threadForOrigin,
   threadFor,
 } from "../useChatAnchors.js";
 import { pageTitle, useDocumentTitle } from "../page-title.js";
@@ -1005,8 +1007,9 @@ export function Reader({
     ) => {
       setChatHandoff({
         slug,
-        /* Every *Ask in chat* starts a fresh chat, whatever is open there — the
-           guide included (`ChatHandoff`, plan 261007j). */
+        /* Every handoff that reaches here starts a fresh chat, whatever is
+           open there — the guide included (`ChatHandoff`, plan 261007j).
+           Item senders first try `reopenItemChat` below. */
         target: "chat",
         question,
         send: then === "send",
@@ -1139,12 +1142,43 @@ export function Reader({
     [handToChat],
   );
   const handoffTaken = useCallback(() => setChatHandoff(null), []);
+  /**
+   * **An item's chat between its first press and the summaries hearing of
+   * it** (plan 261010s, GPT Sol's F1 on the plan). `reopenItemChat` finds an
+   * item's chat in `chatSummaries`, which are re-read only when the reader
+   * leaves Chat or a turn settles; a second press inside that window would
+   * otherwise start a second chat. The band names the thread here as it
+   * sends, and again if the server corrects the id; an entry goes once the
+   * summaries carry that id, and from then on they are the record.
+  */
+  const handedItemChats = useRef<{ origin: ThreadOrigin; id: string }[]>([]);
+  const handedItemChatsSlug = useRef(slug);
   const handoffThread = useCallback(
     (taken: ChatHandoff, id: string) => {
+      if (taken.slug !== slug) return;
       if (taken.target === "chat" && taken.sourceCommentId) owner?.comments.noteThread(taken.sourceCommentId, id);
+      const origin = taken.target === "chat" ? taken.origin : undefined;
+      if (origin) {
+        handedItemChats.current = [
+          ...handedItemChats.current.filter((h) => !sameOrigin(h.origin, origin)),
+          { origin, id },
+        ];
+      }
     },
-    [owner],
+    [owner, slug],
   );
+  const handoffThreadGone = useCallback((taken: ChatHandoff, id: string) => {
+    if (taken.slug !== slug) return;
+    const origin = taken.target === "chat" ? taken.origin : undefined;
+    if (!origin) return;
+    handedItemChats.current = handedItemChats.current.filter(
+      (handed) => handed.id !== id || !sameOrigin(handed.origin, origin),
+    );
+  }, [slug]);
+  useEffect(() => {
+    if (handedItemChatsSlug.current !== slug) handedItemChats.current = [];
+    handedItemChatsSlug.current = slug;
+  }, [slug]);
   /* **And a handoff chat mode never took does not wait for the next visit.** The
      band takes it in the commit that switches mode, so this is the case where
      the switch did not happen, or the reader was elsewhere before it could —
@@ -2669,34 +2703,93 @@ export function Reader({
     },
     [setNote, setThread, refreshChats],
   );
+  /**
+   * **An item has one chat, and *Ask in chat* reopens it** (plan 261010s, D1).
+   * Greg, 2026-10-09 (spya-pdpnjf): pressing it again on a cited work *"created
+   * a new chat rather than resuming the existing one"*. The gutter's
+   * `chatAboutBlock` already reopened a passage's chat; this is the item
+   * senders catching up.
+   *
+   * Found by `threadForOrigin`, the lookup the item's mark draws from, so the
+   * button and the mark can never disagree about which chat is the item's. It
+   * opens where the mark opens it, beside the mode (`openClaimChat`); in Chat
+   * and Learn that card is suppressed, so there it goes into Chat's band, the
+   * rule `openAskedFromDrawer` keeps. Sends nothing. False when the item has
+   * no chat yet, and the caller starts one.
+   *
+   * Not the lens (a second angle is a second question) and not Summary's
+   * paragraph button, which records no origin.
+   */
+  useEffect(() => {
+    if (handedItemChats.current.length === 0) return;
+    const known = new Set(chatSummaries.map((s) => s.id));
+    handedItemChats.current = handedItemChats.current.filter((h) => !known.has(h.id));
+  }, [chatSummaries]);
+  const reopenItemChat = useCallback(
+    (origin: ThreadOrigin | undefined): boolean => {
+      if (!origin) return false;
+      const id =
+        threadForOrigin(chatSummaries, origin)?.id ??
+        handedItemChats.current.find((h) => sameOrigin(h.origin, origin))?.id;
+      if (!id) return false;
+      if (mode === "learn" || mode === "chat") showBand("chat");
+      openClaimChat(id);
+      return true;
+    },
+    [chatSummaries, mode, showBand, openClaimChat],
+  );
+  const askEntry = useCallback(
+    (entry: Pick<GlossaryEntry, "id" | "name">) => {
+      if (!reopenItemChat(itemOrigin("glossary", entry.id, entry.name))) askGlossaryEntryInChat(entry);
+    },
+    [reopenItemChat, askGlossaryEntryInChat],
+  );
+  const askWork = useCallback(
+    (work: Pick<CitedWork, "id" | "title" | "authors" | "year">) => {
+      if (!reopenItemChat(itemOrigin("bibliography", work.id, work.title))) askCitedWorkInChat(work);
+    },
+    [reopenItemChat, askCitedWorkInChat],
+  );
+  const askIdea = useCallback(
+    (idea: Pick<Idea, "id" | "name" | "statement">) => {
+      if (!reopenItemChat(itemOrigin("ideas", idea.id, idea.name))) askIdeaInChat(idea);
+    },
+    [reopenItemChat, askIdeaInChat],
+  );
+  const checkClaim = useCallback(
+    (origin: ClaimOrigin) => {
+      if (!reopenItemChat(origin)) checkClaimInChat(origin);
+    },
+    [reopenItemChat, checkClaimInChat],
+  );
   /* What Debate's claims are handed (ReceptionAndClaimsPanel.tsx § `ReceptionAndClaimsChats`).
      Memoised on the summaries, so the band re-renders when a chat appears or
      its latest line changes and not otherwise. */
   const claimChats = useMemo(
     () => ({
       summaries: chatSummaries,
-      onCheck: checkClaimInChat,
+      onCheck: checkClaim,
       onLens: receptionThroughLensInChat,
       onOpen: openClaimChat,
     }),
-    [chatSummaries, checkClaimInChat, receptionThroughLensInChat, openClaimChat],
+    [chatSummaries, checkClaim, receptionThroughLensInChat, openClaimChat],
   );
   /* The same three things for Glossary's entries and Bibliography's rows
      (OriginChat.tsx § `ItemChats`). **The raw `chatSummaries`**, not `chats`
      below, which is filtered to the conversations anchored to a passage and
      so holds none of these. The way back is the claim's own handler. */
   const entryChats = useMemo(
-    () => ({ summaries: chatSummaries, onAsk: askGlossaryEntryInChat, onOpen: openClaimChat }),
-    [chatSummaries, askGlossaryEntryInChat, openClaimChat],
+    () => ({ summaries: chatSummaries, onAsk: askEntry, onOpen: openClaimChat }),
+    [chatSummaries, askEntry, openClaimChat],
   );
   const workChats = useMemo(
-    () => ({ summaries: chatSummaries, onAsk: askCitedWorkInChat, onOpen: openClaimChat }),
-    [chatSummaries, askCitedWorkInChat, openClaimChat],
+    () => ({ summaries: chatSummaries, onAsk: askWork, onOpen: openClaimChat }),
+    [chatSummaries, askWork, openClaimChat],
   );
   /* And Ideas' rows (plan 261009k, stage 3), from the same raw summaries. */
   const ideaChats = useMemo(
-    () => ({ summaries: chatSummaries, onAsk: askIdeaInChat, onOpen: openClaimChat }),
-    [chatSummaries, askIdeaInChat, openClaimChat],
+    () => ({ summaries: chatSummaries, onAsk: askIdea, onOpen: openClaimChat }),
+    [chatSummaries, askIdea, openClaimChat],
   );
 
   /**
@@ -3401,6 +3494,7 @@ export function Reader({
               handoff={chatHandoff}
               onHandoffTaken={handoffTaken}
               onHandoffThread={handoffThread}
+              onHandoffThreadGone={handoffThreadGone}
               onSettled={refreshChats}
               onOrigin={openOrigin}
               articleTitle={article.meta.title}
@@ -3749,7 +3843,7 @@ export function Reader({
             glossary={owner.glossary}
             /* *Ask in chat* on a term chip's card: the Glossary band's own
                sender, as on the prose card (plan 261009k). */
-            onAskTerm={askGlossaryEntryInChat}
+            onAskTerm={askEntry}
             onOpen={openFromStopCard}
             canOpen={canOpenFromStopCard}
             arrival={skimArrival.current}
@@ -4776,8 +4870,8 @@ export function Reader({
            started from a card records the same origin as one started in the
            band. Each card had *Dig deeper* there until 2026-10-09 (plans
            261002c, 261004b, 261009k). Null for a visitor, who has no chat. */
-        onAskTerm={owner ? askGlossaryEntryInChat : null}
-        onAskCitedWork={owner ? askCitedWorkInChat : null}
+        onAskTerm={owner ? askEntry : null}
+        onAskCitedWork={owner ? askWork : null}
         /* *Open in Sources* on a cited work's card: Bibliography, its row in
            view (plan 261010e). Owner only, as the marks are. */
         onOpenCitedWork={owner ? openBibliographyWork : null}

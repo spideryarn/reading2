@@ -55,12 +55,12 @@ for that.
   citations recorded* means Crossref has none on file, not that nobody has cited the work. Most rows
   have no count, because most works are cited without a DOI. It sits beside influence and does not
   change the order or what the slider hides.
-- **Ask in chat** opens a new conversation in [Chat](/help/mode-chat) and asks a question about
-  the work straight away, with the work named. Chat can search the web and your library to answer,
+- The **chat icon** opens a new conversation in [Chat](/help/mode-chat) and asks a question about
+  the work straight away, with the work named; if one exists, it reopens that instead. Chat can search the web and your library to answer,
   and you can go back and forth. It is on the row, and on the card you get by pointing at a
   citation in the text. A longer reading kept on a row from before (once made by a button called
-  **Dig deeper**, which has gone) is still shown there. Once you have asked, a line under the row
-  shows how the chat’s latest answer begins; press it to open that conversation again beside
+  **Dig deeper**, which has gone) is still shown there. Once you have asked, the button becomes a
+  line with the chat's short summary; press it to open that conversation again beside
   Bibliography. The conversation is also in Chat’s list, marked with Sources’ icon. Only
   whoever added the article has this.
 - **first cited** jumps to where the article first cites it. *only in the references* means the
@@ -117,9 +117,9 @@ for that.
   found yet. One check runs at a time per article, and there is a limit on how many web searches you
   can ask for in an hour and in a day. Visitors see the list, not the checks or anything you typed.
 - To look into one claim yourself, press the chat icon beside it. It opens a new conversation in
-  [Chat](/help/mode-chat) and sends a question with the claim quoted. Once you have asked, a line
-  under the claim shows how the chat’s latest answer begins; press it to open that conversation
-  again. Only whoever added the article has this.
+  [Chat](/help/mode-chat) and sends a question with the claim quoted; if one exists, it reopens that
+  instead. Once you have asked, the icon becomes a line with the chat's short summary; press it to
+  open that conversation again. Only whoever added the article has this.
 - A search made before 2026-10-08 also picked three or four claims by itself and searched those;
   it still shows them, under **Claims the earlier search chose**, each with the sources on it.
   Press a claim to fold its sources away. The **relevance** slider hides sources the AI judged to

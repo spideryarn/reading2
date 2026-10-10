@@ -27,7 +27,7 @@ the next feedback sweep does.
 > — Greg, 2026-10-09 (`spya-gm858u`)
 
 **Ending: Shipped**, all three. On `dev` and not deployed. Plan
-[261010g](../plans/261010g-skim-deeper-passes-always-longer-and-a-previous-stop-door.md).
+[261010t](../plans/261010t-skim-deeper-passes-always-longer-and-a-previous-stop-door.md).
 
 - **Why Most was shorter.** The rule that the passes grow still counted them the way they worked
   when More contained Gist. Since 2026-09-29 each pass walks only its own stops plus a few carried

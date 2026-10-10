@@ -839,8 +839,11 @@ and stands in its place since (plan [261009k](../plans/261009k-ask-in-chat-repla
 opens a fresh conversation in Chat with the work quoted (its title, then the authors and year where
 the article gives them) and a question after it, and sends that as the first question: the press
 is the Send since 2026-10-06 ([261006j](../plans/261006j-ask-in-chat-sends-the-question.md)). Once a chat exists,
-a line under the row's controls shows how many questions were asked and how the latest answer
-begins, and pressing it opens that conversation beside Sources' Bibliography. Chat's list
+a line in the button's place shows how many questions were asked and the chat's gist (or how the
+latest answer begins, until there is one), and pressing it opens that conversation beside Sources'
+Bibliography; the hover card's button reopens it too
+([chat-from-a-mode.md § One chat per item](chat-from-a-mode.md#one-chat-per-item), plan
+[261010s](../plans/261010s-ask-in-chat-resumes-its-thread-and-becomes-an-icon.md)). Chat's list
 marks the conversation with Sources' icon. A visitor has neither the button nor the line.
 
 It is the Glossary's button with a different origin, `{ mode: "bibliography", itemId, quote }` (`citations` until 2026-10-09, still read): the

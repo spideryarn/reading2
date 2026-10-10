@@ -4371,8 +4371,9 @@ export const chatThreads = spideryarn.table(
      * **One line saying what this conversation covered**, written by a small
      * model after each finished answer (src/chat-gist.ts, plan 261008e). Read
      * by the model in the reader's *other* conversations, beside the title, so
-     * a new one can see what an earlier one already said. Never shown on
-     * screen and never the title: the reader's title and renames are untouched.
+     * a new one can see what an earlier one already said. Never the title: the
+     * reader's title and renames are untouched. Shown on screen since plan
+     * 261010s, on the mark of the item a chat was started from.
      * Null until the first gist, and whenever the last attempt failed before
      * any succeeded.
      */
