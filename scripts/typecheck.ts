@@ -200,4 +200,8 @@ if (unchecked.length > 0) {
   console.log(`✓ all ${sources.length} source files are covered by some project`);
 }
 
-process.exit(failed ? 1 : 0);
+/* Not `process.exit()` — see scripts/check.ts's comment on the same line for
+   why: it can drop this script's own just-printed footer line from a pipe,
+   which is exactly the line readiness-parse.ts requires as proof this run
+   finished. `exitCode` + falling off the end flushes stdout first. */
+process.exitCode = failed ? 1 : 0;
