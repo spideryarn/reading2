@@ -150,3 +150,14 @@ remote, so there is nothing to work out.
 One stage: route and store, the tool and the remote list, the confirmation line, docs
 (`mcp.md`'s table and remote section, `admin.md § Author gifts`). Then GPT Sol's code review,
 gates, commit, push.
+
+## Code review (GPT Sol, write-capable): approved with one fix applied
+
+[261010g-code-review-sol.md](261010g-code-review-sol.md), over
+[261010g-code-review.diff](261010g-code-review.diff). One finding, high, fixed by the reviewer: the
+open *Send* confirmation re-read the gift on every refresh (the page polls while any lookup runs), so
+it would have sent an agent's newer values as `expected` — the very edit F1 exists to catch. The card
+now keeps the gift as it was when *Send* was pressed, shows and sends that snapshot, and closes the
+confirmation if the gift is sent or discarded elsewhere; two component tests, seen red first. F3
+stays deferred as above. Gates after the fix: typecheck clean; the twelve MCP, author-gift,
+voucher-page and doc-links suites, 304 tests, green against the local database.

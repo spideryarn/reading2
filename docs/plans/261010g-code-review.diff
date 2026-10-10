@@ -1,0 +1,1284 @@
+diff --git a/docs/project/admin.md b/docs/project/admin.md
+index 7e8629d44..97af884bb 100644
+--- a/docs/project/admin.md
++++ b/docs/project/admin.md
+@@ -882,11 +882,11 @@ is how the section reads each lookup's cost from the ledger.
+ 
+ | Route | Does |
+ |---|---|
+-| `POST /api/admin/author-gifts` | `{ slug, rightsConfirmed: true }`. A new gift: the private link if the article has neither one nor public visibility (`keepExisting`), the row, and its first lookup, which runs after the response → `202`. An article that already has a gift → `200` and nothing touched, so a late replay cannot turn a link back on or buy another search. The article must be the administrator's own (400) and published (409) |
++| `POST /api/admin/author-gifts` | `{ slug, rightsConfirmed: true }`. A new gift: the private link if the article has neither one nor public visibility (`keepExisting`), the row, and its first lookup, which runs after the response → `202`. An article that already has a gift → `200` and nothing touched, so a late replay cannot turn a link back on or buy another search. The article must be the administrator's own (400) and published (409). Since [261010g](../plans/261010g-mcp-draft-gift-and-remote-tool-list-without-the-asking-tools.md), MCP's `draft_author_gift`: `makeLink: false` in place of the tick (never makes a link, so a link-less private article is a 409), `lookup: false` (no lookup row, → `201` with `lookupId: null`), and `draft: { email, recipientName, recipientNote, articles, notes }`, written by the insert only, under the PATCH's field rules |
+ | `POST /api/admin/author-gifts/:id/lookups` | *Look up again* on a draft → `202`; `409` while one runs (five minutes, then it counts as stale) or once the gift is not a draft |
+ | `GET /api/admin/author-gifts` | every gift with its derived status (draft, sending, sent, discarded), fields, notes, each field's source lookup, and every lookup with its cost — `private, no-store` |
+ | `PATCH /api/admin/author-gifts/:id` | `{ email, recipientName, recipientNote, articles, notes, discarded }`, the voucher's own field rules; once *Send* has started only `notes`. Editing the address or name clears its lookup as the source |
+-| `POST /api/admin/author-gifts/:id/send` | freezes the draft under an attempt token, then `createVoucher`; the gift email is scheduled after a create *or* a replay, and a starter that cannot be linked now unfreezes only that attempt (409) |
++| `POST /api/admin/author-gifts/:id/send` | freezes the draft under an attempt token, then `createVoucher`; the gift email is scheduled after a create *or* a replay, and a starter that cannot be linked now unfreezes only that attempt (409). The page sends `{ expected: { email, recipientName, recipientNote, articles } }`, what its confirmation showed, and a gift that no longer matches (an agent edited it meanwhile) is a 409 with nothing made (261010g) |
+ 
+ **The lookup** (`src/author-lookup.ts`, `src/author-lookup-start.ts`) is one capable-tier chat call
+ with Exa web search, standard power whatever the article's, in a collector of its own because the
+diff --git a/docs/project/marketing-author-gifts.md b/docs/project/marketing-author-gifts.md
+index de7642606..463a25414 100644
+--- a/docs/project/marketing-author-gifts.md
++++ b/docs/project/marketing-author-gifts.md
+@@ -13,7 +13,7 @@ they will answer honestly, and they are the best judges of whether it got their
+ Each reply is a user interview, and it tests the author-gift idea below on friendly ground first.
+ Greg, 2026-10-09: *"That's a good idea for the first experiment. I might try and actually talk to
+ them on the phone at the same time."* He will pick the five and draft the notes from a
+-knowledge-work harness, through Spideryarn's MCP server ([mcp.md](mcp.md)).
++knowledge-work harness, through Spideryarn's MCP server ([mcp.md](mcp.md)): `draft_author_gift` saves each one unsent, for him to read and send from `/admin/vouchers`.
+ 
+ ## Authors: a gift, not a republication — *idea, to run as an experiment*
+ 
+diff --git a/docs/project/mcp.md b/docs/project/mcp.md
+index d7572b853..cb9ca9a0c 100644
+--- a/docs/project/mcp.md
++++ b/docs/project/mcp.md
+@@ -114,6 +114,7 @@ this one, not your browser) and deletes the file. A running server notices on it
+ | `update_gift_voucher` | admin: edit or revoke; **changing the address re-sends, and asks you first** |
+ | `retry_gift_voucher_email` | admin: re-send a failed email; **asks you first** |
+ | `list_author_gifts` | admin: the draft gifts for authors, with their notes and lookups (no private link key) — [admin.md § Author gifts](admin.md#author-gifts-a-draft-voucher-for-an-articles-author) |
++| `draft_author_gift` | admin: **saves an unsent gift** for one of your own articles, already filled in (address, name, note to them, size, notes), for you to review and press *Send* on `/admin/vouchers`. Sends nothing, so it does not ask, and works remotely. Never makes the private link: the article must already be public or have one. No web search unless `look_up_author: true`. One per article; an existing one is left alone ([261010g](../plans/261010g-mcp-draft-gift-and-remote-tool-list-without-the-asking-tools.md)) |
+ | `update_author_gift` | admin: edit a draft gift's notes, address, name, note to them or size; **replaces** the notes; sends nothing, so it does not ask. There is no tool that sends one |
+ 
+ **"Asks you first" is a macOS dialog the MCP server itself opens**, naming the exact gift or
+@@ -122,6 +123,13 @@ It is there because an agent that reads your email can be steered by what is in
+ model cannot press that button. (An agent you have also given *computer use* could, in principle;
+ that is a capability you grant separately.) Off macOS these tools refuse and point at the web page.
+ 
++**To review a gift before it goes, draft it.** Greg, 2026-10-10, after his first ChatGPT run:
++*"create_gift_voucher always sends a real email, so ChatGPT refused to draft one."* So
++`draft_author_gift` saves one that nothing sends, and *Send* on `/admin/vouchers` refuses (409) if
++the gift changed after the page showed it, so an agent's later edit cannot ride along. A draft is
++always for one of your articles; a gift with no article has no draft yet, and is made on the page
++or with `create_gift_voucher` on the Mac.
++
+ **A gift is sent once.** `create_gift_voucher` needs an `idempotency_key`, a short name for that
+ gift. Calling again with the same key and the same gift sends nothing; the same key with a different
+ gift is refused. A second gift to the same person needs a new key.
+@@ -165,8 +173,13 @@ account ([261007p](../plans/261007p-mcp-remote-sign-in-with-oauth.md)).
+ - **Administrator only**, for now.
+ - **Other browser origins still refuse.** The origin gate remains the site's own, Claude's and
+   ChatGPT's; other apps must call without an `Origin` header, as server-side clients normally do.
+-- **The asking tools refuse there**: no dialog can be shown on your Mac from a server, so gifts,
+-  publishing and private links are done in the Mac app or on the site.
++- **The asking tools are not offered there**: no dialog can be shown on your Mac from a server, so
++  `tools/list` leaves out `make_article_public`, `create_private_link`, `create_gift_voucher` and
++  `retry_gift_voucher_email`, and `update_gift_voucher` comes without `email`
++  (`remoteTools()` in `tools.ts`). Left out rather than listed with "not available here", because
++  models plan around whatever they are offered; a new asking tool is left out unless it declares a
++  `remote` form. Gifting from there is `draft_author_gift`, then *Send* on the site
++  ([261010g](../plans/261010g-mcp-draft-gift-and-remote-tool-list-without-the-asking-tools.md)).
+ - **What the token can do at Supabase** is more than the tools, and is written up in
+   [security-map.md](security-map.md#and-since-2026-10-07-an-ai-apps-token-which-opens-one-route).
+ 
+@@ -187,7 +200,9 @@ stay out of the local server's imports: `tests/mcp-remote-import-graph.test.ts`.
+ 
+ **Adding a tool** is a row in `TOOLS` that calls an existing route; the server's checks do the
+ rest. A tool that sends mail, publishes, or otherwise reaches the outside world gets an `ask`, and a
+-test that a *Cancel* sends nothing.
++test that a *Cancel* sends nothing. An asking tool is then absent from the remote server's list,
++unless part of it never asks: give it a `remote` form, a narrower input under which `ask` cannot
++ask, as `update_gift_voucher` has.
+ 
+ **Two things not to break.** `serve` speaks MCP on stdout, so nothing else may ever write there; a
+ stray `console.log` corrupts the connection (`tests/mcp-stdio.test.ts` spawns the real thing and
+diff --git a/src/admin-author-gifts.ts b/src/admin-author-gifts.ts
+index b739fb4f3..6246485a9 100644
+--- a/src/admin-author-gifts.ts
++++ b/src/admin-author-gifts.ts
+@@ -93,12 +93,13 @@ export interface AdminAuthorGift {
+ 
+ /**
+  * What `POST /api/admin/author-gifts` answers (R2-F2): `202` with
+- * `created: true` and the first lookup's id for a new gift; `200` with
+- * `created: false` for one that already existed, whose link and lookups it did
+- * not touch.
++ * `created: true` and the first lookup's id for a new gift; `201` with
++ * `lookupId: null` for a new gift made with `lookup: false` (261010g); `200`
++ * with `created: false` for one that already existed, whose link, lookups and
++ * fields it did not touch.
+  */
+ export type AuthorGiftEnsured =
+-  | { readonly id: string; readonly status: AuthorGiftStatus; readonly created: true; readonly lookupId: string }
++  | { readonly id: string; readonly status: AuthorGiftStatus; readonly created: true; readonly lookupId: string | null }
+   | { readonly id: string; readonly status: AuthorGiftStatus; readonly created: false };
+ 
+ /**
+@@ -116,6 +117,20 @@ export interface AuthorLookupStarted {
+   readonly lookupId: string;
+ }
+ 
++/**
++ * **What the *Send* confirmation showed** — the body of `POST
++ * /api/admin/author-gifts/:id/send`, `{ expected }` (261010g, Sol's F1): the
++ * voucher's fields exactly as the list gave them. *Send* goes ahead only while
++ * the gift still holds these, so an edit landing after the page drew it (an
++ * agent's, through MCP) is a `409`, not an email to an address nobody read.
++ */
++export interface AuthorGiftSendExpected {
++  readonly email: string;
++  readonly recipientName: string | null;
++  readonly recipientNote: string | null;
++  readonly articles: number;
++}
++
+ /**
+  * What `POST /api/admin/author-gifts/:id/send` answers: `201` with `queued`
+  * when this press made the voucher, `200` with `replayed` when it already
+diff --git a/src/mcp/remote.ts b/src/mcp/remote.ts
+index a0663510a..d0c8db1c0 100644
+--- a/src/mcp/remote.ts
++++ b/src/mcp/remote.ts
+@@ -50,12 +50,15 @@
+  * request on a stateless transport, and a shared server closed over one
+  * person's identity is a hazard under concurrency). `GET` and `DELETE` are 405.
+  *
+- * ## The asking tools refuse
++ * ## The asking tools are not offered
+  *
+  * Sending mail, publishing and handing over a private link need the owner's
+  * approval, which is a dialog on their Mac; a server on Vercel cannot show
+- * one. The approver here throws `CannotAsk` with the page to use, whatever the
+- * OS (Sol F8: a remote request served during Mac development must refuse too).
++ * one. So the list served here is `remoteTools()`, which leaves those tools
++ * out so a model does not plan around them (plan 261010g § D2), and the
++ * approver throws `CannotAsk` with the page to use, whatever the OS, should
++ * one ever be reached (Sol F8: a remote request served during Mac development
++ * must refuse too).
+  *
+  * **Not imported by the local server.** scripts/spideryarn-mcp.ts must not
+  * pull in src/routes.ts, and this file is reached only from there; it takes
+@@ -82,6 +85,7 @@ import {
+ import { siteOrigin } from "../site-origin.js";
+ import { type Api, ApiError, type HttpMethod } from "./api.js";
+ import { type Approver, CannotAsk } from "./approve.js";
++import { remoteTools } from "./tools.js";
+ import { buildServer } from "./server.js";
+ 
+ export const MCP_PATH = "/api/mcp";
+@@ -210,6 +214,8 @@ async function serveMcp(r: RemoteMcpRequest): Promise<void> {
+     api: inProcessApi(who.claims, r.handleApi, lifetime.signal),
+     ctx: { identity: async () => ({ userId: who.userId, email: who.email }) },
+     approver: REMOTE_APPROVER,
++    /* Without the tools that could only refuse here (261010g § D2). */
++    tools: remoteTools(),
+   });
+   const transport = new WebStandardStreamableHTTPServerTransport({
+     sessionIdGenerator: undefined,
+@@ -289,16 +295,18 @@ async function readBytes(req: IncomingMessage): Promise<Buffer> {
+ }
+ 
+ /**
+- * **No one can be asked from here**, so every asking tool refuses, naming the
+- * page that does the same job with the owner present. Unconditional: never
+- * chosen by the host's OS.
++ * **No one can be asked from here.** The asking tools are not even listed
++ * (`remoteTools`, 261010g § D2); this is the backstop, should one ever be
++ * reached: it refuses, naming the page that does the same job with the owner
++ * present. Unconditional: never chosen by the host's OS.
+  */
+ export const REMOTE_APPROVER: Approver = {
+   async approve(): Promise<boolean> {
+     throw new CannotAsk(
+       "Sending mail, publishing and handing over a private link need your approval, which is a dialog in the " +
+         "Mac app and cannot be shown from here. Do it in the Mac app, or on Spideryarn itself: /admin/vouchers " +
+-        "for gift vouchers, the article's page for publishing or its private link. Nothing was done.",
++        "for gift vouchers (draft_author_gift saves one there for you to send), the article's page for " +
++        "publishing or its private link. Nothing was done.",
+     );
+   },
+ };
+diff --git a/src/mcp/tools.ts b/src/mcp/tools.ts
+index 79508189d..584e2fec7 100644
+--- a/src/mcp/tools.ts
++++ b/src/mcp/tools.ts
+@@ -25,7 +25,12 @@ import type { ToolAnnotations } from "@modelcontextprotocol/server";
+ import * as z from "zod";
+ 
+ import type { AdminUser } from "../admin.js";
+-import { type AdminAuthorGift, type AdminAuthorLookup, AUTHOR_GIFT_NOTES_MAX } from "../admin-author-gifts.js";
++import {
++  type AdminAuthorGift,
++  type AdminAuthorLookup,
++  AUTHOR_GIFT_NOTES_MAX,
++  type AuthorGiftEnsured,
++} from "../admin-author-gifts.js";
+ import type { AdminVoucher } from "../admin-vouchers.js";
+ import { freeArticles } from "../admin-vouchers.js";
+ import { SHARING_RIGHTS_CONFIRM } from "../messages.js";
+@@ -64,6 +69,14 @@ export interface Tool<S extends z.ZodObject = z.ZodObject> {
+    */
+   readonly ask?: (api: Api, args: z.infer<S>, ctx: ToolContext) => Promise<ApprovalRequest | null>;
+   readonly handler: (api: Api, args: z.infer<S>, ctx: ToolContext) => Promise<unknown>;
++  /**
++   * **On the remote server, where nobody can be asked** (plan 261010g § D2), a
++   * tool with `ask` is left out of the list — unless it declares this: the
++   * description and a narrower input under which `ask` never asks. The input
++   * must be a strict subset, so an argument that would ask is refused by the
++   * schema before any handler runs; `ask` stays, as a backstop.
++   */
++  readonly remote?: { readonly description: string; readonly input: z.ZodObject };
+ }
+ 
+ /** Erases the per-tool input type so a list can hold them all; each was checked where it was written. */
+@@ -220,6 +233,16 @@ function trimAuthorGift(api: Api, g: AdminAuthorGift) {
+ 
+ const voucherNote = z.string().max(500).nullable().optional();
+ 
++const updateVoucherInput = z.strictObject({
++  id: z.string().uuid().describe("The voucher's id, from list_gift_vouchers."),
++  email: z.string().min(3).optional(),
++  articles: z.number().int().min(1).max(1000).optional(),
++  recipientName: z.string().max(80).nullable().optional(),
++  recipientNote: voucherNote,
++  note: voucherNote,
++  revoked: z.boolean().optional(),
++});
++
+ async function titleOf(api: Api, slug: string): Promise<string | undefined> {
+   const entries = [...(await shelf(api, false)), ...(await shelf(api, true))];
+   return entries.find((e) => e.slug === slug)?.title;
+@@ -643,7 +666,9 @@ export const TOOLS: readonly Tool[] = [
+       "Admin only. Creates a gift voucher of free articles for an email address and **sends that person a real " +
+       "gift email**. A dialog on this computer asks the person to approve every one. `idempotency_key` names this " +
+       "one gift: calling again with the same key never sends a second gift (the same arguments are a harmless " +
+-      "replay; changed arguments are refused), so reuse it when you retry and choose a new one for a new gift.",
++      "replay; changed arguments are refused), so reuse it when you retry and choose a new one for a new gift. " +
++      "To prepare a gift of one of the admin's own articles for them to review and send themselves, use " +
++      "draft_author_gift instead.",
+     input: z.strictObject({
+       email: z.string().min(3).describe("The recipient's email address."),
+       articles: z.number().int().min(1).max(1000).describe("How many free articles."),
+@@ -699,15 +724,15 @@ export const TOOLS: readonly Tool[] = [
+       "restores it (revoked: false); none of those sends anything. Changing the email address **sends the gift " +
+       "email to the new address**, so a dialog on this computer asks the person to approve that change. A claimed " +
+       "voucher's address cannot change.",
+-    input: z.strictObject({
+-      id: z.string().uuid().describe("The voucher's id, from list_gift_vouchers."),
+-      email: z.string().min(3).optional(),
+-      articles: z.number().int().min(1).max(1000).optional(),
+-      recipientName: z.string().max(80).nullable().optional(),
+-      recipientNote: voucherNote,
+-      note: voucherNote,
+-      revoked: z.boolean().optional(),
+-    }),
++    input: updateVoucherInput,
++    /* Only the address change asks, so the remote keeps the rest (261010g). */
++    remote: {
++      description:
++        "Admin only. Changes a voucher's number of articles, notes or name, or revokes it (revoked: true) or " +
++        "restores it (revoked: false); none of those sends anything. The address cannot be changed from here, " +
++        "because that sends the gift email again; do it on /admin/vouchers.",
++      input: updateVoucherInput.omit({ email: true }),
++    },
+     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
+     ask: async (api, a) =>
+       a.email === undefined
+@@ -799,6 +824,73 @@ export const TOOLS: readonly Tool[] = [
+     },
+   }),
+ 
++  /* Plan 261010g § D1: Greg, after his first ChatGPT run, wanted a draft he
++     reviews and sends himself. One POST makes the draft already filled in.
++     It sends nothing, so it does not ask, and it works on the remote server.
++     It never makes the private link (`makeLink: false`): that would record a
++     rights confirmation the person did not give (Sol's F2 on the plan). */
++  tool({
++    name: "draft_author_gift",
++    title: "Draft a gift of one of your articles",
++    description:
++      "Admin only. Saves an unsent draft gift voucher for the person who should receive one of the admin's own " +
++      "articles (usually its author): their address and name, a note to them, how many free articles, and notes " +
++      "for the admin (where you found the address, why this person). **Sends nothing.** The admin reviews it on " +
++      "/admin/vouchers under Author gifts and presses Send there; no tool can send it. The article must already be " +
++      "readable by link (public, or its private link on); if it is not, ask the admin to turn its private link on " +
++      "from the article's page. One gift per article: if the article already has one, nothing is changed and the " +
++      "answer says so, and update_author_gift edits it. look_up_author: true also runs a paid web search for the " +
++      "author's name and address, which fills only what you left empty. For a gift with no article, there is no " +
++      "draft: the admin makes it on /admin/vouchers.",
++    input: z.strictObject({
++      slug: slugInput,
++      email: z.string().min(3).nullable().optional().describe("The recipient's address, if you know it."),
++      recipientName: z.string().max(80).nullable().optional().describe('Their name; the email opens "Dear <name>,".'),
++      recipientNote: voucherNote.describe("A note to them, put in their email when the admin sends it."),
++      articles: z.number().int().min(1).max(1000).optional().describe("How many free articles (default 20)."),
++      notes: z
++        .string()
++        .max(AUTHOR_GIFT_NOTES_MAX)
++        .nullable()
++        .optional()
++        .describe("Notes for the admin, never emailed: where the address came from, why this person, a draft message."),
++      look_up_author: z.boolean().default(false).describe("Also search the web for the author and an address. Costs money."),
++    }),
++    /* Not idempotent in what it answers: the second call finds the first's gift. */
++    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
++    handler: async (api, { slug, look_up_author, ...fields }) => {
++      const draft = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
++      const answer = await api.call<AuthorGiftEnsured>("POST", "/api/admin/author-gifts", {
++        slug,
++        makeLink: false,
++        lookup: look_up_author,
++        draft,
++      });
++      const review = `${api.site}/admin/vouchers`;
++      if (!answer.created) {
++        return {
++          id: answer.id,
++          status: answer.status,
++          created: false,
++          said:
++            `This article already has an author gift (${answer.status}), so nothing was changed. ` +
++            "Use list_author_gifts to see it and update_author_gift to edit it while it is a draft.",
++          review,
++        };
++      }
++      return {
++        id: answer.id,
++        status: answer.status,
++        created: true,
++        lookup: answer.lookupId !== null,
++        said:
++          "Saved as a draft; nothing was sent. The admin reviews it and presses Send on /admin/vouchers." +
++          (answer.lookupId !== null ? " A web search for the author is running and will fill what is empty." : ""),
++        review,
++      };
++    },
++  }),
++
+   tool({
+     name: "update_author_gift",
+     title: "Change an author gift's notes or draft",
+@@ -857,6 +949,22 @@ export const TOOLS: readonly Tool[] = [
+   }),
+ ];
+ 
++/**
++ * **The list the remote server serves** (plan 261010g § D2). Nobody can be
++ * asked from there, so a tool that asks is left out rather than listed and
++ * refused — a model plans around what it is offered. A tool that declares a
++ * `remote` form is served in that form instead. Left out is the default, so
++ * a new asking tool cannot appear remotely by being forgotten. The stdio
++ * server keeps `TOOLS` whole.
++ */
++export function remoteTools(tools: readonly Tool[] = TOOLS): readonly Tool[] {
++  return tools.flatMap((t): Tool[] => {
++    if (!t.ask) return [t];
++    if (!t.remote) return [];
++    return [{ ...t, description: t.remote.description, input: t.remote.input }];
++  });
++}
++
+ /* ----------------------------------------------------- failures, in words -- */
+ 
+ const ADMIN_ONLY = new Set([
+@@ -867,6 +975,7 @@ const ADMIN_ONLY = new Set([
+   "update_gift_voucher",
+   "retry_gift_voucher_email",
+   "list_author_gifts",
++  "draft_author_gift",
+   "update_author_gift",
+ ]);
+ 
+diff --git a/src/routes.ts b/src/routes.ts
+index c48585b76..b78b5bed0 100644
+--- a/src/routes.ts
++++ b/src/routes.ts
+@@ -375,7 +375,12 @@ import {
+   type AuthorLookupStarted,
+ } from "./admin-author-gifts.js";
+ import { startAuthorLookup } from "./author-lookup-start.js";
+-import { parseAuthorGiftPatch, parseEnsureAuthorGift, pgAuthorGiftStore } from "./store/pg-author-gifts.js";
++import {
++  parseAuthorGiftPatch,
++  parseEnsureAuthorGift,
++  parseSendAuthorGift,
++  pgAuthorGiftStore,
++} from "./store/pg-author-gifts.js";
+ import {
+   chargeAndSwitchOnHighPower,
+   refuseUploadWithoutQuota,
+@@ -9874,7 +9879,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
+       if (!parsed.ok) throw httpError(400, parsed.message);
+       /* Ensure, nothing more (R2-F2): an existing gift is answered as it
+          stands, and only a new one makes the link and its first lookup. */
+-      const answer = await pgAuthorGiftStore.ensureAuthorGift(parsed.value.slug, user.id);
++      const answer = await pgAuthorGiftStore.ensureAuthorGift(parsed.value.slug, user.id, parsed.value.options);
+       res.setHeader("Cache-Control", "private, no-store");
+       if (answer.kind === "refused") {
+         switch (answer.reason) {
+@@ -9883,7 +9888,14 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
+           case "unpublished":
+             throw httpError(409, "That article has nothing to read yet. Draft its gift once it is on your shelf.");
+           case "link-off":
+-            throw httpError(409, "That article's private link was turned off while its gift was being drafted. Try again.");
++            throw httpError(
++              409,
++              parsed.value.options.makeLink
++                ? "That article's private link was turned off while its gift was being drafted. Try again."
++                : /* An agent's draft never makes the link (261010g): the rights tick is the person's. */
++                  "That article is private and has no private link, and a draft made this way does not make one. " +
++                    "Turn its private link on from the article's page (which asks you to confirm you may share it), then draft again.",
++            );
+           default: {
+             const never: never = answer.reason;
+             throw httpError(500, `unknown refusal ${String(never)}`);
+@@ -9894,6 +9906,12 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
+         send(res, 200, { id: answer.id, status: answer.status, created: false } satisfies AuthorGiftEnsured);
+         return;
+       }
++      /* A gift made already filled in, with no lookup asked for (261010g):
++         201, and nothing runs after the response. */
++      if (answer.lookupId === null) {
++        send(res, 201, { id: answer.id, status: "draft", created: true, lookupId: null } satisfies AuthorGiftEnsured);
++        return;
++      }
+       /* Registered only now, after the gift and its pending lookup committed. */
+       const lookupId = answer.lookupId;
+       await afterResponse("author gift: lookup", () => startAuthorLookup(lookupId));
+@@ -9950,13 +9968,18 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
+     method: "POST",
+     pattern: /^\/api\/admin\/author-gifts\/([\w-]+)\/send$/,
+     article: "none",
+-    handler: async ({ request: { res } }, captures) => {
++    handler: async ({ request: { req, res } }, captures) => {
+       const [, id = ""] = captures;
+       if (!isUuid(id)) throw httpError(400, "id must be a uuid");
+-      const answer = await pgAuthorGiftStore.sendAuthorGift(id);
++      /* What the confirmation showed (261010g, Sol's F1); the page always sends it. */
++      const parsed = parseSendAuthorGift(await readBody(req));
++      if (!parsed.ok) throw httpError(400, parsed.message);
++      const answer = await pgAuthorGiftStore.sendAuthorGift(id, { expected: parsed.value.expected });
+       switch (answer.kind) {
+         case "not-found":
+           throw httpError(404, "There is no such author gift.");
++        case "changed":
++          throw httpError(409, "That gift changed since you opened it, so nothing was sent. Check it again, then press Send.");
+         case "no-address":
+           throw httpError(409, "That gift has no address yet. Add one, then send it.");
+         case "discarded":
+diff --git a/src/store/pg-author-gifts.ts b/src/store/pg-author-gifts.ts
+index 5be2d685c..1de5dc740 100644
+--- a/src/store/pg-author-gifts.ts
++++ b/src/store/pg-author-gifts.ts
+@@ -34,6 +34,7 @@ import {
+   AUTHOR_LOOKUP_STALE_MINUTES,
+   type AdminAuthorGift,
+   type AdminAuthorLookup,
++  type AuthorGiftSendExpected,
+   type AuthorGiftStatus,
+   type AuthorLookupOutcome,
+ } from "../admin-author-gifts.js";
+@@ -111,8 +112,11 @@ const NOTES_STAMP_SEEN = sql`date_trunc('milliseconds', ${authorGifts.notesUpdat
+ /* ---------------------------------------------------------------- ensure -- */
+ 
+ export type EnsureAnswer =
+-  /** A new gift, its private link if it needed one, and its first lookup, pending. */
+-  | { readonly kind: "created"; readonly id: string; readonly lookupId: string }
++  /**
++   * A new gift, its private link if it needed one, and its first lookup,
++   * pending — or no lookup at all when the caller asked for none (261010g).
++   */
++  | { readonly kind: "created"; readonly id: string; readonly lookupId: string | null }
+   /** The article already had one. Nothing was touched — not the link, not the lookups (R2-F2). */
+   | { readonly kind: "existing"; readonly id: string; readonly status: AuthorGiftStatus }
+   /**
+@@ -122,6 +126,32 @@ export type EnsureAnswer =
+    */
+   | { readonly kind: "refused"; readonly reason: StarterRefusal };
+ 
++/**
++ * **What a new gift starts with** (plan 261010g § D1) — an agent drafting a
++ * gift it already knows the address for, through `draft_author_gift`. Applied
++ * only by the insert that makes the gift: an existing gift is never changed
++ * here. `lookup: false` makes no lookup row, so nothing is searched.
++ * `makeLink: false` never makes the private link: the person did not tick
++ * the rights box, so a private article without one is refused `link-off`
++ * (Sol's F2 on 261010g — the share-link event records that tick).
++ */
++export interface EnsureOptions {
++  readonly makeLink: boolean;
++  readonly lookup: boolean;
++  readonly draft: AuthorGiftDraft;
++}
++
++/** The fields a new gift may be made with: typed by whoever asked, so with no lookup provenance. */
++export interface AuthorGiftDraft {
++  readonly email?: string | null;
++  readonly recipientName?: string | null;
++  readonly recipientNote?: string | null;
++  readonly articles?: number;
++  readonly notes?: string | null;
++}
++
++const NO_OPTIONS: EnsureOptions = { makeLink: true, lookup: true, draft: {} };
++
+ /** Seams for tests; each defaults to the real thing. */
+ export interface EnsureDeps {
+   readonly resolveStarter?: (slug: string) => Promise<StarterResolution>;
+@@ -149,7 +179,12 @@ export interface EnsureDeps {
+  * Not one transaction overall: the link is the share-link store's own write,
+  * under its own lock, and is wanted whether or not this call wins the insert.
+  */
+-export async function ensureAuthorGift(slug: string, createdBy: string, deps: EnsureDeps = {}): Promise<EnsureAnswer> {
++export async function ensureAuthorGift(
++  slug: string,
++  createdBy: string,
++  options: EnsureOptions = NO_OPTIONS,
++  deps: EnsureDeps = {},
++): Promise<EnsureAnswer> {
+   const db = getDb();
+   const [article] = await db.select({ id: articles.id }).from(articles).where(ownedSlug(slug)).limit(1);
+   if (!article) return { kind: "refused", reason: "absent" };
+@@ -159,7 +194,7 @@ export async function ensureAuthorGift(slug: string, createdBy: string, deps: En
+ 
+   const resolve = deps.resolveStarter ?? resolveStarter;
+   let resolved = await resolve(slug);
+-  if (resolved.kind === "link-off") {
++  if (resolved.kind === "link-off" && options.makeLink) {
+     await pgShareLinkStore.create(slug, { keepExisting: true });
+     resolved = await resolve(slug);
+   }
+@@ -169,12 +204,25 @@ export async function ensureAuthorGift(slug: string, createdBy: string, deps: En
+   if (resolved.starter.articleId !== article.id) return { kind: "refused", reason: "absent" };
+ 
+   const made = await db.transaction(async (tx) => {
++    const { draft } = options;
+     const [gift] = await tx
+       .insert(authorGifts)
+-      .values({ articleId: article.id, starterSlug: slug, createdBy })
++      .values({
++        articleId: article.id,
++        starterSlug: slug,
++        createdBy,
++        ...(draft.email === undefined ? {} : { email: draft.email }),
++        ...(draft.recipientName === undefined ? {} : { recipientName: draft.recipientName }),
++        ...(draft.recipientNote === undefined ? {} : { recipientNote: draft.recipientNote }),
++        ...(draft.articles === undefined ? {} : { articles: draft.articles }),
++        ...(draft.notes === undefined || draft.notes === null
++          ? {}
++          : { notes: draft.notes, notesUpdatedAt: sql`date_trunc('milliseconds', clock_timestamp())` }),
++      })
+       .onConflictDoNothing({ target: authorGifts.articleId })
+       .returning({ id: authorGifts.id });
+     if (!gift) return null;
++    if (!options.lookup) return { id: gift.id, lookupId: null };
+     const [lookup] = await tx
+       .insert(authorLookups)
+       .values({ authorGiftId: gift.id })
+@@ -207,19 +255,65 @@ async function giftOfArticle(articleId: string): Promise<{ id: string; status: A
+ 
+ /**
+  * **What `POST /api/admin/author-gifts` may carry**: `{ slug, rightsConfirmed:
+- * true }` and nothing else. The tick is the private link's rights tick-box,
+- * which the share-link route asks for too; an unknown key is a 400, so a
+- * misspelt field is not silently a default.
++ * true }`, and optionally `lookup` (default true) and `draft`, the fields a
++ * new gift starts with (261010g). The tick is the private link's rights
++ * tick-box, which the share-link route asks for too; an unknown key is a 400,
++ * so a misspelt field is not silently a default.
+  */
+-export function parseEnsureAuthorGift(body: unknown): Parsed<{ readonly slug: string }> {
++export function parseEnsureAuthorGift(
++  body: unknown,
++): Parsed<{ readonly slug: string; readonly options: EnsureOptions }> {
+   if (!isPlainObject(body)) return { ok: false, message: "Expected a JSON object." };
+-  const unknown = Object.keys(body).filter((key) => !["slug", "rightsConfirmed"].includes(key));
++  const unknown = Object.keys(body).filter((key) => !["slug", "rightsConfirmed", "makeLink", "lookup", "draft"].includes(key));
+   if (unknown.length > 0) return { ok: false, message: `Unexpected field: ${unknown.join(", ")}.` };
+-  if (body.rightsConfirmed !== true) {
++  /* Exactly one of the two: the person's tick, which lets a link be made, or
++     `makeLink: false`, which never makes one (an agent's draft, 261010g F2). */
++  const noLink = "makeLink" in body;
++  if (noLink && (body.makeLink !== false || "rightsConfirmed" in body)) {
++    return { ok: false, message: "makeLink may only be false, and goes without rightsConfirmed." };
++  }
++  if (!noLink && body.rightsConfirmed !== true) {
+     return { ok: false, message: "Confirm you have the right to share this article by private link (rightsConfirmed: true)." };
+   }
+   if (!isSlug(body.slug)) return { ok: false, message: "slug must be an article's slug." };
+-  return { ok: true, value: { slug: body.slug } };
++  if ("lookup" in body && typeof body.lookup !== "boolean") return { ok: false, message: "lookup must be true or false." };
++  const draft = "draft" in body ? parseDraftFields(body.draft) : ({ ok: true, value: {} } as const);
++  if (!draft.ok) return draft;
++  return {
++    ok: true,
++    value: { slug: body.slug, options: { makeLink: !noLink, lookup: body.lookup !== false, draft: draft.value } },
++  };
++}
++
++const DRAFT_KEYS = ["email", "recipientName", "recipientNote", "articles", "notes"];
++
++/**
++ * **A new gift's fields, by the PATCH's own rules** — `parseAuthorGiftPatch`
++ * for the voucher's fields, so a draft can never hold what *Send* would
++ * refuse, and the notes as plain text (there is nothing yet to replace, so no
++ * `notesBase`). Not `discarded`, not `appendNotes`.
++ */
++function parseDraftFields(value: unknown): Parsed<AuthorGiftDraft> {
++  if (!isPlainObject(value)) return { ok: false, message: "draft must be an object of the gift's fields." };
++  const unknown = Object.keys(value).filter((key) => !DRAFT_KEYS.includes(key));
++  if (unknown.length > 0) return { ok: false, message: `Unexpected field in draft: ${unknown.join(", ")}.` };
++  const { notes, ...fields } = value;
++  let parsed: AuthorGiftDraft = {};
++  if (Object.keys(fields).length > 0) {
++    const patch = parseAuthorGiftPatch(fields);
++    if (!patch.ok) return patch;
++    const { email, recipientName, recipientNote, articles } = patch.value;
++    parsed = {
++      ...(email === undefined ? {} : { email }),
++      ...(recipientName === undefined ? {} : { recipientName }),
++      ...(recipientNote === undefined ? {} : { recipientNote }),
++      ...(articles === undefined ? {} : { articles }),
++    };
++  }
++  if (!("notes" in value) || notes === null) return { ok: true, value: parsed };
++  const text = parseNotesText(notes, "notes");
++  if (!text.ok) return text;
++  return { ok: true, value: { ...parsed, notes: text.value === "" ? null : text.value } };
+ }
+ 
+ /* --------------------------------------------------------------- lookups -- */
+@@ -826,6 +920,8 @@ export type SendAnswer =
+   | { readonly kind: "not-found" }
+   | { readonly kind: "no-address" }
+   | { readonly kind: "discarded" }
++  /** The gift is not what the confirmation showed (`SendDeps.expected`). Nothing frozen, nothing made. */
++  | { readonly kind: "changed" }
+   /** The article can no longer be linked. The freeze was released, if it was still this attempt's. */
+   | { readonly kind: "starter-refused"; readonly reason: StarterRefusal }
+   /** This caller's freeze was released or replaced before the voucher transaction began. */
+@@ -833,8 +929,59 @@ export type SendAnswer =
+   /** `createVoucher` said the id is a different voucher. Cannot happen; the row stays frozen. */
+   | { readonly kind: "conflict" };
+ 
+-/** Seams for tests; each defaults to the real thing. */
++/** What the *Send* confirmation showed; the wire type is the one home (src/admin-author-gifts.ts). */
++type SendExpected = AuthorGiftSendExpected;
++
++function matchesExpected(
++  row: { email: string | null; recipientName: string | null; recipientNote: string | null; articles: number },
++  expected: SendExpected,
++): boolean {
++  return (
++    row.email === expected.email &&
++    row.recipientName === expected.recipientName &&
++    row.recipientNote === expected.recipientNote &&
++    row.articles === expected.articles
++  );
++}
++
++/** What `POST …/:id/send` may carry: nothing, or `{ expected }`, strictly. */
++export function parseSendAuthorGift(body: unknown): Parsed<{ readonly expected: SendExpected | null }> {
++  if (body === undefined || body === null) return { ok: true, value: { expected: null } };
++  if (!isPlainObject(body)) return { ok: false, message: "Expected a JSON object." };
++  const unknown = Object.keys(body).filter((key) => key !== "expected");
++  if (unknown.length > 0) return { ok: false, message: `Unexpected field: ${unknown.join(", ")}.` };
++  if (!("expected" in body)) return { ok: true, value: { expected: null } };
++  const e = body.expected;
++  const keys = ["email", "recipientName", "recipientNote", "articles"];
++  const nullableString = (v: unknown) => v === null || typeof v === "string";
++  if (
++    !isPlainObject(e) ||
++    Object.keys(e).length !== keys.length ||
++    !keys.every((k) => k in e) ||
++    typeof e.email !== "string" ||
++    !nullableString(e.recipientName) ||
++    !nullableString(e.recipientNote) ||
++    typeof e.articles !== "number" ||
++    !Number.isInteger(e.articles)
++  ) {
++    return { ok: false, message: "expected must be the gift as shown: email, recipientName, recipientNote and articles." };
++  }
++  return {
++    ok: true,
++    value: {
++      expected: {
++        email: e.email,
++        recipientName: e.recipientName as string | null,
++        recipientNote: e.recipientNote as string | null,
++        articles: e.articles,
++      },
++    },
++  };
++}
++
++/** Seams for tests, and the confirmation's snapshot; each seam defaults to the real thing. */
+ export interface SendDeps {
++  readonly expected?: SendExpected | null;
+   readonly createVoucher?: (
+     input: NewVoucher,
+     createdBy: string,
+@@ -860,6 +1007,15 @@ export interface SendDeps {
+  */
+ export async function sendAuthorGift(id: string, deps: SendDeps = {}): Promise<SendAnswer> {
+   const db = getDb();
++  const { expected } = deps;
++  /* What the confirmation showed must still be the row (261010g, Sol's F1).
++     Stored values, compared exactly: the page sends back what it was given. */
++  const unchanged = expected
++    ? sql`${authorGifts.email} is not distinct from ${expected.email}
++          and ${authorGifts.recipientName} is not distinct from ${expected.recipientName}
++          and ${authorGifts.recipientNote} is not distinct from ${expected.recipientNote}
++          and ${authorGifts.articles} = ${expected.articles}`
++    : undefined;
+   const [frozen] = await db
+     .update(authorGifts)
+     .set({ sendStartedAt: sql`now()`, sendAttempt: sql`gen_random_uuid()`, updatedAt: sql`now()` })
+@@ -869,6 +1025,7 @@ export async function sendAuthorGift(id: string, deps: SendDeps = {}): Promise<S
+         isNull(authorGifts.sendStartedAt),
+         isNull(authorGifts.discardedAt),
+         sql`${authorGifts.email} is not null`,
++        unchanged,
+       ),
+     )
+     .returning();
+@@ -876,7 +1033,16 @@ export async function sendAuthorGift(id: string, deps: SendDeps = {}): Promise<S
+   if (!gift) {
+     const [row] = await db.select().from(authorGifts).where(eq(authorGifts.id, id)).limit(1);
+     if (!row) return { kind: "not-found" };
+-    if (row.sendStartedAt === null) return row.discardedAt !== null ? { kind: "discarded" } : { kind: "no-address" };
++    if (row.sendStartedAt === null) {
++      if (row.discardedAt !== null) return { kind: "discarded" };
++      if (row.email === null) return { kind: "no-address" };
++    }
++    /* A draft that missed the freeze only by its fields, or a frozen row that
++       is not what was shown: either way, not what the person approved. */
++    if (expected && !matchesExpected(row, expected)) return { kind: "changed" };
++    /* Unfrozen between the two statements (a starter refusal releasing another
++       press's attempt): press again. */
++    if (row.sendStartedAt === null) return { kind: "superseded" };
+     gift = row;
+   }
+   /* The CHECKs `author_gifts_send_has_email` and `…_send_attempt_together`
+diff --git a/src/web/AdminAuthorGifts.tsx b/src/web/AdminAuthorGifts.tsx
+index c87757f5f..1f3939add 100644
+--- a/src/web/AdminAuthorGifts.tsx
++++ b/src/web/AdminAuthorGifts.tsx
+@@ -700,7 +700,7 @@ function GiftCard({
+     if (busy || running) return;
+     setBusy(true);
+     setSaid(null);
+-    const answer = await hooks.send(gift.id);
++    const answer = await hooks.send(gift);
+     setBusy(false);
+     setConfirming(false);
+     if (answer.kind === "refused") {
+diff --git a/src/web/useAdminAuthorGifts.ts b/src/web/useAdminAuthorGifts.ts
+index 606c86546..d774a0142 100644
+--- a/src/web/useAdminAuthorGifts.ts
++++ b/src/web/useAdminAuthorGifts.ts
+@@ -22,6 +22,7 @@ import {
+   type AdminAuthorLookup,
+   AUTHOR_LOOKUP_STALE_MINUTES,
+   type AuthorGiftEnsured,
++  type AuthorGiftSendExpected,
+   type AuthorGiftSent,
+ } from "../admin-author-gifts.js";
+ import { apiFetch, readJson } from "./lib/api.js";
+@@ -82,7 +83,8 @@ export interface UseAdminAuthorGifts {
+   ensure: (slug: string) => Promise<EnsureAnswer>;
+   lookUpAgain: (id: string) => Promise<string | null>;
+   patch: (id: string, patch: AuthorGiftPatchInput) => Promise<string | null>;
+-  send: (id: string) => Promise<SendAnswer>;
++  /** Sends the gift as drawn: refused if it has changed since. */
++  send: (gift: AdminAuthorGift) => Promise<SendAnswer>;
+ }
+ 
+ type Written =
+@@ -215,8 +217,16 @@ export function useAdminAuthorGifts(): UseAdminAuthorGifts {
+   );
+ 
+   const send = useCallback(
+-    async (id: string): Promise<SendAnswer> => {
+-      const written = await write(`${PATH}/${encodeURIComponent(id)}/send`, "POST");
++    async (gift: AdminAuthorGift): Promise<SendAnswer> => {
++      if (gift.email === null) return { kind: "refused", message: "That gift has no address yet. Add one, then send it." };
++      /* What the confirmation showed, so an edit since (an agent's) is refused, not sent (261010g). */
++      const expected: AuthorGiftSendExpected = {
++        email: gift.email,
++        recipientName: gift.recipientName,
++        recipientNote: gift.recipientNote,
++        articles: gift.articles,
++      };
++      const written = await write(`${PATH}/${encodeURIComponent(gift.id)}/send`, "POST", { expected });
+       if (!written.ok) return { kind: "refused", message: written.message };
+       const answer = written.body as Partial<AuthorGiftSent>;
+       if (
+diff --git a/tests/admin-author-gifts.test.tsx b/tests/admin-author-gifts.test.tsx
+index 90929aac6..283de122d 100644
+--- a/tests/admin-author-gifts.test.tsx
++++ b/tests/admin-author-gifts.test.tsx
+@@ -238,8 +238,8 @@ describe("Author gifts", () => {
+     expect(reason?.textContent).toContain("lookup");
+   });
+ 
+-  it("asks before Send by naming the address, then sends, and re-reads the vouchers", async () => {
+-    giftsAnswer = () => [gift({ email: "ann@example.test" })];
++  it("asks before Send by naming the address, then sends what it showed, and re-reads the vouchers", async () => {
++    giftsAnswer = () => [gift({ email: "ann@example.test", recipientName: "Ann" })];
+     await mount();
+     const vouchersRead = () => calls.filter((c) => c.method === "GET" && c.url === "/api/admin/vouchers").length;
+     const before = vouchersRead();
+@@ -248,7 +248,14 @@ describe("Author gifts", () => {
+     expect(card(DRAFT)?.textContent).toContain("Send the gift email to ann@example.test?");
+     await act(async () => button(card(DRAFT), "Send to ann@example.test")?.click());
+     await settle();
+-    expect(writes()).toEqual([{ method: "POST", url: `/api/admin/author-gifts/${DRAFT}/send`, body: undefined }]);
++    /* Plan 261010g: the gift as the confirmation showed it, so an agent's edit since is refused. */
++    expect(writes()).toEqual([
++      {
++        method: "POST",
++        url: `/api/admin/author-gifts/${DRAFT}/send`,
++        body: { expected: { email: "ann@example.test", recipientName: "Ann", recipientNote: null, articles: 20 } },
++      },
++    ]);
+     expect(card(DRAFT)?.textContent).toContain("The gift email is on its way");
+     expect(vouchersRead()).toBeGreaterThan(before);
+   });
+diff --git a/tests/author-gifts.test.ts b/tests/author-gifts.test.ts
+index 9559414df..f203ae438 100644
+--- a/tests/author-gifts.test.ts
++++ b/tests/author-gifts.test.ts
+@@ -349,9 +349,194 @@ describe("POST /api/admin/author-gifts — ensure", () => {
+   });
+ });
+ 
++/* A draft made already filled in, by an agent through draft_author_gift
++   (plan 261010g § D1): the fields go into the insert, and `lookup: false`
++   starts no search. Nothing is emailed: no voucher, no gift email. */
++describe("POST /api/admin/author-gifts — a filled-in draft (261010g)", () => {
++  it("writes the fields, makes no lookup, starts nothing, and queues no voucher or email", async () => {
++    const box = mailbox();
++    control.deps = box.deps;
++    const mine = await seed("filled", { linkOn: true });
++    const key = await shareTokenOf(mine.id);
++    const reply = await drive("POST", "/api/admin/author-gifts", {
++      slug: mine.slug,
++      makeLink: false,
++      lookup: false,
++      draft: {
++        email: ` ${addressOf("Filled").toUpperCase()} `,
++        recipientName: "Ada",
++        recipientNote: "I made this of your paper.",
++        articles: 7,
++        notes: "Found at https://example.invalid/ada",
++      },
++    });
++    expect(reply.status).toBe(201);
++    expect(reply.body).toEqual({ id: reply.body.id, status: "draft", created: true, lookupId: null });
++    const id = String(reply.body.id);
++    expect(await giftRow(id)).toMatchObject({
++      email: addressOf("filled"),
++      recipient_name: "Ada",
++      recipient_note: "I made this of your paper.",
++      articles: 7,
++      notes: "Found at https://example.invalid/ada",
++      email_lookup_id: null,
++      name_lookup_id: null,
++      send_started_at: null,
++    });
++    expect((await giftRow(id)).notes_updated_at).not.toBeNull();
++    expect(await lookupsOf(id)).toEqual([]);
++    expect(control.lookupsStarted).toEqual([]);
++    const { rows } = await pool.query("select count(*)::int as n from spideryarn.billing_vouchers where email = $1", [
++      addressOf("filled"),
++    ]);
++    expect(rows[0]).toEqual({ n: 0 });
++    expect(box.sent).toEqual([]);
++    expect(await shareTokenOf(mine.id)).toBe(key);
++  });
++
++  /* Sol's F2 on the plan: a model must not record a rights confirmation
++     nobody gave, so `makeLink: false` never makes the link. */
++  it("with makeLink: false, refuses a private article with no link, and makes no link, gift or event", async () => {
++    const mine = await seed("filled-nolink");
++    const reply = await drive("POST", "/api/admin/author-gifts", { slug: mine.slug, makeLink: false, lookup: false });
++    expect(reply.status).toBe(409);
++    expect(String(reply.body.error)).toMatch(/private link/);
++    expect(await shareTokenOf(mine.id)).toBeNull();
++    const { rows } = await pool.query(
++      `select (select count(*)::int from spideryarn.author_gifts where article_id = $1) as gifts,
++              (select count(*)::int from spideryarn.article_share_link_events where article_id = $1) as events`,
++      [mine.id],
++    );
++    expect(rows[0]).toEqual({ gifts: 0, events: 0 });
++
++    /* A public article needs no link, so it can be drafted. */
++    const open = await seed("filled-public", { visibility: "public" });
++    expect((await drive("POST", "/api/admin/author-gifts", { slug: open.slug, makeLink: false, lookup: false })).status).toBe(201);
++  });
++
++  it("still starts a lookup when asked, and the lookup fills only what the draft left empty", async () => {
++    const mine = await seed("filled-lookup", { linkOn: true });
++    const reply = await drive("POST", "/api/admin/author-gifts", {
++      slug: mine.slug,
++      makeLink: false,
++      draft: { email: addressOf("typed") },
++    });
++    expect(reply.status).toBe(202);
++    const id = String(reply.body.id);
++    const lookupId = String(reply.body.lookupId);
++    expect(control.lookupsStarted).toEqual([lookupId]);
++    expect(
++      await finishLookup(lookupId, {
++        kind: "found",
++        authorName: "Grace Hopper",
++        authorSourceUrl: "https://example.org/grace",
++        email: addressOf("found"),
++        emailSourceUrl: "https://example.org/grace",
++        suggestedEmail: null,
++        contactUrl: null,
++        searches: 1,
++        model: "anthropic/claude-sonnet-5",
++        notes: null,
++      }),
++    ).toMatchObject({ kind: "finished", applied: { email: false, name: true } });
++    expect(await giftRow(id)).toMatchObject({
++      email: addressOf("typed"),
++      email_lookup_id: null,
++      recipient_name: "Grace Hopper",
++      name_lookup_id: lookupId,
++    });
++  });
++
++  it("leaves an existing gift exactly as it was", async () => {
++    const mine = await seed("filled-existing");
++    const first = await drive("POST", "/api/admin/author-gifts", {
++      slug: mine.slug,
++      rightsConfirmed: true,
++      lookup: false,
++      draft: { email: addressOf("first"), notes: "first" },
++    });
++    expect(first.status).toBe(201);
++    const before = await giftRow(String(first.body.id));
++    const again = await drive("POST", "/api/admin/author-gifts", {
++      slug: mine.slug,
++      rightsConfirmed: true,
++      lookup: false,
++      draft: { email: addressOf("second"), notes: "second", articles: 3 },
++    });
++    expect(again.status).toBe(200);
++    expect(again.body).toEqual({ id: first.body.id, status: "draft", created: false });
++    expect(await giftRow(String(first.body.id))).toEqual(before);
++  });
++
++  it("refuses bad fields with a 400 before anything is made", async () => {
++    const mine = await seed("filled-bad");
++    for (const body of [
++      { draft: { email: "not an address" } },
++      { draft: { articles: 0 } },
++      { draft: { recipientName: "n".repeat(81) } },
++      { draft: { discarded: true } },
++      { draft: { appendNotes: "x" } },
++      { draft: "x" },
++      { lookup: "no" },
++      { makeLink: false },
++      { rightsConfirmed: undefined, makeLink: true },
++    ]) {
++      const reply = await drive("POST", "/api/admin/author-gifts", { slug: mine.slug, rightsConfirmed: true, ...body });
++      expect(reply.status, JSON.stringify(body)).toBe(400);
++    }
++    const { rows } = await pool.query("select count(*)::int as n from spideryarn.author_gifts where article_id = $1", [mine.id]);
++    expect(rows[0]).toEqual({ n: 0 });
++    expect(await shareTokenOf(mine.id)).toBeNull();
++  });
++});
++
+ /* ------------------------------------------------------------------- send -- */
+ 
+ describe("POST /api/admin/author-gifts/:id/send", () => {
++  /* Plan 261010g, Sol's F1: an agent's edit between Greg reading the
++     confirmation and pressing Send must not send to an address he never saw. */
++  it("with what the confirmation showed: sends when it still matches, and refuses, sending nothing, when it changed", async () => {
++    const box = mailbox();
++    control.deps = box.deps;
++    const mine = await seed("send-expected", { linkOn: true });
++    const made = await drive("POST", "/api/admin/author-gifts", {
++      slug: mine.slug,
++      makeLink: false,
++      lookup: false,
++      draft: { email: addressOf("seen"), recipientName: "Ada", articles: 5 },
++    });
++    const id = String(made.body.id);
++    const shown = { email: addressOf("seen"), recipientName: "Ada", recipientNote: null, articles: 5 };
++    /* The agent re-addresses it after the page drew it. */
++    expect((await drive("PATCH", `/api/admin/author-gifts/${id}`, { email: addressOf("agent") })).status).toBe(200);
++
++    const refused = await drive("POST", `/api/admin/author-gifts/${id}/send`, { expected: shown });
++    expect(refused.status).toBe(409);
++    expect(String(refused.body.error)).toMatch(/changed/);
++    expect(await giftRow(id)).toMatchObject({ send_started_at: null, email: addressOf("agent") });
++    const { rows } = await pool.query("select count(*)::int as n from spideryarn.billing_vouchers where email like $1", [
++      `agift-%-${RUN}@example.invalid`,
++    ]);
++    expect(rows[0]).toEqual({ n: 0 });
++    expect(box.sent).toEqual([]);
++
++    const now = { ...shown, email: addressOf("agent") };
++    const sent = await drive("POST", `/api/admin/author-gifts/${id}/send`, { expected: now });
++    expect(sent.status).toBe(201);
++    /* A replay compares against the frozen row too. */
++    expect((await drive("POST", `/api/admin/author-gifts/${id}/send`, { expected: shown })).status).toBe(409);
++    expect((await drive("POST", `/api/admin/author-gifts/${id}/send`, { expected: now })).status).toBe(200);
++    expect(box.sent).toHaveLength(1);
++  });
++
++  it("refuses an expected snapshot that is not one", async () => {
++    const mine = await seed("send-expected-bad", { linkOn: true });
++    const { id } = await ensured(mine);
++    for (const body of [{ expected: "x" }, { expected: { email: "a@b.c" } }, { other: 1 }]) {
++      expect((await drive("POST", `/api/admin/author-gifts/${id}/send`, body)).status, JSON.stringify(body)).toBe(400);
++    }
++  });
++
+   it("makes the voucher from the frozen fields and queues exactly one gift email; a repeat queues none", async () => {
+     const box = mailbox();
+     control.deps = box.deps;
+diff --git a/tests/mcp-remote.test.ts b/tests/mcp-remote.test.ts
+index 004961d76..ff63f717f 100644
+--- a/tests/mcp-remote.test.ts
++++ b/tests/mcp-remote.test.ts
+@@ -36,7 +36,7 @@ import { join } from "node:path";
+ import { Readable } from "node:stream";
+ 
+ import { Client as McpClient, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
+-import { eq } from "drizzle-orm";
++import { eq, sql } from "drizzle-orm";
+ import { afterAll, beforeAll, describe, expect, it } from "vitest";
+ 
+ import { ADMIN_EMAIL_LOCAL, ADMIN_USER_ID_LOCAL, ADMIN_USER_ID_PROD } from "../src/admin.js";
+@@ -363,22 +363,34 @@ describe("the tools, through the SDK's client", () => {
+     }
+   });
+ 
+-  it("an asking tool refuses with the page to use, and writes nothing", async () => {
++  /* Plan 261010g § D2: a tool that could only refuse here is not listed, so a
++     model does not plan around it; called anyway, it is unknown and writes nothing. */
++  it("the asking tools are not listed, and calling one anyway writes nothing", async () => {
+     const client = await connect("admin-app");
+     try {
+-      const pub = await client.callTool({ name: "make_article_public", arguments: { slug: mine.slug } });
+-      expect(pub.isError).toBe(true);
+-      expect(textOf(pub)).toMatch(/article's page/);
+-
+-      const link = await client.callTool({ name: "create_private_link", arguments: { slug: mine.slug } });
+-      expect(link.isError).toBe(true);
++      const { tools } = await client.listTools();
++      const names = tools.map((t) => t.name);
++      for (const name of ["make_article_public", "create_private_link", "create_gift_voucher", "retry_gift_voucher_email"]) {
++        expect(names, name).not.toContain(name);
++      }
++      expect(names).toContain("draft_author_gift");
++      const update = tools.find((t) => t.name === "update_gift_voucher");
++      expect(Object.keys(update?.inputSchema.properties ?? {})).not.toContain("email");
++
++      /* An unlisted tool is a protocol error or an error result; either way, not done. */
++      const refused = async (name: string, args: Record<string, unknown>) => {
++        const result = await client.callTool({ name, arguments: args }).catch((e: Error) => ({ isError: true, thrown: e.message }));
++        expect(result.isError, name).toBe(true);
++      };
++      await refused("make_article_public", { slug: mine.slug });
++      await refused("create_private_link", { slug: mine.slug });
++      await refused("create_gift_voucher", { email: "someone@example.test", articles: 5, idempotency_key: `k-${RUN}` });
++      await refused("update_gift_voucher", { id: randomUUID(), email: "someone@example.test" });
+ 
+-      const gift = await client.callTool({
+-        name: "create_gift_voucher",
+-        arguments: { email: "someone@example.test", articles: 5, idempotency_key: `k-${RUN}` },
+-      });
+-      expect(gift.isError).toBe(true);
+-      expect(textOf(gift)).toMatch(/\/admin\/vouchers/);
++      /* The positive control (Sol's F4): the same tool without the address reaches its route. */
++      const revoke = await client.callTool({ name: "update_gift_voucher", arguments: { id: randomUUID(), revoked: true } });
++      expect(revoke.isError).toBe(true);
++      expect(textOf(revoke)).toMatch(/^Not found/);
+ 
+       const [row] = await getDb()
+         .select({ visibility: articles.visibility, shareToken: articles.shareToken })
+@@ -390,6 +402,40 @@ describe("the tools, through the SDK's client", () => {
+     }
+   });
+ 
++  /* Plan 261010g § D1: gifting from here is a draft Greg sends from /admin/vouchers. */
++  it("draft_author_gift saves a filled-in draft and sends nothing", async () => {
++    const client = await connect("admin-app");
++    try {
++      const address = `mcp-remote-draft-${RUN}@example.invalid`;
++      /* The tool never makes the link (Sol's F2): first, refused without one. */
++      const nolink = await client.callTool({ name: "draft_author_gift", arguments: { slug: mine.slug, email: address } });
++      expect(nolink.isError).toBe(true);
++      expect(textOf(nolink)).toMatch(/private link/);
++      /* Greg turns it on from the article's page. */
++      await getDb()
++        .update(articles)
++        .set({ shareToken: `MCPxREMOTExDRAFTx${RUN}`.slice(0, 22).padEnd(22, "x"), shareTokenAt: new Date() })
++        .where(eq(articles.id, mine.articleId));
++      const result = await client.callTool({
++        name: "draft_author_gift",
++        arguments: { slug: mine.slug, email: address, recipientName: "Ada", notes: "From a remote test." },
++      });
++      expect(result.isError, textOf(result)).toBeFalsy();
++      const answer = JSON.parse(textOf(result)) as { id: string; created: boolean };
++      expect(answer.created).toBe(true);
++
++      const { rows } = await getDb().execute<{ email: string; notes: string; lookups: number; vouchers: number }>(
++        sql`select g.email, g.notes,
++              (select count(*)::int from spideryarn.author_lookups l where l.author_gift_id = g.id) as lookups,
++              (select count(*)::int from spideryarn.billing_vouchers v where v.id = g.voucher_id or v.email = g.email) as vouchers
++            from spideryarn.author_gifts g where g.id = ${answer.id}`,
++      );
++      expect(rows[0]).toEqual({ email: address, notes: "From a remote test.", lookups: 0, vouchers: 0 });
++    } finally {
++      await client.close();
++    }
++  });
++
+   it("two overlapping requests as two people each get their own answer", async () => {
+     const [a, b] = await Promise.all([connect("admin-app"), connect("admin-prod-app")]);
+     try {
+diff --git a/tests/mcp-tools.test.ts b/tests/mcp-tools.test.ts
+index c788bf02c..84d9de966 100644
+--- a/tests/mcp-tools.test.ts
++++ b/tests/mcp-tools.test.ts
+@@ -19,7 +19,7 @@ import { SHARING_RIGHTS_CONFIRM } from "../src/messages.js";
+ import { ApiError, makeApi, type TokenSource } from "../src/mcp/api.js";
+ import { type Approver, defaultApprover, dialogText, type Operation, osascriptArgs, readDialogAnswer } from "../src/mcp/approve.js";
+ import { buildServer } from "../src/mcp/server.js";
+-import { TOOLS, voucherId } from "../src/mcp/tools.js";
++import { remoteTools, TOOLS, voucherId } from "../src/mcp/tools.js";
+ 
+ const SITE = "https://sy.test";
+ const ACCESS = "SENTINEL-ACCESS-7f3a9c";
+@@ -368,10 +368,76 @@ describe("each tool calls the route it claims", () => {
+   it("there is no tool that sends an author gift", () => {
+     expect(TOOLS.map((t) => t.name).filter((n) => /author_gift/.test(n))).toEqual([
+       "list_author_gifts",
++      "draft_author_gift",
+       "update_author_gift",
+     ]);
+   });
+ 
++  /* Plan 261010g § D1: a gift an agent drafts and Greg sends from /admin/vouchers. */
++  it("draft_author_gift makes a filled-in draft in one POST, with no lookup, and does not ask", async () => {
++    const approver = new StubApprover(false);
++    const h = await harness(
++      {
++        "POST /api/admin/author-gifts": {
++          status: 201,
++          body: { id: VOUCHER, status: "draft", created: true, lookupId: null, privateLinkKey: "SENTINEL-PRIVATE-LINK-KEY" },
++        },
++      },
++      approver,
++    );
++    const result = await h.call("draft_author_gift", {
++      slug: "on-tools",
++      email: "ann@example.com",
++      recipientName: "Ann",
++      recipientNote: "Made this of your paper.",
++      articles: 10,
++      notes: "Her address is on her homepage.",
++    });
++    expect(result.isError, result.text).toBe(false);
++    expect(approver.asked).toEqual([]);
++    expect(h.seen).toEqual([
++      expect.objectContaining({
++        method: "POST",
++        path: "/api/admin/author-gifts",
++        body: {
++          slug: "on-tools",
++          makeLink: false,
++          lookup: false,
++          draft: {
++            email: "ann@example.com",
++            recipientName: "Ann",
++            recipientNote: "Made this of your paper.",
++            articles: 10,
++            notes: "Her address is on her homepage.",
++          },
++        },
++      }),
++    ]);
++    expect(result.json()).toMatchObject({ id: VOUCHER, created: true, status: "draft", lookup: false });
++    expect(result.text).not.toContain("SENTINEL-PRIVATE-LINK-KEY");
++    expect(result.text).toMatch(/\/admin\/vouchers/);
++  });
++
++  it("draft_author_gift with look_up_author asks the route for a lookup", async () => {
++    const h = await harness({
++      "POST /api/admin/author-gifts": { status: 202, body: { id: VOUCHER, status: "draft", created: true, lookupId: VOUCHER } },
++    });
++    const result = await h.call("draft_author_gift", { slug: "on-tools", look_up_author: true });
++    expect(result.isError, result.text).toBe(false);
++    expect(h.seen[0]?.body).toEqual({ slug: "on-tools", makeLink: false, lookup: true, draft: {} });
++    expect(result.json()).toMatchObject({ created: true, lookup: true });
++  });
++
++  it("draft_author_gift on an article that already has a gift says nothing was changed", async () => {
++    const h = await harness({
++      "POST /api/admin/author-gifts": { status: 200, body: { id: VOUCHER, status: "sent", created: false } },
++    });
++    const result = await h.call("draft_author_gift", { slug: "on-tools", email: "ann@example.com" });
++    expect(result.isError, result.text).toBe(false);
++    expect(result.json()).toMatchObject({ id: VOUCHER, created: false, status: "sent" });
++    expect(result.text).toMatch(/update_author_gift/);
++  });
++
+   it("list_gift_vouchers leaves out the notes and the claimant's usage (Sol F17)", async () => {
+     const h = await harness();
+     const result = await h.call("list_gift_vouchers");
+@@ -801,6 +867,7 @@ describe("no token reaches a result", () => {
+         create_gift_voucher: { email: "a@example.com", articles: 1, idempotency_key: "k" },
+         update_gift_voucher: { id: VOUCHER, articles: 2 },
+         update_author_gift: { id: VOUCHER, notes: "n" },
++        draft_author_gift: { slug: "s" },
+         retry_gift_voucher_email: { voucherId: VOUCHER },
+       };
+       await h.call(t.name, args[t.name] ?? {});
+@@ -1073,3 +1140,47 @@ describe("list_users and user_activity read the admin's users route, trimmed", (
+     });
+   }
+ });
++
++/* Plan 261010g § D2: on the remote server nobody can be asked, so a tool that
++   asks is left out of the list rather than listed and refused — unless it
++   declares what it is without the asking part. */
++describe("the remote server's tool list", () => {
++  const remote = remoteTools();
++  const names = remote.map((t) => t.name);
++
++  it("leaves out every tool that always asks", () => {
++    for (const name of ["make_article_public", "create_private_link", "create_gift_voucher", "retry_gift_voucher_email"]) {
++      expect(names, name).not.toContain(name);
++    }
++  });
++
++  it("keeps everything that never asks, draft_author_gift included", () => {
++    for (const t of TOOLS.filter((t) => !t.ask)) expect(names).toContain(t.name);
++    expect(names).toContain("draft_author_gift");
++  });
++
++  it("keeps update_gift_voucher without the address, which is the part that asks", () => {
++    const update = remote.find((t) => t.name === "update_gift_voucher");
++    expect(update).toBeDefined();
++    expect(Object.keys(update?.input.shape ?? {})).not.toContain("email");
++    expect(update?.input.safeParse({ id: VOUCHER, email: "a@example.com" }).success).toBe(false);
++    expect(update?.description).not.toMatch(/approve/);
++  });
++
++  it("leaves out a new asking tool by default, and serves a declared remote form", () => {
++    const base = TOOLS.find((t) => t.name === "whoami")!;
++    const asking = { ...base, name: "future_send", ask: async () => null };
++    const declared = {
++      ...asking,
++      name: "future_edit",
++      remote: { description: "Edits; the sending part is not here.", input: base.input },
++    };
++    const served = remoteTools([base, asking, declared]);
++    expect(served.map((t) => t.name)).toEqual(["whoami", "future_edit"]);
++    expect(served[1]?.description).toBe("Edits; the sending part is not here.");
++  });
++
++  it("says nothing on the remote about a dialog on this computer", () => {
++    for (const t of remote) expect(t.description, t.name).not.toMatch(/dialog/i);
++  });
++});
