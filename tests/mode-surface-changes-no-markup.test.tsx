@@ -1695,6 +1695,7 @@ function mountDiagram(access: DiagramAccess): ReactNode {
 function mountOutline(): ReactNode {
   return createElement(OutlinePanel, {
     root: ROOT,
+    figures: [],
     supplementOf: GEOMETRY.supplementOf,
     arcByRow: null,
     focusRow: 0,

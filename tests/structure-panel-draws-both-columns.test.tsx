@@ -136,6 +136,7 @@ function render(focusRow: number) {
     reactRoot.render(
       <StructurePanel
         root={summaryRoot}
+        figures={[]}
         focusRow={focusRow}
         allowParagraphs={true}
         onJump={() => {}}
@@ -301,6 +302,7 @@ describe("the Structure band", () => {
       reactRoot.render(
         <StructurePanel
           root={summaryRoot}
+          figures={[]}
           focusRow={IN_SECTION_0}
           allowParagraphs={true}
           onJump={(id) => jumps.push(id)}
@@ -359,6 +361,7 @@ describe("the Structure band", () => {
       reactRoot.render(
         <StructurePanel
           root={buildSummaryTree(numbered, blocks, geometry.leafDepth)}
+          figures={[]}
           focusRow={IN_SECTION_0}
           allowParagraphs={true}
           onJump={() => {}}

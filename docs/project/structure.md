@@ -59,6 +59,29 @@ asked to see are the gists. The plan, and GPT Sol's review of it, is
 [261001q](../plans/261001q-structure-fisheye-expanded-and-arrow-keys.md); the keys that went with
 it are [keyboard.md § ← / → in Structure](keyboard.md).
 
+## A mark for the figures a row holds
+
+> perhaps we can have an icon for each diagram or table contained in a section within structure so
+> that you could easily see which parts of the piece do have diagrams or tables and then use
+> structure to jump to them.
+>
+> — Greg, 2026-10-11, spya-sb0c7e, in [261011b](../plans/261011b-skim-figures-walk-and-structure-figure-marks.md)
+
+After each row's title, in both faces and in Expanded, a small muted icon for each kind of thing the
+row's range holds — `Image` for a figure, `Table2` for a table, `Film` for media — with a count
+beside it only when there is more than one. A screen reader hears it as one phrase, *"2 figures,
+1 table"*. A part is marked for everything its sections hold, because the mark is about the range,
+and that is how a reader finds the part to open. The mark is part of the row, not a button of its
+own: the row is already the jump, and the figure itself is one step further in Skim's Figures walk.
+
+What counts as a figure is [`src/figures.ts`](../../src/figures.ts), read off the stored blocks with
+no model call. The rows are counted **by row index** (`startRow`/`endRow`), never by comparing ids —
+[block-ids.md](block-ids.md). The mark is drawn by one component,
+[`src/web/FigureMark.tsx`](../../src/web/FigureMark.tsx), inside each face's one shared row body
+(`Row` in StructurePanel, `RowBody` in OutlinePanel), so the hidden copies the faces measure carry
+it too; if the drawn and measured rows differed, rows would be clipped and nothing would say so.
+`tests/structure-figure-marks.test.tsx` holds both faces to that.
+
 ## The two faces, and how it got here
 
 Where the band is
