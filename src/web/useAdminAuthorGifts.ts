@@ -84,7 +84,8 @@ export interface UseAdminAuthorGifts {
   lookUpAgain: (id: string) => Promise<string | null>;
   patch: (id: string, patch: AuthorGiftPatchInput) => Promise<string | null>;
   /** Sends the gift as drawn: refused if it has changed since. */
-  send: (gift: AdminAuthorGift) => Promise<SendAnswer>;
+  /** `rightsConfirmed`: the person ticked the rights box, so Send may make the private link (261010r). */
+  send: (gift: AdminAuthorGift, options?: { readonly rightsConfirmed?: boolean }) => Promise<SendAnswer>;
 }
 
 type Written =
@@ -217,7 +218,7 @@ export function useAdminAuthorGifts(): UseAdminAuthorGifts {
   );
 
   const send = useCallback(
-    async (gift: AdminAuthorGift): Promise<SendAnswer> => {
+    async (gift: AdminAuthorGift, options: { readonly rightsConfirmed?: boolean } = {}): Promise<SendAnswer> => {
       if (gift.email === null) return { kind: "refused", message: "That gift has no address yet. Add one, then send it." };
       /* What the confirmation showed, so an edit since (an agent's) is refused, not sent (261010i). */
       const expected: AuthorGiftSendExpected = {
@@ -226,7 +227,10 @@ export function useAdminAuthorGifts(): UseAdminAuthorGifts {
         recipientNote: gift.recipientNote,
         articles: gift.articles,
       };
-      const written = await write(`${PATH}/${encodeURIComponent(gift.id)}/send`, "POST", { expected });
+      const written = await write(`${PATH}/${encodeURIComponent(gift.id)}/send`, "POST", {
+        expected,
+        ...(options.rightsConfirmed === true ? { rightsConfirmed: true } : {}),
+      });
       if (!written.ok) return { kind: "refused", message: written.message };
       const answer = written.body as Partial<AuthorGiftSent>;
       if (

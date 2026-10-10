@@ -9906,14 +9906,9 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
           case "unpublished":
             throw httpError(409, "That article has nothing to read yet. Draft its gift once it is on your shelf.");
           case "link-off":
-            throw httpError(
-              409,
-              parsed.value.options.makeLink
-                ? "That article's private link was turned off while its gift was being drafted. Try again."
-                : /* An agent's draft never makes the link (261010i): the rights tick is the person's. */
-                  "That article is private and has no private link, and a draft made this way does not make one. " +
-                    "Turn its private link on from the article's page (which asks you to confirm you may share it), then draft again.",
-            );
+            /* Only the add page's form, which makes the link: an agent's draft
+               (`makeLink: false`) is made without one (261010r). */
+            throw httpError(409, "That article's private link was turned off while its gift was being drafted. Try again.");
           default: {
             const never: never = answer.reason;
             throw httpError(500, `unknown refusal ${String(never)}`);
@@ -9992,7 +9987,10 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       /* What the confirmation showed (261010i, Sol's F1); the page always sends it. */
       const parsed = parseSendAuthorGift(await readBody(req));
       if (!parsed.ok) throw httpError(400, parsed.message);
-      const answer = await pgAuthorGiftStore.sendAuthorGift(id, { expected: parsed.value.expected });
+      const answer = await pgAuthorGiftStore.sendAuthorGift(id, {
+        expected: parsed.value.expected,
+        rightsConfirmed: parsed.value.rightsConfirmed,
+      });
       switch (answer.kind) {
         case "not-found":
           throw httpError(404, "There is no such author gift.");
@@ -10003,7 +10001,16 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
         case "discarded":
           throw httpError(409, "That gift has been discarded. Restore it first.");
         case "starter-refused":
-          /* The freeze was released: fix the article, then press Send again. */
+          /* The freeze was released: fix the article, then press Send again.
+             A gift drafted without a link is sent with the rights tick (261010r). */
+          if (answer.reason === "link-off") {
+            throw httpError(
+              409,
+              parsed.value.rightsConfirmed
+                ? "That earlier Send did not finish, and its article still has no private link. The attempt was released; check the gift, then press Send again."
+                : "That article is private and has no private link yet. Tick the box to confirm you may share it, and Send makes the link.",
+            );
+          }
           throw starterRefused(answer.reason);
         case "superseded":
           throw httpError(409, "A newer change replaced this Send attempt. Check the gift, then press Send again.");

@@ -114,7 +114,7 @@ this one, not your browser) and deletes the file. A running server notices on it
 | `update_gift_voucher` | admin: edit or revoke; **changing the address re-sends, and asks you first** |
 | `retry_gift_voucher_email` | admin: re-send a failed email; **asks you first** |
 | `list_author_gifts` | admin: the draft gifts for authors, with their notes and lookups (no private link key) — [admin.md § Author gifts](admin.md#author-gifts-a-draft-voucher-for-an-articles-author) |
-| `draft_author_gift` | admin: **saves an unsent gift** for one of your own articles, already filled in (address, name, note to them, size, notes), for you to review and press *Send* on `/admin/vouchers`. Sends nothing, so it does not ask, and works remotely. Never makes the private link: the article must already be public or have one. No web search unless `look_up_author: true`. One per article; an existing one is left alone ([261010i](../plans/261010i-mcp-draft-gift-and-remote-tool-list-without-the-asking-tools.md)) |
+| `draft_author_gift` | admin: **saves an unsent gift** for one of your own articles, already filled in (address, name, note to them, size, notes), for you to review and press *Send* on `/admin/vouchers`. Sends nothing, so it does not ask, and works remotely. Never makes the private link: a private article with none is drafted anyway, and *Send* makes the link once you tick that you may share it ([261010r](../plans/261010r-mcp-gift-any-article-and-send-makes-the-link.md)). No web search unless `look_up_author: true`. One per article; an existing one is left alone ([261010i](../plans/261010i-mcp-draft-gift-and-remote-tool-list-without-the-asking-tools.md)) |
 | `update_author_gift` | admin: edit a draft gift's notes, address, name, note to them or size; **replaces** the notes; sends nothing, so it does not ask. There is no tool that sends one |
 
 **"Asks you first" is a macOS dialog the MCP server itself opens**, naming the exact gift or
@@ -122,6 +122,12 @@ article, with *Approve* and *Cancel*. Nothing is sent unless you press *Approve*
 It is there because an agent that reads your email can be steered by what is in an email, and the
 model cannot press that button. (An agent you have also given *computer use* could, in principle;
 that is a capability you grant separately.) Off macOS these tools refuse and point at the web page.
+
+**The server tells the model how the gift tools fit together**, as MCP's `instructions` (`INSTRUCTIONS` in
+`tools.ts`, one text for both servers, so it names only tools both offer): import the piece and wait, check
+nobody has had a gift, draft it with a suggested email in the notes, and send Greg to `/admin/vouchers`.
+From ChatGPT, "find this blogger's address and draft them a gift of their best essay" is then import,
+draft, and Greg's *Send* ([261010r](../plans/261010r-mcp-gift-any-article-and-send-makes-the-link.md)).
 
 **To review a gift before it goes, draft it.** Greg, 2026-10-10, after his first ChatGPT run:
 *"create_gift_voucher always sends a real email, so ChatGPT refused to draft one."* So

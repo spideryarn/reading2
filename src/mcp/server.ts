@@ -17,7 +17,7 @@ import { type CallToolResult, McpServer } from "@modelcontextprotocol/server";
 
 import type { Api } from "./api.js";
 import type { Approver } from "./approve.js";
-import { describeFailure, TOOLS, type Tool, type ToolContext } from "./tools.js";
+import { describeFailure, INSTRUCTIONS, TOOLS, type Tool, type ToolContext } from "./tools.js";
 
 export interface ServerOptions {
   readonly api: Api;
@@ -38,7 +38,8 @@ function failure(message: string): CallToolResult {
 export function buildServer(options: ServerOptions): McpServer {
   const server = new McpServer(
     { name: "spideryarn", version: options.version ?? "0.1.0" },
-    { capabilities: { tools: {} } },
+    /* How the tools fit together (261010r § D3); one text, true of both servers. */
+    { capabilities: { tools: {} }, instructions: INSTRUCTIONS },
   );
   const { api, ctx, approver } = options;
 

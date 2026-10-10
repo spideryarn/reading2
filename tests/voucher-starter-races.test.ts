@@ -82,7 +82,8 @@ describe("a concurrent create commits while starter resolution is in flight", ()
   for (const kind of ["absent", "unpublished", "link-off"] as const) {
     it(`acknowledges the committed identical create even when resolution answers ${kind}`, async () => {
       fixture.reads = [[], [existing]];
-      const resolveStarter = async (): Promise<StarterResolution> => ({ kind });
+      const resolveStarter = async (): Promise<StarterResolution> =>
+        kind === "link-off" ? { kind, articleId: "a" } : { kind };
       expect(await createVoucher(input, creator, { audience, resolveStarter })).toEqual({ kind: "replayed", id: input.id });
       expect(fixture.queueGift).not.toHaveBeenCalled();
     });
@@ -90,14 +91,14 @@ describe("a concurrent create commits while starter resolution is in flight", ()
 
   it("conflicts with a different committed create rather than reporting the live starter state", async () => {
     fixture.reads = [[], [{ ...existing, starterSlug: "different" }]];
-    expect(await createVoucher(input, creator, { audience, resolveStarter: async () => ({ kind: "link-off" }) }))
+    expect(await createVoucher(input, creator, { audience, resolveStarter: async () => ({ kind: "link-off", articleId: "a" }) }))
       .toEqual({ kind: "conflict" });
     expect(fixture.queueGift).not.toHaveBeenCalled();
   });
 
   it("still refuses a new create when no concurrent voucher exists", async () => {
     fixture.reads = [[], []];
-    expect(await createVoucher(input, creator, { audience, resolveStarter: async () => ({ kind: "link-off" }) }))
+    expect(await createVoucher(input, creator, { audience, resolveStarter: async () => ({ kind: "link-off", articleId: "a" }) }))
       .toEqual({ kind: "starter-refused", reason: "link-off" });
     expect(fixture.queueGift).not.toHaveBeenCalled();
   });

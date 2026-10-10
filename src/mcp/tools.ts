@@ -836,9 +836,10 @@ export const TOOLS: readonly Tool[] = [
       "Admin only. Saves an unsent draft gift voucher for the person who should receive one of the admin's own " +
       "articles (usually its author): their address and name, a note to them, how many free articles, and notes " +
       "for the admin (where you found the address, why this person). **Sends nothing.** The admin reviews it on " +
-      "/admin/vouchers under Author gifts and presses Send there; no tool can send it. The article must already be " +
-      "readable by link (public, or its private link on); if it is not, ask the admin to turn its private link on " +
-      "from the article's page. One gift per article: if the article already has one, nothing is changed and the " +
+      "/admin/vouchers under Author gifts and presses Send there; no tool can send it. The article must be on the " +
+      "admin's shelf and finished importing (import_article, then get_import_status). It may be private with no " +
+      "link: this tool never makes one, and if Send needs one it asks the admin to confirm they may share the " +
+      "article and makes it then. One gift per article: if the article already has one, nothing is changed and the " +
       "answer says so, and update_author_gift edits it. look_up_author: true also runs a paid web search for the " +
       "author's name and address, which fills only what you left empty. For a gift with no article, there is no " +
       "draft: the admin makes it on /admin/vouchers.",
@@ -948,6 +949,32 @@ export const TOOLS: readonly Tool[] = [
     },
   }),
 ];
+
+/**
+ * **What the server tells the model about the tools as a whole** — MCP's
+ * `instructions`, sent at `initialize` (plan 261010r § D3, with Sol's F4 and
+ * F5). Both servers send this one text, so every sentence must be true of
+ * both: the remote list has no tool that asks, the Mac's has several.
+ */
+export const INSTRUCTIONS = [
+  "Spideryarn is a reading app. These tools act on the signed-in person's own Spideryarn account and shelf.",
+  "",
+  "To give a writer free articles with one of their pieces (admins only):",
+  "1. Get the piece on the admin's shelf with import_article. If it answers a job, wait until get_import_status " +
+    "says it is done. If it answers an article the admin already has, use that. If it answers somebody else's " +
+    "public copy, that copy cannot be gifted: ask the admin before calling again with own_copy: true, which uses " +
+    "one of their articles.",
+  "2. Check list_author_gifts and list_gift_vouchers, so nobody is offered a gift twice.",
+  "3. Call draft_author_gift with the article's slug and what you know: their address, their name, a short note " +
+    "to them (recipientNote, put in their email), and notes for the admin (notes, never emailed): where you found " +
+    "the address, why this piece, and a suggested email in full. If you cannot find an address, " +
+    "look_up_author: true runs Spideryarn's own paid web search for one.",
+  "4. Tell the admin the draft is waiting on /admin/vouchers under Author gifts. They review it there and press " +
+    "Send themselves; if the article has no private link yet, Send makes one once they confirm they may share it.",
+  "",
+  "draft_author_gift and update_author_gift never send anything. Any tool that sends an email or publishes asks " +
+    "the person in a dialog on their own computer, and such tools are not offered to apps on the web.",
+].join("\n");
 
 /**
  * **The list the remote server serves** (plan 261010i § D2). Nobody can be
