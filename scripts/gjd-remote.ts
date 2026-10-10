@@ -64,14 +64,18 @@ import {
   buildBindingsScript,
   buildSessionScript,
   decideClaim,
+  decideOverseerRestart,
   decideRelease,
   formatWait,
   escapeName,
   overseerClaim,
+  overseerResumeLine,
+  overseerRestartSucceeded,
   parseSessions,
   releaseSucceeded,
   printableName,
   resolveSession,
+  resumeOverseerCommand,
   sessionRepo,
   sessionState,
   setRoleCommand,
@@ -2345,6 +2349,44 @@ function cmdRole(action: "claim" | "release", name: string | undefined): void {
       throw new Error(`unhandled role change: ${JSON.stringify(never)}`);
     }
   }
+}
+
+/**
+ * Bring the Overseer's Claude back, by uuid, in its own pane.
+ *
+ * A Claude resumed by NAME (`claude --resume Overseer`) works and cannot be
+ * messaged: the steer route trusts a pane only when its command line carries
+ * the uuid in `CLAUDE_SESSION_ID`. This reads that uuid off the holder of the
+ * claim and types `claude --resume <uuid>` into the pane's idle shell — what a
+ * person would type, so the environment is the shell's own. It refuses rather
+ * than kill anything: see `decideOverseerRestart`.
+ * docs/plans/261010g-gjd-remote-restart-overseer-resumes-the-overseer-by-uuid.md.
+ */
+function cmdRestartOverseer(opts: { attach: boolean; transport?: "ssh" | undefined }): void {
+  const verdict = decideOverseerRestart(sessions());
+  if (verdict.kind === "refused") die(verdict.why);
+  const r = sshRun(resumeOverseerCommand(verdict));
+  const said = r.stdout.trim();
+  // The old UUID/directory must not be offered as a manual fallback after the
+  // box has rejected them as stale. Nothing has been sent on this path.
+  if (r.status === 5) die(said.replace(/^GJDERR /, "") || lastWords(r.stderr));
+  if (!overseerRestartSucceeded(r)) {
+    // A missing receipt can follow a partial send or dropped SSH connection.
+    // Inspect before retrying, then use the same UUID line if still needed.
+    die(
+      `${said.replace(/^GJDERR /, "") || lastWords(r.stderr)}\n` +
+        `  Resume was not confirmed. Attach (gjd-remote resume ${printableName(verdict.name)}) and inspect the pane before retrying: keys may already have arrived.\n` +
+        `  If it is still at an empty prompt, the manual command is:\n` +
+        `    ${overseerResumeLine(verdict)}`,
+    );
+  }
+  appendLog({ cmd: "restart-overseer", name: verdict.name, id: verdict.conversationId });
+  console.log(
+    green(`✓ typed claude --resume ${verdict.conversationId} into ${printableName(verdict.name)}`) +
+      dim(" — typed, not yet seen to start"),
+  );
+  if (opts.attach) attach({ id: verdict.id, name: verdict.name }, opts.transport);
+  console.log(dim(`  gjd-remote resume ${printableName(verdict.name)}   # watch it come up`));
 }
 
 function cmdLs(): void {
@@ -5487,6 +5529,15 @@ ${bold("SESSIONS")}
                           session and with the tmux server: after a reboot NO
                           session is the Overseer, which ${dim("ls")} says out loud.
   release-overseer <name> let go of the claim, leaving the session running
+  restart-overseer        bring the Overseer's Claude back ${bold("by uuid")}, in its own pane
+                          Reads CLAUDE_SESSION_ID off the claim's holder and types
+                          claude --resume <uuid> into the pane's idle shell, then
+                          attaches. Never kills: refuses unless the pane is at an
+                          empty default bash prompt (so /exit Claude first), and then
+                          prints the line to type by hand. Never type claude --resume
+                          Overseer by hand: a name is not on the command line, so
+                          tell-overseer and the dashboard cannot reach it.
+      --no-attach           type it and leave
   tell-overseer <text…>   send the Overseer one line, as you, and say whether it landed
                           Goes through the fleet dashboard's own steer route on
                           the box — the same path as its "Message the Overseer"
@@ -5974,6 +6025,15 @@ async function main(): Promise<void> {
     case "release-overseer":
       return cmdRole(cmd === "claim-overseer" ? "claim" : "release", positionalName(rest));
 
+    case "restart-overseer": {
+      const { values } = parseArgs({
+        args: rest,
+        allowPositionals: false,
+        options: { "no-attach": { type: "boolean", default: false }, ssh: { type: "boolean", default: false } },
+      });
+      return cmdRestartOverseer({ attach: !values["no-attach"], transport: values.ssh ? "ssh" : undefined });
+    }
+
     case "tell-overseer":
     case "tell": {
       const usage =
@@ -6241,7 +6301,7 @@ async function main(): Promise<void> {
       return console.log(HELP);
 
     default: {
-      const known = ["ls", "log", "new-claude", "new-shell", "resume", "kill", "doctor", "provision", "clone", "setup", "push-env", "upload", "resolve", "ssh", "tunnel", "forget-key", "resume-all", "claim-overseer", "release-overseer", "tell-overseer", "tell"];
+      const known = ["ls", "log", "new-claude", "new-shell", "resume", "kill", "doctor", "provision", "clone", "setup", "push-env", "upload", "resolve", "ssh", "tunnel", "forget-key", "resume-all", "claim-overseer", "release-overseer", "restart-overseer", "tell-overseer", "tell"];
       // The containment clause is not decoration: `new` and `shell` were the
       // names of these two commands until 2026-08-31 and there are no aliases,
       // so the typo path is the whole migration. Two-char prefixes get `new`
