@@ -368,9 +368,9 @@ recurring form.
   **Look for the same idea under a different id, too**, and put the prior-work check in every brief
   (Greg, 2026-09-30, report 6F: *"I find myself suggesting it again because I can't remember
   whether I've already suggested it"*) — both are in [feedback-reports.md § The run](feedback-reports.md#the-run).
-  Since 2026-09-10 a tmux loop (`feedback-sweep-loop`, started with `scripts/tmux-job.ts` from the
-  Overseer's scratchpad, the same shape as the dashboard-refresh loop) runs one sweep every three
-  hours as a `scripts/run-claude.ts --mcp` job under the box's default Claude login, while the
+  Since 2026-10-10 `feedback-sweep.timer` runs one sweep three hours after the last one ended, with
+  its debriefs in `~/.overseer/scratch` (from 2026-09-10 until then a tmux loop,
+  `feedback-sweep-loop`, did it), as a `scripts/run-claude.ts --mcp` job under the box's default Claude login, while the
   daemon's scheduler stays off; its first output is queue
   entries — [feedback-reports.md § Into the Overseer's queue](feedback-reports.md#into-the-overseers-queue).
   The default login is the only one signed in to Sentry, and that is by decision: Greg, 2026-09-11,
@@ -558,7 +558,13 @@ Every few hours, as a tmux loop like the feedback sweep's:
    `git log origin/main..HEAD` is empty, there is nothing to deploy.
 2. Read every new migration and `.sql` file since `origin/main`. Additive ones you apply and name in
    the report. Anything that would destroy reader data goes to Greg first — a dropped table or
-   column, a delete, a truncate, a destructive backfill.
+   column, a delete, a truncate, a destructive backfill. **Whether to ship a migration in one go,
+   risking a brief breakage while old and new code overlap, or in careful steps, is your call, not
+   Greg's.** Default to one go and the brief breakage, and choose the careful steps only when
+   you judge them really necessary. Greg, 2026-10-10: *"Re the Sources rename - I'd rather just
+   break things briefly and keep things simple"*, and *"in future just do the migration decision
+   yourself, whether that's allow for a brief breakage or if you think it's really necessary we can
+   do the multi-step or careful way, but don't stop to ask me"*.
 3. **Write the release notes first**: `npm run changelog:prepare` under `scripts/tmux-job.ts`, then
    pull. Greg, 2026-10-01: *"make sure that the latest release notes are included in the deploy
    itself"*. It commits and pushes the notes for what is about to ship
@@ -777,7 +783,10 @@ Each of these has cost somebody real time on this box.
   and the plan doc's status line over any reading of the pane. Killing a finished session loses
   nothing: its edits are on disk and `claude --resume <session-id>` brings the conversation back.
 - **`gjd-remote resume` is an alias for `attach`** and reattaches to a **live** tmux session. It is
-  not what brings a conversation back after a reboot; that is `claude --resume <claudeSessionId>`,
+  not what brings a conversation back after a reboot; that is `claude --resume <claudeSessionId>`
+  (for the Overseer itself, while its tmux session lives, `gjd-remote restart-overseer` types that
+  for you, and a resume by name cannot be messaged —
+  [hetzner-remote-server-box.md](hetzner-remote-server-box.md#bringing-the-overseer-back-by-uuid)),
   and the id is in your own register.
 - **Talk to a Claude session with `SendMessage`, and steer through tmux only as the fallback.**
   `ListAgents` shows every live Claude session on the box by name; a message sent that way lands in
