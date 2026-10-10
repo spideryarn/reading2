@@ -418,3 +418,27 @@ rows, then narrow the bucket CHECK; rewrite `stale_notice_dismissals`' `citation
 dismissal wins where both exist) and narrow its mode CHECK (added at the second merge, § Log);
 rename the claim-check index and constraints and drop the view;
 remove the old API route aliases and the public payload's old keys. The read-side aliases may stay.
+
+## The migration review, before production
+
+The Overseer held the deploy carrying the two expand migrations until GPT Sol had reviewed the SQL
+on its own and Greg had agreed. [261009w-migration-review-sol.md](261009w-migration-review-sol.md)
+(prompt: [261009w-migration-review-prompt.md](261009w-migration-review-prompt.md)): **SAFE TO APPLY
+AFTER CHANGES.** Every CHECK re-add is a strict widening; drizzle applies all pending migrations in
+one transaction, so any failure rolls back all three; at production size (530 revisions, 91 with a
+Bibliography, 888 KB; 5,476 step runs) the work takes well under a second once the locks are held;
+the app role can fire the triggers; `044614` depends only on the other session's `030425`.
+
+- **M1 (P1), recommended to accept, put to Greg through the Overseer.** In the minutes between the
+  migration and the new code going live, a **pre-rename** sharing job (e.g. Quotes) that has to be
+  carried onto a new base can see the mirrored `bibliography` run row change when a Bibliography run
+  publishes beside it, and decline the rebase (`step-runs-moved`). The job's work is then refused
+  and the reader runs it again, which is what every overlapping job did before plan 260929c added
+  rebasing. It needs two jobs on one article, one of them Bibliography, overlapping inside that
+  window. Sol's fix is a compatibility release of the pre-rename code deployed first, which is a
+  third deploy for a rare, recoverable refusal.
+- **M2 (P2), overruled.** Sol would drop `ON CONFLICT DO NOTHING` from the step-run copy, or
+  compare the twins field by field. It also confirms no conflict can exist on production, because the
+  previous CHECK made a `bibliography` row impossible. The file is already applied to the shared
+  local database, and editing it changes its hash, which makes every worktree's `db:migrate` refuse
+  (database.md § Rule 4 on a laptop). The comment overstates nothing that can happen.
