@@ -103,6 +103,8 @@ export const PLAIN_WORDS_EXEMPT: Record<string, string> = {
   "src/pdf-frontmatter.ts": "writes block ids",
   "src/pdf-authors.ts":
     "copies names and affiliations off the page verbatim, and the code stores the page's characters, not the model's",
+  "src/front-matter-authors.ts":
+    "copies a web page's authors and their affiliations verbatim, and the code stores the page's characters, not the model's",
   "src/pdf-figure-locate.ts": "writes a page number and a box for a figure",
   "src/chat-gist.ts":
     "writes one line about a conversation for another model to decide whether to open it; no reader sees it",
