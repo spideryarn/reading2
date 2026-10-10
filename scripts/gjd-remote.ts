@@ -64,13 +64,13 @@ import {
   buildBindingsScript,
   buildSessionScript,
   decideClaim,
-  decideOverseerRestart,
+  decideOverseerResume,
   decideRelease,
   formatWait,
   escapeName,
   overseerClaim,
   overseerResumeLine,
-  overseerRestartSucceeded,
+  overseerResumeSucceeded,
   parseSessions,
   releaseSucceeded,
   printableName,
@@ -2359,18 +2359,18 @@ function cmdRole(action: "claim" | "release", name: string | undefined): void {
  * the uuid in `CLAUDE_SESSION_ID`. This reads that uuid off the holder of the
  * claim and types `claude --resume <uuid>` into the pane's idle shell — what a
  * person would type, so the environment is the shell's own. It refuses rather
- * than kill anything: see `decideOverseerRestart`.
+ * than kill anything: see `decideOverseerResume`.
  * docs/plans/261010g-gjd-remote-restart-overseer-resumes-the-overseer-by-uuid.md.
  */
-function cmdRestartOverseer(opts: { attach: boolean; transport?: "ssh" | undefined }): void {
-  const verdict = decideOverseerRestart(sessions());
+function cmdResumeOverseer(opts: { attach: boolean; transport?: "ssh" | undefined }): void {
+  const verdict = decideOverseerResume(sessions());
   if (verdict.kind === "refused") die(verdict.why);
   const r = sshRun(resumeOverseerCommand(verdict));
   const said = r.stdout.trim();
   // The old UUID/directory must not be offered as a manual fallback after the
   // box has rejected them as stale. Nothing has been sent on this path.
   if (r.status === 5) die(said.replace(/^GJDERR /, "") || lastWords(r.stderr));
-  if (!overseerRestartSucceeded(r)) {
+  if (!overseerResumeSucceeded(r)) {
     // A missing receipt can follow a partial send or dropped SSH connection.
     // Inspect before retrying, then use the same UUID line if still needed.
     die(
@@ -2380,7 +2380,7 @@ function cmdRestartOverseer(opts: { attach: boolean; transport?: "ssh" | undefin
         `    ${overseerResumeLine(verdict)}`,
     );
   }
-  appendLog({ cmd: "restart-overseer", name: verdict.name, id: verdict.conversationId });
+  appendLog({ cmd: "resume-overseer", name: verdict.name, id: verdict.conversationId });
   console.log(
     green(`✓ typed claude --resume ${verdict.conversationId} into ${printableName(verdict.name)}`) +
       dim(" — typed, not yet seen to start"),
@@ -5529,7 +5529,7 @@ ${bold("SESSIONS")}
                           session and with the tmux server: after a reboot NO
                           session is the Overseer, which ${dim("ls")} says out loud.
   release-overseer <name> let go of the claim, leaving the session running
-  restart-overseer        bring the Overseer's Claude back ${bold("by uuid")}, in its own pane
+  resume-overseer         bring the Overseer's Claude back ${bold("by uuid")}, in its own pane
                           Reads CLAUDE_SESSION_ID off the claim's holder and types
                           claude --resume <uuid> into the pane's idle shell, then
                           attaches. Never kills: refuses unless the pane is at an
@@ -6025,13 +6025,13 @@ async function main(): Promise<void> {
     case "release-overseer":
       return cmdRole(cmd === "claim-overseer" ? "claim" : "release", positionalName(rest));
 
-    case "restart-overseer": {
+    case "resume-overseer": {
       const { values } = parseArgs({
         args: rest,
         allowPositionals: false,
         options: { "no-attach": { type: "boolean", default: false }, ssh: { type: "boolean", default: false } },
       });
-      return cmdRestartOverseer({ attach: !values["no-attach"], transport: values.ssh ? "ssh" : undefined });
+      return cmdResumeOverseer({ attach: !values["no-attach"], transport: values.ssh ? "ssh" : undefined });
     }
 
     case "tell-overseer":
@@ -6301,7 +6301,7 @@ async function main(): Promise<void> {
       return console.log(HELP);
 
     default: {
-      const known = ["ls", "log", "new-claude", "new-shell", "resume", "kill", "doctor", "provision", "clone", "setup", "push-env", "upload", "resolve", "ssh", "tunnel", "forget-key", "resume-all", "claim-overseer", "release-overseer", "restart-overseer", "tell-overseer", "tell"];
+      const known = ["ls", "log", "new-claude", "new-shell", "resume", "kill", "doctor", "provision", "clone", "setup", "push-env", "upload", "resolve", "ssh", "tunnel", "forget-key", "resume-all", "claim-overseer", "release-overseer", "resume-overseer", "tell-overseer", "tell"];
       // The containment clause is not decoration: `new` and `shell` were the
       // names of these two commands until 2026-08-31 and there are no aliases,
       // so the typo path is the whole migration. Two-char prefixes get `new`

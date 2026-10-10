@@ -1323,7 +1323,7 @@ export function setRoleCommand(sessionId: string, role: string | null): string {
 }
 
 /**
- * What `gjd-remote restart-overseer` should do — decided against a listing,
+ * What `gjd-remote resume-overseer` should do — decided against a listing,
  * before anything is typed.
  *
  * **THE UUID IS THE ONE THE STEER ROUTE CHECKS.** It is the holder's
@@ -1339,11 +1339,11 @@ export function setRoleCommand(sessionId: string, role: string | null): string {
  * a refusal that says to `/exit` first — an Overseer interrupted mid-turn could
  * be mid-deploy. docs/plans/261010g-gjd-remote-restart-overseer-resumes-the-overseer-by-uuid.md.
  */
-export type OverseerRestart =
-  | { kind: "restart"; id: string; name: string; conversationId: string; dir: string }
+export type OverseerResume =
+  | { kind: "resume"; id: string; name: string; conversationId: string; dir: string }
   | { kind: "refused"; why: string };
 
-export function decideOverseerRestart(list: readonly Session[]): OverseerRestart {
+export function decideOverseerResume(list: readonly Session[]): OverseerResume {
   const claim = overseerClaim(list);
   switch (claim.kind) {
     case "none":
@@ -1388,7 +1388,7 @@ export function decideOverseerRestart(list: readonly Session[]): OverseerRestart
   const exitFirst = `\n  Nothing was typed. Attach (gjd-remote resume ${name}), /exit the Claude there, then run this again.`;
   switch (s.proc.kind) {
     case "none":
-      return { kind: "restart", id: s.id, name: s.name, conversationId: s.claudeId, dir: s.meta.dir };
+      return { kind: "resume", id: s.id, name: s.name, conversationId: s.claudeId, dir: s.meta.dir };
     case "claude":
       return { kind: "refused", why: `${name}'s Claude is already running.${exitFirst}` };
     case "busy":
@@ -1433,7 +1433,7 @@ export function overseerResumeLine(t: { conversationId: string; dir: string }): 
 }
 
 /** A receipt confirms delivery only when the remote command also exited zero. */
-export function overseerRestartSucceeded(r: { status: number | null; stdout: string }): boolean {
+export function overseerResumeSucceeded(r: { status: number | null; stdout: string }): boolean {
   return r.status === 0 && r.stdout.trim() === "GJD_TYPED";
 }
 
@@ -1488,7 +1488,7 @@ export function resumeOverseerCommand(t: { id: string; conversationId: string; d
       ["CLAUDE_SESSION_ID", t.conversationId],
       [META.dir, t.dir],
     ].map(([key, value]) =>
-      `actual=$(tmux show-environment -t '${t.id}' ${key}) && [ "$actual" = ${shq(`${key}=${value}`)} ] || ${refuse("the claim or launch metadata changed or could not be read; run restart-overseer again for a fresh listing", 5)}`,
+      `actual=$(tmux show-environment -t '${t.id}' ${key}) && [ "$actual" = ${shq(`${key}=${value}`)} ] || ${refuse("the claim or launch metadata changed or could not be read; run resume-overseer again for a fresh listing", 5)}`,
     ),
     `panes=$(tmux list-panes -s -t '${t.id}' -F '#{pane_id} #{pane_pid}') || ${refuse("the session is gone")}`,
     `[ "$(printf '%s\\n' "$panes" | grep -c .)" -eq 1 ] || ${refuse("the session has more than one pane, and I will not guess which")}`,

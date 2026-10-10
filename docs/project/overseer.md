@@ -784,7 +784,7 @@ Each of these has cost somebody real time on this box.
   nothing: its edits are on disk and `claude --resume <session-id>` brings the conversation back.
 - **`gjd-remote resume` is an alias for `attach`** and reattaches to a **live** tmux session. It is
   not what brings a conversation back after a reboot; that is `claude --resume <claudeSessionId>`
-  (for the Overseer itself, while its tmux session lives, `gjd-remote restart-overseer` types that
+  (for the Overseer itself, while its tmux session lives, `gjd-remote resume-overseer` types that
   for you, and a resume by name cannot be messaged —
   [hetzner-remote-server-box.md](hetzner-remote-server-box.md#bringing-the-overseer-back-by-uuid)),
   and the id is in your own register.

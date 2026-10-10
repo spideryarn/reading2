@@ -1,3 +1,5 @@
+Renamed to `resume-overseer` on 2026-10-10 at Greg's request.
+
 # `gjd-remote restart-overseer`: resume the Overseer by uuid, not by name
 
 Status: built 2026-10-10. Queue item `qi-d66em72h` ("Steer route cannot reach an Overseer resumed by
