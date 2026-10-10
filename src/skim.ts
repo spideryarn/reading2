@@ -171,7 +171,7 @@ export type {
  * growth rule judges `passSizes`, and `growPasses` repairs a route that still
  * does not grow. The input hash is unchanged; the version alone makes a stored
  * route outdated, which is not announced.
- * docs/plans/261010g-skim-deeper-passes-always-longer-and-a-previous-stop-door.md.
+ * docs/plans/261010t-skim-deeper-passes-always-longer-and-a-previous-stop-door.md.
  */
 export const PROMPT_VERSION = "skim/12";
 
@@ -255,7 +255,7 @@ export function emptyDrops(): SkimDrops {
  * these were "at depth 1; at depth 1 or 2; in all", the shape from when the
  * passes nested; read as passes, 11 quotes asked for Gist 3, More 3, Most 5, so
  * a model on target walked a More no longer than its Gist (spya-nbmce7, plan
- * 261010g). Now, wherever there are quotes enough (`GROWTH_MIN_QUOTES` and up,
+ * 261010t). Now, wherever there are quotes enough (`GROWTH_MIN_QUOTES` and up,
  * which tests/skim.test.ts checks to the cap), More is at least Gist and Most
  * is more than More: Gist is the old target; More is about 40% of the rest,
  * kept below half of it; Most is everything left, within the cumulative cap.
@@ -928,7 +928,7 @@ export function passSizes(stops: readonly SkimStop[]): [number, number, number] 
  * the reader saw while the passes nested; from 260929e each pass walks only
  * its own stops (and, from 261003l, a few carried in), and the check went on
  * guarding the old walk. A route with cumulative 3 < 7 < 11 walked Gist 3,
- * More 5, Most 4 (spya-nbmce7, plan 261010g).
+ * More 5, Most 4 (spya-nbmce7, plan 261010t).
  *
  * With at least `GROWTH_MIN_QUOTES` offered quotes, all three passes and
  * `1 ≤ w₁ ≤ w₂ < w₃`: Most always walks more than More, and More at least as
@@ -959,7 +959,7 @@ export function growthFailure(
 /**
  * **Make no pass shorter than the one before, and Most longer than More,
  * where the model's route does not** — rule 9, after `validateRoute`'s eight,
- * since `skim/12` (plan 261010g); the rule itself is `growthFailure`'s. The
+ * since `skim/12` (plan 261010t); the rule itself is `growthFailure`'s. The
  * prompt asks for it; this is the backstop, so that More is never longer
  * than Most by luck of the draw (spya-nbmce7: Gist 3, More 5, Most 4, and a
  * re-run that happened to grow).

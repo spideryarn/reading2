@@ -62,10 +62,10 @@ export const OPEN_IDEA_CHAT = "Open the chat about this idea";
 
 /** What the button's card says under its name: where the press goes, and that the press is the Send (since 2026-10-06, plan 261006j). */
 export const ASK_IN_CHAT_SAYS = "Opens a new chat and asks a question about it straight away.";
-/** The card's two statements (plan 261010g, D3): what the chat is, and what becomes of it. */
+/** The card's two statements (plan 261010s, D3): what the chat is, and what becomes of it. */
 export const ASK_IN_CHAT_WHAT = "A conversation with the AI about this one thing, which you can carry on.";
 export const ASK_IN_CHAT_HOW = "The chat is kept. This button then becomes the chat's mark, which opens it again.";
-/** A prose hover card's second statement (plan 261010g, D3): the card draws no mark, so its press reopens the chat the item already has. */
+/** A prose hover card's second statement (plan 261010s, D3): the card draws no mark, so its press reopens the chat the item already has. */
 export const ASK_IN_CHAT_CARD_HOW =
   "Opens your chat about it if there is one. If not, starts one and asks a question straight away.";
 
@@ -87,7 +87,7 @@ export function originChatTip(label: string, turns: number, words: "gist" | "ans
  * The count and *No answer yet* are the app's words. The line is **the
  * chat's gist** when it has one: a small model's line on what the whole
  * conversation covered (src/chat-gist.ts), the *"short summary of the chat"*
- * Greg asked to see here (spya-pdpnjf, plan 261010g, D4). Until the first gist
+ * Greg asked to see here (spya-pdpnjf, plan 261010s, D4). Until the first gist
  * lands, and after an edit clears it, it is the latest answer's opening,
  * clipped. Either is a model's words, so in the model's face
  * (docs/project/fonts.md, `voice-ai`). *No answer yet* until the first
@@ -147,13 +147,13 @@ export function OriginChatMark({
 /**
  * **Glossary's, Bibliography's and Ideas' *Ask in chat*: Chat's two bubbles,
  * with its words in a card.** Where Dig deeper was (plan 261009k). Icon only
- * since plan 261010g, Greg's ask (spya-pdpnjf, 2026-10-09): *"Can we get rid
+ * since plan 261010s, Greg's ask (spya-pdpnjf, 2026-10-09): *"Can we get rid
  * of the words Ask in Chat and just show the chat icon with a rich
  * tooltip?"*, which is icons.md § Navigation. Chat's icon from the bar,
  * because the press takes the reader into Chat. The prose hover cards draw
  * their own smaller button (ProseHoverCard.tsx).
  *
- * **Drawn only while the item has no chat** (plan 261010g, D2). Once it has
+ * **Drawn only while the item has no chat** (plan 261010s, D2). Once it has
  * one, the caller draws `OriginChatMark` in its place, which wears the same
  * bubbles and opens that chat; and the sender behind this button reopens it
  * too, for the hover cards that draw no mark (Reader.tsx § `reopenItemChat`).

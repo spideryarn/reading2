@@ -59,7 +59,7 @@ export type LogoAnimation = {
 };
 
 /**
- * The fourteen, each defined in src/web/styles/logo-animations.css under the
+ * The twenty-seven, each defined in src/web/styles/logo-animations.css under the
  * `id` below. Order here is the order `/design` lists them in and has no other
  * meaning — the picker is uniform, and deliberately so for a first version.
  *
@@ -71,7 +71,7 @@ export type LogoAnimation = {
  * to reach for if one of these disappoints on screen are in
  * docs/plans/260907f-logo-animations-shortlist.md.
  *
- * **Six of the fourteen animate the mark alone**, and that ratio is not an
+ * **Thirteen of the twenty-seven animate the mark alone**, and that ratio is not an
  * accident: the word is hidden below 731px in the corner and at the bar's
  * tightest rungs on the reading view, so on a phone a letters-only animation is
  * a hover that does nothing. docs/project/design-logo.md § What a phone sees.
@@ -165,14 +165,95 @@ export const LOGO_ANIMATIONS: readonly LogoAnimation[] = [
     name: "Dew on the Thread",
     blurb: "A bead of the spider's orange runs once along the white word, each letter glowing as it passes.",
   },
+  /* The thirteen more, 2026-10-10 — Greg, report spya-axbxr8: "Let's generate
+     a bunch more … really have fun with it." Chosen as a set from four
+     longlists in docs/plans/261010p-more-logo-animations.md. */
+  {
+    id: "spya-hop",
+    reach: "mark",
+    name: "Hop",
+    blurb: "It crouches, springs up stretched tall, hangs, and lands with a squash, over a footprint that shrinks and spreads.",
+  },
+  {
+    id: "spya-asterisk",
+    reach: "mark",
+    name: "Asterisk",
+    blurb: "The spider shrinks and rises into a superscript asterisk before the word, a footnote mark, then unfurls.",
+  },
+  {
+    id: "spya-magnifier",
+    reach: "mark",
+    name: "Magnifier",
+    blurb: "A lens glides in over the spider, which swells inside it as if found. Search mode.",
+  },
+  {
+    id: "spya-pacing",
+    reach: "mark",
+    name: "Pacing",
+    blurb: "It walks a few steps, turns round, walks back past its slot, turns again. Someone waiting for something to arrive.",
+  },
+  {
+    id: "spya-lines",
+    reach: "mark",
+    name: "Line by Line",
+    blurb: "The spider reads: four held ticks along a line, back and down a pixel, three lines, home.",
+  },
+  {
+    id: "spya-dead",
+    reach: "mark",
+    name: "Played Dead",
+    blurb: "You poked it. It flips onto its back and goes grey, twitches once, and rolls upright as if nothing happened.",
+  },
+  {
+    id: "spya-semaphore",
+    reach: "mark",
+    name: "Semaphore",
+    blurb: "One foreleg waves twice like a peacock spider flagging, and the other answers. The mark grows a limb.",
+  },
+  {
+    id: "spya-quotes",
+    reach: "letters",
+    name: "In Quotes",
+    blurb: "Orange quotation marks drop in either side: “Spideryarn”. A line worth keeping.",
+  },
+  {
+    id: "spya-click",
+    reach: "letters",
+    name: "It Clicks",
+    blurb: "The letters drift out of true, then all ten snap straight at once with a warm flash. The moment of understanding.",
+  },
+  {
+    id: "spya-shed",
+    reach: "letters",
+    name: "The Shed",
+    blurb: "Odd letters up, even down, as a loom opens its warp; they cross, and are beaten level.",
+  },
+  {
+    id: "spya-xref",
+    reach: "letters",
+    name: "Cross-reference",
+    blurb: "An arc draws itself from the first r to the second, as if one cited the other.",
+  },
+  {
+    id: "spya-skim",
+    reach: "letters",
+    name: "Three Readings",
+    blurb: "Skim's three passes: three letters light, then six, then all ten.",
+  },
+  {
+    id: "spya-tex",
+    reach: "letters",
+    name: "Set in TeX",
+    blurb: "The letters lean into italic one by one, as if typeset as ten maths variables, and straighten.",
+  },
 ];
 
 /**
  * A random animation that is **not** the one just shown.
  *
  * The exclusion is the whole reason this is a function rather than one line at
- * the call site. With fourteen animations a uniform draw repeats the previous
- * one about one hover in fourteen, and a repeat does not read as chance — it
+ * the call site. With twenty-seven animations a uniform draw repeats the previous
+ * one about one hover in twenty-seven, and a repeat does not read as chance — it
  * reads as the feature being broken, because the reader's model is "a new one
  * each time". Excluding the last pick costs nothing and removes the only
  * outcome that looks like a bug.

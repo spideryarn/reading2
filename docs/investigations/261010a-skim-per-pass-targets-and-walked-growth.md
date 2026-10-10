@@ -1,6 +1,6 @@
 # Skim: per-pass targets and walked growth (`skim/12` against `skim/11`)
 
-Run 2026-10-10 for [plan 261010g](../plans/261010g-skim-deeper-passes-always-longer-and-a-previous-stop-door.md).
+Run 2026-10-10 for [plan 261010t](../plans/261010t-skim-deeper-passes-always-longer-and-a-previous-stop-door.md).
 Up: [investigations.md](../project/investigations.md). The mode is [skim.md](../project/skim.md).
 
 **Question and answer.** Does `skim/12` (per-pass targets that grow, plus the `growPasses` repair)

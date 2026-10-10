@@ -1,4 +1,4 @@
-# 261010g — Ask in chat resumes its thread, shows one exists, and becomes an icon
+# 261010s — Ask in chat resumes its thread, shows one exists, and becomes an icon
 
 Up: [plans.md](../project/plans.md) · reports spya-pdpnjf (#526, SPIDERYARN-READING2-G6) and
 spya-fy05y6 (#527, SPIDERYARN-READING2-G7) · queue item `qi-brd4e34k` · builds on
@@ -183,4 +183,4 @@ GPT Sol on this plan (read-only), and on each stage's code.
 - **Browser** (Sonnet subagent, Playwright on the box, `vb-spya-vu3xen`): the icon and its card,
   the press, *Back to …*, the mark in the button's place, the mark and the hover card both opening
   the same thread (`spya-yuwnah`) with no new row in Chat's list, the card staying open under its
-  tooltip, and 390px. No console errors. Screenshots `261010g-shot-1`…`6`.
+  tooltip, and 390px. No console errors. Screenshots `261010s-shot-1`…`6`.

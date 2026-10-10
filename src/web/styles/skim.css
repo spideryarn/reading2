@@ -365,7 +365,7 @@
   font-family: var(--font-author);
   font-size: var(--reading-size);
 }
-/* Back on the left, the way on on the right (spya-gm858u, plan 261010g): the
+/* Back on the left, the way on on the right (spya-gm858u, plan 261010t): the
    row spans the door's measure, and the forward group keeps to the right even
    when there is no back button, or it wraps under one on a narrow window. */
 .skim-door-row {

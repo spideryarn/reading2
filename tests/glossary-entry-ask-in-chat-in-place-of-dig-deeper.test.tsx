@@ -112,7 +112,7 @@ describe("an open Glossary entry, for its owner", () => {
     expect(anyDigDeeper(), "Dig deeper is gone (plan 261009k)").toEqual([]);
     expect(host.querySelector(".gloss-dig")).toBeNull();
     const button = askButton();
-    expect(button?.textContent?.trim(), "icon only (plan 261010g)").toBe("");
+    expect(button?.textContent?.trim(), "icon only (plan 261010s)").toBe("");
     expect(button?.getAttribute("aria-label")).toBe(ASK_ENTRY_IN_CHAT);
     act(() => button?.click());
     expect(asked).toEqual([ENTRY]);
