@@ -7,7 +7,10 @@ Up: [dev-and-deployment-overview.md](dev-and-deployment-overview.md)
 
 ## In this doc
 
-- [§ One box](#one-box-since-2026-09-02) — why the dialog is one box, not three (history)
+- [§ One box](#one-box-since-2026-09-02) — why the dialog is one box, not three (history); under it,
+  [§ Send always does something](#send-always-does-something-since-2026-10-10) (Send while the
+  microphone is on, the one-minute deadline) and
+  [§ The draft survives a reload](#the-draft-survives-a-reload-since-2026-10-10)
 - [§ Your earlier reports](#your-earlier-reports-since-2026-09-16) — the Earlier tab, [§ Shipped or not](#shipped-or-not-since-2026-09-30) (how a note's header becomes a "shipped" mark), [§ What became of each report](#what-became-of-each-report-for-an-admin-since-2026-10-07) (an admin's four statuses, the `#number`, and the note's comment), and [§ Questions for an admin](#questions-for-an-admin-and-replies-to-them-since-2026-10-07) (an agent's questions at the top of *Needs a decision*, the reply box and its microphone, where a reply is stored)
 - [§ The thank-you](#the-thank-you-and-getting-out-of-it) — the message after sending, and the toast
 - [§ The keyboard](#the-keyboard-and-the-button-under-it) — the phone keyboard's Done/Send, and shortcuts
@@ -173,6 +176,41 @@ every test in the file still green. *Spins on Send while the report is in flight
 the test can stand inside the `sending` stage and look. If the report says otherwise on a real
 screen, the thing to suspect is not the markup: the POST body is built **synchronously** before the
 first `await`, so a large pasted screenshot is stringified before React gets to paint the spinner.
+
+### Send always does something, since 2026-10-10
+
+> I could see the send button, but when I tried to press it, nothing happened.
+>
+> — Greg, 2026-10-09, on an iPad, after a couple of voice messages (`spya-t9qu3v`)
+
+Not reproduced, so three states that could do it are closed rather than one cause claimed
+([261010f](../plans/261010f-feedback-dialog-send-after-dictation-and-a-saved-draft.md)):
+
+- **Send is live while the microphone is involved.** It used to be disabled then, greyed only by
+  opacity and still reading *Send*. A press (or ⌘/Ctrl+Enter) now stops the microphone and sends
+  once the words land — the double press on Stop, reached from Send
+  ([dictation.md § A double press on Stop also sends](dictation.md#a-double-press-on-stop-also-sends)).
+- **A send gives up after a minute** (`SEND_TIMEOUT_MS`) with the usual failure panel, so a request
+  suspended with the app no longer holds the latch for good. The retry carries the same id.
+- **An edited retry is a new report.** The server answers a reused id with the row it already has,
+  so an edit after a lost answer would have been thanked and dropped; a retry whose report differs
+  from the last attempt gets a fresh id.
+
+### The draft survives a reload, since 2026-10-10
+
+> I wonder if it's worth auto-saving the feedback dialog every few seconds after a debounce, so
+> that if … the page does get lost or blocked, it can reload. I don't know, that might then make it
+> complicated if you try and open a feedback dialog in multiple tabs.
+>
+> — Greg, 2026-10-09 (`spya-exhqqr`)
+
+The words and kind are copied to `localStorage` a second after they last change, per reader, and
+read back once when the dialog mounts ([`feedback-draft.ts`](../../src/web/feedback-draft.ts)).
+Several tabs: last write wins, and a tab removes only an exact snapshot it read or wrote that is
+still unchanged; a newer body or kind under the same id belongs to the tab that changed it. A
+restored draft is a new report, with a fresh id. Not the screenshot or the tick-box. Gone when sent,
+on **Sign out**, or after a week; `/privacy` says so
+([privacy.md § On the reader's own device](privacy.md#on-the-readers-own-device-until-the-words-arrive)).
 
 ## Your earlier reports, since 2026-09-16
 

@@ -106,6 +106,17 @@ export interface UseDictationField {
    * docs/project/dictation.md § A double press on Stop also sends.
    */
   again?: () => void;
+  /**
+   * **The box's own done action, pressed while the microphone is involved** —
+   * Send while still talking, or while the words are on their way. Stops the
+   * microphone if it is on, and runs `onDone` once the transcript is in the
+   * box, under exactly the rules of a double press on Stop: only if real words
+   * landed, and only for the same `doneKey`. Does nothing on an idle box or one
+   * with no `onDone`. Before this, a box's done action refused silently while
+   * `busy`, and on an iPad that read as a dead Send button (reports
+   * spya-t9qu3v, spya-exhqqr; plan 261010f).
+   */
+  finishThenDone(): void;
   /** A double press was taken: the box will send when the words arrive. */
   sendingAfter: boolean;
   /**
@@ -237,6 +248,20 @@ export function useDictationField<C>({
   useEffect(() => closeAgain, [closeAgain]);
   const wantSend = useRef<{ key: string | undefined } | null>(null);
   const delivered = useRef(false);
+  /**
+   * **When Stop was last pressed, and what the ending after it delivered.**
+   * A fast ending — words back inside {@link DOUBLE_PRESS_MS} — reaches idle
+   * while a second press is still on its way, and that press used to land on
+   * an idle button and start the microphone again: quietly, with Send then
+   * refusing because the microphone was on. So a second press in the window
+   * still means "send" once the ending is over, if words landed for the same
+   * `doneKey`; otherwise it is an ordinary press. Plan 261010f, item 2.
+   */
+  const stoppedAt = useRef<number | null>(null);
+  const endedWith = useRef<{ key: string | undefined } | null>(null);
+  /* A Stop press owns exactly one ending. A later Retry also calls `onEnd`, but
+     it must not be mistaken for the fast ending of that earlier press. */
+  const stopAwaitingEnd = useRef(false);
   const [sendingAfter, setSendingAfter] = useState(false);
   const key = useRef(doneKey);
   key.current = doneKey;
@@ -252,6 +277,9 @@ export function useDictationField<C>({
        opened again before the transcript returns. */
     wantSend.current = null;
     delivered.current = false;
+    stoppedAt.current = null;
+    endedWith.current = null;
+    stopAwaitingEnd.current = false;
     setSendingAfter(false);
     closeAgain();
   }, [doneKey, closeAgain]);
@@ -350,6 +378,13 @@ export function useDictationField<C>({
          outlives the ending it was made for. */
       const wish = wantSend.current;
       const send = wish !== null && delivered.current && wish.key === key.current;
+      const stopped = stopAwaitingEnd.current;
+      /* For a second press that arrives after this ending: see `stoppedAt`. A
+         wish already taken here has been honoured, so there is nothing left
+         for a later press to send. */
+      endedWith.current = stopped && delivered.current && !send ? { key: key.current } : null;
+      stopAwaitingEnd.current = false;
+      if (endedWith.current === null) stoppedAt.current = null;
       wantSend.current = null;
       delivered.current = false;
       setSendingAfter(false);
@@ -398,6 +433,22 @@ export function useDictationField<C>({
       closeAgain();
       setAgainOpen(true);
       againTimer.current = setTimeout(closeAgain, DOUBLE_PRESS_MS);
+      stoppedAt.current = Date.now();
+      endedWith.current = null;
+      stopAwaitingEnd.current = true;
+    }
+    if (!dictation.armed && done.current && stoppedAt.current !== null) {
+      const elapsed = Date.now() - stoppedAt.current;
+      const soon = elapsed >= 0 && elapsed < DOUBLE_PRESS_MS;
+      const ended = endedWith.current;
+      if (soon && !dictation.transcribing && ended !== null && ended.key === key.current) {
+        /* The second press of a double press, after a fast ending: send. */
+        stoppedAt.current = null;
+        endedWith.current = null;
+        sendKey.current = ended.key;
+        setSendTick((n) => n + 1);
+        return;
+      }
     }
     if (!dictation.armed) {
       /* A moved offer may be the only copy of the reader's words. The hook
@@ -406,6 +457,9 @@ export function useDictationField<C>({
       if (dictation.toggle() === false) return;
       wantSend.current = null;
       delivered.current = false;
+      stoppedAt.current = null;
+      endedWith.current = null;
+      stopAwaitingEnd.current = false;
       closeAgain();
       /* A press during the previous session's transcription supersedes that
          session. Its rough Chromium words stay in the box, but they are now
@@ -440,12 +494,42 @@ export function useDictationField<C>({
     wantSend.current = { key: key.current };
     setSendingAfter(true);
   }, [closeAgain]);
+
+  const finishThenDone = useCallback(() => {
+    if (!done.current) return;
+    if (!dictation.armed && !dictation.transcribing) return;
+    /* **The wish before the stop**, because a stop can end the session in the
+       same turn (Safari has no live recogniser to wait for), and an `onEnd`
+       that ran first would find no wish and the words would land unsent. */
+    closeAgain();
+    wantSend.current = { key: key.current };
+    setSendingAfter(true);
+    /* Stop it, unless the cap already has: a press there must never reach the
+       hook's start branch (`toggle` above, and the hook's own grace). */
+    const capped = dictation.endsAt !== null && Date.now() >= dictation.endsAt;
+    if (dictation.armed && !capped) dictation.toggle();
+  }, [dictation, closeAgain]);
+
+  /* **A wish never crosses into another session.** Every session begins in
+     `opening`, including the one the hook starts by itself when the reader
+     picks another microphone, which ends the old session without an `onEnd`
+     to clear the wish. GPT Sol's plan review of 261010f, F6. */
+  const phase = dictation.phase;
+  useEffect(() => {
+    if (phase !== "opening") return;
+    wantSend.current = null;
+    stoppedAt.current = null;
+    endedWith.current = null;
+    stopAwaitingEnd.current = false;
+    setSendingAfter(false);
+  }, [phase]);
   return {
     dictation,
     readOnly,
     busy: readOnly || dictation.armed,
     toggle,
     ...(onDone && againOpen && readOnly ? { again } : {}),
+    finishThenDone,
     sendingAfter,
     doubleStop: onDone !== undefined,
   };

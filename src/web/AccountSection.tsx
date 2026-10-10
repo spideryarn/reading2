@@ -25,6 +25,7 @@ import { LogOut } from "lucide-react";
 
 import { supabase } from "./lib/supabase.js";
 import { forgetDictationsOf } from "./dictation-keep.js";
+import { forgetFeedbackDraft } from "./feedback-draft.js";
 import { useSession } from "./useSession.js";
 
 export function AccountSection() {
@@ -45,6 +46,8 @@ export function AccountSection() {
        refresh must not delete minutes of dictation. Bounded inside. Plan
        260929h. */
     await forgetDictationsOf(user.id);
+    /* And an unsent Feedback draft kept for a reload, for the same reason. */
+    forgetFeedbackDraft(user.id);
     await supabase.auth.signOut();
     /* See the header: a reload, not a re-render. `replace` so Back does not
        return to a page rendered for somebody who is no longer here. */

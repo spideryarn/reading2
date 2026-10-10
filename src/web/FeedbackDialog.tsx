@@ -130,6 +130,12 @@ import { imageFileFromDrop, imageFileFromPaste, screenshotFromFile } from "./fee
 import { apiFetch, failure } from "./lib/api.js";
 import { keepDictation } from "./dictation-keep.js";
 import { useReaderTranscriber } from "./dictation-upload.js";
+import {
+  type FeedbackDraft,
+  forgetMatchingFeedbackDraft,
+  readFeedbackDraft,
+  saveFeedbackDraft,
+} from "./feedback-draft.js";
 import { noteFeedbackDraft } from "./safe-to-reload.js";
 import { Toast, type ToastMessage } from "./Toast.js";
 import { useCopy } from "./useCopy.js";
@@ -195,7 +201,16 @@ interface Props {
    * which says what became of each report. Not a gate; the server's is.
    */
   admin?: boolean;
+  /**
+   * **Whose draft this is**, for the copy kept in this browser so a reload
+   * does not lose it (feedback-draft.ts). `FeedbackHost` passes it, and keys
+   * the dialog on it, so a change of reader is a fresh dialog. Absent: no copy.
+   */
+  readerId?: string;
 }
+
+/** How long after the last keystroke the draft is saved to the browser. */
+const DRAFT_SAVE_MS = 1000;
 
 /**
  * **There is no `sent` stage, since 2026-09-29.** A successful send shuts the
@@ -276,6 +291,19 @@ function asPlainText(body: string, kind: FeedbackKind | null, where: FeedbackWhe
 }
 
 /** What each kind is called, in one place — the buttons and the copied text. */
+/**
+ * **How long a send may take before the reader is told it did not go.**
+ *
+ * There was no limit. A request suspended along with the app on an iPad can
+ * stay unsettled for good, and the latch then refused every later press of
+ * Send until the dialog was shut and opened again (reports spya-t9qu3v and
+ * spya-exhqqr, plan 261010f). A minute rather than less, because a consented
+ * report can carry a screenshot over a slow connection. Giving up loses
+ * nothing: the words stay, and a retry carries the same id, so a request that
+ * did land is answered `duplicate` and files once.
+ */
+const SEND_TIMEOUT_MS = 60_000;
+
 const KIND_LABEL: Record<FeedbackKind, string> = {
   problem: "A problem",
   suggestion: "A suggestion",
@@ -387,7 +415,7 @@ function useDraftHeld(...held: boolean[]): void {
   }, [any]);
 }
 
-export function FeedbackDialog({ open, onClose, where, prefill = null, admin = false }: Props) {
+export function FeedbackDialog({ open, onClose, where, prefill = null, admin = false, readerId }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   /** The one box. `useDictationField` needs it to find the caret. */
   const box = useRef<HTMLTextAreaElement>(null);
@@ -398,8 +426,12 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
   /** Which actual opening is on screen; a late request may outlive its own one. */
   const opening = useRef(0);
 
-  const [body, setBody] = useState("");
-  const [kind, setKind] = useState<FeedbackKind | null>(null);
+  /* **A draft saved before a reload comes back**, read once as the dialog
+     mounts (a page load, or a change of reader), and before the prefill effect
+     below, which then adds to it as it would to any draft. Plan 261010f. */
+  const [restored] = useState(() => (readerId === undefined ? null : readFeedbackDraft(readerId)));
+  const [body, setBody] = useState(restored?.body ?? "");
+  const [kind, setKind] = useState<FeedbackKind | null>(restored?.kind ?? null);
   const [consented, setConsented] = useState(false);
   const [shot, setShot] = useState<Shot | null>(null);
   const [shotProblem, setShotProblem] = useState<string | null>(null);
@@ -455,8 +487,9 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
    * And keying it to `open` meant a reader who closed the dialog after a failed
    * send came back with a **new** id, so their retry filed a second report of
    * the same bug rather than being recognised as the same one. The id now
-   * changes in exactly one place: after a report is successfully filed, when
-   * `discard()` starts the next one.
+   * changes only when a report is successfully filed (`discard()` starts the
+   * next one), or when an edited retry needs a fresh id so the server cannot
+   * accept an older payload as its duplicate.
    */
   const [reportId, setReportId] = useState<string>(() => mintId());
   /* The same value, readable from inside a promise that started before the last
@@ -464,6 +497,53 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
      against to find out whether that report is still the one on screen. */
   const reportIdRef = useRef(reportId);
   reportIdRef.current = reportId;
+  /* Every record this tab last read or wrote for the current draft. The body
+     and kind matter as much as the id: another tab can write newer words under
+     the restored id, and this tab must not mistake their record for its own. */
+  const savedDrafts = useRef(
+    new Map<string, FeedbackDraft>(
+      restored ? [[restored.savedId, { body: restored.body, kind: restored.kind }]] : [],
+    ),
+  );
+  /**
+   * **What the newest attempt sent, under which id.** The server answers a
+   * reused id with the row it already holds and ignores the new payload, so a
+   * send whose answer was lost (a timeout, a dropped connection), then an edit
+   * and a retry under the same id, would be thanked and thrown away. A retry
+   * whose report differs from the attempt is therefore a new report, with a new
+   * id: at worst two rows for one report, never words dropped. Plan 261010f,
+   * GPT Sol's plan review F2; this closes the lost update `toast` below
+   * describes as deliberately not fixed.
+   */
+  const attempted = useRef<{ id: string; report: string } | null>(null);
+
+  /**
+   * **The draft, copied to this browser a second after it last changed**, so a
+   * page that hangs or reloads does not take it (feedback-draft.ts; Greg,
+   * spya-exhqqr). A restored draft carries this tab's fresh report id, never the
+   * saved one, so two tabs cannot send it under one id and have the second
+   * answered as a duplicate. `savedDrafts` keeps the exact older snapshot this
+   * tab read: an emptied or filed draft may remove that snapshot, but not newer
+   * words another tab has since written under the same id.
+   */
+  const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (readerId === undefined) return;
+    const timer = setTimeout(() => {
+      draftTimer.current = null;
+      if (body.trim() === "" && kind === null) {
+        for (const [id, draft] of savedDrafts.current) {
+          forgetMatchingFeedbackDraft(readerId, id, draft);
+        }
+      } else {
+        const draft = { body, kind };
+        saveFeedbackDraft(readerId, reportId, draft);
+        savedDrafts.current.set(reportId, draft);
+      }
+    }, DRAFT_SAVE_MS);
+    draftTimer.current = timer;
+    return () => clearTimeout(timer);
+  }, [readerId, reportId, body, kind]);
 
   /**
    * **`useLayoutEffect`, not `useEffect`, and that is Greg's "it should happen
@@ -571,7 +651,7 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
    * So a draft survives being dismissed, and is cleared only here — when a
    * report has been filed (`send`).
    */
-  const discard = useCallback((keepDraft: boolean) => {
+  const discard = useCallback((keepDraft: boolean): string => {
     /* Invalidates any paste still being re-encoded — see `shotGeneration`. */
     shotGeneration.current += 1;
     if (!keepDraft) {
@@ -587,7 +667,11 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
     resetCopy();
     setPreparing(false);
     sending.current = false;
-    setReportId(mintId());
+    const next = mintId();
+    reportIdRef.current = next;
+    savedDrafts.current = new Map();
+    setReportId(next);
+    return next;
   }, [resetCopy]);
 
   /**
@@ -602,33 +686,39 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
    * Until then it was a `sent` stage with its own panel, and a `thanksSeen`
    * effect that emptied the form once the reader closed that panel; both went.
    *
-   * **`bodyRef` is the box as it is now**, readable from inside a send that
-   * began before the last render — the same pattern as `reportIdRef` — and it is
-   * how a completion finds out whether the reader went on typing after Send.
+   * **The four refs below are the form as it is now**, readable from inside a
+   * send that began before the last render — the same pattern as `reportIdRef`
+   * — and how a completion finds out whether the reader changed anything after
+   * Send.
    *
    * **Words typed after Send are not the report that was filed.** The box stays
    * editable while a request is in flight, so a reader can add a sentence
    * between pressing Send and the answer arriving — and that sentence was never
    * in the POST. Clearing it would delete writing that was never filed. So the
    * draft survives, and the new `reportId` makes pressing Send again file it as
-   * the second report it is. GPT Sol established this as a P0 on 2026-09-05. The
-   * rule — `discard(body !== sentBody)` — did not change with the move to a
-   * toast; only *when* it runs did: at the moment the send succeeds, rather than
-   * when the reader closed the old thank-you panel.
+   * the second report it is. GPT Sol established the body case as a P0 on
+   * 2026-09-05. Plan 261010f's code review widened the comparison to every
+   * mutable report field, because a kind chosen while Send was in flight is just
+   * as unsent as words typed then.
    *
-   * **What is deliberately not fixed here** is the other half Sol names: after a
-   * *failed* send, an edit and a retry carry the same `reportId`, and
-   * `src/store/pg-feedback.ts` answers `duplicate` with the row it already has,
-   * so the edit is dropped server-side. That is the same lost-update class and
-   * it is older than this change; closing it wants a payload snapshot and a form
-   * that stops being editable, which is a redesign of this dialog rather than a
-   * guard. docs/plans/260905c-contact-page-and-a-warmer-feedback-thank-you.md.
+   * **The other half Sol named** — after a *failed* send, an edit and a retry
+   * carried the same `reportId`, and `src/store/pg-feedback.ts` answers
+   * `duplicate` with the row it already has, so the edit was dropped
+   * server-side — was left unfixed here in 260905c and is closed by
+   * `attempted`, above, since plan 261010f: a retry whose report changed gets a
+   * new id.
    */
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const toastCount = useRef(0);
   const dismissToast = useCallback(() => setToast(null), []);
   const bodyRef = useRef(body);
   bodyRef.current = body;
+  const kindRef = useRef(kind);
+  kindRef.current = kind;
+  const consentedRef = useRef(consented);
+  consentedRef.current = consented;
+  const shotRef = useRef(shot);
+  shotRef.current = shot;
 
   /**
    * **A prefill is applied once per request id, and never over the reader's
@@ -748,12 +838,18 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
      Audio may have no transcript yet, and its device backup is best effort.
      `open` is deliberately not part of the reload veto. */
   const holdsDraft =
-    body.trim() !== "" || shot !== null || preparing || dictationBusy || Boolean(dictate.dictation.recording);
+    body.trim() !== "" ||
+    kind !== null ||
+    shot !== null ||
+    preparing ||
+    dictationBusy ||
+    Boolean(dictate.dictation.recording);
   /* Told to the reload veto below, with any half-written reply to a question:
      the Earlier hook is called after the tabs' state it needs. */
 
   /* Both stable (`useCallback` in the hook), so `send` is not remade every render. */
   const { artifact: dictationArtifact, dismiss: dismissDictation } = dictate.dictation;
+  const finishDictationThenSend = dictate.finishThenDone;
 
   /**
    * **What the reader can see of the screen, while this is on it.**
@@ -871,16 +967,12 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
        submit are refused by one line. */
     if (view !== "write") return;
     if (sending.current) return;
-    if (!somethingSaid) return;
     /* **The counter above was a statement, not a rule**, until GPT Sol's code
        review on 2026-09-02: Send stayed enabled at 4,001 characters, so the
        reader was told the limit, allowed to press the button, and answered with
        a server-side `[fb-long]`. The keyboard path needs it too — `disabled` on
        the button does not stop ⌘+Enter. */
     if (over) return;
-    /* The microphone is still on, or the good words are still on their way.
-       Either way the draft is not what the reader means to send yet. */
-    if (dictationBusy) return;
     /* **A screenshot still being re-encoded is not a screenshot to send.** Paste
        a large image and press ⌘+Enter in the same second and the POST would
        otherwise be built with `shot === null` — the report goes without the
@@ -888,6 +980,20 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
        is right rather than waiting: `preparing` also disables Send, so this is
        the keyboard path's copy of a rule the button already keeps. */
     if (preparing) return;
+    /* **The microphone is still on, or the good words are still on their
+       way**, so the draft is not what the reader means to send yet — and
+       pressing Send says they mean to send it once it is. Stop the microphone
+       and send when the words land: the double press on Stop, reached from
+       Send. Until plan 261010f this refused, and the button was disabled while
+       still reading "Send"; on an iPad that was a dead button (spya-t9qu3v).
+       Before `somethingSaid`, because on a browser with no live recogniser the
+       box is empty until the words arrive. `onDone` runs this again then, with
+       the words in the box and `busy` false. */
+    if (dictationBusy) {
+      finishDictationThenSend();
+      return;
+    }
+    if (!somethingSaid) return;
     sending.current = true;
     setStage({ kind: "sending" });
 
@@ -902,7 +1008,15 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
      * GPT Sol, 2026-09-01, and it was the second half of the same finding as
      * the durable id above.
      */
-    const mine = reportId;
+    const report = JSON.stringify([body.trim(), kind, consented, shot?.base64 ?? null]);
+    let mine = reportId;
+    if (attempted.current?.id === mine && attempted.current.report !== report) {
+      /* An edited retry is a new report: see `attempted`. */
+      mine = mintId();
+      reportIdRef.current = mine;
+      setReportId(mine);
+    }
+    attempted.current = { id: mine, report };
     /* What the line under the box is about *now*, so a filed report clears that
        and not something the reader started while it was away. Plan 261001k. */
     const dictated = dictationArtifact();
@@ -931,9 +1045,14 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
        of the three, and the only one that stops the collection happening. */
     const diagnostics = consented ? collectFeedbackDiagnostics() : null;
 
+    /* A timer and a controller rather than `AbortSignal.timeout`, which
+       Safari has only since 16 and fake timers cannot drive. */
+    const giveUp = new AbortController();
+    const deadline = setTimeout(() => giveUp.abort(), SEND_TIMEOUT_MS);
     try {
       const res = await apiFetch("/api/feedback", {
         method: "POST",
+        signal: giveUp.signal,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
           reportBody({
@@ -978,8 +1097,30 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
          was away. Its success still files that report, advances its id and keeps
          any newer words, but it must not close the opening they are using now. */
       closeOpening(openingAtSend);
-      const finished = bodyRef.current === body;
-      discard(!finished);
+      /* The browser's copy of what was just filed goes, and a save still
+         pending for it must not put it back. A draft changed since Send is
+         saved synchronously below under the next report's id. */
+      if (draftTimer.current !== null) clearTimeout(draftTimer.current);
+      draftTimer.current = null;
+      const finished =
+        bodyRef.current === body &&
+        kindRef.current === kind &&
+        consentedRef.current === consented &&
+        shotRef.current === shot;
+      if (readerId !== undefined) {
+        for (const [id, draft] of savedDrafts.current) {
+          forgetMatchingFeedbackDraft(readerId, id, draft);
+        }
+      }
+      const next = discard(!finished);
+      /* The debounce is allowed to lag while the page is healthy, but success
+         just removed the prior report's durable copy. Persist a newer draft
+         now so a reload in the next second cannot lose it. */
+      if (!finished && readerId !== undefined) {
+        const draft = { body: bodyRef.current, kind: kindRef.current };
+        saveFeedbackDraft(readerId, next, draft);
+        savedDrafts.current.set(next, draft);
+      }
       /* **The dictation's message goes with the report it was about.** This
          dialog is mounted for the life of the page, and so is its dictation, so
          a `[mic-silent]` from a dictation that caught nothing used to greet every
@@ -995,6 +1136,8 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
          the plan names, and the sentence is written for it. */
       if (!stillMine()) return;
       showSendFailure(FEEDBACK_SEND_FAILED.message);
+    } finally {
+      clearTimeout(deadline);
     }
   }, [
     view,
@@ -1008,11 +1151,13 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
     where,
     shot,
     dictationBusy,
+    finishDictationThenSend,
     dictationArtifact,
     dismissDictation,
     showSendFailure,
     closeOpening,
     discard,
+    readerId,
   ]);
 
   const copy = useCallback(() => {
@@ -1408,9 +1553,10 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
           <button
             type="submit"
             className="fb-send"
-            disabled={
-              !somethingSaid || over || stage.kind === "sending" || preparing || dictationBusy
-            }
+            /* **Live while the microphone is involved**: pressing it then stops
+               the microphone and sends once the words land (`send`). Plan
+               261010f; it used to be disabled here while still reading Send. */
+            disabled={(!somethingSaid && !dictationBusy) || over || stage.kind === "sending" || preparing}
           >
             {stage.kind === "sending" ? (
               <>

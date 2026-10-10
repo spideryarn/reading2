@@ -275,7 +275,9 @@ export function PrivacyPage() {
           knowing on a shared computer. While a dictation is being turned into text, your browser
           also keeps its recording, so that closing the page or losing your connection doesn’t lose
           what you said; it is deleted once the words are in the box, when you discard it or sign
-          out, and otherwise the first time you come back after a week.
+          out, and otherwise the first time you come back after a week. A Feedback report you have
+          started and not sent is kept the same way, so a page that reloads doesn’t lose it; it is
+          deleted once you send it or sign out, and is not offered back after a week.
         </p>
       </Section>
 

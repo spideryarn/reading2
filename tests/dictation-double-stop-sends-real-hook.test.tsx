@@ -192,5 +192,12 @@ describe("double Stop over the real dictation hook", () => {
     await answer(2, ok("only after retry"));
     expect(shown).toContain("only after retry");
     expect(sent, "Try again is a later ending, not the ending double-pressed").toHaveLength(1);
+
+    const recorders = FakeRecorder.instances.length;
+    act(() => get().toggle());
+    await settle();
+    expect(get().dictation.phase, "the next press starts a new dictation").toBe("listening");
+    expect(FakeRecorder.instances).toHaveLength(recorders + 1);
+    expect(sent, "the retry did not inherit the old Stop press").toHaveLength(1);
   });
 });

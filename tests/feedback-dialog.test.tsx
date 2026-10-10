@@ -26,12 +26,15 @@ import { EARLIER_FEEDBACK_LIMIT, MAX_FEEDBACK_ANSWER_CHARS } from "../src/types.
 import { exactly } from "../src/web/relative-time.js";
 
 const posts: { input: string; init: RequestInit }[] = [];
-let answer: () => Promise<Response>;
+/** Handed the request's init, so an answer can watch its `signal` (plan 261010f). */
+let answer: (init: RequestInit) => Promise<Response>;
 /** Every `GET /api/feedback` — the Earlier tab's reads, kept apart from `posts`. */
 const lists: string[] = [];
 let listAnswer: (input: string) => Promise<Response>;
 /** Whether the dialog is mounted for an admin: the cosmetic flag FeedbackHost passes (261007d). */
 let asAdmin = false;
+/** The reader `show` mounts for, which turns on the draft kept for a reload (261010f). */
+let readerForMount: string | undefined;
 
 vi.mock("../src/web/lib/api.js", () => ({
   apiFetch: async (input: string, init?: RequestInit) => {
@@ -42,7 +45,7 @@ vi.mock("../src/web/lib/api.js", () => ({
       return listAnswer(input);
     }
     posts.push({ input, init: init ?? {} });
-    return answer();
+    return answer(init ?? {});
   },
   failure: async (res: Response) => new Error(await res.text()),
 }));
@@ -63,6 +66,8 @@ vi.mock("../src/web/router.js", async (importOriginal) => ({
  */
 const mic = { supported: true, armed: false, transcribing: false, artifact: 7, recording: null as object | null };
 const micToggles: string[] = [];
+/** Each time the dialog asked the field to stop and send once the words land (261010f). */
+let micFinishes = 0;
 /** What `dismiss` was handed, in order. Plan 261001k. */
 const micDismissals: number[] = [];
 /**
@@ -113,6 +118,9 @@ vi.mock("../src/web/useDictationField.js", () => ({
       busy: mic.transcribing || mic.armed,
       toggle: () => {
         micToggles.push("field");
+      },
+      finishThenDone: () => {
+        micFinishes += 1;
       },
     };
   },
@@ -186,6 +194,7 @@ function show(open: boolean) {
         onClose: () => {},
         where: { url: "https://www.spideryarn.com/read/a-piece?q=footnotes", slug: "a-piece" },
         admin: asAdmin,
+        ...(readerForMount === undefined ? {} : { readerId: readerForMount }),
       }),
     );
   });
@@ -341,6 +350,7 @@ beforeEach(() => {
   lists.length = 0;
   listAnswer = page({ reports: [], more: false, counts: NONE });
   asAdmin = false;
+  readerForMount = undefined;
   carried = null;
   finishShot = null;
 });
@@ -678,31 +688,141 @@ describe("the feedback dialog", () => {
     expect(body().kind).toBe("suggestion");
   });
 
-  it("will not send while the microphone is still listening", async () => {
+  it("sends nothing while the microphone is still listening, and asks for it to stop and send", async () => {
     /* **`armed`, not `transcribing`.** `readOnly` is only the two seconds after
        the reader presses stop; a guard on that alone lets Cmd+Enter file the
        rough live guesses while they are still talking — or nothing at all on a
        browser with no live recogniser. Two positive failures rather than one,
-       because the second passes while the first bug is still there. */
+       because the second passes while the first bug is still there.
+
+       **And pressing Send is not ignored** (plan 261010f, reports spya-t9qu3v
+       and spya-exhqqr). It used to be disabled here, greyed and still reading
+       "Send", and on an iPad that was a dead button. Now it stops the
+       microphone and sends once the real words are in the box — the double
+       press on Stop, reached from Send. Live even with the box empty: on a
+       browser with no live recogniser the words are not in it yet. */
     mic.armed = true;
+    micFinishes = 0;
     mount();
+    expect(host.querySelector<HTMLButtonElement>("button.fb-send")?.disabled).toBe(false);
     type("Half a sentence, still speaking");
-    expect(host.querySelector<HTMLButtonElement>("button.fb-send")?.disabled).toBe(true);
     send();
     await act(async () => {});
     expect(posts).toHaveLength(0);
+    expect(micFinishes).toBe(1);
     mic.armed = false;
   });
 
-  it("will not send while the transcript is still on its way", async () => {
+  it("sends nothing while the transcript is still on its way, and asks to send once it lands", async () => {
     mic.transcribing = true;
+    micFinishes = 0;
     mount();
     type("Said out loud, being written down");
+    expect(host.querySelector<HTMLButtonElement>("button.fb-send")?.disabled).toBe(false);
+    send();
+    await act(async () => {});
+    expect(posts).toHaveLength(0);
+    expect(micFinishes).toBe(1);
+    mic.transcribing = false;
+  });
+
+  it("still refuses an over-long report while the microphone is on, without asking it to send", async () => {
+    mic.armed = true;
+    micFinishes = 0;
+    mount();
+    type("x".repeat(MAX_FEEDBACK_ANSWER_CHARS + 1));
     expect(host.querySelector<HTMLButtonElement>("button.fb-send")?.disabled).toBe(true);
     send();
     await act(async () => {});
     expect(posts).toHaveLength(0);
-    mic.transcribing = false;
+    expect(micFinishes).toBe(0);
+    mic.armed = false;
+  });
+
+  it("gives up on a send that never answers after a minute, and a retry is the same report", async () => {
+    /* A request suspended with the app on an iPad can stay unsettled for good,
+       and the latch then refused every later press. Plan 261010f. */
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      mount();
+      type("It hung.");
+      answer = (init) =>
+        new Promise((_, reject) => {
+          init.signal?.addEventListener("abort", () =>
+            reject(new DOMException("The operation was aborted.", "AbortError")),
+          );
+        });
+      send();
+      await act(async () => {});
+      expect(host.querySelector(".fb-failed")).toBeNull();
+      await act(async () => {
+        vi.advanceTimersByTime(59_000);
+      });
+      expect(host.querySelector(".fb-failed"), "not before the minute is up").toBeNull();
+      await act(async () => {
+        vi.advanceTimersByTime(1_000);
+      });
+      expect(host.querySelector(".fb-failed")).not.toBeNull();
+      expect(firstBox().value).toBe("It hung.");
+
+      answer = ok(200);
+      send();
+      await act(async () => {});
+      expect(posts).toHaveLength(2);
+      expect(idOf(1), "the latch is released and the id kept").toBe(idOf(0));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not let an older attempt's timeout overwrite a newer success", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      mount();
+      type("It hung.");
+      answer = (init) =>
+        new Promise((_, reject) => {
+          init.signal?.addEventListener("abort", () =>
+            reject(new DOMException("The operation was aborted.", "AbortError")),
+          );
+        });
+      send();
+      await act(async () => {});
+
+      /* Reopening abandons the visible latch while the first request remains in
+         flight, so the same report may be retried. */
+      reopen();
+      answer = ok(200);
+      send();
+      await act(async () => {});
+      expect(host.querySelector(".toast"), "the retry should have succeeded").not.toBeNull();
+
+      await act(async () => {
+        vi.advanceTimersByTime(60_000);
+      });
+      expect(host.querySelector(".fb-failed"), "the old timeout spoke for the newer attempt").toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("files an edited retry as a new report, so the edit is not dropped as a duplicate", async () => {
+    /* The server answers a reused id with the row it already has, so after a
+       send whose answer was lost, an edit and a retry under the same id would
+       be thanked and thrown away. A changed draft is a new report. */
+    mount();
+    type("It broke.");
+    answer = async () => {
+      throw new Error("offline");
+    };
+    send();
+    await act(async () => {});
+    type("It broke. And here is what I was doing.");
+    answer = ok(201);
+    send();
+    await act(async () => {});
+    expect(posts).toHaveLength(2);
+    expect(idOf(1)).not.toBe(idOf(0));
   });
 
   it("stops the microphone when the dialog is shut", () => {
@@ -1072,6 +1192,248 @@ describe("the feedback dialog", () => {
  * contract, and it is why the assertion is written against the target rather
  * than against a pixel.
  */
+describe("the draft kept for a reload", () => {
+  /* Greg, spya-exhqqr: the page hung with a report half written. The words and
+     the kind are copied to this browser a second after they last change, and
+     come back when the page loads again. Plan 261010f, stage 2. */
+  const KEY = "spya.feedbackDraft.reader-a";
+  /* jsdom's storage is shadowed by Node's own global here, so a map stands in
+     (tests/last-view-app-reader-change.test.tsx does the same). `refuse` makes
+     every verb throw, as a blocked or full storage does. */
+  const kept = new Map<string, string>();
+  let refuse = false;
+  const no = () => {
+    if (refuse) throw new Error("SecurityError");
+  };
+  const storage = {
+    getItem: (key: string) => (no(), kept.get(key) ?? null),
+    setItem: (key: string, value: string) => (no(), void kept.set(key, value)),
+    removeItem: (key: string) => (no(), void kept.delete(key)),
+    clear: () => kept.clear(),
+  };
+  const saved = () => JSON.parse(kept.get(KEY) ?? "null") as { body: string; kind: string | null; id: string } | null;
+  const later = async (ms: number) => {
+    await act(async () => {
+      vi.advanceTimersByTime(ms);
+    });
+  };
+  /** A reload: the page goes and a new one mounts the dialog afresh. */
+  const reload = () => {
+    act(() => root.unmount());
+    host.remove();
+    mount();
+  };
+
+  beforeEach(() => {
+    kept.clear();
+    refuse = false;
+    vi.stubGlobal("localStorage", storage);
+    readerForMount = "reader-a";
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("saves the words and the kind a second after they last changed, and not before", async () => {
+    mount();
+    type("Half a report");
+    pick("A problem");
+    await later(900);
+    expect(saved()).toBeNull();
+    await later(100);
+    expect(saved()).toMatchObject({ body: "Half a report", kind: "problem" });
+  });
+
+  it("keeps the chosen kind even before the reader has written words", async () => {
+    mount();
+    pick("A suggestion");
+    await later(1000);
+    expect(saved()).toMatchObject({ body: "", kind: "suggestion" });
+    reload();
+    const suggestion = [...host.querySelectorAll<HTMLButtonElement>("button.fb-kind-button")].find(
+      (button) => (button.textContent ?? "").includes("A suggestion"),
+    );
+    expect(suggestion?.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("brings them back after a reload, as a new report", async () => {
+    mount();
+    type("Half a report");
+    pick("A suggestion");
+    await later(1000);
+    const before = saved()?.id;
+    reload();
+    expect(firstBox().value).toBe("Half a report");
+    send();
+    await act(async () => {});
+    expect(body()).toMatchObject({ body: "Half a report", kind: "suggestion" });
+    /* A fresh id, so two tabs that restore one draft cannot share one and have
+       the second answered as a duplicate. */
+    expect(idOf(0)).not.toBe(before);
+    reload();
+    expect(firstBox().value, "the filed restored draft was removed").toBe("");
+  });
+
+  it("keeps words added after Send durable when that send succeeds", async () => {
+    mount();
+    type("The first thing.");
+    await later(1000);
+    let release: (() => void) | null = null;
+    answer = () =>
+      new Promise<Response>((resolve) => {
+        release = () => resolve(new Response(JSON.stringify({ id: "x" }), { status: 201 }));
+      });
+    send();
+    type("The first thing. And another.");
+    await later(1000);
+    expect(saved()?.body).toBe("The first thing. And another.");
+
+    act(() => release?.());
+    await act(async () => {});
+    reload();
+    expect(firstBox().value, "the unsent addition survived the successful request").toBe(
+      "The first thing. And another.",
+    );
+  });
+
+  it("forgets the draft once it is filed, even with a save still pending", async () => {
+    mount();
+    type("Filed");
+    await later(1000);
+    expect(saved()?.body).toBe("Filed");
+    /* A last sentence, and Send before its save is due. */
+    type("Filed straight away");
+    send();
+    await act(async () => {});
+    await later(2000);
+    expect(saved(), "the pending save did not put it back").toBeNull();
+    reload();
+    expect(firstBox().value).toBe("");
+  });
+
+  it("leaves another tab's draft alone when this one files", async () => {
+    mount();
+    type("This tab's words");
+    await later(1000);
+    kept.set(KEY, JSON.stringify({ body: "the other tab's", kind: null, id: "spya-other1", at: Date.now() }));
+    send();
+    await act(async () => {});
+    expect(saved()?.body).toBe("the other tab's");
+  });
+
+  it("does not erase newer words another tab saved under a restored id", async () => {
+    kept.set(
+      KEY,
+      JSON.stringify({ body: "The shared old draft", kind: null, id: "spya-firsttab", at: Date.now() }),
+    );
+    mount();
+    expect(firstBox().value).toBe("The shared old draft");
+    /* The originating tab goes on writing after this tab restored its snapshot.
+       The id still matches, but the contents no longer belong to this send. */
+    kept.set(
+      KEY,
+      JSON.stringify({ body: "The other tab's newer words", kind: null, id: "spya-firsttab", at: Date.now() }),
+    );
+    send();
+    await act(async () => {});
+    expect(saved()?.body).toBe("The other tab's newer words");
+  });
+
+  it("removes the old saved id after an edited retry succeeds under a new one", async () => {
+    mount();
+    type("The first attempt.");
+    await later(1000);
+    const oldId = saved()?.id;
+    answer = async () => {
+      throw new Error("offline");
+    };
+    send();
+    await act(async () => {});
+
+    type("The edited retry.");
+    answer = ok(201);
+    send();
+    await act(async () => {});
+    expect(idOf(1)).not.toBe(oldId);
+    reload();
+    expect(firstBox().value, "the filed attempt survived under its old saved id").toBe("");
+  });
+
+  it("removes its own record when the box is emptied, and only its own", async () => {
+    mount();
+    type("Something");
+    await later(1000);
+    type("");
+    await later(1000);
+    expect(saved()).toBeNull();
+    kept.set(KEY, JSON.stringify({ body: "the other tab's", kind: null, id: "spya-other1", at: Date.now() }));
+    type("x");
+    type("");
+    await later(1000);
+    expect(saved()?.body).toBe("the other tab's");
+  });
+
+  it("removes a restored record when its box is emptied before the fresh id is saved", async () => {
+    kept.set(
+      KEY,
+      JSON.stringify({ body: "Restored words", kind: null, id: "spya-oldtab1", at: Date.now() }),
+    );
+    mount();
+    expect(firstBox().value).toBe("Restored words");
+    type("");
+    await later(1000);
+    expect(saved()).toBeNull();
+    reload();
+    expect(firstBox().value).toBe("");
+  });
+
+  it("does not bring back a draft more than a week old", () => {
+    kept.set(
+      KEY,
+      JSON.stringify({ body: "old words", kind: null, id: "spya-old111", at: Date.now() - 8 * 24 * 60 * 60 * 1000 }),
+    );
+    mount();
+    expect(firstBox().value).toBe("");
+    expect(saved()).toBeNull();
+  });
+
+  it("removes malformed storage instead of reparsing it on every mount", () => {
+    kept.set(KEY, "{broken");
+    mount();
+    expect(firstBox().value).toBe("");
+    expect(kept.has(KEY)).toBe(false);
+  });
+
+  it("is another reader's business, not this one's", () => {
+    kept.set(
+      "spya.feedbackDraft.reader-b",
+      JSON.stringify({ body: "b's words", kind: null, id: "spya-bbbbbb", at: Date.now() }),
+    );
+    mount();
+    expect(firstBox().value).toBe("");
+  });
+
+  it("still opens when the browser refuses storage", async () => {
+    refuse = true;
+    mount();
+    type("Words");
+    await later(1000);
+    send();
+    await act(async () => {});
+    expect(posts).toHaveLength(1);
+  });
+
+  it("keeps nothing for a dialog with no reader", async () => {
+    readerForMount = undefined;
+    mount();
+    type("Words");
+    await later(1000);
+    expect(kept.size).toBe(0);
+  });
+});
+
 describe("the backdrop", () => {
   it("closes on a press whose target is the dialog itself", () => {
     const dialog = mountControlled();
@@ -1267,6 +1629,30 @@ describe("the thank-you, and getting out of it", () => {
     await act(async () => {});
     expect(idOf(1)).not.toBe(idOf(0));
     expect(body().body).toBe("The first thing. And another.");
+  });
+
+  it("keeps a kind chosen after Send as part of the next report", async () => {
+    mountControlled();
+    type("The words stay the same.");
+    pick("A problem");
+    let release: (() => void) | null = null;
+    answer = () =>
+      new Promise<Response>((resolve) => {
+        release = () => resolve(new Response(JSON.stringify({ id: "x" }), { status: 201 }));
+      });
+    send();
+    pick("A suggestion");
+    act(() => release?.());
+    await act(async () => {});
+
+    expect(body().kind, "the filed report kept its original kind").toBe("problem");
+    expect(firstBox().value, "the unchanged words belong to the unsent kind change").toBe(
+      "The words stay the same.",
+    );
+    const suggestion = [...host.querySelectorAll<HTMLButtonElement>("button.fb-kind-button")].find(
+      (button) => (button.textContent ?? "").includes("A suggestion"),
+    );
+    expect(suggestion?.getAttribute("aria-pressed")).toBe("true");
   });
 
   /**

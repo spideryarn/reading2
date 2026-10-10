@@ -179,7 +179,7 @@ that holds a reader's words or their place says whose it is, and is read back on
 Signing out clears neither store: the reader may come back, and clearing would not cover the case
 above, where the reader changes in another tab with no sign-out in this one.
 [`lib/storage-reader.ts`](../../src/web/lib/storage-reader.ts) is the one spelling of "whose",
-with `signed-out` for nobody. Two stores follow it:
+with `signed-out` for nobody. Three stores follow it:
 
 - **Where you were in an article** ([`last-view.ts`](../../src/web/last-view.ts)): the key is
   `spya.lastViewFor.<reader>.<slug>`. `App` supplies the current session's reader, rather than
@@ -194,6 +194,11 @@ with `signed-out` for nobody. Two stores follow it:
   removes that reader's records only. An old record with no reader is removed when read. Another
   reader's words do stay in storage until they come back; nothing running as anybody else is
   handed them.
+- **An unsent Feedback report** ([`feedback-draft.ts`](../../src/web/feedback-draft.ts), since
+  2026-10-10): the key is `spya.feedbackDraft.<reader>`, read once when that reader's dialog
+  mounts. The one exception to the sentence above about signing out: the **Sign out** button
+  removes it, as it does the dictation copy, because it is a reader's unsent prose rather than
+  their place ([privacy.md § On the reader's own device](privacy.md#on-the-readers-own-device-until-the-words-arrive)).
 
 Keys that are the browser's rather than a reader's (the install hint, which microphone) stay as
 they are.
