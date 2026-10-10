@@ -5,7 +5,7 @@
  * whose § GPT Sol's plan review is where most of the rules below come from.
  *
  * ```
- * no DOI on the article, nor in its own address ───► no-doi          (nothing asked)
+ * no usable DOI on the article or in its address ─► no-doi          (nothing asked)
  * a row fresher than 7 days ───────────────────────► that row, checked against the article
  * else ask OpenAlex, each request in its own polite turn:
  *   1. works/doi:<doi>              404 ► not-indexed (remembered)
@@ -98,7 +98,7 @@ const MAX_KIND = 40;
 export type ArticleIdentity = Pick<Meta, "title" | "byline" | "authors" | "doi" | "url">;
 
 /**
- * **The DOI to ask about**: the article's own, or else the one its own address
+ * **The DOI to ask about**: the article's own usable DOI, or else the one its own address
  * names — an arxiv.org page, whose DOI is arXiv's at DataCite (`doiFor`).
  *
  * The address is the fallback for articles imported before an agreed arXiv
@@ -107,10 +107,10 @@ export type ArticleIdentity = Pick<Meta, "title" | "byline" | "authors" | "doi" 
  * the answer is checked against the title and an author on every way out.
  */
 export function citersIdOf(article: ArticleIdentity): WorkId | null {
-  if (article.doi) {
-    const own = parseWorkId(article.doi);
-    return own?.startsWith("doi:") ? own : null;
-  }
+  /* Only a usable DOI has precedence. A legacy or hand-edited non-DOI value
+     must not hide the valid arXiv address underneath it. */
+  const own = article.doi ? parseWorkId(article.doi) : null;
+  if (own?.startsWith("doi:")) return own;
   /* Only an arXiv page: the gap this closes is arXiv's, and an address that is a
      DOI's own (doi.org) gets its DOI put on the article at import (GPT Sol's F4). */
   const named = article.url ? parseWorkId(article.url) : null;

@@ -5769,8 +5769,8 @@ export const CITERS_LOADING = "Looking up which papers cite this piece…";
  * to carry on without one, Google Scholar, is the link drawn under it.
  */
 export const CITERS_NO_DOI =
-  "We could not list who cites this piece, because we have no DOI for it: the identifier a journal " +
-  "or arXiv gives a paper. Web pages and blog posts usually have none.";
+  "We could not list who cites this piece, because we have no DOI for it: a standard identifier " +
+  "used for research papers. Many web pages and blog posts do not have one.";
 export const CITERS_NOT_INDEXED = "OpenAlex, the index we ask, has no record of this piece.";
 /**
  * **Not "the DOI belongs to another work"**: what failed is our check that the

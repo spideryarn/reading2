@@ -658,6 +658,24 @@ describe("the empty states are different sentences, in each sub-mode", () => {
     for (const s of all) expect(s.toLowerCase()).not.toContain("no one has");
   });
 
+  it("uses singular words for one returned page and one candidate", () => {
+    expect(receptionResponsesNoneSuggested(1)).toContain("1 page");
+    expect(receptionResponsesUnverified(1, 1)).toContain("1 page. The AI put forward 1 possible response");
+    expect(receptionResponsesUnverified(1, 1)).toContain("We could not confirm it");
+    expect(sourcesClaimsNoneSuggested(1)).toContain("1 page");
+    expect(sourcesClaimsUnverified(1, 1)).toContain("1 possible piece of evidence");
+    expect(sourcesClaimsUnverified(1, 1)).toContain("We could not confirm it");
+  });
+
+  it("uses plural words for several returned pages and candidates", () => {
+    expect(receptionResponsesNoneSuggested(2)).toContain("2 pages");
+    expect(receptionResponsesUnverified(2, 2)).toContain("2 pages. The AI put forward 2 possible responses");
+    expect(receptionResponsesUnverified(2, 2)).toContain("We could not confirm any of them");
+    expect(sourcesClaimsNoneSuggested(2)).toContain("2 pages");
+    expect(sourcesClaimsUnverified(2, 2)).toContain("2 possible pieces of evidence");
+    expect(sourcesClaimsUnverified(2, 2)).toContain("We could not confirm any of them");
+  });
+
   it("says the search found nothing to look at, when it returned no pages", () => {
     paint(owner({ reception: artefact({ direct: { rows: [], counts: counts(EMPTY) } }) }));
     expect(text()).toContain(RECEPTION_RESPONSES_NONE);
@@ -692,7 +710,7 @@ describe("the empty states are different sentences, in each sub-mode", () => {
 
   /* Plan 261010n (spya-qtk3q2): pages came back and the AI put none forward. Nothing
      was checked, so the sentence must not say a check failed. */
-  it("says the AI judged none of them a response, when it returned pages and suggested none", () => {
+  it("says the AI put none forward, when the search returned pages and its answer had no rows", () => {
     paint(
       owner({
         reception: artefact({

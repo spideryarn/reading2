@@ -370,6 +370,12 @@ describe("citersOf", () => {
     const own = harness(HAPPY);
     expect((await citersOf({ ...LEVIN, url: "https://arxiv.org/abs/1706.03762" }, own.deps)).kind).toBe("found");
     expect(own.api.asked).toEqual([WORK_URL, CITERS_URL]);
+
+    /* A stored value that is not a DOI is not precedence: old or hand-edited
+       metadata must not hide the usable arXiv address underneath it. */
+    const invalid = harness({ [openAlexWorkUrl(arxivDoi)]: WORK, [CITERS_URL]: CITERS });
+    expect((await citersOf({ ...article, doi: "arxiv:1706.03762" }, invalid.deps)).kind).toBe("found");
+    expect(invalid.api.asked).toEqual([openAlexWorkUrl(arxivDoi), CITERS_URL]);
   });
 
   it("calls a 404 not-indexed, remembers it, and does not ask again", async () => {

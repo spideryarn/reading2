@@ -27,11 +27,12 @@ reviews: [261010n](../plans/261010n-reception-says-plainly-why-it-is-empty-and-f
 
 - The empty Reception sentence was one sentence for two cases. It is now three, off counts already
   stored: no pages; pages, and the AI suggested none; the AI suggested some and none passed our
-  checks, each check named. The same for an older Claims search.
+  checks, with the main check explained. The same for an older Claims search.
 - An arXiv paper's DOI (`10.48550/arxiv.<id>`) was confirmed at import and then dropped. It is now
   kept, and an article with no DOI whose own address is an arXiv page is asked about by that DOI,
   so the Attention paper's Cited by lists its citers with no change to production data.
-- The no-DOI sentence now says we looked, and where.
+- The no-DOI sentence now says what a DOI is and that we do not have one; it makes no claim about
+  where an import looked, because that is not recorded per article.
 
 What stays a question to Greg ([q-hbg65m](questions/q-hbg65m.md), question 2): a way to type a DOI in,
 or a title search when a piece has none.

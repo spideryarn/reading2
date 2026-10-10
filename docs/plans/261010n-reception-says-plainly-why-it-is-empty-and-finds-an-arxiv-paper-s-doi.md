@@ -39,9 +39,10 @@ Greg's, all filed 2026-10-09 from Sources › Reception on *Attention Is All You
 it fires whenever the search returned pages (`returnedSources > 0`) and kept no row
 (`keptRows === 0`). Behind that sit two cases the stored counts already tell apart:
 
-- `reportedRows === 0`: the AI read the pages and judged that none responds to the piece. Nothing
-  was "checked" at all; the sentence implies a check failed.
-- `reportedRows > 0`: the AI put forward some pages, and every one failed our rules — most often
+- `reportedRows === 0`: the search returned pages, but the AI's answer contained no candidate row.
+  The counts do not say that it read or judged every page. Nothing was "checked" at all; the
+  sentence implies a check failed.
+- `reportedRows > 0`: the AI's answer contained candidate rows, and none survived our rules — most often
   the quotation it gave could not be found in the slice of the page the search engine returned
   (`unverifiedSource`, `directnessUnverified`), sometimes the page is the article itself or a copy
   of it (`selfSource`, `sourceIsCopy`), or the AI named an address the search never returned
@@ -92,8 +93,8 @@ it), Claims from the article's own sentences (its claims, which the reader picks
   claims". The visitor's single sentence is untouched: it carries no counts.
 - **The no-DOI sentence** says what a DOI is and that we have none (after Sol's F2, which found
   "we looked …, and found none" unrecorded and sometimes false): *"We could not list who cites
-  this piece, because we have no DOI for it: the identifier a journal or arXiv gives a paper. Web
-  pages and blog posts usually have none."* The Google Scholar link under it is the way to carry on
+  this piece, because we have no DOI for it: a standard identifier used for research papers. Many
+  web pages and blog posts do not have one."* The Google Scholar link under it is the way to carry on
   without one.
 - **The Claims card stops describing Reception**: *"The claims this piece rests on, quoted from
   it: pick some to check against the web"*. Reception's stays *"What others say about this piece:
@@ -106,7 +107,7 @@ it), Claims from the article's own sentences (its claims, which the reader picks
   title-and-author test, so this is a registry-agreed DOI like any other. (The Metadata page does
   not draw a DOI today, so nothing on screen changes there.) It is what covers an arXiv paper
   uploaded as a PDF, whose id is found in the document rather than in its address.
-- **`citersOf` falls back to the arXiv id in the article's own address** when it has no DOI, so the
+- **`citersOf` falls back to the arXiv id in the article's own address** when it has no usable DOI, so the
   articles imported before this change (the one in the report included) get *Cited by* without a
   production write. **Only an arXiv address** (Sol's F4): a `doi.org` address gets its DOI at
   import, and widening the fallback widens what the tests must hold. `ArticleIdentity` gains `url`; the fallback goes through `parseWorkId`, and the
@@ -170,6 +171,23 @@ once narrowed. All six taken:
 
 `loadArticleIdentity`'s new `url` is held by the compiler rather than a database test: the
 `article` projection's row type has no `finalUrl` unless it selects it.
+
+## GPT Sol's code review
+
+[261010n-code-review-sol.md](261010n-code-review-sol.md) (prompt:
+[261010n-code-review-prompt.md](261010n-code-review-prompt.md)), `gpt-5.6-sol`, high,
+workspace-write, exit 0. Verdict: LAND AFTER FIXES; Sol fixed three in place, and I read its diff:
+
+- **C1 (P2)**: a stored `doi` that is not a DOI hid the arXiv address under it. Only a usable DOI
+  now takes precedence; a test that failed before.
+- **C2 (P2)**: the question, the note and this plan still said "we looked" or that the AI read and
+  judged every page. Corrected; the no-DOI sentence now reads *"…a standard identifier used for
+  research papers. Many web pages and blog posts do not have one."*
+- **C3 (P3)**: singular and plural pinned by tests.
+- **C4**: `origin/dev` moved during the review; merged again before the push.
+
+Gates after: the eight touched suites (362 passed), `npm run typecheck`. The full suite before the
+review: one failure, the command-bar catalogue that carries the Claims card's words, regenerated.
 
 ## Log
 
