@@ -179,9 +179,14 @@ export function useAdminAuthorGifts(): UseAdminAuthorGifts {
       const answer = written.body as Partial<AuthorGiftEnsured>;
       if (typeof answer.id !== "string") return { kind: "refused", message: "The server's answer had no gift in it." };
       /* 202 with `created: true` is a new gift; 200 is one that already existed (R2-F2). */
-      return written.status === 202 && answer.created === true
-        ? { kind: "created", id: answer.id }
-        : { kind: "existing", id: answer.id };
+      if (written.status === 202 && answer.created === true && typeof answer.lookupId === "string") {
+        return { kind: "created", id: answer.id };
+      }
+      if (written.status === 200 && answer.created === false) return { kind: "existing", id: answer.id };
+      return {
+        kind: "refused",
+        message: "The server's answer was incomplete. Refresh to check whether the author gift was made before trying again.",
+      };
     },
     [write, lookupStarted],
   );
@@ -207,8 +212,18 @@ export function useAdminAuthorGifts(): UseAdminAuthorGifts {
     async (id: string): Promise<SendAnswer> => {
       const written = await write(`${PATH}/${encodeURIComponent(id)}/send`, "POST");
       if (!written.ok) return { kind: "refused", message: written.message };
-      const email = (written.body as Partial<AuthorGiftSent>).email === "replayed" ? "replayed" : "queued";
-      return { kind: "sent", email };
+      const answer = written.body as Partial<AuthorGiftSent>;
+      if (
+        typeof answer.voucherId === "string" &&
+        ((written.status === 201 && answer.email === "queued") ||
+          (written.status === 200 && answer.email === "replayed"))
+      ) {
+        return { kind: "sent", email: answer.email };
+      }
+      return {
+        kind: "refused",
+        message: "The server's answer was incomplete. Refresh to check whether the gift was sent before trying again.",
+      };
     },
     [write],
   );

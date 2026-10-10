@@ -100,6 +100,9 @@ const DEFAULT_ROUTES: Routes = {
           recipientNote: null,
           articles: 20,
           notes: "GIFT-NOTES-abc",
+          /* A route regression must not make an unrecognised credential part of
+             an MCP answer. The tool has its own allow-list boundary. */
+          privateLinkKey: "SENTINEL-PRIVATE-LINK-KEY",
           notesUpdatedAt: "2026-10-09T00:00:00Z",
           emailLookupId: null,
           nameLookupId: null,
@@ -307,6 +310,7 @@ describe("each tool calls the route it claims", () => {
     expect(gifts[0]?.notes).toBe("GIFT-NOTES-abc");
     expect(gifts[0]?.starter).toEqual({ slug: "on-tools", title: "On Tools", link: `${SITE}/read/on-tools` });
     expect(result.text).not.toContain("key=");
+    expect(result.text).not.toContain("SENTINEL-PRIVATE-LINK-KEY");
   });
 
   it("update_author_gift with nothing to change sends nothing", async () => {

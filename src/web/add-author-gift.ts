@@ -30,6 +30,7 @@
 
 import { statusOf } from "./lib/api.js";
 import { type Retirable, readerRegistry } from "./add-sharing-session.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
 
 /** One state at a time: the question, the intent, the request, or its answer. */
 export type AuthorGiftAtAdd =
@@ -138,7 +139,11 @@ export class AuthorGiftAtAddController implements Retirable {
         return "go";
       } catch (e) {
         if (this.retired) return "stale";
-        const message = e instanceof Error ? e.message : "The request failed.";
+        /* Only server-authored and client-authored reader-facing sentences may
+           reach the page. Browser and internal exception text is diagnostic,
+           not copy (lib/describe-failure.ts). */
+        const error = e instanceof Error ? e : new Error("the author-gift request threw a non-Error value");
+        const message = describeFetchFailure(error);
         this.set(
           statusOf(e) === null ? { kind: "lost", slug, message } : { kind: "refused", slug, message },
         );

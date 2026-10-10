@@ -178,8 +178,8 @@ function DraftForm({
     >
       <h3 className="tw:m-0 tw:text-sm tw:font-medium tw:text-foreground">Draft a gift for an author</h3>
       <p className="tw:m-0">
-        Makes the article's private link if it has none, saves a draft, and runs one web search for the author and
-        an address. Nothing is emailed until you press Send on the draft.
+        Makes the article's private link if it has none, saves a draft, and runs a web lookup for the author and an
+        address, using up to three searches. Nothing is emailed until you press Send on the draft.
       </p>
       {refusal && <Refusal message={refusal} />}
       {done && (
@@ -195,10 +195,11 @@ function DraftForm({
         slug={slug}
         onChoose={setSlug}
         reload={shelf.reload}
+        disabled={busy}
       />
       {shelf.error && <p className="tw:m-0 tw:text-danger">Couldn’t read your articles. {shelf.error}</p>}
       <label className="tw:flex tw:items-start tw:gap-2 tw:text-foreground">
-        <input type="checkbox" checked={rights} onChange={(e) => setRights(e.target.checked)} />
+        <input type="checkbox" checked={rights} disabled={busy} onChange={(e) => setRights(e.target.checked)} />
         <span>{SHARING_RIGHTS_CONFIRM}</span>
       </label>
       <div>
@@ -298,7 +299,15 @@ function LookupLine({ lookup, gift, now }: { lookup: AdminAuthorLookup; gift: Ad
 }
 
 /** The notes: shown in full, editable in every status (R2-F7), with when they were last written. */
-function Notes({ gift, patch }: { gift: AdminAuthorGift; patch: UseAdminAuthorGifts["patch"] }) {
+function Notes({
+  gift,
+  patch,
+  lookupRunning,
+}: {
+  gift: AdminAuthorGift;
+  patch: UseAdminAuthorGifts["patch"];
+  lookupRunning: boolean;
+}) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(gift.notes ?? "");
   const [busy, setBusy] = useState(false);
@@ -311,6 +320,9 @@ function Notes({ gift, patch }: { gift: AdminAuthorGift; patch: UseAdminAuthorGi
 
   async function save(event: FormEvent) {
     event.preventDefault();
+    /* A lookup appended after Edit. Replacing the field from this stale box
+       would lose that block; the warning tells Greg how to merge it. */
+    if (busy || movedOn || lookupRunning) return;
     setBusy(true);
     /* Notes only, so a sent gift takes it (R2-F7). */
     const said = await patch(gift.id, { notes: text.trim() === "" ? null : text });
@@ -334,19 +346,25 @@ function Notes({ gift, patch }: { gift: AdminAuthorGift; patch: UseAdminAuthorGi
         <form onSubmit={(e) => void save(e)} className="tw:mt-1 tw:flex tw:flex-col tw:gap-2">
           {movedOn && (
             <p role="status" className="tw:m-0 tw:text-danger">
-              The notes changed after you started editing (a lookup may have added to them). Saving replaces them
-              with what is in this box; Cancel and Edit again to see the new text.
+              The notes changed after you started editing (a lookup may have added to them). Save is paused; Cancel
+              and Edit again to see the new text.
+            </p>
+          )}
+          {lookupRunning && (
+            <p role="status" className="tw:m-0 tw:text-danger">
+              A lookup is still running and may add to these notes. Wait for it to finish, then Cancel and Edit again.
             </p>
           )}
           <textarea
             aria-label="Notes"
             rows={8}
             value={text}
+            disabled={busy}
             onChange={(e) => setText(e.target.value)}
             className={`${TEXTAREA} tw:w-full`}
           />
           <div className="tw:flex tw:flex-wrap tw:gap-2">
-            <button type="submit" disabled={busy} className={BUTTON}>
+            <button type="submit" disabled={busy || movedOn || lookupRunning} className={BUTTON}>
               {busy ? "Saving…" : "Save notes"}
             </button>
             <button type="button" disabled={busy} onClick={() => setEditing(false)} className={BUTTON}>
@@ -452,6 +470,7 @@ function DraftEditor({
             aria-label="Email address"
             enterKeyHint="done"
             value={email}
+            disabled={busy}
             onChange={(e) => setEmail(e.target.value)}
             className={`${INPUT} tw:w-full`}
           />
@@ -466,6 +485,7 @@ function DraftEditor({
             max={1000}
             step={1}
             value={articles}
+            disabled={busy}
             onChange={(e) => setArticles(e.target.value)}
             className={`${INPUT} tw:w-full`}
           />
@@ -479,6 +499,7 @@ function DraftEditor({
           enterKeyHint="done"
           autoComplete="off"
           value={name}
+          disabled={busy}
           onChange={(e) => setName(e.target.value)}
           className={`${INPUT} tw:w-full`}
         />
@@ -489,6 +510,7 @@ function DraftEditor({
           aria-label="Note to them"
           rows={3}
           value={note}
+          disabled={busy}
           onChange={(e) => setNote(e.target.value)}
           className={`${TEXTAREA} tw:w-full`}
         />
@@ -575,7 +597,13 @@ function GiftActions({
 }) {
   const draft = gift.status === "draft";
   const canSend = draft || gift.status === "sending";
-  const noAddressId = `${authorGiftAnchor(gift.id)}-no-address`;
+  const sendHeldId = `${authorGiftAnchor(gift.id)}-send-held`;
+  const sendHeld =
+    gift.email === null
+      ? "Send waits for an address: add one with Edit."
+      : running
+        ? "Send waits for the lookup to finish, so you can review what it found first."
+        : null;
   return (
     <div className="tw:mt-2 tw:flex tw:flex-wrap tw:items-center tw:gap-2">
       {canSend && (
@@ -583,15 +611,15 @@ function GiftActions({
           <Button
             type="button"
             size="sm"
-            disabled={busy || gift.email === null}
-            aria-describedby={gift.email === null ? noAddressId : undefined}
+            disabled={busy || sendHeld !== null}
+            aria-describedby={sendHeld === null ? undefined : sendHeldId}
             onClick={onSend}
           >
             Send
           </Button>
-          {gift.email === null && (
-            <span id={noAddressId} className="tw:text-ink-faint">
-              Send waits for an address: add one with Edit.
+          {sendHeld !== null && (
+            <span id={sendHeldId} className="tw:text-ink-faint">
+              {sendHeld}
             </span>
           )}
         </>
@@ -666,6 +694,7 @@ function GiftCard({
   }
 
   async function sendNow() {
+    if (busy || running) return;
     setBusy(true);
     setSaid(null);
     const answer = await hooks.send(gift.id);
@@ -713,8 +742,8 @@ function GiftCard({
             {title !== null ? <> and links “{title}”</> : null}. This sends a real email and cannot be taken back.
           </p>
           <div className="tw:flex tw:flex-wrap tw:gap-2">
-            <Button type="button" size="sm" disabled={busy} onClick={() => void sendNow()}>
-              {busy ? "Sending…" : `Send to ${gift.email}`}
+            <Button type="button" size="sm" disabled={busy || running} onClick={() => void sendNow()}>
+              {busy ? "Sending…" : running ? "Waiting for lookup…" : `Send to ${gift.email}`}
             </Button>
             <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => setConfirming(false)}>
               Cancel
@@ -739,7 +768,7 @@ function GiftCard({
         />
       )}
 
-      <Notes gift={gift} patch={hooks.patch} />
+      <Notes gift={gift} patch={hooks.patch} lookupRunning={running} />
 
       <div className="tw:mt-3">
         <span className="tw:text-sm tw:font-medium tw:text-foreground">Lookups</span>

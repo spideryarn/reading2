@@ -112,6 +112,7 @@ let ensureAnswer: Answer;
 let patchAnswer: Answer;
 let sendAnswer: Answer;
 let lookupAnswer: Answer;
+let heldWrite: Promise<Response> | null;
 
 beforeEach(() => {
   calls = [];
@@ -120,6 +121,7 @@ beforeEach(() => {
   patchAnswer = { status: 200, body: { ok: true } };
   sendAnswer = { status: 201, body: { voucherId: "v", email: "queued" } };
   lookupAnswer = { status: 202, body: { lookupId: LOOKUP } };
+  heldWrite = null;
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(typeof input === "string" ? input : input instanceof URL ? input : input.url);
     const method = init?.method ?? "GET";
@@ -128,6 +130,7 @@ beforeEach(() => {
     const json = ({ status, body: value }: Answer) =>
       new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
     if (method === "GET" && url === "/api/admin/author-gifts") return json({ status: 200, body: { gifts: giftsAnswer() } });
+    if (method !== "GET" && heldWrite !== null) return heldWrite;
     if (method === "POST" && url === "/api/admin/author-gifts") return json(ensureAnswer);
     if (method === "POST" && url.endsWith("/lookups")) return json(lookupAnswer);
     if (method === "POST" && url.endsWith("/send")) return json(sendAnswer);
@@ -221,6 +224,20 @@ describe("Author gifts", () => {
     expect(reason?.textContent).toContain("address");
   });
 
+  it("holds Send back while a lookup is running, so its result can be reviewed first", async () => {
+    giftsAnswer = () => [
+      gift({
+        email: "ann@example.test",
+        lookups: [lookup({ outcome: null, finishedAt: null, cost: null, createdAt: new Date().toISOString() })],
+      }),
+    ];
+    await mount();
+    const send = button(card(DRAFT), "Send");
+    expect(send?.disabled).toBe(true);
+    const reason = host.querySelector(`#${send?.getAttribute("aria-describedby")}`);
+    expect(reason?.textContent).toContain("lookup");
+  });
+
   it("asks before Send by naming the address, then sends, and re-reads the vouchers", async () => {
     giftsAnswer = () => [gift({ email: "ann@example.test" })];
     await mount();
@@ -248,6 +265,19 @@ describe("Author gifts", () => {
     );
   });
 
+  it("does not claim Send succeeded when the server's success reply is malformed", async () => {
+    sendAnswer = { status: 201, body: { voucherId: "v", email: "something-new" } };
+    giftsAnswer = () => [gift({ email: "ann@example.test" })];
+    await mount();
+    await act(async () => button(card(DRAFT), "Send")?.click());
+    await act(async () => button(card(DRAFT), "Send to ann@example.test")?.click());
+    await settle();
+    const alert = card(DRAFT)?.querySelector('[role="alert"]');
+    expect(alert).not.toBeNull();
+    expect(alert?.textContent ?? "").toContain("answer");
+    expect(card(DRAFT)?.textContent).not.toContain("email is on its way");
+  });
+
   it("lets the notes change on a sent gift, and sends the notes and nothing else", async () => {
     giftsAnswer = () => [
       gift({ id: SENT, status: "sent", email: "ann@example.test", voucherId: "v1", notes: "Old notes.\nSecond line.", notesUpdatedAt: "2026-10-09T13:00:00Z" }),
@@ -265,6 +295,58 @@ describe("Author gifts", () => {
     expect(writes()).toEqual([
       { method: "PATCH", url: `/api/admin/author-gifts/${SENT}`, body: { notes: "Old notes.\nSecond line.\nShe replied." } },
     ]);
+  });
+
+  it("will not overwrite notes a lookup appended while the notes editor was open", async () => {
+    let row = gift({ notes: "Greg's note.", notesUpdatedAt: "2026-10-09T13:00:00Z" });
+    giftsAnswer = () => [row];
+    await mount();
+    const c = card(DRAFT);
+    await act(async () => button(c, "Edit notes")?.click());
+    const box = c?.querySelector('textarea[aria-label="Notes"]') as HTMLTextAreaElement;
+    await act(async () => sets(box, "Greg's edited note."));
+
+    row = gift({
+      notes: "Greg's note.\n\nLookup: address found.",
+      notesUpdatedAt: "2026-10-09T13:01:00Z",
+    });
+    await act(async () => button(section(), "Refresh")?.click());
+    await settle();
+
+    expect(c?.textContent).toContain("notes changed after you started editing");
+    expect(c?.textContent).toContain("Save is paused");
+    expect(button(c, "Save notes")?.disabled).toBe(true);
+  });
+
+  it("will not save notes while a lookup that may append to them is still running", async () => {
+    let row = gift({ notes: "Greg's note.", notesUpdatedAt: "2026-10-09T13:00:00Z" });
+    giftsAnswer = () => [row];
+    await mount();
+    const c = card(DRAFT);
+    await act(async () => button(c, "Edit notes")?.click());
+    row = gift({
+      notes: "Greg's note.",
+      notesUpdatedAt: "2026-10-09T13:00:00Z",
+      lookups: [lookup({ outcome: null, finishedAt: null, cost: null, createdAt: new Date().toISOString() })],
+    });
+    await act(async () => button(section(), "Refresh")?.click());
+    await settle();
+    expect(c?.textContent).toContain("lookup is still running");
+    expect(button(c, "Save notes")?.disabled).toBe(true);
+  });
+
+  it("locks an editor's fields while its save is in flight, so later typing is not discarded", async () => {
+    giftsAnswer = () => [gift({ recipientName: "Ann" })];
+    await mount();
+    const c = card(DRAFT);
+    await act(async () => button(c, "Edit")?.click());
+    const name = c?.querySelector('input[aria-label="Their name"]') as HTMLInputElement;
+    await act(async () => sets(name, "Ann Author"));
+    heldWrite = new Promise<Response>(() => {});
+    act(() => button(c, "Save")?.click());
+    expect(name.disabled).toBe(true);
+    expect((c?.querySelector('input[aria-label="Email address"]') as HTMLInputElement | null)?.disabled).toBe(true);
+    expect((c?.querySelector('textarea[aria-label="Note to them"]') as HTMLTextAreaElement | null)?.disabled).toBe(true);
   });
 
   it("offers Look up again only on a draft, and not while one is running", async () => {
@@ -414,7 +496,18 @@ describe("Author gifts", () => {
       /* Newest first, as the voucher form's picker. */
       expect([...picker().options].map((o) => o.value)).toEqual(["", "some-paper", "the-bitter-lesson"]);
       expect(form().textContent).toContain(SHARING_RIGHTS_CONFIRM);
+      expect(form().textContent).toContain("up to three searches");
       expect(submit().disabled).toBe(true);
+    });
+
+    it("locks the chosen article and rights while drafting is in flight", async () => {
+      await mount();
+      await fill();
+      heldWrite = new Promise<Response>(() => {});
+      act(() => form().requestSubmit());
+      expect(picker().disabled).toBe(true);
+      expect((form().querySelector('input[type="checkbox"]') as HTMLInputElement).disabled).toBe(true);
+      expect(button(form(), "Refresh")?.disabled).toBe(true);
     });
 
     it("sends the slug with the rights confirmed, and says a new gift's lookup is running (202)", async () => {

@@ -178,6 +178,7 @@ async function arm(): Promise<void> {
   const box = giftBox();
   if (!box) throw new Error("no gift box");
   for (const step of AUTHOR_GIFT_AT_ADD_STEPS) expect(box.textContent).toContain(step);
+  expect(box.textContent).toContain("up to three searches");
   expect(button(AUTHOR_GIFT_AT_ADD_CONFIRM, box)?.disabled).toBe(true);
   const rights = [...box.querySelectorAll("label")]
     .find((l) => l.textContent?.includes(SHARING_RIGHTS_CONFIRM))
@@ -374,6 +375,17 @@ describe("armed", () => {
     expect(button(AUTHOR_GIFT_AT_ADD_OPEN_ANYWAY)).toBeDefined();
   });
 
+  it("a malformed success answer does not let the page claim the gift was made", async () => {
+    giftAnswer = async () => json({ id: "not-the-contract", created: true }, { status: 202 });
+    await importing();
+    await arm();
+    complete();
+    await settle();
+    expect(navigations).toEqual([]);
+    expect(host.querySelector("[data-add-author-gift-failed]")).not.toBeNull();
+    expect(button(AUTHOR_GIFT_AT_ADD_OPEN_ANYWAY)).toBeDefined();
+  });
+
   it("a reader change mid-await navigates nowhere", async () => {
     const held = heldResponse();
     giftAnswer = () => held.promise;
@@ -397,5 +409,24 @@ describe("armed", () => {
     complete();
     await settle();
     expect(gifts).toEqual([]);
+  });
+
+  it("a source change mid-await cannot open the article from the old address", async () => {
+    const held = heldResponse();
+    giftAnswer = () => held.promise;
+    await importing();
+    await arm();
+    complete();
+    await settle();
+
+    addResult = makeJob("job-2", "running", "another");
+    jobs = [addResult];
+    act(() => {
+      root.render(<AddPage source={{ kind: "url", url: "https://example.com/another" }} readerId={reader} />);
+    });
+    await act(async () => held.answer(await created()));
+    await settle();
+    expect(navigations).toEqual([]);
+    expect(gifts).toHaveLength(1);
   });
 });

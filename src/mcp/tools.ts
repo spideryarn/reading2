@@ -25,7 +25,7 @@ import type { ToolAnnotations } from "@modelcontextprotocol/server";
 import * as z from "zod";
 
 import type { AdminUser } from "../admin.js";
-import { type AdminAuthorGift, AUTHOR_GIFT_NOTES_MAX } from "../admin-author-gifts.js";
+import { type AdminAuthorGift, type AdminAuthorLookup, AUTHOR_GIFT_NOTES_MAX } from "../admin-author-gifts.js";
 import type { AdminVoucher } from "../admin-vouchers.js";
 import { freeArticles } from "../admin-vouchers.js";
 import { SHARING_RIGHTS_CONFIRM } from "../messages.js";
@@ -171,6 +171,50 @@ function trimVoucher(v: AdminVoucher) {
     revoked: v.revokedAt !== null,
     hasNote: v.note !== null || v.recipientNote !== null,
     giftEmail: v.emails.gift ? { status: v.emails.gift.status, retryable: v.emails.gift.retryable } : null,
+  };
+}
+
+/** One lookup, explicitly allow-listed because every field returned here enters an AI conversation. */
+function trimAuthorLookup(l: AdminAuthorLookup) {
+  return {
+    id: l.id,
+    createdAt: l.createdAt,
+    finishedAt: l.finishedAt,
+    outcome: l.outcome,
+    failure: l.failure,
+    authorName: l.authorName,
+    authorSourceUrl: l.authorSourceUrl,
+    email: l.email,
+    emailSourceUrl: l.emailSourceUrl,
+    suggestedEmail: l.suggestedEmail,
+    contactUrl: l.contactUrl,
+    searches: l.searches,
+    model: l.model,
+    cost: l.cost,
+  };
+}
+
+/** An author gift as an agent sees it. Never spread the route's object: it must not grow a private-link key by accident. */
+function trimAuthorGift(api: Api, g: AdminAuthorGift) {
+  return {
+    id: g.id,
+    status: g.status,
+    starter: { slug: g.starter.slug, title: g.starter.title, link: articleLink(api, g.starter.slug) },
+    email: g.email,
+    recipientName: g.recipientName,
+    recipientNote: g.recipientNote,
+    articles: g.articles,
+    notes: g.notes,
+    notesUpdatedAt: g.notesUpdatedAt,
+    emailLookupId: g.emailLookupId,
+    nameLookupId: g.nameLookupId,
+    createdAt: g.createdAt,
+    createdBy: g.createdBy,
+    updatedAt: g.updatedAt,
+    sendStartedAt: g.sendStartedAt,
+    discardedAt: g.discardedAt,
+    voucherId: g.voucherId,
+    lookups: g.lookups.map(trimAuthorLookup),
   };
 }
 
@@ -751,7 +795,7 @@ export const TOOLS: readonly Tool[] = [
     annotations: { readOnlyHint: true, openWorldHint: false },
     handler: async (api) => {
       const { gifts } = await api.call<{ gifts: AdminAuthorGift[] }>("GET", "/api/admin/author-gifts");
-      return { gifts: gifts.map((g) => ({ ...g, starter: { ...g.starter, link: articleLink(api, g.starter.slug) } })) };
+      return { gifts: gifts.map((g) => trimAuthorGift(api, g)) };
     },
   }),
 

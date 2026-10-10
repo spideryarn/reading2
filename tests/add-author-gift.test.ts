@@ -8,10 +8,12 @@
  */
 import { describe, expect, it } from "vitest";
 
+import { PAGE_FAULT } from "../src/messages.js";
 import { AuthorGiftAtAddController, type PostAuthorGift } from "../src/web/add-author-gift.js";
+import { ReaderFacingError } from "../src/web/lib/reader-facing.js";
 
 function refusal(status: number, message = "no"): Error {
-  return Object.assign(new Error(message), { status });
+  return Object.assign(new ReaderFacingError(message), { status });
 }
 
 /** A `post` that waits for the test to answer, recording every call. */
@@ -134,6 +136,15 @@ describe("AuthorGiftAtAddController", () => {
     });
     await expect(gift.send("a-paper")).resolves.toBe("stay");
     expect(gift.get()).toMatchObject({ kind: "lost" });
+  });
+
+  it("does not put an unauthored exception's words on the page", async () => {
+    const h = held();
+    const gift = armed(h.post);
+    const exit = gift.send("a-paper");
+    h.fail(new Error("SENTINEL internal exception"));
+    await expect(exit).resolves.toBe("stay");
+    expect(gift.get()).toEqual({ kind: "lost", slug: "a-paper", message: PAGE_FAULT.message });
   });
 
   it("retired mid-await: the answer is drawn nowhere and the exit is stale", async () => {

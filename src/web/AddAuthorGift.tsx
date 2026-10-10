@@ -32,7 +32,7 @@ export const ADMIN_VOUCHERS_HREF = "/admin/vouchers";
 export const AUTHOR_GIFT_AT_ADD_STEPS = [
   "High-powered AI is switched on for this article.",
   "A private link is made when the import finishes.",
-  "A web search looks for the author and an email address.",
+  "A web lookup looks for the author and an email address, using up to three searches.",
   "A draft gift appears on /admin/vouchers. Nothing is sent until you press Send there.",
 ] as const;
 

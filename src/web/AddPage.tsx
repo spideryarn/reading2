@@ -92,6 +92,7 @@ import { withVoice } from "./voice.js";
 import { HighPowerIntent, mayHaveStartedOnStandard, type PutHighPower } from "./add-high-power.js";
 import { AddHighPower } from "./AddHighPower.js";
 import { isAdmin } from "../admin.js";
+import type { AuthorGiftEnsured } from "../admin-author-gifts.js";
 import {
   type AuthorGiftAtAdd,
   type AuthorGiftAtAddController,
@@ -105,6 +106,7 @@ import { type LinkAtAdd, linkAtAddFor, type LinkIo, linkUnsettled } from "./add-
 import { addSharingEpoch, subscribeAddSharing } from "./add-sharing-session.js";
 import { AddSharing } from "./AddSharing.js";
 import { asShareLinkState } from "./PrivateLink.js";
+import { MalformedReply } from "./lib/reader-facing.js";
 
 /**
  * Which of the two origins this page is starting.
@@ -254,8 +256,8 @@ const putHighPowerFor =
  */
 const postAuthorGiftFor =
   (readerId: string | null): PostAuthorGift =>
-  (slug) =>
-    apiFetch(
+  async (slug) => {
+    const response = await apiFetch(
       "/api/admin/author-gifts",
       {
         method: "POST",
@@ -263,7 +265,16 @@ const postAuthorGiftFor =
         body: JSON.stringify({ slug, rightsConfirmed: true }),
       },
       readerId,
-    ).then((r) => readJson<{ created: boolean }>(r));
+    );
+    const answer = await readJson<Partial<AuthorGiftEnsured>>(response);
+    if (
+      (response.status === 202 && answer.created === true && typeof answer.id === "string" && typeof answer.lookupId === "string") ||
+      (response.status === 200 && answer.created === false && typeof answer.id === "string")
+    ) {
+      return { created: answer.created };
+    }
+    throw new MalformedReply("the author-gift ensure reply was not its 200 or 202 shape");
+  };
 
 /* For `useSyncExternalStore` when there is no controller: a reader who is not an administrator. */
 const NO_GIFT: AuthorGiftAtAdd = { kind: "off" };

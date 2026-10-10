@@ -82,6 +82,7 @@ export function StarterSelect({
   slug,
   onChoose,
   reload,
+  disabled = false,
 }: {
   id: string;
   label: ReactNode;
@@ -90,12 +91,20 @@ export function StarterSelect({
   slug: string;
   onChoose: (slug: string) => void;
   reload: () => void;
+  /** Lock the choice while the form is sending it, so a later choice is not cleared as if it had been sent. */
+  disabled?: boolean;
 }) {
   return (
     <div className="tw:flex tw:flex-wrap tw:items-end tw:gap-2">
       <label className="tw:flex tw:min-w-0 tw:flex-1 tw:basis-56 tw:flex-col tw:gap-1">
         <span>{label}</span>
-        <select id={id} value={slug} onChange={(e) => onChoose(e.target.value)} className={`${INPUT} tw:w-full tw:min-w-0`}>
+        <select
+          id={id}
+          value={slug}
+          disabled={disabled}
+          onChange={(e) => onChoose(e.target.value)}
+          className={`${INPUT} tw:w-full tw:min-w-0`}
+        >
           <option value="">{noneLabel}</option>
           {choices.map((a) => (
             <option key={a.slug} value={a.slug}>
@@ -104,7 +113,7 @@ export function StarterSelect({
           ))}
         </select>
       </label>
-      <button type="button" onClick={reload} title="Read your articles again" className={BUTTON}>
+      <button type="button" disabled={disabled} onClick={reload} title="Read your articles again" className={BUTTON}>
         <RefreshCw size={12} />
         Refresh
       </button>
