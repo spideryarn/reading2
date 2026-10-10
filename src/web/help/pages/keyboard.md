@@ -30,8 +30,9 @@ related: touch, jumping-around
   If it is sure and the command only takes you somewhere, you go there; otherwise it shows its best
   guesses under **Did you mean** and you press the one you want, or <kbd>Enter</kbd>. You need to be
   signed in.
-- On your own article, once you have said why you are reading it, an empty command bar starts with
-  **Suggest what to do here**. Press it and a fast AI model reads your profile and your reason for
+- On your own article, an empty command bar starts with **Guide chat**, marked with a compass: it
+  opens the guide, the conversation about how to read this piece, and sends nothing.
+- Below it, once you have said why you are reading, comes **Suggest what to do here**. Press it and a fast AI model reads your profile and your reason for
   reading, never the article, and proposes a short list under **From why you’re reading**: up to
   three quick searches, a mode or two, and a question for Chat about what the web says. Nothing is
   done until you press a row, and each row does what it would anywhere else in the bar; the question

@@ -52,7 +52,9 @@ vi.mock("../src/web/DictationStrip.js", () => ({
 }));
 
 const { Dock } = await import("../src/web/Dock.js");
-const { ASK_AGAIN_LABEL, GENERATES_MARKER, NO_MATCH, guideLabel } = await import("../src/web/CommandBar.js");
+const { ASK_AGAIN_LABEL, GENERATES_MARKER, GUIDE_CHAT_LABEL, NO_MATCH, guideLabel } = await import(
+  "../src/web/CommandBar.js"
+);
 const { jobEngine } = await import("../src/web/jobEngine.js");
 
 const SLUG = "a-piece";
@@ -269,5 +271,74 @@ describe("the bar's door to the guide", () => {
     await askAndHear({ kind: "none" });
     expect(listed()).toEqual([]);
     expect(empty()).toBe(`${NO_MATCH} ${ASK_AGAIN_LABEL}`);
+  });
+});
+
+/**
+ * **The guide chat, first on an empty bar** — plan
+ * docs/plans/261010g-guide-chat-at-the-top-of-the-command-bar-with-one-icon.md
+ * (Greg, 2026-10-09, `spya-q3pzyn`: *"Add a way to open the guide chat at the
+ * top of the command bar"*). Free to open, so a bare Enter may take it.
+ */
+describe("the Guide chat row", () => {
+  let opened: number;
+  function withOpen(): CommandExecutor {
+    opened = 0;
+    return {
+      ...executor(),
+      openGuide: (): ActionOutcome => {
+        opened += 1;
+        return { kind: "close" };
+      },
+    };
+  }
+  const compass = (row: HTMLElement | undefined): boolean => row?.querySelector(".cmdbar-guide-mark svg") != null;
+
+  it("is the first row on an empty bar, wears the compass, and a bare Enter opens the guide and asks nothing", async () => {
+    reading(withOpen());
+    openBar();
+    expect(listed()[0]).toBe(GUIDE_CHAT_LABEL);
+    expect(compass(rows()[0])).toBe(true);
+    expect(rows()[0]?.querySelector(".cmdbar-generates")).toBeNull();
+    /* Only the guide's rows wear it. */
+    expect(rows().slice(1).some(compass)).toBe(false);
+    press("Enter");
+    await settle();
+    expect(opened).toBe(1);
+    expect(asked).toEqual([]);
+    expect(dialog().open).toBe(false);
+  });
+
+  it("is listed once, with a rule beneath it before the rest", () => {
+    reading(withOpen());
+    openBar();
+    expect(listed().filter((n) => n === GUIDE_CHAT_LABEL)).toHaveLength(1);
+    /* Directly beneath it: the sibling after the first row is the rule. */
+    expect(rows()[0]?.nextElementSibling?.classList.contains("cmdbar-rest")).toBe(true);
+  });
+
+  it("is not pinned once the reader types: it ranks like any row", () => {
+    reading(withOpen());
+    openBar();
+    type("glossary");
+    expect(listed()[0]).toBe("Glossary");
+    expect(listed()).not.toContain(GUIDE_CHAT_LABEL);
+    type("guide");
+    expect(listed()[0]).toBe(GUIDE_CHAT_LABEL);
+  });
+
+  it("is absent where the page cannot open the guide", () => {
+    reading(executor());
+    openBar();
+    expect(listed()).not.toContain(GUIDE_CHAT_LABEL);
+    expect(dialog().querySelector(".cmdbar-guide-mark")).toBeNull();
+  });
+
+  it("puts the compass on Ask the guide too", async () => {
+    reading(withOpen());
+    openBar();
+    await askAndHear({ kind: "none" });
+    expect(listed()).toEqual([GUIDE_ROW]);
+    expect(compass(rows()[0])).toBe(true);
   });
 });

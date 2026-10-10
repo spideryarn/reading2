@@ -71,6 +71,7 @@ vi.mock("../src/web/DictationStrip.js", () => ({
 }));
 
 const { Dock } = await import("../src/web/Dock.js");
+const { GUIDE_CHAT_LABEL } = await import("../src/web/CommandBar.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
 const { saveProfile } = await import("../src/web/useProfile.js");
 const { savePurpose } = await import("../src/web/purpose.js");
@@ -323,6 +324,28 @@ describe("who is offered the row", () => {
     expect(rows()[0]?.textContent).not.toMatch(/\$|¢|cent|generates/);
   });
 
+  /* Plan 261010g: the guide chat is the bar's first row on an empty box, and
+     the row that asks comes straight after it. */
+  it("sits under the Guide chat row where the page can open the guide", async () => {
+    let opened = 0;
+    await reading({
+      exec: {
+        ...executor(),
+        openGuide: () => {
+          opened += 1;
+          return CLOSE;
+        },
+      },
+    });
+    await openBar();
+    expect(listed().slice(0, 3)).toEqual([GUIDE_CHAT_LABEL, SUGGEST_LABEL, "Plain"]);
+    press("ArrowDown");
+    press("Enter");
+    await settle();
+    expect(asked).toHaveLength(1);
+    expect(opened).toBe(0);
+  });
+
   it("is not typed into view: a word hides it, and it is not a row a sentence can name", async () => {
     await reading();
     await openBar();
@@ -488,6 +511,33 @@ describe("the list", () => {
     act(() => suggestedGlossary?.click());
     await settle();
     expect(openedModes).toEqual(["glossary"]);
+  });
+
+  /* Plan 261010g, GPT Sol's F1: row zero is the guide chat where the page can
+     open it, so "select the first suggestion" has to find it by kind. */
+  it("selects its first suggestion when it lands, not the Guide chat row above it", async () => {
+    let opened = 0;
+    await reading({
+      exec: {
+        ...executor(),
+        openGuide: () => {
+          opened += 1;
+          return CLOSE;
+        },
+      },
+    });
+    await openBar();
+    expect(listed()[0]).toBe(GUIDE_CHAT_LABEL);
+    press("ArrowDown");
+    press("Enter");
+    await settle();
+    await answer(list());
+    const on = rows().filter((r) => r.getAttribute("aria-selected") === "true");
+    expect(on.map(nameOf)).toEqual([QUICK_1]);
+    press("Enter");
+    await settle();
+    expect(searched).toEqual([SEARCH_1]);
+    expect(opened).toBe(0);
   });
 
   it("drops a key that is not a mode here, and a mode the reader does not have — an Archive key is not a row (F1)", async () => {

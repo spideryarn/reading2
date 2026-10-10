@@ -114,6 +114,7 @@
  * they are on the elements even while they carry no rules.
  */
 import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Compass } from "lucide-react";
 import {
   type ArgumentKind,
   COULD_NOT_TELL,
@@ -501,10 +502,31 @@ function articleRows({ slug, search }: CommandBarArticle): readonly Command[] {
   ];
 }
 
+export const GUIDE_CHAT_LABEL = "Guide chat";
+const GUIDE_CHAT_DESCRIPTION = "Talk through how to read this piece: why you're reading it, where to start, which modes would help.";
+const GUIDE_ROW_ID = "guide";
+const ASK_GUIDE_ROW_ID = "ask-the-guide";
+
 /**
- * **The *Guide* row**: open this article's guide in Chat, sending nothing.
+ * **The two rows that go to the guide wear its `Compass`** — the glyph its row
+ * in Chat's list and its greeting wear (docs/project/icons.md § the guide), and
+ * the bar's only icons, which is the point: no other row goes there.
+ */
+const goesToTheGuide = (command: Command): boolean =>
+  command.kind === "action" && (command.id === GUIDE_ROW_ID || command.id === ASK_GUIDE_ROW_ID);
+
+/**
+ * **The *Guide chat* row**: open this article's guide in Chat, sending nothing.
  * Greg, 2026-10-09, `spya-s6qhzv`: *"there should be a command in the command
  * bar for opening the guide chat"*. Plan 261009i.
+ *
+ * **Named "Guide chat", and first on an empty bar** since 2026-10-10 (plan
+ * 261010g; Greg, `spya-q3pzyn`: *"Add a way to open the guide chat at the top
+ * of the command bar. Find a way to name and/or describe it that will be clear
+ * to new users"*). "Guide" alone was also Help's word, for Help's own reader
+ * guides; *chat* says a press opens a conversation. Inside Chat it stays
+ * "Guide" (`GUIDE_LABEL`), where the band already says chat. The pin is the
+ * `shown` memo's, in `CommandBar`; this list keeps it in its ranked place.
  *
  * Only where the page hands over a way to open it (`executor.openGuide`), which
  * is the owner's reading view: the guide is the owner's, and the Metadata page
@@ -518,10 +540,19 @@ function guideRow(article: CommandBarArticle | undefined): readonly Command[] {
   return [
     {
       kind: "action",
-      id: "guide",
-      label: "Guide",
-      description: "This article's guide, in Chat: why you are reading it, where to start, and which modes would help.",
-      aliases: ["tour", "where to start", "how to read", "welcome", "getting started"],
+      id: GUIDE_ROW_ID,
+      label: GUIDE_CHAT_LABEL,
+      description: GUIDE_CHAT_DESCRIPTION,
+      aliases: [
+        "guide",
+        "chat with the guide",
+        "help me read",
+        "tour",
+        "where to start",
+        "how to read",
+        "welcome",
+        "getting started",
+      ],
       /* Opening the guide draws its greeting, which is ours; nothing is asked
          of a model until the reader sends. */
       generates: false,
@@ -1930,7 +1961,7 @@ export function CommandBar({
     if (guideSentence === null || askGuide === undefined) return null;
     const command: Command = {
       kind: "action",
-      id: "ask-the-guide",
+      id: ASK_GUIDE_ROW_ID,
       label: guideLabel(guideSentence),
       description: GUIDE_DESCRIPTION,
       aliases: [],
@@ -1953,17 +1984,29 @@ export function CommandBar({
     (reason.state === "has" || reason.state === "failed") &&
     suggestedNow.length === 0;
   const reasonFailure = emptyBox && reason.state === "failed" && !suggestWaiting ? REASON_NOT_READ.message : null;
+  /* **The guide chat, first on an empty box** (plan 261010g): above *Suggest*
+     and anything it suggested, with a rule beneath. Free to open, so it can
+     be what a bare Enter takes. Once the reader types it ranks like any row:
+     pinned, it would sit above the row they are spelling out. */
+  const pinnedGuide = emptyBox
+    ? results.find((c) => c.kind === "action" && c.id === GUIDE_ROW_ID)
+    : undefined;
+  const ordinary = useMemo(
+    () => (pinnedGuide === undefined ? results : results.filter((c) => c !== pinnedGuide)),
+    [results, pinnedGuide],
+  );
   const shown = useMemo<readonly ShownRow[]>(
     () => [
+      ...(pinnedGuide === undefined ? [] : [ordinaryRow(pinnedGuide)]),
       ...(offerSuggest ? [{ command: SUGGEST_ROW, rowId: commandId(SUGGEST_ROW), press: "suggest" } as const] : []),
       ...suggestedNow,
-      ...results.map(ordinaryRow),
+      ...ordinary.map(ordinaryRow),
       ...(guideRow === null ? [] : [guideRow]),
     ],
-    [offerSuggest, suggestedNow, results, guideRow],
+    [pinnedGuide, offerSuggest, suggestedNow, ordinary, guideRow],
   );
   /** Where the ordinary rows start, for the rule drawn between the list and them. */
-  const firstOrdinary = shown.length - results.length - (guideRow === null ? 0 : 1);
+  const firstOrdinary = shown.length - ordinary.length - (guideRow === null ? 0 : 1);
   const index = Math.min(selected, Math.max(0, shown.length - 1));
   const active = shown[index];
   /* A profile read may insert or remove rows while the reader is choosing.
@@ -1979,8 +2022,15 @@ export function CommandBar({
       rowId: active?.rowId,
     };
     if (!open || !previous.open || (previous.reason === reason && previous.list === list)) return;
-    /* A new answer deliberately selects its first suggestion. */
-    if (list !== null && previous.list !== list) return;
+    /* A new answer deliberately selects its first suggestion — found by kind,
+       not taken as row zero, which is the pinned guide chat's where the page
+       can open it (plan 261010g, GPT Sol's F1). */
+    if (list !== null && previous.list !== list) {
+      const first = shown.findIndex((row) => row.suggested !== undefined);
+      const next = first >= 0 ? first : 0;
+      if (next !== index) setSelected(next);
+      return;
+    }
     /* A save restarts the choice; a removed row has no neighbour to confirm. */
     const at = previous.saves === saves ? shown.findIndex((row) => row.rowId === previous.rowId) : -1;
     const next = at >= 0 ? at : 0;
@@ -2639,7 +2689,8 @@ export function CommandBar({
                   {SUGGEST_HEADING}
                 </div>
               )}
-              {at === firstOrdinary && at > 0 && shown[at - 1]?.suggested !== undefined && (
+              {((at === firstOrdinary && at > 0 && shown[at - 1]?.suggested !== undefined) ||
+                (at === 1 && pinnedGuide !== undefined)) && (
                 <div role="presentation" className="cmdbar-rest tw:mx-3 tw:my-1 tw:border-t tw:border-rule" />
               )}
               {/* biome-ignore lint/a11y/useKeyWithClickEvents: the keyboard equivalent is on the input above — Up/Down move the selection and Enter takes it, which is the listbox pattern; a key handler here would need focus on the row, and focus stays in the box the reader is typing in */}
@@ -2684,6 +2735,11 @@ export function CommandBar({
                   pressRow(row);
                 }}
               >
+                {goesToTheGuide(command) && (
+                  <span className="cmdbar-guide-mark tw:shrink-0 tw:self-center tw:text-ink-faint">
+                    <Compass size={14} aria-hidden="true" />
+                  </span>
+                )}
                 {/* A sub-mode says which mode it is in, muted, before its own
                     name — `Learn › Quiz` — so *Simple* is not a mystery and
                     the pictures read as Diagram's. Outside `cmdbar-name`, which

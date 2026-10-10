@@ -1065,8 +1065,10 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   their press (above). While the conversation is empty it offers three ways in, each sent as the
   reader's first message (*Where should I start?*, *Help me work out what I want from this*, *How
   could I read this well?*; plan 261009u); after that, the guide's own next steps (above). `GUIDE_SYSTEM` is told the greeting exists, since it is not in the transcript.
-- **A row in the command bar**, *Guide*, on the owner's reading view (`guideRow` in
-  [`CommandBar.tsx`](../../src/web/CommandBar.tsx)), which opens it as `?guide=1` does; and since
+- **A row in the command bar**, *Guide chat*, on the owner's reading view (`guideRow` in
+  [`CommandBar.tsx`](../../src/web/CommandBar.tsx)), which opens it as `?guide=1` does — first on
+  an empty bar, with the guide's `Compass`, since 2026-10-10
+  ([261010g](../plans/261010g-guide-chat-at-the-top-of-the-command-bar-with-one-icon.md)); and since
   261007j the bar's *Ask the guide: "…"* for a sentence the fast pick could not place.
 - **Its buttons** are chat's, offered unasked when it suggests a mode or a search
   (§ Command buttons), **and one of them may press itself** (since 2026-10-07,
