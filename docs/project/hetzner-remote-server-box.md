@@ -31,7 +31,7 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
 **The CLI**
 
 - [`scripts/gjd-remote.ts`](../../scripts/gjd-remote.ts) — all of it: `ls`, `new-claude`,
-  `new-shell`, `resume`, `resume-all`, `kill`, `claim-overseer`, `release-overseer`, `restart-overseer`,
+  `new-shell`, `resume`, `resume-all`, `kill`, `claim-overseer`, `release-overseer`, `resume-overseer`,
   `tell-overseer`, `tell`, `log`,
   `doctor`, `provision`, `clone`, `setup`, `push-env`, `upload`, `resolve`, `ssh`, `tunnel`,
   `forget-key`. `--help` is long on purpose.
@@ -675,7 +675,7 @@ Two refusals that are not bugs in `tell`, and are the dashboard's own:
   trusts a pane only when its `claude` command line carries the conversation's uuid (`--session-id`
   or `--resume <uuid>`), and a name is not one. That was how the Overseer was running on 2026-10-09,
   so `tell-overseer` and the dashboard's own box were both refused until it is restarted by uuid —
-  which is what [`restart-overseer`](#bringing-the-overseer-back-by-uuid) does.
+  which is what [`resume-overseer`](#bringing-the-overseer-back-by-uuid) does.
 
 Until 2026-10-10 there was a third: a box holding only Claude Code's dim ghost suggestion (`carry
 on`) or its first-run hint (`Try "create a util…"`) was refused `input-not-empty`, because the route
@@ -688,8 +688,8 @@ When the Overseer's `claude` has exited — or after you `/exit` it — its pane
 shell the job script `exec`s. Bring it back with:
 
 ```
-gjd-remote restart-overseer              # types the resume, then attaches
-gjd-remote restart-overseer --no-attach
+gjd-remote resume-overseer              # types the resume, then attaches
+gjd-remote resume-overseer --no-attach
 ```
 
 It finds the holder of the overseer claim, reads the uuid from that session's `CLAUDE_SESSION_ID`
@@ -733,7 +733,7 @@ exits. **Not borrowed, each for a stated reason** — candidates if a need shows
 - **A box-health gate on `new-claude`**, **pre-answering launch dialogs** for unattended runs,
   **`--tab`**, **`session go`**, and the multi-person, multi-box machinery, which is for a team.
   Its **`overseer up`** (starting the Overseer by uuid) now has a smaller counterpart here,
-  `restart-overseer`, which resumes in place and never kills.
+  `resume-overseer`, which resumes in place and never kills.
 
 ## Sessions nobody made on purpose
 

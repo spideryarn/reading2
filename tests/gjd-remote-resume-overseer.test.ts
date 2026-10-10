@@ -1,5 +1,5 @@
 /**
- * **`gjd-remote restart-overseer`: the Overseer resumed by uuid, never by name.**
+ * **`gjd-remote resume-overseer`: the Overseer resumed by uuid, never by name.**
  *
  * A Claude resumed as `claude --resume Overseer` works for Claude and is
  * invisible to the steer route, which trusts a pane only when its command line
@@ -24,11 +24,11 @@ import {
   ROW_COUNT,
   SESSION_SENTINEL,
   type Session,
-  decideOverseerRestart,
+  decideOverseerResume,
   overseerResumeLine,
   parseSessions,
   resumeOverseerCommand,
-  overseerRestartSucceeded,
+  overseerResumeSucceeded,
 } from "../scripts/gjd-remote-tmux.js";
 
 const b64 = (t: string) => Buffer.from(t, "utf8").toString("base64");
@@ -63,7 +63,7 @@ function sessionsOf(rows: string[]): Session[] {
 }
 
 function refusal(rows: string[]): string {
-  const v = decideOverseerRestart(sessionsOf(rows));
+  const v = decideOverseerResume(sessionsOf(rows));
   expect(v.kind).toBe("refused");
   return v.kind === "refused" ? v.why : "";
 }
@@ -71,8 +71,8 @@ function refusal(rows: string[]): string {
 describe("deciding whether the Overseer can be resumed", () => {
   it("resumes the holder's own CLAUDE_SESSION_ID, in its own launch directory", () => {
     const list = sessionsOf([row({ sid: "$1", name: "other", role: "" }), row({ sid: "$7", name: "Overseer" })]);
-    expect(decideOverseerRestart(list)).toEqual({
-      kind: "restart",
+    expect(decideOverseerResume(list)).toEqual({
+      kind: "resume",
       id: "$7",
       name: "Overseer",
       conversationId: UUID,
@@ -114,12 +114,12 @@ describe("deciding whether the Overseer can be resumed", () => {
 
 describe("the box-side command", () => {
   it("requires an exact receipt and a successful exit", () => {
-    expect(overseerRestartSucceeded({ status: 0, stdout: "GJD_TYPED\n" })).toBe(true);
+    expect(overseerResumeSucceeded({ status: 0, stdout: "GJD_TYPED\n" })).toBe(true);
     for (const status of [null, 3, 4, 5, 255]) {
-      expect(overseerRestartSucceeded({ status, stdout: "GJD_TYPED\n" })).toBe(false);
+      expect(overseerResumeSucceeded({ status, stdout: "GJD_TYPED\n" })).toBe(false);
     }
     for (const stdout of ["", "NOT_GJD_TYPED", "GJDERR failed\nGJD_TYPED", "noise GJD_TYPED"]) {
-      expect(overseerRestartSucceeded({ status: 0, stdout })).toBe(false);
+      expect(overseerResumeSucceeded({ status: 0, stdout })).toBe(false);
     }
   });
   it("throws on anything that is not tmux's id, a lower-case uuid, or an absolute directory", () => {
@@ -147,7 +147,7 @@ describe("the box-side command", () => {
 /** Execute the generated bash, even where the sandbox forbids tmux sockets. */
 describe("against captured tmux replies", () => {
   function runCaptured(cur: string, cx: number, below = "", previous = "", failSend = 0, uuid = "00000000-0000-4000-8000-000000000000", pgrepStatus = 1) {
-    const dir = mkdtempSync(path.join(tmpdir(), "gjd-restart-capture-"));
+    const dir = mkdtempSync(path.join(tmpdir(), "gjd-resume-capture-"));
     const sends = path.join(dir, "sends");
     const quote = (s: string) => `'${s.replaceAll("'", "'\\''")}'`;
     try {
@@ -235,7 +235,7 @@ esac
 
 /** tmux, bash and GNU ps, or the real-tmux half is skipped. */
 function usable(): boolean {
-  const probe = mkdtempSync(path.join(tmpdir(), "gjd-restart-probe-"));
+  const probe = mkdtempSync(path.join(tmpdir(), "gjd-resume-probe-"));
   try {
     execFileSync("tmux", ["-S", path.join(probe, "sock"), "-V"], { stdio: "ignore" });
     execFileSync("ps", ["--version"], { stdio: "ignore" });
@@ -263,7 +263,7 @@ describe.runIf(usable())("against a real tmux server", () => {
    *     `claude` resolves to, and the test stops unless it is the stub.
    */
   const FAKE = "00000000-0000-4000-8000-000000000000";
-  const dir = mkdtempSync(path.join(tmpdir(), "gjd-restart-overseer-"));
+  const dir = mkdtempSync(path.join(tmpdir(), "gjd-resume-overseer-"));
   const sock = path.join(dir, "sock");
   const bin = path.join(dir, "bin");
   const badBin = path.join(dir, "bad-bin");

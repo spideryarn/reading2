@@ -9,22 +9,27 @@
  * the part you cannot work out by yourself: it depends on what else was started
  * today, and `docs/plans/` has hundreds of files in it.
  *
- * **Two agents can be handed the same name, and that is fine.** There is no
- * lock and no reservation — this reads the directory and answers. Two agents
- * asking at the same moment both get `a`, and upstream says the same: don't
- * worry if it happens. A lock here would be a lock across git worktrees, which
- * is a much bigger thing than the problem (a duplicate prefix costs nothing —
- * the files still sort together, and the descriptions differ).
+ * **Two agents are never handed the same letter.** Every git worktree of the
+ * repo shares `git rev-parse --git-common-dir`, so the letters taken are the
+ * union of three things: the files in this checkout, the files on the local
+ * `origin/dev` (no fetch; stale is fine), and a reservation file in the common
+ * dir (`spideryarn-plan-names`, one `<dir> <yyMMdd><letter>` line per name ever
+ * issued), read and appended under a lock. Before this, agents in separate
+ * worktrees all saw the same files and all got the same letter. If the lock
+ * cannot be had (a leftover from a killed run), it falls back to the old
+ * behaviour with a warning rather than refusing to name anything.
  *
  * **Plans written before 2026-08-31 have no date prefix at all**, and are left
  * alone. So `usedLetters` matches only the prefixed form; an unprefixed
  * `admin-page.md` is invisible to it, which is what we want.
  */
-import { globSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { appendFileSync, existsSync, globSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { isMain } from "../src/is-main.js";
+import { LockHeldError, takeLockFile } from "./lockfile.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const PLANS_DIR = "docs/plans";
@@ -110,6 +115,90 @@ export const DIRS: Record<string, { dir: string; ext: string }> = {
   tutorials: { dir: "docs/tutorials", ext: ".html" },
 };
 
+
+/** Names already reserved for `dirKey` on `date`, from the reservation file's text, as fake filenames. */
+export function reservedLetters(text: string, dirKey: string, date: string): string[] {
+  const out: string[] = [];
+  for (const line of text.split("\n")) {
+    const m = line.trim().match(/^(\S+) (\d{6})([a-z]+)$/);
+    if (m && m[1] === dirKey && m[2] === date) out.push(`${date}${m[3]}-reserved`);
+  }
+  return out;
+}
+
+const sleep = (ms: number) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
+/**
+ * Pick the filename and record its letter, under a lock beside `reservationFile`.
+ * `others` are filenames from outside this checkout (origin/dev).
+ */
+export function claimPlanFilename(opts: {
+  dirKey: string;
+  existing: string[];
+  others?: string[];
+  reservationFile: string;
+  date: string;
+  description: string;
+  ext: string;
+}): string {
+  const { dirKey, date, reservationFile } = opts;
+  const lockFile = `${reservationFile}.lock`;
+  let lock: ReturnType<typeof takeLockFile> | null = null;
+  for (let i = 0; i < 100 && !lock; i++) {
+    try {
+      lock = takeLockFile(lockFile);
+    } catch (err) {
+      if (!(err instanceof LockHeldError) || !err.holderAlive) {
+        console.error(`plan-name: could not lock ${lockFile}; not reserving. ${(err as Error).message}`);
+        break;
+      }
+      sleep(50);
+    }
+  }
+  try {
+    const reserved = existsSync(reservationFile) ? readFileSync(reservationFile, "utf8") : "";
+    const filename = nextPlanFilename(
+      [...opts.existing, ...(opts.others ?? []), ...reservedLetters(reserved, dirKey, date)],
+      date,
+      opts.description,
+      opts.ext,
+    );
+    if (lock) {
+      const letter = filename.slice(date.length).split("-")[0]!;
+      appendFileSync(reservationFile, `${dirKey} ${date}${letter}\n`);
+    }
+    return filename;
+  } finally {
+    lock?.release();
+  }
+}
+
+/** Filenames in `dir` on the local origin/dev; empty if there is no such ref. */
+function originDevFiles(dir: string): string[] {
+  try {
+    return execFileSync("git", ["ls-tree", "--name-only", "origin/dev", `${dir}/`], {
+      cwd: ROOT,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    })
+      .split("\n")
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function gitCommonDir(): string | null {
+  try {
+    return path.resolve(
+      ROOT,
+      execFileSync("git", ["rev-parse", "--git-common-dir"], { cwd: ROOT, encoding: "utf8" }).trim(),
+    );
+  } catch {
+    return null;
+  }
+}
+
 function main(): void {
   const args = process.argv.slice(2);
   const dirArg = args.find((a) => a.startsWith("--dir="))?.slice("--dir=".length) ?? "plans";
@@ -125,12 +214,21 @@ function main(): void {
   /* Every file, not just `*.md`: an `.activity.log` sitting beside a review
      answer holds a letter too, and a letter this misses is a letter reused. */
   const existing = globSync(path.join(ROOT, target.dir, "*"));
-  console.log(
-    path.join(
-      target.dir,
-      nextPlanFilename(existing, datePrefix(new Date()), description, target.ext),
-    ),
-  );
+  const others = originDevFiles(target.dir);
+  const common = gitCommonDir();
+  const date = datePrefix(new Date());
+  const filename = common
+    ? claimPlanFilename({
+        dirKey: dirArg,
+        existing,
+        others,
+        reservationFile: path.join(common, "spideryarn-plan-names"),
+        date,
+        description,
+        ext: target.ext,
+      })
+    : nextPlanFilename([...existing, ...others], date, description, target.ext);
+  console.log(path.join(target.dir, filename));
 }
 
 if (isMain(import.meta.url)) main();

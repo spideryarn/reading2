@@ -605,6 +605,11 @@ Every few hours, as a tmux loop like the feedback sweep's:
    for the notes; say so in the report. If a plain deploy fails only because `dev` moved during the
    run (*"level with origin/dev"*), pull and deploy once more — valid pending notes still pass. If
    `changelog` refuses missing, invalid or stale notes, read its reason and recover through step 3.
+   **You need not ask sessions to stop testing while it runs** (since 2026-10-10): the deploy's
+   suite asks for half the box, subject to memory admission, and other runs that start while it
+   holds its lock default to one worker and say why ([testing.md § While a deploy runs](testing.md#while-a-deploy-runs)). Runs
+   already going when it started keep their workers; if the box is crowded with those, starting the
+   deploy after they finish is quicker than starting it among them.
 6. It is not deployed until three things agree: the exit code, the `Target:` line naming the
    production Supabase project, and the commit in `https://www.spideryarn.com/build.json` matching
    the one the deploy named on its `deploying <sha>` line and `origin/main` — under `--ready` that
@@ -784,7 +789,7 @@ Each of these has cost somebody real time on this box.
   nothing: its edits are on disk and `claude --resume <session-id>` brings the conversation back.
 - **`gjd-remote resume` is an alias for `attach`** and reattaches to a **live** tmux session. It is
   not what brings a conversation back after a reboot; that is `claude --resume <claudeSessionId>`
-  (for the Overseer itself, while its tmux session lives, `gjd-remote restart-overseer` types that
+  (for the Overseer itself, while its tmux session lives, `gjd-remote resume-overseer` types that
   for you, and a resume by name cannot be messaged —
   [hetzner-remote-server-box.md](hetzner-remote-server-box.md#bringing-the-overseer-back-by-uuid)),
   and the id is in your own register.
