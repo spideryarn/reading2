@@ -8,7 +8,7 @@
  * gateway that answers what each test says; nothing here spends. What the real
  * model answers, and what it costs, is evals/front-matter/measure.ts.
  *
- * docs/plans/261009u-a-general-authors-pass-for-every-web-page.md.
+ * docs/plans/261010d-a-general-authors-pass-for-every-web-page.md.
  */
 import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
@@ -131,7 +131,7 @@ describe("pageOpening: the page's visible text from its main heading on, before 
      bare text into a new row, and an attribute cannot ride on a text node.
      Closing it meant wrapping hidden text in new elements on every page before
      `prepareDocument`, which this change declined (src/front-matter-authors.ts
-     § markHidden; plan 261009u § The code review). `it.fails` turns red the day
+     § markHidden; plan 261010d § The code review). `it.fails` turns red the day
      it is closed, so this line gets rewritten then. */
   it.fails("keeps hidden provenance when the LaTeXML rewrite moves a hidden element's bare text", async () => {
     const authors = fx("authors-1706-03762v7").replace(

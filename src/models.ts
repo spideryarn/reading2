@@ -511,7 +511,7 @@ export const TITLE_TIDY_MODEL = "deepseek/deepseek-v4.1-flash";
  * between authors by what it seemed to know about them, which the page did not
  * say; Haiku's misses were refusals. On no tier, so High-powered AI does not
  * move it. Route `front-matter-authors` in src/ai-call.ts.
- * docs/plans/261009u-a-general-authors-pass-for-every-web-page.md § Measured.
+ * docs/plans/261010d-a-general-authors-pass-for-every-web-page.md § Measured.
  */
 export const FRONT_MATTER_AUTHORS_MODEL = "anthropic/claude-haiku-5.5";
 

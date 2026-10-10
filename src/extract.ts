@@ -1288,7 +1288,7 @@ export async function runExtract(opts: {
   titleTidier?: TitleTidier;
   /**
    * What reads the declared authors' affiliations off the page's opening, on
-   * any site (src/front-matter-authors.ts, plan 261009u). Import hands in the
+   * any site (src/front-matter-authors.ts, plan 261010d). Import hands in the
    * cheap model's; absent, no call. Asked only when the page declares its
    * authors and gives none of them an affiliation.
    */
@@ -1354,7 +1354,7 @@ export async function runExtract(opts: {
      because Readability keeps only the last of a repeated tag —
      src/meta-authors.ts. */
   /* **Affiliations for the declared names**, read off the page's opening by
-     one cheap call (src/front-matter-authors.ts, plan 261009u), on any site.
+     one cheap call (src/front-matter-authors.ts, plan 261010d), on any site.
      Only when the page declares its authors — `citation_author`, `dc.creator`
      or an arXiv paper's LaTeXML markup — and gives none an affiliation: a page
      that declares affiliations has said what it has to say, and a page that

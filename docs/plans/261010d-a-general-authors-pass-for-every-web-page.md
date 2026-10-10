@@ -214,7 +214,7 @@ but a model that has to be caught is the worse one to start from, so the pass ru
 
 ## The plan review
 
-GPT Sol, read-only, 2026-10-09 ([the review](261009u-general-authors-plan-review-sol.md)), verdict
+GPT Sol, read-only, 2026-10-09 ([the review](261010d-general-authors-plan-review-sol.md)), verdict
 *revise before build*. Each finding was checked, and each one was right.
 
 | | Sev | Finding | Outcome |
@@ -226,8 +226,8 @@ GPT Sol, read-only, 2026-10-09 ([the review](261009u-general-authors-plan-review
 
 ## The code review
 
-GPT Sol, write-capable, 2026-10-09 ([the review](261009u-general-authors-code-review-sol.md), on
-[the scoped diff](261009u-general-authors-code-review.diff)), verdict *ready to push after the fixes
+GPT Sol, write-capable, 2026-10-09 ([the review](261010d-general-authors-code-review-sol.md), on
+[the scoped diff](261010d-general-authors-code-review.diff)), verdict *ready to push after the fixes
 above*. It fixed what it found, red first, and the author read the diff.
 
 | | Sev | Finding | Outcome |
@@ -267,4 +267,7 @@ above*. It fixed what it found, red first, and the author read the diff.
   the DOM it hands on. **Run 5**.
 - 2026-10-09: GPT Sol's code review, *ready to push after the fixes above*; four of its fixes kept,
   the span wrapping not (§ The code review). **Run 6** on the final code. Plan renamed from 261009t
-  to 261009u: the letter was taken on `dev` meanwhile (the Overseer noticed).
+  to 261009u, the letter having been taken on `dev` meanwhile (the Overseer noticed).
+- 2026-10-10: renamed again, 261009u → 261010d: 261009u was already the guide's next-steps plan,
+  whose unprefixed `261009u-code-review-sol.md` and `-plan-review-sol.md` could have been read as
+  this plan's (the Overseer, again).

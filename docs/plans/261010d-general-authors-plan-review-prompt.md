@@ -1,7 +1,7 @@
 You are reviewing a PLAN (and the spike code behind it) in the Spideryarn repo, read-only. Do not edit files.
 
 Read first:
-- docs/plans/261009u-a-general-authors-pass-for-every-web-page.md (the plan under review)
+- docs/plans/261010d-a-general-authors-pass-for-every-web-page.md (the plan under review)
 - docs/plans/261009m-arxiv-html-affiliations-by-the-authors-pass.md (the arXiv path this replaces, and its two reviews' findings: the swap of printed institutions, fused words, note furniture, `3M Company`)
 - docs/plans/261009d-arxiv-html-title-block-tidied-at-import.md (the title-block rewrite that stays)
 - docs/project/security-map.md (a stranger's page is untrusted; a model's output is untrusted)
