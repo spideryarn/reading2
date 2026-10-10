@@ -1,0 +1,726 @@
+diff --git a/docs/project/chat-tools.md b/docs/project/chat-tools.md
+index 93e6fef5a..a0601ed66 100644
+--- a/docs/project/chat-tools.md
++++ b/docs/project/chat-tools.md
+@@ -1040,8 +1040,13 @@ from the pinned row above the list. What makes it a guide rather than a chat:
+   reader can edit and the quick-search chip for its words; *Share this article…* goes to
+   Metadata's *Access & sharing* card and *Archive or put back…* to Metadata, the one place each is
+   done. No ⚙ line is drawn for it. **It ends the turn** (`ENDS_THE_TURN` in
+-  [`src/converse.ts`](../../src/converse.ts)) when it is all a round asked for, that round wrote
+-  prose, and the offer was accepted: the model needs nothing back, so no second request. Typed
++  [`src/converse.ts`](../../src/converse.ts)) when it is the last call of a round that wrote prose,
++  the round yielded normally to its tools rather than running out of tokens, and every call in that
++  round *settled*: the steps accepted, and any `offer_to_save` beside them
++  made or refused as already saved (`ToolOutcome.settles`). The model needs nothing back, so no
++  second request — and a second request after a finished reply is where answers came out twice, or
++  with a tail like *"I'm done with my answer above."*
++  ([261010b](../plans/261010b-next-steps-end-the-turn-even-beside-an-offer-to-save.md)). Typed
+   only, like `offer_to_save`.
+ - **Its greeting is ours**, not a model's ([`GuideGreeting.tsx`](../../src/web/GuideGreeting.tsx),
+   words chosen in [`guide-greeting.ts`](../../src/web/guide-greeting.ts)): free, and since
+diff --git a/evals/guide/offers.ts b/evals/guide/offers.ts
+index 12b4be2a8..3866f418f 100644
+--- a/evals/guide/offers.ts
++++ b/evals/guide/offers.ts
+@@ -92,6 +92,28 @@ const CASES: readonly Case[] = [
+     /* Its About you does not say "historian", so an update is fair either way. */
+     optional: ["profile"],
+   },
++  /* evals/guide/referee-offer.ts's case reason-says-referee, where one answer
++     in two came out twice (investigation 261009d): the reason is already
++     saved, so any offer is About you, and either is fair. */
++  {
++    id: "referee-reason",
++    question: "Where should I start?",
++    about: "Philosopher of mind, lecturer.",
++    why: "I've been asked to referee a longer version of this for a philosophy journal.",
++    wants: [],
++    optional: ["profile", "purpose"],
++  },
++  /* The refusal provoked: the reader says again, word for word, the reason
++     already saved, so an offer of it is refused as "already their saved
++     words" (plan 261010b). Nothing new, so nothing is wanted. */
++  {
++    id: "repeats-saved-reason",
++    question: "I've been asked to referee a longer version of this for a philosophy journal. Where should I start?",
++    about: "Philosopher of mind, lecturer.",
++    why: "I've been asked to referee a longer version of this for a philosophy journal.",
++    wants: [],
++    optional: ["profile"],
++  },
+   {
+     id: "nothing-new",
+     question: "Where should I start?",
+@@ -172,28 +194,59 @@ for (const c of CASES.filter((x) => only.length === 0 || only.includes(x.id))) {
+       async () => {
+         let text = "";
+         let tools: ToolRun[] = [];
+-        for await (const e of converse({
+-          power: "standard",
+-          meta,
+-          blocks: sent,
+-          history: [],
+-          question: c.question,
+-          slug: meta.slug,
+-          kind: "guide",
+-          profile: renderProfile({ profile: c.about, purpose: c.why }),
+-          experience: "a-few",
+-          saved: { purpose: c.why, profile: c.about },
+-          runToolWith: async (name, args, ctx) =>
+-            name === "offer_to_save"
+-              ? runTool(name, args, ctx)
+-              : { label: name, detail: "nothing found", content: "Nothing found. This is a complete answer, not an error." },
+-        })) {
+-          if (e.type === "done") {
+-            text = e.text;
+-            tools = e.tools ?? [];
++        /* The turn, round by round (one per request to OpenRouter): how much
++           prose each round wrote, and each tool it asked for with what it did,
++           "offered", "steps", or a refusal's first words. A round with the
++           reply followed by a round with more prose is the shape that wrote
++           answers twice (postmortem 261009j, plan 261010b); the length says
++           whether prose before an offer was the reply or a preamble. */
++        const rounds: { prose: number; tools: string[] }[] = [];
++        /* What each tool told the model, in call order, for the rounds. */
++        const said: string[] = [];
++        /* Every fetch during the turn is a model request: the offering tools
++           make none, every other tool is stubbed below, and spend is recorded
++           over Postgres. (Not matched on the provider's host, which would make
++           this file one tests/no-undeclared-spend.test.ts flags.) */
++        const realFetch = globalThis.fetch;
++        globalThis.fetch = (input, init) => {
++          rounds.push({ prose: 0, tools: [] });
++          return realFetch(input, init);
++        };
++        try {
++          for await (const e of converse({
++            power: "standard",
++            meta,
++            blocks: sent,
++            history: [],
++            question: c.question,
++            slug: meta.slug,
++            kind: "guide",
++            profile: renderProfile({ profile: c.about, purpose: c.why }),
++            experience: "a-few",
++            saved: { purpose: c.why, profile: c.about },
++            runToolWith: async (name, args, ctx) => {
++              const outcome =
++                name === "offer_to_save" || name === "offer_next_steps"
++                  ? await runTool(name, args, ctx)
++                  : { label: name, detail: "nothing found", content: "Nothing found. This is a complete answer, not an error." };
++              said.push(outcome.offer ? "offered" : outcome.steps ? "steps" : outcome.content.slice(0, 60));
++              return outcome;
++            },
++          })) {
++            const round = rounds.at(-1);
++            if (e.type === "delta" && round !== undefined) round.prose += e.text.trim().length;
++            if (e.type === "tool" && e.run.status !== "running") {
++              round?.tools.push(`${e.run.name}(${e.run.status === "done" ? (said.shift() ?? "?") : e.run.status})`);
++            }
++            if (e.type === "done") {
++              text = e.text;
++              tools = e.tools ?? [];
++            }
+           }
++        } finally {
++          globalThis.fetch = realFetch;
+         }
+-        return { text, tools };
++        return { text, tools, rounds };
+       },
+       { attribution: { scopeKind: "eval", ownerId: environmentOwnerId() }, sink: (row) => costStore.record(row) },
+     );
+@@ -203,15 +256,39 @@ for (const c of CASES.filter((x) => only.length === 0 || only.includes(x.id))) {
+     /* The answer written twice: every round's text is joined, and a model that
+        wrote its reply before the call can write it again after (the browser pass). */
+     const repeated = writtenTwice(result.text);
+-    const ok = !repeated && JSON.stringify(fields) === JSON.stringify([...c.wants].sort());
++    /* More prose in a round after the one that wrote the reply (300
++       characters or more): a second copy, or a tail like "I'm done with my
++       answer above." (plan 261010b). An invited "you can save it with the
++       button" counts too: the card says that itself. */
++    const replied = result.rounds.findIndex((x) => x.prose >= 300);
++    const tail = replied >= 0 && result.rounds.slice(replied + 1).some((x) => x.prose > 0);
++    const shape = result.rounds.map((x, i) => `${i + 1}:[${[...(x.prose > 0 ? [`P${x.prose}`] : []), ...x.tools].join(" ")}]`).join(" ");
++    const stepsShown = result.tools.some((t) => t.steps !== undefined);
++    /* Next steps are part of the safety claim: ending early is only sound if
++       the accepted buttons survived onto the stored run. */
++    const ok = stepsShown && !repeated && !tail && JSON.stringify(fields) === JSON.stringify([...c.wants].sort());
+     total++;
+     if (ok) pass++;
+     const scored = offers.map((o) => ({
+       ...o,
+       closeness: Number(closeness(o.text, `${c.question} ${o.field === "profile" ? (c.about ?? "") : ""}`).toFixed(2)),
+     }));
+-    rows.push({ case: c.id, run: r, ok, wants: c.wants, offers: scored, repeated, saysSaved: /\b(i've|i have) saved\b/i.test(result.text), answer: result.text });
+-    console.log(`${ok ? "✓" : "✗"} ${c.id}#${r}${repeated ? " REPEATED" : ""} offers=${JSON.stringify(scored.map((o) => [o.field, o.closeness, o.text]))}`);
++    rows.push({
++      case: c.id,
++      run: r,
++      ok,
++      wants: c.wants,
++      offers: scored,
++      repeated,
++      tail,
++      stepsShown,
++      shape,
++      saysSaved: /\b(i've|i have) saved\b/i.test(result.text),
++      answer: result.text,
++    });
++    console.log(
++      `${ok ? "✓" : "✗"} ${c.id}#${r}${repeated ? " REPEATED" : ""}${tail ? " TAIL" : ""}${stepsShown ? "" : " NO-STEPS"} ${shape} offers=${JSON.stringify(scored.map((o) => [o.field, o.closeness, o.text]))}`,
++    );
+   }
+ }
+ const out = path.join(import.meta.dirname, "results", `offers-${label}.json`);
+diff --git a/src/chat-tools.ts b/src/chat-tools.ts
+index 3a46ee36e..c2c96a243 100644
+--- a/src/chat-tools.ts
++++ b/src/chat-tools.ts
+@@ -272,6 +272,17 @@ export interface ToolOutcome {
+   offer?: SaveOffer;
+   /** `offer_next_steps`'s steps, copied onto the stored run (`ToolRun.steps`). No other tool sets it. */
+   steps?: NextStep[];
++  /**
++   * **Once the reply is written, the model needs nothing back from this
++   * result.** Set only by the two offering tools, and only on an outcome that
++   * asks nothing of the model: steps accepted, an offer made, an offer refused
++   * because the words are already saved. A refusal that asks for something
++   * ("offer a shorter one") leaves it unset, and so does a throw. `converse`
++   * ends the turn on a round that wrote prose, yielded normally to its tools,
++   * settled every call, and ended on accepted next steps (§ `ENDS_THE_TURN`;
++   * plan 261010b).
++   */
++  settles?: true;
+ }
+ 
+ /* ----------------------------------------------------------- the definitions --
+@@ -625,9 +636,10 @@ export const OFFER_TO_SAVE_TOOL: FunctionTool = {
+  * answer as buttons the reader presses (src/web/GuideNextSteps.tsx). A step
+  * that shares or archives only takes the reader to the one place that does it.
+  *
+- * **It ends the turn** when it is all a round asked for, that round wrote
+- * prose, and every offer succeeded (src/converse.ts § `ENDS_THE_TURN`): the
+- * model needs nothing back.
++ * **It ends the turn** when it is a round's last call, that round wrote prose
++ * and yielded normally to its tools, and every call in it settled — accepted
++ * steps, and any `offer_to_save` beside them made or refused as already saved (`ToolOutcome.settles`;
++ * src/converse.ts § `ENDS_THE_TURN`): the model needs nothing back.
+  *
+  * Guide only, typed only, for `offer_to_save`'s reason.
+  */
+@@ -2209,6 +2221,21 @@ async function readReaderNotes(
+   };
+ }
+ 
++/**
++ * **Said at the end of every result of the two offering tools, offered or
++ * refused.** A model that wrote its whole reply and then called one of them
++ * may still go round again (when `converse` does not end the turn: see
++ * `ToolOutcome.settles`), and the reader's answer is every round's text
++ * joined. Told nothing about the reply already shown, it wrote it again
++ * (postmortem 261009j: 9/14 to 0/14 with this sentence). It stops a rewrite,
++ * not a tail: told to stop, a model still writes "I'm done with my answer
++ * above." (plan 261010b), which is why `converse` ends the turn where it can.
++ */
++export const ALREADY_ON_SCREEN =
++  "Everything you wrote before calling this tool is already on the reader's screen, as the start of your " +
++  "answer: never write any of it again. If your reply was already complete, stop here; otherwise continue " +
++  "from where you left off.";
++
+ /**
+  * `offer_to_save`: the words checked as the store would check them, and handed
+  * back as an offer. Never a store read or write — see `OFFER_TO_SAVE_TOOL`.
+@@ -2216,10 +2243,13 @@ async function readReaderNotes(
+ function offerToSave(args: Record<string, unknown>, ctx: ToolContext): ToolOutcome {
+   const field = args.field === "reason" ? "purpose" : args.field === "about_you" ? "profile" : null;
+   const label = describeCall("offer_to_save", args);
+-  const refuse = (why: string): ToolOutcome => ({
++  /* "Say nothing about it": told only not to claim an offer, a model whose
++     reply was done went on to explain that it had not offered (plan 261010b). */
++  const refuse = (why: string, settles?: true): ToolOutcome => ({
+     label,
+     detail: "not offered",
+-    content: `Nothing was offered: ${why} Do not tell the reader you offered anything.`,
++    content: `Nothing was offered: ${why} Say nothing to the reader about offering or saving it. ${ALREADY_ON_SCREEN}`,
++    ...(settles ? { settles } : {}),
+   });
+   if (field === null) return refuse(`field must be "reason" or "about_you".`);
+   const text = typeof args.text === "string" ? normaliseProfileText(args.text) : null;
+@@ -2233,20 +2263,18 @@ function offerToSave(args: Record<string, unknown>, ctx: ToolContext): ToolOutco
+   if (basis === undefined) {
+     return refuse("what is saved now could not be read, so there is no safe value to replace.");
+   }
+-  if (basis === text) return refuse("those are already their saved words, exactly.");
++  /* The one refusal that asks nothing of the model: there is nothing to
++     offer, and nothing to do instead. The case that wrote answers twice. */
++  if (basis === text) return refuse("those are already their saved words, exactly.", true);
+   return {
+     label,
+     detail: "",
++    settles: true,
+     content:
+       "The reader now sees these words under your answer, with a button to save them. Nothing is saved " +
+       "unless they press it, so do not say it is saved: say in a few words that they can save it with " +
+       "the button under your answer. On a later turn, WHO IS READING THIS shows what is saved. " +
+-      /* Measured (plan 261009q, browser pass): a model that wrote its whole
+-         reply and then called this wrote it all again after the result, and
+-         the reader's answer is every round's text joined. */
+-      "Everything you wrote before calling this tool is already on the reader's screen, as the start of " +
+-      "your answer: never write any of it again. If your reply was already complete, stop here; otherwise " +
+-      "continue from where you left off.",
++      ALREADY_ON_SCREEN,
+     offer: { field, text, basis },
+   };
+ }
+@@ -2266,20 +2294,21 @@ function offerNextSteps(args: Record<string, unknown>): ToolOutcome {
+     return {
+       label,
+       detail: "not offered",
+-      content: `No buttons were shown.${dropped} Do not mention any button.`,
++      content: `No buttons were shown.${dropped} Do not mention any button. ${ALREADY_ON_SCREEN}`,
+     };
+   }
+   return {
+     label,
+     detail: "",
+-    /* Not "write nothing more": beside `offer_to_save`, the model still owes
+-       the reader a word about that card (GPT Sol's F2 on plan 261009u). And
+-       "accepted", not "sees": whether a mode can open here is the page's call. */
++    /* Not "write nothing more": beside an `offer_to_save` that still wants
++       an answer, the model is owed a word about that card (GPT Sol's F2 on
++       plan 261009u). And "accepted", not "sees": whether a mode can open here
++       is the page's call. */
+     content:
+       `${steps.length} next step${steps.length === 1 ? " was" : "s were"} accepted, to show as buttons under your answer.${dropped} ` +
+-      "Everything you wrote before calling this tool is already on the reader's screen: never write any of it " +
+-      "again. If your reply was complete, stop here; otherwise finish it, without mentioning these buttons again.",
++      `Do not mention these buttons. ${ALREADY_ON_SCREEN}`,
+     steps,
++    settles: true,
+   };
+ }
+ 
+diff --git a/src/converse.ts b/src/converse.ts
+index d9053aac0..576bd455d 100644
+--- a/src/converse.ts
++++ b/src/converse.ts
+@@ -260,10 +260,11 @@ export function chatCeiling(kind: ThreadKind, model: string): number {
+ export const MAX_TOOL_ROUNDS = 3;
+ 
+ /**
+- * **The tools whose result the model does not need**: when a round asks for
+- * these and nothing else, this round wrote prose, and every call succeeded,
+- * `converse` stops there rather than sending the result back for another
+- * round. Plan docs/plans/261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md.
++ * **The calls that say the reply is finished**: when a round wrote prose,
++ * yielded normally to tools, ended on one of these, and every call in it
++ * settled (`ToolOutcome.settles`), `converse` stops there rather than sending
++ * the results back for another round. Plans docs/plans/261009u-the-guide-offers-next-steps-as-buttons-and-a-press-to-start-an-action.md
++ * and docs/plans/261010b-next-steps-end-the-turn-even-beside-an-offer-to-save.md.
+  */
+ export const ENDS_THE_TURN: ReadonlySet<string> = new Set(["offer_next_steps"]);
+ 
+@@ -3504,8 +3505,10 @@ export async function* converse({
+        line at a time appear and understanding what is being done on their
+        behalf. Models here ask for one or two tools at a time, so the saving is
+        small and the legibility is not. Revisit if that stops being true. */
+-    /* Where this batch's runs start, for the turn-ending check below. */
+-    const batchStart = toolRuns.length;
++    /* Per call in this batch: whether its result asks nothing more of a model
++       whose reply is written (`ToolOutcome.settles`), for the turn-ending
++       check below. */
++    const settled: boolean[] = [];
+     for (const call of wanted) {
+       /* **Between tools, not only after them.** A model can ask for three at
+          once, and they run one at a time — so a stop landing during the first
+@@ -3586,6 +3589,7 @@ export async function* converse({
+         ...(outcome.steps ? { steps: outcome.steps } : {}),
+       };
+       toolRuns[index] = finished;
++      settled.push(!failed && outcome.settles === true);
+       yield { type: "tool", index, run: finished };
+ 
+       messages.push({ role: "tool", tool_call_id: call.id, content: outcome.content });
+@@ -3601,24 +3605,31 @@ export async function* converse({
+       break;
+     }
+ 
+-    /* **A round that wrote its reply and then asked only for its next steps,
+-       and got them, is the last round.** The model needs nothing back, and
+-       going round again costs a whole request and, measured in 261009q,
+-       sometimes a second copy of the reply. Three conditions, each GPT Sol's
+-       on plan 261009u (F1, F2):
++    /* **A round that wrote its reply and ended on its next steps, with
++       nothing asking for more, is the last round.** The model needs nothing
++       back, and going round again costs a request and gets words nobody asked
++       for: told to stop, a model writes "I'm done with my answer above.", and
++       before it was told, the reply again (postmortem 261009j, plan 261010b).
++       Four conditions, from GPT Sol's reviews of plans 261009u and 261010b:
++       - **the round yielded normally to its tools**: a `max_tokens` ending can
++         leave complete-looking calls after an unfinished sentence. The calls
++         may still run, but they are not evidence that the reply was complete;
+        - **this round's own prose**, not the turn's: a round one that said
+          "let me check…" and a round two of only the steps would otherwise end
+          on the preamble;
+-       - **only turn-ending tools**: with `offer_to_save` beside them, the model
+-         is owed that tool's answer;
+-       - **every one of them offered something**: a refused or failed offer
+-         goes back to the model, which is told no button is shown. */
+-    const offered = toolRuns.slice(batchStart);
++       - **ended on accepted next steps**: the prompt makes them the very last
++         call, after the reply is complete, so they are the model's own "done".
++         Prose beside an offer to save alone may be a preamble, and goes round;
++       - **every call settled** (`ToolOutcome.settles`): only the offering
++         tools ever do, and only when their result asks nothing — so a look-up,
++         a refused next step, an offer told to be shorter, or a throw all go
++         back to the model. */
+     if (
++      outcome.kind === "wants-tools" &&
+       roundText.trim() !== "" &&
+-      wanted.every((call) => ENDS_THE_TURN.has(call.name)) &&
+-      offered.length === wanted.length &&
+-      offered.every((run) => run.status === "done" && run.steps !== undefined)
++      ENDS_THE_TURN.has(wanted.at(-1)?.name ?? "") &&
++      settled.length === wanted.length &&
++      settled.every(Boolean)
+     ) {
+       break;
+     }
+diff --git a/tests/guide-next-steps-tool.test.ts b/tests/guide-next-steps-tool.test.ts
+index aa30569d8..f3f9087f3 100644
+--- a/tests/guide-next-steps-tool.test.ts
++++ b/tests/guide-next-steps-tool.test.ts
+@@ -6,10 +6,10 @@
+  * and `converse` ending the turn on a round that asked only for it.
+  */
+ import { afterEach, describe, expect, it, vi } from "vitest";
+-import { GUIDE_TOOLS, runTool, toolsFor } from "../src/chat-tools.js";
++import { ALREADY_ON_SCREEN, GUIDE_TOOLS, runTool, toolsFor } from "../src/chat-tools.js";
+ import { converse, type ConverseEvent } from "../src/converse.js";
+ import { checkNextSteps, MAX_ASK_CHARS } from "../src/next-steps.js";
+-import type { Block, Meta } from "../src/types.js";
++import { MAX_PURPOSE_CHARS, type Block, type Meta } from "../src/types.js";
+ 
+ const ctx = (kind: "guide" | "chat") => ({ slug: "s", kind, meta: {} as Meta, blocks: [] as Block[], power: "standard" as const });
+ const names = (tools: { function: { name: string } }[]) => tools.map((t) => t.function.name);
+@@ -46,9 +46,11 @@ describe("offer_next_steps, the tool", () => {
+       { kind: "mode", mode: "submode:summary:brief" },
+       { kind: "search", words: "attention heads" },
+     ]);
++    expect(out.settles).toBe(true);
+     expect(out.content).toMatch(/never write any of it\s+again/);
+     const actions = await runTool("offer_next_steps", { steps: [{ kind: "share" }, { kind: "archive" }] }, ctx("guide"));
+     expect(actions.steps).toEqual([{ kind: "share" }, { kind: "archive" }]);
++    expect(actions.settles).toBe(true);
+   });
+ 
+   it("drops what it cannot draw, and says so", async () => {
+@@ -66,13 +68,17 @@ describe("offer_next_steps, the tool", () => {
+       ctx("guide"),
+     );
+     expect(out.steps).toEqual([{ kind: "share" }]);
++    expect(out.settles).toBe(true);
+     expect(out.content).toMatch(/Left out/);
+   });
+ 
+   it("shows nothing when nothing is valid, and tells the model not to mention a button", async () => {
+     const out = await runTool("offer_next_steps", { steps: "share" }, ctx("guide"));
+     expect(out.steps).toBeUndefined();
++    expect(out.settles).toBeUndefined();
+     expect(out.content).toMatch(/Do not mention any button/);
++    /* Plan 261010b: refused after a written reply, the model wrote on. */
++    expect(out.content).toContain(ALREADY_ON_SCREEN);
+   });
+ 
+   it("keeps three at most, and no duplicates", () => {
+@@ -117,6 +123,24 @@ const toolCall = (name: string, args: unknown, content?: string) =>
+       },
+     ],
+   });
++/** One round asking for several tools at once, with or without words of its own. */
++const calls = (content: string | undefined, ...wanted: (readonly [string, unknown])[]) =>
++  frame({
++    model: "test/model",
++    choices: [
++      {
++        delta: {
++          ...(content === undefined ? {} : { content }),
++          tool_calls: wanted.map(([name, args], index) => ({
++            index,
++            id: `toolu_${index}`,
++            type: "function",
++            function: { name, arguments: JSON.stringify(args) },
++          })),
++        },
++      },
++    ],
++  });
+ const endsWithTools = frame({ choices: [{ finish_reason: "tool_calls", delta: {} }] });
+ const endsWithLength = frame({ choices: [{ finish_reason: "length", delta: {} }] });
+ const usage = (input: number, output: number) =>
+@@ -126,7 +150,11 @@ const answer = (text: string) => [
+   frame({ choices: [{ finish_reason: "stop", delta: {} }] }),
+ ];
+ 
+-async function run(rounds: string[][], runToolWith?: typeof runTool) {
++async function run(
++  rounds: string[][],
++  runToolWith?: typeof runTool,
++  saved: { purpose?: string | null; profile?: string | null } = { purpose: null, profile: null },
++) {
+   let n = 0;
+   const sent: Record<string, unknown>[] = [];
+   const fetch = vi.fn(async (_url: unknown, init?: RequestInit) => {
+@@ -143,7 +171,7 @@ async function run(rounds: string[][], runToolWith?: typeof runTool) {
+     question: "Where should I start?",
+     slug: "example",
+     kind: "guide",
+-    saved: { purpose: null, profile: null },
++    saved,
+     ...(runToolWith === undefined ? {} : { runToolWith }),
+   })) {
+     if (event.type === "done") done = event;
+@@ -166,18 +194,20 @@ describe("converse, when the guide offers its next steps", () => {
+     expect(done?.tools?.[0]?.steps).toEqual([{ kind: "share" }]);
+   });
+ 
+-  it("keeps the terminal round's usage and truncation verdict", async () => {
++  it("goes round after max_tokens even when a complete next-steps call was reconstructed", async () => {
+     const { requests, done } = await run([
+       [
+         toolCall("offer_next_steps", { steps: [{ kind: "share" }] }, "Start with the abstract, because"),
+         usage(123, 45),
+         endsWithLength,
+       ],
++      answer("it states the paper's main claim."),
+     ]);
+-    expect(requests).toBe(1);
++    expect(requests).toBe(2);
+     expect(done?.usage).toMatchObject({ inputTokens: 123, outputTokens: 45 });
+     expect(done?.truncated).toBe(true);
+     expect(done?.tools[0]?.steps).toEqual([{ kind: "share" }]);
++    expect(done?.text).toBe("Start with the abstract, because\n\nit states the paper's main claim.");
+   });
+ 
+   it("goes round again when the answer has no words yet", async () => {
+@@ -189,28 +219,123 @@ describe("converse, when the guide offers its next steps", () => {
+     expect(done?.text).toBe("Start with the abstract.");
+   });
+ 
+-  it("goes round again when another tool was asked for in the same round", async () => {
+-    const both = frame({
+-      model: "test/model",
+-      choices: [
+-        {
+-          delta: {
+-            content: "Start with the abstract.",
+-            tool_calls: [
+-              { index: 0, id: "toolu_a", type: "function", function: { name: "offer_next_steps", arguments: JSON.stringify({ steps: [{ kind: "share" }] }) } },
+-              { index: 1, id: "toolu_b", type: "function", function: { name: "offer_to_save", arguments: JSON.stringify({ field: "reason", text: "For a club." }) } },
+-            ],
+-          },
+-        },
++  it("goes round again when a look-up was asked for in the same round", async () => {
++    const { requests, done } = await run([
++      [
++        calls("Start with the abstract.", ["offer_next_steps", { steps: [{ kind: "share" }] }], ["search_article_words", { query: "abstract" }]),
++        endsWithTools,
+       ],
+-    });
+-    const { requests, done } = await run([[both, endsWithTools], answer("You can save it with the button.")]);
++      answer("It is the first section."),
++    ]);
+     expect(requests).toBe(2);
+-    /* Both runs survive, each carrying what its card or row is drawn from. */
+-    expect(done?.tools?.map((t) => t.name)).toEqual(["offer_next_steps", "offer_to_save"]);
+-    expect(done?.tools?.[0]?.steps).toEqual([{ kind: "share" }]);
+-    expect(done?.tools?.[1]?.offer).toMatchObject({ field: "purpose", text: "For a club." });
+-    expect(done?.text).toBe("Start with the abstract.\n\nYou can save it with the button.");
++    expect(done?.text).toBe("Start with the abstract.\n\nIt is the first section.");
++  });
++
++  /* Plan 261010b: a round that wrote the reply, offered to save and offered
++     its next steps went round again, and the round after wrote a tail ("I'm
++     done with my answer above.") or, before next steps, the reply again. The
++     accepted next steps, as the last call, are the model's own "my reply is
++     done"; every other call must have settled (`ToolOutcome.settles`). */
++  describe("beside an offer to save", () => {
++    const save = (text: string, field = "reason") => ["offer_to_save", { field, text }] as const;
++    const steps = ["offer_next_steps", { steps: [{ kind: "share" }] }] as const;
++    const refusedSteps = ["offer_next_steps", { steps: [{ kind: "publish" }] }] as const;
++    const reply = "Start with the abstract.";
++    const tail = answer("I'm done with my answer above.");
++
++    it("stops when the offer was accepted, and both runs keep what they draw from", async () => {
++      const { requests, done } = await run([[calls(reply, save("For a club."), steps), endsWithTools], tail]);
++      expect(requests).toBe(1);
++      expect(done?.tools?.map((t) => t.name)).toEqual(["offer_to_save", "offer_next_steps"]);
++      expect(done?.tools?.[0]?.offer).toMatchObject({ field: "purpose", text: "For a club." });
++      expect(done?.tools?.[1]?.steps).toEqual([{ kind: "share" }]);
++      expect(done?.tools?.every((tool) => !("settles" in tool))).toBe(true);
++      expect(done?.text).toBe(reply);
++    });
++
++    it("stops when both fields were offered", async () => {
++      const { requests, done } = await run([
++        [calls(reply, save("For a club."), save("A historian.", "about_you"), steps), endsWithTools],
++        tail,
++      ]);
++      expect(requests).toBe(1);
++      expect(done?.tools?.filter((t) => t.offer !== undefined)).toHaveLength(2);
++    });
++
++    /* The case that wrote answers twice (investigation 261009d). */
++    it("stops when the offer was refused as already saved, word for word", async () => {
++      const { requests, done } = await run([[calls(reply, save("For a club."), steps), endsWithTools], tail], undefined, {
++        purpose: "For a club.",
++        profile: null,
++      });
++      expect(requests).toBe(1);
++      expect(done?.tools?.[0]).toMatchObject({ name: "offer_to_save", detail: "not offered" });
++      expect(done?.text).toBe(reply);
++    });
++
++    it.each([
++      ["empty", save("   ")],
++      ["too long, which asks for shorter words", save("x".repeat(MAX_PURPOSE_CHARS + 1))],
++    ])("goes round again when the offer was refused as %s", async (_why, offer) => {
++      const { requests } = await run([[calls(reply, offer, steps), endsWithTools], tail]);
++      expect(requests).toBe(2);
++    });
++
++    it("goes round again when what is saved could not be read", async () => {
++      const { requests } = await run([[calls(reply, save("For a club."), steps), endsWithTools], tail], undefined, { profile: null });
++      expect(requests).toBe(2);
++    });
++
++    it("goes round again when the next steps were refused", async () => {
++      const { requests } = await run([[calls(reply, save("For a club."), refusedSteps), endsWithTools], tail]);
++      expect(requests).toBe(2);
++    });
++
++    it("goes round again when one next steps call was accepted and another refused", async () => {
++      const { requests } = await run([[calls(reply, steps, refusedSteps), endsWithTools], tail]);
++      expect(requests).toBe(2);
++    });
++
++    it("goes round again when the round did not end on its next steps", async () => {
++      const { requests } = await run([[calls(reply, steps, save("For a club.")), endsWithTools], tail]);
++      expect(requests).toBe(2);
++    });
++
++    /* GPT Sol's F2 on the first draft: prose beside an offer alone may be a
++       preamble, with the reply still to come. */
++    it("goes round again after a preamble and an offer alone", async () => {
++      const { requests, done } = await run([[calls("Let me note that.", save("For a club.")), endsWithTools], answer(reply)]);
++      expect(requests).toBe(2);
++      expect(done?.text).toBe(`Let me note that.\n\n${reply}`);
++    });
++
++    it("goes round again when the offer to save threw", async () => {
++      const { requests, done } = await run(
++        [[calls("Start with the abstract.", save("For a club."), steps), endsWithTools], answer("I could not offer to save it.")],
++        async (name, args, context) => {
++          if (name === "offer_to_save") throw new Error("test failure");
++          return runTool(name, args, context);
++        },
++      );
++      expect(requests).toBe(2);
++      expect(done?.text).toBe("Start with the abstract.\n\nI could not offer to save it.");
++    });
++
++    it("goes round again when an unknown tool was asked for", async () => {
++      const { requests, done } = await run([
++        [calls(reply, ["invented_tool", {}], steps), endsWithTools],
++        answer("I could not run that tool."),
++      ]);
++      expect(requests).toBe(2);
++      expect(done?.tools?.[0]).toMatchObject({ name: "invented_tool", detail: "no such tool" });
++      expect(done?.text).toBe(`${reply}\n\nI could not run that tool.`);
++    });
++
++    it("goes round again when the round has no words of its own", async () => {
++      const { requests, done } = await run([[calls(undefined, save("For a club."), steps), endsWithTools], answer("Start with the abstract.")]);
++      expect(requests).toBe(2);
++      expect(done?.text).toBe("Start with the abstract.");
++    });
+   });
+ 
+   /* GPT Sol's F1 on the plan: the turn's text is not this round's. */
+diff --git a/tests/guide-offer-to-save.test.ts b/tests/guide-offer-to-save.test.ts
+index 2ee457ff2..67254b64c 100644
+--- a/tests/guide-offer-to-save.test.ts
++++ b/tests/guide-offer-to-save.test.ts
+@@ -27,7 +27,7 @@ vi.mock("../src/store/index.js", async () => {
+   };
+ });
+ 
+-import { GUIDE_TOOLS, runTool, toolsFor } from "../src/chat-tools.js";
++import { ALREADY_ON_SCREEN, GUIDE_TOOLS, runTool, toolsFor } from "../src/chat-tools.js";
+ import { LIVE_SERVER_TOOLS, liveTools } from "../src/live.js";
+ import { MAX_PROFILE_CHARS, MAX_PURPOSE_CHARS, type Meta, type ThreadKind } from "../src/types.js";
+ 
+@@ -81,6 +81,7 @@ describe("what it returns", () => {
+   it("offers a reason, in our field name, normalised as the store would", async () => {
+     const out = await runTool("offer_to_save", { field: "reason", text: "  For journal club\r\nnext week  " }, ctx("guide"));
+     expect(out.offer).toEqual({ field: "purpose", text: "For journal club\nnext week", basis: null });
++    expect(out.settles).toBe(true);
+     expect(out.content).toMatch(/nothing is saved unless they press/i);
+     expect(out.label).toBe("offered to save why you're reading");
+     expect(calls.store).toEqual([]);
+@@ -89,6 +90,7 @@ describe("what it returns", () => {
+   it("offers About you", async () => {
+     const out = await runTool("offer_to_save", { field: "about_you", text: "A cognitive neuroscientist." }, ctx("guide"));
+     expect(out.offer).toEqual({ field: "profile", text: "A cognitive neuroscientist.", basis: null });
++    expect(out.settles).toBe(true);
+     expect(out.label).toBe("offered to update About you");
+   });
+ 
+@@ -102,8 +104,10 @@ describe("what it returns", () => {
+   ])("offers nothing for %s, and says why", async (_what, args) => {
+     const out = await runTool("offer_to_save", args, ctx("guide"));
+     expect(out.offer).toBeUndefined();
++    expect(out.settles).toBeUndefined();
+     expect(out.detail).toBe("not offered");
+     expect(out.content).toMatch(/nothing was offered/i);
++    expect(out.content).toContain(ALREADY_ON_SCREEN);
+   });
+ 
+   it("records what the field held when the turn read it, and refuses when it could not read it", async () => {
+@@ -114,6 +118,7 @@ describe("what it returns", () => {
+     expect(about.offer?.basis).toBe("A historian");
+     const unread = await runTool("offer_to_save", { field: "reason", text: "x" }, { ...ctx("guide"), saved: { profile: null } });
+     expect(unread.offer).toBeUndefined();
++    expect(unread.settles).toBeUndefined();
+     expect(unread.content).toMatch(/what is saved now could not be read/i);
+   });
+ 
+@@ -124,9 +129,26 @@ describe("what it returns", () => {
+       { ...ctx("guide"), saved: { purpose: "For journal club." } },
+     );
+     expect(out.offer).toBeUndefined();
++    expect(out.settles).toBe(true);
+     expect(out.content).toMatch(/already their saved words/);
+   });
+ 
++  /* Plan 261010b: the model that wrote its reply and then offered was refused
++     with no word about the reply already on screen, and went on to write more:
++     a second copy (investigation 261009d), or a stray line about the refusal. */
++  it("tells the model, offered or refused, that what it already wrote is on screen", async () => {
++    const saved = { ...ctx("guide"), saved: { purpose: "For journal club.", profile: null } };
++    const outcomes = await Promise.all([
++      runTool("offer_to_save", { field: "about_you", text: "A historian of science." }, saved),
++      runTool("offer_to_save", { field: "reason", text: "For journal club." }, saved),
++      runTool("offer_to_save", { field: "reason", text: "x" }, { ...ctx("guide"), saved: { profile: null } }),
++    ]);
++    expect(outcomes.map((o) => o.offer === undefined)).toEqual([false, true, true]);
++    /* Offered, or nothing to offer, asks nothing more; "could not read" does. */
++    expect(outcomes.map((o) => o.settles)).toEqual([true, true, undefined]);
++    for (const o of outcomes) expect(o.content).toContain(ALREADY_ON_SCREEN);
++  });
++
+   it("takes text exactly at the cap", async () => {
+     const out = await runTool("offer_to_save", { field: "reason", text: "x".repeat(MAX_PURPOSE_CHARS) }, ctx("guide"));
+     expect(out.offer?.text).toHaveLength(MAX_PURPOSE_CHARS);

@@ -953,14 +953,20 @@ prompt.
   `[cmd:mode:mode%3Aglossary]`, `[cmd:mode:submode%3Alearn%3Atutorial]` — opens a mode or a
   sub-mode. **A mode key is resolved against what the reader can open here now**, at the draw and
   at the press: the Dock's reachable set and its sub-mode rows (`modeDoor` in
-  [`command-runners.ts`](../../src/web/command-runners.ts), built by the reading view from
-  `visibleModes` and `subModeRows`), never the whole catalogue. The Dock keeps an experimental
+  [`command-runners.ts`](../../src/web/command-runners.ts), whose rows are
+  [`chip-door.ts`](../../src/web/chip-door.ts) § `chipDoorRows`, from `visibleModes` and
+  `subModeRows`), never the whole catalogue. The Dock keeps an experimental
   mode already open visible as a way out after the switch is turned off; the proposal set
   deliberately removes that escape hatch, and retained experimental sub-modes, so a mode behind
-  the switch or one this page does not draw is no button. Its `generates` marker is the mode's own
+  the switch or one this page does not draw is no button. **One exception, in a guide thread
+  only** (since 2026-10-09): the guide's door (`guideDoorRows`, handed over by `ChatCommandsFor`
+  in CommandChip.tsx) adds the modes in `OFFERED_BEHIND_THE_SWITCH`, today Referee and its
+  sub-modes, which the guide may offer a reader who says they are refereeing, always as a press
+  ([referee-mode.md § Who the guide offers it to](referee-mode.md#who-the-guide-offers-it-to-since-2026-10-09)). Its `generates` marker is the mode's own
   (`modeGenerates` / `subModeGenerates`; `RISK` says `per-mode`), and the press is the Dock's own
   activator (`useActivateMode`), so it arms what the bar's row arms. Chat's prompt is shown the
-  key's shape and a few examples; the guide's carries every ordinary mode with its token beside it
+  key's shape and a few examples; the guide's carries every ordinary mode with its token beside it, and those offered from behind
+  the switch with theirs and who they are for
   ([`src/guide.ts`](../../src/guide.ts) § `modeWordsSection`). There is no `purpose` button (the plan's F5): the
   guide offers the reason and About you through its own tool instead, `offer_to_save`, drawn as a
   card the reader presses (§ The guide, below).
@@ -1040,8 +1046,13 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   reader can edit and the quick-search chip for its words; *Share this article…* goes to
   Metadata's *Access & sharing* card and *Archive or put back…* to Metadata, the one place each is
   done. No ⚙ line is drawn for it. **It ends the turn** (`ENDS_THE_TURN` in
-  [`src/converse.ts`](../../src/converse.ts)) when it is all a round asked for, that round wrote
-  prose, and the offer was accepted: the model needs nothing back, so no second request. Typed
+  [`src/converse.ts`](../../src/converse.ts)) when it is the last call of a round that wrote prose,
+  the round yielded normally to its tools rather than running out of tokens, and every call in that
+  round *settled*: the steps accepted, and any `offer_to_save` beside them
+  made or refused as already saved (`ToolOutcome.settles`). The model needs nothing back, so no
+  second request — and a second request after a finished reply is where answers came out twice, or
+  with a tail like *"I'm done with my answer above."*
+  ([261010b](../plans/261010b-next-steps-end-the-turn-even-beside-an-offer-to-save.md)). Typed
   only, like `offer_to_save`.
 - **Its greeting is ours**, not a model's ([`GuideGreeting.tsx`](../../src/web/GuideGreeting.tsx),
   words chosen in [`guide-greeting.ts`](../../src/web/guide-greeting.ts)): free, and since

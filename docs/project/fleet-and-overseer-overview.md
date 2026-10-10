@@ -53,6 +53,7 @@ against it.
 | know what a file under `~/.overseer/` is | [overseer-direction.md § The seam is a file](overseer-direction.md#the-seam-is-a-file-not-a-function-overseercurrentjson) and [§ The store](overseer-direction.md#the-store) |
 | act as the Overseer, or learn what it may and may not do | [overseer.md](overseer.md): [§ The gates](overseer.md#the-gates), [§ The standing jobs](overseer.md#the-standing-jobs), [§ The tick](overseer.md#the-tick), [§ Things that will catch you](overseer.md#things-that-will-catch-you) |
 | steer a session, or restart the dashboard safely | [overseer.md § Steering, and the actions you have](overseer.md#steering-and-the-actions-you-have) |
+| send the Overseer or a session a line from the laptop (`gjd-remote tell`) | [hetzner-remote-server-box.md § Sending a session a line from the laptop](hetzner-remote-server-box.md#sending-a-session-a-line-from-the-laptop) |
 | get something deployed | [overseer.md § Deploying](overseer.md#deploying) |
 | start an agent from the Overseer | [overseer.md § Dispatching agents](overseer.md#dispatching-agents) |
 | see what work is approved but deferred | [overseer-queue.md](overseer-queue.md) |

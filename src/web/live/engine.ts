@@ -1,9 +1,11 @@
 /**
  * **Which of the two live-conversation engines a call uses.**
  *
- * Realtime (one model listens and answers) and GPT-Live (a voice with a second
- * model behind it) are built side by side to be compared, and one will be
- * deleted. docs/plans/261003a-gpt-live-alongside-realtime-for-live-conversation.md
+ * GPT-Live (a voice with a second model behind it) is every reader's; Realtime
+ * (one model listens and answers) is offered beside it only with Experimental
+ * features on (Greg, 2026-10-09, report spya-t858ug; plan 261010a). They were
+ * built side by side to be compared, and one will be deleted.
+ * docs/plans/261003a-gpt-live-alongside-realtime-for-live-conversation.md
  * § The engine is pinned to the call.
  *
  * Three things, kept apart, because folding any two together is a bug:
@@ -11,9 +13,9 @@
  * 1. **The remembered preference**: what the reader last chose in the Live
  *    control, in this browser. `null` until they have chosen.
  * 2. **The effective engine**: what the next start would use. The preference
- *    (or the default) while Experimental features are on; Realtime while they
- *    are off, whatever was chosen. A reader with the switch off sees no choice
- *    and gets what every reader gets.
+ *    (or the default) while Experimental features are on; the default while
+ *    they are off, whatever was chosen. A reader with the switch off sees no
+ *    choice and gets what every reader gets.
  * 3. **The owner**: the engine of the call in progress, from its start until
  *    its hang-up has finished. It does not move when the other two do.
  *    `./useLive.ts` holds the two hooks and applies these rules.
@@ -27,25 +29,31 @@ import type { LiveEngine } from "../../types.js";
 import type { LivePhase } from "./useLiveConversation.js";
 
 /**
- * **The engine a reader with Experimental on gets before they have chosen.**
+ * **The engine every reader gets**: always with Experimental off, and with it
+ * on until they choose the other one.
  *
- * Realtime until GPT-Live has passed its real-browser check; then this one
- * constant flips to `"gpt-live"`, so the comparison happens without anybody
- * hunting for a setting (the plan's Stage 4, Sol F9).
+ * Realtime until 2026-10-10, when Greg made GPT-Live the default: *"Let's make
+ * Live the default and keep real-time only for Experimental Features"*
+ * (spya-t858ug). That answered the question the 261002r spike had left open —
+ * GPT-Live's article answers measured about two seconds slower — and the
+ * trade-off is written down in plan 261010a.
  */
-export const DEFAULT_EXPERIMENTAL_ENGINE: LiveEngine = "realtime";
+export const DEFAULT_ENGINE: LiveEngine = "gpt-live";
 
 /** One key, holding the engine's name. */
 export const ENGINE_KEY = "spya.live.engine";
 
 /** What each engine is called in the control, and the one line that says what it is. */
 export const ENGINE_COPY: Record<LiveEngine, { label: string; tip: string }> = {
-  realtime: { label: "Realtime", tip: "One model listens and answers" },
   "gpt-live": {
-    label: "GPT-Live (new)",
+    label: "GPT-Live",
     tip: "A voice that keeps listening while a second model checks the article",
   },
+  realtime: { label: "Realtime", tip: "One model listens and answers" },
 };
+
+/** The order the control lists them in: the default first. */
+export const ENGINE_ORDER: readonly LiveEngine[] = ["gpt-live", "realtime"];
 
 /** A stored value as an engine, or `null` for anything that is not one. */
 export function parseEngine(raw: string | null): LiveEngine | null {
@@ -54,8 +62,8 @@ export function parseEngine(raw: string | null): LiveEngine | null {
 
 /** What the next start would use. */
 export function effectiveEngine(preference: LiveEngine | null, experimentalOn: boolean): LiveEngine {
-  if (!experimentalOn) return "realtime";
-  return preference ?? DEFAULT_EXPERIMENTAL_ENGINE;
+  if (!experimentalOn) return DEFAULT_ENGINE;
+  return preference ?? DEFAULT_ENGINE;
 }
 
 /**

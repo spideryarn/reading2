@@ -52,6 +52,9 @@ let events: string[] = [];
 let host: HTMLDivElement;
 let root: Root;
 
+/** What a Realtime call has once it has resolved where the microphone is. */
+const REALTIME_PLACEMENT = { placement: "laptop", from: "default", label: null } as const;
+
 /** A live session that takes a controllable amount of time to hang up. */
 function fakeLive(phase: LiveApi["phase"]): { api: LiveApi; finish: () => void } {
   let release!: () => void;
@@ -394,6 +397,7 @@ describe("the live session in the shipping chat composer", () => {
     });
     try {
       const { api } = fakeLive("live");
+      api.placement = REALTIME_PLACEMENT;
       paint(api);
       await act(async () => { await Promise.resolve(); });
       expect(host.querySelectorAll(".chat-live select"), "a setting is still beside the Live button").toHaveLength(0);
@@ -411,6 +415,7 @@ describe("the live session in the shipping chat composer", () => {
 
   it("changing noise reduction during a call saves and reconnects, and is remembered", async () => {
     const { api } = fakeLive("live");
+    api.placement = REALTIME_PLACEMENT;
     paint(api);
     const noise = host.querySelector<HTMLSelectElement>('select[aria-label="Noise reduction"]');
     act(() => {
@@ -422,6 +427,31 @@ describe("the live session in the shipping chat composer", () => {
        failed save. */
     expect(events).toEqual(["reconnect"]);
     expect(window.localStorage.getItem("spya.live.micPlacement")).toBe("headset");
+  });
+
+  it("offers no noise reduction on an engine without it (GPT-Live), only the microphone", () => {
+    /* `placement: null` for the whole call is GPT-Live's answer
+       (useGptLive.ts § What `LiveApi` asks for). Plan 261010a, Sol's P3. */
+    const { api } = fakeLive("live");
+    paint(api);
+    const advanced = host.querySelector<HTMLDetailsElement>(".chat-live-advanced");
+    expect(advanced).not.toBeNull();
+    expect(advanced?.querySelector('select[aria-label="Noise reduction"]')).toBeNull();
+    expect(advanced?.textContent).toContain("Changing the microphone during a call");
+  });
+
+  it("waits for Realtime's placement to resolve before offering its noise reduction setting", () => {
+    /* Realtime begins `connecting` with null, then resolves placement before it
+       asks for a ticket. The setting is disabled throughout that short window,
+       so hiding it is not hiding an available action. */
+    const { api } = fakeLive("connecting");
+    paint(api);
+    expect(host.querySelector('select[aria-label="Noise reduction"]')).toBeNull();
+
+    paint({ ...api, placement: REALTIME_PLACEMENT });
+    const noise = host.querySelector<HTMLSelectElement>('select[aria-label="Noise reduction"]');
+    expect(noise).not.toBeNull();
+    expect(noise?.disabled).toBe(true);
   });
 
   it("shows the live words in the thread itself, as chat turns, with no separate transcript", () => {

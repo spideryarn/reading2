@@ -75,3 +75,7 @@ evals/results/thinking-effort-*/**/*.png
 # future src/…/uploads/ that is real code.
 # docs/project/hetzner-remote-server-box.md
 /uploads/
+
+# Marketing outreach lists: named people to contact, with frank notes. Kept out of the public
+# repo on purpose (Greg, 2026-10-09). docs/project/marketing-overview.md says what is in here.
+/outreach-private/
