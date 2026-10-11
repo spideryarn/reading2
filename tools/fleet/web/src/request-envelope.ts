@@ -288,7 +288,7 @@ const STATES: readonly ReceiptSummary["state"][] = [
 ];
 const ACTOR_KINDS: readonly ReceiptSummary["actor"]["kind"][] = ["client-claimed", "unattributed-http", "system"];
 /** Exhaustive by construction, as receipt-journal.ts's: a new `Speaker` arm does not compile until it is named here. */
-const SPEAKER_SET: Record<Speaker, true> = { greg: true, overseer: true, dashboard: true, box: true };
+const SPEAKER_SET: Record<Speaker, true> = { greg: true, overseer: true, dashboard: true, box: true, agent: true };
 const SPEAKERS: readonly string[] = Object.keys(SPEAKER_SET);
 const DISPOSITIONS: readonly string[] = ["lease-abandoned", "operator-confirmed", "abandoned-unknown"];
 

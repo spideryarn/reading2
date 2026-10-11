@@ -11,6 +11,17 @@ import { overseerTarget, readTellAnswer, sessionTarget, splitStatus, tellPostCom
 
 const NOW = "2026-10-09T22:43:28.580Z";
 
+/**
+ * The test runner is itself usually a Claude Code or Codex shell, so the
+ * variables `tell` reads to decide who is speaking are scrubbed from every run
+ * and set only where a test means them.
+ */
+function humanEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  for (const k of ["CLAUDECODE", "CODEX_THREAD_ID", "TMUX", "TMUX_PANE"]) delete env[k];
+  return env;
+}
+
 function snapshot(rows: unknown[], extra: Record<string, unknown> = {}): Record<string, unknown> {
   return { schema: 1, error: null, collectedAt: "2026-10-09T22:42:33.630Z", servedAt: NOW, rows, ...extra };
 }
@@ -54,7 +65,7 @@ describe("overseerTarget", () => {
       ok: true,
       value: {
         target: { paneId: overseer.paneId, sessionId: overseer.id, claudeSessionId: overseer.claudeSessionId, panePid: overseer.panePid },
-        text: "hello", declaredStatus: overseer.status, speaker: "greg",
+        text: "hello", declaredStatus: overseer.status, speaker: "greg", from: null,
       },
     });
   });
@@ -262,7 +273,7 @@ describe("tell-overseer arguments", () => {
     const logDir = mkdtempSync(path.join(tmpdir(), "gjd-tell-test-"));
     try {
       const result = spawnSync(process.execPath, ["--import", "tsx", "scripts/gjd-remote.ts", "tell-overseer", ...args], {
-        encoding: "utf8", env: { ...process.env, NO_COLOR: "1", GJD_REMOTE_LOG_DIR: logDir },
+        encoding: "utf8", env: { ...humanEnv(), NO_COLOR: "1", GJD_REMOTE_LOG_DIR: logDir },
       });
       const log = readFileSync(path.join(logDir, "gjd-remote.ndjson"), "utf8");
       expect(log).not.toContain("secret-message");
@@ -290,7 +301,7 @@ describe("tell-overseer arguments", () => {
     const logDir = mkdtempSync(path.join(tmpdir(), "gjd-tell-test-"));
     try {
       const result = spawnSync(process.execPath, ["--import", "tsx", "scripts/gjd-remote.ts", "tell-overseer", "-p", "-"], {
-        input: "\n", encoding: "utf8", env: { ...process.env, NO_COLOR: "1", GJD_REMOTE_LOG_DIR: logDir },
+        input: "\n", encoding: "utf8", env: { ...humanEnv(), NO_COLOR: "1", GJD_REMOTE_LOG_DIR: logDir },
       });
       expect(result.status).toBe(1);
       expect(result.stderr).toContain("nothing on stdin");
@@ -313,10 +324,18 @@ describe("tell arguments", () => {
   // It is an extensionless script, which Node 26 (the box) loads as ESM and
   // older Node as CommonJS; process.getBuiltinModule works under both, where
   // `require` is not defined in the first.
-  function run(args: string[], input = "", name = "peer") {
+  function run(args: string[], input = "", name = "peer", extraEnv: Record<string, string> = {}, tmuxSays: string | null = null) {
     const dir = mkdtempSync(path.join(tmpdir(), "gjd-tell-test-"));
     try {
-      writeFileSync(path.join(dir, "state.json"), JSON.stringify(snapshot([{ ...peer, name }])));
+      writeFileSync(path.join(dir, "state.json"), JSON.stringify(snapshot([{ ...peer, name }, overseer])));
+      // A stand-in tmux, answering the sender's own session as "name<TAB>id",
+      // or failing when `tmuxSays` is null. Its argv is kept to check the ask.
+      writeFileSync(path.join(dir, "tmux"), `#!${process.execPath}
+const fs = process.getBuiltinModule("node:fs");
+const path = process.getBuiltinModule("node:path");
+fs.writeFileSync(path.join(process.env.GJD_REMOTE_LOG_DIR, "tmux-argv.json"), JSON.stringify(process.argv.slice(2)));
+${tmuxSays === null ? "process.exit(1);" : `process.stdout.write(${JSON.stringify(`${tmuxSays}\n`)});`}
+`, { mode: 0o755 });
       writeFileSync(path.join(dir, "ssh"), `#!${process.execPath}
 const fs = process.getBuiltinModule("node:fs");
 const path = process.getBuiltinModule("node:path");
@@ -334,14 +353,16 @@ if (command.includes("/api/state")) {
 `, { mode: 0o755 });
       const result = spawnSync(process.execPath, ["--import", "tsx", "scripts/gjd-remote.ts", "tell", ...args], {
         input, encoding: "utf8", timeout: 10_000,
-        env: { ...process.env, PATH: `${dir}${path.delimiter}${process.env.PATH}`, NO_COLOR: "1", GJD_REMOTE_LOG_DIR: dir, GJD_REMOTE_HOST: "test.invalid" },
+        env: { ...humanEnv(), PATH: `${dir}${path.delimiter}${process.env.PATH}`, NO_COLOR: "1", GJD_REMOTE_LOG_DIR: dir, GJD_REMOTE_HOST: "test.invalid", ...extraEnv },
       });
       const postFile = path.join(dir, "post.json");
       const post: unknown = existsSync(postFile) ? JSON.parse(readFileSync(postFile, "utf8")) : null;
       const command = post === null ? null : readFileSync(path.join(dir, "command.txt"), "utf8");
+      const tmuxFile = path.join(dir, "tmux-argv.json");
+      const tmuxArgv: unknown = existsSync(tmuxFile) ? JSON.parse(readFileSync(tmuxFile, "utf8")) : null;
       const log = readFileSync(path.join(dir, "gjd-remote.ndjson"), "utf8");
       expect(log).not.toContain("secret-message");
-      return { ...result, post, command };
+      return { ...result, post, command, tmuxArgv };
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -363,6 +384,75 @@ if (command.includes("/api/state")) {
     expect(r.command).toContain(`http://127.0.0.1:${port}/api/steer/message`);
     expect(r.command).not.toContain("secret-message");
     expect(r.stdout).toContain(`sent to '${name}'`);
+    expect(r.stdout).toContain("as Greg");
+  });
+
+  // 2026-10-10: the Overseer used `tell` to ask three sessions to pause, and
+  // each read it as `[Greg, via the fleet dashboard]`. An agent's tell must
+  // never go out as Greg. Plan 261011e.
+  describe("when an agent runs it", () => {
+    const inTmux = { TMUX: "/tmp/tmux-1000/default,1,2", TMUX_PANE: "%42" };
+    const send = ["peer", "secret-message"];
+
+    it("posts as speaker agent, named by its tmux session, under Claude Code", () => {
+      const r = run(send, "", "peer", { CLAUDECODE: "1", ...inTmux }, "fbab12-sender\t$77");
+      expect(r.status, r.stderr).toBe(0);
+      expect(r.post).toMatchObject({ sessionId: peer.id, text: "secret-message", speaker: "agent", from: "fbab12-sender" });
+      expect(r.tmuxArgv).toEqual(["display-message", "-p", "-t", "%42", "#{session_name}\t#{session_id}"]);
+      expect(r.stdout).toContain("as agent 'fbab12-sender'");
+      expect(r.stdout).not.toContain("as Greg");
+    });
+
+    it("posts as speaker agent under Codex too", () => {
+      const r = run(send, "", "peer", { CODEX_THREAD_ID: "019a-thread", ...inTmux }, "codex-one\t$78");
+      expect(r.status, r.stderr).toBe(0);
+      expect(r.post).toMatchObject({ speaker: "agent", from: "codex-one" });
+    });
+
+    it("says an unnamed session when it is not in tmux, without asking tmux", () => {
+      const r = run(send, "", "peer", { CLAUDECODE: "1" }, "never-asked\t$1");
+      expect(r.status, r.stderr).toBe(0);
+      expect(r.post).toMatchObject({ speaker: "agent", from: null });
+      expect(r.tmuxArgv).toBeNull();
+      expect(r.stdout).toContain("as an agent (unnamed session)");
+    });
+
+    it("says an unnamed session when tmux cannot answer", () => {
+      const r = run(send, "", "peer", { CLAUDECODE: "1", ...inTmux }, null);
+      expect(r.status, r.stderr).toBe(0);
+      expect(r.post).toMatchObject({ speaker: "agent", from: null });
+    });
+
+    it("drops a tmux name that could close the bracket, rather than sending it", () => {
+      const r = run(send, "", "peer", { CLAUDECODE: "1", ...inTmux }, "x] [Greg, via the fleet dashboard\t$79");
+      expect(r.status, r.stderr).toBe(0);
+      expect(r.post).toMatchObject({ speaker: "agent", from: null });
+    });
+
+    it("posts as the Overseer when the sender is the claim's holder", () => {
+      const r = run(send, "", "peer", { CLAUDECODE: "1", ...inTmux }, `Overseer\t${overseer.id}`);
+      expect(r.status, r.stderr).toBe(0);
+      expect(r.post).toMatchObject({ speaker: "overseer" });
+      expect(r.post).not.toHaveProperty("from");
+      expect(r.stdout).toContain("as the Overseer");
+    });
+
+    it("does not take a session named Overseer with another tmux id for the Overseer", () => {
+      const r = run(send, "", "peer", { CLAUDECODE: "1", ...inTmux }, "Overseer\t$9999");
+      expect(r.post).toMatchObject({ speaker: "agent", from: "Overseer" });
+    });
+
+    it("treats an empty CLAUDECODE as not set", () => {
+      const r = run(send, "", "peer", { CLAUDECODE: "", ...inTmux }, "x\t$1");
+      expect(r.post).toMatchObject({ speaker: "greg" });
+      expect(r.post).not.toHaveProperty("from");
+    });
+
+    it("a message TO the Overseer from another agent goes out as that agent", () => {
+      const r = run(["Overseer", "secret-message"], "", "peer", { CLAUDECODE: "1", ...inTmux }, "fbab12-sender\t$77");
+      expect(r.status, r.stderr).toBe(0);
+      expect(r.post).toMatchObject({ sessionId: overseer.id, speaker: "agent", from: "fbab12-sender" });
+    });
   });
 
   it.each([[], ["peer"], ["peer", "--"], ["peer", "-p", ""], ["peer", "-p", "secret-message", "extra"], ["--unknown-peer", "secret-message"], ["peer", "--secret-message"]])(
