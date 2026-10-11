@@ -38,7 +38,7 @@ import {
   type AuthorGiftStatus,
   type AuthorLookupOutcome,
 } from "../admin-author-gifts.js";
-import { RECIPIENT_NAME_MAX, cleanRecipientName } from "../admin-vouchers.js";
+import { RECIPIENT_NAME_MAX, cleanRecipientName, starterOwnerOf } from "../admin-vouchers.js";
 import { getDb } from "../db/client.js";
 import { articleRevisions, articles, authorGifts, authorLookups, billingVouchers } from "../db/schema.js";
 import { isSlug } from "../ingest.js";
@@ -640,10 +640,18 @@ export async function listAuthorGifts(): Promise<AdminAuthorGift[]> {
          Asked of the key's timestamp, never the key (261010r § D2). */
       linkable: sql<boolean>`coalesce(${articles.visibility} = 'public' or ${articles.shareTokenAt} is not null, false)`,
       voucherExists: VOUCHER_EXISTS,
+      /* Whose the article is now, against the voucher's creator and claimant,
+         for *Now theirs* (plan 261011n § D3). By the article's id, never the
+         administrator's shelf: an article the claim moved is no longer on it,
+         and its title still shows here — it was theirs, and they gave it. */
+      articleOwner: articles.ownerId,
+      voucherCreatedBy: billingVouchers.createdBy,
+      voucherClaimedBy: billingVouchers.claimedBy,
     })
     .from(authorGifts)
     .leftJoin(articles, eq(articles.id, authorGifts.articleId))
     .leftJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
+    .leftJoin(billingVouchers, eq(billingVouchers.id, authorGifts.voucherId))
     .orderBy(desc(authorGifts.createdAt), desc(authorGifts.id));
   if (gifts.length === 0) return [];
 
@@ -681,8 +689,15 @@ export async function listAuthorGifts(): Promise<AdminAuthorGift[]> {
     byGift.set(l.authorGiftId, [...(byGift.get(l.authorGiftId) ?? []), wire]);
   }
 
-  return gifts.map(({ gift, title, articleThere, linkable, voucherExists }) => {
+  return gifts.map(({ gift, title, articleThere, linkable, voucherExists, articleOwner, voucherCreatedBy, voucherClaimedBy }) => {
     const status = statusOf({ ...gift, voucherExists });
+    const owner =
+      status === "sent" && voucherCreatedBy !== null
+        ? starterOwnerOf(articleThere === null ? null : articleOwner, {
+            createdBy: voucherCreatedBy,
+            claimedBy: voucherClaimedBy,
+          })
+        : null;
     return {
       id: gift.id,
       status,
@@ -690,6 +705,7 @@ export async function listAuthorGifts(): Promise<AdminAuthorGift[]> {
         slug: gift.starterSlug,
         title: articleThere === null ? null : (title ?? gift.starterSlug),
         linkable: articleThere !== null && linkable === true,
+        owner,
       },
       email: gift.email,
       recipientName: gift.recipientName,

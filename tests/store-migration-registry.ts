@@ -2881,6 +2881,14 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* Plan 261010c, stage 2: its own scratch article, a gift and lookups on it,
      and the ledger rows a fake call writes under the lookup's run id. */
   "tests/author-lookup-start.test.ts": "private-postgres",
+  /* 261011n: an article passing between accounts. The author gifts' shape — its
+     own stem, owners and articles minted per run, the Auth lookup and listing
+     replaced — plus the `information_schema` scan, which reads only the schema. */
+  "tests/article-transfer.test.ts": "private-postgres",
+  /* 261011n § D3: a voucher's claim moving its starter. The same shape — its
+     own stem, owners, articles and vouchers minted per run, the Auth lookup
+     replaced, the creator's notice not queued. */
+  "tests/claim-starter-article.test.ts": "private-postgres",
   "tests/blocks-baseline.test.ts": "private-postgres",
   "tests/candidates-route.test.ts": "private-postgres",
   "tests/chat-anchor.test.ts": "private-postgres",

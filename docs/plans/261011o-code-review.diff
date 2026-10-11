@@ -1,0 +1,1069 @@
+diff --git a/src/pipeline.ts b/src/pipeline.ts
+index 3f48163fc..815c2d34d 100644
+--- a/src/pipeline.ts
++++ b/src/pipeline.ts
+@@ -4746,7 +4746,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
+      so a re-run replaces them. */
+   relations: {
+     name: "relations",
+-    label: "Reading how the paragraphs connect",
++    label: "Reading how the paragraphs connect, and writing a few margin notes",
+     produces: ["relations"],
+     /** The rendered article prefix and ordered eligible paragraph pairs — the
+      * exact dynamic request input `generateRelations` hashes too. No profile. */
+diff --git a/src/plain-words.ts b/src/plain-words.ts
+index 61ca54adf..46a1b0bb5 100644
+--- a/src/plain-words.ts
++++ b/src/plain-words.ts
+@@ -118,8 +118,6 @@ export const PLAIN_WORDS_EXEMPT: Record<string, string> = {
+     "writes a number, the number of a page, and words copied from that page verbatim; the code stores the page's characters, not the model's",
+   "src/crossrefs.ts":
+     "writes two block ids and a phrase copied from the article, and the code stores the article's characters, not the model's",
+-  "src/relations.ts":
+-    "writes a block id and one of ten fixed words per paragraph; the words a reader sees for them are the app's own",
+   "src/pdf-read.ts": "transcribes a PDF verbatim; a transcriber told to prefer common words is invited to tidy",
+   "src/command-pick-call.ts":
+     "picks one of the command bar's own rows, then copies words out of the reader's sentence verbatim; neither call writes prose",
+diff --git a/src/relations.ts b/src/relations.ts
+index c13940edb..b9d2459d5 100644
+--- a/src/relations.ts
++++ b/src/relations.ts
+@@ -62,8 +62,14 @@ import {
+ } from "./source-hash.js";
+ import { budgetFor } from "./token-budget.js";
+ import { paperwork } from "./paperwork.js";
++import { plainWords } from "./plain-words.js";
++import { findQuote } from "./quote-match.js";
+ import {
++  MARGIN_NOTE_KINDS,
+   RELATIONS,
++  type MarginNote,
++  type MarginNoteKind,
++  type MarginNotesDropped,
+   type Block,
+   type BlockId,
+   type Meta,
+@@ -76,7 +82,7 @@ import {
+ export type { Relation, Relations, RelationsDropped } from "./types.js";
+ 
+ /** Bumped whenever the prompt changes what a relation *is*, or which paragraphs are asked about. */
+-export const PROMPT_VERSION = "relations/2";
++export const PROMPT_VERSION = "relations/3";
+ 
+ /**
+  * A sentence's worth: fewer words than this is a heading, a date or a byline.
+@@ -127,8 +133,14 @@ export function eligibleParagraphs(
+  * not degrade: it throws `truncationFailure` and loses the pass.
+  */
+ export const TOKENS_PER_PARAGRAPH = 30;
++/**
++ * One note at its longest: two ids, a kind, `NOTE_MAX_WORDS` of note and two
++ * quotes of up to `NOTE_MAX_QUOTE_CHARS` each, counted generously (GPT Sol on
++ * the plan, P1-1: a budget sized for the words alone truncates a full answer).
++ */
++export const TOKENS_PER_NOTE = 300;
+ export function answerTokens(paragraphs: number): number {
+-  return 200 + paragraphs * TOKENS_PER_PARAGRAPH;
++  return 200 + paragraphs * TOKENS_PER_PARAGRAPH + noteCap(paragraphs) * TOKENS_PER_NOTE;
+ }
+ 
+ /**
+@@ -250,6 +262,126 @@ export function toRelations(
+   return { relations, dropped };
+ }
+ 
++/* ------------------------------------------------------------------ notes --
++   **A few notes the model chose to write** — Greg, 2026-10-11 (spya-qyuet0):
++   *"give the LLM just a bit more freedom … explain things that would otherwise
++   be confusing … highlight really important cross-references, especially if
++   there's an inconsistency"*. Plan 261011o. Extra to the relation words, not
++   part of their contract: a bad note is dropped and counted, never fails the
++   run, and none at all is a real answer. */
++
++/**
++ * A note longer than this is dropped. The prompt asks for at most 25 words;
++ * the slack is for a model that runs a little over, not for a paragraph.
++ */
++export const NOTE_MAX_WORDS = 35;
++
++/** A quote longer than this is not a quote of the words a note is about. FAQ's limit (src/faq.ts). */
++export const NOTE_MAX_QUOTE_CHARS = 300;
++
++/**
++ * **How many notes an article may have**: one per eight paragraphs asked
++ * about, at least two and at most eight. The user message says the number;
++ * this keeps it, after every other rule, in the model's order, which the
++ * prompt makes most valuable first. Sparing is the point (*"We don't want to
++ * overdo it"*): the cap is a ceiling the prompt says need not be reached.
++ */
++export function noteCap(paragraphs: number): number {
++  return Math.min(8, Math.max(2, Math.ceil(paragraphs / 8)));
++}
++
++/** Kinds that must name the other passage; `explain` must not; `aside` may. */
++const NEEDS_TARGET: ReadonlySet<MarginNoteKind> = new Set(["recall", "tension"]);
++const NO_TARGET: ReadonlySet<MarginNoteKind> = new Set(["explain"]);
++const NOTE_KIND_SET: ReadonlySet<string> = new Set(MARGIN_NOTE_KINDS);
++
++export function emptyNotesDropped(): MarginNotesDropped {
++  return { malformed: 0, unknown: 0, offList: 0, badTarget: 0, unquoted: 0, badText: 0, repeated: 0, overCap: 0 };
++}
++
++const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
++
++/** The article's characters for `typed` in `block`, or null: the quote must be there, spacing and all. */
++function located(block: Pick<Block, "text">, typed: string): string | null {
++  const span = findQuote(block.text, typed, undefined, "spaced");
++  if (!span || span.end - span.start > NOTE_MAX_QUOTE_CHARS) return null;
++  return block.text.slice(span.start, span.end);
++}
++
++/**
++ * Turn what the model said into notes, believing as little as possible. Pure.
++ *
++ * `body` is every passage of the article's body (`isBodyEvidence`), which is
++ * what the model was shown; a note may sit beside, or point at, any of them.
++ * **Both ends are corroborated by a quote** (GPT Sol on the plan, P1-3): an
++ * id alone can name a real but wrong block, and a note that says "the results
++ * report 8%" beside a link to the methods is a confident wrong join. The
++ * stored quotes are the article's characters, never the model's, as FAQ's.
++ *
++ * Every rule runs before the cap, so a malformed row never uses up a slot.
++ * Never throws: a missing or malformed `notes` is no notes.
++ */
++export function toNotes(
++  raw: unknown,
++  body: readonly Pick<Block, "id" | "text">[],
++  cap: number,
++): { notes: MarginNote[]; dropped: MarginNotesDropped } {
++  const dropped = emptyNotesDropped();
++  if (!Array.isArray(raw)) return { notes: [], dropped };
++  const byId = new Map(body.map((b) => [b.id as string, b]));
++  const taken = new Set<string>();
++  const notes: MarginNote[] = [];
++  for (const row of raw as readonly unknown[]) {
++    if (!row || typeof row !== "object") {
++      dropped.malformed++;
++      continue;
++    }
++    const r = row as Record<string, unknown>;
++    const blockId = str(r.blockId);
++    const to = str(r.to) || null;
++    const block = byId.get(blockId);
++    const target = to === null ? null : byId.get(to);
++    if (!block || target === undefined) {
++      dropped.unknown++;
++      continue;
++    }
++    const kind = str(r.kind);
++    if (!NOTE_KIND_SET.has(kind)) {
++      dropped.offList++;
++      continue;
++    }
++    const k = kind as MarginNoteKind;
++    if (to === blockId || (to === null && NEEDS_TARGET.has(k)) || (to !== null && NO_TARGET.has(k))) {
++      dropped.badTarget++;
++      continue;
++    }
++    const quote = located(block, str(r.quote));
++    const toTyped = str(r.toQuote);
++    const toQuote = target === null ? null : located(target, toTyped);
++    if (quote === null || (target !== null && toQuote === null)) {
++      dropped.unquoted++;
++      continue;
++    }
++    const text = str(r.text).replace(/\s+/g, " ");
++    const words = text === "" ? 0 : text.split(" ").length;
++    if (words === 0 || words > NOTE_MAX_WORDS) {
++      dropped.badText++;
++      continue;
++    }
++    if (taken.has(blockId)) {
++      dropped.repeated++;
++      continue;
++    }
++    if (notes.length >= cap) {
++      dropped.overCap++;
++      continue;
++    }
++    taken.add(blockId);
++    notes.push({ blockId: block.id, kind: k, text, quote, to: target?.id ?? null, toQuote });
++  }
++  return { notes, dropped };
++}
++
+ export const RELATIONS_SYSTEM = `You are reading the article above one paragraph at a time, to say how each
+ paragraph follows from the one before it.
+ 
+@@ -287,19 +419,79 @@ Most paragraphs in most pieces simply carry on. Choose "therefore", "but" or
+ THE RULES
+ 
+ - Answer every listed id exactly once, in the order listed.
+-- Answer only the listed ids. Never invent an id, and never answer for a
+-  paragraph that is not on the list.
++- In "relations", answer only the listed ids. Never invent an id, and never
++  answer for a paragraph that is not on the list.
+ - A paragraph that follows a heading is judged like any other, against the
+   paragraph named beside it.
+ - "relation" must be one of the ten words above, spelled exactly as shown.
+ 
+ ${paperwork("relation")}
+ 
++A FEW NOTES IN THE MARGIN — OPTIONAL
++
++The reader sees the article with a narrow margin beside it. Besides the
++relation words, you may write a few short notes for that margin, each beside
++the passage it is about. Most pieces have a few places where a note would
++help a reader — a step that is easy to stumble on, a point that depends on
++something said much earlier, two passages that do not agree — and some have
++none. Write a note only where a careful reader, reading straight through,
++would be glad to find it there. A margin full of notes is worse than an empty
++one, and the number the user message allows is a ceiling, not a target.
++
++Four kinds:
++
++  "tension" — this passage and another in the piece seem incompatible: they
++              make claims about the same thing, in the same scope and at the
++              same time, that cannot both be true as stated — a number that
++              differs, a claim one asserts and the other denies, a term
++              defined one way and used another. Say what each says, plainly.
++              NOT a contrast the author draws on purpose, a qualification, a
++              development of the argument, or a different group or period.
++              It is the most useful note, and the most damaging when wrong.
++  "recall"  — this passage leans on something said far from here, and being
++              reminded of what that was would change how the reader takes
++              this passage. Say the thing itself, not "see section 2". Not
++              for the passage just before: the reader has just read it.
++  "explain" — a step, term or move here that is likely to confuse this
++              reader, unpicked in a sentence. Not a summary of the passage,
++              and not a definition the passage itself gives.
++  "aside"   — anything else short that would help this reader at this point.
++              Use it rarely.
++
++Each note names what it is about by quoting:
++
++- "quote": the words in its own passage that the note is about, copied
++  exactly from that passage, a phrase or a sentence.
++- "to": the other passage's id. Required for "tension" and "recall"; null for
++  "explain"; "aside" may name one or have null. Never the note's own passage.
++- "toQuote": the words in the other passage that the note means, copied
++  exactly from it. Null exactly when "to" is null.
++
++The rules for notes:
++
++- A note may sit beside, or point at, any passage of the article, not only
++  the paragraphs listed for relations: a heading, a caption, the first
++  paragraph.
++- Use only the article. Not what you know from elsewhere.
++- No more notes than the user message allows, and never two beside the same
++  passage. List them most valuable first.
++- Each note is one or two short sentences, at most 25 words, and says
++  something the passage itself does not.
++- Never write a note to paraphrase or summarise a passage, to praise or agree
++  with it, or to label an ordinary step in the argument. Do not try to use
++  every kind.
++
++${plainWords("explain")}
++
+ OUTPUT
+ 
+-JSON only, no prose, no code fence:
++JSON only, no prose, no code fence. The notes come first, while the whole
++piece is in mind; "notes" is always present, and may be an empty list:
+ 
+-{"relations": [
++{"notes": [
++  {"blockId": "spya-w4n8hc", "kind": "tension", "quote": "cut errors by 12%", "text": "Here errors fall by 12%; the results give 8% for the same group and period.", "to": "spya-r2d6tm", "toQuote": "an 8% reduction in errors"}
++],
++"relations": [
+   {"blockId": "spya-k3m9qt", "relation": "but"},
+   {"blockId": "spya-p7x2wd", "relation": "and-also"}
+ ]}`;
+@@ -307,7 +499,9 @@ JSON only, no prose, no code fence:
+ /** The user message: the paragraphs to answer, each beside the one before it. */
+ export function renderPrompt(paragraphs: readonly EligibleParagraph[]): string {
+   const lines = paragraphs.map((p) => `${p.id} (the paragraph before it: ${p.previous})`);
+-  return `Say how each of these ${paragraphs.length} paragraphs bears on the paragraph before it. Answer every one, once, in this order.
++  return `First write at most ${noteCap(paragraphs.length)} margin notes, or none.
++
++Then say how each of these ${paragraphs.length} paragraphs bears on the paragraph before it. Answer every one, once, in this order.
+ 
+ === THE PARAGRAPHS ===
+ 
+@@ -322,6 +516,26 @@ ${lines.join("\n")}`;
+ export const RELATIONS_OUTPUT_SCHEMA = {
+   type: "object",
+   properties: {
++    /* First, so the model writes them with the whole piece in mind rather
++       than after a hundred mechanical rows (plan 261011o § Measurement).
++       Always present, often empty; `to` always present and nullable, never
++       omitted (the comma trap, docs/project/prompting-guide.md). */
++    notes: {
++      type: "array",
++      items: {
++        type: "object",
++        properties: {
++          blockId: { type: "string" },
++          kind: { type: "string", enum: [...MARGIN_NOTE_KINDS] },
++          quote: { type: "string" },
++          text: { type: "string" },
++          to: { type: ["string", "null"] },
++          toQuote: { type: ["string", "null"] },
++        },
++        required: ["blockId", "kind", "quote", "text", "to", "toQuote"],
++        additionalProperties: false,
++      },
++    },
+     relations: {
+       type: "array",
+       items: {
+@@ -335,12 +549,12 @@ export const RELATIONS_OUTPUT_SCHEMA = {
+       },
+     },
+   },
+-  required: ["relations"],
++  required: ["notes", "relations"],
+   additionalProperties: false,
+ } as const;
+ 
+ validateAnthropicJsonSchema(RELATIONS_OUTPUT_SCHEMA);
+-assertNoBlockIdEnums(RELATIONS_OUTPUT_SCHEMA, ["blockId"]);
++assertNoBlockIdEnums(RELATIONS_OUTPUT_SCHEMA, ["blockId", "to"]);
+ 
+ export interface RelationsRun {
+   relations: Relations;
+@@ -386,6 +600,7 @@ export async function generateRelations(opts: {
+   const artefact = (
+     relations: Record<BlockId, Relation>,
+     dropped: RelationsDropped,
++    notes: { notes: MarginNote[]; dropped: MarginNotesDropped },
+   ): Relations => ({
+     version: PROMPT_VERSION,
+     generator: generatorFor(opts.power),
+@@ -393,6 +608,8 @@ export async function generateRelations(opts: {
+     sourceHash,
+     relations,
+     dropped: { ...dropped },
++    notes: notes.notes,
++    notesDropped: { ...notes.dropped },
+     generatedAt: new Date().toISOString(),
+     elapsedMs: Date.now() - started,
+   });
+@@ -402,7 +619,7 @@ export async function generateRelations(opts: {
+   if (paragraphs.length === 0) {
+     const dropped = emptyDropped();
+     return {
+-      relations: artefact({} as Record<BlockId, Relation>, dropped),
++      relations: artefact({} as Record<BlockId, Relation>, dropped, { notes: [], dropped: emptyNotesDropped() }),
+       called: false,
+       paragraphs: 0,
+       dropped,
+@@ -466,12 +683,13 @@ export async function generateRelations(opts: {
+   }
+   const raw = finishedText(message, "relations", maxTokens, answer);
+ 
+-  const parsed = parseJsonAnswer<{ relations?: unknown }>(raw, "the model's answer");
++  const parsed = parseJsonAnswer<{ relations?: unknown; notes?: unknown }>(raw, "the model's answer");
+   const { relations, dropped } = toRelations(parsed.relations, eligibleIds);
++  const notes = toNotes(parsed.notes, evidence, noteCap(paragraphs.length));
+ 
+   /* Nothing is written here — the caller writes through the store. */
+   return {
+-    relations: artefact(relations, dropped),
++    relations: artefact(relations, dropped, notes),
+     called: true,
+     paragraphs: paragraphs.length,
+     dropped,
+diff --git a/src/store/export-bundle.ts b/src/store/export-bundle.ts
+index 9753ad1d9..fefc1db9c 100644
+--- a/src/store/export-bundle.ts
++++ b/src/store/export-bundle.ts
+@@ -661,7 +661,7 @@ one thing that will make the rest of these files make sense.
+       illustrated.json     The same argument painted, and where each plate's bytes are.
+       quiz.json            Questions generated from the article.
+       faq.json             Questions a careful reader might put to the article, and the passages that respond.
+-      relations.json       How each paragraph bears on the one before it, one word each.
++      relations.json       How each paragraph bears on the one before it, one word each, and a few margin notes.
+       sources-claims.json  The claims the article rests on that someone outside could argue with,
+                            each in the article's words and the model's.
+       skim.json            A route through the quotes, in the order to read them, at three depths.
+@@ -859,7 +859,8 @@ const FILE_NOTES: Readonly<Record<string, string>> = {
+   "augmentations/quiz.json": "Questions generated from the article.",
+   "augmentations/faq.json":
+     "Questions a careful reader might put to the article, and the passages that respond.",
+-  "augmentations/relations.json": "How each paragraph bears on the one before it, one word each.",
++  "augmentations/relations.json":
++    "How each paragraph bears on the one before it, one word each, and a few margin notes.",
+   "augmentations/sources-claims.json":
+     "The claims the article rests on that someone outside could argue with, each in the article's words and the model's.",
+   "augmentations/skim.json":
+diff --git a/src/types.ts b/src/types.ts
+index 0b2bbb336..16943f813 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -5937,10 +5937,60 @@ export interface Relations {
+    */
+   relations: Record<BlockId, Relation>;
+   dropped: RelationsDropped;
++  /**
++   * **A few notes the model chose to write**, beside the passage each is about
++   * (`relations/3`, plan 261011o). Absent on a row written before then, which
++   * reads as none. Never more than `noteCap` (src/relations.ts), and often none.
++   */
++  notes?: MarginNote[];
++  /** What validation threw away from `notes`. Absent with them. */
++  notesDropped?: MarginNotesDropped;
+   generatedAt: string;
+   elapsedMs: number;
+ }
+ 
++/**
++ * **What kind of note the model wrote**: the four Greg asked for (spya-qyuet0).
++ * `recall` and `tension` always point at another passage; `aside` may.
++ */
++export const MARGIN_NOTE_KINDS = ["explain", "recall", "tension", "aside"] as const;
++export type MarginNoteKind = (typeof MARGIN_NOTE_KINDS)[number];
++
++/** One note in the margin, written by the `relations` call. */
++export interface MarginNote {
++  /** The passage it sits beside. */
++  blockId: BlockId;
++  kind: MarginNoteKind;
++  /** The note, in the AI's words. */
++  text: string;
++  /** The words in `blockId` the note is about — the article's characters, checked. */
++  quote: string;
++  /** The other passage it is about, or null. Never `blockId`. */
++  to: BlockId | null;
++  /** The words in `to` it means, the article's characters, checked; null exactly when `to` is. */
++  toQuote: string | null;
++}
++
++/** What validation threw away from the notes. Counts only. */
++export interface MarginNotesDropped {
++  /** A row that is not an object. */
++  malformed: number;
++  /** `blockId` or `to` is not a passage of the article's body. */
++  unknown: number;
++  /** A kind outside `MARGIN_NOTE_KINDS`. */
++  offList: number;
++  /** `to` is the note's own passage, absent on a kind that needs one, or present on `explain`. */
++  badTarget: number;
++  /** A quote that is not in its passage, spacing and all, or is too long to be one. */
++  unquoted: number;
++  /** Empty, or longer than `NOTE_MAX_WORDS`. */
++  badText: number;
++  /** A second note beside a passage that already has one; the first wins. */
++  repeated: number;
++  /** Past the cap, after every other rule, in the model's order. */
++  overCap: number;
++}
++
+ /** `GET /api/relations/:slug`. Two staleness facts: no profile is in this stamp. */
+ export interface RelationsResponse {
+   relations: Relations;
+diff --git a/src/web/marginalia/MarginaliaColumn.tsx b/src/web/marginalia/MarginaliaColumn.tsx
+index 6262c2a9d..095116925 100644
+--- a/src/web/marginalia/MarginaliaColumn.tsx
++++ b/src/web/marginalia/MarginaliaColumn.tsx
+@@ -25,7 +25,7 @@ import {
+ } from "react";
+ import { ChevronRight, X } from "lucide-react";
+ import { TOAST_MS, useGoesByItself } from "../Toast.js";
+-import type { BlockId, CitedWork, Faq, Ideas, TimelineEvent } from "../../types.js";
++import type { BlockId, CitedWork, Faq, Ideas, MarginNote, TimelineEvent } from "../../types.js";
+ import { isFolded, subscribeFold } from "../fold.js";
+ import { useReceptionRead } from "../useReception.js";
+ import { useStepFinished } from "../useStepJob.js";
+@@ -48,9 +48,10 @@ import {
+   type MarginaliaNote,
+   layoutNotes,
+ } from "./notes.js";
+-import { type RelationsByBlock, useRelations } from "../useRelations.js";
++import { type MarginNotesList, type RelationsByBlock, useRelations } from "../useRelations.js";
+ import { MARK_KIND_LABEL } from "../comment-nav.js";
+-import { ARC_ORIGIN, IDEA_ORIGIN, MARG_TIPS, type MargTipKey, PATH_ORIGIN, RELATION_TIPS } from "./tips.js";
++import { ARC_ORIGIN, IDEA_ORIGIN, MARG_TIPS, type MargTipKey, NOTE_TIPS, PATH_ORIGIN, RELATION_TIPS } from "./tips.js";
++import { BlockRef } from "../BlockRef.js";
+ import { type Voice, voiceClass, withVoice } from "../voice.js";
+ import { ownLabel, plainWords } from "../lib/own-label.js";
+ import { Excerpt } from "../Excerpt.js";
+@@ -188,6 +189,50 @@ function RelationWord({ relation }: { relation: DrawnRelation }) {
+   );
+ }
+ 
++/**
++ * **A note the relations call chose to write** (plan 261011o; Greg,
++ * spya-qyuet0). Open, not shut: at most eight in an article and each at most
++ * a couple of short sentences, and a shut line would hide the only thing it
++ * has to say. The stamp is a button with a card, as the relation word is,
++ * saying what kind of note it is and that AI wrote it; the words are in the
++ * AI's face. A note about another passage links to it with the one block
++ * link (`BlockRef`), so it has the block-link card and the jump.
++ */
++function AsideNote({ note }: { note: MarginNote }) {
++  const [open, setOpen] = useState(false);
++  const tip = NOTE_TIPS[note.kind];
++  return (
++    <div className="marg-aside" data-kind={note.kind}>
++      <Tooltip
++        placement="bottom"
++        keepSide
++        open={open}
++        onOpenChange={setOpen}
++        content={<ControlTip head={tip.head} what={tip.what} how={tip.how} />}
++      >
++        <button
++          type="button"
++          className="marg-aside-stamp"
++          aria-expanded={open}
++          aria-label={`${tip.head}: ${tip.what}`}
++          onClick={() => setOpen((was) => !was)}
++        >
++          {tip.stamp}
++        </button>
++      </Tooltip>{" "}
++      <span className={withVoice("marg-aside-text", "ai")}>{note.text}</span>
++      {note.to !== null && (
++        <>
++          {" "}
++          <BlockRef id={note.to} className="marg-aside-to">
++            {note.kind === "tension" ? "the other passage" : "read it"}
++          </BlockRef>
++        </>
++      )}
++    </div>
++  );
++}
++
+ /** One block's notes. `user-select: none` in marginalia.css, so a copy of the
+     prose never carries them. */
+ function MarginNotes({
+@@ -208,6 +253,8 @@ function MarginNotes({
+         switch (note.kind) {
+           case "relation":
+             return <RelationWord key="relation" relation={note.relation} />;
++          case "aside":
++            return <AsideNote key="aside" note={note.note} />;
+           case "question":
+             return <QuestionNote key={`q${note.depth}`} depth={note.depth} text={note.text} />;
+           case "idea":
+@@ -790,9 +837,18 @@ export type MarginFeed = {
+   timeline: readonly TimelineEvent[] | null;
+   claims: readonly MarginClaim[] | null;
+   relations: RelationsByBlock;
++  /** The notes the relations call wrote (plan 261011o). */
++  notes: MarginNotesList;
+ };
+ 
+-export const NO_OWNER_FEED: MarginFeed = { ideas: null, faq: null, timeline: null, claims: null, relations: null };
++export const NO_OWNER_FEED: MarginFeed = {
++  ideas: null,
++  faq: null,
++  timeline: null,
++  claims: null,
++  relations: null,
++  notes: null,
++};
+ 
+ /**
+  * **The owner's ideas, FAQ, Timeline and Debate, read and never made** — and
+@@ -830,7 +886,7 @@ export function OwnerMarginFeed({
+      own, and this mount is what asks for them where none is stored — once per
+      article per page load, whatever opened the column, and only while the
+      notes are on screen (useRelations.ts). */
+-  const relations = useRelations(slug, shown && !awaitingStructure);
++  const { relations, notes } = useRelations(slug, shown && !awaitingStructure);
+   /* **A list made while the margin is open reaches it** — FAQ run in the left
+      band appears here without reopening the margin. The band refreshes its own
+      read when its job finishes; this hears the same completion for the margin's
+@@ -846,8 +902,8 @@ export function OwnerMarginFeed({
+   const claims =
+     receptionRead.status === "ready" && !receptionRead.stale ? (receptionRead.reception?.claims.rows ?? null) : null;
+   useEffect(() => {
+-    onFeed({ ideas, faq, timeline, claims, relations });
+-  }, [ideas, faq, timeline, claims, relations, onFeed]);
++    onFeed({ ideas, faq, timeline, claims, relations, notes });
++  }, [ideas, faq, timeline, claims, relations, notes, onFeed]);
+   useEffect(() => () => onFeed(NO_OWNER_FEED), [onFeed]);
+   return null;
+ }
+diff --git a/src/web/marginalia/notes.ts b/src/web/marginalia/notes.ts
+index 2e3790b6d..96f91470b 100644
+--- a/src/web/marginalia/notes.ts
++++ b/src/web/marginalia/notes.ts
+@@ -4,7 +4,8 @@
+  * Everything here is drawn from what the article already has: the Socratic
+  * question the whole-document call wrote on each top-level part
+  * (src/structure.ts § `questionFor`), the arc, and the ideas where the reader
+- * has made them. Nothing is generated for this mode.
++ * has made them. The one call it makes is its own: the relation words, and
++ * since 2026-10-11 a few notes the same call may write (plan 261011o).
+  *
+  * **Sparse on purpose.** The risk this mode runs against vision.md is a second
+  * article down the margin, so it never draws a gist or a label per paragraph:
+@@ -23,6 +24,7 @@ import type {
+   FaqQuestion,
+   Idea,
+   IdeaProvenance,
++  MarginNote,
+   Relation,
+   TimelineEvent,
+   Tree,
+@@ -61,6 +63,9 @@ const isDrawn = (relation: Relation): relation is DrawnRelation => Object.hasOwn
+ export type MarginaliaNote =
+   /** How this paragraph bears on the one before it. First in its note. */
+   | { kind: "relation"; relation: DrawnRelation }
++  /** A note the relations call chose to write here (plan 261011o): open, not
++      shut, since there are at most eight and the line is the whole of it. */
++  | { kind: "aside"; note: MarginNote }
+   /** The question a part — or, at `depth` 0, the whole article — answers. */
+   | { kind: "question"; depth: number; text: string }
+   /** An idea the piece assumes or introduces, occurring in this block. */
+@@ -114,6 +119,8 @@ export type MarginSources = {
+   asked?: readonly AskedQuestion[] | null;
+   /** How each paragraph bears on the one before — the owner's only in v1. */
+   relations?: Readonly<Record<BlockId, Relation>> | null;
++  /** The notes the same call wrote — the owner's only, as the words are. */
++  notes?: readonly MarginNote[] | null;
+ };
+ 
+ type GroupedKind = Extract<MarginaliaNote, { items: unknown }>;
+@@ -171,6 +178,16 @@ export function marginaliaNotes(
+     if (relation !== undefined && isDrawn(relation)) add(block.id, { kind: "relation", relation });
+   }
+ 
++  /* **Then the model's own note**, under its word and above the part's
++     question. One per block, which the step already enforces; a note pointing
++     at a passage this article no longer has is left out rather than drawn
++     with a dead link (a stale list is never handed here, but a fresh one is
++     checked anyway: it costs one lookup). */
++  const placed = (more.notes ?? []).filter((note) => note.to === null || index.has(note.to));
++  /* In article order, as the words are, whatever order the model wrote them. */
++  placed.sort((a, b) => (index.get(a.blockId) ?? 0) - (index.get(b.blockId) ?? 0));
++  for (const note of placed) add(note.blockId, { kind: "aside", note });
++
+   /* **Beside the part's first paragraph, not its first block.** A part's range
+      starts at its heading, or at the date line under the title, and a question
+      drawn level with those reads as a caption for them (GPT Astra's design
+diff --git a/src/web/marginalia/tips.ts b/src/web/marginalia/tips.ts
+index 9014ce02f..e0790bcc7 100644
+--- a/src/web/marginalia/tips.ts
++++ b/src/web/marginalia/tips.ts
+@@ -18,6 +18,7 @@
+ 
+ import type { DrawnRelation } from "./notes.js";
+ import type { Voice } from "../voice.js";
++import type { MarginNoteKind } from "../../types.js";
+ 
+ export type MargTipKey =
+   | "question-article"
+@@ -108,6 +109,42 @@ export const RELATION_TIPS: Record<DrawnRelation, MargTip> = {
+   },
+ };
+ 
++/** Where a margin note came from: the same for all four kinds. */
++const NOTE_ORIGIN =
++  "Written by AI for Marginalia, in the same reading that marks the turns in the argument. It writes a note only where it thinks one would help, so most passages have none. It can be wrong: read the passage.";
++
++/**
++ * **What each kind of note is**, on its stamp (plan 261011o). `Record` over
++ * the kinds, so a fifth kind without a card is a type error. `stamp` is the
++ * word drawn in the margin.
++ */
++export const NOTE_TIPS: Record<MarginNoteKind, MargTip & { stamp: string }> = {
++  tension: {
++    stamp: "Tension",
++    head: "Tension",
++    what: "This passage seems not to fit with another part of the article. Follow the link to read the other passage and judge for yourself.",
++    how: NOTE_ORIGIN,
++  },
++  recall: {
++    stamp: "Recall",
++    head: "Recall",
++    what: "A reminder of what another part of the article said, which this passage leans on. Follow the link to read it.",
++    how: NOTE_ORIGIN,
++  },
++  explain: {
++    stamp: "Note",
++    head: "Note",
++    what: "A short explanation of something in this passage that is easy to stumble on.",
++    how: NOTE_ORIGIN,
++  },
++  aside: {
++    stamp: "Note",
++    head: "Note",
++    what: "A short note the AI thought would help at this point in the article.",
++    how: NOTE_ORIGIN,
++  },
++};
++
+ export function isMargTipKey(key: string | null): key is MargTipKey {
+   return key !== null && Object.hasOwn(MARG_TIPS, key);
+ }
+diff --git a/src/web/reader/Reader.tsx b/src/web/reader/Reader.tsx
+index 9fbe20d23..c4e04c37e 100644
+--- a/src/web/reader/Reader.tsx
++++ b/src/web/reader/Reader.tsx
+@@ -2531,6 +2531,7 @@ export function Reader({
+       timeline: marginaliaTimeline,
+       /* The owner's only: a visitor's payload does not carry them (plan 261003f). */
+       relations: isOwner ? ownerFeed.relations : null,
++      notes: isOwner ? ownerFeed.notes : null,
+       claims: marginaliaClaims,
+       citations: marginaliaBibliography,
+       comments,
+@@ -2583,6 +2584,7 @@ export function Reader({
+     marginaliaTimeline,
+     isOwner,
+     ownerFeed.relations,
++    ownerFeed.notes,
+     marginaliaClaims,
+     marginaliaBibliography,
+     comments,
+diff --git a/src/web/step-names.ts b/src/web/step-names.ts
+index dc160c913..588218c89 100644
+--- a/src/web/step-names.ts
++++ b/src/web/step-names.ts
+@@ -71,8 +71,8 @@ const STEP_PLACE: Record<StepName, StepPlace> = {
+   quiz: { sub: { mode: "learn", view: "quiz" } },
+   faq: { mode: "faq" },
+   relations: {
+-    name: "Relation words",
+-    what: "The small words Marginalia puts beside a paragraph where the argument turns (so, but, vs)",
++    name: "Marginalia notes",
++    what: "What Marginalia writes itself: the small words beside a paragraph where the argument turns (so, but, vs), and a few short notes where one would help",
+   },
+   sketch: { sub: { mode: "diagram", view: "sketch" } },
+   illustrated: { sub: { mode: "diagram", view: "illustrated" } },
+diff --git a/src/web/styles/marginalia.css b/src/web/styles/marginalia.css
+index 6de3a1669..58334879f 100644
+--- a/src/web/styles/marginalia.css
++++ b/src/web/styles/marginalia.css
+@@ -136,6 +136,32 @@
+   outline: 2px solid var(--highlight-text);
+   outline-offset: 2px;
+ }
++/* A note the relations call wrote (MarginaliaColumn.tsx § AsideNote, plan
++   261011o): the stamp in the relation word's small capitals, then the note,
++   open, in the AI's face, and for a recall or a tension a link to the other
++   passage. A rule on its left, like the part's question, so it reads as
++   something said about the passage rather than a line of it. */
++.marg-aside {
++  padding-left: 0.5rem;
++  border-left: 1px solid var(--rule-strong);
++  font-size: 0.8125rem;
++  line-height: 1.4;
++  color: var(--ink-soft);
++}
++.marg-aside-stamp {
++  all: unset;
++  cursor: help;
++  border-radius: 2px;
++  font-size: 0.6875rem;
++  font-weight: 700;
++  letter-spacing: 0.06em;
++  text-transform: uppercase;
++  color: var(--ink-soft);
++}
++.marg-aside-stamp:focus-visible {
++  outline: 2px solid var(--highlight-text);
++  outline-offset: 2px;
++}
+ .marg-stamp {
+   font-size: 0.6875rem;
+   font-weight: 600;
+diff --git a/src/web/useRelations.ts b/src/web/useRelations.ts
+index d11808803..6662edd6a 100644
+--- a/src/web/useRelations.ts
++++ b/src/web/useRelations.ts
+@@ -35,7 +35,13 @@
+  * docs/plans/261005d-marginalia-out-of-the-experimental-switch.md.
+  */
+ import { useCallback, useEffect, useState } from "react";
+-import { NONE_YET_AS_NULL_HEADER, type BlockId, type Relation, type RelationsResponse } from "../types.js";
++import {
++  NONE_YET_AS_NULL_HEADER,
++  type BlockId,
++  type MarginNote,
++  type Relation,
++  type RelationsResponse,
++} from "../types.js";
+ import { apiFetch, readJson } from "./lib/api.js";
+ import { MalformedReply } from "./lib/reader-facing.js";
+ import { useAutoRunOnArrival } from "./useAutoRun.js";
+@@ -51,7 +57,10 @@ type RelationsStatus = "loading" | "none" | "ready" | "error";
+  */
+ export type RelationsByBlock = Readonly<Record<BlockId, Relation>> | null;
+ 
+-export function useRelations(slug: string, shown: boolean): RelationsByBlock {
++/** The notes the same call wrote (plan 261011o), or null for none, on the same terms as the words. */
++export type MarginNotesList = readonly MarginNote[] | null;
++
++export function useRelations(slug: string, shown: boolean): { relations: RelationsByBlock; notes: MarginNotesList } {
+   const [status, setStatus] = useState<RelationsStatus>("loading");
+   const [loaded, setLoaded] = useState<RelationsResponse | null>(null);
+ 
+@@ -117,5 +126,14 @@ export function useRelations(slug: string, shown: boolean): RelationsByBlock {
+ 
+   /* `?.` because a reply that is JSON but not this shape must cost the reader
+      the words, not the column: this runs inside Marginalia's boundary. */
+-  return status === "ready" && loaded !== null && !loaded.stale ? (loaded.relations?.relations ?? null) : null;
++  const usable = status === "ready" && loaded !== null && !loaded.stale;
++  /* Each the stored object itself, so it keeps its identity while `loaded`
++     does, and the feed's effect does not fire on every render. A row from
++     before `relations/3` has no `notes`: none. An answer that is not an array
++     is none too, rather than a crash in the column. */
++  const notes = usable ? loaded.relations?.notes : undefined;
++  return {
++    relations: usable ? (loaded.relations?.relations ?? null) : null,
++    notes: Array.isArray(notes) ? notes : null,
++  };
+ }
+diff --git a/tests/marginalia-notes.test.ts b/tests/marginalia-notes.test.ts
+index b64847a48..dd32eb850 100644
+--- a/tests/marginalia-notes.test.ts
++++ b/tests/marginalia-notes.test.ts
+@@ -6,7 +6,7 @@
+ import { describe, expect, it } from "vitest";
+ import { blockIndex } from "../src/section-path.js";
+ import { checkTree } from "../src/tree-invariants.js";
+-import type { Arc, Block, CitedWork, FaqQuestion, Idea, TimelineEvent, Tree, TreeNode } from "../src/types.js";
++import type { Arc, Block, BlockId, CitedWork, FaqQuestion, Idea, MarginNote, TimelineEvent, Tree, TreeNode } from "../src/types.js";
+ import {
+   type MarginClaim,
+   type MarginComment,
+@@ -705,3 +705,43 @@ describe("marginaliaNotes, relation words (plan 261003f)", () => {
+     expect(kinds).toEqual(["relation", "question", "faq"]);
+   });
+ });
++
++/* The notes the relations call may write — plan 261011o. */
++describe("marginaliaNotes, the model's own notes (plan 261011o)", () => {
++  const note = (blockId: string, to: string | null = null): MarginNote => ({
++    blockId: blockId as BlockId,
++    kind: to === null ? "explain" : "tension",
++    text: `about ${blockId}`,
++    quote: "q",
++    to: to as BlockId | null,
++    toQuote: to === null ? null : "t",
++  });
++
++  it("puts a note under its block's relation word and above the part's question", () => {
++    const tree2 = {
++      ...tree,
++      nodes: { ...tree.nodes, a: { ...(tree.nodes.a as TreeNode), range: ["spya-aaaaa2", "spya-aaaaa3"] } },
++    } as Tree;
++    const kinds = (
++      marginaliaNotes(tree2, quoted, null, {
++        relations: { "spya-aaaaa2": "but" },
++        notes: [note("spya-aaaaa2")],
++      }).get("spya-aaaaa2") ?? []
++    ).map((n) => n.kind);
++    expect(kinds).toEqual(["relation", "aside", "question"]);
++  });
++
++  it("places notes in article order, whatever order the model wrote them in", () => {
++    const notes = marginaliaNotes(null, quoted, null, {
++      notes: [note("spya-aaaaa5"), note("spya-aaaaa2", "spya-aaaaa4")],
++    });
++    expect([...notes.keys()]).toEqual(["spya-aaaaa2", "spya-aaaaa5"]);
++  });
++
++  it("leaves out a note beside, or pointing at, a passage this article no longer has", () => {
++    const notes = marginaliaNotes(null, quoted, null, {
++      notes: [note("spya-zzzzzz"), note("spya-aaaaa2", "spya-zzzzzz")],
++    });
++    expect(notes.size).toBe(0);
++  });
++});
+diff --git a/tests/relations.test.ts b/tests/relations.test.ts
+index 9065cb53f..2597a9c82 100644
+--- a/tests/relations.test.ts
++++ b/tests/relations.test.ts
+@@ -24,6 +24,7 @@ import {
+   PROMPT_VERSION,
+   RELATIONS_OUTPUT_SCHEMA,
+   RELATIONS_SYSTEM,
++  NOTE_MAX_WORDS,
+   answerTokens,
+   eligibleParagraphs,
+   generateRelations,
+@@ -31,6 +32,8 @@ import {
+   isOutdated,
+   isStale,
+   renderPrompt,
++  noteCap,
++  toNotes,
+   toRelations,
+ } from "../src/relations.js";
+ 
+@@ -368,3 +371,168 @@ describe("where the step sits", () => {
+     expect(cascadeForce(["faq", "relations"], new Set(["relations"])).has("relations")).toBe(true);
+   });
+ });
++
++/* ------------------------------------------------------------------- notes -- */
++
++/* The notes the same call may write — plan 261011o. What is pinned is what
++   has no visible symptom: a note whose quote is not in its passage, or whose
++   link names a real but wrong passage, is dropped and counted rather than
++   drawn; the cap is applied last, so a bad row never uses up a slot; and a bad
++   note never costs the relation words. */
++describe("toNotes", () => {
++  const body = [
++    block("spya-aaaaaa", { text: "The trial cut errors by 12% in the first year." }),
++    block("spya-bbbbbb", { text: "Results: an 8% reduction in errors over the same year." }),
++    block("spya-cccccc", { text: "Calibration means the stated odds match how often things happen." }),
++  ];
++  const tension = {
++    blockId: "spya-aaaaaa",
++    kind: "tension",
++    quote: "cut errors by 12%",
++    text: "Here 12%; the results give 8% for the same year.",
++    to: "spya-bbbbbb",
++    toQuote: "an 8% reduction in errors",
++  };
++  const explain = {
++    blockId: "spya-cccccc",
++    kind: "explain",
++    quote: "stated odds match",
++    text: "If it says 70%, it should happen about seven times in ten.",
++    to: null,
++    toQuote: null,
++  };
++
++  it("keeps a good note, storing the article's characters for both quotes", () => {
++    const { notes, dropped } = toNotes(
++      [{ ...tension, quote: "cut  errors by 12%" }, explain],
++      body,
++      8,
++    );
++    expect(notes).toEqual([
++      {
++        blockId: "spya-aaaaaa",
++        kind: "tension",
++        text: tension.text,
++        quote: "cut errors by 12%",
++        to: "spya-bbbbbb",
++        toQuote: "an 8% reduction in errors",
++      },
++      { ...explain, quote: "stated odds match" },
++    ]);
++    expect(Object.values(dropped).every((n) => n === 0)).toBe(true);
++  });
++
++  it("drops a quote that is not in its passage, at either end", () => {
++    expect(toNotes([{ ...tension, quote: "cut errors by 20%" }], body, 8).dropped.unquoted).toBe(1);
++    /* A real passage, the wrong one: the confident wrong join the quote is for. */
++    expect(toNotes([{ ...tension, to: "spya-cccccc" }], body, 8).dropped.unquoted).toBe(1);
++  });
++
++  it("drops a recall or tension with no other passage, an explain with one, and a note pointing at itself", () => {
++    const { notes, dropped } = toNotes(
++      [
++        { ...tension, to: null, toQuote: null },
++        { ...explain, to: "spya-aaaaaa", toQuote: "cut errors" },
++        { ...tension, to: "spya-aaaaaa", toQuote: "12%" },
++      ],
++      body,
++      8,
++    );
++    expect(notes).toEqual([]);
++    expect(dropped.badTarget).toBe(3);
++  });
++
++  it("counts each other kind of bad row under its own name", () => {
++    const { dropped } = toNotes(
++      [
++        "not an object",
++        { ...tension, blockId: "spya-zzzzzz" },
++        { ...tension, kind: "praise" },
++        { ...explain, text: "" },
++        { ...explain, text: Array.from({ length: NOTE_MAX_WORDS + 1 }, () => "w").join(" ") },
++        explain,
++        explain,
++      ],
++      body,
++      8,
++    );
++    expect(dropped).toMatchObject({ malformed: 1, unknown: 1, offList: 1, badText: 2, repeated: 1 });
++  });
++
++  it("applies the cap last, in the model's order, so a bad row never takes a slot", () => {
++    const { notes, dropped } = toNotes([{ ...tension, quote: "not there" }, explain, tension], body, 1);
++    expect(notes.map((n) => n.blockId)).toEqual(["spya-cccccc"]);
++    expect(dropped).toMatchObject({ unquoted: 1, overCap: 1 });
++  });
++
++  it("reads a missing or malformed list as no notes, and never throws", () => {
++    expect(toNotes(undefined, body, 8).notes).toEqual([]);
++    expect(toNotes({ notes: [] }, body, 8).notes).toEqual([]);
++  });
++
++  it("caps an article at one note per eight paragraphs, at least two and at most eight", () => {
++    expect(noteCap(1)).toBe(2);
++    expect(noteCap(24)).toBe(3);
++    expect(noteCap(1000)).toBe(8);
++  });
++});
++
++describe("generateRelations, with notes", () => {
++  const blocks = [
++    block("spya-aaaaaa", { text: "The trial cut errors by 12% in the first year, which is the headline claim." }),
++    block("spya-bbbbbb", { text: "Results: an 8% reduction in errors over the same year, in the same group of people." }),
++    block("spya-cccccc"),
++  ];
++
++  it("stores the notes beside the words, and a bad note does not fail the run", async () => {
++    answer = JSON.stringify({
++      notes: [
++        {
++          blockId: "spya-bbbbbb",
++          kind: "tension",
++          quote: "an 8% reduction in errors",
++          text: "Here 8%; the opening says 12% for the same year.",
++          to: "spya-aaaaaa",
++          toQuote: "cut errors by 12%",
++        },
++        { blockId: "spya-cccccc", kind: "recall", quote: "nowhere", text: "x", to: "spya-aaaaaa", toQuote: "y" },
++      ],
++      relations: [
++        { blockId: "spya-bbbbbb", relation: "but" },
++        { blockId: "spya-cccccc", relation: "and-also" },
++      ],
++    });
++    const run = await generateRelations({ article: article(blocks), power: "standard" });
++    expect(run.relations.relations).toEqual({ "spya-bbbbbb": "but", "spya-cccccc": "and-also" });
++    expect(run.relations.notes?.map((n) => [n.blockId, n.kind, n.to])).toEqual([
++      ["spya-bbbbbb", "tension", "spya-aaaaaa"],
++    ]);
++    expect(run.relations.notesDropped?.unquoted).toBe(1);
++  });
++
++  it("an answer with no notes at all still stores the words, with none", async () => {
++    answer = JSON.stringify({
++      relations: [
++        { blockId: "spya-bbbbbb", relation: "but" },
++        { blockId: "spya-cccccc", relation: "and-also" },
++      ],
++    });
++    const run = await generateRelations({ article: article(blocks), power: "standard" });
++    expect(run.relations.notes).toEqual([]);
++  });
++
++  it("asks for the notes first, in the schema and in the user message", () => {
++    expect(Object.keys(RELATIONS_OUTPUT_SCHEMA.properties)).toEqual(["notes", "relations"]);
++    const user = renderPrompt([{ id: "spya-bbbbbb" as BlockId, previous: "spya-aaaaaa" as BlockId }]);
++    expect(user.indexOf("margin notes")).toBeLessThan(user.indexOf("bears on the paragraph before it"));
++    expect(RELATIONS_OUTPUT_SCHEMA.properties.notes.items.properties.to).toEqual({ type: ["string", "null"] });
++  });
++
++  it("budgets for a full set of notes at their longest, as well as the words", () => {
++    expect(answerTokens(64)).toBeGreaterThanOrEqual(64 * 30 + noteCap(64) * 300);
++  });
++
++  it("carries the plain-words rule, now that the step writes prose a reader sees", () => {
++    expect(RELATIONS_SYSTEM).toContain("PLAIN WORDS");
++  });
++});

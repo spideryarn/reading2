@@ -533,7 +533,8 @@ describe("relations", () => {
     n += 1;
     slug = `relations-${n}`;
   });
-  const shown = (at: string) => useRelations(at, true);
+  /* The words are what this file is about; the notes ride on the same read. */
+  const shown = (at: string) => useRelations(at, true).relations;
   async function mountRelations(): Promise<void> {
     await act(async () => root.render(createElement(Probe, { use: shown, slug })));
     await settle();
@@ -554,6 +555,19 @@ describe("relations", () => {
     answer = () => json(RELATIONS);
     await mountRelations();
     expect(seen).toEqual({ "spya-bbbbbb": "so" });
+  });
+
+  it("draws the notes that came with the words, and none from an answer without them", async () => {
+    const note = { blockId: "spya-bbbbbb", kind: "aside", text: "A note.", quote: "q", to: null, toQuote: null };
+    const withNotes = (at: string) => useRelations(at, true).notes;
+    answer = () => json({ ...RELATIONS, relations: { ...RELATIONS.relations, notes: [note] } });
+    await act(async () => root.render(createElement(Probe, { use: withNotes, slug })));
+    await settle();
+    expect(seen).toEqual([note]);
+    answer = () => json(RELATIONS);
+    await act(async () => root.render(createElement(Probe, { use: withNotes, slug: `${slug}-bare` })));
+    await settle();
+    expect(seen).toBeNull();
   });
 
   for (const late of [null, {

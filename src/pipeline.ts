@@ -4746,7 +4746,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      so a re-run replaces them. */
   relations: {
     name: "relations",
-    label: "Reading how the paragraphs connect",
+    label: "Reading how the paragraphs connect, and writing a few margin notes",
     produces: ["relations"],
     /** The rendered article prefix and ordered eligible paragraph pairs — the
      * exact dynamic request input `generateRelations` hashes too. No profile. */

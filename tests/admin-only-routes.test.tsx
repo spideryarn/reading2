@@ -89,6 +89,8 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
           ? '{"vouchers":[]}'
           : url.startsWith("/api/admin/costs")
             ? '{"since":null,"until":null,"label":"all recorded calls","rows":[],"owners":[],"emailsAvailable":true}'
+          : url.startsWith("/api/admin/articles")
+            ? '{"articles":[],"emailsAvailable":true}'
           : "{}";
   return new Response(body, { status: 200, headers: { "content-type": "application/json" } });
 }) as typeof fetch;
@@ -211,6 +213,12 @@ describe("/admin still refuses exactly as it did", () => {
     await show("/admin/vouchers");
     expect(heading()).toBe("Spideryarn");
   });
+
+  it("refuses the articles page to a reader", async () => {
+    session.user = READER;
+    await show("/admin/articles");
+    expect(heading()).toBe("Spideryarn");
+  });
 });
 
 /**
@@ -234,6 +242,7 @@ describe("the pages that load on demand", () => {
     ["/admin/feedback", "Feedback"],
     ["/admin/vouchers", "Gift vouchers"],
     ["/admin/costs", "Costs"],
+    ["/admin/articles", "Articles"],
     ["/design", "Design reference"],
   ];
   for (const [path, name] of variants) {
@@ -255,6 +264,9 @@ describe("the list itself", () => {
     expect(adminOnly(parseRoute("/admin/vouchers"))).toBe(true);
     expect(parseRoute("/admin/costs")).toEqual({ kind: "admin", page: "costs" });
     expect(adminOnly(parseRoute("/admin/costs"))).toBe(true);
+    /* Every article, and moving one (plan 261011n). */
+    expect(parseRoute("/admin/articles")).toEqual({ kind: "admin", page: "articles" });
+    expect(adminOnly(parseRoute("/admin/articles"))).toBe(true);
     expect(adminOnly(parseRoute("/design"))).toBe(true);
     for (const open of ["/", "/profile", "/privacy", "/pricing", "/features", "/contact", "/help", "/asdf"]) {
       expect(adminOnly(parseRoute(open)), open).toBe(false);

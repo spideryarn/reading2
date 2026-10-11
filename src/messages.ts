@@ -5785,6 +5785,21 @@ export const CITERS_LOADING = "Looking up which papers cite this piece…";
 export const CITERS_NO_DOI =
   "We could not list who cites this piece, because we have no DOI for it: a standard identifier " +
   "used for research papers. Many web pages and blog posts do not have one.";
+/**
+ * **A title search that matched nothing** (plan 261011q). Not "OpenAlex has no
+ * record of it": the search reads one page, and refuses anything it cannot be
+ * sure of (GPT Sol's F6).
+ */
+export const CITERS_NO_MATCH =
+  "We had no DOI for this piece, and searching OpenAlex by its title found no record we could be " +
+  "sure is this one, so we cannot list who cites it.";
+/**
+ * **Above a list reached by title, before the record's own title, linked**, so
+ * that a wrong match can be seen to be one (plan 261011q, GPT Sol's F6). The
+ * record's title follows it as text.
+ */
+export const CITERS_BY_TITLE =
+  "We had no DOI for this piece, so we looked it up in OpenAlex by its title, and took this record because its title and two of its authors (or one author and the year) match:";
 export const CITERS_NOT_INDEXED = "OpenAlex, the index we ask, has no record of this piece.";
 /**
  * **Not "the DOI belongs to another work"**: what failed is our check that the
@@ -5794,17 +5809,17 @@ export const CITERS_NOT_INDEXED = "OpenAlex, the index we ask, has no record of 
 export const CITERS_UNCONFIRMED =
   "We could not confirm that the DOI on record is this piece's own, so we have not listed who cites it.";
 /** The one outcome with a Try again beside it. */
-export const CITERS_UNAVAILABLE = "We could not reach OpenAlex just now.";
+export const CITERS_UNAVAILABLE = "We could not get the Cited by list just now.";
 /** No Try again: the same request would be too large again. */
-export const CITERS_TOO_LARGE = "OpenAlex's list for this piece is too large for us to read yet.";
+export const CITERS_TOO_LARGE = "OpenAlex's answer for this piece is too large for us to read yet.";
 export const CITERS_NONE = "OpenAlex knows this piece and lists no paper citing it yet.";
 /** Under every list: the list is a list, and nothing here says what a citing paper thinks. */
 export const CITERS_UNREAD = "We have not read what any of them says about it.";
 /** What the band's (i) says of the section, for the owner. */
 export const CITERS_ABOUT =
   "Cited by is OpenAlex's list of the papers that cite this piece. To get it we send OpenAlex " +
-  "the piece's DOI and our contact address, never its text or reader details. No AI is involved, " +
-  "and we have not read the papers.";
+  "the piece's DOI, or the words of its title when we have no DOI, and our contact address; " +
+  "never its text or reader details. No AI is involved, and we have not read the papers.";
 
 const papers = (n: number): string => (n === 1 ? "1 paper" : `${n} papers`);
 

@@ -1,10 +1,9 @@
 /**
- * **The relation words, as Marginalia sees them**: how each paragraph bears on
- * the one before it (*so*, *but*, *vs*), read from `GET /api/relations/:slug`,
- * and the one job that writes them.
+ * **Marginalia's own artefact**: relation words for adjacent paragraphs and a
+ * few optional prose notes, read from `GET /api/relations/:slug`, and the one
+ * job that writes them.
  *
- * Marginalia otherwise generates nothing (docs/project/marginalia.md). This is
- * its one artefact of its own, and **it is made the first time the column is
+ * It is Marginalia's one artefact of its own, and **it is made the first time the column is
  * shown**:
  *
  * > generate linking words when Marginalia mode is opened
@@ -18,7 +17,7 @@
  * an article arrived with a margin that had no words until the column was
  * turned off and on. So it is `useAutoRunOnArrival`, the rule Summary's thread already had: one
  * unforced attempt per article per page load, whatever put the column there —
- * a press, the default, a pasted `?margin=1`, a reload, a restored view. That
+ * a press, a pasted `?margin=1`, a reload, a restored view. That
  * last one is how an article from before this gets its words; there is no
  * backfill. Nor is it queued on import, as it was for part of 2026-10-05
  * (src/auto-mode-steps.ts): that paid for every article, opened or not.
@@ -29,13 +28,18 @@
  *
  * Owner only, and not because of a check here: the one caller is
  * `OwnerMarginFeed`, mounted under the owner's arm. A visitor's payload does
- * not carry the words at all in v1 — it has no staleness verdict, and a
- * relation word has no quote to check against its block.
+ * not carry the artefact at all in v1 — it has no staleness verdict.
  * docs/plans/261003f-marginalia-relation-words-and-timeline-events.md;
  * docs/plans/261005d-marginalia-out-of-the-experimental-switch.md.
  */
 import { useCallback, useEffect, useState } from "react";
-import { NONE_YET_AS_NULL_HEADER, type BlockId, type Relation, type RelationsResponse } from "../types.js";
+import {
+  NONE_YET_AS_NULL_HEADER,
+  type BlockId,
+  type MarginNote,
+  type Relation,
+  type RelationsResponse,
+} from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { MalformedReply } from "./lib/reader-facing.js";
 import { useAutoRunOnArrival } from "./useAutoRun.js";
@@ -51,7 +55,10 @@ type RelationsStatus = "loading" | "none" | "ready" | "error";
  */
 export type RelationsByBlock = Readonly<Record<BlockId, Relation>> | null;
 
-export function useRelations(slug: string, shown: boolean): RelationsByBlock {
+/** The notes the same call wrote (plan 261011o), or null for none, on the same terms as the words. */
+export type MarginNotesList = readonly MarginNote[] | null;
+
+export function useRelations(slug: string, shown: boolean): { relations: RelationsByBlock; notes: MarginNotesList } {
   const [status, setStatus] = useState<RelationsStatus>("loading");
   const [loaded, setLoaded] = useState<RelationsResponse | null>(null);
 
@@ -117,5 +124,14 @@ export function useRelations(slug: string, shown: boolean): RelationsByBlock {
 
   /* `?.` because a reply that is JSON but not this shape must cost the reader
      the words, not the column: this runs inside Marginalia's boundary. */
-  return status === "ready" && loaded !== null && !loaded.stale ? (loaded.relations?.relations ?? null) : null;
+  const usable = status === "ready" && loaded !== null && !loaded.stale;
+  /* Each the stored object itself, so it keeps its identity while `loaded`
+     does, and the feed's effect does not fire on every render. A row from
+     before `relations/3` has no `notes`: none. An answer that is not an array
+     is none too, rather than a crash in the column. */
+  const notes = usable ? loaded.relations?.notes : undefined;
+  return {
+    relations: usable ? (loaded.relations?.relations ?? null) : null,
+    notes: Array.isArray(notes) ? notes : null,
+  };
 }

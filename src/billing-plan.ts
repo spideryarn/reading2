@@ -429,6 +429,20 @@ export interface BillingSummary {
   readonly purchase: Purchase;
 }
 
+/**
+ * **`GET /api/billing/usage`'s body: the summary, and what its claim moved.**
+ * `claimedArticles` is the slugs of the gift starter articles that this very
+ * call's voucher claim made the reader's own (plan 261011n § D3,
+ * src/store/pg-vouchers.ts § `claimVouchersFor` step 5) — empty for almost
+ * every call, and empty when the claim failed and the plan was served without
+ * it. The reading view on a private link asks it once, and re-reads the article
+ * as its owner when its slug is here (src/web/article/useClaimSharedArticle.ts).
+ * The billing surfaces read the summary and ignore it.
+ */
+export interface BillingUsage extends BillingSummary {
+  readonly claimedArticles: readonly string[];
+}
+
 /* -------------------------------------------------- when the plan ends -- */
 
 /**

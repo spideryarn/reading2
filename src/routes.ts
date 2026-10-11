@@ -290,7 +290,7 @@ import {
 import { type ArticleCost, describeAdminMiss, isAdmin } from "./admin.js";
 import { costCategoryOf } from "./cost-categories.js";
 import { type AdminCosts, costWindowLabel, parseCostWindow } from "./cost-cube.js";
-import { authAdminEndpoint, gotruePages, listAccounts } from "./store/admin-accounts.js";
+import { authAdminEndpoint, confirmedAccountEmail, gotruePages, listAccounts } from "./store/admin-accounts.js";
 import {
   silentLiveSessionsForArticle,
   SpendCubeTooLarge,
@@ -356,6 +356,7 @@ import {
   startCheckout,
 } from "./billing/checkout.js";
 import { readBillingSummary } from "./billing/summary.js";
+import type { BillingUsage } from "./billing-plan.js";
 import {
   claimVouchersFor,
   parseNewVoucher,
@@ -377,6 +378,8 @@ import {
   type AuthorLookupStarted,
 } from "./admin-author-gifts.js";
 import { startAuthorLookup } from "./author-lookup-start.js";
+import type { AdminArticle, AdminArticles, TransferDone, TransferPreview } from "./admin-articles.js";
+import { parseTransferRequest, pgArticleTransferStore } from "./store/pg-article-transfer.js";
 import {
   parseAuthorGiftPatch,
   parseEnsureAuthorGift,
@@ -9591,6 +9594,8 @@ const SHARE_LINK_PATTERN = /^\/api\/article\/([\w.%-]+)\/share-link$/;
 const ADMIN_VOUCHERS_PATH = "/api/admin/vouchers";
 /* Author gifts: GET lists, POST ensures one for an article (261010c). */
 const ADMIN_AUTHOR_GIFTS_PATH = "/api/admin/author-gifts";
+/* One article's transfer to another account: GET previews it, POST does it (261011n). */
+const ADMIN_ARTICLE_TRANSFER_PATTERN = /^\/api\/admin\/articles\/([\w-]+)\/transfer$/;
 
 /**
  * **Why a voucher's starter article was refused**, in the administrator's
@@ -10062,6 +10067,105 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
           throw httpError(500, `unknown send answer ${String(never)}`);
         }
       }
+    },
+  },
+
+  /* **Every article, and moving one to another account** — `/admin/articles`.
+     docs/plans/261011n-author-gift-link-and-article-ownership-transfer.md § D2,
+     D4; src/store/pg-article-transfer.ts, through its guarded store. Under
+     `/api/admin/`, so the namespace gate refuses everybody else before any of
+     this runs. The list reads across owners, and shows a title and a slug only
+     for the administrator's own articles and public ones (D4): which articles
+     somebody reads is their reading. */
+  {
+    kind: "exact",
+    method: "GET",
+    path: "/api/admin/articles",
+    article: "none",
+    handler: async ({ user, request: { res } }) => {
+      /* Other people's addresses, and when they added what. */
+      res.setHeader("Cache-Control", "private, no-store");
+      const { url, key } = authAdminEndpoint();
+      const [rows, accounts] = await Promise.all([
+        pgArticleTransferStore.listArticlesAcrossOwners(user.id),
+        /* **A failed listing costs the addresses, not the page** — the cost
+           route's rule: the rows are ours and do not need the Auth service.
+           Only the error's class is logged; its message may carry the endpoint. */
+        listAccounts(gotruePages(url, key)).catch((err: unknown) => {
+          log("http").warn(
+            { errorClass: err instanceof Error ? err.constructor.name : typeof err },
+            "admin articles: the account listing failed, so the answer carries no addresses",
+          );
+          return null;
+        }),
+      ]);
+      const emails = new Map((accounts ?? []).map((a) => [a.id, a.email]));
+      const articles: AdminArticle[] = rows.map((r) => ({ ...r, ownerEmail: emails.get(r.ownerId) ?? null }));
+      send(res, 200, { articles, emailsAvailable: accounts !== null } satisfies AdminArticles);
+    },
+  },
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: ADMIN_ARTICLE_TRANSFER_PATTERN,
+    article: "none",
+    handler: async ({ request: { res } }, captures) => {
+      const [, raw = ""] = captures;
+      if (!isUuid(raw)) throw httpError(400, "id must be a uuid");
+      const preview = await pgArticleTransferStore.previewTransfer(raw.toLowerCase());
+      if (!preview) throw httpError(404, "There is no such article.");
+      res.setHeader("Cache-Control", "private, no-store");
+      send(res, 200, preview satisfies TransferPreview);
+    },
+  },
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: ADMIN_ARTICLE_TRANSFER_PATTERN,
+    article: "none",
+    handler: async ({ user, request: { req, res } }, captures) => {
+      const [, raw = ""] = captures;
+      if (!isUuid(raw)) throw httpError(400, "id must be a uuid");
+      const id = raw.toLowerCase();
+      const parsed = parseTransferRequest(await readBody(req));
+      if (!parsed.ok) throw httpError(400, parsed.message);
+      const { to, expectedFrom } = parsed.value;
+      /* **Before the transaction** (Sol F11): a network call, and the new
+         owner must be a live account with a confirmed address — what the claim
+         asks of a voucher's recipient. */
+      const account = await confirmedAccountEmail(to);
+      if (account.kind === "unavailable") {
+        throw httpError(503, "The sign-in service could not be asked about that account, so nothing was moved. Try again.");
+      }
+      if (account.kind !== "confirmed") {
+        throw httpError(400, "That account has no confirmed address, so it cannot be given an article.");
+      }
+      const answer = await pgArticleTransferStore.transferBetween({ articleId: id, from: expectedFrom, to, actor: user.id });
+      if (answer.kind === "absent") throw httpError(404, "There is no such article.");
+      if (answer.kind === "refused") {
+        switch (answer.reason) {
+          case "stale":
+            throw httpError(409, "That article's owner has changed since you opened it, so nothing was moved. Reload and check.");
+          case "same-owner":
+            throw httpError(409, "That article already belongs to that account.");
+          case "busy":
+            throw httpError(409, "An import or a job is running on that article. Wait for it to finish, then transfer it.");
+          case "minimal":
+            throw httpError(409, "Only that article's abstract has been read. Read it in full first, then transfer it.");
+          default: {
+            const never: never = answer;
+            throw httpError(500, `unknown transfer refusal ${String(never)}`);
+          }
+        }
+      }
+      res.setHeader("Cache-Control", "private, no-store");
+      send(res, 200, {
+        articleId: id,
+        from: expectedFrom,
+        to,
+        deleted: answer.deleted,
+        madePrivate: answer.madePrivate,
+      } satisfies TransferDone);
     },
   },
 
@@ -11867,8 +11971,11 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
    *
    * **A `GET` that may make two outside requests and fill a cache**, which is
    * the link preview's shape above: no model, no money, and almost every call
-   * is answered by a row a week fresh. Every outcome is a 200 carrying one
-   * `CitersResult` member, because each has its own sentence in the panel.
+   * is answered by a row a week fresh. An article with no DOI adds a third, a
+   * title search made on every call (plan 261011q), which spends a little of
+   * OpenAlex's free daily allowance rather than money. Every outcome is a 200
+   * carrying one `CitersResult` member, because each has its own sentence in
+   * the panel.
    *
    * **The owner's only, and in this table.** `loadArticleIdentity` goes through
    * the owner filter, so somebody else's slug is the same 404 as one that does
@@ -13488,6 +13595,10 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
    * a second call finds nothing waiting — and a failure is logged and the plan
    * served anyway, because the next visit tries again. Hence `no-store`.
    * docs/plans/261001m-gift-vouchers-for-free-articles.md (F5).
+   *
+   * **The claim may also move a gift's starter article to the reader**
+   * (261011n § D3), and `claimedArticles` names the slugs it moved, so the
+   * reading view on a private link can re-read the article as its owner.
    */
   {
     kind: "exact",
@@ -13499,8 +13610,11 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          (`claimVouchersFor`, step 4); the notices go after the response, one
          task each, so one that fails does not stop the next (Sol F8). */
       let deliveries: readonly string[] = [];
+      /* The gift starters this claim made the reader's (261011n § D3): the
+         reading view on one re-reads it as its owner. Empty when it failed. */
+      let claimedArticles: readonly string[] = [];
       try {
-        deliveries = (await claimVouchersFor(user)).deliveries;
+        ({ deliveries, articles: claimedArticles } = await claimVouchersFor(user));
       } catch (err) {
         log("store").warn(
           { err: err instanceof Error ? err.name : "unknown" },
@@ -13511,7 +13625,8 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
         await afterResponse("voucher email: claimed", () => sendQueuedVoucherEmail(delivery));
       }
       res.setHeader("Cache-Control", "private, no-store");
-      send(res, 200, await readBillingSummary(currentOwnerId()));
+      const body: BillingUsage = { ...(await readBillingSummary(currentOwnerId())), claimedArticles };
+      send(res, 200, body);
     },
   },
 ];

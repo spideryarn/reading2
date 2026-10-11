@@ -1123,6 +1123,20 @@ one, under `/api/admin/vouchers` ([admin.md](admin.md)); the plan and its review
   always been so; a test now holds it
   ([261011k](../plans/261011k-vouchers-paste-name-and-address-several-to-one-person-add-up.md)).
 
+**The starter article becomes the recipient's when they claim it** (since 2026-10-11, Greg:
+*"when the recipient of the gift voucher with an associated article signs in, we actually want to
+transfer ownership … so that they then own that article and can use chat and everything else
+fully"*). Inside the claim's transaction, in a savepoint, all or nothing: the article moves to the
+claimant only when it is still the voucher creator's, private, the starter of no other unrevoked
+voucher, and carries none of the creator's own words (comments, chats and the like); otherwise the
+voucher is claimed as before and the admin moves it by hand on `/admin/articles`. A move makes it
+private and freezes the creator's ledger rows for it, so the article never counts against the
+recipient's allowance and the creator's bill does not move with it. The reading view asks this same
+route once when a signed-in reader opens a private link, and re-reads the article as theirs if its
+slug comes back in `claimedArticles`. What moves, what is reset and what is deleted is
+[admin.md § `/admin/articles`](admin.md#adminarticles-moving-an-article-to-another-account); the
+plan is [261011n](../plans/261011n-author-gift-link-and-article-ownership-transfer.md).
+
 What the reader is told is `ReaderPlan.gifts` — articles, the claim date and an opaque `noticeKey`,
 on the `free` and `lapsed` arms and, since 2026-10-02, the `paid` arm too, where it is drawn as
 *waiting* for Free; **absent when there are none**, so no surface can mention a
