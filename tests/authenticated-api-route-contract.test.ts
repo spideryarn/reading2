@@ -423,6 +423,12 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/admin/feedback/answers"],
   },
   {
+    /* An admin's addendum to one of their own reports, 261010o. One segment, as `answers` is. */
+    match: { kind: "literal", path: "/api/admin/feedback/addenda" },
+    methods: ["POST"],
+    witnesses: ["/api/admin/feedback/addenda"],
+  },
+  {
     /* An admin's "defer for now" on a question, 261008i. One segment, as `answers` is. */
     match: { kind: "literal", path: "/api/admin/feedback/deferrals" },
     methods: ["POST"],
@@ -1087,8 +1093,9 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
    version" notices (plan 261010a); 115 with Reception's and the claims list's
    new paths beside their old ones, and the claim checks' new path beside its
    old one, for one deploy (plan 261009w Stage 3, removed by its contract);
-   116 with dismissing one of the bar's suggestions (plan 261010u). */
-const EXPECTED_MATCHER_COUNT = 116;
+   116 with dismissing one of the bar's suggestions (plan 261010u); 117 with
+   an admin's addenda to their own reports (plan 261010o). */
+const EXPECTED_MATCHER_COUNT = 117;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
    with the admin's earlier feedback; 118 with their replies to questions; 119
    with the Help pages' chatbot; 120 with Hidden text's Opus check; 121 with the
@@ -1102,8 +1109,9 @@ const EXPECTED_MATCHER_COUNT = 116;
    the dismissed "older version" notices' GET and POST (plan 261010a); 142 with
    the new Reception GET, the new list GET and the new checks' GET and POST
    beside their old paths (plan 261009w Stage 3); 143 with dismissing one of
-   the bar's suggestions (plan 261010u). */
-const EXPECTED_GUARD_COUNT = 143;
+   the bar's suggestions (plan 261010u); 144 with the addenda's POST (plan
+   261010o). */
+const EXPECTED_GUARD_COUNT = 144;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2273,6 +2281,8 @@ describe("the authenticated API's route contract", () => {
         "GET literal /api/admin/feedback/earlier",
         // an admin's reply to a question, 261007d stage 2 — beside the list that carries the questions
         "POST literal /api/admin/feedback/answers",
+        // an admin's addendum to their own report, 261010o — beside the replies
+        "POST literal /api/admin/feedback/addenda",
         // an admin's deferral of a question, 261008i — beside the replies
         "POST literal /api/admin/feedback/deferrals",
         "GET regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)$/",

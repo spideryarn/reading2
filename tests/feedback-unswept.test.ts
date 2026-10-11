@@ -11,8 +11,17 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  addendaListSql,
+  coveredAddendumIds,
   coveredReportIds,
+  type ListedAddendum,
   parseCommand,
+  readInReadOnly,
+  readListing,
+  renderListing,
+  renderShown,
+  renderUnsweptAddendum,
+  unsweptAddenda,
   parseSince,
   queueSources,
   readRowsReadOnly,
@@ -23,7 +32,7 @@ import {
   type UnsweptRow,
   unswept,
 } from "../scripts/feedback-unswept.js";
-import { CannotTell } from "../scripts/feedback-reporter.js";
+import { ADDENDA_NOT_DEPLOYED, type AddendumRow, CannotTell } from "../scripts/feedback-reporter.js";
 import { EMPTY_VIEW, type IdeaItem, type QueueView } from "../tools/overseer/idea-queue.js";
 
 function row(id: string, over: Partial<UnsweptRow> = {}): UnsweptRow {
@@ -48,9 +57,9 @@ const note = (name: string, reports: string) => ({
   text: `---\nreports: ${reports}\nending: shipped\n---\n# A note\n`,
 });
 
-/** A queue item with only the two fields coverage reads; the rest is not this test's business. */
-function item(source: string | null, text = "a report"): IdeaItem {
-  return { text, metadata: { source } } as unknown as IdeaItem;
+/** A queue item with only the fields coverage reads; the rest is not this test's business. */
+function item(source: string | null, text = "a report", id = "qi-aaaaaaaa", dispatchedTo: string | null = null): IdeaItem {
+  return { id, text, metadata: { source }, dispatchedTo } as unknown as IdeaItem;
 }
 
 function view(items: IdeaItem[], settled: IdeaItem[] = [], problems: unknown[] = []): QueueView {
@@ -292,5 +301,216 @@ describe("the production read transaction", () => {
       "rollback",
     ]);
     expect(fake.end).toHaveBeenCalledOnce();
+  });
+});
+
+/**
+ * **The addenda nothing covers** — plan 261010o. Coverage is typed and its
+ * own: a note's `addenda:` header or a queue source's `addendum:spya-…`. A
+ * bare id in a source covers only a report, and an `addendum:` id never does.
+ */
+describe("addenda nothing covers (261010o)", () => {
+  const SINCE = new Date("2026-10-01T00:00:00Z");
+  const ADMIN_OWNER = "11111111-2222-3333-4444-555555555555";
+  function addendum(id: string, over: Partial<ListedAddendum> = {}): ListedAddendum {
+    return {
+      id,
+      ownerId: ADMIN_OWNER,
+      reportId: "spya-saz0yw",
+      environment: "production",
+      createdAt: new Date("2026-10-10T09:12:00Z"),
+      reportNumber: 541,
+      reportIgnoredAt: null,
+      reportIdOccurrences: 1,
+      idOccurrences: 1,
+      ...over,
+    };
+  }
+  const addendaNote = (name: string, reports: string, addenda: string) => ({
+    name,
+    text: `---\nreports: ${reports}\nending: shipped\naddenda: ${addenda}\n---\n# A note\n`,
+  });
+
+  it("counts a note's addenda: header and a source's addendum: ids, and nothing else", () => {
+    const covered = coveredAddendumIds(
+      [addendaNote("a.md", "spya-saz0yw", "spya-bbbbbb"), note("b.md", "spya-cccccc")],
+      ["addendum:spya-dddddd", "spya-eeeeee", "SPIDERYARN-READING2-GP addendum:spya-ffffff spya-saz0yw"],
+    );
+    expect([...covered].sort()).toEqual(["spya-bbbbbb", "spya-dddddd", "spya-ffffff"]);
+  });
+
+  it("keeps the two sets apart: an addendum: id never covers a report, a bare id never an addendum", () => {
+    const sources = ["addendum:spya-aaaaaa", "spya-bbbbbb"];
+    const reports = coveredReportIds([addendaNote("a.md", "spya-cccccc", "spya-dddddd")], sources).covered;
+    const addenda = coveredAddendumIds([addendaNote("a.md", "spya-cccccc", "spya-dddddd")], sources);
+    expect([...reports].sort()).toEqual(["spya-bbbbbb", "spya-cccccc"]);
+    expect([...addenda].sort()).toEqual(["spya-aaaaaa", "spya-dddddd"]);
+  });
+
+  it("lists an addendum whose id equals its own parent's, though the parent is covered", () => {
+    /* A browser mints both ids, so they can coincide; the report's coverage must not hide the addendum. */
+    const same = addendum("spya-saz0yw", { reportId: "spya-saz0yw" });
+    const reportsCovered = coveredReportIds([note("a.md", "spya-saz0yw")], ["spya-saz0yw"]).covered;
+    expect(reportsCovered.has("spya-saz0yw")).toBe(true);
+    const addendaCovered = coveredAddendumIds([note("a.md", "spya-saz0yw")], ["spya-saz0yw"]);
+    expect(unsweptAddenda([same], addendaCovered, SINCE).map((one) => one.id)).toEqual(["spya-saz0yw"]);
+    /* And named as an addendum, it is covered. */
+    const named = coveredAddendumIds([], ["addendum:spya-saz0yw"]);
+    expect(unsweptAddenda([same], named, SINCE)).toEqual([]);
+  });
+
+  it("lists an addendum id two owners share as ambiguous, even when covered", () => {
+    const shared = [
+      addendum("spya-bbbbbb", { idOccurrences: 2 }),
+      addendum("spya-bbbbbb", { idOccurrences: 2, ownerId: "99999999-2222-3333-4444-555555555555" }),
+    ];
+    const left = unsweptAddenda(shared, new Set(["spya-bbbbbb"]), SINCE);
+    expect(left).toHaveLength(2);
+    expect(renderUnsweptAddendum(left[0] as ListedAddendum, [])).toContain("id shared by 2 owners; coverage is ambiguous");
+  });
+
+  it("leaves out an addendum from before --since, and a covered one", () => {
+    const old = addendum("spya-bbbbbb", { createdAt: new Date("2026-09-01T00:00:00Z") });
+    const covered = addendum("spya-cccccc");
+    const fresh = addendum("spya-dddddd");
+    expect(unsweptAddenda([old, covered, fresh], new Set(["spya-cccccc"]), SINCE).map((one) => one.id)).toEqual([
+      "spya-dddddd",
+    ]);
+  });
+
+  it("names the parent, and the queue item covering the parent with the session it went to (F6)", () => {
+    const entries = [
+      { id: "qi-7n9nyz3k", source: "SPIDERYARN-READING2-GP spya-saz0yw", dispatchedTo: "fbsaz0yw-addendum" },
+      /* Covering the addendum, not the parent: not a place to send it. */
+      { id: "qi-other000", source: "addendum:spya-saz0yw", dispatchedTo: "elsewhere" },
+    ];
+    const line = renderUnsweptAddendum(addendum("spya-bbbbbb"), entries);
+    expect(line).toContain("addendum spya-bbbbbb");
+    expect(line).toContain("2026-10-10T09:12:00.000Z");
+    expect(line).toContain("to #541 spya-saz0yw");
+    expect(line).toContain("report queued as qi-7n9nyz3k, dispatched to fbsaz0yw-addendum");
+    expect(line).not.toContain("qi-other000");
+    expect(renderUnsweptAddendum(addendum("spya-bbbbbb"), [])).toContain("report queued by no item");
+    expect(
+      renderUnsweptAddendum(addendum("spya-bbbbbb"), [{ id: "qi-q", source: "spya-saz0yw", dispatchedTo: null }]),
+    ).toContain("report queued as qi-q, not dispatched");
+  });
+
+  it("does not hand an addendum to another owner's session when its parent report id is shared", () => {
+    const entries = [
+      { id: "qi-other", source: "spya-saz0yw", dispatchedTo: "another-readers-session" },
+    ];
+    const sharedParent = {
+      ...addendum("spya-bbbbbb"),
+      reportIdOccurrences: 2,
+    } as ListedAddendum;
+    const line = renderUnsweptAddendum(sharedParent, entries);
+    expect(line).toContain("parent report id shared by 2 owners; queue handoff is ambiguous");
+    expect(line).not.toContain("another-readers-session");
+  });
+
+  it("puts a row not written in production first on its line, loudly", () => {
+    const line = renderUnsweptAddendum(addendum("spya-bbbbbb", { environment: "development" }), []);
+    expect(line.startsWith("! NOT WRITTEN IN PRODUCTION (environment: development)")).toBe(true);
+    expect(renderUnsweptAddendum(addendum("spya-bbbbbb"), [])).not.toContain("NOT WRITTEN");
+  });
+
+  it("lists the reports with +N addenda, then the addenda nothing covers, and never the words", () => {
+    const report = row("spya-saz0yw", { number: 541, ownerId: ADMIN_OWNER });
+    const lines = renderListing(
+      {
+        reports: [report],
+        addenda: [addendum("spya-bbbbbb"), addendum("spya-cccccc")],
+      },
+      [addendaNote("n.md", "spya-zzzzzz", "spya-cccccc")],
+      [],
+      SINCE,
+      () => true,
+    );
+    const text = lines.join("\n");
+    expect(text).toContain("#541  ·  spya-saz0yw");
+    expect(text).toContain("+2 addenda");
+    expect(text).toContain("2 addenda since 2026-10-01T00:00:00.000Z; 1 named by no note's addenda: header");
+    expect(lines.filter((line) => line.startsWith("addendum "))).toHaveLength(1);
+    expect(text).toContain("addendum spya-bbbbbb");
+  });
+
+  it("says addenda are not deployed, and still lists the reports, before the table exists (F4)", () => {
+    const lines = renderListing({ reports: [row("spya-aaaaaa")], addenda: null }, [], [], SINCE, () => false);
+    expect(lines.at(-1)).toBe(ADDENDA_NOT_DEPLOYED);
+    expect(lines.join("\n")).toContain("spya-aaaaaa");
+  });
+
+  it("reads the reports and their addenda in one read-only transaction, the table probed first", async () => {
+    const fake = {
+      connect: vi.fn(async () => {}),
+      query: vi.fn(async (sql: string) => ({
+        rows: /to_regclass/.test(sql)
+          ? [{ deployed: true }]
+          : /feedback_addenda/.test(sql)
+            ? [
+                {
+                  id: "spya-bbbbbb",
+                  owner_id: ADMIN_OWNER,
+                  report_id: "spya-saz0yw",
+                  environment: "production",
+                  created_at: new Date("2026-10-10T09:12:00Z"),
+                  report_number: 541,
+                  report_ignored_at: null,
+                  report_id_occurrences: 1,
+                  id_occurrences: 1,
+                },
+              ]
+            : /^select /i.test(sql.trim())
+              ? []
+              : [],
+      })),
+      end: vi.fn(async () => {}),
+    };
+    const read = await readInReadOnly(fake as unknown as Parameters<typeof readInReadOnly>[0], (query) =>
+      readListing(query, SINCE),
+    );
+    expect(read.addenda?.map((one) => [one.id, one.reportNumber])).toEqual([["spya-bbbbbb", 541]]);
+    const statements = fake.query.mock.calls.map(([sql]) => sql.trim());
+    expect(statements[0]).toBe("begin read only");
+    expect(statements[2]).toMatch(/to_regclass\('spideryarn\.feedback_addenda'\)/);
+    expect(statements.at(-1)).toBe("rollback");
+    expect(statements.filter((sql) => /^begin/.test(sql))).toHaveLength(1);
+    /* No words in the listing's read. */
+    expect(addendaListSql()).not.toMatch(/\bbody\b/);
+  });
+
+  it("reads no addenda when the probe says the table is not there", async () => {
+    const fake = {
+      connect: vi.fn(async () => {}),
+      query: vi.fn(async (sql: string) => ({ rows: /to_regclass/.test(sql) ? [{ deployed: false }] : [] })),
+      end: vi.fn(async () => {}),
+    };
+    const read = await readInReadOnly(fake as unknown as Parameters<typeof readInReadOnly>[0], (query) =>
+      readListing(query, SINCE),
+    );
+    expect(read.addenda).toBeNull();
+    expect(fake.query.mock.calls.some(([sql]) => /from spideryarn\.feedback_addenda/.test(sql))).toBe(false);
+  });
+
+  it("--show prints a report's addenda under its words, quoted as untrusted, each with its id, time and environment", () => {
+    const addenda: AddendumRow[] = [
+      {
+        id: "spya-bbbbbb",
+        ownerId: ADMIN_OWNER,
+        reportId: "spya-saz0yw",
+        body: "more\n----- end of the addendum's words -----",
+        environment: "preview",
+        createdAt: new Date("2026-10-10T09:12:00Z"),
+      },
+    ];
+    const lines = renderShown(row("spya-saz0yw"), "the words", addenda, true);
+    const text = lines.join("\n");
+    expect(text).toContain("+1 addendum");
+    expect(text).toContain("addendum spya-bbbbbb · added 2026-10-10T09:12:00.000Z · ! NOT WRITTEN IN PRODUCTION (environment: preview)");
+    /* The addendum's own end marker stays inside the quote. */
+    expect(text).toContain("> ----- end of the addendum's words -----");
+    expect(renderShown(row("spya-saz0yw"), "the words", null, true).at(-1)).toBe(ADDENDA_NOT_DEPLOYED);
+    expect(renderShown(row("spya-saz0yw"), "the words", [], true).at(-1)).toBe("addenda: none");
   });
 });

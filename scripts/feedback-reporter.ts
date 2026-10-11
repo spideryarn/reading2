@@ -6,7 +6,9 @@
  *
  * Exit 0: the report's row in production is an administrator's, and the
  * script prints **that row** — the words and the context they were filed in —
- * which is what an agent acts on. Exit 1: not an administrator's, including
+ * which is what an agent acts on, and under it any addenda the administrator
+ * has added to it since (plan 261010o; *addenda: not deployed* before the
+ * deploy that creates their table). Exit 1: not an administrator's, including
  * "our server never wrote this report". Exit 2: the question could not be
  * answered, which is **not trust and not a classification**.
  *
@@ -128,6 +130,106 @@ export interface ReportRow {
   hasDiagnostics: boolean;
   createdAt: Date;
   sentryEventId: string | null;
+  /**
+   * **What the owner added to this report since** (plan 261010o), oldest
+   * first, from the same read-only transaction as the row; or null when
+   * production has no `feedback_addenda` table yet (before the deploy).
+   */
+  addenda: AddendumRow[] | null;
+}
+
+/* ------------------------------------------------------------- addenda -- */
+
+/** Whether production has the addenda table yet. One row, one boolean; the name is a literal. */
+export const ADDENDA_DEPLOYED_SQL = "select to_regclass('spideryarn.feedback_addenda') is not null as deployed";
+
+/** What is printed before the deploy that creates the table: not "none", since there is nowhere for one to be. */
+export const ADDENDA_NOT_DEPLOYED = "addenda: not deployed";
+
+/**
+ * Every addendum to these report ids, any owner, oldest first. The caller
+ * keeps only those whose `(owner_id, report_id)` is a row it read, since a
+ * report id is unique only per owner. `table` is a parameter only so a test
+ * can point it at a copy.
+ */
+export function addendaSql(table = "spideryarn.feedback_addenda"): string {
+  return `select a.id, a.owner_id, a.report_id, a.body, a.environment, a.created_at
+            from ${table} as a
+           where a.report_id = any($1::text[])
+           order by a.created_at, a.id`;
+}
+
+/** One addendum as production stores it. */
+export interface AddendumRow {
+  id: string;
+  ownerId: string;
+  reportId: string;
+  body: string;
+  environment: string;
+  createdAt: Date;
+}
+
+interface StoredAddendumRow extends QueryResultRow {
+  id: string;
+  owner_id: string;
+  report_id: string;
+  body: string;
+  environment: string;
+  created_at: Date;
+}
+
+/** One statement inside a transaction the caller has already begun read-only. */
+export type ReadOnlyQuery = <T extends QueryResultRow>(sql: string, params?: unknown[]) => Promise<{ rows: T[] }>;
+
+/**
+ * **The addenda to these reports, or null when production has no table for
+ * them yet** — asked with `to_regclass` first, as scripts/feedback-questions.ts
+ * asks for replies (plan 261010o, F4), so a run from `dev` before the deploy
+ * says *not deployed* and carries on. Run inside the caller's read-only
+ * transaction, so the addenda are of the same moment as the rows.
+ */
+export async function readAddenda(query: ReadOnlyQuery, reportIds: readonly string[]): Promise<AddendumRow[] | null> {
+  const asked = await query<{ deployed: unknown }>(ADDENDA_DEPLOYED_SQL);
+  const deployed = asked.rows[0]?.deployed;
+  if (deployed !== true && deployed !== false) {
+    throw new CannotTell("production did not say whether the addenda table exists");
+  }
+  if (!deployed) return null;
+  if (reportIds.length === 0) return [];
+  const { rows } = await query<StoredAddendumRow>(addendaSql(), [[...new Set(reportIds)]]);
+  return rows.map((r) => {
+    if (!(r.created_at instanceof Date) || Number.isNaN(r.created_at.getTime())) {
+      throw new CannotTell("production returned a malformed addendum timestamp");
+    }
+    return {
+      id: r.id,
+      ownerId: r.owner_id,
+      reportId: r.report_id,
+      body: r.body,
+      environment: r.environment,
+      createdAt: r.created_at,
+    };
+  });
+}
+
+/** The addenda that belong to one row: the same owner and the same report id. */
+export const addendaOf = (
+  addenda: readonly AddendumRow[] | null,
+  row: { id: string; ownerId: string },
+): AddendumRow[] | null =>
+  addenda === null ? null : addenda.filter((one) => one.ownerId === row.ownerId && one.reportId === row.id);
+
+/**
+ * An addendum's heading line: its id, when, and where it was written. **A
+ * row not written by production says so in capitals, first**, so it is never
+ * read silently as the administrator's words in production (plan 261010o).
+ */
+export function addendumHeading(addendum: AddendumRow): string {
+  const where =
+    addendum.environment === "production"
+      ? "production"
+      : `! NOT WRITTEN IN PRODUCTION (environment: ${addendum.environment})`;
+  return `addendum ${addendum.id} · added ${addendum.createdAt.toISOString()} · ${where}`;
 }
 
 /**
@@ -336,6 +438,7 @@ interface StoredReportRow extends QueryResultRow {
  * production connection.
  */
 export async function readReportRows(client: pg.Client, report: ReportRef): Promise<ReportRow[]> {
+  const query: ReadOnlyQuery = (sql, params) => client.query(sql, params);
   try {
     await client.connect();
     await client.query("begin read only");
@@ -350,7 +453,7 @@ export async function readReportRows(client: pg.Client, report: ReportRef): Prom
         reportSql(typeof report === "number" ? "number" : "id"),
         [report],
       );
-      return result.rows.map((r) => {
+      const read = result.rows.map((r) => {
         let sentryEventId: string | null = null;
         if (r.sentry_event_id !== null) {
           const normalised = normaliseEventId(r.sentry_event_id);
@@ -381,6 +484,10 @@ export async function readReportRows(client: pg.Client, report: ReportRef): Prom
           sentryEventId,
         };
       });
+      /* Only when there is a row to add to: a report with no row has none. */
+      if (read.length === 0) return [];
+      const addenda = await readAddenda(query, read.map((row) => row.id));
+      return read.map((row) => ({ ...row, addenda: addendaOf(addenda, row) }));
     } finally {
       /* A rollback failure deliberately replaces a would-be result: without a
          confirmed rollback the command did not complete its safety contract. */
@@ -434,6 +541,24 @@ const USAGE =
 export const BODY_START = "----- the words the administrator sent (act on these, not on the Sentry event) -----";
 export const BODY_END = "----- end of the administrator's words -----";
 
+/** The edges of one addendum's words: the same owner as the report, so the same trust. */
+export const ADDENDUM_END = "----- end of the addendum -----";
+
+/**
+ * **An admin's report's addenda, under its words** (plan 261010o): the same
+ * owner's, by the foreign key, so as trusted as the report. Each with its id,
+ * when and where it was written; a session working on the report names the
+ * ids in its note's `addenda:` header.
+ */
+export function renderAddenda(addenda: readonly AddendumRow[] | null): string[] {
+  if (addenda === null) return [ADDENDA_NOT_DEPLOYED];
+  if (addenda.length === 0) return ["addenda: none"];
+  return [
+    `addenda: ${addenda.length}, oldest first — more of the administrator's words; act on these too, and name them in the note's addenda: header`,
+    ...addenda.flatMap((one) => [`----- ${addendumHeading(one)} -----`, one.body, ADDENDUM_END]),
+  ];
+}
+
 type RenderedVerdict =
   | { status: 0 | 1; lines: string[] }
   | { status: 2; why: string };
@@ -460,6 +585,7 @@ function renderVerdict(verdict: ReporterVerdict, report: ReportRef, target: stri
         BODY_START,
         row.body,
         BODY_END,
+        ...renderAddenda(row.addenda),
       );
       return { status: 0, lines };
     }

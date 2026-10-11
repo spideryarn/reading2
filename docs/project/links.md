@@ -1017,6 +1017,8 @@ against `splitCitations`, and what happens to a URL that is still being streamed
   server, so its count of "how many links are in this article" is a distinct-destination count and
   differs from the raw one in the table above; it is also where a link the reader asks *about* gets
   followed, which this card deliberately never does
+- [sources.md § Links](sources.md#links) — every one of these links at once, as a list in the
+  band: one row per address, read in the browser like the free card, with no fetch
 - [glossary.md](glossary.md) — the other half of the same card
 - [block-ids.md](block-ids.md) — why an in-article anchor points at an id we minted, and what stage 3
   had to do to the author's own ids to make that work

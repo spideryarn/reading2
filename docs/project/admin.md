@@ -256,6 +256,10 @@ reader's data, and it is under the namespace because only an administrator is as
 The third, since 2026-10-08, is **`POST /api/admin/feedback/deferrals`**, *Defer for now* on a
 question: a row in `feedback_question_deferrals` under the same id, for the same reasons
 ([261008i](../plans/261008i-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md)).
+The fourth, since 2026-10-10, is **`POST /api/admin/feedback/addenda`**, more words added to one of
+the administrator's own reports that has not ended: a row in `feedback_addenda`, whose foreign key
+to `feedback (owner_id, id)` is what keeps it to the administrator's own reports
+([feedback.md § Adding to an earlier report](feedback.md#adding-to-an-earlier-report-since-2026-10-10)).
 
 The metadata is exact and worth listing rather than gesturing at: the account **id**, the **email
 address**, the **providers** GoTrue records for it (`google`, `email`), whether that address is

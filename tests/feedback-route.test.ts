@@ -60,6 +60,8 @@ import type {
   StoredFeedbackAnswer,
   StoredFeedbackDeferral,
   NewFeedbackDeferral,
+  FeedbackAddendumSubmission,
+  NewFeedbackAddendum,
 } from "../src/store/contracts.js";
 import { acceptAny, AUTHED_HEADERS, TEST_EMAIL, TEST_OWNER } from "./helpers/authed.js";
 import { logLinesWhile } from "./helpers/log-capture.js";
@@ -90,6 +92,10 @@ let statusAnswer: unknown = { reports: [], more: false, counts: { open: 0, waiti
 let answersSubmitted: { input: NewFeedbackAnswer; owner: string }[] = [];
 /** What the fake `submitAnswer` answers with; null means "created, echoing the input". */
 let answerOutcome: FeedbackAnswerSubmission | null = null;
+/** Every `submitAddendum` the route made, with the endings and the owner in force (plan 261010o). */
+let addendaSubmitted: { input: NewFeedbackAddendum; endings: unknown; owner: string }[] = [];
+/** What the fake `submitAddendum` answers with; null means "created, echoing the input". */
+let addendumOutcome: FeedbackAddendumSubmission | null = null;
 /** The question ids each `answersTo` asked about, and the replies it hands back. */
 let newestAsked: { ids: readonly string[]; owner: string }[] = [];
 let newestAnswer: StoredFeedbackAnswer[] = [];
@@ -223,6 +229,15 @@ vi.mock("../src/store/index.js", async (importActual) => {
           answerOutcome ?? {
             kind: "created",
             answer: { id: input.id, questionId: input.questionId, body: input.body, createdAt: "2026-10-07T09:00:00.000Z" },
+          }
+        );
+      },
+      submitAddendum: async (input: NewFeedbackAddendum, endings: unknown) => {
+        addendaSubmitted.push({ input, endings, owner: currentOwnerId() });
+        return (
+          addendumOutcome ?? {
+            kind: "created",
+            addendum: { id: input.id, reportId: input.reportId, body: input.body, createdAt: "2026-10-10T09:12:00.000Z" },
           }
         );
       },
@@ -469,6 +484,8 @@ beforeEach(() => {
   statusAnswer = { reports: [], more: false, counts: { open: 0, waiting: 0, aside: 0, shipped: 0 } };
   answersSubmitted = [];
   answerOutcome = null;
+  addendaSubmitted = [];
+  addendumOutcome = null;
   newestAsked = [];
   newestAnswer = [];
   linkedAsked = [];
@@ -685,6 +702,7 @@ describe("GET /api/admin/feedback/earlier", () => {
     number,
     status,
     ignoredAt: null,
+    addenda: [],
     ...over,
   });
 
@@ -742,6 +760,7 @@ describe("GET /api/admin/feedback/earlier", () => {
           status: "aside",
           comment: "Set aside: the browser gives us no way to do this.",
           ignoredAt: null,
+          addenda: [],
         },
         { ...row("spya-k3m9qt", 211, "shipped"), comment: null },
         { ...row("spya-unkn0w", 210, "aside", { ignoredAt: "2026-10-05T09:00:00.000Z" }), comment: null },
@@ -765,6 +784,65 @@ describe("GET /api/admin/feedback/earlier", () => {
       },
     ]);
     expect(listed, "the plain list is not read as well").toEqual([]);
+  });
+
+  /* Plan 261010o: each report carries its addenda, three fields each, and
+     nothing else the store might hand back with one. */
+  it("sends each report's addenda, oldest first as the store has them, three fields each", async () => {
+    statusAnswer = {
+      reports: [
+        row("spya-wa1t00", 541, "waiting", {
+          addenda: [
+            { id: "spya-addzz2", body: "Actually, only the Open ones.", createdAt: "2026-10-10T09:12:00.000Z", reportId: "spya-wa1t00" },
+            { id: "spya-addzz3", body: "And a second thought.", createdAt: "2026-10-10T09:13:00.000Z", environment: "test" },
+          ],
+        }),
+        row("spya-k3m9qt", 540, "shipped"),
+      ],
+      more: false,
+      counts: { open: 0, waiting: 1, aside: 0, shipped: 1 },
+    };
+    const reply = await get();
+    expect(reply.status).toBe(200);
+    const sent = reply.body as { reports: { id: string; addenda: unknown }[] };
+    expect(sent.reports.map((one) => one.addenda)).toEqual([
+      [
+        { id: "spya-addzz2", body: "Actually, only the Open ones.", createdAt: "2026-10-10T09:12:00.000Z" },
+        { id: "spya-addzz3", body: "And a second thought.", createdAt: "2026-10-10T09:13:00.000Z" },
+      ],
+      [],
+    ]);
+  });
+
+  /* F1: a report and its addenda are kept or cut together, and the budget
+     counts them both. The largest permitted item, a report at the cap and
+     addenda at the cap, all control characters, is still sent alone. */
+  it("counts a report's addenda in the byte budget, and keeps or cuts them with the report", async () => {
+    const heavy = "\u0001".repeat(MAX_FEEDBACK_BODY_CHARS);
+    const half = "\u0001".repeat(MAX_FEEDBACK_BODY_CHARS / 2);
+    const rows = Array.from({ length: EARLIER_FEEDBACK_LIMIT }, (_, i) =>
+      row(`spya-hvy${String(i).padStart(3, "0")}`, 300 - i, "open", {
+        body: heavy,
+        addenda: [
+          { id: `spya-ad${String(i).padStart(3, "0")}a`, body: half, createdAt: "2026-10-10T09:12:00.000Z" },
+          { id: `spya-ad${String(i).padStart(3, "0")}b`, body: half, createdAt: "2026-10-10T09:13:00.000Z" },
+        ],
+      }),
+    );
+    statusAnswer = {
+      reports: rows,
+      more: false,
+      counts: { open: EARLIER_FEEDBACK_LIMIT, waiting: 0, aside: 0, shipped: 0 },
+    };
+    const reply = await get();
+    expect(reply.status).toBe(200);
+    const sent = reply.body as { reports: { id: string; addenda: { body: string }[] }[]; more: boolean };
+    /* Each item is twice a report, so half as many fit as without addenda. */
+    expect(sent.reports.length).toBeGreaterThan(0);
+    expect(sent.reports.length).toBeLessThan(Math.floor(FEEDBACK_LIST_BYTES / (MAX_FEEDBACK_BODY_CHARS * 6)));
+    expect(sent.reports.every((one) => one.addenda.length === 2 && one.addenda.every((a) => a.body === half))).toBe(true);
+    expect(sent.more).toBe(true);
+    expect(Buffer.byteLength(JSON.stringify(sent.reports))).toBeLessThanOrEqual(FEEDBACK_LIST_BYTES);
   });
 
   it("hands each ?show= to the store, so the cap applies after the filter", async () => {
@@ -1160,6 +1238,125 @@ describe("questions for the admin, and replies to them", () => {
       await post({ id: "spya-repzyy", question: "q-aaaaaa", body: "a thaumaturgical decision" });
     });
     expect(logged).toContain("spya-repzyy");
+    expect(logged).not.toContain("thaumaturgical");
+  });
+});
+
+/**
+ * **An addendum to one of the admin's own reports** — `POST
+ * /api/admin/feedback/addenda`, plan 261010o. The store's six outcomes, each
+ * to its status; the store itself is tests/feedback-store.test.ts.
+ */
+describe("POST /api/admin/feedback/addenda", () => {
+  const ADDENDA = "/api/admin/feedback/addenda";
+  const post = (body: unknown, verify?: Parameters<typeof handleApi>[2]) =>
+    call(body, { method: "POST", path: ADDENDA, ...(verify ? { verify } : {}) });
+  const good = { id: "spya-addzz2", report: "spya-k3m9qt", body: "Actually, only the Open ones." };
+  const acceptSomebodyElse: Parameters<typeof handleApi>[2] = async () => ({
+    ok: true,
+    claims: {
+      sub: "0000f5e1-0000-4000-8000-00000000beef",
+      email: "somebody-else@example.test",
+      role: "authenticated",
+      is_anonymous: false,
+    },
+  });
+
+  it("stores one: 201, the server's environment, the endings, the signed-in owner, never cached", async () => {
+    const reply = await post({ ...good, body: "  Actually, only the Open ones.  " });
+    expect(reply.status).toBe(201);
+    expect(reply.headers["cache-control"]).toBe("private, no-store");
+    expect(reply.body).toEqual({
+      addendum: { id: "spya-addzz2", body: "Actually, only the Open ones.", createdAt: "2026-10-10T09:12:00.000Z" },
+    });
+    expect(addendaSubmitted).toEqual([
+      {
+        input: { id: "spya-addzz2", reportId: "spya-k3m9qt", body: "Actually, only the Open ones.", environment: "test" },
+        /* The same endings the list's status is worked out from, so the gate and the list agree. */
+        endings: { shipped: ["spya-k3m9qt", "spya-sh1pd2"], declined: ["spya-dec1ne"], awaiting: ["spya-wa1t00"] },
+        owner: TEST_OWNER,
+      },
+    ]);
+    /* An addendum is not a report: nothing is filed, mirrored or mailed. */
+    expect(submitted).toEqual([]);
+    expect(attempted).toEqual([]);
+    expect(notices).toEqual([]);
+  });
+
+  it("answers each outcome with its own status, and never echoes the words on a refusal", async () => {
+    addendumOutcome = {
+      kind: "duplicate",
+      addendum: { id: "spya-addzz2", reportId: "spya-k3m9qt", body: good.body, createdAt: "2026-10-10T09:00:00.000Z" },
+    };
+    const again = await post(good);
+    expect(again.status).toBe(200);
+    expect(again.body).toEqual({ addendum: { id: "spya-addzz2", body: good.body, createdAt: "2026-10-10T09:00:00.000Z" } });
+
+    const refusals: [FeedbackAddendumSubmission, number, string][] = [
+      [{ kind: "conflict" }, 409, "[fx-reused]"],
+      [{ kind: "missing" }, 404, "[fx-missing]"],
+      [{ kind: "closed", status: "shipped" }, 409, "[fx-closed]"],
+      [{ kind: "full" }, 409, "[fx-full]"],
+    ];
+    for (const [outcome, status, tag] of refusals) {
+      addendumOutcome = outcome;
+      const reply = await post({ ...good, body: "a thaumaturgical second thought" });
+      expect(reply.status, outcome.kind).toBe(status);
+      expect(JSON.stringify(reply.body), outcome.kind).toContain(tag);
+      expect(reply.body, outcome.kind).not.toHaveProperty("addendum");
+      expect(JSON.stringify(reply.body), outcome.kind).not.toContain("thaumaturgical");
+      expect(reply.headers["cache-control"], outcome.kind).toBe("private, no-store");
+    }
+  });
+
+  it("refuses a body with any field but the three, in fixed prose, and reaches no store", async () => {
+    const SECRET = "thaumaturgical";
+    for (const extra of [{ environment: "production" }, { ownerId: TEST_OWNER }, { [SECRET]: 1 }, { question: "q-aaaaaa" }]) {
+      const reply = await post({ ...good, ...extra });
+      expect(reply.status).toBe(400);
+      expect(JSON.stringify(reply.body)).not.toContain(SECRET);
+    }
+    expect(addendaSubmitted).toEqual([]);
+  });
+
+  it("refuses a bad id, a bad report, an empty addendum, one over the cap, and a body that is not an object", async () => {
+    expect((await post({ ...good, id: "212" })).status).toBe(400);
+    expect((await post({ ...good, id: undefined })).status).toBe(400);
+    expect((await post({ ...good, report: "#212" })).status).toBe(400);
+    expect((await post({ ...good, report: "q-aaaaaa" })).status).toBe(400);
+    expect((await post({ ...good, report: undefined })).status).toBe(400);
+    expect((await post({ ...good, body: "   " })).status).toBe(400);
+    expect((await post({ ...good, body: 7 })).status).toBe(400);
+    expect((await post({ ...good, body: "x".repeat(MAX_FEEDBACK_BODY_CHARS + 1) })).status).toBe(400);
+    expect((await post([good])).status).toBe(400);
+    expect(addendaSubmitted).toEqual([]);
+    /* The positive control: exactly the cap is stored. */
+    expect((await post({ ...good, body: "x".repeat(MAX_FEEDBACK_BODY_CHARS) })).status).toBe(201);
+  });
+
+  /* F7: the request limit is worked out as the reply route's is. A cap's
+     worth of control characters, each escaped to six bytes, is the heaviest
+     legal request, and it must not be refused for its size. */
+  it("takes the heaviest legal request: a cap's worth of characters JSON escapes to six bytes each", async () => {
+    const heavy = "\u0001".repeat(MAX_FEEDBACK_BODY_CHARS);
+    expect(Buffer.byteLength(JSON.stringify({ ...good, body: heavy }))).toBeGreaterThan(MAX_FEEDBACK_BODY_CHARS * 6);
+    const reply = await post({ ...good, body: heavy });
+    expect(reply.status).toBe(201);
+    expect(addendaSubmitted.map((one) => one.input.body.length)).toEqual([MAX_FEEDBACK_BODY_CHARS]);
+  });
+
+  it("is a 403 for a signed-in reader who is not an admin, 401 signed out, and reaches no store", async () => {
+    expect((await post(good, acceptSomebodyElse)).status).toBe(403);
+    expect((await call(good, { method: "POST", path: ADDENDA, headers: {} })).status).toBe(401);
+    expect(addendaSubmitted).toEqual([]);
+  });
+
+  it("logs the ids and the length, never the words", async () => {
+    const logged = await logLinesWhile(async () => {
+      await post({ ...good, body: "a thaumaturgical second thought" });
+    });
+    expect(logged).toContain("spya-addzz2");
+    expect(logged).toContain("spya-k3m9qt");
     expect(logged).not.toContain("thaumaturgical");
   });
 });

@@ -49,7 +49,7 @@
  * everything on screen.
  * docs/plans/261003o-debate-reception-and-claims-sub-modes-and-a-tidier-panel.md.
  *
- * **Since 2026-10-09 they are two of Sources' three sub-modes**
+ * **Since 2026-10-09 they are two of Sources' sub-modes**
  * (`?sources=`), after Bibliography, which is the Citations panel. This
  * panel draws Reception or Claims under the chip row the mode hands it as
  * `head` (SourcesMode.tsx § `SourcesViews`), and the chips' numbers and
@@ -273,7 +273,7 @@ import { RewriteWaiting } from "./RewriteWaiting.js";
 import { TipNote, Tooltip } from "./Tooltip.js";
 import { type CitedInParagraph, workShortName, worksCitedIn } from "./cited-in-paragraph.js";
 import { lensThreads, threadForOrigin } from "./useChatAnchors.js";
-import { OriginChatMark } from "./OriginChat.js";
+import { OriginChatMark, originChatTip } from "./OriginChat.js";
 import { claimFocusKey, type ItemFocus, useLandOnItem } from "./item-focus.js";
 import { useRenderCount } from "./perf.js";
 import type { UseReception } from "./useReception.js";
@@ -1682,7 +1682,8 @@ function Angles({ chats }: { chats: ReceptionAndClaimsChats }) {
                   type="button"
                   className="rcp-angle"
                   aria-label={`${RECEPTION_OPEN_ANGLE_CHAT}: ${chat.origin.lens}`}
-                  title={angleChatTip(chat.turns)}
+                  aria-describedby={chat.gist ? `rcp-angle-gist-${chat.id}` : undefined}
+                  title={originChatTip(RECEPTION_OPEN_ANGLE_CHAT, chat.turns, chat.gist ? "gist" : "none")}
                   onClick={() => chats.onOpen(chat.id)}
                 >
                   <MessagesSquare size={12} aria-hidden="true" />
@@ -1692,6 +1693,15 @@ function Angles({ chats }: { chats: ReceptionAndClaimsChats }) {
                     “<span className="rcp-angle-words voice-reader">{chat.origin.lens}</span>”
                   </span>
                   <span className="rcp-angle-count">{chat.turns}</span>
+                  {/* The chat's gist under the angle, as every other item's mark
+                      shows it (OriginChat.tsx § OriginChatMark; Greg,
+                      2026-10-10, spya-rbp55k: *"true for anywhere where we
+                      offer Ask in Chat"*, plan 261011c). The model's words. */}
+                  {chat.gist && (
+                    <span id={`rcp-angle-gist-${chat.id}`} className="rcp-angle-gist origin-chat-gist voice-ai">
+                      {chat.gist}
+                    </span>
+                  )}
                 </button>
               </li>
             ))}
@@ -1705,11 +1715,6 @@ function Angles({ chats }: { chats: ReceptionAndClaimsChats }) {
       )}
     </div>
   );
-}
-
-/** A line's tooltip: what a press does, and what the number is. */
-function angleChatTip(turns: number): string {
-  return `${RECEPTION_OPEN_ANGLE_CHAT}. ${turns} ${turns === 1 ? "question" : "questions"} so far.`;
 }
 
 /** How many citing papers are on screen before *Show all*. */

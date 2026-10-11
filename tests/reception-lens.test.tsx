@@ -16,6 +16,7 @@
  * The whole trip into Chat and back is tests/reception-lens-in-chat.test.tsx.
  * Fixtures are tests/sources-claims-chat.test.tsx's, cut down.
  */
+import { readFileSync } from "node:fs";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -25,9 +26,14 @@ import type { BlockId, ClaimReceptionRow, Reception, ReceptionCounts, ThreadSumm
 import type { PublicReception } from "../src/public-types.js";
 import type { UseReception } from "../src/web/useReception.js";
 
-const { ReceptionAndClaimsPanel, RECEPTION_LENS_LABEL, RECEPTION_LENS_SEND, RECEPTION_ANGLES_HEAD, RECEPTION_ANGLES_SHOWN } = await import(
-  "../src/web/ReceptionAndClaimsPanel.js"
-);
+const {
+  ReceptionAndClaimsPanel,
+  RECEPTION_LENS_LABEL,
+  RECEPTION_LENS_SEND,
+  RECEPTION_ANGLES_HEAD,
+  RECEPTION_ANGLES_SHOWN,
+  RECEPTION_OPEN_ANGLE_CHAT,
+} = await import("../src/web/ReceptionAndClaimsPanel.js");
 
 const BLOCK = "spya-k3m9qt" as BlockId;
 const CLAIM = "a starter needs cool water";
@@ -339,6 +345,33 @@ describe("Your angles", () => {
       expect(a.querySelector(".rcp-angle-words")?.classList.contains("voice-reader")).toBe(true);
     }
     expect(angles()[1]?.querySelector(".rcp-angle-count")?.textContent).toBe("2");
+  });
+
+  it("shows the chat's gist under its angle, in the model's face, and nothing until there is one (261011c)", () => {
+    /* Greg, 2026-10-10 (spya-rbp55k): a short summary of the chat in the
+       place that started it, "anywhere where we offer Ask in Chat". */
+    const gist = "Two replications failed; the third used a different measure.";
+    paintOwner([
+      summary({ id: "spya-aaa222", origin: LENS, updatedAt: "2026-10-05T11:00:00.000Z", gist }),
+      summary({
+        id: "spya-aaa333",
+        origin: { mode: "reception", lens: "replication attempts" },
+        updatedAt: "2026-10-05T12:00:00.000Z",
+      }),
+    ]);
+    const [fresh, gisted] = angles();
+    expect(fresh?.querySelector(".rcp-angle-gist")).toBeNull();
+    const line = gisted?.querySelector(".rcp-angle-gist");
+    expect(line?.textContent).toBe(gist);
+    expect(line?.classList.contains("voice-ai")).toBe(true);
+    expect(gisted?.getAttribute("aria-label")).toBe(`${RECEPTION_OPEN_ANGLE_CHAT}: ${LENS.lens}`);
+    expect(gisted?.getAttribute("aria-describedby")).toBe(line?.id);
+    expect(gisted?.title).toMatch(/AI's summary/);
+    expect(gisted?.title).toMatch(/1 question so far/);
+    /* The shared gist clamp has to clip as well as count lines. Without this,
+       a long angle summary can paint into the next row in a narrow band. */
+    const css = readFileSync("src/web/styles/origin-chat.css", "utf8");
+    expect(css).toMatch(/\.origin-chat-gist\s*\{[^}]*overflow:\s*hidden;/s);
   });
 
   it("opens that chat on a press, and hands nothing over", () => {

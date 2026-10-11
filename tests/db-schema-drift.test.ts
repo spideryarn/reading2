@@ -282,6 +282,7 @@ describe("declaredTables", () => {
       "command_suggestion_dismissals",
       "comments",
       "feedback",
+      "feedback_addenda",
       "feedback_question_answers",
       "feedback_question_deferrals",
       "feedback_shipped_emails",
@@ -406,8 +407,9 @@ describe("against a real database", () => {
          261008i § 3; `sources_claim_checks` since plan 261009w); fifty-six since `author_gifts` and `author_lookups`,
          2026-10-09 (plan 261010c); fifty-seven since `stale_notice_dismissals`,
          2026-10-10 (plan 261010a); fifty-eight since
-         `command_suggestion_dismissals` the same day (plan 261010u). */
-      expect(report.declaredTables).toBe(58);
+         `command_suggestion_dismissals` the same day (plan 261010u); fifty-nine
+         since `feedback_addenda` the same day (plan 261010o). */
+      expect(report.declaredTables).toBe(59);
       expect(driftWarnings(report)).toEqual([]);
     });
   });

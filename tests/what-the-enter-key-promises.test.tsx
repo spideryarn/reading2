@@ -134,7 +134,9 @@ const PROMISES: Record<string, string> = {
      nothing, so Enter is a new line. */
   "DesignPage.tsx › Example text box": "newline",
   "FeedbackDialog.tsx › fb-input fb-body": "newline",
-  "FeedbackEarlier.tsx › fb-input fb-reply-input": "newline",
+  /* The reply box under a question and the addendum box under a report: one
+     component since 261010o. ⌘/Ctrl+Enter sends, never plain Enter. */
+  "FeedbackSendBox.tsx › fb-input fb-reply-input": "newline",
   /* The note on how an Illustrated picture should come out: a sentence or two,
      often dictated, and the paint it goes with is a $0.40 press that must
      never be one keystroke away (plan 261002j). */

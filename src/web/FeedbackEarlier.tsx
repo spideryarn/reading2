@@ -58,7 +58,7 @@
  * asked** (a file under docs/user-feedback/questions/, compiled into the
  * server). They are drawn at the top of *Needs a decision*, counted beside
  * that pill in every view, and each has a reply box with a microphone
- * (`EarlierQuestions`). A reply is a row of its own, never a report.
+ * (`EarlierThreads`). A reply is a row of its own, never a report.
  *
  * ## Once per opening, per filter
  *
@@ -75,7 +75,7 @@
  * the reader has already chosen a filter.
  */
 import { LoaderCircle } from "lucide-react";
-import { type KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { MAX_FEEDBACK_COMMENT_CHARS } from "../feedback-ending-values.js";
 import {
@@ -95,7 +95,9 @@ import {
   FEEDBACK_REPLY_STALE,
 } from "../messages.js";
 import {
+  ADDENDUM_STATUSES,
   MAX_FEEDBACK_ANSWER_CHARS,
+  type AdminFeedbackAddendum,
   type AdminFeedbackQuestion,
   type AdminFeedbackQuestionAnswer,
   ADMIN_EARLIER_FEEDBACK_SHOWS,
@@ -112,15 +114,12 @@ import {
   type EarlierFeedbackStatus,
   type FeedbackKind,
 } from "../types.js";
-import { keepDictation } from "./dictation-keep.js";
-import { useReaderTranscriber } from "./dictation-upload.js";
-import { DictationButton, DictationStrip } from "./DictationStrip.js";
+import { AddendumBox, addendaShown, isAddendum, type ReportAddenda, useReportAddenda } from "./FeedbackAddendum.js";
+import { FeedbackSendBox } from "./FeedbackSendBox.js";
 import { apiFetch } from "./lib/api.js";
 import { Link } from "./Link.js";
 import { exactly, relativeAgo } from "./relative-time.js";
 import { parseRoute, readHref } from "./router.js";
-import { useDictationField } from "./useDictationField.js";
-import { useFitTextarea } from "./useFitTextarea.js";
 
 /**
  * **Which list an answer is**: every reader's (`plain`, `GET /api/feedback`),
@@ -252,7 +251,7 @@ function isEarlierFeedbackPage(value: unknown, which: EarlierFeedbackShow): valu
 function isAdminEarlierFeedbackPage(
   value: unknown,
   which: AdminEarlierFeedbackShow,
-): value is AdminThreadsPage {
+): value is AdminWirePage {
   const envelope = readEnvelope(value, which, ADMIN_EARLIER_FEEDBACK_SHOWS);
   if (envelope === null) return false;
   const { counts } = envelope;
@@ -267,9 +266,13 @@ function isAdminEarlierFeedbackPage(
       (typeof report.comment === "string" && report.comment !== "" &&
         report.comment.length <= MAX_FEEDBACK_COMMENT_CHARS)) &&
     (report.ignoredAt === null ||
-      (typeof report.ignoredAt === "string" && !Number.isNaN(Date.parse(report.ignoredAt))))
+      (typeof report.ignoredAt === "string" && !Number.isNaN(Date.parse(report.ignoredAt)))) &&
+    /* No key at all is a server from before 261010o: none, and no box
+       (`withAddendaKnown`). A key is a list of exactly-shaped addenda, ids no
+       two share, or the whole answer fails. */
+    (!Object.hasOwn(report, "addenda") || areAddenda(report.addenda))
   )) return false;
-  const reports = envelope.reports as unknown as AdminEarlierFeedback[];
+  const reports = envelope.reports as unknown as AdminWireReport[];
   if (new Set(reports.map((report) => report.id)).size !== reports.length) return false;
   if (new Set(reports.map((report) => report.number)).size !== reports.length) return false;
   for (const status of EARLIER_FEEDBACK_STATUSES) {
@@ -279,16 +282,32 @@ function isAdminEarlierFeedbackPage(
   return areQuestions((value as { questions?: unknown }).questions);
 }
 
-/** A reply as the server sends it back: an id, words, and a time that parses. */
-function isQuestionAnswer(value: unknown): value is AdminFeedbackQuestionAnswer {
-  if (typeof value !== "object" || value === null) return false;
-  const answer = value as Record<string, unknown>;
+/** A reply as the server sends it back: an id, words, and a time that parses — an addendum's three. */
+const isQuestionAnswer: (value: unknown) => value is AdminFeedbackQuestionAnswer = isAddendum;
+
+/** A report's addenda: each exactly shaped, no id twice. */
+function areAddenda(value: unknown): value is AdminFeedbackAddendum[] {
   return (
-    Object.keys(answer).sort().join() === "body,createdAt,id" &&
-    typeof answer.id === "string" && isSpideryarnId(answer.id) &&
-    typeof answer.body === "string" && answer.body.trim() !== "" &&
-    typeof answer.createdAt === "string" && !Number.isNaN(Date.parse(answer.createdAt))
+    Array.isArray(value) &&
+    value.every(isAddendum) &&
+    new Set(value.map((one: AdminFeedbackAddendum) => one.id)).size === value.length
   );
+}
+
+/** A report as the admin route may send it: `addenda` absent from a server before 261010o. */
+type AdminWireReport = Omit<AdminEarlierFeedback, "addenda"> & { addenda?: AdminFeedbackAddendum[] };
+type AdminWirePage = Omit<AdminThreadsPage, "reports"> & { reports: AdminWireReport[] };
+
+/**
+ * **A report as this client draws it**: `addenda` null when the server said
+ * nothing about them (a server from before 261010o, mid-deploy), which draws
+ * none and **no box**, since that server has no route to send one to.
+ */
+export type AdminRowReport = Omit<AdminEarlierFeedback, "addenda"> & { addenda: AdminFeedbackAddendum[] | null };
+
+/** The checked answer, with an absent `addenda` made the explicit null the rows read. */
+function withAddendaKnown(page: AdminWirePage): AdminThreadsPage {
+  return { ...page, reports: page.reports.map((report) => ({ ...report, addenda: report.addenda ?? null })) };
 }
 
 /** A reply POST's whole receipt: one stored answer and no server-only sibling fields. */
@@ -324,8 +343,11 @@ export type ThreadQuestion = Omit<AdminFeedbackQuestion, "report"> & {
   report: (Omit<NonNullable<AdminFeedbackQuestion["report"]>, "body"> & { body: string | null }) | null;
 };
 
-/** The admin answer as this client keeps it: threads, not the server's raw questions. */
-export type AdminThreadsPage = Omit<AdminEarlierFeedbackPage, "questions"> & { questions: ThreadQuestion[] };
+/** The admin answer as this client keeps it: threads, not the server's raw questions, and rows that say whether addenda are known. */
+export type AdminThreadsPage = Omit<AdminEarlierFeedbackPage, "questions" | "reports"> & {
+  questions: ThreadQuestion[];
+  reports: AdminRowReport[];
+};
 
 /**
  * **A server from before 261008i answers in the six-key shape** — a rollback,
@@ -479,13 +501,15 @@ export interface EarlierFeedback {
   /** How many of the server's threads wait on a decision, without a remembered no-longer-open question: the pill's and the shortcut's number. */
   waitingQuestionCount: number | null;
   replies: QuestionReplies;
+  /** The admin's addenda to their own reports, in progress and just sent (FeedbackAddendum.tsx). */
+  addenda: ReportAddenda;
 }
 
 /** Where the open thread's send, or its defer, has got to. */
 export type ReplyStage = { kind: "idle" } | { kind: "sending" } | { kind: "failed"; message: string };
 
-/** Something this page did to a thread, and when on the hook's clock: kept until a read started after it lands. */
-interface Receipt<T> {
+/** Something this page did to a thread or a report, and when on the hook's clock: kept until a read started after it lands. */
+export interface Receipt<T> {
   value: T;
   at: number;
 }
@@ -804,7 +828,7 @@ async function read(ask: EarlierAsk): Promise<ReadAnswer | "failed" | "absent"> 
     if (res.status === 404) return "absent";
     if (!res.ok) return "failed";
     const page = withLegacyQuestions(await res.json());
-    return isAdminEarlierFeedbackPage(page, ask.show) ? { detail: "admin", page } : "failed";
+    return isAdminEarlierFeedbackPage(page, ask.show) ? { detail: "admin", page: withAddendaKnown(page) } : "failed";
   }
   const query = ask.show === "all" ? "" : `?show=${ask.show}`;
   const res = await apiFetch(`${PLAIN_PATH}${query}`);
@@ -856,6 +880,7 @@ export function useEarlierFeedback(open: boolean, wanted: boolean, admin = false
      flight is not unmounted when the dialog closes. */
   const rememberedQuestions = useRef(new Map<string, ThreadQuestion>());
   const replies = useQuestionReplies(tick, chose);
+  const addenda = useReportAddenda(tick);
 
   const load = useCallback(async (asked: EarlierAsk) => {
     const which = asked.show;
@@ -969,6 +994,7 @@ export function useEarlierFeedback(open: boolean, wanted: boolean, admin = false
     liveQuestions: currentQuestions,
     waitingQuestionCount: currentQuestions === null ? null : waitingThreads(currentQuestions),
     replies,
+    addenda,
   };
 }
 
@@ -1229,7 +1255,19 @@ function PlainRow({ report, show, now }: { report: EarlierReport; show: EarlierF
  * ("feedback 212"); what became of it, on every row and under every filter;
  * and under the reader's words, the one line its note says about it.
  */
-function AdminRow({ report, now }: { report: AdminEarlierFeedback; now: number }) {
+function AdminRow({ report, now, adding }: { report: AdminRowReport; now: number; adding: Adding | null }) {
+  const shown =
+    report.addenda === null
+      ? []
+      : adding === null
+        ? report.addenda
+        : addendaShown(report.id, report.addenda, adding.startedAt, adding.addenda.sent);
+  const draft = adding?.addenda.drafts[report.id] ?? "";
+  /* A box with words in it stays open whatever else is opened, and even once
+     the report has closed, so the words are never held where nobody can see
+     them; a send then says the report has closed. */
+  const boxOpen = adding !== null && (adding.addenda.openId === report.id || draft.trim() !== "");
+  const takes = ADDENDUM_STATUSES.some((status) => status === report.status);
   return (
     <li className="fb-earlier-item">
       <p className="fb-earlier-meta">
@@ -1242,6 +1280,21 @@ function AdminRow({ report, now }: { report: AdminEarlierFeedback; now: number }
         </span>
       </p>
       <p className="fb-earlier-body">{report.body}</p>
+      {shown.length === 0 ? null : (
+        /* More of the report, so under its words, oldest first, and in the
+           reader's face: they are the admin's own words (fonts.md). Text,
+           and whole, with their lines kept, as the report's are. */
+        <div className="fb-addenda">
+          {shown.map((one) => (
+            <div key={one.id} className="fb-addendum" data-addendum={one.id}>
+              <p className="fb-earlier-meta">
+                Added <time dateTime={one.createdAt}>{when(one.createdAt, now)}</time>
+              </p>
+              <p className="fb-addendum-body">{one.body}</p>
+            </div>
+          ))}
+        </div>
+      )}
       {report.comment !== null ? (
         /* A model wrote it, so it is in the model's face (docs/project/fonts.md),
            and it is text: React escapes it, and nothing here parses it. */
@@ -1252,26 +1305,43 @@ function AdminRow({ report, now }: { report: AdminEarlierFeedback; now: number }
           Set aside on /admin/feedback, {exactly(report.ignoredAt) ?? report.ignoredAt}
         </p>
       ) : null}
+      {/* Only where the server has said what this report's addenda are, so
+          it has the route to send one to (an older server says nothing). */}
+      {adding === null || report.addenda === null ? null : boxOpen ? (
+        <AddendumBox report={report.id} number={report.number} addenda={adding.addenda} active={adding.active} />
+      ) : takes ? (
+        <div className="fb-addendum-open">
+          <button type="button" className="fb-copy" onClick={() => adding.addenda.open(report.id)}>
+            Add to this report
+          </button>
+        </div>
+      ) : null}
     </li>
   );
+}
+
+/** What a row needs to show and take addenda: the hook, which read it came from, and whether it can be seen. */
+interface Adding {
+  addenda: ReportAddenda;
+  /** When the read behind this list began, on the Earlier hook's clock. */
+  startedAt: number;
+  /** The dialog open, on Earlier: out of sight, a box's microphone stops. */
+  active: boolean;
 }
 
 /**
  * **The box an admin replies to one thread in**, with its own microphone, and
  * the thread's other way out: *Defer for now*, or *Bring back*. Mounted only
  * while that thread is open, so there is at most one, and the dialog's Write
- * box keeps the only other `useDictationField`.
+ * box keeps the only other `useDictationField` (bar an addendum box).
  *
  * `active` is whether the box can be seen: the dialog open, on Earlier, in
- * *Needs a decision*. **Going out of sight stops the microphone**, exactly as
- * the Write box's is stopped on a tab change and on close: the hook's own
- * `toggle` (a stop, so what was said lands in the draft), never the field's,
- * which would pull focus into a box that has just been hidden.
- *
- * **It grows with its words and never scrolls itself** (useFitTextarea.ts):
- * on an iPhone, a dictated paragraph in a three-line box inside a scrolling
- * panel was two scrollers under one finger with the keyboard up (Greg,
- * `spya-za2tse`; plan 261008i, decision 10).
+ * *Needs a decision*. The box itself — growing with its words, the
+ * microphone's keeper and its stop out of sight, Send off while it listens —
+ * is `FeedbackSendBox`, shared with the addendum box (plan 261010o). The
+ * keeper is per question, because Previous and Next reuse this one box, and
+ * the name is what a transcript is bound to (dictation.md § Words go only
+ * where they were said).
  */
 function ReplyBox({
   question,
@@ -1282,125 +1352,40 @@ function ReplyBox({
   replies: QuestionReplies;
   active: boolean;
 }) {
-  const box = useRef<HTMLTextAreaElement>(null);
-  const draft = replies.drafts[question.id] ?? "";
-  const over = draft.length > MAX_FEEDBACK_ANSWER_CHARS;
   const sending = replies.stage.kind === "sending";
   const deferring = replies.deferring.kind === "sending";
-  const transcribe = useReaderTranscriber();
-  useFitTextarea(box, draft);
-  /* Read at call time, so a double press on Stop sees this render's `busy`. */
-  const busyRef = useRef(false);
-  const trySend = () => {
-    if (!active || busyRef.current) return;
-    void replies.send(question.id);
-  };
-  const dictate = useDictationField({
-    value: draft,
-    onChange: (next) => replies.setDraft(question.id, next),
-    box,
-    /* Not the article being read: a question is about the app, so the
-       transcript is primed with the app's words and the reader's profile. */
-    context: { kind: "profile" },
-    transcribe,
-    /* Its own keeper name, so a recording left by the Write box is never
-       offered here or the other way round; and only while it can be seen. Per
-       question, because Previous and Next reuse this one box, and the name is
-       what a transcript is bound to (dictation.md § Words go only where they
-       were said). */
-    ...(active ? { keep: keepDictation(`feedback-reply:${question.id}`) } : {}),
-    /* A double press on Stop also sends (dictation.md), by the same guarded
-       function the button calls, and never from a box out of sight. */
-    onDone: trySend,
-    doneKey: active ? `reply:${question.id}` : "reply:hidden",
-  });
-  busyRef.current = dictate.busy;
-  const { armed, toggle } = dictate.dictation;
-  const stoppedOutOfSight = useRef(false);
-  useEffect(() => {
-    if (active) {
-      stoppedOutOfSight.current = false;
-    } else if (armed && !stoppedOutOfSight.current) {
-      /* The retained box can render more than once while hidden (for example
-         when the fetched lists are forgotten on close). Ask the recorder to
-         stop once for that departure, not once per render. */
-      stoppedOutOfSight.current = true;
-      toggle();
-    }
-  }, [active, armed, toggle]);
-
-  /* ⌘/Ctrl+Enter sends the reply, and goes no further: the dialog's own
-     handler is for the Write form. */
-  const onKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey)) return;
-    event.preventDefault();
-    event.stopPropagation();
-    trySend();
-  };
   const deferred = question.state === "deferred";
-
   return (
-    <div className="fb-reply">
-      <textarea
-        ref={box}
-        className="fb-input fb-reply-input"
-        rows={5}
-        aria-label={`Your reply to: ${question.title}`}
-        value={draft}
-        readOnly={dictate.readOnly || sending}
-        onChange={(event) => replies.setDraft(question.id, event.target.value)}
-        onKeyDown={onKeyDown}
-        placeholder="Your reply. “1A” is enough…"
-      />
-      {over ? (
-        <span className="fb-over">
-          {draft.length} characters — the limit is {MAX_FEEDBACK_ANSWER_CHARS}.
-        </span>
-      ) : null}
-      <div className="fb-reply-actions">
-        {dictate.dictation.supported && (
-          <DictationButton
-            dictation={dictate.dictation}
-            toggle={dictate.toggle}
-            disabled={sending}
-            again={dictate.again}
-            sendingAfter={dictate.sendingAfter}
-            doubleStop={dictate.doubleStop}
-          />
-        )}
-        <button
-          type="button"
-          className="fb-copy fb-reply-send"
-          disabled={sending || deferring || dictate.busy || over || draft.trim() === ""}
-          onClick={trySend}
-        >
-          {sending ? <LoaderCircle className="cmt-spinner" size={14} aria-hidden="true" /> : null}
-          Send reply
-        </button>
-        {/* The alternative to replying (spya-t6nmxt): "not now". Reversible,
-            and it tells agents not to chase it (plan 261008i, decision 3). */}
-        <button
-          type="button"
-          className="fb-copy"
-          disabled={sending || deferring}
-          onClick={() => void replies.defer(question.id, !deferred)}
-        >
-          {deferring ? <LoaderCircle className="cmt-spinner" size={14} aria-hidden="true" /> : null}
-          {deferred ? "Bring back" : "Defer for now"}
-        </button>
-      </div>
-      <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} />
-      {replies.stage.kind === "failed" ? (
-        <p className="fb-shot-problem" role="alert">
-          {replies.stage.message}
-        </p>
-      ) : null}
-      {replies.deferring.kind === "failed" ? (
-        <p className="fb-shot-problem" role="alert">
-          {replies.deferring.message}
-        </p>
-      ) : null}
-    </div>
+    <FeedbackSendBox
+      value={replies.drafts[question.id] ?? ""}
+      onChange={(next) => replies.setDraft(question.id, next)}
+      onSend={() => void replies.send(question.id)}
+      sending={sending}
+      held={deferring}
+      active={active}
+      keeper={`feedback-reply:${question.id}`}
+      doneKey={{ seen: `reply:${question.id}`, hidden: "reply:hidden" }}
+      label={`Your reply to: ${question.title}`}
+      placeholder="Your reply. “1A” is enough…"
+      sendWord="Send reply"
+      cap={MAX_FEEDBACK_ANSWER_CHARS}
+      problems={[
+        replies.stage.kind === "failed" ? replies.stage.message : null,
+        replies.deferring.kind === "failed" ? replies.deferring.message : null,
+      ]}
+    >
+      {/* The alternative to replying (spya-t6nmxt): "not now". Reversible,
+          and it tells agents not to chase it (plan 261008i, decision 3). */}
+      <button
+        type="button"
+        className="fb-copy"
+        disabled={sending || deferring}
+        onClick={() => void replies.defer(question.id, !deferred)}
+      >
+        {deferring ? <LoaderCircle className="cmt-spinner" size={14} aria-hidden="true" /> : null}
+        {deferred ? "Bring back" : "Defer for now"}
+      </button>
+    </FeedbackSendBox>
   );
 }
 
@@ -1787,6 +1772,8 @@ export function EarlierList({
   retry,
   questions = null,
   threadOpen = false,
+  addenda = null,
+  active = false,
 }: {
   earlier: EarlierState;
   choice: EarlierChoice;
@@ -1795,6 +1782,10 @@ export function EarlierList({
   questions?: readonly ThreadQuestion[] | null;
   /** One thread is showing on its own, so the list is not drawn. */
   threadOpen?: boolean;
+  /** The admin's addenda (`EarlierFeedback.addenda`); without them no row offers a box. */
+  addenda?: ReportAddenda | null;
+  /** Whether the list can be seen: the dialog open, on Earlier. */
+  active?: boolean;
 }) {
   switch (earlier.kind) {
     case "idle":
@@ -1825,6 +1816,7 @@ export function EarlierList({
          one thing that must not happen if they ever did not. */
       if (earlier.detail === "admin" && choice.detail === "admin") {
         const { reports, more, counts } = earlier.page;
+        const adding: Adding | null = addenda === null ? null : { addenda, startedAt: earlier.startedAt, active };
         if (choice.show === "waiting") {
           if (threadOpen) return null;
           /* **Only the reports no thread is about** (spya-u6h6q8, plan
@@ -1850,7 +1842,7 @@ export function EarlierList({
               </p>
               <ol className="fb-earlier-list">
                 {orphans.map((report) => (
-                  <AdminRow key={report.id} report={report} now={now} />
+                  <AdminRow key={report.id} report={report} now={now} adding={adding} />
                 ))}
               </ol>
               {more ? (
@@ -1866,7 +1858,7 @@ export function EarlierList({
           <>
             <ol className="fb-earlier-list">
               {reports.map((report) => (
-                <AdminRow key={report.id} report={report} now={now} />
+                <AdminRow key={report.id} report={report} now={now} adding={adding} />
               ))}
             </ol>
             {more ? (

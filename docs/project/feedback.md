@@ -11,7 +11,7 @@ Up: [dev-and-deployment-overview.md](dev-and-deployment-overview.md)
   [§ Send always does something](#send-always-does-something-since-2026-10-10) (Send while the
   microphone is on, the one-minute deadline) and
   [§ The draft survives a reload](#the-draft-survives-a-reload-since-2026-10-10)
-- [§ Your earlier reports](#your-earlier-reports-since-2026-09-16) — the Earlier tab, [§ Shipped or not](#shipped-or-not-since-2026-09-30) (how a note's header becomes a "shipped" mark), [§ What became of each report](#what-became-of-each-report-for-an-admin-since-2026-10-07) (an admin's four statuses, the `#number`, and the note's comment), and [§ Questions for an admin](#questions-for-an-admin-and-replies-to-them-since-2026-10-07) (an agent's questions at the top of *Needs a decision*, the reply box and its microphone, where a reply is stored)
+- [§ Your earlier reports](#your-earlier-reports-since-2026-09-16) — the Earlier tab, [§ Shipped or not](#shipped-or-not-since-2026-09-30) (how a note's header becomes a "shipped" mark), [§ What became of each report](#what-became-of-each-report-for-an-admin-since-2026-10-07) (an admin's four statuses, the `#number`, and the note's comment), and [§ Questions for an admin](#questions-for-an-admin-and-replies-to-them-since-2026-10-07) (an agent's questions at the top of *Needs a decision*, the reply box and its microphone, where a reply is stored), and [§ Adding to an earlier report](#adding-to-an-earlier-report-since-2026-10-10) (an admin's addendum to their own report)
 - [§ The thank-you](#the-thank-you-and-getting-out-of-it) — the message after sending, and the toast
 - [§ The keyboard](#the-keyboard-and-the-button-under-it) — the phone keyboard's Done/Send, and shortcuts
 - [§ Where it came from](#where-it-came-from) — Greg's original request, verbatim
@@ -465,6 +465,43 @@ rather than 34rem, and on a window at least 760px tall at least `min(90%, 44rem)
 unchanged.
 
 
+### Adding to an earlier report, since 2026-10-10
+
+> Make it possible for me to add a reply as a kind of addendum to any earlier open feedback reports.
+>
+> — Greg, 2026-10-10 (`spya-saz0yw`)
+
+**For an admin, on their own reports that have not ended**: *Open* and *Needs a decision*, never
+*Shipped* or *Set aside*. Each such row in the admin's Earlier tab has **Add to this report**, which
+opens a box like the reply box (it grows, it has its own microphone, keeper
+`feedback-addendum:<report id>`, and a half-written one holds the page against a reload). What was
+added shows under the report's own words, oldest first, in the reader's face, on any status.
+A box with words in it stays open whatever else is opened, even after its report closes (a send
+then says so), because a hidden draft would be a reload hold nobody can see; *Cancel* shuts it and
+throws its words away. A recording cut off by a pill change is offered back when that report's
+box shows again.
+
+- **Where it goes.** `POST /api/admin/feedback/addenda` with `{ id, report, body }`: a row in
+  `feedback_addenda`, keyed `(owner_id, id)`, with a foreign key to `feedback (owner_id, id)`, so it
+  can only name the signed-in admin's own report. The same three idempotent answers as a reply (201,
+  200 with the stored row, 409 for an id reused). **404** when there is no such report of the
+  caller's; **409** when the report has been shipped or set aside since the page loaded, judged by
+  `statusOf` on the report's locked row, so Ignore pressed at the same moment cannot slip between
+  the check and the insert; **409** when the report's addenda together would pass 20,000
+  characters, which keeps a report and its addenda inside the list's byte budget.
+- **Where it is read.** `GET /api/admin/feedback/earlier` carries `addenda` on each report, in the
+  list's own snapshot, counted with its report against `FEEDBACK_LIST_BYTES`. A browser that finds
+  no `addenda` key (a server from before) shows none and offers no box.
+- **What agents see.** `feedback-reporter.ts` and `feedback-unswept.ts --show` print a report's
+  addenda under its words, from the production rows; `feedback-unswept.ts` lists every addendum
+  nothing covers yet, so one written after the sweep took its report is not lost
+  ([feedback-reports.md § An addendum](feedback-reports.md#an-addendum-to-a-report-already-taken)).
+- **An addendum is not a report**: never in Sentry, `/admin/feedback`, the endings map or a shipped
+  email, and not rate-limited. It cannot be edited or deleted.
+
+[261010o](../plans/261010o-addendum-to-an-earlier-feedback-report.md) has the design, what the
+review changed, and what was deferred (other readers, `/admin/feedback`).
+
 ## The thank-you, and getting out of it
 
 > After submitting a bit of feedback in the feedback dialogue, it says something like thank you that
@@ -665,7 +702,8 @@ which *is* the verified account id.
 | whether each earlier report shipped | the notes' headers in [`docs/user-feedback/`](../user-feedback/), compiled by [`scripts/feedback-endings.ts`](../../scripts/feedback-endings.ts); read in [`src/feedback-ending.ts`](../../src/feedback-ending.ts) |
 | an admin's Earlier tab: status, number, comment | `GET /api/admin/feedback/earlier` in [`src/routes.ts`](../../src/routes.ts); `listMineByStatus` in [`src/store/pg-feedback.ts`](../../src/store/pg-feedback.ts); the same `FeedbackEarlier.tsx` |
 | questions for an admin: the files, the compile, what the server reads | [`docs/user-feedback/questions/`](../user-feedback/questions/), [`scripts/feedback-endings.ts`](../../scripts/feedback-endings.ts) § `parseQuestionFile`, [`src/feedback-question.ts`](../../src/feedback-question.ts), the rules in [`src/feedback-question-values.ts`](../../src/feedback-question-values.ts) |
-| replies to them: the route, the store, the table, the box | `POST /api/admin/feedback/answers` in [`src/routes.ts`](../../src/routes.ts); `submitAnswer` and `newestAnswers` in [`src/store/pg-feedback.ts`](../../src/store/pg-feedback.ts); `feedbackQuestionAnswers` in [`src/db/schema.ts`](../../src/db/schema.ts); `EarlierQuestions` in `FeedbackEarlier.tsx` |
+| replies to them: the route, the store, the table, the box | `POST /api/admin/feedback/answers` in [`src/routes.ts`](../../src/routes.ts); `submitAnswer` and `newestAnswers` in [`src/store/pg-feedback.ts`](../../src/store/pg-feedback.ts); `feedbackQuestionAnswers` in [`src/db/schema.ts`](../../src/db/schema.ts); `ReplyBox` in `FeedbackEarlier.tsx`, on the shared box in [`FeedbackSendBox.tsx`](../../src/web/FeedbackSendBox.tsx) |
+| an admin's addenda: the route, the store, the table, the box | `POST /api/admin/feedback/addenda` in [`src/routes.ts`](../../src/routes.ts); `submitAddendum` in [`src/store/pg-feedback.ts`](../../src/store/pg-feedback.ts); `feedbackAddenda` in [`src/db/schema.ts`](../../src/db/schema.ts); [`FeedbackAddendum.tsx`](../../src/web/FeedbackAddendum.tsx) |
 | listing questions and reading replies, for agents | [`scripts/feedback-questions.ts`](../../scripts/feedback-questions.ts) |
 | the microphone on its box | [dictation.md](dictation.md), and two guards this dialog needs that the others do not — see its header |
 | the diagnostics allowlist, shared by both halves | [`src/feedback-payload.ts`](../../src/feedback-payload.ts) |

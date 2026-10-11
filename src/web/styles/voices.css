@@ -74,6 +74,8 @@
     .rcp-group-quote,
     /* "first cited" — the words the article cites the work with */
     .cite-at,
+    /* Sources › Links: the words the article links an address with */
+    .link-phrase,
     /* the search hit card's passage */
     .tip-hit-quote,
     /* Timeline's date phrase: the article's own characters, wrapped so our
@@ -281,6 +283,8 @@
        the box they reply in (261007d) */
     .fb-question-answer-body,
     .fb-reply-input,
+    /* what the admin added to their own report since (261010o) */
+    .fb-addendum-body,
     .ill-steer-input,
     .cmdbar-input,
     /* About you or the reason, quoted back in the guide's greeting (261009i) */

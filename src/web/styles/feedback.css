@@ -384,6 +384,25 @@ a.fb-earlier-page:focus-visible {
    view with the keyboard up (spya-za2tse). */
 .fb-reply-input { overflow: hidden; resize: none; }
 
+/* What the admin has added to one of their own reports since (261010o): under
+   the report's words, indented by a rule as a reply under a question is. */
+.fb-addenda {
+  margin-top: 0.4rem;
+  padding-left: 0.6rem;
+  border-left: 2px solid var(--rule-strong);
+}
+.fb-addendum + .fb-addendum { margin-top: 0.4rem; }
+.fb-addendum-body {
+  margin: 0.15rem 0 0;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.fb-addendum-open,
+.fb-addendum-box { margin-top: 0.5rem; }
+
 /* The contents of Needs a decision: three groups, one row a thread (261008i). */
 .fb-threads { display: flex; flex-direction: column; gap: 0.75rem; }
 .fb-threads-group { display: flex; flex-direction: column; gap: 0.35rem; }

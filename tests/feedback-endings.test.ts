@@ -171,6 +171,23 @@ describe("parseNoteHeader", () => {
     expect(parseNoteHeader("# A note from before headers\n")).toBeNull();
   });
 
+  /* Plan 261010o, F2: the addenda a note dealt with, by the same id rule as
+     `reports:`, and never compiled into the endings. */
+  it("reads addenda: the addendum ids the note dealt with, and leaves them out of the endings", () => {
+    const text = note("reports: spya-aaaaaa\nending: shipped\naddenda: spya-bbbbbb, spya-cccccc");
+    expect(parseNoteHeader(text)).toEqual({
+      reports: ["spya-aaaaaa"],
+      ending: "shipped",
+      addenda: ["spya-bbbbbb", "spya-cccccc"],
+    });
+    /* An addendum id is not a report id: it gets no ending of its own. */
+    const { endings, problems } = compileEndings([{ name: "a.md", text }]);
+    expect(problems).toEqual([]);
+    expect([...endings.keys()]).toEqual(["spya-aaaaaa"]);
+    /* Absent is no key at all, as `comment` is. */
+    expect(parseNoteHeader(note("reports: spya-aaaaaa\nending: shipped"))).not.toHaveProperty("addenda");
+  });
+
   it.each([
     ["an unknown ending", "reports: spya-aaaaaa\nending: done", /ending must be one of/],
     ["a capitalised ending", "reports: spya-aaaaaa\nending: Shipped", /ending must be one of/],
@@ -195,6 +212,10 @@ describe("parseNoteHeader", () => {
     ["an id that starts with a digit", "reports: spya-2aaaaa\nending: shipped", /not a report id/],
     ["parts of one", "reports: spya-aaaaaa\nending: shipped\nparts: 1", /parts must be/],
     ["parts on two reports", "reports: spya-aaaaaa, spya-bbbbbb\nending: shipped\nparts: 2", /exactly one report/],
+    ["an empty addenda line", "reports: spya-aaaaaa\nending: shipped\naddenda:", /addenda: names no addendum id/],
+    ["an addendum id outside the alphabet", "reports: spya-aaaaaa\nending: shipped\naddenda: spya-all1il", /not an addendum id/],
+    ["an addendum given as a prefixed source", "reports: spya-aaaaaa\nending: shipped\naddenda: addendum:spya-bbbbbb", /not an addendum id/],
+    ["one addendum id twice", "reports: spya-aaaaaa\nending: shipped\naddenda: spya-bbbbbb, spya-bbbbbb", /addendum id named more than once/],
   ])("refuses %s", (_case, header, why) => {
     expect(parseNoteHeader(note(header))).toMatch(why);
   });

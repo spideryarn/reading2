@@ -1,7 +1,7 @@
 ---
 id: q-vzd2xt
 report: spya-nbmce7
-status: open
+status: answered
 asked: 2026-10-10
 title: Skim: should More always have more stops than Gist, even if Gist gets shorter on short articles?
 refs: qi-67k544sa · SPIDERYARN-READING2-GC · docs/plans/261010t-skim-deeper-passes-always-longer-and-a-previous-stop-door.md · docs/investigations/261010a-skim-per-pass-targets-and-walked-growth.md · docs/user-feedback/261010_1800-skim-deeper-passes-never-shorter-and-a-previous-stop.md
@@ -30,3 +30,9 @@ What it costs: A means pressing "More detail" can occasionally give you the same
 Routes planned before this keep their old shape until re-planned (Metadata, re-run Skim).
 
 Reply "A" or "B"; anything else, say so.
+
+## Greg's answer, 2026-10-11 (to the Overseer)
+
+> q-vzd2xt use your judgment
+
+Settled as A, the Overseer's call on the recommendation above: More may equal Gist on short articles, never fewer, and Gist keeps its 3 stops. That is what is built and live, so nothing changes.

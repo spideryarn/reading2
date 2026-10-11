@@ -22,8 +22,17 @@
  * the session that held the claim when the snapshot was taken. The window is
  * one collection interval, and the success line names the session it went to.
  *
+ * **WHO IS SPEAKING FOLLOWS WHO RAN IT** (plan 261011e). Greg at his own
+ * terminal posts as `greg`, as the card does. A Claude Code or Codex session
+ * running this posts as `agent`, naming its tmux session, or as `overseer` if
+ * it is the claim's holder — because on 2026-10-10 an Overseer request sent
+ * through here arrived as `[Greg, via the fleet dashboard]` and was obeyed as
+ * Greg's. One command rather than a `tell-from-agent` beside it: an agent
+ * choosing the wrong one of two is the failure. `voiceFor` decides.
+ *
  * No ssh or process. `scripts/gjd-remote.ts` does the I/O.
  */
+import { isSenderName } from "../tools/fleet/actions.js";
 import { claimFromSnapshot, describeClaim } from "../tools/fleet/overseer-claim.js";
 import { escapeName, printableName } from "./gjd-remote-tmux.js";
 
@@ -50,7 +59,18 @@ export function tellPostCommand(port: number): string {
     `--data-binary @- '${base}/api/steer/message'`;
 }
 
-/** The request body `/api/steer/message` takes — the shape `steerMessageBody` builds in the web client. */
+/**
+ * Who a `tell` speaks as: the three `Speaker` arms it can be, with `agent`
+ * carrying the sender's name (null for "an unnamed session").
+ */
+export type TellVoice = { speaker: "greg" } | { speaker: "overseer" } | { speaker: "agent"; from: string | null };
+
+export const GREG: TellVoice = { speaker: "greg" };
+
+/**
+ * The request body `/api/steer/message` takes — the shape `steerMessageBody`
+ * builds in the web client, plus `from` when an agent is speaking.
+ */
 export type TellBody = {
   paneId: string | null;
   sessionId: string;
@@ -58,8 +78,89 @@ export type TellBody = {
   panePid: number | null;
   status: unknown;
   text: string;
-  speaker: "greg";
-};
+} & TellVoice;
+
+/** The sending session's own tmux session, as `tmux display-message` names it. */
+export type OwnSession = { name: string; id: string };
+
+function nonEmpty(v: string | undefined): v is string {
+  return v !== undefined && v !== "";
+}
+
+/**
+ * Whether an agent, not a person, is running this. Claude Code sets
+ * `CLAUDECODE=1` in its Bash tool's environment, and Codex sets
+ * `CODEX_THREAD_ID` in the commands it runs (both checked on the box,
+ * 2026-10-11). Neither is a security boundary — a shell that unsets them is
+ * sent as Greg — but an honest agent no longer has to remember to say so.
+ */
+export function runByAgent(env: NodeJS.ProcessEnv): boolean {
+  return nonEmpty(env["CLAUDECODE"]) || nonEmpty(env["CODEX_THREAD_ID"]);
+}
+
+/**
+ * The `tmux` argv that names the session this process is running in, or null
+ * when tmux or the sender's pane id is unavailable. `-t $TMUX_PANE` asks
+ * about this pane rather than whichever client tmux thinks is current.
+ * Never omit the target: missing identity must give an unnamed sender, not
+ * another client's session (which might even hold the Overseer claim).
+ */
+export function ownSessionQuery(env: NodeJS.ProcessEnv): string[] | null {
+  if (!nonEmpty(env["TMUX"])) return null;
+  const pane = env["TMUX_PANE"];
+  if (pane === undefined || !/^%\d+$/.test(pane)) return null;
+  return ["display-message", "-p", "-t", pane, "#{session_name}\t#{session_id}"];
+}
+
+/** `ownSessionQuery`'s answer, or null for anything that is not one name and one `$N` id. */
+export function parseOwnSession(stdout: string): OwnSession | null {
+  const line = stdout.replace(/\r?\n$/, "");
+  const cut = line.lastIndexOf("\t");
+  if (cut <= 0) return null;
+  const id = line.slice(cut + 1);
+  return /^\$\d+$/.test(id) ? { name: line.slice(0, cut), id } : null;
+}
+
+/** The snapshot's own word for "now", which a claim's age is measured against. */
+function snapshotNow(snapshot: unknown): number {
+  const served = isRecord(snapshot) && typeof snapshot["servedAt"] === "string" ? Date.parse(snapshot["servedAt"]) : Number.NaN;
+  return Number.isFinite(served) ? served : Date.now();
+}
+
+/**
+ * Who this `tell` speaks as. Not an agent: Greg. An agent whose tmux session
+ * has the claim's id AND name: the Overseer. Any other agent: `agent`, named
+ * when its session name is one the prefix can carry (`isSenderName`).
+ *
+ * Every wrong guess here lands on a label that says "not Greg" — the Overseer
+ * called `agent`, or the reverse (on the Mac, whose tmux ids are not the
+ * box's, an Overseer match is near impossible and would be harmless). The one
+ * guess that matters, an agent called Greg, needs both variables gone.
+ */
+export function voiceFor(snapshot: unknown, env: NodeJS.ProcessEnv, own: OwnSession | null): TellVoice {
+  if (!runByAgent(env)) return GREG;
+  if (own !== null) {
+    const claim = claimFromSnapshot(snapshot, { nowMs: snapshotNow(snapshot), maxAgeMs: CLAIM_MAX_AGE_MS });
+    if (claim.kind === "one" && claim.id === own.id && claim.name === own.name) return { speaker: "overseer" };
+  }
+  return { speaker: "agent", from: own !== null && isSenderName(own.name) ? own.name : null };
+}
+
+/** The end of the success line, so the sender sees how it went out. */
+export function describeVoice(voice: TellVoice): string {
+  switch (voice.speaker) {
+    case "greg":
+      return "as Greg";
+    case "overseer":
+      return "as the Overseer";
+    case "agent":
+      return voice.from === null ? "as an agent (unnamed session)" : `as agent '${voice.from}'`;
+    default: {
+      const never: never = voice;
+      return never;
+    }
+  }
+}
 
 export type TellTarget = { ok: true; name: string; body: TellBody } | { ok: false; why: string };
 
@@ -75,9 +176,8 @@ function isRecord(v: unknown): v is Record<string, unknown> {
  * the right one to measure its age against, and it cannot be skewed against
  * the laptop's.
  */
-export function overseerTarget(snapshot: unknown, text: string, nowMs?: number): TellTarget {
-  const served = isRecord(snapshot) && typeof snapshot["servedAt"] === "string" ? Date.parse(snapshot["servedAt"]) : Number.NaN;
-  const now = nowMs ?? (Number.isFinite(served) ? served : Date.now());
+export function overseerTarget(snapshot: unknown, text: string, nowMs?: number, voice: TellVoice = GREG): TellTarget {
+  const now = nowMs ?? snapshotNow(snapshot);
   const claim = claimFromSnapshot(snapshot, { nowMs: now, maxAgeMs: CLAIM_MAX_AGE_MS });
   if (claim.kind !== "one") return { ok: false, why: escapeName(describeClaim(claim, escapeName)) };
 
@@ -85,7 +185,7 @@ export function overseerTarget(snapshot: unknown, text: string, nowMs?: number):
   const row = rows.find((r): r is Record<string, unknown> => isRecord(r) && r["id"] === claim.id);
   if (row === undefined) return { ok: false, why: `the snapshot named ${printableName(claim.name)} as the Overseer and then had no row for it` };
 
-  return { ok: true, name: claim.name, body: rowBody(row, claim.id, text) };
+  return { ok: true, name: claim.name, body: rowBody(row, claim.id, text, voice) };
 }
 
 /**
@@ -104,7 +204,7 @@ export function overseerTarget(snapshot: unknown, text: string, nowMs?: number):
  * the session is `Overseer` is probably right, and "probably" is not the bar
  * for keystrokes in somebody's pane.
  */
-export function sessionTarget(snapshot: unknown, name: string, text: string): TellTarget {
+export function sessionTarget(snapshot: unknown, name: string, text: string, voice: TellVoice = GREG): TellTarget {
   if (!isRecord(snapshot) || snapshot["schema"] !== 1) return { ok: false, why: "the dashboard answered something that is not a snapshot this build reads" };
   if (snapshot["error"] !== null) {
     return { ok: false, why: "the dashboard's last collection failed, so its list of sessions may not be current — try again in a minute" };
@@ -126,7 +226,7 @@ export function sessionTarget(snapshot: unknown, name: string, text: string): Te
     if (typeof row["id"] !== "string" || !/^\$\d+$/.test(row["id"])) {
       return { ok: false, why: `the dashboard's row for ${printableName(name)} has no usable tmux session id` };
     }
-    return { ok: true, name, body: rowBody(row, row["id"], text) };
+    return { ok: true, name, body: rowBody(row, row["id"], text, voice) };
   }
   if (exact.length > 1) return { ok: false, why: `${exact.length} sessions are called ${printableName(name)}` };
   const near = rows.filter((r) => typeof r["name"] === "string" && r["name"].toLowerCase() === name.toLowerCase());
@@ -141,7 +241,7 @@ export function sessionTarget(snapshot: unknown, name: string, text: string): Te
 }
 
 /** One dashboard row as the steer route's body — the shape `steerMessageBody` builds in the web client. */
-function rowBody(row: Record<string, unknown>, sessionId: string, text: string): TellBody {
+function rowBody(row: Record<string, unknown>, sessionId: string, text: string, voice: TellVoice): TellBody {
   const paneId = row["paneId"];
   const claudeSessionId = row["claudeSessionId"];
   const panePid = row["panePid"];
@@ -155,7 +255,9 @@ function rowBody(row: Record<string, unknown>, sessionId: string, text: string):
     panePid: typeof panePid === "number" ? panePid : null,
     status: row["status"],
     text,
-    speaker: "greg",
+    // `speaker`, and `from` only when the voice is `agent`: the route refuses a
+    // name on any other speaker, and Greg's body stays the card's shape.
+    ...voice,
   };
 }
 
