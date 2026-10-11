@@ -467,9 +467,9 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     aliases: ["recall", "remember", "memorise", "memorize", "study", "revise", "revision", "practice", "practise"],
     /* In every reader's bar since 2026-10-05. Greg, 2026-10-04 (spya-cnqcjf):
        *"I think recall submode for sure. I think quiz mode as well. And then
-       let's try tutorial too."* Explore, the fourth part, stays behind the
-       switch one level down (src/web/sub-modes.ts § `LEARN_SUB_MODES`).
-       docs/project/experimental-features.md. */
+       let's try tutorial too."* Explore, the fourth part, stayed behind the
+       switch one level down until 2026-10-11 (spya-jm0nfg; src/web/sub-modes.ts
+       § `LEARN_SUB_MODES`). docs/project/experimental-features.md. */
     experimental: false,
   },
   quotes: {
@@ -651,15 +651,15 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        the button): the questions are `TreeNode.question` on the root and the
        top-level parts (src/structure.ts § `questionFor`), the sentence at the
        top is the arc (src/arc.ts), and the stamps are the stored ideas, read
-       and never generated (src/web/marginalia/MarginaliaColumn.tsx). The one
-       thing it generates is its own relation words — so, but, vs
-       (src/relations.ts, plan 261003f), asked for the first time the owner's
-       column is shown (src/web/useRelations.ts, plan 261005d), never on
-       import; other modes' lists are only read. The
+       and never generated (src/web/marginalia/MarginaliaColumn.tsx). Its one
+       call writes relation words — so, but, vs — and may add a few short notes
+       (src/relations.ts, plans 261003f and 261011o), asked for the first time
+       the owner's column is shown (src/web/useRelations.ts, plan 261005d),
+       never on import; other modes' lists are only read. The
        width is
        `fitView`'s `margW` (src/web/layout.ts): below it the column is not
        drawn. */
-    how: "It marks where the argument turns, with so, but or vs beside those paragraphs. One model call makes those words, the first time the article's owner opens the column; the notes are there meanwhile and the words join them when they are ready. Everything else is read, never made here: the questions come with the article's parts, the sentence at the top is where the argument has got to, and ideas, FAQ, Timeline, and Sources' claims and cited works appear once they have been made in their own modes. It needs a wide window; on a narrow one the notes are hidden.",
+    how: "It marks where the argument turns, with so, but or vs beside those paragraphs, and may add a few short notes where something is confusing or another passage matters. One model call makes both, the first time the article's owner opens the column. The other notes are read, never made here: the questions come with the article's parts, the sentence at the top is where the argument has got to, and ideas, FAQ, Timeline, and Sources' claims and cited works appear once they have been made in their own modes. It needs a wide window; on a narrow one the notes are hidden.",
     /* `annotations` was the mode's own word until 2026-10-01 (261001n); the
        Comments row has it too and this row wins it. **Nothing here may start
        with `notes`**, which is the Comments row's. */
@@ -688,16 +688,17 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
  * mode for anyone (src/web/experimental-visibility.ts). A button the guide
  * offers to the one reader who said they need the mode is not clutter. So a
  * mode here keeps its place behind the switch in the bar, the command bar and
- * ordinary Chat, and gains, with its sub-modes, three things, each read from
+ * ordinary Chat, and gains, with its sub-modes, two things, each read from
  * here through `offeredBehindTheSwitch`:
  *
  *  - a button in the written guide's list of modes, with `audience` and
  *    `guidance` beside it (src/guide.ts § `modeWordsSection`);
- *  - a place in the **guide's** chip door only (src/web/chip-door.ts §
- *    `guideDoorRows`);
- *  - and it is always a press, never opened by the guide itself
- *    (src/acts-alone.ts § `modeActsAlone`): the offer rests on the model's
- *    reading of who the reader is, which the reader confirms.
+ *  - and a place in the **guide's** chip door only (src/web/chip-door.ts §
+ *    `guideDoorRows`), so that button can be pressed.
+ *
+ * Like every guide button it is the reader's to press (the guide opens nothing
+ * itself since plan 261011m), which matters doubly here: the offer rests on the
+ * model's reading of who the reader is, and the press is the reader confirming it.
  *
  * An allowlist of its own, deny by default, so the exceptions to the switch
  * can be read in one place rather than found scattered across the rows above.

@@ -62,15 +62,33 @@ unless it is worth a reader's attention, and at most a handful:
 
 `aside` is the "freedom to play" Greg asked for; the other three are the cases he named.
 
-Each note is `{ blockId, kind, text, to }` with `to` a block id or `null`, always present (the
-"omit this field" comma trap, [prompting-guide.md](../project/prompting-guide.md#what-the-model-writes-back)).
+Each note is `{ blockId, kind, quote, text, to, toQuote }`, with `to` and `toQuote` always
+present and null together (the "omit this field" comma trap,
+[prompting-guide.md](../project/prompting-guide.md#what-the-model-writes-back)). **Both ends are
+quoted and the quotes checked** (Sol on the plan, P1-3): `quote` must be in the note's own passage
+and `toQuote` in the other, with `findQuote(…, "spaced")` as FAQ does, and the stored quotes are the
+article's characters. An id alone can name a real but wrong passage.
 
 **Sparing, enforced in code as well as asked for in the prompt.** A cap scaled to the article: one
-note per eight listed paragraphs, at least two, at most eight. Validation, each with a `dropped`
-counter as the relation rows already have: an unknown `blockId` or `to`; `to` equal to the block or
-missing on `recall`/`tension`; a second note on the same block (first wins); text over 40 words or
-empty; anything past the cap. **A bad note never fails the run**: the relation words are the step's
-contract, notes are extra, and zero notes is a real answer.
+note per eight listed paragraphs, at least two, at most eight (`noteCap`). Validation, each rule
+its own counter in a separate `notesDropped`: a row that is not an object; an unknown `blockId` or
+`to`; a kind off the list; `to` equal to the block, missing on `recall`/`tension`, or present on
+`explain`; a quote not found; text empty or over 35 words (the prompt asks for 25); a second note on
+the same block (first wins); and **only then** the cap, in the model's order, which the prompt makes
+most valuable first, so a bad row never takes a slot (Sol P2-5). **A bad note never fails the
+run**: the relation words are the step's contract, notes are extra, and zero notes is a real
+answer. An article with fewer than two body paragraphs still makes no call and so gets no notes
+(Sol P2-6, decided: the short case is not worth a call of its own).
+
+**The notes come before the words in the answer** — in the schema, the example and the user
+message. Asked for after the words, the model barely wrote any (§ Measurement).
+
+The answer budget counts a full set of notes at their longest, quotes included (Sol P1-1):
+`answerTokens` adds `noteCap × 300` tokens.
+
+**Labels that said "words" now say both** (Sol P2-8): Metadata's rerun row is *Marginalia notes*,
+the job's label adds "and writing a few margin notes", and the export's description of
+`relations.json` mentions the notes.
 
 **The prompt carries `plainWords("explain")`**, since the step now writes prose a reader sees, and
 `src/relations.ts` leaves `PLAIN_WORDS_EXEMPT`.
@@ -78,8 +96,10 @@ contract, notes are extra, and zero notes is a real answer.
 **In the margin**, a note is a line of its own in the AI's face, under the relation word and before
 the part's question: a small-caps stamp, the text, and for `recall`/`tension` a link to the other
 passage (`BlockRef`, so it has the block-link card and the jump). **Shown open, not shut** like the
-other modes' items: it is short, there are at most eight, and a shut line that says "1 note" would
-hide the only thing it has to say. A card on the stamp says what it is and who wrote it (`tips.ts`,
+other modes' items: it is short, there are at most eight, and a shut line would hide the only thing
+it has to say. (Sol P2-7 pointed out a shut line could show the note's own words, cut to a line;
+with 25-word notes the open note is two or three lines at 288px, so open stayed, and the browser
+check below looked at a cluster.) A card on the stamp says what it is and who wrote it (`tips.ts`,
 a `Record` over the four kinds). Owner only, like the words.
 
 Stored inside the existing `article_revisions.relations` JSONB: `Relations.notes`, optional on read
@@ -101,21 +121,65 @@ then (useRelations.ts).
 
 ### Cost
 
-One call per article per showing already; this adds output (eight notes is ~400 tokens) and the
-model's thinking. Measured below.
+From about 4.9 to about 5.7 cents an article per run, measured below. It runs once per article
+when its owner first shows the column, and once more for every article that already has words,
+because the version moved.
 
 ### Questions for Greg (decided for the simplest version; easy to change)
 
-- **Q-notes-effort**: the call stays at `low` effort. Finding an inconsistency is the hardest part
-  of this; if the measurement shows `low` finds none on articles that have one, raise it to `medium`.
+- **Q-notes-effort**: the call stays at `low` effort. `medium` was measured and changed nothing
+  (§ Measurement).
 - **Q-notes-kinds**: four kinds, the stamp saying which. *Tension* rather than *Inconsistent*,
   because the model will sometimes be wrong and the softer word leaves room.
+- **Q-notes-density**: about one note per eighteen paragraphs on the four articles measured. More
+  is a sentence in the prompt; fewer is the cap.
 
 ## Measurement
 
-(To be filled in: production's own `generateRelations`, the old prompt twice and the new prompt
-once on the same local articles; relation word agreement between arms, notes per article, a read of
-every note against its passages, tokens and cost.)
+[`evals/margin-notes/run.ts`](../../evals/margin-notes/run.ts) calls production's own
+`generateRelations` at standard power on four local articles of different kinds: the Transformer
+paper (`arxiv-1706-03762v7`, 101 paragraphs asked about), a Paul Graham essay (`desres`, 38), Nagel's
+*What is it like to be a bat?* (33) and a cognitive-science review (`fd-src-nihms-536461`, 57).
+Each arm records `PROMPT_VERSION` and a hash of `src/relations.ts`; the arms are in
+`evals/results/margin-notes/`. `npx tsx evals/margin-notes/run.ts report` prints the table.
+
+| Arm | Prompt | Notes (4 articles) | Drawn words | Words agreeing with `before` | Output tokens | Cost |
+|---|---|---|---|---|---|---|
+| `before` | `relations/2` | — | 28 | — | 5,938 | $0.198 |
+| `before-2` | `relations/2`, the control | — | 27 | 208/229 (91%) | 5,939 | $0.198 |
+| `after`, `after-2` | notes after the words | 2, 4 | 29, 30 | 197, 194 | 6,237, 6,462 | $0.215, $0.217 |
+| `after-medium` | the same at `medium` effort | 2 | 28 | 199 | 6,238 | $0.215 |
+| `v2`, `v2-2` | softer "how many" wording | 4, 3 | 27, 28 | 196, 193 | 6,404, 6,358 | $0.217 |
+| **`v3`, `v3-2`** | **notes first** — what shipped | **11, 14** | 34, 34 | 190, 200 (83%, 87%) | 7,373, 7,577 | $0.227, $0.229 |
+
+What the numbers say:
+
+- **Asked for after a hundred rows of words, the model hardly wrote a note**; two articles got none
+  in any of five runs. Effort made no difference (output tokens show `low` and `medium` did the same
+  work). Asking for the notes first raised it to 11–14, every article getting some, both runs.
+- **The words moved a little.** Against `before`, the shipped prompt agrees on 83–87% of words; two
+  runs of the old prompt agreed on 91%. The drawn turns rose from 27–28 to 34. Acceptable for what
+  the notes give, and worth a look if Greg finds the margin busier.
+- **Nothing was dropped by validation** in any run: every quote was found in its passage.
+
+**Every note, read against its passages** (the 25 from `v3` and `v3-2`):
+
+- **The Transformer paper's real inconsistency was found in all seven runs of the new prompt,
+  whatever its wording**: §6.1 says the big model scored 41.0 BLEU on English-to-French, while
+  the abstract and Table 2 give 41.8. A true *Tension*, which is exactly Greg's case.
+- **Two *Tension* notes are weak**: that "over 2 BLEU" is only barely true (2.04), and, in the
+  essay, that the author's later speculation that research may not be collaborative contradicts his
+  earlier remark that it can be. The first is pedantic, the second is a development of the argument,
+  which the prompt says is not a tension. 2 weak of 5 distinct tensions; the card tells the reader to
+  judge.
+- ***Explain* notes are the bulk and mostly good**: why large dot products saturate the softmax,
+  why a REPL leaves no place for type declarations, what blocking means in learning experiments,
+  the 62.5% arithmetic of probability matching.
+- ***Recall* notes are fair**: the result in Table 3 row (E) that "nearly identical" refers to; an
+  earlier finding about dopamine and reversal learning that a later passage leans on.
+- **Nagel's article came out of extraction with a paragraph spliced into the middle of a sentence**,
+  and in every run the model said so in an *aside*. Not what Greg asked for, but true and useful,
+  and a pointer to an extraction bug worth its own look (not this work).
 
 ## Reviews
 

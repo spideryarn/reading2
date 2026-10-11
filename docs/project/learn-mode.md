@@ -230,7 +230,7 @@ full and the pass condition is a person reading them.
 > account anything from the user profile or the why are you reading this information. … lots of
 > small increments is probably better than big, slow increments.
 
-The chip order and visibility are in [§ Who sees which chip](#who-sees-which-chip-since-2026-10-05)
+The chip order and visibility are in [§ Who sees which chip](#who-sees-which-chip-since-2026-10-11)
 (`?learn=tutorial`). **Each visible chip has its
 own card** since 2026-10-04 (`LEARN_VIEW_HOW` in
 [`src/web/QuizPanel.tsx`](../../src/web/QuizPanel.tsx)), and the band's (i) is two short sentences
@@ -292,17 +292,17 @@ His thread showed why: the prompt said "when they answer well, move up", the top
 thought. So "moving up" now means a harder question **about the article** (what a step needs, how
 two parts fit, what the author would say to a case), and a task that asks for the reader's own view
 is rationed: never in the first two tasks, never two running, about one turn in four. When the
-reader sets off on a line of their own, the tutor answers briefly, points to Chat, and comes back to
-the piece. **It points to Chat and not to Explore on purpose** (plan 261005l, PR-8): Explore is the
-natural home for that line of thought, but it is behind the experimental switch, so most readers
-have no such chip. When Explore leaves the switch, that sentence of the prompt should name it. The
+reader sets off on a line of their own, the tutor answers briefly, points to Explore, and comes back
+to the piece. Until 2026-10-11 it pointed to Chat (plan 261005l, PR-8), because Explore was behind
+the experimental switch and most readers had no such chip; when Explore came out, the sentence
+named it ([261011p](../plans/261011p-learn-explore-out-of-the-experimental-switch.md)). The
 opening prediction for a reader who has not read it is not one of the rationed tasks.
 
 Measured before and after on two articles with a blind judge: own-view tasks fell from 19 of 60
 turns to 6 of 60, none in a first two turns —
 [261003c](../investigations/261003c-tutorial-prompt-leans-to-retention.md). The eval's readers are
 now per article (`--readers=noema|entropy`), each run prints a hash of its prompt, and `--out` keeps
-one arm from overwriting another. The pointer to Chat is not yet reliable, and one run still asked
+one arm from overwriting another. The pointer (then to Chat) was not reliable, and one run still asked
 for the reader's view two turns running.
 
 **The invitation offers; it does not ask the reader to say so** (`spya-hw8mhz`): *"It's fine if you
@@ -312,12 +312,12 @@ request is started from zero without comment; a short one that names a goal is t
 **What the reader thinks has its own sub-mode since the same day**: § Explore, the fourth
 sub-mode, below, which starts from the reader's comments, highlights and conversations.
 
-### Who sees which chip, since 2026-10-05
+### Who sees which chip, since 2026-10-11
 
-Learn is in every reader's bar, with Recall, Tutorial
-and Quiz. Explore's chip is drawn only with the experimental-features switch on, or while the reader
-is in Explore. The reason and the mechanism are in
-[experimental-features.md](experimental-features.md#the-two-things-gated-below-mode-level).
+Every owner sees all four chips, switch on or off. Learn came out of the experimental switch on
+2026-10-05 with Recall, Tutorial and Quiz, and Explore followed on 2026-10-11 (Greg, `spya-jm0nfg`:
+*"because it's useful"*). The history is in
+[experimental-features.md](experimental-features.md#what-is-behind-it-today).
 
 ## Explore, the fourth sub-mode
 
@@ -378,10 +378,10 @@ whose rules are there to keep the move fair
 It is not Debate. Debate is a stored survey of what the web says about the piece; this is one turn
 of a conversation, about the argument or the reader's own doubt. Tutorial is unchanged.
 
-With the Experimental switch on there are four chips, and in a narrow band head the group tightens
-their side padding (`quiz.css`, an `@container learn-head` query around
+There are four chips for every owner, and in a narrow band head the group tightens its side padding
+(`quiz.css`, an `@container learn-head` query around
 `.learn-submode:has(> …:nth-child(4))`) so the four and the start-over bin fit the 288px band on
-an iPad. Anywhere wider, and with three chips, they take the part-switcher's own padding.
+an iPad. Anywhere wider, they take the part-switcher's own padding.
 
 **What a turn does.** One move, in under about 150 words, with one question at most and last:
 

@@ -118,8 +118,6 @@ export const PLAIN_WORDS_EXEMPT: Record<string, string> = {
     "writes a number, the number of a page, and words copied from that page verbatim; the code stores the page's characters, not the model's",
   "src/crossrefs.ts":
     "writes two block ids and a phrase copied from the article, and the code stores the article's characters, not the model's",
-  "src/relations.ts":
-    "writes a block id and one of ten fixed words per paragraph; the words a reader sees for them are the app's own",
   "src/pdf-read.ts": "transcribes a PDF verbatim; a transcriber told to prefer common words is invited to tidy",
   "src/command-pick-call.ts":
     "picks one of the command bar's own rows, then copies words out of the reader's sentence verbatim; neither call writes prose",

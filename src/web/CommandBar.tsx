@@ -1531,8 +1531,8 @@ function onlyMovesTheReader(command: Command): boolean {
 /**
  * **The sub-mode rows to offer**: every sub-mode of every mode the Dock offers
  * (as a button or under More), in Dock order and then chip order — and, inside
- * a mode, only the chips that mode would draw with the switch as it is (Diagram's pictures and Learn's
- * Explore: experimental-visibility.ts, the rule `visibleKinds` in DiagramPanel.tsx
+ * a mode, only the chips that mode would draw with the switch as it is (Diagram's pictures, and
+ * Learn's Explore until 2026-10-11: experimental-visibility.ts, the rule `visibleKinds` in DiagramPanel.tsx
  * and `visibleModes` in Dock.tsx share). A mode the Dock does not offer has
  * no sub-mode row at all, so the experimental switch is decided once, upstream.
  *

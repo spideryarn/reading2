@@ -27,7 +27,7 @@
  * See docs/project/ingest-queue.md.
  */
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, Check, ChevronRight, Circle, Copy, LoaderCircle, Plus, RotateCw, X } from "lucide-react";
+import { AlertCircle, BookPlus, Check, ChevronRight, Circle, Copy, LoaderCircle, Link as LinkIcon, RotateCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { slugFromUrl } from "../ingest.js";
 import {
@@ -256,7 +256,11 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
   const hide = (id: string) => setDismissed((prev) => new Set(prev).add(id));
 
   return (
-    <section className="tw:mb-8 tw:rounded-lg tw:border tw:border-border tw:bg-card tw:p-4">
+    /* **Narrower than the column, and on the left**, so it and the search box
+       below stop reading as one long field twice. Greg, spya-zh5f23: *"maybe
+       make it narrower and left aligned"*. The search box is the narrower one,
+       on the right (`SearchBox` in Library.tsx). Plan 261011l. */
+    <section className="tw:mb-8 tw:max-w-2xl tw:rounded-lg tw:border tw:border-border tw:bg-card tw:p-4">
       {/* **One row, two ways in, and the box is the drop target.** Until
           2026-09-03 the PDF half was a dashed rectangle of its own under the
           URL row — about 130px of a 300px section, for the rarer way in, which
@@ -270,9 +274,13 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
             <form onSubmit={(e) => submit(e, slots)}>
               <label
                 htmlFor="add-url"
-                className="tw:mb-2 tw:flex tw:items-center tw:gap-2 tw:text-xs tw:font-medium tw:text-muted-foreground"
+                /* **A heading, not a caption**: the foreground colour and the
+                   body size, with a book being added, so the box says *add*
+                   before the field is read. The words stay "Add an article",
+                   which is what Help calls it. Plan 261011l. */
+                className="tw:mb-2 tw:flex tw:items-center tw:gap-2 tw:text-sm tw:font-semibold tw:text-foreground"
               >
-                <Plus size={14} />
+                <BookPlus size={16} />
                 Add an article
               </label>
               {/* **Wrap, do not shrink.** Three controls on one row crushed the
@@ -292,26 +300,37 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
                     phone keyboard for the URL layout, and the validation that
                     matters is `slugFromUrl` below, which is the same function
                     the server uses. */}
-                <input
-                  id="add-url"
-                  type="text"
-                  inputMode="url"
-                  /* Enter submits the form this input is in, which is the add. */
-                  enterKeyHint="go"
-                  autoComplete="url"
-                  value={url}
-                  onChange={(e) => {
-                    setUrl(e.target.value);
-                    /* Typing is touching. This is the half that makes *last
-                       touched* true rather than a slogan: a reader who chose a
-                       PDF and then went back to the address bar gets the
-                       address, and the button says so before they press it. */
-                    setLastTouched("url");
-                  }}
-                  placeholder="example.com/an-essay-worth-reading"
-                  spellCheck={false}
-                  className="voice-reader tw:min-w-48 tw:flex-1 tw:rounded-md tw:border tw:border-border tw:bg-background tw:px-3 tw:py-2 tw:text-[13px] tw:text-foreground tw:any-pointer-coarse:text-base tw:transition-colors tw:outline-none tw:placeholder:text-muted-foreground tw:focus:border-highlight-text tw:focus:ring-2 tw:focus:ring-highlight-text/25"
-                />
+                {/* **A link at its start, as the search box has a magnifier**,
+                    so the two fields begin with different pictures. The
+                    wrapper is the flex item now, so the floor and the growth
+                    are on it rather than on the input. Plan 261011l. */}
+                <div className="tw:relative tw:min-w-48 tw:flex-1">
+                  <LinkIcon
+                    size={15}
+                    aria-hidden="true"
+                    className="tw:pointer-events-none tw:absolute tw:left-3 tw:top-1/2 tw:-translate-y-1/2 tw:text-muted-foreground"
+                  />
+                  <input
+                    id="add-url"
+                    type="text"
+                    inputMode="url"
+                    /* Enter submits the form this input is in, which is the add. */
+                    enterKeyHint="go"
+                    autoComplete="url"
+                    value={url}
+                    onChange={(e) => {
+                      setUrl(e.target.value);
+                      /* Typing is touching. This is the half that makes *last
+                         touched* true rather than a slogan: a reader who chose a
+                         PDF and then went back to the address bar gets the
+                         address, and the button says so before they press it. */
+                      setLastTouched("url");
+                    }}
+                    placeholder="Paste a link, e.g. example.com/an-essay"
+                    spellCheck={false}
+                    className="voice-reader tw:w-full tw:rounded-md tw:border tw:border-border tw:bg-background tw:py-2 tw:pr-3 tw:pl-9 tw:text-[13px] tw:text-foreground tw:any-pointer-coarse:text-base tw:transition-colors tw:outline-none tw:placeholder:text-muted-foreground tw:focus:border-highlight-text tw:focus:ring-2 tw:focus:ring-highlight-text/25"
+                  />
+                </div>
                 {/* One box, so the two actions wrap together rather than the
                     row breaking between them, and `ml-auto` keeps them on the
                     right of the line they land on. */}
@@ -355,7 +374,7 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
 
             {url.trim() !== "" && !slug && (
               <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-muted-foreground">
-                That doesn't look like a URL yet.
+                That doesn't look like a URL yet. To search your shelf, use the search box below.
               </p>
             )}
             {/* **The trailing dash and ellipsis are not decoration.** Since

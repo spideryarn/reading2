@@ -183,8 +183,9 @@ function json(body: unknown, status = 200): Response {
 function reply(url: string, method: string): Response {
   if (url === `/api/public/article/${SLUG}`) return json(ARTICLE);
   if (url === `/api/article/${SLUG}`) return json(OWNED);
-  /* The switch is on. Learn was behind it when this was written; since
-     2026-10-05 only its Explore part is (docs/project/experimental-features.md). */
+  /* The switch is on. Learn was behind it when this was written; from
+     2026-10-05 only its Explore part was, and since 2026-10-11 none of it
+     (docs/project/experimental-features.md). */
   if (url === "/api/reader") return json({ experimentalSince: "2026-10-02T00:00:00.000Z" });
   if (method === "POST") return new Response(null, { status: 204 });
   if (url.startsWith("/api/comments/")) return json({ comments: [] });

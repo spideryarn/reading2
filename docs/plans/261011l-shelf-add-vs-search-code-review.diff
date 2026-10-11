@@ -1,0 +1,445 @@
+diff --git a/src/help-corpus.generated.json b/src/help-corpus.generated.json
+index e90c8bda0..ec7bfe900 100644
+--- a/src/help-corpus.generated.json
++++ b/src/help-corpus.generated.json
+@@ -327,7 +327,7 @@
+   "summary": "How to search, sort and filter the articles you have added, and where the topics above them come from.",
+   "keywords": "library home homepage articles list sort order filter unread table cards topics tags categories find",
+   "experimental": false,
+-  "body": "Your shelf is every article you have added. The search box above it does two jobs: it narrows the\ncards by what is written on them (title, author, site and the one-line summary), and it searches the\nwords *inside* your articles, listing matching passages underneath. Open one and you land on that\npassage with your words lit up. Archived articles are left out of both unless **Include archived**\nis on.\n\n- **Sorting.** The chips set the order; press the one you are on to reverse it. **Shift-click** a\n  second chip to sort within the first — by Added, then by Length, say. **Published** is the date\n  the publisher gives. For a paper it is the date, or just the year, on its public record, and a\n  paper with only a year sits at the start of that year. An article with neither goes last.\n- **Cards or Table.** The same list two ways: cards for deciding what to read next, the table for\n  comparing. Its Columns menu hides the columns you don’t want.\n- **Unread** shows only the articles you have never opened.\n- **Point at a card’s date line** to see when it was added, where from, how often you’ve opened it\n  and how long it is.\n- **On a phone or tablet**, a card’s actions are behind its **⋯** button.\n\n**Topics** are the row of subjects above the list, each with a count. Choose one to see only the\narticles about it; choose a second to narrow to articles about *both*. Usually, a model names them\nfrom your articles’ titles and one-sentence summaries, using your profile if you have written one:\nbroad subjects first, with finer ones inside them marked **›**. Until that answer exists, the row\ncan fall back to phrases from the articles themselves. New articles are sorted in by themselves.\nEach article shows the topics it is in under its title: up to four, or the first three and how many\nmore. Topics appear once there are about eight different articles on the shelf, and shift as it\ngrows."
++  "body": "Your shelf is every article you have added. The search box above it does two jobs: it narrows the\ncards by what is written on them (title, author, site and the one-line summary), and it searches the\nwords *inside* your articles, listing matching passages underneath. Open one and you land on that\npassage with your words lit up. Archived articles are left out of both unless **Include archived**\nis on. Paste a web address into it by mistake and it offers to add the article instead — press\n**Add it**.\n\n- **Sorting.** The chips set the order; press the one you are on to reverse it. **Shift-click** a\n  second chip to sort within the first — by Added, then by Length, say. **Published** is the date\n  the publisher gives. For a paper it is the date, or just the year, on its public record, and a\n  paper with only a year sits at the start of that year. An article with neither goes last.\n- **Cards or Table.** The same list two ways: cards for deciding what to read next, the table for\n  comparing. Its Columns menu hides the columns you don’t want.\n- **Unread** shows only the articles you have never opened.\n- **Point at a card’s date line** to see when it was added, where from, how often you’ve opened it\n  and how long it is.\n- **On a phone or tablet**, a card’s actions are behind its **⋯** button.\n\n**Topics** are the row of subjects above the list, each with a count. Choose one to see only the\narticles about it; choose a second to narrow to articles about *both*. Usually, a model names them\nfrom your articles’ titles and one-sentence summaries, using your profile if you have written one:\nbroad subjects first, with finer ones inside them marked **›**. Until that answer exists, the row\ncan fall back to phrases from the articles themselves. New articles are sorted in by themselves.\nEach article shows the topics it is in under its title: up to four, or the first three and how many\nmore. Topics appear once there are about eight different articles on the shelf, and shift as it\ngrows."
+  },
+  {
+   "anchor": "sharing",
+diff --git a/src/web/AddArticle.tsx b/src/web/AddArticle.tsx
+index 39f1e5b9a..f2da42865 100644
+--- a/src/web/AddArticle.tsx
++++ b/src/web/AddArticle.tsx
+@@ -27,7 +27,7 @@
+  * See docs/project/ingest-queue.md.
+  */
+ import { useEffect, useMemo, useState } from "react";
+-import { AlertCircle, Check, ChevronRight, Circle, Copy, LoaderCircle, Plus, RotateCw, X } from "lucide-react";
++import { AlertCircle, BookPlus, Check, ChevronRight, Circle, Copy, LoaderCircle, Link as LinkIcon, RotateCw, X } from "lucide-react";
+ import { Button } from "@/components/ui/button";
+ import { slugFromUrl } from "../ingest.js";
+ import {
+@@ -256,7 +256,11 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
+   const hide = (id: string) => setDismissed((prev) => new Set(prev).add(id));
+ 
+   return (
+-    <section className="tw:mb-8 tw:rounded-lg tw:border tw:border-border tw:bg-card tw:p-4">
++    /* **Narrower than the column, and on the left**, so it and the search box
++       below stop reading as one long field twice. Greg, spya-zh5f23: *"maybe
++       make it narrower and left aligned"*. The search box is the narrower one,
++       on the right (`SearchBox` in Library.tsx). Plan 261011l. */
++    <section className="tw:mb-8 tw:max-w-2xl tw:rounded-lg tw:border tw:border-border tw:bg-card tw:p-4">
+       {/* **One row, two ways in, and the box is the drop target.** Until
+           2026-09-03 the PDF half was a dashed rectangle of its own under the
+           URL row — about 130px of a 300px section, for the rarer way in, which
+@@ -270,9 +274,13 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
+             <form onSubmit={(e) => submit(e, slots)}>
+               <label
+                 htmlFor="add-url"
+-                className="tw:mb-2 tw:flex tw:items-center tw:gap-2 tw:text-xs tw:font-medium tw:text-muted-foreground"
++                /* **A heading, not a caption**: the foreground colour and the
++                   body size, with a book being added, so the box says *add*
++                   before the field is read. The words stay "Add an article",
++                   which is what Help calls it. Plan 261011l. */
++                className="tw:mb-2 tw:flex tw:items-center tw:gap-2 tw:text-sm tw:font-semibold tw:text-foreground"
+               >
+-                <Plus size={14} />
++                <BookPlus size={16} />
+                 Add an article
+               </label>
+               {/* **Wrap, do not shrink.** Three controls on one row crushed the
+@@ -292,26 +300,37 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
+                     phone keyboard for the URL layout, and the validation that
+                     matters is `slugFromUrl` below, which is the same function
+                     the server uses. */}
+-                <input
+-                  id="add-url"
+-                  type="text"
+-                  inputMode="url"
+-                  /* Enter submits the form this input is in, which is the add. */
+-                  enterKeyHint="go"
+-                  autoComplete="url"
+-                  value={url}
+-                  onChange={(e) => {
+-                    setUrl(e.target.value);
+-                    /* Typing is touching. This is the half that makes *last
+-                       touched* true rather than a slogan: a reader who chose a
+-                       PDF and then went back to the address bar gets the
+-                       address, and the button says so before they press it. */
+-                    setLastTouched("url");
+-                  }}
+-                  placeholder="example.com/an-essay-worth-reading"
+-                  spellCheck={false}
+-                  className="voice-reader tw:min-w-48 tw:flex-1 tw:rounded-md tw:border tw:border-border tw:bg-background tw:px-3 tw:py-2 tw:text-[13px] tw:text-foreground tw:any-pointer-coarse:text-base tw:transition-colors tw:outline-none tw:placeholder:text-muted-foreground tw:focus:border-highlight-text tw:focus:ring-2 tw:focus:ring-highlight-text/25"
+-                />
++                {/* **A link at its start, as the search box has a magnifier**,
++                    so the two fields begin with different pictures. The
++                    wrapper is the flex item now, so the floor and the growth
++                    are on it rather than on the input. Plan 261011l. */}
++                <div className="tw:relative tw:min-w-48 tw:flex-1">
++                  <LinkIcon
++                    size={15}
++                    aria-hidden="true"
++                    className="tw:pointer-events-none tw:absolute tw:left-3 tw:top-1/2 tw:-translate-y-1/2 tw:text-muted-foreground"
++                  />
++                  <input
++                    id="add-url"
++                    type="text"
++                    inputMode="url"
++                    /* Enter submits the form this input is in, which is the add. */
++                    enterKeyHint="go"
++                    autoComplete="url"
++                    value={url}
++                    onChange={(e) => {
++                      setUrl(e.target.value);
++                      /* Typing is touching. This is the half that makes *last
++                         touched* true rather than a slogan: a reader who chose a
++                         PDF and then went back to the address bar gets the
++                         address, and the button says so before they press it. */
++                      setLastTouched("url");
++                    }}
++                    placeholder="Paste a link, e.g. example.com/an-essay"
++                    spellCheck={false}
++                    className="voice-reader tw:w-full tw:rounded-md tw:border tw:border-border tw:bg-background tw:py-2 tw:pr-3 tw:pl-9 tw:text-[13px] tw:text-foreground tw:any-pointer-coarse:text-base tw:transition-colors tw:outline-none tw:placeholder:text-muted-foreground tw:focus:border-highlight-text tw:focus:ring-2 tw:focus:ring-highlight-text/25"
++                  />
++                </div>
+                 {/* One box, so the two actions wrap together rather than the
+                     row breaking between them, and `ml-auto` keeps them on the
+                     right of the line they land on. */}
+@@ -355,7 +374,7 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
+ 
+             {url.trim() !== "" && !slug && (
+               <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-muted-foreground">
+-                That doesn't look like a URL yet.
++                That doesn't look like a URL yet. To search your shelf, use the search box below.
+               </p>
+             )}
+             {/* **The trailing dash and ellipsis are not decoration.** Since
+diff --git a/src/web/Library.tsx b/src/web/Library.tsx
+index 8907c2da9..00dcd8476 100644
+--- a/src/web/Library.tsx
++++ b/src/web/Library.tsx
+@@ -87,7 +87,9 @@ import { ShelfTagFilter } from "./ShelfTagFilter.js";
+ import { articleTopics } from "./article-topics.js";
+ import { shelfKeyOf, topicsExpected, useShelfTopics } from "./useShelfTerms.js";
+ import { pageTitle, useDocumentTitle } from "./page-title.js";
+-import { ADMIN_HREF, PROFILE_HREF } from "./router.js";
++import { addHref, ADMIN_HREF, navigate, PROFILE_HREF } from "./router.js";
++import { slugFromUrl } from "../ingest.js";
++import { Button } from "./components/ui/button.js";
+ import { media } from "./media.js";
+ import { ArchivedMark, ShelfCard } from "./ShelfEntry.js";
+ import { ShelfControls, type ShelfFilter } from "./ShelfControls.js";
+@@ -1224,8 +1226,15 @@ function SearchBox({ value, onChange }: { value: string; onChange: (v: string) =
+      pointer made it, so an abandoned touch cannot poison a later keyboard,
+      voice or assistive-technology activation. */
+   const fingerOrPenOnCross = useRef(false);
++  const link = linkToAdd(value);
+   return (
+-    <div className="tw:mb-4">
++    /* **Narrower than the column, and on the right**, so it does not read as
++       a second add box. Greg, spya-zh5f23: *"Users keep confusing them … can
++       we narrow the search box and perhaps right align it"*. The add box
++       above is left-aligned and the wider of the two (AddArticle.tsx). The
++       `- 2rem` keeps a visible step on the left even on a phone, where 24rem
++       is wider than the column. Plan 261011l. */
++    <div className="tw:mb-4 tw:ml-auto tw:w-[min(24rem,calc(100%_-_2rem))]">
+       <div className="tw:relative">
+         <Search
+           size={15}
+@@ -1262,7 +1271,7 @@ function SearchBox({ value, onChange }: { value: string; onChange: (v: string) =
+               onChange("");
+             }
+           }}
+-          placeholder="Search titles, authors, and article text"
++          placeholder="Search your shelf: titles, authors, text"
+           aria-label="Search the library"
+           /* A ring as well as a border colour on focus. A 1px border changing
+              from grey to orange is about one pixel's worth of colour on a
+@@ -1311,10 +1320,38 @@ function SearchBox({ value, onChange }: { value: string; onChange: (v: string) =
+           </button>
+         )}
+       </div>
++      {/* **A link here was meant for the add box.** The box above takes the
++          cursor on arrival, so a reader who arrives and pastes an address
++          pastes it here, and nothing on a shelf matches an address. Offered,
++          not done: the press goes through the same `/add/<url>` as Add, and
++          Enter still only puts the keyboard away. Plan 261011l. */}
++      {link !== null && (
++        <p className="tw:mt-2 tw:mb-0 tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1 tw:text-xs tw:text-muted-foreground">
++          That's a link. Add it to your shelf?
++          <Button type="button" size="xs" variant="outline" onClick={() => navigate(addHref(link))}>
++            Add it
++          </Button>
++        </p>
++      )}
+     </div>
+   );
+ }
+ 
++/**
++ * The address a search query is, if the reader plainly meant to add it.
++ *
++ * `slugFromUrl` is the add box's own test, so this never offers what Add would
++ * refuse. On top of it, the query must be one token and carry a scheme or a
++ * path: `nature.com` alone is a fair thing to search a shelf for (the site
++ * name is on the cards), and `nature.com/articles/x` is not.
++ */
++export function linkToAdd(query: string): string | null {
++  const q = query.trim();
++  if (q === "" || /\s/.test(q)) return null;
++  if (!/^https?:\/\//i.test(q) && !q.includes("/")) return null;
++  return slugFromUrl(q) === "" ? null : q;
++}
++
+ /**
+  * The passages, under the cards.
+  *
+diff --git a/src/web/help/pages/shelf.md b/src/web/help/pages/shelf.md
+index dc929950d..44c23c397 100644
+--- a/src/web/help/pages/shelf.md
++++ b/src/web/help/pages/shelf.md
+@@ -9,7 +9,8 @@ Your shelf is every article you have added. The search box above it does two job
+ cards by what is written on them (title, author, site and the one-line summary), and it searches the
+ words *inside* your articles, listing matching passages underneath. Open one and you land on that
+ passage with your words lit up. Archived articles are left out of both unless **Include archived**
+-is on.
++is on. Paste a web address into it by mistake and it offers to add the article instead — press
++**Add it**.
+ 
+ - **Sorting.** The chips set the order; press the one you are on to reverse it. **Shift-click** a
+   second chip to sort within the first — by Added, then by Length, say. **Published** is the date
+diff --git a/tests/shelf-search-offers-a-pasted-link.test.tsx b/tests/shelf-search-offers-a-pasted-link.test.tsx
+new file mode 100644
+index 000000000..0028c5c90
+--- /dev/null
++++ b/tests/shelf-search-offers-a-pasted-link.test.tsx
+@@ -0,0 +1,223 @@
++// @vitest-environment jsdom
++/**
++ * **A link pasted into the shelf's search box is offered to the add box.**
++ *
++ * > In the logged in homepage, we have two text input boxes near the top, one
++ * > for adding a URL and one for searching the shelf. Users keep confusing them
++ * >
++ * > — Greg, 2026-10-11, SPIDERYARN-READING2-HD (spya-zh5f23)
++ *
++ * The search box takes the cursor on arrival (plan 260929g), so a reader who
++ * arrives and pastes a link pastes it into the search. Nothing on the shelf
++ * matches an address, and the page said nothing. Now it offers to add it — on a
++ * press, through the same `/add/<url>` the Add button uses, never by itself.
++ * docs/plans/261011l-shelf-add-box-and-search-box-look-like-different-things.md.
++ *
++ * The mocks are tests/shelf-search-clear.test.tsx's, plus `navigate` spied on.
++ */
++import { act, createElement } from "react";
++import { createRoot, type Root } from "react-dom/client";
++import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++import type { LibraryTermsResponse } from "../src/types.js";
++
++const NO_TERMS: LibraryTermsResponse = {
++  terms: [],
++  scope: { articles: 0, works: 0, skipped: 0 },
++  pending: 0,
++  chosenBy: "program",
++  refreshing: false,
++};
++
++vi.mock("../src/web/lib/api.js", () => ({
++  apiFetch: async (url: string) => {
++    const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
++    if (url.startsWith("/api/library/terms")) return json(NO_TERMS);
++    if (url.startsWith("/api/library")) return json({ articles: [] });
++    return json({ query: "", hits: [], articles: 0, capped: false });
++  },
++  fetchOk: async () => new Response(null, { status: 200 }),
++  readJson: async (r: Response) => {
++    if (!r.ok) throw Object.assign(new Error(`HTTP ${r.status}`), { status: r.status });
++    return r.json();
++  },
++  statusOf: (e: unknown) => {
++    const status = (e as { status?: unknown } | null)?.status;
++    return typeof status === "number" ? status : null;
++  },
++}));
++vi.mock("../src/web/lib/cached-shelf.js", () => ({ readCachedShelf: async () => null }));
++vi.mock("../src/web/useJobs.js", () => ({ useJobs: () => ({}) }));
++vi.mock("../src/web/AddArticle.js", () => ({ AddArticle: () => null }));
++vi.mock("../src/web/FeedbackButton.js", () => ({ FeedbackTrigger: () => null }));
++vi.mock("../src/web/useSession.js", () => ({
++  useSession: () => ({ session: null, user: null, loading: false, known: true }),
++}));
++
++/** Where the page was sent, in order. */
++const went: string[] = [];
++vi.mock("../src/web/router.js", async (importOriginal) => {
++  const real = await importOriginal<typeof import("../src/web/router.js")>();
++  return { ...real, navigate: (href: string) => went.push(href) };
++});
++
++class NoResizeObserver {
++  observe(): void {}
++  unobserve(): void {}
++  disconnect(): void {}
++}
++Object.assign(globalThis, { ResizeObserver: NoResizeObserver });
++
++/** jsdom has no `matchMedia`; this one answers no to every query. */
++Object.defineProperty(window, "matchMedia", {
++  writable: true,
++  configurable: true,
++  value: (query: string) => ({
++    matches: false,
++    media: query,
++    addEventListener() {},
++    removeEventListener() {},
++    addListener() {},
++    removeListener() {},
++    onchange: null,
++    dispatchEvent: () => false,
++  }),
++});
++
++(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
++enableHistorySync();
++
++const { Library, linkToAdd } = await import("../src/web/Library.js");
++
++let host: HTMLDivElement;
++let root: Root;
++
++beforeEach(() => {
++  went.length = 0;
++  (document.activeElement as HTMLElement | null)?.blur?.();
++});
++
++afterEach(() => {
++  act(() => root.unmount());
++  host.remove();
++});
++
++async function show(path: string): Promise<void> {
++  history.replaceState(null, "", path);
++  host = document.createElement("div");
++  document.body.append(host);
++  root = createRoot(host);
++  await act(async () => {
++    root.render(createElement(NuqsAdapter, null, createElement(Library, { readerId: "reader" })));
++  });
++  await settle();
++}
++
++/** Longer than the 200ms `?q=` is debounced by (params.ts), so the address has caught up. */
++async function settle(): Promise<void> {
++  await act(async () => {
++    await new Promise((r) => setTimeout(r, 350));
++  });
++}
++
++const box = (): HTMLInputElement => {
++  const el = host.querySelector<HTMLInputElement>('input[aria-label="Search the library"]');
++  expect(el, "the shelf draws no search box").not.toBeNull();
++  return el as HTMLInputElement;
++};
++
++const offer = (): HTMLButtonElement | null =>
++  [...host.querySelectorAll<HTMLButtonElement>("button")].find(
++    (b) => b.textContent?.trim() === "Add it",
++  ) ?? null;
++
++/** Types into the box the way React hears it: the native setter, then `input`. */
++async function type(value: string): Promise<void> {
++  const el = box();
++  const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
++  await act(async () => {
++    set?.call(el, value);
++    el.dispatchEvent(new Event("input", { bubbles: true }));
++  });
++  await settle();
++}
++
++describe("a link in the shelf's search box", () => {
++  it("is offered to the add box, and a press adds it the way Add does", async () => {
++    await show("/");
++    await type("https://example.com/an-essay");
++    expect(host.textContent).toContain("That's a link.");
++    await act(async () => {
++      offer()?.click();
++    });
++    expect(went).toEqual(["/add/" + encodeURIComponent("https://example.com/an-essay")]);
++  });
++
++  it("is offered when the address arrives in the page's own ?q=", async () => {
++    await show("/?q=" + encodeURIComponent("http://example.com/x"));
++    expect(offer()).not.toBeNull();
++  });
++
++  it("adds nothing until it is pressed", async () => {
++    await show("/");
++    await type("https://example.com/an-essay");
++    expect(went).toEqual([]);
++  });
++
++  it("is not offered for words, a bare site name, or words around an address", async () => {
++    await show("/");
++    await type("attention");
++    expect(offer()).toBeNull();
++    /* The site name is on the cards, so it is a fair search. */
++    await type("example.com");
++    expect(offer()).toBeNull();
++    await type("see https://example.com/an-essay");
++    expect(offer()).toBeNull();
++  });
++
++  it("leaves Enter as it was — the keyboard goes away and nothing is added", async () => {
++    await show("/");
++    await type("https://example.com/an-essay");
++    const enter = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
++    await act(async () => {
++      box().dispatchEvent(enter);
++    });
++    await settle();
++    expect(went).toEqual([]);
++  });
++
++  it("goes with the query when Escape clears it", async () => {
++    await show("/");
++    await type("https://example.com/an-essay");
++    const escape = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
++    await act(async () => {
++      box().dispatchEvent(escape);
++    });
++    await settle();
++    expect(offer()).toBeNull();
++    expect(new URLSearchParams(location.search).has("q")).toBe(false);
++  });
++});
++
++describe("linkToAdd — what counts as a link meant for the add box", () => {
++  it("takes what Add takes, with a scheme or a path", () => {
++    expect(linkToAdd("https://example.com/an-essay")).toBe("https://example.com/an-essay");
++    expect(linkToAdd("  example.com/an-essay ")).toBe("example.com/an-essay");
++    expect(linkToAdd("arxiv.org/abs/2608.13566")).toBe("arxiv.org/abs/2608.13566");
++  });
++
++  it("refuses what Add refuses", () => {
++    expect(linkToAdd("javascript:alert(1)")).toBeNull();
++    /* Credentials and a local address: the add page would only refuse them. */
++    expect(linkToAdd("https://user:pass@example.com/x")).toBeNull();
++    expect(linkToAdd("http://127.0.0.1/x")).toBeNull();
++    expect(linkToAdd("http://localhost/x")).toBeNull();
++  });
++
++  it("leaves words and bare site names to the search", () => {
++    expect(linkToAdd("")).toBeNull();
++    expect(linkToAdd("attention is all you need")).toBeNull();
++    expect(linkToAdd("nature.com")).toBeNull();
++    expect(linkToAdd("and/or")).toBeNull();
++  });
++});

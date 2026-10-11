@@ -178,35 +178,6 @@ export type SpokenLanded =
   | { ok: true; threadId: string; tailId: string }
   | { ok: false; conflict: boolean; error: string };
 
-/**
- * **An answer that has just finished arriving in this tab, from a turn this
- * tab started** — a send, a retry or an edit whose stream ended with its
- * `done` frame. The guide acts on these and on nothing else (src/web/guide-acts.ts,
- * plan 261007p, GPT Sol's F2): a recovered answer arrives as `recovery.found`,
- * a refused retry puts an old answer back without a `done`, and a transcript
- * loaded from the server never streams at all, so none of them is one.
- *
- * The thread and message ids are the server's: `begin` swapped them before
- * any `done`. `startedThreadId` also names the turn before that correction.
- */
-export interface Answered {
-  readonly threadId: string;
-  /** The name at Send, before `begin` corrected it; a mounted panel may still hold that name. */
-  readonly startedThreadId: string;
-  readonly message: ChatMessage;
-  /**
-   * The generating modes the server found already made for this turn
-   * (`TurnDone.opensFree`): the one snapshot the guide's prompt was also told,
-   * so its act and its sentence agree (plan 261008a). Empty for anything else.
-   */
-  readonly opensFree: ReadonlySet<string>;
-}
-
-/** `TurnDone.opensFree` off the wire: strings only, anything else is nothing. */
-function opensFreeOf(value: unknown): ReadonlySet<string> {
-  return new Set(Array.isArray(value) ? value.filter((key): key is string => typeof key === "string") : []);
-}
-
 /** What React reads: the state, and the two things derived from it. */
 export interface ChatSnapshot {
   state: ChatState;
@@ -263,10 +234,6 @@ export class ChatController {
    * 409 we inflicted on ourselves.
    */
   #spokenWaiters = new Map<OpId, (landed: SpokenLanded) => void>();
-  /** Who is told of each `Answered` — an event, so nobody mounted later hears an old one. */
-  #answered = new Set<(answered: Answered) => void>();
-  /** The starting name of each live turn, retained through its server-id correction. */
-  #startedThreadIds = new Map<OpId, string>();
 
   /** No side effects here — the hook builds one during a render. */
   constructor(slug: string, effects: ChatEffects, onSettled?: () => void) {
@@ -285,18 +252,6 @@ export class ChatController {
   };
 
   getSnapshot = (): ChatSnapshot => this.#current;
-
-  /**
-   * **Hear each answer as it finishes** (`Answered`). Told once, at the moment
-   * of the `done` frame, after the state is current and before React has
-   * necessarily re-rendered; a listener added afterwards never hears it.
-   */
-  onAnswered = (listener: (answered: Answered) => void): (() => void) => {
-    this.#answered.add(listener);
-    return () => {
-      this.#answered.delete(listener);
-    };
-  };
 
   /** The state as it is **now**, readable from an event handler. */
   get state(): ChatState {
@@ -412,10 +367,6 @@ export class ChatController {
     const before = this.#current;
     const { state, commands } = reduce(before.state, event);
     const operation = "opId" in event ? before.state.operations.get(event.opId) : undefined;
-    const startedThreadId = operation?.kind === "turn" ? this.#startedThreadIds.get(operation.id) ?? operation.threadId : null;
-    if (event.type === "turn.started" && state !== before.state && state.operations.has(event.op.id)) {
-      this.#startedThreadIds.set(event.op.id, event.op.threadId);
-    }
     this.#moveGoneAfter(event, operation);
     /* A lost stream or refused write is still being reconciled. Its recovery
        or repair will notify when it finishes, including after detach. */
@@ -449,17 +400,6 @@ export class ChatController {
          is still current on this line; only *when React hears* is bounded.
          docs/postmortems/260915a-a-store-notified-per-frame-turns-a-buffered-stream-into-an-update-loop.md */
       this.#notify();
-    }
-    /* A turn's own `done`, not superseded (its conversation deleted), whose
-       row is on screen now: the one shape `Answered` names. */
-    if (event.type === "turn.done" && operation?.kind === "turn" && !operation.superseded && this.#answered.size > 0) {
-      const message = this.#current.threads
-        .find((t) => t.id === operation.threadId)
-        ?.messages.find((m) => m.id === operation.replyId);
-      if (message?.status === "done") {
-        const opensFree = opensFreeOf(event.done.opensFree);
-        for (const listener of [...this.#answered]) listener({ threadId: operation.threadId, startedThreadId: startedThreadId ?? operation.threadId, message, opensFree });
-      }
     }
     for (const command of commands) this.#perform(command);
     this.#retireGone(event, operation, state);
@@ -566,9 +506,9 @@ export class ChatController {
     this.#onThreadId.clear();
   }
 
-  /** Forget the callbacks and starting names of turns that have finished. */
+  /** Forget the callbacks of turns that have finished. */
   #prune(state: ChatState): void {
-    for (const callbacks of [this.#onThreadId, this.#onConfirmed, this.#startedThreadIds]) {
+    for (const callbacks of [this.#onThreadId, this.#onConfirmed]) {
       for (const id of [...callbacks.keys()]) {
         if (!state.operations.has(id)) callbacks.delete(id);
       }
