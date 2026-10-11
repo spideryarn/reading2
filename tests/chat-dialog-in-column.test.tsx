@@ -17,6 +17,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { BlockId, ChatThread } from "../src/types.js";
+import { chatDraftsFor, forgetChatDrafts } from "../src/web/chat-draft.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -215,6 +216,7 @@ afterEach(() => {
     t.remove();
   });
   vi.restoreAllMocks();
+  forgetChatDrafts();
 });
 
 describe("where the panel is attached", () => {
@@ -274,11 +276,18 @@ describe("where the panel is attached", () => {
         return this.isConnected ? 44 : 0;
       },
     });
+    /* Mounted with words in it, a conversation's kept draft: an empty box
+       rests at its rows and measures nothing (ChatPanel.tsx § Composer, plan
+       261011m), so the mount-time measurement is only a question for one
+       that is not empty. */
+    const kept = () => chatDraftsFor("a-piece").setThread(ANSWERED.id, "Why bumps?");
     try {
-      draw(DRAFT, {});
+      kept();
+      draw(THREAD, {});
       expect(panel().querySelector("textarea")?.style.height).toBe("44px");
       act(() => root.render(null));
-      draw(DRAFT, inCard());
+      kept();
+      draw(THREAD, inCard());
       expect(panel().querySelector("textarea")?.style.height).toBe("44px");
     } finally {
       delete (HTMLTextAreaElement.prototype as { scrollHeight?: number }).scrollHeight;

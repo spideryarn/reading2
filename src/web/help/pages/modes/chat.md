@@ -66,11 +66,8 @@ Nothing happens until you press the button; Chat cannot do any of these itself.
 **The guide.** The **Guide** row pinned at the top of the list, with a compass, is a conversation about how to read
 this article with Spideryarn, rather than about what it says. A new article opens on it when there
 is room beside the text, with a greeting that is ours and costs nothing; nothing is asked of the AI
-until you send something. The guide can do one thing per answer by itself, if it only moves you:
-take you to a passage, or open a mode that has nothing to write, such as Structure or Learn, or the
-Glossary or Summary's Brief or Fuller once they have already been written for this article. It
-says so when it does, and **Back** undoes it. Anything that costs money or changes your things, such
-as a search, a mode that has to be written first, a tag or a bookmark, is still a button you press. Its
+until you send something. When the guide suggests a mode or a passage, it gives you a button and
+says what pressing it will do; it never opens anything or moves you by itself. Its
 greeting asks why you are reading the piece: answer in the box below as you would any message. When
 you say why, or something about yourself, the guide offers to save it, as close to your own words
 as it can, under its answer: **Save as why you're reading** or **Save to About you**. Nothing is

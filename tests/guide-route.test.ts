@@ -13,9 +13,8 @@
  * is offered no web search and no tool that leaves the article; and a guide
  * refuses `visible`, as every non-chat kind does.
  *
- * And since plan 261008a: which *Button* modes are already made is read per
- * guide turn from the stores behind the bands' GETs, told to the model in the
- * final message, and sent to the page on the `done` frame — never stored.
+ * Plan 261008a read which modes were already made on every guide turn; plan
+ * 261011m removed that, and the last describe below holds it removed.
  * `loadGlossary` and `loadSimpleSummary` are the real ones unless a test sets
  * `storedReads`.
  */
@@ -44,7 +43,6 @@ vi.mock("../src/store/index.js", async (importOriginal) => {
 import { closeDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
-import { ArtefactNotMadeYet } from "../src/store/artefact-not-made-yet.js";
 import { acceptAny, asTestOwner, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
 import { logLinesWhile } from "./helpers/log-capture.js";
 import { pgReady } from "./helpers/pg-ready.js";
@@ -348,71 +346,26 @@ describe("a turn of any other kind", () => {
   );
 });
 
-/* Plan 261008a (qi-ztp3w9az). */
-describe("which modes are already made, on a guide turn", () => {
-  const MADE = "ALREADY MADE FOR THIS ARTICLE:";
+/* Plan 261011m: the guide opens nothing itself, so the route no longer reads
+   which modes are already made (plan 261008a's `guideMade`), tells the model,
+   or puts `opensFree` on the `done` frame. */
+describe("a guide turn reads nothing about which modes are made", () => {
   const doneFrame = (): Record<string, unknown> => {
     const frame = written.find((w) => w.startsWith("event: done\n"));
     if (frame === undefined) throw new Error(`no done frame in ${written.length} writes`);
     return JSON.parse(frame.slice(frame.indexOf("data: ") + 6)) as Record<string, unknown>;
   };
 
-  it("tells the model and the page the same snapshot, and stores neither", async () => {
+  it("neither reads the stored Glossary nor tells the model or the page about it", async () => {
     vi.spyOn(shelfStore, "articlesOpenedBefore").mockResolvedValue(3);
-    storedReads.glossary = async () => ({ glossary: { entries: [] } });
-    storedReads.simple = async () => {
-      throw new ArtefactNotMadeYet("none yet");
-    };
-    answerWith = "I've opened the Glossary.";
-    expect(await post({ threadId: "spya-gdrtm2", question: "Which terms matter?", kind: "guide" })).toBe(200);
-    const { head, final } = lastRequest();
-    expect(final).toContain(`${MADE} Glossary.`);
-    expect(final).not.toContain("Summary › Brief");
-    expect(head).not.toContain(MADE + " ");
-    expect(doneFrame().opensFree).toEqual(["mode:glossary"]);
-    const stored = await asTestOwner(() => chatStore.load(SLUG));
-    const answer = stored.flatMap((t) => t.messages).find((m) => m.role === "assistant");
-    expect(answer?.status, "the control: the answer was stored").toBe("done");
-    expect(answer).not.toHaveProperty("opensFree");
-  });
-
-  it("names nothing, and sends an empty list, when nothing is made", async () => {
-    vi.spyOn(shelfStore, "articlesOpenedBefore").mockResolvedValue(3);
-    const none = async () => {
-      throw new ArtefactNotMadeYet("none yet");
-    };
-    storedReads.glossary = none;
-    storedReads.simple = none;
-    answerWith = "Start with the introduction.";
-    expect(await post({ threadId: "spya-gdrtn2", question: "Where do I start?", kind: "guide" })).toBe(200);
-    expect(lastRequest().final).not.toContain(MADE);
-    expect(doneFrame().opensFree).toEqual([]);
-  });
-
-  it("costs the line and not the turn when a read fails, and sends no list", async () => {
-    vi.spyOn(shelfStore, "articlesOpenedBefore").mockResolvedValue(3);
-    storedReads.simple = async () => {
-      throw Object.assign(new Error("connection dropped"), { status: 503 });
-    };
-    answerWith = "Start with the introduction.";
-    let status = 0;
-    const lines = await logLinesWhile(async () => {
-      status = await post({ threadId: "spya-gdrto2", question: "carry on", kind: "guide" });
-    });
-    expect(status).toBe(200);
-    expect(lastRequest().final).not.toContain(MADE);
-    expect(doneFrame()).not.toHaveProperty("opensFree");
-    expect(lines).toContain("guide: could not read which modes are already made");
-    expect(lines).not.toContain("connection dropped");
-  });
-
-  it("is neither read nor sent on a chat turn", async () => {
     const glossary = vi.fn(async () => ({ glossary: { entries: [] } }));
     storedReads.glossary = glossary;
-    answerWith = "An answer.";
-    expect(await post({ threadId: "spya-gdrtp2", question: "What does it say?", kind: "chat" })).toBe(200);
+    answerWith = "Glossary would list the terms. Press it to open it.";
+    expect(await post({ threadId: "spya-gdrtm2", question: "Which terms matter?", kind: "guide" })).toBe(200);
     expect(glossary).not.toHaveBeenCalled();
-    expect(lastRequest().final).not.toContain(MADE);
-    expect(doneFrame()).not.toHaveProperty("opensFree");
+    expect(lastRequest().final).not.toContain("ALREADY MADE");
+    const done = doneFrame();
+    expect(done.text, "the control: this is the answer's done frame").toBe(answerWith);
+    expect(done).not.toHaveProperty("opensFree");
   });
 });

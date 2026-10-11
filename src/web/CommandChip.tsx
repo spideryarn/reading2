@@ -5,11 +5,9 @@
  *
  * The line it holds is the accepted one
  * (docs/project/chat-llm-help-commands-vision.md § Decided): the model never
- * causes a run, **with one exception since 2026-10-07: in the guide, the first
- * chip of an answer that has just finished on screen presses itself if it only
- * moves the reader** (guide-acts.ts, plan 261007p). A mode opened by that act
- * uses the executor's unarmed opener (plan 261008a). Nothing else here runs on
- * render; a reader's press runs the proposal
+ * causes a run, in the guide as everywhere else. Nothing here runs on render
+ * (the guide's act, which pressed one chip by itself from 2026-10-07, was
+ * removed by plan 261011m on Greg's report spya-gae0zv); a reader's press runs the proposal
  * through the executor the reading view built for the bar
  * (command-runners.ts § `chatExecutor`), so the bookmark is Reader's memoised
  * one (GPT Sol's F6) and the tags are the shelf row's controller (F4).
@@ -18,7 +16,7 @@
  * asked **twice**: by Cited.tsx to decide between a chip and plain text, and
  * again inside the press, so availability is never remembered from the draw.
  */
-import { createContext, useContext, useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { createContext, useContext, useRef, useState, type ReactElement, type ReactNode } from "react";
 import type { ActionOutcome } from "./command-match.js";
 import { chipFor, doneWords } from "./chat-commands.js";
 import type { Known } from "./citations.js";
@@ -30,7 +28,6 @@ import {
   proposalWords,
   runProposal,
 } from "./command-proposal.js";
-import { actsAlone, GuideActContext, isShown } from "./guide-acts.js";
 import { voiceClass } from "./voice.js";
 
 /**
@@ -109,25 +106,6 @@ export function CommandChip({
   /* A ref as well as the state: two presses in one frame both see the state
      from before the first — CommandBar.tsx § `inFlight`. */
   const inFlight = useRef(false);
-  const button = useRef<HTMLButtonElement>(null);
-  /* The guide's one act for the answer this chip is in, if it has one —
-     guide-acts.ts. Read by the effect below, after the press is defined. */
-  const act = useContext(GuideActContext);
-  /* Assigned on every render below; the effect runs after the render that
-     assigned it, so it presses with this render's executor and blocks. */
-  const pressRef = useRef<((how?: "unarmed") => void) | null>(null);
-  useEffect(() => {
-    if (act === null || act.used) return;
-    const now = chipFor(raw, commands, blocks);
-    if (now === null || !now.enabled || !actsAlone(now, act.made)) return;
-    /* A mode the guide opens is opened unarmed, or not at all (plan 261008a). */
-    if (now.proposal.id === "mode" && commands.openModeUnarmed === undefined) return;
-    /* Spent whether or not it runs: a chip the reader cannot see now must not
-       act when the band comes back (GPT Sol's F3 on plan 261007p). */
-    act.used = true;
-    if (button.current === null || !isShown(button.current)) return;
-    pressRef.current?.("unarmed");
-  }, [act, raw, commands, blocks]);
   const chip = chipFor(raw, commands, blocks);
   // Cited.tsx only mounts this for a token that is a chip; if it stopped being
   // one (the article's blocks changed under it), it is its own characters.
@@ -150,8 +128,7 @@ export function CommandChip({
     }
   };
 
-  /** `"unarmed"` is the guide's act alone: a mode opens with no run armed. */
-  const press = (how?: "unarmed") => {
+  const press = () => {
     if (inFlight.current) return;
     /* Asked again now, not remembered from the draw: the owner, the runner and
        the block are all facts about this moment. */
@@ -163,10 +140,7 @@ export function CommandChip({
     const done = doneWords(now.proposal.id);
     let outcome: ReturnType<typeof runProposal>;
     try {
-      outcome =
-        how === "unarmed" && now.proposal.id === "mode"
-          ? (commands.openModeUnarmed?.(now.proposal) ?? null)
-          : runProposal(commands.runners, now.proposal);
+      outcome = runProposal(commands.runners, now.proposal);
     } catch {
       outcome = { kind: "stay", message: RUN_FAILED };
     }
@@ -188,13 +162,10 @@ export function CommandChip({
       });
   };
 
-  pressRef.current = press;
-
   const pending = said?.kind === "pending";
   return (
     <span className="cmd-chip-wrap">
       <button
-        ref={button}
         type="button"
         className="cmd-chip"
         title={description}

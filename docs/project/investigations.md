@@ -43,6 +43,9 @@ measured with scripted readers and a blind judge:
 - [261009b](../investigations/261009b-skim-cue-optional-eval.md) — Skim's cue made optional
   (`skim/11`): two thirds of the cues dropped, both judges calling most old ones echoes, three
   wordings in one day, and the ship rule that was not met and was overridden, with the reasons.
+- [261011a](../investigations/261011a-the-guide-offers-buttons-only-measured.md) — the guide told
+  it never opens a mode itself: no answer claimed to have opened one (against 3 of 12 on the old
+  prompt), and fewer inline mode buttons in the *expert* case; the eval's empty answers predate it.
 - [261007a](../investigations/261007a-the-guide-prompt-first-measurement.md) — two versions of the
   guide's prompt, each run twice, with buttons scored by the renderer's own `chipFor`: the shorter
   second version improved the measured failures, while the client still refused an injected mode.

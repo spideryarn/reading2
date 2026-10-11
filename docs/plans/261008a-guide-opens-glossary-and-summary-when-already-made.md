@@ -1,5 +1,7 @@
 # 261008a — The guide opens Glossary and Summary by itself when they are already made
 
+**Status, 2026-10-11: removed by [261011m](261011m-guide-suggests-a-mode-with-a-button-a-bigger-chat-box-suggestions-centred.md), on Greg's report `spya-gae0zv`: the guide opens nothing itself, so the already-made read, `opensFree` and the unarmed opener went with the act.**
+
 Owned by [plans.md](../project/plans.md). Overseer queue item `qi-ztp3w9az`, the follow-up
 [261007p](261007p-the-guide-acts-without-a-press-and-opens-every-new-article.md) deferred as
 `Q-guide-acts-generating`. **Status: built, plan reviewed by GPT Sol; code review below.**

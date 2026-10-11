@@ -151,6 +151,13 @@
   height: auto;
 }
 
+/* The shared composer is raised against a band's recessed `--panel` ground.
+   A chat dialog is already `--surface-raised`, so that same fill disappeared
+   there. Give its strip the panel ground instead: the larger page-ground box
+   stays distinct in both themes, including when the dialog is a marginalia
+   card. Plan 261011m. */
+.chat-dialog .chat-composer { background: var(--panel); }
+
 /* **Collapsed: about one note tall, and the whole card is one button**
    (ChatDialog.tsx § The card collapses to one line). The rest of the panel is
    hidden, not unmounted; said here as well as by `hidden`, because

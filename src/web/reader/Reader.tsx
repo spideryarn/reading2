@@ -3003,28 +3003,16 @@ export function Reader({
    * pair of activators, through `modeActivators` (set below, beside
    * `onDockMode`).
    */
-  const modeActivators = useRef<{
-    mode(next: Mode): void;
-    sub(sub: SubMode): void;
-    modeUnarmed(next: Mode): void;
-    subUnarmed(sub: SubMode): void;
-  } | null>(null);
+  const modeActivators = useRef<{ mode(next: Mode): void; sub(sub: SubMode): void } | null>(null);
   const chipModes = useMemo(() => {
     if (!isOwner) return undefined;
     const nav = { diagram: subNav.diagram, learn: mode === "learn" ? subNav.learn : undefined };
     const rows = chipDoorRows({ experimentalOn: experimental.on, mode, marginOpen, subNav: nav });
     const door = (of: readonly ModeCommand[]) =>
-      modeDoor(
-        of,
-        {
-          mode: (c) => modeActivators.current?.mode(c.mode),
-          sub: (c) => modeActivators.current?.sub(c.sub),
-        },
-        {
-          mode: (c) => modeActivators.current?.modeUnarmed(c.mode),
-          sub: (c) => modeActivators.current?.subUnarmed(c.sub),
-        },
-      );
+      modeDoor(of, {
+        mode: (c) => modeActivators.current?.mode(c.mode),
+        sub: (c) => modeActivators.current?.sub(c.sub),
+      });
     return { chat: door(rows), guide: door(guideDoorRows(rows, nav)) };
   }, [isOwner, experimental.on, mode, marginOpen, subNav.diagram, subNav.learn]);
   const moreTerms = owner !== null && glossaryAppendOnOffer(owner.glossary) && dockDraws("glossary");
@@ -4039,8 +4027,7 @@ export function Reader({
    * below; plan 261007j, GPT Sol's F3).
    */
   const onDockMode = (next: Mode, sub?: SubMode, toggle = false): void => {
-    /* Dock's activators arm a reader's press before this navigation; the
-       guide's unarmed activators call it without arming. nuqs updates React
+    /* Dock's activators arm a reader's press before this navigation. nuqs updates React
        now but may leave `location.href` on the old entry for ~50ms, so the
        activators use React state to choose what to arm. Back and Forward
        call neither activator and never arm. */
@@ -4101,8 +4088,8 @@ export function Reader({
       openQuickSearch();
       return;
     }
-    /* A reader's sub-mode press was armed by `useActivateSubMode` in Dock.tsx;
-       a guide act was not. This only moves the band, sub-mode and all. */
+    /* A reader's sub-mode press was armed by `useActivateSubMode` in Dock.tsx.
+       This only moves the band, sub-mode and all. */
     /* A command naming the mode already open, or the bar bringing a
        stepped-aside band back, changes no URL state. Avoid a same-value
        `nuqs` write: it still pushes a history entry even though the
@@ -4180,27 +4167,7 @@ export function Reader({
     marginOpen,
   );
   const activateSubModeHere = useActivateSubMode(slug, carriedSearch(location.search), onDockMode, isOwner);
-  /* **The same two with `arms` false, for the guide's own act** (plan 261008a,
-     GPT Sol's F1): it moves the band exactly as a chip's press does and arms
-     nothing, so a stored Glossary or Summary it opens cannot buy a run even if
-     the artefact went between the server's read and the band's. */
-  const activateModeUnarmed = useActivateMode(
-    slug,
-    carriedSearch(location.search),
-    { diagram: subNav.diagram, summary: summaryView, sources: subNav.sources },
-    onDockMode,
-    false,
-    mode,
-    false,
-    marginOpen,
-  );
-  const activateSubModeUnarmed = useActivateSubMode(slug, carriedSearch(location.search), onDockMode, false);
-  modeActivators.current = {
-    mode: activateModeHere,
-    sub: activateSubModeHere,
-    modeUnarmed: activateModeUnarmed,
-    subUnarmed: activateSubModeUnarmed,
-  };
+  modeActivators.current = { mode: activateModeHere, sub: activateSubModeHere };
 
   return (
     /* Every block link inside — panels, chips, the chat dialog through its

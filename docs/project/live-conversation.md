@@ -623,8 +623,11 @@ What differs is what the session is told and given, on both engines:
   (`withoutCommandButtons`), for the reason block ids are: a voice shown brackets in its own past
   words starts saying them.
 
-Not built: a spoken guide that opens a mode itself, as the typed one does (an `open_mode` tool
-answered in the browser, like `show_passage`). It names them instead.
+It names modes rather than opening them, as the typed guide offers them as buttons and never opens
+one itself (since
+[261011m](../plans/261011m-guide-suggests-a-mode-with-a-button-a-bigger-chat-box-suggestions-centred.md),
+on Greg's report that a new reader was surprised by a mode opening unasked). An `open_mode` tool
+answered in the browser, like `show_passage`, would go against that, so it is not planned.
 
 ## What is not built
 

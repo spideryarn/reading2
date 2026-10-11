@@ -650,9 +650,9 @@ anything, or spends money. That is the reason the write tools below are not buil
 that writes turns "an injected page made the answer wrong" into "an injected page changed the
 reader's data". Since 2026-10-03 an answer can *offer* a write or a spend as a button, and the
 sentence above is unchanged by it, because a button is pressed by the reader and called by nothing:
-[§ Command buttons](#command-buttons-chat-proposes-the-reader-presses). The guide's one exception,
-since 2026-10-07, keeps it too: the only button that presses itself is one that moves the reader
-and writes and spends nothing ([§ The guide](#the-guide)).
+[§ Command buttons](#command-buttons-chat-proposes-the-reader-presses). The guide included: from
+2026-10-07 one of its buttons pressed itself, and that was removed on 2026-10-11
+([§ The guide](#the-guide)).
 
 ## A transcript cannot be published by column allowlist, and that is why chat is not shared
 
@@ -1076,30 +1076,25 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   ([261010g](../plans/261010g-guide-chat-at-the-top-of-the-command-bar-with-one-icon.md)); and since
   261007j the bar's *Ask the guide: "…"* for a sentence the fast pick could not place.
 - **Its buttons** are chat's, offered unasked when it suggests a mode or a search
-  (§ Command buttons), **and one of them may press itself** (since 2026-10-07,
-  [261007p](../plans/261007p-the-guide-acts-without-a-press-and-opens-every-new-article.md); Greg on
-  q-tyvutf: *"yes. err on the side of capability for the guide, unless there's high risk/stakes"*).
-  When a guide answer finishes arriving in this tab, from a turn this tab started, with the guide
-  on screen, the first of its buttons that only moves the reader runs as if pressed: a jump, or a
-  mode that makes nothing and writes nothing (`modeActsAlone` in
-  [`src/acts-alone.ts`](../../src/acts-alone.ts) — not one that generates, and not Search, whose
-  opening tidies the reader's saved searches). **Since 2026-10-08 Glossary and Summary's Brief and
-  Fuller act too, when what they show is already stored**
-  ([261008a](../plans/261008a-guide-opens-glossary-and-summary-when-already-made.md),
-  `OPENS_FREE_ONCE_MADE`): the route reads the same stores the bands' GETs read, once per guide
-  turn (`guideMade`), tells the model in the last message (`madeLine`, *ALREADY MADE FOR THIS
-  ARTICLE*) and the page on the `done` frame (`opensFree`, never stored), so the sentence and the
-  act come from one snapshot. And every mode the guide opens by itself is opened **unarmed**
-  (`openModeUnarmed`), so if the artefact went in between, the band shows its own *Write it* and
-  nothing is bought. Everything else stays a press: a quick search, a find, a look-up, a tag, a
-  bookmark (it writes into the reader's comments), any other generating mode, and Summary by its
-  bare name or its Thread (the Thread writes on arrival). The prompt marks each mode *Opens at once*
-  or *Button* from the same rule, and tells the guide to say *"I've opened…"* for an opening at
-  once, including a *Button* named on the already-made line. A transcript loaded, recovered or put
-  back never acts, nor does a stopped or cut-off
-  answer, nor a band stepped aside on a phone
-  ([`src/web/guide-acts.ts`](../../src/web/guide-acts.ts)). Chat itself never acts: its context
-  can hold fetched pages, and nobody asked.
+  (§ Command buttons), and **the reader presses every one**: the guide never opens a mode or moves
+  the reader itself. Its prompt prints every mode as *Button* (`modeWordsSection` in
+  [`src/guide.ts`](../../src/guide.ts)) and tells it to offer the next step with its button, say
+  what pressing it will do, and never say it has opened or done anything.
+
+  > I was showing the guide chat to a new user, and they asked it for suggestions, and it opened a
+  > different mode directly, and they were surprised and didn't know what to make of it. I think
+  > instead it should suggest things, with a UI button for them to press that would take them to
+  > that mode, so that they're aware of what's happening.
+  >
+  > — Greg, 2026-10-11, `spya-gae0zv`
+
+  That reversed two earlier plans:
+  [261007p](../plans/261007p-the-guide-acts-without-a-press-and-opens-every-new-article.md) (the
+  first button that only moved the reader pressed itself when the answer finished) and
+  [261008a](../plans/261008a-guide-opens-glossary-and-summary-when-already-made.md) (so did
+  Glossary and Summary's Brief/Fuller when already stored). The machinery was deleted rather than
+  switched off —
+  [261011m](../plans/261011m-guide-suggests-a-mode-with-a-button-a-bigger-chat-box-suggestions-centred.md).
 - **Three doors**: the pinned row; the command bar's *Ask the guide: "…"* when the fast pick
   answers that no row fits
   ([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)); and

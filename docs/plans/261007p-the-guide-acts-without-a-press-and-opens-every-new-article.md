@@ -1,5 +1,7 @@
 # 261007p — The guide acts without a press, and opens every new article
 
+**Status, 2026-10-11: item 1 (the guide acts without a press) was removed by [261011m](261011m-guide-suggests-a-mode-with-a-button-a-bigger-chat-box-suggestions-centred.md), on Greg's report `spya-gae0zv`: the guide now only offers buttons. Item 2 (every first open lands on the guide) stands.**
+
 Owned by [plans.md](../project/plans.md). Overseer queue items `qi-kc47m5pw` and `qi-yfa6gs7m`
 (report `spya-tddvg2`), the two follow-ups [261007j](261007j-the-guide-a-conversation-about-how-to-read-this.md)
 deferred. **Status: built, reviewed by GPT Sol (plan and code), on `dev`, not deployed.**
