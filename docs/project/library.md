@@ -655,6 +655,22 @@ else already has the focus, or when the box is not on screen (Back can mount the
 `takesFocusOnArrival` in `Library.tsx` has the reasons;
 [260929g](../plans/260929g-shelf-search-focus-and-metadata-chord.md) § Part A has the cost.
 
+**It must not look like the add box above it**, since 2026-10-11:
+
+> In the logged in homepage, we have two text input boxes near the top, one for adding a URL and one
+> for searching the shelf. Users keep confusing them
+>
+> — Greg, 2026-10-11, SPIDERYARN-READING2-HD (`spya-zh5f23`)
+
+So the two are different shapes: the add box is the wider card on the left (`max-w-2xl`), with a
+heading in the foreground colour and a link icon at the start of its field; the search box is
+narrower and on the right, with its magnifier, and keeps a step on the left even on a phone. And
+because the search box has the focus on arrival, a link pasted into it is offered to the add box —
+*That's a link. Add it to your shelf?* — through the same `/add/<url>` as Add, on a press only.
+`linkToAdd` in `Library.tsx` is the rule: what `slugFromUrl` accepts, one token, with a scheme or a
+path, so `nature.com` stays a search.
+[261011l](../plans/261011l-shelf-add-box-and-search-box-look-like-different-things.md).
+
 **One cross clears it, and so does Escape.**
 
 > Little cross button to clear the search on the logged in homepage shelf.
