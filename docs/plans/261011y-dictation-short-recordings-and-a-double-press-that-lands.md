@@ -187,3 +187,20 @@ to the hook so that a capture restarted on another microphone during the 300 ms 
 running. That ignores the reader's Stop press; stopping whatever is still armed is what they asked
 for. It also put a new method on the hook and a stub line in twelve test files. Reverted, with a
 test that the restarted capture is still stopped.
+
+## Measured after the change
+
+The same Sonnet browser check, re-run on the built code (Playwright, system Chrome, fake
+microphone, `/api/transcribe` stubbed at 250 ms or 2 s, real gaps between the two pointer-downs):
+
+| | gaps | result |
+|---|---|---|
+| Chat 1440, fast transcript | 130, 249 ms | one send each, no second recording |
+| Chat 390 (touch), fast transcript | 140, 275 ms | one send each |
+| Chat 1440 / 390, slow transcript | 200, 215 ms | one send each |
+| Command bar 1440 | 122, 255, 202 ms | "…then pressing Enter…", Enter ran, bar closed |
+| single Stop, Chat 1440 | — | nothing changes for ~330 ms (still Stop, focus on it), then stops; 0.6 px; nothing sent |
+| ~400 ms gap, every surface | 398–430 ms | stops at ~330 ms; the second click lands on the disabled spinner: nothing sent, no new recording |
+
+The last row is the cost of 300 ms: a slow double press is now a plain Stop, which is the safe way
+round to miss. Not tried: a real transcriber, a real iPhone.
