@@ -358,10 +358,12 @@ button and strip take `done="save"`; the command bar presses Enter (below). The 
 
 - **Stop waits for the second press, rather than the second press chasing Stop.** On a box with
   `onDone`, a Stop press is **held for 300 ms** (`DOUBLE_PRESS_MS`) before the microphone stops.
-  Nothing changes on screen meanwhile: the microphone is still on, the button is still Stop, and the
-  focus stays on it, so Enter or Space twice is a double press too. A second press inside the hold
-  is `finishThenDone()` (below); without one, the hold expires and stops whatever is still armed. A
-  box without `onDone` stops at once. Greg, 2026-10-11 (`spya-j5h3cb`): *"as soon as I click the
+  The press itself changes nothing on screen: the microphone is still on, the button is still Stop,
+  and the focus stays on it, so Enter or Space twice is a double press too. Chromium may still add a
+  live phrase during the hold and grow the box; that residual movement is not buffered. A second
+  press inside the hold is `finishThenDone()` (below); without one, the hold expires and stops the
+  same capture if it is still armed. A box without `onDone` stops at once. Greg, 2026-10-11
+  (`spya-j5h3cb`): *"as soon as I click the
   first of the two double-click clicks, it automatically kind of changes the UI … maybe 300
   milliseconds at most"*. Until then it was a 600 ms window *after* Stop, with the button kept
   enabled through it; a measured browser check found that a fast transcript (a few seconds of
@@ -370,7 +372,8 @@ button and strip take `done="save"`; the command bar presses Enter (below). The 
   [261011y](../plans/261011y-dictation-short-recordings-and-a-double-press-that-lands.md). **The hold
   is not withdrawn by a new `doneKey` or by the phase returning to `opening`** (Chromium's
   recogniser does that after a pause, inside one session): the reader pressed Stop, so Stop
-  happens; only the wish to send is tied to the key.
+  happens; only the wish to send is tied to the key. Nor by a change of microphone, which restarts
+  the capture without a press: it is still the dictation the reader pressed Stop on.
 - **The button has to be where the first press left it.** Nothing that positions it may change
   size at Stop. Since the hold, the second press arrives before Stop, so this matters less than it
   did, but the rule stands for the box's own Send and for anything a slow hand presses late. In Chat the composer grows upwards from a pinned bottom edge, so a line leaving the
@@ -391,7 +394,8 @@ button and strip take `done="save"`; the command bar presses Enter (below). The 
   *"…then saving…"* or *"…then pressing Enter…"*.
 - **It sends only where it was said.** A box that is reused across things — one comment dialog for
   every comment, one quiz box for every question — passes **`doneKey`**, and a wish made on one is
-  not honoured on another. Feedback's key is whether it is open.
+  not honoured on another. The field tracks the key's generation as well as its string, so closing
+  and reopening Feedback cannot revive an earlier `"open"` hold or wish.
 - **It sends only a real transcript.** The done action runs only if that ending put the transcript
   in the box. A failed upload, `[mic-silent]`, a recording too short to send, a transcript refused
   because the box changed, and a later **Try again** send nothing, and the wish to send ends with
@@ -492,7 +496,8 @@ example.
 
 **If the box sends, give it the double press**: `onDone: send` on the field (and `doneKey` if the
 box is reused across things), and
-`again={dictate.again} sendingAfter={dictate.sendingAfter}` on the button and the strip
+`sendingAfter={dictate.sendingAfter} doubleStop={dictate.doubleStop}` on the button and
+`sendingAfter={dictate.sendingAfter}` on the strip
 ([§ A double press on Stop also sends](#a-double-press-on-stop-also-sends)).
 
 **And disable the button too, not only the guard.** A correct guard behind a lit button is a press

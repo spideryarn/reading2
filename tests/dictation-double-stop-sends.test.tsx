@@ -8,8 +8,9 @@
  * **The Stop press is held, not followed by a window** (plan
  * docs/plans/261011y-dictation-short-recordings-and-a-double-press-that-lands.md,
  * Part 2). On a box with a done action a Stop press waits `DOUBLE_PRESS_MS`
- * before it stops anything, and nothing on screen changes meanwhile; a second
- * press inside that time stops at once and sends once the real words are in.
+ * before it stops anything, and the press itself changes nothing on screen; a
+ * second press inside that time stops at once and sends once the real words are
+ * in. Chromium's live phrase may still grow the box during the hold.
  * Greg, spya-j5h3cb: *"as soon as I click the first of the two double-click
  * clicks, it automatically kind of changes the UI"*.
  *
@@ -364,6 +365,39 @@ describe("a second press on Stop, in the field", () => {
     expect(sent).toEqual([]);
   });
 
+  it("a second press stops at once if the box withdrew its done action during the hold", () => {
+    start();
+    const before = mic.toggles;
+    press();
+    withDone = false;
+    draw();
+
+    press();
+    expect(mic.toggles).toBe(before + 1);
+    expect(f().sendingAfter).toBe(false);
+    wait(DOUBLE_PRESS_MS);
+    expect(mic.toggles).toBe(before + 1);
+  });
+
+  it("does not revive a held send when the target changes away and back", () => {
+    doneKey = "open";
+    draw();
+    start();
+    const before = mic.toggles;
+    press();
+
+    doneKey = "shut";
+    draw();
+    doneKey = "open";
+    draw();
+    press();
+
+    expect(mic.toggles, "the second press still stops at once").toBe(before + 1);
+    expect(f().sendingAfter, "the old target identity must not be revived by the same string").toBe(false);
+    end("a report from the earlier opening");
+    expect(sent).toEqual([]);
+  });
+
   it("does not revive a withdrawn wish when the same target key returns", () => {
     doneKey = "open";
     draw();
@@ -438,6 +472,61 @@ describe("what the hold survives, and what ends it", () => {
     expect(mic.toggles).toBe(before);
     wait(DOUBLE_PRESS_MS);
     expect(mic.toggles, "the microphone must not be left on").toBe(before + 1);
+  });
+
+  it("still stops when the hook restarts on another microphone during the hold", () => {
+    start();
+    const before = mic.toggles;
+    press();
+
+    /* Choosing another microphone (or the system default changing) restarts
+       the capture without a press. It is still the dictation the reader
+       pressed Stop on, so Stop happens (plan 261011y: the code review's
+       capture generation, which let it run on, was not taken). */
+    mic.armedPhase = "opening";
+    draw();
+    mic.armedPhase = "listening";
+    draw();
+    wait(DOUBLE_PRESS_MS);
+
+    expect(mic.toggles).toBe(before + 1);
+    expect(mic.armed).toBe(false);
+    expect(f().sendingAfter).toBe(false);
+  });
+
+  it("does not let the second physical press start over after the held session ended by itself", () => {
+    start();
+    const before = mic.toggles;
+    press();
+    act(() => {
+      mic.armed = false;
+      options().onEnd();
+    });
+    draw();
+
+    press();
+    expect(mic.toggles, "the click aimed at the old Stop started a new dictation").toBe(before);
+    expect(mic.armed).toBe(false);
+  });
+
+  it("returns focus when the held capture ends by itself before expiry", () => {
+    withButton = true;
+    draw();
+    const area = host.querySelector("textarea");
+    const button = host.querySelector("button");
+    if (!area || !button) throw new Error("box did not draw");
+    start();
+    button.focus();
+    press();
+    act(() => {
+      mic.armed = false;
+      mic.transcribing = false;
+    });
+    draw();
+
+    wait(DOUBLE_PRESS_MS);
+    paint();
+    expect(document.activeElement).toBe(area);
   });
 
   it("presses nothing after the box has gone", () => {

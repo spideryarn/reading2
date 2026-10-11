@@ -162,6 +162,24 @@ it.each(["chat", "learn"] as const)("%s Dictate cancels pending Live before clai
   expect(connections).toBe(0);
 });
 
+it("coalesces two Dictate presses while Live's asynchronous stop is still settling", async () => {
+  await act(async () => { root.render(createElement(Harness, { kind: "chat" })); });
+  await act(async () => { live.start({ threadId: "spya-k3m9qt" }); });
+  const dictate = host.querySelector<HTMLButtonElement>('button[aria-label="Dictate"]');
+  expect(dictate).not.toBeNull();
+
+  act(() => {
+    dictate?.click();
+    dictate?.click();
+  });
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  expect(host.querySelector('button[aria-label="Stop dictating"]'), "the second queued call stopped the dictation the first one started").not.toBeNull();
+});
+
 /* "Use dictation" inside the live panel went in 261002j (Greg, spya-f4eq7p:
    "I don't think we need that"). The composer's own Dictate button above is
    the one way from Live to dictation, and is what this file pins. */

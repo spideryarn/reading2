@@ -3238,11 +3238,32 @@ export function Composer({
   // A Live ticket can still be pending before Live claims the microphone.
   // Cancel that attempt as well as any active capture; otherwise its late
   // ticket would claim the microphone after the reader chose dictation.
+  const latestDictationToggle = useRef(dictate.toggle);
+  latestDictationToggle.current = dictate.toggle;
+  /* Two clicks can arrive while Live's asynchronous stop still leaves the
+     button looking idle. Let them join one handoff: releasing both afterwards
+     would start dictation and immediately stop it through the same stale
+     render, before the held-Stop policy can see either press. */
+  const handingToDictation = useRef(false);
   const toggleDictation = () => {
-    void (async () => {
-      if (live && live.phase !== "idle" && live.phase !== "failed") await live.stop();
-      if (box.current) dictate.toggle();
-    })();
+    /* The promise is the authority, not Live's rendered phase: its last update
+       is `idle`, and that render may arrive while this handoff's continuation
+       is still queued. */
+    if (handingToDictation.current) return;
+    if (!live || live.phase === "idle" || live.phase === "failed") {
+      latestDictationToggle.current();
+      return;
+    }
+    handingToDictation.current = true;
+    void live.stop().then(
+      () => {
+        handingToDictation.current = false;
+        if (box.current) latestDictationToggle.current();
+      },
+      () => {
+        handingToDictation.current = false;
+      },
+    );
   };
 
   /**

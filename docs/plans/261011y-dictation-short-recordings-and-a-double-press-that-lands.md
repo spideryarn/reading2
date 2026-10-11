@@ -104,8 +104,9 @@ Nothing changes on screen while it holds; the microphone stays on and the button
 - A box without `onDone` (the profile boxes, the Illustrated note, the fleet dashboard) stops at
   once, as now.
 
-**Because nothing has stopped yet, nothing can race.** The second press always lands on the same
-Stop button in the same place, however fast the transcriber is. And the after-Stop machinery goes:
+**Because this press has not stopped the capture yet, the transcriber cannot race it.** The second
+press lands on the same Stop button, apart from the accepted residual risk of a Chromium live phrase
+growing the box during the hold. And the after-Stop machinery goes:
 the 600 ms window (`againOpen`, `againTimer`), `again` and the button's `pressable` state, the
 "fast ending" path (`stoppedAt`, `endedWith`, `stopAwaitingEnd`), and `DONE_WORDS[…].again`. That
 is the larger part of what 261005a and 261010f added to the field, and every rule they wrote about
@@ -122,12 +123,13 @@ hold still stops (the reader pressed Stop), and the wish to send stays tied to t
 - F2: the hold is **not** cleared when the phase returns to `opening`. Chromium's recogniser does
   that after an ordinary pause inside one session, and clearing the hold there would leave the
   microphone on after the reader pressed Stop. The expiry reads the latest render's hook and stops
-  whatever is still armed; a session the reader did not start cannot exist inside 300 ms, because
-  starting one is a press, and a press during the hold is the second press.
+  whatever is still armed.
 - F3: **the focus stays on the button during the hold.** Every press used to send the focus back to
   the box at once, so Enter twice on the button was Enter on Stop and then Enter in the box. Now
   the box gets the focus when the hold ends or the second press is taken.
-- F4: a `doneKey` change does not clear the hold (it clears only the wish, as before).
+- F4: a `doneKey` change does not clear the hold (it clears only the wish, as before). The built
+  code compares a key generation too, so a target that changes away and back does not revive the
+  earlier hold as a send gesture.
 - F5, the 300 ms window against the measured ~320 and ~490 ms gaps: those gaps were the test
   script's, inflated by a screenshot between the clicks. Kept at Greg's ceiling; if he finds it too
   tight, it is one number.
@@ -163,3 +165,25 @@ millisecond here is added to every single Stop.
   rewrite the window bullets as the hold.
 - `/help` (`keyboard.md`, `modes/chat.md`) already say "Press Stop twice quickly" — still true.
 - The button's card (`DICTATION_DOUBLE_STOP`) — check its wording still holds.
+
+## The code review
+
+GPT Sol's code review ([261011y-dictation-code-review-sol.md](261011y-dictation-code-review-sol.md))
+fixed six things in place. Kept:
+
+- Chat's hand-over from Live voice to dictation is one promise, so two presses while Live is
+  stopping cannot start dictation and stop it again through a stale render
+  (`tests/chat-live-dictation.test.tsx`).
+- A second press after the held session has already ended by itself (an error, the cap) is
+  swallowed instead of starting a new dictation under a button that turned from Stop to Dictate
+  mid-gesture.
+- A second press after the box withdrew its `onDone` is an ordinary Stop, and the hold refocuses
+  the box even when the session ended before it expired.
+- The target key carries a generation, so Feedback's open, shut, open within a hold cannot revive
+  the earlier wish.
+
+**Not kept: binding the hold to a capture generation.** The review added a `sessionGeneration()`
+to the hook so that a capture restarted on another microphone during the 300 ms would be left
+running. That ignores the reader's Stop press; stopping whatever is still armed is what they asked
+for. It also put a new method on the hook and a stub line in twelve test files. Reverted, with a
+test that the restarted capture is still stopped.

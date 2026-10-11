@@ -124,8 +124,7 @@ export interface UseDictationField {
   /**
    * **This box takes a double press on Stop at all** (it was given an
    * `onDone`), so the button's card can say so before the reader needs it.
-   * `again` cannot: it exists only in the moment after Stop. Hand it to
-   * `DictationButton` as `doubleStop`.
+   * Hand it to `DictationButton` as `doubleStop`.
    */
   doubleStop: boolean;
 }
@@ -253,25 +252,33 @@ export function useDictationField<C>({
    * armed then; only the wish to send is tied to the key. Bound to a phase it
    * would have been cancelled by Chromium's recogniser returning to `opening`
    * after a pause, leaving the microphone on (GPT Sol's plan review, F2, F4).
+   * **Nor by a change of microphone**: the hook restarts on the new device by
+   * itself, and that capture is still the one the reader pressed Stop on. The
+   * code review proposed binding the hold to a capture generation so the
+   * replacement would carry on; that ignores the press, so it was not taken
+   * (plan 261011y).
    */
   const held = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /* What the box was about at the first press: a second press sends only if it
-     is still about that. */
-  const heldKey = useRef<string | undefined>(undefined);
+  /* What the box was about at the first press. The generation distinguishes a
+     target that changed away and back from one that never changed. */
+  const heldKey = useRef<{ key: string | undefined; generation: number } | null>(null);
   const clearHeld = useCallback(() => {
     if (held.current !== null) clearTimeout(held.current);
     held.current = null;
+    heldKey.current = null;
   }, []);
   useEffect(() => clearHeld, [clearHeld]);
-  const wantSend = useRef<{ key: string | undefined } | null>(null);
+  const wantSend = useRef<{ key: string | undefined; generation: number } | null>(null);
   const delivered = useRef(false);
   const [sendingAfter, setSendingAfter] = useState(false);
   const key = useRef(doneKey);
   key.current = doneKey;
+  const keyGeneration = useRef(0);
   const previousKey = useRef(doneKey);
   useEffect(() => {
     if (previousKey.current === doneKey) return;
     previousKey.current = doneKey;
+    keyGeneration.current += 1;
     /* A reused box now means something else. Withdraw both an offered second
        press and one already accepted immediately, rather than merely refusing
        it at the eventual ending: the new target must not accept the old
@@ -291,7 +298,7 @@ export function useDictationField<C>({
   const done = useRef(onDone);
   done.current = onDone;
   const sentTick = useRef(0);
-  const sendKey = useRef<string | undefined>(undefined);
+  const sendKey = useRef<{ key: string | undefined; generation: number } | null>(null);
   useEffect(() => {
     if (sendTick === sentTick.current) return;
     sentTick.current = sendTick;
@@ -300,7 +307,12 @@ export function useDictationField<C>({
        can move to the next question in the same React batch as `onEnd`, after
        the check below but before this effect. Never call that target's latest
        `onDone` for words spoken to the previous one. */
-    if (sendKey.current !== key.current) return;
+    const target = sendKey.current;
+    if (
+      target === null ||
+      target.key !== key.current ||
+      target.generation !== keyGeneration.current
+    ) return;
     done.current?.();
   }, [sendTick]);
 
@@ -376,12 +388,16 @@ export function useDictationField<C>({
       /* Read and cleared here, at every ending, so a wish to send never
          outlives the ending it was made for. */
       const wish = wantSend.current;
-      const send = wish !== null && delivered.current && wish.key === key.current;
+      const send =
+        wish !== null &&
+        delivered.current &&
+        wish.key === key.current &&
+        wish.generation === keyGeneration.current;
       wantSend.current = null;
       delivered.current = false;
       setSendingAfter(false);
       if (send) {
-        sendKey.current = wish.key;
+        sendKey.current = wish;
         setSendTick((n) => n + 1);
       }
       /* If the hook immediately restarts on a newly chosen device, it does so
@@ -442,7 +458,7 @@ export function useDictationField<C>({
     /* **The wish before the stop**, because a stop can end the session in the
        same turn (Safari has no live recogniser to wait for), and an `onEnd`
        that ran first would find no wish and the words would land unsent. */
-    wantSend.current = { key: key.current };
+    wantSend.current = { key: key.current, generation: keyGeneration.current };
     setSendingAfter(true);
     /* Stop it, unless the cap already has: a press there must never reach the
        hook's start branch (`toggle` below, and the hook's own grace). */
@@ -451,22 +467,32 @@ export function useDictationField<C>({
   }, [clearHeld]);
 
   const toggle = useCallback(() => {
+    const d = latest.current;
     /* **A press at or past the cap was aimed at a Stop the cap has already
        pressed.** This render still says `armed`, so without this the press
        would hold a Stop, and a second one would send a dictation nobody asked
        to send. The hook ignores the press too (`CAP_PRESS_GRACE_MS`); this is
        the half that keeps the field's own state out of it. GPT Sol's code
        review of 261007b, C1. */
-    if (dictation.armed && dictation.endsAt !== null && Date.now() >= dictation.endsAt) return;
-    if (dictation.armed) {
+    if (d.armed && d.endsAt !== null && Date.now() >= d.endsAt) {
+      clearHeld();
+      return;
+    }
+    if (d.armed) {
       /* The second press of a double press: stop now, and send once the words
          are in. */
       if (held.current !== null) {
         /* The box moved to something else between the presses: the words were
            spoken to the old target, so this is an ordinary Stop. */
-        if (heldKey.current !== key.current) {
+        const target = heldKey.current;
+        if (
+          !done.current ||
+          target === null ||
+          target.key !== key.current ||
+          target.generation !== keyGeneration.current
+        ) {
           clearHeld();
-          dictation.toggle();
+          d.toggle();
         } else finishThenDone();
         refocus();
         return;
@@ -475,24 +501,31 @@ export function useDictationField<C>({
         /* **The Stop press, held** for a second one. The focus stays on the
            button, so Enter or Space pressed twice is a double press too (GPT
            Sol's plan review, F3); it goes back to the box when the hold ends. */
-        heldKey.current = key.current;
+        heldKey.current = { key: key.current, generation: keyGeneration.current };
         held.current = setTimeout(() => {
-          held.current = null;
-          const d = latest.current;
-          if (!d.armed || (d.endsAt !== null && Date.now() >= d.endsAt)) return;
-          d.toggle();
+          clearHeld();
+          const current = latest.current;
+          if (current.armed && (current.endsAt === null || Date.now() < current.endsAt)) current.toggle();
           refocus();
         }, DOUBLE_PRESS_MS);
         return;
       }
-      dictation.toggle();
+      d.toggle();
       refocus();
       return;
     }
     /* A moved offer may be the only copy of the reader's words. The hook
        refuses that start; keep the ended dictation's caret/value proof and
        focus until a new start is actually accepted. */
-    if (dictation.toggle() === false) return;
+    /* The old session can fail between the two physical presses. Consume that
+       second press instead of starting a fresh dictation under a button that
+       changed from Stop to Dictate during the gesture. */
+    if (held.current !== null) {
+      clearHeld();
+      refocus();
+      return;
+    }
+    if (d.toggle() === false) return;
     wantSend.current = null;
     delivered.current = false;
     /* A press during the previous session's transcription supersedes that
@@ -505,7 +538,7 @@ export function useDictationField<C>({
     /* A new press: there is no ended dictation to be stale relative to. */
     valueAtEnd.current = null;
     refocus();
-  }, [box, dictation, clearHeld, finishThenDone, refocus]);
+  }, [box, clearHeld, finishThenDone, refocus]);
 
   /* Derived, not stored. The box is closed exactly while the hook says a
      transcript is on its way — one source, so there is no state to leave locked
