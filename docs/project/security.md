@@ -933,6 +933,14 @@ fence means and what to do about anything inside it addressed to the model.
 **This is a mitigation and it is stated as one.** A determined injection can still steer an answer,
 and no amount of prompt text changes that.
 
+**`read_cited_work` is the same exposure, through a PDF** (since 2026-10-11, plan
+[261011w](../plans/261011w-does-the-cited-work-say-that-at-the-citing-sentence.md)): a cited paper's
+text, fenced the same way, in a prompt whose model has tools. Its address is not the model's to
+choose: it is the stored row's DOI or arXiv link, or the page the current quick check matched, and
+is fetched through `fetchDocument`, so it adds no SSRF. A hostile PDF can still ask for a later
+`read_web_page`, which is the send this section's next part describes. The hidden-text scan does not
+read PDFs ([security-map.md](security-map.md)).
+
 ### A read tool can still send — the claim that was wrong here
 
 This section first said that "every one of these tools is a read", so nothing could be sent anywhere,

@@ -43,7 +43,7 @@ import {
   citeReadNotIdentified,
   verdictText,
 } from "../src/web/BibliographyPanel.js";
-import { CITED_AT_JUMPS_SHOWN, ProseHoverCard } from "../src/web/ProseHoverCard.js";
+import { CITED_AT_JUMPS_SHOWN, DOES_IT_SAY_THAT, ProseHoverCard } from "../src/web/ProseHoverCard.js";
 import { annotateHtml, citeMarks, termMarks } from "../src/web/annotate.js";
 import { ASK_WORK_IN_CHAT } from "../src/web/OriginChat.js";
 import { buildNoteIndex } from "../src/web/notes-view.js";
@@ -158,6 +158,8 @@ const TERM: GlossaryEntry = {
 /** The owner's *Ask in chat* on the card, as Reader hands it (`onAskCitedWork`). */
 interface CiteActions {
   ask(work: CitedWork): void;
+  /** *Does it say that?* (plan 261011w), as Reader hands it (`onCheckCitedWork`). */
+  check?(work: CitedWork, blockId: BlockId): void;
 }
 
 const jumped: BlockId[] = [];
@@ -226,6 +228,7 @@ function Harness({
         showInSpideryarn={owner}
         termActions={null}
         onAskCitedWork={citeActions ? (work) => citeActions.ask(work) : null}
+        onCheckCitedWork={citeActions?.check ? (work, id) => citeActions.check?.(work, id) : null}
         onOpenCitedWork={openWork ? (id) => void openedWorks.push(id) : null}
         onOpenTerm={(id) => openedTerms.push(id)}
         onJump={(id, aim) => {
@@ -737,6 +740,78 @@ describe("Ask in chat from the card", () => {
     hover(cite(0));
     expect(card()).not.toBeNull();
     expect(button()).toBeUndefined();
+  });
+});
+
+/* Plan 261011w: *Does it say that?*, a fresh chat about the paragraph the card
+   was opened from, which chat answers by reading the paper. Only where that
+   paragraph cites the work (`citedAt`, GPT Sol's S8). */
+describe("Does it say that? from the card", () => {
+  const check = () =>
+    [...(card()?.querySelectorAll("button") ?? [])].find((b) => b.textContent?.trim() === DOES_IT_SAY_THAT) as
+      | HTMLButtonElement
+      | undefined;
+  const actions = (): CiteActions & { checked: [string, BlockId][] } => {
+    const checked: [string, BlockId][] = [];
+    return { ask: () => {}, check: (work, id) => void checked.push([work.id, id]), checked };
+  };
+
+  it("asks about the work in the paragraph the card was opened from, and closes the card", () => {
+    const a = actions();
+    paint(WORKS, [], true, a);
+    hover(cite(1));
+    act(() => check()?.click());
+    expect(a.checked).toEqual([[KAPLAN.id, TWO]]);
+    expect(card()).toBe(null);
+  });
+
+  it("is one tap for a finger: it says what it does in its own words", () => {
+    const a = actions();
+    paint(WORKS, [], true, a);
+    hover(cite(0));
+    tapControl(check() as HTMLButtonElement);
+    expect(a.checked).toEqual([[TULVING.id, ONE]]);
+  });
+
+  it("binds one button to each work when the same phrase cites two works", () => {
+    const twin = work({
+      id: "spya-tw0wrk",
+      title: "Remembering Reconsidered",
+      mentions: [...TULVING.mentions],
+      citedAt: [...TULVING.citedAt],
+      firstCited: TULVING.firstCited,
+    });
+    const a = actions();
+    paint([TULVING, twin], [], true, a);
+    hover(cite(0));
+    const buttons = [...(card()?.querySelectorAll<HTMLButtonElement>(".prose-card-cite-check") ?? [])];
+    expect(buttons).toHaveLength(2);
+    act(() => buttons[1]?.click());
+    expect(a.checked).toEqual([[twin.id, ONE]]);
+  });
+
+  it("cannot spend twice when a finger double-taps the one-tap text button", () => {
+    const a = actions();
+    paint(WORKS, [], true, a);
+    hover(cite(0));
+    const button = check() as HTMLButtonElement;
+    tapControl(button);
+    tapControl(button);
+    expect(a.checked).toEqual([[TULVING.id, ONE]]);
+  });
+
+  it("is not drawn on the reference entry, which is not a claim", () => {
+    paint([...WORKS, REFERENCE_ONLY], [], true, actions());
+    hover(host.querySelector(`mark.cite[data-cite~="${REFERENCE_ONLY.id}"]`) as HTMLElement);
+    expect(card()).not.toBeNull();
+    expect(check()).toBeUndefined();
+  });
+
+  it("is not drawn for a visitor", () => {
+    paint(WORKS, [], false, null);
+    hover(cite(0));
+    expect(card()).not.toBeNull();
+    expect(check()).toBeUndefined();
   });
 });
 

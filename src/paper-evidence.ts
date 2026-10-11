@@ -341,14 +341,18 @@ function terms(text: string): Set<string> {
  */
 export function selectChunks(
   chunks: readonly PaperChunk[],
-  query: { why: string; passages: readonly string[] },
+  query: { why: string; passages: readonly string[]; claim?: string | undefined },
+  budgetWords: number = SENT_WORDS_BUDGET,
 ): string[] {
-  const want = terms([query.why, ...query.passages].join(" "));
+  /* `claim` is chat's `read_cited_work` aiming the reading at one citing
+     sentence (plan 261011w, Sol S2). Its terms are added to the row's own; it
+     is never treated as one of the article's citing passages. */
+  const want = terms([query.why, ...query.passages, query.claim ?? ""].join(" "));
   const chosen = new Set<number>();
   let sent = 0;
   const take = (i: number) => {
     const chunk = chunks[i]!;
-    if (sent + chunk.words > SENT_WORDS_BUDGET) return;
+    if (sent + chunk.words > budgetWords) return;
     chosen.add(i);
     sent += chunk.words;
   };
@@ -647,6 +651,14 @@ export interface PaperEvidenceInput {
   };
   /** The page the quick check matched, when it matched one. */
   matchedPageUrl?: string | null;
+  /**
+   * **Chat's aim** (`read_cited_work`, plan 261011w): the sentence the reader
+   * asked about, as extra selection terms, and a smaller budget, since a chat
+   * tool's output is re-sent every later round. Absent for Dig deeper, which
+   * keeps `SENT_WORDS_BUDGET` and selects exactly as before.
+   */
+  claim?: string;
+  budgetWords?: number;
 }
 
 export interface PaperEvidenceDeps {
@@ -748,7 +760,11 @@ export async function readPaperEvidence(
   }
 
   const chunks = chunkPaper(canonical);
-  const selected = selectChunks(chunks, { why: work.why, passages: work.passages });
+  const selected = selectChunks(
+    chunks,
+    { why: work.why, passages: work.passages, claim: input.claim },
+    input.budgetWords,
+  );
   const sentText = paperSentText(chunks, selected);
   const chosen = new Set(selected);
   return logged(

@@ -62,7 +62,9 @@ Three things look like this and are not: Summary's *Ask about a paragraph*
 origin (`summary` is reserved in the database CHECK and not built, and since 2026-10-09 the CHECK
 `chat_threads_origin_summary` lets it carry none of the shape columns); a chat about a passage has an
 *anchor*, not an origin; and a comment's question is linked from the comment's side
-([comments.md](comments.md#asking-the-model-and-the-link-back)).
+([comments.md](comments.md#asking-the-model-and-the-link-back)). A citation card's *Does it say
+that?* is the passage kind: anchored on the citing paragraph, fresh each press, and it leaves the
+work's own chat alone ([bibliography.md § Marked in the prose](bibliography.md#marked-in-the-prose-in-every-mode)).
 
 ## One chat per item
 

@@ -91,6 +91,7 @@ import {
 import {
   askAboutSummaryParagraph,
   askAboutCitedWork,
+  askDoesItSayThat,
   askAboutGlossaryEntry,
   askAboutIdea,
   askAboutBlock,
@@ -1126,6 +1127,21 @@ export function Reader({
     (work: Pick<CitedWork, "id" | "title" | "authors" | "year">) =>
       handToChat(askAboutCitedWork(work), "send", itemOrigin("bibliography", work.id, work.title)),
     [handToChat],
+  );
+  /* **And *Does it say that?* on a citation's card** (plan 261011w): a fresh
+     chat anchored on the citing paragraph, not an item's chat, so it stores no
+     origin and is never reopened; the same work cited in two paragraphs is two
+     questions. Chat answers it by reading the paper (`read_cited_work`). */
+  const checkCitedWorkInChat = useCallback(
+    (work: Pick<CitedWork, "title" | "authors" | "year">, blockId: BlockId) =>
+      askPassageInChat({
+        kind: "draft",
+        anchor: { blockId },
+        opening: article.blocks.find((block) => block.id === blockId)?.text ?? "",
+        question: askDoesItSayThat(work),
+        sendNow: true,
+      }),
+    [article.blocks, askPassageInChat],
   );
   /* **A seventh since 2026-10-09: an idea's *Ask in chat*** (plan 261009k,
      stage 3). The name and the statement go in the fence; the origin is the
@@ -4869,6 +4885,7 @@ export function Reader({
            261002c, 261004b, 261009k). Null for a visitor, who has no chat. */
         onAskTerm={owner ? askEntry : null}
         onAskCitedWork={owner ? askWork : null}
+        onCheckCitedWork={owner ? checkCitedWorkInChat : null}
         /* *Open in Sources* on a cited work's card: Bibliography, its row in
            view (plan 261010e). Owner only, as the marks are. */
         onOpenCitedWork={owner ? openBibliographyWork : null}
