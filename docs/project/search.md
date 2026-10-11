@@ -127,6 +127,7 @@ function doing the same job.
 - [§ How the pieces fit](#how-the-pieces-fit) — the diagram of files from box to marks
 - [§ A visitor reads the saved searches](#a-visitor-reads-the-saved-searches-and-asks-nothing) — what a stranger sees and why it is enforced in three places
 - [§ The third search](#the-third-search-the-whole-library-at-once) — the shelf's box, and the embedding choice for when it is wanted
+- [§ Searches started from a chat](#searches-started-from-a-chat) — a chat button runs a quick search where it is, and what that does not share with this mode
 - [§ What is still open](#what-is-still-open) — known gaps and undecided calls
 - [§ See also](#see-also) — neighbours
 - How it came to be — superseded designs, earlier numbers, the bugs along the way — is in
@@ -1699,6 +1700,30 @@ sentence-shaped questions it returns **nothing at all — zero hits on all eight
 deliberately generous word matcher (OR over content words, ranked) finds under a quarter of the
 relevant passages. That is the gap the embeddings are buying, stated as a measurement rather than as
 a hope.
+
+## Searches started from a chat
+
+**Since 2026-10-11**
+([261011aa](../plans/261011aa-guide-and-chat-run-in-article-searches-in-place-and-link-the-article-readily.md),
+Greg's `spya-ma72mx`): a search button in a chat answer runs the search in the conversation
+rather than opening this mode. The button and what it draws are
+[chat-tools.md § A search button runs in the conversation](chat-tools.md#a-search-button-runs-in-the-conversation);
+what matters here is what it shares with this mode and what it does not.
+
+- **It is this mode's request.** `POST /api/search/<slug>`, kind `quick`, so the answer is a saved
+  row in this mode's list, and *Open in Search* opens it here (`?mode=search&match=quick&runs=<id>`).
+- **It is not this mode's client.** [`chat-searches.ts`](../../src/web/chat-searches.ts) is a small
+  second reader of the stream, outside `useSearch`, because `useSearch` lives inside the band and
+  the band is not mounted while chat is. So nothing here hears of a chat search until the mode
+  next loads its list: a Search band already on screen beside it (the passage dialog over Search)
+  does not show it, and one opened in the second or so a quick search takes shows it pending until
+  it is opened again. Lifting one `useSearch` above both was weighed (GPT Sol, plan review F1) and
+  left for when that window is seen to matter.
+- **No thorough search follows it** (`auto-thorough.ts` is this mode's); the row's *thorough* button
+  is here.
+- **A saved answer drawn again in chat is judged by its blocks, not its fingerprint**: the list this
+  mode reads carries no current fingerprint (below), so a chat card reuses a finished quick search
+  only while every passage it found still exists, and says the day it was found.
 
 ## What is still open
 
