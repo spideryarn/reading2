@@ -20,6 +20,7 @@ import {
   type Comment,
   type CommentAnchor,
   type HighlightColour,
+  type Severity,
 } from "../types.js";
 import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
 import { apiFetch, failure, fetchOk, leavingFetch, readJson, statusOf } from "./lib/api.js";
@@ -242,6 +243,13 @@ export interface CommentsApi {
    * whole row (plan 261003e, review S3).
    */
   recolour(id: string, colour: HighlightColour | null): Promise<void>;
+  /**
+   * **Sort a note major or minor, or un-sort it** (`null`). Its own route,
+   * `PATCH …/:id/severity`, for the reason `place` has one, and queued behind
+   * the others on the same comment for the reason `recolour` is. Referee ›
+   * Notes (plan 261011f).
+   */
+  sort(id: string, severity: Severity | null): Promise<void>;
   /**
    * Remember locally that this comment started that conversation.
    *
@@ -1160,6 +1168,35 @@ export function useComments(slug: string): CommentsApi {
   );
 
   /**
+   * Sort a note major or minor, or un-sort it. **Not optimistic, and queued
+   * per comment**, for the reasons `recolour` gives: the Notes sub-mode's buttons are
+   * controlled by the stored comment, so a sort shows once the server has it.
+   */
+  const sort = useCallback(
+    (id: string, severity: Severity | null): Promise<void> =>
+      queue(id, async (isCurrent) => {
+        if (isCurrent()) setError(null);
+        const sentAt = answerMark(id);
+        try {
+          const r = await fetchOk(
+            `/api/comments/${encodeURIComponent(slug)}/${encodeURIComponent(id)}/severity`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ severity }),
+            },
+            madeFor,
+          );
+          const { comment } = await readJson<{ comment: Comment }>(r);
+          if (isCurrent()) landPatch(id, comment, sentAt);
+        } catch (e) {
+          if (isCurrent()) setError(describeFetchFailure(e as Error));
+        }
+      }),
+    [slug, queue, madeFor, answerMark, landPatch],
+  );
+
+  /**
    * Remember, **locally**, that this comment started that conversation.
    *
    * There is no request here and there must not be: the link is written by the
@@ -1243,6 +1280,7 @@ export function useComments(slug: string): CommentsApi {
     edit,
     place,
     recolour,
+    sort,
     noteThread,
     retry,
     deepen,

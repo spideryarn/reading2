@@ -1,4 +1,9 @@
-# Referee › Outline: your own notes, sorted major and minor by you, copied out in your words
+# Referee › Notes: your own notes, sorted major and minor by you, copied out in your words
+
+> **Built as *Notes*, not *Outline*** (`?referee=notes`). Outline was this app's name for what is
+> now Structure (2026-08-28 to 2026-09-10), and `src/web/OutlinePanel.tsx` still carries it; GPT Sol's
+> plan review also asked for a name that reads less like a report template (F2). The plan's file
+> name keeps the first word. The sketch below is the plan as written; § Plan review says what changed.
 
 Up: [plans.md](../project/plans.md) · Mode doc: [referee-mode.md](../project/referee-mode.md)
 
@@ -111,9 +116,11 @@ located by the paragraph's opening words, as the drawer does — `passageOf`).
   most-edited components in the app.
 - **No stored summary box.** A text box for the summary would be a new stored thing per article;
   the empty heading costs nothing and the reviewer writes the summary where they write the report.
-- **No new store, no export work beyond one line.** `src/store/export.ts` builds the comment row
-  from a hand-written list, so `severity` is added there (it says so in its own comment); import
-  reads it back through the same type.
+- **No new store, and one line of export.** The reader-facing export
+  (`src/store/export-bundle.ts`) serialises whole rows, so the new columns arrive by themselves. The
+  legacy rollback projection, `src/store/export.ts`, builds the comment row from a hand-written list,
+  so `severity` is added there. There is no importer to change (`db:import` was deleted).
+  (Corrected after GPT Sol's plan review, F4.)
 - **Shared links do not carry it.** `publicCommentsQuery` names its columns, so the field never
   reaches a visitor. A reading note the reviewer sorted still goes out on a shared link as a plain
   reading note, exactly as it does today — this change adds no exposure. Whether a *sorted* note
@@ -147,3 +154,37 @@ change a key in the same `Record`s, so a merge conflict there is expected and me
 A referee with notes on a paper opens Outline, sorts them, presses Copy, and pastes a plain-text
 skeleton whose every sentence they wrote, in reading order under Major, Minor and Not sorted yet,
 under an empty Summary.
+
+## Plan review (GPT Sol, read-only): BUILD WITH CHANGES
+
+[261011f-referee-outline-plan-review-sol.md](261011f-referee-outline-plan-review-sol.md), ten findings.
+
+- **F1 (P0) — withhold a sorted note from a shared link: not built here; Greg's.** Sol proposes
+  `severity IS NULL` in `PUBLIC_COMMENTS_WHERE`. That is a defence
+  ([security-map.md](../project/security-map.md)), which this session was told not to edit, and it
+  is a product call too. It is **not a new exposure**: a reading note went out on a shared link
+  before it was sorted and goes out the same after; the sort itself never does (the projection names
+  its columns). Sol's case is that sorting marks it as review material, like a criterion does.
+  Written up for Greg in the user-feedback note, with that recommendation.
+- **F2 (P1) — scaffold framing.** Partly taken. Renamed to **Notes** and **Copy notes**; the
+  `[Yours to write.]` and `[None yet.]` placeholders are gone, so the only sentences in the copied
+  text are the reviewer's. **The bare *Summary* heading stays**: Greg chose idea D knowing it as
+  *"taken out as a skeleton in your words"*, and the research's skeleton is *summary, major, minor*.
+  A heading with nothing under it is not text written for anyone. Overruled in that one respect.
+- **F3 (P1) — Copy during a sort in flight.** Taken: Copy is disabled while any sort is unanswered,
+  and says *Saving your sort…*; tested with a held promise, and a mutation removing the hold goes red.
+- **F4 (P1) — export/import account wrong.** Taken; corrected above.
+- **F5 (P1) — places the compiler will not name.** Taken: `referee-mode`, `referee-notices` and
+  `referee-tooltips` tests now read the count from `REFEREE_VIEWS`; both help pages and the corpus;
+  `comments.md` and the contract's table. `pressing-a-chip-arms-it`, `command-bar-sub-modes` and
+  `referee-copy-is-about-the-model` pass unchanged (data-driven). MCP and Mirror need nothing.
+- **F6 (P1) — use `useCopy`.** Already so; component tests for success, refusal and no clipboard.
+- **F7 (P2) — narrow input type.** Taken: `NoteSource` is a `Pick`, and the test fills every
+  model-owned field with a sentinel and checks exact output.
+- **F8 (P2) — no jump to a paragraph that has gone.** Taken, tested.
+- **F9 (P2) — pin `severity_at`.** Taken: null at first, stamped on a sort and on an un-sort.
+- **F10 (P3) — "highlights with no words" is inaccurate.** Taken: *marks without a note*.
+
+Also found while building: I overwrote the existing `src/web/OutlinePanel.tsx` (Structure's list)
+with the first draft of this panel; restored byte-for-byte from `HEAD` before anything was committed,
+which is the other reason for the rename.

@@ -25,7 +25,7 @@ import type { BlockId, Comment } from "../types.js";
  * paragraph did not survive — sorts to the end rather than being dropped. It is
  * still the reader's question, and it can still be read and deleted.
  */
-export function orderComments(comments: Comment[], blocks: { id: BlockId }[]): Comment[] {
+export function orderComments<T extends Passaged>(comments: T[], blocks: { id: BlockId }[]): T[] {
   return [...comments].sort(byPassage(blocks));
 }
 

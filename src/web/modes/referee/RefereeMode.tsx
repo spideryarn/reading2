@@ -14,7 +14,7 @@
 import { type ReactNode, useRef, useState } from "react";
 import { useQueryState } from "nuqs";
 import { Info, TriangleAlert } from "lucide-react";
-import type { Block, BlockId, Comment } from "../../../types.js";
+import type { Block, BlockId, Comment, Severity } from "../../../types.js";
 import { LINKAGE_NOT_ADEQUACY } from "../../../referee-claims.js";
 import {
   REFEREE_CANDIDATES_REACHES_SEARCH,
@@ -40,6 +40,7 @@ import { CriteriaBand, WHAT_THE_RANK_IS, WHAT_THE_TICK_DOES } from "../../Criter
 import { ClaimsBand } from "../../ClaimsPanel.js";
 import { MIRROR_IS_NOT_GIVEN_THE_PAPER, MirrorBand } from "../../MirrorPanel.js";
 import { CandidatesBand } from "../../CandidatesPanel.js";
+import { RefereeNotesView, type NotesComments } from "../../RefereeNotesPanel.js";
 import { ModeSurface } from "../../ModeSurface.js";
 
 /**
@@ -118,6 +119,8 @@ export function RefereeBand({
   blocks,
   byline,
   comments,
+  notes,
+  onSort,
   onJump,
   onFound,
   openKey,
@@ -145,6 +148,14 @@ export function RefereeBand({
    * mode's business. docs/project/comments.md § the referee's own placement.
    */
   comments: readonly Comment[];
+  /**
+   * The same comments with the list's load state — **for Notes, and read
+   * nowhere else** — so an empty Notes panel is never drawn over a list that has
+   * not arrived. And `onSort`, the one write this band makes to a comment:
+   * the reviewer's own major/minor sort (`useComments.sort`). Plan 261011f.
+   */
+  notes: NotesComments;
+  onSort(id: string, severity: Severity | null): Promise<void>;
   onJump(blockId: BlockId): void;
   /** `Reader` owns the prose — the seam described on `found` above. */
   onFound(next: Found[]): void;
@@ -178,6 +189,8 @@ export function RefereeBand({
         blocks={blocks}
         byline={byline}
         comments={comments}
+        notes={notes}
+        onSort={onSort}
         onJump={onJump}
         onFound={onFound}
         openKey={openKey}
@@ -321,6 +334,9 @@ const REFEREE_HOW_TO_READ: Record<RefereeView, readonly string[]> = {
   criteria: [WHAT_THE_TICK_DOES, WHAT_THE_RANK_IS],
   claims: [LINKAGE_NOT_ADEQUACY],
   mirror: [MIRROR_IS_NOT_GIVEN_THE_PAPER],
+  /* What may go out is said in the lead line and the hover card, and the
+     panel has no result to misread. */
+  notes: [],
   candidates: [],
   /* The panel says what it is for at its own foot, in every state
      (`WHAT_THIS_IS` in SourceScanNotice.tsx), so there is nothing to move. */
@@ -555,6 +571,10 @@ const REFEREE_VIEW_TIP: Record<RefereeView, { what: string; how: string }> = {
     what: "The model reads your own comments back to you and points at ones an author could not act on.",
     how: "It is never given the paper, so it can hold no opinion about it. The answer is not stored — leaving this sub-mode loses it.",
   },
+  notes: {
+    what: "Sort your own notes into major and minor, then copy them out as the bones of your report.",
+    how: "Only your words go out, each with the passage it is on — never an AI answer, and no model is called. The Summary is left empty for you to write.",
+  },
   candidates: {
     what: "For an editor: who could review this paper, and what expertise it would take.",
     how: "It searches the web as you talk to it, and every name carries a link a search returned. Conflicts of interest are not checked by anything here.",
@@ -590,6 +610,8 @@ function RefereeSubMode({
   blocks,
   byline,
   comments,
+  notes,
+  onSort,
   onJump,
   onFound,
   openKey,
@@ -607,6 +629,9 @@ function RefereeSubMode({
   check?: HiddenCheckApi;
   /** The referee's own placements. See `RefereeBand`, which says why. */
   comments: readonly Comment[];
+  /** Notes' comments and its one write. See `RefereeBand`. */
+  notes: NotesComments;
+  onSort(id: string, severity: Severity | null): Promise<void>;
   onJump(blockId: BlockId): void;
   onFound(next: Found[]): void;
   /** Criteria's pressed passage. See `RefereeBand`, which says why. */
@@ -642,6 +667,12 @@ function RefereeSubMode({
          jump into the piece, and nothing is painted on the prose.
          src/web/MirrorPanel.tsx. */
       return <MirrorBand slug={slug} onJump={onJump} />;
+    case "notes":
+      /* **The reviewer's own notes, sorted by them and copied out in their
+         words.** No model, nothing painted on the prose, and nothing read off
+         a comment but its words, its passage and its sort —
+         src/web/referee-notes.ts says why. Plan 261011f. */
+      return <RefereeNotesView comments={notes} blocks={blocks} onSort={onSort} onJump={onJump} />;
     case "candidates":
       /* **Stage 6 and 7, and somebody else's stage.** The one sub-mode that is
          not the referee's question: it answers an *editor's* — who could review

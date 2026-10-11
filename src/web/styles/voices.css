@@ -63,6 +63,8 @@
     .crit-quote,
     .mir-quote:not(.mir-block-id),
     .mir-passage,
+    /* Referee › Notes: the passage a note is on */
+    .ref-notes-passage,
     .skim-words,
     .skim-words-tip,
     .tip-cite-text,
@@ -250,6 +252,8 @@
     /* the reader's note on their own highlight, in the Quotes band's card */
     .quotes-yours-note,
     .mir-yours,
+    /* Referee › Notes: the reviewer's own note */
+    .ref-notes-words,
     .quiz-answer,
     .srch-input,
     .srch-saved-criterion,

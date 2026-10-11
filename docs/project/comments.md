@@ -55,7 +55,15 @@ Three independent properties, and a comment may have any combination of them:
    the words     optional — `body`. Nothing written is a bare bookmark.
    the answer    only on one made before 2026-08-28, or on a chat it started.
    the placement optional — `criterionId` + `valence`, and only in Referee mode.
+   the sort      optional — `severity`, major or minor, set only in Referee › Notes.
 ```
+
+**The sort** is the reviewer's own *major* or *minor* on a note, written only by
+`PATCH /api/comments/:slug/:id/severity` (`patchSeverity`; the key is required and `null` un-sorts),
+never by a Save, and stamped in `severity_at`, not `updated_at`. Referee › Notes lists notes under it
+and copies them out in the reviewer's words
+([referee-mode.md § 4. Notes](referee-mode.md#4-notes-the-reviewers-own-notes-sorted-by-them-copied-out-in-their-words)).
+A shared link does not carry it: `publicCommentsQuery` names its columns.
 
 ### The box a selection opens <a id="the-selection-box"></a>
 
@@ -386,6 +394,7 @@ plan; it is the reason the store contract now names who may write what.
 | `beginAnswer` | the answer fields — plus, in Postgres, an attempt id and a lease | a bookmark, and a `pending` row whose attempt is **still live** — one answer at a time |
 | `patchBody` | `body`, `updatedAt` | a request with **no `body` key at all** — 400, because absent could mean *clear it* or *leave it* |
 | `patchMark` | `criterionId`, `valence`, `updatedAt` | a half-named placement, and everything `tidyMark` refuses on the create path |
+| `patchSeverity` | `severity`, `severity_at` | a request with no `severity` key, and anything but `major`, `minor` or `null` — 400 |
 | `linkThread` | `threadId`, once, from absent | a second conversation, a comment that is not free, or one about a different passage |
 
 Two more times are stored and shown nowhere ([sql.md § Store when it happened](sql.md#store-when-it-happened)):

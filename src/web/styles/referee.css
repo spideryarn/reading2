@@ -928,3 +928,37 @@ a.clm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight-text); o
 /* *Ask*: shadcn's outline `Button`, the run button every mode shares (plan 261007h § F3);
    the class is a hook, and only where it sits is here. */
 .cnd-send { align-self: flex-start; }
+
+/* ---- Notes: the reviewer's own notes, sorted by them (plan 261011f) ---- */
+
+.ref-notes { display: flex; flex-direction: column; gap: 0.6rem; padding: 0.45rem 0.35rem 0.6rem; }
+.ref-notes-copy { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.ref-notes-said { font-size: 0.84rem; color: var(--ink-faint); }
+.ref-notes-note { margin: 0; font-size: 0.88rem; color: var(--ink-faint); }
+
+.ref-notes-heading { margin: 0; font-size: 0.88rem; font-weight: 600; color: var(--ink); }
+.ref-notes-count { font-weight: 400; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+.ref-notes-list { margin: 0.25rem 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+.ref-notes-row { border-top: 1px solid var(--rule); padding: 0.45rem 0 0; }
+.ref-notes-row[aria-busy="true"] .ref-notes-sort { opacity: 0.6; }
+
+/* The passage is a jump into the piece, drawn as Mirror's is. */
+.ref-notes-jump {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ref-notes-jump:hover .ref-notes-passage { text-decoration: underline; }
+.ref-notes-jump:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+.ref-notes-passage { font-size: var(--type-quote); color: var(--ink-faint); }
+.ref-notes-gone { margin: 0; font-size: 0.84rem; font-style: italic; color: var(--ink-faint); }
+
+/* The reviewer's own words: the thing this panel is for, so at full ink. */
+.ref-notes-words { margin: 0.2rem 0 0; font-size: 0.92rem; line-height: 1.45; color: var(--ink); white-space: pre-wrap; }
+.ref-notes-sort { margin-top: 0.3rem; }

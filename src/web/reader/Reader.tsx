@@ -3905,6 +3905,18 @@ export function Reader({
                judgement; `useComments` is already mounted for the page.
                docs/project/referee-mode.md § the referee's own mark. */
             comments={comments}
+            /* **The same list with its load state, and the one write — for
+               Notes alone**: the reviewer's own major/minor sort. The state, so
+               "no notes yet" is never said over a list still on its way.
+               Plan 261011f. */
+            notes={
+              owner.comments.loadFailed
+                ? { state: "failed" }
+                : owner.comments.loaded
+                  ? { state: "ready", comments }
+                  : { state: "loading" }
+            }
+            onSort={owner.comments.sort}
             onJump={bandJump}
             onFound={setRefereeFound}
             /* Which marked passage the referee last pressed, so the prose rings

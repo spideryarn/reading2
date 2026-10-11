@@ -157,7 +157,7 @@ export const DIAGRAM_SUB_MODES: Readonly<Record<DiagramKind, SubModeWords>> = {
   },
 };
 
-/** Referee's five views. The chips, RefereeMode.tsx § `RefereeViews`. */
+/** Referee's six views. The chips, RefereeMode.tsx § `RefereeViews`. */
 export const REFEREE_SUB_MODES: Readonly<Record<RefereeView, SubModeWords>> = {
   criteria: {
     label: "Criteria",
@@ -172,6 +172,11 @@ export const REFEREE_SUB_MODES: Readonly<Record<RefereeView, SubModeWords>> = {
   mirror: {
     label: "Mirror",
     description: "Your own review comments, read back to you — never a verdict on the paper",
+    experimental: false,
+  },
+  notes: {
+    label: "Notes",
+    description: "Your own notes, sorted major and minor by you, copied out in your words",
     experimental: false,
   },
   candidates: {
