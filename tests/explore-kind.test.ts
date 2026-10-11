@@ -76,10 +76,10 @@ describe("the kind itself", () => {
     expect(webSearchTool("explore")).toEqual(webSearchTool("chat"));
   });
 
-  /* PR-3: the reader's notes go to typed Chat and Explore and to nobody else. */
-  it("is offered the shared tools plus reader_notes", () => {
+  /* PR-3 and plan 261011w: the two typed-only tools go to Chat and Explore. */
+  it("is offered the shared tools plus reader_notes and read_cited_work", () => {
     const names = toolsFor("explore").map((t) => t.function.name);
-    expect(names).toEqual([...CHAT_TOOLS.map((t) => t.function.name), "reader_notes"]);
+    expect(names).toEqual([...CHAT_TOOLS.map((t) => t.function.name), "reader_notes", "read_cited_work"]);
     expect(toolsFor("explore")).toBe(toolsFor("chat"));
   });
 });

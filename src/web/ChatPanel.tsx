@@ -92,6 +92,7 @@ import type {
   ChatMessage,
   ChatThread,
   Citation,
+  ComposerModality,
   ThreadKind,
   ThreadOrigin,
   ToolRun,
@@ -149,6 +150,7 @@ import { useMedia } from "./media.js";
 import { chatDraftsFor } from "./chat-draft.js";
 import { rowTitle } from "./chat-list-row.js";
 import { dictationReporter } from "./dictation-report.js";
+import { afterChange, composerModality, freshProvenance } from "./composer-modality.js";
 
 /**
  * **How a question was sent.** `typed` only where the reader wrote the whole
@@ -159,6 +161,12 @@ import { dictationReporter } from "./dictation-report.js";
  */
 export interface SendHow {
   typed?: true;
+  /**
+   * How the composer saw the words arrive: typed, dictated or mixed
+   * (`composerModality`). Absent when it could not tell. Stored on the
+   * question's row; report spya-z30x5n, plan 261011z.
+   */
+  modality?: ComposerModality;
 }
 
 interface Props {
@@ -257,7 +265,7 @@ interface Props {
    * reader's question to a stored conversation under a placeholder promising a
    * new one; GPT-5.6 found it, 2026-08-27. This one always mints.
    */
-  onSendNew(question: string): void;
+  onSendNew(question: string, how?: SendHow): void;
   /**
    * Forget a conversation nobody ever said anything in.
    *
@@ -3144,6 +3152,11 @@ export function Composer({
      this keeps the value because typing into it must not repaint the
      transcript above. */
   const [value, setValue] = useState(draft);
+  /* **How this draft's words arrived**, so the question can be stored with it
+     (report spya-z30x5n). A ref: it decides nothing on screen. Seeded when the
+     box starts non-empty, and then unrecorded until it is emptied
+     (composer-modality.ts). */
+  const provenance = useRef(freshProvenance(draft));
   /* Recall's, Tutorial's and Explore's box alike: tall, microphone first. */
   const learn = isLearnKind(kind);
   /**
@@ -3223,6 +3236,7 @@ export function Composer({
   const dictate = useDictationField({
     value,
     onChange: (next) => {
+      provenance.current = afterChange(provenance.current, next, "dictation");
       setValue(next);
       onDraft(next);
     },
@@ -3238,11 +3252,32 @@ export function Composer({
   // A Live ticket can still be pending before Live claims the microphone.
   // Cancel that attempt as well as any active capture; otherwise its late
   // ticket would claim the microphone after the reader chose dictation.
+  const latestDictationToggle = useRef(dictate.toggle);
+  latestDictationToggle.current = dictate.toggle;
+  /* Two clicks can arrive while Live's asynchronous stop still leaves the
+     button looking idle. Let them join one handoff: releasing both afterwards
+     would start dictation and immediately stop it through the same stale
+     render, before the held-Stop policy can see either press. */
+  const handingToDictation = useRef(false);
   const toggleDictation = () => {
-    void (async () => {
-      if (live && live.phase !== "idle" && live.phase !== "failed") await live.stop();
-      if (box.current) dictate.toggle();
-    })();
+    /* The promise is the authority, not Live's rendered phase: its last update
+       is `idle`, and that render may arrive while this handoff's continuation
+       is still queued. */
+    if (handingToDictation.current) return;
+    if (!live || live.phase === "idle" || live.phase === "failed") {
+      latestDictationToggle.current();
+      return;
+    }
+    handingToDictation.current = true;
+    void live.stop().then(
+      () => {
+        handingToDictation.current = false;
+        if (box.current) latestDictationToggle.current();
+      },
+      () => {
+        handingToDictation.current = false;
+      },
+    );
   };
 
   /**
@@ -3283,11 +3318,16 @@ export function Composer({
     // Revoke never-submitted recovery before the wait: another draft can be
     // typed and the mode left while this question is already on its way.
     onSubmitStarted?.();
+    /* Read before the box is cleared and before Live's hand-off is awaited, and
+       reset at once: the reader may start the next draft during that wait, and
+       its words are not this question's (Sol's plan review F2, 261011z). */
+    const modality = composerModality(provenance.current);
+    provenance.current = freshProvenance("");
     setValue("");
     onDraft("");
     if (handoff) await live.stop();
     /* Typed here, by the reader: the one send that says so (`SendHow`). */
-    onSend(question, { typed: true });
+    onSend(question, { typed: true, ...(modality ? { modality } : {}) });
     /* The question has gone and the answer arrives under the keys: let go of
        a soft keyboard, and only a soft one (useVisualViewport.ts §
        `putKeyboardAway`; Greg, spya-gmtt4b). A live handoff can wait long
@@ -3337,6 +3377,7 @@ export function Composer({
                 : (placeholder ?? "Ask about this article…")
         }
         onChange={(e) => {
+          provenance.current = afterChange(provenance.current, e.target.value, "keyboard");
           setValue(e.target.value);
           // Kept above this component so the words survive it; see `drafts`
           // in ChatPanel.
@@ -3385,6 +3426,7 @@ export function Composer({
           if (e.key === "Escape" && !isImeComposing(e)) {
             if (onStop) onStop();
             else if (value !== "") {
+              provenance.current = freshProvenance("");
               setValue("");
               onDraft("");
             }
@@ -3454,14 +3496,14 @@ export function Composer({
              phases, the disabled-while-transcribing rule and the article's own
              glossary priming all come along unchanged. Only the label is new. */
           <span className="chat-talk">
-            <DictationButton dictation={dictate.dictation} toggle={toggleDictation} disabled={busy} again={dictate.again} sendingAfter={dictate.sendingAfter} doubleStop={dictate.doubleStop} />
+            <DictationButton dictation={dictate.dictation} toggle={toggleDictation} disabled={busy} sendingAfter={dictate.sendingAfter} doubleStop={dictate.doubleStop} />
             {/* Holds its width across Stop: in this wrapping row a wider word
                 could push Live onto a line of its own and move the microphone
                 in a bottom-pinned composer. `TalkLabel`. */}
             <TalkLabel field={dictate} className="chat-talk-label" hidden />
           </span>
         ) : (
-          <DictationButton dictation={dictate.dictation} toggle={toggleDictation} disabled={busy} again={dictate.again} sendingAfter={dictate.sendingAfter} doubleStop={dictate.doubleStop} />
+          <DictationButton dictation={dictate.dictation} toggle={toggleDictation} disabled={busy} sendingAfter={dictate.sendingAfter} doubleStop={dictate.doubleStop} />
         ))}
       {/* **Beside the microphone, not instead of it.** They are different
           things: one turns speech into text in this box, the other holds a

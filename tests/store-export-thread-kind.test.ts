@@ -84,6 +84,8 @@ describe("db:export and a conversation's kind", () => {
       status: "done",
       createdAt: at,
       hintOpenedAt: new Date(HINT_OPENED_AT),
+      /* And a modality, so the rollback export and restore are seen to carry it (plan 261011z). */
+      modality: "spoken",
     });
     out = await mkdtemp(path.join(tmpdir(), "spideryarn-export-thread-kind-"));
     /* `seedChatFromFiles` deliberately reads the repository's `data/` root and
@@ -157,15 +159,16 @@ describe("db:export and a conversation's kind", () => {
       threads: ChatThread[];
     };
     const exported = file.threads.find((t) => t.id === LEARN_THREAD)?.messages[0];
-    expect(exported).toMatchObject({ id: HINTED_ANSWER, hintOpenedAt: HINT_OPENED_AT });
+    expect(exported).toMatchObject({ id: HINTED_ANSWER, hintOpenedAt: HINT_OPENED_AT, modality: "spoken" });
 
     /* The test above this one has already deleted the rows and restored them
        from that file, so what is in the table now came through the helper. */
     const [restored] = await getDb()
-      .select({ hintOpenedAt: chatMessages.hintOpenedAt })
+      .select({ hintOpenedAt: chatMessages.hintOpenedAt, modality: chatMessages.modality })
       .from(chatMessages)
       .where(eq(chatMessages.articleId, ARTICLE_ID));
     expect(restored?.hintOpenedAt?.toISOString()).toBe(HINT_OPENED_AT);
+    expect(restored?.modality).toBe("spoken");
   });
 
   /* Explore's index, from the migration that widened the CHECK for it

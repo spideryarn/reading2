@@ -44,6 +44,7 @@ const everyField: Required<ChatMessage> = {
   stance: "socratic",
   help: true,
   hintOpenedAt: "2026-10-09T06:02:00.000Z",
+  modality: "spoken",
 };
 
 describe("a chat message through messageRow and toMessage", () => {

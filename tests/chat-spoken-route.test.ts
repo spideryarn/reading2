@@ -253,6 +253,15 @@ describe("appending one exchange", () => {
     expect(thread.messages[1]?.model).toBe(LIVE_MODEL);
   });
 
+  it("stores both halves as spoken, the selector for reviewing live answers (spya-z30x5n)", async () => {
+    const thread = threadOf(await post("spya-vaaaam", exchange()));
+    const stored = (await threads()).find((t) => t.id === thread.id);
+    expect(stored?.messages.map((m) => [m.role, m.modality])).toEqual([
+      ["user", "spoken"],
+      ["assistant", "spoken"],
+    ]);
+  });
+
   it("takes a passage pointer and an interruption", async () => {
     const thread = threadOf(
       await post(

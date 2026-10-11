@@ -521,6 +521,15 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "request `converse` builds. Seeds through `scratchArticleInPg`; what it still reaches is the " +
       "seeder's copy step and the ledger row the stubbed model call records.",
   },
+  "tests/chat-modality-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["ledger-redirect", "fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "`chat_messages.modality` at the route: what the wire may carry, what each path stores, and " +
+      "the CHECK. chat-help-route's harness: seeds through `scratchArticleInPg`; what it still " +
+      "reaches is the seeder's copy step and the ledger row the stubbed model call records.",
+  },
   "tests/chat-help-route.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["ledger-redirect", "fixture-loader"],
@@ -2944,6 +2953,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      writing to the same `chat_threads` could falsify without touching this
      file. */
   "tests/chat-help-route.test.ts": "private-postgres",
+  /* Plan 261011z. chat-help-route's harness and its lane: it reads the first
+     thread back with `chatStore.load` after every post. */
+  "tests/chat-modality-route.test.ts": "private-postgres",
   /* Plan 261005i. The anchor route suite's harness and its lane: it reads
      conversations back with `chatStore.load` and asserts a refused request
      left none. */

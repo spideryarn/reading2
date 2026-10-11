@@ -349,22 +349,34 @@ Greg, 2026-10-04 (`spya-rp8676`): *"if I'm in a feedback report and I double cli
 then it should also click send afterwards for me. And if I'm in chat or whatever and I double click
 the stop button, then it should automatically send that message after it's finished transcribing"*.
 
-A box hands `useDictationField` its own done action as **`onDone`**, and passes the field's `again`
-and `sendingAfter` on to `DictationButton` and `DictationStrip`. Six boxes send: Feedback (Send),
+A box hands `useDictationField` its own done action as **`onDone`**, and passes the field's
+`sendingAfter` and `doubleStop` on to `DictationButton` and `DictationStrip`. Six boxes send: Feedback (Send),
 Feedback's reply to a question (Send reply), chat (Send), the comment follow-up (Ask in chat), the
 quiz answer (Answer) and Help's Ask box (Ask). The annotate box saves (Save, never Ask AI), so its
 button and strip take `done="save"`; the command bar presses Enter (below). The plan, with what was deferred and why, is
 [261005a](../plans/261005a-dictation-double-press-on-stop-also-sends.md).
 
-- **The second press has to be able to land.** A `disabled` button is sent no click. So on a box
-  with `onDone`, **for 600 ms after Stop** (`DOUBLE_PRESS_MS`), the button stays enabled and is
-  named for the box's action — "Send", "Save" or "Press Enter" when the words arrive; its only
-  press there is `again()`, and it never starts a dictation. After that, or once the press is taken,
-  it is `disabled` as it always was. The field returns `again` only while a second press would
-  count, which is the whole of how the button knows. Not `aria-disabled`: that says "cannot be
-  used" at the one moment it can (GPT Sol).
+- **Stop waits for the second press, rather than the second press chasing Stop.** On a box with
+  `onDone`, a Stop press is **held for 300 ms** (`DOUBLE_PRESS_MS`) before the microphone stops.
+  The press itself changes nothing on screen: the microphone is still on, the button is still Stop,
+  and the focus stays on it, so Enter or Space twice is a double press too. Chromium may still add a
+  live phrase during the hold and grow the box; that residual movement is not buffered. A second
+  press inside the hold is `finishThenDone()` (below); without one, the hold expires and stops the
+  same capture if it is still armed. A box without `onDone` stops at once. Greg, 2026-10-11
+  (`spya-j5h3cb`): *"as soon as I click the
+  first of the two double-click clicks, it automatically kind of changes the UI … maybe 300
+  milliseconds at most"*. Until then it was a 600 ms window *after* Stop, with the button kept
+  enabled through it; a measured browser check found that a fast transcript (a few seconds of
+  speech) landed inside the window, put the layout back (59 px in Chat) or turned the button back
+  into Dictate, and the second press missed —
+  [261011y](../plans/261011y-dictation-short-recordings-and-a-double-press-that-lands.md). **The hold
+  is not withdrawn by a new `doneKey` or by the phase returning to `opening`** (Chromium's
+  recogniser does that after a pause, inside one session): the reader pressed Stop, so Stop
+  happens; only the wish to send is tied to the key. Nor by a change of microphone, which restarts
+  the capture without a press: it is still the dictation the reader pressed Stop on.
 - **The button has to be where the first press left it.** Nothing that positions it may change
-  size at Stop. In Chat the composer grows upwards from a pinned bottom edge, so a line leaving the
+  size at Stop. Since the hold, the second press arrives before Stop, so this matters less than it
+  did, but the rule stands for the box's own Send and for anything a slow hand presses late. In Chat the composer grows upwards from a pinned bottom edge, so a line leaving the
   strip *under* the button moves the button down; the "Microphone: … Change" line did exactly that
   until 2026-10-08, and Greg's second tap missed (`spya-pd9fnc`). So the strip keeps that line, the
   "Couldn't use" warning and an open picker drawn, switched off, until the words land, and a
@@ -382,7 +394,8 @@ button and strip take `done="save"`; the command bar presses Enter (below). The 
   *"…then saving…"* or *"…then pressing Enter…"*.
 - **It sends only where it was said.** A box that is reused across things — one comment dialog for
   every comment, one quiz box for every question — passes **`doneKey`**, and a wish made on one is
-  not honoured on another. Feedback's key is whether it is open.
+  not honoured on another. The field tracks the key's generation as well as its string, so closing
+  and reopening Feedback cannot revive an earlier `"open"` hold or wish.
 - **It sends only a real transcript.** The done action runs only if that ending put the transcript
   in the box. A failed upload, `[mic-silent]`, a recording too short to send, a transcript refused
   because the box changed, and a later **Try again** send nothing, and the wish to send ends with
@@ -395,15 +408,10 @@ button and strip take `done="save"`; the command bar presses Enter (below). The 
   refuse there too; Feedback checks `open`.
 - **Do not offer it while the done action would refuse.** The annotate box passes `onDone` only
   once its comments have loaded, so a press is never taken and then dropped.
-- **A second press after a fast ending still sends.** Words can land inside the 600 ms, and the
-  ending then reaches idle before the second press does; that press used to start the microphone
-  again, quietly. Now, on a box with `onDone`, a press within `DOUBLE_PRESS_MS` of Stop runs the
-  done action if that ending delivered words for the same `doneKey`, and is an ordinary press
-  otherwise (after a failure, trying again at once is what the reader wants). Since 2026-10-10,
-  [261010f](../plans/261010f-feedback-dialog-send-after-dictation-and-a-saved-draft.md).
 - **The box's own button can ask for it too: `finishThenDone()`.** Feedback's Send, pressed while
   the microphone is on or its words are on their way, stops the microphone and sends once the words
-  land, under every rule above. The wish is recorded *before* the stop, because on Safari a stop can
+  land, under every rule above. It is also what the second press of a double press calls, and it
+  clears a held Stop. The wish is recorded *before* the stop, because on Safari a stop can
   end the session in the same turn, and it is withdrawn whenever a new session starts (the hook
   restarts by itself on a change of microphone). Greg's iPad report `spya-t9qu3v`: Send, greyed but
   still reading "Send" while the microphone was on, did nothing. Tests:
@@ -419,8 +427,8 @@ key itself calls, so the double press cannot run anything Enter would not: a phr
 row runs that row (a row that writes or generates included, as Enter on it does), and a phrase that
 names nothing is asked about, with the answer drawn under **Did you mean** unless it is a sure pick
 that only moves the reader. The bar does not "send", so the button and the strip take
-`done="enter"` and say *"Press Enter when the words arrive"* and *"Turning that into text, then
-pressing Enter…"* (`DONE_WORDS` in `DictationStrip.tsx`). Like Feedback it stays mounted when shut:
+`done="enter"` and say *"Turning your words into text, then pressing Enter"* and *"Turning that
+into text, then pressing Enter…"* (`DONE_WORDS` in `DictationStrip.tsx`). Like Feedback it stays mounted when shut:
 `onDone` checks `open`, and its `doneKey` is whether it is open. It is not offered while a run is
 `Starting…`, when Enter is refused. **The Illustrated note still has none**: it starts a paid
 repaint.
@@ -463,6 +471,12 @@ const dictate = useDictationField({
 <DictationStrip dictation={dictate.dictation} />
 ```
 
+**A box whose words are stored as a chat question also says how they arrived.** Chat's composer
+keeps score of which `onChange` ran, the hook's or the textarea's, and sends `typed`, `dictated`
+or `mixed` with the question ([`composer-modality.ts`](../../src/web/composer-modality.ts), plan
+[261011z](../plans/261011z-chat-messages-record-how-they-were-made.md)). The command bar's
+*Ask the guide* row does not yet, and its questions are stored unrecorded.
+
 `transcribe` comes from `useReaderTranscriber` in
 [`dictation-upload.ts`](../../src/web/dictation-upload.ts) in this app. It binds the upload to the
 reader the box was mounted for, before recording, tape draining or retries can outlive an account
@@ -488,7 +502,8 @@ example.
 
 **If the box sends, give it the double press**: `onDone: send` on the field (and `doneKey` if the
 box is reused across things), and
-`again={dictate.again} sendingAfter={dictate.sendingAfter}` on the button and the strip
+`sendingAfter={dictate.sendingAfter} doubleStop={dictate.doubleStop}` on the button and
+`sendingAfter={dictate.sendingAfter}` on the strip
 ([§ A double press on Stop also sends](#a-double-press-on-stop-also-sends)).
 
 **And disable the button too, not only the guard.** A correct guard behind a lit button is a press
@@ -789,7 +804,10 @@ Feedback draft itself is the next step, and is named in the plan.
    the schema is `MAX_TRANSCRIPT_CHARS` — a loose tripwire for an answer far longer than anything
    that could have been said — plus the tests for dictated questions and commands. Residual risk,
    accepted knowingly, and slightly differently shaped than it was.
-2. **Hallucination on silence.** Nothing under two seconds is sent at all, and an empty transcript
+2. **Hallucination on silence.** Nothing under 0.6 s is sent at all (`MIN_MS` in
+   [`mic-recording.ts`](../../src/web/mic-recording.ts); it was two seconds until 2026-10-11, which
+   threw away a brief spoken command — plan
+   [261011y](../plans/261011y-dictation-short-recordings-and-a-double-press-that-lands.md)), and an empty transcript
    is a success rather than an error — the box is left as it was, and the audio is offered back.
 3. **The vocabulary quietly stops being assembled.** Returns a slightly worse transcript and no
    other symptom. Pinned by [`tests/transcribe.test.ts`](../../tests/transcribe.test.ts) asserting

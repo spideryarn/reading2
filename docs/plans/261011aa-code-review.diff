@@ -1,0 +1,1114 @@
+diff --git a/src/converse.ts b/src/converse.ts
+index 836a57577..760cf375f 100644
+--- a/src/converse.ts
++++ b/src/converse.ts
+@@ -541,13 +541,15 @@ token alone. The reader sees a button there, not the token.
+   reader's own tags on this article. One tag per token; a tag has no comma.
+ - [cmd:jump-first:mutual%20information] — takes them to the first place the
+   article has exactly those words.
+-- [cmd:find:mutual%20information] — opens a search showing every place the
+-  article has exactly those words.
++- [cmd:find:mutual%20information] — lists every place the article has
++  exactly those words, under your answer, as links to each passage.
+ - [cmd:glossary-ask:free%20energy] — looks that term up in this article's
+   glossary, and adds it if it is not there yet.
+ - [cmd:quick-search:how%20they%20measured%20it] — runs a quick search for the
+-  passages about that, in whatever words the article uses, and shows them.
+-  Use it when they want the parts about an idea rather than one exact phrase.
++  passages about that, in whatever words the article uses, and lists them
++  under your answer, as links to each passage. The reader stays in this
++  conversation. Use it when they want the parts about an idea rather than one
++  exact phrase.
+ - [cmd:mode:mode%3Aglossary] — opens one of Spideryarn's modes beside the
+   article, here the Glossary. After "mode:" comes the mode's key: mode%3A and
+   the mode's name in lower case (mode%3Asummary, mode%3Aquotes,
+@@ -569,7 +571,8 @@ everywhere it says X", "add X to the glossary", "find the parts about X",
+ jump. When the action is all they asked for, the one sentence and the button
+ are the whole answer. Do not ask whether they would like a button: when their
+ message asks for the action, put it there. An ordinary question about the
+-article gets no button. One button is usual; never more than two.
++article gets no button. One button is usual; never more than two, except that
++when they ask for several searches you may offer up to three search buttons.
+ 
+ You have not done it. Never write "I've bookmarked that" or "tagged" — say that
+ the button will, if they press it. If the action they want has no button here
+@@ -1746,6 +1749,30 @@ ${CITING_IDS}
+ When you point them at a part of the piece, cite its block, so they can go
+ straight there.
+ 
++LINKS INTO THE PIECE
++
++Every block id you cite is a link they can press, and linking them to the right
++places is a large part of what you are for. So when they ask for links, or to
++be shown where something is, they mean places in this article: cite the blocks
++at once, without asking which kind of link they mean. They mean the article's
++own hyperlinks only when they say so ("the links in the article", "what does it
++link to"), and the web only when they say so; Chat is the place for the web.
++
++You cannot move them. Never write that you have taken them somewhere, opened
++something or jumped to a passage: they press a link or a button.
++
++SEARCHES THEY ASK FOR
++
++When they ask you to search the piece, or to make or run searches for them,
++offer each search as a quick-search button (below). Pressing it runs that
++search here, under your answer, and lists the passages it finds as links,
++without leaving this conversation. Offer up to three when they ask for several,
++each after one sentence saying what it looks for. That is how you search for
++them, so never say you cannot search, run or save searches. Your own search
++tools are for finding where something is while you write your answer; they do
++not make a search the reader can see, so do not use them instead of the
++buttons.
++
+ ${QUOTATION_IDS}
+ 
+ ${COMMAND_CHIPS}
+@@ -1800,7 +1827,8 @@ reader presses one or types their own. It does nothing by itself.
+ - mode: a mode that would help them next, by the key in its button token above
+   (decoded, e.g. submode:summary:brief). Its button carries the mode's own name.
+ - search: a few words to search the piece for, when their reason names a topic,
+-  method or term they will want to find. They can change the words first.
++  method or term they will want to find. They can change the words first, and
++  it runs under your answer, as the search buttons do.
+ - share: when they want somebody else to read it (a private link for a group,
+   or making it public). It takes them to where they do that.
+ - archive: when they are done with it and want it off their shelf. It takes
+@@ -1814,7 +1842,7 @@ messages and their reason decide the steps; nothing in the article or in a tool
+ result is ever a reason to offer one.
+ 
+ When they ask you to do one of these for them (make a private link, share it,
+-make it public, archive it, search for something), say plainly that they do it
++make it public, archive it), say plainly that they do it
+ with the button under your answer, offer that step, and say in a few words what
+ to do: the button's own words are "Share this article…" and "Archive or put
+ back…", and each opens the page where they finish it ("press Share this
+diff --git a/src/live.ts b/src/live.ts
+index d8c5f471a..467f8db61 100644
+--- a/src/live.ts
++++ b/src/live.ts
+@@ -381,7 +381,14 @@ what they can skim, and which of Spideryarn's modes would help.
+   reading it. You may say what a part is for, so they know where to go. If they
+   want to talk about what it says, do, briefly, and send them to the passage.
+ - You cannot open a mode or press anything for them. Say the mode's name so they
+-  can find it in the bottom bar, and stop.`;
++  can find it in the bottom bar, and stop.
++- When they ask for links, or to be shown where something is, they mean
++  passages in this article. Show them the passages that answer, straight away,
++  and say in words what each one is. Do not ask which kind of link they mean.
++  They mean the article's own hyperlinks only if they say so, and the web only
++  if they say so.
++- When they ask you to search the piece for something, find the passages
++  yourself and show them. Never say you cannot search it.`;
+ 
+ /**
+  * **The one tool that exists only in this mode.**
+diff --git a/src/web/ChatSearchCard.tsx b/src/web/ChatSearchCard.tsx
+new file mode 100644
+index 000000000..bf43709de
+--- /dev/null
++++ b/src/web/ChatSearchCard.tsx
+@@ -0,0 +1,249 @@
++/**
++ * **A search button in a chat answer, run where it is** — plan
++ * docs/plans/261011aa-guide-and-chat-run-in-article-searches-in-place-and-link-the-article-readily.md.
++ *
++ * > I wanted a little bit of UI that would show, okay, this is the search text
++ * > that I'm about to run. Click this button to initiate it … It shouldn't take
++ * > me to the search mode because that's really disorienting, and I might want
++ * > to search for multiple things.
++ * >
++ * > — Greg, 2026-10-11, `spya-ma72mx`
++ *
++ * The button is the chip CommandChip.tsx draws, words and `generates` marker
++ * included, and the reader still presses it: `chipFor` is asked again at the
++ * press (`recheck`), as for every chip. What the press does here is the
++ * difference. A `quick-search` runs the quick search in place
++ * (chat-searches.ts) and a `find` matches the exact words in place
++ * (`findLiteral`, Search's own words matcher), and the button's place becomes
++ * what was found: the passages as block links, which jump the article and
++ * leave the conversation where it is, and *Open in Search* for the whole view.
++ *
++ * Drawn only inside a chat surface that provided `ChatSearchHere` (Reader.tsx,
++ * around the chat band and the passage chat dialog). Anywhere else a search
++ * chip presses through the executor as it always did.
++ */
++import { createContext, useContext, useState, type ReactElement, type ReactNode } from "react";
++import type { Block, BlockId } from "../types.js";
++import { BlockRef } from "./BlockRef.js";
++import { findHref, searchRunHref } from "./CommandBar.js";
++import { NOT_HERE } from "./command-proposal.js";
++import { findLiteral } from "./search-hits.js";
++import { startChatSearch, useChatSearch } from "./chat-searches.js";
++import { useMadeFor } from "./lib/made-for.js";
++import { carriedSearch, navigate } from "./router.js";
++
++/** What a chat surface hands its search buttons: the article, and its jump. */
++export interface ChatSearchPlace {
++  readonly slug: string;
++  readonly blocks: readonly Block[];
++  jump(blockId: BlockId): void;
++}
++
++const ChatSearchContext = createContext<ChatSearchPlace | null>(null);
++
++export function ChatSearchHere({ place, children }: { place: ChatSearchPlace; children: ReactNode }): ReactElement {
++  return <ChatSearchContext.Provider value={place}>{children}</ChatSearchContext.Provider>;
++}
++
++export function useChatSearchPlace(): ChatSearchPlace | null {
++  return useContext(ChatSearchContext);
++}
++
++/** How many passages a card lists before it says how many more Search has. */
++export const SHOWN = 12;
++
++type Props = {
++  readonly kind: "quick" | "find";
++  readonly words: string;
++  readonly place: ChatSearchPlace;
++  /** The chip, as CommandChip drew it: the label, and the `generates` marker. */
++  readonly button: ReactNode;
++  readonly description: string;
++  readonly enabled: boolean;
++  /** `chipFor` asked again at the press: is this still a button here, now? */
++  recheck(): boolean;
++};
++
++export function ChatSearchCard(props: Props): ReactElement {
++  return props.kind === "quick" ? <QuickCard {...props} /> : <FindCard {...props} />;
++}
++
++function QuickCard({ words, place, button, description, enabled, recheck }: Props): ReactElement {
++  const reader = useMadeFor();
++  const search = useChatSearch(reader, place.slug, words);
++  const [refused, setRefused] = useState(false);
++  const press = () => {
++    if (!recheck()) {
++      setRefused(true);
++      return;
++    }
++    setRefused(false);
++    startChatSearch(reader, place.slug, words);
++  };
++  /* **A saved answer is drawn only while every passage it found is still
++     here.** The saved list carries no fingerprint of the article now
++     (search.md § Searches started from a chat), so this is the check we can
++     make; an answer that names a passage the article no longer has is left
++     as the button, for the reader to ask again. And it says when it was
++     found, since it was not found just now. */
++  const known = new Set(place.blocks.map((b) => b.id as string));
++  const shown =
++    search.status === "done" && search.saved === true && !search.run.hits.every((h) => known.has(h.blockId))
++      ? ({ status: "idle" } as const)
++      : search;
++  switch (shown.status) {
++    case "idle":
++    case "error":
++      return (
++        <span className="cmd-chip-wrap chat-search">
++          <button type="button" className="cmd-chip" title={description} disabled={!enabled} onClick={press}>
++            {button}
++          </button>
++          {(refused || shown.status === "error") && (
++            <span className="cmd-chip-said" role="status">
++              {refused ? NOT_HERE : shown.status === "error" ? shown.message : null}
++            </span>
++          )}
++        </span>
++      );
++    case "searching":
++      return (
++        <Found
++          button={button}
++          status={
++            shown.hits.length === 0
++              ? "Searching…"
++              : `Searching… ${passages(new Set(shown.hits.map((h) => h.blockId)).size)} so far`
++          }
++          ids={shown.hits.map((h) => h.blockId)}
++          place={place}
++          busy
++        />
++      );
++    case "done": {
++      const ids = shown.run.hits.map((h) => h.blockId);
++      const said = ids.length === 0 ? "Nothing found" : passages(new Set(ids).size);
++      const when = shown.saved === true ? ` (searched ${day(shown.run.finishedAt ?? shown.run.createdAt)})` : "";
++      return (
++        <Found
++          button={button}
++          status={`${said}${when}.`}
++          ids={ids}
++          place={place}
++          open={searchRunHref(place.slug, here(), shown.run.id)}
++        />
++      );
++    }
++    default: {
++      const never: never = shown;
++      return never;
++    }
++  }
++}
++
++function FindCard({ words, place, button, description, enabled, recheck }: Props): ReactElement {
++  /* Free and instant, so the press works it out there and then; nothing to
++     keep across a redraw that a second press would not give back at once. */
++  const [found, setFound] = useState<readonly BlockId[] | null>(null);
++  const [refused, setRefused] = useState(false);
++  if (found !== null) {
++    return (
++      <Found
++        button={button}
++        status={found.length === 0 ? "Not in this article." : `${passages(new Set(found).size)}.`}
++        ids={found}
++        place={place}
++        open={findHref(place.slug, here(), words)}
++      />
++    );
++  }
++  return (
++    <span className="cmd-chip-wrap chat-search">
++      <button
++        type="button"
++        className="cmd-chip"
++        title={description}
++        disabled={!enabled}
++        onClick={() => {
++          if (!recheck()) {
++            setRefused(true);
++            return;
++          }
++          setFound(findLiteral([...place.blocks], words).map((f) => f.blockId));
++        }}
++      >
++        {button}
++      </button>
++      {refused && (
++        <span className="cmd-chip-said" role="status">
++          {NOT_HERE}
++        </span>
++      )}
++    </span>
++  );
++}
++
++/**
++ * **What a search found, in the button's place**: the words it ran, a line
++ * saying how it went, the passages as block links in the article's order, and
++ * the way to the whole thing in Search.
++ */
++function Found({
++  button,
++  status,
++  ids,
++  place,
++  open,
++  busy = false,
++}: {
++  button: ReactNode;
++  status: string;
++  ids: readonly BlockId[];
++  place: ChatSearchPlace;
++  open?: string;
++  busy?: boolean;
++}): ReactElement {
++  const order = new Map(place.blocks.map((b, i) => [b.id, i] as const));
++  const unique = [...new Set(ids)].sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0));
++  const shown = unique.slice(0, SHOWN);
++  const more = unique.length - shown.length;
++  return (
++    <span className="cmd-chip-wrap chat-search chat-search-ran" aria-busy={busy}>
++      <span className="chat-search-what">{button}</span>
++      <span className="chat-search-status" role="status">
++        {status}
++        {open !== undefined && (
++          <>
++            {" "}
++            <a
++              className="chat-search-open"
++              href={open}
++              onClick={(event) => {
++                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
++                event.preventDefault();
++                navigate(open);
++              }}
++            >
++              {more > 0 ? `${more} more in Search` : "Open in Search"}
++            </a>
++          </>
++        )}
++      </span>
++      {shown.length > 0 && (
++        <span className="chat-search-hits">
++          {shown.map((id) => (
++            <BlockRef key={id} id={id} onJump={place.jump} />
++          ))}
++        </span>
++      )}
++    </span>
++  );
++}
++
++/** "11 Oct", the day a saved search was answered. */
++const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" });
++
++const passages = (n: number) => (n === 1 ? "1 passage" : `${n} passages`);
++
++/** The address bar's query, for a link that keeps the reader's other settings. */
++const here = () => carriedSearch(typeof window === "undefined" ? "" : window.location.search);
+diff --git a/src/web/CommandBar.tsx b/src/web/CommandBar.tsx
+index e5ad08442..7495e10ad 100644
+--- a/src/web/CommandBar.tsx
++++ b/src/web/CommandBar.tsx
+@@ -1116,6 +1116,19 @@ export function findHref(slug: string, carried: string, words: string): string {
+   return readHref(slug, search, "article");
+ }
+ 
++/**
++ * **The address of one saved quick search, switched on in Search** — the
++ * *Open in Search* link under a search a chat button ran in place
++ * (ChatSearchCard.tsx, plan 261011aa). `findHref`'s rule for what is carried.
++ */
++export function searchRunHref(slug: string, carried: string, runId: string): string {
++  const kept = searchWithoutAny(carried, SEARCH_KEYS);
++  const search = [kept, "mode=search", "match=quick", `runs=${encodeURIComponent(runId)}`]
++    .filter(Boolean)
++    .join("&");
++  return readHref(slug, search, "article");
++}
++
+ /**
+  * **The rows a query with an argument offers** (plan 261003f, Stage 1) —
+  * appended after the ranked rows, as the find row has been since 2026-10-02.
+diff --git a/src/web/CommandChip.tsx b/src/web/CommandChip.tsx
+index e7bd9cb85..fc260e379 100644
+--- a/src/web/CommandChip.tsx
++++ b/src/web/CommandChip.tsx
+@@ -29,6 +29,7 @@ import {
+   runProposal,
+ } from "./command-proposal.js";
+ import { voiceClass } from "./voice.js";
++import { ChatSearchCard, useChatSearchPlace } from "./ChatSearchCard.js";
+ 
+ /**
+  * **The executor chat's chips press through**, from the reading view to the
+@@ -106,6 +107,7 @@ export function CommandChip({
+   /* A ref as well as the state: two presses in one frame both see the state
+      from before the first — CommandBar.tsx § `inFlight`. */
+   const inFlight = useRef(false);
++  const searchPlace = useChatSearchPlace();
+   const chip = chipFor(raw, commands, blocks);
+   // Cited.tsx only mounts this for a token that is a chip; if it stopped being
+   // one (the article's blocks changed under it), it is its own characters.
+@@ -113,6 +115,34 @@ export function CommandChip({
+ 
+   const { label, description, generates } = proposalWords(chip.proposal, chip.shown, chip.target);
+ 
++  /* **A search runs where it is, in a chat surface** (plan 261011aa, Greg's
++     spya-ma72mx): the same button, still pressed by the reader and checked
++     again at the press, but what it found is drawn here rather than the band
++     switching to Search. */
++  const proposal = chip.proposal;
++  if (searchPlace !== null && (proposal.id === "quick-search" || proposal.id === "find")) {
++    return (
++      <ChatSearchCard
++        kind={proposal.id === "quick-search" ? "quick" : "find"}
++        words={proposal.words}
++        place={searchPlace}
++        button={
++          <>
++            <span className="cmd-chip-name">{voiced(label)}</span>
++            {generates && <span className="cmd-chip-generates">{GENERATES_MARKER}</span>}
++          </>
++        }
++        description={
++          proposal.id === "quick-search"
++            ? "A fast first pass for the passages about this, listed here."
++            : "Every place these words appear, listed here."
++        }
++        enabled={chip.enabled}
++        recheck={() => chipFor(raw, commands, blocks)?.enabled === true}
++      />
++    );
++  }
++
+   const settle = (outcome: ActionOutcome, done: string | null) => {
+     switch (outcome.kind) {
+       case "stay":
+diff --git a/src/web/chat-searches.ts b/src/web/chat-searches.ts
+new file mode 100644
+index 000000000..bf09d7750
+--- /dev/null
++++ b/src/web/chat-searches.ts
+@@ -0,0 +1,192 @@
++/**
++ * **The quick searches a chat answer's buttons started, for this tab** — plan
++ * docs/plans/261011aa-guide-and-chat-run-in-article-searches-in-place-and-link-the-article-readily.md.
++ *
++ * > It shouldn't take me to the search mode because that's really
++ * > disorienting, and I might want to search for multiple things, and it
++ * > should be able to initiate searches.
++ * >
++ * > — Greg, 2026-10-11, `spya-ma72mx`
++ *
++ * A `quick-search` button pressed in a chat surface runs the search where it
++ * is (ChatSearchCard.tsx) rather than switching the band to Search. The
++ * request is the one Search mode makes — `POST /api/search/<slug>`, kind
++ * `quick` — so the answer is saved as a Search row like any other and is in
++ * Search's list when the reader goes there.
++ *
++ * **Why a store outside React, and not the card's own state.** A card is
++ * remounted whenever the transcript is redrawn (a new answer, a thread
++ * switch), and the server abandons a quick search whose client went away
++ * (routes.ts § search, `gone`). Kept here, a search outlives the card that
++ * pressed it, and two buttons with the same words show one search rather
++ * than paying twice.
++ *
++ * **A reload keeps the answer** through the article's saved list
++ * (`GET /api/search/<slug>`, read once per article per page): a card whose
++ * words match a finished saved quick search draws it as found. That read
++ * spends nothing and writes nothing, so a model's token still runs nothing
++ * by being drawn.
++ *
++ * Keyed by the reader as well as the article, because a tab can change
++ * reader under a mounted page (lib/made-for.ts).
++ */
++import { useEffect, useSyncExternalStore } from "react";
++import type { SearchHit, SearchRun } from "../types.js";
++import { mintId } from "../ids.js";
++import { describeFetchFailure } from "./lib/describe-failure.js";
++import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
++import { apiFetch, failure, fetchOk } from "./lib/api.js";
++import { ReaderFacingError } from "./lib/reader-facing.js";
++
++export type ChatSearch =
++  | { readonly status: "idle" }
++  | { readonly status: "searching"; readonly hits: readonly SearchHit[] }
++  /** `saved`: read from the article's saved list, not run by this tab. */
++  | { readonly status: "done"; readonly run: SearchRun; readonly saved?: true }
++  | { readonly status: "error"; readonly message: string };
++
++const IDLE: ChatSearch = { status: "idle" };
++
++/** The words as the server stores them, compared without case. */
++export function sameWords(words: string): string {
++  return words.replace(/\s+/g, " ").trim().toLowerCase();
++}
++
++const keyOf = (reader: string | null, slug: string, words: string) =>
++  `${reader ?? ""}\u0000${slug}\u0000${sameWords(words)}`;
++
++/** What this tab started, and what it learnt from the saved list. */
++const searches = new Map<string, ChatSearch>();
++/** The saved list, once per reader and article — `null` while it is out. */
++const saved = new Map<string, readonly SearchRun[] | null>();
++const listeners = new Set<() => void>();
++
++function changed(): void {
++  for (const listener of listeners) listener();
++}
++
++function subscribe(listener: () => void): () => void {
++  listeners.add(listener);
++  return () => listeners.delete(listener);
++}
++
++function set(key: string, next: ChatSearch): void {
++  searches.set(key, next);
++  changed();
++}
++
++/**
++ * The newest finished quick search in the saved list with these words, or
++ * none. Only `done`: a failed or abandoned row is not an answer to show.
++ */
++function savedAnswer(reader: string | null, slug: string, words: string): SearchRun | undefined {
++  const runs = saved.get(`${reader ?? ""}\u0000${slug}`);
++  if (!runs) return undefined;
++  const want = sameWords(words);
++  let best: SearchRun | undefined;
++  for (const run of runs) {
++    if (run.kind !== "quick" || run.status !== "done" || sameWords(run.criterion) !== want) continue;
++    if (best === undefined || (run.finishedAt ?? run.createdAt) > (best.finishedAt ?? best.createdAt)) best = run;
++  }
++  return best;
++}
++
++function readSaved(reader: string | null, slug: string): void {
++  const listKey = `${reader ?? ""}\u0000${slug}`;
++  if (saved.has(listKey)) return;
++  saved.set(listKey, null);
++  void fetchOk(`/api/search/${encodeURIComponent(slug)}`, {}, reader)
++    .then((r) => r.json() as Promise<{ runs?: SearchRun[] }>)
++    .then((body) => {
++      saved.set(listKey, body.runs ?? []);
++      changed();
++    })
++    /* No list is not a failure the reader needs to hear about: the button
++       stays a button, and pressing it asks. Left `[]` rather than retried, so
++       a card that keeps redrawing does not keep asking. */
++    .catch(() => {
++      saved.set(listKey, []);
++      changed();
++    });
++}
++
++/** This button's search: what this tab started, else a saved answer, else nothing yet. */
++export function chatSearchFor(reader: string | null, slug: string, words: string): ChatSearch {
++  const key = keyOf(reader, slug, words);
++  const own = searches.get(key);
++  if (own !== undefined) return own;
++  const run = savedAnswer(reader, slug, words);
++  if (run === undefined) return IDLE;
++  /* The same object for the same run: `useSyncExternalStore` compares
++     snapshots by identity, and a fresh one each read would redraw forever. */
++  const before = fromSaved.get(key);
++  if (before?.status === "done" && before.run === run) return before;
++  const found: ChatSearch = { status: "done", run, saved: true };
++  fromSaved.set(key, found);
++  return found;
++}
++
++/** The saved answers drawn so far, by key, so a snapshot keeps its identity. */
++const fromSaved = new Map<string, ChatSearch>();
++
++/** The search for these words, redrawn as it changes. Reads the saved list once per article. */
++export function useChatSearch(reader: string | null, slug: string, words: string): ChatSearch {
++  useEffect(() => readSaved(reader, slug), [reader, slug]);
++  return useSyncExternalStore(subscribe, () => chatSearchFor(reader, slug, words), () => IDLE);
++}
++
++/**
++ * **Run it** — the reader's press, never a draw. A search for the same words
++ * already out, or already answered, is left alone: one search, shown by every
++ * button with those words.
++ */
++export function startChatSearch(reader: string | null, slug: string, words: string): void {
++  const key = keyOf(reader, slug, words);
++  const now = chatSearchFor(reader, slug, words);
++  if (now.status === "searching" || now.status === "done") return;
++  const criterion = words.replace(/\s+/g, " ").trim();
++  if (criterion === "") return;
++  set(key, { status: "searching", hits: [] });
++  void (async () => {
++    try {
++      const r = await apiFetch(
++        `/api/search/${encodeURIComponent(slug)}`,
++        {
++          method: "POST",
++          headers: { "Content-Type": "application/json" },
++          body: JSON.stringify({ id: mintId(), criterion, kind: "quick" }),
++        },
++        reader,
++      );
++      if (!r.ok || !r.body) throw await failure(r);
++      for await (const event of readEvents(r.body, { stallMs: STREAM_STALL_MS })) {
++        if (event.name === "hit") {
++          const { hit } = event.data as { hit: SearchHit };
++          const at = searches.get(key);
++          if (at?.status === "searching") set(key, { status: "searching", hits: [...at.hits, hit] });
++          continue;
++        }
++        if (event.name === "done") {
++          /* The final answer replaces what streamed, as in Search mode
++             (useSearch.ts § `done`). */
++          const run = event.data as SearchRun;
++          set(key, run.status === "done" ? { status: "done", run } : { status: "error", message: run.error ?? FAILED });
++          return;
++        }
++      }
++      throw new ReaderFacingError("The search stopped arriving. Try again.");
++    } catch (e) {
++      set(key, { status: "error", message: describeFetchFailure(e as Error) });
++    }
++  })();
++}
++
++const FAILED = "That search didn't work. Try again in a moment.";
++
++/** Tests only: forget everything this tab started and read. */
++export function resetChatSearches(): void {
++  searches.clear();
++  saved.clear();
++  fromSaved.clear();
++  changed();
++}
+diff --git a/src/web/reader/Reader.tsx b/src/web/reader/Reader.tsx
+index 9805f2688..6b1070d76 100644
+--- a/src/web/reader/Reader.tsx
++++ b/src/web/reader/Reader.tsx
+@@ -129,6 +129,7 @@ import { chatExecutor, type ModeCommand, modeDoor, readingExecutor, type TagsCon
+ import { chipDoorRows, guideDoorRows } from "../chip-door.js";
+ import { type FindMoreMode, glossaryAppendOnOffer, quotesAppendOnOffer } from "../find-more.js";
+ import { ChatCommands } from "../CommandChip.js";
++import { ChatSearchHere } from "../ChatSearchCard.js";
+ import { findHref } from "../CommandBar.js";
+ import { buildNoteIndex, type NoteMarker, type NoteReturn } from "../notes-view.js";
+ import {
+@@ -3108,7 +3109,15 @@ export function Reader({
+       const chat = chatExecutor({ reading: executor, blocks: article.blocks, jump, tags: tagsControl, find });
+       return chipModes === undefined ? chat : { ...chat, guide: withModeDoor(chat, chipModes.guide) };
+     };
+-    return { band: forJump(bandJump), dialog: forJump(jumpTo) };
++    return {
++      band: forJump(bandJump),
++      dialog: forJump(jumpTo),
++      /* Where a search button in an answer runs and draws what it found, so
++         the reader stays in the conversation (ChatSearchCard.tsx, plan
++         261011aa). Each surface jumps the way its citations do. */
++      bandSearch: { slug, blocks: article.blocks, jump: bandJump },
++      dialogSearch: { slug, blocks: article.blocks, jump: jumpTo },
++    };
+   }, [slug, executor, chipModes, article.blocks, tagsControl, bandJump, jumpTo]);
+ 
+   /**
+@@ -3481,6 +3490,7 @@ export function Reader({
+              Candidates' prompts never ask for one, so only this arm and the
+              chat dialog below are given the executor. CommandChip.tsx. */
+           <ChatCommands executor={chatCommands.band}>
++            <ChatSearchHere place={chatCommands.bandSearch}>
+             <ConversationBand
+               key={mode}
+               slug={slug}
+@@ -3496,6 +3506,7 @@ export function Reader({
+               onOrigin={openOrigin}
+               articleTitle={article.meta.title}
+             />
++            </ChatSearchHere>
+           </ChatCommands>
+         ) : null;
+       /* **Learn is two bands behind one mode**, and the choice between them
+@@ -4596,6 +4607,7 @@ export function Reader({
+           being empty. */}
+       {owner && overlay && (
+         <ChatCommands executor={chatCommands.dialog}>
++          <ChatSearchHere place={chatCommands.dialogSearch}>
+           <ChatDialog
+             slug={slug}
+             target={overlay}
+@@ -4643,6 +4655,7 @@ export function Reader({
+             onRenamed={owner.chatAnchors.rename}
+             onSettled={owner.chatAnchors.refresh}
+           />
++          </ChatSearchHere>
+         </ChatCommands>
+       )}
+       {/* **Mounted for a visitor too, since 2026-09-04**, with an `access` of
+diff --git a/src/web/styles/mode-band.css b/src/web/styles/mode-band.css
+index 8518907be..6a78bff3d 100644
+--- a/src/web/styles/mode-band.css
++++ b/src/web/styles/mode-band.css
+@@ -1116,6 +1116,25 @@ svg.band-waiting-ghost { flex: none; }
+ .cmd-chip-generates { flex-shrink: 0; color: var(--ink-faint); font-size: 0.85em; }
+ .cmd-chip-said { margin-left: 0.5em; color: var(--ink-faint); font-size: 0.85em; }
+ 
++/* A search button that ran in the conversation (ChatSearchCard.tsx, plan
++   261011aa): the words it ran, a line on how it went, and the passages as the
++   same block links an answer cites with. A block of its own under the
++   sentence that offered it, since what it found is a list. */
++.chat-search-ran {
++  display: flex;
++  flex-direction: column;
++  gap: 0.25rem;
++  margin: 0.25rem 0;
++  padding: 0.35rem 0.55rem;
++  border: 1px solid var(--rule);
++  border-radius: var(--radius);
++  font-size: 0.9em;
++}
++.chat-search-what { display: flex; gap: 0.5em; align-items: baseline; color: var(--ink-soft); }
++.chat-search-status { color: var(--ink-faint); font-size: 0.9em; }
++.chat-search-open { margin-left: 0.25em; }
++.chat-search-hits { display: flex; flex-wrap: wrap; gap: 0.25rem 0.5rem; }
++
+ /* ---- what the model did before it answered ----
+    A strip ABOVE the answer, not below it. Sources sit below because they are
+    where the answer came from and you want them after reading it; this is what
+diff --git a/tests/chat-search-in-place.test.tsx b/tests/chat-search-in-place.test.tsx
+new file mode 100644
+index 000000000..6e2b3f0f4
+--- /dev/null
++++ b/tests/chat-search-in-place.test.tsx
+@@ -0,0 +1,302 @@
++// @vitest-environment jsdom
++/**
++ * **A search button in a chat answer runs where it is** — plan
++ * docs/plans/261011aa-guide-and-chat-run-in-article-searches-in-place-and-link-the-article-readily.md,
++ * on Greg's report spya-ma72mx: *"It shouldn't take me to the search mode
++ * because that's really disorienting, and I might want to search for multiple
++ * things."*
++ *
++ * Inside a chat surface (`ChatSearchHere`), the reader's press on a
++ * `quick-search` chip posts the quick search and draws what it found in the
++ * button's place, as block links; it never calls the executor's runner, which
++ * is the one that switches the band to Search. A `find` chip matches the exact
++ * words in place. Nothing runs on the draw.
++ */
++import { act, createElement } from "react";
++import { createRoot, type Root } from "react-dom/client";
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++import type { Block, BlockId, SearchRun } from "../src/types.js";
++import type { ActionOutcome } from "../src/web/command-match.js";
++import type { CommandExecutor } from "../src/web/command-proposal.js";
++
++let answer: (url: string, init: RequestInit) => Promise<Response>;
++const asked: { url: string; init: RequestInit }[] = [];
++
++vi.mock("../src/web/lib/api.js", async () => {
++  const real = await vi.importActual<typeof import("../src/web/lib/api.js")>("../src/web/lib/api.js");
++  const apiFetch = (url: string, init: RequestInit = {}) => {
++    asked.push({ url, init });
++    return answer(url, init);
++  };
++  return {
++    ...real,
++    apiFetch,
++    fetchOk: async (url: string, init: RequestInit = {}) => {
++      const r = await apiFetch(url, init);
++      if (!r.ok) throw await real.failure(r);
++      return r;
++    },
++  };
++});
++
++const went: string[] = [];
++vi.mock("../src/web/router.js", async (importOriginal) => {
++  const real = await importOriginal<typeof import("../src/web/router.js")>();
++  return { ...real, navigate: (href: string) => went.push(href) };
++});
++
++const { CitedMarkdown } = await import("../src/web/Cited.js");
++const { ChatSearchHere } = await import("../src/web/ChatSearchCard.js");
++const { resetChatSearches } = await import("../src/web/chat-searches.js");
++
++const SLUG = "a-piece";
++const block = (id: string, text: string): Block =>
++  ({ id: id as BlockId, tag: "p", kind: "text", text, words: text.split(" ").length, html: `<p>${text}</p>`, gistable: true }) as Block;
++const ARTICLE: Block[] = [
++  block("spya-aaaaaa", "A rhizome has multiple entryways and no centre."),
++  block("spya-bbbbbb", "The tree is a centred system with a hierarchy."),
++  block("spya-cccccc", "Make a map, not a tracing; a map has multiple entryways."),
++];
++const BLOCKS = new Map(ARTICLE.map((b) => [b.id as string, b.text]));
++const CLOSE: ActionOutcome = { kind: "close" };
++
++let host: HTMLDivElement;
++let root: Root;
++let jumped: string[];
++
++beforeEach(() => {
++  host = document.createElement("div");
++  document.body.append(host);
++  root = createRoot(host);
++  asked.length = 0;
++  went.length = 0;
++  jumped = [];
++  resetChatSearches();
++  answer = (url) => Promise.resolve(json(url.endsWith(SLUG) ? { runs: [] } : {}));
++});
++
++afterEach(() => {
++  act(() => root.unmount());
++  host.remove();
++});
++
++function json(body: unknown, status = 200): Response {
++  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
++}
++
++const run = (over: Partial<SearchRun> = {}): SearchRun => ({
++  id: "spya-run001",
++  criterion: "centred systems",
++  kind: "quick",
++  createdAt: "2026-10-11T09:23:00.000Z",
++  status: "done",
++  hits: [
++    { blockId: "spya-bbbbbb" as BlockId, quote: "", confidence: 90, reasoning: "" },
++    { blockId: "spya-aaaaaa" as BlockId, quote: "", confidence: 70, reasoning: "" },
++  ],
++  ...over,
++});
++
++function stream(done: SearchRun): Response {
++  const frames =
++    `event: begin\ndata: ${JSON.stringify({ ...done, status: "pending", hits: [] })}\n\n` +
++    done.hits.map((hit) => `event: hit\ndata: ${JSON.stringify({ hit })}\n\n`).join("") +
++    `event: done\ndata: ${JSON.stringify(done)}\n\n`;
++  return new Response(frames, { status: 200, headers: { "content-type": "text/event-stream" } });
++}
++
++function executor(runners: Partial<CommandExecutor["runners"]>): CommandExecutor {
++  return { runners: runners as CommandExecutor["runners"], sources: {} };
++}
++
++function paint(text: string, commands: CommandExecutor, inChat = true): void {
++  const cited = createElement(CitedMarkdown, { text, blocks: BLOCKS, onJump: () => {}, links: true, commands });
++  act(() => {
++    root.render(
++      inChat
++        ? createElement(ChatSearchHere, {
++            place: { slug: SLUG, blocks: ARTICLE, jump: (id: BlockId) => jumped.push(id) },
++            children: cited,
++          })
++        : cited,
++    );
++  });
++}
++
++async function flush(times = 8): Promise<void> {
++  for (let i = 0; i < times; i++) {
++    await act(async () => {
++      await new Promise((r) => setTimeout(r, 0));
++    });
++  }
++}
++
++const chips = () => [...host.querySelectorAll<HTMLButtonElement>("button.cmd-chip")];
++const links = () => [...host.querySelectorAll<HTMLAnchorElement>(".chat-search-hits a")].map((a) => a.dataset.blockLink);
++const posts = () => asked.filter((a) => a.init.method === "POST");
++
++describe("a quick-search button in a chat answer", () => {
++  it("runs the quick search in place and lists what it found, without switching to Search", async () => {
++    const quick = vi.fn((_p: { words: string }) => CLOSE);
++    answer = (_url, init) =>
++      Promise.resolve(init.method === "POST" ? stream(run()) : json({ runs: [] }));
++    paint("Here is one.\n\n[cmd:quick-search:centred%20systems]", executor({ "quick-search": quick }));
++    await flush();
++    expect(posts()).toHaveLength(0);
++
++    await act(async () => chips()[0]?.click());
++    await flush();
++
++    expect(quick).not.toHaveBeenCalled();
++    expect(posts()).toHaveLength(1);
++    expect(posts()[0]?.url).toBe(`/api/search/${SLUG}`);
++    expect(JSON.parse(String(posts()[0]?.init.body))).toMatchObject({ criterion: "centred systems", kind: "quick" });
++    // In the article's order, not the model's.
++    expect(links()).toEqual(["spya-aaaaaa", "spya-bbbbbb"]);
++    expect(host.textContent).toContain("2 passages.");
++    const open = host.querySelector<HTMLAnchorElement>("a.chat-search-open");
++    expect(open?.getAttribute("href")).toContain("mode=search");
++    expect(open?.getAttribute("href")).toContain("runs=spya-run001");
++    expect(went).toEqual([]);
++  });
++
++  it("shows one search for two buttons with the same words, and asks once", async () => {
++    answer = (_url, init) => Promise.resolve(init.method === "POST" ? stream(run()) : json({ runs: [] }));
++    paint(
++      "One.\n\n[cmd:quick-search:centred%20systems]\n\nTwo.\n\n[cmd:quick-search:Centred%20%20systems]",
++      executor({ "quick-search": () => CLOSE }),
++    );
++    await flush();
++    await act(async () => chips()[0]?.click());
++    await flush();
++    expect(posts()).toHaveLength(1);
++    expect(host.querySelectorAll(".chat-search-ran")).toHaveLength(2);
++  });
++
++  it("draws a finished saved search with the same words without a press", async () => {
++    answer = (url) => Promise.resolve(json(url.endsWith(SLUG) ? { runs: [run({ criterion: "Centred systems" })] } : {}));
++    paint("[cmd:quick-search:centred%20systems]", executor({ "quick-search": () => CLOSE }));
++    await flush();
++    expect(posts()).toHaveLength(0);
++    expect(links()).toEqual(["spya-aaaaaa", "spya-bbbbbb"]);
++  });
++
++  it("puts the button back with the reason when the search fails, and a press asks again", async () => {
++    answer = (_url, init) =>
++      Promise.resolve(init.method === "POST" ? json({ error: "No." }, 500) : json({ runs: [] }));
++    paint("[cmd:quick-search:centred%20systems]", executor({ "quick-search": () => CLOSE }));
++    await flush();
++    await act(async () => chips()[0]?.click());
++    await flush();
++    expect(chips()).toHaveLength(1);
++    expect(host.querySelector(".cmd-chip-said")).not.toBeNull();
++    await act(async () => chips()[0]?.click());
++    await flush();
++    expect(posts()).toHaveLength(2);
++  });
++
++  it("follows the id the server answered under, and lets the final answer replace what streamed", async () => {
++    const done = run({ id: "spya-run777", hits: [{ blockId: "spya-cccccc" as BlockId, quote: "", confidence: 80, reasoning: "" }] });
++    answer = (_url, init) => {
++      if (init.method !== "POST") return Promise.resolve(json({ runs: [] }));
++      const frames =
++        `event: begin\ndata: ${JSON.stringify({ ...done, status: "pending", hits: [] })}\n\n` +
++        `event: hit\ndata: ${JSON.stringify({ hit: { blockId: "spya-aaaaaa", quote: "", confidence: 50, reasoning: "" } })}\n\n` +
++        `event: done\ndata: ${JSON.stringify(done)}\n\n`;
++      return Promise.resolve(new Response(frames, { status: 200, headers: { "content-type": "text/event-stream" } }));
++    };
++    paint("[cmd:quick-search:centred%20systems]", executor({ "quick-search": () => CLOSE }));
++    await flush();
++    await act(async () => chips()[0]?.click());
++    await flush();
++    expect(links()).toEqual(["spya-cccccc"]);
++    expect(host.querySelector("a.chat-search-open")?.getAttribute("href")).toContain("runs=spya-run777");
++    expect(host.querySelector("a.chat-search-open")?.getAttribute("href")).toContain("match=quick");
++  });
++
++  it("asks once for two presses in a row", async () => {
++    answer = (_url, init) => Promise.resolve(init.method === "POST" ? stream(run()) : json({ runs: [] }));
++    paint("[cmd:quick-search:centred%20systems]", executor({ "quick-search": () => CLOSE }));
++    await flush();
++    const button = chips()[0];
++    await act(async () => {
++      button?.click();
++      button?.click();
++    });
++    await flush();
++    expect(posts()).toHaveLength(1);
++  });
++
++  it("does not reuse a saved meaning search, a failed one, or one naming a passage the article no longer has", async () => {
++    answer = (url) =>
++      Promise.resolve(
++        json(
++          url.endsWith(SLUG)
++            ? {
++                runs: [
++                  run({ id: "spya-mean01", kind: "meaning" }),
++                  run({ id: "spya-fail01", status: "error", hits: [] }),
++                  run({ id: "spya-gone01", hits: [{ blockId: "spya-zzzzzz" as BlockId, quote: "", confidence: 90, reasoning: "" }] }),
++                ],
++              }
++            : {},
++        ),
++      );
++    paint("[cmd:quick-search:centred%20systems]", executor({ "quick-search": () => CLOSE }));
++    await flush();
++    expect(chips()).toHaveLength(1);
++    expect(host.querySelector(".chat-search-ran")).toBeNull();
++  });
++
++  it("says a saved answer was found earlier", async () => {
++    answer = (url) => Promise.resolve(json(url.endsWith(SLUG) ? { runs: [run({ finishedAt: "2026-10-09T10:00:00.000Z" })] } : {}));
++    paint("[cmd:quick-search:centred%20systems]", executor({ "quick-search": () => CLOSE }));
++    await flush();
++    expect(host.querySelector(".chat-search-status")?.textContent).toContain("(searched ");
++  });
++
++  it("presses through the executor as before outside a chat surface", async () => {
++    const quick = vi.fn((_p: { words: string }) => CLOSE);
++    paint("[cmd:quick-search:centred%20systems]", executor({ "quick-search": quick }), false);
++    await act(async () => chips()[0]?.click());
++    expect(quick).toHaveBeenCalledWith(expect.objectContaining({ words: "centred systems" }));
++    expect(posts()).toHaveLength(0);
++  });
++});
++
++describe("a find button in a chat answer", () => {
++  it("lists every block with the exact words in place, and asks nothing", async () => {
++    const find = vi.fn((_p: { words: string }) => CLOSE);
++    paint("[cmd:find:multiple%20entryways]", executor({ find }));
++    await flush();
++    const before = asked.length;
++    await act(async () => chips()[0]?.click());
++    expect(links()).toEqual(["spya-aaaaaa", "spya-cccccc"]);
++    expect(find).not.toHaveBeenCalled();
++    expect(asked.length).toBe(before);
++    expect(went).toEqual([]);
++    expect(host.querySelector("a.chat-search-open")?.getAttribute("href")).toContain("match=words");
++  });
++
++  it("lists a passage once however many times it has the words", async () => {
++    ARTICLE.push(block("spya-dddddd", "Entryways, entryways: multiple entryways and more multiple entryways."));
++    BLOCKS.set("spya-dddddd", ARTICLE[3]?.text ?? "");
++    try {
++      paint("[cmd:find:multiple%20entryways]", executor({ find: () => CLOSE }));
++      await act(async () => chips()[0]?.click());
++      expect(links()).toEqual(["spya-aaaaaa", "spya-cccccc", "spya-dddddd"]);
++      expect(host.textContent).toContain("3 passages.");
++    } finally {
++      ARTICLE.pop();
++      BLOCKS.delete("spya-dddddd");
++    }
++  });
++
++  it("jumps the article from a listed passage and stays in the conversation", async () => {
++    paint("[cmd:find:multiple%20entryways]", executor({ find: () => CLOSE }));
++    await act(async () => chips()[0]?.click());
++    const first = host.querySelector<HTMLAnchorElement>(".chat-search-hits a");
++    await act(async () => first?.dispatchEvent(new MouseEvent("click", { bubbles: true, button: 0 })));
++    expect(jumped).toEqual(["spya-aaaaaa"]);
++  });
++});
+diff --git a/tests/guide-links-and-searches-prompt.test.ts b/tests/guide-links-and-searches-prompt.test.ts
+new file mode 100644
+index 000000000..33bb58c3a
+--- /dev/null
++++ b/tests/guide-links-and-searches-prompt.test.ts
+@@ -0,0 +1,73 @@
++/**
++ * **The guide links into the piece without asking which kind of link, and
++ * offers searches it can run** — plan
++ * docs/plans/261011aa-guide-and-chat-run-in-article-searches-in-place-and-link-the-article-readily.md,
++ * on Greg's reports spya-mpg67x and spya-ma72mx.
++ *
++ * In the thread that prompted it, the spoken guide asked "links to the
++ * highlighted passages, or external links?", then read "links within the
++ * article" as the article's own hyperlinks and said there were none; the typed
++ * one said "I've taken you to the first of the three" and "I can't save
++ * searches for you". These pin the sentences that answer each, and that the
++ * spoken guide is told it without a token or a tool name, since the voice
++ * model has neither (src/live-gpt.ts).
++ */
++import { describe, expect, it } from "vitest";
++import { buildConverseMessages } from "../src/converse.js";
++import { SPOKEN_GUIDE } from "../src/live.js";
++import type { Block, Meta } from "../src/types.js";
++
++const system = (kind: "guide" | "chat"): string => {
++  const block: Block = {
++    id: "spya-aaaaaa",
++    tag: "p",
++    kind: "text",
++    text: "A paragraph.",
++    words: 2,
++    html: "<p>A paragraph.</p>",
++    gistable: true,
++  };
++  const meta = { title: "A piece", byline: "Someone" } as unknown as Meta;
++  return String(buildConverseMessages({ meta, blocks: [block], history: [], question: "Links?", kind })[0]?.content);
++};
++
++const flat = (text: string) => text.replace(/\s+/g, " ");
++
++describe("the typed guide", () => {
++  const guide = flat(system("guide"));
++
++  it("takes a request for links as places in this article, without asking which kind", () => {
++    expect(guide).toContain("when they ask for links, or to be shown where something is, they mean places in this article: cite the blocks at once, without asking which kind of link they mean");
++    expect(guide).toContain("They mean the article's own hyperlinks only when they say so");
++  });
++
++  it("never claims to have moved the reader", () => {
++    expect(guide).toContain("Never write that you have taken them somewhere, opened something or jumped to a passage");
++  });
++
++  it("offers searches as buttons that run under the answer, and never says it cannot", () => {
++    expect(guide).toContain("Pressing it runs that search here, under your answer");
++    expect(guide).toContain("never say you cannot search, run or save searches");
++    expect(guide).toContain("do not use them instead of the buttons");
++  });
++});
++
++describe("Chat's buttons", () => {
++  it("says a search button lists what it finds under the answer, in Chat as in the guide", () => {
++    for (const kind of ["chat", "guide"] as const) {
++      const text = flat(system(kind));
++      expect(text, kind).toContain("lists them under your answer, as links to each passage");
++      expect(text, kind).not.toContain("opens a search showing every place");
++    }
++  });
++});
++
++describe("the spoken guide", () => {
++  it("shows passages for links and searches, and names no token, tool or block id", () => {
++    const spoken = flat(SPOKEN_GUIDE);
++    expect(spoken).toContain("When they ask for links, or to be shown where something is, they mean passages in this article");
++    expect(spoken).toContain("Do not ask which kind of link they mean");
++    expect(spoken).toContain("find the passages yourself and show them");
++    expect(SPOKEN_GUIDE).not.toMatch(/\[cmd:|spya-|show_passage|search_article/);
++  });
++});

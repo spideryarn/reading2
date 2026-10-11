@@ -1,6 +1,6 @@
 {
-  "id": "16e18b3c-881d-4715-9f03-039a326949d4",
-  "prevId": "dee03555-7336-4800-aaf7-c00420870f61",
+  "id": "95ebc469-6924-4059-9c96-2e8bc5b5c590",
+  "prevId": "9f0efb4e-04cc-4d06-8e61-cd94916b997f",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -3097,6 +3097,12 @@
           "notNull": true,
           "default": false
         },
+        "modality": {
+          "name": "modality",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -3206,6 +3212,10 @@
         "chat_messages_help_user_only": {
           "name": "chat_messages_help_user_only",
           "value": "\"spideryarn\".\"chat_messages\".\"help\" = false or \"spideryarn\".\"chat_messages\".\"role\" = 'user'"
+        },
+        "chat_messages_modality": {
+          "name": "chat_messages_modality",
+          "value": "\"spideryarn\".\"chat_messages\".\"modality\" is null or (\"spideryarn\".\"chat_messages\".\"role\" = 'user' and \"spideryarn\".\"chat_messages\".\"modality\" in ('typed','dictated','mixed','spoken')) or (\"spideryarn\".\"chat_messages\".\"role\" = 'assistant' and \"spideryarn\".\"chat_messages\".\"modality\" in ('written','spoken'))"
         },
         "chat_messages_hint_opened_assistant_only": {
           "name": "chat_messages_hint_opened_assistant_only",

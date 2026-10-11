@@ -3250,6 +3250,30 @@ export function isLiveEngine(x: unknown): x is LiveEngine {
 }
 
 /**
+ * **How a chat message was made** (`ChatMessage.modality`, report spya-z30x5n;
+ * docs/plans/261011z-chat-messages-record-how-they-were-made.md). Internal data:
+ * nothing shows it. A reader's question was `typed`, `dictated`, `mixed` (both
+ * went into the one box, in either order) or `spoken` in a live conversation;
+ * an answer was `written` (streamed text) or `spoken` (a live voice answer,
+ * whose engine is in `model`). The `chat_messages_modality` CHECK holds each
+ * value to its role.
+ */
+export type QuestionModality = "typed" | "dictated" | "mixed" | "spoken";
+export type AnswerModality = "written" | "spoken";
+export type MessageModality = QuestionModality | AnswerModality;
+
+/**
+ * **The modalities a browser may claim for a question**, on a new turn. Not
+ * `spoken` — only the `/spoken` route writes that — and never an answer's: the
+ * server stamps those itself.
+ */
+export type ComposerModality = Exclude<QuestionModality, "spoken">;
+export const COMPOSER_MODALITIES = ["typed", "dictated", "mixed"] as const satisfies readonly ComposerModality[];
+export function isComposerModality(x: unknown): x is ComposerModality {
+  return typeof x === "string" && (COMPOSER_MODALITIES as readonly string[]).includes(x);
+}
+
+/**
  * **What `POST /api/chat/:slug/:threadId/live-session` answers** — everything
  * the browser needs to open one GPT-Live call, and nothing it could use to
  * change what the models were told.
@@ -4123,6 +4147,17 @@ export interface ChatMessage {
    * follow above, and what tests/store-roundtrip.test.ts compares.
    */
   help?: true;
+  /**
+   * **How this message was made**: typed, dictated, mixed or spoken for a
+   * question; written or spoken for an answer (`MessageModality` above).
+   * Absent means not recorded — every row before 2026-10-11, and a question
+   * whose words came from a button or a prefilled box rather than being seen
+   * arriving. Never guessed. The question keeps its value through an edit
+   * (`editedAt` says it changed); every answer a retry or an edit writes is
+   * `written`. A spoken exchange's two rows are both `spoken`, which is the
+   * selector for reviewing live answers (docs/project/live-conversation.md).
+   */
+  modality?: MessageModality;
   /**
    * **When the reader first pressed Hint under this answer.** Assistant turns
    * of Recall (`learn`) threads only.

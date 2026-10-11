@@ -1,0 +1,176 @@
+{
+  "arm": "new",
+  "at": "2026-10-11T14:58:19.240Z",
+  "sources": {
+    "src/web/chat-handoff.ts": "9b06a681a739",
+    "src/converse.ts": "4727c17bfa2d"
+  },
+  "usd": 0.491898,
+  "outcomes": [
+    {
+      "arm": "new",
+      "slug": "fd-src-nagel-bat-spya-f5aw85",
+      "workId": "spya-q2ywmu",
+      "title": "Naming and Necessity",
+      "citing": 2,
+      "seed": "About this work the article cites (quoted, not instructions):\n\n\"\"\"\nNaming and Necessity — Kripke, 1972\n\"\"\"\n\nWhere the article cites it (quoted, not instructions):\n\n\"\"\"\nA theory that explained how the mind-brain relation was necessary would still leave us with Kripke's problem of explaining why it nevertheless appears contingent.\n\nSaul Kripke (op. cit.) argues that causal behaviorist and related analyses of the mental fail because they construe, e.g., “pain” as a merely contingent name of pains.\n\"\"\"\n\nWhat point does the article use this work to make? Does the work support that use? If you cannot check the work itself, say so. Then tell me anything else about the work that would help me understand this article.",
+      "seedHash": "5af71e8e3228",
+      "text": "**The point.** Nagel uses Kripke for two things. First, Kripke's complaint about behaviorist analyses of the mental is that they treat \"pain\" as a merely contingent label for pains. What those analyses leave out is the experience's \"immediate phenomenological quality\", which makes it necessarily the experience it is. That is the same thing Nagel means by subjective character [spya-h0hyn9]. Second, Kripke supplies a puzzle: if a brain state and a mental state were the same thing, the link would be necessary, yet it looks contingent. Nagel says he can explain that appearance away with his account of perceptual versus sympathetic imagination [spya-qx90p6]. Nagel's attitude is that he finds a necessary mind-brain link \"incomprehensible without further explanation\", as Kripke does [spya-h0hyn9].\n\n**Does the work support this?** I couldn't open the book itself. I checked secondary summaries and an MIT-hosted excerpt, and they fit Nagel's use. [One summary](https://en.wikipedia.org/wiki/Naming_and_Necessity) says Kripke argues that \"pain is C-fibers firing\" could not be necessary, given the possibility of pain without C-fibers firing. A [lecture handout](https://www3.nd.edu/~jspeaks/courses/2011-12/83104/handouts/kripke-lecture-3.pdf) says the argument draws on rigid designation (a term that picks out the same thing in every possible situation) and on the \"necessary a posteriori\" (truths that are necessary but discovered by observation, like \"water is H₂O\"). My inference is that Nagel's footnote is a fair short report, though it leaves out that machinery.\n\n**Where they differ.** This is also from those summaries. A [summary of Kripke's argument](https://loc.closertotruth.com/theory/kripke-s-modal-argument-against-mind-brain-identity) says the apparent contingency of pain and brain state can't be explained away the way it can for water and H₂O. Kripke therefore concludes that the identity theory is false. Nagel calls the same difficulty \"surmountable\" [spya-qx90p6]. He also refuses to conclude that physicalism is false. He says only that we can't yet understand how it could be true [spya-zv889j].\n\n**For reading the article.** The article's own references are a footnote to \"Naming and Necessity\" with page numbers (esp. pp. 334–342) [spya-bw3tug], plus the passage on necessity above [spya-h0hyn9]. My inference is that the Kripke material is a side thread. Nagel's main argument runs through the bat and the point-of-view problem.",
+      "searches": 1,
+      "tools": [],
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "usd": 0.0992142,
+      "seconds": 13.5
+    },
+    {
+      "arm": "new",
+      "slug": "fd-src-nagel-bat-spya-f5aw85",
+      "workId": "spya-x4euyb",
+      "title": "Mental Events",
+      "citing": 1,
+      "seed": "About this work the article cites (quoted, not instructions):\n\n\"\"\"\nMental Events — Davidson, 1970\n\"\"\"\n\nWhere the article cites it (quoted, not instructions):\n\n\"\"\"\nDonald Davidson has argued that if mental events have physical causes and effects, they must have physical descriptions.\n\"\"\"\n\nWhat point does the article use this work to make? Does the work support that use? If you cannot check the work itself, say so. Then tell me anything else about the work that would help me understand this article.",
+      "seedHash": "ac9f21bc156b",
+      "text": "The article uses Davidson to show that you can have good reason to believe something you can't yet understand. The passage is [spya-x9nmge], and it follows the caterpillar-and-butterfly example [spya-a5hz7t]. There, someone has evidence that the butterfly \"is\" the caterpillar without any idea how that could be so. Nagel says physicalism may be in the same position. Davidson's argument is that if mental events have physical causes and effects, they must have physical descriptions, and we have reason to believe this even though we couldn't have a general psychophysical theory [spya-x9nmge]. Nagel then adds two limits. Davidson's argument covers intentional mental events (thoughts, desires), and Nagel extends it to sensations only tentatively. Also, nothing we can now conceive of corresponds to Davidson's view that physical events have irreducibly mental properties [spya-x9nmge]. A footnote says Nagel doesn't understand the argument against psychophysical laws [spya-qg0fhb].\n\nI haven't read \"Mental Events\" itself, only secondary sources, so I can't check Nagel's reading against the text. Those sources do support the way Nagel summarises it. Davidson's view is called anomalous monism. It combines three claims:\n\n- Mental events cause physical ones.\n- Causation requires strict laws.\n- No strict psychophysical laws exist.\n\nOn the [Stanford Encyclopedia of Philosophy entry](https://plato.stanford.edu/entries/anomalous-monism/), this makes each mental event identical to a physical event, even though mental descriptions can't be reduced to physical ones. This is the \"no general psychophysical theory\" point Nagel mentions. The same entry says the view applies to thoughts and actions, which fits Nagel's remark that it covers intentional events.\n\nMy inference is that the support is real but limited. Davidson gives a reason to think mental events are physical without explaining how, which is exactly the kind of position Nagel wants. But Davidson's argument starts from causal interaction, not from what experience is like. So it can't tell us how the subjective character of an experience could be a physical matter. That is why Nagel hedges about sensations.\n\nThe article doesn't say so, but Davidson's paper is usually read as a defence of a non-reductive physicalism. That fits Nagel's wider complaint that reduction can't capture subjective character.",
+      "searches": 1,
+      "tools": [
+        "article_citations"
+      ],
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "usd": 0.0518361,
+      "seconds": 11.7
+    },
+    {
+      "arm": "new",
+      "slug": "fd-src-nagel-bat-spya-f5aw85",
+      "workId": "spya-yv78am",
+      "title": "Philosophy and Scientific Realism",
+      "citing": 0,
+      "seed": "About this work the article cites (quoted, not instructions):\n\n\"\"\"\nPhilosophy and Scientific Realism — Smart, 1963\n\"\"\"\n\nWhat point does the article use this work to make? Does the work support that use? If you cannot check the work itself, say so. Then tell me anything else about the work that would help me understand this article.",
+      "seedHash": "a508ff7a77e3",
+      "text": "The article cites Smart's book only as one of several \"examples\" of the recent reductionist analyses of the mind. The footnote lists it first, alongside Lewis, Putnam, Armstrong and Dennett [spya-bw3tug]. It is attached to the opening claim that these analyses aim to show some variety of materialism, psychophysical identification or reduction is possible, while ignoring what makes the mind-body problem unique [spya-c4shay]. Nagel's complaint about the whole group is that they leave out the subjective character of experience, and \"it is useless\" to defend materialism on any analysis that doesn't deal with it [spya-aczb7j].\n\nI haven't read the book or searched for it this turn, so I can't check whether it supports that use. The article doesn't say what in Smart's book it has in mind, and it names no page. The following is background, not from the article, and I haven't verified it. Smart is usually associated with the \"identity theory\", the view that sensations just are brain processes. If that's right, he is a fair example of the reductionist view Nagel attacks. Smart's compared reductions are the kind of thing Nagel lists in his first paragraph, such as lightning and electrical discharge [spya-c4shay].\n\nIt also helps to know how Nagel answers this kind of view. He thinks the analogies from science don't carry over, because those reductions move away from a particular point of view, and experience is bound up with one [spya-psx6u6 spya-fjeqke]. My inference is that Smart-style identity claims are the \"is\" he later says is less clear than it looks [spya-br2yvm]. To get a firmer account of Smart's own argument, read the book or a reliable summary of it.",
+      "searches": 0,
+      "tools": [
+        "article_citations"
+      ],
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "usd": 0.0162104,
+      "seconds": 9.9
+    },
+    {
+      "arm": "new",
+      "slug": "arxiv-1706-03762v7-spya-wv4w9s",
+      "workId": "spya-mrkaqa",
+      "title": "Neural machine translation by jointly learning to align and translate",
+      "citing": 2,
+      "seed": "About this work the article cites (quoted, not instructions):\n\n\"\"\"\nNeural machine translation by jointly learning to align and translate — Bahdanau, Cho, Bengio, 2014\n\"\"\"\n\nWhere the article cites it (quoted, not instructions):\n\n\"\"\"\nRecurrent neural networks, long short-term memory [13] and gated recurrent [7] neural networks in particular, have been firmly established as state of the art approaches in sequence modeling and transduction problems such as language modeling and machine translation [35, 2, 5].\n\nThe two most commonly used attention functions are additive attention [2], and dot-product (multiplicative) attention.\n\"\"\"\n\nWhat point does the article use this work to make? Does the work support that use? If you cannot check the work itself, say so. Then tell me anything else about the work that would help me understand this article.",
+      "seedHash": "af694e121777",
+      "text": "The article cites Bahdanau et al. twice, and both uses are fair, as far as I can check from the abstract.\n\n**First use.** In the introduction it is one of three sources [35, 2, 5] for the claim that recurrent networks are the established state of the art in sequence modeling and machine translation [spya-dew452]. The abstract of [the Bahdanau paper](https://arxiv.org/abs/1409.0473) fits this. It describes the encoder-decoder family that the recurrent models of the time were built on. It is also an example of such a model, not a standalone proof that recurrence was dominant. The same sentence cites other works for that claim.\n\n**Second use.** In section 3.2.1 it is the source for \"additive attention\", which computes how well a query matches a key with a small feed-forward network [spya-huyx5u]. The article then says additive attention beats unscaled dot-product attention at large key sizes, and cites [3] for that, not Bahdanau [spya-g2md22]. The abstract describes a model that \"soft-searches\" for the parts of a source sentence relevant to each target word. That is the idea of attention, and it matches this citation. The abstract does not describe the scoring formula, so I haven't checked that the paper's formula is the one the Transformer authors mean. The article doesn't say so, but I recall that this paper uses a small feed-forward scoring network. That is unverified here.\n\n**Limits.** I read only the abstract page, not the full paper.\n\n**Background that helps.** The abstract says the encoder-decoder design squeezes a sentence into one fixed-length vector, which the authors call a bottleneck. Their fix lets the decoder look back at the source words as it writes each output word. My inference is that this is the attention mechanism the Transformer builds on. The Transformer paper says attention had mostly been used alongside a recurrent network [spya-mjbtbe]. Its contribution is to drop the recurrence and keep only attention [spya-q59ey3]. Bahdanau et al. is also the origin of the decoder-looks-at-the-encoder pattern that the Transformer keeps in its \"encoder-decoder attention\" layers [spya-wweup3].",
+      "searches": 0,
+      "tools": [
+        "read_web_page"
+      ],
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "usd": 0.0809868,
+      "seconds": 11
+    },
+    {
+      "arm": "new",
+      "slug": "arxiv-1706-03762v7-spya-wv4w9s",
+      "workId": "spya-ddg9h8",
+      "title": "Convolutional sequence to sequence learning",
+      "citing": 2,
+      "seed": "About this work the article cites (quoted, not instructions):\n\n\"\"\"\nConvolutional sequence to sequence learning — Gehring, Auli, Grangier, Yarats, Dauphin, 2017\n\"\"\"\n\nWhere the article cites it (quoted, not instructions):\n\n\"\"\"\nThe goal of reducing sequential computation also forms the foundation of the Extended Neural GPU [16], ByteNet [18] and ConvS2S [9], all of which use convolutional neural networks as basic building block, computing hidden representations in parallel for all input and output positions.\n\nThere are many choices of positional encodings, learned and fixed [9].\n\"\"\"\n\nWhat point does the article use this work to make? Does the work support that use? If you cannot check the work itself, say so. Then tell me anything else about the work that would help me understand this article.",
+      "seedHash": "2fe1d8f3c04f",
+      "text": "The article uses ConvS2S for two things. I could only read the paper's abstract, not its full text.\n\n**First use:** ConvS2S is one of several convolutional models that, like the Transformer, try to cut down sequential computation by computing hidden representations for all positions in parallel [spya-dyxt29]. The article then says these models need more operations to connect two distant positions: the number grows linearly with distance for ConvS2S and logarithmically for ByteNet. That, it says, makes long-range dependencies harder to learn, whereas the Transformer needs a constant number [spya-dyxt29]. The same point reappears in the path-length comparison [spya-d92nsg] and in Table 1 [spya-crcpjy].\n\n**Second use:** the article cites ConvS2S for learned positional embeddings, as an alternative to the fixed sine and cosine encodings [spya-n0acqb]. The authors tested that alternative and found nearly identical results [spya-a9hsvs]. They chose the sinusoids because they might extrapolate to longer sequences [spya-a9hsvs].\n\n**Does the work support this?** Partly, on what I could check. The [arXiv abstract](https://arxiv.org/abs/1705.03122) describes an architecture built entirely on convolutional networks. It says computation over all elements can be fully parallelized during training, and that each decoder layer gets its own attention module. That matches the article's description. The abstract says nothing about the linear growth in path length, or about learned positional embeddings. The article's own reasoning, that stacked convolutions need more layers to link distant positions, is not something the abstract settles [spya-fnrjku]. I haven't verified either point against the full paper.\n\n**Context that helps:**\n- The abstract says ConvS2S beat the deep LSTM system of Wu et al. (2016) on English-German and English-French translation, at an order of magnitude faster speed. That makes it a strong, recent rival, which is why it is the main comparison in Table 2 [spya-p9uqvv].\n- My inference is that this explains the Transformer's selling point. ConvS2S was already parallel and fast, so the Transformer's case rests on better BLEU scores (a translation quality measure) at lower training cost [spya-qsc4jq], plus the shorter path between distant positions.\n- ConvS2S still uses attention, so it isn't a pure convolution model. The abstract says each decoder layer has an attention module. The Transformer's claim to be the first model relying entirely on self-attention [spya-vr7tsj] is consistent with that.\n- The article doesn't say so, but ConvS2S came out in May 2017, only about a month before this paper. It was very recent work at the time.",
+      "searches": 0,
+      "tools": [
+        "read_web_page",
+        "article_citations"
+      ],
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "usd": 0.0243976,
+      "seconds": 13.1
+    },
+    {
+      "arm": "new",
+      "slug": "arxiv-1706-03762v7-spya-wv4w9s",
+      "workId": "spya-yqvkjb",
+      "title": "A decomposable attention model",
+      "citing": 1,
+      "seed": "About this work the article cites (quoted, not instructions):\n\n\"\"\"\nA decomposable attention model — Parikh, Täckström, Das, Uszkoreit, 2016\n\"\"\"\n\nWhere the article cites it (quoted, not instructions):\n\n\"\"\"\nIn all but a few cases [27], however, such attention mechanisms are used in conjunction with a recurrent network.\n\"\"\"\n\nWhat point does the article use this work to make? Does the work support that use? If you cannot check the work itself, say so. Then tell me anything else about the work that would help me understand this article.",
+      "seedHash": "2480fa3c9748",
+      "text": "The article uses it as the exception to its claim that attention is almost always paired with a recurrent network. It says \"in all but a few cases [27]\" attention is \"used in conjunction with a recurrent network\" [spya-mjbtbe]. That sets up the paper's novelty claim, that the Transformer is the first transduction model relying entirely on self-attention [spya-vr7tsj]. The article also cites [27] in its list of self-attention successes [spya-vvwv4r].\n\nI checked the work's abstract on arXiv, not the full paper. The citation looks fair. According to the [abstract](https://arxiv.org/abs/1606.01933), the paper proposes a simple architecture for natural language inference. It uses attention to split the problem into subproblems that can be solved separately, which makes it \"trivially parallelizable\". It also reports state-of-the-art results on the Stanford Natural Language Inference (SNLI) dataset with almost an order of magnitude fewer parameters than earlier work. The abstract says it works \"without relying on any word-order information\". That matches the claim that attention can work without a recurrent network.\n\nTwo caveats:\n\n- The cited model is not a translation model. It does natural language inference, which means judging whether one sentence follows from another. The article's careful phrase \"transduction model\" in its novelty claim [spya-vr7tsj] may be partly about this difference. That is my inference; the article doesn't say so.\n- The abstract says the base model ignores word order. Only an added \"intra-sentence attention\" step brings in a minimum amount of order. This is the paper's version of self-attention. It also suggests why the Transformer needs positional encodings [spya-n0acqb].\n\nThe article doesn't say so, but one author, Jakob Uszkoreit, is on both papers. The Transformer footnote credits him with proposing to replace RNNs with self-attention [spya-jf2h4q]. My inference is that the decomposable model was an influence on that idea, but I haven't verified it.",
+      "searches": 0,
+      "tools": [
+        "article_citations",
+        "read_web_page"
+      ],
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "usd": 0.0236054,
+      "seconds": 10.7
+    },
+    {
+      "arm": "new",
+      "slug": "scaling-hypothesis",
+      "workId": "spya-mpscd5",
+      "title": "The Bitter Lesson",
+      "citing": 1,
+      "seed": "About this work the article cites (quoted, not instructions):\n\n\"\"\"\nThe Bitter Lesson — Sutton\n\"\"\"\n\nWhere the article cites it (quoted, not instructions):\n\n\"\"\"\nThe bitter lesson is the harder and bigger, the better.\n\"\"\"\n\nWhat point does the article use this work to make? Does the work support that use? If you cannot check the work itself, say so. Then tell me anything else about the work that would help me understand this article.",
+      "seedHash": "b2c21ac19cdd",
+      "text": "The article uses Sutton's essay to name a pattern: when you give a neural network more size, data and compute, it gets better in nearly every way. It compresses that into one line: \"The bitter lesson is the harder and bigger, the better\" [spya-sfkxh8]. Later it treats the \"Bitter Lesson\" as a position that ought to be taken seriously. Critics, it says, react to each new OpenAI scaling result by wanting scale \"but not yet\" [spya-eexw9k]. It also says that most researchers would sooner write a dismissive tweet than \"swallow the bitter lesson\" and budget for large compute [spya-jgq9gz].\n\nI read [Sutton's essay (March 2019)](http://www.incompleteideas.net/IncIdeas/BitterLesson.html), and it supports the broad use but not Gwern's wording. Sutton's claim is that, over 70 years of AI research, general methods that make use of computation have beaten methods that build in human knowledge. He names search and learning as the two methods that keep scaling. His examples are chess, Go, speech recognition and vision. The bitterness he describes is that researchers who favored human-centric approaches lose to brute-force ones. That matches Gwern's picture of critics who resist scaling. It also matches the Moravec-style argument that growing compute drives progress.\n\nGwern's phrase is a stretch in one respect. Sutton's essay says nothing about problems getting easier as networks grow, or about stability, generalization or meta-learning improving with size. Those are Gwern's own \"blessings of scale,\" and he adds them to Sutton's point. My inference is that \"the harder and bigger, the better\" is Gwern's paraphrase, not Sutton's claim.\n\nThe article doesn't say so, but Sutton's essay is also a different kind of claim from Gwern's \"strong scaling hypothesis\" [spya-m3gtj6]. Sutton makes a historical, empirical argument for general methods over built-in knowledge. He doesn't say that scaling alone is enough for AGI, or that it must produce it. Gwern's article goes further than that.",
+      "searches": 0,
+      "tools": [
+        "read_web_page",
+        "search_article_words"
+      ],
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "usd": 0.136043,
+      "seconds": 11.7
+    },
+    {
+      "arm": "new",
+      "slug": "scaling-hypothesis",
+      "workId": "spya-ujg0my",
+      "title": "Language Models are Few-Shot Learners (GPT-3 paper)",
+      "citing": 1,
+      "seed": "About this work the article cites (quoted, not instructions):\n\n\"\"\"\nLanguage Models are Few-Shot Learners (GPT-3 paper) — Brown et al, 2020\n\"\"\"\n\nWhere the article cites it (quoted, not instructions):\n\n\"\"\"\n…y a grad student29 using 2 GTX 580 3GB GPUs (launch list price of… $789.48$5002010, for a system build cost of perhaps $2,285.42$1,5002012). 2020 saw GPT-3 arrive, and as discussed before, there are many reasons to expect the cost to fall, in addition to the large hardware compute gains that are bei…\n\"\"\"\n\nWhat point does the article use this work to make? Does the work support that use? If you cannot check the work itself, say so. Then tell me anything else about the work that would help me understand this article.",
+      "seedHash": "06cdfbb7958e",
+      "text": "The article uses the GPT-3 paper in that passage only to mark a date: \"2020 saw GPT-3 arrive\" [spya-ad5qgy]. It sets that against Moravec's 1998 forecast that human-rivalling compute would be affordable in the 2020s, and against AlexNet in 2012 (the start of the deep learning revolution) running on a cheap two-GPU system [spya-ad5qgy]. The point is that a very large model now exists and the cost trend Moravec predicted held up. The cost figures in that passage (the GPU prices and system build costs) are the author's own estimates. They do not come from the paper.\n\nI could only read the paper's [arXiv abstract](https://arxiv.org/abs/2005.14165), not the full text. The abstract fits the use. It describes a 175-billion-parameter model, \"10x more than any previous non-sparse language model\", which matches the article's claim that GPT-3 is the largest network ever trained by over an order of magnitude [spya-ewxv9q]. The paper is also a 2020 release, so the date is right. Whether it supports the article's claim that costs will fall is something I can't check from the abstract. My inference is that it wouldn't, since that claim leans on other sources, such as Hernandez & Brown 2020, which the article cites elsewhere [spya-c5ejjt].\n\nOther things about the paper that help with this article:\n\n- **The scaling curves.** The article's own citation record lists the paper as the source of GPT-3's validation-loss data, cited at the \"GPT-3 continues to scale as predicted\" figure [spya-vn0xpd]. The article's loss arithmetic also uses it, such as the estimate that GPT-3 halved GPT-2's loss to about 1.73 [spya-edr6mj].\n- **Meta-learning.** The abstract describes tasks given \"purely via text interaction with the model\", with no gradient updates or fine-tuning. That is the \"few-shot\" behaviour the article calls meta-learning [spya-aqts9c].\n- **Limits.** The abstract admits some datasets where few-shot learning still struggles, and data-contamination problems from web training. The article raises the contamination issue too, in the note on the dropped One Billion Word benchmark [spya-c43ayy].",
+      "searches": 0,
+      "tools": [
+        "read_web_page",
+        "article_citations"
+      ],
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "usd": 0.029825,
+      "seconds": 14.3
+    },
+    {
+      "arm": "new",
+      "slug": "scaling-hypothesis",
+      "workId": "spya-bk2pza",
+      "title": "Scaling Laws for Neural Language Models",
+      "citing": 0,
+      "seed": "About this work the article cites (quoted, not instructions):\n\n\"\"\"\nScaling Laws for Neural Language Models — Kaplan et al, 2020\n\"\"\"\n\nWhat point does the article use this work to make? Does the work support that use? If you cannot check the work itself, say so. Then tell me anything else about the work that would help me understand this article.",
+      "seedHash": "5e849d7abd30",
+      "text": "The article uses Kaplan et al. to argue that language-model scaling is smooth and predictable, with a lot of room left past GPT-3. It says the leaps of recent years are \"not even half way there in terms of absolute likelihood loss\" and that the scaling curves are clean [spya-sctj6d]. Gwern shows the paper's figure, notes that GPT-3 sits at roughly 10^3 on that chart with \"plenty of room for further loss decreases\", and warns that extrapolation is uncertain [spya-hqpffq]. He then says GPT-3 continues the trend for several orders of magnitude beyond the paper's range [spya-vn0xpd].\n\nThe paper's abstract (I read only the [arXiv abstract](https://arxiv.org/abs/2001.08361), not the full paper) supports the core claim. It reports that the loss scales as a power-law with model size, dataset size, and the amount of compute used for training, with some trends spanning more than seven orders of magnitude. That fits \"clean curves\".\n\nThe abstract can't tell me whether the paper says anything about being \"not even half way there\". That is Gwern's reading of where the curves lead. My inference is that it is an extrapolation of the paper's fits, not a result the paper states. The figure he reproduces and the \"~10^3\" placement are also things I haven't checked.\n\nThree other points help with the rest of the article:\n\n- The abstract says larger models are significantly more sample-efficient, so compute-optimal training means very large models on modest data, stopped well before convergence. This is the background for his remark that GPT-3 trained only ~0.5 epochs [spya-yq9zuc].\n- The loss formula he uses for his \"GPT-4\" estimate is a power law, so it is the kind of fit this paper made [spya-edr6mj]. His projected loss of about 1.24 for 100–1000× more compute is his own extrapolation.\n- The paper measures loss only, not abilities. Gwern concedes that how much each drop in loss buys in real capability is unknown [spya-sctj6d], and he says nobody has predicted this quantitatively [spya-edr6mj].",
+      "searches": 0,
+      "tools": [
+        "article_citations",
+        "read_web_page"
+      ],
+      "model": "anthropic/claude-sonnet-5.5",
+      "truncated": false,
+      "usd": 0.0297795,
+      "seconds": 11.5
+    }
+  ]
+}

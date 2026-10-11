@@ -1,0 +1,71 @@
+The feature is worth building, but the plan is not buildable unchanged.
+
+1. **High — The proposed anchor is not a legal `ChatAnchor`, and the card does not currently know the marked words.**
+
+   Evidence: a selection anchor requires all three fields, `{ blockId, quote, start }`; `{ blockId, quote }` is deliberately impossible and is rejected by the route ([types.ts:4300](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/types.ts:4300), [routes.ts:5033](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/routes.ts:5033)). The offset must be in rendered-text space. Citation storage uses `block.text` offsets, which Reader explicitly drops before recomputing rendered marks ([Reader.tsx:1459](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/web/reader/Reader.tsx:1459), [annotate.ts:1097](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/web/annotate.ts:1097)). `CiteCard` receives `work` and `here`, but no clicked quote or rendered offset ([ProseHoverCard.tsx:791](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/web/ProseHoverCard.tsx:791), [ProseHoverCard.tsx:2176](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/web/ProseHoverCard.tsx:2176)).
+
+   `converse` does render the stored anchor on every turn, but a block-only anchor names the block; it does not repeat its paragraph because the full article is already in context ([converse.ts:2445](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/converse.ts:2445), [routes.ts:3861](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/routes.ts:3861)).
+
+   Fix: use the simpler `{ blockId: here }` anchor and put the fenced work title in the first question. If highlighting precisely the citation is essential, plumb the clicked mark’s rendered quote and rendered offset through `Hit`; do not use `CitationPlace.start`.
+
+2. **High — A `CitedWork` is not a `PaperEvidenceInput`, and `article`/`web` row URLs must not automatically become `matchedPageUrl`.**
+
+   Evidence: `PaperEvidenceInput.work` requires the normalized Investigate context, including nullable authors/year/reference and actual citing passages ([paper-evidence.ts:642](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/paper-evidence.ts:642)). The existing caller builds that through `investigateContext`, using up to three current article blocks ([citation-investigate-context.ts:106](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/citation-investigate-context.ts:106)), then obtains `matchedPageUrl` through `matchedPageOf` and a freshly loaded `CitationFind` ([citation-investigate.ts:1022](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/citation-investigate.ts:1022)).
+
+   `matchedPageUrl` specifically means “the page the quick check matched” ([paper-evidence.ts:182](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/paper-evidence.ts:182)). A `web` row can still have a `not-identified` lookup, while an `article` link was selected merely from an article anchor ([types.ts:4958](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/types.ts:4958), [types.ts:5339](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/types.ts:5339)). `confirmIdentity` is a valuable second defence, but for a matched page it can accept title plus first author with no identifier ([paper-evidence.ts:600](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/paper-evidence.ts:600)); it is not a replacement for the quick-check precondition.
+
+   Fix:
+
+   - Build `work` with `investigateContext(row, id => blockText.get(id))`.
+   - Let DOI/arXiv resolution use `row.url` normally.
+   - Pass `matchedPageUrl` only from `matchedPageOf(row, freshlyLoadedFind)`.
+   - Otherwise pass `null`, irrespective of `linkFrom: "article" | "web"`.
+   - Add the model’s `claim` as an explicit additional selection input; do not relabel it as one of the article’s stored citing passages.
+
+3. **Medium — The bibliography lookup must preserve the existing stale/error boundary, and the proposed matcher is too broad.**
+
+   Evidence: `loadBibliography` can return a stale list ([pg.ts:4362](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/store/pg.ts:4362)). `article_citations` refuses to expose any stale row because its works and block IDs may describe an earlier revision ([chat-tools.ts:1952](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/chat-tools.ts:1952)); it also distinguishes `BibliographyListNotFound` from store failures ([chat-tools.ts:2066](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/chat-tools.ts:2066)).
+
+   “Matched like `article_citations`” is also wrong for an argument described as title words: that query searches title, authors, year **and `why`** as one substring ([chat-tools.ts:1896](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/chat-tools.ts:1896)). It could uniquely select a work because its model-written `why` happens to contain the supplied words.
+
+   Fix: refuse stale lists; preserve “not made” versus “could not read” outcomes; use a dedicated title-only normalized matcher requiring exactly one row. If ambiguity responses name candidate titles, put all titles inside `untrusted()`—the current citations tool fences them because publisher/model text must not be presented as the app’s instructions ([chat-tools.ts:2040](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/chat-tools.ts:2040)).
+
+4. **Medium — The operation is not currently bounded by `PAPER_READ_MS` or fully cancelled with the chat turn.**
+
+   Evidence: registry lookup happens before the 25-second paper deadline begins ([paper-evidence.ts:677](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/paper-evidence.ts:677), [paper-evidence.ts:693](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/paper-evidence.ts:693)). A cold DOI can spend up to roughly 28 seconds across Crossref and DataCite ([bibliographic.ts:155](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/bibliographic.ts:155)). The existing `readCitedPaper` wrapper accepts no signal ([citation-investigate.ts:814](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/citation-investigate.ts:814)), although `converse` constructs a turn-deadline signal for tools ([converse.ts:2737](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/converse.ts:2737)).
+
+   Fix: inject a dependency that accepts the tool’s `AbortSignal` and passes it into `readPaperEvidence`. Also place an outer deadline around registry plus paper reading; ideally make `lookupWork` abortable rather than merely returning while its registry request continues. Keep service dependencies out of `ToolContext`; inject them into `runTool` or the new helper, so the excluded Live caller does not have to construct an unusable paper dependency.
+
+5. **Medium — The SSRF boundary is good, but the plan understates the prompt-injection and indirect-exfiltration shape.**
+
+   Evidence: paper reading uses `fetchDocument`, carrying scheme, private-address, redirect and size defences ([paper-text.ts:13](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/paper-text.ts:13)). The model’s `claim` affects only term-overlap selection, not the fetched address ([paper-evidence.ts:335](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/paper-evidence.ts:335)). Therefore there is no direct claim-to-fetch SSRF or exfiltration channel.
+
+   The residual risk is indirect: a hostile PDF can instruct the chat model to make a later `read_web_page` request carrying article or reader text. The fence cannot prevent that; existing security docs say the URL is an outbound channel and the length caps stop bulk exfiltration, not a determined trickle ([security.md:923](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/docs/project/security.md:923), [security.md:936](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/docs/project/security.md:936)). PDFs are specifically outside the hidden-instruction scanner ([security-map.md:19](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/docs/project/security-map.md:19)).
+
+   Fix: describe this as the same mitigation as `read_web_page`, not “link-summary handling.” Link summary is stronger because its model call has no tools ([security-map.md:120](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/docs/project/security-map.md:120)). Add malicious-PDF tests covering delimiter escape and a request to call `read_web_page`, and update both security docs. If true link-summary-level isolation is required, use a no-tools subcall such as the existing code-verified passage path ([citation-paper-passages.ts:1](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/citation-paper-passages.ts:1)); that costs an additional model call.
+
+6. **Medium — Whether chat actually invokes the tool remains the feature’s silent-success risk.**
+
+   Evidence: tool descriptions are prompts, not enforcement; the file explicitly identifies incorrect tool choice as a primary failure mode ([chat-tools.ts:320](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/chat-tools.ts:320)). The existing work handoff already asks “What does it say, and does the article use it fairly?” ([chat-handoff.ts:260](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/web/chat-handoff.ts:260)). A plausible model may still call `article_citations`, web search, or `read_web_page` instead.
+
+   Fix: move the real-model measurement immediately after the tool stage and make passing it a gate before building the UI. Measure tool-call rate, successful-paper-read rate, and whether answers distinguish “shown passages do not address it” from “the paper does not.” If calling remains unreliable, the card press must preload the paper result rather than relying on model tool choice.
+
+7. **Low — The 2,000-word cap and mode exclusions are right, but the registry arrangement must be explicit.**
+
+   Evidence: 2,000 words is roughly the existing 12,000-character web-page result and at most about eight 250-word chunks ([chat-tools.ts:120](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/chat-tools.ts:120), [paper-evidence.ts:75](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/paper-evidence.ts:75)). Tool results are resent on later rounds, so smaller is appropriate ([chat-tools.md:482](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/docs/project/chat-tools.md:482)). Use the actual `evidence.sentWords`, not an illustrative “1,800.”
+
+   Live is built directly from `CHAT_TOOLS`, while chat/explore’s extra tool currently sits outside it ([chat-tools.ts:510](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/chat-tools.ts:510), [live.ts:442](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/live.ts:442)). Therefore `read_cited_work` must be a separate definition added only to the chat/explore array. Live and guide exclusion are correct; Learn exclusion is a reasonable product boundary.
+
+   Registry pacing/caching is already adequate: found results last 180 days, misses seven days, with global service spacing ([bibliographic.ts:142](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/bibliographic.ts:142), [bibliographic.ts:172](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/bibliographic.ts:172)). Most new bibliography DOI rows should already have warmed that cache.
+
+8. **Low — The UI does not technically violate “one chat per item,” but its distinction and touch behavior need explicit acceptance tests.**
+
+   Evidence: existing `Ask in chat` reopens one bibliography-origin chat ([Reader.tsx:2715](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/web/reader/Reader.tsx:2715)); the docs explicitly distinguish an origin chat from a passage-anchored chat and say “one” is a button rule rather than a database invariant ([chat-from-a-mode.md:60](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/docs/project/chat-from-a-mode.md:60), [chat-from-a-mode.md:67](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/docs/project/chat-from-a-mode.md:67)). So a fresh, originless passage chat can coexist with the work chat.
+
+   The correct “citing paragraph” predicate is `here !== null && work.citedAt.includes(here)`, not merely “not the reference entry”; `citedAt` is explicitly the body blocks that cite the work ([types.ts:5023](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/types.ts:5023)). The card already has an icon Ask action and Open-in-Sources action in a wrapping footer ([ProseHoverCard.tsx:2289](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/web/ProseHoverCard.tsx:2289)).
+
+   Fix: retain both actions, but label the new one clearly as starting a new chat about this citation here. Bind it per work when one marked phrase names several works, close the card on press, and test narrow layout, touch, and double-tap spending. A visible text button may be one-tap; the existing two-step touch behavior is needed because its Ask control is an unlabeled icon with a tooltip ([ProseHoverCard.tsx:160](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/web/ProseHoverCard.tsx:160)).
+
+One availability correction: bibliography is now queued on every new import, although asynchronously; it is not absent for “most” new articles ([auto-mode-steps.ts:41](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/auto-mode-steps.ts:41), [bibliography.md:951](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/docs/project/bibliography.md:951)). Legacy, pending, or failed lists still need the planned no-list outcome. A prose citation card cannot silently no-op when the list is absent because the marks and card themselves are built from that list ([Reader.tsx:1475](/var/tmp/spideryarn-worktrees/fbh5aypq-cited-work-says-that/src/web/reader/Reader.tsx:1475)).
+
+BUILD WITH CHANGES

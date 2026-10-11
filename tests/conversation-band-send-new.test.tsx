@@ -25,7 +25,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ChatThread } from "../src/types.js";
+import type { ChatThread, ComposerModality } from "../src/types.js";
 
 /** The props the band last handed down. */
 let panel: Record<string, unknown> | undefined;
@@ -167,11 +167,14 @@ function asked(): string[] {
  * actually landed, so nothing here depends on what nuqs's throttle is set to —
  * the same reason the case below waits instead of taking a fixed delay.
  */
-async function sendNew(question: string): Promise<void> {
-  const send = panel?.onSendNew as (q: string, p?: boolean) => void;
+async function sendNew(question: string, modality?: ComposerModality): Promise<void> {
+  const send = panel?.onSendNew as (
+    q: string,
+    how?: { typed?: true; modality?: ComposerModality },
+  ) => void;
   expect(typeof send, "the band handed the panel no way to start a conversation").toBe("function");
   await act(async () => {
-    send(question, false);
+    send(question, modality ? { typed: true, modality } : undefined);
   });
   await settle();
   await vi.waitFor(() => {
@@ -198,6 +201,14 @@ describe("the band's onSendNew", () => {
       "user",
       "assistant",
     ]);
+  });
+
+  it("keeps how the list composer's question was made", async () => {
+    await mount(STORED.id);
+    await sendNew("Something dictated and edited", "mixed");
+
+    const [post] = calls.filter((c) => c.method === "POST");
+    expect(post?.body).toMatchObject({ modality: "mixed" });
   });
 
   /* And the URL follows it, or a reload lands on the conversation the reader

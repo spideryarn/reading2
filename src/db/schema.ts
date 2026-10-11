@@ -108,6 +108,7 @@ import type {
   Timeline,
   ToolRun,
   AnswerEffort,
+  MessageModality,
   Tree,
   TweetThread,
 } from "../types.js";
@@ -4796,6 +4797,14 @@ export const chatMessages = spideryarn.table(
      * run or refuse. docs/plans/260905c-gutter-comment-chip-explanation-metadata-and-prompt.md.
      */
     help: boolean("help").notNull().default(false),
+    /**
+     * **How this message was made** — `ChatMessage.modality` in src/types.ts
+     * (report spya-z30x5n). Nullable, null meaning "not recorded": every row
+     * before 2026-10-11, and a question that did not come through the composer.
+     * Not backfilled: old spoken answers are found exactly by `model`, and the
+     * query is in docs/project/live-conversation.md.
+     */
+    modality: text("modality").$type<MessageModality>(),
     createdAt: createdAt(),
 
     /**
@@ -4881,6 +4890,12 @@ export const chatMessages = spideryarn.table(
     /* Only an answer was thought about. */
     check("chat_messages_effort_assistant_only", sql`${t.effort} is null or ${t.role} = 'assistant'`),
     check("chat_messages_help_user_only", sql`${t.help} = false or ${t.role} = 'user'`),
+    /* Each value to its role: the database refuses a `written` question or a
+       `dictated` answer from any writer. */
+    check(
+      "chat_messages_modality",
+      sql`${t.modality} is null or (${t.role} = 'user' and ${t.modality} in ('typed','dictated','mixed','spoken')) or (${t.role} = 'assistant' and ${t.modality} in ('written','spoken'))`,
+    ),
     /* A hint sits under an answer, so only an assistant row can have had one
        opened. Same shape as the stance check above. */
     check(

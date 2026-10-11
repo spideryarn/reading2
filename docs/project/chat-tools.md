@@ -45,9 +45,10 @@ contract come from.
 ## In this doc
 
 - [§ What Greg asked for, and what is here](#what-greg-asked-for-and-what-is-here) — intent and the tool loop in one picture
-- [§ The nine, and the filter they had to pass](#the-nine-and-the-filter-they-had-to-pass) — adding or judging a tool
+- [§ The ten, and the filter they had to pass](#the-ten-and-the-filter-they-had-to-pass) — adding or judging a tool
 - [§ The links the prompt does not carry](#the-links-the-prompt-does-not-carry) — `article_links` and `read_web_page`
 - [§ The citations list: one more tool](#the-citations-list-one-more-tool) — `article_citations`
+- [§ Reading a cited paper](#reading-a-cited-paper-read_cited_work) — `read_cited_work`, the PDF of a work the article cites
 - [§ The reader's notes: the one tool not every conversation gets](#the-readers-notes-the-one-tool-not-every-conversation-gets) — `reader_notes`, `toolsFor(kind)`, and [the other conversations with every question](#the-other-conversations-come-with-every-question) (each one's gist)
 - [§ The loop, and the three things that are not obvious](#the-loop-and-the-three-things-that-are-not-obvious) — rounds, withheld tools
 - [§ What the reader sees](#what-the-reader-sees) — tool rows in the panel
@@ -98,7 +99,7 @@ improved by work that is already planned, and the seam it goes behind is `librar
 in [`src/store/`](../../src/store/index.ts) — a store contract, so the semantic matcher lands there
 and this file does not change.
 
-## The nine, and the filter they had to pass
+## The ten, and the filter they had to pass
 
 > **Does it send the reader somewhere they could not otherwise get to?**
 
@@ -113,9 +114,10 @@ and this file does not change.
 | `article_glossary` | This article's [glossary](glossary.md), if one has been generated | So an answer about a term agrees with what the app has already told the reader, rather than quietly contradicting it |
 | `article_citations` | The works **this** article cites, from its stored [citations](bibliography.md) list if one has been made: what the piece uses each for, where it cites it, and the link with where that link came from. An optional `query` narrows it | So a question about a work, author or study the piece leans on — or a web search about one — starts from the right paper rather than from a guess. Reads the list and never makes one. See [§ The citations list](#the-citations-list-one-more-tool) |
 | `reader_notes` | The reader's own comments, highlights and bookmarks on **this** article, and a list of their other conversations about it. Given a conversation's id as `thread`, that conversation | The reader's own thinking about the piece is the one thing about this article the prompt does not hold. **Typed Chat only**: it is not in `CHAT_TOOLS`. Since 2026-10-08 the list of other conversations, each with a line on what it covered, also comes with every Chat question, so the model knows when one is worth opening. See [§ The reader's notes](#the-readers-notes-the-one-tool-not-every-conversation-gets) |
+| `read_cited_work` | A paper **this** article cites, read from its PDF once code has confirmed it is the work, aimed at the claim the article makes with it | `read_web_page` cannot read a PDF and cannot say which paper it has. *Does the cited work say that?* needs the work's own words. **Chat and Explore only.** See [§ Reading a cited paper](#reading-a-cited-paper-read_cited_work) |
 
-**Eight of the nine are `CHAT_TOOLS`**, the list every kind of conversation but the guide, and
-Live, share. The ninth is added by `toolsFor(kind)` in [`src/chat-tools.ts`](../../src/chat-tools.ts),
+**Eight of the ten are `CHAT_TOOLS`**, the list every kind of conversation but the guide, and
+Live, share. The other two are added by `toolsFor(kind)` in [`src/chat-tools.ts`](../../src/chat-tools.ts),
 for the kinds that function names and no others. **The guide** (plan
 [261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md)) gets five,
 `GUIDE_TOOLS`: the article's own, and nothing that leaves it — no `read_web_page`, no library, no
@@ -296,6 +298,42 @@ deliberately: it is read-only and article-local, and a per-kind tool list is mor
 that warrants. It does not widen what `read_web_page` may fetch; the citation URLs are one of the
 sets the allowlist in [§ Still open](#still-open) would use. *(A per-kind list did arrive, on
 2026-10-03, for the tool in the next section. This one stays in the shared eight.)*
+
+## Reading a cited paper: `read_cited_work`
+
+**Built 2026-10-11** (plan
+[261011w](../plans/261011w-does-the-cited-work-say-that-at-the-citing-sentence.md)), for Greg's 4B
+on [q-fkq30v](../user-feedback/questions/q-fkq30v.md): *does the cited work say that?*, asked at the
+citing sentence. `read_web_page` refuses a PDF, and most cited papers are PDFs, so until this chat
+answered that question from abstracts and snippets.
+
+It takes a work's **title** (as `article_citations` lists it, matched by title only, never the
+*used for* line) and the **claim** the article makes with it, and reads the paper through
+[`paper-evidence.ts`](../../src/paper-evidence.ts), the half of Dig deeper that outlived its button:
+the row's DOI or arXiv link, or a page a current quick check matched, never a row's other links; a
+PDF only; and code confirms it is the work before a word is sent
+([bibliography.md § Dig deeper](bibliography.md#dig-deeper-a-closer-look-at-one-work-on-demand)).
+It sends the title and abstract and the chunks sharing most words with the claim, up to
+`CITED_WORK_WORDS` (2,000), inside `untrusted()`, with a provenance line of ours outside the fence
+saying what was read and how it was confirmed. Every way it can fail to read says why, and tells the
+model to say the paper was not read. One deadline covers the registry and the paper,
+`CITED_WORK_DEADLINE_MS`. The code is [`src/read-cited-work.ts`](../../src/read-cited-work.ts);
+[`tests/read-cited-work.test.ts`](../../tests/read-cited-work.test.ts).
+
+**Chat and Explore only**, beside `reader_notes` in `toolsFor`: not Live (a 25-second PDF read in a
+spoken turn), not Learn, Tutorial, Candidates or the guide.
+
+**Measured before the button was built**, because a tool the model never calls looks built
+(`evals/read-cited-work.ts`, 2026-10-11, four articles): called 4 of 4 times, the paper read 2 of 4;
+the other two said why (a title the list holds as *Santoro et al 2016* could not be confirmed on page
+one; a publisher refused the reader). Both reads separated what the shown passages say from the
+whole paper. The numbers are in the plan.
+
+**What it does not do:** chat's quotes of the paper are the model's, told to quote only from the
+fenced text, not checked by code (Dig deeper's passages were); a paywalled or HTML-only work stays
+unread; a cited work already on the reader's shelf is not read from the store. And the paper is a
+stranger's text in a prompt whose model has tools, so it carries `read_web_page`'s residual risk
+([§ Security](#security-a-tool-result-is-data-and-one-of-them-is-a-strangers)).
 
 ## The reader's notes: the one tool not every conversation gets
 
@@ -981,8 +1019,8 @@ prompt.
   `chipFor` turns that into *open the entry* when the visible glossary has it.
 - **Two more ids since 2026-10-07, for Chat and the guide alike**
   ([261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md), stage 2):
-  `quick-search:<words>` is the bar's own *Quick search “X”* row (the same press,
-  `quickSearchPress`; the words take `find`'s rule; it *generates*), and `mode:<catalogue key>` —
+  `quick-search:<words>` is the bar's own *Quick search “X”* row (the words take `find`'s rule;
+  it *generates*; in a chat surface its press runs in place, below), and `mode:<catalogue key>` —
   `[cmd:mode:mode%3Aglossary]`, `[cmd:mode:submode%3Alearn%3Atutorial]` — opens a mode or a
   sub-mode. **A mode key is resolved against what the reader can open here now**, at the draw and
   at the press: the Dock's reachable set and its sub-mode rows (`modeDoor` in
@@ -1025,6 +1063,41 @@ in 2 of 25 answers. So the prompt's sentence about the article is not a defence;
 allowlist are. [261003b](../investigations/261003b-chat-proposes-commands-as-chips.md) has the
 numbers, what was not measured (a hostile *fetched page*, a conversation with history), and the
 runner is [`evals/chat-commands/run.ts`](../../evals/chat-commands/run.ts).
+
+### A search button runs in the conversation
+
+> It shouldn't take me to the search mode because that's really disorienting, and I might want to
+> search for multiple things, and it should be able to initiate searches.
+>
+> — Greg, 2026-10-11, `spya-ma72mx`
+
+**Since 2026-10-11**
+([261011aa](../plans/261011aa-guide-and-chat-run-in-article-searches-in-place-and-link-the-article-readily.md)),
+a `quick-search` or `find` button in Chat, the guide (its next steps' search included) or the
+passage chat dialog no longer switches the band to Search. The reader still presses it, and
+`chipFor` is still asked again at the press; what the press does is draw what it found in the
+button's place ([`ChatSearchCard.tsx`](../../src/web/ChatSearchCard.tsx)): the passages as block
+links in the article's order, which jump the article and leave the conversation where it is, and
+*Open in Search* for the whole view.
+
+- **`quick-search`** posts the quick search Search mode posts (`POST /api/search/<slug>`, kind
+  `quick`), so it is a saved Search row like any other. The request lives in a per-tab store
+  outside the card ([`chat-searches.ts`](../../src/web/chat-searches.ts)), because a card is
+  remounted whenever the transcript redraws and the server abandons a quick search whose client
+  went away; two buttons with the same words show one search.
+- **`find`** matches the exact words with Search's own matcher (`findLiteral`), in the page, free.
+- **A reload keeps a quick answer**: the article's saved list is read once per page, and a finished
+  quick search with the same words is drawn without a press — a read, which spends and writes
+  nothing — but only while every passage it found is still in the article, and saying the day it
+  was found, because the list carries no fingerprint of the article to judge it by
+  ([search.md § Searches started from a chat](search.md#searches-started-from-a-chat)).
+- **Where it is drawn**: only where Reader.tsx provided `ChatSearchHere`, around the chat band and
+  the dialog. Elsewhere the chip presses through the executor as before; the command bar's own
+  *Quick search* row still opens Search, because there the reader asked for Search.
+
+**Not built**: the thorough search after the quick one, which Search mode starts by itself
+(`auto-thorough.ts`); in chat, *Open in Search* is the way to it. And a Search mode already on
+screen beside a chat search (the dialog over Search) does not hear of it until it is next opened.
 
 ***Copy answer* leaves the button lines out** (`withoutCommandLines`, src/citable.ts): the reader was
 shown a button, not a token. A token that was drawn as text is copied as text.
@@ -1115,6 +1188,14 @@ from the pinned row above the list. What makes it a guide rather than a chat:
   an empty bar, with the guide's `Compass`, since 2026-10-10
   ([261010g](../plans/261010g-guide-chat-at-the-top-of-the-command-bar-with-one-icon.md)); and since
   261007j the bar's *Ask the guide: "…"* for a sentence the fast pick could not place.
+- **Links into the piece, and searches** (since 2026-10-11, plan 261011aa, Greg's `spya-mpg67x`:
+  *"it didn't produce block links to the article readily, which is a big part of what we want the
+  guide chat to do"*): asked for links, or where something is, it cites the blocks at once,
+  without asking which kind of link is meant; the article's own hyperlinks and the web only when
+  the reader says so. Asked to search, it offers up to three search buttons, each of which runs in
+  the conversation ([§ A search button runs in the conversation](#a-search-button-runs-in-the-conversation));
+  it never says it cannot search, and never that it has moved the reader. The spoken guide is told
+  the same in a voice's terms (`SPOKEN_GUIDE`, [live-conversation.md](live-conversation.md)).
 - **Its buttons** are chat's, offered unasked when it suggests a mode or a search
   (§ Command buttons), and **the reader presses every one**: the guide never opens a mode or moves
   the reader itself. Its prompt prints every mode as *Button* (`modeWordsSection` in

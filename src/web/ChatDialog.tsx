@@ -62,7 +62,7 @@ import { createPortal } from "react-dom";
 import { ChevronDown, ChevronUp, LoaderCircle, MessagesSquare, Square, X } from "lucide-react";
 
 import type { BlockId, ChatAnchor, ChatThread, ThreadSummary } from "../types.js";
-import { Composer, Conversation } from "./ChatPanel.js";
+import { Composer, Conversation, type SendHow } from "./ChatPanel.js";
 import { chatDraftsFor } from "./chat-draft.js";
 import { answerOpening } from "../answer-opening.js";
 import { askAboutBlock, HELP_QUESTION } from "./chat-handoff.js";
@@ -934,7 +934,7 @@ export function ChatDialog({
   }, [inCard, visible, showComposer]);
 
   const ask = useCallback(
-    (question: string) => {
+    (question: string, how?: SendHow) => {
       if (target.kind !== "draft") return;
       /**
        * **`askAboutBlock` quotes nothing unless it is handed something to
@@ -992,6 +992,10 @@ export function ChatDialog({
            on a comment they just saved. The server links the two once it has a
            real thread id; nothing here does, on purpose. */
         ...(target.sourceCommentId ? { sourceCommentId: target.sourceCommentId } : {}),
+        /* The shared Composer saw how these words arrived. Keep that fact on
+           the question just as the full Chat panel does; handed-over and
+           automatically sent drafts call `ask` without it and stay unknown. */
+        ...(how?.modality ? { modality: how.modality } : {}),
       });
       onThread(id);
       /* The prose is told at once, with the id we have. If the server mints a
@@ -1305,7 +1309,12 @@ export function ChatDialog({
             onJump={onJump}
             recovering={recovering}
             blocks={blocks}
-            onSend={(question) => send(thread.id, question, at)}
+            onSend={(question, how) => send(thread.id, question, at, {
+              /* `Conversation` owns the same Composer as the full Chat panel;
+                 dropping its second argument here silently erased typed /
+                 dictated / mixed on every dialog follow-up. */
+              ...(how?.modality ? { modality: how.modality } : {}),
+            })}
             onRetry={(messageId) => retry(thread.id, messageId)}
             onEdit={(messageId, question) => edit(thread.id, messageId, question, at)}
             /* Only on a settled conversation — see `onDeleteFrom` in ChatPanel. */

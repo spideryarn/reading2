@@ -503,7 +503,19 @@ and opened the Citations mode with that row scrolled into view
 *Ask in chat*** (plan [261009k](../plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)): the Bibliography row's own sender (`askCitedWorkInChat`), so
 the chat records the same origin as one started from the row, and the card closes. It is the
 card's own `onAskCitedWork` prop, owner only. *search Scholar* stays beside it on a row with no
-link. The glossary card's is the same shape. The one-shot that opened Citations on a row
+link.
+
+**And *Does it say that?*, since 2026-10-11, on a card opened from a paragraph that cites the work**
+(that paragraph is in the work's `citedAt`; not the reference entry). It is the research's idea 2,
+Greg's 4B on [q-fkq30v](../user-feedback/questions/q-fkq30v.md): *does the cited work say that?*, at
+the citing sentence. A press starts a fresh chat anchored on that paragraph, with no origin, so it is
+not the work's one chat and a second paragraph is a second question. The question names the work,
+fenced (`askDoesItSayThat` in [`chat-handoff.ts`](../../src/web/chat-handoff.ts)), and chat answers
+it by reading the paper with `read_cited_work`
+([chat-tools.md § Reading a cited paper](chat-tools.md#reading-a-cited-paper-read_cited_work)),
+which is Dig deeper's paper read, offered to chat. A text button, one tap for a finger, owner only
+(`onCheckCitedWork`). Plan
+[261011w](../plans/261011w-does-the-cited-work-say-that-at-the-citing-sentence.md). The glossary card's is the same shape. The one-shot that opened Citations on a row
 (`citeFocus`, `BibliographyPanel` § `Props.focus`, which lowers the bar if it hides the row) stays in
 `Reader` for the way back from a chat to its row (that plan's stage 2).
 
@@ -851,7 +863,23 @@ Since 2026-10-06 every owner row has **Ask in chat**; it sat beside Dig deeper u
 and stands in its place since (plan [261009k](../plans/261009k-ask-in-chat-replaces-dig-deeper-and-a-chat-goes-back-to-its-item.md)). It
 opens a fresh conversation in Chat with the work quoted (its title, then the authors and year where
 the article gives them) and a question after it, and sends that as the first question: the press
-is the Send since 2026-10-06 ([261006j](../plans/261006j-ask-in-chat-sends-the-question.md)). Once a chat exists,
+is the Send since 2026-10-06 ([261006j](../plans/261006j-ask-in-chat-sends-the-question.md)).
+
+**The question starts from the article, not the work** (since 2026-10-11, plan
+[261011ab](../plans/261011ab-ask-in-chat-about-a-citation-leads-with-how-the-article-uses-it.md)):
+
+> When we ask in chat, for example, for this citation, I think I was hoping for a bit more about how
+> it relates to the article, what the article is trying to say with it, and then whether it's
+> justified, as well as all of this external stuff.
+>
+> — Greg, 2026-10-11 (spya-xv3q97)
+
+So the seed also quotes the sentence around each mention (`citingSentences` in
+[`chat-handoff.ts`](../../src/web/chat-handoff.ts); a mention's own quote is only a locator such as
+"Tulving (1983)"), and asks what point the article uses the work to make, whether the work supports
+that, to say so when it cannot check the work itself, and only then for anything else worth knowing
+about it (`CITED_WORK_QUESTION`). A work cited only in a footnote or the references gets the
+question without sentences. Older chats keep the question they were asked. Once a chat exists,
 a line in the button's place shows how many questions were asked and the chat's gist (or how the
 latest answer begins, until there is one), and pressing it opens that conversation beside Sources'
 Bibliography; the hover card's button reopens it too

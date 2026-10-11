@@ -427,6 +427,33 @@ not this feature's, and it went when the filesystem store did.
 - **`model`** — set server-side, never taken from the browser: `LIVE_MODEL`, or `GPT_LIVE_MODEL`
   when the `/spoken` body names that engine. The browser names an engine, never a model. It is what lets the
   citation instruments tell a spoken answer from a typed one that happened to cite nothing.
+- **`modality = 'spoken'`**, on **both** rows, since 2026-10-11 — set by `withSpokenTurn`, never
+  taken from the browser. A typed question says `typed`, `dictated` or `mixed`, and a streamed
+  answer `written`, so every message says how it was made
+  ([`ChatMessage.modality`](../../src/types.ts); plan
+  [261011z](../plans/261011z-chat-messages-record-how-they-were-made.md)). Greg asked for it so the
+  voice model's answers can be looked through for quality:
+
+  > I'm especially interested for you to know which bits of the AI response came from the live,
+  > real-time voice, because we may want to kind of look through those and check to see if they're
+  > doing a good job.
+  >
+  > — Greg, 2026-10-11 (`spya-z30x5n`)
+
+  **Reviewing them is a query, not a screen.** Rows before 2026-10-11 were not backfilled, and
+  are found exactly by `model` instead, so the selector covers both:
+
+  ```sql
+  select a.created_at, a.model, a.interrupted, q.text as question, a.text as answer
+  from spideryarn.chat_messages a
+  join spideryarn.chat_messages q
+    on q.article_id = a.article_id and q.thread_id = a.thread_id and q.ordinal = a.ordinal - 1
+  where a.role = 'assistant'
+    and (a.modality = 'spoken' or a.model like 'gpt-realtime%' or a.model like 'gpt-live%')
+  order by a.created_at desc;
+  ```
+
+  A retried spoken answer is rewritten as streamed text, and becomes `written` with it.
 
 ## Three things that are not obvious and cost an afternoon each
 
@@ -607,7 +634,13 @@ What differs is what the session is told and given, on both engines:
 - **The prompt** is the companion's (`LIVE_SYSTEM`, or GPT-Live's two) plus `SPOKEN_GUIDE` in
   [`src/live.ts`](../../src/live.ts) and `spokenModeWords()` in [`src/guide.ts`](../../src/guide.ts):
   the reading, not the piece; why they are reading first; modes named, never pressed, since a
-  voice has no buttons.
+  voice has no buttons. Since 2026-10-11 it also says that "links" means passages in this article,
+  shown at once without asking which kind of link, and that a search they ask for is done by
+  finding the passages and showing them — Greg's `spya-mpg67x`, where a spoken guide asked which
+  links he meant, then read the article's own hyperlinks and said it had none
+  ([261011aa](../plans/261011aa-guide-and-chat-run-in-article-searches-in-place-and-link-the-article-readily.md)).
+  Worded without a tool or a token, because the GPT-Live voice model is given this too and has
+  neither.
 - **The tools** are the typed guide's article tools (`GUIDE_TOOLS`) plus `show_passage`, without
   the typed guide's `offer_to_save` or `offer_next_steps` (a card or a row of buttons, which a voice has nowhere to put;
   `LIVE_SERVER_TOOLS` refuses it too, and a spoken turn's stored runs never carry an offer,

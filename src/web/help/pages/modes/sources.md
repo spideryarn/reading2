@@ -67,6 +67,12 @@ for that.
   line with the chat's short summary; press it to open that conversation again beside
   Bibliography. The conversation is also in Chat’s list, marked with Sources’ icon. Only
   whoever added the article has this.
+- **Does it say that?** is on the card you get by pointing at a citation in a paragraph. It opens
+  a new chat beside that paragraph, asking whether the work says what the paragraph
+  cites it for. Chat then tries to read the work itself: it can when the article gives a DOI or
+  arXiv link to a freely available PDF, and it checks the PDF is that work before reading it. It
+  says what it read, and says so plainly when it could not read the work. Only whoever added the
+  article has this.
 - **first cited** jumps to where the article first cites it. *only in the references* means the
   article lists it but never cites it in the text.
 - **In your library** or **On the public shelf** means the work is already an article here, and
