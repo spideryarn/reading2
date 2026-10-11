@@ -209,3 +209,14 @@ Withholding a sorted note is a tightening of a defence and a product call, and i
 ([q-dkz7au](../user-feedback/questions/q-dkz7au.md), recommending Sol's fix). **Condition: q-dkz7au
 is answered before a deploy carries this change.** `dev` deploys nothing, and Referee is behind
 the experimental switch.
+
+## Landed
+
+On `dev`, not deployed. Full suite green on the reviewed tree (1948 files, 44,821 tests); after the
+merge of `origin/dev`, the 17 suites this work touches re-run green, typecheck clean.
+
+Seen in a browser (Playwright on the box, a Sonnet subagent): the Notes chip after Mirror, notes
+grouped and sorted, *1 mark without a note of yours is left out*
+([shot 1](261011f-shot-1-notes.png), [shot 2](261011f-shot-2-sorted.png)). In shot 2 the first
+row's *Minor* carries the shared order chip's hover wash, not the bold `.on` state: the pointer was
+left on a button just pressed to un-sort.
